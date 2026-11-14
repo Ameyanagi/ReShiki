@@ -377,6 +377,7 @@ fn native_figures_match_the_library() {
                 format,
                 false,
                 false,
+                export::Background::Canvas,
                 budget,
             ))
             .expect("a publication figure");
@@ -427,6 +428,7 @@ fn figure_warnings_come_in_ops_order() {
             "png",
             false,
             false,
+            export::Background::Canvas,
             Budgets::default().export_png_pixels,
         ))
         .expect("a publication figure");

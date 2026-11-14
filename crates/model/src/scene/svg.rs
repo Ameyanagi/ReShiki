@@ -9,7 +9,7 @@ fn escape(s: &str) -> String {
         .replace('"', "&quot;")
 }
 
-pub(super) fn render_svg(doc: &Document, background: bool) -> String {
+pub(super) fn render_svg(doc: &Document, paper: Option<[u8; 3]>) -> String {
     let drawing = primitives(doc);
     let (lo, hi) = bounds(&drawing);
     let mut s = format!(
@@ -22,8 +22,7 @@ pub(super) fn render_svg(doc: &Document, background: bool) -> String {
         (hi.y - lo.y) * STYLE.points_per_world()
     );
     let theme = doc.canvas_theme;
-    if background {
-        let [r, g, b] = theme.background();
+    if let Some([r, g, b]) = paper {
         s.push_str(&format!(
             "<rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" fill=\"rgb({r},{g},{b})\"/>\n",
             lo.x,
@@ -34,7 +33,7 @@ pub(super) fn render_svg(doc: &Document, background: bool) -> String {
     }
     let frame = Frame {
         theme,
-        paper: background.then(|| theme.background()),
+        paper,
         lo,
         hi,
         gradients: Default::default(),

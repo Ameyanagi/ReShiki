@@ -188,12 +188,13 @@ impl App {
     ) -> Task<Message> {
         let format = key.format;
         let engine = self.engine.clone();
+        let pictures = self.copy_pictures(None);
         Task::perform(
             async move {
                 if chemical_text {
                     reshiki::clipboard::prepare_chemical_text(engine, snapshot, format).await
                 } else {
-                    reshiki::clipboard::prepare_as(engine, snapshot, format).await
+                    reshiki::clipboard::prepare_as(engine, snapshot, format, pictures).await
                 }
             },
             move |result| Message::CopyAsPrepared(key.clone(), Box::new(result)),
@@ -381,7 +382,28 @@ impl App {
         }
     }
 
-    pub(super) fn copy_native(&mut self, cut: bool, image_only: bool) -> Task<Message> {
+    /// How one copy's pictures look: on `background`, or on the Copy default.
+    pub(super) fn copy_pictures(
+        &self,
+        background: Option<crate::appearance::Background>,
+    ) -> reshiki::clipboard::Pictures {
+        let appearance = &self.appearance;
+        reshiki::clipboard::Pictures {
+            background: background
+                .unwrap_or(appearance.copy_background)
+                .paper(appearance.custom_background),
+            editable: appearance.export_editable_drawing,
+        }
+    }
+
+    /// Copy, or Copy image when `image_only`; `background` overrides the
+    /// Copy default for this copy only.
+    pub(super) fn copy_native(
+        &mut self,
+        cut: bool,
+        image_only: bool,
+        background: Option<crate::appearance::Background>,
+    ) -> Task<Message> {
         if self.clipboard_working() {
             self.status = "A clipboard operation is already in progress".into();
             return Task::none();
@@ -406,7 +428,12 @@ impl App {
         self.error = false;
         self.status = "Preparing clipboard…".into();
         Task::perform(
-            reshiki::clipboard::copy(self.engine.clone(), snapshot, image_only),
+            reshiki::clipboard::copy(
+                self.engine.clone(),
+                snapshot,
+                image_only,
+                self.copy_pictures(background),
+            ),
             move |result| Message::ClipboardWritten {
                 epoch,
                 revision,
@@ -579,7 +606,7 @@ impl App {
             return Task::none();
         }
         if reshiki::clipboard::available() {
-            return self.copy_native(cut, false);
+            return self.copy_native(cut, false, None);
         }
         if self.tab.selected.is_empty() {
             self.status = "Select objects to copy".into();

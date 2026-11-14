@@ -133,7 +133,7 @@ impl App {
             Message::ArrowLabelGap(action) => self.arrow_label_gap_action(action),
             Message::CustomElement(s) => self.custom_element = s,
             Message::ApplyElement => self.apply_custom_element(),
-            Message::CopyImage => return Some(self.copy_native(false, true)),
+            Message::CopyImage => return Some(self.copy_native(false, true, None)),
             Message::CopyAs(format) => return Some(self.copy_as(format)),
             Message::Copy(cut) => return Some(self.copy_selection(cut)),
             Message::PastePicture => return Some(self.paste_native(true)),

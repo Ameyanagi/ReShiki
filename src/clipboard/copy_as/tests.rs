@@ -13,6 +13,28 @@ fn molecule() -> Document {
 }
 
 #[tokio::test]
+async fn copy_as_pictures_follow_the_editable_drawing_switch_and_background() {
+    let engine = LocalEngine::in_process();
+    for format in [CopyFormat::Png, CopyFormat::Svg, CopyFormat::Pdf] {
+        for editable in [false, true] {
+            let pictures = super::super::Pictures {
+                background: export::Background::Color([0; 3]),
+                editable,
+            };
+            let copy = prepare_as(engine.clone(), molecule(), format, pictures)
+                .await
+                .unwrap();
+            let bytes = copy.representations[0].bytes().unwrap();
+            assert_eq!(payload::read(&bytes).is_some(), editable, "{format:?}");
+            if format == CopyFormat::Png {
+                let raster = image::load_from_memory(&bytes).unwrap().into_rgba8();
+                assert_eq!(raster.get_pixel(0, 0).0, [0, 0, 0, 255]);
+            }
+        }
+    }
+}
+
+#[tokio::test]
 async fn copy_as_pictures_contain_the_selected_editable_drawing() {
     let mut source = molecule();
     source.version = 15;
@@ -36,7 +58,7 @@ async fn copy_as_pictures_contain_the_selected_editable_drawing() {
         (CopyFormat::Svg, "public.svg-image"),
         (CopyFormat::Pdf, "com.adobe.pdf"),
     ] {
-        let copy = prepare_as(engine.clone(), source.clone(), format)
+        let copy = prepare_as(engine.clone(), source.clone(), format, Default::default())
             .await
             .unwrap();
         let bytes = copy
@@ -103,9 +125,14 @@ async fn name_copy_accepts_a_complete_drawn_salt() {
     doc.atom_mut(sodium).unwrap().charge = 1;
     doc.atom_mut(chloride).unwrap().charge = -1;
     assert_eq!(CopyFormat::Name.unavailable_reason(&doc), None);
-    let copy = prepare_as(LocalEngine::default(), doc, CopyFormat::Name)
-        .await
-        .unwrap();
+    let copy = prepare_as(
+        LocalEngine::default(),
+        doc,
+        CopyFormat::Name,
+        Default::default(),
+    )
+    .await
+    .unwrap();
     assert_eq!(copy, prepare_name("sodium chloride".into()));
 }
 
@@ -173,7 +200,13 @@ async fn name_preparation_generates_verified_ethanol() -> Result<(), String> {
     let carbon = doc.add_atom("C", Point::new(-42., 0.));
     doc.add_bond(carbon, doc.atoms[0].id, 1, "plain");
     let before = doc.clone();
-    let copy = prepare_as(LocalEngine::default(), doc.clone(), CopyFormat::Name).await?;
+    let copy = prepare_as(
+        LocalEngine::default(),
+        doc.clone(),
+        CopyFormat::Name,
+        Default::default(),
+    )
+    .await?;
     assert_eq!(copy, prepare_name("ethanol".into()));
     assert_eq!(doc, before);
     Ok(())
@@ -268,7 +301,9 @@ async fn chemical_text_matches_former_refresh_first_conversion() {
         let reaction = crate::reactions::copy_reaction(&source, &source).unwrap();
         let mut refreshed = export::checked_document(&engine, source).await.unwrap();
         refreshed.reactions = reaction.into_iter().collect();
-        let former = prepare_as(engine, refreshed, format).await.unwrap();
+        let former = prepare_as(engine, refreshed, format, Default::default())
+            .await
+            .unwrap();
         assert_eq!(direct.text(), former.text());
         assert_eq!(direct.notices, former.notices);
     }
@@ -289,7 +324,7 @@ async fn chemical_text_refreshes_stale_attached_forward_arrow_like_former_copy()
     let engine = LocalEngine::default();
     let (format, chemical) = chemical_text_snapshot(&source, &source).unwrap();
     assert_eq!(format, CopyFormat::ChemDoodleReaction);
-    let unrefreshed = prepare_as(engine.clone(), chemical.clone(), format)
+    let unrefreshed = prepare_as(engine.clone(), chemical.clone(), format, Default::default())
         .await
         .unwrap();
     let direct = prepare_chemical_text(engine.clone(), chemical, format)
@@ -301,7 +336,9 @@ async fn chemical_text_refreshes_stale_attached_forward_arrow_like_former_copy()
         .unwrap();
     assert_ne!(refreshed.arrows[0].start, source.arrows[0].start);
     refreshed.reactions = reaction.into_iter().collect();
-    let former = prepare_as(engine, refreshed, format).await.unwrap();
+    let former = prepare_as(engine, refreshed, format, Default::default())
+        .await
+        .unwrap();
     assert_ne!(direct.text(), unrefreshed.text());
     assert_eq!(direct.text(), former.text());
     assert_eq!(direct.notices, former.notices);
@@ -412,9 +449,14 @@ async fn dark_depth_copy_as_cdxml_and_cdx_preserves_exact_source_ink() {
         }
         let before = original.clone();
         for format in [CopyFormat::Cdxml, CopyFormat::Cdx] {
-            let copy = prepare_as(Default::default(), original.clone(), format)
-                .await
-                .unwrap();
+            let copy = prepare_as(
+                Default::default(),
+                original.clone(),
+                format,
+                Default::default(),
+            )
+            .await
+            .unwrap();
             let xml = if format == CopyFormat::Cdxml {
                 copy.text().unwrap().to_owned()
             } else {
@@ -479,9 +521,14 @@ async fn bracketed_ion_copy_keeps_hidden_charge_data_and_grouped_superscript() {
     document.group_selection(&document.all_ids()).unwrap();
     let source = document.clone();
     for format in [CopyFormat::Cdxml, CopyFormat::Cdx] {
-        let copy = prepare_as(Default::default(), document.clone(), format)
-            .await
-            .unwrap();
+        let copy = prepare_as(
+            Default::default(),
+            document.clone(),
+            format,
+            Default::default(),
+        )
+        .await
+        .unwrap();
         let xml = if format == CopyFormat::Cdxml {
             copy.text().unwrap().to_owned()
         } else {
@@ -620,25 +667,40 @@ async fn molecular_formats_export_selected_graph_and_invalid_conversion_has_no_p
     let engine = LocalEngine::default();
     let doc = molecule();
     let before = doc.clone();
-    let smiles = prepare_as(engine.clone(), doc.clone(), CopyFormat::Smiles)
-        .await
-        .unwrap();
+    let smiles = prepare_as(
+        engine.clone(),
+        doc.clone(),
+        CopyFormat::Smiles,
+        Default::default(),
+    )
+    .await
+    .unwrap();
     assert_eq!(smiles.text(), Some("CO"));
-    let mol = prepare_as(engine.clone(), doc.clone(), CopyFormat::Mol)
-        .await
-        .unwrap();
+    let mol = prepare_as(
+        engine.clone(),
+        doc.clone(),
+        CopyFormat::Mol,
+        Default::default(),
+    )
+    .await
+    .unwrap();
     let imported = crate::chemistry::molfile::read(mol.text().unwrap()).unwrap();
     assert_eq!(imported.molecule.ids.len(), 2);
     assert_eq!(doc, before);
     assert!(
-        prepare_as(engine.clone(), doc, CopyFormat::Rxn)
+        prepare_as(engine.clone(), doc, CopyFormat::Rxn, Default::default())
             .await
             .is_err()
     );
     assert!(
-        prepare_as(engine, Document::default(), CopyFormat::Mol)
-            .await
-            .is_err()
+        prepare_as(
+            engine,
+            Document::default(),
+            CopyFormat::Mol,
+            Default::default()
+        )
+        .await
+        .is_err()
     );
 }
 
@@ -653,9 +715,14 @@ async fn figure_payloads_keep_the_chosen_format_with_the_editable_drawing() {
         Default::default(),
     ));
     for format in [CopyFormat::Png, CopyFormat::Svg, CopyFormat::Pdf] {
-        let copy = prepare_as(Default::default(), drawing.clone(), format)
-            .await
-            .unwrap();
+        let copy = prepare_as(
+            Default::default(),
+            drawing.clone(),
+            format,
+            Default::default(),
+        )
+        .await
+        .unwrap();
         assert_eq!(copy.format, format);
         let bytes = copy.representations[0].bytes().unwrap();
         assert_eq!(
@@ -715,9 +782,14 @@ async fn reaction_payload_retains_participants_and_export_warnings() {
         coefficient: 1,
     });
     doc.reactions.push(reaction);
-    let rxn = prepare_as(Default::default(), doc.clone(), CopyFormat::Rxn)
-        .await
-        .unwrap();
+    let rxn = prepare_as(
+        Default::default(),
+        doc.clone(),
+        CopyFormat::Rxn,
+        Default::default(),
+    )
+    .await
+    .unwrap();
     let roundtrip = crate::chemistry::reaction::read_rxn(rxn.text().unwrap()).unwrap();
     assert_eq!(roundtrip.reactants.len(), 1);
     assert_eq!(roundtrip.products.len(), 1);
@@ -726,9 +798,14 @@ async fn reaction_payload_retains_participants_and_export_warnings() {
             .iter()
             .any(|notice| notice == crate::chemistry::reaction::EXPORT_WARNING)
     );
-    let smiles = prepare_as(Default::default(), doc, CopyFormat::ReactionSmiles)
-        .await
-        .unwrap();
+    let smiles = prepare_as(
+        Default::default(),
+        doc,
+        CopyFormat::ReactionSmiles,
+        Default::default(),
+    )
+    .await
+    .unwrap();
     assert_eq!(smiles.text(), Some("CO>>O"));
     assert_eq!(rxn.notices, smiles.notices);
 }

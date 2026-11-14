@@ -1,4 +1,45 @@
-use crate::{document::Document, scene};
+use crate::{canvas_theme::CanvasTheme, document::Document, scene};
+use std::borrow::Cow;
+
+/// The paper behind a copied or exported picture.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Background {
+    /// No paper. The ink keeps the canvas's colors.
+    Transparent,
+    /// The drawing's own canvas color.
+    Canvas,
+    /// This color. Black and white ink swap to stay readable on it.
+    Color([u8; 3]),
+}
+
+impl Background {
+    /// The drawing as painted on this background, and the paper color.
+    /// A color background takes the canvas, light or dark, whose ink reads
+    /// better on it: Ink and palette colors follow it, custom colors stay exact.
+    pub fn apply(self, doc: &Document) -> (Cow<'_, Document>, Option<[u8; 3]>) {
+        use crate::color_contrast::contrast;
+        match self {
+            Self::Transparent => (Cow::Borrowed(doc), None),
+            Self::Canvas => (Cow::Borrowed(doc), Some(doc.canvas_theme.background())),
+            Self::Color(paper) => {
+                let canvas = if contrast([0; 3], paper) >= contrast([255; 3], paper) {
+                    CanvasTheme::Light
+                } else {
+                    CanvasTheme::Dark
+                };
+                let doc = if doc.canvas_theme == canvas {
+                    Cow::Borrowed(doc)
+                } else {
+                    Cow::Owned(Document {
+                        canvas_theme: canvas,
+                        ..doc.clone()
+                    })
+                };
+                (doc, Some(paper))
+            }
+        }
+    }
+}
 
 pub fn parse_svg(svg: String) -> Result<resvg::usvg::Tree, String> {
     parse_svg_with_fontdb(&svg, crate::style::fontdb())
@@ -119,6 +160,7 @@ pub async fn publication(
     format: &'static str,
     pages: bool,
     editable: bool,
+    background: Background,
     max_pixels: u64,
 ) -> Result<Publication, String> {
     let (doc, notice) = figure_document(engine, doc).await?;
@@ -147,12 +189,12 @@ pub async fn publication(
             (None, None)
         };
         let figure = if pages {
-            pages_pdf(&doc).map(|bytes| Figure {
+            pages_pdf(&doc, background).map(|bytes| Figure {
                 bytes,
                 detail: None,
             })
         } else {
-            figure_with_budget_and_drawing(&doc, format, max_pixels, drawing.as_deref())
+            figure_with_budget_and_drawing(&doc, format, background, max_pixels, drawing.as_deref())
         }?;
         Ok::<_, String>((figure, detail))
     })
@@ -180,19 +222,27 @@ pub fn drawing(doc: &Document, format: &str) -> Result<Vec<u8>, String> {
 pub fn figure(doc: &Document, format: &str) -> Result<Figure, String> {
     with_attachment_notice(
         doc,
-        render_drawing(doc, format, false, RasterBudget::FILE, None),
+        render_drawing(
+            doc,
+            format,
+            false,
+            Background::Canvas,
+            RasterBudget::FILE,
+            None,
+        ),
     )
 }
 
 /// [`figure`] with PNG resolution chosen to fit `max_pixels`, capped at
 /// [`FILE_PIXELS`].
 pub fn figure_with_budget(doc: &Document, format: &str, max_pixels: u64) -> Result<Figure, String> {
-    figure_with_budget_and_drawing(doc, format, max_pixels, None)
+    figure_with_budget_and_drawing(doc, format, Background::Canvas, max_pixels, None)
 }
 
 fn figure_with_budget_and_drawing(
     doc: &Document,
     format: &str,
+    background: Background,
     max_pixels: u64,
     drawing: Option<&[u8]>,
 ) -> Result<Figure, String> {
@@ -202,6 +252,7 @@ fn figure_with_budget_and_drawing(
             doc,
             format,
             false,
+            background,
             RasterBudget {
                 adaptive: true,
                 pixels: max_pixels.min(FILE_PIXELS),
@@ -224,18 +275,19 @@ pub fn clipboard_drawing(doc: &Document, format: &str) -> Result<Vec<u8>, String
 /// Preserve format details (including bounded PNG dimensions/DPI) in an
 /// explicit format-copy receipt as well as in file-export receipts.
 pub fn clipboard_figure(doc: &Document, format: &str) -> Result<Figure, String> {
-    clipboard_figure_with_drawing(doc, format, None)
+    clipboard_figure_with_drawing(doc, format, Background::Transparent, None)
 }
 
 /// Render a clipboard figure, optionally carrying an already prepared drawing.
 pub fn clipboard_figure_with_drawing(
     doc: &Document,
     format: &str,
+    background: Background,
     drawing: Option<&[u8]>,
 ) -> Result<Figure, String> {
     with_attachment_notice(
         doc,
-        render_drawing(doc, format, true, RasterBudget::FILE, drawing),
+        render_drawing(doc, format, true, background, RasterBudget::FILE, drawing),
     )
 }
 
@@ -243,7 +295,7 @@ pub fn clipboard_figure_with_drawing(
 pub fn office_preview(doc: &Document) -> Result<reshiki_windows::OfficePreview, String> {
     Ok(reshiki_windows::OfficePreview {
         png: clipboard_png(doc)?,
-        metafile: crate::native_windows::office_metafile(doc)?,
+        metafile: crate::native_windows::office_metafile(doc, Background::Transparent)?,
     })
 }
 
@@ -267,15 +319,14 @@ fn render_drawing(
     doc: &Document,
     format: &str,
     clipboard: bool,
+    background: Background,
     file_budget: RasterBudget,
     drawing: Option<&[u8]>,
 ) -> Result<Figure, String> {
     doc.validate()?;
-    let svg = if clipboard {
-        scene::svg(doc)
-    } else {
-        scene::svg_with_background(doc)
-    };
+    let (doc, paper) = background.apply(doc);
+    let doc = doc.as_ref();
+    let svg = scene::svg_on(doc, paper);
     if format == "svg" {
         let mut bytes = svg.into_bytes();
         if let Some(drawing) = drawing {
@@ -317,8 +368,7 @@ fn render_drawing(
             let scale = dpi as f32 / 96.0;
             let mut pixmap =
                 resvg::tiny_skia::Pixmap::new(width, height).ok_or("Could not allocate image")?;
-            if !clipboard {
-                let [r, g, b] = doc.canvas_theme.background();
+            if let Some([r, g, b]) = paper {
                 pixmap.fill(resvg::tiny_skia::Color::from_rgba8(r, g, b, 255));
             }
             resvg::render(
@@ -490,15 +540,17 @@ fn png_dimensions(
 }
 /// Export all physical sheets without scaling the drawing. Page gaps and margin
 /// guides belong to the editor only; marks beyond a sheet edge are clipped.
-pub fn pages_pdf(doc: &Document) -> Result<Vec<u8>, String> {
+pub fn pages_pdf(doc: &Document, background: Background) -> Result<Vec<u8>, String> {
     use pdf_writer::{Content, Finish, Name, Pdf, Rect, Ref};
     use std::collections::HashMap;
     doc.validate()?;
+    let (doc, paper) = background.apply(doc);
+    let doc = doc.as_ref();
     let layout = doc
         .page_layout
         .as_ref()
         .ok_or("Set up publication pages before exporting a page PDF.")?;
-    let svg = scene::svg_with_background(doc);
+    let svg = scene::svg_on(doc, paper);
     let tree = parse_svg(svg)?;
     let (chunk, root) = svg2pdf::to_chunk(&tree, svg2pdf::ConversionOptions::default())
         .map_err(|e| e.to_string())?;
@@ -533,11 +585,13 @@ pub fn pages_pdf(doc: &Document) -> Result<Vec<u8>, String> {
         page.resources().x_objects().pair(name, root);
         page.finish();
         let mut content = Content::new();
-        let [r, g, b] = doc.canvas_theme.background().map(|c| f32::from(c) / 255.);
-        content
-            .set_fill_rgb(r, g, b)
-            .rect(0., 0., layout.width_pt, layout.height_pt)
-            .fill_nonzero();
+        if let Some(paper) = paper {
+            let [r, g, b] = paper.map(|c| f32::from(c) / 255.);
+            content
+                .set_fill_rgb(r, g, b)
+                .rect(0., 0., layout.width_pt, layout.height_pt)
+                .fill_nonzero();
+        }
         content
             .save_state()
             .rect(0., 0., layout.width_pt, layout.height_pt)

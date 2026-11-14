@@ -344,7 +344,7 @@ fn exported_pictures_preserve_pixels_transparency_rotation_and_layer_order() {
     let pdf = reshiki::export::drawing(&doc, "pdf").unwrap();
     assert!(String::from_utf8_lossy(&pdf).contains("/Subtype /Image"));
     doc.page_layout = Some(Default::default());
-    let pdf = reshiki::export::pages_pdf(&doc).unwrap();
+    let pdf = reshiki::export::pages_pdf(&doc, reshiki::export::Background::Canvas).unwrap();
     assert!(String::from_utf8_lossy(&pdf).contains("/Subtype /Image"));
     let mut cover = Graphic::dragged(
         2,

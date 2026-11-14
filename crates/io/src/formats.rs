@@ -80,9 +80,17 @@ pub async fn write_with_engine(
     engine: &LocalEngine,
 ) -> Result<Vec<u8>, String> {
     if let Some(figure) = ["svg", "png", "pdf"].into_iter().find(|f| *f == format) {
-        return export::publication(engine, doc, figure, false, false, EXPORT_PNG_PIXELS)
-            .await
-            .map(|Publication { bytes, .. }| bytes);
+        return export::publication(
+            engine,
+            doc,
+            figure,
+            false,
+            false,
+            export::Background::Canvas,
+            EXPORT_PNG_PIXELS,
+        )
+        .await
+        .map(|Publication { bytes, .. }| bytes);
     }
     match format {
         "rsk" | "reshiki" => doc.file_json(),

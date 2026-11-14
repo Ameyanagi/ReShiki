@@ -3444,7 +3444,7 @@ pub fn bounds(drawing: &[Primitive]) -> (Point, Point) {
 }
 /// The themed drawing with a transparent surround, for compositing and geometry checks.
 pub fn svg(doc: &Document) -> String {
-    svg::render_svg(doc, false)
+    svg::render_svg(doc, None)
 }
 /// Part of a scene alone over `lo..hi`, for rasterizing it the way figure
 /// export does: the canvas paints 3D models this way.
@@ -3453,7 +3453,11 @@ pub fn svg_part(drawing: &[Primitive], lo: Point, hi: Point) -> String {
 }
 /// A figure carries the canvas background when exported or copied.
 pub fn svg_with_background(doc: &Document) -> String {
-    svg::render_svg(doc, true)
+    svg::render_svg(doc, Some(doc.canvas_theme.background()))
+}
+/// The drawing on `paper`, or with a transparent surround for `None`.
+pub fn svg_on(doc: &Document, paper: Option<[u8; 3]>) -> String {
+    svg::render_svg(doc, paper)
 }
 
 #[cfg(test)]

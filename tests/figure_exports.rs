@@ -16,7 +16,7 @@ async fn sequence(
     let (doc, notice) = export::figure_document(engine, doc).await?;
     let figure = tokio::task::spawn_blocking(move || {
         if pages {
-            export::pages_pdf(&doc).map(|bytes| export::Figure {
+            export::pages_pdf(&doc, export::Background::Canvas).map(|bytes| export::Figure {
                 bytes,
                 detail: None,
             })
@@ -92,9 +92,17 @@ async fn publication_matches_sequence() -> anyhow::Result<()> {
     let engine = LocalEngine::default();
     for (case, doc, format, pages) in publication_cases()? {
         let expected = sequence(&engine, doc.clone(), format, pages).await;
-        let actual = export::publication(&engine, doc, format, pages, false, export::FILE_PIXELS)
-            .await
-            .map(|publication| (publication.bytes, publication.details));
+        let actual = export::publication(
+            &engine,
+            doc,
+            format,
+            pages,
+            false,
+            export::Background::Canvas,
+            export::FILE_PIXELS,
+        )
+        .await
+        .map(|publication| (publication.bytes, publication.details));
         // Compare without printing raster bytes on a mismatch.
         assert!(actual == expected, "{case}");
     }
@@ -121,6 +129,7 @@ async fn editable_option_embeds_vector_drawings_but_never_pages() -> anyhow::Res
                 format,
                 pages,
                 editable,
+                export::Background::Canvas,
                 export::FILE_PIXELS,
             )
             .await
@@ -195,7 +204,8 @@ async fn unresolved_aromatic_drawing_exports_without_assigning_chemistry() -> an
         .await
         .map_err(anyhow::Error::msg)?;
     assert!(notice.is_some());
-    let bytes = export::pages_pdf(&pages).map_err(anyhow::Error::msg)?;
+    let bytes =
+        export::pages_pdf(&pages, export::Background::Canvas).map_err(anyhow::Error::msg)?;
     assert!(bytes.starts_with(b"%PDF-"));
     assert_eq!(
         String::from_utf8_lossy(&bytes).matches("/MediaBox").count(),

@@ -30,6 +30,43 @@ impl std::fmt::Display for Mode {
         })
     }
 }
+/// The background of copied pictures or exported files.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Background {
+    #[default]
+    Transparent,
+    Canvas,
+    White,
+    Black,
+    /// The chosen color of [`Settings::background_colors`].
+    Custom,
+}
+impl Background {
+    /// The exporter's background, with `custom` as the Custom color.
+    pub fn paper(self, custom: [u8; 3]) -> reshiki::export::Background {
+        use reshiki::export::Background as Paper;
+        match self {
+            Self::Transparent => Paper::Transparent,
+            Self::Canvas => Paper::Canvas,
+            Self::White => Paper::Color([255; 3]),
+            Self::Black => Paper::Color([0; 3]),
+            Self::Custom => Paper::Color(custom),
+        }
+    }
+}
+impl std::fmt::Display for Background {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::Transparent => "Transparent",
+            Self::Canvas => "Canvas",
+            Self::White => "White",
+            Self::Black => "Black",
+            Self::Custom => "Custom",
+        })
+    }
+}
+
 #[derive(Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
@@ -55,6 +92,14 @@ pub struct Settings {
     pub export_svg_live_text: bool,
     /// Display/input preference for the five physical Drawing Style fields.
     pub drawing_style_unit: reshiki::style::units::Unit,
+    /// Background of copied pictures (transparent by default).
+    pub copy_background: Background,
+    /// Background of exported files (the canvas by default).
+    pub export_background: Background,
+    /// The color that Custom uses.
+    pub custom_background: [u8; 3],
+    /// Saved colors for Custom, newest first.
+    pub background_colors: Vec<[u8; 3]>,
 }
 impl Default for Settings {
     fn default() -> Self {
@@ -70,6 +115,10 @@ impl Default for Settings {
             export_editable_drawing: true,
             export_svg_live_text: false,
             drawing_style_unit: Default::default(),
+            copy_background: Background::Transparent,
+            export_background: Background::Canvas,
+            custom_background: [244, 239, 230],
+            background_colors: Vec::new(),
         }
     }
 }

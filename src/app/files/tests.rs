@@ -99,9 +99,13 @@ async fn vector_payloads_open_as_untitled_drawings() -> Result<(), String> {
     let drawing = drawing.current();
     let envelope = reshiki::payload::encode(&drawing)?;
     for format in ["svg", "pdf"] {
-        let contents =
-            reshiki::export::clipboard_figure_with_drawing(&drawing, format, Some(&envelope))?
-                .bytes;
+        let contents = reshiki::export::clipboard_figure_with_drawing(
+            &drawing,
+            format,
+            reshiki::export::Background::Transparent,
+            Some(&envelope),
+        )?
+        .bytes;
         let path = PathBuf::from(format!("images/oxygen.{}", format.to_ascii_uppercase()));
         let opened = prepare_contents(path, Ok(contents)).await;
         assert!(matches!(&opened, Some((_, Ok(Prepared::Picture(_, None))))));
@@ -137,6 +141,7 @@ fn vector_open_keeps_the_refusal_without_a_payload_and_explains_damage() -> Resu
         let invalid = reshiki::export::clipboard_figure_with_drawing(
             &Document::default(),
             format,
+            reshiki::export::Background::Transparent,
             Some(b"invalid payload"),
         )?
         .bytes;

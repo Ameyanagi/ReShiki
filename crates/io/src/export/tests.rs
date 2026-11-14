@@ -26,15 +26,24 @@ async fn editable_png_contains_the_prepared_drawing_and_preserves_pixels() -> an
         "png",
         false,
         false,
+        Background::Canvas,
         export::FILE_PIXELS,
     )
     .await
     .map_err(anyhow::Error::msg)?;
     assert!(crate::payload::read(&plain.bytes).is_none());
     assert_eq!(plain.details.len(), 1);
-    let editable = export::publication(&engine, doc, "png", false, true, export::FILE_PIXELS)
-        .await
-        .map_err(anyhow::Error::msg)?;
+    let editable = export::publication(
+        &engine,
+        doc,
+        "png",
+        false,
+        true,
+        Background::Canvas,
+        export::FILE_PIXELS,
+    )
+    .await
+    .map_err(anyhow::Error::msg)?;
     let embedded = crate::payload::read(&editable.bytes)
         .context("embedded drawing")?
         .map_err(anyhow::Error::msg)?;
@@ -89,6 +98,7 @@ async fn editable_png_preserves_custom_colors_from_older_dark_snapshots() {
             "png",
             false,
             true,
+            Background::Canvas,
             FILE_PIXELS,
         )
         .await
@@ -144,6 +154,7 @@ async fn editable_figure_export_skips_a_drawing_over_the_embed_limit() {
             format,
             false,
             true,
+            Background::Canvas,
             FILE_PIXELS,
         )
         .await
@@ -370,6 +381,112 @@ fn clipboard_is_transparent_and_files_keep_canvas_background() {
             );
         }
     }
+}
+
+/// A dark-canvas drawing: a bond and an O label in Ink, and a custom red label.
+fn dark_ink_drawing() -> Document {
+    use crate::{
+        canvas_theme::CanvasTheme,
+        document::{Annotation, Point},
+        typography::TextFormat,
+    };
+    let mut doc = Document {
+        canvas_theme: CanvasTheme::Dark,
+        ..Default::default()
+    };
+    let a = doc.add_atom("C", Point::default());
+    let b = doc.add_atom("O", Point::new(40., 0.));
+    doc.add_bond(a, b, 1, "plain");
+    let mut format = TextFormat::default();
+    format.style.color = crate::palette::Color::Custom([180, 50, 55]);
+    doc.annotations.push(Annotation {
+        id: doc.next_id(),
+        position: Point::new(0., 40.),
+        text: "N".into(),
+        format,
+    });
+    doc
+}
+
+fn rgba(png: &[u8]) -> Vec<[u8; 4]> {
+    let mut reader = png::Decoder::new(std::io::Cursor::new(png))
+        .read_info()
+        .unwrap();
+    let mut pixels = vec![0; reader.output_buffer_size()];
+    let frame = reader.next_frame(&mut pixels).unwrap();
+    pixels[..frame.buffer_size()].as_chunks::<4>().0.to_vec()
+}
+
+#[test]
+fn picture_backgrounds_paint_the_png_and_swap_black_and_white_ink() {
+    let doc = dark_ink_drawing();
+    let navy = [30, 42, 68];
+    let paper = [244, 239, 230];
+    // Background, corner pixel, and the ink that must appear.
+    let cases = [
+        (Background::Transparent, [0, 0, 0, 0], [255, 255, 255]),
+        (Background::Canvas, [0, 0, 0, 255], [255, 255, 255]),
+        (Background::Color([255; 3]), [255, 255, 255, 255], [0, 0, 0]),
+        (Background::Color([0; 3]), [0, 0, 0, 255], [255, 255, 255]),
+        (Background::Color(paper), [244, 239, 230, 255], [0, 0, 0]),
+        (Background::Color(navy), [30, 42, 68, 255], [255, 255, 255]),
+    ];
+    for (background, corner, ink) in cases {
+        for clipboard in [true, false] {
+            let bytes = if clipboard {
+                clipboard_figure_with_drawing(&doc, "png", background, None)
+            } else {
+                figure_with_budget_and_drawing(&doc, "png", background, FILE_PIXELS, None)
+            }
+            .unwrap()
+            .bytes;
+            let pixels = rgba(&bytes);
+            assert_eq!(pixels[0], corner, "{background:?}");
+            assert_eq!(pixels[pixels.len() - 1], corner, "{background:?}");
+            assert!(
+                pixels.iter().any(|p| p[..3] == ink && p[3] == 255),
+                "{background:?} keeps readable ink"
+            );
+            let other = ink.map(|c| 255 - c);
+            assert!(
+                !pixels
+                    .iter()
+                    .any(|p| p[..3] == other && p[3] == 255 && *p != corner),
+                "{background:?} has no ink of the other brightness"
+            );
+            // The custom color stays exact on every background.
+            assert!(pixels.iter().any(|p| p[..3] == [180, 50, 55]));
+        }
+    }
+}
+
+#[test]
+fn picture_backgrounds_reach_svg_paper_and_ink() {
+    let doc = dark_ink_drawing();
+    let svg = |background| {
+        String::from_utf8(
+            figure_with_budget_and_drawing(&doc, "svg", background, FILE_PIXELS, None)
+                .unwrap()
+                .bytes,
+        )
+        .unwrap()
+    };
+    let white = svg(Background::Color([255; 3]));
+    assert!(white.contains("<rect") && white.contains("fill=\"rgb(255,255,255)\""));
+    assert!(white.contains("rgb(0,0,0)"), "dark ink on white");
+    let canvas = svg(Background::Canvas);
+    assert!(canvas.contains("fill=\"rgb(0,0,0)\"/>") && canvas.contains("rgb(255,255,255)"));
+    assert!(!svg(Background::Transparent).contains("<rect"));
+    assert_eq!(
+        svg(Background::Canvas),
+        String::from_utf8(drawing(&doc, "svg").unwrap()).unwrap(),
+        "file export keeps the canvas by default"
+    );
+    assert_eq!(
+        svg(Background::Transparent),
+        scene::svg(&doc),
+        "transparent keeps the canvas ink, as Copy did"
+    );
 }
 #[test]
 fn outlined_svg_and_office_exports_preserve_text_geometry_and_physical_size() {
@@ -783,9 +900,10 @@ fn editable_pdf_has_catalog_xmp_without_compression_and_valid_cross_references()
 
     let doc = vector_payload_document();
     let envelope = crate::payload::encode(&doc).unwrap();
-    let bytes = clipboard_figure_with_drawing(&doc, "pdf", Some(&envelope))
-        .unwrap()
-        .bytes;
+    let bytes =
+        clipboard_figure_with_drawing(&doc, "pdf", Background::Transparent, Some(&envelope))
+            .unwrap()
+            .bytes;
     let catalog = pdf_text_object(&bytes, 1);
     let metadata_id = catalog
         .split_once("/Metadata ")
@@ -832,12 +950,28 @@ async fn publication_vectors_include_the_prepared_drawing_only_when_enabled() {
     let engine = Default::default();
     let mut live_drawing = None;
     for format in ["svg", "svg-office", "pdf"] {
-        let plain = publication(&engine, doc.clone(), format, false, false, FILE_PIXELS)
-            .await
-            .unwrap();
-        let editable = publication(&engine, doc.clone(), format, false, true, FILE_PIXELS)
-            .await
-            .unwrap();
+        let plain = publication(
+            &engine,
+            doc.clone(),
+            format,
+            false,
+            false,
+            Background::Canvas,
+            FILE_PIXELS,
+        )
+        .await
+        .unwrap();
+        let editable = publication(
+            &engine,
+            doc.clone(),
+            format,
+            false,
+            true,
+            Background::Canvas,
+            FILE_PIXELS,
+        )
+        .await
+        .unwrap();
         assert!(crate::payload::read(&plain.bytes).is_none(), "{format}");
         let restored = crate::payload::read(&editable.bytes).unwrap().unwrap();
         assert_eq!(
@@ -878,12 +1012,28 @@ async fn publication_vectors_include_the_prepared_drawing_only_when_enabled() {
     }
     let mut pages = doc;
     pages.page_layout = Some(Default::default());
-    let plain = publication(&engine, pages.clone(), "pdf", true, false, FILE_PIXELS)
-        .await
-        .unwrap();
-    let editable = publication(&engine, pages, "pdf", true, true, FILE_PIXELS)
-        .await
-        .unwrap();
+    let plain = publication(
+        &engine,
+        pages.clone(),
+        "pdf",
+        true,
+        false,
+        Background::Canvas,
+        FILE_PIXELS,
+    )
+    .await
+    .unwrap();
+    let editable = publication(
+        &engine,
+        pages,
+        "pdf",
+        true,
+        true,
+        Background::Canvas,
+        FILE_PIXELS,
+    )
+    .await
+    .unwrap();
     assert_eq!(editable.details, plain.details);
     assert!(crate::payload::read(&editable.bytes).is_none());
 }

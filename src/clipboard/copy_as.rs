@@ -239,7 +239,7 @@ pub async fn prepare_chemical_text(
             Some(format!("Chemistry could not be refreshed: {error}")),
         ),
     };
-    let mut copy = prepare_as(engine, snapshot, format).await?;
+    let mut copy = prepare_as(engine, snapshot, format, Default::default()).await?;
     if let Some(notice) = notice {
         copy.notices.insert(0, notice);
     }
@@ -274,10 +274,12 @@ pub fn prepare_name(name: String) -> PreparedCopy {
 
 /// Prepare the complete chosen payload before touching the existing clipboard.
 /// Warnings are retained; a failed conversion never falls back to another format.
+/// `pictures` applies to PNG, SVG and PDF.
 pub async fn prepare_as(
     engine: LocalEngine,
     original: Document,
     format: CopyFormat,
+    pictures: super::Pictures,
 ) -> Result<PreparedCopy, String> {
     original.validate()?;
     // Conversion remains usable offline even without a native clipboard (e.g.
@@ -328,11 +330,16 @@ pub async fn prepare_as(
         let doc = doc.current();
         notices.extend(notice);
         let (figure, notice) = crate::task::spawn_blocking(move || {
-            let envelope = payload::encode(&doc)?;
-            let drawing = (envelope.len() <= payload::EMBED_LIMIT).then_some(envelope.as_slice());
-            let figure = super::clipboard_figure(&doc, format.code(), drawing)?;
-            let notice = drawing
-                .is_none()
+            let envelope = pictures
+                .editable
+                .then(|| payload::encode(&doc))
+                .transpose()?;
+            let drawing = envelope
+                .as_deref()
+                .filter(|envelope| envelope.len() <= payload::EMBED_LIMIT);
+            let figure =
+                super::clipboard_figure(&doc, format.code(), pictures.background, drawing)?;
+            let notice = (envelope.is_some() && drawing.is_none())
                 .then_some("Picture copied without the editable drawing (too large)");
             Ok::<_, String>((figure, notice))
         })

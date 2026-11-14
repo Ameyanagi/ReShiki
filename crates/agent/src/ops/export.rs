@@ -171,6 +171,7 @@ pub(crate) async fn export_bytes(
             figure_format,
             pages,
             false,
+            crate::export::Background::Canvas,
             budgets.export_png_pixels,
         )
         .await

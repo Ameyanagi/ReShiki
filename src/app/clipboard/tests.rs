@@ -426,7 +426,7 @@ fn an_ordinary_copy_outliving_its_tab_cannot_overtake_a_new_copy_as() {
     app.tab.selected = vec![atom];
     app.tab.saved = app.tab.doc.clone();
     let (id, epoch, revision) = (app.tab.id, app.tab.file_epoch, app.tab.revision);
-    let _task = app.copy_native(false, false);
+    let _task = app.copy_native(false, false, None);
     assert!(app.native_copy_busy);
     let _ = app.close_active_tab();
     app.tab.doc.add_atom("N", Point::default());
