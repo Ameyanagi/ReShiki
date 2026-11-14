@@ -78,6 +78,7 @@ impl Drawing {
                 &mut drawing,
                 &source,
             ));
+            notices.extend(part.file.notices);
             if source
                 .state
                 .metadata

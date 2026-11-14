@@ -308,6 +308,99 @@ fn v3000_import_and_reference_output_preserve_and_or_groups() -> anyhow::Result<
     Ok(())
 }
 
+/// A charge or hydrogen count that does not fit its field is left out with a
+/// warning; it used to wrap (256 became 0, 200 became -56).
+#[test]
+fn substance_group_charges_and_hydrogen_counts_out_of_range_are_left_out() -> anyhow::Result<()> {
+    let group = |atoms: &str, field: &str, value: &str| {
+        ENHANCED_STEREO_BASE
+            .replace("COUNTS 6 5 0", "COUNTS 6 5 1")
+            .replace(
+                "M  V30 END CTAB",
+                &format!(
+                    "M  V30 BEGIN SGROUP\n\
+                     M  V30 1 DAT 0 ATOMS=({atoms}) FIELDNAME={field} FIELDDATA={value}\n\
+                     M  V30 END SGROUP\nM  V30 END CTAB"
+                ),
+            )
+    };
+    let plain = read(ENHANCED_STEREO_BASE)?.molecule.state.graph;
+    for (field, value, notice) in [
+        (
+            "ZCH",
+            "256",
+            "Ignored the charge 256 in the ZCH data group: it is outside -128 to 127",
+        ),
+        (
+            "ZCH",
+            "200",
+            "Ignored the charge 200 in the ZCH data group: it is outside -128 to 127",
+        ),
+        (
+            "ZCH",
+            "-129",
+            "Ignored the charge -129 in the ZCH data group: it is outside -128 to 127",
+        ),
+        (
+            "HYD",
+            "256",
+            "Ignored the hydrogen count 256 in the HYD data group: it is outside 0 to 255",
+        ),
+        (
+            "HYD",
+            "-1",
+            "Ignored the hydrogen count -1 in the HYD data group: it is outside 0 to 255",
+        ),
+        (
+            "MRV_IMPLICIT_H",
+            "IMPL_H-1",
+            "Ignored the hydrogen count -1 in the MRV_IMPLICIT_H data group: it is outside 0 to 255",
+        ),
+    ] {
+        let imported = read(&group("1 1", field, value))?;
+        let atom = &imported.molecule.state.graph.atoms[0];
+        assert_eq!(atom.charge, plain.atoms[0].charge, "{field} {value}");
+        assert_eq!(
+            atom.explicit_hydrogens, plain.atoms[0].explicit_hydrogens,
+            "{field} {value}"
+        );
+        assert_eq!(imported.annotations.notices, [notice]);
+        let (_, _, notices) = imported.display_document()?;
+        assert!(notices.iter().any(|n| n == notice), "{notices:?}");
+    }
+    // The values that fit still apply.
+    let imported = read(&group("2 1 2", "ZCH", "1;256"))?;
+    let atoms = &imported.molecule.state.graph.atoms;
+    assert_eq!(
+        (atoms[0].charge, atoms[1].charge),
+        (1, plain.atoms[1].charge)
+    );
+    assert_eq!(imported.annotations.notices.len(), 1);
+    assert!(
+        read(&group("1 1", "ZCH", "1"))?
+            .annotations
+            .notices
+            .is_empty()
+    );
+    // A reaction reports the notices of its participants.
+    let reaction = crate::chemistry::reaction::Imported {
+        reactants: vec![read(&group("1 1", "ZCH", "256"))?],
+        products: vec![read(ENHANCED_STEREO_BASE)?],
+        agents: Vec::new(),
+    };
+    let drawing = reaction.drawing()?;
+    let labels = drawing.labels()?;
+    let (_, notices) = drawing.finish_with_notices(labels)?;
+    assert_eq!(
+        notices
+            .iter()
+            .filter(|n| n.starts_with("Ignored the charge 256 in the ZCH data group"))
+            .count(),
+        1
+    );
+    Ok(())
+}
+
 #[test]
 fn mixed_mol_stereo_marks_only_ungrouped_centres_absolute() -> anyhow::Result<()> {
     for label in ["RAC", "REL"] {

@@ -193,18 +193,28 @@ fn parse_inner(text: &str) -> Result<Parsed> {
     parse_with(text, false)
 }
 
+/// Whether a byte at either end of SMILES or SMARTS text is kept. The
+/// reference lexer keeps a `char` above 32; where `char` is signed that drops
+/// control bytes, space and every byte of 0x80 or above. This states that rule
+/// outright, so Linux arm64, whose `char` is unsigned, trims the same bytes.
+pub(crate) fn boundary_content(byte: u8) -> bool {
+    byte > 0x20 && byte < 0x80
+}
+
 fn parse_with(text: &str, partial: bool) -> Result<Parsed> {
     if text.len() > 1024 * 1024 {
         return Err(Error::Limit);
     }
     let bytes = text.as_bytes();
+    // Trim at both ends every byte that is not printable ASCII: the result
+    // of the reference lexer's signed-char comparison, on every platform.
     let start = bytes
         .iter()
-        .position(|&b| (b as std::os::raw::c_char) > 32)
+        .position(|&b| boundary_content(b))
         .unwrap_or(bytes.len());
     let end = bytes
         .iter()
-        .rposition(|&b| (b as std::os::raw::c_char) > 32)
+        .rposition(|&b| boundary_content(b))
         .map_or(start, |i| i + 1);
     let mut reader = Reader {
         bytes: bytes.get(start..end).ok_or(Error::Limit)?,

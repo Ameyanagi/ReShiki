@@ -203,6 +203,28 @@ fn a_recovery_dialog_keeps_background_update_receipts_and_save_questions_working
 }
 
 #[test]
+fn drafts_from_a_newer_version_show_the_banner_until_dismissed() {
+    let (directory, store, mut app) = seeded();
+    let mut newer = serde_json::to_value(&app.recovered[0].snapshot).unwrap();
+    newer["document"]["version"] = (reshiki::document::VERSION + 1).into();
+    std::fs::write(
+        directory.path().join("4294967294-newer.json"),
+        serde_json::to_vec(&newer).unwrap(),
+    )
+    .unwrap();
+    let scan = store.scan();
+    assert_eq!((scan.candidates.len(), scan.newer), (2, 1));
+    app.recovered.clear();
+    assert!(!app.recovery_banner_shown());
+    app.recovery_manager = State::found(scan.newer);
+    assert!(app.recovery_banner_shown());
+    let _ = app.recovery_banner();
+    let _ = app.update(Message::DismissRecovery);
+    assert!(!app.recovery_banner_shown());
+    assert!(directory.path().join("4294967294-newer.json").exists());
+}
+
+#[test]
 fn titles_dates_and_ages_are_bounded_and_do_not_expose_source_directories() {
     let (_directory, _store, mut app) = seeded();
     app.recovered[0].snapshot.source = Some("/synthetic-account/private/aspirin.rsk".into());

@@ -28,19 +28,78 @@ pub fn with_default_extension(path: &Path, extension: &str) -> PathBuf {
 }
 
 /// Replace only after the complete file has been written beside its destination.
+/// A symbolic link stays a link and the file it names is replaced. On Unix the
+/// replaced file keeps its mode, and a new file is private to its owner (0600):
+/// recovery drafts, settings and caches are written here.
 pub fn write_atomic(path: &Path, bytes: &[u8]) -> Result<(), String> {
+    write(path, bytes, 0o600)
+}
+
+/// [`write_atomic`] for a file the user saves. On Unix a new file gets 0666
+/// less the umask, as `File::create` gives.
+pub fn write_saved(path: &Path, bytes: &[u8]) -> Result<(), String> {
+    write(path, bytes, 0o666)
+}
+
+/// An empty temporary file in `parent`, to be written and then renamed over
+/// its destination. On Unix its mode is `mode` less the umask rather than
+/// tempfile's private 0600; other platforms ignore `mode`.
+pub fn temporary_in(
+    parent: &Path,
+    #[cfg(unix)] mode: u32,
+    #[cfg(not(unix))] _: u32,
+) -> io::Result<tempfile::NamedTempFile> {
+    #[cfg(unix)]
+    {
+        use std::{fs::Permissions, os::unix::fs::PermissionsExt};
+        tempfile::Builder::new()
+            .permissions(Permissions::from_mode(mode))
+            .tempfile_in(parent)
+    }
+    #[cfg(not(unix))]
+    tempfile::NamedTempFile::new_in(parent)
+}
+
+fn write(path: &Path, bytes: &[u8], mode: u32) -> Result<(), String> {
     #[cfg(target_arch = "wasm32")]
     if let Some(key) = browser::key(path) {
         return browser::write(&key, bytes);
     }
+    // Save through links, even a chain whose last target is gone, so no link is
+    // replaced; `with_file_name` resolves a relative target against its link's
+    // folder. A loop is refused, as the OS refuses to open it.
+    let opened = path;
+    let mut path = path.to_path_buf();
+    for _ in 0..40 {
+        if !path.is_symlink() {
+            break;
+        }
+        let target = std::fs::read_link(&path).map_err(|e| e.to_string())?;
+        path = path.with_file_name(target);
+    }
+    if path.is_symlink() {
+        return Err(format!("Too many symbolic links: {}", opened.display()));
+    }
+    let path = path.as_path();
     let parent = path
         .parent()
         .filter(|p| !p.as_os_str().is_empty())
         .unwrap_or(Path::new("."));
-    let mut temp = tempfile::NamedTempFile::new_in(parent).map_err(|e| e.to_string())?;
+    let mut temp = temporary_in(parent, mode).map_err(|e| e.to_string())?;
+    #[cfg(unix)]
+    if let Ok(metadata) = std::fs::metadata(path) {
+        temp.as_file()
+            .set_permissions(metadata.permissions())
+            .map_err(|e| e.to_string())?;
+    }
     temp.write_all(bytes).map_err(|e| e.to_string())?;
     temp.as_file().sync_all().map_err(|e| e.to_string())?;
     temp.persist(path).map_err(|e| e.to_string())?;
+    // The rename is durable once its folder is synced.
+    #[cfg(unix)]
+    std::fs::File::open(parent)
+        .and_then(|folder| folder.sync_all())
+        .map_err(|e| e.to_string())?;
     Ok(())
 }
 

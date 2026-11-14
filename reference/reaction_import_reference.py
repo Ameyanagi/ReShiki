@@ -110,9 +110,7 @@ def emit(name, text):
                 text=text,
                 expected=expected,
                 failure=failure,
-                restriction=generic_restriction(text, reaction=True)
-                if expected is not None
-                else None,
+                restriction=generic_restriction(text, reaction=True, original=expected is not None),
                 renumbered=query_renumbering(
                     text, expected is not None, read, "Query reaction atom"
                 ),

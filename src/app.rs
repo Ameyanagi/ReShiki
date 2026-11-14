@@ -516,10 +516,10 @@ impl App {
         } else {
             Recovery::standard().ok()
         };
-        let recovered = recovery
-            .as_ref()
-            .map(|r| r.candidates())
-            .unwrap_or_default();
+        let reshiki::recovery::Scan {
+            candidates: recovered,
+            newer: newer_drafts,
+        } = recovery.as_ref().map(|r| r.scan()).unwrap_or_default();
         let recovery_root = recovery
             .as_ref()
             .and_then(|r| r.session.parent().map(PathBuf::from));
@@ -570,7 +570,7 @@ impl App {
             aromatic_ring: false,
             custom_element: String::new(),
             recovered,
-            recovery_manager: recovery_manager::State::default(),
+            recovery_manager: recovery_manager::State::found(newer_drafts),
             exit: autosave::Exit::default(),
             inspector_open: true,
             inspector_tab: InspectorTab::Properties,

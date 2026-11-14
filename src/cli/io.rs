@@ -10,7 +10,6 @@ use std::{
     io::{self, Read, Write},
     path::{Path, PathBuf},
 };
-use tempfile::NamedTempFile;
 
 /// The most bytes read for an import `format`: [`Budgets::max_text_bytes`],
 /// or for cdx the raw size whose base64 fits [`Budgets::max_cdx_base64`].
@@ -56,7 +55,9 @@ pub(crate) fn write_output(path: &Path, bytes: &[u8], force: bool) -> Result<(),
         .parent()
         .filter(|parent| !parent.as_os_str().is_empty())
         .unwrap_or(Path::new("."));
-    let mut file = temporary_in(parent).map_err(failed)?;
+    // 0666 less the umask, the mode `File::create` gives a new file, so the
+    // published output gets the user's usual mode.
+    let mut file = crate::storage::temporary_in(parent, 0o666).map_err(failed)?;
     file.write_all(bytes).map_err(failed)?;
     file.as_file().sync_all().map_err(failed)?;
     let persisted = if force {
@@ -141,21 +142,4 @@ pub(crate) fn write_skill(
         write_output(&target, bytes, force)?;
     }
     Ok(root)
-}
-
-/// An empty temporary file in `parent`. On Unix its mode is 0666 less the
-/// umask, the mode `File::create` gives a new file, rather than tempfile's
-/// private 0600, so the published output gets the user's usual mode.
-#[cfg(unix)]
-fn temporary_in(parent: &Path) -> io::Result<NamedTempFile> {
-    use std::{fs::Permissions, os::unix::fs::PermissionsExt};
-    tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o666))
-        .tempfile_in(parent)
-}
-
-/// An empty temporary file in `parent`.
-#[cfg(not(unix))]
-fn temporary_in(parent: &Path) -> io::Result<NamedTempFile> {
-    NamedTempFile::new_in(parent)
 }

@@ -38,6 +38,7 @@ impl Imported {
         if let Some(notice) = imported.restore_superatoms(&mut document) {
             notices.push(notice);
         }
+        notices.extend(imported.annotations.notices.iter().cloned());
         let molecule = if restored {
             document::prepare(&document)?
         } else {

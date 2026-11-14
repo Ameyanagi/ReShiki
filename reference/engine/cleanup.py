@@ -60,7 +60,7 @@ def fragments(doc):
 
 
 def orient(mol, old, fixed, keep_orientation):
-    """Rigid rotation only: never reflect or change the chemical drawing scale."""
+    """Rigid motion only: never change the chemical drawing scale."""
     conf = mol.GetConformer()
     new = [conf.GetAtomPosition(i) for i in range(mol.GetNumAtoms())]
     if len(fixed) >= 2:
@@ -73,15 +73,28 @@ def orient(mol, old, fixed, keep_orientation):
         n = len(new)
         bx, by = sum(p.x for p in old) / n, sum(p.y for p in old) / n
         ax, ay = sum(p.x for p in new) / n, sum(p.y for p in new) / n
-    angle = 0.0
+    angle, flip = 0.0, 1.0
     if keep_orientation:
         dot = sum((p.x - ax) * (q.x - bx) + (p.y - ay) * (q.y - by) for p, q in zip(new, old))
         cross = sum((p.x - ax) * (q.y - by) - (p.y - ay) * (q.x - bx) for p, q in zip(new, old))
+        # The layout can be the mirror image of the drawing (#1121). Reflect it
+        # in y when its mirror image fits clearly better; the margin keeps the
+        # unmirrored result for symmetric layouts.
+        mirrored_dot = sum(
+            (p.x - ax) * (q.x - bx) - (p.y - ay) * (q.y - by) for p, q in zip(new, old)
+        )
+        mirrored_cross = sum(
+            (p.x - ax) * (q.y - by) + (p.y - ay) * (q.x - bx) for p, q in zip(new, old)
+        )
+        if mirrored_dot * mirrored_dot + mirrored_cross * mirrored_cross > (
+            dot * dot + cross * cross
+        ) * (1.0 + 1e-9):
+            dot, cross, flip = mirrored_dot, mirrored_cross, -1.0
         if abs(dot) + abs(cross) > 1e-12:
             angle = math.atan2(cross, dot)
     c, s = math.cos(angle), math.sin(angle)
     for i, p in enumerate(new):
-        x, y = p.x - ax, p.y - ay
+        x, y = p.x - ax, flip * (p.y - ay)
         conf.SetAtomPosition(i, (bx + c * x - s * y, by + s * x + c * y, 0.0))
 
 

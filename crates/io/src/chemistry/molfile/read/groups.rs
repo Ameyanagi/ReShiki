@@ -42,6 +42,17 @@ struct Group {
 // Native FileParserUtils checks the character set, then uses from_chars.
 // It accepts a numeric prefix and leaves the initialized value at zero on
 // overflow or a leading '+'. Keep those extension-field rules explicitly.
+/// The notice for a data-group charge or hydrogen count that is left out.
+fn out_of_range(field: &str, value: i64) -> String {
+    if field == "ZCH" {
+        format!("Ignored the charge {value} in the ZCH data group: it is outside -128 to 127")
+    } else {
+        format!(
+            "Ignored the hydrogen count {value} in the {field} data group: it is outside 0 to 255"
+        )
+    }
+}
+
 fn numeric_field(text: &str, signed: bool) -> Result<i64> {
     if text
         .bytes()
@@ -152,8 +163,8 @@ impl Groups {
     }
 
     // This pass follows the file's explicit valence processing. Native field
-    // storage narrows signed charges and H counts to eight bits; retain that
-    // defined conversion, including negative and overflowing extension values.
+    // storage narrows signed charges and H counts to eight bits; a value that
+    // does not fit is left out with a notice instead of wrapping.
     pub(super) fn apply(&self, p: &mut Parsed) -> Result<()> {
         for group in self
             .entries
@@ -296,7 +307,11 @@ impl Groups {
                 Some("MRV_IMPLICIT_H") => {
                     for data in &group.data {
                         if let Some(value) = data.strip_prefix("IMPL_H") {
-                            let hs = numeric_field(value, true)? as u8;
+                            let value = numeric_field(value, true)?;
+                            let Ok(hs) = u8::try_from(value) else {
+                                p.notices.push(out_of_range("MRV_IMPLICIT_H", value));
+                                continue;
+                            };
                             for &index in &group.atoms {
                                 if aromatic.get(index) == Some(&true) {
                                     p.graph
@@ -323,9 +338,15 @@ impl Groups {
                             let value = numeric_field(value, true)?;
                             let atom = p.graph.atoms.get_mut(index).ok_or(ReadError::Limit)?;
                             if field == "ZCH" {
-                                atom.charge = value as i8;
+                                match i8::try_from(value) {
+                                    Ok(charge) => atom.charge = charge,
+                                    Err(_) => p.notices.push(out_of_range(field, value)),
+                                }
                             } else {
-                                atom.explicit_hydrogens = value as u8;
+                                match u8::try_from(value) {
+                                    Ok(hs) => atom.explicit_hydrogens = hs,
+                                    Err(_) => p.notices.push(out_of_range(field, value)),
+                                }
                             }
                         }
                     }

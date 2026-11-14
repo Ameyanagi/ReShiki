@@ -10,7 +10,7 @@ use crate::document::{Atom, Document, Point};
 use crate::editing;
 pub(crate) use aromatic::show_circles;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::LazyLock;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -910,19 +910,44 @@ impl Attachment<'_> {
             .iter()
             .map(|atom| (atom.id, mapped(atom.id)))
             .collect();
-        for fill in &mut result.ring_fills {
-            for id in &mut fill.atoms {
-                *id = mapped(*id);
-            }
-        }
         let mut affected: Vec<_> = shared.values().copied().collect();
         affected.extend(mapping.keys());
         crate::highlights::inherit_merged(&mut result, &mapping);
         result.invalidate_chemistry(&affected);
-        result.atoms.retain(|a| !mapping.contains_key(&a.id));
+        // Every field is named, so a new collection does not compile until its
+        // references to the removed atoms are handled or dismissed here.
+        let Document {
+            // Joins that touch a generic definition are refused before a pose.
+            generic: _,
+            canvas_theme: _,
+            color_theme: _,
+            custom_theme: _,
+            drawing_style: _,
+            page_layout: _,
+            abbreviations,
+            atom_labels: _,
+            ring_fills,
+            depth_appearance,
+            version: _,
+            atoms,
+            bonds,
+            annotations: _,
+            molecule_names,
+            // Their anchors follow in `remap_for_join` below.
+            arrows: _,
+            arrow_labels: _,
+            graphics: _,
+            groups,
+            // Reconciled below, which drops the removed atoms.
+            reactions: _,
+            // A removed atom leaves its model when the edit is reconciled.
+            models: _,
+            recent_colors: _,
+        } = &mut result;
+        atoms.retain(|a| !mapping.contains_key(&a.id));
         // A multi-edge fusion may map both endpoints of a genuinely new
         // edge. Remove only duplicate edges, not every mapped-to-mapped edge.
-        result.bonds.retain(|b| {
+        bonds.retain(|b| {
             !(mapping.contains_key(&b.a)
                 && mapping.contains_key(&b.b)
                 && doc.bonds.iter().any(|old| {
@@ -930,7 +955,7 @@ impl Attachment<'_> {
                         || (old.b == mapped(b.a) && old.a == mapped(b.b))
                 }))
         });
-        for b in &mut result.bonds {
+        for b in bonds {
             b.a = mapped(b.a);
             b.b = mapped(b.b);
             for id in &mut b.stereo_atoms {
@@ -938,7 +963,7 @@ impl Attachment<'_> {
             }
         }
         // The templates contain no stereo at attachment sites. Retain remote stereo.
-        for a in &mut result.atoms {
+        for a in atoms {
             for member in &mut a.centroid {
                 *member = mapped(*member);
             }
@@ -948,14 +973,19 @@ impl Attachment<'_> {
                 }
             }
         }
-        for group in &mut result.groups {
+        for fill in ring_fills {
+            for id in &mut fill.atoms {
+                *id = mapped(*id);
+            }
+        }
+        for group in groups {
             for id in &mut group.members {
                 *id = mapped(*id);
             }
             group.members.sort_unstable();
             group.members.dedup();
         }
-        for group in &mut result.abbreviations {
+        for group in abbreviations {
             group.anchor = mapped(group.anchor);
             group.exit = group.exit.map(mapped);
             for id in &mut group.members {
@@ -964,6 +994,24 @@ impl Attachment<'_> {
             group.members.sort_unstable();
             group.members.dedup();
         }
+        // At a shared atom the host keeps its name and depth scope; the incoming
+        // molecule's membership there is dropped, so neither claims it twice.
+        let named: HashSet<_> = doc.molecule_names.iter().flat_map(|n| &n.atoms).collect();
+        let painted: HashSet<_> = doc.depth_appearance.iter().flat_map(|s| &s.atoms).collect();
+        let host_keeps = |owned: &HashSet<&u64>, id: u64| {
+            mapping.get(&id).is_some_and(|host| owned.contains(host))
+        };
+        for name in molecule_names.iter_mut() {
+            name.atoms.retain(|id| !host_keeps(&named, *id));
+            for id in &mut name.atoms {
+                *id = mapped(*id);
+            }
+        }
+        molecule_names.retain(|name| !name.atoms.is_empty());
+        for scope in depth_appearance.iter_mut() {
+            scope.retain_members(|id| !host_keeps(&painted, id));
+        }
+        *depth_appearance = crate::depth_appearance::remap(depth_appearance, &endpoint_mapping);
         if fuse {
             let source_ids: HashMap<_, _> = added.iter().map(|(a, b)| (*a, mapped(*b))).collect();
             if !aromatic.assign(doc, part, &mut result, &source_ids, source) {

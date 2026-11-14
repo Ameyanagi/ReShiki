@@ -75,6 +75,21 @@ fn cdx_import_text_uses_standard_base64_only_for_lower_case_format() {
     }
 }
 
+/// A byte-order mark hid the `$RXN` header and made InChI look like SMILES.
+#[test]
+fn import_text_drops_one_leading_byte_order_mark() {
+    for (text, format) in [("$RXN\n", "rxn"), ("InChI=1S/CH4/h1H4", "inchi")] {
+        let marked = format!("\u{feff}{text}");
+        let imported = import_text("auto", marked.into_bytes()).unwrap();
+        assert_eq!(imported, text);
+        assert_eq!(crate::engine::text_format(&imported), format);
+    }
+    assert_eq!(
+        import_text("smiles", "\u{feff}\u{feff}C".as_bytes().to_vec()),
+        Ok("\u{feff}C".into())
+    );
+}
+
 #[test]
 fn import_text_preserves_utf8_and_its_error_message() {
     let text = "C=C\n硫\r\n";

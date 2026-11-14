@@ -59,6 +59,56 @@ impl App {
     }
 
     pub(in crate::app) fn recovery_banner(&self) -> Element<'_, Message> {
+        let mut banner = row![].spacing(6).align_y(Alignment::Center);
+        if !self.recovered.is_empty() {
+            banner = banner.push(self.offered_drafts());
+        }
+        let newer = self.recovery_manager.newer;
+        if newer > 0 {
+            banner = banner.push(hover_hint(
+                text(format!(
+                    "{newer} {} from a newer ReShiki",
+                    plural(newer, "draft", "drafts")
+                ))
+                .size(10)
+                .wrapping(iced::widget::text::Wrapping::None),
+                plural(
+                    newer,
+                    "Update ReShiki to restore it. The file stays in the recovery folder.",
+                    "Update ReShiki to restore them. The files stay in the recovery folder.",
+                ),
+                tooltip::Position::Top,
+            ));
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                banner = banner.push(
+                    reshiki::accessibility::button(
+                        "recovery-open-folder",
+                        "Open the recovery folder",
+                        text("Open folder").size(11),
+                    )
+                    .on_press(Message::Recovery(Action::OpenFolder))
+                    .padding([3, 5])
+                    .style(control(false)),
+                );
+            }
+            if self.recovered.is_empty() {
+                banner = banner.push(
+                    reshiki::accessibility::button(
+                        "recovery-dismiss",
+                        "Dismiss the recovery notice until the next launch",
+                        text("Dismiss").size(11),
+                    )
+                    .on_press(Message::DismissRecovery)
+                    .padding([3, 5])
+                    .style(control(false)),
+                );
+            }
+        }
+        banner.into()
+    }
+
+    fn offered_drafts(&self) -> Element<'_, Message> {
         let count = self.recovered.len();
         let newest = self.recovered.first();
         let name = newest.map(title).unwrap_or_else(|| "Untitled".into());

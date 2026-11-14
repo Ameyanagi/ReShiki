@@ -15,6 +15,8 @@ The second Y value is exactly the mismatch reported by Windows ARM CI run 356954
 
 `cleanup_windows_reference.py` captures both profiles from the unchanged original worker. It computes the complete response before installing observation hooks, verifies the observed response is identical, and verifies source immutability. `fixtures/cleanup-windows-trigonometry.json` retains the source and UCRT hashes, all orientation inputs/outputs, intermediate scalars, and final full-precision analysis positions. The regression replays the real Rust orientation with the non-FMA policy and compares every coordinate bit.
 
+The capture predates the mirrored candidate that the worker's `orient` and the Rust orientation gained for issue 1121, so the recorded hash of `reference/engine/cleanup.py` is the earlier source. The captured case keeps its handedness, and the regression still replays it bit for bit.
+
 The shared implementation in `crates/chemistry/src/windows_trigonometry.rs` retains the previously audited abbreviation arithmetic unchanged. Its existing 42,567-pair native corpus and finite `[-2π, 2π]` domain remain in force. Cleanup's finite `atan2` result lies inside that domain; rejection does not fall back to host trigonometry. Attribution and the pinned AMD source are in `licenses/amd-win-libm/NOTICE`.
 
 Recreate the capture using the pinned Windows x64 Python environment:

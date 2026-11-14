@@ -1,8 +1,10 @@
 """Derive bounded generic-import contracts from explicit CTAB records.
 
 This module does not call the Rust parser, inspect its errors, or use case names.
-The producers retain the complete original result and attach these contracts only
-after original success. Consumers must also require the exact current rejection.
+The producers retain the complete original result and attach a rejection contract
+only after original success. Consumers must also require the exact current
+rejection. A contract without an error is a warned difference: the import must
+succeed when the original did, and its result is not compared.
 Unsupported/malformed framing outside this small record reader gets no exemption.
 """
 
@@ -37,6 +39,7 @@ class Group:
     bonds: list[int] = field(default_factory=list)
     heads: list[int] = field(default_factory=list)
     properties: dict[str, str] = field(default_factory=dict)
+    data: list[str] = field(default_factory=list)
 
 
 def unsupported(category, reason):
@@ -45,6 +48,51 @@ def unsupported(category, reason):
 
 def invalid(category, line, reason):
     return dict(category=category, error=f"Invalid MOL input at line {line}: {reason}")
+
+
+def warned(category):
+    """A value ReShiki leaves out with an import warning; RDKit wraps it."""
+    return dict(category=category, error=None)
+
+
+def data_integer(text):
+    """Read a data-group integer: a numeric prefix, or zero outside 32 bits."""
+    if any(char not in "0123456789 +-" for char in text):
+        raise ValueError("Invalid data-group integer")
+    digits = re.match(r"-?[0-9]*", text.lstrip(" ")).group()
+    value = int(digits) if digits not in ("", "-") else 0
+    return value if -(2**31) <= value < 2**31 else 0
+
+
+def data_range(group):
+    """Return the first charge or hydrogen count that does not fit its field.
+
+    ReShiki imports the structure without that value and warns, so the result
+    differs from RDKit's by design and the consumers require success only.
+    """
+    name = group.properties.get("FIELDNAME")
+    if name == "MRV_COORDINATE_BOND_TYPE":
+        if group.data and any(char not in "0123456789 +" for char in group.data[0]):
+            raise ValueError("Invalid data-group integer")
+    elif name == "MRV_IMPLICIT_H":
+        for data in group.data:
+            if data.startswith("IMPL_H") and not 0 <= data_integer(data[6:]) <= 255:
+                return warned("substance_group_hydrogen_range")
+    elif name == "ZBO":
+        if group.bonds:
+            raise ValueError("Zero-order bond")
+    elif name in ("ZCH", "HYD"):
+        for data in group.data:
+            values = data.strip().split(";")
+            if len(values) < len(group.atoms):
+                continue
+            for value in values[: len(group.atoms)]:
+                value = data_integer(value)
+                if name == "ZCH" and not -128 <= value <= 127:
+                    return warned("substance_group_charge_range")
+                if name == "HYD" and not 0 <= value <= 255:
+                    return warned("substance_group_hydrogen_range")
+    return None
 
 
 def integer(text):
@@ -83,6 +131,12 @@ def finish(groups, bonds, reaction, generic_before_groups=False):
                 "polymer crossing-bond list does not match its atom membership",
             )
         has_repeats = True
+    # Data groups apply after the repeat units, in group-number order.
+    for _, group in sorted(groups.items()):
+        if group.kind == "DAT":
+            restriction = data_range(group)
+            if restriction is not None:
+                return restriction
     if reaction and has_repeats:
         return unsupported(
             "generic_rxn_substance_groups",
@@ -101,6 +155,7 @@ def v2000(lines, start, reaction, capture=None):
         row = lines[start + 4 + atom_count + idx]
         bonds[idx + 1] = integer(row[:3]), integer(row[3:6])
     groups, alternatives, generic = {}, [], False
+    data, data_group, data_lines = "", 0, 0
     cursor = start + 4 + atom_count + bond_count
     while cursor < len(lines):
         row, number = lines[cursor], cursor + 1
@@ -169,6 +224,25 @@ def v2000(lines, start, reaction, capture=None):
                 if group is not None:
                     key = "SUBTYPE" if kind == "M  SST" else "CONNECT"
                     group.properties[key] = row[offset + 5 : offset + 8].rstrip()
+        elif kind == "M  SDT":
+            group = groups.get(integer(row[7:10]))
+            if group is not None and row[11:41].rstrip():
+                group.properties["FIELDNAME"] = row[11:41].rstrip()
+        elif kind in {"M  SCD", "M  SED"}:
+            idx = integer(row[7:10])
+            group = groups.get(idx)
+            if group is None:
+                continue
+            if data_group not in (0, idx) or (kind == "M  SCD" and data_lines > 2):
+                raise ValueError("Invalid data continuation")
+            data_group = idx if kind == "M  SCD" else 0
+            if len(row) > 11:
+                data += row[11:80]
+                if kind == "M  SED":
+                    group.data.append(data.rstrip().encode()[:200].decode(errors="ignore"))
+                    data, data_lines = "", 0
+                else:
+                    data_lines += 1
         elif kind in {"M  SPL", "M  SNC"}:
             for item in range(integer(row[6:9])):
                 offset = 9 + item * 8
@@ -242,6 +316,16 @@ def v3000(lines, start, reaction, capture=None):
             overridden = {key for key, _ in explicit}
             for key, value in explicit + [(k, v) for k, v in defaults if k not in overridden]:
                 group.properties[key] = value
+                if key in {"FIELDNAME", "FIELDDATA"}:
+                    if value.startswith("'"):
+                        raise ValueError("Unsupported group string")
+                    if value.startswith('"'):
+                        value = value[1:-1].replace('""', '"')
+                    value = value.rstrip()
+                    if key == "FIELDDATA":
+                        group.data.append(value.encode()[:200].decode(errors="ignore"))
+                    else:
+                        group.properties[key] = value
                 if key == "PATOMS" and kind not in NON_POLYMERS:
                     return unsupported(
                         "polymer_parent_atoms", "polymer parent-atom membership"
@@ -307,8 +391,20 @@ def input_generic(text):
     return None
 
 
-def generic_restriction(text, *, reaction=False):
-    """Return the exact first representability restriction, or no allowance."""
+def generic_restriction(text, *, reaction=False, original=True):
+    """Return the exact first representability restriction, or no allowance.
+
+    `original` says whether RDKit accepted the input. A rejection contract
+    needs that; a warned difference does not, because the value RDKit wrapped
+    can itself be what made it reject the input.
+    """
+    restriction = first_restriction(text, reaction)
+    if original or (restriction is not None and restriction["error"] is None):
+        return restriction
+    return None
+
+
+def first_restriction(text, reaction):
     # Rust str::lines splits LF/CRLF; Python splitlines also splits Unicode
     # separators and would produce incorrect physical error-line contracts.
     lines = [row.removesuffix("\r") for row in text.split("\n")]

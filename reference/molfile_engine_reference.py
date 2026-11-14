@@ -52,7 +52,7 @@ def emit(name, text):
         failure = None
     except (ValueError, RuntimeError, KeyError, OverflowError) as error:
         expected, failure = None, str(error)
-    restriction = generic_restriction(text) if expected is not None else None
+    restriction = generic_restriction(text, original=expected is not None)
     display = generic = extension = None
     if restriction is None:
         if expected is not None:

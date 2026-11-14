@@ -269,6 +269,8 @@ fn completion(message: &Message) -> Option<Completion> {
             | super::recovery_manager::Action::Discard
             | super::recovery_manager::Action::ConfirmDiscard
             | super::recovery_manager::Action::Close => None,
+            #[cfg(not(target_arch = "wasm32"))]
+            super::recovery_manager::Action::OpenFolder => None,
         },
         Message::Accessibility(action) => {
             use super::accessibility::Action;

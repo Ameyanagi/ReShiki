@@ -427,23 +427,7 @@ fn mapped_append_part(
     if matches!(mode, AppendMode::Ordinary) {
         crate::stereo_groups::renumber_incoming(doc, &mut part.atoms);
     }
-    part.generic.remap(&mapping)?;
-    for name in &mut part.molecule_names {
-        let mapped = mapping.get(&name.annotation).copied()?;
-        name.annotation = mapped;
-        for atom in &mut name.atoms {
-            let mapped = mapping.get(atom).copied()?;
-            *atom = mapped;
-        }
-    }
-    for label in &mut part.arrow_labels {
-        label.arrow = mapping.get(&label.arrow).copied()?;
-        label.annotation = mapping.get(&label.annotation).copied()?;
-    }
-    for model in &mut part.models {
-        model.remap(&mapping)?;
-    }
-    part.depth_appearance = crate::depth_appearance::remap(&source.depth_appearance, &mapping);
+    remap_ids(&mut part, &mapping)?;
     for a in &mut part.atoms {
         // A pasted fragment keeps its source appearance when document defaults differ.
         if matches!(mode, AppendMode::Ordinary) && source.atom_labels != doc.atom_labels {
@@ -464,44 +448,17 @@ fn mapped_append_part(
                 .show
                 .get_or_insert(source.atom_labels.stereo_groups);
         }
-        let mapped = mapping.get(&a.id).copied()?;
-        a.id = mapped;
-        for id in &mut a.centroid {
-            let mapped = mapping.get(id).copied()?;
-            *id = mapped;
-        }
         a.position = a.position.offset(offset.x, offset.y);
-        if let Some(s) = &mut a.stereo {
-            for id in &mut s.neighbors {
-                let mapped = mapping.get(id).copied()?;
-                *id = mapped;
-            }
-        }
     }
-    for b in &mut part.bonds {
-        if matches!(mode, AppendMode::Ordinary)
-            && source.atom_labels.stereo != doc.atom_labels.stereo
-        {
+    if matches!(mode, AppendMode::Ordinary) && source.atom_labels.stereo != doc.atom_labels.stereo {
+        for b in &mut part.bonds {
             b.indicator.show.get_or_insert(source.atom_labels.stereo);
-        }
-        let mapped = mapping.get(&b.a).copied()?;
-        b.a = mapped;
-        let mapped = mapping.get(&b.b).copied()?;
-        b.b = mapped;
-        for id in &mut b.stereo_atoms {
-            let mapped = mapping.get(id).copied()?;
-            *id = mapped;
         }
     }
     for a in &mut part.annotations {
-        let mapped = mapping.get(&a.id).copied()?;
-        a.id = mapped;
         a.position = a.position.offset(offset.x, offset.y);
     }
     for a in &mut part.arrows {
-        let mapped = mapping.get(&a.id).copied()?;
-        a.id = mapped;
-        crate::arrow_anchors::remap(a, &mapping);
         if matches!(mode, AppendMode::Ordinary) {
             a.map_points(|p| p.offset(offset.x, offset.y));
         } else {
@@ -518,40 +475,94 @@ fn mapped_append_part(
         }
     }
     for g in &mut part.graphics {
-        let mapped = mapping.get(&g.id).copied()?;
-        g.id = mapped;
         g.origin = g.origin.offset(offset.x, offset.y);
-    }
-    for g in &mut part.groups {
-        let mapped = mapping.get(&g.id).copied()?;
-        g.id = mapped;
-        for id in &mut g.members {
-            let mapped = mapping.get(id).copied()?;
-            *id = mapped;
-        }
-    }
-    for group in &mut part.abbreviations {
-        let anchor = mapping.get(&group.anchor).copied()?;
-        group.anchor = anchor;
-        if let Some(exit) = &mut group.exit {
-            *exit = mapping.get(exit).copied()?;
-        }
-        for id in &mut group.members {
-            let mapped = mapping.get(id).copied()?;
-            *id = mapped;
-        }
-    }
-    for fill in &mut part.ring_fills {
-        for id in &mut fill.atoms {
-            let mapped = mapping.get(id).copied()?;
-            *id = mapped;
-        }
-    }
-    for reaction in &mut part.reactions {
-        reaction.remap(&mapping)?;
     }
     let ids = part.all_ids();
     Some((part, mapping, ids))
+}
+/// Renames every object and group ID that `doc` stores or refers to; `None`
+/// when one has no entry in `mapping`. The destructure names every field, so
+/// a new collection does not compile until its IDs are handled here.
+pub(crate) fn remap_ids(doc: &mut Document, mapping: &HashMap<u64, u64>) -> Option<()> {
+    let Document {
+        generic,
+        canvas_theme: _,
+        color_theme: _,
+        custom_theme: _,
+        drawing_style: _,
+        page_layout: _,
+        abbreviations,
+        atom_labels: _,
+        ring_fills,
+        depth_appearance,
+        version: _,
+        atoms,
+        bonds,
+        annotations,
+        molecule_names,
+        arrows,
+        arrow_labels,
+        graphics,
+        groups,
+        reactions,
+        models,
+        recent_colors: _,
+    } = doc;
+    let map = |id: &mut u64| {
+        *id = *mapping.get(id)?;
+        Some(())
+    };
+    generic.remap(mapping)?;
+    for a in atoms {
+        map(&mut a.id)?;
+        a.centroid.iter_mut().try_for_each(map)?;
+        if let Some(s) = &mut a.stereo {
+            s.neighbors.iter_mut().try_for_each(map)?;
+        }
+    }
+    for b in bonds {
+        map(&mut b.a)?;
+        map(&mut b.b)?;
+        b.stereo_atoms.iter_mut().try_for_each(map)?;
+    }
+    for a in annotations {
+        map(&mut a.id)?;
+    }
+    for name in molecule_names {
+        map(&mut name.annotation)?;
+        name.atoms.iter_mut().try_for_each(map)?;
+    }
+    for a in arrows {
+        map(&mut a.id)?;
+        crate::arrow_anchors::remap(a, mapping);
+    }
+    for label in arrow_labels {
+        map(&mut label.arrow)?;
+        map(&mut label.annotation)?;
+    }
+    for g in graphics {
+        map(&mut g.id)?;
+    }
+    for g in groups {
+        map(&mut g.id)?;
+        g.members.iter_mut().try_for_each(map)?;
+    }
+    for group in abbreviations {
+        map(&mut group.anchor)?;
+        group.exit.iter_mut().try_for_each(map)?;
+        group.members.iter_mut().try_for_each(map)?;
+    }
+    for fill in ring_fills {
+        fill.atoms.iter_mut().try_for_each(map)?;
+    }
+    for reaction in reactions {
+        reaction.remap(mapping)?;
+    }
+    for model in models {
+        model.remap(mapping)?;
+    }
+    *depth_appearance = crate::depth_appearance::remap(depth_appearance, mapping);
+    Some(())
 }
 pub(crate) fn extend_append_part(doc: &mut Document, part: Document) {
     doc.atoms.extend(part.atoms);
@@ -1762,10 +1773,8 @@ fn isolated_ring(doc: &Document, ids: &[u64]) -> Option<Vec<u64>> {
             || atom.charge != 0
             || atom.isotope != 0
             || atom.aromatic
-            || atom.stereo.is_some()
-            || atom.explicit_h != 0
-            || atom.no_implicit
-            || atom.map_num != 0
+            // Nor any state that sharing the atom would lose.
+            || !crate::templates::compatible(atom, atom)
         {
             return None;
         }
@@ -1906,6 +1915,8 @@ pub fn snap_ring(doc: &mut Document, ids: &[u64], delta: Point, radius: f32) -> 
     if ring.iter().any(|id| crate::models3d::hides(doc, *id)) {
         return None;
     }
+    // Every ring atom is the same plain carbon, so one stands for both shared atoms.
+    let shared = doc.atom(*ring.first()?)?;
     let mut targets = None;
     let mut best: Option<Candidate> = None;
     for (a, b) in ring
@@ -1939,9 +1950,7 @@ pub fn snap_ring(doc: &mut Document, ids: &[u64], delta: Point, radius: f32) -> 
                     }
                     let (ta, tb) = doc.atom(bond.a).zip(doc.atom(bond.b))?;
                     if [ta, tb].iter().any(|a| {
-                        a.element != "C"
-                            || a.charge != 0
-                            || a.isotope != 0
+                        !crate::templates::compatible(shared, a)
                             || a.aromatic
                             || doc
                                 .bonds

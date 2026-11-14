@@ -49,13 +49,20 @@ pub fn file_format(path: &Path) -> Option<&'static str> {
 }
 
 /// Structure file contents as import text: binary CDX as standard base64.
-/// Only the exact format name `cdx` is binary; every other name uses UTF-8.
+/// Only the exact format name `cdx` is binary; every other name uses UTF-8,
+/// without one leading byte-order mark.
 pub fn import_text(format: &str, bytes: Vec<u8>) -> Result<String, String> {
     use base64::{Engine, engine::general_purpose::STANDARD};
     if format == "cdx" {
         Ok(STANDARD.encode(bytes))
     } else {
-        String::from_utf8(bytes).map_err(|error| format!("The file is not valid UTF-8: {error}"))
+        let text = String::from_utf8(bytes)
+            .map_err(|error| format!("The file is not valid UTF-8: {error}"))?;
+        // A byte-order mark is not content; it hides `$RXN` and `InChI=`.
+        Ok(match text.strip_prefix('\u{feff}') {
+            Some(rest) => rest.into(),
+            None => text,
+        })
     }
 }
 

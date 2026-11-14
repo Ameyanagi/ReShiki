@@ -438,6 +438,7 @@ impl App {
     pub(super) fn dismiss_recovery(&mut self) {
         self.recovery_manager.close();
         self.recovered.clear();
+        self.recovery_manager.newer = 0;
         if self.status.is_empty() {
             self.status = super::READY.into();
         }

@@ -125,7 +125,7 @@ pub(super) async fn save_path(_title: &str, name: &str, extension: &str) -> Opti
 /// Write a saved file atomically in place.
 #[cfg(not(target_arch = "wasm32"))]
 pub(super) fn write(path: &std::path::Path, bytes: &[u8]) -> Result<(), String> {
-    reshiki::storage::write_atomic(path, bytes)
+    reshiki::storage::write_saved(path, bytes)
 }
 
 /// The browser has no files to write; a save downloads under the file's name.

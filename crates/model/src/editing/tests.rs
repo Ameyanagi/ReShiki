@@ -561,6 +561,55 @@ fn dragging_an_existing_ring_rotates_scales_and_reuses_the_target_atoms() {
     assert_eq!(doc, before);
 }
 
+/// Fusing deletes the two shared ring atoms, so it must not take a radical,
+/// a mark or a stereo group with them.
+#[test]
+fn ring_snap_refuses_ring_atoms_with_state_it_would_delete() {
+    use crate::{
+        scientific::{AtomMark, MarkKind},
+        stereo_groups::{Kind, StereoGroup},
+    };
+    let mut base = Document::default();
+    let fixed = ring(&mut base, Point::default(), 6, false, 5.0);
+    let moving = ring(&mut base, Point::new(250.0, 200.0), 5, false, 5.0);
+    let midpoint = |ids: &[u64]| {
+        let a = base.atom(ids[0]).unwrap().position;
+        let b = base.atom(ids[1]).unwrap().position;
+        Point::new((a.x + b.x) / 2.0, (a.y + b.y) / 2.0)
+    };
+    let (a, b) = (midpoint(&fixed), midpoint(&moving));
+    let delta = Point::new(a.x - b.x, a.y - b.y);
+    assert!(snap_ring(&mut base.clone(), &moving, delta, 5.0).is_some());
+    let changes: [fn(&mut crate::document::Atom); 3] = [
+        |atom| atom.radical_electrons = 1,
+        |atom| {
+            atom.marks.push(AtomMark {
+                id: Some(1),
+                kind: MarkKind::LonePair,
+                offset: Point::new(0., -20.),
+                angle: 0.,
+                size_pt: None,
+            })
+        },
+        |atom| {
+            atom.stereo_group = Some(StereoGroup {
+                kind: Kind::And,
+                number: 1,
+            })
+        },
+    ];
+    // The atoms it fuses onto are held to the same rule as any shared atom.
+    for id in [moving[0], fixed[0]] {
+        for change in changes {
+            let mut doc = base.clone();
+            change(doc.atom_mut(id).unwrap());
+            let before = doc.clone();
+            assert!(snap_ring(&mut doc, &moving, delta, 5.0).is_none());
+            assert_eq!(doc, before);
+        }
+    }
+}
+
 #[test]
 fn growth_uses_open_space_at_either_end_and_at_a_branch() {
     let mut doc = Document::default();
