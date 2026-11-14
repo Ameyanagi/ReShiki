@@ -23,9 +23,12 @@ issues: []
 - A PNG is at most 32,767 pixels on a side. Export lowers the resolution to
   stay within it, or says that the drawing is too large for a PNG. One long
   line of text used to export as an image 444,586 pixels wide.
-- A `.rsk` file whose pictures hold more than 64 MB or 64 million pixels in
-  total is refused when it is opened, before any picture is decoded. It used to
-  be refused only after every picture was decoded, which took up to a minute.
+- A `.rsk` file is refused when it is opened, before any picture is decoded,
+  if its pictures are stored in more than 64 MB or hold more than 64 million
+  pixels in total. It used to be refused only after every picture was decoded,
+  which took up to a minute. The 64 MB counts the pictures as they are stored,
+  so a file whose pictures are stored in more than 64 MB is now refused even if
+  they would take less once read.
 - PNG export of a drawing that is too large even at 72 dpi is refused before
   the drawing is rendered, not after. This holds for text, shapes and pictures
   as well as atoms.
