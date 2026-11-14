@@ -45,6 +45,15 @@ features, labeled examples for each new shortcut, and matched before/after
 images for visible bug fixes. Provide a reusable caption and image link for the
 release changelog. Explain the evidence used for changes with no visible output.
 
+## Release notes
+
+Add one file for your change to [`docs/changes/unreleased/`](docs/changes/unreleased/README.md),
+named after your branch with `/` replaced by `-`. It names the section and the
+issues it fixes, and holds one bullet per user-visible change. Do not edit
+`docs/changes-unreleased.md` or `docs/contributors.md`: the website assembles
+the unreleased page from the fragments, and release preparation moves them
+into the release notes and the contributor list.
+
 ## Contributor credit
 
 When preparing a contribution for merge, preserve the original author's commit
@@ -52,10 +61,10 @@ attribution. If changes are squashed together with maintainer work, retain the
 original author or add an accurate `Co-authored-by` trailer using the author's
 existing commit identity.
 
-Add the contributor and pull-request link to [the contributor list](docs/contributors.md)
-and credit them beside the change in [the next release notes](docs/changes-unreleased.md).
-Keep that credit when moving an entry into a versioned changelog. Mark work still
-under review explicitly; update its status when it merges.
+Credit an outside contributor with `credit: [@name]` in the change's
+[release-note fragment](docs/changes/unreleased/README.md). Release preparation
+adds that credit beside the change in the release notes and to
+[the contributor list](docs/contributors.md).
 
 Keep @Ameyanagi's contributor-list entry as "project creator and maintainer";
 credit individual changes in the release notes.

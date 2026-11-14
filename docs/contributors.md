@@ -2,7 +2,9 @@
 
 Thank you to all the contributors who have helped improve ReShiki. Your contributions are greatly appreciated.
 
-This list credits authors of contributions to ReShiki.
+This list credits authors of contributions to ReShiki. Pull requests do not
+edit it: release preparation adds the `credit` of each
+[release-note fragment](changes/unreleased/README.md).
 
 @Ameyanagi — [carbonyl rail clearance during rotation and
 consistent mechanism-arrow targeting](changes/carbonyl-rotation.md) in

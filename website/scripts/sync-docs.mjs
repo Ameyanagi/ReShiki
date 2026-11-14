@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { cp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
@@ -62,7 +63,15 @@ await mkdir(destination, { recursive: true });
 for (const name of (await readdir(source))
   .filter((name) => name.endsWith(".md") && name !== "README.md")
   .sort()) {
-  let body = await readFile(path.join(source, name), "utf8");
+  // The unreleased page is its hand-kept head plus one fragment per change.
+  let body =
+    name === "changes-unreleased.md"
+      ? execFileSync(
+          process.platform === "win32" ? "python" : "python3",
+          [path.join(root, "scripts/assemble_changelog.py")],
+          { encoding: "utf8" },
+        )
+      : await readFile(path.join(source, name), "utf8");
   const title = /^# (.+)$/m.exec(body)?.[1];
   if (!title) throw new Error(`Missing page title in ${name}`);
   body = body.replace(/^# .+\r?\n/m, "");
