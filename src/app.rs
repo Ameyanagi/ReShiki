@@ -818,6 +818,7 @@ impl App {
             self.tab.chemistry_notice = None;
         }
         if committed.recorded {
+            self.trim_histories(tabs::HISTORY_BYTES);
             self.tab.stereo_notes.clear();
             let previous = self.tab.revision;
             self.tab.revision = self.tab.revision.wrapping_add(1);

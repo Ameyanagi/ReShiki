@@ -400,6 +400,28 @@ fn history_caps_estimated_bytes_but_keeps_the_minimum_steps() {
     assert_eq!(history.undo_frames().len(), History::MIN_STEPS);
 }
 #[test]
+fn history_releases_its_oldest_frames_down_to_the_steps_to_keep() {
+    let mut doc = Document::default();
+    doc.add_atom("C", Point::default());
+    let mut history = History::default();
+    for _ in 0..30 {
+        let before = doc.clone();
+        doc.atoms[0].position.x += 1.;
+        assert!(history.commit(before, &doc));
+    }
+    let frame = frame_bytes(&doc);
+    assert_eq!(history.undo_bytes(), 30 * frame);
+    assert_eq!(history.release(0, 5), 0);
+    assert_eq!(history.release(frame + 1, 5), 2 * frame);
+    assert_eq!(history.undo_frames().len(), 28);
+    assert_eq!(history.release(usize::MAX, 5), 23 * frame);
+    assert_eq!(history.undo_frames().len(), 5);
+    assert_eq!(history.release(1, 5), 0);
+    // The newest step is the one that remains to undo.
+    assert!(history.undo(&mut doc));
+    assert_eq!(doc.atoms[0].position.x, 29.);
+}
+#[test]
 fn history_frames_count_arrow_node_buffers() {
     let mut doc = Document::default();
     doc.arrows.push(crate::document::Arrow::new(

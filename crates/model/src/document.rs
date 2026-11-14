@@ -1072,12 +1072,23 @@ impl History {
             let _ = self.undo.pop_front();
         }
         if self.max_bytes != usize::MAX {
-            let mut total: usize = self.undo.iter().map(frame_bytes).sum();
-            while total > self.max_bytes && self.undo.len() > Self::MIN_STEPS {
-                total -= self.undo.pop_front().as_ref().map_or(0, frame_bytes);
-            }
+            let over = self.undo_bytes().saturating_sub(self.max_bytes);
+            self.release(over, Self::MIN_STEPS);
         }
         true
+    }
+    /// Estimated bytes of the undo frames, as the byte limit counts them.
+    pub fn undo_bytes(&self) -> usize {
+        self.undo.iter().map(frame_bytes).sum()
+    }
+    /// Drops the oldest undo frames until at least `bytes` estimated bytes
+    /// are released or `keep` frames remain. Returns the bytes released.
+    pub fn release(&mut self, bytes: usize, keep: usize) -> usize {
+        let mut released = 0;
+        while released < bytes && self.undo.len() > keep {
+            released += self.undo.pop_front().as_ref().map_or(0, frame_bytes);
+        }
+        released
     }
     pub fn undo(&mut self, doc: &mut Document) -> bool {
         if let Some(prev) = self.undo.pop_back() {

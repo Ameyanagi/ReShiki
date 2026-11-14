@@ -984,3 +984,56 @@ fn window_titles_mark_unsaved_changes() {
         "Caffeine.rsk • — ReShiki"
     );
 }
+
+#[test]
+fn tabs_share_one_undo_budget_and_the_ones_behind_give_way_first() {
+    use reshiki::document::History;
+    let mut app = ready();
+    for edits in [30, 40, 30] {
+        if app.tab.history.can_undo() {
+            app.add_tab();
+            app.tab.busy = false;
+        }
+        for _ in 0..edits {
+            edit(&mut app, "C");
+        }
+    }
+    let frames = |app: &App| {
+        app.strip()
+            .map(|tab| tab.history.undo_frames().len())
+            .collect::<Vec<_>>()
+    };
+    let bytes = |app: &App| -> usize { app.strip().map(|tab| tab.history.undo_bytes()).sum() };
+    assert_eq!(frames(&app), [30, 40, 30], "the real budget is far away");
+    let total = bytes(&app);
+    app.trim_histories(total);
+    assert_eq!(frames(&app), [30, 40, 30]);
+    // A result for a tab behind the front trims nothing: the front tab
+    // would count as one behind.
+    let behind = app.tabs.background[0].id;
+    app.in_tab(behind, |app| app.trim_histories(0));
+    assert_eq!(frames(&app), [30, 40, 30]);
+    // The largest history behind the front loses its oldest step first.
+    app.trim_histories(total - 1);
+    assert_eq!(frames(&app), [30, 39, 30]);
+    assert!(bytes(&app) < total);
+    // Then the other tab behind. The front tab is last, once the tabs behind
+    // are down to the steps every tab keeps.
+    loop {
+        let before = frames(&app);
+        app.trim_histories(bytes(&app) - 1);
+        if frames(&app)[2] != before[2] {
+            assert_eq!(before, [BACKGROUND_STEPS, BACKGROUND_STEPS, 30]);
+            break;
+        }
+    }
+    app.trim_histories(0);
+    assert_eq!(
+        frames(&app),
+        [BACKGROUND_STEPS, BACKGROUND_STEPS, History::MIN_STEPS]
+    );
+    // The newest steps remain.
+    let atoms = app.tab.doc.atoms.len();
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc.atoms.len(), atoms - 1);
+}

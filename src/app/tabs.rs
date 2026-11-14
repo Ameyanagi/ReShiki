@@ -51,6 +51,13 @@ impl State {
     }
 }
 
+/// Estimated bytes of undo history that all tabs keep together. One tab alone
+/// keeps at most half of it (`History::default`).
+pub(super) const HISTORY_BYTES: usize = 256 << 20;
+/// Undo steps a tab behind the front keeps however large its drawing. The
+/// tab in front keeps `History::MIN_STEPS`.
+pub(super) const BACKGROUND_STEPS: usize = 5;
+
 const TAB_HEIGHT: f32 = 30.;
 const TAB_PADDING: f32 = 8.;
 const TAB_MIN: f32 = 88.;
@@ -186,6 +193,36 @@ impl App {
     pub(super) fn next_epoch(&mut self) -> u64 {
         self.tabs.epochs += 1;
         self.tabs.epochs
+    }
+
+    /// Keeps the undo history of all tabs within `budget` estimated bytes.
+    /// The tabs behind give up their oldest steps first, the largest history
+    /// first, down to [`BACKGROUND_STEPS`]. The tab in front is last and
+    /// keeps `History::MIN_STEPS`. A result routed to a tab behind the front
+    /// trims nothing, as that tab stands in front for the moment.
+    pub(super) fn trim_histories(&mut self, budget: usize) {
+        if self.tabs.temporary_depth != 0 {
+            return;
+        }
+        let mut histories: Vec<_> = self
+            .tabs
+            .background
+            .iter_mut()
+            .map(|tab| (&mut tab.history, BACKGROUND_STEPS))
+            .collect();
+        histories.sort_by_cached_key(|(history, _)| std::cmp::Reverse(history.undo_bytes()));
+        histories.push((&mut self.tab.history, super::History::MIN_STEPS));
+        let total: usize = histories
+            .iter()
+            .map(|(history, _)| history.undo_bytes())
+            .sum();
+        let mut over = total.saturating_sub(budget);
+        for (history, keep) in histories {
+            if over == 0 {
+                break;
+            }
+            over = over.saturating_sub(history.release(over, keep));
+        }
     }
 
     /// A new empty tab with its own draft file, not yet in the strip.
