@@ -124,11 +124,14 @@ def main():
         "--locked",
         "--bin",
         "reshiki-inchi-helper",
-        "--target",
-        target,
         "--jobs",
         str(args.jobs),
     ]
+    # A host build without --target shares target/debug with `cargo build --bin
+    # reshiki`; with it, Cargo compiles the same crates again under target/<triple>.
+    cross = target != host
+    if cross:
+        command += ["--target", target]
     if args.production:
         command.append("--release")
     subprocess.run(command, cwd=root, check=True)
@@ -145,7 +148,7 @@ def main():
     name = "reshiki-inchi-helper" + suffix
     built = (
         Path(metadata["target_directory"])
-        / target
+        / (target if cross else "")
         / ("release" if args.production else "debug")
         / name
     )
@@ -168,7 +171,7 @@ def main():
         )
         # Warm native test executables before fault tests copy/link them. A
         # cross-target executable can only be checked on its destination host.
-        if target == host:
+        if not cross:
             subprocess.run([str(stub)], input=b"", capture_output=True, timeout=60, check=True)
     record = dict(
         inchi_version=INCHI_VERSION,
