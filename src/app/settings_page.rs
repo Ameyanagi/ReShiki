@@ -232,7 +232,7 @@ impl App {
             let current = words.is_empty() && section == state.section;
             nav = nav.push(
                 reshiki::accessibility::button(
-                    format!("settings-{}", section.label().to_lowercase()),
+                    format!("settings-section-{section:?}").to_lowercase(),
                     section.label(),
                     row![
                         text(section.label()).size(13).width(Length::Fill),
@@ -861,8 +861,9 @@ fn choices<'a, T: Clone + PartialEq + 'a>(
     segmented(strip)
 }
 
-/// The five backgrounds with their swatches. `tiles` stacks each swatch over
-/// its label in equal columns, for the narrow Export tab.
+/// The five backgrounds with their swatches. `tiles` shows swatches alone in
+/// equal columns, named on hover, for the narrow Export tab; its caller names
+/// the chosen one.
 pub(super) fn background_choices<'a>(
     id: &str,
     selected: Background,
@@ -886,31 +887,33 @@ pub(super) fn background_choices<'a>(
         };
         let paper = background.paper(custom);
         let content: Element<'a, Message> = if tiles {
-            column![
-                swatch(paper, 26., 18.),
-                text(label).size(10).wrapping(text::Wrapping::None)
-            ]
-            .spacing(4)
-            .width(Length::Fill)
-            .align_x(Alignment::Center)
-            .into()
+            container(swatch(paper, 26., 18.))
+                .center_x(Length::Fill)
+                .into()
         } else {
             row![swatch(paper, 12., 12.), text(label).size(12)]
                 .spacing(6)
                 .align_y(Alignment::Center)
                 .into()
         };
+        let name_for_hint = name.clone();
         let item =
             reshiki::accessibility::button(format!("{id}-{}", label.to_lowercase()), name, content)
                 .checked(current)
                 .padding(if tiles { [7, 0] } else { [5, 10] })
                 .style(control(current))
                 .on_press(message(background));
-        strip = strip.push(if tiles {
-            item.width(Length::FillPortion(1))
+        let item: Element<'a, Message> = if tiles {
+            super::workspace::hover_hint(
+                item.width(Length::FillPortion(1)),
+                name_for_hint,
+                tooltip::Position::Bottom,
+            )
+            .into()
         } else {
-            item
-        });
+            item.into()
+        };
+        strip = strip.push(item);
     }
     if tiles {
         strip.width(Length::Fill).into()

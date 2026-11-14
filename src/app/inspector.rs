@@ -2099,7 +2099,11 @@ impl App {
             self.figure_menu(figure),
             text(figure.description()).size(12).style(muted_text),
             column![
-                text("Background").size(12),
+                text(format!(
+                    "Background · {}",
+                    self.appearance.export_background.label()
+                ))
+                .size(12),
                 super::settings_page::background_choices(
                     "export-background",
                     self.appearance.export_background,
