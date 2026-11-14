@@ -144,6 +144,8 @@ struct Exported {
 ///   format set, as `App::export_drawing` (src/app/files.rs) sends it. Its
 ///   warnings become the warnings. No output is [`ErrorKind::Failed`]; the
 ///   app would save an empty file (src/app/engine_jobs.rs `engine_done`).
+///   An empty InChI is [`ErrorKind::Failed`] too: the InChI library gives no
+///   identifier for some drawings, such as one with a wildcard atom.
 ///
 /// Every error is [`ErrorKind::Failed`] with the app's message, except a file
 /// over [`Budgets::max_output_bytes`], which is [`ErrorKind::Budget`].
@@ -189,6 +191,9 @@ pub(crate) async fn export_bytes(
             let output = response
                 .output
                 .ok_or_else(|| format!("The chemistry engine returned no {name} output"))?;
+            if format == Format::Inchi && output.is_empty() {
+                return Err("InChI has no identifier for this drawing".into());
+            }
             Ok((output.into_bytes(), None, response.warnings))
         })
     };

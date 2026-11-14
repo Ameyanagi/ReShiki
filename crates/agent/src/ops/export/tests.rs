@@ -451,3 +451,28 @@ async fn exporting_never_changes_the_document() {
     assert_eq!(after.revision, before.revision);
     assert!(Arc::ptr_eq(&after.doc, &before.doc));
 }
+
+/// S13: InChI has no identifier for a wildcard atom (or for a drawing over
+/// its atom limit). The export says so instead of returning an empty file.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn an_empty_inchi_is_an_error_not_an_empty_file() {
+    let host = HeadlessHost::new("9.8.7", Budgets::default());
+    let imported = host
+        .call(call("import", json!({"format": "smiles", "text": "*C"})))
+        .await
+        .unwrap();
+    assert!(!imported.is_error, "{:?}", imported.value);
+    let handle = DocHandle::new(imported.value["value"]["document"].as_str().unwrap()).unwrap();
+    let result = export_call(&host, &handle, "inchi", Value::Null).await;
+    assert_eq!(
+        error(&result),
+        ("failed", "InChI has no identifier for this drawing")
+    );
+    assert!(result.files.is_empty());
+    // The other chemistry formats still export it.
+    assert!(
+        !export_ok(&host, &handle, "smiles").await.files[0]
+            .bytes
+            .is_empty()
+    );
+}
