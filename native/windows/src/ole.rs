@@ -125,9 +125,26 @@ impl State {
             .prefix("ReShiki Office ")
             .tempdir()
             .map_err(error)?;
-        let path = directory
-            .path()
-            .join(session_file_name(self.host_app.borrow().as_deref()));
+        // Each drawing open from the same host gets its own tab title.
+        let open: Vec<_> = OBJECTS.with_borrow(|objects| {
+            objects
+                .iter()
+                .filter_map(Weak::upgrade)
+                .filter_map(|object| {
+                    let session = object.session.borrow();
+                    session.as_ref()?.path.file_name().map(ToOwned::to_owned)
+                })
+                .collect()
+        });
+        let mut number = 1;
+        let name = loop {
+            let name = session_file_name(self.host_app.borrow().as_deref(), number);
+            if !open.iter().any(|open| open == name.as_str()) {
+                break name;
+            }
+            number += 1;
+        };
+        let path = directory.path().join(name);
         let document = self.drawing.borrow().document.clone();
         if document.is_empty() {
             return Err(error("The embedded drawing is empty"));
@@ -270,7 +287,9 @@ impl State {
     }
 }
 
-fn session_file_name(app: Option<&str>) -> String {
+/// The editor shows this name without its extension as the tab title. Later
+/// drawings open from the same host are numbered from 2.
+fn session_file_name(app: Option<&str>, number: u32) -> String {
     let app = app.unwrap_or_default();
     let app: String = app
         .strip_prefix("Microsoft ")
@@ -278,9 +297,14 @@ fn session_file_name(app: Option<&str>) -> String {
         .chars()
         .filter(|&c| !c.is_control() && !r#"<>:"/\|?*"#.contains(c))
         .collect();
-    match app.trim() {
-        "" => "Office drawing.rsk".to_owned(),
-        app => format!("Drawing in {app}.rsk"),
+    let name = match app.trim() {
+        "" => "Office drawing".to_owned(),
+        app => format!("Drawing in {app}"),
+    };
+    if number > 1 {
+        format!("{name} ({number}).rsk")
+    } else {
+        format!("{name}.rsk")
     }
 }
 
