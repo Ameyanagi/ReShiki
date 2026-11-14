@@ -652,12 +652,12 @@ impl Prepared {
         }
         if crowded != 0 {
             warnings.push(format!(
-                "Selected atoms in {crowded} molecule(s) now lie close to fixed atoms. Review the drawing, or choose Selected molecules."
+                "Selected atoms in {crowded} molecule(s) now lie close to other atoms. Review the drawing, or choose Selected molecules."
             ));
         }
         if stuck != 0 {
             warnings.push(format!(
-                "Selected atoms in {stuck} molecule(s) kept unchanged: cleaned up, they would lie on fixed atoms. Choose Selected molecules."
+                "Selected atoms in {stuck} molecule(s) kept unchanged: cleaned up, they would lie on other atoms. Choose Selected molecules."
             ));
         }
         if self.preserved_attachments != 0 {
@@ -712,9 +712,9 @@ impl Prepared {
 
 enum Fold {
     Clear,
-    /// Reflected atoms ended closer than half a bond to a fixed atom.
+    /// Reflected atoms ended closer than half a bond to another atom.
     Crowded,
-    /// A moved atom still lies on a fixed atom.
+    /// A moved atom still lies on another atom.
     Stuck,
 }
 
@@ -728,31 +728,42 @@ fn unfold(
     bond_length: f64,
 ) -> Result<Fold> {
     let (on, close) = (0.1 * bond_length, 0.5 * bond_length);
-    let cell = |x: f64, y: f64| ((x / close).floor() as i64, (y / close).floor() as i64);
-    let mut cells = HashMap::<_, Vec<_>>::new();
-    for point in fixed.values() {
-        cells.entry(cell(point.x, point.y)).or_default().push(point);
-    }
-    let near_fixed = |point: &Point3, limit: f64| {
-        let (x, y) = cell(point.x, point.y);
-        (-1..=1).any(|dx| {
-            (-1..=1).any(|dy| {
-                cells.get(&(x + dx, y + dy)).is_some_and(|near| {
-                    near.iter()
-                        .any(|q| (point.x - q.x).hypot(point.y - q.y) < limit)
-                })
-            })
-        })
+    let cell = |point: &Point3| {
+        (
+            (point.x / close).floor() as i64,
+            (point.y / close).floor() as i64,
+        )
     };
-    let on_fixed = |layout: &[Point3]| -> Vec<usize> {
+    // Whether an atom that `counts` lies within `limit` of each atom.
+    let near = |layout: &[Point3], limit: f64, counts: &dyn Fn(usize, usize) -> bool| {
+        let mut cells = HashMap::<_, Vec<_>>::new();
+        for (index, point) in layout.iter().enumerate() {
+            cells.entry(cell(point)).or_default().push((index, point));
+        }
         layout
             .iter()
             .enumerate()
-            .filter(|(i, point)| !fixed.contains_key(i) && near_fixed(point, on))
-            .map(|(i, _)| i)
-            .collect()
+            .map(|(index, point)| {
+                let (x, y) = cell(point);
+                (-1..=1).any(|dx| {
+                    (-1..=1).any(|dy| {
+                        cells.get(&(x + dx, y + dy)).is_some_and(|others| {
+                            others.iter().any(|&(other, q)| {
+                                counts(index, other) && (point.x - q.x).hypot(point.y - q.y) < limit
+                            })
+                        })
+                    })
+                })
+            })
+            .collect::<Vec<_>>()
     };
-    let mut pending = on_fixed(layout);
+    let mut pending: Vec<_> = near(layout, on, &|index, other| {
+        !fixed.contains_key(&index) && fixed.contains_key(&other)
+    })
+    .iter()
+    .enumerate()
+    .filter_map(|(index, &folded)| folded.then_some(index))
+    .collect();
     if pending.is_empty() {
         return Ok(Fold::Clear);
     }
@@ -761,14 +772,17 @@ fn unfold(
         adjacent.get_mut(bond.a).ok_or(Error::Layout)?.push(bond.b);
         adjacent.get_mut(bond.b).ok_or(Error::Layout)?.push(bond.a);
     }
-    let mut seen = HashSet::new();
-    let mut reflected = Vec::new();
+    // The reflected group of each atom; atoms that stay share group zero.
+    let mut groups = vec![0usize; layout.len()];
+    let mut count = 0;
     while let Some(start) = pending.pop() {
-        if !seen.insert(start) {
+        if groups.get(start) != Some(&0) {
             continue;
         }
+        count += 1;
         // The moved atoms bonded together, and the fixed atoms that hold them.
         let mut group = vec![start];
+        *groups.get_mut(start).ok_or(Error::Layout)? = count;
         let mut holders = Vec::new();
         let mut next = 0;
         while let Some(&index) = group.get(next) {
@@ -778,7 +792,8 @@ fn unfold(
                     if !holders.contains(&other) {
                         holders.push(other);
                     }
-                } else if seen.insert(other) {
+                } else if groups.get(other) == Some(&0) {
+                    *groups.get_mut(other).ok_or(Error::Layout)? = count;
                     group.push(other);
                 }
             }
@@ -801,15 +816,15 @@ fn unfold(
             point.x = 2. * (a.x + along * dx) - point.x;
             point.y = 2. * (a.y + along * dy) - point.y;
         }
-        reflected.extend(group);
     }
-    Ok(if !on_fixed(layout).is_empty() {
+    // A reflected atom must stay clear of every atom outside its own group:
+    // the fixed atoms, the moved atoms that stayed and the other groups.
+    let outside = |index: usize, other: usize| {
+        groups.get(index) != Some(&0) && groups.get(index) != groups.get(other)
+    };
+    Ok(if near(layout, on, &outside).contains(&true) {
         Fold::Stuck
-    } else if reflected
-        .iter()
-        .filter_map(|&index| layout.get(index))
-        .any(|point| near_fixed(point, close))
-    {
+    } else if near(layout, close, &outside).contains(&true) {
         Fold::Crowded
     } else {
         Fold::Clear

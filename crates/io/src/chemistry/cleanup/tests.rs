@@ -848,7 +848,47 @@ fn selected_cleanup_leaves_atoms_it_cannot_unfold_with_a_warning() -> anyhow::Re
     assert_eq!(
         cleaned.warnings,
         [
-            "Selected atoms in 1 molecule(s) kept unchanged: cleaned up, they would lie on fixed atoms. Choose Selected molecules."
+            "Selected atoms in 1 molecule(s) kept unchanged: cleaned up, they would lie on other atoms. Choose Selected molecules."
+        ]
+    );
+    Ok(())
+}
+
+/// Issue #1181: a group turned back to its free side can land on selected
+/// atoms outside the group, which are not fixed.
+#[test]
+fn selected_cleanup_never_reflects_atoms_onto_other_selected_atoms() -> anyhow::Result<()> {
+    let mut points = vec![(3., 0.)];
+    points.extend(
+        (0..6)
+            .map(|i| (f64::from(i) * PI / 3.).sin_cos())
+            .map(|(sin, cos)| (1.5 * cos, 1.5 * sin)),
+    );
+    let source = drawing_at("Cc1ccccc1", &points)?;
+    let selected = [0, 2, 3].map(|index| source.atoms[index].id);
+    let cleaned = prepare(
+        &source,
+        Options {
+            scope: Scope::SelectedAtoms,
+            ..Default::default()
+        },
+        &selected,
+    )?
+    .finish_with(|request| {
+        // Atoms 2 and 3 hang on fixed atoms 1 and 4; fold them onto 6 and 5.
+        // The methyl carbon sits where the reflection puts atom 2 back.
+        let mut points = request.molecule.positions.clone();
+        points[0] = points[2];
+        points[2] = points[6];
+        points[3] = points[5];
+        Ok::<_, Error>(points)
+    })?;
+    assert_eq!(cleaned.document.atoms, source.atoms);
+    assert_eq!(cleaned.document.bonds, source.bonds);
+    assert_eq!(
+        cleaned.warnings,
+        [
+            "Selected atoms in 1 molecule(s) kept unchanged: cleaned up, they would lie on other atoms. Choose Selected molecules."
         ]
     );
     Ok(())

@@ -2037,7 +2037,7 @@ fn spiro_cleanup_of_a_selected_ring_stays_clear_of_fixed_atoms() -> anyhow::Resu
             assert_eq!(
                 cleaned.warnings,
                 [
-                    "Selected atoms in 1 molecule(s) now lie close to fixed atoms. Review the drawing, or choose Selected molecules."
+                    "Selected atoms in 1 molecule(s) now lie close to other atoms. Review the drawing, or choose Selected molecules."
                 ],
                 "{label}"
             );
@@ -2072,6 +2072,49 @@ fn spiro_cleanup_of_a_selected_ring_stays_clear_of_fixed_atoms() -> anyhow::Resu
             }
         }
     }
+    Ok(())
+}
+
+/// #1181: turning one selected group back must not land it on another
+/// selected group. Atom 10 folds onto fixed atom 19; reflected, atom 11 would
+/// lie on selected atom 14.
+#[test]
+fn spiro_cleanup_never_reflects_selected_atoms_onto_other_selected_atoms() -> anyhow::Result<()> {
+    use crate::cleanup::{Options, Scope};
+    let imported = imported_smiles(SPIRO_INDANONE)?;
+    let state = &imported.molecule.state;
+    let world = f64::from(imported.document.drawing_style.bond_length_world);
+    let squashed = depict::compute(
+        state,
+        &vec![None; state.graph.atoms.len()],
+        None,
+        depict::Options::default(),
+    )?
+    .positions;
+    let mut source = imported.document.clone();
+    for (atom, point) in source.atoms.iter_mut().zip(&squashed) {
+        atom.position.x = (point.x * world / 1.5) as f32;
+        atom.position.y = (-point.y * world / 1.5) as f32;
+    }
+    let mut request = Request::molecule("clean", source.clone());
+    request.cleanup = Some(Options {
+        scope: Scope::SelectedAtoms,
+        keep_orientation: true,
+        iupac_orientation: false,
+    });
+    request.selected_ids = Some(
+        [10, 11, 14, 18]
+            .map(|index| source.atoms[index].id)
+            .to_vec(),
+    );
+    let cleaned = crate::engine::native_cleanup::prepare(&request)?;
+    assert_eq!(cleaned.document.atoms, source.atoms);
+    assert_eq!(
+        cleaned.warnings,
+        [
+            "Selected atoms in 1 molecule(s) kept unchanged: cleaned up, they would lie on other atoms. Choose Selected molecules."
+        ]
+    );
     Ok(())
 }
 
