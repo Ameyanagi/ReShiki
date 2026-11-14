@@ -374,3 +374,48 @@ fn archive_links_are_unsafe_entries() {
     let hard = listing("hard.tar.gz");
     assert!(!only_files_and_folders(&hard), "{hard}");
 }
+
+/// S5: a signed Windows build installs only an installer signed by the same
+/// publisher. The reports are as PowerShell prints them on Windows 11.
+#[test]
+fn a_signed_app_needs_an_installer_from_its_publisher() {
+    const PUBLISHER: &str = "CN=ReShiki Publisher, O=ReShiki, C=US";
+    const REFUSED: &str = "The downloaded installer is not signed by the publisher of this ReShiki. Nothing was installed.";
+    let report = |lines: [&str; 4]| lines.join("\r\n") + "\r\n";
+    // An unsigned build has no publisher to compare.
+    for status in ["NotSigned", "UnknownError", "HashMismatch", "NotTrusted"] {
+        assert_eq!(
+            same_publisher(&report([status, "", "NotSigned", ""])),
+            Ok(())
+        );
+    }
+    assert_eq!(
+        same_publisher(&report(["Valid", PUBLISHER, "Valid", PUBLISHER])),
+        Ok(())
+    );
+    for installer in [
+        ["NotSigned", ""],
+        ["HashMismatch", PUBLISHER],
+        ["NotTrusted", PUBLISHER],
+        ["Valid", "CN=Someone Else, O=Other, C=US"],
+        ["Valid", ""],
+    ] {
+        assert_eq!(
+            same_publisher(&report(["Valid", PUBLISHER, installer[0], installer[1]])),
+            Err(REFUSED.into()),
+            "{installer:?}"
+        );
+    }
+    assert_eq!(
+        same_publisher(&report(["Valid", "", "Valid", ""])),
+        Err(REFUSED.into())
+    );
+    // PowerShell did not run, or printed something else.
+    for broken in ["", "Valid\r\n", "Valid\r\na\r\nValid\r\na\r\nextra\r\n"] {
+        assert_eq!(
+            same_publisher(broken),
+            Err("The installer's signature could not be checked. Nothing was installed.".into()),
+            "{broken:?}"
+        );
+    }
+}

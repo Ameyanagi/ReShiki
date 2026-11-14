@@ -308,7 +308,45 @@ fn stage(asset: &Path, directory: &Path, version: &str) -> Result<PathBuf, Strin
 }
 #[cfg(target_os = "windows")]
 fn stage(asset: &Path, _directory: &Path, _version: &str) -> Result<PathBuf, String> {
+    use std::os::windows::process::CommandExt;
+    let report = Command::new("powershell.exe")
+        .args(["-NoProfile", "-NonInteractive", "-Command", SIGNERS])
+        .env(
+            "RESHIKI_UPDATE_CURRENT",
+            std::env::current_exe().map_err(|e| e.to_string())?,
+        )
+        .env("RESHIKI_UPDATE_INSTALLER", asset)
+        .creation_flags(crate::workers::CREATE_NO_WINDOW)
+        .output()
+        .map_err(|e| e.to_string())?;
+    same_publisher(&String::from_utf8_lossy(&report.stdout))?;
     Ok(asset.into())
+}
+/// Prints the Authenticode status and signer subject of the running
+/// application, then of the downloaded installer: four lines.
+#[cfg(target_os = "windows")]
+const SIGNERS: &str = "$ErrorActionPreference = 'Stop'
+foreach ($path in $env:RESHIKI_UPDATE_CURRENT, $env:RESHIKI_UPDATE_INSTALLER) {
+    $signature = Get-AuthenticodeSignature -LiteralPath $path
+    [string]$signature.Status
+    if ($signature.SignerCertificate) { $signature.SignerCertificate.Subject } else { '' }
+}";
+/// Checks the report of the `SIGNERS` script. A signed application installs only an
+/// installer with a valid signature from the same publisher, so a release
+/// whose files and checksums were both replaced is not run. An unsigned
+/// build has no publisher to compare and relies on the checksum alone.
+#[cfg(any(target_os = "windows", test))]
+fn same_publisher(report: &str) -> Result<(), String> {
+    let lines: Vec<_> = report.lines().map(str::trim).collect();
+    match *lines.as_slice() {
+        [current, _, _, _] if current != "Valid" => Ok(()),
+        [_, publisher, "Valid", signer] if !publisher.is_empty() && signer == publisher => Ok(()),
+        [_, _, _, _] => Err(
+            "The downloaded installer is not signed by the publisher of this ReShiki. Nothing was installed."
+                .into(),
+        ),
+        _ => Err("The installer's signature could not be checked. Nothing was installed.".into()),
+    }
 }
 /// Whether a `tar -tv` listing holds only regular files and folders. A
 /// symbolic or hard link could point a later entry outside the folder the
