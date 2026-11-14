@@ -49,7 +49,9 @@ fn assert_failed(output: &Output) -> String {
     let stderr = text(&output.stderr);
     assert_eq!(output.status.code(), Some(1), "{stderr}");
     assert!(output.stdout.is_empty(), "{}", text(&output.stdout));
-    assert!(stderr.starts_with("reshiki: error: "), "{stderr}");
+    // An operation error is `reshiki: error[code]: `, an input or output
+    // error `reshiki: error: `.
+    assert!(stderr.starts_with("reshiki: error"), "{stderr}");
     stderr
 }
 

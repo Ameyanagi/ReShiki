@@ -11,11 +11,11 @@ https://reshiki.com/developer/agent-reference/#proposal
 Run `reshiki --cli schema proposal` for the schema.
 
 Options:
-  --to FORMAT  The output format: svg, pdf, png, cdxml, mol, smiles, inchi.
+  --to FORMAT  The output format: svg, pdf, png, cdxml, cdx, mol, rxn, smiles, rsmi, inchi.
                Without --to, the extension of OUTPUT picks it (.smi is smiles).
   -o OUTPUT    Write the file to OUTPUT. Without -o, or with -o -, the file
-               goes to stdout and needs --to; pdf and png are never written
-               to a terminal.
+               goes to stdout and needs --to; pdf, png and cdx are never
+               written to a terminal.
   --pages      Export every publication page as one PDF (pdf only).
   --svg-text MODE
                Draw svg text as outlines (outline, the default), the same

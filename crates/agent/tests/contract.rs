@@ -11,9 +11,11 @@ use reshiki_agent::{
     ops::{
         budget::{Budgets, RenderBudget},
         catalog::{RESULTS, SPECS, catalog_json, decode_check},
+        compose::SKETCH_PLACEHOLDER,
         headless::HeadlessHost,
         host::{Call, ToolHost},
         inspect::MAX_TEXT_CHARS,
+        naming::{self, Naming, NamingFuture},
         wire::{Principal, RequestId},
     },
     tool_spec::{ToolSpec, valid_name},
@@ -228,9 +230,31 @@ fn ops_files_schema_and_decoder_parity() {
     }
 }
 
+/// What compose lists for the sketch object.
+fn sketch_placeholder() -> Value {
+    json!({"type": "object", "description": SKETCH_PLACEHOLDER})
+}
+
+/// compose's inputSchema as a client that drew a sketch knows it: the
+/// sketch placeholder replaced by the schema the `schema` tool returns.
+fn compose_with_sketch() -> Value {
+    let mut schema = inlined((spec("compose").input_schema)());
+    let sketch = &mut schema["properties"]["proposal"]["properties"]["sketch"]["anyOf"][1];
+    assert_eq!(*sketch, sketch_placeholder());
+    *sketch = reshiki_agent::ops::schema::sketch();
+    schema
+}
+
 const COMPOSE: Contract = Contract {
     name: "ops-compose",
-    schema: || tools_schema(&["compose"]),
+    schema: || {
+        json!({
+            "type": "object",
+            "properties": {"tool": {"const": "compose"}, "arguments": compose_with_sketch()},
+            "required": ["tool", "arguments"],
+            "additionalProperties": false,
+        })
+    },
     decode: decode_tool_call,
     cases: "ops-compose-cases.json",
 };
@@ -258,10 +282,11 @@ fn ops_apply_schema_and_decoder_parity() {
     }
 }
 
-/// compose publishes the assistant's Proposal schema in a smaller form. With
-/// its `$defs` resolved it is the pinned schema (the bytes `canvas_preview`
-/// publishes), less `explanation`, `replace_ids` and three sentences of the
-/// sketch description that repeat other text.
+/// compose publishes the assistant's Proposal schema in a smaller form:
+/// without `explanation` and `replace_ids`, and with the sketch object as a
+/// placeholder whose fields the `schema` tool returns. With the placeholder
+/// swapped back and `$defs` resolved it is the pinned schema (the bytes
+/// `canvas_preview` publishes) less those two properties.
 #[test]
 fn compose_derives_its_proposal_schema_from_the_pinned_one() {
     let golden = include_str!("../../../tests/fixtures/agent-contract/proposal-schema.json")
@@ -276,7 +301,7 @@ fn compose_derives_its_proposal_schema_from_the_pinned_one() {
         .keys()
         .map(String::as_str)
         .collect();
-    assert_eq!(defs, ["color", "molecules", "point"]);
+    assert_eq!(defs, ["molecules"]);
 
     let mut expected = reshiki_agent::schema();
     for name in ["explanation", "replace_ids"] {
@@ -289,27 +314,30 @@ fn compose_derives_its_proposal_schema_from_the_pinned_one() {
         );
     }
     expected["required"] = json!(["molecules", "reactions", "composition", "sketch"]);
-    let description = &mut expected["properties"]["sketch"]["anyOf"][1]["description"];
-    let mut text = description.as_str().unwrap().to_owned();
-    for sentence in [
-        " Use centroids with kind multi_center for haptic contacts (all target atoms), kind variable for alternative attachment positions, and null only for nonchemical drawing anchors.",
-        " Use ring_arc on consecutive ring bonds for partial inner curves, preserving their underlying bond orders.",
-        " Leave molecules and reactions empty.",
-    ] {
-        assert_eq!(text.matches(sentence).count(), 1, "{sentence}");
-        text = text.replace(sentence, "");
-    }
-    assert!(text.contains("Keep molecules and reactions empty when using sketch."));
-    *description = text.into();
-    assert_eq!(inlined(published)["properties"]["proposal"], expected);
+    assert_eq!(
+        reshiki_agent::ops::schema::sketch(),
+        expected["properties"]["sketch"]["anyOf"][1]
+    );
+    assert_eq!(compose_with_sketch()["properties"]["proposal"], expected);
+    assert!(SKETCH_PLACEHOLDER.contains("call schema with name sketch"));
+    assert!(SKETCH_PLACEHOLDER.contains("Keep molecules and reactions empty when using sketch."));
 }
 
-/// The tool list every MCP client loads into its context stays small: it
-/// was 27,316 characters before compose shared its repeated subschemas.
+/// The tool list every MCP client loads into its context stays small. It
+/// was 27,316 characters with the whole Proposal schema, 24,412 once
+/// compose shared its repeated subschemas, and CATALOG_CHARS now that the
+/// sketch schema is fetched with the schema tool, with three more tools.
 #[test]
 fn the_operation_catalog_stays_small() {
     let size = catalog_json().to_string().chars().count();
-    assert!(size <= 25_000, "the catalog is {size} characters");
+    eprintln!("the operation catalog is {size} characters");
+    assert!(size <= 19_500, "the catalog is {size} characters");
+    let sketch = reshiki_agent::ops::schema::sketch()
+        .to_string()
+        .chars()
+        .count();
+    eprintln!("the sketch schema, fetched on demand, is {sketch} characters");
+    assert!(sketch > 9_000, "the sketch schema is {sketch} characters");
 }
 
 /// The operation catalog as hosts list it. See
@@ -322,8 +350,8 @@ fn the_operation_catalog_bytes_are_pinned() {
     assert_eq!(catalog_json().to_string(), golden);
 }
 
-/// The leading `{...}` lists only top-level keys; the prose after it
-/// documents nested fields and their meanings.
+/// The leading `{...}` lists only the keys of the envelope's `value`; the
+/// prose after it documents nested fields and their meanings.
 fn result_keys(tool: &str) -> BTreeSet<&'static str> {
     let description = RESULTS
         .iter()
@@ -425,14 +453,50 @@ async fn successful_result(host: &HeadlessHost, tool: &str, arguments: Value) ->
     Value::Object(result.value)
 }
 
+/// Every successful result is the one envelope, and its `value` has exactly
+/// the documented keys.
 fn assert_result_keys(tool: &str, result: &Value, source: &str) {
-    let actual: BTreeSet<_> = result
-        .as_object()
-        .unwrap_or_else(|| panic!("{source}: {tool}: result is not an object"))
-        .keys()
-        .map(String::as_str)
-        .collect();
-    assert_eq!(result_keys(tool), actual, "{source}: {tool}");
+    let keys = |value: &Value| -> BTreeSet<String> {
+        value
+            .as_object()
+            .unwrap_or_else(|| panic!("{source}: {tool}: not an object"))
+            .keys()
+            .cloned()
+            .collect()
+    };
+    assert_eq!(
+        keys(result),
+        ["validation", "value", "versions", "warnings"]
+            .map(str::to_owned)
+            .into(),
+        "{source}: {tool}"
+    );
+    let documented: BTreeSet<String> = result_keys(tool).into_iter().map(str::to_owned).collect();
+    assert_eq!(documented, keys(&result["value"]), "{source}: {tool}");
+}
+
+/// A naming hook for the name tool's result keys; the real one lives in the
+/// application.
+struct Named;
+
+impl Naming for Named {
+    fn resolve(&self, _: String) -> NamingFuture<String> {
+        Box::pin(async { Ok("C".to_owned()) })
+    }
+
+    fn generate(&self, _: reshiki_model::document::Document) -> NamingFuture<naming::Named> {
+        Box::pin(async {
+            Ok(naming::Named {
+                name: "methane".into(),
+                status: "preferred".into(),
+                preferred: true,
+                reason: None,
+                detail: String::new(),
+                aliases: Vec::new(),
+                alternatives: Vec::new(),
+            })
+        })
+    }
 }
 
 /// Prefer successful real-binary goldens. Tools without one run against the
@@ -465,23 +529,38 @@ async fn documented_result_keys_match_successful_operations() {
         &[directory.path().to_path_buf()],
     )
     .expect("fixture grants");
-    let host = HeadlessHost::new("contract-test", Budgets::default()).with_grants(Arc::new(grants));
+    let host = HeadlessHost::new("contract-test", Budgets::default())
+        .with_grants(Arc::new(grants))
+        .with_naming(Arc::new(Named));
     for tool in missing {
         let arguments = match tool {
             "info" | "document_new" | "document_list" => json!({}),
             "document_close" | "file_save" => {
                 let created = successful_result(&host, "document_new", json!({})).await;
                 if tool == "document_close" {
-                    json!({"document": created["document"]})
+                    json!({"document": created["value"]["document"]})
                 } else {
                     json!({
-                        "document": created["document"],
+                        "document": created["value"]["document"],
                         "path": directory.path().join("output.rsk"),
                         "format": null, "overwrite": false, "pages": null, "svg_text": null,
                     })
                 }
             }
             "file_open" => json!({"path": input, "format": "auto"}),
+            "schema" => json!({"name": "sketch"}),
+            "convert" => json!({
+                "input": {
+                    "format": "rsk",
+                    "text": include_str!("../../../tests/fixtures/bond-join-regression.rsk"),
+                },
+                "to": "preview", "pages": null, "svg_text": null,
+                "max_width": null, "max_height": null,
+            }),
+            "name" => {
+                let created = successful_result(&host, "document_new", json!({})).await;
+                json!({"document": created["value"]["document"]})
+            }
             _ => panic!("{tool}: add a successful golden or HeadlessHost fallback"),
         };
         let result = successful_result(&host, tool, arguments).await;
@@ -671,10 +750,17 @@ fn the_operation_catalog_follows_the_mcp_tool_rules() {
         assert_eq!(schema["type"], "object", "{name}");
         assert!(schema.get("$schema").is_none(), "{name}");
         assert_eq!(json_schema::check_keywords(&schema), [], "{name}");
+        // The one object level left open: compose's sketch, whose strict
+        // schema the schema tool returns.
         let (mut loose, mut skipped) = (Vec::new(), Vec::new());
-        loose_objects(&schema, "", &Value::Null, &mut loose, &mut skipped);
+        loose_objects(&schema, "", &sketch_placeholder(), &mut loose, &mut skipped);
         assert_eq!(loose, Vec::<String>::new(), "{name}: not strict");
-        assert_eq!(skipped, Vec::<String>::new(), "{name}");
+        let open: &[&str] = if name == "compose" {
+            &["/properties/proposal/properties/sketch/anyOf/1"]
+        } else {
+            &[]
+        };
+        assert_eq!(skipped, open, "{name}");
     }
     assert_eq!(catalog_json().as_array().map(Vec::len), Some(SPECS.len()));
 }
@@ -695,8 +781,11 @@ enum Effect {
 }
 
 /// Every operation tool's effect class.
-const EFFECTS: [(&str, Effect); 13] = [
+const EFFECTS: [(&str, Effect); 16] = [
     ("info", Effect::ReadOnly),
+    ("convert", Effect::ReadOnly),
+    ("name", Effect::ReadOnly),
+    ("schema", Effect::ReadOnly),
     ("document_list", Effect::ReadOnly),
     ("inspect", Effect::ReadOnly),
     ("analyze", Effect::ReadOnly),

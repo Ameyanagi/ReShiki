@@ -115,7 +115,7 @@ fn parameters_without_descriptions_omit_the_column_and_link_the_proposal() {
 fn results_start_with_code_formatted_top_level_keys() {
     let reference = agent_reference();
     assert!(reference.contains(&format!("## Tools\n\n{RESULT_CONVENTIONS}\n\n")));
-    assert!(reference.contains("Result: `{document, closed, versions}`. The closed"));
+    assert!(reference.contains("Result `value`: `{document, closed}`. The closed"));
 }
 
 #[test]

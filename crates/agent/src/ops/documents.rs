@@ -7,7 +7,7 @@ use super::{
     exec::Context,
     result::ToolResult,
     store::Documents,
-    wire::{DocHandle, Principal, handle_schema, versions_json},
+    wire::{DocHandle, Principal, handle_schema},
 };
 use crate::{
     access::{
@@ -23,14 +23,17 @@ use serde::Deserialize;
 use serde_json::{Map, Value, json};
 use std::sync::Arc;
 
-/// The `format` values the import operation accepts.
+/// The `format` values the import operation accepts. `rsk` and `reshiki`
+/// both name a native drawing; `name` is a chemical name.
 pub const IMPORT_FORMATS: &[&str] = &[
-    "auto", "smiles", "mol", "rxn", "rsmi", "inchi", "cdxml", "cdx", "reshiki",
+    "auto", "smiles", "mol", "rxn", "rsmi", "inchi", "cdxml", "cdx", "reshiki", "rsk", "name",
 ];
 
-/// The `format` values the export operation accepts. EMF and CDX output are
-/// not offered.
-pub const EXPORT_FORMATS: &[&str] = &["svg", "pdf", "png", "cdxml", "mol", "smiles", "inchi"];
+/// The `format` values the export operation accepts. EMF output is not
+/// offered.
+pub const EXPORT_FORMATS: &[&str] = &[
+    "svg", "pdf", "png", "cdxml", "cdx", "mol", "rxn", "smiles", "rsmi", "inchi",
+];
 
 pub const INFO: ToolSpec = ToolSpec {
     name: "info",
@@ -120,17 +123,16 @@ pub(crate) fn decode_close(args: Value) -> Result<Close, OpError> {
     arguments(args)
 }
 
-/// `fields` and `versions` as a successful result.
+/// `fields` as the value of a successful envelope without warnings.
 fn ok<const N: usize>(fields: [(&str, Value); N], versions: &Versions) -> ToolResult {
-    let mut value: Map<String, Value> = fields
+    let value: Map<String, Value> = fields
         .into_iter()
         .map(|(name, value)| (name.to_owned(), value))
         .collect();
-    value.insert("versions".into(), versions_json(versions));
-    ToolResult::plain(value)
+    ToolResult::valid(value, Vec::new(), versions.clone())
 }
 
-/// Reports server information; the successful flat result contract is in
+/// Reports server information; the successful result contract is in
 /// [`super::catalog::RESULTS`].
 pub(crate) fn info(versions: &Versions, budgets: &Budgets, grants: &Grants) -> ToolResult {
     let granted = grants.summary();
@@ -187,7 +189,7 @@ pub fn budgets_json(budgets: &Budgets) -> Value {
 }
 
 /// Creates an empty document, as the app's new tab does
-/// (src/app/document_tab.rs). The successful flat result contract is in
+/// (src/app/document_tab.rs). The successful result contract is in
 /// [`super::catalog::RESULTS`].
 pub(crate) async fn document_new(
     mut ctx: Context,
@@ -207,7 +209,7 @@ pub(crate) async fn document_new(
     ))
 }
 
-/// Lists live documents; the successful flat result contract is in
+/// Lists live documents; the successful result contract is in
 /// [`super::catalog::RESULTS`].
 pub(crate) async fn document_list(
     ctx: Context,
@@ -229,7 +231,7 @@ pub(crate) async fn document_list(
     Ok(ok([("documents", Value::Array(documents))], &versions))
 }
 
-/// Closes a document; the successful flat result contract is in
+/// Closes a document; the successful result contract is in
 /// [`super::catalog::RESULTS`].
 pub(crate) async fn document_close(
     mut ctx: Context,

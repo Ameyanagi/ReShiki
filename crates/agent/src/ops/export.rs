@@ -21,6 +21,7 @@ use crate::{
     export::Publication,
     tool_spec::{Hints, ToolSpec},
 };
+use base64::{Engine, engine::general_purpose::STANDARD};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::sync::Arc;
@@ -28,7 +29,7 @@ use std::sync::Arc;
 pub const EXPORT: ToolSpec = ToolSpec {
     name: "export",
     title: Some("Export file"),
-    description: "Export a session document as a file, exactly as the app's Export command makes it: svg, pdf or png figures on the drawing's background, or cdxml, mol, smiles or inchi chemistry. PNG resolution steps down from the style's dpi until the image fits export_png_pixels. The file comes back inline, at most max_output_bytes (info reports both budgets), with a receipt {format, byte_len, detail}.",
+    description: "Export a session document as a file, exactly as the app's Export command makes it: svg, pdf or png figures on the drawing's background, or cdxml, cdx, mol, rxn, smiles, rsmi (reaction SMILES) or inchi chemistry. PNG resolution steps down from the style's dpi until the image fits export_png_pixels. The file comes back inline, at most max_output_bytes (info reports both budgets), with a receipt {format, byte_len, detail}.",
     input_schema: schema,
     hints: Some(Hints {
         read_only: true,
@@ -52,8 +53,8 @@ fn schema() -> Value {
     })
 }
 
-/// An export `format`, exactly [`EXPORT_FORMATS`]. EMF and CDX output are
-/// not offered.
+/// An export `format`, exactly [`EXPORT_FORMATS`]. EMF output is not
+/// offered.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub(crate) enum Format {
@@ -61,8 +62,11 @@ pub(crate) enum Format {
     Pdf,
     Png,
     Cdxml,
+    Cdx,
     Mol,
+    Rxn,
     Smiles,
+    Rsmi,
     Inchi,
 }
 
@@ -75,10 +79,18 @@ impl Format {
             Self::Pdf => "pdf",
             Self::Png => "png",
             Self::Cdxml => "cdxml",
+            Self::Cdx => "cdx",
             Self::Mol => "mol",
+            Self::Rxn => "rxn",
             Self::Smiles => "smiles",
+            Self::Rsmi => "rsmi",
             Self::Inchi => "inchi",
         }
+    }
+
+    /// The format named `name` in [`EXPORT_FORMATS`].
+    pub(crate) fn named(name: &str) -> Option<Self> {
+        serde_json::from_value(Value::String(name.to_owned())).ok()
     }
 
     pub(crate) fn mime(self) -> &'static str {
@@ -87,8 +99,10 @@ impl Format {
             Self::Pdf => "application/pdf",
             Self::Png => "image/png",
             Self::Cdxml => "chemical/x-cdxml",
+            Self::Cdx => "chemical/x-cdx",
             Self::Mol => "chemical/x-mdl-molfile",
-            Self::Smiles => "chemical/x-daylight-smiles",
+            Self::Rxn => "chemical/x-mdl-rxnfile",
+            Self::Smiles | Self::Rsmi => "chemical/x-daylight-smiles",
             Self::Inchi => "chemical/x-inchi",
         }
     }
@@ -117,10 +131,7 @@ pub(crate) struct Export {
 pub(crate) fn decode(args: Value) -> Result<Export, OpError> {
     let export: Export = arguments(args)?;
     if export.pages == Some(true) && export.format != Format::Pdf {
-        return Err(OpError::new(
-            ErrorKind::InvalidArguments,
-            "pages is valid only with format pdf",
-        ));
+        return Err(OpError::invalid("pages is valid only with format pdf").param("pages"));
     }
     Ok(export)
 }
@@ -140,10 +151,12 @@ struct Exported {
 ///   become the warnings in order: the PNG size first, then the notice that
 ///   the drawing was preserved for review. The receipt's detail is the PNG
 ///   size. SVG uses `svg-office` for outlined text, or `svg` for live text.
-/// - cdxml, mol, smiles and inchi: an engine `export` request with the
-///   format set, as `App::export_drawing` (src/app/files.rs) sends it. Its
-///   warnings become the warnings. No output is [`ErrorKind::Failed`]; the
-///   app would save an empty file (src/app/engine_jobs.rs `engine_done`).
+/// - cdxml, cdx, mol, rxn, smiles, rsmi and inchi: an engine `export`
+///   request with the format set, as `App::export_drawing`
+///   (src/app/files.rs) sends it. Its warnings become the warnings. No
+///   output is [`ErrorKind::Failed`]; the app would save an empty file
+///   (src/app/engine_jobs.rs `engine_done`). The engine returns binary CDX
+///   as base64, which is decoded here.
 ///
 /// Every error is [`ErrorKind::Failed`] with the app's message, except a file
 /// over [`Budgets::max_output_bytes`], which is [`ErrorKind::Budget`].
@@ -189,7 +202,14 @@ pub(crate) async fn export_bytes(
             let output = response
                 .output
                 .ok_or_else(|| format!("The chemistry engine returned no {name} output"))?;
-            Ok((output.into_bytes(), None, response.warnings))
+            let bytes = if format == Format::Cdx {
+                STANDARD
+                    .decode(output)
+                    .map_err(|_| "Invalid binary drawing base64".to_owned())?
+            } else {
+                output.into_bytes()
+            };
+            Ok((bytes, None, response.warnings))
         })
     };
     ctx.checkpoint()?;

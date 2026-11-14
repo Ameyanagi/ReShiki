@@ -7,7 +7,11 @@ fn every_operation_format_has_an_extension() {
     let imports: HashSet<_> = FILE_FORMATS.iter().filter_map(|row| row.import).collect();
     let exports: HashSet<_> = FILE_FORMATS.iter().filter_map(|row| row.export).collect();
     let mut expected_imports: HashSet<_> = IMPORT_FORMATS.iter().copied().collect();
-    expected_imports.remove("auto");
+    // auto follows the extension, rsk is another name for reshiki and a
+    // chemical name is not a file.
+    for format in ["auto", "rsk", "name"] {
+        assert!(expected_imports.remove(format), "{format}");
+    }
     assert_eq!(imports, expected_imports);
     let mut expected_exports: HashSet<_> = EXPORT_FORMATS.iter().copied().collect();
     expected_exports.insert("reshiki");
@@ -19,9 +23,7 @@ fn every_operation_format_has_an_extension() {
             "{ext}"
         );
     }
-    for excluded in ["emf", "cdx"] {
-        assert!(!WRITE.contains(&excluded), "{excluded}");
-    }
+    assert!(!WRITE.contains(&"emf"));
 }
 
 #[test]
@@ -59,7 +61,8 @@ fn read_and_write_derive_from_the_table() {
     assert_eq!(
         *WRITE,
         [
-            "rsk", "mol", "cdxml", "smi", "smiles", "inchi", "svg", "pdf", "png"
+            "rsk", "mol", "rxn", "rsmi", "cdxml", "cdx", "smi", "smiles", "inchi", "svg", "pdf",
+            "png"
         ]
     );
 }

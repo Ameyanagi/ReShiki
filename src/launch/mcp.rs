@@ -268,7 +268,11 @@ pub(crate) fn mcp(args: Vec<OsString>) -> ! {
         }
     };
     let limits = Limits::from_budgets(&budgets);
-    let host = Arc::new(HeadlessHost::new(CURRENT_VERSION, budgets).with_grants(Arc::new(grants)));
+    let host = Arc::new(
+        HeadlessHost::new(CURRENT_VERSION, budgets)
+            .with_grants(Arc::new(grants))
+            .with_naming(Arc::new(reshiki::naming::AgentNaming)),
+    );
     let result = runtime.block_on(server::serve(
         Arc::clone(&host),
         Principal::local(),

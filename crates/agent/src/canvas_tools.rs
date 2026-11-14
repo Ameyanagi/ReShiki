@@ -11,7 +11,7 @@ pub const PREVIEW_WIDTH: u32 = 1600;
 /// The height [`image`] fits a preview within, in pixels.
 pub const PREVIEW_HEIGHT: u32 = 1000;
 /// How far [`image_within`] scales a small drawing up.
-pub const MAX_UPSCALE: f32 = 3.;
+pub use reshiki_io::preview::MAX_UPSCALE;
 
 #[derive(Debug, Clone, Default)]
 pub struct Snapshot {
@@ -186,35 +186,14 @@ pub fn image(document: &Document) -> Result<Vec<u8>, String> {
     image_within(document, PREVIEW_WIDTH, PREVIEW_HEIGHT)
 }
 /// Renders `document` on white, scaled up to 3x and down to fit within
-/// `max_width` x `max_height` pixels.
+/// `max_width` x `max_height` pixels: [`reshiki_io::preview::png`], the
+/// preview every surface shares.
 pub fn image_within(
     document: &Document,
     max_width: u32,
     max_height: u32,
 ) -> Result<Vec<u8>, String> {
-    // f32::clamp panics when its minimum exceeds its maximum.
-    if max_width == 0 || max_height == 0 {
-        return Err("Preview size must be at least 1 × 1 pixels".into());
-    }
-    let tree = crate::export::parse_svg(crate::scene::svg(document))?;
-    let scale = (max_width as f32 / tree.size().width())
-        .min(max_height as f32 / tree.size().height())
-        .min(MAX_UPSCALE);
-    let width = (tree.size().width() * scale)
-        .ceil()
-        .clamp(1., max_width as f32) as u32;
-    let height = (tree.size().height() * scale)
-        .ceil()
-        .clamp(1., max_height as f32) as u32;
-    let mut pixels =
-        resvg::tiny_skia::Pixmap::new(width, height).ok_or("Could not create canvas image")?;
-    pixels.fill(resvg::tiny_skia::Color::WHITE);
-    resvg::render(
-        &tree,
-        resvg::tiny_skia::Transform::from_scale(scale, scale),
-        &mut pixels.as_mut(),
-    );
-    pixels.encode_png().map_err(|e| e.to_string())
+    reshiki_io::preview::png(document, max_width, max_height, crate::pictures::MAX_PIXELS)
 }
 
 #[cfg(test)]

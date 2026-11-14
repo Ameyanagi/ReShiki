@@ -306,7 +306,9 @@ impl SessionStore {
             return Ok(Decision::Replay(receipt));
         }
         if entry.revision != change.base.0 {
-            return Err(OpError::new(ErrorKind::Stale, STALE));
+            return Err(OpError::new(ErrorKind::Stale, STALE)
+                .at_revision(entry.revision)
+                .param("base_revision"));
         }
         let applied = prospect(entry, &change.edit, change.labels.as_ref());
         // A step only moves frames between the document and its history, and
