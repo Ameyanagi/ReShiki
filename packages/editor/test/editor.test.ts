@@ -148,10 +148,11 @@ describe.skipIf(!cli)("matches the desktop CLI", () => {
     }
 
     test(`SVG preview of ${input}`, async () => {
+      // Live text on both sides: outlines are the glyphs of each side's font.
       const expected = new TextDecoder().decode(
-        desktop(["render", "--smiles", input, "--to", "svg"]),
+        desktop(["render", "--smiles", input, "--to", "svg", "--svg-text", "live"]),
       );
-      const actual = await renderSvg(input, "smiles");
+      const actual = await renderSvg(input, "smiles", { svgText: "live" });
       // Liberation Sans has Arial's advances but not its outlines, so label
       // ink boxes, and the bond ends clipped to them, move slightly.
       const deviation = svgDeviation(actual, expected);
