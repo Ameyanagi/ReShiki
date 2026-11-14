@@ -25,11 +25,32 @@
       import { mount } from "./editor.js";
 
       const METHODS = new Set(["load", "save", "exportImage"]);
-      const post = (message, origin = "*") => parent.postMessage(message, origin);
+      // The page that embeds this frame. The frame posts to that origin only
+      // and answers no other, so the drawing never reaches another page.
+      const embedder =
+        location.ancestorOrigins?.[0] ??
+        (document.referrer ? new URL(document.referrer).origin : location.origin);
+      const post = (message) => parent.postMessage(message, embedder);
+      // Anyone can link to this page with a `fonts` parameter, so it fetches
+      // fonts only from its own origin or the embedding page's.
       const fonts = JSON.parse(new URLSearchParams(location.search).get("fonts") ?? "{}");
+      const allowed = (font) =>
+        [location.origin, embedder].includes(new URL(font, location.href).origin);
+      const refuse = (font) =>
+        post({
+          event: "fonterror",
+          error: `The font ${font} is not on this page's origin, so it was not loaded`,
+        });
+      const pageFonts = Array.isArray(fonts.fonts) ? fonts.fonts : [];
+      pageFonts.filter((font) => !allowed(font)).forEach(refuse);
+      let cjkFont = fonts.cjkFont;
+      if (typeof cjkFont === "string" && !allowed(cjkFont)) {
+        refuse(cjkFont);
+        cjkFont = false;
+      }
       const ready = mount(document.getElementById("editor"), {
-        fonts: fonts.fonts,
-        cjkFont: fonts.cjkFont,
+        fonts: pageFonts.filter(allowed),
+        cjkFont,
         onChange: () => post({ event: "change" }),
         onError: (error) => post({ event: "fonterror", error: String(error?.message ?? error) }),
       });
@@ -39,13 +60,13 @@
       );
 
       addEventListener("message", async ({ source, origin, data }) => {
-        if (source !== parent || !METHODS.has(data?.method)) return;
+        if (source !== parent || origin !== embedder || !METHODS.has(data?.method)) return;
         try {
           const editor = await ready;
           const result = await editor[data.method](...(data.args ?? []));
-          post({ id: data.id, result }, origin);
+          post({ id: data.id, result });
         } catch (error) {
-          post({ id: data.id, error: String(error?.message ?? error) }, origin);
+          post({ id: data.id, error: String(error?.message ?? error) });
         }
       });
     </script>

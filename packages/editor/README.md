@@ -105,7 +105,7 @@ await editor.load("CCO", "smiles");
 
 `embed` returns the same methods as `mount`, sent to `src/frame.html` with
 `postMessage`. Serve that page with the package's `src` and `dist` folders, or
-pass its URL as `frameUrl`.
+pass its URL as `frameUrl`. The frame answers only the page that embeds it.
 
 The custom element wraps `mount`:
 
@@ -210,7 +210,9 @@ await mount(element, {
 });
 ```
 
-`embed()` takes the same options, with fonts as URLs. The custom element
+`embed()` takes the same options, with fonts as URLs on the page's own origin
+or the frame's; it reports a font from anywhere else through `onError` and
+does not load it. The custom element
 takes `fonts` (URLs separated by spaces) and `cjk-font` (a URL, or `false`)
 attributes and fires `error` for a font that could not load. Fonts added this
 way also reach `save` and `exportImage` figures.
