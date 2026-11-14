@@ -287,8 +287,8 @@ impl State {
     }
 }
 
-/// The editor shows this name without its extension as the tab title. Later
-/// drawings open from the same host are numbered from 2.
+/// The editor shows this file name as the tab title. Later drawings open from
+/// the same host are numbered from 2.
 fn session_file_name(app: Option<&str>, number: u32) -> String {
     let app = app.unwrap_or_default();
     let app: String = app
