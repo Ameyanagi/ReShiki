@@ -152,8 +152,8 @@ impl Groups {
     }
 
     // This pass follows the file's explicit valence processing. Native field
-    // storage narrows signed charges and H counts to eight bits; retain that
-    // defined conversion, including negative and overflowing extension values.
+    // storage narrows signed charges and H counts to eight bits; a value that
+    // does not fit is an error here, as it is in `M  CHG`, instead of wrapping.
     pub(super) fn apply(&self, p: &mut Parsed) -> Result<()> {
         for group in self
             .entries
@@ -296,7 +296,9 @@ impl Groups {
                 Some("MRV_IMPLICIT_H") => {
                     for data in &group.data {
                         if let Some(value) = data.strip_prefix("IMPL_H") {
-                            let hs = numeric_field(value, true)? as u8;
+                            let hs = u8::try_from(numeric_field(value, true)?).map_err(|_| {
+                                ReadError::Chemistry("Excessive hydrogen count".into())
+                            })?;
                             for &index in &group.atoms {
                                 if aromatic.get(index) == Some(&true) {
                                     p.graph
@@ -323,9 +325,12 @@ impl Groups {
                             let value = numeric_field(value, true)?;
                             let atom = p.graph.atoms.get_mut(index).ok_or(ReadError::Limit)?;
                             if field == "ZCH" {
-                                atom.charge = value as i8;
+                                atom.charge = i8::try_from(value)
+                                    .map_err(|_| ReadError::Chemistry("Excessive charge".into()))?;
                             } else {
-                                atom.explicit_hydrogens = value as u8;
+                                atom.explicit_hydrogens = u8::try_from(value).map_err(|_| {
+                                    ReadError::Chemistry("Excessive hydrogen count".into())
+                                })?;
                             }
                         }
                     }

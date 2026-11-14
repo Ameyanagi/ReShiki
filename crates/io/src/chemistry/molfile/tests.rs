@@ -308,6 +308,39 @@ fn v3000_import_and_reference_output_preserve_and_or_groups() -> anyhow::Result<
     Ok(())
 }
 
+/// A charge or hydrogen count that does not fit its field is an error, as
+/// in `M  CHG`; it used to wrap (256 became 0, 200 became -56).
+#[test]
+fn substance_group_charges_and_hydrogen_counts_out_of_range_are_errors() -> anyhow::Result<()> {
+    let group = |field: &str, value: &str| {
+        ENHANCED_STEREO_BASE
+            .replace("COUNTS 6 5 0", "COUNTS 6 5 1")
+            .replace(
+                "M  V30 END CTAB",
+                &format!(
+                    "M  V30 BEGIN SGROUP\n\
+                     M  V30 1 DAT 0 ATOMS=(1 1) FIELDNAME={field} FIELDDATA={value}\n\
+                     M  V30 END SGROUP\nM  V30 END CTAB"
+                ),
+            )
+    };
+    assert_eq!(
+        read(&group("ZCH", "1"))?.molecule.state.graph.atoms[0].charge,
+        1
+    );
+    for (field, value, message) in [
+        ("ZCH", "256", "Excessive charge"),
+        ("ZCH", "200", "Excessive charge"),
+        ("ZCH", "-129", "Excessive charge"),
+        ("HYD", "256", "Excessive hydrogen count"),
+        ("HYD", "-1", "Excessive hydrogen count"),
+    ] {
+        let error = read(&group(field, value)).unwrap_err().to_string();
+        assert!(error.contains(message), "{field} {value}: {error}");
+    }
+    Ok(())
+}
+
 #[test]
 fn mixed_mol_stereo_marks_only_ungrouped_centres_absolute() -> anyhow::Result<()> {
     for label in ["RAC", "REL"] {
