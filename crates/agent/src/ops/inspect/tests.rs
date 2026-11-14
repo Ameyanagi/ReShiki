@@ -560,9 +560,8 @@ fn the_bounds_of_a_bonded_drawing_take_linear_time() {
         }
         doc
     };
-    // The fastest of several runs: other tests run at the same time.
     let fastest = |doc: &Document| {
-        (0..9)
+        (0..3)
             .map(|_| {
                 let start = std::time::Instant::now();
                 std::hint::black_box(doc.bounds());
@@ -571,9 +570,15 @@ fn the_bounds_of_a_bonded_drawing_take_linear_time() {
             .min()
             .unwrap()
     };
-    let (small, large) = (fastest(&rows(4_000)), fastest(&rows(16_000)));
-    assert!(
-        large < small * 10,
-        "4,000 atoms took {small:?} and 16,000 took {large:?}"
-    );
+    let (small, large) = (rows(4_000), rows(16_000));
+    // Quadratic time is sixteen times as long on every attempt. Other tests
+    // and a busy machine can slow one attempt of a linear one that much, so
+    // one attempt in five under ten times is enough.
+    let mut times = Vec::new();
+    let linear = (0..5).any(|_| {
+        let (small, large) = (fastest(&small), fastest(&large));
+        times.push((small, large));
+        large < small * 10
+    });
+    assert!(linear, "4,000 and 16,000 atoms took {times:?}");
 }
