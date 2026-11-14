@@ -310,6 +310,15 @@ fn stage(asset: &Path, directory: &Path, version: &str) -> Result<PathBuf, Strin
 fn stage(asset: &Path, _directory: &Path, _version: &str) -> Result<PathBuf, String> {
     Ok(asset.into())
 }
+/// Whether a `tar -tv` listing holds only regular files and folders. A
+/// symbolic or hard link could point a later entry outside the folder the
+/// archive is unpacked into.
+#[cfg(any(target_os = "linux", test))]
+fn only_files_and_folders(listing: &str) -> bool {
+    listing.lines().all(|line| {
+        matches!(line.as_bytes().first(), Some(b'-' | b'd')) && !line.contains(" link to ")
+    })
+}
 #[cfg(target_os = "linux")]
 fn stage(asset: &Path, directory: &Path, version: &str) -> Result<PathBuf, String> {
     let extract = directory.join("extracted");
@@ -320,7 +329,8 @@ fn stage(asset: &Path, directory: &Path, version: &str) -> Result<PathBuf, Strin
             || Path::new(s)
                 .components()
                 .any(|c| matches!(c, std::path::Component::ParentDir))
-    }) {
+    }) || !only_files_and_folders(&command(Command::new("tar").arg("-tvzf").arg(asset))?)
+    {
         return Err("Unsafe archive entry".into());
     }
     command(

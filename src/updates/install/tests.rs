@@ -332,3 +332,45 @@ async fn a_staged_program_that_changed_is_not_installed() {
     assert!(handoff(Arc::clone(&prepared), vec![]).await.is_err());
     assert_eq!(std::fs::read_dir(&stage).unwrap().count(), 0);
 }
+
+/// S15: a link in the update archive could point a later entry outside the
+/// folder it is unpacked into, so any entry but a file or a folder is unsafe.
+/// This reads the listing of the system's own tar: GNU tar or bsdtar.
+#[cfg(unix)]
+#[test]
+fn archive_links_are_unsafe_entries() {
+    let folder = tempfile::tempdir().unwrap();
+    let package = folder.path().join("package");
+    std::fs::create_dir_all(package.join("Licenses")).unwrap();
+    std::fs::write(package.join("reshiki"), b"app").unwrap();
+    std::fs::write(package.join("Licenses/NOTICE"), b"notice").unwrap();
+    let listing = |name: &str| {
+        let archive = folder.path().join(name);
+        let packed = Command::new("tar")
+            .arg("-czf")
+            .arg(&archive)
+            .arg("-C")
+            .arg(folder.path())
+            .arg("package")
+            .status()
+            .unwrap();
+        assert!(packed.success());
+        let listed = Command::new("tar")
+            .arg("-tvzf")
+            .arg(&archive)
+            .output()
+            .unwrap();
+        assert!(listed.status.success());
+        String::from_utf8(listed.stdout).unwrap()
+    };
+    let plain = listing("plain.tar.gz");
+    assert_eq!(plain.lines().count(), 4, "{plain}");
+    assert!(only_files_and_folders(&plain), "{plain}");
+    std::os::unix::fs::symlink("/etc", package.join("escape")).unwrap();
+    let symbolic = listing("symbolic.tar.gz");
+    assert!(!only_files_and_folders(&symbolic), "{symbolic}");
+    std::fs::remove_file(package.join("escape")).unwrap();
+    std::fs::hard_link(package.join("reshiki"), package.join("twin")).unwrap();
+    let hard = listing("hard.tar.gz");
+    assert!(!only_files_and_folders(&hard), "{hard}");
+}
