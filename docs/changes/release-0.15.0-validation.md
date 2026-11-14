@@ -181,7 +181,7 @@ style: unknown field `crossing_clearance_pt`, …".
 
 ## Build and verification
 
-Moved from the [release notes](../../changes-0.15.md).
+Moved from the [release notes](../changes-0.15.md).
 
 - **RDKit 2026.09.1.** The reference suites, oracles and captured goldens
   follow RDKit 2026.9.1; ReShiki keeps its own ring-finding basis

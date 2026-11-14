@@ -60,7 +60,7 @@ Publication and package checks do not cover Keynote, the Microsoft 365 add-in in
 
 ## Build and verification
 
-Moved from the [release notes](../../changes-0.12.md).
+Moved from the [release notes](../changes-0.12.md).
 
 - **Nightly naming checks.** Application and renderer tests use the naming
   helper built for each Windows, macOS and Linux release target. After the

@@ -68,7 +68,7 @@ the macOS signing checks, as in the [0.12.0 record](release-0.12.0-validation.md
 
 ## Build and verification
 
-Moved from the [release notes](../../changes-0.13.md).
+Moved from the [release notes](../changes-0.13.md).
 
 - **COSMolKit 0.5.0.** InChI, 3D generation and MMFF94, MMFF94s and UFF use
   COSMolKit 0.5.0 instead of a patched 0.3.0 branch. Generated 3D starting

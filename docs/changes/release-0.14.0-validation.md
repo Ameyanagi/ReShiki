@@ -193,7 +193,7 @@ stay open for the published downloads.
 
 ## Build and verification
 
-Moved from the [release notes](../../changes-0.14.md).
+Moved from the [release notes](../changes-0.14.md).
 
 - **Python wheels and PyPI.** Release tags build abi3 wheels for six targets,
   test them on four, and publish `reshiki` to PyPI through trusted publishing.
