@@ -67,7 +67,8 @@ for (const name of (await readdir(source))
     name === "changes-unreleased.md"
       ? execFileSync(
           process.platform === "win32" ? "python" : "python3",
-          [path.join(root, "scripts/assemble_changelog.py")],
+          // UTF-8 output whatever the Windows code page is.
+          ["-X", "utf8", path.join(root, "scripts/assemble_changelog.py")],
           { encoding: "utf8" },
         )
       : await readFile(path.join(source, name), "utf8");
