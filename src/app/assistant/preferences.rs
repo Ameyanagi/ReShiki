@@ -14,6 +14,8 @@ pub(in crate::app) struct Choices<'a> {
     pub resolved: Option<&'a reshiki::assistant::codex::Model>,
     pub effort: Option<&'a str>,
     pub auto_apply: bool,
+    /// Why the last save failed.
+    pub save_error: Option<&'a str>,
 }
 
 impl App {
@@ -26,6 +28,7 @@ impl App {
             resolved,
             effort: resolved.map(|model| state.preferences.effort(model)),
             auto_apply: state.preferences.auto_apply,
+            save_error: state.preferences_error.as_deref(),
         }
     }
 
@@ -78,8 +81,11 @@ impl App {
     }
     pub(super) fn assistant_preferences_saved(&mut self, result: Result<(), String>) {
         self.assistant.preferences_saving = false;
-        if let Err(error) = result {
-            self.assistant.status = format!("Could not save assistant preferences: {error}");
+        self.assistant.preferences_error = result
+            .err()
+            .map(|error| format!("Could not save assistant preferences: {error}"));
+        if let Some(error) = &self.assistant.preferences_error {
+            self.assistant.status = error.clone();
             self.assistant.error = true;
         }
     }

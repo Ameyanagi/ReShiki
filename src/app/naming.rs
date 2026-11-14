@@ -809,6 +809,12 @@ impl App {
             && self.tab.optimization.is_none()
     }
 
+    /// No naming request is running. A running one keeps the preferences it
+    /// started with, so they wait for it.
+    pub(super) fn naming_idle(&self) -> bool {
+        self.tab.naming.pending.is_none()
+    }
+
     pub(super) fn naming_can_show_molecule(&self) -> bool {
         self.naming_can_edit() && self.tab.naming.pending.is_none()
     }

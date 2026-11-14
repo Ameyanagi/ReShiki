@@ -126,6 +126,7 @@ fn saved_colors_are_parsed_once_deduplicated_and_become_custom() {
         "newest first, without repeats"
     );
     assert_eq!(app.appearance.custom_background, [30, 42, 68]);
+    assert_eq!(app.appearance.copy_background, Background::Custom);
     let _ = app.update(Message::Settings(Action::Custom([244, 239, 230])));
     assert_eq!(app.appearance.custom_background, [244, 239, 230]);
     for value in 0..SAVED_COLORS as u8 + 2 {
@@ -136,6 +137,68 @@ fn saved_colors_are_parsed_once_deduplicated_and_become_custom() {
         let _ = app.update(Message::Settings(Action::SaveColor));
     }
     assert_eq!(app.appearance.background_colors.len(), SAVED_COLORS);
+}
+
+/// Picking a saved color, as in the approved design, copies the next
+/// pictures on it; the export background stays.
+#[test]
+fn picking_a_saved_color_copies_pictures_on_it() {
+    let mut app = app();
+    assert_eq!(app.copy_pictures(None).background, Paper::Transparent);
+    let navy = [30, 42, 68];
+    app.appearance.background_colors = vec![navy];
+    let _ = app.update(Message::Settings(Action::Custom(navy)));
+    assert_eq!(app.copy_pictures(None).background, Paper::Color(navy));
+    assert_eq!(app.appearance.export_background, Background::Canvas);
+}
+
+/// The picker adds a palette color without touching the drawing, and closes.
+#[test]
+fn the_color_picker_saves_a_palette_color_without_changing_the_drawing() {
+    let mut app = app();
+    let drawing = app.tab.doc.clone();
+    let _ = app.update(Message::Settings(Action::AddColor));
+    assert!(app.settings.color.is_some());
+    let _ = app.update(Message::Settings(Action::CloseColor));
+    assert!(
+        app.settings.color.is_none(),
+        "Escape or a click outside closes it"
+    );
+    let _ = app.update(Message::Settings(Action::AddColor));
+    let _ = app.update(Message::Settings(Action::PickColor([40, 99, 171])));
+    assert!(app.settings.color.is_none());
+    assert_eq!(app.appearance.background_colors, [[40, 99, 171]]);
+    assert_eq!(
+        app.copy_pictures(None).background,
+        Paper::Color([40, 99, 171])
+    );
+    assert_eq!(app.tab.doc, drawing);
+}
+
+/// Settings shows a failed save of the preferences that save on their own.
+#[test]
+fn failed_update_and_assistant_saves_show_in_their_sections() {
+    let mut app = app();
+    assert_eq!(app.section_error(Section::Updates), None);
+    assert_eq!(app.section_error(Section::Assistant), None);
+    let _ = app.update(Message::Updates(super::super::updates::Action::Saved(Err(
+        "disk full".into(),
+    ))));
+    let _ = app.update(Message::Assistant(
+        super::super::assistant::Action::PreferencesSaved(Err("read-only".into())),
+    ));
+    assert_eq!(
+        app.section_error(Section::Updates),
+        Some("Could not save update preferences: disk full")
+    );
+    assert_eq!(
+        app.section_error(Section::Assistant),
+        Some("Could not save assistant preferences: read-only")
+    );
+    let _ = app.update(Message::Assistant(
+        super::super::assistant::Action::PreferencesSaved(Ok(())),
+    ));
+    assert_eq!(app.section_error(Section::Assistant), None);
 }
 
 #[test]
@@ -150,6 +213,83 @@ fn copies_use_the_copy_default_unless_one_copy_picks_a_background() {
     let once = app.copy_pictures(Some(Paper::Canvas));
     assert_eq!(once.background, Paper::Canvas);
     assert_eq!(app.appearance.copy_background, Background::Custom);
+}
+
+/// The real view's texts and accessible controls, popovers included.
+fn rendered(
+    app: &App,
+    renderer: &mut iced::Renderer,
+) -> (Vec<String>, Vec<reshiki::accessibility::Node>) {
+    use iced::advanced::widget::{Id, Operation, operation};
+    use iced_runtime::{UserInterface, user_interface::Cache};
+    struct Texts(Vec<String>);
+    impl Operation for Texts {
+        fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
+            operate(self);
+        }
+        fn text(&mut self, _: Option<&Id>, _: Rectangle, text: &str) {
+            self.0.push(text.into());
+        }
+    }
+    let size = Size::new(1280., 820.);
+    let mut ui = UserInterface::build(app.view(), size, Cache::new(), renderer);
+    let mut texts = Texts(Vec::new());
+    ui.operate(renderer, &mut texts);
+    let mut collect = reshiki::accessibility::Collect::new(Rectangle::with_size(size));
+    ui.operate(renderer, &mut operation::black_box(&mut collect));
+    (texts.0, collect.snapshot().nodes.clone())
+}
+
+/// Save failures show in search results too; the unknown-configuration row
+/// waits for a running name; the color picker is reachable by keyboard.
+#[tokio::test]
+#[ignore = "Opt-in real App widget tree check"]
+async fn settings_rows_show_failures_wait_for_naming_and_reach_the_picker() {
+    use iced::advanced::renderer::Headless;
+    let mut renderer =
+        <iced::Renderer as Headless>::new(iced::Font::default(), iced::Pixels(16.), None)
+            .await
+            .unwrap();
+    let mut app = app();
+    let _ = app.update(Message::Updates(super::super::updates::Action::Saved(Err(
+        "disk full".into(),
+    ))));
+    let _ = app.update(Message::Assistant(
+        super::super::assistant::Action::PreferencesSaved(Err("read-only".into())),
+    ));
+    open(&mut app, Section::Appearance);
+    for (query, shown) in [
+        ("channel", "Could not save update preferences: disk full"),
+        ("accept", "Could not save assistant preferences: read-only"),
+    ] {
+        let _ = app.update(Message::Settings(Action::Query(query.into())));
+        let (texts, _) = rendered(&app, &mut renderer);
+        assert!(texts.iter().any(|text| text == shown), "{query}: {texts:?}");
+    }
+
+    let unknown = |app: &App, renderer: &mut iced::Renderer| {
+        rendered(app, renderer)
+            .1
+            .into_iter()
+            .find(|node| node.id == "settings-unknown-stereo")
+            .expect("the unknown-configuration row")
+            .enabled
+    };
+    let mut app = self::app();
+    evidence_app(&mut app);
+    open(&mut app, Section::Names);
+    assert!(unknown(&app, &mut renderer));
+    let _ = app.update(Message::Naming(super::super::naming::Action::Generate));
+    assert!(!app.naming_idle());
+    assert!(!unknown(&app, &mut renderer), "waits for the running name");
+
+    let mut app = self::app();
+    open(&mut app, Section::CopyExport);
+    let _ = app.update(Message::Settings(Action::AddColor));
+    let (_, nodes) = rendered(&app, &mut renderer);
+    for id in [COLOR, "settings-save-color"] {
+        assert!(nodes.iter().any(|node| node.id == id), "missing {id}");
+    }
 }
 
 /// A selected benzene ring, with two saved colors and a navy Custom.
@@ -174,7 +314,7 @@ fn open(app: &mut App, section: Section) {
 async fn settings_snapshots() {
     use iced::advanced::{renderer::Headless, widget::Tree};
     type Setup = fn(&mut App);
-    let states: [(&str, Setup); 12] = [
+    let states: [(&str, Setup); 13] = [
         ("toolbar", |_| {}),
         ("settings-appearance", |app| open(app, Section::Appearance)),
         ("settings-drawing", |app| open(app, Section::Drawing)),
@@ -187,6 +327,10 @@ async fn settings_snapshots() {
             let _ = app.update(Message::Settings(Action::AddColor));
             let _ = app.update(Message::Settings(Action::ColorInput("teal".into())));
             let _ = app.update(Message::Settings(Action::SaveColor));
+        }),
+        ("settings-copy-export-picker", |app| {
+            open(app, Section::CopyExport);
+            let _ = app.update(Message::Settings(Action::AddColor));
         }),
         ("settings-names", |app| open(app, Section::Names)),
         ("settings-assistant", |app| open(app, Section::Assistant)),

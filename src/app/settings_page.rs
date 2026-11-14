@@ -79,12 +79,16 @@ pub enum Action {
     DrawingUnit(Unit),
     CopyBackground(Background),
     ExportBackground(Background),
-    /// Use this saved color as Custom.
+    /// Copy pictures on this saved color, as Custom.
     Custom([u8; 3]),
-    /// Show or hide the box for typing a new color.
+    /// Open or close the color picker for a new saved color.
     AddColor,
+    CloseColor,
     ColorInput(String),
+    /// Save the typed color.
     SaveColor,
+    /// Save this color from the picker's palette.
+    PickColor([u8; 3]),
 }
 
 #[derive(Default)]
@@ -92,7 +96,8 @@ pub(super) struct State {
     pub(super) open: bool,
     section: Section,
     query: String,
-    /// The color being typed, and whether it could not be read.
+    /// While the color picker is open: the typed color, and whether it could
+    /// not be read.
     color: Option<(String, bool)>,
 }
 
@@ -152,34 +157,56 @@ impl App {
                 self.appearance.export_background = background;
                 self.save_preference("background");
             }
-            Action::Custom(rgb) => {
-                self.appearance.custom_background = rgb;
-                self.save_preference("background");
-            }
+            Action::Custom(rgb) => self.use_custom_background(rgb),
             Action::AddColor => {
                 if settings.color.take().is_none() {
                     settings.color = Some((String::new(), false));
                     return iced::widget::operation::focus(COLOR);
                 }
             }
+            Action::CloseColor => settings.color = None,
             Action::ColorInput(input) => settings.color = Some((input, false)),
             Action::SaveColor => {
                 let Some((input, _)) = settings.color.take() else {
                     return Task::none();
                 };
-                let Some(rgb) = reshiki::palette::parse_color(&input) else {
-                    settings.color = Some((input, true));
-                    return Task::none();
-                };
-                let colors = &mut self.appearance.background_colors;
-                colors.retain(|saved| *saved != rgb);
-                colors.insert(0, rgb);
-                colors.truncate(SAVED_COLORS);
-                self.appearance.custom_background = rgb;
-                self.save_preference("background");
+                match reshiki::palette::parse_color(&input) {
+                    Some(rgb) => self.save_background_color(rgb),
+                    None => settings.color = Some((input, true)),
+                }
+            }
+            Action::PickColor(rgb) => {
+                settings.color = None;
+                self.save_background_color(rgb);
             }
         }
         Task::none()
+    }
+
+    /// Keep `rgb` first among the saved colors, and copy pictures on it.
+    fn save_background_color(&mut self, rgb: [u8; 3]) {
+        let colors = &mut self.appearance.background_colors;
+        colors.retain(|saved| *saved != rgb);
+        colors.insert(0, rgb);
+        colors.truncate(SAVED_COLORS);
+        self.use_custom_background(rgb);
+    }
+
+    /// Copy pictures on `rgb`, as the Custom background.
+    fn use_custom_background(&mut self, rgb: [u8; 3]) {
+        self.appearance.custom_background = rgb;
+        self.appearance.copy_background = Background::Custom;
+        self.save_preference("background");
+    }
+
+    /// A failed save of the section's preferences, which save on their own.
+    fn section_error(&self, section: Section) -> Option<&str> {
+        match section {
+            Section::Updates => self.updates.error(),
+            #[cfg(not(target_arch = "wasm32"))]
+            Section::Assistant => self.assistant_choices().save_error,
+            _ => None,
+        }
     }
 
     fn save_preference(&mut self, name: &str) {
@@ -256,11 +283,7 @@ impl App {
                     for (title, items) in groups {
                         pane = pane.push(group(title, items));
                     }
-                    if section == Section::Updates
-                        && let Some(error) = self.updates.error()
-                    {
-                        pane = pane.push(text(error).size(12).style(text::danger));
-                    }
+                    pane = pane.push(self.section_error(section).map(error));
                 }
             } else if matches > 0 {
                 pane = pane.push(heading(section.label(), "", 15));
@@ -273,6 +296,7 @@ impl App {
                         pane = pane.push(group(title, items));
                     }
                 }
+                pane = pane.push(self.section_error(section).map(error));
             }
         }
         if !words.is_empty() && !found_any {
@@ -423,7 +447,7 @@ impl App {
                         ),
                         Item::wide(
                             "Your colors",
-                            "Pick one to use it as Custom. On white, black or a color, black and white ink swap so a dark drawing stays readable; colored atoms keep their colors. Canvas keeps the drawing's own colors.",
+                            "Pick one to copy pictures on it, as Custom. On white, black or a color, black and white ink swap so a dark drawing stays readable; colored atoms and other colors stay as they are. Canvas keeps the drawing's own colors.",
                             self.saved_colors(),
                         ),
                     ],
@@ -480,8 +504,8 @@ impl App {
                         "Write Ξ/ξ for unknown configuration",
                         "In generated names of atoms marked as explicitly unknown.",
                         a.write_unknown_stereo,
-                        Message::Naming(super::naming::Action::WriteUnknownStereo(
-                            !a.write_unknown_stereo,
+                        self.naming_idle().then_some(Message::Naming(
+                            super::naming::Action::WriteUnknownStereo(!a.write_unknown_stereo),
                         )),
                     ),
                 ],
@@ -515,48 +539,39 @@ impl App {
                 tooltip::Position::Bottom,
             ));
         }
-        let adding = self.settings.color.as_ref();
-        colors = colors.push(super::workspace::hover_hint(
-            reshiki::accessibility::button(
-                "settings-add-color",
-                "Add a color",
-                text("+").size(16).center().width(22).height(22),
-            )
-            .checked(adding.is_some())
-            .padding(2)
-            .style(control(adding.is_some()))
-            .on_press(Message::Settings(Action::AddColor)),
-            "Add a color",
-            tooltip::Position::Bottom,
-        ));
-        let mut body = column![colors].spacing(8);
-        if let Some((input, invalid)) = adding {
-            body = body.push(
-                row![
-                    reshiki::accessibility::text_input(
-                        COLOR,
-                        "New background color: hexadecimal, RGB or OKLCH",
-                        "#1F4E79 · 31, 78, 121 · oklch(…)",
-                        input
-                    )
-                    .style(crate::appearance::input_style)
-                    .on_input(|input| Message::Settings(Action::ColorInput(input)))
-                    .on_submit(Message::Settings(Action::SaveColor))
-                    .size(12)
-                    .padding(6)
-                    .width(260),
-                    reshiki::accessibility::button(
-                        "settings-save-color",
-                        "Add this color",
-                        text("Add").size(12)
-                    )
-                    .padding([6, 10])
-                    .style(crate::appearance::secondary)
-                    .on_press(Message::Settings(Action::SaveColor)),
-                ]
-                .spacing(8)
-                .align_y(Alignment::Center),
+        let picker = self.settings.color.as_ref().map(|(input, invalid)| {
+            use reshiki::palette::{Hues, Palette};
+            // The default palette as it shows on a light canvas.
+            let palette = Palette::new(
+                reshiki::canvas_theme::ColorTheme::Publication.tones(CanvasTheme::Light),
+                Hues::default(),
+                CanvasTheme::Light,
             );
+            let chosen = |paint| {
+                let rgb = palette.rgb(paint);
+                (
+                    rgb == a.custom_background,
+                    Some(Message::Settings(Action::PickColor(rgb))),
+                )
+            };
+            let mut body = column![
+                text("New background color").size(13),
+                super::color_popover::palette_swatches(
+                    &palette,
+                    Hues::default(),
+                    [chosen(reshiki::palette::Color::Ink), (false, None)],
+                    chosen,
+                    None,
+                ),
+                super::color_popover::color_box(
+                    (COLOR, "New background color: hexadecimal, RGB or OKLCH"),
+                    input,
+                    |input| Message::Settings(Action::ColorInput(input)),
+                    Message::Settings(Action::SaveColor),
+                    ("settings-save-color", "Add this color", "Add"),
+                ),
+            ]
+            .spacing(10);
             if *invalid {
                 body = body.push(
                     text(super::color_popover::HINT)
@@ -564,8 +579,28 @@ impl App {
                         .style(text::danger),
                 );
             }
-        }
-        body.into()
+            super::color_popover::card(body)
+        });
+        let open = picker.is_some();
+        let add = super::workspace::hover_hint(
+            reshiki::accessibility::button(
+                "settings-add-color",
+                "Add a color",
+                text("+").size(16).center().width(22).height(22),
+            )
+            .checked(open)
+            .padding(2)
+            .style(control(open))
+            .on_press(Message::Settings(Action::AddColor)),
+            "Add a color",
+            tooltip::Position::Bottom,
+        );
+        let close = Message::Settings(Action::CloseColor);
+        colors
+            .push(Element::new(
+                super::popover::popover(add, picker, close.clone()).on_escape(close),
+            ))
+            .into()
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -705,17 +740,18 @@ enum Kind<'a> {
 }
 
 impl<'a> Item<'a> {
+    /// A checkbox; it is disabled without a `toggle` message.
     fn check(
         id: &'static str,
         name: &'static str,
         detail: &'static str,
         checked: bool,
-        toggle: Message,
+        toggle: impl Into<Option<Message>>,
     ) -> Self {
         Self {
             name,
             detail,
-            kind: Kind::Check(accessible_checkbox(id, name, checked, Some(toggle)).into()),
+            kind: Kind::Check(accessible_checkbox(id, name, checked, toggle.into()).into()),
         }
     }
     fn choice(
@@ -774,6 +810,10 @@ fn found(words: &[String], section: Section, group: Option<&str>, item: &Item<'_
     )
     .to_lowercase();
     words.iter().all(|word| haystack.contains(word.as_str()))
+}
+
+fn error(message: &str) -> Element<'_, Message> {
+    text(message).size(12).style(text::danger).into()
 }
 
 fn heading<'a>(title: &'a str, summary: &'a str, size: u32) -> Element<'a, Message> {
