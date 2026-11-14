@@ -519,7 +519,8 @@ class TransientRetryTests(unittest.TestCase):
     def test_disk_image_creation_retries_resource_busy(self):
         import installers
 
-        outcomes = [self.failure(["hdiutil"]), None]
+        # Each hdiutil step fails once, then passes.
+        outcomes = [self.failure(["hdiutil"]), None, self.failure(["hdiutil"]), None]
 
         def fake(command):
             outcome = outcomes.pop(0)
@@ -528,12 +529,19 @@ class TransientRetryTests(unittest.TestCase):
 
         with patch("installers.run", side_effect=fake) as run, redirect_stdout(io.StringIO()):
             installers.create_disk_image(Path("contents"), Path("out.dmg"), sleep=lambda _: None)
-        self.assertEqual(run.call_count, 2)
-        self.assertEqual(run.call_args.args[0][:2], ["hdiutil", "create"])
-        self.assertIn("-ov", run.call_args.args[0])
+        commands = [call.args[0] for call in run.call_args_list]
+        self.assertEqual(
+            [command[1] for command in commands], ["create", "create", "convert", "convert"]
+        )
+        create, convert = commands[1], commands[3]
+        self.assertEqual(create[create.index("-srcfolder") + 1], Path("contents"))
+        self.assertEqual(create[create.index("-format") + 1], "UDZO")
         # LZMA compression; every supported macOS (14 and later) opens it.
-        command = run.call_args.args[0]
-        self.assertEqual(command[command.index("-format") + 1], "ULMO")
+        self.assertEqual(convert[2], create[-1])
+        self.assertEqual(convert[convert.index("-format") + 1], "ULMO")
+        self.assertEqual(convert[convert.index("-o") + 1], Path("out.dmg"))
+        for command in commands:
+            self.assertIn("-ov", command)
 
     def test_disk_image_creation_raises_after_the_last_attempt(self):
         import installers

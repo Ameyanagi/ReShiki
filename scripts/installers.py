@@ -479,37 +479,35 @@ def mac_disk_image(folder, output_dir, signed=False):
     return output
 
 
-# hdiutil create fails intermittently on hosted runners with "Resource busy".
+# hdiutil fails intermittently on hosted runners with "Resource busy".
 # -ov makes another attempt safe; the last failure still stops the build.
 DISK_IMAGE_ATTEMPTS = 3
 DISK_IMAGE_DELAY_SECONDS = 10
 
 
 def create_disk_image(staging, output, *, sleep=time.sleep):
-    command = [
-        "hdiutil",
-        "create",
-        "-volname",
-        "ReShiki",
-        "-srcfolder",
-        staging,
-        "-format",
-        "ULMO",
-        "-ov",
-        output,
-    ]
-    for attempt in range(1, DISK_IMAGE_ATTEMPTS + 1):
-        try:
-            return run(command)
-        except subprocess.CalledProcessError as error:
-            if attempt == DISK_IMAGE_ATTEMPTS:
-                raise
-            print(
-                f"hdiutil create failed (exit {error.returncode}); "
-                f"retrying in {DISK_IMAGE_DELAY_SECONDS} s",
-                flush=True,
-            )
-            sleep(DISK_IMAGE_DELAY_SECONDS)
+    # Creating an LZMA (ULMO) image straight from a folder fails with "No space
+    # left on device" for some folder contents, so compress in a second step.
+    with tempfile.TemporaryDirectory(prefix="ReShiki disk image ") as temporary:
+        zlib = Path(temporary) / "zlib.dmg"
+        for command in (
+            ["hdiutil", "create", "-volname", "ReShiki", "-srcfolder", staging]
+            + ["-format", "UDZO", "-ov", zlib],
+            ["hdiutil", "convert", zlib, "-format", "ULMO", "-ov", "-o", output],
+        ):
+            for attempt in range(1, DISK_IMAGE_ATTEMPTS + 1):
+                try:
+                    run(command)
+                    break
+                except subprocess.CalledProcessError as error:
+                    if attempt == DISK_IMAGE_ATTEMPTS:
+                        raise
+                    print(
+                        f"hdiutil {command[1]} failed (exit {error.returncode}); "
+                        f"retrying in {DISK_IMAGE_DELAY_SECONDS} s",
+                        flush=True,
+                    )
+                    sleep(DISK_IMAGE_DELAY_SECONDS)
 
 
 def verify_mac_disk_image(output, signed, *, architecture):
