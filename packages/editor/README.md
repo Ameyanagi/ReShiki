@@ -105,7 +105,10 @@ await editor.load("CCO", "smiles");
 
 `embed` returns the same methods as `mount`, sent to `src/frame.html` with
 `postMessage`. Serve that page with the package's `src` and `dist` folders, or
-pass its URL as `frameUrl`. The frame answers only the page that embeds it.
+pass its URL as `frameUrl`. The frame answers only the page that embeds it. It
+learns that page's origin from the browser: `location.ancestorOrigins`, or the
+referrer in Firefox, so a page on another origin must not hide its referrer
+from the frame.
 
 The custom element wraps `mount`:
 
