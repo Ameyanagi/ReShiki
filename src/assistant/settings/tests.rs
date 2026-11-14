@@ -49,3 +49,22 @@ fn new_preferences_use_standard_low_and_keep_explicit_overrides() {
     assert_eq!(prefs.effort(&model), "medium");
     assert_eq!(prefs.tier(&model), Some("priority"));
 }
+#[test]
+fn unreadable_preferences_are_set_aside_before_a_save_replaces_them() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("assistant-preferences.json");
+    let newer = br#"{"auto_apply":"a-value-from-a-newer-build","model":"gpt-6-astra"}"#;
+    std::fs::write(&path, newer).unwrap();
+    let loaded = Preferences::load_from(&path);
+    assert_eq!(loaded.model, None);
+    loaded.save_to(&path).unwrap();
+    let bad = dir.path().join("assistant-preferences.json.bad");
+    assert_eq!(std::fs::read(&bad).unwrap(), newer);
+
+    // A readable file and a missing one leave nothing behind.
+    std::fs::remove_file(&bad).unwrap();
+    assert_eq!(Preferences::load_from(&path).model, None);
+    std::fs::remove_file(&path).unwrap();
+    let _ = Preferences::load_from(&path);
+    assert!(!bad.exists());
+}
