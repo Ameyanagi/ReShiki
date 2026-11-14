@@ -354,6 +354,9 @@ fn prepare(path: &std::path::Path, contents: Vec<u8>) -> Result<Prepared, String
         let format = reshiki::compatibility::file_format(path)
             .or_else(|| matches!(extension.as_str(), "smi" | "smiles").then_some("smiles"))
             .ok_or_else(|| super::import::unsupported_file(path))?;
+        if contents.len() as u64 > super::import::limit(path) {
+            return Err("File exceeds 16 MB".into());
+        }
         Ok(Prepared::Import {
             format,
             contents: super::import::contents(format, contents)?,
@@ -368,7 +371,11 @@ pub(super) async fn read(path: PathBuf) -> Opened {
     let result = reshiki::task::spawn_blocking(move || {
         let mut contents = Vec::new();
         open(&source)
-            .and_then(|mut file| std::io::Read::read_to_end(&mut file, &mut contents))
+            .and_then(|file| {
+                use std::io::Read;
+                file.take(super::import::open_limit(&source).saturating_add(1))
+                    .read_to_end(&mut contents)
+            })
             .map_err(|e| e.to_string())?;
         prepare(&source, contents)
     })
@@ -391,7 +398,7 @@ pub(super) fn open_dialog(
         "Open a ReShiki, editable PNG/SVG/PDF, MOL, RXN, CDXML, CDX, SMILES, CIF, PDB, POSCAR or XYZ file",
         None,
         false,
-        unlimited,
+        super::import::open_limit,
     ))
     .then(move |files| {
         open_picked(

@@ -342,6 +342,14 @@ pub(super) fn limit(path: &Path) -> u64 {
         _ => u64::MAX,
     }
 }
+/// Open reads a structure file only to its [`limit`], as Insert does.
+/// Drawings and pictures are read whole.
+pub(super) fn open_limit(path: &Path) -> u64 {
+    match kind(path) {
+        Kind::Structure(_) => limit(path),
+        _ => u64::MAX,
+    }
+}
 /// No extension filter: VASP files are often named POSCAR or CONTCAR without
 /// one. Files of other kinds are refused with their extension.
 fn choose(ticket: Ticket) -> Task<Message> {

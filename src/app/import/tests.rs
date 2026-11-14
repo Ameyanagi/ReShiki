@@ -830,7 +830,8 @@ async fn oversized_pictures_are_read_only_past_their_limit() -> Result<(), Strin
 }
 
 /// S9: a structure file over the parsers' 16 MB limit is read one byte past
-/// it and refused by its size. A crystal file has no such limit.
+/// it and refused by its size, by Insert and by Open. A crystal file has no
+/// such limit.
 #[tokio::test]
 async fn oversized_structure_files_are_read_only_past_their_limit() -> Result<(), String> {
     let folder = tempfile::tempdir().map_err(|e| e.to_string())?;
@@ -838,7 +839,7 @@ async fn oversized_structure_files_are_read_only_past_their_limit() -> Result<()
     for extension in ["mol", "rxn", "cdxml", "cdx", "smi"] {
         let huge = folder.path().join(format!("huge.{extension}"));
         std::fs::write(&huge, vec![b' '; max + 4096]).map_err(|e| e.to_string())?;
-        let files = super::super::files::read_paths(vec![huge], limit).await?;
+        let files = super::super::files::read_paths(vec![huge.clone()], limit).await?;
         assert_eq!(files[0].contents.len(), max + 1, "{extension}");
         let error = load(
             LocalEngine::default(),
@@ -852,9 +853,15 @@ async fn oversized_structure_files_are_read_only_past_their_limit() -> Result<()
             error,
             format!("Could not import huge.{extension}: File exceeds 16 MB")
         );
+        let (_, opened) = super::super::files::read(huge).await.unwrap();
+        assert_eq!(opened.unwrap_err(), "File exceeds 16 MB", "{extension}");
     }
     assert_eq!(limit(Path::new("cell.cif")), u64::MAX);
     assert_eq!(limit(Path::new("drawing.rsk")), u64::MAX);
+    assert_eq!(open_limit(Path::new("huge.mol")), max as u64);
+    for name in ["cell.cif", "drawing.rsk", "picture.png", "drawing.svg"] {
+        assert_eq!(open_limit(Path::new(name)), u64::MAX, "{name}");
+    }
     Ok(())
 }
 
