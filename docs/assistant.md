@@ -51,7 +51,7 @@ At most two correction rounds are allowed, followed by a final verification when
 
 **Review edits** is the initial mode. **Apply** inserts the editable proposal below existing content, or replaces its targeted objects. **Discard** removes only the draft.
 
-**Accept all edits** applies a proposal automatically only after its exact final version passes visual review with no unresolved issues. Turning this preference on does not bypass warnings on an existing draft. A draft with warnings can still be inspected and applied explicitly. Every application is one Undo step; Redo restores it.
+**Accept all edits** applies a proposal automatically only after its exact final version passes visual review with no unresolved issues. A proposal that replaces objects outside your selection always waits for **Apply**. Turning this preference on does not bypass warnings on an existing draft. A draft with warnings can still be inspected and applied explicitly. Every application is one Undo step; Redo restores it.
 
 Additions use the current drawing, preserving edits made during generation. Replacements require the original drawing revision and cannot target objects outside an explicitly selected replacement scope. Switching documents invalidates either kind of result. Application waits for an active text edit or attachment operation to finish. Stopped jobs and late results cannot overwrite newer work.
 

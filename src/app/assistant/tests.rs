@@ -872,3 +872,73 @@ fn failed_refresh_clears_old_account_and_each_setup_failure_allows_drawing_and_r
         assert_eq!(app.assistant.connection, Connection::Cancelled);
     }
 }
+
+/// S19: a proposal names the objects it replaces, and text in an opened
+/// drawing can shape that choice. Accept all edits applies a replacement
+/// only inside the user's selection; any other waits for Apply.
+#[test]
+fn accept_all_reviews_a_replacement_outside_the_selection() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    app.assistant.preferences.auto_apply = true;
+    let kept = app
+        .tab
+        .doc
+        .add_atom("N", reshiki::document::Point::default());
+    let chosen = app
+        .tab
+        .doc
+        .add_atom("S", reshiki::document::Point::new(200., 0.));
+    let elements = |app: &App| -> Vec<String> {
+        let mut elements: Vec<_> = app
+            .tab
+            .doc
+            .atoms
+            .iter()
+            .map(|a| a.element.clone())
+            .collect();
+        elements.sort();
+        elements
+    };
+    let done = |app: &mut App, replace_ids: Vec<u64>| {
+        let mut fragment = Document::default();
+        fragment.add_atom("O", reshiki::document::Point::default());
+        let _ = app.assistant_action(Action::Done {
+            serial: app.assistant.serial,
+            epoch: app.tab.file_epoch,
+            revision: app.tab.revision,
+            replace: vec![],
+            result: Box::new(Ok(assistant::review::Outcome {
+                proposal: Proposal {
+                    replace_ids,
+                    ..Default::default()
+                },
+                document: fragment,
+                review: assistant::review::Report {
+                    verified: true,
+                    ..Default::default()
+                },
+            })),
+        });
+    };
+    app.tab.selected = vec![chosen];
+    done(&mut app, vec![kept]);
+    assert!(app.assistant.draft.is_some());
+    assert_eq!(elements(&app), ["N", "S"]);
+    assert_eq!(
+        app.assistant.status,
+        "Ready for review · It replaces objects outside your selection"
+    );
+    // Choosing Accept all edits again does not apply it either.
+    let _ = app.assistant_action(Action::AutoApply(true));
+    assert!(app.assistant.draft.is_some());
+    assert_eq!(elements(&app), ["N", "S"]);
+    let _ = app.assistant_action(Action::Apply);
+    assert!(app.assistant.draft.is_none());
+    assert_eq!(elements(&app), ["O", "S"]);
+    // A replacement inside the selection is applied at once.
+    app.tab.selected = vec![chosen];
+    done(&mut app, vec![chosen]);
+    assert!(app.assistant.draft.is_none());
+    assert_eq!(elements(&app), ["O", "O"]);
+}
