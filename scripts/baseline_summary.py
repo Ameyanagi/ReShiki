@@ -1,8 +1,9 @@
 """List the test fixture rows a pull request changes, for the job summary.
 
 Usage: baseline_summary.py BASE [HEAD]. Text fixtures (gzipped ones too) are
-compared row by row; `.tsv` rows are matched by their first column. The output
-is Markdown, appended to $GITHUB_STEP_SUMMARY when that is set.
+compared row by row; `.tsv` rows are matched by their leading columns, as many
+as tell the rows apart. The output is Markdown, appended to
+$GITHUB_STEP_SUMMARY when that is set.
 """
 
 import gzip
@@ -19,11 +20,26 @@ ROW_WIDTH = 300  # characters shown per row
 
 def row_changes(old, new, keyed):
     old, new = old.splitlines(), new.splitlines()
-    if not keyed:
+    # The key is the fewest leading columns that tell every row apart on both sides.
+    width = None
+    if keyed:
+        columns = max((row.count("\t") + 1 for row in old + new), default=0)
+        width = next(
+            (
+                width
+                for width in range(1, columns + 1)
+                if all(
+                    len({tuple(row.split("\t")[:width]) for row in rows}) == len(rows)
+                    for rows in (old, new)
+                )
+            ),
+            None,
+        )
+    if width is None:
         removed, added = Counter(old) - Counter(new), Counter(new) - Counter(old)
         return [f"- {row}" for row in removed.elements()] + [f"+ {row}" for row in added.elements()]
-    before = {row.split("\t", 1)[0]: row for row in old}
-    after = {row.split("\t", 1)[0]: row for row in new}
+    before = {tuple(row.split("\t")[:width]): row for row in old}
+    after = {tuple(row.split("\t")[:width]): row for row in new}
     changes = []
     for key, row in before.items():
         if after.get(key) != row:

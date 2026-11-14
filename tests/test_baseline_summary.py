@@ -8,6 +8,8 @@ from pathlib import Path
 
 from scripts.baseline_summary import ROW_LIMIT, row_changes, summary
 
+BASELINE = Path(__file__).parent / "fixtures/s2n/baseline.tsv"
+
 
 def git(root, *arguments):
     return subprocess.run(
@@ -29,6 +31,29 @@ class BaselineSummaryTests(unittest.TestCase):
             ["- a", "- b", "+ c"],
         )
         self.assertEqual(row_changes("a\nb\n", "b\na\n", keyed=False), [])
+
+    def test_rows_that_share_a_first_column_are_matched_by_as_many_columns_as_tell_them_apart(
+        self,
+    ):
+        # The naming baseline has four columns and is keyed on the first two.
+        old = BASELINE.read_text(encoding="utf-8")
+        row = "generated\tacid\t21\t21\n"
+        self.assertIn(row, old)
+        self.assertEqual(
+            row_changes(old, old.replace(row, "generated\tacid\t20\t21\n"), keyed=True),
+            ["- generated\tacid\t21\t21", "+ generated\tacid\t20\t21"],
+        )
+        self.assertEqual(
+            row_changes(old, old.replace(row, ""), keyed=True), ["- generated\tacid\t21\t21"]
+        )
+        self.assertEqual(
+            row_changes(old.replace(row, ""), old, keyed=True), ["+ generated\tacid\t21\t21"]
+        )
+        # A file with a row that appears twice has no key: its rows are counted.
+        self.assertEqual(
+            row_changes("a\t1\na\t1\nb\t2\n", "a\t1\nb\t3\n", keyed=True),
+            ["- a\t1", "- b\t2", "+ b\t3"],
+        )
 
     def test_summary_covers_text_gzip_binary_added_and_removed_fixtures_only(self):
         with tempfile.TemporaryDirectory() as temporary:
