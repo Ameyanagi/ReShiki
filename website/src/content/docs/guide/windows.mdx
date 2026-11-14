@@ -119,7 +119,9 @@ snapshot of the selected objects. Cancel leaves the drawing unchanged.
 
 ## Performance
 
-Use a release build for performance checks. Windows uses a direct 2D software
-renderer to avoid expensive GPU emulation on virtual machines and remote
-desktops. See [Windows development](/developer/windows/) for renderer
-choices, the tested scope and remaining hardware checks.
+Use a release build for performance checks. ReShiki draws with the graphics
+card when Windows reports one. On virtual machines and remote desktops that
+offer only a software adapter, or when the graphics card fails to start, it
+uses a direct 2D software renderer instead, which avoids slow GPU emulation.
+See [Windows development](/developer/windows/) for renderer choices, the tested
+scope and remaining hardware checks.
