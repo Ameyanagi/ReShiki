@@ -5,84 +5,41 @@
   <img src="assets/branding/wordmark-light.png" alt="ReShiki Reaction Cycle logo" width="440">
 </picture>
 
-**Chemical drawing, reinvented.**
+**Chemical drawing, reinvented.** Draw molecules, build reaction schemes and prepare publication figures on an editable canvas. Free for any use, including at work.
 
-Draw molecules, build reaction schemes, and prepare figures on an editable canvas.
+**ReShiki (リシキ)** means “REinvention of the wheel for drawing chemical structure.” _Shiki_ is 式, as in chemical equation.
 
-**ReShiki (リシキ)** means “REinvention of the wheel for drawing chemical structure.” _Shiki_ is 式, as in chemical equation; **R** also stands for Rust, and **RE** for reaction.
-
-[Download stable](https://github.com/Ameyanagi/ReShiki/releases/latest) · [Visual manual](https://reshiki.com/guide/first-molecule/) · [Development](https://reshiki.com/developer/development/)
+[Download](https://github.com/Ameyanagi/ReShiki/releases/latest) · [User guide](https://reshiki.com/guide/first-molecule/) · [Release notes](https://reshiki.com/developer/changes-0.15/) · [Try it in your browser](https://reshiki.com/demo/)
 
 [![Sponsor this work](website/public/badges/sponsor.svg)](https://github.com/sponsors/Ameyanagi)
 [![Star on GitHub](website/public/badges/star.svg)](https://github.com/Ameyanagi/ReShiki)
 
-[![Watch the ReShiki full tour — chemical drawing, free and in color](website/public/media/reshiki-promo-poster.png)](https://reshiki.com/#promo-video)
+[![Watch the ReShiki tour](website/public/media/reshiki-promo-poster.png)](https://reshiki.com/#promo-video)
 
-[Watch the full tour · 3:57](https://reshiki.com/#promo-video) · [What changed in 0.15.0](https://reshiki.com/developer/changes-0.15/) · [Download the full video](https://reshiki.com/media/reshiki-promo.mp4?v=0.13.1) · [Logo assets and usage guide](assets/branding/README.md)
+## What's new in 0.15.0
 
-Start with JACS / ACS styling. Attach templates, refine selected structures, or ask the assistant to propose a drawing. Review edits and undo changes. Copy editable structures or export SVG, PDF, and PNG.
-
-Version 0.15.0 adds enhanced stereo groups (abs, AND, OR), arrows with nodes in the middle, and pictures that reopen in ReShiki as editable drawings. SVG text is drawn as outlines, a bundled Arial-compatible font keeps labels in place without Arial, and the chemistry follows RDKit 2026.09 with names from nazuchem 0.2.0. Older drawings open normally. Most drawings saved in 0.15.0 use document version 30 and open in 0.13.1 and 0.14.0; drawings with an arrow node, a custom crossing clearance, a stereo group or an atom with three or four unpaired electrons need 0.15.0. Keep a copy saved by the older version if you share drawings with someone who uses it. [Release notes](docs/changes-0.15.md) · [Styles and themes](docs/drawing-styles.md) · [Shortcut gallery and reference](docs/contextual-shortcuts.md).
-
-[Explore the color palettes](https://reshiki.com/guide/color-palettes/): each theme's Strong and Tint rows and every Presentation, Pastel, Jmol and VESTA element color in light and dark mode, with RGB, OKLCH, CSS variables and reusable theme downloads.
-
-New drawings use `.rsk`; existing `.reshiki` and `.moruno` drawings remain supported. Groups and templates are available now and may be extended or revised in future releases.
+Enhanced stereo groups (abs, AND, OR), arrows with nodes in the middle, and pictures that reopen in ReShiki as editable drawings. Older drawings open normally; [file compatibility](docs/changes-0.15.md#file-compatibility) lists what needs 0.15.0.
 
 ## Install
 
-Download ReShiki for Apple Silicon or Intel macOS, Windows (x64 / ARM64), or Linux (x64 / ARM64). ReShiki includes the drawing and chemistry tools: no Python, RDKit, or uv installation is needed. Drawing, imports, cleanup, and molecular properties work offline from the first launch. Chemical names and NMR prediction work offline too.
+Download ReShiki for macOS (Apple Silicon or Intel), Windows (x64 or ARM64) or Linux (x64 or ARM64). Drawing, chemistry, chemical names and NMR prediction work offline, with nothing else to install. The [installation guide](https://reshiki.com/guide/install/) covers each platform, Nightly builds and the [code signing policy](docs/code-signing-policy.md).
 
-On Mac, open the disk image and drag ReShiki to Applications. On Windows, run setup. Click **ReShiki** in the app to check for updates.
+The optional AI assistant uses your own [Codex sign-in](https://reshiki.com/guide/assistant-setup/).
 
-[Installation guide](https://reshiki.com/guide/install/)
+## Use from code
 
-[Code signing policy](docs/code-signing-policy.md) · [Privacy policy](docs/privacy-policy.md).
-macOS downloads are signed and notarized. Windows downloads are currently unsigned;
-SignPath access is provisioned; the release certificate and Windows signing activation are pending.
-
-Want to test upcoming changes? [Nightly builds](https://reshiki.com/guide/install/#nightly-builds) are optional prereleases. Stable is the recommended download for everyday work.
-
-Open **Help → Open shortcut examples** for a single editable reference file. Double-click an example structure to select it, then copy it into your drawing. See the [clipboard compatibility table](docs/clipboard.md#changes-made-for-an-external-copy) for supported transfer and explicit conversions.
-
-The AI assistant is optional and uses your local Codex sign-in. [Install Codex and connect the assistant](docs/assistant-setup.md) for text and image requests; ordinary drawing and chemistry work offline without it.
-
-Experimental: AI agents such as Claude Code and Codex can drive ReShiki through its MCP server or command line. [Connect AI agents](https://reshiki.com/guide/agents/)
+- **Python:** `uv add reshiki` ([Python package](docs/python.md)).
+- **JavaScript:** `bun add @ameyanagi/reshiki`, the editor and a headless converter in WebAssembly ([npm package](packages/editor/README.md)).
+- **AI agents (experimental):** `reshiki --mcp` or `reshiki --cli` ([Connect AI agents](https://reshiki.com/guide/agents/)).
 
 ## Acknowledging ReShiki
 
-ReShiki does not require a citation. If you would like to acknowledge its use, please include the following in the Acknowledgments section:
+No citation is required. If you want to acknowledge it:
 
 > Chemical structures and reaction schemes were drawn using ReShiki (https://reshiki.com/).
 
-[Acknowledgment wording in the User Guide](https://reshiki.com/guide/acknowledgments/)
-
 ## Contribute
 
-### License
+ReShiki is written in Rust with Iced. Start with [Build and test](https://reshiki.com/developer/development/), then read the [documentation policy](docs/README.md) and the [contribution license agreement](CONTRIBUTING.md). Thanks to our [contributors](docs/contributors.md). [Report a problem](https://github.com/Ameyanagi/ReShiki/issues).
 
-Original ReShiki code and documentation are dual-licensed under the
-[MIT License](LICENSE-MIT) or [Apache License 2.0](LICENSE-APACHE), at your
-option. Both permit commercial use, including use at work.
-
-Third-party dependencies and copied, ported, or adapted code retain their
-existing licenses and notices. See [LICENSE](LICENSE) for scope and
-[NOTICE](NOTICE) for the attribution records. Release packages include the
-project licenses and one consolidated `THIRD-PARTY-NOTICES.txt` in their `Licenses` directory.
-
-Unless explicitly stated otherwise, contributions intentionally submitted
-for inclusion in original ReShiki code are offered under MIT OR Apache-2.0.
-Contributions to separately licensed components must preserve their
-applicable terms and attribution. Read the [contribution license agreement](CONTRIBUTING.md)
-and confirm it in your pull request.
-
-### Development
-
-Thanks to our [contributors](docs/contributors.md) for their code, testing, and feedback.
-
-ReShiki uses Rust and Iced, with chemistry, clipboard and printing in one application executable per platform. See the [developer guide](https://reshiki.com/developer/development/) for setup, checks, and contribution instructions. For LLMs and AI agents, the site also publishes [llms.txt](https://reshiki.com/llms.txt) and the [Agent API set](https://reshiki.com/_llms-txt/agent-api.txt).
-
-See the [documentation and evidence policy](docs/README.md) when adding guides, review records or supporting assets.
-
-ReShiki is under active development. [Report a problem](https://github.com/Ameyanagi/ReShiki/issues).
-
-See the [latest release notes](docs/changes-0.15.md) and the [shortcut list with one editable example document](docs/contextual-shortcuts.md). Group and template definitions may be extended or revised in future releases.
+Original ReShiki code and documentation are dual-licensed under the [MIT License](LICENSE-MIT) or [Apache License 2.0](LICENSE-APACHE), at your option. Third-party code keeps its own license; see [LICENSE](LICENSE) and [NOTICE](NOTICE).
