@@ -588,10 +588,11 @@ impl<'d> Membership<'d> {
     }
     /// [`Document::bond_visible`].
     pub(crate) fn bond_visible(&self, a: u64, b: u64) -> bool {
+        let shared = |g: &Abbreviation| self.of(b).iter().any(|h| std::ptr::eq(*h, g));
         !(self
             .of(a)
             .iter()
-            .any(|g| g.members.contains(&b) || g.anchor != a && g.exit != Some(a))
+            .any(|g| shared(g) || g.anchor != a && g.exit != Some(a))
             || self
                 .of(b)
                 .iter()

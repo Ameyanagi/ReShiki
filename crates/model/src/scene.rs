@@ -505,14 +505,19 @@ fn label_runs(
         group.exit.is_none()
             && group.alignment.is_auto()
             && crate::atom_labels::condensed_label(&group.label).is_some()
-            && doc
-                .bonds
-                .iter()
-                .filter(|bond| {
-                    (bond.a == a.id || bond.b == a.id) && doc.bond_visible(bond.a, bond.b)
-                })
-                .count()
-                > 1
+            && match isotopes.graph() {
+                Some(graph) => graph
+                    .bonds(a.id)
+                    .filter(|(_, bond)| graph.bond_visible(bond.a, bond.b))
+                    .count(),
+                None => doc
+                    .bonds
+                    .iter()
+                    .filter(|bond| {
+                        (bond.a == a.id || bond.b == a.id) && doc.bond_visible(bond.a, bond.b)
+                    })
+                    .count(),
+            } > 1
     });
     if let Some(group) = doc.abbreviation(a.id).filter(|_| internal_group.is_none()) {
         return abbreviation_label_runs(a, doc, isotopes.graph(), group);
@@ -666,7 +671,7 @@ fn label_runs(
         let layout = scripts
             .as_ref()
             .map(|scripts| free_label_layout(source, scripts, core.len()..source.len(), &style));
-        push_condensed_suffix(a, doc, frame, &mut cursor, suffix, layout);
+        push_condensed_suffix(a, doc, isotopes.graph(), frame, &mut cursor, suffix, layout);
     }
     if internal_group.is_some() {
         return cursor.runs;
@@ -903,6 +908,7 @@ struct LabelCursor {
 fn push_condensed_suffix(
     a: &Atom,
     doc: &Document,
+    graph: Option<&graph::Graph<'_>>,
     frame: LabelFrame<'_>,
     cursor: &mut LabelCursor,
     suffix: &str,
@@ -939,7 +945,7 @@ fn push_condensed_suffix(
             style: run.style,
         })
         .collect();
-    let side = crate::atom_labels::appendage_position(a, doc, None);
+    let side = crate::atom_labels::appendage_position(a, doc, graph);
     place_appendage(
         &cursor.runs,
         &mut parts,
@@ -1076,7 +1082,7 @@ fn nearby_label_ink(
 ) -> Option<Vec<(Point, Point)>> {
     measuring(|| {
         let others = match isotopes.graph() {
-            Some(graph) => graph.within_x(a.position.x, size * 5.),
+            Some(graph) => graph.near(a.position, size * 5.),
             None => doc.atoms.iter().collect(),
         };
         others
