@@ -20,8 +20,8 @@ only a check: it should confirm what already passed on your machine.
 | --------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
 | `crates/<name>/`                                    | `cargo test -p reshiki-<name> --locked` (`crates/web-worker` is `reshiki-web-worker`)                    |
 | `native/<name>/`                                    | `cargo test -p reshiki-<name> --locked` (`reshiki-macos`, `-windows`, `-linux`, `-geometry`, `-process`) |
-| `src/app/<module>`, `src/canvas/<module>`           | `cargo test --locked --bin reshiki app::<module>::` (or `canvas::<module>::`)                            |
-| other `src/<module>` (library)                      | `cargo test --locked -p reshiki --lib <module>::`                                                        |
+| `src/<module>` declared in `src/main.rs`            | `cargo test --locked --bin reshiki <path>::`, e.g. `app::<module>::` or `session::`                      |
+| `src/<module>` declared in `src/lib.rs`             | `cargo test --locked -p reshiki --lib <module>::`                                                        |
 | `tests/<name>.rs`                                   | `cargo test --locked -p reshiki --test <name>`                                                           |
 | `vendor/`                                           | `uv run --locked python scripts/check_vendor.py`, then the tests of the crates that use it               |
 | `scripts/*.py`, `tests/test_*.py`, `reference/*.py` | `uv run --locked python -m unittest tests.test_<name>`; `ruff check`, `ruff format --check`, `ty check`  |
