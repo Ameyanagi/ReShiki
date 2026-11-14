@@ -734,6 +734,9 @@ impl App {
                         format!("Edit cancelled: {error}")
                     }
                 };
+                // The rollback removed whatever the edit added and had selected.
+                let ids: std::collections::HashSet<_> = self.tab.doc.object_ids().collect();
+                self.tab.selected.retain(|id| ids.contains(id));
                 return;
             }
         };
