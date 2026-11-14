@@ -1,17 +1,23 @@
 """Check that each crate in vendor/ is its crates.io source plus vendor/patches/<crate>.diff.
 
-Run `cargo fetch --locked` first so Cargo's registry holds the upstream sources.
+The upstream source comes from Cargo's registry when it is there. Otherwise the
+crate file is downloaded from crates.io and checked against the sha256 in
+vendor/README.md, because `cargo fetch` skips crates that [patch.crates-io] replaces.
 `--write` regenerates the patches after a deliberate change to a vendored crate.
 """
 
 import argparse
 import filecmp
+import hashlib
 import os
+import re
 import shutil
 import subprocess
 import sys
+import tarfile
 import tempfile
 import tomllib
+import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -22,11 +28,31 @@ PATCHES = VENDOR / "patches"
 IGNORED = (".cargo-ok", "Cargo.lock")
 
 
-def registry_source(name, version):
+def checksums():
+    """The crates.io sha256 of each vendored crate file, from the table in vendor/README.md."""
+    readme = (VENDOR / "README.md").read_text(encoding="utf-8")
+    return dict(re.findall(r"^\| `([^`]+)` .*`([0-9a-f]{64})`", readme, re.MULTILINE))
+
+
+def upstream_source(name, version, checksum, temporary):
     home = Path(os.environ.get("CARGO_HOME", Path.home() / ".cargo"))
     for source in sorted(home.glob(f"registry/src/*/{name}-{version}")):
         return source
-    raise ValueError(f"No {name} {version} in {home}/registry/src; run cargo fetch --locked")
+    package = f"{name}-{version}"
+    for cached in sorted(home.glob(f"registry/cache/*/{package}.crate")):
+        data = cached.read_bytes()
+        break
+    else:
+        url = f"https://static.crates.io/crates/{name}/{package}.crate"
+        with urllib.request.urlopen(url) as response:
+            data = response.read()
+    if hashlib.sha256(data).hexdigest() != checksum:
+        raise ValueError(f"{package}.crate does not match the sha256 in vendor/README.md")
+    archive = Path(temporary) / f"{package}.crate"
+    archive.write_bytes(data)
+    with tarfile.open(archive) as crate:
+        crate.extractall(temporary, filter="data")
+    return Path(temporary) / package
 
 
 def copy(source, destination):
@@ -75,17 +101,26 @@ def main():
     parser.add_argument("--write", action="store_true", help="regenerate vendor/patches")
     args = parser.parse_args()
     crates = sorted(path.name for path in VENDOR.iterdir() if (path / "Cargo.toml").is_file())
+    recorded = checksums()
     errors = []
     for crate in crates:
-        manifest = tomllib.loads((VENDOR / crate / "Cargo.toml").read_text(encoding="utf-8"))
-        upstream = registry_source(manifest["package"]["name"], manifest["package"]["version"])
+        package = tomllib.loads((VENDOR / crate / "Cargo.toml").read_text(encoding="utf-8"))[
+            "package"
+        ]
         patch = PATCHES / f"{crate}.diff"
-        if args.write:
-            write(crate, upstream, patch)
-        elif not patch.is_file():
-            errors.append(f"{crate}: no {patch.relative_to(ROOT)}")
-        else:
-            errors.extend(check(crate, upstream, patch))
+        if package["name"] not in recorded:
+            errors.append(f"{crate}: no sha256 in vendor/README.md")
+            continue
+        with tempfile.TemporaryDirectory() as temporary:
+            upstream = upstream_source(
+                package["name"], package["version"], recorded[package["name"]], temporary
+            )
+            if args.write:
+                write(crate, upstream, patch)
+            elif not patch.is_file():
+                errors.append(f"{crate}: no {patch.relative_to(ROOT)}")
+            else:
+                errors.extend(check(crate, upstream, patch))
     stale = {path.stem for path in PATCHES.glob("*.diff")} - set(crates)
     errors.extend(f"{name}: patch for a crate that is not vendored" for name in sorted(stale))
     for error in errors:
