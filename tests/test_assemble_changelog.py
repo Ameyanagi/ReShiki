@@ -91,6 +91,15 @@ class AssembleChangelogTests(unittest.TestCase):
             self.assertEqual(assemble_changelog.main(), 1)
         self.assertIn("bad.md: section must be one of", error.getvalue())
 
+    def test_page_is_written_as_utf8_whatever_the_console_encoding(self):
+        self.fragment("arrow", "section: Fixes\nissues: []\n", "- A \u2192 B.\n")
+        # A Windows console code page without the arrow.
+        stdout = io.TextIOWrapper(io.BytesIO(), encoding="cp1252")
+        with patch("sys.argv", ["assemble_changelog.py"]), patch("sys.stdout", stdout):
+            self.assertEqual(assemble_changelog.main(), 0)
+        stdout.flush()
+        self.assertIn("- A \u2192 B.".encode(), stdout.buffer.getvalue())
+
     def test_release_folds_fragments_into_notes_and_contributors(self):
         (self.docs / "changes-0.16.md").write_text("# ReShiki 0.16.0\n\nIntro.\n", encoding="utf-8")
         (self.docs / "contributors.md").write_text("# Contributors\n", encoding="utf-8")

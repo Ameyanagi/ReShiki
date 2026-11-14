@@ -187,10 +187,23 @@ fn unreadable_preferences_are_set_aside_before_a_save_replaces_them() {
         newer
     );
 
-    // A readable file and a missing one leave nothing behind.
+    // Saving over a readable file or a missing one keeps no copy.
     std::fs::remove_file(dir.path().join("appearance.json.bad")).unwrap();
-    assert_eq!(Settings::load_from(&path).mode, Mode::default());
+    loaded.save_to(&path).unwrap();
     std::fs::remove_file(&path).unwrap();
-    let _ = Settings::load_from(&path);
+    loaded.save_to(&path).unwrap();
     assert!(!dir.path().join("appearance.json.bad").exists());
+}
+
+#[test]
+fn a_save_keeps_an_unreadable_file_when_its_copy_cannot_be_written() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("appearance.json");
+    let newer = br#"{"mode":"a-mode-from-a-newer-build","smart_guides":false}"#;
+    std::fs::write(&path, newer).unwrap();
+    // A directory of the copy's name blocks writing it.
+    std::fs::create_dir(dir.path().join("appearance.json.bad")).unwrap();
+    let loaded = Settings::load_from(&path);
+    assert!(loaded.save_to(&path).is_err());
+    assert_eq!(std::fs::read(&path).unwrap(), newer);
 }
