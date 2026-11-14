@@ -222,3 +222,28 @@ fn canvas_handle_resizing_refreshes_the_picture_dimensions() {
     let _ = app.update(Message::Undo);
     assert_eq!(app.tab.pictures.width, "50.80");
 }
+
+/// Undo and Redo show the restored size of the selected picture.
+#[test]
+fn undo_and_redo_refresh_the_picture_size_inputs() {
+    let size = |app: &App| {
+        (
+            app.tab.pictures.width.clone(),
+            app.tab.pictures.height.clone(),
+        )
+    };
+    let mut app = ready();
+    insert(&mut app, picture(120, 80));
+    app.sync_pictures();
+    let original = size(&app);
+    assert_ne!(original.0, "");
+    let _ = app.update(Message::Pictures(Action::Width("12".into())));
+    let _ = app.update(Message::Pictures(Action::Resize(true)));
+    let resized = size(&app);
+    assert_ne!(resized, original, "the edit shows the new size");
+
+    let _ = app.update(Message::Undo);
+    assert_eq!(size(&app), original);
+    let _ = app.update(Message::Redo);
+    assert_eq!(size(&app), resized);
+}

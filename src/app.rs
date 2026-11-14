@@ -813,23 +813,8 @@ impl App {
         });
         let committed = reconciled.commit(&mut self.tab.doc, &mut self.tab.history, continuing);
         self.label_layout_settled();
-        if committed.chemistry_changed {
-            self.tab.labels_dirty = true;
-            self.tab.chemistry_notice = None;
-        }
         if committed.recorded {
-            self.tab.stereo_notes.clear();
-            let previous = self.tab.revision;
-            self.tab.revision = self.tab.revision.wrapping_add(1);
-            if committed.chemistry_changed {
-                self.tab.analysis = None;
-            } else {
-                let (epoch, revision) = (self.tab.file_epoch, self.tab.revision);
-                self.tab
-                    .inspector_ui
-                    .advance_revision(epoch, previous, revision);
-            }
-            self.error = false;
+            self.drawing_revised(committed.chemistry_changed);
             self.status = if unit_cell_removed {
                 CELL_REMOVED_NOTICE
             } else if committed.chemistry_changed {
@@ -846,6 +831,25 @@ impl App {
         let existing: std::collections::HashSet<_> = self.tab.doc.all_ids().into_iter().collect();
         self.tab.selected.retain(|id| existing.contains(id));
         self.sync_arrow_label_gap_input();
+    }
+    /// What every recorded change of the drawing needs, whether an edit made
+    /// it or Undo or Redo restored it. Results for the previous revision are
+    /// dropped when the chemistry changed and carried over when it did not.
+    fn drawing_revised(&mut self, chemistry_changed: bool) {
+        self.tab.stereo_notes.clear();
+        let previous = self.tab.revision;
+        self.tab.revision = previous.wrapping_add(1);
+        if chemistry_changed {
+            self.tab.analysis = None;
+            self.tab.chemistry_notice = None;
+            self.tab.labels_dirty = true;
+        } else {
+            let (epoch, revision) = (self.tab.file_epoch, self.tab.revision);
+            self.tab
+                .inspector_ui
+                .advance_revision(epoch, previous, revision);
+        }
+        self.error = false;
     }
     fn fit(&mut self) {
         if self.display_document().all_ids().is_empty() {
