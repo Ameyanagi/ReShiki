@@ -203,7 +203,7 @@ and use a local disposable document:
 4. Repeat **Copy Image** separately to demonstrate a static figure. Record
    Excel's host fill/outline separately from ReShiki's transparent preview.
 
-Use the exact registered candidate; the [Windows guide](../windows.md#edit-a-drawing-in-office)
+Use the exact registered candidate; the [Windows guide](https://reshiki.com/guide/windows/#copy-editable-drawings-or-pictures)
 explains installed/portable registration. Mac Office and Linux do not provide
 this Windows OLE workflow. If #107 changes descriptor bytes in the candidate,
 repeat Office checks after integration and share that evidence with its owner.

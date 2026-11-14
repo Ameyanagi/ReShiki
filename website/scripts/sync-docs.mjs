@@ -25,7 +25,6 @@ const guides = {
     "porphine-core",
   ],
   editing: [
-    "contextual-shortcuts",
     "selection-and-groups",
     "selection-transforms",
     "selection-cleanup",
@@ -39,7 +38,6 @@ const guides = {
   "generic-structures": ["generic-structures"],
   reactions: ["arrows", "reactions"],
   assistant: ["assistant"],
-  "assistant-setup": ["assistant-setup"],
   figures: [
     "drawing-styles",
     "graphics",
@@ -50,6 +48,8 @@ const guides = {
   ],
   sharing: ["clipboard", "clipboard-compatibility"],
 };
+// Pages published whole as a guide page instead of a developer page.
+const guideCopies = { "contextual-shortcuts": "shortcuts", "assistant-setup": "assistant-setup" };
 const guideForTopic = new Map(
   Object.entries(guides).flatMap(([guide, topics]) => topics.map((topic) => [topic, guide])),
 );
@@ -59,6 +59,33 @@ const historicalTopicSet = new Set(historicalTopics);
 await rm(path.join(content, "reference"), { recursive: true, force: true });
 await rm(destination, { recursive: true, force: true });
 await mkdir(destination, { recursive: true });
+// Relative links in a page from `directory` become site routes, or GitHub links
+// for files the site does not publish.
+function rewriteLinks(body, directory) {
+  return body.replace(/\]\(([^\s)]+)([^)]*)\)/g, (match, href, suffix) => {
+    if (/^(?:[a-z]+:|#|\/)/i.test(href)) return match;
+    const [file, anchor] = href.split("#");
+    const resolved = path.resolve(directory, file);
+    const fragment = anchor ? `#${anchor}` : "";
+    if (path.dirname(resolved) === source && file.endsWith(".md")) {
+      const topic = path.basename(file, ".md");
+      const route = guideCopies[topic] ? `guide/${guideCopies[topic]}` : `developer/${topic}`;
+      return `](/${route}/${fragment}${suffix})`;
+    }
+    const relative = path.relative(root, resolved).split(path.sep).join("/");
+    if (relative === "assets/examples/shortcut-examples.rsk") {
+      return `](/examples/shortcut-examples.rsk${suffix})`;
+    }
+    if (relative === "packages/editor/README.md") {
+      return `](/developer/npm-package/${fragment}${suffix})`;
+    }
+    if (relative.startsWith("docs/images/")) {
+      return `](/doc-images/${relative.slice("docs/images/".length)}${fragment}${suffix})`;
+    }
+    return `](https://github.com/Ameyanagi/ReShiki/blob/main/${relative}${fragment}${suffix})`;
+  });
+}
+
 for (const name of (await readdir(source))
   .filter((name) => name.endsWith(".md") && name !== "README.md")
   .sort()) {
@@ -74,23 +101,7 @@ for (const name of (await readdir(source))
   const title = /^# (.+)$/m.exec(body)?.[1];
   if (!title) throw new Error(`Missing page title in ${name}`);
   body = body.replace(/^# .+\r?\n/m, "");
-  body = body.replace(/\]\(([^\s)]+)([^)]*)\)/g, (match, href, suffix) => {
-    if (/^(?:[a-z]+:|#|\/)/i.test(href)) return match;
-    const [file, anchor] = href.split("#");
-    const resolved = path.resolve(source, file);
-    const fragment = anchor ? `#${anchor}` : "";
-    if (path.dirname(resolved) === source && file.endsWith(".md")) {
-      return `](/developer/${path.basename(file, ".md")}/${fragment}${suffix})`;
-    }
-    const relative = path.relative(root, resolved).split(path.sep).join("/");
-    if (relative === "assets/examples/shortcut-examples.rsk") {
-      return `](/examples/shortcut-examples.rsk${suffix})`;
-    }
-    if (relative.startsWith("docs/images/")) {
-      return `](/doc-images/${relative.slice("docs/images/".length)}${fragment}${suffix})`;
-    }
-    return `](https://github.com/Ameyanagi/ReShiki/blob/main/${relative}${fragment}${suffix})`;
-  });
+  body = rewriteLinks(body, source);
   const topic = path.basename(name, ".md");
   if (topic === "contextual-shortcuts") {
     await writeFile(
@@ -110,6 +121,7 @@ for (const name of (await readdir(source))
       `---\ntitle: Set up Codex\ndescription: Install Codex, sign in, and connect ReShiki’s optional AI assistant.\neditUrl: https://github.com/Ameyanagi/ReShiki/edit/main/docs/assistant-setup.md\n---\n${guideBody}`,
     );
   }
+  if (guideCopies[topic]) continue;
   const pagination = topic === "development" ? "prev: false\n" : "";
   const guide = guideForTopic.get(topic);
   // Keep archived implementation checks from outranking the visual manual.
@@ -124,6 +136,14 @@ for (const name of (await readdir(source))
     `---\ntitle: ${JSON.stringify(title)}\nslug: developer/${topic}\n${pagination}${search}editUrl: https://github.com/Ameyanagi/ReShiki/edit/main/docs/${name}\n---\n${note}${body}`,
   );
 }
+
+// The npm package README, which also shows on npmjs.com.
+const npmReadme = path.join(root, "packages/editor/README.md");
+const npmBody = (await readFile(npmReadme, "utf8")).replace(/^# .+\r?\n/m, "");
+await writeFile(
+  path.join(destination, "npm-package.md"),
+  `---\ntitle: Browser editor package (npm)\nslug: developer/npm-package\neditUrl: https://github.com/Ameyanagi/ReShiki/edit/main/packages/editor/README.md\n---\n${rewriteLinks(npmBody, path.dirname(npmReadme))}`,
+);
 
 async function filesUnder(directory) {
   const files = [];
