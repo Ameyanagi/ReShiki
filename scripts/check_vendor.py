@@ -114,9 +114,13 @@ def main():
             errors.append(f"{crate}: no sha256 in vendor/README.md")
             continue
         with tempfile.TemporaryDirectory() as temporary:
-            upstream = upstream_source(
-                package["name"], package["version"], recorded[package["name"]], temporary
-            )
+            try:
+                upstream = upstream_source(
+                    package["name"], package["version"], recorded[package["name"]], temporary
+                )
+            except ValueError as mismatch:
+                errors.append(f"{crate}: {mismatch}")
+                continue
             if args.write:
                 write(crate, upstream, patch)
             elif not patch.is_file():
