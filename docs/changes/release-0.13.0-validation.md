@@ -65,3 +65,29 @@ The maintainer runs these on a manual **Release builds** run of the merged
 
 Record the tag commit, the publishing run, the public download checksums and
 the macOS signing checks, as in the [0.12.0 record](release-0.12.0-validation.md).
+
+## Build and verification
+
+Moved from the [release notes](../../changes-0.13.md).
+
+- **COSMolKit 0.5.0.** InChI, 3D generation and MMFF94, MMFF94s and UFF use
+  COSMolKit 0.5.0 instead of a patched 0.3.0 branch. Generated 3D starting
+  geometries for a given seed can differ from earlier versions.
+  [Issue #369](https://github.com/Ameyanagi/ReShiki/issues/369) · @Ameyanagi.
+- **Nix flake.** `nix run github:Ameyanagi/ReShiki` builds and runs ReShiki on
+  Linux (x64 and ARM) and Apple Silicon Macs, with an InChI and PNG export
+  check after building.
+  [Install guide](https://reshiki.com/guide/install/#nix) ·
+  [PR #366](https://github.com/Ameyanagi/ReShiki/pull/366) · @Stefanomarton.
+- **Browser build checked on every pull request.** A **Browser build
+  (wasm32)** job runs Clippy on the browser editor and headless library and the
+  `packages/editor` tests.
+  [Development](../development.md#ci) ·
+  [Issue #432](https://github.com/Ameyanagi/ReShiki/issues/432) · @Ameyanagi.
+- **0.12.0 release validation.** The record of the tagged source, tag runs,
+  publishing run and public downloads.
+  [Validation record](release-0.12.0-validation.md) ·
+  [PR #324](https://github.com/Ameyanagi/ReShiki/pull/324) · @Ameyanagi.
+- **Release preparation.** Update the version, the release notes and the
+  documentation for 0.13.0.
+  [Validation record](release-0.13.0-validation.md) · @Ameyanagi.

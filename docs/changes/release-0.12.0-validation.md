@@ -57,3 +57,46 @@ Windows portable and setup checks and Linux portable-runtime checks passed in th
 The [Documentation workflow](https://github.com/Ameyanagi/ReShiki/actions/runs/38525081539) built and deployed the release preparation documentation at `884da257`. This record follows the same review and deployment path.
 
 Publication and package checks do not cover Keynote, the Microsoft 365 add-in in real Office hosts, Windows signing, antivirus results, accessibility or full graphical desktop acceptance. Those limits remain in the release notes.
+
+## Build and verification
+
+Moved from the [release notes](../../changes-0.12.md).
+
+- **Nightly naming checks.** Application and renderer tests use the naming
+  helper built for each Windows, macOS and Linux release target. After the
+  missing-helper failures in
+  [run 38116417137](https://github.com/Ameyanagi/ReShiki/actions/runs/38116417137),
+  [Nightly run 38123945065](https://github.com/Ameyanagi/ReShiki/actions/runs/38123945065)
+  built all six platforms and published
+  [0.11.0-nightly.20261011.38123945065.1](https://github.com/Ameyanagi/ReShiki/releases/tag/nightly-0.11.0-nightly.20261011.38123945065.1)
+  from `8e38151190eb2c3814df23a3eb166fb21c972d64`.
+  [#304](https://github.com/Ameyanagi/ReShiki/pull/304) · @Ameyanagi.
+- **Windows Nightly check.** Arc editing with Undo/Redo, tab activation, ethanol
+  insertion with its caption and a floating NMR report passed on the published
+  Windows Nightly at 100% display scale.
+  [Record](nightly-windows-20261011.md) ·
+  [#306](https://github.com/Ameyanagi/ReShiki/pull/306) · @Ameyanagi.
+- **Windows signing.** SignPath-signed x64 and ARM64 applications and installers
+  are verified, and internal test-signed Nightly artifacts are kept.
+  [Setup guide](../signpath-setup.md) ·
+  [#270](https://github.com/Ameyanagi/ReShiki/pull/270) · @Ameyanagi.
+- **Assistant image benchmark.** A source-tree tool records graph identity,
+  unfinished drafts and failures for eight original synthetic images. The
+  cohort is small and does not measure accuracy on real scans.
+  [Method and results](../assistant-benchmark.md) ·
+  [Provisional preview](../assistant-benchmark-results/baseline-20261009/cyclic-gly4/run-2/provisional.png) ·
+  [#281](https://github.com/Ameyanagi/ReShiki/pull/281), merged through
+  [#300](https://github.com/Ameyanagi/ReShiki/pull/300) · @Ameyanagi.
+- **Combined reviews.** The features were also checked together:
+  [drawing tools and NMR](drawing-tools-integration.md)
+  ([#297](https://github.com/Ameyanagi/ReShiki/pull/297)); chemical names,
+  captions and atom maps
+  ([#298](https://github.com/Ameyanagi/ReShiki/pull/298)); and coordination,
+  Join, generic structures, Office and Windows
+  ([review](coordination-join-integration.md),
+  [#300](https://github.com/Ameyanagi/ReShiki/pull/300), with the adaptive
+  limits and Assistant source from
+  [#299](https://github.com/Ameyanagi/ReShiki/pull/299)).
+- **Release preparation.** Update the version, the release notes and the
+  documentation for 0.12.0.
+  [#320](https://github.com/Ameyanagi/ReShiki/pull/320) · @Ameyanagi.

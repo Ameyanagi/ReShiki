@@ -190,3 +190,27 @@ run and the focus check passed. The remaining manual checks above (release
 build run, macOS app, Windows install, Linux archives, browser demo,
 npm/PyPI installs and file compatibility) were not run before the tag and
 stay open for the published downloads.
+
+## Build and verification
+
+Moved from the [release notes](../../changes-0.14.md).
+
+- **Python wheels and PyPI.** Release tags build abi3 wheels for six targets,
+  test them on four, and publish `reshiki` to PyPI through trusted publishing.
+  [Releasing](../releasing.md#configure-pypi-publishing) ·
+  [PR #936](https://github.com/Ameyanagi/ReShiki/pull/936).
+- **Structure-to-name harness.** Golden-status, metamorphic and PubChem
+  round-trip checks for generated names.
+  [Harness](../structure-to-name-harness.md) ·
+  [#938](https://github.com/Ameyanagi/ReShiki/pull/938),
+  [#940](https://github.com/Ameyanagi/ReShiki/pull/940),
+  [#963](https://github.com/Ameyanagi/ReShiki/pull/963).
+- **CI.** macOS runners moved to macOS 15, and Rust caches are saved from main
+  only ([#737](https://github.com/Ameyanagi/ReShiki/pull/737),
+  [#605](https://github.com/Ameyanagi/ReShiki/pull/605)).
+- **0.13.1 release validation.** The publication record of the tagged source,
+  tag runs and public downloads.
+  [Validation record](release-0.13.1-validation.md) ·
+  [PR #595](https://github.com/Ameyanagi/ReShiki/pull/595).
+- **Release preparation.** Update the version, the release notes and the
+  documentation for 0.14.0.

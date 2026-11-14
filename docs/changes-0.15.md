@@ -449,35 +449,4 @@ this release are by @Ameyanagi.
 
 ## Build and verification
 
-- **RDKit 2026.09.1.** The reference suites, oracles and captured goldens
-  follow RDKit 2026.9.1; ReShiki keeps its own ring-finding basis
-  ([#1162](https://github.com/Ameyanagi/ReShiki/pull/1162),
-  [#1142](https://github.com/Ameyanagi/ReShiki/pull/1142); fixes
-  [issue #1117](https://github.com/Ameyanagi/ReShiki/issues/1117)). The live
-  reference failures on main were cleared before the release
-  ([#1159](https://github.com/Ameyanagi/ReShiki/pull/1159)).
-- **nazuchem.** The naming engines moved into
-  [nazuchem](https://github.com/Ameyanagi/nazuchem), with their history,
-  licenses and a frozen snapshot of the naming worker's responses that guarded
-  the move ([#1067](https://github.com/Ameyanagi/ReShiki/pull/1067),
-  [#1071](https://github.com/Ameyanagi/ReShiki/pull/1071)–[#1083](https://github.com/Ameyanagi/ReShiki/pull/1083),
-  [#1167](https://github.com/Ameyanagi/ReShiki/pull/1167)).
-- **CI.** Linux jobs run in prebuilt images, native tests are partitioned with
-  cargo-nextest, and lint and golden replay run in one job per platform
-  ([#1104](https://github.com/Ameyanagi/ReShiki/pull/1104)–[#1108](https://github.com/Ameyanagi/ReShiki/pull/1108),
-  [#1102](https://github.com/Ameyanagi/ReShiki/pull/1102),
-  [#1103](https://github.com/Ameyanagi/ReShiki/pull/1103),
-  [#1133](https://github.com/Ameyanagi/ReShiki/pull/1133)). Nightly builds
-  accept their version suffix again
-  ([#1101](https://github.com/Ameyanagi/ReShiki/pull/1101)). Two Windows tests
-  no longer fail on a brief file lock or a slow debug build
-  ([#1109](https://github.com/Ameyanagi/ReShiki/pull/1109),
-  [#1166](https://github.com/Ameyanagi/ReShiki/pull/1166)). Source files are
-  formatted with `bun fmt`
-  ([#1068](https://github.com/Ameyanagi/ReShiki/pull/1068)).
-- **0.14.0 release validation.** The publication record of the tagged source,
-  tag run and public downloads.
-  [Validation record](changes/release-0.14.0-validation.md) ·
-  [PR #1066](https://github.com/Ameyanagi/ReShiki/pull/1066).
-- **Release preparation.** Update the version, the release notes and the
-  documentation for 0.15.0.
+Build, CI and release checks are in the [release validation record](changes/release-0.15.0-validation.md#build-and-verification).
