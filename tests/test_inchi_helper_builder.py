@@ -144,6 +144,9 @@ class GitDependencyTests(unittest.TestCase):
                     BUILDER.dependency(root)
 
 
+JSON_MESSAGES = "--message-format=json-render-diagnostics"
+
+
 def artifact(executable, name="reshiki-inchi-helper"):
     return json.dumps(
         dict(reason="compiler-artifact", target=dict(name=name), executable=str(executable))
@@ -166,6 +169,8 @@ class RustBuildTests(unittest.TestCase):
                     stdout = "rustc test\nhost: " + host + "\n"
                 elif command[:2] == ["test-cargo", "build"]:
                     self.assertNotIn("--target", command)
+                    # Without this flag Cargo prints no artifact messages.
+                    self.assertIn(JSON_MESSAGES, command)
                     for path, data in ((stale, b"stale"), (built, b"fresh")):
                         path.parent.mkdir(parents=True)
                         path.write_bytes(data)
@@ -190,6 +195,49 @@ class RustBuildTests(unittest.TestCase):
             ):
                 BUILDER.main()
             self.assertEqual((output / "reshiki-inchi-helper").read_bytes(), b"fresh")
+
+    def test_host_build_names_the_host_when_the_environment_sets_another_target(self):
+        # CARGO_BUILD_TARGET would otherwise make Cargo build that other target.
+        host = "aarch64-apple-darwin"
+        for arguments in ([], ["--target", host]):
+            with self.subTest(arguments=arguments), tempfile.TemporaryDirectory() as temporary:
+                output = Path(temporary).resolve()
+                built = output / "target" / host / "debug/reshiki-inchi-helper"
+                starts = []
+
+                def run(command, **_kwargs):
+                    stdout = ""
+                    if command == ["test-rustc", "-vV"]:
+                        stdout = "rustc test\nhost: " + host + "\n"
+                    elif command[:2] == ["test-cargo", "build"]:
+                        self.assertEqual(command[command.index("--target") + 1], host)
+                        built.parent.mkdir(parents=True)
+                        built.write_bytes(b"host")
+                        stdout = artifact(built)
+                    elif command[0] == "test-rustc":
+                        Path(command[command.index("-o") + 1]).write_bytes(b"stub")
+                    else:
+                        starts.append(command)
+                    return subprocess.CompletedProcess(command, 0, stdout, "")
+
+                environment = {
+                    "CARGO": "test-cargo",
+                    "RUSTC": "test-rustc",
+                    "CARGO_BUILD_TARGET": "x86_64-apple-darwin",
+                }
+                with (
+                    patch.object(
+                        sys, "argv", ["build_inchi_helper.py", "--output", temporary, *arguments]
+                    ),
+                    patch.dict(os.environ, environment),
+                    patch.object(BUILDER, "verify_executable", return_value=host),
+                    patch.object(BUILDER.subprocess, "run", side_effect=run),
+                    patch("builtins.print"),
+                ):
+                    BUILDER.main()
+                self.assertEqual((output / "reshiki-inchi-helper").read_bytes(), b"host")
+                # The host stub still runs.
+                self.assertEqual(len(starts), 1)
 
     def test_development_builds_run_the_stub_only_on_the_compiler_host(self):
         host = "x86_64-apple-darwin"
@@ -218,6 +266,7 @@ class RustBuildTests(unittest.TestCase):
                             self.assertEqual(command[command.index("--target") + 1], target)
                             folder = output / target
                         self.assertIn("--locked", command)
+                        self.assertIn(JSON_MESSAGES, command)
                         self.assertNotIn("--release", command)
                         binary = folder / "debug" / ("reshiki-inchi-helper" + suffix)
                         binary.parent.mkdir(parents=True)
@@ -262,6 +311,7 @@ class RustBuildTests(unittest.TestCase):
                         stdout = "rustc test\nhost: " + host + "\n"
                     else:
                         self.assertIn("--locked", command)
+                        self.assertIn(JSON_MESSAGES, command)
                         self.assertIn("--release", command)
                         self.assertEqual(
                             command[command.index("--bin") + 1], "reshiki-inchi-helper"
