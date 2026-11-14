@@ -28,19 +28,47 @@ pub fn with_default_extension(path: &Path, extension: &str) -> PathBuf {
 }
 
 /// Replace only after the complete file has been written beside its destination.
+/// A symbolic link stays a link and the file it names is replaced. On Unix the
+/// replaced file keeps its mode, and a new file gets 0666 less the umask, as
+/// `File::create` gives, rather than tempfile's private 0600.
 pub fn write_atomic(path: &Path, bytes: &[u8]) -> Result<(), String> {
     #[cfg(target_arch = "wasm32")]
     if let Some(key) = browser::key(path) {
         return browser::write(&key, bytes);
     }
+    let target = path
+        .is_symlink()
+        .then(|| std::fs::canonicalize(path).ok())
+        .flatten();
+    let path = target.as_deref().unwrap_or(path);
     let parent = path
         .parent()
         .filter(|p| !p.as_os_str().is_empty())
         .unwrap_or(Path::new("."));
+    #[cfg(unix)]
+    let mut temp = {
+        use std::{fs::Permissions, os::unix::fs::PermissionsExt};
+        let temp = tempfile::Builder::new()
+            .permissions(Permissions::from_mode(0o666))
+            .tempfile_in(parent)
+            .map_err(|e| e.to_string())?;
+        if let Ok(metadata) = std::fs::metadata(path) {
+            temp.as_file()
+                .set_permissions(metadata.permissions())
+                .map_err(|e| e.to_string())?;
+        }
+        temp
+    };
+    #[cfg(not(unix))]
     let mut temp = tempfile::NamedTempFile::new_in(parent).map_err(|e| e.to_string())?;
     temp.write_all(bytes).map_err(|e| e.to_string())?;
     temp.as_file().sync_all().map_err(|e| e.to_string())?;
     temp.persist(path).map_err(|e| e.to_string())?;
+    // The rename is durable once its folder is synced.
+    #[cfg(unix)]
+    std::fs::File::open(parent)
+        .and_then(|folder| folder.sync_all())
+        .map_err(|e| e.to_string())?;
     Ok(())
 }
 

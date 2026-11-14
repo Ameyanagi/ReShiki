@@ -76,6 +76,27 @@ fn replacing_a_longer_document_does_not_leave_old_bytes() {
     assert_eq!(std::fs::read(&path).unwrap(), b"{}");
     assert_eq!(std::fs::read_dir(directory.path()).unwrap().count(), 1);
 }
+#[cfg(unix)]
+#[test]
+fn saving_keeps_the_file_mode_and_writes_through_a_symbolic_link() {
+    use std::os::unix::fs::PermissionsExt;
+    let directory = tempfile::tempdir().unwrap();
+    let mode = |path: &Path| std::fs::metadata(path).unwrap().permissions().mode() & 0o777;
+    let usual = directory.path().join("usual");
+    std::fs::write(&usual, b"").unwrap();
+    let path = directory.path().join("drawing.reshiki");
+    write_atomic(&path, b"first").unwrap();
+    assert_eq!(mode(&path), mode(&usual), "a new file gets the usual mode");
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o640)).unwrap();
+    write_atomic(&path, b"second").unwrap();
+    assert_eq!(mode(&path), 0o640);
+    let link = directory.path().join("link.reshiki");
+    std::os::unix::fs::symlink(&path, &link).unwrap();
+    write_atomic(&link, b"third").unwrap();
+    assert!(link.is_symlink());
+    assert_eq!(std::fs::read(&path).unwrap(), b"third");
+    assert_eq!(mode(&path), 0o640);
+}
 #[test]
 fn desktop_data_files_are_the_file_system() {
     let directory = tempfile::tempdir().unwrap();
