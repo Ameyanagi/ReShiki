@@ -29,7 +29,10 @@ and prints the process ID for a sampling profiler.
 The model scaling benchmark needs no renderer. It repeats the workload 1, 4 and
 16 times side by side (483, 1,932 and 7,728 atoms) and reports scene
 generation, bond-crossing gaps, selection bounds, **Align left** and document
-copying for each size, then the first scene of one 1,001-atom chain. A step
+copying for each size. With one two-attachment abbreviation added, it reports
+the drawn copy that an unchanged drawing shares (`render_copy_shared`) and the
+one an edit takes (`render_copy_fresh`). It ends with the first scene of one
+1,001-atom and one 4,001-atom chain. A step
 whose time grows much faster than the drawing shows up as a 16× row that is far
 more than 16 times its 1× row:
 

@@ -105,6 +105,25 @@ fn model_scaling_workloads() {
         measure(&format!("document_clone_{copies}x"), iterations, || {
             black_box(doc.clone());
         });
+        // One two-attachment abbreviation makes every drawing, label and
+        // picking query ask for a copy with remapped bonds. An unchanged
+        // drawing shares it; each edit takes a fresh one.
+        let mut bridged = doc.clone();
+        let chain = [(-60., 0.), (0., 0.), (20., 25.), (40., 20.), (80., 0.)]
+            .map(|(x, y)| bridged.add_atom("C", Point::new(x, y - 500.)));
+        for pair in chain.windows(2) {
+            if let [a, b] = pair {
+                bridged.add_bond(*a, *b, 1, "plain");
+            }
+        }
+        bridged.contract(&chain[1..4], "Ala", "Back").unwrap();
+        measure(&format!("render_copy_shared_{copies}x"), iterations, || {
+            black_box(&*bridged.abbreviation_render_copy());
+        });
+        measure(&format!("render_copy_fresh_{copies}x"), iterations, || {
+            bridged.atoms[0].position.x += 1.;
+            black_box(&*bridged.abbreviation_render_copy());
+        });
     }
     for residues in [200, 800] {
         let doc = polyalanine(residues);
