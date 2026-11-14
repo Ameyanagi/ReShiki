@@ -120,3 +120,27 @@ fn printing_uses_valid_page_drafts_without_applying_them() {
     app.tab.file_epoch += 1;
     assert!(app.print_document().is_err());
 }
+#[cfg(target_os = "macos")]
+#[test]
+fn closing_the_print_panel_returns_focus_to_the_editor_window() {
+    for outcome in [
+        Ok(Outcome { completed: false }),
+        Ok(Outcome { completed: true }),
+        Err("Unavailable printer".into()),
+    ] {
+        let mut app = ready();
+        app.printing.active = Some(1);
+        let ticket = ticket(&app, 1);
+        let task = app.print_action(Action::Finished(ticket, outcome.clone()));
+        assert!(task.units() > 0, "{outcome:?}");
+        // A result that no longer has a panel leaves the window alone.
+        let task = app.print_action(Action::Finished(ticket, outcome));
+        assert_eq!(task.units(), 0);
+    }
+    // No panel opened when preparing the print failed.
+    let mut app = ready();
+    app.printing.active = Some(1);
+    let ticket = ticket(&app, 1);
+    let task = app.print_action(Action::Prepared(ticket, Err("No printer".into())));
+    assert_eq!(task.units(), 0);
+}

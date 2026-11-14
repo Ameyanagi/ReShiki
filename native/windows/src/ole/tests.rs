@@ -15,6 +15,25 @@ fn session_file_name_uses_sanitized_host_app() {
         (Some(""), "Office drawing.rsk"),
         (None, "Office drawing.rsk"),
     ] {
-        assert_eq!(session_file_name(app), expected, "{app:?}");
+        assert_eq!(session_file_name(app, 1), expected, "{app:?}");
+    }
+}
+
+#[test]
+fn later_drawings_from_one_host_are_numbered() {
+    for (app, number, expected) in [
+        (
+            Some("Microsoft PowerPoint"),
+            2,
+            "Drawing in PowerPoint (2).rsk",
+        ),
+        (
+            Some("Microsoft PowerPoint"),
+            3,
+            "Drawing in PowerPoint (3).rsk",
+        ),
+        (None, 2, "Office drawing (2).rsk"),
+    ] {
+        assert_eq!(session_file_name(app, number), expected, "{app:?}");
     }
 }

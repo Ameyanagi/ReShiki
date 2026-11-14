@@ -120,3 +120,24 @@ async fn profile_polyalanine_insert_stages() -> anyhow::Result<()> {
     }
     Ok(())
 }
+
+#[test]
+fn inserted_structures_follow_the_drawings_label_settings() {
+    use reshiki::document::{Document, Point};
+    let (mut app, _) = App::new();
+    app.tab.doc.atom_labels.stereo = true;
+    let mut document = Document::default();
+    let a = document.add_atom("N", Point::default());
+    let b = document.add_atom("C", Point::new(42., 0.));
+    document.add_bond(a, b, 1, "plain");
+    let before = app.tab.doc.clone();
+    let selected = app.insert_beside_drawing(&document).unwrap();
+    assert!(
+        selected
+            .iter()
+            .all(|id| app.tab.doc.atom(*id).unwrap().display.stereo.show.is_none())
+    );
+    app.commit_structure_insert(before.clone(), selected);
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+}

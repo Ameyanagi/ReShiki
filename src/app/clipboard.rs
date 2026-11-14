@@ -525,7 +525,12 @@ impl App {
         let part = if outcome.native {
             reshiki::canvas_theme::for_native_paste(outcome.document, self.tab.doc.canvas_theme)
         } else {
-            reshiki::canvas_theme::for_paste(outcome.document, self.tab.doc.canvas_theme)
+            // Another program's structure has no label settings of its own:
+            // it follows this drawing's instead of overriding them per atom.
+            let mut part =
+                reshiki::canvas_theme::for_paste(outcome.document, self.tab.doc.canvas_theme);
+            part.atom_labels = self.tab.doc.atom_labels.clone();
+            part
         };
         let center = editing::center(&part, &part.all_ids());
         let before = self.tab.doc.clone();

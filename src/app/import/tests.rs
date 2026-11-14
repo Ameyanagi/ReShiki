@@ -839,3 +839,24 @@ fn browser_files_are_read_one_byte_past_their_limit() {
     assert_eq!(read_length(5_000_000_000, 20), 21);
     assert_eq!(read_length(5_000_000_000, u64::MAX), 5_000_000_000);
 }
+
+#[test]
+fn a_new_file_epoch_releases_an_import_that_can_no_longer_finish() {
+    let mut app = ready();
+    let ticket = app.import_ticket();
+    assert!(
+        app.update(Message::Imports(Action::Files(paths(&["old.mol"]))))
+            .units()
+            > 0
+    );
+    assert!(app.tab.busy);
+    // As when Office closes the drawing's document while the files load.
+    app.begin_file_epoch();
+    assert!(!app.tab.busy);
+    let _ = app.update(Message::Imports(Action::Loaded(
+        ticket,
+        Box::new(Err("Old error".into())),
+    )));
+    assert!(!app.tab.busy && !app.error);
+    assert!(app.update(Message::Analyze).units() > 0);
+}

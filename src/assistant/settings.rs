@@ -133,17 +133,31 @@ impl Preferences {
     }
     pub fn load() -> Self {
         Self::path()
-            .and_then(|p| std::fs::read(p).ok())
-            .filter(|b| b.len() < 65536)
-            .and_then(|b| serde_json::from_slice(&b).ok())
+            .map(|path| Self::load_from(&path))
             .unwrap_or_default()
     }
+    fn load_from(path: &std::path::Path) -> Self {
+        let Ok(bytes) = std::fs::read(path) else {
+            return Self::default();
+        };
+        if bytes.len() < 65536
+            && let Ok(preferences) = serde_json::from_slice(&bytes)
+        {
+            return preferences;
+        }
+        // A copy of a file this build cannot read, such as a newer build's,
+        // outlives the next save. The file itself stays until then.
+        let _ = crate::storage::write_atomic(&path.with_extension("json.bad"), &bytes);
+        Self::default()
+    }
     pub fn save(&self) -> Result<(), String> {
-        let path = Self::path().ok_or("No preferences directory")?;
+        self.save_to(&Self::path().ok_or("No preferences directory")?)
+    }
+    fn save_to(&self, path: &std::path::Path) -> Result<(), String> {
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
         }
-        crate::storage::write_atomic(&path, &serde_json::to_vec(self).map_err(|e| e.to_string())?)
+        crate::storage::write_atomic(path, &serde_json::to_vec(self).map_err(|e| e.to_string())?)
     }
 }
 #[cfg(test)]

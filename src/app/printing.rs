@@ -132,7 +132,14 @@ impl App {
                     Err(error) => self.finish_print(ticket, Err(error)),
                 }
             }
-            Action::Finished(ticket, result) => self.finish_print(ticket, result),
+            Action::Finished(ticket, result) => {
+                let panel_closed = self.printing.active == Some(ticket.serial);
+                self.finish_print(ticket, result);
+                // The macOS print panel leaves the editor window inactive.
+                if panel_closed && cfg!(target_os = "macos") {
+                    return iced::window::latest().and_then(iced::window::gain_focus);
+                }
+            }
         }
         Task::none()
     }

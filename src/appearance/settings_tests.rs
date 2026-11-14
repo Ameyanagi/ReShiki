@@ -170,3 +170,27 @@ fn an_unwritable_preference_destination_reports_failure() {
         settings.canvas_theme
     );
 }
+
+#[test]
+fn unreadable_preferences_are_set_aside_before_a_save_replaces_them() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("appearance.json");
+    let newer = br#"{"mode":"a-mode-from-a-newer-build","smart_guides":false}"#;
+    std::fs::write(&path, newer).unwrap();
+    let loaded = Settings::load_from(&path);
+    assert_eq!(loaded.mode, Mode::default());
+    // Loading alone leaves the newer build's file in place.
+    assert_eq!(std::fs::read(&path).unwrap(), newer);
+    loaded.save_to(&path).unwrap();
+    assert_eq!(
+        std::fs::read(dir.path().join("appearance.json.bad")).unwrap(),
+        newer
+    );
+
+    // A readable file and a missing one leave nothing behind.
+    std::fs::remove_file(dir.path().join("appearance.json.bad")).unwrap();
+    assert_eq!(Settings::load_from(&path).mode, Mode::default());
+    std::fs::remove_file(&path).unwrap();
+    let _ = Settings::load_from(&path);
+    assert!(!dir.path().join("appearance.json.bad").exists());
+}

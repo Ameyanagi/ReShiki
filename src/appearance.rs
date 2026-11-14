@@ -97,19 +97,25 @@ impl Settings {
             .unwrap_or_default()
     }
     fn load_from(path: &std::path::Path) -> Self {
-        reshiki::storage::read(path)
-            .ok()
-            .and_then(|bytes| {
-                let mut settings: Self = serde_json::from_slice(&bytes).ok()?;
-                let legacy: serde_json::Value = serde_json::from_slice(&bytes).ok()?;
-                if legacy.get("mode").is_none()
-                    && let Some(dark) = legacy.get("dark").and_then(|v| v.as_bool())
-                {
-                    settings.mode = if dark { Mode::Dark } else { Mode::Light };
-                }
-                Some(settings)
-            })
-            .unwrap_or_default()
+        let Ok(bytes) = reshiki::storage::read(path) else {
+            return Self::default();
+        };
+        let parsed = || {
+            let mut settings: Self = serde_json::from_slice(&bytes).ok()?;
+            let legacy: serde_json::Value = serde_json::from_slice(&bytes).ok()?;
+            if legacy.get("mode").is_none()
+                && let Some(dark) = legacy.get("dark").and_then(|v| v.as_bool())
+            {
+                settings.mode = if dark { Mode::Dark } else { Mode::Light };
+            }
+            Some(settings)
+        };
+        parsed().unwrap_or_else(|| {
+            // A copy of a file this build cannot read, such as a newer build's,
+            // outlives the next save. The file itself stays until then.
+            let _ = reshiki::storage::write_atomic(&path.with_extension("json.bad"), &bytes);
+            Self::default()
+        })
     }
     pub fn save(&self) -> Result<(), String> {
         if cfg!(test) {

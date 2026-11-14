@@ -249,8 +249,8 @@ fn invalid_edit_rolls_back_with_edit_cancelled_status() {
     assert!(app.tab.cleanup.is_none());
     // changed() ends the erase stroke before the edit is rejected.
     assert!(!app.tab.erase_stroke);
-    // A rejection returns before the selection is pruned.
-    assert_eq!(app.tab.selected, [a, 999_999]);
+    // A rejection keeps only the selected objects that still exist.
+    assert_eq!(app.tab.selected, [a]);
 }
 
 #[test]
@@ -920,4 +920,17 @@ fn bond_shortcuts_keep_the_transaction_unit_cell_removal_notice() {
     assert!(reshiki::models3d::crystal::touches(&app.tab.doc, &[]));
     app.step_history(false);
     assert_eq!(app.tab.doc, before);
+}
+
+#[test]
+fn rejected_edit_deselects_the_objects_it_rolled_back() {
+    let mut app = app();
+    let [a, _] = ethane(&mut app, 1);
+    let before = app.tab.doc.clone();
+    let added = app.tab.doc.add_atom("N", Point::new(f32::NAN, 0.));
+    app.tab.selected = vec![a, added];
+    app.changed(before.clone());
+    assert_eq!(app.tab.doc, before);
+    assert!(app.error);
+    assert_eq!(app.tab.selected, [a]);
 }
