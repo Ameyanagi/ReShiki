@@ -27,7 +27,9 @@ Jupyter displays each object as SVG.
 `properties()` returns a frozen dataclass with the same fields as
 [`reshiki --cli analyze`](agent-cli.md#analyze): `formula`, `display_formula`,
 `mass`, `exact_mass`, `logp`, `tpsa`, `donors`, `acceptors`, `rings`, `inchi`,
-`inchikey`, `smiles` and `unpaired_electrons`.
+`inchikey`, `smiles` and `unpaired_electrons`. `mass`, `exact_mass`, `logp`
+and `tpsa` are rounded to 9 decimal places, as the command line and the MCP
+tools report them.
 
 ## Inputs and outputs
 
@@ -53,23 +55,52 @@ accepts native `.rsk`, MOL/SDF, RXN, SMILES/reaction SMILES, InChI, CDXML, binar
 CIF, PDB/ENT, POSCAR/CONTCAR/`.vasp` and XYZ/extXYZ. Crystal imports use the
 [existing crystal readers](crystal-structures.md).
 
-Render with `png()`, `svg()` or `pdf()`, and export with `cdxml()`, `mol()`,
-`sdf()`, `smiles()`, `inchi()` or `rsk()`. PNG, PDF and native drawings return
-bytes; chemical text and SVG return strings. `save(path, **options)` chooses the
-output format from the extension. EMF raises `NotImplementedError` pending a
-headless exporter.
+Make figures with `png()`, `svg()` or `pdf()`, and chemistry files with
+`cdxml()`, `cdx()`, `mol()`, `sdf()`, `smiles()`, `inchi()` or `rsk()`. A
+reaction also has `rxn()` and `rsmi()` (reaction SMILES). PNG, PDF, CDX and
+`.rsk` drawings return bytes; chemical text and SVG return strings.
+`export(format, **options)` writes any of these by name; it is what the app's
+**Export** command, the MCP `export` tool and `reshiki --cli convert` make.
+`render()` is the older name of `export()` and stays. EMF raises
+`NotImplementedError` pending a headless exporter.
+
+`save(path, **options)` chooses the output format from the extension. It
+replaces an existing file; pass `overwrite=False` to get `FileExistsError`
+instead, as the MCP `file_save` tool refuses without `overwrite` and the
+command line without `--force`.
 
 SVG output draws text as outlines, so every viewer shows the glyphs, positions
-and sizes that `png()` draws, whatever fonts it has. Pass `text="live"` to keep
-`<text>` elements that stay editable and searchable; a viewer without Arial then
-substitutes its own font, and labels can look narrower or wider than in the
-PNG. `svg()`, `render()`, `convert()`, `save()` and `render_many()` accept
-`text=`; other formats ignore it.
+and sizes that `png()` draws, whatever fonts it has. Pass `svg_text="live"` to
+keep `<text>` elements that stay editable and searchable; a viewer without
+Arial then substitutes its own font, and labels can look narrower or wider
+than in the PNG. `svg()`, `export()`, `convert()`, `save()` and
+`render_many()` accept `svg_text=`, the name the MCP tools and the command
+line use; other formats ignore it. The older spelling `text=` still works.
+
+## Errors
+
+ReShiki raises `reshiki.ReShikiError`, a `ValueError`, so `except ValueError`
+keeps working. Its `code` is the [error code](agent-api.md#error-codes) the MCP
+tools and the command line report for the same failure:
+
+| `code`              | Meaning                                           |
+| ------------------- | ------------------------------------------------- |
+| `invalid_arguments` | A format, option or style is not accepted         |
+| `failed`            | The structure could not be read, drawn or written |
+
+```python
+try:
+    reshiki.Molecule.from_smiles("C(")
+except reshiki.ReShikiError as error:
+    print(error.code, error)  # failed Invalid SMILES at byte 2
+```
+
+A wrong argument type still raises `TypeError`, and a missing file `OSError`.
 
 ```python
 drawing = reshiki.Drawing.open("rutile.vasp")
 drawing.save("rutile.svg")
-png = reshiki.render("CCO", format="png", width=300)
+png = reshiki.export("CCO", format="png", width=300)
 mol = reshiki.convert("CCO", to="mol")
 analysis = reshiki.properties("CCO")
 ```

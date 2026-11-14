@@ -155,18 +155,19 @@ operation limits and their units. Session weight counts objects plus one for
 each document and history frame. Picture memory counts unique picture data
 across documents and history.
 
-| Limit                                                                       | When exceeded                                            |
-| --------------------------------------------------------------------------- | -------------------------------------------------------- |
-| Input text, CDX base64, documents, objects, object IDs, pictures and output | `budget`                                                 |
-| Session weight                                                              | `budget`, checked before any change                      |
-| History depth                                                               | The oldest step is dropped                               |
-| Inspect                                                                     | `truncated: true`; counts stay complete                  |
-| Idempotency                                                                 | The oldest receipt is dropped; a longer key is invalid   |
-| Idle documents                                                              | `unknown_document`                                       |
-| Concurrency and queue                                                       | `busy`                                                   |
-| Deadline                                                                    | `timeout` at the next cooperative checkpoint             |
-| Preview render                                                              | `invalid_arguments` for a side, `budget` for the pixels  |
-| PNG export                                                                  | Resolution steps down from the style's dpi until it fits |
+| Limit                                                                       | When exceeded                                                                                                                                               |
+| --------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Input text, CDX base64, documents, objects, object IDs, pictures and output | `budget`                                                                                                                                                    |
+| Session weight                                                              | `budget`, checked before any change                                                                                                                         |
+| History depth                                                               | The oldest step is dropped                                                                                                                                  |
+| Inspect                                                                     | `truncated: true`; counts stay complete                                                                                                                     |
+| Idempotency                                                                 | The oldest receipt is dropped; a longer key is invalid                                                                                                      |
+| Idle documents                                                              | `unknown_document`                                                                                                                                          |
+| Concurrency and queue                                                       | `busy`                                                                                                                                                      |
+| Deadline                                                                    | `timeout` at the next cooperative checkpoint                                                                                                                |
+| Preview render                                                              | `invalid_arguments` for a side, `budget` for the pixels                                                                                                     |
+| PNG export                                                                  | Resolution steps down from the style's dpi until it fits                                                                                                    |
+| Chemical names (`import` format `name`, `convert`, `name`)                  | `failed`: names are at most 2,048 bytes and molecules 512 atoms, and the work runs in the app's bounded naming worker (see [Naming worker](#naming-worker)) |
 
 MCP framing and process limits also apply:
 
