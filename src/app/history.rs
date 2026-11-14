@@ -1,5 +1,6 @@
 //! Undo and redo of drawing history.
 use super::{App, chemistry_changed, pages};
+use std::collections::HashSet;
 
 impl App {
     pub(super) fn step_history(&mut self, redo: bool) {
@@ -37,9 +38,9 @@ impl App {
                     .advance_revision(epoch, revision.wrapping_sub(1), revision);
                 self.settle_label_layout();
             }
-            let ids = self.tab.doc.all_ids();
+            let ids: HashSet<_> = self.tab.doc.object_ids().collect();
             self.tab.selected.retain(|id| ids.contains(id));
-            let previous_ids = before.all_ids();
+            let previous_ids: HashSet<_> = before.object_ids().collect();
             let restored_group = self.tab.doc.groups.iter().any(|group| {
                 group
                     .members
