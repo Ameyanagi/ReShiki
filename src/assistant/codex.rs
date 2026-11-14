@@ -795,10 +795,8 @@ async fn run_turn(
                 {
                     Ok(value) => return Ok(value),
                     Err(error) => {
-                        eprintln!(
-                            "Codex returned invalid structured output: {error}; reply: {}",
-                            output.chars().take(200).collect::<String>()
-                        );
+                        // The reply may quote the drawing; only the parse error is logged.
+                        eprintln!("Codex returned invalid structured output: {error}");
                         if retried {
                             return Err("The model's reply couldn't be read.".into());
                         }

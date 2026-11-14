@@ -837,3 +837,56 @@ async fn source_color_review_notes_do_not_block_automatic_application() -> anyho
     server.shutdown().await;
     Ok(())
 }
+
+/// S20: a reply that cannot be read may quote the drawing, so none of it is
+/// written to stderr. The test runs itself again as a child to read stderr.
+#[cfg(unix)]
+#[tokio::test]
+async fn an_unreadable_reply_is_not_written_to_stderr() -> anyhow::Result<()> {
+    const CHILD: &str = "RESHIKI_TEST_UNREADABLE_REPLY";
+    const REPLY: &str = "private-reply-text";
+    if std::env::var_os(CHILD).is_none() {
+        let name = format!(
+            "{}::an_unreadable_reply_is_not_written_to_stderr",
+            module_path!().split_once("::").map_or("", |(_, path)| path)
+        );
+        let output = std::process::Command::new(std::env::current_exe()?)
+            .args(["--exact", &name, "--nocapture"])
+            .env(CHILD, "1")
+            .output()?;
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(output.status.success(), "{stderr}");
+        assert!(
+            String::from_utf8_lossy(&output.stdout).contains("1 passed"),
+            "the child ran no test"
+        );
+        assert!(
+            stderr.contains("Codex returned invalid structured output"),
+            "{stderr}"
+        );
+        assert!(!stderr.contains(REPLY), "{stderr}");
+        return Ok(());
+    }
+    let unreadable = final_message("test", "final_answer", &format!("{{{REPLY}"));
+    let (mut server, _evidence) = fake_turns(json!([unreadable.clone(), unreadable])).await?;
+    let (tx, _rx) = tokio::sync::mpsc::channel(32);
+    let turn = Turn {
+        thread: "test",
+        effort: "low",
+        tier: None,
+        progress: &tx,
+        canvas: None,
+        source: None,
+    };
+    let result = run_turn(
+        &mut server,
+        &turn,
+        json!([]),
+        super::super::review::schema(),
+        false,
+    )
+    .await;
+    server.shutdown().await;
+    assert_eq!(result.unwrap_err(), "The model's reply couldn't be read.");
+    Ok(())
+}
