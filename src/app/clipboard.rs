@@ -355,6 +355,12 @@ impl App {
         }
         match result {
             Ok(notices) => {
+                if matches!(
+                    key.format,
+                    CopyFormat::Png | CopyFormat::Svg | CopyFormat::Pdf
+                ) {
+                    self.star.used();
+                }
                 let scope = match (
                     !key.selected.is_empty(),
                     key.revision == self.tab.revision && key.selected == self.tab.selected,
@@ -452,6 +458,10 @@ impl App {
                 return;
             }
         };
+        // Windows puts a picture on the clipboard only for Copy Image.
+        if outcome.image_only || !cfg!(windows) {
+            self.star.used();
+        }
         let cut = !cut_ids.is_empty();
         let stale_cut = cut && (epoch != self.tab.file_epoch || revision != self.tab.revision);
         if cut && !stale_cut {

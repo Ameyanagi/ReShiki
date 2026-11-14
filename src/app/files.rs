@@ -917,6 +917,7 @@ impl super::App {
     ) {
         match result {
             Ok(Some(saved)) => {
+                self.star.used();
                 self.status =
                     export_status(&saved.path, &saved.details, cfg!(target_arch = "wasm32"));
                 self.error = false;
