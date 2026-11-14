@@ -900,14 +900,14 @@ fn accept_all_reviews_a_replacement_outside_the_selection() {
         elements.sort();
         elements
     };
-    let done = |app: &mut App, replace_ids: Vec<u64>| {
+    let done_in = |app: &mut App, replace_ids: Vec<u64>, replace: Vec<u64>| {
         let mut fragment = Document::default();
         fragment.add_atom("O", reshiki::document::Point::default());
         let _ = app.assistant_action(Action::Done {
             serial: app.assistant.serial,
             epoch: app.tab.file_epoch,
             revision: app.tab.revision,
-            replace: vec![],
+            replace,
             result: Box::new(Ok(assistant::review::Outcome {
                 proposal: Proposal {
                     replace_ids,
@@ -921,6 +921,7 @@ fn accept_all_reviews_a_replacement_outside_the_selection() {
             })),
         });
     };
+    let done = |app: &mut App, replace_ids| done_in(app, replace_ids, vec![]);
     app.tab.selected = vec![chosen];
     done(&mut app, vec![kept]);
     assert!(app.assistant.draft.is_some());
@@ -941,4 +942,20 @@ fn accept_all_reviews_a_replacement_outside_the_selection() {
     done(&mut app, vec![chosen]);
     assert!(app.assistant.draft.is_none());
     assert_eq!(elements(&app), ["O", "O"]);
+    // A proposal that names nothing replaces what was selected when the
+    // request was sent. With the selection cleared since, that waits too.
+    let sent: Vec<u64> = app.tab.doc.atoms.iter().map(|a| a.id).collect();
+    app.tab.selected = vec![];
+    done_in(&mut app, vec![], sent.clone());
+    assert!(app.assistant.draft.is_some());
+    assert_eq!(elements(&app), ["O", "O"]);
+    assert_eq!(
+        app.assistant.status,
+        "Ready for review · It replaces objects outside your selection"
+    );
+    // With the selection kept, it is applied at once.
+    app.tab.selected = sent.clone();
+    done_in(&mut app, vec![], sent);
+    assert!(app.assistant.draft.is_none());
+    assert_eq!(elements(&app), ["O"]);
 }
