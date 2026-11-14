@@ -80,13 +80,13 @@ pub(crate) enum Format {
 struct Arguments {
     document: DocHandle,
     format: Format,
-    #[serde(deserialize_with = "Option::deserialize")]
+    #[serde(default)]
     max_width: Option<u32>,
-    #[serde(deserialize_with = "Option::deserialize")]
+    #[serde(default)]
     max_height: Option<u32>,
-    #[serde(deserialize_with = "Option::deserialize")]
+    #[serde(default)]
     ids: Option<Vec<ObjectId>>,
-    #[serde(deserialize_with = "Option::deserialize")]
+    #[serde(default)]
     svg_text: Option<SvgText>,
 }
 

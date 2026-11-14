@@ -106,9 +106,9 @@ impl Format {
 pub(crate) struct Export {
     document: DocHandle,
     format: Format,
-    #[serde(deserialize_with = "Option::deserialize")]
+    #[serde(default)]
     pages: Option<bool>,
-    #[serde(deserialize_with = "Option::deserialize")]
+    #[serde(default)]
     svg_text: Option<SvgText>,
 }
 

@@ -127,13 +127,12 @@ fn pages_is_valid_only_with_pdf() {
             );
         }
     }
-    let omitted =
-        decode(json!({"document": "doc_1", "format": "pdf", "svg_text": null})).unwrap_err();
-    assert_eq!(omitted.message, "missing field `pages`");
+    let omitted = decode(json!({"document": "doc_1", "format": "pdf", "svg_text": null})).unwrap();
+    assert_eq!(omitted.pages, None);
 }
 
 #[test]
-fn svg_text_is_required_nullable_and_accepts_only_the_published_modes() {
+fn svg_text_is_nullable_and_accepts_only_the_published_modes() {
     for format in EXPORT_FORMATS {
         for (value, expected) in [
             (Value::Null, SvgText::Outline),
@@ -154,8 +153,8 @@ fn svg_text_is_required_nullable_and_accepts_only_the_published_modes() {
         .unwrap_err();
         assert_eq!(error.kind, ErrorKind::InvalidArguments);
     }
-    let omitted = decode(json!({"document": "doc_1", "format": "svg", "pages": null})).unwrap_err();
-    assert_eq!(omitted.message, "missing field `svg_text`");
+    let omitted = decode(json!({"document": "doc_1", "format": "svg", "pages": null})).unwrap();
+    assert_eq!(omitted.svg_text, None);
     assert_eq!(schema()["properties"]["svg_text"], svg_text_schema());
     assert!(
         schema()["required"]

@@ -65,7 +65,7 @@ fn schema() -> Value {
 #[serde(deny_unknown_fields)]
 struct Arguments {
     proposal: Value,
-    #[serde(deserialize_with = "Option::deserialize")]
+    #[serde(default)]
     style_document: Option<DocHandle>,
 }
 

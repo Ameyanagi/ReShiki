@@ -106,13 +106,13 @@ enum Kind {
 struct Arguments {
     document: DocHandle,
     edit: Kind,
-    #[serde(deserialize_with = "Option::deserialize")]
+    #[serde(default)]
     source: Option<DocHandle>,
-    #[serde(deserialize_with = "Option::deserialize")]
+    #[serde(default)]
     ids: Option<Vec<ObjectId>>,
-    #[serde(deserialize_with = "Option::deserialize")]
+    #[serde(default)]
     base_revision: Option<Revision>,
-    #[serde(deserialize_with = "Option::deserialize")]
+    #[serde(default)]
     idempotency_key: Option<String>,
 }
 

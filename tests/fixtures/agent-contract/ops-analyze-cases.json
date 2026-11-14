@@ -49,7 +49,7 @@
 
     {"name": "ids_null", "rule": "analyze.ids_nullable_required", "base": "whole", "expect": "both_accept"},
     {"name": "ids_empty", "rule": "analyze.ids_nullable_required", "base": "whole", "patch": [{"op": "replace", "path": "/arguments/ids", "value": []}], "expect": "both_accept"},
-    {"name": "ids_omitted", "rule": "analyze.ids_nullable_required", "base": "whole", "patch": [{"op": "remove", "path": "/arguments/ids"}], "expect": "both_reject", "message": "missing field `ids`"},
+    {"name": "ids_omitted", "rule": "analyze.ids_nullable_required", "base": "whole", "patch": [{"op": "remove", "path": "/arguments/ids"}], "expect": "schema_rejects_only"},
     {"name": "ids_string", "rule": "analyze.ids_nullable_required", "base": "whole", "patch": [{"op": "replace", "path": "/arguments/ids", "value": "1"}], "expect": "both_reject"},
     {"name": "ids_object", "rule": "analyze.ids_nullable_required", "base": "whole", "patch": [{"op": "replace", "path": "/arguments/ids", "value": {"1": true}}], "expect": "both_reject"},
 

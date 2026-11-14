@@ -131,10 +131,12 @@ chemical names are not resolved, although the app can import them.
 
 ## Calling a tool
 
-Every argument a tool's `inputSchema` lists is required. For an argument you
-do not use, pass `null` where the schema allows it. This `render` call asks
-for a PNG preview of the whole drawing at the default size, for a document
-that `import` made from the SMILES `CCO`:
+Each tool's `inputSchema` lists every argument as required, so that clients
+which validate strictly always send a complete call. For an argument you do
+not use, pass `null` where the schema allows it. The server also reads an
+omitted nullable argument as `null`. This `render` call asks for a PNG preview
+of the whole drawing at the default size, for a document that `import` made
+from the SMILES `CCO`:
 
 ```json
 {
@@ -195,8 +197,9 @@ The result, with the image data shortened:
 }
 ```
 
-The same call without `max_width` fails with `invalid_arguments` and the
-message ``missing field `max_width` ``. This exchange uses the 2025-11-25
+The same call with only `document` and `format` gives the same result. A
+call without `format`, which cannot be `null`, fails with `invalid_arguments`
+and the message ``missing field `format` ``. This exchange uses the 2025-11-25
 revision. In 2026-07-28, each request also carries `_meta` and each result a
 `resultType` (see [Protocol revisions](#protocol-revisions)).
 

@@ -61,7 +61,7 @@ fn schema() -> Value {
 #[serde(deny_unknown_fields)]
 pub(crate) struct Analyze {
     document: DocHandle,
-    #[serde(deserialize_with = "Option::deserialize")]
+    #[serde(default)]
     ids: Option<Vec<ObjectId>>,
 }
 

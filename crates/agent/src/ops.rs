@@ -39,8 +39,9 @@
 //! - Document handles ([`wire::DocHandle`]) are opaque strings of 1 to 64
 //!   characters of `[A-Za-z0-9_-]`, checked against their owner on every call.
 //! - Input schemas are hand-written JSON Schema 2020-12 built from the
-//!   [`wire`] helpers. Every argument struct follows the required-nullable
-//!   rule described in [`wire`], so serde and the schema's `required` agree.
+//!   [`wire`] helpers. Every argument struct follows the nullable rule
+//!   described in [`wire`]: the schema requires every property, and the
+//!   decoder reads an omitted nullable one as `null`.
 //! - Results are a [`result::ToolResult`] whose `value` is always a JSON
 //!   object, valid as `structuredContent` in every supported MCP revision.
 //!   `info`, document tools and `inspect` return flat objects with `versions`.

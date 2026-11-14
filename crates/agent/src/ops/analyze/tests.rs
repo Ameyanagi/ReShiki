@@ -105,9 +105,8 @@ fn ids_over_the_budget_are_refused_at_decode_time() {
     assert_eq!(decoded(budgets.max_ids), Ok(()));
     let error = decoded(budgets.max_ids + 1).unwrap_err();
     assert_eq!(error.kind, ErrorKind::Budget);
-    let omitted = decode(json!({"document": "doc_1"}), &budgets).unwrap_err();
-    assert_eq!(omitted.kind, ErrorKind::InvalidArguments);
-    assert_eq!(omitted.message, "missing field `ids`");
+    // An omitted nullable argument reads as null.
+    assert!(decode(json!({"document": "doc_1"}), &budgets).is_ok());
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

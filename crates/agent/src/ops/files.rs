@@ -180,12 +180,12 @@ impl SaveFormat {
 struct SaveArgs {
     document: DocHandle,
     path: String,
-    #[serde(deserialize_with = "Option::deserialize")]
+    #[serde(default)]
     format: Option<SaveFormat>,
     overwrite: bool,
-    #[serde(deserialize_with = "Option::deserialize")]
+    #[serde(default)]
     pages: Option<bool>,
-    #[serde(deserialize_with = "Option::deserialize")]
+    #[serde(default)]
     svg_text: Option<SvgText>,
 }
 

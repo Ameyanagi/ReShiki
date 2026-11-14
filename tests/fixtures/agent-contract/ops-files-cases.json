@@ -31,7 +31,7 @@
     {"name": "save_svg_text_live", "rule": "file_save.svg_text_nullable_enum_required", "base": "save", "patch": [{"op": "replace", "path": "/arguments/svg_text", "value": "live"}], "expect": "both_accept"},
     {"name": "save_svg_text_invalid", "rule": "file_save.svg_text_nullable_enum_required", "base": "save", "patch": [{"op": "replace", "path": "/arguments/svg_text", "value": "editable"}], "expect": "both_reject"},
     {"name": "save_svg_text_number", "rule": "file_save.svg_text_nullable_enum_required", "base": "save", "patch": [{"op": "replace", "path": "/arguments/svg_text", "value": 1}], "expect": "both_reject"},
-    {"name": "save_svg_text_omitted", "rule": "file_save.svg_text_nullable_enum_required", "base": "save", "patch": [{"op": "remove", "path": "/arguments/svg_text"}], "expect": "both_reject", "message": "missing field `svg_text`"},
+    {"name": "save_svg_text_omitted", "rule": "file_save.svg_text_nullable_enum_required", "base": "save", "patch": [{"op": "remove", "path": "/arguments/svg_text"}], "expect": "schema_rejects_only"},
     {"name": "save_svg_text_live_non_svg", "rule": "file_save.svg_text_nullable_enum_required", "base": "save_pages", "patch": [{"op": "replace", "path": "/arguments/svg_text", "value": "live"}], "expect": "both_accept"},
 
     {"name": "open_arguments_object", "rule": "arguments.object", "base": "open", "expect": "both_accept"},
@@ -107,7 +107,7 @@
     {"name": "save_format_import_only", "rule": "file_save.format_nullable_enum", "base": "save", "patch": [{"op": "replace", "path": "/arguments/format", "value": "rxn"}], "expect": "both_reject"},
     {"name": "save_format_auto", "rule": "file_save.format_nullable_enum", "base": "save", "patch": [{"op": "replace", "path": "/arguments/format", "value": "auto"}], "expect": "both_reject"},
     {"name": "save_format_upper_case", "rule": "file_save.format_nullable_enum", "base": "save", "patch": [{"op": "replace", "path": "/arguments/format", "value": "SVG"}], "expect": "both_reject"},
-    {"name": "save_format_omitted", "rule": "file_save.format_nullable_enum", "base": "save", "patch": [{"op": "remove", "path": "/arguments/format"}], "expect": "both_reject", "message": "missing field `format`"},
+    {"name": "save_format_omitted", "rule": "file_save.format_nullable_enum", "base": "save", "patch": [{"op": "remove", "path": "/arguments/format"}], "expect": "schema_rejects_only"},
 
     {"name": "save_null_follows_any_case_extension", "rule": "file_save.format_matches_extension", "base": "save", "patch": [{"op": "replace", "path": "/arguments/path", "value": "/data/ethanol.PNG"}], "expect": "both_accept"},
     {"name": "save_smiles_alias", "rule": "file_save.format_matches_extension", "base": "save", "patch": [{"op": "replace", "path": "/arguments/path", "value": "/data/ethanol.smi"}, {"op": "replace", "path": "/arguments/format", "value": "smiles"}], "expect": "both_accept"},
@@ -130,7 +130,7 @@
 
     {"name": "save_pages_null", "rule": "file_save.pages_nullable_required", "base": "save", "expect": "both_accept"},
     {"name": "save_pages_false", "rule": "file_save.pages_nullable_required", "base": "save", "patch": [{"op": "replace", "path": "/arguments/pages", "value": false}], "expect": "both_accept"},
-    {"name": "save_pages_omitted", "rule": "file_save.pages_nullable_required", "base": "save", "patch": [{"op": "remove", "path": "/arguments/pages"}], "expect": "both_reject", "message": "missing field `pages`"},
+    {"name": "save_pages_omitted", "rule": "file_save.pages_nullable_required", "base": "save", "patch": [{"op": "remove", "path": "/arguments/pages"}], "expect": "schema_rejects_only"},
     {"name": "save_pages_string", "rule": "file_save.pages_nullable_required", "base": "save_pages", "patch": [{"op": "replace", "path": "/arguments/pages", "value": "true"}], "expect": "both_reject"},
 
     {"name": "save_pages_with_pdf", "rule": "file_save.pages_pdf_only", "base": "save_pages", "expect": "both_accept"},
