@@ -38,7 +38,7 @@
     },
     {
       "id": "apply.base_revision_nullable_required",
-      "cite": "crates/agent/src/ops/wire.rs:3-10,192-195; crates/agent/src/ops/apply.rs:83,89,114-115"
+      "cite": "crates/agent/src/ops/wire.rs:3-10,192-195; crates/agent/src/ops/apply.rs:83-86,89,114-115"
     },
     {
       "id": "apply.base_revision_decimal",
@@ -109,7 +109,7 @@
 
     {"name": "source_given", "rule": "apply.source_nullable_required", "base": "replace", "expect": "both_accept"},
     {"name": "source_null", "rule": "apply.source_nullable_required", "base": "delete", "expect": "both_accept"},
-    {"name": "source_omitted", "rule": "apply.source_nullable_required", "base": "delete", "patch": [{"op": "remove", "path": "/arguments/source"}], "expect": "both_reject", "message": "missing field `source`"},
+    {"name": "source_omitted", "rule": "apply.source_nullable_required", "base": "delete", "patch": [{"op": "remove", "path": "/arguments/source"}], "expect": "schema_rejects_only"},
     {"name": "source_object", "rule": "apply.source_nullable_required", "base": "insert", "patch": [{"op": "replace", "path": "/arguments/source", "value": {"document": "doc_1"}}], "expect": "both_reject"},
 
     {"name": "source_handle_one_character", "rule": "apply.source_handle", "base": "insert", "patch": [{"op": "replace", "path": "/arguments/source", "value": "x"}], "expect": "both_accept"},
@@ -119,7 +119,7 @@
 
     {"name": "ids_null", "rule": "apply.ids_nullable_required", "base": "insert", "expect": "both_accept"},
     {"name": "ids_empty_insert", "rule": "apply.ids_nullable_required", "base": "insert", "patch": [{"op": "replace", "path": "/arguments/ids", "value": []}], "expect": "both_accept"},
-    {"name": "ids_omitted", "rule": "apply.ids_nullable_required", "base": "insert", "patch": [{"op": "remove", "path": "/arguments/ids"}], "expect": "both_reject", "message": "missing field `ids`"},
+    {"name": "ids_omitted", "rule": "apply.ids_nullable_required", "base": "insert", "patch": [{"op": "remove", "path": "/arguments/ids"}], "expect": "schema_rejects_only"},
     {"name": "ids_string", "rule": "apply.ids_nullable_required", "base": "delete", "patch": [{"op": "replace", "path": "/arguments/ids", "value": "7"}], "expect": "both_reject"},
 
     {"name": "id_one", "rule": "apply.ids_items", "base": "delete", "patch": [{"op": "replace", "path": "/arguments/ids", "value": ["1"]}], "expect": "both_accept"},
@@ -136,7 +136,7 @@
 
     {"name": "base_revision_null", "rule": "apply.base_revision_nullable_required", "base": "insert", "expect": "both_accept"},
     {"name": "base_revision_given", "rule": "apply.base_revision_nullable_required", "base": "undo", "expect": "both_accept"},
-    {"name": "base_revision_omitted", "rule": "apply.base_revision_nullable_required", "base": "insert", "patch": [{"op": "remove", "path": "/arguments/base_revision"}], "expect": "both_reject", "message": "missing field `base_revision`"},
+    {"name": "base_revision_omitted", "rule": "apply.base_revision_nullable_required", "base": "insert", "patch": [{"op": "remove", "path": "/arguments/base_revision"}], "expect": "schema_rejects_only"},
     {"name": "base_revision_number", "rule": "apply.base_revision_nullable_required", "base": "delete", "patch": [{"op": "replace", "path": "/arguments/base_revision", "value": 0}], "expect": "both_reject", "message": "invalid type: integer `0`, expected Revisions are decimal strings such as \"0\" or \"12\""},
 
     {"name": "base_revision_zero", "rule": "apply.base_revision_decimal", "base": "delete", "expect": "both_accept"},
@@ -150,7 +150,7 @@
 
     {"name": "idempotency_key_null", "rule": "apply.idempotency_key_nullable_required", "base": "insert", "expect": "both_accept"},
     {"name": "idempotency_key_given", "rule": "apply.idempotency_key_nullable_required", "base": "replace", "expect": "both_accept"},
-    {"name": "idempotency_key_omitted", "rule": "apply.idempotency_key_nullable_required", "base": "insert", "patch": [{"op": "remove", "path": "/arguments/idempotency_key"}], "expect": "both_reject", "message": "missing field `idempotency_key`"},
+    {"name": "idempotency_key_omitted", "rule": "apply.idempotency_key_nullable_required", "base": "insert", "patch": [{"op": "remove", "path": "/arguments/idempotency_key"}], "expect": "schema_rejects_only"},
     {"name": "idempotency_key_number", "rule": "apply.idempotency_key_nullable_required", "base": "insert", "patch": [{"op": "replace", "path": "/arguments/idempotency_key", "value": 7}], "expect": "both_reject"},
 
     {"name": "idempotency_key_empty", "rule": "apply.idempotency_key_bytes", "base": "insert", "patch": [{"op": "replace", "path": "/arguments/idempotency_key", "value": ""}], "expect": "both_accept"},

@@ -38,6 +38,7 @@ use crate::{
     transport::{ENVELOPE_BYTES, Stdio, key_of},
 };
 use reshiki_agent::{
+    access::GrantSummary,
     envelope::Versions,
     ops::{
         error::{ErrorKind, OpError},
@@ -101,9 +102,28 @@ const WORKFLOW: &str = "Call info first: it reports limits, formats and the fold
 const SMILES_ONLY: &str = "Provide SMILES; chemical names are not resolved.";
 
 /// The `instructions` sent to clients: the experimental [`NOTICE`], then
-/// [`DATA_NOT_INSTRUCTIONS`], the workflow and the SMILES sentence.
-pub fn instructions() -> String {
-    format!("{NOTICE} {DATA_NOT_INSTRUCTIONS} {WORKFLOW} {SMILES_ONLY}")
+/// [`DATA_NOT_INSTRUCTIONS`], the workflow, the folders granted at startup
+/// and the SMILES sentence.
+pub fn instructions(grants: &GrantSummary) -> String {
+    // Debug formatting quotes each folder and escapes control characters.
+    let folders = |folders: &[String]| match folders {
+        [] => "none".to_owned(),
+        folders => folders
+            .iter()
+            .map(|folder| format!("{folder:?}"))
+            .collect::<Vec<_>>()
+            .join(", "),
+    };
+    let granted = if grants.read.is_empty() && grants.write.is_empty() {
+        "No folders are granted: use import and export.".to_owned()
+    } else {
+        format!(
+            "Granted folders: file_open reads {}; file_save writes {}.",
+            folders(&grants.read),
+            folders(&grants.write)
+        )
+    };
+    format!("{NOTICE} {DATA_NOT_INSTRUCTIONS} {WORKFLOW} {granted} {SMILES_ONLY}")
 }
 
 /// The longest tool name echoed in an error, in characters.
@@ -122,6 +142,8 @@ const KNOWN_METHODS: [&str; 5] = [
 pub struct Identity {
     /// The application version reported in `serverInfo`.
     pub app_version: String,
+    /// The folders granted at startup, stated in the `instructions`.
+    pub grants: GrantSummary,
 }
 
 /// Why [`serve`] returned.
@@ -367,7 +389,7 @@ impl<H: ToolHost> ServerHandler for Server<H> {
                 .with_description(NOTICE)
                 .with_website_url(GUIDE_URL),
         )
-        .with_instructions(instructions())
+        .with_instructions(instructions(&self.identity.grants))
     }
 
     async fn list_tools(

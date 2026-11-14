@@ -107,6 +107,10 @@ struct Import {
     file: String,
     into: Value,
     at: String,
+    /// Members removed from every imported base, as JSON pointers into it;
+    /// imported cases that patch one are left out.
+    #[serde(default)]
+    drop: Vec<String>,
     #[serde(default)]
     adjust: BTreeMap<String, Adjust>,
 }
@@ -422,9 +426,26 @@ fn imported(import: &Import, failures: &mut Vec<String>) -> Result<Corpus, Strin
             .ok_or_else(|| format!("import {}: no such location", import.at))? = value;
         Ok::<_, String>(wrapped)
     };
+    let dropped = |path: &str| {
+        import
+            .drop
+            .iter()
+            .any(|drop| path.starts_with(drop.as_str()))
+    };
+    sibling
+        .cases
+        .retain(|case| !case.patch.iter().any(|patch| dropped(&patch.path)));
     sibling.bases = std::mem::take(&mut sibling.bases)
         .into_iter()
-        .map(|(name, base)| Ok((name, place(base)?)))
+        .map(|(name, mut base)| {
+            for drop in &import.drop {
+                let (parent, member) = drop.rsplit_once('/').unwrap_or_default();
+                if let Some(Value::Object(parent)) = base.pointer_mut(parent) {
+                    parent.remove(member);
+                }
+            }
+            Ok((name, place(base)?))
+        })
         .collect::<Result<_, String>>()?;
     let mut adjust: BTreeMap<&str, &Adjust> = import
         .adjust

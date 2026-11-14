@@ -1,6 +1,6 @@
 {
   "rules": [
-    {"id": "export.svg_text_nullable_enum_required", "cite": "crates/agent/src/ops/wire.rs:372-383; crates/agent/src/ops/export.rs:48,50,111-112"},
+    {"id": "export.svg_text_nullable_enum_required", "cite": "crates/agent/src/ops/wire.rs:372-386; crates/agent/src/ops/export.rs:48,50,111-112"},
     {
       "id": "arguments.object",
       "cite": "crates/agent/src/ops/catalog.rs:263-271; crates/agent/src/ops/export.rs:43,118"
@@ -40,7 +40,7 @@
     {"name": "svg_text_live", "rule": "export.svg_text_nullable_enum_required", "base": "svg", "patch": [{"op": "replace", "path": "/arguments/svg_text", "value": "live"}], "expect": "both_accept"},
     {"name": "svg_text_invalid", "rule": "export.svg_text_nullable_enum_required", "base": "svg", "patch": [{"op": "replace", "path": "/arguments/svg_text", "value": "editable"}], "expect": "both_reject"},
     {"name": "svg_text_number", "rule": "export.svg_text_nullable_enum_required", "base": "svg", "patch": [{"op": "replace", "path": "/arguments/svg_text", "value": 1}], "expect": "both_reject"},
-    {"name": "svg_text_omitted", "rule": "export.svg_text_nullable_enum_required", "base": "svg", "patch": [{"op": "remove", "path": "/arguments/svg_text"}], "expect": "both_reject", "message": "missing field `svg_text`"},
+    {"name": "svg_text_omitted", "rule": "export.svg_text_nullable_enum_required", "base": "svg", "patch": [{"op": "remove", "path": "/arguments/svg_text"}], "expect": "schema_rejects_only"},
     {"name": "svg_text_live_non_svg", "rule": "export.svg_text_nullable_enum_required", "base": "pages", "patch": [{"op": "replace", "path": "/arguments/svg_text", "value": "live"}], "expect": "both_accept"},
 
     {"name": "arguments_object", "rule": "arguments.object", "base": "svg", "expect": "both_accept"},
@@ -72,7 +72,7 @@
 
     {"name": "pages_null", "rule": "export.pages_nullable_required", "base": "svg", "expect": "both_accept"},
     {"name": "pages_false", "rule": "export.pages_nullable_required", "base": "svg", "patch": [{"op": "replace", "path": "/arguments/pages", "value": false}], "expect": "both_accept"},
-    {"name": "pages_omitted", "rule": "export.pages_nullable_required", "base": "svg", "patch": [{"op": "remove", "path": "/arguments/pages"}], "expect": "both_reject", "message": "missing field `pages`"},
+    {"name": "pages_omitted", "rule": "export.pages_nullable_required", "base": "svg", "patch": [{"op": "remove", "path": "/arguments/pages"}], "expect": "schema_rejects_only"},
     {"name": "pages_string", "rule": "export.pages_nullable_required", "base": "pages", "patch": [{"op": "replace", "path": "/arguments/pages", "value": "true"}], "expect": "both_reject"},
     {"name": "pages_number", "rule": "export.pages_nullable_required", "base": "pages", "patch": [{"op": "replace", "path": "/arguments/pages", "value": 1}], "expect": "both_reject"},
 

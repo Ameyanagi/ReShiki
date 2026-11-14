@@ -16,9 +16,9 @@ use reshiki_agent::{
         inspect::MAX_TEXT_CHARS,
         wire::{Principal, RequestId},
     },
-    tool_spec::valid_name,
+    tool_spec::{ToolSpec, valid_name},
 };
-use serde_json::{Value, json};
+use serde_json::{Map, Value, json};
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
     path::{Path, PathBuf},
@@ -52,6 +52,43 @@ fn proposal_schema_and_decoder_parity() {
     }
 }
 
+/// `schema` as a client resolves it: each `{"$ref": "#/$defs/name"}` replaced
+/// by its definition, and `$defs` removed. The contract harness's keyword
+/// allowlist has neither keyword, so every check below runs on this form.
+fn inlined(mut schema: Value) -> Value {
+    fn resolve(schema: &mut Value, defs: &Value) {
+        if let Some(reference) = schema.get("$ref") {
+            let name = reference
+                .as_str()
+                .and_then(|reference| reference.strip_prefix("#/$defs/"))
+                .unwrap_or_else(|| panic!("unsupported $ref {reference}"));
+            assert_eq!(schema.as_object().map(Map::len), Some(1), "$ref {name}");
+            *schema = defs
+                .get(name)
+                .unwrap_or_else(|| panic!("no $defs entry {name}"))
+                .clone();
+        }
+        match schema {
+            Value::Object(members) => members.values_mut().for_each(|m| resolve(m, defs)),
+            Value::Array(items) => items.iter_mut().for_each(|item| resolve(item, defs)),
+            _ => {}
+        }
+    }
+    let defs = schema
+        .as_object_mut()
+        .and_then(|schema| schema.remove("$defs"))
+        .unwrap_or_default();
+    resolve(&mut schema, &defs);
+    schema
+}
+
+fn spec(name: &str) -> &'static ToolSpec {
+    SPECS
+        .iter()
+        .find(|spec| spec.name == name)
+        .unwrap_or_else(|| panic!("no operation tool {name}"))
+}
+
 /// One schema for several operation tools. A case value is
 /// `{"tool": name, "arguments": {...}}`; the branch for `name` checks the
 /// arguments against that tool's inputSchema.
@@ -59,13 +96,10 @@ fn tools_schema(names: &[&str]) -> Value {
     let branches: Vec<Value> = names
         .iter()
         .map(|name| {
-            let spec = SPECS
-                .iter()
-                .find(|spec| spec.name == *name)
-                .unwrap_or_else(|| panic!("no operation tool {name}"));
+            let arguments = inlined((spec(name).input_schema)());
             json!({
                 "type": "object",
-                "properties": {"tool": {"const": name}, "arguments": (spec.input_schema)()},
+                "properties": {"tool": {"const": name}, "arguments": arguments},
                 "required": ["tool", "arguments"],
                 "additionalProperties": false,
             })
@@ -224,21 +258,58 @@ fn ops_apply_schema_and_decoder_parity() {
     }
 }
 
-/// compose nests the Proposal schema verbatim: the bytes the assistant's
-/// `canvas_preview` publishes, pinned by the ops-1 golden.
+/// compose publishes the assistant's Proposal schema in a smaller form. With
+/// its `$defs` resolved it is the pinned schema (the bytes `canvas_preview`
+/// publishes), less `explanation`, `replace_ids` and three sentences of the
+/// sketch description that repeat other text.
 #[test]
-fn compose_nests_the_pinned_proposal_schema() {
+fn compose_derives_its_proposal_schema_from_the_pinned_one() {
     let golden = include_str!("../../../tests/fixtures/agent-contract/proposal-schema.json")
         .strip_suffix('\n')
         .expect("proposal-schema.json ends in one LF");
-    let spec = SPECS
-        .iter()
-        .find(|spec| spec.name == "compose")
-        .expect("compose is in the catalog");
-    assert_eq!(
-        (spec.input_schema)()["properties"]["proposal"].to_string(),
-        golden
-    );
+    assert_eq!(reshiki_agent::schema().to_string(), golden);
+
+    let published = (spec("compose").input_schema)();
+    let defs: Vec<&str> = published["$defs"]
+        .as_object()
+        .unwrap()
+        .keys()
+        .map(String::as_str)
+        .collect();
+    assert_eq!(defs, ["color", "molecules", "point"]);
+
+    let mut expected = reshiki_agent::schema();
+    for name in ["explanation", "replace_ids"] {
+        assert!(
+            expected["properties"]
+                .as_object_mut()
+                .unwrap()
+                .remove(name)
+                .is_some()
+        );
+    }
+    expected["required"] = json!(["molecules", "reactions", "composition", "sketch"]);
+    let description = &mut expected["properties"]["sketch"]["anyOf"][1]["description"];
+    let mut text = description.as_str().unwrap().to_owned();
+    for sentence in [
+        " Use centroids with kind multi_center for haptic contacts (all target atoms), kind variable for alternative attachment positions, and null only for nonchemical drawing anchors.",
+        " Use ring_arc on consecutive ring bonds for partial inner curves, preserving their underlying bond orders.",
+        " Leave molecules and reactions empty.",
+    ] {
+        assert_eq!(text.matches(sentence).count(), 1, "{sentence}");
+        text = text.replace(sentence, "");
+    }
+    assert!(text.contains("Keep molecules and reactions empty when using sketch."));
+    *description = text.into();
+    assert_eq!(inlined(published)["properties"]["proposal"], expected);
+}
+
+/// The tool list every MCP client loads into its context stays small: it
+/// was 27,316 characters before compose shared its repeated subschemas.
+#[test]
+fn the_operation_catalog_stays_small() {
+    let size = catalog_json().to_string().chars().count();
+    assert!(size <= 25_000, "the catalog is {size} characters");
 }
 
 /// The operation catalog as hosts list it. See
@@ -425,12 +496,12 @@ async fn documented_result_keys_match_successful_operations() {
 
 #[test]
 fn tool_description_limits_match_defaults() {
-    let description = |name| {
-        SPECS
-            .iter()
-            .find(|spec| spec.name == name)
+    let description = |name| spec(name).description;
+    let parameter = |name, parameter: &str| {
+        (spec(name).input_schema)()["properties"][parameter]["description"]
+            .as_str()
             .unwrap()
-            .description
+            .to_owned()
     };
     let number = |text: &str, marker: &str| -> u64 {
         text.split_once(marker)
@@ -456,26 +527,25 @@ fn tool_description_limits_match_defaults() {
         MAX_TEXT_CHARS as u64,
     );
     assert_eq!(
-        number(description("apply"), "idempotency_key (at most "),
+        number(&parameter("apply", "idempotency_key"), "At most "),
         budgets.max_idempotency_key_bytes as u64,
     );
-    let render = description("render");
     assert_eq!(
-        number(render, "scaled up to ") as f32,
+        number(&parameter("render", "format"), "scaled up to ") as f32,
         canvas_tools::MAX_UPSCALE
     );
-    let defaults = render.split_once("pixels (null for ").unwrap().1;
     assert_eq!(
-        number(defaults, ""),
+        number(&parameter("render", "max_width"), "null for "),
         u64::from(budgets.render.default_width)
     );
     assert_eq!(
-        number(defaults, " × "),
+        number(&parameter("render", "max_height"), "null for "),
         u64::from(budgets.render.default_height)
     );
-    let sides = render.split_once("each side ").unwrap().1;
-    assert_eq!(number(sides, ""), u64::from(budgets.render.min_side));
-    assert_eq!(number(sides, " to "), u64::from(budgets.render.max_side));
+    // The side limits are in the schema itself.
+    let side = &(spec("render").input_schema)()["properties"]["max_width"]["anyOf"][1];
+    assert_eq!(side["minimum"], budgets.render.min_side);
+    assert_eq!(side["maximum"], budgets.render.max_side);
     assert_eq!(budgets.render, RenderBudget::DEFAULT);
 }
 
@@ -582,12 +652,11 @@ fn loose_objects_finds_every_non_strict_object_level() {
 /// - every annotation hint is explicit, because the spec defaults
 ///   destructiveHint and openWorldHint to true.
 ///
-/// ReShiki's own rules: every schema uses only the contract harness's
-/// keywords and pattern table, and every object level is strict, except the
-/// verbatim Proposal subtree, which proposal-schema.json pins.
+/// ReShiki's own rules, checked with `$defs` resolved: every schema uses
+/// only the contract harness's keywords and pattern table, and every object
+/// level is strict.
 #[test]
 fn the_operation_catalog_follows_the_mcp_tool_rules() {
-    let proposal = reshiki_agent::schema();
     let mut names = HashSet::new();
     for spec in SPECS {
         let name = spec.name;
@@ -598,19 +667,14 @@ fn the_operation_catalog_follows_the_mcp_tool_rules() {
             "{name} is also a canvas tool"
         );
         assert!(spec.hints.is_some(), "{name} has no hints");
-        let schema = (spec.input_schema)();
+        let schema = inlined((spec.input_schema)());
         assert_eq!(schema["type"], "object", "{name}");
         assert!(schema.get("$schema").is_none(), "{name}");
         assert_eq!(json_schema::check_keywords(&schema), [], "{name}");
         let (mut loose, mut skipped) = (Vec::new(), Vec::new());
-        loose_objects(&schema, "", &proposal, &mut loose, &mut skipped);
+        loose_objects(&schema, "", &Value::Null, &mut loose, &mut skipped);
         assert_eq!(loose, Vec::<String>::new(), "{name}: not strict");
-        let verbatim: &[&str] = if name == "compose" {
-            &["/properties/proposal"]
-        } else {
-            &[]
-        };
-        assert_eq!(skipped, verbatim, "{name}");
+        assert_eq!(skipped, Vec::<String>::new(), "{name}");
     }
     assert_eq!(catalog_json().as_array().map(Vec::len), Some(SPECS.len()));
 }

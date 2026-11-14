@@ -25,7 +25,7 @@ use std::sync::Arc;
 pub const IMPORT: ToolSpec = ToolSpec {
     name: "import",
     title: Some("Import structure"),
-    description: "Import structure text as a new session document and return its handle, revision, object counts and molecular analysis. format is smiles, mol, rxn, rsmi (reaction SMILES), inchi, cdxml, cdx (the binary file as base64 text), reshiki (a native ReShiki drawing's JSON), or auto, which tells SMILES, MOL, RXN, reaction SMILES, InChI and CDXML apart. text is at most max_text_bytes, or max_cdx_base64 for cdx; info reports both. Every call creates another document, even for the same text; close the ones you no longer need with document_close.",
+    description: "Import structure text as a new session document and return its handle, revision, object counts and molecular analysis. Every call creates another document, even for the same text; close the ones you no longer need with document_close.",
     input_schema: schema,
     hints: Some(Hints {
         read_only: false,
@@ -39,8 +39,8 @@ fn schema() -> Value {
     json!({
         "type": "object",
         "properties": {
-            "format": {"type": "string", "enum": IMPORT_FORMATS},
-            "text": {"type": "string"},
+            "format": {"type": "string", "enum": IMPORT_FORMATS, "description": "rsmi is reaction SMILES; cdx takes the binary file as base64 text; reshiki takes a native ReShiki drawing's JSON; auto tells SMILES, MOL, RXN, reaction SMILES, InChI and CDXML apart."},
+            "text": {"type": "string", "description": "At most max_text_bytes, or max_cdx_base64 for cdx; info reports both."},
         },
         "required": ["format", "text"],
         "additionalProperties": false,

@@ -263,7 +263,7 @@ async fn errors_are_a_protocol_error_or_coded_tool_errors() {
     let document = created.value["document"].as_str().unwrap().to_owned();
     for (tool, arguments) in [
         ("info", json!([])),
-        ("inspect", json!({"document": document})),
+        ("inspect", json!({"ids": null})),
         ("inspect", json!({"document": document, "ids": [1]})),
         (
             "render",
@@ -280,6 +280,14 @@ async fn errors_are_a_protocol_error_or_coded_tool_errors() {
             "{tool} {arguments}"
         );
     }
+    // An omitted nullable argument reads as null.
+    ok(&host, "inspect", json!({"document": document})).await;
+    ok(
+        &host,
+        "render",
+        json!({"document": document, "format": "svg"}),
+    )
+    .await;
 
     let unknown = json!({"document": "doc_0", "ids": null});
     assert_eq!(

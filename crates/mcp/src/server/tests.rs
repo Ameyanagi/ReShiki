@@ -7,6 +7,7 @@ fn server() -> Server<FakeHost> {
     Server {
         identity: Identity {
             app_version: "1.2.3".into(),
+            grants: GrantSummary::default(),
         },
         catalog: Catalog::new(host.catalog()).unwrap(),
         host,
@@ -74,7 +75,8 @@ fn get_info_labels_the_server_experimental() {
         base_revision; after stale, inspect again and retry with a new idempotency_key. export \
         returns a file inline; file_save writes only into a granted folder and never overwrites \
         unless overwrite is true. Close documents you no longer need with document_close. Object \
-        IDs and revisions are decimal strings. Provide SMILES; chemical names are not resolved.";
+        IDs and revisions are decimal strings. No folders are granted: use import and export. \
+        Provide SMILES; chemical names are not resolved.";
     assert_eq!(info.instructions.as_deref(), Some(expected_instructions));
     assert_eq!(info.meta, None);
     assert_eq!(server.supported_protocol_versions().as_ref(), SUPPORTED);
@@ -116,5 +118,29 @@ fn host_errors_map_to_protocol_errors_or_tool_errors() {
     assert_eq!(
         busy.structured_content.unwrap()["error"],
         json!({"code": "busy", "message": "later"})
+    );
+}
+
+#[test]
+fn instructions_state_the_granted_folders() {
+    let granted = |read: &[&str], write: &[&str]| {
+        let folders =
+            |folders: &[&str]| folders.iter().map(|folder| (*folder).to_owned()).collect();
+        instructions(&GrantSummary {
+            read: folders(read),
+            write: folders(write),
+        })
+    };
+    assert!(granted(&[], &[]).contains(" No folders are granted: use import and export. "));
+    assert!(granted(&["/in", "/a \"b\"\nc"], &["/out"]).contains(
+        r#" Granted folders: file_open reads "/in", "/a \"b\"\nc"; file_save writes "/out". "#
+    ));
+    assert!(
+        granted(&[], &["/out"])
+            .contains(r#" Granted folders: file_open reads none; file_save writes "/out". "#)
+    );
+    assert!(
+        granted(&["/in"], &[])
+            .contains(r#" Granted folders: file_open reads "/in"; file_save writes none. "#)
     );
 }

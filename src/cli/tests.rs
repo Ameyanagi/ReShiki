@@ -808,6 +808,11 @@ async fn name_locants_reports_parent_atoms_in_imported_atom_order() {
         let result: Value = serde_json::from_str(&out).unwrap();
         assert_eq!(result["value"]["name"], "ethanol");
         assert_eq!(result["value"]["locants"], json!([null, "1", "2"]));
+        // The JSON line is wrapped like the other commands' results.
+        assert_eq!(result["warnings"], json!([]));
+        assert_eq!(result["versions"]["app"], crate::updates::CURRENT_VERSION);
+        assert_eq!(result["versions"]["document"], crate::document::VERSION);
+        assert_eq!(result["experimental"], true);
     }
 }
 

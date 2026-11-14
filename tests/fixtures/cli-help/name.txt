@@ -14,6 +14,7 @@ Options:
   --locants              Print JSON with parent locants in input atom order.
 
 Without --json or --locants, prints only the name followed by a newline. With either,
+prints one JSON line with value, the import's warnings and versions.
 value contains name, preferred, status, reason, detail, alternatives and aliases:
   preferred      true only when status is preferred.
   status         preferred = the preferred IUPAC name (IUPAC 2013);

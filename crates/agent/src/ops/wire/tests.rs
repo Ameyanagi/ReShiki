@@ -170,18 +170,20 @@ fn schema_helpers_use_the_contract_patterns() {
     );
 }
 
-/// A sample argument struct following the required-nullable rule.
+/// A sample argument struct following the nullable rule.
 #[derive(Debug, PartialEq, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Sample {
-    #[serde(deserialize_with = "Option::deserialize")]
+    #[serde(default)]
     x: Option<ObjectId>,
 }
 
 #[test]
-fn required_nullable_fields_must_be_present() {
-    let message = error_text(serde_json::from_value::<Sample>(json!({})));
-    assert!(message.contains("missing field `x`"), "{message}");
+fn an_omitted_nullable_field_reads_as_null() {
+    assert_eq!(
+        serde_json::from_value::<Sample>(json!({})).unwrap(),
+        Sample { x: None }
+    );
     assert_eq!(
         serde_json::from_value::<Sample>(json!({"x": null})).unwrap(),
         Sample { x: None }

@@ -5,7 +5,7 @@
 mod fake_host;
 
 use fake_host::FakeHost;
-use reshiki_agent::ops::wire::Principal;
+use reshiki_agent::{access::GrantSummary, ops::wire::Principal};
 use reshiki_mcp::{
     framing::Limits,
     install_panic_hook,
@@ -91,6 +91,7 @@ fn a_panicking_tool_call_is_an_internal_error_and_serving_goes_on() {
         move || output_writer,
         Identity {
             app_version: fake_host::APP_VERSION.into(),
+            grants: GrantSummary::default(),
         },
         Limits::default(),
         log,

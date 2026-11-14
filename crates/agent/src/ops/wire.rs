@@ -1,13 +1,13 @@
 //! Wire types and JSON Schema helpers for the operation API.
 //!
-//! # Required-nullable rule
+//! # Nullable rule
 //!
 //! Every ops argument struct is `#[serde(deny_unknown_fields)]`, and every
-//! nullable field carries `#[serde(deserialize_with = "Option::deserialize")]`.
-//! Plain serde treats an omitted `Option` field as `None`; with
-//! `deserialize_with` an omitted field is a serde error instead. That matches
-//! the strict schemas, which list every property in `required` and wrap
-//! nullable ones in [`nullable`], so callers pass `null` for an absent value.
+//! nullable field is an `Option` with `#[serde(default)]`, so an omitted
+//! field decodes as `null`. The published schemas stay strict for clients
+//! that validate in strict mode: they list every property in `required`
+//! and wrap nullable ones in [`nullable`]. An omitted nullable field is
+//! therefore outside the schema, but the decoder accepts it.
 //!
 //! # Schemas
 //!
@@ -377,9 +377,20 @@ pub enum SvgText {
     Live,
 }
 
-/// The required-nullable SVG text mode; `null` uses outlined text.
+/// The nullable SVG text mode; `null` uses outlined text.
 pub(crate) fn svg_text_schema() -> Value {
-    nullable(json!({"type": "string", "enum": ["outline", "live"]}))
+    described(
+        nullable(json!({"type": "string", "enum": ["outline", "live"]})),
+        "outline (the default, also null) turns SVG text into paths for the same appearance in every viewer; live keeps text elements. Other formats ignore it.",
+    )
+}
+
+/// `schema` with a `description`, which hosts show next to the parameter.
+pub(crate) fn described(mut schema: Value, description: &str) -> Value {
+    if let Some(schema) = schema.as_object_mut() {
+        schema.insert("description".to_owned(), description.into());
+    }
+    schema
 }
 
 /// An [`ExportReceipt`] on the wire: `{format, byte_len, detail}`.

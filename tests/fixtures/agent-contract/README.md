@@ -33,8 +33,17 @@ compares it byte for byte and lints the catalog against the MCP tool rules of
 revisions 2026-07-28 and 2025-11-25: valid, unique names that differ from the
 in-app canvas tools; a root `"type": "object"` without `$schema`; explicit
 hints; the keyword allowlist and pattern table below; and strict objects
-(`additionalProperties: false`, every property required) everywhere except the
-verbatim Proposal subtree that `proposal-schema.json` pins.
+(`additionalProperties: false`, every property required) everywhere. The
+checks run with each `$ref` replaced by its `$defs` entry, as a client
+resolves it.
+
+compose publishes the Proposal schema in a shorter form, derived from the
+pinned `proposal-schema.json`: without `explanation` and `replace_ids`, which
+the decoder fills in, with the molecule list, point and color subschemas
+stated once under `$defs`, and without three sentences of the sketch
+description that repeat other text. contract.rs checks that the resolved form
+equals the pinned schema with exactly those differences, and that the whole
+catalog stays within 25,000 characters.
 
 Regenerate it only for an intentional contract change, such as a tool, title,
 description, schema or hint that is meant to change, and in the same PR as that
@@ -127,12 +136,15 @@ An optional `"import": {"file": "sibling-cases.json", "into": wrapper, "at":
 reuses a sibling file's rules, bases and cases instead of copying them: each
 base and literal case value replaces the value at `at` in a copy of `into`,
 each patch path gains `at` as its prefix, and names must not clash with local
-ones. `adjust` restates the class and exact decoder message of the imported
-cases the importing decoder judges differently; an adjustment that names no
+ones. `"drop": ["/json/pointer"]` removes members from every imported base
+and leaves out the imported cases that patch them. `adjust` restates the class
+and exact decoder message of the imported cases the importing decoder judges
+differently; an adjustment that names no
 imported case or changes nothing fails. Imported rules keep their coverage
 gate in the sibling's own contract. `ops-compose-cases.json` runs the whole
-`proposal-cases.json` corpus as compose arguments this way, adjusting the
-cases compose rejects for replacement IDs or for having no drawing.
+`proposal-cases.json` corpus as compose arguments this way, dropping
+`explanation` and `replace_ids`, which its schema leaves out, and adjusting
+the cases compose rejects for having no drawing.
 
 ## Rule inventory
 

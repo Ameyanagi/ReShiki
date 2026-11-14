@@ -661,6 +661,7 @@ Options:
   --locants              Print JSON with parent locants in input atom order.
 
 Without --json or --locants, prints only the name followed by a newline. With either,
+prints one JSON line with value, the import's warnings and versions.
 value contains name, preferred, status, reason, detail, alternatives and aliases:
   preferred      true only when status is preferred.
   status         preferred = the preferred IUPAC name (IUPAC 2013);
@@ -693,9 +694,10 @@ api.operation_api. Run `reshiki --cli help --json` for the commands as JSON.
 
 fn schema_help() -> String {
     let body = "\
-NAME is proposal: the Proposal JSON Schema compose reads, the same schema
-reshiki --mcp publishes. It is printed as one JSON line without the
-experimental label, so it can be saved and used as a schema file.
+NAME is proposal: the Proposal JSON Schema compose reads. reshiki --mcp
+publishes a shorter form of it, without explanation and replace_ids, which
+compose fills in. It is printed as one JSON line without the experimental
+label, so it can be saved and used as a schema file.
 ";
     format!("Usage: {}\n\n{body}", SCHEMA.usage)
 }

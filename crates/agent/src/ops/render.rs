@@ -11,7 +11,7 @@ use super::{
     result::{Blob, Image, ToolResult},
     store::Documents,
     wire::{
-        DocHandle, ObjectId, Principal, SvgText, handle_schema, ids_schema, nullable,
+        DocHandle, ObjectId, Principal, SvgText, described, handle_schema, ids_schema, nullable,
         svg_text_schema,
     },
 };
@@ -31,7 +31,7 @@ pub const FORMATS: &[&str] = &["png", "svg"];
 pub const RENDER: ToolSpec = ToolSpec {
     name: "render",
     title: Some("Render preview"),
-    description: "Render a session document, or the part ids select (null for the whole drawing), as a preview to look at. png is drawn on white, scaled up to 3x and down to fit within max_width × max_height pixels (null for 1600 × 1000; each side 1 to 8192, and at most render.max_pixels in all, as info reports). svg is the drawing with a transparent surround. svg_text null or outline (default) turns SVG text into paths for the same appearance in every viewer; live keeps text elements; other formats ignore it. This is the editor's preview, not a publication file; use export for files. Read-only.",
+    description: "Render a session document as a preview to look at. This is the editor's preview, not a publication file; use export for files.",
     input_schema: schema,
     hints: Some(Hints {
         read_only: true,
@@ -46,10 +46,10 @@ fn schema() -> Value {
         "type": "object",
         "properties": {
             "document": handle_schema(),
-            "format": {"type": "string", "enum": FORMATS},
-            "max_width": nullable(side_schema()),
-            "max_height": nullable(side_schema()),
-            "ids": nullable(ids_schema()),
+            "format": {"type": "string", "enum": FORMATS, "description": "png is drawn on white, scaled up to 3x and down to fit within max_width × max_height pixels. svg is the drawing with a transparent surround."},
+            "max_width": described(nullable(side_schema()), "Pixels; null for 1600. max_width × max_height is at most render.max_pixels, as info reports."),
+            "max_height": described(nullable(side_schema()), "Pixels; null for 1000."),
+            "ids": described(nullable(ids_schema()), "The part to render, or null for the whole drawing."),
             "svg_text": svg_text_schema(),
         },
         "required": ["document", "format", "max_width", "max_height", "ids", "svg_text"],
@@ -80,13 +80,13 @@ pub(crate) enum Format {
 struct Arguments {
     document: DocHandle,
     format: Format,
-    #[serde(deserialize_with = "Option::deserialize")]
+    #[serde(default)]
     max_width: Option<u32>,
-    #[serde(deserialize_with = "Option::deserialize")]
+    #[serde(default)]
     max_height: Option<u32>,
-    #[serde(deserialize_with = "Option::deserialize")]
+    #[serde(default)]
     ids: Option<Vec<ObjectId>>,
-    #[serde(deserialize_with = "Option::deserialize")]
+    #[serde(default)]
     svg_text: Option<SvgText>,
 }
 

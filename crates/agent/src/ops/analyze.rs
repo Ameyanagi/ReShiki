@@ -10,7 +10,8 @@ use super::{
     result::ToolResult,
     store::Documents,
     wire::{
-        AnalysisJson, DocHandle, ObjectId, Principal, handle_schema, ids_schema, nullable, warnings,
+        AnalysisJson, DocHandle, ObjectId, Principal, described, handle_schema, ids_schema,
+        nullable, warnings,
     },
 };
 use crate::{
@@ -34,7 +35,7 @@ pub const NO_ATOMS: &str = "Select at least one atom";
 pub const ANALYZE: ToolSpec = ToolSpec {
     name: "analyze",
     title: Some("Analyze chemistry"),
-    description: "Compute the molecular properties of a session document: SMILES, formula, mass, exact mass, logP, TPSA, hydrogen-bond donors and acceptors, rings, unpaired electrons, InChI and InChIKey. Pass ids (or null for the whole drawing) to analyze part of it, as the app's inspector does: the selected atoms, where any abbreviation member pulls in the whole abbreviation; analyzed_atoms lists them, and the selection must cover at least one atom. Read-only: the document and its revision never change.",
+    description: "Compute the molecular properties of a session document: SMILES, formula, mass, exact mass, logP, TPSA, hydrogen-bond donors and acceptors, rings, unpaired electrons, InChI and InChIKey.",
     input_schema: schema,
     hints: Some(Hints {
         read_only: true,
@@ -49,7 +50,7 @@ fn schema() -> Value {
         "type": "object",
         "properties": {
             "document": handle_schema(),
-            "ids": nullable(ids_schema()),
+            "ids": described(nullable(ids_schema()), "The part to analyze, or null for the whole drawing, as the app's inspector does: the selected atoms, where any abbreviation member pulls in the whole abbreviation. analyzed_atoms lists them; the selection must cover at least one atom."),
         },
         "required": ["document", "ids"],
         "additionalProperties": false,
@@ -61,7 +62,7 @@ fn schema() -> Value {
 #[serde(deny_unknown_fields)]
 pub(crate) struct Analyze {
     document: DocHandle,
-    #[serde(deserialize_with = "Option::deserialize")]
+    #[serde(default)]
     ids: Option<Vec<ObjectId>>,
 }
 

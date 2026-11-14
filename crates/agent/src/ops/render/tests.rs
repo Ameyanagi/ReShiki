@@ -138,7 +138,7 @@ fn ids_over_the_budget_are_refused_at_decode_time() {
 }
 
 #[test]
-fn svg_text_is_required_nullable_and_accepts_only_the_published_modes() {
+fn svg_text_is_nullable_and_accepts_only_the_published_modes() {
     let budgets = Budgets::default();
     let handle = DocHandle::new("doc_1").unwrap();
     for format in FORMATS {
@@ -166,10 +166,7 @@ fn svg_text_is_required_nullable_and_accepts_only_the_published_modes() {
     }
     let mut args = arguments(&handle, "svg", [Value::Null, Value::Null], Value::Null);
     args.as_object_mut().unwrap().remove("svg_text");
-    assert_eq!(
-        decode(args, &budgets).unwrap_err().message,
-        "missing field `svg_text`"
-    );
+    assert_eq!(decode(args, &budgets).unwrap().svg_text, SvgText::Outline);
     assert_eq!(schema()["properties"]["svg_text"], svg_text_schema());
     assert!(
         schema()["required"]

@@ -378,7 +378,7 @@ fn file_save_decodes_the_format_from_the_extension() {
 }
 
 #[test]
-fn svg_text_is_required_nullable_and_accepts_only_the_published_modes() {
+fn svg_text_is_nullable_and_accepts_only_the_published_modes() {
     let args = |path: &str, value: Value| {
         json!({
             "document": "doc_1", "path": path, "format": null,
@@ -406,10 +406,7 @@ fn svg_text_is_required_nullable_and_accepts_only_the_published_modes() {
     }
     let mut omitted = args("/x/a.svg", Value::Null);
     omitted.as_object_mut().unwrap().remove("svg_text");
-    assert_eq!(
-        decode_save(omitted).unwrap_err().message,
-        "missing field `svg_text`"
-    );
+    assert_eq!(decode_save(omitted).unwrap().svg_text, SvgText::Outline);
     assert_eq!(save_schema()["properties"]["svg_text"], svg_text_schema());
     assert!(
         save_schema()["required"]

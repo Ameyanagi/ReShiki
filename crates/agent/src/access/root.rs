@@ -130,7 +130,7 @@ pub struct Grants {
 }
 
 /// Granted roots as the user spelled them.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct GrantSummary {
     pub read: Vec<String>,
     pub write: Vec<String>,

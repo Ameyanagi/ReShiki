@@ -1,6 +1,6 @@
 {
   "rules": [
-    {"id": "render.svg_text_nullable_enum_required", "cite": "crates/agent/src/ops/wire.rs:372-383; crates/agent/src/ops/render.rs:53,55,89-90"},
+    {"id": "render.svg_text_nullable_enum_required", "cite": "crates/agent/src/ops/wire.rs:372-386; crates/agent/src/ops/render.rs:53,55,89-90"},
     {
       "id": "arguments.object",
       "cite": "crates/agent/src/ops/catalog.rs:263-271; crates/agent/src/ops/render.rs:46,121"
@@ -64,7 +64,7 @@
     {"name": "svg_text_live", "rule": "render.svg_text_nullable_enum_required", "base": "sized", "patch": [{"op": "replace", "path": "/arguments/svg_text", "value": "live"}], "expect": "both_accept"},
     {"name": "svg_text_invalid", "rule": "render.svg_text_nullable_enum_required", "base": "sized", "patch": [{"op": "replace", "path": "/arguments/svg_text", "value": "editable"}], "expect": "both_reject"},
     {"name": "svg_text_number", "rule": "render.svg_text_nullable_enum_required", "base": "sized", "patch": [{"op": "replace", "path": "/arguments/svg_text", "value": 1}], "expect": "both_reject"},
-    {"name": "svg_text_omitted", "rule": "render.svg_text_nullable_enum_required", "base": "sized", "patch": [{"op": "remove", "path": "/arguments/svg_text"}], "expect": "both_reject", "message": "missing field `svg_text`"},
+    {"name": "svg_text_omitted", "rule": "render.svg_text_nullable_enum_required", "base": "sized", "patch": [{"op": "remove", "path": "/arguments/svg_text"}], "expect": "schema_rejects_only"},
     {"name": "svg_text_live_non_svg", "rule": "render.svg_text_nullable_enum_required", "base": "default", "patch": [{"op": "replace", "path": "/arguments/svg_text", "value": "live"}], "expect": "both_accept"},
 
     {"name": "arguments_object", "rule": "arguments.object", "base": "default", "expect": "both_accept"},
@@ -87,12 +87,12 @@
     {"name": "format_null", "rule": "render.format_enum", "base": "default", "patch": [{"op": "replace", "path": "/arguments/format", "value": null}], "expect": "both_reject"},
 
     {"name": "max_width_null", "rule": "render.max_width_nullable_required", "base": "default", "expect": "both_accept"},
-    {"name": "max_width_omitted", "rule": "render.max_width_nullable_required", "base": "default", "patch": [{"op": "remove", "path": "/arguments/max_width"}], "expect": "both_reject", "message": "missing field `max_width`"},
+    {"name": "max_width_omitted", "rule": "render.max_width_nullable_required", "base": "default", "patch": [{"op": "remove", "path": "/arguments/max_width"}], "expect": "schema_rejects_only"},
     {"name": "max_width_string", "rule": "render.max_width_nullable_required", "base": "default", "patch": [{"op": "replace", "path": "/arguments/max_width", "value": "800"}], "expect": "both_reject"},
     {"name": "max_width_bool", "rule": "render.max_width_nullable_required", "base": "default", "patch": [{"op": "replace", "path": "/arguments/max_width", "value": true}], "expect": "both_reject"},
 
     {"name": "max_height_null", "rule": "render.max_height_nullable_required", "base": "default", "expect": "both_accept"},
-    {"name": "max_height_omitted", "rule": "render.max_height_nullable_required", "base": "default", "patch": [{"op": "remove", "path": "/arguments/max_height"}], "expect": "both_reject", "message": "missing field `max_height`"},
+    {"name": "max_height_omitted", "rule": "render.max_height_nullable_required", "base": "default", "patch": [{"op": "remove", "path": "/arguments/max_height"}], "expect": "schema_rejects_only"},
     {"name": "max_height_string", "rule": "render.max_height_nullable_required", "base": "default", "patch": [{"op": "replace", "path": "/arguments/max_height", "value": "600"}], "expect": "both_reject"},
 
     {"name": "max_width_1", "rule": "render.side_range", "base": "default", "patch": [{"op": "replace", "path": "/arguments/max_width", "value": 1}], "expect": "both_accept"},
@@ -118,7 +118,7 @@
 
     {"name": "ids_null", "rule": "render.ids_nullable_required", "base": "default", "expect": "both_accept"},
     {"name": "ids_empty", "rule": "render.ids_nullable_required", "base": "default", "patch": [{"op": "replace", "path": "/arguments/ids", "value": []}], "expect": "both_accept"},
-    {"name": "ids_omitted", "rule": "render.ids_nullable_required", "base": "default", "patch": [{"op": "remove", "path": "/arguments/ids"}], "expect": "both_reject", "message": "missing field `ids`"},
+    {"name": "ids_omitted", "rule": "render.ids_nullable_required", "base": "default", "patch": [{"op": "remove", "path": "/arguments/ids"}], "expect": "schema_rejects_only"},
     {"name": "ids_string", "rule": "render.ids_nullable_required", "base": "default", "patch": [{"op": "replace", "path": "/arguments/ids", "value": "1"}], "expect": "both_reject"},
 
     {"name": "id_one", "rule": "render.ids_items", "base": "sized", "patch": [{"op": "replace", "path": "/arguments/ids", "value": ["1"]}], "expect": "both_accept"},
