@@ -945,3 +945,32 @@ fn returning_to_a_tab_shows_its_own_repeat_label_offset() {
         ("14.4", "-7.2")
     );
 }
+
+#[test]
+fn expansion_finishing_under_the_recovery_dialog_is_discarded_not_left_pending() {
+    let (mut app, completion) = pending_expansion();
+    let directory = tempfile::tempdir().unwrap();
+    let store = reshiki::recovery::Recovery::in_directory(directory.path()).unwrap();
+    let snapshot = reshiki::recovery::Snapshot {
+        document: app.tab.doc.clone(),
+        source: Some("abandoned.rsk".into()),
+        saved_at: 100,
+    };
+    std::fs::write(
+        directory.path().join("4294967294-abandoned.rsk.json"),
+        serde_json::to_vec(&snapshot).unwrap(),
+    )
+    .unwrap();
+    app.recovered = store.candidates();
+    let _ = app.update(Message::Recovery(
+        super::super::recovery_manager::Action::Show,
+    ));
+    assert!(app.recovery_manager.open());
+
+    let _ = app.update(completion);
+    assert!(app.generic.pending.is_none());
+    assert_eq!(app.status, EXPANSION_DISCARDED);
+    assert!(!app.error);
+    assert_eq!(app.strip().count(), 1);
+    assert!(app.recovery_manager.open());
+}

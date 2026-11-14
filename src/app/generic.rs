@@ -88,6 +88,7 @@ impl App {
         self.tab.atom_text.is_some()
             || self.tab.cleanup.is_some()
             || self.tab.optimization.is_some()
+            || self.recovery_manager.open()
             || self.updates.open
             || self.updates.restarting
             || self.exit.frozen()
