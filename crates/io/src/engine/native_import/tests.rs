@@ -1992,6 +1992,89 @@ fn spiro_cleanup_keeps_regular_rings_and_bond_lengths() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// #1181: from RDKit's squashed layout, Clean Up on only the tetralone
+/// benzene ring must not fold that ring onto the fixed atoms.
+#[test]
+fn spiro_cleanup_of_a_selected_ring_stays_clear_of_fixed_atoms() -> anyhow::Result<()> {
+    use crate::cleanup::{Options, Scope};
+    let imported = imported_smiles(SPIRO_INDANONE)?;
+    let state = &imported.molecule.state;
+    let world = f64::from(imported.document.drawing_style.bond_length_world);
+    let squashed = depict::compute(
+        state,
+        &vec![None; state.graph.atoms.len()],
+        None,
+        depict::Options::default(),
+    )?
+    .positions;
+    let ids: Vec<u64> = imported.document.atoms.iter().map(|atom| atom.id).collect();
+    for mirror in [1., -1.] {
+        let mut source = imported.document.clone();
+        for (atom, point) in source.atoms.iter_mut().zip(&squashed) {
+            atom.position.x = (mirror * point.x * world / 1.5) as f32;
+            atom.position.y = (-point.y * world / 1.5) as f32;
+        }
+        for keep_orientation in [true, false] {
+            let mut request = Request::molecule("clean", source.clone());
+            request.cleanup = Some(Options {
+                scope: Scope::SelectedAtoms,
+                keep_orientation,
+                iupac_orientation: false,
+            });
+            request.selected_ids = Some(ids[14..].to_vec());
+            let cleaned = crate::engine::native_cleanup::prepare(&request)?;
+            let label = format!("keep {keep_orientation}, mirror {mirror}");
+            let atoms = &cleaned.document.atoms;
+            for (i, (before, after)) in source.atoms.iter().zip(atoms).enumerate().take(14) {
+                assert_eq!(before.position, after.position, "{label}: fixed atom {i}");
+            }
+            let distance = |a: usize, b: usize| {
+                f64::from(atoms[a].position.distance(atoms[b].position)) / world
+            };
+            // The fixed part is regular, so a regular ring fits beside it. One
+            // corner is then 0.38 bond lengths from the indanone's benzene
+            // ring, which is why RDKit squashed it.
+            assert_eq!(
+                cleaned.warnings,
+                [
+                    "Selected atoms in 1 molecule(s) now lie close to fixed atoms. Review the drawing, or choose Selected molecules."
+                ],
+                "{label}"
+            );
+            for a in 0..atoms.len() {
+                for b in a + 1..atoms.len() {
+                    assert!(
+                        distance(a, b) > 0.35,
+                        "{label}: atoms {a} and {b} are {} bond lengths apart",
+                        distance(a, b)
+                    );
+                }
+            }
+            // A regular hexagon: unit bonds and diagonals of two bonds.
+            for bond in &state.graph.bonds {
+                if bond.a >= 14 || bond.b >= 14 {
+                    let length = distance(bond.a, bond.b);
+                    assert!(
+                        (length - 1.).abs() < 1e-3,
+                        "{label}: bond {}-{} is {length} bond lengths",
+                        bond.a,
+                        bond.b
+                    );
+                }
+            }
+            for a in 14..17 {
+                let diagonal = distance(a, a + 3);
+                assert!(
+                    (diagonal - 2.).abs() < 1e-3,
+                    "{label}: ring diagonal {a}-{} is {diagonal} bond lengths",
+                    a + 3
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
 #[test]
 fn buchwald_ligands_lay_out_without_ring_overlap() -> anyhow::Result<()> {
     for text in [SPHOS, XPHOS] {
