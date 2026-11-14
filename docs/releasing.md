@@ -305,6 +305,8 @@ Build runners are macOS 14 on Apple Silicon, macOS 15 on Intel, Windows Server 2
 
 Build on the target operating system with Rust 1.99.1, a C/C++ compiler and Python 3.12. On Windows, use `python` instead of `python3`. Archives are written to `dist/releases/`.
 
+Shipped executables carry no symbols. Release builds keep line tables in a separate symbol file for crash reports: `reshiki.dSYM` on macOS, `reshiki.pdb` on Windows and `reshiki.debug` on Linux, next to the binary in `target/<target>/release/`. The Release builds workflow uploads them as the `symbols-<platform>` workflow artifact, not as a release download. Cargo strips macOS builds itself. In CI, Windows builds are not stripped, because the MSVC linker then writes no PDB, and `scripts/build_release.py` splits the Linux symbols off with `objcopy`. The Python wheel is stripped too. Never set `panic = "abort"`: the app recovers from panics.
+
 On macOS, run `python3 scripts/build_macos_app.py` for a development app. Add `--portable --release` for an optimized bundle in `dist/ReShiki.app`. Both forms include one executable, the icon, license notices and an ad-hoc signature; release signing replaces that signature.
 
 Install Inno Setup 6.7.3 for local Windows installer builds, or set `RESHIKI_ISCC` to its `ISCC.exe`. Installer verification installs and uninstalls the app, so run it in a disposable Windows account or CI runner. Omit `--installer` to build only a portable archive.

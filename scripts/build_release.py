@@ -614,6 +614,11 @@ def main():
     else:
         shutil.copy2(build / binary_name, folder / binary_name)
         notices(folder / "Licenses")
+    if system == "linux":
+        # Ship a stripped binary; reshiki.debug keeps its symbols for crash reports.
+        symbols = build / "reshiki.debug"
+        run(["objcopy", "--only-keep-debug", build / binary_name, symbols])
+        run(["objcopy", "--strip-all", f"--add-gnu-debuglink={symbols}", folder / binary_name])
     from build_inchi_helper import INCHI_VERSION, dependency
     from geometry_source import verify as geometry_metadata
 

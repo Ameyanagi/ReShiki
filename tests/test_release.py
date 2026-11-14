@@ -269,6 +269,59 @@ class ReleaseTests(unittest.TestCase):
         header[60:64] = (64).to_bytes(4, "little")
         return header + b"PE\0\0" + machine.to_bytes(2, "little")
 
+    @staticmethod
+    def package(root, target, system):
+        """Run build_release.main() for target with cargo and the checks mocked out."""
+        with (
+            patch("build_release.ROOT", root),
+            patch("build_release.version", return_value="1.2.3"),
+            patch("build_release.platform.system", return_value=system),
+            patch("build_release.platform.machine", return_value="AMD64"),
+            patch("build_release.target_directory", return_value=root / "target"),
+            patch("build_release.notices"),
+            patch(
+                "build_inchi_helper.dependency",
+                return_value={"name": "cosmolkit-inchi", "version": "0.3.0"},
+            ),
+            patch(
+                "geometry_source.verify",
+                return_value={
+                    "version": "2026.03.6",
+                    "implementation": "Rust",
+                    "runtime": "self-process-rust-core",
+                    "runtime_python": False,
+                    "backend": {"name": "cosmolkit-core", "version": "0.3.0"},
+                },
+            ),
+            patch("build_release.verify_archive"),
+            patch("build_release.run") as run,
+            patch("sys.argv", ["build_release.py", "--target", target]),
+            contextlib.redirect_stdout(io.StringIO()),
+        ):
+            main()
+        return run
+
+    def test_linux_package_ships_a_stripped_binary_and_keeps_its_symbols(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            target = "x86_64-unknown-linux-gnu"
+            build = root / "target" / target / "release"
+            build.mkdir(parents=True)
+            elf = bytearray(64)
+            elf[:6] = b"\x7fELF\x02\x01"
+            elf[18:20] = (62).to_bytes(2, "little")
+            (build / "reshiki").write_bytes(elf)
+            run = self.package(root, target, "Linux")
+            packaged = root / "build/release-bundles/reshiki-1.2.3-linux-x64/reshiki"
+            symbols = build / "reshiki.debug"
+            self.assertEqual(
+                [call.args[0] for call in run.call_args_list[1:]],
+                [
+                    ["objcopy", "--only-keep-debug", build / "reshiki", symbols],
+                    ["objcopy", "--strip-all", f"--add-gnu-debuglink={symbols}", packaged],
+                ],
+            )
+
     def test_windows_arm_package_uses_rust_target_under_x64_python(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -276,33 +329,7 @@ class ReleaseTests(unittest.TestCase):
             binary = root / "target" / target / "release/reshiki.exe"
             binary.parent.mkdir(parents=True)
             binary.write_bytes(self.pe_image(0xAA64))
-            with (
-                patch("build_release.ROOT", root),
-                patch("build_release.version", return_value="1.2.3"),
-                patch("build_release.platform.system", return_value="Windows"),
-                patch("build_release.platform.machine", return_value="AMD64"),
-                patch("build_release.target_directory", return_value=root / "target"),
-                patch("build_release.notices"),
-                patch(
-                    "build_inchi_helper.dependency",
-                    return_value={"name": "cosmolkit-inchi", "version": "0.3.0"},
-                ),
-                patch(
-                    "geometry_source.verify",
-                    return_value={
-                        "version": "2026.03.6",
-                        "implementation": "Rust",
-                        "runtime": "self-process-rust-core",
-                        "runtime_python": False,
-                        "backend": {"name": "cosmolkit-core", "version": "0.3.0"},
-                    },
-                ),
-                patch("build_release.verify_archive"),
-                patch("build_release.run") as run,
-                patch("sys.argv", ["build_release.py", "--target", target]),
-                contextlib.redirect_stdout(io.StringIO()),
-            ):
-                main()
+            run = self.package(root, target, "Windows")
             run.assert_called_once_with(
                 ["cargo", "build", "--release", "--locked", "--bin", "reshiki", "--target", target],
                 cwd=root,
@@ -353,6 +380,15 @@ class ReleaseTests(unittest.TestCase):
         script = (root / "scripts/build_release.py").read_text(encoding="utf-8")
         self.assertEqual(script.count('"--bin"'), 1)
         self.assertIn('"--bin", "reshiki", "--target"', script)
+
+    def test_release_profile_strips_symbols_into_a_separate_file(self):
+        root = Path(__file__).resolve().parents[1]
+        manifest = tomllib.loads((root / "Cargo.toml").read_text(encoding="utf-8"))
+        profile = manifest["profile"]["release"]
+        self.assertEqual(profile["strip"], "symbols")
+        self.assertEqual(profile["split-debuginfo"], "packed")
+        # The app recovers from panics with catch_unwind, so panics must unwind.
+        self.assertNotIn("panic", profile)
 
     def test_native_headers_reject_mislabeled_or_damaged_archives(self):
         elf = bytearray(64)

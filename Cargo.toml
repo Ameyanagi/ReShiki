@@ -219,6 +219,15 @@ window_clipboard = "0.5"
 [profile.dev]
 debug = 1
 
+# Shipped executables carry no symbols. Line tables go to a separate symbol file
+# for crash reports: reshiki.dSYM on macOS. release.yml keeps reshiki.pdb on
+# Windows and reshiki.debug on Linux instead (see docs/releasing.md).
+# Never set panic = "abort": the app recovers from panics with catch_unwind.
+[profile.release]
+debug = "line-tables-only"
+split-debuginfo = "packed"
+strip = "symbols"
+
 # Keep interactive geometry within its worker deadline in development builds,
 # using the same optimized solver crates (ETKDG, MMFF/UFF, model) as numerical tests.
 [profile.dev.package.cosmolkit]

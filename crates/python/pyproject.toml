@@ -44,6 +44,7 @@ dev = ["pytest>=8,<10", "ruff>=0.15", "ty>=0.0.24", "pillow>=10"]
 [tool.maturin]
 python-source = "python"
 module-name = "reshiki._native"
+strip = true
 features = ["pyo3/extension-module"]
 include = ["python/reshiki/py.typed", "python/reshiki/*.pyi"]
 
