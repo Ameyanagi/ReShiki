@@ -570,7 +570,9 @@ fn the_bounds_of_a_bonded_drawing_take_linear_time() {
             .min()
             .unwrap()
     };
-    let (small, large) = (rows(4_000), rows(16_000));
+    // From 8,000 atoms the time doubles with the size; below that it grows a
+    // little faster as the drawing outgrows the processor's caches.
+    let (small, large) = (rows(8_000), rows(32_000));
     // Quadratic time is sixteen times as long on every attempt. Other tests
     // and a busy machine can slow one attempt of a linear one that much, so
     // one attempt in five under ten times is enough.
@@ -580,5 +582,5 @@ fn the_bounds_of_a_bonded_drawing_take_linear_time() {
         times.push((small, large));
         large < small * 10
     });
-    assert!(linear, "4,000 and 16,000 atoms took {times:?}");
+    assert!(linear, "8,000 and 32,000 atoms took {times:?}");
 }
