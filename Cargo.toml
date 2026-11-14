@@ -106,7 +106,7 @@ rfd = "0.15"
 tempfile = "3"
 directories-next = "2"
 resvg = "0.45"
-png = "0.18"
+png = "0.17"
 image = { version = "0.25", default-features = false, features = [
   "png",
   "jpeg",

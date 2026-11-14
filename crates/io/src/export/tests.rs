@@ -49,8 +49,7 @@ async fn editable_png_contains_the_prepared_drawing_and_preserves_pixels() -> an
     let mut decoded = Vec::new();
     for bytes in [&plain.bytes, &editable.bytes] {
         let mut reader = png::Decoder::new(std::io::Cursor::new(bytes)).read_info()?;
-        let size = reader.output_buffer_size().context("PNG frame too large")?;
-        let mut pixels = vec![0; size];
+        let mut pixels = vec![0; reader.output_buffer_size()];
         let frame = reader.next_frame(&mut pixels)?;
         pixels.truncate(frame.buffer_size());
         decoded.push((frame.width, frame.height, pixels));
@@ -159,7 +158,7 @@ async fn editable_figure_export_skips_a_drawing_over_the_embed_limit() {
             let mut reader = png::Decoder::new(std::io::Cursor::new(export.bytes))
                 .read_info()
                 .unwrap();
-            let mut pixels = vec![0; reader.output_buffer_size().unwrap()];
+            let mut pixels = vec![0; reader.output_buffer_size()];
             reader.next_frame(&mut pixels).unwrap();
         }
     }
@@ -346,7 +345,7 @@ fn clipboard_is_transparent_and_files_keep_canvas_background() {
                 .read_info()
                 .unwrap();
             assert_eq!(reader.info().pixel_dims.unwrap().xppu, 47244);
-            let mut pixels = vec![0; reader.output_buffer_size().unwrap()];
+            let mut pixels = vec![0; reader.output_buffer_size()];
             let frame = reader.next_frame(&mut pixels).unwrap();
             let pixels = &pixels[..frame.buffer_size()];
             if clipboard {
