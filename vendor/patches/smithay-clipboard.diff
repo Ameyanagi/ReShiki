@@ -1,0 +1,2876 @@
+diff --git a/.cargo_vcs_info.json a/.cargo_vcs_info.json
+deleted file mode 100644
+index e65464e..0000000
+--- a/.cargo_vcs_info.json
++++ /dev/null
+@@ -1,6 +0,0 @@
+-{
+-  "git": {
+-    "sha1": "26c2f53f15f6bdc4f41a442d0ae2c2d63bbc617c"
+-  },
+-  "path_in_vcs": ""
+-}
+\ No newline at end of file
+diff --git a/.github/workflows/ci.yml a/.github/workflows/ci.yml
+deleted file mode 100644
+index 0b45a9b..0000000
+--- a/.github/workflows/ci.yml
++++ /dev/null
+@@ -1,53 +0,0 @@
+-name: CI
+-
+-on:
+-  pull_request:
+-  push:
+-    branches: [master]
+-
+-env:
+-  RUST_BACKTRACE: 1
+-  CARGO_INCREMENTAL: 0
+-  RUSTFLAGS: "-Cdebuginfo=0 --deny=warnings"
+-  RUSTDOCFLAGS: "--deny=warnings"
+-
+-jobs:
+-  fmt:
+-    name: Check Formatting
+-    runs-on: ubuntu-latest
+-    steps:
+-      - uses: actions/checkout@v3
+-      - uses: hecrj/setup-rust-action@v1
+-        with:
+-          rust-version: nightly
+-          components: rustfmt
+-      - name: Check Formatting
+-        run: cargo +nightly fmt --all -- --check
+-
+-  tests:
+-    name: Tests
+-    runs-on: ubuntu-latest
+-    strategy:
+-      matrix:
+-        rust_version: ["1.85", stable, nightly]
+-
+-    steps:
+-      - uses: actions/checkout@v3
+-
+-      - uses: hecrj/setup-rust-action@v1
+-        with:
+-          rust-version: ${{ matrix.rust_version }}
+-          components: clippy
+-
+-      - name: Install system dependencies
+-        run: sudo apt-get install libxkbcommon-dev libwayland-dev
+-
+-      - name: Run tests
+-        run: cargo test --verbose
+-
+-      - name: Clippy
+-        if: matrix.toolchain == 'stable'
+-        run: cargo clippy -- -D warnings
+-
+-      - name: Check documentation
+-        run: cargo doc --no-deps --document-private-items
+diff --git a/.github/workflows/docs.yml a/.github/workflows/docs.yml
+deleted file mode 100644
+index abedc2c..0000000
+--- a/.github/workflows/docs.yml
++++ /dev/null
+@@ -1,45 +0,0 @@
+-name: Deploy Docs to GitHub Pages
+-
+-on:
+-  push:
+-    branches:
+-    - master
+-
+-jobs:
+-  doc:
+-    name: Documentation on Github Pages
+-    runs-on: ubuntu-latest
+-
+-    steps:
+-      - name: Checkout sources
+-        uses: actions/checkout@v3
+-
+-      - name: Cargo cache
+-        uses: actions/cache@v4
+-        with:
+-          path: ~/.cargo
+-          key: cargo-stable
+-
+-      - name: Rust toolchain
+-        uses: actions-rs/toolchain@v1
+-        with:
+-          toolchain: stable
+-          override: true
+-
+-      - name: Install system dependencies
+-        run: sudo apt-get install libxkbcommon-dev libwayland-dev
+-
+-      - name: Build Documentation
+-        uses: actions-rs/cargo@v1
+-        with:
+-          command: doc
+-          args: --no-deps
+-
+-      - name: Setup index
+-        run: cp ./doc_index.html ./target/doc/index.html
+-
+-      - name: Deploy
+-        uses: peaceiris/actions-gh-pages@v3
+-        with:
+-          github_token: ${{ secrets.GITHUB_TOKEN }}
+-          publish_dir: ./target/doc
+diff --git a/.gitignore a/.gitignore
+deleted file mode 100644
+index 6936990..0000000
+--- a/.gitignore
++++ /dev/null
+@@ -1,3 +0,0 @@
+-/target
+-**/*.rs.bk
+-Cargo.lock
+diff --git a/Cargo.toml b/Cargo.toml
+index 7b09850..6c1a4b9 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -11,7 +11,7 @@
+ 
+ [package]
+ edition = "2024"
+-rust-version = "1.85.0"
++rust-version = "1.88.0"
+ name = "smithay-clipboard"
+ version = "0.7.3"
+ authors = [
+@@ -37,17 +37,18 @@ repository = "https://github.com/smithay/smithay-clipboard"
+ [features]
+ default = ["dlopen"]
+ dlopen = ["wayland-backend/dlopen"]
++wayland-qa = []
+ 
+ [lib]
+ name = "smithay_clipboard"
+ path = "src/lib.rs"
+ 
+-[[example]]
+-name = "clipboard"
+-path = "examples/clipboard.rs"
++[dependencies.futures-channel]
++version = "=0.3.34"
+ 
+-[dependencies.libc]
+-version = "0.2.149"
++[dependencies.rustix]
++version = "=1.1.4"
++features = ["fs"]
+ 
+ [dependencies.sctk]
+ version = "0.20.0"
+@@ -59,12 +60,3 @@ package = "smithay-client-toolkit"
+ version = "0.3.5"
+ features = ["client_system"]
+ default-features = false
+-
+-[dev-dependencies.sctk]
+-version = "0.20.0"
+-features = [
+-    "calloop",
+-    "xkbcommon",
+-]
+-default-features = false
+-package = "smithay-client-toolkit"
+diff --git b/UPSTREAM.json b/UPSTREAM.json
+new file mode 100644
+index 0000000..f9d2904
+--- /dev/null
++++ b/UPSTREAM.json
+@@ -0,0 +1,32 @@
++{
++  "upstream": "https://github.com/Smithay/smithay-clipboard",
++  "version": "0.7.3",
++  "commit": "26c2f53f15f6bdc4f41a442d0ae2c2d63bbc617c",
++  "license": "MIT",
++  "source": "crates.io smithay-clipboard 0.7.3",
++  "upstream_file_sha256": {
++    "Cargo.toml": "9f7a1d198a1385bfe35775e3c8d335d93cc31ea8d2ce15f189bebb0c42a99c98",
++    "Cargo.toml.orig": "976fb6f80a01f50e67cf8a7f6aa601246020ddb5e9476cf47d141030f590c481",
++    "LICENSE": "21c2bc064d4ad1bba2a66c6b6d111b859a616283687a11f7a32c1350814542c9",
++    "README.md": "0e1ce2826c6c74cb98922009fa2dfb6bcd142c774610c6603b9ae7f0c275fde1",
++    "CHANGELOG.md": "a61e4a55886233d02e4855bba024e584ad8119abee636cbeb32927817215615e",
++    "doc_index.html": "9191616fd8ecaef1615eda8a0f9cd36bf75eb4e5f20e24db8852faf07123dfcc",
++    "rustfmt.toml": "a0b3513964ccc1f72d7671376c1a2f073df01aad4b91bf99f0060fbe9dc88034",
++    "src/lib.rs": "ad96abaf7bf9c0a2d23de711823ac3e80065467e4b3453d160f3ea09481d9858",
++    "src/state.rs": "7c5e872387b7ebdbe061c667e7fb09ce3771e26572ae6a2a349fa6bdedf456e3",
++    "src/worker.rs": "3d9665e4794af1fae8f427a73333f88b9d1f78f142f9e2144eac6d3df73d47f1",
++    "src/mime.rs": "2d42f2c147d6ae93d53197f1eda57335f64e9af71e507415c3e89369a22cf0ce",
++    "examples/clipboard.rs": "771a50a8458fc4bb74dd0895220e3b7ed8ce95dae601a342a2ae273fcbb2c09a"
++  },
++  "purpose": "Bounded asynchronous multi-MIME requests through the existing Iced-owned standard Wayland data-device connection. A command-only weak registry avoids a second data device or extending foreign display lifetime.",
++  "local_changes": [
++    "Rich client lookup and per-request cancellation/completion",
++    "Positive selection-offer generation receipt before successful Copy/Cut",
++    "Immutable per-source MIME buffers and bounded nonblocking transfers",
++    "No ext/wlr data-control protocol",
++    "Omit upstream example-only target/dev-dependencies so fork unit tests run from the locked parent workspace without adding Wayland targets to every platform's workspace checks; original example and manifest retained",
++    "Rust 1.88 minimum for edition-2024 let chains; exact existing futures-channel/rustix versions; upstream foreign-display lifetime boundary retained",
++    "Default-off wayland-qa one-shot scheduling delays before write submission and after a real generation-matched compositor receipt; no injected result, serial or MIME; watchdog bounds test shutdown while the production five-second deadline continues"
++  ],
++  "local_rust_version": "1.88.0"
++}
+diff --git a/src/lib.rs b/src/lib.rs
+index 1f0b746..a20ded9 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -13,6 +13,9 @@ use sctk::reexports::client::Connection;
+ use sctk::reexports::client::backend::Backend;
+ 
+ mod mime;
++#[cfg(feature = "wayland-qa")]
++mod qa;
++pub mod rich;
+ mod state;
+ mod worker;
+ 
+@@ -21,6 +24,8 @@ pub struct Clipboard {
+     request_sender: Sender<worker::Command>,
+     request_receiver: Receiver<Result<String>>,
+     clipboard_thread: Option<std::thread::JoinHandle<()>>,
++    rich_client: rich::Client,
++    display_key: usize,
+ }
+ 
+ impl Clipboard {
+@@ -40,10 +45,22 @@ impl Clipboard {
+         // Create channel to get data from the clipboard thread.
+         let (clipboard_reply_sender, request_receiver) = mpsc::channel();
+ 
++        let display_key = display as usize;
++        let rich_client = rich::Client::new(display_key, request_sender.clone());
++
+         let name = String::from("smithay-clipboard");
+-        let clipboard_thread = worker::spawn(name, connection, rx_chan, clipboard_reply_sender);
++        let clipboard_thread = worker::spawn(
++            name,
++            connection,
++            rx_chan,
++            clipboard_reply_sender,
++            rich_client.inner.clone(),
++        );
++        if clipboard_thread.is_none() {
++            rich_client.stop(display_key);
++        }
+ 
+-        Self { request_receiver, request_sender, clipboard_thread }
++        Self { request_receiver, request_sender, clipboard_thread, rich_client, display_key }
+     }
+ 
+     /// Load clipboard data.
+@@ -95,6 +112,9 @@ impl Clipboard {
+ 
+ impl Drop for Clipboard {
+     fn drop(&mut self) {
++        // A command clone never owns this worker or the borrowed wl_display.
++        // Refuse new work and retire exactly our registry generation first.
++        self.rich_client.stop(self.display_key);
+         // Shutdown smithay-clipboard.
+         let _ = self.request_sender.send(worker::Command::Exit);
+         if let Some(clipboard_thread) = self.clipboard_thread.take() {
+diff --git b/src/qa.rs b/src/qa.rs
+new file mode 100644
+index 0000000..6978c8d
+--- /dev/null
++++ b/src/qa.rs
+@@ -0,0 +1,30 @@
++//! One-shot scheduling delays for real-compositor tests; never supplies results.
++
++use std::time::{Duration, Instant};
++
++pub(crate) fn hold(phase: &str, marker: &str) {
++    let Some(directory) = std::env::var_os("RESHIKI_WAYLAND_QA_DIR") else {
++        return;
++    };
++    let directory = std::path::PathBuf::from(directory);
++    if std::fs::remove_file(directory.join(format!("gate-{phase}.arm"))).is_err() {
++        return;
++    }
++    if let Err(error) = std::fs::write(
++        directory.join(format!("gate-{phase}.entered")),
++        format!("{phase}\n{marker}\n"),
++    ) {
++        eprintln!("Could not observe Wayland QA gate: {error}");
++        return;
++    }
++    // Production deadlines keep advancing. A watchdog bounds owner Drop/join
++    // even if the external test process fails before releasing the worker.
++    let deadline = Instant::now() + Duration::from_secs(6);
++    while Instant::now() < deadline {
++        if std::fs::remove_file(directory.join(format!("gate-{phase}.release"))).is_ok() {
++            return;
++        }
++        std::thread::sleep(Duration::from_millis(5));
++    }
++    eprintln!("Wayland QA {phase} gate watchdog expired");
++}
+diff --git b/src/rich.rs b/src/rich.rs
+new file mode 100644
+index 0000000..d4c1581
+--- /dev/null
++++ b/src/rich.rs
+@@ -0,0 +1,762 @@
++//! Bounded binary clipboard requests through an existing GUI-owned connection.
++//!
++//! A [`Client`] contains only a command sender. The original [`crate::Clipboard`]
++//! remains the sole owner of the Wayland worker, and always stops and joins it
++//! before releasing its borrowed display. Keeping a client cannot extend that
++//! lifetime. This ReShiki extension does not create another data device.
++
++use std::collections::{BTreeMap, HashMap, HashSet};
++use std::future::Future;
++use std::io::{self, Read};
++use std::pin::Pin;
++use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
++use std::sync::{Arc, Mutex, OnceLock, Weak};
++use std::task::{Context, Poll};
++use std::time::{Duration, Instant};
++
++use futures_channel::oneshot;
++use sctk::reexports::calloop::channel::Sender;
++
++use crate::worker::Command;
++
++/// Maximum bytes in one published offer or received representation.
++pub const MAX_BYTES: usize = 64 * 1024 * 1024;
++/// Includes the private ownership-receipt MIME added to a binary offer.
++pub const MAX_FORMATS: usize = 128;
++/// Maximum simultaneously queued requests or pipe transfers.
++pub const MAX_TRANSFERS: usize = 16;
++/// Published snapshots and in-progress read buffers share this retention cap.
++pub const MAX_RETAINED_BYTES: usize = 2 * MAX_BYTES;
++/// An operation or a consumer's pipe may not wait indefinitely.
++pub const TIMEOUT: Duration = Duration::from_secs(5);
++pub const CLIPBOARD_CHANGED: &str = "The clipboard changed while pasting; paste again";
++
++pub(crate) const MARKER_PREFIX: &str = "application/x-reshiki-clipboard-receipt-";
++const MAX_MIME_BYTES: usize = 255;
++
++/// MIME aliases can share the same immutable allocation.
++pub type Offer = BTreeMap<String, Arc<[u8]>>;
++
++/// One selected representation, with its exact bytes and MIME name.
++#[derive(Debug, Eq, PartialEq)]
++pub struct Data {
++    pub mime_type: String,
++    pub bytes: Vec<u8>,
++}
++
++/// Identity and candidate from the same observed standard selection offer.
++#[derive(Debug, Eq, PartialEq)]
++pub struct ReadSnapshot {
++    pub generation: String,
++    pub data: Option<Data>,
++}
++
++/// A receive failure after a MIME has been selected. Kept inside `io::Error`
++/// so callers can retry another representation without masking owner errors.
++#[derive(Debug)]
++pub struct ReadFailure {
++    pub mime_type: String,
++    pub generation: String,
++    source: io::Error,
++}
++
++impl std::fmt::Display for ReadFailure {
++    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
++        std::fmt::Display::fmt(&self.source, formatter)
++    }
++}
++
++impl std::error::Error for ReadFailure {
++    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
++        Some(&self.source)
++    }
++}
++
++pub(crate) fn read_failure(mime_type: String, generation: String, source: io::Error) -> io::Error {
++    if source.to_string() == CLIPBOARD_CHANGED {
++        return source;
++    }
++    io::Error::new(source.kind(), ReadFailure { mime_type, generation, source })
++}
++
++pub(crate) fn check_generation(expected: Option<&str>, generation: &str) -> io::Result<()> {
++    if expected.is_some_and(|expected| expected != generation) {
++        return Err(io::Error::other(CLIPBOARD_CHANGED));
++    }
++    Ok(())
++}
++
++/// A cancellable reply. Dropping it stops pending preparation or pipe reads.
++/// A source already sent to the compositor remains available until replacement
++/// or shutdown; failure cleanup never clears another application's selection.
++pub struct Request<T> {
++    receiver: oneshot::Receiver<io::Result<T>>,
++    control: Arc<Control>,
++    wake: Arc<Inner>,
++    finished: bool,
++}
++
++impl<T> Future for Request<T> {
++    type Output = io::Result<T>;
++
++    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
++        match Pin::new(&mut self.receiver).poll(cx) {
++            Poll::Pending => Poll::Pending,
++            Poll::Ready(reply) => {
++                self.finished = true;
++                Poll::Ready(reply.unwrap_or_else(|_| Err(unavailable())))
++            },
++        }
++    }
++}
++
++impl<T> Drop for Request<T> {
++    fn drop(&mut self) {
++        if !self.finished {
++            self.control.cancelled.store(true, Ordering::Release);
++            // Failed requests can be dropped without ever entering the rich
++            // request budget. Coalesce their maintenance wake-ups as well.
++            if !self.wake.wake_pending.swap(true, Ordering::AcqRel) {
++                let _ = self.wake.sender.send(Command::Wake);
++            }
++        }
++    }
++}
++
++/// A command-only handle to a clipboard owned by the GUI toolkit.
++#[derive(Clone)]
++pub struct Client {
++    pub(crate) inner: Arc<Inner>,
++}
++
++pub(crate) struct Inner {
++    pub sender: Sender<Command>,
++    pub stopped: AtomicBool,
++    pub ready: AtomicBool,
++    pub wake_pending: AtomicBool,
++    sequence: AtomicU64,
++    pending: Arc<AtomicUsize>,
++    pub memory: Arc<AtomicUsize>,
++    pub epoch: u64,
++}
++
++type Registry = Mutex<HashMap<usize, Weak<Inner>>>;
++
++fn registry() -> &'static Registry {
++    static REGISTRY: OnceLock<Registry> = OnceLock::new();
++    REGISTRY.get_or_init(|| Mutex::new(HashMap::new()))
++}
++
++impl Client {
++    /// Finds the already-created clipboard for an observed Wayland display.
++    ///
++    /// `display_key` is only an opaque lookup key (the display pointer cast to
++    /// `usize`); this function never dereferences it. An unknown, starting, or
++    /// stopped owner returns `None`. This cannot connect to or keep a display
++    /// alive. Obtain the key from the actual GUI window's display handle.
++    pub fn for_display(display_key: usize) -> Option<Self> {
++        let mut entries = registry().lock().unwrap_or_else(|error| error.into_inner());
++        entries.retain(|_, entry| entry.strong_count() != 0);
++        let inner = entries.get(&display_key)?.upgrade()?;
++        (!inner.stopped.load(Ordering::Acquire) && inner.ready.load(Ordering::Acquire))
++            .then_some(Self { inner })
++    }
++
++    pub(crate) fn new(display_key: usize, sender: Sender<Command>) -> Self {
++        static NEXT_EPOCH: AtomicU64 = AtomicU64::new(1);
++        let inner = Arc::new(Inner {
++            sender,
++            stopped: AtomicBool::new(false),
++            ready: AtomicBool::new(false),
++            wake_pending: AtomicBool::new(false),
++            sequence: AtomicU64::new(1),
++            pending: Arc::new(AtomicUsize::new(0)),
++            memory: Arc::new(AtomicUsize::new(0)),
++            epoch: NEXT_EPOCH.fetch_add(1, Ordering::Relaxed),
++        });
++        registry()
++            .lock()
++            .unwrap_or_else(|error| error.into_inner())
++            .insert(display_key, Arc::downgrade(&inner));
++        Self { inner }
++    }
++
++    pub(crate) fn stop(&self, display_key: usize) {
++        self.inner.stopped.store(true, Ordering::Release);
++        let mut entries = registry().lock().unwrap_or_else(|error| error.into_inner());
++        if entries
++            .get(&display_key)
++            .is_some_and(|entry| Weak::ptr_eq(entry, &Arc::downgrade(&self.inner)))
++        {
++            entries.remove(&display_key);
++        }
++    }
++
++    /// Publishes a complete immutable offer. Success requires seeing this
++    /// generation in the focused seat's resulting standard selection offer.
++    /// Queueing a request or completing a display roundtrip is not success.
++    pub fn write(&self, offer: Offer) -> Request<()> {
++        self.write_with_exit_filter(offer, &[])
++    }
++
++    /// Publishes an offer whose listed MIME types are omitted at shutdown, so a
++    /// clipboard manager can retain another representation. Only mixed offers
++    /// are replaced, while this client still owns the focused seat's selection.
++    pub fn write_with_exit_filter(&self, offer: Offer, omit: &[&str]) -> Request<()> {
++        self.submit(|completion| match StoredOffer::new(offer, self.inner.memory.clone(), true) {
++            Ok(offer) => {
++                let exit_mime_types = exit_mime_types(&offer.data, omit);
++                Some(Operation::Write { offer, exit_mime_types, completion })
++            },
++            Err(error) => {
++                completion.finish(Err(error));
++                None
++            },
++        })
++    }
++
++    /// Receives the first supported MIME in caller priority order. The offer
++    /// identity is checked before selecting a MIME and when its pipe finishes.
++    /// Empty preferences still observe the generation. Binary data stays exact.
++    pub fn read(
++        &self,
++        mime_types: Vec<String>,
++        generation: Option<String>,
++    ) -> Request<ReadSnapshot> {
++        self.submit(|completion| {
++            match validate_types(&mime_types)
++                .and_then(|()| validate_generation(generation.as_deref()))
++            {
++                Ok(()) => Some(Operation::Read { mime_types, generation, completion }),
++                Err(error) => {
++                    completion.finish(Err(error));
++                    None
++                },
++            }
++        })
++    }
++
++    fn submit<T>(&self, build: impl FnOnce(Completion<T>) -> Option<Operation>) -> Request<T> {
++        let (sender, receiver) = oneshot::channel();
++        let control = Arc::new(Control {
++            cancelled: AtomicBool::new(false),
++            deadline: Instant::now() + TIMEOUT,
++        });
++        let request = Request {
++            receiver,
++            control: control.clone(),
++            wake: self.inner.clone(),
++            finished: false,
++        };
++        let permit = Counter::reserve(self.inner.pending.clone(), 1, MAX_TRANSFERS);
++        // The supported Rust 1.88 predates stable Atomic*::try_update.
++        #[allow(deprecated)]
++        let id = self
++            .inner
++            .sequence
++            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |value| value.checked_add(1));
++        let mut completion = Completion { sender: Some(sender), control, permit: None, id: 0 };
++        if self.inner.stopped.load(Ordering::Acquire) || !self.inner.ready.load(Ordering::Acquire) {
++            completion.finish(Err(unavailable()));
++        } else if let (Ok(permit), Ok(id)) = (permit, id) {
++            completion.permit = Some(permit);
++            completion.id = id;
++            if let Some(operation) = build(completion) {
++                let _ = self.inner.sender.send(Command::Rich(operation));
++            }
++        } else {
++            completion.finish(Err(io::Error::other("too many pending clipboard requests")));
++        }
++        request
++    }
++}
++
++pub(crate) struct Control {
++    pub cancelled: AtomicBool,
++    pub deadline: Instant,
++}
++
++impl Control {
++    pub fn error(&self, now: Instant) -> Option<io::Error> {
++        if self.cancelled.load(Ordering::Acquire) {
++            Some(io::Error::new(io::ErrorKind::Interrupted, "clipboard request cancelled"))
++        } else if now >= self.deadline {
++            Some(io::Error::new(io::ErrorKind::TimedOut, "clipboard request timed out"))
++        } else {
++            None
++        }
++    }
++}
++
++pub(crate) struct Completion<T> {
++    sender: Option<oneshot::Sender<io::Result<T>>>,
++    pub control: Arc<Control>,
++    permit: Option<Counter>,
++    pub id: u64,
++}
++
++impl<T> Completion<T> {
++    pub fn finish(mut self, result: io::Result<T>) {
++        if let Some(sender) = self.sender.take() {
++            let _ = sender.send(result);
++        }
++    }
++}
++
++pub(crate) enum Operation {
++    Write {
++        offer: Arc<StoredOffer>,
++        exit_mime_types: Option<Vec<String>>,
++        completion: Completion<()>,
++    },
++    Read {
++        mime_types: Vec<String>,
++        generation: Option<String>,
++        completion: Completion<ReadSnapshot>,
++    },
++}
++
++impl Operation {
++    pub fn id(&self) -> u64 {
++        match self {
++            Self::Write { completion, .. } => completion.id,
++            Self::Read { completion, .. } => completion.id,
++        }
++    }
++
++    pub fn control(&self) -> &Control {
++        match self {
++            Self::Write { completion, .. } => &completion.control,
++            Self::Read { completion, .. } => &completion.control,
++        }
++    }
++
++    pub fn fail(self, error: io::Error) {
++        match self {
++            Self::Write { completion, .. } => completion.finish(Err(error)),
++            Self::Read { completion, .. } => completion.finish(Err(error)),
++        }
++    }
++}
++
++fn exit_mime_types(offer: &Offer, omit: &[&str]) -> Option<Vec<String>> {
++    let remaining: Vec<_> =
++        offer.keys().filter(|mime| !omit.contains(&mime.as_str())).cloned().collect();
++    (!remaining.is_empty() && remaining.len() < offer.len()).then_some(remaining)
++}
++
++pub(crate) struct StoredOffer {
++    pub data: Offer,
++    pub marker: Option<String>,
++    _memory: Counter,
++}
++
++impl StoredOffer {
++    pub fn new(data: Offer, memory: Arc<AtomicUsize>, receipt: bool) -> io::Result<Arc<Self>> {
++        if data.is_empty() || data.len() + usize::from(receipt) > MAX_FORMATS {
++            return Err(io::Error::other("too many clipboard MIME representations"));
++        }
++        let mut allocations = HashSet::new();
++        let mut size = 0_usize;
++        for (mime, bytes) in &data {
++            validate_type(mime)?;
++            if allocations.insert((bytes.as_ptr() as usize, bytes.len())) {
++                size = size.checked_add(bytes.len()).ok_or_else(oversized)?;
++            }
++            if size > MAX_BYTES {
++                return Err(oversized());
++            }
++        }
++        let marker = if receipt { Some(marker()?) } else { None };
++        let memory = Counter::reserve(memory, size, MAX_RETAINED_BYTES)?;
++        Ok(Arc::new(Self { data, marker, _memory: memory }))
++    }
++
++    pub fn mime_types(&self) -> impl Iterator<Item = &str> {
++        self.data.keys().map(String::as_str).chain(self.marker.as_deref())
++    }
++
++    pub fn bytes(&self, mime: &str) -> Option<Arc<[u8]>> {
++        if self.marker.as_deref() == Some(mime) {
++            Some(Arc::from([]))
++        } else {
++            self.data.get(mime).cloned()
++        }
++    }
++}
++
++pub(crate) struct Counter {
++    used: Arc<AtomicUsize>,
++    amount: usize,
++}
++
++impl Counter {
++    pub fn reserve(used: Arc<AtomicUsize>, amount: usize, limit: usize) -> io::Result<Self> {
++        let mut counter = Self { used, amount: 0 };
++        counter.grow(amount, limit)?;
++        Ok(counter)
++    }
++
++    pub fn grow(&mut self, amount: usize, limit: usize) -> io::Result<()> {
++        // The supported Rust 1.88 predates stable Atomic*::try_update.
++        #[allow(deprecated)]
++        self.used
++            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |used| {
++                used.checked_add(amount).filter(|total| *total <= limit)
++            })
++            .map_err(|_| io::Error::other("clipboard retention budget is exhausted"))?;
++        self.amount += amount;
++        Ok(())
++    }
++}
++
++impl Drop for Counter {
++    fn drop(&mut self) {
++        self.used.fetch_sub(self.amount, Ordering::AcqRel);
++    }
++}
++
++fn validate_types(types: &[String]) -> io::Result<()> {
++    if types.len() > MAX_FORMATS {
++        return Err(io::Error::other("invalid clipboard MIME preference count"));
++    }
++    for mime in types {
++        validate_type(mime)?;
++    }
++    Ok(())
++}
++
++fn validate_generation(generation: Option<&str>) -> io::Result<()> {
++    if generation.is_some_and(|token| {
++        token.is_empty()
++            || token.len() > 128
++            || token.bytes().any(|byte| !(b'!'..=b'~').contains(&byte))
++    }) {
++        return Err(io::Error::other("Invalid clipboard generation"));
++    }
++    Ok(())
++}
++
++fn validate_type(mime: &str) -> io::Result<()> {
++    if mime.is_empty()
++        || mime.len() > MAX_MIME_BYTES
++        || !mime.is_ascii()
++        || mime.bytes().any(|byte| byte <= b' ' || byte == 0x7f)
++        || mime.starts_with(MARKER_PREFIX)
++    {
++        Err(io::Error::other("invalid or reserved clipboard MIME name"))
++    } else {
++        Ok(())
++    }
++}
++
++fn marker() -> io::Result<String> {
++    let mut bytes = [0_u8; 16];
++    std::fs::File::open("/dev/urandom")?.read_exact(&mut bytes)?;
++    let mut marker = MARKER_PREFIX.to_owned();
++    for byte in bytes {
++        use std::fmt::Write;
++        let _ = write!(marker, "{byte:02x}");
++    }
++    Ok(marker)
++}
++
++pub(crate) fn oversized() -> io::Error {
++    io::Error::other("clipboard data exceeds 64 MiB")
++}
++
++pub(crate) fn unavailable() -> io::Error {
++    io::Error::other("the GUI clipboard owner is unavailable")
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    use sctk::reexports::calloop::channel::{self, Channel};
++    use std::task::Waker;
++
++    fn key() -> usize {
++        static NEXT: AtomicUsize = AtomicUsize::new(1);
++        NEXT.fetch_add(1, Ordering::Relaxed)
++    }
++
++    fn ready_client() -> (usize, Client, Channel<Command>) {
++        let key = key();
++        let (sender, receiver) = channel::channel();
++        let client = Client::new(key, sender);
++        client.inner.ready.store(true, Ordering::Release);
++        (key, client, receiver)
++    }
++
++    fn poll<T>(request: &mut Request<T>) -> Poll<io::Result<T>> {
++        Pin::new(request).poll(&mut Context::from_waker(Waker::noop()))
++    }
++
++    fn offer(bytes: &[u8]) -> Offer {
++        [("image/png".to_owned(), Arc::from(bytes))].into_iter().collect()
++    }
++
++    #[test]
++    fn lookup_never_connects_and_stopped_command_clones_do_not_keep_owner_available() {
++        let key = key();
++        assert!(Client::for_display(key).is_none());
++        let (sender, receiver) = channel::channel();
++        let owner = Client::new(key, sender);
++        assert!(Client::for_display(key).is_none(), "initialization is not ready");
++        owner.inner.ready.store(true, Ordering::Release);
++        let clone = Client::for_display(key).unwrap();
++        let mut pending = clone.read(vec!["image/png".into()], None);
++        assert!(poll(&mut pending).is_pending());
++        owner.stop(key);
++        assert!(Client::for_display(key).is_none());
++        let mut rejected = clone.read(vec!["image/png".into()], None);
++        assert!(matches!(poll(&mut rejected), Poll::Ready(Err(_))));
++        // The owner worker dropping its command queue resolves pending replies.
++        drop(receiver);
++        assert!(matches!(poll(&mut pending), Poll::Ready(Err(_))));
++    }
++
++    #[test]
++    fn an_old_owner_cannot_unregister_a_replacement_using_the_same_display_key() {
++        let key = key();
++        let (first_sender, _first_queue) = channel::channel();
++        let (next_sender, _next_queue) = channel::channel();
++        let first = Client::new(key, first_sender);
++        let next = Client::new(key, next_sender);
++        first.inner.ready.store(true, Ordering::Release);
++        next.inner.ready.store(true, Ordering::Release);
++        first.stop(key);
++        let found = Client::for_display(key).unwrap();
++        assert!(Arc::ptr_eq(&found.inner, &next.inner));
++        assert!(first.inner.stopped.load(Ordering::Acquire));
++        assert!(!next.inner.stopped.load(Ordering::Acquire));
++        next.stop(key);
++    }
++
++    #[test]
++    fn queueing_and_accepting_a_command_never_produces_a_write_receipt() {
++        let (key, client, commands) = ready_client();
++        let mut request = client.write(offer(&[0, 255, 17]));
++        assert!(poll(&mut request).is_pending());
++        let Command::Rich(operation) = commands.try_recv().unwrap() else { panic!() };
++        assert!(poll(&mut request).is_pending());
++        let Operation::Write { offer, completion, .. } = operation else { panic!() };
++        let marker = offer.marker.as_ref().unwrap();
++        assert!(marker.starts_with(MARKER_PREFIX));
++        assert_eq!(marker.len(), MARKER_PREFIX.len() + 32);
++        assert_eq!(offer.bytes("image/png").unwrap().as_ref(), [0, 255, 17]);
++        completion.finish(Err(io::Error::new(io::ErrorKind::TimedOut, "no ownership receipt")));
++        assert!(
++            matches!(poll(&mut request), Poll::Ready(Err(error)) if error.kind() == io::ErrorKind::TimedOut)
++        );
++        // A failed receipt leaves the sent immutable offer available to serve.
++        assert_eq!(offer.bytes("image/png").unwrap().as_ref(), [0, 255, 17]);
++        client.stop(key);
++    }
++
++    #[test]
++    fn cancelling_a_request_marks_queued_work_and_wakes_maintenance() {
++        let (key, client, commands) = ready_client();
++        let request = client.write(offer(b"first"));
++        let Command::Rich(operation) = commands.try_recv().unwrap() else { panic!() };
++        assert!(operation.control().error(Instant::now()).is_none());
++        drop(request);
++        assert!(matches!(commands.try_recv(), Ok(Command::Wake)));
++        assert_eq!(
++            operation.control().error(Instant::now()).unwrap().kind(),
++            io::ErrorKind::Interrupted
++        );
++        drop(operation);
++        assert_eq!(client.inner.pending.load(Ordering::Acquire), 0);
++        assert_eq!(client.inner.memory.load(Ordering::Acquire), 0);
++        client.stop(key);
++    }
++
++    #[test]
++    fn dropping_rejected_requests_coalesces_maintenance_wakeups() {
++        let (key, client, commands) = ready_client();
++        for _ in 0..1_000 {
++            drop(client.read(vec![String::new()], None));
++        }
++        assert!(matches!(commands.try_recv(), Ok(Command::Wake)));
++        assert!(commands.try_recv().is_err());
++        assert_eq!(client.inner.pending.load(Ordering::Acquire), 0);
++        // The next maintenance pass rearms later cancellation wakeups.
++        client.inner.wake_pending.store(false, Ordering::Release);
++        drop(client.read(vec![String::new()], None));
++        assert!(matches!(commands.try_recv(), Ok(Command::Wake)));
++        assert!(commands.try_recv().is_err());
++        client.stop(key);
++    }
++
++    #[test]
++    fn invalid_mime_requests_fail_before_the_worker_sees_them() {
++        let (key, client, commands) = ready_client();
++        let mut invalid =
++            client.write([(format!("{MARKER_PREFIX}forged"), Arc::from([1_u8]))].into());
++        assert!(
++            matches!(poll(&mut invalid), Poll::Ready(Err(error)) if error.to_string().contains("reserved"))
++        );
++        let mut empty = client.read(vec![String::new()], None);
++        assert!(matches!(poll(&mut empty), Poll::Ready(Err(_))));
++        let mut invalid = client.read(vec!["text/plain\0injected".into()], None);
++        assert!(matches!(poll(&mut invalid), Poll::Ready(Err(_))));
++        assert!(commands.try_recv().is_err());
++        assert_eq!(client.inner.pending.load(Ordering::Acquire), 0);
++        client.stop(key);
++    }
++
++    #[test]
++    fn invalid_generation_requests_fail_before_the_worker_sees_them() {
++        let (key, client, commands) = ready_client();
++        for generation in [String::new(), "x".repeat(129), "bad token".into(), "日本語".into()] {
++            let mut invalid = client.read(Vec::new(), Some(generation));
++            assert!(
++                matches!(poll(&mut invalid), Poll::Ready(Err(error)) if error.to_string() == "Invalid clipboard generation")
++            );
++        }
++        assert!(commands.try_recv().is_err());
++        client.stop(key);
++    }
++
++    #[test]
++    fn owner_failures_before_mime_selection_have_no_read_failure_metadata() {
++        let (key, client, commands) = ready_client();
++        let mut request = client.read(vec!["text/plain".into(), "image/png".into()], None);
++        let Command::Rich(operation) = commands.try_recv().unwrap() else { panic!() };
++        operation.fail(io::Error::other("the clipboard owner is unavailable"));
++        let Poll::Ready(Err(error)) = poll(&mut request) else {
++            panic!("owner failure was not delivered")
++        };
++        assert_eq!(error.to_string(), "the clipboard owner is unavailable");
++        assert!(error.get_ref().unwrap().downcast_ref::<ReadFailure>().is_none());
++        client.stop(key);
++    }
++
++    #[test]
++    fn changed_offer_aborts_without_mime_failure_metadata() {
++        let original = "wayland:1:2:3";
++        assert!(check_generation(None, original).is_ok());
++        assert!(check_generation(Some(original), original).is_ok());
++        for current in ["wayland:1:2:4", "wayland:1:2:0", "wayland:2:2:3"] {
++            let error = check_generation(Some(original), current).unwrap_err();
++            assert_eq!(error.to_string(), CLIPBOARD_CHANGED);
++            let error = read_failure("text/plain".into(), current.into(), error);
++            assert!(error.get_ref().unwrap().downcast_ref::<ReadFailure>().is_none());
++        }
++    }
++
++    #[test]
++    fn empty_preferences_still_request_and_return_the_offer_identity() {
++        let (key, client, commands) = ready_client();
++        let mut request = client.read(Vec::new(), Some("wayland:1:2:3".into()));
++        let Command::Rich(Operation::Read { mime_types, generation, completion }) =
++            commands.try_recv().unwrap()
++        else {
++            panic!()
++        };
++        assert!(mime_types.is_empty());
++        assert_eq!(generation.as_deref(), Some("wayland:1:2:3"));
++        completion.finish(Ok(ReadSnapshot { generation: "wayland:1:2:3".into(), data: None }));
++        let Poll::Ready(Ok(snapshot)) = poll(&mut request) else { panic!() };
++        assert_eq!(snapshot.generation, "wayland:1:2:3");
++        assert!(snapshot.data.is_none());
++        client.stop(key);
++    }
++
++    #[test]
++    fn pending_request_limit_rejects_without_growing_the_command_queue() {
++        let (key, client, commands) = ready_client();
++        let mut requests: Vec<_> =
++            (0..MAX_TRANSFERS).map(|_| client.read(vec!["image/png".into()], None)).collect();
++        let mut overflow = client.read(vec!["image/png".into()], None);
++        assert!(matches!(poll(&mut overflow), Poll::Ready(Err(_))));
++        for request in &mut requests {
++            assert!(poll(request).is_pending());
++            let Command::Rich(operation) = commands.try_recv().unwrap() else { panic!() };
++            operation.fail(io::Error::other("test owner stopped"));
++            assert!(matches!(poll(request), Poll::Ready(Err(_))));
++        }
++        assert!(commands.try_recv().is_err());
++        assert_eq!(client.inner.pending.load(Ordering::Acquire), 0);
++        client.stop(key);
++    }
++
++    #[test]
++    fn aliases_share_bytes_and_old_transfers_retain_their_own_generation() {
++        let memory = Arc::new(AtomicUsize::new(0));
++        let bytes: Arc<[u8]> = Arc::from([0_u8, 255, 128, 4]);
++        let original = StoredOffer::new(
++            [("image/png".into(), bytes.clone()), ("application/example".into(), bytes)].into(),
++            memory.clone(),
++            false,
++        )
++        .unwrap();
++        assert_eq!(memory.load(Ordering::Acquire), 4);
++        let serving_old_pipe = original.clone();
++        let replacement = StoredOffer::new(offer(b"new"), memory.clone(), false).unwrap();
++        drop(original);
++        assert_eq!(memory.load(Ordering::Acquire), 7);
++        assert_eq!(serving_old_pipe.bytes("image/png").unwrap().as_ref(), [0, 255, 128, 4]);
++        assert_eq!(replacement.bytes("image/png").unwrap().as_ref(), b"new");
++        drop(serving_old_pipe);
++        assert_eq!(memory.load(Ordering::Acquire), 3);
++        drop(replacement);
++        assert_eq!(memory.load(Ordering::Acquire), 0);
++    }
++
++    #[test]
++    fn exit_filter_only_replaces_mixed_offers_and_preserves_payloads() {
++        let text = ["text/plain;charset=utf-8", "text/plain", "UTF8_STRING"];
++        let mut mixed = offer(b"picture");
++        let smiles: Arc<[u8]> = Arc::from(b"CCO".as_slice());
++        for mime in text {
++            mixed.insert(mime.into(), smiles.clone());
++        }
++        mixed.insert("image/svg+xml".into(), Arc::from(b"svg".as_slice()));
++        assert_eq!(
++            exit_mime_types(&mixed, &text),
++            Some(vec!["image/png".into(), "image/svg+xml".into()])
++        );
++        assert_eq!(mixed["image/png"].as_ref(), b"picture");
++        assert!(Arc::ptr_eq(&mixed["text/plain"], &smiles));
++        assert_eq!(exit_mime_types(&mixed, &[]), None);
++        assert_eq!(exit_mime_types(&offer(b"picture"), &text), None);
++        let only_text = text.into_iter().map(|mime| (mime.into(), smiles.clone())).collect();
++        assert_eq!(exit_mime_types(&only_text, &text), None);
++        for mime in text {
++            let mut one_alias = offer(b"picture");
++            one_alias.insert(mime.into(), smiles.clone());
++            assert_eq!(exit_mime_types(&one_alias, &text), Some(vec!["image/png".into()]));
++        }
++    }
++
++    #[test]
++    fn retained_memory_is_reserved_before_new_publication() {
++        let memory = Arc::new(AtomicUsize::new(0));
++        let occupied =
++            Counter::reserve(memory.clone(), MAX_RETAINED_BYTES - 3, MAX_RETAINED_BYTES).unwrap();
++        let current = StoredOffer::new(offer(b"old"), memory.clone(), false).unwrap();
++        assert!(StoredOffer::new(offer(b"new"), memory.clone(), false).is_err());
++        assert_eq!(current.bytes("image/png").unwrap().as_ref(), b"old");
++        assert_eq!(memory.load(Ordering::Acquire), MAX_RETAINED_BYTES);
++        drop(occupied);
++        drop(current);
++        assert_eq!(memory.load(Ordering::Acquire), 0);
++    }
++
++    #[test]
++    fn the_private_receipt_counts_toward_the_offer_format_limit() {
++        let memory = Arc::new(AtomicUsize::new(0));
++        let bytes: Arc<[u8]> = Arc::from([1_u8]);
++        let allowed: Offer = (0..MAX_FORMATS - 1)
++            .map(|index| (format!("application/example-{index}"), bytes.clone()))
++            .collect();
++        let ready = StoredOffer::new(allowed.clone(), memory.clone(), true).unwrap();
++        assert_eq!(ready.mime_types().count(), MAX_FORMATS);
++        let mut too_many = allowed;
++        too_many.insert("application/one-more".into(), bytes);
++        assert!(StoredOffer::new(too_many, memory.clone(), true).is_err());
++        assert_eq!(memory.load(Ordering::Acquire), 1);
++    }
++}
+diff --git b/src/state/binary.rs b/src/state/binary.rs
+new file mode 100644
+index 0000000..f4ac08a
+--- /dev/null
++++ b/src/state/binary.rs
+@@ -0,0 +1,333 @@
++//! Requests use real input state and a positive, generation-specific receipt.
++
++use std::collections::{HashMap, HashSet};
++use std::io;
++use std::sync::atomic::Ordering;
++use std::time::{Duration, Instant};
++
++use sctk::data_device_manager::data_offer::DataOfferError;
++use sctk::reexports::client::protocol::wl_callback::{self, WlCallback};
++use sctk::reexports::client::protocol::wl_data_device::WlDataDevice;
++use sctk::reexports::client::{Connection, Dispatch, Proxy, QueueHandle};
++use wayland_backend::client::ObjectId;
++
++use super::transfers::{ReadReply, SelectionGuard};
++use super::{ClipboardSource, State};
++use crate::rich::{
++    Completion, MAX_TRANSFERS, Operation, ReadSnapshot, check_generation, read_failure, unavailable,
++};
++
++pub(super) const MAX_SOURCES: usize = 32;
++
++#[derive(Default)]
++pub(super) struct Binary {
++    pending: HashMap<u64, Operation>,
++    // Keep outstanding sync identifiers even after cancellation/timeout. The
++    // callback has no client-side destroy request; retaining this bounded set
++    // prevents repeated cancelled requests from growing protocol objects.
++    synchronizing: HashSet<u64>,
++    writes: HashMap<ObjectId, WriteReceipt>,
++}
++
++struct WriteReceipt {
++    seat: ObjectId,
++    device: WlDataDevice,
++    marker: String,
++    completion: Completion<()>,
++}
++
++impl Binary {
++    pub(super) fn timeout(&self, now: Instant) -> Option<Duration> {
++        self.pending
++            .values()
++            .map(|operation| operation.control().deadline)
++            .chain(self.writes.values().map(|write| write.completion.control.deadline))
++            .map(|deadline| deadline.saturating_duration_since(now))
++            .min()
++    }
++}
++
++impl State {
++    pub fn request(&mut self, connection: &Connection, operation: Operation) {
++        #[cfg(feature = "wayland-qa")]
++        if matches!(&operation, Operation::Write { .. }) {
++            crate::qa::hold("request", "");
++        }
++        if self.client.stopped.load(Ordering::Acquire) {
++            operation.fail(unavailable());
++            return;
++        }
++        if let Some(error) = operation.control().error(Instant::now()) {
++            operation.fail(error);
++            return;
++        }
++        if self.binary.synchronizing.len() >= MAX_TRANSFERS {
++            operation.fail(io::Error::other("clipboard display requests are still pending"));
++            return;
++        }
++        let id = operation.id();
++        self.binary.synchronizing.insert(id);
++        self.binary.pending.insert(id, operation);
++        // Iced and this worker dispatch separate queues on the same display.
++        // This asynchronous barrier lets our queue observe input/focus events
++        // preceding the user's action. Its reply is never a write receipt.
++        connection.display().sync(&self.queue_handle, id);
++    }
++
++    fn finish_sync(&mut self, id: u64) {
++        self.binary.synchronizing.remove(&id);
++        let Some(operation) = self.binary.pending.remove(&id) else {
++            return;
++        };
++        if self.client.stopped.load(Ordering::Acquire) {
++            operation.fail(unavailable());
++            return;
++        }
++        if let Some(error) = operation.control().error(Instant::now()) {
++            operation.fail(error);
++            return;
++        }
++        let Some(seat_id) = self.latest_seat.clone() else {
++            operation.fail(io::Error::other("no clipboard input seat is available"));
++            return;
++        };
++        let Some(seat) = self.seats.get(&seat_id).filter(|seat| seat.has_focus) else {
++            operation.fail(io::Error::other("focus ReShiki and try the clipboard command again"));
++            return;
++        };
++        let Some(device) = seat.data_device.as_ref() else {
++            operation.fail(io::Error::other("the seat has no standard clipboard data device"));
++            return;
++        };
++
++        match operation {
++            Operation::Write { offer, exit_mime_types, completion } => {
++                if seat.latest_serial == 0 {
++                    completion.finish(Err(io::Error::other("no valid clipboard input serial")));
++                    return;
++                }
++                if self.data_sources.len() >= MAX_SOURCES {
++                    completion.finish(Err(io::Error::other("clipboard sources are still pending")));
++                    return;
++                }
++                let Some(manager) = &self.data_device_manager_state else {
++                    completion
++                        .finish(Err(io::Error::other("standard Wayland clipboard unavailable")));
++                    return;
++                };
++                let Some(marker) = offer.marker.clone() else {
++                    completion.finish(Err(io::Error::other("clipboard receipt marker is missing")));
++                    return;
++                };
++                let source =
++                    manager.create_copy_paste_source(&self.queue_handle, offer.mime_types());
++                let source_id = source.inner().id();
++                self.binary.writes.insert(
++                    source_id,
++                    WriteReceipt {
++                        seat: seat_id,
++                        device: device.inner().clone(),
++                        marker,
++                        completion,
++                    },
++                );
++                source.set_selection(device, seat.latest_serial);
++                self.data_sources.push(ClipboardSource { source, offer, exit_mime_types });
++            },
++            Operation::Read { mime_types, generation: expected, completion } => {
++                let selection = device.data().selection_offer();
++                let offer_generation = match &selection {
++                    Some(selection) => match self.offers.generation(selection.inner()) {
++                        Some(generation) => generation,
++                        None => {
++                            completion.finish(Err(io::Error::other(
++                                "clipboard offer identity is unavailable",
++                            )));
++                            return;
++                        },
++                    },
++                    None => 0,
++                };
++                let generation = format!(
++                    "wayland:{:x}:{:x}:{offer_generation:x}",
++                    self.client.epoch,
++                    seat_id.protocol_id()
++                );
++                if let Err(error) = check_generation(expected.as_deref(), &generation) {
++                    completion.finish(Err(error));
++                    return;
++                }
++                let Some(selection) = selection else {
++                    completion.finish(Ok(ReadSnapshot { generation, data: None }));
++                    return;
++                };
++                if !self.offers.valid(selection.inner()) {
++                    completion.finish(Err(io::Error::other(
++                        "clipboard offer metadata exceeds its limit",
++                    )));
++                    return;
++                }
++                let chosen = selection.with_mime_types(|available| {
++                    mime_types.iter().find(|mime| available.contains(mime)).cloned()
++                });
++                let Some(mime_type) = chosen else {
++                    completion.finish(Ok(ReadSnapshot { generation, data: None }));
++                    return;
++                };
++                match selection.receive(mime_type.clone()) {
++                    Ok(pipe) => {
++                        self.receive_pipe(
++                            pipe,
++                            ReadReply::Binary {
++                                completion,
++                                mime_type,
++                                generation,
++                                selection: SelectionGuard::Live {
++                                    device: device.inner().clone(),
++                                    offer: selection.inner().id(),
++                                },
++                            },
++                        );
++                    },
++                    Err(error) => {
++                        let error = match error {
++                            DataOfferError::Io(error) => error,
++                            DataOfferError::InvalidReceive => {
++                                io::Error::other("clipboard offer is not ready")
++                            },
++                        };
++                        completion.finish(Err(read_failure(mime_type, generation, error)));
++                    },
++                }
++            },
++        }
++    }
++
++    pub(super) fn selection_receipt(&mut self, device: &WlDataDevice) {
++        let Some((seat_id, seat)) = self.seats.iter().find(|(_, seat)| {
++            seat.has_focus && seat.data_device.as_ref().is_some_and(|data| data.inner() == device)
++        }) else {
++            return;
++        };
++        let Some(selection) =
++            seat.data_device.as_ref().and_then(|data| data.data().selection_offer())
++        else {
++            return;
++        };
++        if !self.offers.valid(selection.inner()) {
++            return;
++        }
++        let ready: Vec<_> = selection.with_mime_types(|mime_types| {
++            self.binary
++                .writes
++                .iter()
++                .filter_map(|(source, write)| {
++                    (&write.seat == seat_id
++                        && &write.device == device
++                        && mime_types.contains(&write.marker))
++                    .then_some(source.clone())
++                })
++                .collect()
++        });
++        for source in ready {
++            #[cfg(feature = "wayland-qa")]
++            if let Some(write) = self.binary.writes.get(&source) {
++                // This offer and generation marker came from the compositor.
++                // Only delivery is delayed; no sync or queued-write substitute.
++                crate::qa::hold("receipt", &write.marker);
++            }
++            if let Some(write) = self.binary.writes.remove(&source) {
++                let result = write.completion.control.error(Instant::now()).map_or(Ok(()), Err);
++                write.completion.finish(result);
++            }
++        }
++    }
++
++    pub(super) fn source_cancelled(&mut self, source: &ObjectId) {
++        if let Some(write) = self.binary.writes.remove(source) {
++            write
++                .completion
++                .finish(Err(io::Error::other("clipboard ownership was rejected or replaced")));
++        }
++    }
++
++    pub(super) fn seat_lost_focus(&mut self, seat: &ObjectId) {
++        let lost: Vec<_> = self
++            .binary
++            .writes
++            .iter()
++            .filter_map(|(source, write)| (&write.seat == seat).then_some(source.clone()))
++            .collect();
++        for source in lost {
++            if let Some(write) = self.binary.writes.remove(&source) {
++                write.completion.finish(Err(io::Error::other(
++                    "clipboard focus changed before publication was confirmed; try again",
++                )));
++            }
++        }
++    }
++
++    pub fn maintain(&mut self) {
++        let now = Instant::now();
++        if self.exit_handoff.as_ref().is_some_and(|handoff| now >= handoff.deadline) {
++            self.exit = true;
++        }
++        let expired: Vec<_> = self
++            .binary
++            .pending
++            .iter()
++            .filter_map(|(id, operation)| operation.control().error(now).map(|error| (*id, error)))
++            .collect();
++        for (id, error) in expired {
++            if let Some(operation) = self.binary.pending.remove(&id) {
++                operation.fail(error);
++            }
++        }
++        let expired: Vec<_> = self
++            .binary
++            .writes
++            .iter()
++            .filter_map(|(source, write)| {
++                write.completion.control.error(now).map(|error| (source.clone(), error))
++            })
++            .collect();
++        for (source, error) in expired {
++            if let Some(write) = self.binary.writes.remove(&source) {
++                write.completion.finish(Err(error));
++            }
++        }
++        // A timed-out or cancelled publication never unsets the selection or
++        // drops a sent source. It can still be serving another application.
++        self.expire_transfers(now);
++        self.offers.prune();
++    }
++
++    pub fn timeout(&self) -> Option<Duration> {
++        let now = Instant::now();
++        self.binary
++            .timeout(now)
++            .into_iter()
++            .chain(self.transfers.timeout(now))
++            .chain(
++                self.exit_handoff
++                    .as_ref()
++                    .map(|handoff| handoff.deadline.saturating_duration_since(now)),
++            )
++            .min()
++    }
++}
++
++impl Dispatch<WlCallback, u64, State> for State {
++    fn event(
++        state: &mut State,
++        _: &WlCallback,
++        event: wl_callback::Event,
++        id: &u64,
++        _: &Connection,
++        _: &QueueHandle<Self>,
++    ) {
++        if let wl_callback::Event::Done { .. } = event {
++            state.finish_sync(*id);
++        }
++    }
++}
+diff --git b/src/state/offers.rs b/src/state/offers.rs
+new file mode 100644
+index 0000000..3772454
+--- /dev/null
++++ b/src/state/offers.rs
+@@ -0,0 +1,136 @@
++//! Bound metadata before forwarding protocol events to SCTK's offer storage.
++
++use std::collections::HashMap;
++
++use sctk::data_device_manager::DataDeviceManagerState;
++use sctk::data_device_manager::data_device::DataDeviceData;
++use sctk::data_device_manager::data_offer::DataOfferData;
++use sctk::data_device_manager::data_source::DataSourceData;
++use sctk::globals::GlobalData;
++use sctk::reexports::client::protocol::wl_data_device::{self, WlDataDevice};
++use sctk::reexports::client::protocol::wl_data_device_manager::WlDataDeviceManager;
++use sctk::reexports::client::protocol::wl_data_offer::{self, WlDataOffer};
++use sctk::reexports::client::protocol::wl_data_source::WlDataSource;
++use sctk::reexports::client::{
++    Connection, Dispatch, Proxy, QueueHandle, delegate_dispatch, event_created_child,
++};
++use wayland_backend::client::ObjectId;
++
++use super::State;
++use crate::rich::MAX_FORMATS;
++
++const MAX_OFFERS: usize = 32;
++const MAX_MIME_BYTES: usize = 255;
++
++#[derive(Default)]
++pub(super) struct Offers {
++    active: HashMap<ObjectId, Metadata>,
++    next_generation: u64,
++}
++
++struct Metadata {
++    offer: WlDataOffer,
++    count: usize,
++    overflow: bool,
++    generation: u64,
++}
++
++impl Offers {
++    pub(super) fn valid(&self, offer: &WlDataOffer) -> bool {
++        self.active.get(&offer.id()).is_some_and(|metadata| !metadata.overflow)
++    }
++
++    pub(super) fn generation(&self, offer: &WlDataOffer) -> Option<u64> {
++        self.active.get(&offer.id()).map(|metadata| metadata.generation)
++    }
++
++    pub(super) fn prune(&mut self) {
++        self.active.retain(|_, metadata| metadata.offer.is_alive());
++    }
++
++    fn admit(&mut self, offer: &WlDataOffer) -> bool {
++        self.prune();
++        if self.active.len() >= MAX_OFFERS {
++            return false;
++        }
++        let Some(generation) = self.next_generation.checked_add(1) else {
++            return false;
++        };
++        self.next_generation = generation;
++        self.active.insert(
++            offer.id(),
++            Metadata { offer: offer.clone(), count: 0, overflow: false, generation },
++        );
++        true
++    }
++
++    fn mime(&mut self, offer: &WlDataOffer, mime: &str) -> bool {
++        let Some(metadata) = self.active.get_mut(&offer.id()) else { return false };
++        metadata.count = metadata.count.saturating_add(1);
++        if metadata.count > MAX_FORMATS {
++            metadata.overflow = true;
++            return false;
++        }
++        // Unknown or unusually long consumer-specific types are simply not
++        // supported. They must not prevent using another ordinary MIME format.
++        !mime.is_empty() && mime.len() <= MAX_MIME_BYTES && !mime.bytes().any(|byte| byte < b' ')
++    }
++}
++
++impl Dispatch<WlDataDevice, DataDeviceData, State> for State {
++    event_created_child!(State, WlDataDevice, [0 => (WlDataOffer, DataOfferData::default())]);
++
++    fn event(
++        state: &mut State,
++        device: &WlDataDevice,
++        mut event: wl_data_device::Event,
++        data: &DataDeviceData,
++        connection: &Connection,
++        queue: &QueueHandle<Self>,
++    ) {
++        match &mut event {
++            wl_data_device::Event::DataOffer { id } => {
++                if !state.offers.admit(id) {
++                    id.destroy();
++                    return;
++                }
++            },
++            wl_data_device::Event::Selection { id } | wl_data_device::Event::Enter { id, .. } => {
++                if id.as_ref().is_some_and(|offer| !state.offers.active.contains_key(&offer.id())) {
++                    *id = None;
++                }
++            },
++            _ => {},
++        }
++        <DataDeviceManagerState as Dispatch<WlDataDevice, DataDeviceData, State>>::event(
++            state, device, event, data, connection, queue,
++        );
++        state.offers.prune();
++    }
++}
++
++impl Dispatch<WlDataOffer, DataOfferData, State> for State {
++    fn event(
++        state: &mut State,
++        offer: &WlDataOffer,
++        event: wl_data_offer::Event,
++        data: &DataOfferData,
++        connection: &Connection,
++        queue: &QueueHandle<Self>,
++    ) {
++        if let wl_data_offer::Event::Offer { mime_type } = &event
++            && !state.offers.mime(offer, mime_type)
++        {
++            return;
++        }
++        if !state.offers.active.contains_key(&offer.id()) {
++            return;
++        }
++        <DataDeviceManagerState as Dispatch<WlDataOffer, DataOfferData, State>>::event(
++            state, offer, event, data, connection, queue,
++        );
++    }
++}
++
++delegate_dispatch!(State: [WlDataDeviceManager: GlobalData] => DataDeviceManagerState);
++delegate_dispatch!(State: [WlDataSource: DataSourceData] => DataDeviceManagerState);
+diff --git b/src/state/transfers.rs b/src/state/transfers.rs
+new file mode 100644
+index 0000000..859cfa7
+--- /dev/null
++++ b/src/state/transfers.rs
+@@ -0,0 +1,671 @@
++//! Nonblocking pipes with bounded memory, concurrency, work and lifetime.
++
++use std::collections::HashMap;
++use std::fs::File;
++use std::io::{self, Read, Write};
++use std::sync::Arc;
++use std::sync::mpsc::Sender;
++use std::time::{Duration, Instant};
++
++use sctk::data_device_manager::data_device::DataDeviceData;
++use sctk::data_device_manager::{ReadPipe, WritePipe};
++use sctk::reexports::calloop::{PostAction, RegistrationToken};
++use sctk::reexports::client::Proxy;
++use sctk::reexports::client::protocol::wl_data_device::WlDataDevice;
++use wayland_backend::client::ObjectId;
++
++use super::{State, set_non_blocking};
++use crate::mime::{MimeType, normalize_to_lf};
++use crate::rich::{
++    CLIPBOARD_CHANGED, Completion, Control, Counter, Data, MAX_BYTES, MAX_RETAINED_BYTES,
++    MAX_TRANSFERS, ReadSnapshot, StoredOffer, TIMEOUT, oversized, read_failure,
++};
++
++const DISPATCH_BYTES: usize = 64 * 1024;
++
++#[derive(Default)]
++pub(super) struct Transfers {
++    next_id: u64,
++    active: HashMap<u64, Transfer>,
++}
++
++struct Transfer {
++    token: Option<RegistrationToken>,
++    deadline: Instant,
++    control: Option<Arc<Control>>,
++    body: Body,
++}
++
++enum Body {
++    Read { bytes: Vec<u8>, memory: Counter, reply: ReadReply },
++    Write { _offer: Arc<StoredOffer>, bytes: Arc<[u8]>, written: usize, source: ObjectId },
++}
++
++pub(super) enum ReadReply {
++    Text {
++        sender: Sender<io::Result<String>>,
++        mime_type: MimeType,
++    },
++    Binary {
++        completion: Completion<ReadSnapshot>,
++        mime_type: String,
++        generation: String,
++        selection: SelectionGuard,
++    },
++}
++
++pub(super) enum SelectionGuard {
++    Live {
++        device: WlDataDevice,
++        offer: ObjectId,
++    },
++    #[cfg(test)]
++    Simulated(Arc<std::sync::atomic::AtomicBool>),
++}
++
++impl SelectionGuard {
++    fn is_current(&self) -> bool {
++        match self {
++            Self::Live { device, offer } => {
++                device.is_alive()
++                    && device
++                        .data::<DataDeviceData>()
++                        .and_then(DataDeviceData::selection_offer)
++                        .is_some_and(|selection| selection.inner().id() == *offer)
++            },
++            #[cfg(test)]
++            Self::Simulated(current) => current.load(std::sync::atomic::Ordering::Acquire),
++        }
++    }
++}
++
++impl ReadReply {
++    fn finish(self, result: io::Result<Vec<u8>>) {
++        match self {
++            Self::Text { sender, mime_type } => {
++                let result = result.map(|bytes| {
++                    let text = match String::from_utf8(bytes) {
++                        Ok(text) => text,
++                        Err(error) => String::from_utf8_lossy(error.as_bytes()).into_owned(),
++                    };
++                    match mime_type {
++                        MimeType::TextPlain | MimeType::TextPlainUtf8 => normalize_to_lf(text),
++                        MimeType::Utf8String => text,
++                    }
++                });
++                let _ = sender.send(result);
++            },
++            Self::Binary { completion, mime_type, generation, selection } => {
++                if !selection.is_current() {
++                    completion.finish(Err(io::Error::other(CLIPBOARD_CHANGED)));
++                    return;
++                }
++                completion.finish(match result {
++                    Ok(bytes) => {
++                        Ok(ReadSnapshot { generation, data: Some(Data { mime_type, bytes }) })
++                    },
++                    Err(error) => Err(read_failure(mime_type, generation, error)),
++                });
++            },
++        }
++    }
++
++    fn control(&self) -> Option<Arc<Control>> {
++        match self {
++            Self::Text { .. } => None,
++            Self::Binary { completion, .. } => Some(completion.control.clone()),
++        }
++    }
++
++    fn changed(&self) -> bool {
++        matches!(self, Self::Binary { selection, .. } if !selection.is_current())
++    }
++}
++
++impl Transfer {
++    fn error(&self, now: Instant) -> Option<io::Error> {
++        if let Body::Read { reply, .. } = &self.body
++            && reply.changed()
++        {
++            return Some(io::Error::other(CLIPBOARD_CHANGED));
++        }
++        self.control.as_ref().and_then(|control| control.error(now)).or_else(|| {
++            (now >= self.deadline)
++                .then(|| io::Error::new(io::ErrorKind::TimedOut, "clipboard transfer timed out"))
++        })
++    }
++
++    fn finish(self, result: io::Result<()>) {
++        if let Body::Read { bytes, reply, .. } = self.body {
++            reply.finish(result.map(|()| bytes));
++        }
++    }
++}
++
++impl Transfers {
++    fn next_id(&mut self) -> io::Result<u64> {
++        if self.active.len() >= MAX_TRANSFERS {
++            return Err(io::Error::other("too many clipboard pipe transfers"));
++        }
++        self.next_id = self
++            .next_id
++            .checked_add(1)
++            .ok_or_else(|| io::Error::other("clipboard transfer identifiers exhausted"))?;
++        Ok(self.next_id)
++    }
++
++    pub(super) fn timeout(&self, now: Instant) -> Option<Duration> {
++        self.active.values().map(|transfer| transfer.deadline.saturating_duration_since(now)).min()
++    }
++}
++
++impl State {
++    pub(super) fn receive_pipe(&mut self, pipe: ReadPipe, reply: ReadReply) {
++        let id = match self.transfers.next_id().and_then(|id| {
++            set_non_blocking(&pipe)?;
++            Ok(id)
++        }) {
++            Ok(id) => id,
++            Err(error) => {
++                reply.finish(Err(error));
++                return;
++            },
++        };
++        let memory = match Counter::reserve(self.client.memory.clone(), 0, MAX_RETAINED_BYTES) {
++            Ok(memory) => memory,
++            Err(error) => {
++                reply.finish(Err(error));
++                return;
++            },
++        };
++        let control = reply.control();
++        let deadline = control.as_ref().map_or_else(|| Instant::now() + TIMEOUT, |c| c.deadline);
++        self.transfers.active.insert(
++            id,
++            Transfer {
++                token: None,
++                deadline,
++                control,
++                body: Body::Read { bytes: Vec::new(), memory, reply },
++            },
++        );
++        match self
++            .loop_handle
++            .insert_source(pipe, move |_, file, state| state.read_ready(id, file.as_ref()))
++        {
++            Ok(token) => {
++                if let Some(transfer) = self.transfers.active.get_mut(&id) {
++                    transfer.token = Some(token);
++                }
++            },
++            Err(error) => {
++                if let Some(transfer) = self.transfers.active.remove(&id) {
++                    transfer.finish(Err(io::Error::other(error.to_string())));
++                }
++            },
++        }
++    }
++
++    pub(super) fn send_pipe(
++        &mut self,
++        pipe: WritePipe,
++        offer: Arc<StoredOffer>,
++        bytes: Arc<[u8]>,
++        source: ObjectId,
++    ) {
++        // An empty private receipt representation completes by closing its fd.
++        if bytes.is_empty() {
++            drop(pipe);
++            self.exit_transfer_finished(&source);
++            return;
++        }
++        let Ok(id) = self.transfers.next_id() else {
++            return;
++        };
++        if set_non_blocking(&pipe).is_err() {
++            return;
++        }
++        self.transfers.active.insert(
++            id,
++            Transfer {
++                token: None,
++                deadline: Instant::now() + TIMEOUT,
++                control: None,
++                body: Body::Write { _offer: offer, bytes, written: 0, source },
++            },
++        );
++        match self
++            .loop_handle
++            .insert_source(pipe, move |_, file, state| state.write_ready(id, file.as_ref()))
++        {
++            Ok(token) => {
++                if let Some(transfer) = self.transfers.active.get_mut(&id) {
++                    transfer.token = Some(token);
++                }
++            },
++            Err(_) => {
++                self.transfers.active.remove(&id);
++            },
++        }
++    }
++
++    fn read_ready(&mut self, id: u64, mut file: &File) -> PostAction {
++        let Some(transfer) = self.transfers.active.get_mut(&id) else {
++            return PostAction::Remove;
++        };
++        let result = if let Some(error) = transfer.error(Instant::now()) {
++            Some(Err(error))
++        } else if let Body::Read { bytes, memory, .. } = &mut transfer.body {
++            read_available(&mut file, bytes, memory)
++        } else {
++            Some(Err(io::Error::other("invalid clipboard read transfer")))
++        };
++        if let Some(result) = result {
++            if let Some(transfer) = self.transfers.active.remove(&id) {
++                transfer.finish(result);
++            }
++            PostAction::Remove
++        } else {
++            PostAction::Continue
++        }
++    }
++
++    fn write_ready(&mut self, id: u64, mut file: &File) -> PostAction {
++        let Some(transfer) = self.transfers.active.get_mut(&id) else {
++            return PostAction::Remove;
++        };
++        let result = if let Some(error) = transfer.error(Instant::now()) {
++            Some(Err(error))
++        } else if let Body::Write { bytes, written, .. } = &mut transfer.body {
++            write_available(&mut file, bytes, written)
++        } else {
++            Some(Err(io::Error::other("invalid clipboard write transfer")))
++        };
++        if let Some(result) = result {
++            if let Some(transfer) = self.transfers.active.remove(&id) {
++                if result.is_ok()
++                    && let Body::Write { source, .. } = &transfer.body
++                    && self.exit_handoff.as_ref().is_some_and(|handoff| &handoff.source == source)
++                {
++                    let source = source.clone();
++                    // Run after PostAction::Remove has dropped the pipe and closed its fd.
++                    self.loop_handle.insert_idle(move |state| {
++                        state.exit_transfer_finished(&source);
++                    });
++                }
++                transfer.finish(result);
++            }
++            PostAction::Remove
++        } else {
++            PostAction::Continue
++        }
++    }
++
++    pub(super) fn expire_transfers(&mut self, now: Instant) {
++        let expired: Vec<_> = self
++            .transfers
++            .active
++            .iter()
++            .filter_map(|(id, transfer)| transfer.error(now).map(|error| (*id, error)))
++            .collect();
++        for (id, error) in expired {
++            if let Some(transfer) = self.transfers.active.remove(&id) {
++                if let Some(token) = transfer.token {
++                    self.loop_handle.remove(token);
++                }
++                transfer.finish(Err(error));
++            }
++        }
++    }
++}
++
++fn read_available(
++    reader: &mut impl Read,
++    bytes: &mut Vec<u8>,
++    memory: &mut Counter,
++) -> Option<io::Result<()>> {
++    let mut buffer = [0_u8; 4096];
++    let mut progressed = 0;
++    // Bound both bytes and syscall retries, including repeated EINTR.
++    for _ in 0..128 {
++        match reader.read(&mut buffer) {
++            Ok(0) => return Some(Ok(())),
++            Ok(count) => {
++                if bytes.len().saturating_add(count) > MAX_BYTES {
++                    return Some(Err(oversized()));
++                }
++                if let Err(error) = memory.grow(count, MAX_RETAINED_BYTES) {
++                    return Some(Err(error));
++                }
++                if let Err(error) = bytes.try_reserve_exact(count) {
++                    return Some(Err(io::Error::other(error.to_string())));
++                }
++                bytes.extend_from_slice(&buffer[..count]);
++                progressed += count;
++                if progressed >= DISPATCH_BYTES {
++                    return None;
++                }
++            },
++            Err(error) if error.kind() == io::ErrorKind::WouldBlock => return None,
++            Err(error) if error.kind() == io::ErrorKind::Interrupted => {},
++            Err(error) => return Some(Err(error)),
++        }
++    }
++    None
++}
++
++fn write_available(
++    writer: &mut impl Write,
++    bytes: &[u8],
++    written: &mut usize,
++) -> Option<io::Result<()>> {
++    let mut progressed = 0;
++    for _ in 0..128 {
++        let end = bytes.len().min(written.saturating_add(DISPATCH_BYTES - progressed));
++        match writer.write(&bytes[*written..end]) {
++            Ok(0) => {
++                return Some(Err(io::Error::new(
++                    io::ErrorKind::WriteZero,
++                    "clipboard pipe closed",
++                )));
++            },
++            Ok(count) => {
++                *written += count;
++                progressed += count;
++                if *written == bytes.len() {
++                    return Some(Ok(()));
++                }
++                if progressed >= DISPATCH_BYTES {
++                    return None;
++                }
++            },
++            Err(error) if error.kind() == io::ErrorKind::WouldBlock => return None,
++            Err(error) if error.kind() == io::ErrorKind::Interrupted => {},
++            Err(error) => return Some(Err(error)),
++        }
++    }
++    None
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    use crate::rich::{Client, MAX_RETAINED_BYTES};
++    use crate::worker::Command;
++    use sctk::reexports::calloop::channel;
++    use std::future::Future;
++    use std::io::Cursor;
++    use std::pin::Pin;
++    use std::sync::atomic::{AtomicUsize, Ordering};
++    use std::task::{Context, Poll, Waker};
++
++    struct ChunkReader {
++        data: Cursor<Vec<u8>>,
++        calls: usize,
++    }
++
++    impl Read for ChunkReader {
++        fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
++            self.calls += 1;
++            if self.calls % 3 == 0 {
++                return Err(io::ErrorKind::WouldBlock.into());
++            }
++            let end = buffer.len().min(127);
++            self.data.read(&mut buffer[..end])
++        }
++    }
++
++    #[derive(Default)]
++    struct ChunkWriter {
++        bytes: Vec<u8>,
++        calls: usize,
++    }
++
++    impl Write for ChunkWriter {
++        fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
++            self.calls += 1;
++            if self.calls % 5 == 0 {
++                return Err(io::ErrorKind::WouldBlock.into());
++            }
++            let count = bytes.len().min(31);
++            self.bytes.extend_from_slice(&bytes[..count]);
++            Ok(count)
++        }
++
++        fn flush(&mut self) -> io::Result<()> {
++            Ok(())
++        }
++    }
++
++    fn memory() -> (Arc<AtomicUsize>, Counter) {
++        let used = Arc::new(AtomicUsize::new(0));
++        let counter = Counter::reserve(used.clone(), 0, MAX_RETAINED_BYTES).unwrap();
++        (used, counter)
++    }
++
++    #[test]
++    fn short_binary_reads_and_would_block_preserve_every_byte_until_eof() {
++        let expected: Vec<_> = (0..70_003).map(|index| (index % 256) as u8).collect();
++        let mut reader = ChunkReader { data: Cursor::new(expected.clone()), calls: 0 };
++        let mut received = Vec::new();
++        let (used, mut memory) = memory();
++        let mut done = false;
++        for _ in 0..10_000 {
++            let previous_calls = reader.calls;
++            if let Some(result) = read_available(&mut reader, &mut received, &mut memory) {
++                result.unwrap();
++                done = true;
++                break;
++            }
++            assert!(reader.calls - previous_calls <= 128);
++        }
++        assert!(done, "the pipe must reach EOF");
++        assert_eq!(received, expected);
++        assert_eq!(used.load(Ordering::Acquire), received.len());
++        drop(memory);
++        assert_eq!(used.load(Ordering::Acquire), 0);
++    }
++
++    #[test]
++    fn short_binary_writes_resume_from_the_exact_offset() {
++        let expected: Vec<_> = (0..70_003).map(|index| (index % 256) as u8).collect();
++        let mut writer = ChunkWriter::default();
++        let mut written = 0;
++        let mut done = false;
++        for _ in 0..10_000 {
++            let previous_calls = writer.calls;
++            if let Some(result) = write_available(&mut writer, &expected, &mut written) {
++                result.unwrap();
++                done = true;
++                break;
++            }
++            assert!(writer.calls - previous_calls <= 128);
++        }
++        assert!(done);
++        assert_eq!(written, expected.len());
++        assert_eq!(writer.bytes, expected);
++    }
++
++    #[test]
++    fn a_zero_write_terminates_instead_of_spinning() {
++        struct Closed;
++        impl Write for Closed {
++            fn write(&mut self, _: &[u8]) -> io::Result<usize> {
++                Ok(0)
++            }
++            fn flush(&mut self) -> io::Result<()> {
++                Ok(())
++            }
++        }
++        let mut written = 0;
++        let error = write_available(&mut Closed, b"payload", &mut written).unwrap().unwrap_err();
++        assert_eq!(error.kind(), io::ErrorKind::WriteZero);
++        assert_eq!(written, 0);
++    }
++
++    #[test]
++    fn repeated_interrupts_are_bounded_per_dispatch() {
++        struct Interrupted(usize);
++        impl Read for Interrupted {
++            fn read(&mut self, _: &mut [u8]) -> io::Result<usize> {
++                self.0 += 1;
++                Err(io::ErrorKind::Interrupted.into())
++            }
++        }
++        impl Write for Interrupted {
++            fn write(&mut self, _: &[u8]) -> io::Result<usize> {
++                self.0 += 1;
++                Err(io::ErrorKind::Interrupted.into())
++            }
++            fn flush(&mut self) -> io::Result<()> {
++                Ok(())
++            }
++        }
++        let (_, mut memory) = memory();
++        let mut read = Interrupted(0);
++        assert!(read_available(&mut read, &mut Vec::new(), &mut memory).is_none());
++        assert_eq!(read.0, 128);
++        let mut write = Interrupted(0);
++        assert!(write_available(&mut write, b"payload", &mut 0).is_none());
++        assert_eq!(write.0, 128);
++    }
++
++    #[test]
++    fn a_read_cannot_exceed_its_representation_or_shared_retention_budget() {
++        let used = Arc::new(AtomicUsize::new(0));
++        let occupied =
++            Counter::reserve(used.clone(), MAX_RETAINED_BYTES - 3, MAX_RETAINED_BYTES).unwrap();
++        let mut memory = Counter::reserve(used.clone(), 0, MAX_RETAINED_BYTES).unwrap();
++        let mut bytes = Vec::new();
++        let mut reader = Cursor::new(b"four");
++        assert!(read_available(&mut reader, &mut bytes, &mut memory).unwrap().is_err());
++        assert!(bytes.is_empty());
++        assert_eq!(used.load(Ordering::Acquire), MAX_RETAINED_BYTES - 3);
++        drop(occupied);
++
++        let mut full = vec![0; MAX_BYTES];
++        let mut one_more = Cursor::new([1]);
++        assert!(read_available(&mut one_more, &mut full, &mut memory).unwrap().is_err());
++        assert_eq!(full.len(), MAX_BYTES);
++    }
++
++    #[test]
++    fn expiry_returns_an_error_instead_of_delivering_a_partial_read() {
++        let (sender, receiver) = std::sync::mpsc::channel();
++        let (_, memory) = memory();
++        let transfer = Transfer {
++            token: None,
++            deadline: Instant::now(),
++            control: None,
++            body: Body::Read {
++                bytes: b"partial".to_vec(),
++                memory,
++                reply: ReadReply::Text { sender, mime_type: MimeType::TextPlain },
++            },
++        };
++        let error = transfer.error(Instant::now()).unwrap();
++        assert_eq!(error.kind(), io::ErrorKind::TimedOut);
++        transfer.finish(Err(error));
++        assert_eq!(receiver.try_recv().unwrap().unwrap_err().kind(), io::ErrorKind::TimedOut);
++    }
++
++    #[test]
++    fn binary_completion_does_not_apply_the_legacy_text_normalizer() {
++        let (sender, commands) = channel::channel();
++        let client = Client::new(100_000, sender);
++        client.inner.ready.store(true, Ordering::Release);
++        let mut request = client.read(vec!["image/png".into()], None);
++        let Command::Rich(crate::rich::Operation::Read { completion, .. }) =
++            commands.try_recv().unwrap()
++        else {
++            panic!()
++        };
++        let bytes = vec![0, 255, b'\r', b'\n', 128];
++        ReadReply::Binary {
++            completion,
++            mime_type: "image/png".into(),
++            generation: "wayland:1:2:3".into(),
++            selection: SelectionGuard::Simulated(Arc::new(std::sync::atomic::AtomicBool::new(
++                true,
++            ))),
++        }
++        .finish(Ok(bytes.clone()));
++        let result = Pin::new(&mut request).poll(&mut Context::from_waker(Waker::noop()));
++        assert!(
++            matches!(result, Poll::Ready(Ok(ReadSnapshot { data: Some(data), .. })) if data.bytes == bytes && data.mime_type == "image/png")
++        );
++        client.stop(100_000);
++
++        let (sender, receiver) = std::sync::mpsc::channel();
++        ReadReply::Text { sender, mime_type: MimeType::TextPlain }
++            .finish(Ok(b"a\r\nb\rc".to_vec()));
++        assert_eq!(receiver.try_recv().unwrap().unwrap(), "a\nb\nc");
++    }
++
++    #[test]
++    fn failed_binary_transfer_retains_the_selected_mime_and_error() {
++        let (sender, commands) = channel::channel();
++        let client = Client::new(100_001, sender);
++        client.inner.ready.store(true, Ordering::Release);
++        let mut request = client.read(vec!["text/plain".into(), "image/png".into()], None);
++        let Command::Rich(crate::rich::Operation::Read { completion, .. }) =
++            commands.try_recv().unwrap()
++        else {
++            panic!()
++        };
++        ReadReply::Binary {
++            completion,
++            mime_type: "text/plain".into(),
++            generation: "wayland:1:2:3".into(),
++            selection: SelectionGuard::Simulated(Arc::new(std::sync::atomic::AtomicBool::new(
++                true,
++            ))),
++        }
++        .finish(Err(io::Error::new(io::ErrorKind::TimedOut, "read timed out")));
++        let Poll::Ready(Err(error)) =
++            Pin::new(&mut request).poll(&mut Context::from_waker(Waker::noop()))
++        else {
++            panic!("binary transfer did not deliver its error")
++        };
++        assert_eq!(error.kind(), io::ErrorKind::TimedOut);
++        assert_eq!(error.to_string(), "read timed out");
++        let failure = error.get_ref().unwrap().downcast_ref::<crate::rich::ReadFailure>().unwrap();
++        assert_eq!(failure.mime_type, "text/plain");
++        assert_eq!(failure.generation, "wayland:1:2:3");
++        assert_eq!(std::error::Error::source(failure).unwrap().to_string(), "read timed out");
++        client.stop(100_001);
++    }
++
++    #[test]
++    fn changed_selection_during_a_pipe_read_aborts_success_and_failure() {
++        for result in [Ok(b"CCO".to_vec()), Err(io::Error::other("broken pipe"))] {
++            let (sender, commands) = channel::channel();
++            let client = Client::new(100_002, sender);
++            client.inner.ready.store(true, Ordering::Release);
++            let mut request = client.read(vec!["text/plain".into()], None);
++            let Command::Rich(crate::rich::Operation::Read { completion, .. }) =
++                commands.try_recv().unwrap()
++            else {
++                panic!()
++            };
++            let current = Arc::new(std::sync::atomic::AtomicBool::new(true));
++            let reply = ReadReply::Binary {
++                completion,
++                mime_type: "text/plain".into(),
++                generation: "wayland:1:2:3".into(),
++                selection: SelectionGuard::Simulated(current.clone()),
++            };
++            current.store(false, Ordering::Release);
++            assert!(reply.changed());
++            reply.finish(result);
++            let Poll::Ready(Err(error)) =
++                Pin::new(&mut request).poll(&mut Context::from_waker(Waker::noop()))
++            else {
++                panic!()
++            };
++            assert_eq!(error.to_string(), CLIPBOARD_CHANGED);
++            assert!(error.get_ref().unwrap().downcast_ref::<crate::rich::ReadFailure>().is_none());
++            client.stop(100_002);
++        }
++    }
++}
+diff --git a/src/state.rs b/src/state.rs
+index 866c51e..dc8e0b2 100644
+--- a/src/state.rs
++++ b/src/state.rs
+@@ -1,10 +1,9 @@
+-use std::borrow::Cow;
+ use std::collections::HashMap;
+-use std::io::{Error, ErrorKind, Read, Result, Write};
+-use std::mem;
+-use std::os::unix::io::{AsRawFd, RawFd};
+-use std::rc::Rc;
++use std::io::{Error, ErrorKind, Result};
++use std::os::fd::AsFd;
++use std::sync::Arc;
+ use std::sync::mpsc::Sender;
++use std::time::{Duration, Instant};
+ 
+ use sctk::data_device_manager::data_device::{DataDevice, DataDeviceHandler};
+ use sctk::data_device_manager::data_offer::{DataOfferError, DataOfferHandler, DragOffer};
+@@ -17,11 +16,11 @@ use sctk::registry::{ProvidesRegistryState, RegistryState};
+ use sctk::seat::pointer::{PointerData, PointerEvent, PointerEventKind, PointerHandler};
+ use sctk::seat::{Capability, SeatHandler, SeatState};
+ use sctk::{
+-    delegate_data_device, delegate_pointer, delegate_primary_selection, delegate_registry,
+-    delegate_seat, registry_handlers,
++    delegate_pointer, delegate_primary_selection, delegate_registry, delegate_seat,
++    registry_handlers,
+ };
+ 
+-use sctk::reexports::calloop::{LoopHandle, PostAction};
++use sctk::reexports::calloop::LoopHandle;
+ use sctk::reexports::client::globals::GlobalList;
+ use sctk::reexports::client::protocol::wl_data_device::WlDataDevice;
+ use sctk::reexports::client::protocol::wl_data_device_manager::DndAction;
+@@ -37,13 +36,37 @@ use sctk::reexports::protocols::wp::primary_selection::zv1::client::{
+ };
+ use wayland_backend::client::ObjectId;
+ 
+-use crate::mime::{ALLOWED_MIME_TYPES, MimeType, normalize_to_lf};
++use crate::mime::{ALLOWED_MIME_TYPES, MimeType};
++use crate::rich::{Inner, StoredOffer};
++
++mod binary;
++mod offers;
++mod transfers;
++
++struct ClipboardSource {
++    source: CopyPasteSource,
++    offer: Arc<StoredOffer>,
++    exit_mime_types: Option<Vec<String>>,
++}
++
++struct ExitHandoff {
++    source: ObjectId,
++    deadline: Instant,
++    limit: Instant,
++    completed: bool,
++}
++
++struct PrimarySource {
++    source: PrimarySelectionSource,
++    offer: Arc<StoredOffer>,
++}
+ 
+ pub struct State {
+     pub primary_selection_manager_state: Option<PrimarySelectionManagerState>,
+     pub data_device_manager_state: Option<DataDeviceManagerState>,
+     pub reply_tx: Sender<Result<String>>,
+     pub exit: bool,
++    pub exit_requested: bool,
+ 
+     registry_state: RegistryState,
+     seat_state: SeatState,
+@@ -54,12 +77,13 @@ pub struct State {
+ 
+     loop_handle: LoopHandle<'static, Self>,
+     queue_handle: QueueHandle<Self>,
+-
+-    primary_sources: Vec<PrimarySelectionSource>,
+-    primary_selection_content: Rc<[u8]>,
+-
+-    data_sources: Vec<CopyPasteSource>,
+-    data_selection_content: Rc<[u8]>,
++    client: Arc<Inner>,
++    binary: binary::Binary,
++    offers: offers::Offers,
++    transfers: transfers::Transfers,
++    primary_sources: Vec<PrimarySource>,
++    data_sources: Vec<ClipboardSource>,
++    exit_handoff: Option<ExitHandoff>,
+ }
+ 
+ impl State {
+@@ -69,6 +93,7 @@ impl State {
+         queue_handle: &QueueHandle<Self>,
+         loop_handle: LoopHandle<'static, Self>,
+         reply_tx: Sender<Result<String>>,
++        client: Arc<Inner>,
+     ) -> Option<Self> {
+         // NOTE: while it's mutable, it's not part of the hash compute.
+         #[allow(clippy::mutable_key_type)]
+@@ -90,19 +115,23 @@ impl State {
+ 
+         Some(Self {
+             registry_state: RegistryState::new(globals),
+-            primary_selection_content: Rc::from([]),
+-            data_selection_content: Rc::from([]),
+             queue_handle: queue_handle.clone(),
+             primary_selection_manager_state,
+             primary_sources: Vec::new(),
+             data_device_manager_state,
+             data_sources: Vec::new(),
++            exit_handoff: None,
+             latest_seat: None,
+             loop_handle,
+             exit: false,
++            exit_requested: false,
+             seat_state,
+             reply_tx,
+             seats,
++            client,
++            binary: Default::default(),
++            offers: Default::default(),
++            transfers: Default::default(),
+         })
+     }
+ 
+@@ -113,34 +142,86 @@ impl State {
+         let latest = self.latest_seat.as_ref()?;
+         let seat = self.seats.get_mut(latest)?;
+ 
+-        if !seat.has_focus {
++        if !seat.has_focus || seat.latest_serial == 0 {
+             return None;
+         }
+-
+-        let contents = Rc::from(contents.into_bytes());
++        let contents: Arc<[u8]> = Arc::from(contents.into_bytes());
++        let data =
++            ALLOWED_MIME_TYPES.iter().map(|mime| ((*mime).to_owned(), contents.clone())).collect();
++        let offer = StoredOffer::new(data, self.client.memory.clone(), false).ok()?;
+ 
+         match ty {
+             SelectionTarget::Clipboard => {
+                 let mgr = self.data_device_manager_state.as_ref()?;
+-                self.data_selection_content = contents;
++                if self.data_sources.len() >= binary::MAX_SOURCES {
++                    return None;
++                }
+                 let source =
+                     mgr.create_copy_paste_source(&self.queue_handle, ALLOWED_MIME_TYPES.iter());
+-                source.set_selection(seat.data_device.as_ref().unwrap(), seat.latest_serial);
+-                self.data_sources.push(source);
++                source.set_selection(seat.data_device.as_ref()?, seat.latest_serial);
++                self.data_sources.push(ClipboardSource { source, offer, exit_mime_types: None });
+             },
+             SelectionTarget::Primary => {
+                 let mgr = self.primary_selection_manager_state.as_ref()?;
+-                self.primary_selection_content = contents;
++                if self.primary_sources.len() >= binary::MAX_SOURCES {
++                    return None;
++                }
+                 let source =
+                     mgr.create_selection_source(&self.queue_handle, ALLOWED_MIME_TYPES.iter());
+-                source.set_selection(seat.primary_device.as_ref().unwrap(), seat.latest_serial);
+-                self.primary_sources.push(source);
++                source.set_selection(seat.primary_device.as_ref()?, seat.latest_serial);
++                self.primary_sources.push(PrimarySource { source, offer });
+             },
+         }
+ 
+         Some(())
+     }
+ 
++    pub fn begin_exit(&mut self) {
++        self.exit = self.start_exit_handoff().is_none();
++    }
++
++    fn start_exit_handoff(&mut self) -> Option<()> {
++        let seat = self.seats.get(self.latest_seat.as_ref()?)?;
++        if !seat.has_focus || seat.latest_serial == 0 {
++            return None;
++        }
++        let device = seat.data_device.as_ref()?;
++        let selection = device.data().selection_offer()?;
++        let current = selection.with_mime_types(|types| {
++            self.data_sources.iter().find(|entry| {
++                entry.offer.marker.as_ref().is_some_and(|marker| types.contains(marker))
++            })
++        })?;
++        let types = current.exit_mime_types.as_ref()?;
++        let offer = current.offer.clone();
++        let source = self
++            .data_device_manager_state
++            .as_ref()?
++            .create_copy_paste_source(&self.queue_handle, types);
++        source.set_selection(device, seat.latest_serial);
++        let now = Instant::now();
++        // With no clipboard manager, give a reader only a short time to appear.
++        self.exit_handoff = Some(ExitHandoff {
++            source: source.inner().id(),
++            deadline: now + Duration::from_millis(250),
++            limit: now + Duration::from_millis(1500),
++            completed: false,
++        });
++        self.data_sources.push(ClipboardSource { source, offer, exit_mime_types: None });
++        Some(())
++    }
++
++    fn exit_transfer_finished(&mut self, source: &ObjectId) {
++        if let Some(handoff) = &mut self.exit_handoff
++            && &handoff.source == source
++            && !handoff.completed
++        {
++            handoff.completed = true;
++            // EOF has reached the receiver; allow its asynchronous read to finish.
++            handoff.deadline = (Instant::now() + Duration::from_millis(250)).min(handoff.limit);
++        }
++    }
++
+     /// Load selection for the given target.
+     pub fn load_selection(&mut self, ty: SelectionTarget) -> Result<()> {
+         let latest = self
+@@ -161,6 +242,10 @@ impl State {
+                     .and_then(|data| data.data().selection_offer())
+                     .ok_or_else(|| Error::other("selection is empty"))?;
+ 
++                if !self.offers.valid(selection.inner()) {
++                    return Err(Error::other("clipboard offer metadata exceeds its limit"));
++                }
++
+                 let mime_type =
+                     selection.with_mime_types(MimeType::find_allowed).ok_or_else(|| {
+                         Error::new(ErrorKind::NotFound, "supported mime-type is not found")
+@@ -190,85 +275,12 @@ impl State {
+             },
+         };
+ 
+-        // Mark FD as non-blocking so we won't block ourselves.
+-        set_non_blocking(read_pipe.as_raw_fd())?;
+-
+-        let mut reader_buffer = [0; 4096];
+-        let mut content = Vec::new();
+-        let _ = self.loop_handle.insert_source(read_pipe, move |_, file, state| {
+-            let file = unsafe { file.get_mut() };
+-            loop {
+-                match file.read(&mut reader_buffer) {
+-                    Ok(0) => {
+-                        let utf8 = String::from_utf8_lossy(&content);
+-                        let content = match utf8 {
+-                            Cow::Borrowed(_) => {
+-                                // Don't clone the read data.
+-                                let mut to_send = Vec::new();
+-                                mem::swap(&mut content, &mut to_send);
+-                                String::from_utf8(to_send).unwrap()
+-                            },
+-                            Cow::Owned(content) => content,
+-                        };
+-
+-                        // Post-process the content according to mime type.
+-                        let content = match mime_type {
+-                            MimeType::TextPlainUtf8 | MimeType::TextPlain => {
+-                                normalize_to_lf(content)
+-                            },
+-                            MimeType::Utf8String => content,
+-                        };
+-
+-                        let _ = state.reply_tx.send(Ok(content));
+-                        break PostAction::Remove;
+-                    },
+-                    Ok(n) => content.extend_from_slice(&reader_buffer[..n]),
+-                    Err(err) if err.kind() == ErrorKind::WouldBlock => break PostAction::Continue,
+-                    Err(err) => {
+-                        let _ = state.reply_tx.send(Err(err));
+-                        break PostAction::Remove;
+-                    },
+-                };
+-            }
+-        });
+-
++        self.receive_pipe(
++            read_pipe,
++            transfers::ReadReply::Text { sender: self.reply_tx.clone(), mime_type },
++        );
+         Ok(())
+     }
+-
+-    fn send_request(&mut self, ty: SelectionTarget, write_pipe: WritePipe, mime: String) {
+-        // We can only send strings, so don't do anything with the mime-type.
+-        if MimeType::find_allowed(&[mime]).is_none() {
+-            return;
+-        }
+-
+-        // Mark FD as non-blocking so we won't block ourselves.
+-        if set_non_blocking(write_pipe.as_raw_fd()).is_err() {
+-            return;
+-        }
+-
+-        // Don't access the content on the state directly, since it could change during
+-        // the send.
+-        let contents = match ty {
+-            SelectionTarget::Clipboard => self.data_selection_content.clone(),
+-            SelectionTarget::Primary => self.primary_selection_content.clone(),
+-        };
+-
+-        let mut written = 0;
+-        let _ = self.loop_handle.insert_source(write_pipe, move |_, file, _| {
+-            let file = unsafe { file.get_mut() };
+-            loop {
+-                match file.write(&contents[written..]) {
+-                    Ok(n) if written + n == contents.len() => {
+-                        written += n;
+-                        break PostAction::Remove;
+-                    },
+-                    Ok(n) => written += n,
+-                    Err(err) if err.kind() == ErrorKind::WouldBlock => break PostAction::Continue,
+-                    Err(_) => break PostAction::Remove,
+-                }
+-            }
+-        });
+-    }
+ }
+ 
+ impl SeatHandler for State {
+@@ -331,12 +343,15 @@ impl SeatHandler for State {
+             Capability::Keyboard => {
+                 seat_state.data_device = None;
+                 seat_state.primary_device = None;
++                seat_state.has_focus = false;
++                seat_state.latest_serial = 0;
+ 
+                 if let Some(keyboard) = seat_state.keyboard.take() {
+                     if keyboard.version() >= 3 {
+                         keyboard.release()
+                     }
+                 }
++                self.seat_lost_focus(&seat.id());
+             },
+             Capability::Pointer => {
+                 if let Some(pointer) = seat_state.pointer.take() {
+@@ -351,6 +366,7 @@ impl SeatHandler for State {
+ 
+     fn remove_seat(&mut self, _: &Connection, _: &QueueHandle<Self>, seat: WlSeat) {
+         self.seats.remove(&seat.id());
++        self.seat_lost_focus(&seat.id());
+     }
+ }
+ 
+@@ -407,7 +423,9 @@ impl DataDeviceHandler for State {
+     fn drop_performed(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &WlDataDevice) {}
+ 
+     // The selection is finished and ready to be used.
+-    fn selection(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &WlDataDevice) {}
++    fn selection(&mut self, _: &Connection, _: &QueueHandle<Self>, device: &WlDataDevice) {
++        self.selection_receipt(device);
++    }
+ }
+ 
+ impl DataSourceHandler for State {
+@@ -415,15 +433,36 @@ impl DataSourceHandler for State {
+         &mut self,
+         _: &Connection,
+         _: &QueueHandle<Self>,
+-        _: &WlDataSource,
++        source: &WlDataSource,
+         mime: String,
+         write_pipe: WritePipe,
+     ) {
+-        self.send_request(SelectionTarget::Clipboard, write_pipe, mime)
++        // An earlier source can still be serving a pipe while a later Copy is
++        // published. Select its own immutable bytes by protocol object identity.
++        let offer = self
++            .data_sources
++            .iter()
++            .find(|entry| entry.source.inner() == source)
++            .map(|entry| entry.offer.clone());
++        if let Some(offer) = offer
++            && let Some(bytes) = offer.bytes(&mime)
++        {
++            if let Some(handoff) = &mut self.exit_handoff
++                && handoff.source == source.id()
++                && !handoff.completed
++            {
++                handoff.deadline = handoff.limit;
++            }
++            self.send_pipe(write_pipe, offer, bytes, source.id());
++        }
+     }
+ 
+     fn cancelled(&mut self, _: &Connection, _: &QueueHandle<Self>, deleted: &WlDataSource) {
+-        self.data_sources.retain(|source| source.inner() != deleted)
++        if self.exit_handoff.as_ref().is_some_and(|handoff| handoff.source == deleted.id()) {
++            self.exit = true;
++        }
++        self.source_cancelled(&deleted.id());
++        self.data_sources.retain(|entry| entry.source.inner() != deleted);
+     }
+ 
+     fn accept_mime(
+@@ -485,11 +524,20 @@ impl PrimarySelectionSourceHandler for State {
+         &mut self,
+         _: &Connection,
+         _: &QueueHandle<Self>,
+-        _: &ZwpPrimarySelectionSourceV1,
++        source: &ZwpPrimarySelectionSourceV1,
+         mime: String,
+         write_pipe: WritePipe,
+     ) {
+-        self.send_request(SelectionTarget::Primary, write_pipe, mime);
++        let offer = self
++            .primary_sources
++            .iter()
++            .find(|entry| entry.source.inner() == source)
++            .map(|entry| entry.offer.clone());
++        if let Some(offer) = offer
++            && let Some(bytes) = offer.bytes(&mime)
++        {
++            self.send_pipe(write_pipe, offer, bytes, source.id());
++        }
+     }
+ 
+     fn cancelled(
+@@ -498,7 +546,7 @@ impl PrimarySelectionSourceHandler for State {
+         _: &QueueHandle<Self>,
+         deleted: &ZwpPrimarySelectionSourceV1,
+     ) {
+-        self.primary_sources.retain(|source| source.inner() != deleted)
++        self.primary_sources.retain(|entry| entry.source.inner() != deleted);
+     }
+ }
+ 
+@@ -525,10 +573,12 @@ impl Dispatch<WlKeyboard, ObjectId, State> for State {
+             WlKeyboardEvent::Enter { serial, .. } => {
+                 seat_state.latest_serial = serial;
+                 seat_state.has_focus = true;
++                state.latest_seat = Some(data.clone());
+             },
+             WlKeyboardEvent::Leave { .. } => {
+                 seat_state.latest_serial = 0;
+                 seat_state.has_focus = false;
++                state.seat_lost_focus(data);
+             },
+             _ => (),
+         }
+@@ -537,7 +587,6 @@ impl Dispatch<WlKeyboard, ObjectId, State> for State {
+ 
+ delegate_seat!(State);
+ delegate_pointer!(State);
+-delegate_data_device!(State);
+ delegate_primary_selection!(State);
+ delegate_registry!(State);
+ 
+@@ -577,17 +626,8 @@ impl Drop for ClipboardSeatState {
+     }
+ }
+ 
+-fn set_non_blocking(raw_fd: RawFd) -> std::io::Result<()> {
+-    let flags = unsafe { libc::fcntl(raw_fd, libc::F_GETFL) };
+-
+-    if flags < 0 {
+-        return Err(std::io::Error::last_os_error());
+-    }
+-
+-    let result = unsafe { libc::fcntl(raw_fd, libc::F_SETFL, flags | libc::O_NONBLOCK) };
+-    if result < 0 {
+-        return Err(std::io::Error::last_os_error());
+-    }
+-
++fn set_non_blocking(fd: impl AsFd) -> std::io::Result<()> {
++    let flags = rustix::fs::fcntl_getfl(&fd)?;
++    rustix::fs::fcntl_setfl(fd, flags | rustix::fs::OFlags::NONBLOCK)?;
+     Ok(())
+ }
+diff --git a/src/worker.rs b/src/worker.rs
+index 4906495..3c6f547 100644
+--- a/src/worker.rs
++++ b/src/worker.rs
+@@ -1,5 +1,6 @@
+ use std::io::{Error, Result};
+ use std::sync::mpsc::Sender;
++use std::sync::{Arc, atomic::Ordering};
+ 
+ use sctk::reexports::calloop::channel::Channel;
+ use sctk::reexports::calloop::{EventLoop, channel};
+@@ -7,6 +8,7 @@ use sctk::reexports::calloop_wayland_source::WaylandSource;
+ use sctk::reexports::client::Connection;
+ use sctk::reexports::client::globals::registry_queue_init;
+ 
++use crate::rich::{Inner, Operation};
+ use crate::state::{SelectionTarget, State};
+ 
+ /// Spawn a clipboard worker, which dispatches its own `EventQueue` and handles
+@@ -16,17 +18,17 @@ pub fn spawn(
+     display: Connection,
+     rx_chan: Channel<Command>,
+     worker_replier: Sender<Result<String>>,
++    client: Arc<Inner>,
+ ) -> Option<std::thread::JoinHandle<()>> {
+     std::thread::Builder::new()
+         .name(name)
+         .spawn(move || {
+-            worker_impl(display, rx_chan, worker_replier);
++            worker_impl(display, rx_chan, worker_replier, client);
+         })
+         .ok()
+ }
+ 
+ /// Clipboard worker thread command.
+-#[derive(Eq, PartialEq)]
+ pub enum Command {
+     /// Store data to a clipboard.
+     Store(String),
+@@ -36,6 +38,10 @@ pub enum Command {
+     Load,
+     /// Load primary selection.
+     LoadPrimary,
++    /// A bounded binary request from a command-only client.
++    Rich(Operation),
++    /// Wake maintenance after a request future is cancelled.
++    Wake,
+     /// Shutdown the worker.
+     Exit,
+ }
+@@ -45,57 +51,98 @@ fn worker_impl(
+     connection: Connection,
+     rx_chan: Channel<Command>,
+     reply_tx: Sender<Result<String>>,
++    client: Arc<Inner>,
+ ) {
++    // Cover initialization failure, connection loss and ordinary owner shutdown.
++    struct StopOnExit(Arc<Inner>);
++    impl Drop for StopOnExit {
++        fn drop(&mut self) {
++            self.0.ready.store(false, Ordering::Release);
++            self.0.stopped.store(true, Ordering::Release);
++        }
++    }
++    let _stop = StopOnExit(client.clone());
+     let (globals, event_queue) = match registry_queue_init(&connection) {
+         Ok(data) => data,
+         Err(_) => return,
+     };
+ 
+-    let mut event_loop = EventLoop::<State>::try_new().unwrap();
++    let Ok(mut event_loop) = EventLoop::<State>::try_new() else {
++        return;
++    };
+     let loop_handle = event_loop.handle();
+ 
+-    let mut state = match State::new(&globals, &event_queue.handle(), loop_handle.clone(), reply_tx)
+-    {
++    let mut state = match State::new(
++        &globals,
++        &event_queue.handle(),
++        loop_handle.clone(),
++        reply_tx,
++        client.clone(),
++    ) {
+         Some(state) => state,
+         None => return,
+     };
+ 
+-    loop_handle
+-        .insert_source(rx_chan, |event, _, state| {
++    let command_connection = connection.clone();
++    if loop_handle
++        .insert_source(rx_chan, move |event, _, state| {
+             if let channel::Event::Msg(event) = event {
+                 match event {
+                     Command::StorePrimary(contents) => {
+                         state.store_selection(SelectionTarget::Primary, contents);
+-                    },
++                    }
+                     Command::Store(contents) => {
+                         state.store_selection(SelectionTarget::Clipboard, contents);
+-                    },
++                    }
+                     Command::Load if state.data_device_manager_state.is_some() => {
+                         if let Err(err) = state.load_selection(SelectionTarget::Clipboard) {
+                             let _ = state.reply_tx.send(Err(err));
+                         }
+-                    },
++                    }
+                     Command::LoadPrimary if state.data_device_manager_state.is_some() => {
+                         if let Err(err) = state.load_selection(SelectionTarget::Primary) {
+                             let _ = state.reply_tx.send(Err(err));
+                         }
+-                    },
++                    }
+                     Command::Load | Command::LoadPrimary => {
+                         let _ = state
+                             .reply_tx
+                             .send(Err(Error::other("requested selection is not supported")));
+-                    },
+-                    Command::Exit => state.exit = true,
++                    }
++                    Command::Rich(operation) => state.request(&command_connection, operation),
++                    Command::Wake => {}
++                    Command::Exit => state.exit_requested = true,
+                 }
++            } else {
++                state.exit = true;
+             }
+         })
+-        .unwrap();
++        .is_err()
++    {
++        return;
++    }
+ 
+-    WaylandSource::new(connection, event_queue).insert(loop_handle).unwrap();
++    if WaylandSource::new(connection, event_queue)
++        .insert(loop_handle)
++        .is_err()
++    {
++        return;
++    }
++    client.ready.store(true, Ordering::Release);
+ 
+     loop {
+-        if event_loop.dispatch(None, &mut state).is_err() || state.exit {
++        // Clear before maintenance observes cancellation. Keeping this set
++        // through channel dispatch also prevents repeated rejected requests
++        // from continuously feeding wake messages into that dispatch.
++        client.wake_pending.store(false, Ordering::Release);
++        state.maintain();
++        if state.exit || event_loop.dispatch(state.timeout(), &mut state).is_err() {
+             break;
+         }
++        // Process any focus/selection events in this dispatch before deciding
++        // whether we still own a selection that can be handed off.
++        if std::mem::take(&mut state.exit_requested) {
++            state.begin_exit();
++        }
+     }
+ }
