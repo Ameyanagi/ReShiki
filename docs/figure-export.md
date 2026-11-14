@@ -10,9 +10,27 @@ Open **Export → Figure**, choose a format from the menu (**Vector**: **SVG**, 
 | PNG                      | An opaque image, normally at 1200 dpi, with physical resolution metadata.                                   |
 | EMF for Office (Windows) | Vector picture for Microsoft Office at the drawing's physical size. Text becomes vector outlines.           |
 
-File exports in all formats include the document’s canvas colors and background. **Copy image** instead uses a transparent background, preserving the visible ink for slides and other documents. **Canvas: Dark** exports white bonds and labels on black paper; **View → Interface** changes only the surrounding UI.
+By default, file exports in all formats include the document’s canvas colors and background, and copied pictures use a transparent background, preserving the visible ink for slides and other documents. **Canvas: Dark** exports white bonds and labels on black paper; **View → Interface** changes only the surrounding UI. To change either default, see [Background](#background).
 
 Canvas zoom, rulers, grid and crosshair do not affect the exported figure. **Export pages as PDF** uses an explicitly configured publication layout; ordinary figure export crops to the artwork. See [publication pages](publication-pages.md).
+
+## Background
+
+Copied pictures and exported files each have their own background. Choose it in **Settings → Copy & export**, or for exported files in **Export → Figure → Background**. ReShiki remembers both choices.
+
+| Background  | Result                                                                                  |
+| ----------- | --------------------------------------------------------------------------------------- |
+| Transparent | No background; slides and documents show through. The default for copies.               |
+| Canvas      | The drawing as you see it, on its own canvas color. The default for exported files.     |
+| White       | White paper, for journals and posters. A drawing on a dark canvas switches to dark ink. |
+| Black       | Black paper, for dark slides. Black ink switches to white.                              |
+| Custom      | The color chosen under **Settings → Copy & export → Your colors**.                      |
+
+On **White**, **Black** or **Custom**, black and white ink swap when that makes the drawing readable: dark ink on a light background, light ink on a dark one. Colored atoms and objects keep their colors. Palette colors take the tone they have on the matching canvas, and custom colors stay exact. **Canvas** keeps the drawing's own colors, and **Transparent** keeps the canvas ink, as copies always did.
+
+To copy a picture on another background once, right-click the drawing and choose **Copy image on**, then a background or one of your saved colors. A tick marks your default; **Change the default…** opens **Settings → Copy & export**.
+
+The background applies to PNG, SVG, PDF, **Export pages as PDF** and EMF for Office. On Windows, the Office preview that **Copy** adds uses the copy background too.
 
 ## Text in SVG files
 
@@ -24,10 +42,12 @@ Turn on **Keep text editable**, below the export button when **SVG** is chosen, 
 
 A PNG, SVG or single-figure PDF from ReShiki can carry the ReShiki drawing inside the file. Paste that picture into ReShiki, drop the file on the window, or open it with **File → Open**, and you get the editable drawing back instead of a picture. **Import → Paste picture** still inserts raster images instead of restoring their drawing. SVG and PDF without a ReShiki drawing cannot be imported.
 
-- **Copy**, **Copy image** and **Copy as → PNG / SVG / PDF** put the drawing in their PNG, SVG and PDF pictures when it fits the limit.
-- **File export** adds it when **Include editable drawing** is on, below the export button. It is on by default, and ReShiki remembers your choice. **Export pages as PDF** never includes it, because page edges can clip parts of the drawing. **EMF for Office** does not carry it yet.
+- One switch decides for both copies and files: **Include editable drawing**, below the export button on the **Export** tab, or **Put the editable drawing in pictures** in **Settings → Copy & export**. It is on by default, and ReShiki remembers your choice.
+- With it on, **Copy**, **Copy image** and **Copy as → PNG / SVG / PDF** put the drawing in their PNG, SVG and PDF pictures when it fits the limit, and **file export** adds it to PNG, SVG and single-figure PDF files.
+- With it off, copied and exported pictures carry no drawing. Copying between ReShiki windows still keeps the drawing, because ReShiki puts its own copy of it on the clipboard.
+- **Export pages as PDF** never includes it, because page edges can clip parts of the drawing. **EMF for Office** does not carry it yet.
 
-The drawing inside a picture holds exactly what the picture shows: the selected objects for a copy of a selection, and the whole drawing for a file export. It has no file paths, user names, recent colors, import notes, page setup, recovery data or Undo history. Anyone who gets the picture can open that drawing in ReShiki, so turn **Include editable drawing** off for figures you send to a journal or publish.
+The drawing inside a picture holds exactly what the picture shows: the selected objects for a copy of a selection, and the whole drawing for a file export. It has no file paths, user names, recent colors, import notes, page setup, recovery data or Undo history. Anyone who gets the picture can open that drawing in ReShiki, so turn **Include editable drawing** off for figures you send to a journal or publish. In a PNG, the drawing is a text chunk after the image data; PNG files from older versions, which put it before the image data, still open as drawings.
 
 A drawing larger than 2 MB compressed, usually one with large embedded photos, is not put in pictures. The status bar says so, and the file or clipboard picture is still written. Normal **Copy** keeps the editable drawing for ReShiki either way.
 

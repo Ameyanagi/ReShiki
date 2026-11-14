@@ -239,6 +239,7 @@ export default defineConfig({
                 "selection-and-ring-placement",
                 "selection-cleanup",
                 "selection-transforms",
+                "settings",
                 "signpath-setup",
                 "template-library",
                 "template-placement",
