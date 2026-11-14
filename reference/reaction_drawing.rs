@@ -211,7 +211,8 @@ fn reaction_drawings_match_native_scene_assembly() -> anyhow::Result<()> {
                 .map(|doc| (e, doc))
         });
         let case_failures = if let Some(restriction) = &case.generic_restriction {
-            // #300 restricts these explicit generic RXN records. Keep the
+            // #300 restricts these explicit generic RXN records, and a data
+            // group's charge or hydrogen count must fit its field. Keep the
             // original drawing capture and require a valid legacy Document
             // plus the exact independently predicted read-stage rejection.
             let failure = if matches!(
@@ -222,6 +223,8 @@ fn reaction_drawings_match_native_scene_assembly() -> anyhow::Result<()> {
                     | "v2000_link_nodes"
                     | "polymer_parent_atoms"
                     | "polymer_crossing_correspondence"
+                    | "substance_group_charge_range"
+                    | "substance_group_hydrogen_range"
             ) {
                 restrictions::rejection_difference(
                     restriction,
