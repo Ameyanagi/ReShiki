@@ -57,10 +57,13 @@ fn private_directory(path: &Path, uid: u32) -> io::Result<File> {
 /// The folder that holds the endpoint's directory, in a place only this
 /// user can write: `XDG_RUNTIME_DIR`, else `<run_user>/<uid>` (systemd's
 /// `/run/user`), each owned by the user with mode 0700; else the user's own
-/// cache folder, `XDG_CACHE_HOME` or `$HOME/.cache`.
+/// cache folder, `XDG_CACHE_HOME` or else `$HOME/.cache`, made when missing.
+/// A cache folder counts, followed through any symbolic link, only when the
+/// user owns it and no one else can write to it.
 ///
-/// Never `/tmp`: any user could create the endpoint's name there first,
-/// and this user could then neither save nor reach a running ReShiki.
+/// Never `/tmp` or another shared folder: any user could create the
+/// endpoint's name there first, and this user could then neither save nor
+/// reach a running ReShiki.
 fn base(
     uid: u32,
     variable: impl Fn(&str) -> Option<OsString>,
@@ -78,16 +81,23 @@ fn base(
     if private(&runtime) {
         return Ok(runtime);
     }
-    let cache = variable("XDG_CACHE_HOME")
+    let own = |cache: PathBuf| {
+        DirBuilder::new()
+            .recursive(true)
+            .mode(0o700)
+            .create(&cache)
+            .ok()?;
+        let cache = cache.canonicalize().ok()?;
+        let meta = std::fs::metadata(&cache).ok()?;
+        (meta.is_dir() && meta.uid() == uid && meta.mode() & 0o022 == 0).then_some(cache)
+    };
+    variable("XDG_CACHE_HOME")
         .map(PathBuf::from)
         .filter(|path| path.is_absolute())
-        .or_else(|| variable("HOME").map(|home| PathBuf::from(home).join(".cache")))
-        .ok_or_else(denied)?;
-    DirBuilder::new()
-        .recursive(true)
-        .mode(0o700)
-        .create(&cache)?;
-    Ok(cache)
+        .into_iter()
+        .chain(variable("HOME").map(|home| PathBuf::from(home).join(".cache")))
+        .find_map(own)
+        .ok_or_else(denied)
 }
 
 #[derive(Clone)]

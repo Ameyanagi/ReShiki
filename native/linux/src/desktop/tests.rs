@@ -336,3 +336,63 @@ fn the_endpoint_folder_is_never_a_shared_temporary_folder() {
     // Nothing to go by: an error, never /tmp.
     assert!(base(uid, |_| None, &root.join("no-run")).is_err());
 }
+
+/// S17: a cache folder that already exists is used only when it is the
+/// user's own and no one else can write to it. `XDG_CACHE_HOME=/tmp`, or a
+/// link into such a folder, would put the endpoint's predictable name where
+/// another user can create it first.
+#[test]
+fn a_cache_folder_others_can_write_to_is_not_used() {
+    let fixture = Fixture::new();
+    let (uid, root) = (fixture.endpoint.uid, &fixture.path);
+    let home = root.join("home");
+    let folder = |uid: u32, cache: &Path| {
+        let cache = cache.to_owned();
+        base(
+            uid,
+            |name| match name {
+                "XDG_CACHE_HOME" => Some(cache.clone().into()),
+                "HOME" => Some(home.clone().into()),
+                _ => None,
+            },
+            &root.join("no-run"),
+        )
+    };
+    let mode = |path: &Path, mode| {
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode)).unwrap();
+    };
+    let shared = root.join("shared");
+    std::fs::create_dir(&shared).unwrap();
+    // As /tmp, then writable by a group, then by anyone without the sticky bit.
+    for bits in [0o1777, 0o770, 0o777] {
+        mode(&shared, bits);
+        assert_eq!(
+            folder(uid, &shared).unwrap(),
+            home.join(".cache"),
+            "{bits:o}"
+        );
+    }
+    // A link into the shared folder is that folder.
+    let link = root.join("link");
+    symlink(&shared, &link).unwrap();
+    assert_eq!(folder(uid, &link).unwrap(), home.join(".cache"));
+    // A folder of another user.
+    let private = root.join("private");
+    std::fs::create_dir(&private).unwrap();
+    mode(&private, 0o755);
+    assert!(folder(uid + 1, &private).is_err());
+    // The user's own folder is used, through a link too.
+    assert_eq!(folder(uid, &private).unwrap(), private);
+    std::fs::remove_file(&link).unwrap();
+    symlink(&private, &link).unwrap();
+    assert_eq!(folder(uid, &link).unwrap(), private);
+    // No private folder at all: an error.
+    mode(&home.join(".cache"), 0o777);
+    assert!(folder(uid, &shared).is_err());
+    // The endpoint is made in the folder that was checked.
+    mode(&home.join(".cache"), 0o700);
+    let endpoint = folder(uid, &shared).unwrap().join("reshiki-desktop-test");
+    private_directory(&endpoint, uid).unwrap();
+    assert!(home.join(".cache/reshiki-desktop-test").is_dir());
+    assert_eq!(std::fs::read_dir(&shared).unwrap().count(), 0);
+}

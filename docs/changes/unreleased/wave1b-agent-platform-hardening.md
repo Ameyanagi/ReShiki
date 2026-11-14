@@ -32,7 +32,7 @@ issues: []
 - **Linux without `XDG_RUNTIME_DIR`.** ReShiki no longer uses a folder under
   `/tmp` to find its running window. Another user could create that folder
   first, and saving then failed. It uses `/run/user/<uid>`, or your cache
-  folder.
+  folder when it is yours and no one else can write to it.
 - **LibreOffice extension.** Without a chosen app the extension starts the
   installed ReShiki before a `reshiki` found on `PATH`.
 - **Microsoft 365 companion.** The companion serves the task pane only to
