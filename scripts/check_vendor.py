@@ -20,6 +20,8 @@ import tomllib
 import urllib.request
 from pathlib import Path
 
+from download_tls import verified_context
+
 ROOT = Path(__file__).resolve().parents[1]
 VENDOR = ROOT / "vendor"
 PATCHES = VENDOR / "patches"
@@ -44,7 +46,7 @@ def upstream_source(name, version, checksum, temporary):
         break
     else:
         url = f"https://static.crates.io/crates/{name}/{package}.crate"
-        with urllib.request.urlopen(url) as response:
+        with urllib.request.urlopen(url, timeout=60, context=verified_context()) as response:
             data = response.read()
     if hashlib.sha256(data).hexdigest() != checksum:
         raise ValueError(f"{package}.crate does not match the sha256 in vendor/README.md")
