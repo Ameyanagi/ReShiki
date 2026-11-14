@@ -19,7 +19,7 @@ base64 = "0.22"
 directories-next = "2"
 flate2 = { version = "1.1.10", default-features = false, features = ["rust_backend"] }
 pdf-writer = "0.12.1"
-png = "0.17"
+png = "0.18"
 resvg = "0.45"
 roxmltree = "0.20"
 serde = { version = "1", features = ["derive", "rc"] }

@@ -230,7 +230,7 @@ fn png_payload_has_standard_itxt_and_valid_crcs_and_decodes_pixels() {
     assert_eq!(kinds[1], b"iTXt");
     let decoder = png::Decoder::new(std::io::Cursor::new(&bytes));
     let mut reader = decoder.read_info().unwrap();
-    let mut pixels = vec![0; reader.output_buffer_size()];
+    let mut pixels = vec![0; reader.output_buffer_size().unwrap()];
     let info = reader.next_frame(&mut pixels).unwrap();
     assert_eq!(&pixels[..info.buffer_size()], &[12, 34, 56, 255]);
     assert_eq!(read(&bytes).unwrap().unwrap(), doc);
