@@ -13,7 +13,7 @@ issues: []
   **White**, **Black** or **Custom** background, with separate defaults for each:
   copies stay transparent and exports keep the canvas unless you change them.
   On white, black or a color, black and white ink swap so a dark drawing stays
-  readable; colored atoms keep their colors. Save your own colors for
+  readable; every other color stays as it is. Save your own colors for
   **Custom** in **Settings → Copy & export**. The **Export** tab has the same
   **Background** choice, and the right-click menu has **Copy image on** for one
   copy. See [Exporting figures](figure-export.md#background).

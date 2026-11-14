@@ -26,11 +26,11 @@ Copied pictures and exported files each have their own background. Choose it in 
 | Black       | Black paper, for dark slides. Black ink switches to white.                              |
 | Custom      | The color chosen under **Settings → Copy & export → Your colors**.                      |
 
-On **White**, **Black** or **Custom**, black and white ink swap when that makes the drawing readable: dark ink on a light background, light ink on a dark one. Colored atoms and objects keep their colors. Palette colors take the tone they have on the matching canvas, and custom colors stay exact. **Canvas** keeps the drawing's own colors, and **Transparent** keeps the canvas ink, as copies always did.
+On **White**, **Black** or **Custom**, black and white ink swap when that makes the drawing readable: dark ink on a light background, light ink on a dark one. Every other color stays as the drawing's canvas shows it: colored atoms, palette colors and custom colors. **Canvas** keeps the drawing's own colors, and **Transparent** keeps the canvas ink, as copies always did.
 
 To copy a picture on another background once, right-click the drawing and choose **Copy image on**, then a background or one of your saved colors. A tick marks your default; **Change the default…** opens **Settings → Copy & export**.
 
-The background applies to PNG, SVG, PDF, **Export pages as PDF** and EMF for Office. On Windows, the Office preview that **Copy** adds uses the copy background too.
+The background applies to PNG, SVG, PDF, **Export pages as PDF** and EMF for Office. On Windows, the Office preview that **Copy** adds uses the copy background too, also when Office rebuilds it after you edit the embedded drawing.
 
 ## Text in SVG files
 

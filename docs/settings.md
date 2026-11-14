@@ -12,7 +12,8 @@ tab, stay where they are and change the same preference.
    run **Settings** from the command palette.
 2. Choose a section on the left, or type in **Search settings** to list every
    setting whose name or description contains the words.
-3. Change a setting. It saves at once.
+3. Change a setting. It saves at once. If it cannot be saved, its section says
+   why.
 4. Press **Esc**, press **Cmd+,** or **Ctrl+,** again, or click **Done**. The
    keyboard goes back to the drawing.
 
@@ -25,23 +26,29 @@ tab, stay where they are and change the same preference.
 | Assistant      | **Model**, **Reasoning** and **Accept all edits**. The model and reasoning lists fill in once the assistant connects.                                                                                                  |
 | Updates        | **Check for updates automatically** and **Channel** (**Stable** or **Nightly**). Changing the channel checks for that channel's latest release.                                                                        |
 
-To add a background color, click **+** under **Your colors**, type the color as
-`#1F4E79`, `31, 78, 121` or `oklch(0.42 0.09 250)`, and click **Add**. The new
-color becomes the **Custom** color. Click a saved color to use it as **Custom**.
-ReShiki keeps the eight newest colors.
+To add a background color, click **+** under **Your colors**. Pick a palette
+color, or type the color as `#1F4E79`, `31, 78, 121` or `oklch(0.42 0.09 250)`
+and click **Add**. The new color becomes the **Custom** color, and copied
+pictures use it. Click a saved color to do the same with it. ReShiki keeps the
+eight newest colors.
 
 ## Limits
 
 - The browser editor has no **Assistant** or **Updates** section: it has no
   local assistant and updates with its page.
-- **Esc** closes the whole page, also while you type a color or search.
+- While the color picker is open, **Esc** closes only the picker. Otherwise it
+  closes the whole page, also while you search.
+- **Write Ξ/ξ for unknown configuration** waits while a name is being made, as
+  it does on the **Names** panel.
 - Settings changes nothing in a drawing that is already open, except where the
   preference itself does, such as **Interface**.
 
 ## Implementation notes
 
 - The page is `src/app/settings_page.rs`. Each row sends the same message as
-  its existing control, so saving and error reporting stay in one place.
+  its existing control, so saving and error reporting stay in one place. The
+  color picker shares the swatches and color box of the style bar's color
+  popover.
 - The appearance preferences and the new background keys live in
   `appearance.json` in ReShiki's data folder: `copy_background`,
   `export_background` (`transparent`, `canvas`, `white`, `black` or `custom`),
