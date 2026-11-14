@@ -1763,6 +1763,9 @@ fn isolated_ring(doc: &Document, ids: &[u64]) -> Option<Vec<u64>> {
             || atom.isotope != 0
             || atom.aromatic
             || atom.stereo.is_some()
+            || atom.stereo_group.is_some()
+            || atom.radical_electrons != 0
+            || !atom.marks.is_empty()
             || atom.explicit_h != 0
             || atom.no_implicit
             || atom.map_num != 0
