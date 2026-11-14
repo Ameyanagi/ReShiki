@@ -70,8 +70,10 @@ fn unreadable_preferences_are_set_aside_before_a_save_replaces_them() {
     loaded.save_to(&path).unwrap();
     assert!(!bad.exists());
 
-    // A file too large to read is kept too.
-    std::fs::write(&path, vec![b' '; 65536]).unwrap();
+    // A file too large to read is kept too, even when it is valid JSON.
+    let mut large = b"{}".to_vec();
+    large.resize(65536, b' ');
+    std::fs::write(&path, &large).unwrap();
     loaded.save_to(&path).unwrap();
     assert_eq!(std::fs::read(&bad).unwrap().len(), 65536);
 }
