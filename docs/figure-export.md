@@ -43,7 +43,7 @@ EMF file export is available on Windows only and supports figures up to 40 inche
 
 ## Large PNG drawings
 
-Large drawings, including the complete shortcut gallery, may exceed the image memory limit at 1200 dpi. File export automatically chooses the highest resolution that fits, from 1200, 600, 300, 150, 96 and 72 dpi, with a limit of 80 million pixels. This changes pixel density, not the physical dimensions, drawing content or native document.
+Large drawings, including the complete shortcut gallery, may exceed the image memory limit at 1200 dpi. File export automatically chooses the highest resolution that fits, from 1200, 600, 300, 150, 96 and 72 dpi, with a limit of 80 million pixels and 32,767 pixels on a side. This changes pixel density, not the physical dimensions, drawing content or native document.
 
 The saved-file status reports the actual width, height and DPI. Use SVG or PDF if you need vector quality at any magnification. Exceptionally large drawings that exceed the limit even at 72 dpi still require a vector format. Clipboard PNG images retain their fixed 1200-dpi sizing and can be omitted for an oversized drawing; see [clipboard support](clipboard.md).
 

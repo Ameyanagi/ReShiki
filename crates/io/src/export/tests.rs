@@ -296,6 +296,48 @@ fn raster_budget_rejects_invalid_and_extreme_sizes_without_allocating() {
 }
 
 #[test]
+fn png_sides_are_capped_whatever_the_pixel_count() {
+    // One long line: 2.6 million pixels at 72 dpi, but 43,688 of them wide.
+    assert_eq!(
+        png_dimensions(58_250., 80., RasterBudget::FILE)
+            .err()
+            .as_deref(),
+        Some("Drawing is too large for a PNG even at 72 dpi; use SVG or PDF.")
+    );
+    // The widest PNG, and one that steps down a resolution to stay within it.
+    assert_eq!(
+        png_dimensions(43_689., 80., RasterBudget::FILE),
+        Ok((FILE_SIDE, 60, 72))
+    );
+    assert_eq!(
+        png_dimensions(3_000., 80., RasterBudget::FILE),
+        Ok((18_750, 500, 600))
+    );
+}
+
+#[test]
+fn an_oversized_png_is_refused_before_the_drawing_is_rendered() {
+    use crate::document::Point;
+    let rendered = || SCENES.with(std::cell::Cell::get);
+    let mut doc = Document::default();
+    doc.add_atom("C", Point::default());
+    doc.add_atom("N", Point::new(200_000., 200_000.));
+    let before = rendered();
+    for result in [
+        figure(&doc, "png"),
+        figure_with_budget(&doc, "png", 1_000),
+        clipboard_figure(&doc, "png"),
+    ] {
+        let error = result.err().unwrap();
+        assert!(error.starts_with("Drawing is too large for a"), "{error}");
+    }
+    assert_eq!(rendered(), before);
+    // Vector formats have no pixel budget.
+    assert!(figure(&doc, "svg").is_ok());
+    assert_eq!(rendered(), before + 1);
+}
+
+#[test]
 fn windows_clipboard_resolution_fits_dib_office_and_native_picture_limits() {
     let budget = RasterBudget::clipboard(true);
     assert_eq!(png_dimensions(100., 100., budget), Ok((1250, 1250, 1200)));

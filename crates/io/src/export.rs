@@ -121,6 +121,11 @@ pub async fn publication(
     editable: bool,
     max_pixels: u64,
 ) -> Result<Publication, String> {
+    if format == "png" && !pages {
+        // Before the chemistry check and the render, which cost the most.
+        doc.validate()?;
+        png_fits(&doc, RasterBudget::file(max_pixels))?;
+    }
     let (doc, notice) = figure_document(engine, doc).await?;
     let doc = doc.current();
     let attachment_notice = pages
@@ -198,17 +203,7 @@ fn figure_with_budget_and_drawing(
 ) -> Result<Figure, String> {
     with_attachment_notice(
         doc,
-        render_drawing(
-            doc,
-            format,
-            false,
-            RasterBudget {
-                adaptive: true,
-                pixels: max_pixels.min(FILE_PIXELS),
-                side: u32::MAX,
-            },
-            drawing,
-        ),
+        render_drawing(doc, format, false, RasterBudget::file(max_pixels), drawing),
     )
 }
 
@@ -271,6 +266,16 @@ fn render_drawing(
     drawing: Option<&[u8]>,
 ) -> Result<Figure, String> {
     doc.validate()?;
+    let budget = if clipboard {
+        RasterBudget::clipboard(cfg!(windows))
+    } else {
+        file_budget
+    };
+    if format == "png" {
+        png_fits(doc, budget)?;
+    }
+    #[cfg(test)]
+    SCENES.with(|scenes| scenes.set(scenes.get() + 1));
     let svg = if clipboard {
         scene::svg(doc)
     } else {
@@ -307,11 +312,6 @@ fn render_drawing(
             detail: None,
         }),
         "png" => {
-            let budget = if clipboard {
-                RasterBudget::clipboard(cfg!(windows))
-            } else {
-                file_budget
-            };
             let (width, height, dpi) =
                 png_dimensions(tree.size().width(), tree.size().height(), budget)?;
             let scale = dpi as f32 / 96.0;
@@ -427,6 +427,9 @@ fn single_pdf(tree: &resvg::usvg::Tree, drawing: Option<&[u8]>) -> Result<Vec<u8
 
 /// The pixel budget of a file-export PNG.
 pub const FILE_PIXELS: u64 = 80_000_000;
+/// The longest side of an exported PNG. Many image readers refuse a longer
+/// one, and a single line of text can be that long within the pixel budget.
+pub const FILE_SIDE: u32 = 32_767;
 
 #[derive(Clone, Copy)]
 struct RasterBudget {
@@ -435,11 +438,19 @@ struct RasterBudget {
     side: u32,
 }
 impl RasterBudget {
-    const FILE: Self = Self {
-        adaptive: true,
-        pixels: FILE_PIXELS,
-        side: u32::MAX,
-    };
+    const FILE: Self = Self::file(FILE_PIXELS);
+
+    const fn file(pixels: u64) -> Self {
+        Self {
+            adaptive: true,
+            pixels: if pixels < FILE_PIXELS {
+                pixels
+            } else {
+                FILE_PIXELS
+            },
+            side: FILE_SIDE,
+        }
+    }
 
     fn clipboard(windows: bool) -> Self {
         if windows {
@@ -457,6 +468,47 @@ impl RasterBudget {
             }
         }
     }
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Scenes built for a figure on this thread.
+    static SCENES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Refuse a PNG that cannot fit `budget` before the drawing is rendered. A
+/// drawing whose atoms fit goes on to be rendered and measured as before. One
+/// whose atoms alone do not fit is measured from its scene, which is exact and
+/// costs less than rendering it.
+fn png_fits(doc: &Document, budget: RasterBudget) -> Result<(), String> {
+    use crate::document::Point;
+    let Some(first) = doc.atoms.first() else {
+        return Ok(());
+    };
+    // SVG user units are CSS pixels; the drawing is sized in points.
+    let pixels = crate::style::DEFAULT.points_per_world() * 96. / 72.;
+    let fits = |lo: Point, hi: Point| {
+        png_dimensions(
+            ((hi.x - lo.x) * pixels).max(1.),
+            ((hi.y - lo.y) * pixels).max(1.),
+            budget,
+        )
+    };
+    let span = doc
+        .atoms
+        .iter()
+        .fold((first.position, first.position), |(lo, hi), atom| {
+            let at = atom.position;
+            (
+                Point::new(lo.x.min(at.x), lo.y.min(at.y)),
+                Point::new(hi.x.max(at.x), hi.y.max(at.y)),
+            )
+        });
+    if fits(span.0, span.1).is_ok() {
+        return Ok(());
+    }
+    let (lo, hi) = scene::bounds(&scene::primitives(doc));
+    fits(lo, hi).map(|_| ())
 }
 
 /// Choose resolution before allocating pixels. PNG resolution metadata keeps
