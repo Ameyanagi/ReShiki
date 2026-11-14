@@ -315,70 +315,31 @@ impl Prepared {
             .filter(|(_, new)| host.contains(new))
             .collect();
         let original_id = |id: u64| restore.get(&id).copied().unwrap_or(id);
-        let endpoint_atoms = placed.atoms.clone();
-        let endpoint_mapping: HashMap<_, _> = endpoint_atoms
-            .iter()
-            .map(|atom| (atom.id, original_id(atom.id)))
-            .collect();
-        // Restore IDs of moved objects simultaneously. Only shared atoms disappear;
-        // destination IDs, labels, remote stereo and unrelated objects retain identity.
         for a in &mut placed.atoms {
             if let Some(&id) = restore.get(&a.id) {
-                a.id = id;
                 // Template insertion gives copies fresh groups; these atoms were
                 // moved within this drawing and keep their original membership.
                 a.stereo_group = self.fragment.atom(id).and_then(|atom| atom.stereo_group);
             }
-            for member in &mut a.centroid {
-                *member = original_id(*member);
-            }
-            if let Some(stereo) = &mut a.stereo {
-                for neighbor in &mut stereo.neighbors {
-                    *neighbor = original_id(*neighbor);
-                }
-            }
         }
-        for fill in &mut placed.ring_fills {
-            for id in &mut fill.atoms {
-                *id = original_id(*id);
-            }
-        }
-        for b in &mut placed.bonds {
-            b.a = original_id(b.a);
-            b.b = original_id(b.b);
-            for neighbor in &mut b.stereo_atoms {
-                *neighbor = original_id(*neighbor);
-            }
-        }
-        for a in &mut placed.annotations {
-            a.id = original_id(a.id);
-        }
-        for a in &mut placed.arrows {
-            a.id = original_id(a.id);
-        }
-        for g in &mut placed.graphics {
-            g.id = original_id(g.id);
-        }
-        for name in &mut placed.molecule_names {
-            name.annotation = original_id(name.annotation);
-            for atom in &mut name.atoms {
-                *atom = original_id(*atom);
-            }
-        }
-        for label in &mut placed.arrow_labels {
-            label.arrow = original_id(label.arrow);
-            label.annotation = original_id(label.annotation);
-        }
-        placed.depth_appearance =
-            crate::depth_appearance::remap(&placed.depth_appearance, &endpoint_mapping);
-        for model in &mut placed.models {
-            // Only a moved model has every ID in `restore`.
+        // Only a moved model has every ID in `restore`.
+        let mut models = std::mem::take(&mut placed.models);
+        for model in &mut models {
             let mut moved = model.clone();
             if moved.remap(&restore).is_some() {
                 *model = moved;
             }
         }
-        crate::arrow_anchors::remap_for_join(&mut placed, &endpoint_atoms, &endpoint_mapping);
+        // Restore IDs of moved objects simultaneously. Only shared atoms disappear;
+        // destination IDs, labels, remote stereo and unrelated objects retain identity.
+        let restored: HashMap<_, _> = placed
+            .all_ids()
+            .into_iter()
+            .chain(placed.groups.iter().map(|g| g.id))
+            .map(|id| (id, original_id(id)))
+            .collect();
+        editing::remap_ids(&mut placed, &restored).ok_or("The fragment could not be joined.")?;
+        placed.models = models;
         // Preparation deletes moving atoms only from a detached preview base.
         // An unselected arrow still belongs to the original document and must
         // follow the moved/shared target rather than lose its attachment.
@@ -399,13 +360,6 @@ impl Prepared {
         // Shared attachment sites cannot carry positioned marks. Other moved
         // marks retain their original host identity after temporary-ID restore.
         crate::arrow_anchors::remap_for_join(&mut placed, &self.original.atoms, &joined_mapping);
-        for g in &mut placed.abbreviations {
-            g.anchor = original_id(g.anchor);
-            g.exit = g.exit.map(original_id);
-            for member in &mut g.members {
-                *member = original_id(*member);
-            }
-        }
         // Restore logical groups, including groups that span the moved and fixed
         // fragments. Group reconciliation unites newly connected molecules.
         placed.groups = self.original.groups.clone();
