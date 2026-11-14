@@ -65,16 +65,21 @@ fn write(path: &Path, bytes: &[u8], mode: u32) -> Result<(), String> {
     if let Some(key) = browser::key(path) {
         return browser::write(&key, bytes);
     }
-    // A link whose target is gone is saved through too, recreating the target;
-    // `with_file_name` resolves a relative target against the link's folder.
-    let target = if path.is_symlink() {
-        let target = std::fs::canonicalize(path)
-            .or_else(|_| std::fs::read_link(path).map(|target| path.with_file_name(target)));
-        Some(target.map_err(|e| e.to_string())?)
-    } else {
-        None
-    };
-    let path = target.as_deref().unwrap_or(path);
+    // Save through links, even a chain whose last target is gone, so no link is
+    // replaced; `with_file_name` resolves a relative target against its link's
+    // folder. A loop is refused, as the OS refuses to open it.
+    let mut path = path.to_path_buf();
+    for _ in 0..40 {
+        if !path.is_symlink() {
+            break;
+        }
+        let target = std::fs::read_link(&path).map_err(|e| e.to_string())?;
+        path = path.with_file_name(target);
+    }
+    if path.is_symlink() {
+        return Err(format!("Too many symbolic links: {}", path.display()));
+    }
+    let path = path.as_path();
     let parent = path
         .parent()
         .filter(|p| !p.as_os_str().is_empty())

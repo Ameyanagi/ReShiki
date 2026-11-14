@@ -116,7 +116,21 @@ fn saving_through_a_link_whose_target_is_gone_recreates_the_target() {
     write_saved(&link, b"saved").unwrap();
     assert!(link.is_symlink());
     let target = directory.path().join("drawings/drawing.reshiki");
-    assert_eq!(std::fs::read(target).unwrap(), b"saved");
+    assert_eq!(std::fs::read(&target).unwrap(), b"saved");
+
+    // A chain of links keeps every link, and a loop is refused untouched.
+    let chain = directory.path().join("chain.reshiki");
+    std::os::unix::fs::symlink("link.reshiki", &chain).unwrap();
+    std::fs::remove_file(&target).unwrap();
+    write_saved(&chain, b"chained").unwrap();
+    assert!(chain.is_symlink() && link.is_symlink());
+    assert_eq!(std::fs::read(&target).unwrap(), b"chained");
+    let a = directory.path().join("a.reshiki");
+    let b = directory.path().join("b.reshiki");
+    std::os::unix::fs::symlink("b.reshiki", &a).unwrap();
+    std::os::unix::fs::symlink("a.reshiki", &b).unwrap();
+    assert!(write_saved(&a, b"loop").is_err());
+    assert!(a.is_symlink() && b.is_symlink());
 }
 #[test]
 fn desktop_data_files_are_the_file_system() {
