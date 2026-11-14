@@ -889,6 +889,7 @@ async fn updates_automatic_check_supports_modal_keyboard_traversal_and_activatio
         "updates-check",
         "updates-automatic",
         "updates-notes",
+        "updates-star",
         "updates-close",
     ] {
         let (status, messages) =
@@ -897,7 +898,7 @@ async fn updates_automatic_check_supports_modal_keyboard_traversal_and_activatio
         assert!(messages.is_empty());
         assert_eq!(focused(&mut ui, &app), vec![expected]);
     }
-    for expected in ["updates-notes", "updates-automatic"] {
+    for expected in ["updates-star", "updates-notes", "updates-automatic"] {
         let (status, messages) = ui.event(&app, tab(Modifiers::SHIFT), mouse::Cursor::Unavailable);
         assert_eq!(status, iced::event::Status::Captured);
         assert!(messages.is_empty());
@@ -943,6 +944,7 @@ async fn updates_automatic_check_supports_modal_keyboard_traversal_and_activatio
         "updates-close",
         "updates-check",
         "updates-notes",
+        "updates-star",
         "updates-close",
     ] {
         let (_, messages) = ui.event(&app, tab(Modifiers::empty()), mouse::Cursor::Unavailable);
@@ -950,7 +952,7 @@ async fn updates_automatic_check_supports_modal_keyboard_traversal_and_activatio
         assert_eq!(focused(&mut ui, &app), vec![expected]);
     }
     let _ = app.update(Message::Updates(updates::Action::Saved(Ok(()))));
-    for expected in ["updates-notes", "updates-automatic"] {
+    for expected in ["updates-star", "updates-notes", "updates-automatic"] {
         let (_, messages) = ui.event(&app, tab(Modifiers::SHIFT), mouse::Cursor::Unavailable);
         assert!(messages.is_empty());
         assert_eq!(focused(&mut ui, &app), vec![expected]);
@@ -1002,7 +1004,7 @@ async fn updates_automatic_check_supports_modal_keyboard_traversal_and_activatio
         ),
         "The checkbox and its focus wrapper must publish one mouse action: {click_messages:?}"
     );
-    for expected in ["updates-notes", "updates-close"] {
+    for expected in ["updates-notes", "updates-star", "updates-close"] {
         let (_, messages) = ui.event(&app, tab(Modifiers::empty()), mouse::Cursor::Unavailable);
         assert!(messages.is_empty());
         assert_eq!(focused(&mut ui, &app), vec![expected]);
