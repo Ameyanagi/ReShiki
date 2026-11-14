@@ -144,7 +144,53 @@ class GitDependencyTests(unittest.TestCase):
                     BUILDER.dependency(root)
 
 
+def artifact(executable, name="reshiki-inchi-helper"):
+    return json.dumps(
+        dict(reason="compiler-artifact", target=dict(name=name), executable=str(executable))
+    )
+
+
 class RustBuildTests(unittest.TestCase):
+    def test_host_build_copies_the_executable_cargo_reports(self):
+        # CARGO_BUILD_TARGET or `[build] target` in a Cargo config moves a build
+        # without --target to target/<triple>/debug; target/debug may hold an old copy.
+        host = "aarch64-apple-darwin"
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary).resolve()
+            stale = output / "target/debug/reshiki-inchi-helper"
+            built = output / "target" / host / "debug/reshiki-inchi-helper"
+
+            def run(command, **_kwargs):
+                stdout = ""
+                if command == ["test-rustc", "-vV"]:
+                    stdout = "rustc test\nhost: " + host + "\n"
+                elif command[:2] == ["test-cargo", "build"]:
+                    self.assertNotIn("--target", command)
+                    for path, data in ((stale, b"stale"), (built, b"fresh")):
+                        path.parent.mkdir(parents=True)
+                        path.write_bytes(data)
+                    stdout = "\n".join(
+                        [
+                            artifact(None, "reshiki"),
+                            artifact(built.with_name("other"), "other"),
+                            artifact(built),
+                            json.dumps(dict(reason="build-finished", success=True)),
+                        ]
+                    )
+                elif command[0] == "test-rustc":
+                    Path(command[command.index("-o") + 1]).write_bytes(b"stub")
+                return subprocess.CompletedProcess(command, 0, stdout, "")
+
+            with (
+                patch.object(sys, "argv", ["build_inchi_helper.py", "--output", temporary]),
+                patch.dict(os.environ, {"CARGO": "test-cargo", "RUSTC": "test-rustc"}),
+                patch.object(BUILDER, "verify_executable", return_value=host),
+                patch.object(BUILDER.subprocess, "run", side_effect=run),
+                patch("builtins.print"),
+            ):
+                BUILDER.main()
+            self.assertEqual((output / "reshiki-inchi-helper").read_bytes(), b"fresh")
+
     def test_development_builds_run_the_stub_only_on_the_compiler_host(self):
         host = "x86_64-apple-darwin"
         for requested in (None, *BUILDER.SUPPORTED_TARGETS):
@@ -163,8 +209,6 @@ class RustBuildTests(unittest.TestCase):
                         self.assertEqual(command[command.index("--target") + 1], target)
                         self.assertEqual(Path(command[command.index("-o") + 1]), stub)
                         stub.write_bytes(b"target test executable")
-                    elif command[:2] == ["test-cargo", "metadata"]:
-                        stdout = json.dumps(dict(target_directory=str(output)))
                     elif command[:2] == ["test-cargo", "build"]:
                         # A host build shares target/debug with `cargo build --bin reshiki`.
                         folder = output
@@ -178,6 +222,7 @@ class RustBuildTests(unittest.TestCase):
                         binary = folder / "debug" / ("reshiki-inchi-helper" + suffix)
                         binary.parent.mkdir(parents=True)
                         binary.write_bytes(b"target helper executable")
+                        stdout = artifact(binary)
                     else:
                         self.assertEqual(command, [str(stub)])
                         self.assertEqual(target, host, "Cannot execute a cross-target stub")
@@ -215,8 +260,6 @@ class RustBuildTests(unittest.TestCase):
                     if command[0] == "test-rustc":
                         self.assertEqual(command[1:], ["-vV"])
                         stdout = "rustc test\nhost: " + host + "\n"
-                    elif command[1] == "metadata":
-                        stdout = json.dumps(dict(target_directory=str(output)))
                     else:
                         self.assertIn("--locked", command)
                         self.assertIn("--release", command)
@@ -229,6 +272,7 @@ class RustBuildTests(unittest.TestCase):
                         binary = folder / "release" / name
                         binary.parent.mkdir(parents=True)
                         binary.write_bytes(b"test executable")
+                        stdout = artifact(binary)
                     return subprocess.CompletedProcess(command, 0, stdout, "")
 
                 with (
