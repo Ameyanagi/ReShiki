@@ -25,9 +25,10 @@ issues: []
   memory limit. A 200,000-atom drawing was refused after 204 s and 1.3 GB in
   a development build; it is now refused after 2.7 s and 0.3 GB.
 - **Updates.** ReShiki checks the downloaded update again when you restart to
-  install it, and installs nothing if the file changed. On Linux an update
-  archive that holds a symbolic or hard link is refused. On Windows a signed
-  ReShiki installs only an installer signed by the same publisher.
+  install it, and installs nothing if any file of it changed. On Linux an
+  update archive that holds a symbolic or hard link is refused. On Windows a
+  signed ReShiki installs only an installer signed by the same publisher,
+  and a ReShiki whose own signature is not valid installs no update.
 - **Linux without `XDG_RUNTIME_DIR`.** ReShiki no longer uses a folder under
   `/tmp` to find its running window. Another user could create that folder
   first, and saving then failed. It uses `/run/user/<uid>`, or your cache

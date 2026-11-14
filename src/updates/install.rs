@@ -14,9 +14,9 @@ pub struct Prepared {
     directory: tempfile::TempDir,
     target: PathBuf,
     payload: PathBuf,
-    /// The staged program the installer runs or installs, with its SHA-256
-    /// from when it was verified; [`handoff`] checks it again.
-    program: (PathBuf, String),
+    /// The [`tree_digest`] of `payload` from when it was verified;
+    /// [`handoff`] checks it again.
+    digest: String,
     handed_off: std::sync::atomic::AtomicBool,
 }
 impl Drop for Prepared {
@@ -130,20 +130,45 @@ async fn download(
     file.sync_all().await.map_err(|e| e.to_string())?;
     Ok(format!("{:x}", hash.finalize()))
 }
-/// The lowercase hexadecimal SHA-256 of the file at `path`.
-fn file_digest(path: &Path) -> Result<String, String> {
+/// The lowercase hexadecimal SHA-256 of everything staged at `path`: a
+/// file's bytes, or for a folder the name, kind and bytes of every entry in
+/// it (the target of a symbolic link), in name order.
+fn tree_digest(path: &Path) -> Result<String, String> {
     use std::io::BufRead;
-    let mut file = std::io::BufReader::new(std::fs::File::open(path).map_err(|e| e.to_string())?);
-    let mut hash = Sha256::new();
-    loop {
-        let chunk = file.fill_buf().map_err(|e| e.to_string())?;
-        if chunk.is_empty() {
-            return Ok(format!("{:x}", hash.finalize()));
+    fn add(hash: &mut Sha256, root: &Path, path: &Path) -> std::io::Result<()> {
+        let name = path.strip_prefix(root).unwrap_or(path);
+        hash.update(name.as_os_str().as_encoded_bytes());
+        let metadata = std::fs::symlink_metadata(path)?;
+        if metadata.is_dir() {
+            hash.update(b"\0d");
+            let mut entries = std::fs::read_dir(path)?
+                .map(|entry| entry.map(|entry| entry.path()))
+                .collect::<Result<Vec<_>, _>>()?;
+            entries.sort();
+            entries.iter().try_for_each(|entry| add(hash, root, entry))
+        } else if metadata.is_symlink() {
+            hash.update(b"\0l");
+            hash.update(std::fs::read_link(path)?.as_os_str().as_encoded_bytes());
+            hash.update(b"\0");
+            Ok(())
+        } else {
+            hash.update(b"\0f");
+            hash.update(metadata.len().to_le_bytes());
+            let mut file = std::io::BufReader::new(std::fs::File::open(path)?);
+            loop {
+                let chunk = file.fill_buf()?;
+                if chunk.is_empty() {
+                    return Ok(());
+                }
+                hash.update(chunk);
+                let read = chunk.len();
+                file.consume(read);
+            }
         }
-        hash.update(chunk);
-        let read = chunk.len();
-        file.consume(read);
     }
+    let mut hash = Sha256::new();
+    add(&mut hash, path, path).map_err(|e| e.to_string())?;
+    Ok(format!("{:x}", hash.finalize()))
 }
 #[cfg(not(windows))]
 fn command(command: &mut Command) -> Result<String, String> {
@@ -234,20 +259,12 @@ pub async fn prepare(
         .await;
     tokio::task::spawn_blocking(move || {
         let payload = stage(&asset, directory.path(), &release.version)?;
-        // The installer itself on Windows, else the application's executable.
-        let program = if cfg!(windows) {
-            payload.clone()
-        } else if cfg!(target_os = "macos") {
-            payload.join("Contents/MacOS/reshiki")
-        } else {
-            payload.join("reshiki")
-        };
-        let digest = file_digest(&program)?;
+        let digest = tree_digest(&payload)?;
         Ok(Arc::new(Prepared {
             directory,
             target,
             payload,
-            program: (program, digest),
+            digest,
             handed_off: std::sync::atomic::AtomicBool::new(false),
         }))
     })
@@ -255,6 +272,12 @@ pub async fn prepare(
     .map_err(|e| e.to_string())?
 }
 
+/// Checks that every part of the bundle at `app` has a valid signature of
+/// ReShiki's publisher.
+#[cfg(target_os = "macos")]
+fn verify_app(app: &Path) -> Result<String, String> {
+    command(Command::new("/usr/bin/codesign").args(["--verify","--deep","--strict","-R","=anchor apple generic and identifier \"dev.reshiki.editor\" and certificate leaf[subject.OU] = \"XXN44W8X56\""]).arg(app))
+}
 #[cfg(target_os = "macos")]
 fn stage(asset: &Path, directory: &Path, version: &str) -> Result<PathBuf, String> {
     // Verify the signed disk image before mounting; verify the app again afterward.
@@ -278,7 +301,7 @@ fn stage(asset: &Path, directory: &Path, version: &str) -> Result<PathBuf, Strin
     )?;
     let result = (|| {
         let app = mount.join("ReShiki.app");
-        command(Command::new("/usr/bin/codesign").args(["--verify","--deep","--strict","-R","=anchor apple generic and identifier \"dev.reshiki.editor\" and certificate leaf[subject.OU] = \"XXN44W8X56\""]).arg(&app))?;
+        verify_app(&app)?;
         command(
             Command::new("/usr/sbin/spctl")
                 .args(["--assess", "--type", "execute"])
@@ -333,16 +356,24 @@ foreach ($path in $env:RESHIKI_UPDATE_CURRENT, $env:RESHIKI_UPDATE_INSTALLER) {
 }";
 /// Checks the report of the `SIGNERS` script. A signed application installs only an
 /// installer with a valid signature from the same publisher, so a release
-/// whose files and checksums were both replaced is not run. An unsigned
-/// build has no publisher to compare and relies on the checksum alone.
+/// whose files and checksums were both replaced is not run. Only a build
+/// that has no signature at all has no publisher to compare and relies on
+/// the checksum alone: an application whose own signature is broken, not
+/// trusted or could not be checked installs nothing.
 #[cfg(any(target_os = "windows", test))]
 fn same_publisher(report: &str) -> Result<(), String> {
     let lines: Vec<_> = report.lines().map(str::trim).collect();
     match *lines.as_slice() {
-        [current, _, _, _] if current != "Valid" => Ok(()),
-        [_, publisher, "Valid", signer] if !publisher.is_empty() && signer == publisher => Ok(()),
-        [_, _, _, _] => Err(
+        ["NotSigned", "", _, _] => Ok(()),
+        ["Valid", publisher, "Valid", signer] if !publisher.is_empty() && signer == publisher => {
+            Ok(())
+        }
+        ["Valid", _, _, _] => Err(
             "The downloaded installer is not signed by the publisher of this ReShiki. Nothing was installed."
+                .into(),
+        ),
+        [_, _, _, _] => Err(
+            "The signature of this ReShiki is not valid, so the installer cannot be checked against it. Nothing was installed; download the installer from the releases page."
                 .into(),
         ),
         _ => Err("The installer's signature could not be checked. Nothing was installed.".into()),
@@ -411,13 +442,18 @@ fn stage(asset: &Path, directory: &Path, version: &str) -> Result<PathBuf, Strin
 
 /// The helper acknowledges startup before the application exits. It waits for
 /// this process to terminate, then installs and reopens the saved tabs.
-/// Nothing starts when the staged program no longer has its verified digest.
+/// Nothing starts when anything staged no longer has its verified digest.
 pub async fn handoff(prepared: Arc<Prepared>, drawings: Vec<PathBuf>) -> Result<(), String> {
     // The update can wait a long time for the user between its checks and
-    // this handoff, so the staged program is checked again.
+    // this handoff, so everything staged is checked again: the helper
+    // installs the whole payload, not just its executable. On macOS the
+    // bundle's signature is checked again as well.
     let staged = Arc::clone(&prepared);
     let unchanged = tokio::task::spawn_blocking(move || {
-        file_digest(&staged.program.0).is_ok_and(|digest| digest == staged.program.1)
+        let unchanged = tree_digest(&staged.payload).is_ok_and(|digest| digest == staged.digest);
+        #[cfg(target_os = "macos")]
+        let unchanged = unchanged && verify_app(&staged.payload).is_ok();
+        unchanged
     })
     .await
     .map_err(|e| e.to_string())?;
