@@ -6,6 +6,7 @@ use rustix::{
 };
 use std::{
     collections::hash_map::DefaultHasher,
+    ffi::OsString,
     fs::{DirBuilder, File, Metadata},
     hash::{Hash, Hasher},
     io::{self, Read, Write},
@@ -53,6 +54,41 @@ fn private_directory(path: &Path, uid: u32) -> io::Result<File> {
     }
     Ok(File::from(fd))
 }
+/// The folder that holds the endpoint's directory, in a place only this
+/// user can write: `XDG_RUNTIME_DIR`, else `<run_user>/<uid>` (systemd's
+/// `/run/user`), each owned by the user with mode 0700; else the user's own
+/// cache folder, `XDG_CACHE_HOME` or `$HOME/.cache`.
+///
+/// Never `/tmp`: any user could create the endpoint's name there first,
+/// and this user could then neither save nor reach a running ReShiki.
+fn base(
+    uid: u32,
+    variable: impl Fn(&str) -> Option<OsString>,
+    run_user: &Path,
+) -> io::Result<PathBuf> {
+    let private = |path: &Path| metadata(path, uid, 0o700).is_ok_and(|meta| meta.is_dir());
+    if let Some(runtime) = variable("XDG_RUNTIME_DIR").map(PathBuf::from) {
+        return if private(&runtime) {
+            Ok(runtime)
+        } else {
+            Err(denied())
+        };
+    }
+    let runtime = run_user.join(uid.to_string());
+    if private(&runtime) {
+        return Ok(runtime);
+    }
+    let cache = variable("XDG_CACHE_HOME")
+        .map(PathBuf::from)
+        .filter(|path| path.is_absolute())
+        .or_else(|| variable("HOME").map(|home| PathBuf::from(home).join(".cache")))
+        .ok_or_else(denied)?;
+    DirBuilder::new()
+        .recursive(true)
+        .mode(0o700)
+        .create(&cache)?;
+    Ok(cache)
+}
 
 #[derive(Clone)]
 pub struct Endpoint {
@@ -68,16 +104,8 @@ impl Endpoint {
             std::env::var_os(name).hash(&mut hash);
         }
         let session = hash.finish();
-        let path = if let Some(runtime) = std::env::var_os("XDG_RUNTIME_DIR") {
-            let runtime = PathBuf::from(runtime);
-            let meta = metadata(&runtime, uid, 0o700)?;
-            if !meta.is_dir() {
-                return Err(denied());
-            }
-            runtime.join(format!("reshiki-desktop-{session:016x}"))
-        } else {
-            PathBuf::from(format!("/tmp/reshiki-desktop-{uid}-{session:016x}"))
-        };
+        let path = base(uid, |name| std::env::var_os(name), Path::new("/run/user"))?
+            .join(format!("reshiki-desktop-{session:016x}"));
         let directory = Arc::new(private_directory(&path, uid)?);
         Ok(Self {
             root: directory.clone(),

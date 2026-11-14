@@ -282,3 +282,57 @@ fn silent_peer_is_bounded_and_does_not_prevent_the_next_connection() {
     );
     assert!(next.join().is_ok());
 }
+
+/// S17: without `XDG_RUNTIME_DIR` the endpoint used a predictable name in
+/// `/tmp`, which any user could create first. It now stays in folders only
+/// this user can write.
+#[test]
+fn the_endpoint_folder_is_never_a_shared_temporary_folder() {
+    let fixture = Fixture::new();
+    let (uid, root) = (fixture.endpoint.uid, &fixture.path);
+    let run_user = root.join("run");
+    let home = root.join("home");
+    let folder = |runtime: Option<&Path>, cache: Option<&Path>| {
+        let (runtime, cache) = (runtime.map(Path::to_owned), cache.map(Path::to_owned));
+        base(
+            uid,
+            |name| match name {
+                "XDG_RUNTIME_DIR" => runtime.clone().map(OsString::from),
+                "XDG_CACHE_HOME" => cache.clone().map(OsString::from),
+                "HOME" => Some(home.clone().into()),
+                _ => None,
+            },
+            &run_user,
+        )
+    };
+    let mode = |path: &Path, mode| {
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode)).unwrap();
+    };
+    // No runtime folder at all: the user's cache folder, made when missing.
+    assert_eq!(folder(None, None).unwrap(), home.join(".cache"));
+    assert!(home.join(".cache").is_dir());
+    let cache = root.join("cache");
+    assert_eq!(folder(None, Some(&cache)).unwrap(), cache);
+    assert_eq!(
+        folder(None, Some(Path::new("relative"))).unwrap(),
+        home.join(".cache")
+    );
+    // systemd's folder counts only when it is the user's own, mode 0700.
+    let runtime = run_user.join(uid.to_string());
+    std::fs::create_dir_all(&runtime).unwrap();
+    mode(&runtime, 0o755);
+    assert_eq!(folder(None, None).unwrap(), home.join(".cache"));
+    mode(&runtime, 0o700);
+    assert_eq!(folder(None, None).unwrap(), runtime);
+    // XDG_RUNTIME_DIR comes first, and an unsafe one is an error, not a
+    // reason to look elsewhere.
+    let named = root.join("named");
+    std::fs::create_dir(&named).unwrap();
+    mode(&named, 0o700);
+    assert_eq!(folder(Some(&named), None).unwrap(), named);
+    mode(&named, 0o755);
+    assert!(folder(Some(&named), None).is_err());
+    assert!(folder(Some(&root.join("missing")), None).is_err());
+    // Nothing to go by: an error, never /tmp.
+    assert!(base(uid, |_| None, &root.join("no-run")).is_err());
+}
