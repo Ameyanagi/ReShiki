@@ -402,6 +402,29 @@ fn proposal_errors_read_as_on_the_assistant_path() {
     assert!(error.message.starts_with("unknown field `shading`"));
 }
 
+/// The published schema has neither field; the assistant's form has both.
+#[test]
+fn explanation_and_replace_ids_may_be_left_out() {
+    let full = arguments(&reaction(), None);
+    let mut short = full.clone();
+    let fields = short["proposal"].as_object_mut().unwrap();
+    assert!(fields.remove("explanation").is_some());
+    assert!(fields.remove("replace_ids").is_some());
+    let short = decode(short).unwrap().proposal;
+    assert_eq!(short.explanation, "");
+    assert!(short.replace_ids.is_empty());
+    assert_eq!(short.reactions.len(), 1);
+    assert_eq!(decode(full).unwrap().proposal.explanation, "Esterification");
+    let published = schema();
+    for name in ["explanation", "replace_ids"] {
+        assert!(
+            published["properties"]["proposal"]["properties"]
+                .get(name)
+                .is_none()
+        );
+    }
+}
+
 #[test]
 fn replacement_ids_are_rejected() {
     let mut proposal = reaction();

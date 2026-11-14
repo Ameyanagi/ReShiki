@@ -9,7 +9,7 @@ use super::{
     progress,
     result::ToolResult,
     store::Documents,
-    wire::{DocHandle, Principal, Revision, handle_schema, nullable, warnings},
+    wire::{DocHandle, Principal, Revision, described, handle_schema, nullable, warnings},
 };
 use crate::{
     DrawingSettings, Proposal, composition,
@@ -21,7 +21,7 @@ use crate::{
     tool_spec::{Hints, ToolSpec},
 };
 use serde::{Deserialize, Serialize};
-use serde_json::{Value, json};
+use serde_json::{Map, Value, json};
 use std::sync::Arc;
 use tokio::sync::mpsc::{self, Sender};
 
@@ -35,7 +35,7 @@ pub const NO_DRAWING: &str = "A drawing needs at least one molecule, reaction or
 pub const COMPOSE: ToolSpec = ToolSpec {
     name: "compose",
     title: Some("Compose scheme"),
-    description: "Lay out a Proposal as a new session document, as ReShiki's assistant composes its drafts: molecules and reactions from SMILES, or one editable sketch diagram, never both. proposal follows the assistant's Proposal schema; replace_ids must be empty, because compose always creates a new document. style_document is a session document whose drawing style (bond length, font, line width) and atom label settings to use, or null for the default style. Returns the document's handle and revision, its atom, bond and arrow counts, its bounds, layout review issues and the layout changes made. Use render to look at it. Every call creates another document; close the ones you no longer need with document_close.",
+    description: "Lay out a Proposal as a new session document, as ReShiki's assistant composes its drafts: molecules and reactions from SMILES, or one editable sketch diagram, never both. Returns the document's handle and revision, its atom, bond and arrow counts, its bounds, layout review issues and the layout changes made. Use render to look at it. Every call creates another document; close the ones you no longer need with document_close.",
     input_schema: schema,
     hints: Some(Hints {
         read_only: false,
@@ -45,18 +45,96 @@ pub const COMPOSE: ToolSpec = ToolSpec {
     }),
 };
 
-/// The Proposal schema is nested verbatim, as the assistant's
-/// `canvas_preview` publishes it.
+/// Proposal subschemas that occur more than once, published once under
+/// `$defs`: each name and where its first copy is.
+const SHARED: &[(&str, &str)] = &[
+    ("molecules", "/properties/molecules"),
+    (
+        "point",
+        "/properties/sketch/anyOf/1/properties/arrows/items/properties/start",
+    ),
+    (
+        "color",
+        "/properties/sketch/anyOf/1/properties/captions/items/properties/color",
+    ),
+];
+
+/// Sentences of the sketch description that repeat its first sentences or
+/// the descriptions of `centroids.kind` and `bonds.ring_arc`.
+const REPEATED: &[&str] = &[
+    " Use centroids with kind multi_center for haptic contacts (all target atoms), kind variable for alternative attachment positions, and null only for nonchemical drawing anchors.",
+    " Use ring_arc on consecutive ring bonds for partial inner curves, preserving their underlying bond orders.",
+    " Leave molecules and reactions empty.",
+];
+
+/// The Proposal schema is derived from the assistant's [`crate::schema`],
+/// which stays as `canvas_preview` publishes it, and made smaller:
+///
+/// - `explanation` and `replace_ids` are left out, because compose always
+///   creates a new document; [`decode`] fills them in and still accepts them;
+/// - each [`SHARED`] subschema is stated once under `$defs`;
+/// - the [`REPEATED`] sentences are removed.
 fn schema() -> Value {
+    let mut proposal = crate::schema();
+    for name in ["explanation", "replace_ids"] {
+        if let Some(properties) = proposal
+            .pointer_mut("/properties")
+            .and_then(Value::as_object_mut)
+        {
+            properties.remove(name);
+        }
+        if let Some(required) = proposal
+            .pointer_mut("/required")
+            .and_then(Value::as_array_mut)
+        {
+            required.retain(|required| required != name);
+        }
+    }
+    if let Some(Value::String(text)) =
+        proposal.pointer_mut("/properties/sketch/anyOf/1/description")
+    {
+        for sentence in REPEATED {
+            *text = text.replace(sentence, "");
+        }
+    }
+    let mut defs = Map::new();
+    for (name, pointer) in SHARED {
+        if let Some(def) = proposal.pointer(pointer).cloned() {
+            share(
+                &mut proposal,
+                &def,
+                &json!({"$ref": format!("#/$defs/{name}")}),
+            );
+            defs.insert((*name).to_owned(), def);
+        }
+    }
     json!({
         "type": "object",
         "additionalProperties": false,
         "properties": {
-            "proposal": crate::schema(),
-            "style_document": nullable(handle_schema()),
+            "proposal": proposal,
+            "style_document": described(nullable(handle_schema()), "A session document whose drawing style (bond length, font, line width) and atom label settings to use, or null for the default style."),
         },
         "required": ["proposal", "style_document"],
+        "$defs": defs,
     })
+}
+
+/// Replaces every subschema of `schema` equal to `def` with `reference`.
+fn share(schema: &mut Value, def: &Value, reference: &Value) {
+    if schema == def {
+        *schema = reference.clone();
+        return;
+    }
+    match schema {
+        Value::Object(members) => members
+            .values_mut()
+            .for_each(|member| share(member, def, reference)),
+        Value::Array(items) => items
+            .iter_mut()
+            .for_each(|item| share(item, def, reference)),
+        _ => {}
+    }
 }
 
 /// The `compose` arguments as sent. The proposal is decoded on its own so
@@ -78,15 +156,22 @@ pub(crate) struct Compose {
 
 /// Decodes the arguments before any work runs.
 ///
-/// The proposal is decoded and validated exactly as the assistant's Codex
-/// Proposal turn does (src/assistant/codex.rs), with the same error text.
-/// Then compose's own rules: no replacement IDs ([`REPLACE_IDS`]) and at
-/// least one molecule, reaction or sketch ([`NO_DRAWING`]).
+/// A proposal without `explanation` gets an empty one; `replace_ids`
+/// already defaults to none. The proposal is then decoded and validated
+/// exactly as the assistant's Codex Proposal turn does
+/// (src/assistant/codex.rs), with the same error text. Then compose's own
+/// rules: no replacement IDs ([`REPLACE_IDS`]) and at least one molecule,
+/// reaction or sketch ([`NO_DRAWING`]).
 pub(crate) fn decode(args: Value) -> Result<Compose, OpError> {
     let Arguments {
-        proposal,
+        mut proposal,
         style_document,
     } = arguments(args)?;
+    if let Some(fields) = proposal.as_object_mut() {
+        fields
+            .entry("explanation")
+            .or_insert_with(|| Value::String(String::new()));
+    }
     let proposal: Proposal =
         serde_json::from_value(proposal).map_err(|error| OpError::invalid(error.to_string()))?;
     proposal.validate().map_err(OpError::invalid)?;

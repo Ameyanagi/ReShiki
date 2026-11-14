@@ -2,27 +2,31 @@
   "rules": [
     {
       "id": "arguments.object",
-      "cite": "crates/agent/src/ops/catalog.rs:61,77-88; crates/agent/src/ops/compose.rs:91-94"
+      "cite": "crates/agent/src/ops/catalog.rs:61,77-88; crates/agent/src/ops/compose.rs:166-169"
     },
     {
       "id": "compose.proposal_required",
-      "cite": "crates/agent/src/ops/compose.rs:56,59,66-68,95-96"
+      "cite": "crates/agent/src/ops/compose.rs:115,118,144-145,175-176"
     },
     {
       "id": "compose.proposal_as_assistant",
-      "cite": "crates/agent/src/ops/compose.rs:56,95-97; crates/agent/src/lib.rs:110-186,191-204; src/assistant/codex.rs:487-488"
+      "cite": "crates/agent/src/ops/compose.rs:115,175-177; crates/agent/src/lib.rs:110-186,191-204; src/assistant/codex.rs:487-488"
+    },
+    {
+      "id": "compose.explanation_filled",
+      "cite": "crates/agent/src/ops/compose.rs:73-74,79-92,170-174; crates/agent/src/lib.rs:101-102,123"
     },
     {
       "id": "compose.replace_ids_empty",
-      "cite": "crates/agent/src/ops/compose.rs:29-31,97-100; crates/agent/src/lib.rs:117-127"
+      "cite": "crates/agent/src/ops/compose.rs:29-30,178-180; crates/agent/src/lib.rs:117-127"
     },
     {
       "id": "compose.has_drawing",
-      "cite": "crates/agent/src/ops/compose.rs:33-34,101-103; crates/agent/src/lib.rs:187-189"
+      "cite": "crates/agent/src/ops/compose.rs:33,181-183; crates/agent/src/lib.rs:187-189"
     },
     {
       "id": "compose.style_document_nullable_required",
-      "cite": "crates/agent/src/ops/wire.rs:3-10,192-195; crates/agent/src/ops/compose.rs:57,59,69-70"
+      "cite": "crates/agent/src/ops/wire.rs:3-10,192-195; crates/agent/src/ops/compose.rs:116,118,146-147"
     },
     {
       "id": "compose.style_document_handle",
@@ -30,17 +34,17 @@
     },
     {
       "id": "compose.no_unknown_fields",
-      "cite": "crates/agent/src/ops/compose.rs:54,66-71"
+      "cite": "crates/agent/src/ops/compose.rs:113,143-148"
     }
   ],
   "import": {
     "file": "proposal-cases.json",
     "into": {"tool": "compose", "arguments": {"proposal": null, "style_document": null}},
     "at": "/arguments/proposal",
+    "drop": ["/explanation", "/replace_ids"],
     "adjust": {
       "proposal-all-fields": {"expect": "decoder_rejects_only", "message": "A drawing needs at least one molecule, reaction or sketch"},
       "proposal-explicit-defaults": {"expect": "decoder_rejects_only", "message": "A drawing needs at least one molecule, reaction or sketch"},
-      "proposal-missing-replace-ids": {"expect": "both_reject", "message": "A drawing needs at least one molecule, reaction or sketch"},
       "proposal-missing-composition": {"expect": "both_reject", "message": "A drawing needs at least one molecule, reaction or sketch"},
       "proposal-missing-sketch": {"expect": "both_reject", "message": "A drawing needs at least one molecule, reaction or sketch"},
       "composition-explicit-defaults": {"expect": "decoder_rejects_only", "message": "A drawing needs at least one molecule, reaction or sketch"},
@@ -51,16 +55,11 @@
       "composition-empty-object": {"expect": "both_reject", "message": "A drawing needs at least one molecule, reaction or sketch"},
       "null-sketch": {"expect": "decoder_rejects_only", "message": "A drawing needs at least one molecule, reaction or sketch"},
       "composition-as-array": {"expect": "both_reject", "message": "A drawing needs at least one molecule, reaction or sketch"},
-      "explanation-12000-bytes": {"expect": "decoder_rejects_only", "message": "A drawing needs at least one molecule, reaction or sketch"},
       "columns-1": {"expect": "decoder_rejects_only", "message": "A drawing needs at least one molecule, reaction or sketch"},
       "columns-3": {"expect": "decoder_rejects_only", "message": "A drawing needs at least one molecule, reaction or sketch"},
       "width-100": {"expect": "decoder_rejects_only", "message": "A drawing needs at least one molecule, reaction or sketch"},
       "width-1800": {"expect": "decoder_rejects_only", "message": "A drawing needs at least one molecule, reaction or sketch"},
-      "width-rounds-up-to-100-in-f32": {"expect": "both_reject", "message": "A drawing needs at least one molecule, reaction or sketch"},
-      "replace-id-1": {"expect": "decoder_rejects_only", "message": "compose creates a new document; pass replacement IDs to apply as decimal strings"},
-      "replace-id-u64-max-minus-1": {"expect": "decoder_rejects_only", "message": "compose creates a new document; pass replacement IDs to apply as decimal strings"},
-      "replace-ids-distinct": {"expect": "decoder_rejects_only", "message": "compose creates a new document; pass replacement IDs to apply as decimal strings"},
-      "replace-ids-5000": {"expect": "decoder_rejects_only", "message": "compose creates a new document; pass replacement IDs to apply as decimal strings"}
+      "width-rounds-up-to-100-in-f32": {"expect": "both_reject", "message": "A drawing needs at least one molecule, reaction or sketch"}
     }
   },
   "bases": {},
@@ -81,16 +80,22 @@
     {"name": "rotation_45", "rule": "compose.proposal_as_assistant", "base": "reaction", "patch": [{"op": "replace", "path": "/arguments/proposal/reactions/0/reactants/0/rotation", "value": 45}], "expect": "both_reject", "message": "Use at most 32 molecules with short labels and valid SMILES"},
     {"name": "molecules_33", "rule": "compose.proposal_as_assistant", "base": "molecule", "patch": [{"op": "replace", "path": "/arguments/proposal/molecules", "value": {"$repeat": {"smiles": "C", "label": "", "coefficient": 1, "rotation": 0, "compact": false}, "count": 33}}], "expect": "decoder_rejects_only", "message": "Use at most 32 molecules with short labels and valid SMILES"},
     {"name": "sketch_and_molecules", "rule": "compose.proposal_as_assistant", "base": "sketch", "patch": [{"op": "add", "path": "/arguments/proposal/molecules/-", "value": {"smiles": "C", "label": "", "coefficient": 1, "rotation": 0, "compact": false}}], "expect": "decoder_rejects_only", "message": "Use either a diagram or SMILES molecules/reactions, not both"},
-    {"name": "explanation_omitted", "rule": "compose.proposal_as_assistant", "base": "reaction", "patch": [{"op": "remove", "path": "/arguments/proposal/explanation"}], "expect": "both_reject", "message": "missing field `explanation`"},
+    {"name": "explanation_omitted", "rule": "compose.explanation_filled", "base": "reaction", "expect": "both_accept"},
+    {"name": "explanation_given", "rule": "compose.explanation_filled", "base": "reaction", "patch": [{"op": "add", "path": "/arguments/proposal/explanation", "value": "Ethanol."}], "expect": "schema_rejects_only"},
+    {"name": "explanation_12000_bytes", "rule": "compose.explanation_filled", "base": "reaction", "patch": [{"op": "add", "path": "/arguments/proposal/explanation", "value": {"$text": "a", "count": 12000}}], "expect": "schema_rejects_only"},
+    {"name": "explanation_12001_bytes", "rule": "compose.explanation_filled", "base": "reaction", "patch": [{"op": "add", "path": "/arguments/proposal/explanation", "value": {"$text": "a", "count": 12001}}], "expect": "both_reject", "message": "The proposal is too large; request a smaller drawing"},
+    {"name": "explanation_number", "rule": "compose.explanation_filled", "base": "reaction", "patch": [{"op": "add", "path": "/arguments/proposal/explanation", "value": 1}], "expect": "both_reject"},
+    {"name": "explanation_null", "rule": "compose.explanation_filled", "base": "reaction", "patch": [{"op": "add", "path": "/arguments/proposal/explanation", "value": null}], "expect": "both_reject"},
     {"name": "proposal_unknown_field", "rule": "compose.proposal_as_assistant", "base": "reaction", "patch": [{"op": "add", "path": "/arguments/proposal/style_document", "value": null}], "expect": "both_reject"},
-    {"name": "replace_ids_empty", "rule": "compose.replace_ids_empty", "base": "reaction", "expect": "both_accept"},
-    {"name": "replace_ids_one", "rule": "compose.replace_ids_empty", "base": "reaction", "patch": [{"op": "replace", "path": "/arguments/proposal/replace_ids", "value": [1]}], "expect": "decoder_rejects_only", "message": "compose creates a new document; pass replacement IDs to apply as decimal strings"},
-    {"name": "replace_ids_decimal_string", "rule": "compose.replace_ids_empty", "base": "reaction", "patch": [{"op": "replace", "path": "/arguments/proposal/replace_ids", "value": ["1"]}], "expect": "both_reject"},
-    {"name": "replace_ids_zero_validated_first", "rule": "compose.replace_ids_empty", "base": "reaction", "patch": [{"op": "replace", "path": "/arguments/proposal/replace_ids", "value": [0]}], "expect": "both_reject", "message": "The proposal is too large; request a smaller drawing"},
-    {"name": "replace_ids_duplicate_validated_first", "rule": "compose.replace_ids_empty", "base": "reaction", "patch": [{"op": "replace", "path": "/arguments/proposal/replace_ids", "value": [1, 1]}], "expect": "decoder_rejects_only", "message": "The proposal is too large; request a smaller drawing"},
+    {"name": "replace_ids_omitted", "rule": "compose.replace_ids_empty", "base": "reaction", "expect": "both_accept"},
+    {"name": "replace_ids_empty", "rule": "compose.replace_ids_empty", "base": "reaction", "patch": [{"op": "add", "path": "/arguments/proposal/replace_ids", "value": []}], "expect": "schema_rejects_only"},
+    {"name": "replace_ids_one", "rule": "compose.replace_ids_empty", "base": "reaction", "patch": [{"op": "add", "path": "/arguments/proposal/replace_ids", "value": [1]}], "expect": "both_reject", "message": "compose creates a new document; pass replacement IDs to apply as decimal strings"},
+    {"name": "replace_ids_decimal_string", "rule": "compose.replace_ids_empty", "base": "reaction", "patch": [{"op": "add", "path": "/arguments/proposal/replace_ids", "value": ["1"]}], "expect": "both_reject"},
+    {"name": "replace_ids_zero_validated_first", "rule": "compose.replace_ids_empty", "base": "reaction", "patch": [{"op": "add", "path": "/arguments/proposal/replace_ids", "value": [0]}], "expect": "both_reject", "message": "The proposal is too large; request a smaller drawing"},
+    {"name": "replace_ids_duplicate_validated_first", "rule": "compose.replace_ids_empty", "base": "reaction", "patch": [{"op": "add", "path": "/arguments/proposal/replace_ids", "value": [1, 1]}], "expect": "both_reject", "message": "The proposal is too large; request a smaller drawing"},
     {"name": "drawing_present", "rule": "compose.has_drawing", "base": "pair_sketch", "expect": "both_accept"},
     {"name": "drawing_missing", "rule": "compose.has_drawing", "base": "empty", "expect": "decoder_rejects_only", "message": "A drawing needs at least one molecule, reaction or sketch"},
-    {"name": "replace_ids_checked_before_drawing", "rule": "compose.has_drawing", "base": "empty", "patch": [{"op": "replace", "path": "/arguments/proposal/replace_ids", "value": [7]}], "expect": "decoder_rejects_only", "message": "compose creates a new document; pass replacement IDs to apply as decimal strings"},
+    {"name": "replace_ids_checked_before_drawing", "rule": "compose.has_drawing", "base": "empty", "patch": [{"op": "add", "path": "/arguments/proposal/replace_ids", "value": [7]}], "expect": "both_reject", "message": "compose creates a new document; pass replacement IDs to apply as decimal strings"},
     {"name": "style_document_null", "rule": "compose.style_document_nullable_required", "base": "reaction", "expect": "both_accept"},
     {"name": "style_document_handle", "rule": "compose.style_document_nullable_required", "base": "reaction", "patch": [{"op": "replace", "path": "/arguments/style_document", "value": "doc_0123456789abcdef0123456789abcdef"}], "expect": "both_accept"},
     {"name": "style_document_omitted", "rule": "compose.style_document_nullable_required", "base": "reaction", "patch": [{"op": "remove", "path": "/arguments/style_document"}], "expect": "schema_rejects_only"},

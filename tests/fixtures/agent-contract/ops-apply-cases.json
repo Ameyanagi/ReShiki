@@ -38,7 +38,7 @@
     },
     {
       "id": "apply.base_revision_nullable_required",
-      "cite": "crates/agent/src/ops/wire.rs:3-10,192-195; crates/agent/src/ops/apply.rs:83,89,114-115"
+      "cite": "crates/agent/src/ops/wire.rs:3-10,192-195; crates/agent/src/ops/apply.rs:83-86,89,114-115"
     },
     {
       "id": "apply.base_revision_decimal",

@@ -10,8 +10,8 @@ use super::{
     result::{Blob, ToolResult},
     store::Documents,
     wire::{
-        DocHandle, ExportReceiptJson, Principal, SvgText, handle_schema, nullable, svg_text_schema,
-        warnings,
+        DocHandle, ExportReceiptJson, Principal, SvgText, described, handle_schema, nullable,
+        svg_text_schema, warnings,
     },
 };
 use crate::{
@@ -28,7 +28,7 @@ use std::sync::Arc;
 pub const EXPORT: ToolSpec = ToolSpec {
     name: "export",
     title: Some("Export file"),
-    description: "Export a session document as a file, exactly as the app's Export command makes it: svg, pdf or png figures on the drawing's background, or cdxml, mol, smiles or inchi chemistry. svg_text null or outline (default) turns SVG text into paths for the same appearance in every viewer; live keeps text elements; other formats ignore it. pages: true exports every publication page as one PDF; it needs format pdf and a drawing with publication pages. Pass null or false otherwise. PNG resolution steps down from the style's dpi until the image fits export_png_pixels. The file comes back inline, at most max_output_bytes (info reports both budgets), with a receipt {format, byte_len, detail}. Read-only.",
+    description: "Export a session document as a file, exactly as the app's Export command makes it: svg, pdf or png figures on the drawing's background, or cdxml, mol, smiles or inchi chemistry. PNG resolution steps down from the style's dpi until the image fits export_png_pixels. The file comes back inline, at most max_output_bytes (info reports both budgets), with a receipt {format, byte_len, detail}.",
     input_schema: schema,
     hints: Some(Hints {
         read_only: true,
@@ -44,7 +44,7 @@ fn schema() -> Value {
         "properties": {
             "document": handle_schema(),
             "format": {"type": "string", "enum": EXPORT_FORMATS},
-            "pages": nullable(json!({"type": "boolean"})),
+            "pages": described(nullable(json!({"type": "boolean"})), "true exports every publication page as one PDF; it needs format pdf and a drawing with publication pages. null or false otherwise."),
             "svg_text": svg_text_schema(),
         },
         "required": ["document", "format", "pages", "svg_text"],

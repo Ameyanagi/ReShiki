@@ -522,9 +522,10 @@ reshiki --cli schema NAME
 
 `reshiki --cli help schema` prints the [full help](agent-reference.md#reshiki---cli-schema).
 
-NAME is `proposal`. Prints the Proposal JSON Schema that `compose` reads, the same schema the MCP
-server publishes. It is one JSON line without `experimental` and `api`, so you
-can save it as a schema file:
+NAME is `proposal`. Prints the Proposal JSON Schema that `compose` reads. The
+MCP server publishes a shorter form of it, without `explanation` and
+`replace_ids`, which `compose` fills in. The schema is one JSON line without
+`experimental` and `api`, so you can save it as a schema file:
 
 ```sh
 reshiki --cli schema proposal > proposal-schema.json

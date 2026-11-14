@@ -37,7 +37,7 @@ pub const INFO: ToolSpec = ToolSpec {
     title: Some("Server info"),
     description: "Report ReShiki's versions, the limits this server enforces (budgets), the import \
                   and export formats, the granted folders and the file extensions file_open and \
-                  file_save accept. Read-only.",
+                  file_save accept.",
     input_schema: no_arguments_schema,
     hints: Some(Hints {
         read_only: true,
@@ -63,7 +63,7 @@ pub const NEW: ToolSpec = ToolSpec {
 pub const LIST: ToolSpec = ToolSpec {
     name: "document_list",
     title: Some("List documents"),
-    description: "List your live session documents in creation order, each with its handle, revision and object count. Read-only.",
+    description: "List your live session documents in creation order, each with its handle, revision and object count.",
     input_schema: no_arguments_schema,
     hints: Some(Hints {
         read_only: true,

@@ -23,8 +23,8 @@ use super::{
     result::ToolResult,
     store::{Applied, Change, Documents, Edit, IdempotencyKey, Receipt, Snapshot},
     wire::{
-        DocHandle, IdRemapJson, ObjectId, Principal, Revision, handle_schema, ids_schema, nullable,
-        revision_schema, warnings,
+        DocHandle, IdRemapJson, ObjectId, Principal, Revision, described, handle_schema,
+        ids_schema, nullable, revision_schema, warnings,
     },
 };
 use crate::{
@@ -61,7 +61,7 @@ pub const NO_BASE: &str =
 pub const APPLY: ToolSpec = ToolSpec {
     name: "apply",
     title: Some("Edit document"),
-    description: "Edit a session document as one undo step. edit is insert, delete, undo or redo. insert copies every object of the source session document (made by import or compose, for example) into document: with ids it replaces those objects and puts the copy where they were; with ids null or empty it adds the copy below the drawing. delete removes ids. An abbreviation member in ids pulls in the whole abbreviation. undo and redo step through the document's history, which keeps history_depth undo steps; source and ids must be null for them. base_revision is the document revision you last saw. It is required for delete, for insert with ids, and for undo and redo; a different current revision gives stale and changes nothing. idempotency_key (at most 128 bytes, or null) identifies one exact request: repeating the request with the same key returns the first result instead of editing again, and the same key with different arguments is invalid_arguments; after stale, retry with a new key. Returns the new revision, recorded (false when nothing changed), the inserted IDs, id_remap from source to inserted IDs, and the deleted IDs. Deleted IDs can be reused, so inserted and deleted may share IDs.",
+    description: "Edit a session document as one undo step. Returns the new revision, recorded (false when nothing changed), the inserted IDs, id_remap from source to inserted IDs, and the deleted IDs. Deleted IDs can be reused, so inserted and deleted may share IDs.",
     input_schema: schema,
     hints: Some(Hints {
         read_only: false,
@@ -76,14 +76,14 @@ fn schema() -> Value {
         "type": "object",
         "properties": {
             "document": handle_schema(),
-            "edit": {"type": "string", "enum": ["insert", "delete", "undo", "redo"]},
-            "source": nullable(handle_schema()),
-            "ids": nullable(ids_schema()),
-            "base_revision": nullable(revision_schema()),
-            "idempotency_key": nullable(json!({
+            "edit": {"type": "string", "enum": ["insert", "delete", "undo", "redo"], "description": "insert copies every object of source into document: with ids it replaces those objects and puts the copy where they were; with ids null or empty it adds the copy below the drawing. delete removes ids. undo and redo step through the document's history, which keeps history_depth undo steps."},
+            "source": described(nullable(handle_schema()), "The session document insert copies (made by import or compose, for example); null for delete, undo and redo."),
+            "ids": described(nullable(ids_schema()), "The objects insert replaces or delete removes; an abbreviation member pulls in the whole abbreviation. null for undo and redo."),
+            "base_revision": described(nullable(revision_schema()), "The document revision you last saw. Required for delete, for insert with ids, and for undo and redo; a different current revision gives stale and changes nothing."),
+            "idempotency_key": described(nullable(json!({
                 "type": "string",
                 "maxLength": Budgets::default().max_idempotency_key_bytes,
-            })),
+            })), "At most 128 bytes, or null. It identifies one exact request: repeating the request with the same key returns the first result instead of editing again, and the same key with different arguments is invalid_arguments; after stale, retry with a new key."),
         },
         "required": ["document", "edit", "source", "ids", "base_revision", "idempotency_key"],
         "additionalProperties": false,

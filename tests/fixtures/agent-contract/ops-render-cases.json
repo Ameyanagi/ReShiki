@@ -1,6 +1,6 @@
 {
   "rules": [
-    {"id": "render.svg_text_nullable_enum_required", "cite": "crates/agent/src/ops/wire.rs:372-383; crates/agent/src/ops/render.rs:53,55,89-90"},
+    {"id": "render.svg_text_nullable_enum_required", "cite": "crates/agent/src/ops/wire.rs:372-386; crates/agent/src/ops/render.rs:53,55,89-90"},
     {
       "id": "arguments.object",
       "cite": "crates/agent/src/ops/catalog.rs:263-271; crates/agent/src/ops/render.rs:46,121"

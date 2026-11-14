@@ -379,7 +379,18 @@ pub enum SvgText {
 
 /// The nullable SVG text mode; `null` uses outlined text.
 pub(crate) fn svg_text_schema() -> Value {
-    nullable(json!({"type": "string", "enum": ["outline", "live"]}))
+    described(
+        nullable(json!({"type": "string", "enum": ["outline", "live"]})),
+        "outline (the default, also null) turns SVG text into paths for the same appearance in every viewer; live keeps text elements. Other formats ignore it.",
+    )
+}
+
+/// `schema` with a `description`, which hosts show next to the parameter.
+pub(crate) fn described(mut schema: Value, description: &str) -> Value {
+    if let Some(schema) = schema.as_object_mut() {
+        schema.insert("description".to_owned(), description.into());
+    }
+    schema
 }
 
 /// An [`ExportReceipt`] on the wire: `{format, byte_len, detail}`.

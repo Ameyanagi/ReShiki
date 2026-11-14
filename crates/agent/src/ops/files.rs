@@ -17,7 +17,10 @@ use super::{
     policy::Access,
     result::ToolResult,
     store::Documents,
-    wire::{DocHandle, Principal, SvgText, handle_schema, nullable, svg_text_schema, warnings},
+    wire::{
+        DocHandle, Principal, SvgText, described, handle_schema, nullable, svg_text_schema,
+        warnings,
+    },
 };
 use crate::{
     access::{
@@ -39,7 +42,7 @@ const MAX_PATH_BYTES: usize = 4096;
 pub const FILE_OPEN: ToolSpec = ToolSpec {
     name: "file_open",
     title: Some("Open file"),
-    description: "Open a structure file or a native ReShiki drawing as a new session document and return what import returns, plus source {path, bytes}. path must be an absolute path inside a folder the user granted for reading when the server started; info lists the granted folders and the extensions files open from. format auto follows the extension (.rsk, .reshiki and .moruno drawings; .mol, .rxn, .rsmi, .cdxml, .cdx, .smi, .smiles and .inchi structures); any other format must be the extension's own. Files are at most max_text_bytes. Every call creates another document; close the ones you no longer need with document_close.",
+    description: "Open a structure file or a native ReShiki drawing as a new session document and return what import returns, plus source {path, bytes}. Files are at most max_text_bytes. Every call creates another document; close the ones you no longer need with document_close.",
     input_schema: open_schema,
     hints: Some(Hints {
         read_only: false,
@@ -52,7 +55,7 @@ pub const FILE_OPEN: ToolSpec = ToolSpec {
 pub const FILE_SAVE: ToolSpec = ToolSpec {
     name: "file_save",
     title: Some("Save file"),
-    description: "Save a session document as a file: a native ReShiki drawing (reshiki, .rsk), svg, pdf or png figures, or cdxml, mol, smiles or inchi chemistry, made exactly as export makes them. svg_text null or outline (default) turns SVG text into paths for the same appearance in every viewer; live keeps text elements; other formats ignore it. Every file is at most max_output_bytes. Use an absolute path inside a folder the user granted for writing when the server started; info lists the granted folders and the extensions files save to. The parent folder must exist; folders are never created. format null follows the extension; any other format must be the extension's own. Existing files are kept unless overwrite is true, which replaces them. pages: true saves every publication page as one PDF; pass null or false otherwise. Returns a receipt {path, format, byte_len, replaced, detail}.",
+    description: "Save a session document as a file: a native ReShiki drawing (reshiki, .rsk), svg, pdf or png figures, or cdxml, mol, smiles or inchi chemistry, made exactly as export makes them. Every file is at most max_output_bytes. Returns a receipt {path, format, byte_len, replaced, detail}.",
     input_schema: save_schema,
     hints: Some(Hints {
         read_only: false,
@@ -75,8 +78,8 @@ fn open_schema() -> Value {
     json!({
         "type": "object",
         "properties": {
-            "path": path_schema(),
-            "format": {"type": "string", "enum": IMPORT_FORMATS},
+            "path": described(path_schema(), "An absolute path inside a folder the user granted for reading when the server started; info lists the granted folders and the extensions files open from."),
+            "format": {"type": "string", "enum": IMPORT_FORMATS, "description": "auto follows the extension (.rsk, .reshiki and .moruno drawings; .mol, .rxn, .rsmi, .cdxml, .cdx, .smi, .smiles and .inchi structures); any other format must be the extension's own."},
         },
         "required": ["path", "format"],
         "additionalProperties": false,
@@ -88,10 +91,10 @@ fn save_schema() -> Value {
         "type": "object",
         "properties": {
             "document": handle_schema(),
-            "path": path_schema(),
-            "format": nullable(json!({"type": "string", "enum": SAVE_FORMATS})),
-            "overwrite": {"type": "boolean"},
-            "pages": nullable(json!({"type": "boolean"})),
+            "path": described(path_schema(), "An absolute path inside a folder the user granted for writing when the server started; info lists the granted folders and the extensions files save to. The parent folder must exist; folders are never created."),
+            "format": described(nullable(json!({"type": "string", "enum": SAVE_FORMATS})), "null follows the extension; any other format must be the extension's own."),
+            "overwrite": {"type": "boolean", "description": "An existing file is kept unless this is true, which replaces it."},
+            "pages": described(nullable(json!({"type": "boolean"})), "true saves every publication page as one PDF; null or false otherwise."),
             "svg_text": svg_text_schema(),
         },
         "required": ["document", "path", "format", "overwrite", "pages", "svg_text"],

@@ -42,7 +42,13 @@ Generated from ReShiki's command help, tool catalog and schemas.\n\n\
     ] {
         row(&mut text, &[code(name), version.to_string()]);
     }
-    text.push_str("\n## Proposal\n\n<details>\n<summary>Proposal JSON Schema</summary>\n\n");
+    text.push_str(
+        "\n## Proposal\n\n\
+`reshiki --cli schema proposal` prints this schema. The `compose` tool publishes a shorter form: \
+without `explanation` and `replace_ids`, which it fills in, and with repeated parts stated once \
+under `$defs`. `compose` reads both forms.\n\n\
+<details>\n<summary>Proposal JSON Schema</summary>\n\n",
+    );
     fence(&mut text, "json", &format!("{:#}", reshiki_agent::schema()));
     text.push_str("</details>\n");
     text

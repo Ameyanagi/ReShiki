@@ -2,11 +2,11 @@
   "rules": [
     {
       "id": "arguments.object",
-      "cite": "crates/agent/src/ops/catalog.rs:58,77-88; crates/agent/src/ops/analyze.rs:67-68"
+      "cite": "crates/agent/src/ops/catalog.rs:58,77-88; crates/agent/src/ops/analyze.rs:68-69"
     },
     {
       "id": "analyze.document_required",
-      "cite": "crates/agent/src/ops/analyze.rs:50,53,62"
+      "cite": "crates/agent/src/ops/analyze.rs:51,54,63"
     },
     {
       "id": "analyze.document_handle",
@@ -14,7 +14,7 @@
     },
     {
       "id": "analyze.ids_nullable_required",
-      "cite": "crates/agent/src/ops/wire.rs:3-10,192-195; crates/agent/src/ops/analyze.rs:51,53,63-64"
+      "cite": "crates/agent/src/ops/wire.rs:3-10,192-195; crates/agent/src/ops/analyze.rs:52,54,64-65"
     },
     {
       "id": "analyze.ids_items",
@@ -22,11 +22,11 @@
     },
     {
       "id": "analyze.ids_count",
-      "cite": "crates/agent/src/ops/ids.rs:11-25; crates/agent/src/ops/analyze.rs:69-71; crates/agent/src/ops/wire.rs:187-190; crates/agent/src/ops/budget.rs:26-27,84"
+      "cite": "crates/agent/src/ops/ids.rs:11-25; crates/agent/src/ops/analyze.rs:70-72; crates/agent/src/ops/wire.rs:187-190; crates/agent/src/ops/budget.rs:26-27,84"
     },
     {
       "id": "analyze.no_unknown_fields",
-      "cite": "crates/agent/src/ops/analyze.rs:54,60"
+      "cite": "crates/agent/src/ops/analyze.rs:55,61"
     }
   ],
   "bases": {
