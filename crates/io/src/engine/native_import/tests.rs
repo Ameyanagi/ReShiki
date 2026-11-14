@@ -1918,29 +1918,77 @@ fn spiro_imports_keep_regular_rings_and_bond_lengths() -> anyhow::Result<()> {
 }
 
 #[test]
-fn selected_spiro_cleanup_keeps_regular_rings_and_bond_lengths() -> anyhow::Result<()> {
+fn spiro_cleanup_keeps_regular_rings_and_bond_lengths() -> anyhow::Result<()> {
+    use crate::cleanup::{Options, Scope};
     let imported = imported_smiles(SPIRO_INDANONE)?;
-    let selected = imported.document.atoms.iter().map(|atom| atom.id).collect();
-    let bond_length = f64::from(imported.document.drawing_style.bond_length_world) / 28.;
-    let mut request = Request::molecule("clean", imported.document);
-    request.cleanup = Some(crate::cleanup::Options {
-        scope: crate::cleanup::Scope::SelectedAtoms,
-        ..Default::default()
-    });
-    // Selecting every atom exercises the app cleanup path without fixed atoms.
-    request.selected_ids = Some(selected);
-    let cleaned = crate::engine::native_cleanup::prepare(&request)?;
-    let molecule = cleaned.molecule.expect("selected cleanup analysis");
-    let normalized = molecule
-        .positions
-        .iter()
-        .map(|p| Point3 {
-            x: p.x * 1.5 / bond_length,
-            y: p.y * 1.5 / bond_length,
-            z: p.z,
-        })
-        .collect::<Vec<_>>();
-    assert_regular_spiro_rings(SPIRO_INDANONE, &molecule.state, &normalized);
+    let state = &imported.molecule.state;
+    let world = f64::from(imported.document.drawing_style.bond_length_world);
+    // RDKit's own layout, with the tetralone benzene ring (atoms 14–19) squashed.
+    let squashed = depict::compute(
+        state,
+        &vec![None; state.graph.atoms.len()],
+        None,
+        depict::Options::default(),
+    )?
+    .positions;
+    let short = (squashed[15].x - squashed[16].x).hypot(squashed[15].y - squashed[16].y);
+    assert!((short - 0.8).abs() < 1e-6, "source ring bond is {short}");
+    let ids: Vec<u64> = imported.document.atoms.iter().map(|atom| atom.id).collect();
+    assert_eq!(ids.len(), squashed.len());
+    for mirror in [1., -1.] {
+        let mut source = imported.document.clone();
+        for (atom, point) in source.atoms.iter_mut().zip(&squashed) {
+            atom.position.x = (mirror * point.x * world / 1.5) as f32;
+            atom.position.y = (-point.y * world / 1.5) as f32;
+        }
+        for (label, scope, selected) in [
+            ("whole drawing", Scope::Drawing, None),
+            (
+                "the molecule",
+                Scope::SelectedMolecules,
+                Some(ids[..1].to_vec()),
+            ),
+            // Selecting every atom has no fixed atoms.
+            ("every atom", Scope::SelectedAtoms, Some(ids.clone())),
+            // Only the indanone's carbonyl oxygen stays fixed, so the layout
+            // runs with a fixed atom.
+            (
+                "all but one atom",
+                Scope::SelectedAtoms,
+                Some(ids[1..].to_vec()),
+            ),
+        ] {
+            for (keep_orientation, iupac_orientation) in
+                [(true, false), (false, false), (false, true)]
+            {
+                let mut request = Request::molecule("clean", source.clone());
+                request.cleanup = Some(Options {
+                    scope,
+                    keep_orientation,
+                    iupac_orientation,
+                });
+                request.selected_ids = selected.clone();
+                let cleaned = crate::engine::native_cleanup::prepare(&request)?;
+                let molecule = cleaned.molecule.expect("cleanup analysis");
+                let normalized = molecule
+                    .positions
+                    .iter()
+                    .map(|p| Point3 {
+                        x: p.x * 1.5 * 28. / world,
+                        y: p.y * 1.5 * 28. / world,
+                        z: p.z,
+                    })
+                    .collect::<Vec<_>>();
+                assert_regular_spiro_rings(
+                    &format!(
+                        "{label}, keep {keep_orientation}, IUPAC {iupac_orientation}, mirror {mirror}"
+                    ),
+                    &molecule.state,
+                    &normalized,
+                );
+            }
+        }
+    }
     Ok(())
 }
 
