@@ -19,6 +19,9 @@ pub(crate) struct Graph<'d> {
     bonds: HashMap<u64, Vec<usize>>,
     /// Each bond's end positions, by bond index.
     ends: Vec<Option<(Point, Point)>>,
+    collapsed: crate::abbreviations::Membership<'d>,
+    /// Atom indices by x position, sorted on first use.
+    by_x: std::cell::OnceCell<Vec<(f32, usize)>>,
 }
 
 impl<'d> Graph<'d> {
@@ -49,6 +52,8 @@ impl<'d> Graph<'d> {
             atoms,
             bonds,
             ends,
+            collapsed: crate::abbreviations::Membership::new(doc),
+            by_x: std::cell::OnceCell::new(),
         }
     }
 
@@ -75,6 +80,44 @@ impl<'d> Graph<'d> {
     /// The end positions of the bond at this index, when both atoms exist.
     pub(crate) fn ends(&self, index: usize) -> Option<(Point, Point)> {
         self.ends.get(index).copied().flatten()
+    }
+
+    /// The atoms no farther than `reach` from `x` along the x axis, in
+    /// document order.
+    pub(crate) fn within_x(&self, x: f32, reach: f32) -> Vec<&'d Atom> {
+        let doc = self.doc;
+        let sorted = self.by_x.get_or_init(|| {
+            let mut sorted: Vec<_> = doc
+                .atoms
+                .iter()
+                .enumerate()
+                .map(|(index, atom)| (atom.position.x, index))
+                .collect();
+            sorted.sort_by(|a, b| a.0.total_cmp(&b.0));
+            sorted
+        });
+        let start = sorted.partition_point(|(at, _)| *at < x - reach);
+        let mut found: Vec<_> = sorted
+            .iter()
+            .skip(start)
+            .take_while(|(at, _)| *at <= x + reach)
+            .map(|(_, index)| *index)
+            .collect();
+        found.sort_unstable();
+        found
+            .into_iter()
+            .filter_map(|index| doc.atoms.get(index))
+            .collect()
+    }
+
+    /// [`Document::atom_visible`] without rescanning every abbreviation.
+    pub(crate) fn atom_visible(&self, id: u64) -> bool {
+        self.collapsed.atom_visible(id)
+    }
+
+    /// [`Document::bond_visible`] without rescanning every abbreviation.
+    pub(crate) fn bond_visible(&self, a: u64, b: u64) -> bool {
+        self.collapsed.bond_visible(a, b)
     }
 
     /// [`crate::atom_labels::visible`] without rescanning every bond.
@@ -118,6 +161,7 @@ mod tests {
             assert_eq!(indexed, scanned);
             assert_eq!(graph.degree(id), scanned.len());
             assert_eq!(graph.visible(atom), crate::atom_labels::visible(atom, &doc));
+            assert_eq!(graph.atom_visible(id), doc.atom_visible(id));
         }
         for (i, bond) in doc.bonds.iter().enumerate() {
             let ends = doc
@@ -125,6 +169,25 @@ mod tests {
                 .zip(doc.atom(bond.b))
                 .map(|(a, b)| (a.position, b.position));
             assert_eq!(graph.ends(i), ends);
+            assert_eq!(
+                graph.bond_visible(bond.a, bond.b),
+                doc.bond_visible(bond.a, bond.b)
+            );
+        }
+        for atom in &doc.atoms {
+            let x = atom.position.x;
+            let scanned: Vec<_> = doc
+                .atoms
+                .iter()
+                .filter(|other| (other.position.x - x).abs() <= 40.)
+                .map(std::ptr::from_ref)
+                .collect();
+            let indexed: Vec<_> = graph
+                .within_x(x, 40.)
+                .into_iter()
+                .map(std::ptr::from_ref)
+                .collect();
+            assert_eq!(indexed, scanned);
         }
         assert!(graph.atom(u64::MAX).is_none());
         assert_eq!(graph.bonds(u64::MAX).count(), 0);

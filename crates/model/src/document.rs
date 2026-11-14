@@ -679,6 +679,43 @@ impl Document {
         crate::arrow_anchors::transformed(self, ids, |v| v);
         crate::arrow_labels::translated(self, ids);
     }
+    /// [`Self::translate`] for disjoint units that each move by their own
+    /// offset, in one pass over the drawing instead of one pass per unit.
+    pub(crate) fn translate_units(&mut self, units: &[(Vec<u64>, f32, f32)]) {
+        let collapsed = crate::abbreviations::Membership::new(self);
+        let mut unit = std::collections::HashMap::new();
+        for (index, (ids, ..)) in units.iter().enumerate() {
+            for id in ids {
+                unit.insert(*id, index);
+                // Any selected member pulls in the whole abbreviation.
+                for group in collapsed.of(*id) {
+                    unit.extend(group.members.iter().map(|member| (*member, index)));
+                }
+            }
+        }
+        let offset = |id: u64, p: Point| match unit.get(&id).and_then(|i| units.get(*i)) {
+            Some((_, dx, dy)) => p.offset(*dx, *dy),
+            None => p,
+        };
+        for graphic in &mut self.graphics {
+            graphic.origin = offset(graphic.id, graphic.origin);
+        }
+        for a in &mut self.atoms {
+            a.position = offset(a.id, a.position);
+        }
+        for a in &mut self.annotations {
+            a.position = offset(a.id, a.position);
+        }
+        for a in &mut self.arrows {
+            let id = a.id;
+            a.map_points(|p| offset(id, p));
+        }
+        crate::projection::sync_centroids(self);
+        crate::arrow_anchors::transformed_units(self, |id| unit.get(&id).copied(), |v| v);
+        for (ids, ..) in units {
+            crate::arrow_labels::translated(self, ids);
+        }
+    }
     /// Every object ID, in [`Document::object_ids`] order.
     pub fn all_ids(&self) -> Vec<u64> {
         self.object_ids().collect()

@@ -397,3 +397,71 @@ fn arrangement_matches_captured_baseline() {
         if capture { "captured" } else { "matched" }
     );
 }
+
+/// Moving every unit in one pass leaves the drawing one translate per unit
+/// would, including collapsed groups, centroid attachments, arrow links kept
+/// inside a unit or detached across units, and a caption dragged off its arrow.
+#[test]
+fn units_translated_together_match_one_translate_per_unit() {
+    use crate::arrow_anchors::{Anchor, Target};
+    let mut linked = geometry();
+    linked.groups = vec![Group {
+        id: 10,
+        members: vec![1, 2, 8],
+        integral: false,
+    }];
+    let anchor = |target| {
+        Some(Anchor {
+            target,
+            offset: Point::new(4., 6.),
+            direction: Point::new(0., 1.),
+            gap: 2.,
+        })
+    };
+    linked.arrows[0].start_anchor = anchor(Target::Atom { atom: 1 });
+    linked.arrows[0].end_anchor = anchor(Target::Bond {
+        a: 3,
+        b: 4,
+        fraction: 0.5,
+    });
+    crate::arrow_anchors::reconcile(&mut linked);
+    let mut captioned = geometry();
+    captioned
+        .arrow_labels
+        .push(crate::arrow_labels::ArrowLabel {
+            arrow: 8,
+            annotation: 7,
+            side: crate::arrow_labels::Side::Above,
+            gap: None,
+        });
+    let mut cases = fixtures();
+    cases.push(("linked", linked));
+    cases.push(("captioned", captioned));
+    for (name, doc) in cases {
+        let all = doc.all_ids();
+        let without_arrows: Vec<_> = all
+            .iter()
+            .copied()
+            .filter(|id| doc.arrows.iter().all(|a| a.id != *id))
+            .collect();
+        for ids in [all, without_arrows] {
+            // An arrow's own unit goes first: a later one would first follow
+            // a target that had already moved, then detach from it.
+            let mut units = groups(&doc, &ids);
+            units.sort_by_key(|unit| doc.arrows.iter().all(|a| !unit.contains(&a.id)));
+            let moves: Vec<_> = units
+                .into_iter()
+                .enumerate()
+                .map(|(i, unit)| (unit, i as f32 * 7. - 3., i as f32 * -5. + 2.))
+                .collect();
+            let mut one_by_one = doc.clone();
+            for (unit, dx, dy) in &moves {
+                one_by_one.translate(unit, *dx, *dy);
+            }
+            let mut together = doc.clone();
+            together.translate_units(&moves);
+            assert_eq!(together, one_by_one, "{name}");
+            assert_ne!(together, doc, "{name}");
+        }
+    }
+}

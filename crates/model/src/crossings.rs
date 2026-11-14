@@ -408,7 +408,7 @@ pub(crate) fn gaps_with_opacity(
         .iter()
         .enumerate()
         .filter_map(|(i, b)| {
-            if !doc.bond_visible(b.a, b.b) {
+            if !graph.bond_visible(b.a, b.b) {
                 return None;
             }
             let (from, to) = graph.ends(i)?;
