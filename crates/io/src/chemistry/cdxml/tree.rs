@@ -50,7 +50,7 @@ impl Tree {
         if text.len() > INPUT_BYTES {
             return Err(Error::Limit);
         }
-        reject_dtd_declarations(text)?;
+        super::xml_guard::check(text)?;
         let doc = roxmltree::Document::parse_with_options(
             text,
             roxmltree::ParsingOptions {
@@ -238,72 +238,6 @@ impl Tree {
         }
         Ok(output)
     }
-}
-
-/// Inspect the XML preamble before parsing so entity expansion cannot consume
-/// resources and DTD attribute defaults cannot disappear. Quoted external IDs,
-/// comments, and processing instructions are inert and remain allowed.
-fn reject_dtd_declarations(mut text: &str) -> Result<()> {
-    while let Some(start) = text.find('<') {
-        text = text.get(start..).ok_or(Error::Limit)?;
-        if text.starts_with("<!--") || text.starts_with("<?") {
-            let end = if text.starts_with("<!--") {
-                "-->"
-            } else {
-                "?>"
-            };
-            let Some(index) = text.find(end) else {
-                break;
-            };
-            text = text.get(index + end.len()..).ok_or(Error::Limit)?;
-            continue;
-        }
-        if !text.starts_with("<!DOCTYPE") {
-            break;
-        }
-        let mut cursor = "<!DOCTYPE".len();
-        let mut quote = None;
-        let mut brackets = 0usize;
-        while let Some(&byte) = text.as_bytes().get(cursor) {
-            if let Some(delimiter) = quote {
-                if byte == delimiter {
-                    quote = None;
-                }
-            } else if byte == b'\'' || byte == b'"' {
-                quote = Some(byte);
-            } else if byte == b'<' {
-                let rest = text.get(cursor..).ok_or(Error::Limit)?;
-                if rest.starts_with("<!--") || rest.starts_with("<?") {
-                    let end = if rest.starts_with("<!--") {
-                        "-->"
-                    } else {
-                        "?>"
-                    };
-                    let Some(index) = rest.find(end) else {
-                        break;
-                    };
-                    cursor += index + end.len();
-                    continue;
-                }
-                if ["<!ENTITY", "<!ATTLIST", "<!ELEMENT", "<!NOTATION"]
-                    .iter()
-                    .any(|p| rest.starts_with(p))
-                {
-                    return Err(Error::Unsupported("internal DTD declarations"));
-                }
-            } else if byte == b'[' {
-                brackets += 1;
-            } else if byte == b']' {
-                brackets = brackets.saturating_sub(1);
-            } else if byte == b'>' && brackets == 0 {
-                cursor += 1;
-                break;
-            }
-            cursor += 1;
-        }
-        text = text.get(cursor..).ok_or(Error::Limit)?;
-    }
-    Ok(())
 }
 
 fn push(output: &mut String, text: &str) -> Result<()> {
