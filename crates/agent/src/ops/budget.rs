@@ -173,9 +173,13 @@ pub fn objects(doc: &Document) -> usize {
 }
 
 /// The weight of one document or history frame: [`objects`] plus one, so an
-/// empty document still counts.
+/// empty document still counts, plus one for every 64 bytes of annotation
+/// text, so a few objects holding much text are not nearly free.
 pub fn cost(doc: &Document) -> u64 {
-    (objects(doc) as u64).saturating_add(1)
+    let text: usize = doc.annotations.iter().map(|a| a.text.len()).sum();
+    (objects(doc) as u64)
+        .saturating_add(1)
+        .saturating_add(text as u64 / 64)
 }
 
 /// Stored PNG and original EMF bytes in `docs`, counting each storage once.
