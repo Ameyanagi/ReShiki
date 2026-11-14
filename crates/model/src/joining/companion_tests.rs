@@ -143,3 +143,25 @@ fn sharing_an_atom_keeps_the_name_and_depth_scope_of_the_moved_molecule() {
     assert_eq!(joined.molecule_names[0].atoms, [shared, atoms[1]]);
     assert_eq!(joined.depth_appearance[0].atoms, [shared, atoms[1]]);
 }
+
+#[test]
+fn sharing_an_atom_keeps_the_surviving_links_of_the_moved_model() {
+    use crate::models3d::{ForceField, Model3d, Placed};
+    let (mut doc, atoms) = fixture();
+    let placed = atoms
+        .iter()
+        .zip([-1., 1.])
+        .map(|(id, x)| Placed {
+            id: *id,
+            xyz: [x, 0., 0.],
+        })
+        .collect();
+    let model = Model3d::new(&doc, placed, vec![], ForceField::Mmff94s);
+    doc.models.push(model);
+    crate::models3d::require_version(&mut doc);
+    host(&mut doc);
+    doc.validate().unwrap();
+    let joined = place(&doc, &atoms, atoms[0], Connection::ShareAtom);
+    assert_eq!(joined.models.len(), 1);
+    assert_eq!(joined.models[0].linked_atoms, [atoms[1]]);
+}

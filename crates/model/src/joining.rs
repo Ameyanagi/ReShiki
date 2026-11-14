@@ -322,10 +322,13 @@ impl Prepared {
                 a.stereo_group = self.fragment.atom(id).and_then(|atom| atom.stereo_group);
             }
         }
-        // Only a moved model has every ID in `restore`.
+        // Only a moved model has every surviving ID in `restore`; a shared atom
+        // was removed and leaves the moved model, as on any other edit.
+        let present: HashSet<_> = placed.atoms.iter().map(|a| a.id).collect();
         let mut models = std::mem::take(&mut placed.models);
         for model in &mut models {
             let mut moved = model.clone();
+            crate::models3d::prune_sources(&mut moved, &present);
             if moved.remap(&restore).is_some() {
                 *model = moved;
             }
