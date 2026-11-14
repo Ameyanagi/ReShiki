@@ -61,15 +61,15 @@ NATIVE_ROWS = [
 ]
 # Matrix rows by job, in the order and key order the job names list them.
 MATRICES: dict[str, list[dict[str, Any]]] = {
+    # The macOS rust-lint-goldens job runs the Python checks and the arm64
+    # geometry tests, so neither takes a macOS runner of its own.
     "python": [
-        {"os": "macos-15", "python": PYTHON},
         {"os": "windows-2022", "python": WINDOWS_PYTHON},
         {"os": "ubuntu-22.04", "python": PYTHON},
     ],
     # checks.yml rust and rust-lint-goldens
     "rust": NATIVE_ROWS,
     "geometry": [
-        {"os": "macos-15", "target": "aarch64-apple-darwin"},
         {"os": "macos-15-intel", "target": "x86_64-apple-darwin"},
         {"os": "windows-2022", "target": "x86_64-pc-windows-msvc", "msvc_arch": "x64"},
         {"os": "windows-11-arm", "target": "aarch64-pc-windows-msvc", "msvc_arch": "arm64"},

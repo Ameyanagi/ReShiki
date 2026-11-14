@@ -174,9 +174,6 @@ jobs:
       - run: uv run --locked ruff check reference scripts tests
       - run: uv run --locked ruff format --check reference scripts tests
       - run: uv run --locked ty check
-      - name: Install Rust for native macOS clipboard and printing checks
-        if: runner.os == 'macOS'
-        run: rustup toolchain install 1.99.1 --profile minimal && rustup default 1.99.1
       - run: uv run --locked python -m unittest discover -s tests -p 'test_*.py'
       - run: uv run --locked python -m unittest discover -s reference -p 'test_*.py'
       - run: uv run --locked python scripts/check_reference_dependencies.py
@@ -330,13 +327,6 @@ jobs:
           RESHIKI_HELP_QA_DIR: artifacts/qa-help-polish
           RESHIKI_DATA_DIR: ${{ runner.temp }}/reshiki-help-polish
         run: cargo test --locked --no-default-features --bin reshiki app::help::tests::help_renderer_evidence -- --exact --ignored
-      - name: Retain Windows Help renderer evidence
-        if: runner.os == 'Windows' && matrix.partition == 1
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
-        with:
-          name: qa-help-polish-${{ matrix.platform.target }}
-          path: artifacts/qa-help-polish
-          if-no-files-found: error
       - name: Test rendered cascading menus on Windows
         if: runner.os == 'Windows' && matrix.partition == 1
         # The headless renderer falls back to TinySkia on Windows. These
@@ -488,6 +478,29 @@ jobs:
         run: cargo test --locked --features rdkit-reference --test inchi_reader --test depict_geometry --test depict_rings --test depict_attachment --test depict_seeds --test depict_templates --test depict_collision --test depict_expansion --test depict_finalize --no-fail-fast
       - name: Replay complete aromatic response fixtures
         run: cargo test --locked --features rdkit-reference --test native_aromatic complete_aromatic_responses_match_goldens -- --exact
+      # macOS runners are the scarcest, so the macOS Python checks and the arm64
+      # geometry tests run here and not as jobs of their own. Keep the two steps
+      # below the same as the python and geometry jobs.
+      - name: Check and test Python on macOS
+        if: runner.os == 'macOS'
+        run: |
+          uv run --locked ruff check reference scripts tests
+          uv run --locked ruff format --check reference scripts tests
+          uv run --locked ty check
+          uv run --locked python -m unittest discover -s tests -p 'test_*.py'
+          uv run --locked python -m unittest discover -s reference -p 'test_*.py'
+          uv run --locked python scripts/check_reference_dependencies.py
+      - name: Test the geometry, heap and process crates for the packaged macOS target
+        if: runner.os == 'macOS' && needs.scope.outputs.geometry == 'true'
+        env:
+          MACOSX_DEPLOYMENT_TARGET: "14.0"
+        run: |
+          cargo test --release --locked -p reshiki-process-heap --no-default-features --target ${{ matrix.target }}
+          cargo test --release --locked -p reshiki-process-heap --no-default-features --features allocation-metrics --test global_allocator_unwind --target ${{ matrix.target }}
+          cargo test --locked -p reshiki-geometry --features cosmolkit/op-contracts-strict --target ${{ matrix.target }}
+          cargo test --locked -p reshiki-model --lib --target ${{ matrix.target }} chemistry::abbreviations::
+          cargo check --locked -p reshiki-process --all-targets --target ${{ matrix.target }}
+          cargo test --locked -p reshiki-process --target ${{ matrix.target }}
   rust-result:
     name: Rust checks
     needs: [scope, rust, rust-lint-goldens]
