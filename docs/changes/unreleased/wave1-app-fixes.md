@@ -1,6 +1,6 @@
 ---
 section: Fixes
-issues: [1151, 1149, 1119]
+issues: []
 ---
 
 - Pasting a MOL file, SMILES or a ChemDraw structure, and **Insert** on the
@@ -13,12 +13,13 @@ issues: [1151, 1149, 1119]
   window, so the next key acts on the drawing without a click (fixes
   [issue #1149](https://github.com/Ameyanagi/ReShiki/issues/1149)).
 - On Windows, several drawings opened from the same Office application get
-  numbered tabs: `Drawing in PowerPoint`, then `Drawing in PowerPoint (2)`, and
-  so on (fixes [issue #1119](https://github.com/Ameyanagi/ReShiki/issues/1119)).
+  numbered tabs: `Drawing in PowerPoint.rsk`, then
+  `Drawing in PowerPoint (2).rsk`, and so on (fixes
+  [issue #1119](https://github.com/Ameyanagi/ReShiki/issues/1119)).
 - A newer ReShiki's interface or assistant preferences that this version cannot
-  read are no longer lost. ReShiki keeps the file as `appearance.json.bad` or
-  `assistant-preferences.json.bad` in its data folder and starts with the
-  default settings.
+  read are no longer lost. ReShiki starts with the default settings and keeps a
+  copy of the file as `appearance.json.bad` or `assistant-preferences.json.bad`
+  in its data folder.
 - **Expand generic structures** is available again after an expansion finishes
   while the recovery drafts dialog is open. The status bar says that the
   expansion was discarded.
