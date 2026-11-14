@@ -1,7 +1,7 @@
 use super::*;
 use crate::{
     attachments::Kind,
-    document::Arrow,
+    document::{Arrow, Atom, Bond},
     ops::{
         headless::HeadlessHost,
         host::{Call, ToolHost},
@@ -529,4 +529,50 @@ async fn an_unknown_handle_is_an_unknown_document() {
     let result = inspect_call(&host, "doc_0123456789abcdef0123456789abcdef", Value::Null).await;
     assert!(result.is_error);
     assert_eq!(result.value["error"]["code"], "unknown_document");
+}
+
+/// S12: the summary's bounds once counted every bond for every atom, so a
+/// drawing four times as large took sixteen times as long.
+#[test]
+fn the_bounds_of_a_bonded_drawing_take_linear_time() {
+    // Rows of 300 bonded carbons, as the audit's 45,000-atom drawing.
+    let rows = |atoms: u64| {
+        let mut doc = Document::default();
+        let first = doc.add_atom("C", Point::default());
+        let second = doc.add_atom("C", Point::new(42., 0.));
+        doc.add_bond(first, second, 1, "plain");
+        let (atom, bond) = (doc.atoms[0].clone(), doc.bonds[0].clone());
+        // Pushed directly: add_atom and add_bond scan the drawing each time.
+        for i in 2..atoms {
+            let position = Point::new((i % 300) as f32 * 42., (i / 300) as f32 * 42.);
+            doc.atoms.push(Atom {
+                id: i + 1,
+                position,
+                ..atom.clone()
+            });
+            if i % 300 != 0 {
+                doc.bonds.push(Bond {
+                    a: i,
+                    b: i + 1,
+                    ..bond.clone()
+                });
+            }
+        }
+        doc
+    };
+    let fastest = |doc: &Document| {
+        (0..3)
+            .map(|_| {
+                let start = std::time::Instant::now();
+                std::hint::black_box(doc.bounds());
+                start.elapsed()
+            })
+            .min()
+            .unwrap()
+    };
+    let (small, large) = (fastest(&rows(4_000)), fastest(&rows(16_000)));
+    assert!(
+        large < small * 10,
+        "4,000 atoms took {small:?} and 16,000 took {large:?}"
+    );
 }

@@ -1473,6 +1473,8 @@ fn selections_bounds_in_axes(
         }
     }
     let isotopes = HydrogenIsotopeLabels::new(doc);
+    // One bond index for every atom's label, not a scan of the bonds each.
+    let graph = graph::Graph::new(doc);
     for atom in doc
         .atoms
         .iter()
@@ -1489,7 +1491,7 @@ fn selections_bounds_in_axes(
             );
         }
         if let Some((lo, hi)) = text_bounds(&atom_label_shown(atom, doc, &isotopes, || {
-            visible(atom, doc)
+            graph.visible(atom)
         })) {
             grow(atom.id, &mut [lo, hi].into_iter());
         }
