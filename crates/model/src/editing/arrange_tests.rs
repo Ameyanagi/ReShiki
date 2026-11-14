@@ -465,3 +465,142 @@ fn units_translated_together_match_one_translate_per_unit() {
         }
     }
 }
+
+/// An arrow outside the selection is not rewritten: aligning objects that
+/// already line up leaves the whole drawing as it was, including a bent
+/// arrow whose bend is still implied.
+#[test]
+fn aligning_aligned_objects_leaves_an_unselected_arrow_untouched() {
+    let mut doc = Document::default();
+    let mut boxes = vec![];
+    for y in [0., 120.] {
+        let id = doc.next_id();
+        doc.graphics.push(Graphic::dragged(
+            id,
+            GraphicKind::Rectangle,
+            Point::new(10., y),
+            Point::new(70., y + 40.),
+            GraphicStyle::default(),
+            BracketSides::Both,
+            false,
+        ));
+        boxes.push(id);
+    }
+    doc.arrows.push(Arrow {
+        start_anchor: None,
+        end_anchor: None,
+        id: doc.next_id(),
+        start: Point::new(0., 300.),
+        end: Point::new(100., 300.),
+        kind: "bent".into(),
+        control: None,
+        cubic: None,
+        nodes: Vec::new(),
+        style: None,
+    });
+    doc.validate().unwrap();
+    let before = doc.clone();
+    arrange(&mut doc, &boxes, Arrange::AlignLeft);
+    assert_eq!(doc, before);
+    assert_eq!(doc.arrows[0].control, None);
+}
+
+/// Condition text keeps its arrow link when both move together, and text
+/// moved apart from its arrow is re-measured or released, whichever unit the
+/// arrow and the text fall in.
+#[test]
+fn labelled_arrows_translated_together_match_one_translate_per_unit() {
+    let mut doc = Document::default();
+    let mut pairs = vec![];
+    for row in 0..4 {
+        let y = row as f32 * 150.;
+        let arrow = doc.next_id();
+        doc.arrows.push(Arrow {
+            start_anchor: None,
+            end_anchor: None,
+            id: arrow,
+            start: Point::new(0., y),
+            end: Point::new(160., y),
+            kind: "forward".into(),
+            control: None,
+            cubic: None,
+            nodes: Vec::new(),
+            style: None,
+        });
+        let caption = doc.next_id();
+        doc.annotations.push(Annotation {
+            id: caption,
+            position: Point::new(60., y - 30.),
+            text: "heat".into(),
+            format: Default::default(),
+        });
+        doc.arrow_labels.push(crate::arrow_labels::ArrowLabel {
+            arrow,
+            annotation: caption,
+            side: crate::arrow_labels::Side::Above,
+            gap: None,
+        });
+        pairs.push((arrow, caption));
+    }
+    doc.validate().unwrap();
+    let [(a0, t0), (a1, t1), (a2, t2), (_, t3)] = pairs[..] else {
+        unreachable!()
+    };
+    let moves = vec![
+        // Together: the link stays as it is.
+        (vec![a0, t0], 30., 5.),
+        // Text alone, nudged away: a custom gap.
+        (vec![t1], 0., -12.),
+        // Arrow and text in different units, the text to the other side.
+        (vec![a2], 10., 0.),
+        (vec![t2], 10., 70.),
+        // Text carried off the end of its arrow: released.
+        (vec![t3], 400., 0.),
+        (vec![a1], 0., 0.),
+    ];
+    let mut one_by_one = doc.clone();
+    for (unit, dx, dy) in &moves {
+        one_by_one.translate(unit, *dx, *dy);
+    }
+    let mut together = doc.clone();
+    together.translate_units(&moves);
+    assert_eq!(together, one_by_one);
+    assert_eq!(together.arrow_labels.len(), 3);
+    assert_eq!(together.arrow_labels[0], doc.arrow_labels[0]);
+    assert!(together.arrow_labels.iter().any(|l| l.gap.is_some()));
+    assert!(
+        together
+            .arrow_labels
+            .iter()
+            .any(|l| l.annotation == t2 && l.side == crate::arrow_labels::Side::Below)
+    );
+}
+
+/// Selecting every atom of one collapsed group expands that group once, not
+/// once per selected atom, and still moves all of it.
+#[test]
+fn a_fully_selected_collapsed_group_moves_as_one() {
+    let mut doc = Document::default();
+    let chain: Vec<_> = (0..40)
+        .map(|i| doc.add_atom("C", Point::new(i as f32 * 35., (i % 2) as f32 * 20.)))
+        .collect();
+    for pair in chain.windows(2) {
+        doc.add_bond(pair[0], pair[1], 1, "plain");
+    }
+    doc.contract(&chain[1..], "R", "R").unwrap();
+    let lone = doc.add_atom("O", Point::new(-200., 300.));
+    for ids in [chain.clone(), vec![chain[5]]] {
+        let moves = vec![(ids, 7., -3.), (vec![lone], -2., 4.)];
+        let mut one_by_one = doc.clone();
+        for (unit, dx, dy) in &moves {
+            one_by_one.translate(unit, *dx, *dy);
+        }
+        let mut together = doc.clone();
+        together.translate_units(&moves);
+        assert_eq!(together, one_by_one);
+        assert_eq!(
+            together.atom(chain[39]).unwrap().position,
+            doc.atom(chain[39]).unwrap().position.offset(7., -3.)
+        );
+    }
+}

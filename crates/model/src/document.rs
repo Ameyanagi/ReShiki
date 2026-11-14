@@ -684,12 +684,15 @@ impl Document {
     pub(crate) fn translate_units(&mut self, units: &[(Vec<u64>, f32, f32)]) {
         let collapsed = crate::abbreviations::Membership::new(self);
         let mut unit = std::collections::HashMap::new();
+        let mut expanded = std::collections::HashSet::new();
         for (index, (ids, ..)) in units.iter().enumerate() {
             for id in ids {
                 unit.insert(*id, index);
-                // Any selected member pulls in the whole abbreviation.
+                // Any selected member pulls in the whole abbreviation, once.
                 for group in collapsed.of(*id) {
-                    unit.extend(group.members.iter().map(|member| (*member, index)));
+                    if expanded.insert((index, std::ptr::from_ref(*group))) {
+                        unit.extend(group.members.iter().map(|member| (*member, index)));
+                    }
                 }
             }
         }
@@ -707,14 +710,15 @@ impl Document {
             a.position = offset(a.id, a.position);
         }
         for a in &mut self.arrows {
-            let id = a.id;
-            a.map_points(|p| offset(id, p));
+            // Mapping an arrow writes out its implied bend, so leave the
+            // arrows outside every unit alone.
+            if let Some((_, dx, dy)) = unit.get(&a.id).and_then(|i| units.get(*i)) {
+                a.map_points(|p| p.offset(*dx, *dy));
+            }
         }
         crate::projection::sync_centroids(self);
         crate::arrow_anchors::transformed_units(self, |id| unit.get(&id).copied(), |v| v);
-        for (ids, ..) in units {
-            crate::arrow_labels::translated(self, ids);
-        }
+        crate::arrow_labels::translated_units(self, |id| unit.get(&id).copied());
     }
     /// Every object ID, in [`Document::object_ids`] order.
     pub fn all_ids(&self) -> Vec<u64> {
