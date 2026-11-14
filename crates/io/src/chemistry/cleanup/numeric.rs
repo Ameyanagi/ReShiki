@@ -73,15 +73,34 @@ fn orient_with(
         )
     };
     let mut angle = 0.;
+    // Multiplying y by one keeps the unmirrored arithmetic bit for bit.
+    let mut flip = 1.;
     if keep {
-        let dot = sum(new
+        let mut dot = sum(new
             .iter()
             .zip(old)
             .map(|(p, q)| (p.x - ax) * (q.x - bx) + (p.y - ay) * (q.y - by)));
-        let cross = sum(new
+        let mut cross = sum(new
             .iter()
             .zip(old)
             .map(|(p, q)| (p.x - ax) * (q.y - by) - (p.y - ay) * (q.x - bx)));
+        // The solver can return the mirror image of the drawing (#1121). The
+        // best rotation of each candidate fits by the length of (dot, cross);
+        // reflect the layout in y when its mirror image fits clearly better.
+        // The margin keeps the original result for symmetric layouts.
+        let mirrored_dot = sum(new
+            .iter()
+            .zip(old)
+            .map(|(p, q)| (p.x - ax) * (q.x - bx) - (p.y - ay) * (q.y - by)));
+        let mirrored_cross = sum(new
+            .iter()
+            .zip(old)
+            .map(|(p, q)| (p.x - ax) * (q.y - by) + (p.y - ay) * (q.x - bx)));
+        if mirrored_dot * mirrored_dot + mirrored_cross * mirrored_cross
+            > (dot * dot + cross * cross) * (1. + 1e-9)
+        {
+            (dot, cross, flip) = (mirrored_dot, mirrored_cross, -1.);
+        }
         if dot.abs() + cross.abs() > 1e-12 {
             angle = cross.atan2(dot);
         }
@@ -89,7 +108,7 @@ fn orient_with(
     let (s, c) = rotation(angle)?;
     for point in new {
         let x = point.x - ax;
-        let y = point.y - ay;
+        let y = flip * (point.y - ay);
         *point = Point3 {
             x: bx + c * x - s * y,
             y: by + s * x + c * y,

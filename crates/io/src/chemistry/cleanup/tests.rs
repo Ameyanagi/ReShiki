@@ -787,3 +787,36 @@ fn selected_cleanup_keeps_two_fixed_atoms_at_their_original_angle() -> anyhow::R
     assert!(grid_error(after.positions[ring[0]], after.positions[ring[1]]) > 6_f64.to_radians());
     Ok(())
 }
+
+/// Issue #1121: the solver's layout can be the mirror image of the drawing.
+#[test]
+fn cleanup_with_keep_orientation_keeps_the_handedness_of_the_drawing() -> anyhow::Result<()> {
+    let text = "O=C1Cc2ccccc2C12CCC(=O)c1ccccc12";
+    let state = smiles::read(text)?.prepared.state;
+    let points = depict::compute(
+        &state,
+        &vec![None; state.graph.atoms.len()],
+        None,
+        Default::default(),
+    )?
+    .positions;
+    let ring = &state.rings.atoms[0];
+    let area = |points: &[Point3]| -> f64 {
+        ring.iter()
+            .zip(ring.iter().cycle().skip(1))
+            .map(|(&a, &b)| points[a].x * points[b].y - points[b].x * points[a].y)
+            .sum()
+    };
+    for mirror in [1., -1.] {
+        let xy: Vec<_> = points.iter().map(|p| (p.x * mirror, p.y)).collect();
+        let source = drawing_at(text, &xy)?;
+        let before = area(&molecular::prepare(&source)?.positions);
+        let cleaned = clean(&source, Options::default(), &[], 0.7)?;
+        let after = area(&cleaned.molecule.as_ref().unwrap().positions);
+        assert!(
+            before * after > 0.,
+            "mirror {mirror}: ring area {before} became {after}"
+        );
+    }
+    Ok(())
+}
