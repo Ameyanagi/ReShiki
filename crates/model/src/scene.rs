@@ -515,7 +515,7 @@ fn label_runs(
                 > 1
     });
     if let Some(group) = doc.abbreviation(a.id).filter(|_| internal_group.is_none()) {
-        return abbreviation_label_runs(a, doc, group);
+        return abbreviation_label_runs(a, doc, isotopes.graph(), group);
     }
     let show_element = internal_group.is_some() || shown();
     if !show_element && a.charge == 0 {
@@ -796,13 +796,14 @@ fn free_label_layout(
 fn abbreviation_label_runs(
     a: &Atom,
     doc: &Document,
+    graph: Option<&graph::Graph<'_>>,
     group: &crate::abbreviations::Abbreviation,
 ) -> Vec<Primitive> {
     let style = crate::typography::TextStyle {
         formula: true,
         ..group.text_style(doc)
     };
-    let content = group.text(doc);
+    let content = group.text_in(doc, graph);
     let size = STYLE.world(style.size_pt);
     // A hyphen inside a name (2-Py, Indol-1-yl) is a separator, not a charge.
     let spans = content
@@ -824,7 +825,7 @@ fn abbreviation_label_runs(
         ..Default::default()
     };
     let layout = crate::typography::layout(content, &format);
-    let range = crate::abbreviations::anchor_range(content, group.faces_left(doc));
+    let range = crate::abbreviations::anchor_range(content, group.faces_left_in(doc, graph));
     let before =
         crate::typography::layout(content.get(..range.start).unwrap_or_default(), &format).width;
     let through =

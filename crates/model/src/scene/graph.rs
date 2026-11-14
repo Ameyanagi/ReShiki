@@ -189,6 +189,12 @@ mod tests {
                 .collect();
             assert_eq!(indexed, scanned);
         }
+        for group in &doc.abbreviations {
+            assert_eq!(
+                group.faces_left_in(&doc, Some(&graph)),
+                group.faces_left(&doc)
+            );
+        }
         assert!(graph.atom(u64::MAX).is_none());
         assert_eq!(graph.bonds(u64::MAX).count(), 0);
     }

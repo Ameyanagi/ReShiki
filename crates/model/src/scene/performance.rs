@@ -106,9 +106,11 @@ fn model_scaling_workloads() {
             black_box(doc.clone());
         });
     }
-    let doc = polyalanine(200);
-    println!("SIZE,polyalanine_200,{} atoms", doc.atoms.len());
-    measure("polyalanine_200_scene", iterations, || {
-        black_box(super::primitives(&doc));
-    });
+    for residues in [200, 800] {
+        let doc = polyalanine(residues);
+        println!("SIZE,polyalanine_{residues},{} atoms", doc.atoms.len());
+        measure(&format!("polyalanine_{residues}_scene"), iterations, || {
+            black_box(super::primitives(&doc));
+        });
+    }
 }

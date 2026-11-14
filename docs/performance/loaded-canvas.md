@@ -26,6 +26,18 @@ separately measures document copying, scene generation, selection bounds, and
 translation over 30 measured iterations. Its `--profile` argument repeats scene construction for 30 seconds
 and prints the process ID for a sampling profiler.
 
+The model scaling benchmark needs no renderer. It repeats the workload 1, 4 and
+16 times side by side (483, 1,932 and 7,728 atoms) and reports scene
+generation, bond-crossing gaps, selection bounds, **Align left** and document
+copying for each size, then the first scene of one 1,001-atom chain. A step
+whose time grows much faster than the drawing shows up as a 16× row that is far
+more than 16 times its 1× row:
+
+```sh
+cargo test --release --locked -p reshiki-model \
+  scene::performance::model_scaling_workloads -- --ignored --exact --nocapture
+```
+
 For a rendered correctness check (requires a working headless renderer):
 
 ```sh

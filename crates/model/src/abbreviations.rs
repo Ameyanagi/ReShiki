@@ -283,6 +283,16 @@ impl Abbreviation {
     }
 
     pub fn faces_left(&self, doc: &Document) -> bool {
+        self.faces_left_in(doc, None)
+    }
+
+    /// [`Self::faces_left`]; a pass over every label lends its `graph`
+    /// instead of scanning every atom and bond.
+    pub(crate) fn faces_left_in(
+        &self,
+        doc: &Document,
+        graph: Option<&crate::scene::graph::Graph<'_>>,
+    ) -> bool {
         match self.alignment {
             LabelAlignment::Left => return false,
             LabelAlignment::Right => return true,
@@ -291,28 +301,42 @@ impl Abbreviation {
         if self.exit.is_some() {
             return false;
         }
-        let Some(anchor) = doc.atom(self.anchor) else {
+        let atom = |id| match graph {
+            Some(graph) => graph.atom(id),
+            None => doc.atom(id),
+        };
+        let Some(anchor) = atom(self.anchor) else {
             return false;
         };
-        doc.bonds
-            .iter()
-            .find_map(|b| {
-                let other = if b.a == self.anchor {
-                    b.b
-                } else if b.b == self.anchor {
-                    b.a
-                } else {
-                    return None;
-                };
-                (!self.members.contains(&other))
-                    .then(|| doc.atom(other))
-                    .flatten()
-            })
-            .is_some_and(|a| a.position.x > anchor.position.x + 0.1)
+        let outside = |b: &crate::document::Bond| {
+            let other = if b.a == self.anchor {
+                b.b
+            } else if b.b == self.anchor {
+                b.a
+            } else {
+                return None;
+            };
+            (!self.members.contains(&other))
+                .then(|| atom(other))
+                .flatten()
+        };
+        match graph {
+            Some(graph) => graph.bonds(self.anchor).find_map(|(_, b)| outside(b)),
+            None => doc.bonds.iter().find_map(outside),
+        }
+        .is_some_and(|a| a.position.x > anchor.position.x + 0.1)
     }
 
     pub fn text<'a>(&'a self, doc: &Document) -> &'a str {
-        if self.faces_left(doc) && !self.reverse_label.trim().is_empty() {
+        self.text_in(doc, None)
+    }
+
+    pub(crate) fn text_in<'a>(
+        &'a self,
+        doc: &Document,
+        graph: Option<&crate::scene::graph::Graph<'_>>,
+    ) -> &'a str {
+        if self.faces_left_in(doc, graph) && !self.reverse_label.trim().is_empty() {
             &self.reverse_label
         } else {
             &self.label
