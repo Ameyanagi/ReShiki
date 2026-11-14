@@ -742,6 +742,7 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
             state.geometry.take();
             state.text.take();
         }
+        let _frame = cache::Frame::begin(&state.scene, self.doc);
         let paper = self.guides.paper(bounds);
         let offset = Vector::new(paper.x - bounds.x, paper.y - bounds.y);
         let mut frame = layered::Frame::clipped(
