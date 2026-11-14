@@ -1,6 +1,6 @@
 # Chain drawing and bond constraints
 
-Added 2026-09-20. **JACS / ACS remains the default**: Arial 10 pt, black drawing color, 14.4 pt bonds and 0.6 pt lines. Straight and snaking chain tools share the same document, chemistry and export pipeline as individually drawn bonds.
+**JACS / ACS is the default**: Arial 10 pt, black drawing color, 14.4 pt bonds and 0.6 pt lines. Straight and snaking chain tools share the same document, chemistry and export pipeline as individually drawn bonds.
 
 ## Drawing workflow
 

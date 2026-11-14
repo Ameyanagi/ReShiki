@@ -2,7 +2,7 @@
 
 The bundled groups and templates are the current implementation. Their coverage, labels and layouts may be extended or revised in future releases. Existing examples can be saved as editable native drawings.
 
-Added 2026-09-20 after the initial [template placement](template-placement.md) update. JACS/ACS remains the default drawing style. Templates retain explicitly saved formatting and geometry.
+See also [template placement](template-placement.md). Templates retain explicitly saved formatting and geometry.
 
 ## Find and place
 
