@@ -41,12 +41,26 @@ pub fn write_saved(path: &Path, bytes: &[u8]) -> Result<(), String> {
     write(path, bytes, 0o666)
 }
 
-fn write(
-    path: &Path,
-    bytes: &[u8],
+/// An empty temporary file in `parent`, to be written and then renamed over
+/// its destination. On Unix its mode is `mode` less the umask rather than
+/// tempfile's private 0600; other platforms ignore `mode`.
+pub fn temporary_in(
+    parent: &Path,
     #[cfg(unix)] mode: u32,
     #[cfg(not(unix))] _: u32,
-) -> Result<(), String> {
+) -> io::Result<tempfile::NamedTempFile> {
+    #[cfg(unix)]
+    {
+        use std::{fs::Permissions, os::unix::fs::PermissionsExt};
+        tempfile::Builder::new()
+            .permissions(Permissions::from_mode(mode))
+            .tempfile_in(parent)
+    }
+    #[cfg(not(unix))]
+    tempfile::NamedTempFile::new_in(parent)
+}
+
+fn write(path: &Path, bytes: &[u8], mode: u32) -> Result<(), String> {
     #[cfg(target_arch = "wasm32")]
     if let Some(key) = browser::key(path) {
         return browser::write(&key, bytes);
@@ -60,22 +74,13 @@ fn write(
         .parent()
         .filter(|p| !p.as_os_str().is_empty())
         .unwrap_or(Path::new("."));
+    let mut temp = temporary_in(parent, mode).map_err(|e| e.to_string())?;
     #[cfg(unix)]
-    let mut temp = {
-        use std::{fs::Permissions, os::unix::fs::PermissionsExt};
-        let temp = tempfile::Builder::new()
-            .permissions(Permissions::from_mode(mode))
-            .tempfile_in(parent)
+    if let Ok(metadata) = std::fs::metadata(path) {
+        temp.as_file()
+            .set_permissions(metadata.permissions())
             .map_err(|e| e.to_string())?;
-        if let Ok(metadata) = std::fs::metadata(path) {
-            temp.as_file()
-                .set_permissions(metadata.permissions())
-                .map_err(|e| e.to_string())?;
-        }
-        temp
-    };
-    #[cfg(not(unix))]
-    let mut temp = tempfile::NamedTempFile::new_in(parent).map_err(|e| e.to_string())?;
+    }
     temp.write_all(bytes).map_err(|e| e.to_string())?;
     temp.as_file().sync_all().map_err(|e| e.to_string())?;
     temp.persist(path).map_err(|e| e.to_string())?;
