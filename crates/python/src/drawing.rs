@@ -152,7 +152,8 @@ pub async fn properties(data: &[u8]) -> Result<String, String> {
         .request(Request::molecule("analyze", document))
         .await?
         .analysis
-        .ok_or("Analysis returned no molecular properties")?;
+        .ok_or("Analysis returned no molecular properties")?
+        .rounded();
     serde_json::to_string(&analysis).map_err(|error| error.to_string())
 }
 

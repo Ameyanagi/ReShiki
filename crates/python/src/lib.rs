@@ -7,6 +7,26 @@ mod render;
 mod styles;
 
 use pyo3::{exceptions::PyValueError, prelude::*, types::PyBytes};
+
+/// `reshiki.ReShikiError(message, code)`, the package's coded `ValueError`.
+/// If the Python class cannot be loaded, a plain `ValueError` still carries
+/// the message.
+fn coded(py: Python<'_>, code: &str, message: String) -> PyErr {
+    py.import("reshiki._errors")
+        .and_then(|module| module.getattr("ReShikiError"))
+        .and_then(|class| class.call1((message.as_str(), code)))
+        .map_or_else(|_| PyValueError::new_err(message), PyErr::from_value)
+}
+
+/// The structure could not be read, drawn or written.
+fn failed(py: Python<'_>) -> impl Fn(String) -> PyErr {
+    move |message| coded(py, "failed", message)
+}
+
+/// A format, option or style is not accepted.
+fn invalid(py: Python<'_>) -> impl Fn(String) -> PyErr {
+    move |message| coded(py, "invalid_arguments", message)
+}
 use rayon::prelude::*;
 use reshiki_model::document::Document;
 
@@ -33,7 +53,7 @@ fn parse(
                 Ok((data, kind, warnings))
             })
         })
-        .map_err(PyValueError::new_err)?;
+        .map_err(failed(py))?;
     Ok((bytes(py, data), kind, warnings))
 }
 
@@ -41,7 +61,7 @@ fn parse(
 fn from_name(py: Python<'_>, name: &str) -> PyResult<(Py<PyBytes>, String, Vec<String>)> {
     let (data, kind, warnings) = py
         .detach(|| drawing::run(drawing::from_name(name)))
-        .map_err(PyValueError::new_err)?;
+        .map_err(failed(py))?;
     Ok((bytes(py, data), kind, warnings))
 }
 
@@ -52,7 +72,7 @@ fn parse_online_smiles(
 ) -> PyResult<(Py<PyBytes>, String, Vec<String>)> {
     let (data, kind, warnings) = py
         .detach(|| drawing::run(drawing::parse_online_smiles(smiles)))
-        .map_err(PyValueError::new_err)?;
+        .map_err(failed(py))?;
     Ok((bytes(py, data), kind, warnings))
 }
 
@@ -60,7 +80,7 @@ fn parse_online_smiles(
 fn clean(py: Python<'_>, data: Vec<u8>) -> PyResult<Py<PyBytes>> {
     let data = py
         .detach(|| drawing::run(drawing::clean(&data)))
-        .map_err(PyValueError::new_err)?;
+        .map_err(failed(py))?;
     Ok(bytes(py, data))
 }
 
@@ -68,18 +88,18 @@ fn clean(py: Python<'_>, data: Vec<u8>) -> PyResult<Py<PyBytes>> {
 fn with_style(py: Python<'_>, data: Vec<u8>, style_json: &str) -> PyResult<Py<PyBytes>> {
     let data = py
         .detach(|| styles::apply(Document::from_native_file(&data)?, Some(style_json))?.file_json())
-        .map_err(PyValueError::new_err)?;
+        .map_err(invalid(py))?;
     Ok(bytes(py, data))
 }
 
 #[pyfunction(name = "styles")]
-fn list_styles() -> PyResult<String> {
-    styles::presets().map_err(PyValueError::new_err)
+fn list_styles(py: Python<'_>) -> PyResult<String> {
+    styles::presets().map_err(failed(py))
 }
 
 #[pyfunction(signature = (name, overrides_json="{}"))]
-fn style(name: &str, overrides_json: &str) -> PyResult<String> {
-    styles::named(name, overrides_json).map_err(PyValueError::new_err)
+fn style(py: Python<'_>, name: &str, overrides_json: &str) -> PyResult<String> {
+    styles::named(name, overrides_json).map_err(invalid(py))
 }
 
 // The arguments mirror the Python keywords.
@@ -95,22 +115,22 @@ fn render_drawing(
     dpi: Option<f64>,
     svg_text: &str,
 ) -> PyResult<Py<PyBytes>> {
-    let options = render::Options::new(style_json, width, height, dpi, svg_text)
-        .map_err(PyValueError::new_err)?;
+    let options =
+        render::Options::new(style_json, width, height, dpi, svg_text).map_err(invalid(py))?;
     let data = py
         .detach(|| {
             drawing::run(async {
                 render::document(Document::from_native_file(&data)?, format, &options).await
             })
         })
-        .map_err(PyValueError::new_err)?;
+        .map_err(failed(py))?;
     Ok(bytes(py, data))
 }
 
 #[pyfunction]
 fn properties(py: Python<'_>, data: Vec<u8>) -> PyResult<String> {
     py.detach(|| drawing::run(drawing::properties(&data)))
-        .map_err(PyValueError::new_err)
+        .map_err(failed(py))
 }
 
 type BatchOutput = (
@@ -132,8 +152,8 @@ fn render_many(
     dpi: Option<f64>,
     svg_text: &str,
 ) -> PyResult<BatchOutput> {
-    let options = render::Options::new(style_json, width, height, dpi, svg_text)
-        .map_err(PyValueError::new_err)?;
+    let options =
+        render::Options::new(style_json, width, height, dpi, svg_text).map_err(invalid(py))?;
     let results: Vec<_> = py.detach(|| {
         items
             .into_par_iter()

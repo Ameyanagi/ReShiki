@@ -27,8 +27,8 @@ fonts. To choose a specific installed family, use, for example,
 Python or the Jupyter kernel before rendering again.
 
 SVG output draws text as outlines, so it looks the same in every viewer. Pass
-`text="live"`, as in `aspirin.svg(text="live")`, to keep editable `<text>`
-elements instead.
+`svg_text="live"`, as in `aspirin.svg(svg_text="live")`, to keep editable
+`<text>` elements instead.
 
 ## Reuse a style
 
@@ -94,6 +94,10 @@ Online lookup requires one complete-name match and checks that importing its
 stereospecific structure preserves molecular identity. Ambiguous names and
 unsupported structures raise `ValueError`; network failures raise a connection
 or timeout error. Each network request has a 15-second timeout.
+
+Errors from ReShiki itself are `reshiki.ReShikiError`, a `ValueError` whose
+`code` is `invalid_arguments` for a format, option or style that is not
+accepted, and `failed` when a structure cannot be read, drawn or written.
 
 An input that imports with a change or an assumption, such as a SMILES bond of
 any order (`~`), issues a `reshiki.StructureWarning` through
