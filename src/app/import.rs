@@ -292,6 +292,9 @@ async fn read(
             Ok((picture_drawing(&picture), warnings))
         }
         Kind::Structure(format) => {
+            if file.contents.len() as u64 > limit(&file.path) {
+                return Err("File exceeds 16 MB".into());
+            }
             let mut request = Request::import(format, &contents(format, file.contents)?);
             request.drawing_options = Some(options);
             let response = engine.execute(request).await?;
@@ -328,12 +331,15 @@ async fn load(
     }
     Ok(batch)
 }
-/// Picture carriers are bounded; structure files are read whole.
+/// Picture carriers and the structure formats whose readers stop at 16 MB
+/// are bounded; crystal files and drawings are read whole.
 pub(super) fn limit(path: &Path) -> u64 {
-    if matches!(kind(path), Kind::Picture | Kind::Drawing) {
-        reshiki::pictures::MAX_BYTES as u64
-    } else {
-        u64::MAX
+    match kind(path) {
+        Kind::Picture | Kind::Drawing => reshiki::pictures::MAX_BYTES as u64,
+        Kind::Structure(format) if !reshiki::crystal::is_crystal_format(format) => {
+            reshiki::exchange::LIMIT as u64
+        }
+        _ => u64::MAX,
     }
 }
 /// No extension filter: VASP files are often named POSCAR or CONTCAR without

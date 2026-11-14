@@ -5,7 +5,11 @@ issues: []
 
 - **Files that are not regular files.** Opening or inserting a named pipe or
   a folder in the app now fails at once with `not a regular file`. A pipe
-  with no writer kept the app waiting on it.
+  with no writer kept the app waiting on it. `reshiki --cli` refuses such an
+  input the same way; pipe it to standard input with `-`.
+- **Structure files over 16 MB.** Inserting a MOL, RXN, CDXML, CDX or SMILES
+  file over 16 MB now fails with `File exceeds 16 MB` after reading 16 MB of
+  it. The whole file was read into memory first.
 - **Agent tools: an edit over a budget stops early.** `apply` now refuses an
   edit over the object or session weight limit before it reconciles the
   drawing. Doubling a 59,900-object drawing was refused after 38.7 s in a

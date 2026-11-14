@@ -829,6 +829,35 @@ async fn oversized_pictures_are_read_only_past_their_limit() -> Result<(), Strin
     Ok(())
 }
 
+/// S9: a structure file over the parsers' 16 MB limit is read one byte past
+/// it and refused by its size. A crystal file has no such limit.
+#[tokio::test]
+async fn oversized_structure_files_are_read_only_past_their_limit() -> Result<(), String> {
+    let folder = tempfile::tempdir().map_err(|e| e.to_string())?;
+    let max = reshiki::exchange::LIMIT;
+    for extension in ["mol", "rxn", "cdxml", "cdx", "smi"] {
+        let huge = folder.path().join(format!("huge.{extension}"));
+        std::fs::write(&huge, vec![b' '; max + 4096]).map_err(|e| e.to_string())?;
+        let files = super::super::files::read_paths(vec![huge], limit).await?;
+        assert_eq!(files[0].contents.len(), max + 1, "{extension}");
+        let error = load(
+            LocalEngine::default(),
+            files,
+            Default::default(),
+            Default::default(),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(
+            error,
+            format!("Could not import huge.{extension}: File exceeds 16 MB")
+        );
+    }
+    assert_eq!(limit(Path::new("cell.cif")), u64::MAX);
+    assert_eq!(limit(Path::new("drawing.rsk")), u64::MAX);
+    Ok(())
+}
+
 #[test]
 fn chosen_files_belong_to_the_drawing_they_were_chosen_for() {
     let read = Message::Imports(Action::Read(
