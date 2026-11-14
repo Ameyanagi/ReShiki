@@ -319,6 +319,7 @@ pub async fn prepare_as(
     }
 
     let mut notices = Vec::new();
+    let mut native = None;
     let (bytes, text) = if format == CopyFormat::ChemDoodleReaction {
         let output = crate::task::spawn_blocking(move || chemdoodle::write(&original))
             .await
@@ -329,22 +330,25 @@ pub async fn prepare_as(
         let (doc, notice) = export::figure_document(&engine, original).await?;
         let doc = doc.current();
         notices.extend(notice);
-        let (figure, notice) = crate::task::spawn_blocking(move || {
-            let envelope = pictures
-                .editable
-                .then(|| payload::encode(&doc))
-                .transpose()?;
-            let drawing = envelope
-                .as_deref()
-                .filter(|envelope| envelope.len() <= payload::EMBED_LIMIT);
+        let (figure, notice, reshiki_data) = crate::task::spawn_blocking(move || {
+            let envelope = payload::encode(&doc)?;
+            let fits = envelope.len() <= payload::EMBED_LIMIT;
+            let drawing = (pictures.editable && fits).then_some(envelope.as_slice());
             let figure =
                 super::clipboard_figure(&doc, format.code(), pictures.background, drawing)?;
-            let notice = (envelope.is_some() && drawing.is_none())
+            let notice = (pictures.editable && !fits)
                 .then_some("Picture copied without the editable drawing (too large)");
-            Ok::<_, String>((figure, notice))
+            // When the picture leaves the drawing out, ReShiki's own data
+            // still pastes it back, within the same limit.
+            let native = (!pictures.editable && fits)
+                .then(|| serde_json::to_vec(&payload::visible(&doc)))
+                .transpose()
+                .map_err(|e| e.to_string())?;
+            Ok::<_, String>((figure, notice, native))
         })
         .await
         .map_err(|error| format!("Could not render clipboard figure: {error}"))??;
+        native = reshiki_data;
         notices.extend(figure.detail);
         notices.extend(notice.map(str::to_owned));
         let bytes = figure.bytes;
@@ -384,7 +388,10 @@ pub async fn prepare_as(
             (output.as_bytes().to_vec(), Some(output))
         }
     };
-    from_output(format, bytes, text, notices)
+    let mut copy = from_output(format, bytes, text, notices)?;
+    copy.representations
+        .extend(native.map(|bytes| Representation::new(super::NATIVE, &bytes)));
+    Ok(copy)
 }
 
 fn from_output(
