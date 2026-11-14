@@ -4,7 +4,7 @@ use super::{
     host::{CliError, Session, labelled},
 };
 use crate::naming::{self, NameStatus};
-use serde_json::{Map, json};
+use serde_json::{Map, Value, json};
 use std::io::Write;
 
 pub(crate) async fn run(
@@ -21,7 +21,15 @@ pub(crate) async fn run(
         let smiles = text.split_whitespace().next().unwrap_or_default();
         naming::canonical_smiles(smiles).map_err(CliError::Failed)?;
     }
-    let handle = session.import_text(text, format, err).await?;
+    let mut imported = session
+        .call("import", json!({"format": format, "text": text}), err)
+        .await?
+        .value;
+    let handle = imported
+        .get("value")
+        .and_then(|value| value.get("document"))
+        .cloned()
+        .unwrap_or_default();
     let document = session.document(handle)?;
     let identity = naming::document_identity(&document).map_err(CliError::Failed)?;
     let record = naming::generate_name_with_options(
@@ -88,8 +96,14 @@ pub(crate) async fn run(
                 ),
             );
         }
-        let value = Map::from_iter([("value".into(), value.into())]);
-        writeln!(out, "{}", labelled(value)).map_err(CliError::Stdout)
+        // The import's warnings and versions, as analyze reports its own.
+        let mut field = |name: &str| (name.to_owned(), imported.remove(name).unwrap_or_default());
+        let result = Map::from_iter([
+            ("value".into(), Value::Object(value)),
+            field("warnings"),
+            field("versions"),
+        ]);
+        writeln!(out, "{}", labelled(result)).map_err(CliError::Stdout)
     } else {
         writeln!(out, "{}", record.title).map_err(CliError::Stdout)
     }

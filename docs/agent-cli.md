@@ -119,26 +119,27 @@ MCP server's `file_save` or the app.
 
 ## Options
 
-| Option              | Commands                       | Meaning                                                                                                  |
-| ------------------- | ------------------------------ | -------------------------------------------------------------------------------------------------------- |
-| `--smiles TEXT`     | convert, render, analyze, name | Read SMILES text instead of a file or standard input                                                     |
-| `--from FORMAT`     | convert, render, analyze, name | Set the input format                                                                                     |
-| `--to FORMAT`       | convert, render, compose       | Set the output format: `svg`, `pdf`, `png`, `cdxml`, `mol`, `smiles`, `inchi`; `png` or `svg` for render |
-| `-o OUTPUT`         | convert, render, compose       | Write to OUTPUT, or to standard output with `-`                                                          |
-| `--pages`           | convert, compose               | Export every publication page as one PDF; PDF output only                                                |
-| `--svg-text MODE`   | convert, render, compose       | SVG text as `outline` (default) or `live` `<text>` elements; other formats ignore it                     |
-| `--width N`         | render                         | The widest the PNG may be, in pixels: 1 to 8192, default 1600                                            |
-| `--height N`        | render                         | The tallest the PNG may be, in pixels: 1 to 8192, default 1000                                           |
-| `--force`           | convert, render, compose       | Replace OUTPUT if it exists                                                                              |
-| `--receipt`         | convert, compose               | Print one receipt JSON line after writing OUTPUT; needs `-o OUTPUT`                                      |
-| `-o FOLDER`         | skill                          | The existing folder that receives the skill folder                                                       |
-| `--name NAME`       | skill                          | The skill's name and folder name; default `reshiki`                                                      |
-| `--executable PATH` | skill                          | The absolute path of the executable the skill runs; default this executable                              |
-| `--force`           | skill                          | Replace the generated files of an existing skill folder                                                  |
-| `--receipt`         | skill                          | Print one receipt JSON line after writing the skill                                                      |
-| `--json`            | name                           | Print the name and its status as one JSON line                                                           |
-| `--locants`         | name                           | Print JSON with parent locants in input atom order                                                       |
-| `--json`            | help                           | Print the command catalog as one JSON line                                                               |
+| Option                  | Commands                       | Meaning                                                                                                  |
+| ----------------------- | ------------------------------ | -------------------------------------------------------------------------------------------------------- |
+| `--smiles TEXT`         | convert, render, analyze, name | Read SMILES text instead of a file or standard input                                                     |
+| `--from FORMAT`         | convert, render, analyze, name | Set the input format                                                                                     |
+| `--to FORMAT`           | convert, render, compose       | Set the output format: `svg`, `pdf`, `png`, `cdxml`, `mol`, `smiles`, `inchi`; `png` or `svg` for render |
+| `-o OUTPUT`             | convert, render, compose       | Write to OUTPUT, or to standard output with `-`                                                          |
+| `--pages`               | convert, compose               | Export every publication page as one PDF; PDF output only                                                |
+| `--svg-text MODE`       | convert, render, compose       | SVG text as `outline` (default) or `live` `<text>` elements; other formats ignore it                     |
+| `--width N`             | render                         | The widest the PNG may be, in pixels: 1 to 8192, default 1600                                            |
+| `--height N`            | render                         | The tallest the PNG may be, in pixels: 1 to 8192, default 1000                                           |
+| `--force`               | convert, render, compose       | Replace OUTPUT if it exists                                                                              |
+| `--receipt`             | convert, compose               | Print one receipt JSON line after writing OUTPUT; needs `-o OUTPUT`                                      |
+| `-o FOLDER`             | skill                          | The existing folder that receives the skill folder                                                       |
+| `--name NAME`           | skill                          | The skill's name and folder name; default `reshiki`                                                      |
+| `--executable PATH`     | skill                          | The absolute path of the executable the skill runs; default this executable                              |
+| `--force`               | skill                          | Replace the generated files of an existing skill folder                                                  |
+| `--receipt`             | skill                          | Print one receipt JSON line after writing the skill                                                      |
+| `--isotope-style STYLE` | name                           | Isotope notation: `iupac` (default), as in (2H3)methanol, or `boughton`, as in methanol-d3               |
+| `--json`                | name                           | Print the name and its status as one JSON line                                                           |
+| `--locants`             | name                           | Print JSON with parent locants in input atom order                                                       |
+| `--json`                | help                           | Print the command catalog as one JSON line                                                               |
 
 A rendered PNG has at most 16,000,000 pixels. A `--width` or `--height` that
 is not a whole number is a usage error. A number outside 1 to 8192 fails, as
@@ -337,18 +338,19 @@ The result has the same fields as the MCP `analyze` tool's
 ## name
 
 ```text
-reshiki --cli name (INPUT | - | --smiles TEXT) [--from FORMAT] [--json] [--locants]
+reshiki --cli name (INPUT | - | --smiles TEXT) [--from FORMAT] [--isotope-style STYLE]
+                   [--json] [--locants]
 ```
 
 `reshiki --cli help name` prints the [full help](agent-reference.md#reshiki---cli-name).
 
-Prints the systematic name of one connected molecule, followed by a newline.
-The input is read as for `convert`. The name comes from the app's local
+Prints the systematic name of one molecule or charge-balanced salt, followed
+by a newline. The input is read as for `convert`. The name comes from the app's local
 structure-to-name engine and is printed only after the OPSIN Rust port reads
 it back to the same structure, as in the app's
 [Chemical names](chemical-naming-rust.md#structure-to-name) inspector.
-Mixtures, salts and structures the engine declines are errors (exit 1), and
-stdout stays empty.
+Mixtures, sets with a net charge and structures the engine declines are errors
+(exit 1), and stdout stays empty.
 
 ```text
 $ reshiki --cli name --smiles 'CCC#N'
@@ -377,9 +379,19 @@ This is `name --smiles 'CC(=NN)C' --json`, shown on several lines:
     "preferred": false,
     "reason": "functional_class",
     "status": "not_preferred"
-  }
+  },
+  "versions": {
+    "app": "0.15.0",
+    "document": 37,
+    "engine_protocol": 1,
+    "operation_api": 1
+  },
+  "warnings": []
 }
 ```
+
+`warnings` and `versions` are those of the import, as in the
+[results](agent-api.md#results) of the MCP tools. `value` has these fields:
 
 | Field          | Meaning                                                                                                    |
 | -------------- | ---------------------------------------------------------------------------------------------------------- |
@@ -505,12 +517,12 @@ same catalog `tools/list` returns, versioned by `api.operation_api`. The
 ## schema
 
 ```text
-reshiki --cli schema proposal
+reshiki --cli schema NAME
 ```
 
 `reshiki --cli help schema` prints the [full help](agent-reference.md#reshiki---cli-schema).
 
-Prints the Proposal JSON Schema that `compose` reads, the same schema the MCP
+NAME is `proposal`. Prints the Proposal JSON Schema that `compose` reads, the same schema the MCP
 server publishes. It is one JSON line without `experimental` and `api`, so you
 can save it as a schema file:
 

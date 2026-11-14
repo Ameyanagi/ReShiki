@@ -130,3 +130,39 @@ fn budget_units_cover_the_serialized_limits() {
     assert!(text.contains("| `max_documents` | 16 | count |"));
     assert!(!agent_reference().contains("| `app` |"));
 }
+
+/// docs/agent-cli.md is hand-written: each command's usage must appear in it
+/// (line wraps aside), and its options table must list every option with
+/// the commands that take it.
+#[test]
+fn the_cli_guide_states_every_usage_and_option() {
+    let guide = include_str!("../../../docs/agent-cli.md");
+    let folded = |text: &str| text.split_whitespace().collect::<Vec<_>>().join(" ");
+    let guide_folded = folded(guide);
+    let mut missing = Vec::new();
+    for spec in COMMANDS {
+        if !guide_folded.contains(&folded(spec.usage)) {
+            missing.push(format!("usage: {}", folded(spec.usage)));
+        }
+        for option in spec.options {
+            let cell = match option.value {
+                Some(value) => format!("| `{} {value}` ", option.flag),
+                None => format!("| `{}` ", option.flag),
+            };
+            let listed = guide.lines().any(|line| {
+                line.starts_with(&cell)
+                    && line.split('|').nth(2).is_some_and(|commands| {
+                        commands.split(',').any(|name| name.trim() == spec.name)
+                    })
+            });
+            if !listed {
+                missing.push(format!("option row: {cell}| … {} … |", spec.name));
+            }
+        }
+    }
+    assert!(
+        missing.is_empty(),
+        "docs/agent-cli.md lacks:\n{}",
+        missing.join("\n")
+    );
+}
