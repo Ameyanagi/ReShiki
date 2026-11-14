@@ -850,3 +850,39 @@ fn engine_insert_keeps_placement_selection_status_and_one_undo() {
     assert_eq!(app.tab.doc, before);
     assert!(!app.tab.history.can_undo());
 }
+
+#[test]
+fn foreign_paste_follows_the_drawings_label_settings_in_one_undo_step() {
+    let part = || {
+        let mut part = Document::default();
+        let a = part.add_atom("N", Point::default());
+        let b = part.add_atom("C", Point::new(42., 0.));
+        part.add_bond(a, b, 1, "plain");
+        part
+    };
+    let overrides = |app: &App| {
+        app.tab
+            .selected
+            .iter()
+            .map(|id| app.tab.doc.atom(*id).unwrap().display.stereo.show)
+            .collect::<Vec<_>>()
+    };
+    let (mut app, _) = App::new();
+    app.tab.doc.atom_labels.stereo = true;
+    app.tab.doc.atom_labels.dl_descriptors = true;
+    let before = app.tab.doc.clone();
+    app.clipboard_read(app.tab.file_epoch, app.tab.revision, Ok(part().into()));
+    assert_eq!(overrides(&app), [None, None]);
+    assert!(app.tab.doc.bonds.iter().all(|b| b.indicator.show.is_none()));
+    assert_eq!(app.tab.doc.atom_labels, before.atom_labels);
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+
+    // A ReShiki drawing keeps the appearance it was copied with.
+    app.clipboard_read(
+        app.tab.file_epoch,
+        app.tab.revision,
+        Ok(PasteOutcome::native(part())),
+    );
+    assert_eq!(overrides(&app), [Some(false), Some(false)]);
+}

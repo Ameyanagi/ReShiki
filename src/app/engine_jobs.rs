@@ -277,7 +277,11 @@ impl App {
                 self.tab.camera.center.y - center.y,
             )
         };
-        let ids = editing::append(&mut self.tab.doc, document, offset);
+        // A generated structure follows this drawing's label settings instead
+        // of overriding them per atom.
+        let mut document = document.clone();
+        document.atom_labels = self.tab.doc.atom_labels.clone();
+        let ids = editing::append(&mut self.tab.doc, &document, offset);
         (!ids.is_empty()).then_some(ids)
     }
 
