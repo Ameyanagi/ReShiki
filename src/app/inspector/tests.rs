@@ -72,7 +72,7 @@ async fn lazy_crystal_properties_keep_scope_and_ordinary_analysis() {
     .unwrap();
     let panel_text = |app: &App, renderer: &mut iced::Renderer| {
         let mut ui = iced_runtime::UserInterface::build(
-            app.molecular_section(),
+            app.molecular_section(app.opened_section()),
             iced::Size::new(300., 800.),
             iced_runtime::user_interface::Cache::new(),
             renderer,
@@ -852,6 +852,24 @@ fn whole_molecules_open_properties_and_partial_selections_keep_their_section() {
     assert_eq!(app.opened_section(), Some(Section::Atoms));
     app.tab.selected = first.iter().copied().chain([second[0]]).collect();
     assert_eq!(app.opened_section(), Some(Section::Bonds));
+}
+
+#[test]
+fn a_view_finds_the_opened_section_once() {
+    let (mut app, _) = App::new();
+    let ring = reshiki::editing::ring(
+        &mut app.tab.doc,
+        reshiki::document::Point::default(),
+        6,
+        false,
+        42.,
+    );
+    for selected in [vec![], ring.clone(), vec![ring[0], ring[1]]] {
+        app.tab.selected = selected;
+        OPENED_SECTIONS.set(0);
+        drop(app.view());
+        assert_eq!(OPENED_SECTIONS.get(), 1, "{:?}", app.tab.selected);
+    }
 }
 
 #[test]

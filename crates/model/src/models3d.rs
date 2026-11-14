@@ -1431,10 +1431,14 @@ pub fn keep_place(doc: &mut Document, index: usize, origin: Point) {
 /// The selected molecule: the whole connected component of the selected atoms
 /// when they all belong to one, in document order.
 pub fn selected_molecule(doc: &Document, selected: &[u64]) -> Option<Vec<u64>> {
+    if selected.is_empty() {
+        return None;
+    }
+    let ids: HashSet<_> = doc.atoms.iter().map(|atom| atom.id).collect();
     let atoms: Vec<_> = doc
         .expand_abbreviation_selection(selected)
         .into_iter()
-        .filter(|id| doc.atom(*id).is_some())
+        .filter(|id| ids.contains(id))
         .collect();
     let first = *atoms.first()?;
     // A model retains its own source links until Update, including after a
@@ -1447,9 +1451,10 @@ pub fn selected_molecule(doc: &Document, selected: &[u64]) -> Option<Vec<u64>> {
             || crate::molecule_names::component(doc, first),
             |model| model.linked_ids(doc),
         );
+    let members: HashSet<_> = component.iter().copied().collect();
     atoms
         .iter()
-        .all(|id| component.contains(id))
+        .all(|id| members.contains(id))
         .then_some(component)
 }
 
