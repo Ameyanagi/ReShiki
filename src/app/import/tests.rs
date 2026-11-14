@@ -769,6 +769,44 @@ fn browser_drags_outline_the_canvas_until_the_files_leave() {
     assert!(app.imports.hovered.is_empty());
 }
 
+/// S9: opening a named pipe with no writer waits forever, so opening a
+/// drawing and inserting files both refuse it by its file type.
+#[cfg(unix)]
+#[tokio::test]
+async fn a_named_pipe_is_refused_without_blocking() {
+    let folder = tempfile::tempdir().unwrap();
+    let pipe = folder.path().join("pipe.mol");
+    assert!(
+        std::process::Command::new("mkfifo")
+            .arg(&pipe)
+            .status()
+            .unwrap()
+            .success()
+    );
+    let reads = async {
+        let opened = super::super::files::read(pipe.clone()).await.unwrap().1;
+        let inserted = super::super::files::read_paths(vec![pipe.clone()], limit).await;
+        (opened.unwrap_err(), inserted.err().unwrap())
+    };
+    let Ok((opened, inserted)) =
+        tokio::time::timeout(std::time::Duration::from_secs(5), reads).await
+    else {
+        // A writer that closes ends each blocked read, so the test fails
+        // instead of hanging.
+        for _ in 0..2 {
+            let writer = std::fs::OpenOptions::new()
+                .read(true)
+                .write(true)
+                .open(&pipe);
+            tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+            drop(writer);
+        }
+        panic!("reading a named pipe must not block");
+    };
+    assert_eq!(opened, "not a regular file");
+    assert_eq!(inserted, "Could not read pipe.mol: not a regular file");
+}
+
 #[tokio::test]
 async fn oversized_pictures_are_read_only_past_their_limit() -> Result<(), String> {
     let folder = tempfile::tempdir().map_err(|e| e.to_string())?;

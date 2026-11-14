@@ -219,6 +219,15 @@ pub(super) fn browser_files(files: Vec<(String, Vec<u8>)>) -> Vec<Picked> {
         .collect()
 }
 
+/// Opens `path` for reading. Anything but a regular file is refused before it
+/// is opened: opening a named pipe with no writer would wait forever.
+fn open(path: &std::path::Path) -> std::io::Result<std::fs::File> {
+    if !std::fs::metadata(path)?.is_file() {
+        return Err(std::io::Error::other("not a regular file"));
+    }
+    std::fs::File::open(path)
+}
+
 /// Read files up to `limit` on a blocking worker.
 pub(super) async fn read_paths(paths: Vec<PathBuf>, limit: Limit) -> Result<Vec<Picked>, String> {
     use std::io::Read;
@@ -227,7 +236,7 @@ pub(super) async fn read_paths(paths: Vec<PathBuf>, limit: Limit) -> Result<Vec<
             .into_iter()
             .map(|path| {
                 let mut contents = Vec::new();
-                std::fs::File::open(&path)
+                open(&path)
                     .and_then(|file| {
                         file.take(limit(&path).saturating_add(1))
                             .read_to_end(&mut contents)
@@ -357,7 +366,10 @@ fn prepare(path: &std::path::Path, contents: Vec<u8>) -> Result<Prepared, String
 pub(super) async fn read(path: PathBuf) -> Opened {
     let source = path.clone();
     let result = reshiki::task::spawn_blocking(move || {
-        let contents = std::fs::read(&source).map_err(|e| e.to_string())?;
+        let mut contents = Vec::new();
+        open(&source)
+            .and_then(|mut file| std::io::Read::read_to_end(&mut file, &mut contents))
+            .map_err(|e| e.to_string())?;
         prepare(&source, contents)
     })
     .await
