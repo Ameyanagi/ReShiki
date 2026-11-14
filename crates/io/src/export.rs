@@ -15,7 +15,8 @@ pub enum Background {
 impl Background {
     /// The drawing as painted on this background, and the paper color.
     /// A color background takes the canvas, light or dark, whose ink reads
-    /// better on it: Ink and palette colors follow it, custom colors stay exact.
+    /// better on it. Only Ink follows it: palette, element and custom colors
+    /// keep how the drawing's own canvas shows them.
     pub fn apply(self, doc: &Document) -> (Cow<'_, Document>, Option<[u8; 3]>) {
         use crate::color_contrast::contrast;
         match self {
@@ -30,10 +31,9 @@ impl Background {
                 let doc = if doc.canvas_theme == canvas {
                     Cow::Borrowed(doc)
                 } else {
-                    Cow::Owned(Document {
-                        canvas_theme: canvas,
-                        ..doc.clone()
-                    })
+                    let mut doc = crate::canvas_theme::resolved_document(doc).into_owned();
+                    doc.canvas_theme = canvas;
+                    Cow::Owned(doc)
                 };
                 (doc, Some(paper))
             }

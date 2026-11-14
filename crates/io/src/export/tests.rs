@@ -461,6 +461,56 @@ fn picture_backgrounds_paint_the_png_and_swap_black_and_white_ink() {
 }
 
 #[test]
+fn picture_backgrounds_keep_palette_and_element_colors() {
+    use crate::{
+        canvas_theme::{CanvasTheme, ColorTheme, element_color},
+        document::{Annotation, Point},
+        palette::{Color, Hue, Palette, Row},
+        typography::TextFormat,
+    };
+    for canvas in CanvasTheme::ALL {
+        let mut doc = Document {
+            canvas_theme: canvas,
+            color_theme: ColorTheme::Jmol,
+            ..Default::default()
+        };
+        doc.add_atom("N", Point::default());
+        let blue = Color::Palette(Hue::Blue, Row::Strong);
+        let mut format = TextFormat::default();
+        format.style.color = blue;
+        doc.annotations.push(Annotation {
+            id: doc.next_id(),
+            position: Point::new(0., 40.),
+            text: "M".into(),
+            format,
+        });
+        // The colors as the drawing's own canvas shows them.
+        let expected = [
+            Palette::of(&doc).rgb(blue),
+            element_color(&doc, "N", canvas),
+        ];
+        let paper = if canvas.is_light() { [0; 3] } else { [255; 3] };
+        for clipboard in [true, false] {
+            let background = Background::Color(paper);
+            let bytes = if clipboard {
+                clipboard_figure_with_drawing(&doc, "png", background, None)
+            } else {
+                figure_with_budget_and_drawing(&doc, "png", background, FILE_PIXELS, None)
+            }
+            .unwrap()
+            .bytes;
+            let pixels = rgba(&bytes);
+            for rgb in expected {
+                assert!(
+                    pixels.iter().any(|p| p[..3] == rgb && p[3] == 255),
+                    "{canvas} drawing on {paper:?} keeps {rgb:?}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
 fn picture_backgrounds_reach_svg_paper_and_ink() {
     let doc = dark_ink_drawing();
     let svg = |background| {
