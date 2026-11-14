@@ -415,6 +415,7 @@ impl App {
     fn command_bar(&self) -> Element<'_, Message> {
         // The browser build updates with its page and has no local assistant.
         let browser = cfg!(target_arch = "wasm32");
+        let settings = Message::Settings(super::settings_page::Action::Open(None));
         let bar = row![
             hover_hint(
                 reshiki::accessibility::button(
@@ -522,6 +523,12 @@ impl App {
                 keyed("Export", &Message::Inspector(InspectorTab::Export)),
                 Some(Message::Inspector(InspectorTab::Export)),
                 self.inspector_open && self.inspector_tab == InspectorTab::Export
+            ),
+            icon_button(
+                Icon::Settings,
+                keyed("Settings", &settings),
+                Some(settings.clone()),
+                self.settings.open
             ),
             icon_button(
                 Icon::Inspector,
@@ -3225,6 +3232,7 @@ fn icon_button_at(
         Icon::Export => "header-export",
         Icon::Inspector => "header-inspector",
         Icon::Keyboard => "help-open",
+        Icon::Settings => "header-settings",
         _ => "header-other",
     };
     hover_hint(

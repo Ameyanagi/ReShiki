@@ -130,6 +130,30 @@ pub(super) fn label_align(
     }
 }
 
+/// Eight teeth around a hub, for Settings.
+pub(super) fn gear(f: &mut Frame<'_>, ink: Color) {
+    let stroke = Stroke::default().with_width(1.5).with_color(ink);
+    let outline = Path::new(|p| {
+        for tooth in 0..8 {
+            let middle = tooth as f32 * std::f32::consts::FRAC_PI_4;
+            for (offset, radius) in [(-0.27, 7.6), (-0.15, 10.2), (0.15, 10.2), (0.27, 7.6)] {
+                let at = Point::new(
+                    12. + radius * (middle + offset).cos(),
+                    12. + radius * (middle + offset).sin(),
+                );
+                if tooth == 0 && offset < -0.2 {
+                    p.move_to(at);
+                } else {
+                    p.line_to(at);
+                }
+            }
+        }
+        p.close();
+    });
+    f.stroke(&outline, stroke);
+    f.stroke(&Path::circle(Point::new(12., 12.), 3.2), stroke);
+}
+
 pub(super) fn more(f: &mut Frame<'_>, ink: Color) {
     for x in [5., 12., 19.] {
         f.fill(&Path::circle(Point::new(x, 12.), 1.8), ink);

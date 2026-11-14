@@ -724,6 +724,7 @@ fn completion(message: &Message) -> Option<Completion> {
         | Message::InsertInput
         | Message::ToggleHelp
         | Message::Help(..)
+        | Message::Settings(..)
         | Message::Commands(..)
         | Message::OpenShortcutExamples
         | Message::Viewport(..)
@@ -779,6 +780,7 @@ fn completion(message: &Message) -> Option<Completion> {
         | Message::CopyChemicalText
         | Message::Copy(..)
         | Message::CopyImage
+        | Message::CopyImageOn(_)
         | Message::CopyAs(..)
         | Message::Paste
         | Message::PastePicture

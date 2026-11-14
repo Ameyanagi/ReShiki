@@ -94,6 +94,7 @@ mod ring_edits;
 #[cfg(test)]
 mod rotation_tests;
 mod selection_edits;
+mod settings_page;
 mod shortcut_examples;
 #[cfg(test)]
 mod shortcut_focus_tests;
@@ -221,6 +222,7 @@ pub enum Message {
     Naming(naming::Action),
     InsertInput,
     ToggleHelp,
+    Settings(settings_page::Action),
     Help(help::Action),
     Commands(command_palette::Action),
     OpenShortcutExamples,
@@ -278,6 +280,8 @@ pub enum Message {
     CopyChemicalText,
     Copy(bool),
     CopyImage,
+    /// Copy image on this background, for this copy only.
+    CopyImageOn(reshiki::export::Background),
     CopyAs(reshiki::clipboard::CopyFormat),
     CopyFrame(clipboard::FrameAction),
     CopyAsPrepared(
@@ -461,6 +465,7 @@ pub struct App {
     inspector_open: bool,
     inspector_tab: InspectorTab,
     help_open: bool,
+    settings: settings_page::State,
     help: help::State,
     commands: command_palette::State,
     viewport: iced::Size,
@@ -575,6 +580,7 @@ impl App {
             inspector_open: true,
             inspector_tab: InspectorTab::Properties,
             help_open: false,
+            settings: settings_page::State::default(),
             help: help::State::default(),
             commands: command_palette::State::default(),
             viewport: iced::Size::new(850.0, 600.0),
@@ -1274,6 +1280,7 @@ impl App {
             || self.updates.open
             || self.assistant.viewed_image.is_some()
             || self.help_open
+            || self.settings.open
             || self.tab.atom_text.is_some()
             || self.palette.is_some();
         // The command palette's Tab cycles its filter, unless a dialog is over it.
@@ -1286,13 +1293,17 @@ impl App {
                 // modal also keeps that panel from taking clicks.
                 self.with_prompt(self.with_recovery_manager(self.with_updates(
                     self.with_assistant_image(self.with_commands(self.with_nmr(
-                        self.with_atom_text(self.with_help(self.with_palette(self.workspace()))),
+                        self.with_atom_text(
+                            self.with_settings(self.with_help(self.with_palette(self.workspace()))),
+                        ),
                     ))),
                 ))),
                 if self.prompt.is_some() {
                     Some(prompt::modal_key)
                 } else if self.recovery_manager.open() {
                     Some(recovery_manager::modal_key)
+                } else if self.settings.open {
+                    Some(settings_page::modal_key)
                 } else if self.help_open {
                     Some(help::modal_key)
                 } else if self.commands.open {

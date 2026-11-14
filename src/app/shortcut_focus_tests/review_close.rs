@@ -557,3 +557,76 @@ async fn review_close_returns_focus_failed_structure_insert_keeps_editor() {
     close(&mut ui, &mut app, false).await;
     assert_canvas_delete(&mut ui, &mut app).await;
 }
+
+/// Settings opens on Command+, with its search field focused and keeps every
+/// key; Escape, Command+, and Done each return them to the drawing.
+#[tokio::test]
+#[ignore = "Opt-in renderer input check"]
+async fn settings_close_returns_focus_to_the_drawing() {
+    let mut ui = Ui::new().await;
+    for closing in ["Escape", "Command+,", "Done"] {
+        let mut app = drawing_app();
+        let drawing = app.tab.doc.clone();
+        let selected = app.tab.selected.clone();
+        let comma = || Key::Character(",".into());
+        ui.key(
+            &mut app,
+            comma(),
+            Code::Comma,
+            Modifiers::COMMAND,
+            Some(","),
+        )
+        .await;
+        assert!(app.settings.open, "{closing}");
+        assert!(ui.input(&app, "settings-search").1, "search has focus");
+        for (text, code) in [("g", Code::KeyG), ("u", Code::KeyU)] {
+            ui.key(
+                &mut app,
+                Key::Character(text.into()),
+                code,
+                Modifiers::empty(),
+                Some(text),
+            )
+            .await;
+        }
+        ui.key(
+            &mut app,
+            Key::Named(Named::Delete),
+            Code::Delete,
+            Modifiers::empty(),
+            None,
+        )
+        .await;
+        assert_eq!(ui.input_value(&app, "settings-search"), "gu");
+        assert_eq!(app.tab.doc, drawing, "keys stay in Settings");
+        match closing {
+            "Escape" => {
+                ui.key(
+                    &mut app,
+                    Key::Named(Named::Escape),
+                    Code::Escape,
+                    Modifiers::empty(),
+                    None,
+                )
+                .await
+            }
+            "Command+," => {
+                ui.key(
+                    &mut app,
+                    comma(),
+                    Code::Comma,
+                    Modifiers::COMMAND,
+                    Some(","),
+                )
+                .await
+            }
+            _ => {
+                let done = ui.text(&app, "Done");
+                ui.click(&mut app, done.center());
+            }
+        }
+        assert!(!app.settings.open, "{closing}");
+        assert_eq!(app.tab.selected, selected);
+        assert_canvas_delete(&mut ui, &mut app).await;
+    }
+}

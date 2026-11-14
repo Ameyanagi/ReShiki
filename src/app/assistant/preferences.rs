@@ -4,7 +4,31 @@ use super::{Action, Menu};
 use crate::app::{App, Message};
 use iced::Task;
 
+/// What Settings shows of the assistant preferences.
+pub(in crate::app) struct Choices<'a> {
+    /// The account's models; empty until it connects.
+    pub models: &'a [reshiki::assistant::codex::Model],
+    /// The chosen model id; None uses the default.
+    pub model: Option<&'a str>,
+    /// The model in use, whose reasoning levels Settings lists.
+    pub resolved: Option<&'a reshiki::assistant::codex::Model>,
+    pub effort: Option<&'a str>,
+    pub auto_apply: bool,
+}
+
 impl App {
+    pub(in crate::app) fn assistant_choices(&self) -> Choices<'_> {
+        let state = &self.assistant;
+        let resolved = state.model();
+        Choices {
+            models: state.account.as_ref().map_or(&[], |a| &a.models),
+            model: state.preferences.model.as_deref(),
+            resolved,
+            effort: resolved.map(|model| state.preferences.effort(model)),
+            auto_apply: state.preferences.auto_apply,
+        }
+    }
+
     pub(super) fn assistant_auto_apply(&mut self, value: bool) -> Task<Message> {
         if !value {
             self.assistant.waiting_for_canvas_edit = false;

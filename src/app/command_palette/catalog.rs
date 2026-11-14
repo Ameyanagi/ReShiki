@@ -1473,6 +1473,14 @@ fn view(app: &App) -> Vec<Command> {
         )
         .keys(super::super::help::registry::finder_keys()),
         send(
+            "Settings",
+            View,
+            "App-wide preferences: appearance, drawing, copy and export backgrounds, names, updates",
+            "preferences options background transparent export copy picture editable",
+            Message::Settings(super::super::settings_page::Action::Open(None)),
+        )
+        .alias(&["settings", "preferences"]),
+        send(
             "Shortcut examples",
             View,
             "Open labeled shortcut examples in a new tab",

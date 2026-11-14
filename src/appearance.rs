@@ -54,16 +54,14 @@ impl Background {
             Self::Custom => Paper::Color(custom),
         }
     }
-}
-impl std::fmt::Display for Background {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(match self {
+    pub fn label(self) -> &'static str {
+        match self {
             Self::Transparent => "Transparent",
             Self::Canvas => "Canvas",
             Self::White => "White",
             Self::Black => "Black",
             Self::Custom => "Custom",
-        })
+        }
     }
 }
 

@@ -134,6 +134,10 @@ impl App {
             Message::CustomElement(s) => self.custom_element = s,
             Message::ApplyElement => self.apply_custom_element(),
             Message::CopyImage => return Some(self.copy_native(false, true, None)),
+            Message::CopyImageOn(background) => {
+                return Some(self.copy_native(false, true, Some(background)));
+            }
+            Message::Settings(action) => return Some(self.settings_action(action)),
             Message::CopyAs(format) => return Some(self.copy_as(format)),
             Message::Copy(cut) => return Some(self.copy_selection(cut)),
             Message::PastePicture => return Some(self.paste_native(true)),

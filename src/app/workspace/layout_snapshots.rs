@@ -86,11 +86,16 @@ pub(in crate::app) fn pass(
             mouse::Cursor::Unavailable,
         );
     }
-    let (width, height) = (size.width as u32, size.height as u32);
+    // RESHIKI_UI_QA_SCALE sets the pixel density, such as 2 for Retina screenshots.
+    let scale = std::env::var("RESHIKI_UI_QA_SCALE")
+        .ok()
+        .and_then(|scale| scale.parse::<f32>().ok())
+        .unwrap_or(1.);
+    let (width, height) = ((size.width * scale) as u32, (size.height * scale) as u32);
     let pixels = Headless::screenshot(
         renderer,
         Size::new(width, height),
-        1.,
+        scale,
         theme.palette().background,
     );
     image::save_buffer(output, &pixels, width, height, image::ColorType::Rgba8).unwrap();

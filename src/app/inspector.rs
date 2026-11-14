@@ -2078,9 +2078,47 @@ impl App {
     pub(super) fn export_panel(&self) -> Element<'_, Message> {
         let figure = self.tab.inspector_ui.figure;
         let chemical = self.tab.inspector_ui.chemical;
+        let settings_link = reshiki::accessibility::button(
+            "export-background-settings",
+            "Open Settings at Copy & export",
+            text("Settings → Copy & export").size(11),
+        )
+        .padding(0)
+        .style(|theme: &iced::Theme, status| iced::widget::button::Style {
+            text_color: if status == iced::widget::button::Status::Hovered {
+                theme.palette().text
+            } else {
+                theme.palette().primary
+            },
+            ..Default::default()
+        })
+        .on_press(Message::Settings(super::settings_page::Action::Open(Some(
+            super::settings_page::Section::CopyExport,
+        ))));
         let mut figures = column![
             self.figure_menu(figure),
             text(figure.description()).size(12).style(muted_text),
+            column![
+                text("Background").size(12),
+                super::settings_page::background_choices(
+                    "export-background",
+                    self.appearance.export_background,
+                    self.appearance.custom_background,
+                    |background| Message::Settings(super::settings_page::Action::ExportBackground(
+                        background
+                    )),
+                    true,
+                ),
+                row![
+                    text("ReShiki remembers this for exported files.")
+                        .size(11)
+                        .style(muted_text),
+                    settings_link,
+                ]
+                .spacing(4)
+                .wrap(),
+            ]
+            .spacing(6),
             reshiki::accessibility::button(
                 "export-figure",
                 format!("Export {figure} figure"),
@@ -2130,7 +2168,7 @@ impl App {
                         ))
                         .text_size(12),
                     text(
-                        "ReShiki can reopen the file as this drawing. Anyone with the file can too."
+                        "ReShiki can reopen the file as this drawing. Anyone with the file can too. Also applies to Copy."
                     )
                     .size(11)
                     .style(muted_text),

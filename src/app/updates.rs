@@ -52,6 +52,17 @@ pub struct State {
     error: Option<String>,
 }
 impl State {
+    /// Whether a preference save is in progress, which holds both preferences.
+    pub(super) fn saving(&self) -> bool {
+        self.saving
+    }
+    /// Whether the channel can change: no save, install or restart is running.
+    pub(super) fn idle(&self) -> bool {
+        !self.saving && !self.installing && !self.restarting
+    }
+    pub(super) fn error(&self) -> Option<&str> {
+        self.error.as_deref()
+    }
     pub fn new() -> Self {
         let preferences = if cfg!(test) {
             Preferences::default()

@@ -385,13 +385,15 @@ impl App {
     /// How one copy's pictures look: on `background`, or on the Copy default.
     pub(super) fn copy_pictures(
         &self,
-        background: Option<crate::appearance::Background>,
+        background: Option<reshiki::export::Background>,
     ) -> reshiki::clipboard::Pictures {
         let appearance = &self.appearance;
         reshiki::clipboard::Pictures {
-            background: background
-                .unwrap_or(appearance.copy_background)
-                .paper(appearance.custom_background),
+            background: background.unwrap_or_else(|| {
+                appearance
+                    .copy_background
+                    .paper(appearance.custom_background)
+            }),
             editable: appearance.export_editable_drawing,
         }
     }
@@ -402,7 +404,7 @@ impl App {
         &mut self,
         cut: bool,
         image_only: bool,
-        background: Option<crate::appearance::Background>,
+        background: Option<reshiki::export::Background>,
     ) -> Task<Message> {
         if self.clipboard_working() {
             self.status = "A clipboard operation is already in progress".into();

@@ -5,7 +5,7 @@
 //! changes in one place. Contextual keys come from the same tables the
 //! drawing uses (`reshiki::hotkeys`), and their previews run those edits.
 use super::super::{
-    Message, optimization, printing,
+    Message, optimization, printing, settings_page,
     shortcuts::{self, TabKey, keys, tab_keys},
 };
 use iced::keyboard::Modifiers;
@@ -591,6 +591,13 @@ pub(crate) fn entries() -> Vec<Entry> {
             "Turn the bond length or angle constraint on or off",
             Anywhere,
             &["constraint", "snap", "geometry"],
+        ),
+        entry(
+            label(Message::Settings(settings_page::Action::Open(None))),
+            "Settings",
+            "Open the app-wide preferences; Esc closes them",
+            Anywhere,
+            &["preferences", "options", "background"],
         ),
         entry(
             label(Message::Fit),
