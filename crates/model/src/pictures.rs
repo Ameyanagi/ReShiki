@@ -58,12 +58,6 @@ impl Serialize for Picture {
 }
 impl<'de> Deserialize<'de> for Picture {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        #[derive(Deserialize)]
-        #[serde(untagged)]
-        enum Stored {
-            Png(String),
-            Metafile(StoredMetafile),
-        }
         let text = match Stored::deserialize(deserializer)? {
             Stored::Png(text) => text,
             Stored::Metafile(source) => {
@@ -80,11 +74,63 @@ impl<'de> Deserialize<'de> for Picture {
         Self::from_decoded(decoded).map_err(serde::de::Error::custom)
     }
 }
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum Stored {
+    Png(String),
+    Metafile(StoredMetafile),
+}
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct StoredMetafile {
     png: String,
     emf: String,
+}
+
+/// The pictures of a drawing may store at most this many bytes and pixels.
+pub const DRAWING_BYTES: usize = 64 * 1024 * 1024;
+pub const DRAWING_PIXELS: u64 = 64_000_000;
+pub(crate) const OVER_DRAWING_BUDGET: &str = "Drawing pictures exceed 64 MB or 64 million pixels";
+
+/// Refuse a stored drawing whose pictures are over the pixel budget from their
+/// PNG headers alone, before any picture is decoded. This reads the pictures
+/// and skips the rest of the drawing. A drawing or header it cannot read is
+/// left for the full read to refuse.
+pub(crate) fn check_stored(json: &[u8]) -> Result<(), String> {
+    #[derive(Deserialize)]
+    struct Drawing {
+        #[serde(default)]
+        graphics: Vec<Graphic>,
+    }
+    #[derive(Deserialize)]
+    struct Graphic {
+        #[serde(default)]
+        picture: Option<Stored>,
+    }
+    let Ok(drawing) = serde_json::from_slice::<Drawing>(json) else {
+        return Ok(());
+    };
+    let mut pixels = 0_u64;
+    for picture in drawing.graphics.iter().filter_map(|g| g.picture.as_ref()) {
+        let png = match picture {
+            Stored::Png(png) => png,
+            Stored::Metafile(stored) => &stored.png,
+        };
+        // The signature and the size at the start of the first chunk.
+        let header = png.get(..32).and_then(|head| STANDARD.decode(head).ok());
+        if let Some(header) = header.filter(|h| h.starts_with(b"\x89PNG\r\n\x1a\n\0\0\0\rIHDR")) {
+            let side = |at| {
+                header
+                    .get(at..at + 4)
+                    .map_or(0, |b| b.iter().fold(0_u64, |n, b| n << 8 | u64::from(*b)))
+            };
+            pixels = pixels.saturating_add(side(16).saturating_mul(side(20)));
+        }
+        if pixels > DRAWING_PIXELS {
+            return Err(OVER_DRAWING_BUDGET.into());
+        }
+    }
+    Ok(())
 }
 fn decode_base64_limited(text: &str) -> Result<Vec<u8>, String> {
     if text.len() > MAX_BYTES.div_ceil(3) * 4 {
