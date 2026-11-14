@@ -214,8 +214,9 @@ await mount(element, {
 ```
 
 `embed()` takes the same options, with fonts as URLs on the page's own origin
-or the frame's; it reports a font from anywhere else through `onError` and
-does not load it. The custom element
+or the frame's; it reports a font from anywhere else, or one whose URL
+redirects, through `onError` and does not load it. `mount` follows a font's
+redirects unless `fontRedirect` is `"error"`. The custom element
 takes `fonts` (URLs separated by spaces) and `cjk-font` (a URL, or `false`)
 attributes and fires `error` for a font that could not load. Fonts added this
 way also reach `save` and `exportImage` figures.

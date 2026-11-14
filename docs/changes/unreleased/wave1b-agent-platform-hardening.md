@@ -48,4 +48,5 @@ issues: []
   an unreadable reply to the error log.
 - **Browser editor in a frame.** `frame.html` answers only the page that
   embeds it, and loads fonts only from that page's origin or its own. A font
-  from another origin is reported through `onError` and not loaded.
+  from another origin, or one whose URL redirects, is reported through
+  `onError` and not loaded.

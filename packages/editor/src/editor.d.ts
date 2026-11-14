@@ -34,6 +34,10 @@ export interface MountOptions {
    * for every language, or by default the language's Noto Sans subset (JP, KR
    * or SC) from jsDelivr. `false` loads nothing. */
   cjkFont?: string | URL | false;
+  /** What a URL in `fonts` or `cjkFont` that redirects does: "follow" it,
+   * the default, or "error", which reports the font through `onError`
+   * without asking the address it redirects to. `frame.html` uses "error". */
+  fontRedirect?: "follow" | "error";
   /** Called with fonts that could not be loaded; they are logged by default. */
   onError?: (error: Error) => void;
 }

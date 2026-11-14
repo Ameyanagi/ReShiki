@@ -32,7 +32,8 @@
         (document.referrer ? new URL(document.referrer).origin : location.origin);
       const post = (message) => parent.postMessage(message, embedder);
       // Anyone can link to this page with a `fonts` parameter, so it fetches
-      // fonts only from its own origin or the embedding page's.
+      // fonts only from its own origin or the embedding page's, and follows
+      // no redirect: one could lead from there to any other origin.
       const fonts = JSON.parse(new URLSearchParams(location.search).get("fonts") ?? "{}");
       const allowed = (font) =>
         [location.origin, embedder].includes(new URL(font, location.href).origin);
@@ -51,6 +52,7 @@
       const ready = mount(document.getElementById("editor"), {
         fonts: pageFonts.filter(allowed),
         cjkFont,
+        fontRedirect: "error",
         onChange: () => post({ event: "change" }),
         onError: (error) => post({ event: "fonterror", error: String(error?.message ?? error) }),
       });

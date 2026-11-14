@@ -86,3 +86,75 @@ test("the frame loads fonts only from its own origin or the embedding page's", a
     })),
   );
 });
+
+// The frame script with the real font loader and the real fetch, against two
+// local servers: `site` is the frame's and the embedding page's origin, and
+// `elsewhere` is a third one that `site` redirects a font to.
+test("the frame does not follow a font that redirects to another origin", async () => {
+  const followed: string[] = [];
+  const elsewhere = Bun.serve({
+    port: 0,
+    hostname: "127.0.0.1",
+    fetch(request) {
+      followed.push(new URL(request.url).pathname);
+      return new Response("elsewhere");
+    },
+  });
+  const site = Bun.serve({
+    port: 0,
+    hostname: "127.0.0.1",
+    fetch(request) {
+      const { pathname } = new URL(request.url);
+      return pathname.startsWith("/moved")
+        ? Response.redirect(`http://127.0.0.1:${elsewhere.port}${pathname}`, 302)
+        : new Response("font");
+    },
+  });
+  try {
+    const origin = `http://127.0.0.1:${site.port}`;
+    const fonts = {
+      fonts: [`${origin}/a.ttf`, `${origin}/moved.ttf`],
+      cjkFont: `${origin}/moved-cjk.otf`,
+    };
+    const folder = await mkdtemp(join(tmpdir(), "reshiki-frame-"));
+    const loader = new URL("../src/fonts.js", import.meta.url).href;
+    // As mount in editor.js: the options go to loadFonts as they are.
+    await writeFile(
+      join(folder, "editor.js"),
+      `import { loadFonts } from ${JSON.stringify(loader)};
+       export const mount = async (_element, options) => {
+         globalThis.added = [];
+         const wasm = { addFont: (bytes) => globalThis.added.push(new TextDecoder().decode(bytes)) };
+         globalThis.missingFont = await loadFonts(wasm, options);
+         return {};
+       };`,
+    );
+    await writeFile(join(folder, "frame.js"), script);
+    const posted: Posted["message"][] = [];
+    Object.assign(globalThis, {
+      parent: { postMessage: (message: Posted["message"]) => posted.push(message) },
+      location: new URL(`${origin}/frame.html?fonts=${encodeURIComponent(JSON.stringify(fonts))}`),
+      document: { referrer: `${origin}/page.html`, getElementById: () => ({}) },
+      addEventListener: () => {},
+    });
+    await import(pathToFileURL(join(folder, "frame.js")).href);
+    const page = globalThis as unknown as {
+      added: string[];
+      missingFont: (language: string) => Promise<void>;
+    };
+    while (!posted.some((message) => message.event === "ready")) await Bun.sleep(5);
+    // The font that stays on the page's origin loads; the other is reported.
+    expect(page.added).toEqual(["font"]);
+    await page.missingFont("ja");
+    expect(page.added).toEqual(["font"]);
+    const errors = posted.filter((message) => message.event === "fonterror");
+    expect(errors).toHaveLength(2);
+    expect(errors[0].error).toStartWith(`Could not load the font ${origin}/moved.ttf: `);
+    expect(errors[1].error).toStartWith(`Could not load the font ${origin}/moved-cjk.otf: `);
+    // The address a font redirected to was never asked.
+    expect(followed).toEqual([]);
+  } finally {
+    site.stop(true);
+    elsewhere.stop(true);
+  }
+});
