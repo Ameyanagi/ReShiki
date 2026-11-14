@@ -10,7 +10,7 @@ use crate::document::{Atom, Document, Point};
 use crate::editing;
 pub(crate) use aromatic::show_circles;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::LazyLock;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -994,10 +994,22 @@ impl Attachment<'_> {
             group.members.sort_unstable();
             group.members.dedup();
         }
-        for name in molecule_names {
+        // At a shared atom the host keeps its name and depth scope; the incoming
+        // molecule's membership there is dropped, so neither claims it twice.
+        let named: HashSet<_> = doc.molecule_names.iter().flat_map(|n| &n.atoms).collect();
+        let painted: HashSet<_> = doc.depth_appearance.iter().flat_map(|s| &s.atoms).collect();
+        let host_keeps = |owned: &HashSet<&u64>, id: u64| {
+            mapping.get(&id).is_some_and(|host| owned.contains(host))
+        };
+        for name in molecule_names.iter_mut() {
+            name.atoms.retain(|id| !host_keeps(&named, *id));
             for id in &mut name.atoms {
                 *id = mapped(*id);
             }
+        }
+        molecule_names.retain(|name| !name.atoms.is_empty());
+        for scope in depth_appearance.iter_mut() {
+            scope.retain_members(|id| !host_keeps(&painted, id));
         }
         *depth_appearance = crate::depth_appearance::remap(depth_appearance, &endpoint_mapping);
         if fuse {

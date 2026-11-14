@@ -165,3 +165,53 @@ fn sharing_an_atom_keeps_the_surviving_links_of_the_moved_model() {
     assert_eq!(joined.models.len(), 1);
     assert_eq!(joined.models[0].linked_atoms, [atoms[1]]);
 }
+
+#[test]
+fn sharing_an_atom_between_two_depth_painted_molecules_keeps_the_host_scope() {
+    let (mut doc, atoms) = fixture();
+    doc.depth_appearance
+        .push(Scope::alpha_only(&doc, atoms.to_vec(), 0.5));
+    host(&mut doc);
+    let hosts = vec![doc.atoms[2].id, doc.atoms[3].id];
+    doc.depth_appearance
+        .push(Scope::alpha_only(&doc, hosts.clone(), 0.8));
+    doc.validate().unwrap();
+    let joined = place(&doc, &atoms, atoms[0], Connection::ShareAtom);
+    let mut scopes: Vec<_> = joined
+        .depth_appearance
+        .iter()
+        .map(|s| (s.atoms.clone(), s.rear_opacity))
+        .collect();
+    scopes.sort_by(|a, b| a.0.cmp(&b.0));
+    assert_eq!(scopes, [(vec![atoms[1]], 0.5), (hosts, 0.8)]);
+}
+
+#[test]
+fn sharing_an_atom_between_two_named_molecules_keeps_the_host_name() {
+    let (mut doc, atoms) = fixture();
+    let annotation = caption(&mut doc, "methanol", Point::new(180., 30.));
+    doc.molecule_names.push(MoleculeName {
+        annotation,
+        atoms: atoms.to_vec(),
+        smiles: "CO".into(),
+        text: "methanol".into(),
+    });
+    host(&mut doc);
+    let hosts = vec![doc.atoms[2].id, doc.atoms[3].id];
+    let ethane = caption(&mut doc, "ethane", Point::new(20., 30.));
+    doc.molecule_names.push(MoleculeName {
+        annotation: ethane,
+        atoms: hosts.clone(),
+        smiles: "CC".into(),
+        text: "ethane".into(),
+    });
+    doc.validate().unwrap();
+    let joined = place(&doc, &atoms, atoms[0], Connection::ShareAtom);
+    let mut names: Vec<_> = joined
+        .molecule_names
+        .iter()
+        .map(|n| (n.annotation, n.atoms.clone()))
+        .collect();
+    names.sort();
+    assert_eq!(names, [(annotation, vec![atoms[1]]), (ethane, hosts)]);
+}
