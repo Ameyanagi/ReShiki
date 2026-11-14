@@ -22,26 +22,30 @@ function secureEqual(a, b) {
     timingSafeEqual(Buffer.from(a), Buffer.from(b))
   );
 }
-function isOfficeLaunchRequest(req, url) {
+// The launch key of a task pane request, or null when the query is not the one
+// a generated manifest produces: `?launch=<key>`, to which Office may append
+// its own `_host_Info` metadata.
+function officeLaunchKey(req, url) {
   if (
     req.method !== "GET" ||
     !["/", "/taskpane.html"].includes(url.pathname) ||
     url.hash ||
     url.username ||
     url.password ||
-    url.search.length > 2048 ||
-    !/^\?_host_(?:Info|info)=[^&]+$/.test(url.search)
+    url.search.length > 2048
   )
-    return false;
+    return null;
+  const match = /^\?launch=([0-9a-f]{64})(?:&_host_(?:Info|info)=([^&]+))?$/.exec(url.search);
+  if (!match) return null;
   try {
     // Office supplies opaque launch metadata for Office.js. Never use it as
     // host identity or authorization, or interpolate it into the served HTML.
-    const value = decodeURIComponent(url.search.slice(url.search.indexOf("=") + 1));
     // oxlint-disable-next-line no-control-regex -- reject encoded request controls.
-    return !/[\u0000-\u001f\u007f]/.test(value);
+    if (/[\u0000-\u001f\u007f]/.test(decodeURIComponent(match[2] ?? ""))) return null;
   } catch {
-    return false;
+    return null;
   }
+  return match[1];
 }
 async function jsonBody(req) {
   if (req.headers["content-type"] !== "application/json")
@@ -60,7 +64,13 @@ async function jsonBody(req) {
     throw new Error("Expected a JSON object");
   return value;
 }
-export function makeHandler({ origin, sessions, worker, token = randomBytes(32).toString("hex") }) {
+export function makeHandler({
+  origin,
+  sessions,
+  worker,
+  launchKey,
+  token = randomBytes(32).toString("hex"),
+}) {
   const hostname = new URL(origin).host;
   // Nonces of served task pane pages that have not asked for the token yet.
   const nonces = new Set();
@@ -82,8 +92,8 @@ export function makeHandler({ origin, sessions, worker, token = randomBytes(32).
     try {
       if (req.headers.host !== hostname) throw forbidden("Invalid localhost Host");
       const url = new URL(req.url, origin);
-      if (url.origin !== origin || (url.search && !isOfficeLaunchRequest(req, url)))
-        throw forbidden("Invalid request URL");
+      const launch = url.search ? officeLaunchKey(req, url) : null;
+      if (url.origin !== origin || (url.search && !launch)) throw forbidden("Invalid request URL");
       if (req.method === "GET" && url.pathname === "/bootstrap.json") {
         if (req.headers.origin && req.headers.origin !== origin)
           throw forbidden("Bootstrap requires a same-origin fetch");
@@ -156,6 +166,11 @@ export function makeHandler({ origin, sessions, worker, token = randomBytes(32).
         return send(404, { error: "Unknown resource" });
       let data = await readFile(path.join(ROOT, resource));
       if (resource === "/taskpane.html") {
+        // Only setup's manifests, private to this account, carry the launch key.
+        // Any local process can reach this port, so the page and its nonce go
+        // only to a request that has it.
+        if (!secureEqual(launch, launchKey))
+          throw forbidden("Open the task pane from a manifest that setup.js generated");
         const nonce = randomBytes(32).toString("hex");
         nonces.add(nonce);
         // Only the 32 newest pages can still ask: one per task pane the companion allows.
@@ -192,9 +207,15 @@ export async function start(config) {
   const worker = (mode, input) => runWorker(executable, mode, input);
   const sessions = new Sessions({ recoveryDir: config.recoveryDir, executable, worker });
   const origin = `https://localhost:${port}`;
+  if (typeof config.launchKey !== "string")
+    throw new Error(
+      "The config has no launch key. Run setup.js with a new --directory and sideload its manifests",
+    );
+  const launchKey = (await readFile(config.launchKey, "utf8")).trim();
+  if (!/^[0-9a-f]{64}$/.test(launchKey)) throw new Error("The launch key file is not valid");
   const server = https.createServer(
     { cert: await readFile(config.cert), key: await readFile(config.key), minVersion: "TLSv1.2" },
-    makeHandler({ origin, sessions, worker }),
+    makeHandler({ origin, sessions, worker, launchKey }),
   );
   server.requestTimeout = 20000;
   server.headersTimeout = 10000;

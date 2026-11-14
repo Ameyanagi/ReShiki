@@ -30,8 +30,11 @@ issues: []
   folder.
 - **LibreOffice extension.** Without a chosen app the extension starts the
   installed ReShiki before a `reshiki` found on `PATH`.
-- **Microsoft 365 companion.** The companion gives its token only to a task
-  pane page it served, once per page.
+- **Microsoft 365 companion.** The companion serves the task pane only to
+  the address in the manifests that `setup.js` generates, which now carries a
+  private launch key, and gives its token once per served page. Another
+  process on the computer could ask for the token before. Run `setup.js`
+  with a new `--directory` and sideload its manifests again.
 - **Assistant: Accept all edits.** A draft that replaces objects outside your
   selection now waits for **Apply**; see [the assistant](assistant.md#applying-and-undoing).
 - **Assistant: other tools.** A request stops with
