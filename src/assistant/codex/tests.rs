@@ -840,7 +840,8 @@ async fn source_color_review_notes_do_not_block_automatic_application() -> anyho
 
 /// S6: the app turns Codex's own tools off with start-up flags, whose names
 /// a Codex release can change. A turn holding anything but messages,
-/// reasoning and the canvas tools therefore fails, on any thread.
+/// reasoning and the canvas tools therefore fails, on any thread, and so
+/// does an item event that names no item.
 #[cfg(unix)]
 #[tokio::test]
 async fn a_turn_with_any_other_tool_fails() -> anyhow::Result<()> {
@@ -851,13 +852,11 @@ async fn a_turn_with_any_other_tool_fails() -> anyhow::Result<()> {
         item("test", "item/started", json!({"type":"userMessage"})),
         item("test", "item/started", json!({"type":"reasoning"})),
         item("test", "item/completed", json!({"type":"reasoning"})),
-        item("test", "item/started", json!({"type":"contextCompaction"})),
         item(
             "test",
             "item/started",
             json!({"type":"dynamicToolCall","tool":"canvas_preview"}),
         ),
-        item("test", "item/started", json!({"type":"subAgentActivity"})),
         item(
             "child",
             "item/completed",
@@ -914,6 +913,30 @@ async fn a_turn_with_any_other_tool_fails() -> anyhow::Result<()> {
             "a tool of a later release",
         ),
         (item("test", "item/started", json!({})), "unknown"),
+        // An item event with no item at all.
+        (
+            json!({"method":"item/started","params":{"threadId":"test"}}),
+            "unknown",
+        ),
+        (json!({"method":"item/completed"}), "unknown"),
+        // Delegation and compaction are not canvas tools: the flag that turns
+        // subagents off is one of those a release can rename.
+        (
+            item(
+                "test",
+                "item/started",
+                json!({"type":"collabAgentToolCall"}),
+            ),
+            "collabAgentToolCall",
+        ),
+        (
+            item("test", "item/started", json!({"type":"subAgentActivity"})),
+            "subAgentActivity",
+        ),
+        (
+            item("test", "item/started", json!({"type":"contextCompaction"})),
+            "contextCompaction",
+        ),
     ];
     let run = async |events: Vec<Value>| {
         let (mut server, _evidence) = fake_turns(json!([events])).await?;

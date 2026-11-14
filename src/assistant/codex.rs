@@ -623,27 +623,21 @@ async fn prepare_source_image(
 
 /// The reason an item of a turn fails it, on any thread of the connection.
 ///
-/// A turn may hold messages, reasoning, the canvas tools ReShiki registers,
-/// and Codex's own context compaction and subagent records (a subagent's
-/// items arrive here too and are checked the same way). Codex's own tools
-/// are turned off by start-up flags whose names a release can change, so
-/// any other item, such as a shell command, a file change, or an MCP or
-/// web call, stops the request.
+/// A turn may hold messages, reasoning and the canvas tools ReShiki
+/// registers. Codex's own tools and its subagents are turned off by start-up
+/// flags whose names a release can change, so any other item, such as a
+/// shell command, a file change, a subagent call, or an MCP or web call,
+/// stops the request. So does an item event that names no item.
 fn refused_item(event: &Value) -> Option<String> {
-    let item = event.pointer("/params/item")?;
+    let item = event.pointer("/params/item");
     let kind = item
-        .get("type")
+        .and_then(|item| item.get("type"))
         .and_then(Value::as_str)
         .unwrap_or("unknown");
     let allowed = match kind {
-        "userMessage"
-        | "agentMessage"
-        | "reasoning"
-        | "contextCompaction"
-        | "collabAgentToolCall"
-        | "subAgentActivity" => true,
+        "userMessage" | "agentMessage" | "reasoning" => true,
         "dynamicToolCall" => item
-            .get("tool")
+            .and_then(|item| item.get("tool"))
             .and_then(Value::as_str)
             .is_some_and(|tool| {
                 super::canvas_tools::SPECS
