@@ -36,15 +36,13 @@ fn host(doc: &mut Document) {
 }
 
 fn join(doc: &Document, selected: &[u64], source: u64) -> Document {
+    place(doc, selected, source, Connection::Connect)
+}
+
+fn place(doc: &Document, selected: &[u64], source: u64, mode: Connection) -> Document {
     let prepared = Prepared::new(doc, selected).unwrap();
     let (placed, _) = prepared
-        .place(
-            Point::default(),
-            None,
-            5.,
-            Anchor::Atom(source),
-            Connection::Connect,
-        )
+        .place(Point::default(), None, 5., Anchor::Atom(source), mode)
         .unwrap();
     placed
 }
@@ -121,4 +119,27 @@ fn move_and_attach_keeps_a_model_linked_to_the_moved_atoms() {
     let joined = join(&doc, &atoms, atoms[0]);
     assert_eq!(joined.models.len(), 1);
     assert_eq!(joined.models[0].linked_ids(&joined), atoms);
+}
+
+/// The shared carbon is the host's, so everything that named it follows.
+#[test]
+fn sharing_an_atom_keeps_the_name_and_depth_scope_of_the_moved_molecule() {
+    let (mut doc, atoms) = fixture();
+    let annotation = caption(&mut doc, "methanol", Point::new(180., 30.));
+    doc.molecule_names.push(MoleculeName {
+        annotation,
+        atoms: atoms.to_vec(),
+        smiles: "CO".into(),
+        text: "methanol".into(),
+    });
+    let scope = Scope::alpha_only(&doc, atoms.to_vec(), 0.5);
+    doc.depth_appearance.push(scope);
+    host(&mut doc);
+    doc.validate().unwrap();
+    let shared = doc.atoms[2].id;
+    let joined = place(&doc, &atoms, atoms[0], Connection::ShareAtom);
+    assert!(joined.atom(atoms[0]).is_none());
+    assert_eq!(joined.molecule_names[0].annotation, annotation);
+    assert_eq!(joined.molecule_names[0].atoms, [shared, atoms[1]]);
+    assert_eq!(joined.depth_appearance[0].atoms, [shared, atoms[1]]);
 }
