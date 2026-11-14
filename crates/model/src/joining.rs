@@ -83,6 +83,8 @@ fn moving_ids(doc: &Document, selected: &[u64]) -> Vec<u64> {
             break;
         }
     }
+    // An arrow takes its condition text with it, as Copy and Delete do.
+    crate::arrow_labels::include_labels(doc, &mut moving);
     doc.all_ids()
         .into_iter()
         .filter(|id| moving.contains(id))
@@ -357,6 +359,25 @@ impl Prepared {
         for g in &mut placed.graphics {
             g.id = original_id(g.id);
         }
+        for name in &mut placed.molecule_names {
+            name.annotation = original_id(name.annotation);
+            for atom in &mut name.atoms {
+                *atom = original_id(*atom);
+            }
+        }
+        for label in &mut placed.arrow_labels {
+            label.arrow = original_id(label.arrow);
+            label.annotation = original_id(label.annotation);
+        }
+        placed.depth_appearance =
+            crate::depth_appearance::remap(&placed.depth_appearance, &endpoint_mapping);
+        for model in &mut placed.models {
+            // Only a moved model has every ID in `restore`.
+            let mut moved = model.clone();
+            if moved.remap(&restore).is_some() {
+                *model = moved;
+            }
+        }
         crate::arrow_anchors::remap_for_join(&mut placed, &endpoint_atoms, &endpoint_mapping);
         // Preparation deletes moving atoms only from a detached preview base.
         // An unselected arrow still belongs to the original document and must
@@ -418,6 +439,8 @@ impl Prepared {
     }
 }
 
+#[cfg(test)]
+mod companion_tests;
 #[cfg(test)]
 mod endpoint_tests;
 #[cfg(test)]
