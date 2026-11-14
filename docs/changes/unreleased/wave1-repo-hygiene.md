@@ -14,3 +14,6 @@ issues: []
   reason and its patch; `scripts/check_vendor.py` checks each one against its
   crates.io source.
 - `AGENTS.md` tells coding agents and contributors which checks to run.
+- The old getting-started page redirects to the
+  [install guide](https://reshiki.com/guide/install/). The development,
+  architecture and roadmap notes match the current toolchain, CI and crates.
