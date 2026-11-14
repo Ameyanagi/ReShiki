@@ -753,6 +753,8 @@ test("Office launch metadata loads only task-pane HTML and cannot relax API or r
       req.end(method === "POST" ? JSON.stringify({ clientId: f.clientId }) : undefined);
     });
   const html = await readFile(new URL("./taskpane.html", import.meta.url), "utf8");
+  // The served page differs from the file only by its bootstrap nonce.
+  const withoutNonce = (body) => body.replace(/content="[0-9a-f]{64}"/, 'content=""');
   // First URL is the actual Word for Mac request that previously returned 403.
   // Microsoft also documents the Win32 pattern in OfficeDev's debugger README.
   const queries = [
@@ -764,7 +766,8 @@ test("Office launch metadata loads only task-pane HTML and cannot relax API or r
     for (const query of ["", ...queries]) {
       const response = await request(resource + query);
       assert.equal(response.status, 200, resource + query);
-      assert.equal(response.body, html);
+      assert.notEqual(response.body, html);
+      assert.equal(withoutNonce(response.body), html);
       assert.match(response.headers["content-type"], /^text\/html/);
       assert.equal(response.headers["cache-control"], "no-store");
       assert.ok(!response.body.includes(token));
@@ -776,7 +779,7 @@ test("Office launch metadata loads only task-pane HTML and cannot relax API or r
     "/taskpane.html?_host_Info=" + encodeURIComponent("<script>evil()</script>&host=Word"),
   );
   assert.equal(opaque.status, 200);
-  assert.equal(opaque.body, html);
+  assert.equal(withoutNonce(opaque.body), html);
   for (const query of [
     "?unknown=1",
     queries[0] + "&redirect=https://evil.test",
@@ -831,6 +834,67 @@ test("Office launch metadata loads only task-pane HTML and cannot relax API or r
   assert.equal(workerCalls, 0);
   assert.equal(f.sessions.clients.size, 1);
   assert.equal(f.sessions.sessions.size, 0);
+});
+
+test("the task pane token needs the one-time nonce of a served page", async (t) => {
+  const f = await fixture(t),
+    token = "private-taskpane-token";
+  let handler;
+  const server = http.createServer((req, res) => handler(req, res));
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  t.after(
+    () =>
+      new Promise((resolve) => {
+        server.closeAllConnections();
+        server.close(resolve);
+      }),
+  );
+  const port = server.address().port,
+    host = `localhost:${port}`;
+  handler = makeHandler({
+    origin: `http://${host}`,
+    sessions: f.sessions,
+    token,
+    worker: async () => {
+      throw new Error("Bootstrap must never run a worker");
+    },
+  });
+  const get = (route, headers = {}) =>
+    new Promise((resolve, reject) => {
+      const req = http.request(
+        { hostname: "127.0.0.1", port, path: route, headers: { Host: host, ...headers } },
+        (res) => {
+          const chunks = [];
+          res.on("data", (chunk) => chunks.push(chunk));
+          res.on("end", () =>
+            resolve({ status: res.statusCode, body: Buffer.concat(chunks).toString("utf8") }),
+          );
+        },
+      );
+      req.on("error", reject);
+      req.end();
+    });
+  const bootstrap = (nonce) => get("/bootstrap.json", { "X-ReShiki-Bootstrap": nonce });
+  const page = async () =>
+    /<meta name="reshiki-bootstrap" content="([0-9a-f]{64})" \/>/.exec(
+      (await get("/taskpane.html")).body,
+    )[1];
+  // A local process that only knows the header, as before, gets no token.
+  for (const guess of ["1", "", "0".repeat(64)]) {
+    const refused = await bootstrap(guess);
+    assert.equal(refused.status, 403, guess);
+    assert.ok(!refused.body.includes(token));
+  }
+  const [first, second] = [await page(), await page()];
+  assert.notEqual(first, second);
+  assert.deepEqual(JSON.parse((await bootstrap(first)).body), { token });
+  // Each page's nonce is good for one token.
+  assert.equal((await bootstrap(first)).status, 403);
+  assert.equal((await bootstrap(second)).status, 200);
+  // Only the 32 newest pages can still ask.
+  const oldest = await page();
+  for (let pages = 0; pages < 32; pages++) await page();
+  assert.equal((await bootstrap(oldest)).status, 403);
 });
 
 test("worker rejects unknown modes, impossible input sizes, launch failures and timeout", async (t) => {
@@ -953,33 +1017,39 @@ test("setup publishes complete outputs, reuses matching partial runs and refuses
       }),
   );
   assert.equal(running.server.address().address, "127.0.0.1");
-  const result = await new Promise((resolve, reject) => {
-    const req = https.request(
-      {
-        hostname: "127.0.0.1",
-        servername: "localhost",
-        port,
-        path: "/bootstrap.json",
-        ca: execFileSync("openssl", ["x509", "-in", cert, "-outform", "PEM"]),
-        headers: {
-          Host: `localhost:${port}`,
-          "X-ReShiki-Bootstrap": "1",
-          "Sec-Fetch-Site": "same-origin",
+  const ca = execFileSync("openssl", ["x509", "-in", cert, "-outform", "PEM"]);
+  const get = (route, headers = {}) =>
+    new Promise((resolve, reject) => {
+      const req = https.request(
+        {
+          hostname: "127.0.0.1",
+          servername: "localhost",
+          port,
+          path: route,
+          ca,
+          headers: { Host: `localhost:${port}`, ...headers },
         },
-      },
-      (res) => {
-        const chunks = [];
-        res.on("data", (chunk) => chunks.push(chunk));
-        res.on("end", () =>
-          resolve({ status: res.statusCode, data: JSON.parse(Buffer.concat(chunks)) }),
-        );
-      },
-    );
-    req.on("error", reject);
-    req.end();
+        (res) => {
+          const chunks = [];
+          res.on("data", (chunk) => chunks.push(chunk));
+          res.on("end", () =>
+            resolve({ status: res.statusCode, body: Buffer.concat(chunks).toString("utf8") }),
+          );
+        },
+      );
+      req.on("error", reject);
+      req.end();
+    });
+  // As the task pane does: load the page, then ask with its nonce.
+  const [, nonce] = /name="reshiki-bootstrap" content="([0-9a-f]{64})"/.exec(
+    (await get("/taskpane.html")).body,
+  );
+  const result = await get("/bootstrap.json", {
+    "X-ReShiki-Bootstrap": nonce,
+    "Sec-Fetch-Site": "same-origin",
   });
   assert.equal(result.status, 200);
-  assert.match(result.data.token, /^[0-9a-f]{64}$/);
+  assert.match(JSON.parse(result.body).token, /^[0-9a-f]{64}$/);
   for (const host of HOSTS)
     assert.ok(
       (await readFile(path.join(directory, "manifests", `${host.name}.xml`), "utf8")).includes(

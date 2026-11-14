@@ -10,6 +10,8 @@ import { LIMITS, decodeBase64, validateEnvelope } from "../protocol.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const BODY_LIMIT = Math.ceil(((LIMITS.nativeBytes + LIMITS.pngBytes) * 4) / 3) + 16384;
+// The tag in taskpane.html that receives each served page's bootstrap nonce.
+const NONCE_TAG = '<meta name="reshiki-bootstrap" content="" />';
 function forbidden(message) {
   return Object.assign(new Error(message), { status: 403 });
 }
@@ -60,6 +62,8 @@ async function jsonBody(req) {
 }
 export function makeHandler({ origin, sessions, worker, token = randomBytes(32).toString("hex") }) {
   const hostname = new URL(origin).host;
+  // Nonces of served task pane pages that have not asked for the token yet.
+  const nonces = new Set();
   let inflight = 0;
   return async (req, res) => {
     res.setHeader("Cache-Control", "no-store");
@@ -81,13 +85,13 @@ export function makeHandler({ origin, sessions, worker, token = randomBytes(32).
       if (url.origin !== origin || (url.search && !isOfficeLaunchRequest(req, url)))
         throw forbidden("Invalid request URL");
       if (req.method === "GET" && url.pathname === "/bootstrap.json") {
-        if (
-          req.headers["x-reshiki-bootstrap"] !== "1" ||
-          (req.headers.origin && req.headers.origin !== origin)
-        )
+        if (req.headers.origin && req.headers.origin !== origin)
           throw forbidden("Bootstrap requires a same-origin fetch");
         if (req.headers["sec-fetch-site"] && req.headers["sec-fetch-site"] !== "same-origin")
           throw forbidden("Bootstrap requires same origin");
+        // Each served page carries one nonce, which is good for one token.
+        if (!nonces.delete(req.headers["x-reshiki-bootstrap"]))
+          throw forbidden("Bootstrap requires the nonce of a served task pane page");
         return send(200, { token });
       }
       if (url.pathname.startsWith("/api/")) {
@@ -150,7 +154,14 @@ export function makeHandler({ origin, sessions, worker, token = randomBytes(32).
         !/^\/assets\/icon-(16|32|80)\.png$/.test(resource)
       )
         return send(404, { error: "Unknown resource" });
-      const data = await readFile(path.join(ROOT, resource));
+      let data = await readFile(path.join(ROOT, resource));
+      if (resource === "/taskpane.html") {
+        const nonce = randomBytes(32).toString("hex");
+        nonces.add(nonce);
+        // Only the 32 newest pages can still ask: one per task pane the companion allows.
+        if (nonces.size > 32) nonces.delete(nonces.values().next().value);
+        data = data.toString("utf8").replace(NONCE_TAG, NONCE_TAG.replace('""', `"${nonce}"`));
+      }
       const type = resource.endsWith(".html")
         ? "text/html; charset=utf-8"
         : resource.endsWith(".css")
