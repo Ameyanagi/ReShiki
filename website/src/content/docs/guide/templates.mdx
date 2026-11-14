@@ -9,6 +9,8 @@ import Screenshot from "../../../components/Screenshot.astro";
 
 Open **Templates**. Pick a category or search by name, then choose a structure. Hover a thumbnail to see its name.
 
+Search matches names, IUPAC aliases, glycan symbols and SMILES. Searching inside an open category shows **In [category]**; choose **Search all** to search the whole library with the same query. **← Categories** and your mouse's Back and Forward buttons move between the preview, a category and the category list.
+
 <Screenshot src="/manual/template-categories.webp" alt="Template categories beside the drawing." />
 
 <Screenshot
@@ -67,7 +69,11 @@ Click the exact atom or bond in the large template preview, then its destination
   alt="Cyclopentane sharing one atom with cyclohexane."
 />
 
-Drag from the destination to choose a direction. **Shift/Ctrl** snaps the angle; **Alt/Option** frees it. Click empty space to place a separate structure.
+Drag from the destination to choose a direction. **Shift/Ctrl** snaps the angle; **Alt/Option** frees it. Click empty space to place a separate structure; drag there to rotate it. Choose **Auto** to let ReShiki pick a compatible attachment point in the selected mode.
+
+The preview is tinted green until you release. If the destination cannot take the template, ReShiki says why before you release and leaves the drawing unchanged.
+
+For a **Coordination geometry** frame, choose **Share an atom** with the frame's metal selected, then click a metal in your drawing. The metal keeps its element and charge; relabel the ligand ends as needed. The wedges show the frame's projection only and assign no stereochemistry.
 
 With the **Benzene** toolbar tool, click an aromatic carbon to connect a phenyl group by a single bond (benzene becomes biphenyl), or click/drag from a bond to fuse. A terminal carbon can become part of the new ring. Existing ring bond orders are retained when connecting a phenyl group.
 
@@ -91,7 +97,7 @@ The **Benzene** toolbar tool, six-membered **Aromatic circle** tool (including C
   alt="A saved Benzofuran template with attachment, Favorite, and editing controls."
 />
 
-Use **Favorite** for quick access. Custom templates also have **Edit**, **Replace from selection**, and **Remove template**. **Undo library change** restores the last library edit.
+Use **Favorite** for quick access. Custom templates also have **Edit** for the name and collection, **Replace from selection** to swap in a revised drawing, and **Remove template**. **Undo library change** restores the last library edit. Changing the library never changes structures already in your drawing. Built-in templates can't be edited: place one and save it to make your own copy.
 
 **Export** and **Import** in Templates share a `.reshiki-templates` collection.
 

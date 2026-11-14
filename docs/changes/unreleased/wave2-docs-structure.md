@@ -12,6 +12,10 @@ issues: []
   records moved from `docs/` to `docs/changes/`. Their old website addresses
   redirect to the records on GitHub. New release validation records go in
   `docs/changes/release-<version>-validation.md`.
+- **Chain and template notes.** The chain tools and template library pages
+  describe behavior and limits only. Their how-to steps moved to the
+  first-molecule and templates guides, and their 2026-09-20 checks moved to
+  `docs/changes/`.
 - **Release notes template.** [Writing and terms](writing-style.md#release-notes)
   sets the sections of every release note. Build and verification details now
   live in the release validation records.

@@ -80,6 +80,15 @@ Straight and snaking chains have separate one-click toolbar buttons. **Shift+x**
   alt="Straight and snaking chains, with atom-count and angle controls."
 />
 
+- Leave **Atoms** at **Auto** to size a straight chain by dragging; a click places six atoms.
+- Hold **Ctrl** during a straight-chain drag to start bending it. Retrace a snaking chain to remove its tail.
+- Start on an atom to extend its molecule, or click a chain end to continue its zigzag.
+- **Shift** flips the side the zigzag starts on.
+- A red preview means the chain would overlap an atom; releasing it changes nothing. **Escape** cancels.
+- **Length** and **Angles** keep bonds at the set length and in 15° steps. Hold **Alt/Option** to release both for one drag. **Reset** restores the document's bond length and the 120° chain angle.
+
+One Undo removes the whole chain. [How chains behave](/developer/chain-tools/) lists the limits.
+
 Use **Shift+R** to switch saturated/aromatic ring drawing while keeping the member count. With Select and a complete 3–8 member ring selected, the same shortcut converts that ring in place. This changes drawing notation without inferring charges. Select an already aromatic ring and press **Cmd/Ctrl+Alt+K** (or **Alt+K** on Windows) to switch between a circle and alternating bonds.
 
 For a partial delocalization curve, select consecutive ring atoms and right-click → **Bond appearance… → Toggle inner ring curve**, or use Properties → Bond appearance. Select the whole ring for a circle. Bond orders stay unchanged; keep `.rsk` or use figure export for this depiction.

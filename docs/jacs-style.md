@@ -33,7 +33,7 @@ Regression tests check physical SVG/PNG scale, line-art metadata, label clearanc
 
 The original desktop PDF matched the headless export byte for byte and embedded a subset of Arial. The desktop PNG likewise matched, measured 4087 × 4618 pixels with approximately 1200 dpi metadata, and contained only neutral RGB values. Both renderings were visually inspected. That initial style update passed 20 Rust tests and 10 Python tests, along with formatting and Clippy checks. The standalone bundle passed its engine check outside the checkout and its signature verification.
 
-The 2026-09-20 chain update passed 83 Rust and 23 Python tests. The packaged app was checked after deliberately changing its font, size, color and bond length, then creating a new document. Exported CDXML declares Arial, 10 pt label/caption sizes, 14.4 pt bonds and 0.6 pt lines; the saved chain coordinates were also measured independently. See [the desktop verification record](chain-tools.md#reference-and-verification).
+The 2026-09-20 chain update passed 83 Rust and 23 Python tests. The packaged app was checked after deliberately changing its font, size, color and bond length, then creating a new document. Exported CDXML declares Arial, 10 pt label/caption sizes, 14.4 pt bonds and 0.6 pt lines; the saved chain coordinates were also measured independently. See [the desktop verification record](changes/chain-tools-20260920.md).
 
 Headless export is available for repeatable checks:
 
