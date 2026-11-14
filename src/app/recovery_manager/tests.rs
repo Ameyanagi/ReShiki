@@ -216,7 +216,7 @@ fn drafts_from_a_newer_version_show_the_banner_until_dismissed() {
     assert_eq!((scan.candidates.len(), scan.newer), (2, 1));
     app.recovered.clear();
     assert!(!app.recovery_banner_shown());
-    app.recovery_manager = State::found(scan.newer, Some(directory.path().into()));
+    app.recovery_manager = State::found(scan.newer);
     assert!(app.recovery_banner_shown());
     let _ = app.recovery_banner();
     let _ = app.update(Message::DismissRecovery);

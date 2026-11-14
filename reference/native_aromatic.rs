@@ -524,6 +524,8 @@ async fn complete_aromatic_responses_match_goldens() -> anyhow::Result<()> {
                 Some("aromatic-graphics-exchange-source.py.gz")
             }
             "reference/engine/worker.py" => Some("aromatic-worker-source.py.gz"),
+            // #1121 gave the live cleanup worker a mirrored orientation candidate.
+            "reference/engine/cleanup.py" => Some("aromatic-cleanup-source.py.gz"),
             "reference/engine/reactions.py" => Some("aromatic-reactions-source.py.gz"),
             // Since #1168 the live mirror accepts three or four radical electrons.
             "reference/document_preparation_reference.py" => {

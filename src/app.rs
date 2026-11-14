@@ -525,7 +525,7 @@ impl App {
         let mut app = Self {
             accessibility: accessibility::State::default(),
             tab: DocumentTab::new(recovery, appearance.canvas_theme),
-            tabs: tabs::State::new(recovery_root.clone()),
+            tabs: tabs::State::new(recovery_root),
             updates: updates::State::new(),
             theme_library: theme_files::State::load(),
             palette: None,
@@ -568,7 +568,7 @@ impl App {
             aromatic_ring: false,
             custom_element: String::new(),
             recovered,
-            recovery_manager: recovery_manager::State::found(newer_drafts, recovery_root),
+            recovery_manager: recovery_manager::State::found(newer_drafts),
             exit: autosave::Exit::default(),
             inspector_open: true,
             inspector_tab: InspectorTab::Properties,
