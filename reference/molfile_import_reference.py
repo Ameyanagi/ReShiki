@@ -71,7 +71,7 @@ def emit(name, text):
         expected, failure = None, str(error)
     # Keep the original result; the restriction is a second, input-derived
     # contract and must never turn an original rejection into an allowance.
-    restriction = generic_restriction(text) if expected is not None else None
+    restriction = generic_restriction(text, original=expected is not None)
     extension = None
     if expected is None and failure == "Outside the existing editable chemistry contract":
         supported = generic_molecule_extension(text)

@@ -29,7 +29,7 @@ def emit(name, text):
         failure = None
     except (ValueError, RuntimeError, KeyError, AttributeError, OverflowError) as error:
         expected, failure = None, str(error)
-    restriction = generic_restriction(text, reaction=True) if expected is not None else None
+    restriction = generic_restriction(text, reaction=True, original=expected is not None)
     print(
         json.dumps(
             dict(name=name, text=text, expected=expected, failure=failure, restriction=restriction)

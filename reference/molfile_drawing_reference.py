@@ -67,7 +67,7 @@ def emit(name, text):
         document = to_document(original)
     except (ValueError, RuntimeError, KeyError, OverflowError) as error:
         expected, failure = None, str(error)
-    restriction = generic_restriction(text) if expected is not None else None
+    restriction = generic_restriction(text, original=expected is not None)
     extension = None
     if expected is None and failure == "Outside the existing editable chemistry contract":
         supported = generic_molecule_extension(text)

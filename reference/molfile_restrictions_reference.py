@@ -1,8 +1,10 @@
 """Derive bounded generic-import contracts from explicit CTAB records.
 
 This module does not call the Rust parser, inspect its errors, or use case names.
-The producers retain the complete original result and attach these contracts only
-after original success. Consumers must also require the exact current rejection.
+The producers retain the complete original result and attach a rejection contract
+only after original success. Consumers must also require the exact current
+rejection. A contract without an error is a warned difference: the import must
+succeed when the original did, and its result is not compared.
 Unsupported/malformed framing outside this small record reader gets no exemption.
 """
 
@@ -48,8 +50,9 @@ def invalid(category, line, reason):
     return dict(category=category, error=f"Invalid MOL input at line {line}: {reason}")
 
 
-def chemistry(category, reason):
-    return dict(category=category, error="MOL chemistry: " + reason)
+def warned(category):
+    """A value ReShiki leaves out with an import warning; RDKit wraps it."""
+    return dict(category=category, error=None)
 
 
 def data_integer(text):
@@ -62,7 +65,11 @@ def data_integer(text):
 
 
 def data_range(group):
-    """Return the first charge or hydrogen count that does not fit its field."""
+    """Return the first charge or hydrogen count that does not fit its field.
+
+    ReShiki imports the structure without that value and warns, so the result
+    differs from RDKit's by design and the consumers require success only.
+    """
     name = group.properties.get("FIELDNAME")
     if name == "MRV_COORDINATE_BOND_TYPE":
         if group.data and any(char not in "0123456789 +" for char in group.data[0]):
@@ -70,7 +77,7 @@ def data_range(group):
     elif name == "MRV_IMPLICIT_H":
         for data in group.data:
             if data.startswith("IMPL_H") and not 0 <= data_integer(data[6:]) <= 255:
-                return chemistry("substance_group_hydrogen_range", "Excessive hydrogen count")
+                return warned("substance_group_hydrogen_range")
     elif name == "ZBO":
         if group.bonds:
             raise ValueError("Zero-order bond")
@@ -82,9 +89,9 @@ def data_range(group):
             for value in values[: len(group.atoms)]:
                 value = data_integer(value)
                 if name == "ZCH" and not -128 <= value <= 127:
-                    return chemistry("substance_group_charge_range", "Excessive charge")
+                    return warned("substance_group_charge_range")
                 if name == "HYD" and not 0 <= value <= 255:
-                    return chemistry("substance_group_hydrogen_range", "Excessive hydrogen count")
+                    return warned("substance_group_hydrogen_range")
     return None
 
 
@@ -384,8 +391,20 @@ def input_generic(text):
     return None
 
 
-def generic_restriction(text, *, reaction=False):
-    """Return the exact first representability restriction, or no allowance."""
+def generic_restriction(text, *, reaction=False, original=True):
+    """Return the exact first representability restriction, or no allowance.
+
+    `original` says whether RDKit accepted the input. A rejection contract
+    needs that; a warned difference does not, because the value RDKit wrapped
+    can itself be what made it reject the input.
+    """
+    restriction = first_restriction(text, reaction)
+    if original or (restriction is not None and restriction["error"] is None):
+        return restriction
+    return None
+
+
+def first_restriction(text, reaction):
     # Rust str::lines splits LF/CRLF; Python splitlines also splits Unicode
     # separators and would produce incorrect physical error-line contracts.
     lines = [row.removesuffix("\r") for row in text.split("\n")]

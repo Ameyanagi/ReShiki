@@ -438,6 +438,7 @@ impl PythonEngine {
             is_3d: false,
             attachment_points: vec![None; n],
             dummy_labels: imported.prepared.dummy_labels,
+            notices: Vec::new(),
         };
         document::validate_molecule(&molecule).map_err(|e| e.to_string())?;
         #[derive(Deserialize)]

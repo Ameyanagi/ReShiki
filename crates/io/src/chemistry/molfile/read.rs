@@ -73,6 +73,10 @@ pub struct FileAnnotations {
     pub is_3d: bool,
     pub attachment_points: Vec<Option<i32>>,
     pub dummy_labels: Vec<Option<String>>,
+    /// What the reader left out, for the import to report. Excluded from
+    /// RDKit-compatible parser snapshots.
+    #[serde(skip)]
+    pub notices: Vec<String>,
 }
 
 impl Imported {
@@ -293,6 +297,7 @@ struct Parsed {
     groups: groups::Groups,
     chirality: bool,
     marked_3d: bool,
+    notices: Vec<String>,
 }
 #[derive(Clone, Copy)]
 enum Context {
@@ -316,6 +321,7 @@ impl Parsed {
             groups: groups::Groups::default(),
             chirality: false,
             marked_3d,
+            notices: Vec::new(),
         }
     }
     fn atom(&mut self, atom: Atom, position: Point3, meta: AtomMetadata, props: FileAtom) {
@@ -576,6 +582,7 @@ impl Parsed {
                 attachment_points: self.atoms.iter().map(|a| a.attachment).collect(),
                 singlets: self.atoms.iter().map(|a| a.singlet).collect(),
                 dummy_labels: self.atoms.into_iter().map(|a| a.dummy_label).collect(),
+                notices: self.notices,
             },
         })
     }

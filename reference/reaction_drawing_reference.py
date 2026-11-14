@@ -163,8 +163,8 @@ def emit(name, text):
                 text=text,
                 expected=result,
                 failure=failure,
-                generic_restriction=(
-                    generic_restriction(text, reaction=True) if result is not None else None
+                generic_restriction=generic_restriction(
+                    text, reaction=True, original=result is not None
                 ),
             )
         )

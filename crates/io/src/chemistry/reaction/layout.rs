@@ -101,6 +101,7 @@ impl SmilesReaction {
                         is_3d,
                         attachment_points: vec![None; n],
                         dummy_labels: part.prepared.dummy_labels,
+                        notices: Vec::new(),
                     },
                 };
                 document::validate_molecule(&source.molecule)?;

@@ -211,10 +211,11 @@ fn reaction_drawings_match_native_scene_assembly() -> anyhow::Result<()> {
                 .map(|doc| (e, doc))
         });
         let case_failures = if let Some(restriction) = &case.generic_restriction {
-            // #300 restricts these explicit generic RXN records, and a data
-            // group's charge or hydrogen count must fit its field. Keep the
+            // #300 restricts these explicit generic RXN records. Keep the
             // original drawing capture and require a valid legacy Document
             // plus the exact independently predicted read-stage rejection.
+            // A data group's out-of-range charge or hydrogen count is left
+            // out with a warning instead, so those two only have to read.
             let failure = if matches!(
                 restriction.category.as_str(),
                 "polymer_crossing_membership"
@@ -233,7 +234,7 @@ fn reaction_drawings_match_native_scene_assembly() -> anyhow::Result<()> {
                 )
             } else {
                 Some(format!(
-                    "Unclassified drawing restriction: {} ({})",
+                    "Unclassified drawing restriction: {} ({:?})",
                     restriction.category, restriction.error
                 ))
             };
@@ -422,6 +423,7 @@ fn reaction_completion_is_atomic_and_rejects_incomplete_labels() -> anyhow::Resu
             attachment_points: vec![None],
             dummy_labels: vec![None],
             generic: Default::default(),
+            notices: Vec::new(),
         },
     };
     let source = reaction::Imported {

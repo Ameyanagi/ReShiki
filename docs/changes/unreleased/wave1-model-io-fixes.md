@@ -19,8 +19,9 @@ issues: [1121]
   before matching the rotation.
 - Files that start with a UTF-8 byte-order mark now import. An RXN file used to
   fail with "Missing RXN header", and an InChI file was read as SMILES.
-- A MOL file whose `ZCH`, `HYD` or `IMPL_H` data group gives a charge or
-  hydrogen count that is out of range is now an error, as it is in `M  CHG`.
-  The value used to wrap, so a charge of 256 imported as 0.
+- A MOL or RXN file whose `ZCH`, `HYD` or `IMPL_H` data group gives a charge or
+  hydrogen count that is out of range now imports without that value, and an
+  import warning names the group and the value. The value used to wrap, so a
+  charge of 200 imported as -56.
 - Recovery drafts made with a newer ReShiki are no longer hidden. The status
   bar shows how many there are, with **Open folder** to find the files.
