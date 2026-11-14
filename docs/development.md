@@ -199,7 +199,7 @@ Windows ARM64 and Linux ARM64 remain release targets with package and installer 
 
 Install [Bun 1.4.4](https://bun.com/docs/installation), then run `bun install --frozen-lockfile` to install the web tools and Lefthook hooks. Use `bun run --bun lefthook install` to reinstall hooks. Python changes also need the uv development environment above.
 
-Hooks check staged file types: Oxlint and `bun fmt` for web and configuration files, Ruff/ty for Python, and Cargo fmt and Clippy for Rust. Clippy type-checks libraries and binaries; CI lints tests and examples on every pull request. They do not rewrite or restage changes. Rust checks run sequentially. The repository uses LF line endings, including on Windows.
+Pre-commit hooks check staged file types: Oxlint and `bun fmt` for web and configuration files, Ruff/ty for Python, and Cargo fmt for Rust. A pre-push hook runs Clippy when the push changes Rust or Cargo files. Clippy type-checks libraries and binaries; CI lints tests and examples on every pull request. Hooks do not rewrite or restage changes. The repository uses LF line endings, including on Windows.
 
 ```sh
 bun run lint:js

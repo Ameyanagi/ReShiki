@@ -8,21 +8,24 @@ pre-commit:
       glob: "*.{js,mjs,cjs,ts,tsx,jsx,json,css,html,md,mdx,yml,yaml,toml}"
       exclude: "assets/**"
       run: bun fmt --check --no-error-on-unmatched-pattern {staged_files}
+    # Python files and the two files that set the Python tools and their versions.
     ruff:
-      glob: "*.{py,toml,lock}"
+      glob: &python ["*.py", "pyproject.toml", "uv.lock"]
       run: uv run --locked ruff check reference scripts tests
     ruff-format:
-      glob: "*.{py,toml,lock}"
+      glob: *python
       run: uv run --locked ruff format --check reference scripts tests
     ty:
-      glob: "*.{py,toml,lock}"
+      glob: *python
       run: uv run --locked ty check
     cargo-fmt:
       glob: "*.{rs,toml,lock}"
       run: cargo fmt --all --check
-    # Clippy type-checks libraries and binaries with all features, so a
-    # separate `cargo check` would repeat the build. Tests and examples (about
-    # 100 targets) are linted by CI on every pull request, not on each commit.
+# Clippy type-checks every library and binary with all features, which is too
+# slow for each commit, so it runs once per push. Tests and examples (about 100
+# targets) are linted by CI on every pull request.
+pre-push:
+  commands:
     cargo-clippy:
       glob: "*.{rs,toml,lock}"
       run: cargo clippy --workspace --lib --bins --all-features --locked -- -D warnings
