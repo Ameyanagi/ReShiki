@@ -59,7 +59,8 @@ impl Record {
         match reshiki::storage::read(path) {
             Ok(bytes) => Self::parse(&bytes),
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                Self::change(path, Self::new(today), |_| true).map(|(record, _)| record)
+                let record = Self::new(today);
+                record.save(path).map(|()| record)
             }
             Err(_) => None,
         }
@@ -68,41 +69,9 @@ impl Record {
     fn parse(bytes: &[u8]) -> Option<Self> {
         serde_json::from_slice(bytes).ok()
     }
-    /// Applies `edit` to the saved record and saves it if `edit` returns true.
-    /// A lock beside the record keeps another running ReShiki from losing this
-    /// change, or this one from losing its. A file that a newer build wrote
-    /// meanwhile is kept as `.json.bad`, and `fallback` stands in for it.
-    /// `None` when the record cannot be read or saved.
-    fn change(
-        path: &Path,
-        fallback: Self,
-        edit: impl FnOnce(&mut Self) -> bool,
-    ) -> Option<(Self, bool)> {
+    fn save(&self, path: &Path) -> Option<()> {
         reshiki::storage::create_dir_all(path.parent()?).ok()?;
-        let lock = std::fs::File::options()
-            .create(true)
-            .truncate(false)
-            .write(true)
-            .open(path.with_extension("lock"))
-            .ok()?;
-        lock.lock().ok()?;
-        let mut record = match reshiki::storage::read(path) {
-            Ok(bytes) => match Self::parse(&bytes) {
-                Some(record) => record,
-                None => {
-                    reshiki::storage::write_atomic(&path.with_extension("json.bad"), &bytes)
-                        .ok()?;
-                    fallback
-                }
-            },
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => fallback,
-            Err(_) => return None,
-        };
-        let changed = edit(&mut record);
-        if changed {
-            reshiki::storage::write_atomic(path, &serde_json::to_vec(&record).ok()?).ok()?;
-        }
-        Some((record, changed))
+        reshiki::storage::write_atomic(path, &serde_json::to_vec(self).ok()?).ok()
     }
     /// Everything that the record, the day and the version decide.
     pub(super) fn may_ask(&self, today: NaiveDate, version: &str) -> bool {
@@ -208,14 +177,11 @@ pub(super) struct State {
     path: Option<PathBuf>,
     /// The record as last read or saved; `None` asks no more in this run.
     record: Option<Record>,
-    /// Asked in this run: never twice.
-    asked: bool,
     pub open: bool,
     last_input: Instant,
     focused: bool,
-    /// A mouse button or fingers held down, as in a drag.
+    /// A mouse button held down, as in a drag.
     pressed: bool,
-    fingers: Vec<iced::touch::Finger>,
 }
 
 impl State {
@@ -234,26 +200,22 @@ impl State {
         Self {
             path,
             record,
-            asked: false,
             open: false,
             last_input: Instant::now(),
             focused: true,
             pressed: false,
-            fingers: Vec::new(),
         }
     }
 
     /// Whether this run may still ask, perhaps after more uses or on a later day.
     fn waiting(&self) -> bool {
-        !self.asked
-            && self
-                .record
-                .as_ref()
-                .is_some_and(|record| match &record.state {
-                    Answer::Asking => true,
-                    Answer::Asked { version, .. } => feature_release(version, CURRENT_VERSION),
-                    Answer::Starred | Answer::Done => false,
-                })
+        self.record
+            .as_ref()
+            .is_some_and(|record| match &record.state {
+                Answer::Asking => true,
+                Answer::Asked { version, .. } => feature_release(version, CURRENT_VERSION),
+                Answer::Starred | Answer::Done => false,
+            })
     }
 
     /// A successful export or picture copy.
@@ -272,36 +234,34 @@ impl State {
         }
     }
 
-    /// [`Record::change`] on the saved record, which then replaces this run's
-    /// copy. A record that cannot be read or saved is dropped, so this run
-    /// asks no more. Returns whether `edit` changed it.
+    /// Reads the saved record again, so that another running ReShiki's count
+    /// or answer stays, applies `edit` and saves it if `edit` returns true. A
+    /// record that cannot be read or saved is dropped, so this run asks no
+    /// more. Returns whether `edit` changed it.
     fn change(&mut self, edit: impl FnOnce(&mut Record) -> bool) -> bool {
-        let (Some(record), Some(path)) = (self.record.take(), self.path.as_deref()) else {
+        let (Some(_), Some(path)) = (self.record.take(), self.path.as_deref()) else {
             return false;
         };
-        match Record::change(path, record, edit) {
-            Some((record, changed)) => {
-                self.record = Some(record);
-                changed
-            }
-            None => false,
+        let Some(mut record) = Record::load(path, today()) else {
+            return false;
+        };
+        let changed = edit(&mut record);
+        if changed && record.save(path).is_none() {
+            return false;
         }
+        self.record = Some(record);
+        changed
     }
 }
 
-/// The events the toast's timing needs: focus and held buttons and fingers
-/// always, and with `all` every other input too.
+/// The events the toast's timing needs: focus and held buttons always, and
+/// with `all` every other input too.
 fn input(event: iced::Event, all: bool) -> Option<Message> {
-    use iced::{Event, mouse, touch, window};
+    use iced::{Event, mouse, window};
     let held = matches!(
         event,
         Event::Window(window::Event::Focused | window::Event::Unfocused)
             | Event::Mouse(mouse::Event::ButtonPressed(_) | mouse::Event::ButtonReleased(_))
-            | Event::Touch(
-                touch::Event::FingerPressed { .. }
-                    | touch::Event::FingerLifted { .. }
-                    | touch::Event::FingerLost { .. }
-            )
     );
     let other = matches!(
         event,
@@ -311,47 +271,32 @@ fn input(event: iced::Event, all: bool) -> Option<Message> {
 }
 
 impl App {
-    /// Focus, held buttons and fingers are followed while this run may still
-    /// ask, so that the toast never opens in the background or mid-drag;
-    /// every input once the uses are reached; and the timer only while an ask
-    /// is due in a focused window on a drawing ReShiki owns.
+    /// Focus and held buttons are followed while this run may still ask, so
+    /// that the toast never opens in the background or mid-drag; every input
+    /// and the timer once the uses are reached.
     pub(super) fn star_subscription(&self) -> Subscription<Message> {
         if !self.star.waiting() {
             return Subscription::none();
         }
-        let all = self
+        if self
             .star
             .record
             .as_ref()
-            .is_some_and(|record| record.uses >= USES);
-        let events = if all {
-            iced::event::listen_with(|event, _, _| input(event, true))
+            .is_some_and(|record| record.uses >= USES)
+        {
+            Subscription::batch([
+                iced::event::listen_with(|event, _, _| input(event, true)),
+                iced::time::every(TICK).map(|_| Message::Star(Action::Tick)),
+            ])
         } else {
             iced::event::listen_with(|event, _, _| input(event, false))
-        };
-        let timer = if self.star_timer() {
-            iced::time::every(TICK).map(|_| Message::Star(Action::Tick))
-        } else {
-            Subscription::none()
-        };
-        Subscription::batch([events, timer])
-    }
-
-    fn star_timer(&self) -> bool {
-        self.star.waiting()
-            && self.star.focused
-            && self.tab.office.is_none()
-            && self
-                .star
-                .record
-                .as_ref()
-                .is_some_and(|record| record.may_ask(today(), CURRENT_VERSION))
+        }
     }
 
     pub(super) fn star_action(&mut self, action: Action) -> Task<Message> {
         match action {
             Action::Event(event) => {
-                use iced::{Event, mouse, touch, window};
+                use iced::{Event, mouse, window};
                 let star = &mut self.star;
                 star.last_input = Instant::now();
                 match event {
@@ -359,10 +304,6 @@ impl App {
                     Event::Window(window::Event::Unfocused) => star.focused = false,
                     Event::Mouse(mouse::Event::ButtonPressed(_)) => star.pressed = true,
                     Event::Mouse(mouse::Event::ButtonReleased(_)) => star.pressed = false,
-                    Event::Touch(touch::Event::FingerPressed { id, .. }) => star.fingers.push(id),
-                    Event::Touch(
-                        touch::Event::FingerLifted { id, .. } | touch::Event::FingerLost { id, .. },
-                    ) => star.fingers.retain(|finger| *finger != id),
                     _ => {}
                 }
             }
@@ -387,7 +328,6 @@ impl App {
                         .star
                         .change(|record| record.ask(today, CURRENT_VERSION))
                 {
-                    self.star.asked = true;
                     self.star.open = true;
                     return self.accessibility_refresh();
                 }
@@ -428,13 +368,12 @@ impl App {
             focused: self.star.focused,
             busy: self.star_busy(),
         };
-        !self.star.asked && should_ask(self.star.record.as_ref(), &moment)
+        should_ask(self.star.record.as_ref(), &moment)
     }
 
     /// Anything the toast must not interrupt, besides a focused field.
     fn star_busy(&self) -> bool {
         self.star.pressed
-            || !self.star.fingers.is_empty()
             || self.tab.office.is_some()
             || self.prompt.is_some()
             || self.pending.is_some()
@@ -452,7 +391,6 @@ impl App {
             || self.theme_library.editor.is_some()
             || self.imports.menu
             || self.imports.examples_menu
-            || self.imports.dragging()
             || self.tab.nmr.overlay_open()
             || self.tab.inspector_ui.menu_open()
             || self.tab.atom_text.is_some()

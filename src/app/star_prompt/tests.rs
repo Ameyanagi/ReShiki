@@ -148,7 +148,7 @@ fn asks_only_when_every_rule_holds() {
 }
 
 #[test]
-fn record_round_trips_and_keeps_a_newer_file() {
+fn record_round_trips_and_leaves_a_newer_file_alone() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("data/star-prompt.json");
     let today = day("2026-11-15");
@@ -179,11 +179,7 @@ fn record_round_trips_and_keeps_a_newer_file() {
             state,
             ..new.clone()
         };
-        let saved = Record::change(&path, new.clone(), |saved| {
-            *saved = record.clone();
-            true
-        });
-        assert_eq!(saved, Some((record.clone(), true)));
+        assert_eq!(record.save(&path), Some(()));
         assert_eq!(Record::load(&path, today), Some(record));
     }
 
@@ -192,15 +188,6 @@ fn record_round_trips_and_keeps_a_newer_file() {
     std::fs::write(&path, newer).unwrap();
     assert_eq!(Record::load(&path, today), None);
     assert_eq!(std::fs::read(&path).unwrap(), newer);
-    let bad = path.with_extension("json.bad");
-    assert!(!bad.exists());
-    // A change that finds one keeps a copy before replacing it.
-    assert_eq!(
-        Record::change(&path, new.clone(), |_| true),
-        Some((new.clone(), true))
-    );
-    assert_eq!(std::fs::read(&bad).unwrap(), newer);
-    assert_eq!(Record::load(&path, today), Some(new));
 
     // A file that cannot be read, or a folder that cannot be written, never asks.
     let folder = dir.path().join("folder.json");
@@ -225,17 +212,22 @@ fn a_record_that_stops_reading_or_saving_ends_the_asks_and_is_left_alone() {
     app.star.used();
     assert_eq!(app.star.record, None);
     assert!(path.is_dir());
-    assert!(!path.with_extension("json.bad").exists());
 
     // A valid record in a folder that cannot save the ask never shows the toast.
-    let (mut app, dir) = app_with(asking(today() - Days::new(1)));
-    let path = dir.path().join("star-prompt.json");
-    let before = std::fs::read(&path).unwrap();
-    std::fs::create_dir(path.with_extension("lock")).unwrap();
-    assert!(app.star.record.is_some(), "Loading only reads");
-    assert!(!tick(&mut app));
-    assert_eq!(app.star.record, None);
-    assert_eq!(std::fs::read(&path).unwrap(), before);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let (mut app, dir) = app_with(asking(today() - Days::new(1)));
+        let path = dir.path().join("star-prompt.json");
+        let before = std::fs::read(&path).unwrap();
+        let mode = |mode| std::fs::Permissions::from_mode(mode);
+        std::fs::set_permissions(dir.path(), mode(0o555)).unwrap();
+        assert!(app.star.record.is_some(), "Loading only reads");
+        assert!(!tick(&mut app));
+        std::fs::set_permissions(dir.path(), mode(0o755)).unwrap();
+        assert_eq!(app.star.record, None);
+        assert_eq!(std::fs::read(&path).unwrap(), before);
+    }
 }
 
 #[test]
@@ -426,12 +418,9 @@ fn the_toast_waits_for_a_quiet_moment_and_asks_once_per_run() {
         "Drawing in Word.rsk".into(),
         crate::session::Host::LibreOffice,
     ));
-    assert!(!app.star_timer(), "No timer for a drawing from LibreOffice");
     assert!(!tick(&mut app), "The drawing belongs to LibreOffice");
     app.tab.office = None;
-    assert!(app.star_timer());
     event(&mut app, Event::Window(window::Event::Unfocused));
-    assert!(!app.star_timer(), "No timer in the background");
     assert!(!tick(&mut app), "The window is in the background");
     event(&mut app, Event::Window(window::Event::Focused));
     event(
@@ -469,20 +458,19 @@ fn focus_and_held_input_are_followed_before_the_count_is_reached() {
     let moved = Event::Mouse(mouse::Event::CursorMoved {
         position: iced::Point::ORIGIN,
     });
-    let finger = |id| touch::Finger(id);
-    let pressed = Event::Touch(touch::Event::FingerPressed {
-        id: finger(1),
+    let touched = Event::Touch(touch::Event::FingerPressed {
+        id: touch::Finger(1),
         position: iced::Point::ORIGIN,
     });
-    // Until the count is reached, only focus and held buttons and fingers.
+    // Until the count is reached, only focus and held buttons.
     for (event, held) in [
         (Event::Window(window::Event::Unfocused), true),
         (
             Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
             true,
         ),
-        (pressed.clone(), true),
-        (moved.clone(), false),
+        (touched, false),
+        (moved, false),
     ] {
         assert_eq!(input(event.clone(), false).is_some(), held, "{event:?}");
         assert!(input(event, true).is_some());
@@ -508,53 +496,21 @@ fn focus_and_held_input_are_followed_before_the_count_is_reached() {
             .unwrap()
             .may_ask(today(), CURRENT_VERSION)
     );
-    assert!(!app.star_timer());
     assert!(!tick(&mut app), "Never in the background");
     event(&mut app, Event::Window(window::Event::Focused));
-    assert!(app.star_timer());
-
-    // A finger held still, as in a touch drag, keeps it closed until lifted or lost.
-    event(&mut app, pressed);
-    event(
-        &mut app,
-        Event::Touch(touch::Event::FingerPressed {
-            id: finger(2),
-            position: iced::Point::ORIGIN,
-        }),
-    );
-    event(
-        &mut app,
-        Event::Touch(touch::Event::FingerLifted {
-            id: finger(2),
-            position: iced::Point::ORIGIN,
-        }),
-    );
-    assert!(!tick(&mut app), "A finger is still down");
-    event(
-        &mut app,
-        Event::Touch(touch::Event::FingerLost {
-            id: finger(1),
-            position: iced::Point::ORIGIN,
-        }),
-    );
     assert!(tick(&mut app));
 }
 
 #[test]
-fn menus_panels_and_drags_keep_the_toast_away() {
+fn menus_and_panels_keep_the_toast_away() {
     type Open = fn(&mut App);
-    let cases: [(&str, Open); 6] = [
+    let cases: [(&str, Open); 5] = [
         ("Tabs ▾ menu", |app| app.tabs.menu = true),
         ("Assistant menu", |app| {
             app.assistant.menu = Some(crate::app::assistant::Menu::Models);
         }),
         ("Floating NMR palette", |app| app.tab.nmr.open = true),
         ("Insert menu", |app| app.imports.menu = true),
-        ("Files dragged over the window", |app| {
-            let _ = app.update(Message::Imports(import::Action::Hovered(
-                "Molecule.mol".into(),
-            )));
-        }),
         ("Updates", |app| app.updates.open = true),
     ];
     for (name, open) in cases {
@@ -683,6 +639,19 @@ impl Ui {
                 operation,
             );
         });
+    }
+
+    fn focus(&mut self, app: &App, id: &str) {
+        let mut focus: Box<dyn iced::advanced::widget::Operation> =
+            Box::new(reshiki::accessibility::FocusControl::new(id));
+        loop {
+            self.operate(app, focus.as_mut());
+            match focus.finish() {
+                iced::advanced::widget::operation::Outcome::Chain(next) => focus = next,
+                _ => break,
+            }
+        }
+        assert_eq!(self.focused(app), [id]);
     }
 
     fn focused(&mut self, app: &App) -> Vec<String> {
@@ -824,16 +793,7 @@ async fn the_toast_takes_no_focus_is_reached_by_tab_and_returns_focus_to_the_dra
     benzene(&mut app);
     // Not while a field has the keyboard.
     let _ = app.update(Message::Inspector(crate::app::InspectorTab::Import));
-    let mut focus: Box<dyn iced::advanced::widget::Operation> =
-        Box::new(reshiki::accessibility::FocusControl::new(import::INPUT));
-    loop {
-        ui.operate(&app, focus.as_mut());
-        match focus.finish() {
-            iced::advanced::widget::operation::Outcome::Chain(next) => focus = next,
-            _ => break,
-        }
-    }
-    assert_eq!(ui.focused(&app), [import::INPUT]);
+    ui.focus(&app, import::INPUT);
     idle(&mut app);
     ui.update(&mut app, Message::Star(Action::Tick)).await;
     assert!(!app.star.open, "The Import field has the keyboard");
@@ -869,6 +829,27 @@ async fn the_toast_takes_no_focus_is_reached_by_tab_and_returns_focus_to_the_dra
     assert!(!app.star.open);
     assert!(ui.focused(&app).is_empty(), "Focus returns to the drawing");
     assert!(!ui.ids(&app).iter().any(|id| id.starts_with("star-")));
+}
+
+#[tokio::test]
+#[ignore = "Opt-in renderer check"]
+async fn the_updates_link_stars_reshiki_on_github() {
+    let mut ui = Ui::new().await;
+    let (mut app, _dir) = app_with(asking(today() - Days::new(1)));
+    app.updates.open = true;
+    ui.focus(&app, "updates-star");
+    let messages = ui.key(&app, iced::keyboard::key::Named::Enter);
+    assert!(matches!(
+        messages.as_slice(),
+        [Message::Star(Action::Star { toast: false })]
+    ));
+    // The task that opens the browser is dropped here, not run.
+    for message in messages {
+        let _ = app.update(message);
+    }
+    assert_eq!(saved_record(&app).unwrap().state, Answer::Starred);
+    assert!(!app.star.waiting(), "The toast never asks");
+    assert!(app.updates.open, "About stays open");
 }
 
 #[tokio::test]
