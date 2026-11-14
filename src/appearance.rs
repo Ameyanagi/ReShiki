@@ -124,6 +124,10 @@ impl Default for Settings {
 #[cfg(test)]
 mod settings_tests;
 impl Settings {
+    /// The background of copied pictures.
+    pub fn copy_paper(&self) -> reshiki::export::Background {
+        self.copy_background.paper(self.custom_background)
+    }
     fn path() -> Result<std::path::PathBuf, String> {
         let root = std::env::var_os("RESHIKI_DATA_DIR")
             .map(std::path::PathBuf::from)

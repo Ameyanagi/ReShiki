@@ -387,14 +387,9 @@ impl App {
         &self,
         background: Option<reshiki::export::Background>,
     ) -> reshiki::clipboard::Pictures {
-        let appearance = &self.appearance;
         reshiki::clipboard::Pictures {
-            background: background.unwrap_or_else(|| {
-                appearance
-                    .copy_background
-                    .paper(appearance.custom_background)
-            }),
-            editable: appearance.export_editable_drawing,
+            background: background.unwrap_or_else(|| self.appearance.copy_paper()),
+            editable: self.appearance.export_editable_drawing,
         }
     }
 

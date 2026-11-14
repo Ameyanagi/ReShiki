@@ -460,6 +460,20 @@ fn picture_backgrounds_paint_the_png_and_swap_black_and_white_ink() {
     }
 }
 
+/// Office rebuilds the preview of an edited drawing on Copy's background.
+#[cfg(windows)]
+#[test]
+fn office_preview_rebuild_keeps_the_copy_background() {
+    let doc = dark_ink_drawing();
+    let white = office_preview(&doc, Background::Color([255; 3])).unwrap();
+    let pixels = rgba(&white.png);
+    assert_eq!(pixels[0], [255; 4]);
+    assert!(pixels.iter().any(|p| *p == [0, 0, 0, 255]), "dark ink");
+    let transparent = office_preview(&doc, Background::Transparent).unwrap();
+    assert_eq!(rgba(&transparent.png)[0], [0; 4]);
+    assert_ne!(white.metafile, transparent.metafile);
+}
+
 #[test]
 fn picture_backgrounds_keep_palette_and_element_colors() {
     use crate::{

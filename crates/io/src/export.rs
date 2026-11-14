@@ -291,11 +291,16 @@ pub fn clipboard_figure_with_drawing(
     )
 }
 
+/// Office's preview of an embedded drawing, rebuilt after it is edited, on
+/// the same background as the first Copy.
 #[cfg(windows)]
-pub fn office_preview(doc: &Document) -> Result<reshiki_windows::OfficePreview, String> {
+pub fn office_preview(
+    doc: &Document,
+    background: Background,
+) -> Result<reshiki_windows::OfficePreview, String> {
     Ok(reshiki_windows::OfficePreview {
-        png: clipboard_png(doc)?,
-        metafile: crate::native_windows::office_metafile(doc, Background::Transparent)?,
+        png: clipboard_figure_with_drawing(doc, "png", background, None)?.bytes,
+        metafile: crate::native_windows::office_metafile(doc, background)?,
     })
 }
 

@@ -74,7 +74,10 @@ fn main() -> iced::Result {
         if launch::gui_flag(std::env::args_os().skip(1), "--ole-server") {
             let result = reshiki_windows::run_office_server(|bytes| {
                 let document = reshiki::document::Document::from_json(bytes)?;
-                reshiki::export::office_preview(&document)
+                reshiki::export::office_preview(
+                    &document,
+                    appearance::Settings::load().copy_paper(),
+                )
             });
             if let Err(error) = result {
                 eprintln!("Office integration failed: {error}");
