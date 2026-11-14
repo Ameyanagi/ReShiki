@@ -253,10 +253,6 @@ jobs:
       - *actions_runtime
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: rustup toolchain install 1.99.1 --profile minimal && rustup default 1.99.1
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
-        with:
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-          shared-key: linux-x11
       - name: Run native clipboard regressions serially on a private display
         run: |
           # Tests briefly release their last connection; keep the X server ready.
@@ -569,9 +565,13 @@ jobs:
       - run: rustup toolchain install 1.99.1 --profile minimal --target ${{ matrix.target }}
       - run: rustup default 1.99.1
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        # One cache, not one per target (2.5 GB of the 10 GB repository limit):
+        # Windows x64 gains most from it on pull requests (about 3.5 minutes);
+        # the other targets build cold in 4 to 8 minutes, off the critical path.
+        if: matrix.target == 'x86_64-pc-windows-msvc'
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
-          shared-key: geometry-${{ matrix.target }}
+          shared-key: geometry
       - name: Select the native Windows compiler
         if: runner.os == 'Windows'
         uses: ./.github/actions/setup-msvc
