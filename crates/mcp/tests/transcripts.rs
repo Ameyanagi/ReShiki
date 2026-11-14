@@ -13,6 +13,7 @@ mod fake_host;
 
 use fake_host::{FakeHost, SPECS};
 use reshiki_agent::{
+    access::GrantSummary,
     ops::wire::{Principal, RequestId},
     tool_spec::ToolSpec,
 };
@@ -113,6 +114,7 @@ impl Session {
             },
             Identity {
                 app_version: fake_host::APP_VERSION.into(),
+                grants: GrantSummary::default(),
             },
             limits,
             Log::silent(),
@@ -705,6 +707,7 @@ fn an_invalid_catalog_is_refused_before_serving() {
                 move || output_writer,
                 Identity {
                     app_version: fake_host::APP_VERSION.into(),
+                    grants: GrantSummary::default(),
                 },
                 Limits::default(),
                 Log::silent(),

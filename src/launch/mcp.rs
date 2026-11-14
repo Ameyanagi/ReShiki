@@ -237,7 +237,8 @@ pub(crate) fn mcp(args: Vec<OsString>) -> ! {
     };
     let (log, log_done) = Log::start(io::stderr, level);
     reshiki_mcp::install_panic_hook(log.clone());
-    log.notice(BANNER, &banner(CURRENT_VERSION, &grants.summary(), level));
+    let summary = grants.summary();
+    log.notice(BANNER, &banner(CURRENT_VERSION, &summary, level));
     #[cfg(windows)]
     log.event(
         Level::Debug,
@@ -275,6 +276,7 @@ pub(crate) fn mcp(args: Vec<OsString>) -> ! {
         || io::stdout().lock(),
         Identity {
             app_version: CURRENT_VERSION.into(),
+            grants: summary,
         },
         limits,
         log.clone(),

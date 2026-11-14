@@ -116,6 +116,35 @@ fn initialize_names_the_server_experimental() {
     assert_eq!(result["protocolVersion"], "2025-11-25", "{initialized}");
     assert_eq!(result["serverInfo"]["title"], TITLE, "{initialized}");
     assert_instructions(result);
+    let instructions = result["instructions"].as_str().unwrap();
+    assert!(
+        instructions.contains(" No folders are granted: use import and export. "),
+        "{instructions}"
+    );
+    finish(session);
+}
+
+#[test]
+fn instructions_state_the_granted_folders() {
+    let folders = tempfile::tempdir().unwrap();
+    let read = folders.path().join("in");
+    let write = folders.path().join("out");
+    std::fs::create_dir(&read).unwrap();
+    std::fs::create_dir(&write).unwrap();
+    let (read, write) = (read.to_str().unwrap(), write.to_str().unwrap());
+    let args = ["--allow-read", read, "--allow-write", write];
+    let mut session = McpSession::start(&args, StderrMode::Captured);
+    session.send(json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "server/discover",
+        "params": {"_meta": headless::modern_meta()},
+    }));
+    let discovered = session.recv_for(Some(&json!(1)), LINE_TIMEOUT);
+    let instructions = discovered["result"]["instructions"].as_str().unwrap();
+    let granted =
+        format!(" Granted folders: file_open reads {read:?}; file_save writes {write:?}. ");
+    assert!(instructions.contains(&granted), "{instructions}");
     finish(session);
 }
 
