@@ -52,6 +52,7 @@ disallowed-methods = [
   { path = "tokio::fs::try_exists", reason = "reshiki-mcp never touches the filesystem; file tools go through reshiki_agent::access grants", allow-invalid = true },
   { path = "cap_std::ambient_authority", reason = "ambient cap-std authority is used only by reshiki_agent::access when it opens a granted root" },
   { path = "reshiki_model::storage::write_atomic", reason = "ReShiki's ambient file helpers bypass reshiki_agent::access grants" },
+  { path = "reshiki_model::storage::write_saved", reason = "ReShiki's ambient file helpers bypass reshiki_agent::access grants" },
   { path = "reshiki_model::pictures::Picture::open", reason = "ReShiki's ambient file helpers bypass reshiki_agent::access grants" },
   { path = "reshiki_model::theme_files::load", reason = "ReShiki's ambient file helpers bypass reshiki_agent::access grants" },
   { path = "reshiki_model::theme_files::save", reason = "ReShiki's ambient file helpers bypass reshiki_agent::access grants" },

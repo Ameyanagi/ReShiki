@@ -84,10 +84,19 @@ fn saving_keeps_the_file_mode_and_writes_through_a_symbolic_link() {
     let mode = |path: &Path| std::fs::metadata(path).unwrap().permissions().mode() & 0o777;
     let usual = directory.path().join("usual");
     std::fs::write(&usual, b"").unwrap();
+    let draft = directory.path().join("draft.reshiki");
+    write_atomic(&draft, b"private").unwrap();
+    assert_eq!(mode(&draft), 0o600, "an application file stays private");
     let path = directory.path().join("drawing.reshiki");
-    write_atomic(&path, b"first").unwrap();
-    assert_eq!(mode(&path), mode(&usual), "a new file gets the usual mode");
+    write_saved(&path, b"first").unwrap();
+    assert_eq!(
+        mode(&path),
+        mode(&usual),
+        "a saved file gets the usual mode"
+    );
     std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o640)).unwrap();
+    write_saved(&path, b"second").unwrap();
+    assert_eq!(mode(&path), 0o640);
     write_atomic(&path, b"second").unwrap();
     assert_eq!(mode(&path), 0o640);
     let link = directory.path().join("link.reshiki");

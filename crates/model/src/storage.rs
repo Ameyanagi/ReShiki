@@ -29,9 +29,24 @@ pub fn with_default_extension(path: &Path, extension: &str) -> PathBuf {
 
 /// Replace only after the complete file has been written beside its destination.
 /// A symbolic link stays a link and the file it names is replaced. On Unix the
-/// replaced file keeps its mode, and a new file gets 0666 less the umask, as
-/// `File::create` gives, rather than tempfile's private 0600.
+/// replaced file keeps its mode, and a new file is private to its owner (0600):
+/// recovery drafts, settings and caches are written here.
 pub fn write_atomic(path: &Path, bytes: &[u8]) -> Result<(), String> {
+    write(path, bytes, 0o600)
+}
+
+/// [`write_atomic`] for a file the user saves. On Unix a new file gets 0666
+/// less the umask, as `File::create` gives.
+pub fn write_saved(path: &Path, bytes: &[u8]) -> Result<(), String> {
+    write(path, bytes, 0o666)
+}
+
+fn write(
+    path: &Path,
+    bytes: &[u8],
+    #[cfg(unix)] mode: u32,
+    #[cfg(not(unix))] _: u32,
+) -> Result<(), String> {
     #[cfg(target_arch = "wasm32")]
     if let Some(key) = browser::key(path) {
         return browser::write(&key, bytes);
@@ -49,7 +64,7 @@ pub fn write_atomic(path: &Path, bytes: &[u8]) -> Result<(), String> {
     let mut temp = {
         use std::{fs::Permissions, os::unix::fs::PermissionsExt};
         let temp = tempfile::Builder::new()
-            .permissions(Permissions::from_mode(0o666))
+            .permissions(Permissions::from_mode(mode))
             .tempfile_in(parent)
             .map_err(|e| e.to_string())?;
         if let Ok(metadata) = std::fs::metadata(path) {

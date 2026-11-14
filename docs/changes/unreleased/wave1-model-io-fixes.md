@@ -10,8 +10,9 @@ issues: [1121]
   radical, a lone pair or other mark, or a stereo group. Fusing used to delete
   them without notice.
 - Saving over a file keeps its permissions, and saving through a symbolic link
-  writes to the linked file instead of replacing the link. New files get the
-  usual permissions instead of owner-only ones. This applies to macOS and Linux.
+  writes to the linked file instead of replacing the link. A newly saved file
+  gets the usual permissions instead of owner-only ones; recovery drafts and
+  settings stay owner-only. This applies to macOS and Linux.
 - **Clean up…** with **Keep orientation** no longer mirrors the drawing. When
   the new layout is the mirror image of the drawing, ReShiki reflects it back
   before matching the rotation.
