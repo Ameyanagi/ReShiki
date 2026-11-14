@@ -88,7 +88,7 @@ no captured aromaticity request uses.
 `aromatic-cleanup-source.py.gz` retains `reference/engine/cleanup.py` from
 commit `568513c2333a7f1402eef86fca8ba9efca7f9cea`, decompressed SHA256
 `409651d999583092d04bae7a01513922057affea732f709928d7db82c92ee20c`. The live
-worker later tried the mirrored orientation candidate during cleanup (#1121),
+module later tried the mirrored orientation candidate during cleanup (#1121),
 which no captured aromaticity request uses.
 
 These are the original recorded hashes in all three fixture headers. The current

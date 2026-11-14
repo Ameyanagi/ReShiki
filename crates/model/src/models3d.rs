@@ -1836,7 +1836,7 @@ fn same_geometry(a: &Model3d, b: &Model3d) -> bool {
             .all(|(old, new)| old == new || new.is_none())
 }
 
-pub(crate) fn prune_sources(model: &mut Model3d, present: &HashSet<u64>) {
+fn prune_sources(model: &mut Model3d, present: &HashSet<u64>) {
     model.linked_atoms.retain(|id| present.contains(id));
     if let Some(generated) = &mut model.generated {
         for source in &mut generated.sources {

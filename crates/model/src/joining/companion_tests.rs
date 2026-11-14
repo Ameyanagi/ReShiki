@@ -167,6 +167,49 @@ fn sharing_an_atom_keeps_the_surviving_links_of_the_moved_model() {
 }
 
 #[test]
+fn joining_a_model_through_all_of_its_atoms_drops_the_model() {
+    use crate::models3d::{ForceField, Model3d, Placed};
+    // A lone atom shared onto a host atom, and a C-C fused along a host bond.
+    for fuse in [false, true] {
+        let mut doc = Document::default();
+        let mut atoms = vec![doc.add_atom("C", Point::new(180., 0.))];
+        if fuse {
+            atoms.push(doc.add_atom("C", Point::new(222., 0.)));
+            doc.add_bond(atoms[0], atoms[1], 1, "plain");
+        }
+        let placed = atoms
+            .iter()
+            .zip([0., 1.5])
+            .map(|(id, x)| Placed {
+                id: *id,
+                xyz: [x, 0., 0.],
+            })
+            .collect();
+        let model = Model3d::new(&doc, placed, vec![], ForceField::Mmff94s);
+        doc.models.push(model);
+        crate::models3d::require_version(&mut doc);
+        host(&mut doc);
+        doc.validate().unwrap();
+        let (point, anchor, mode) = if fuse {
+            (
+                Point::new(21., 0.),
+                Anchor::Bond(atoms[0], atoms[1]),
+                Connection::FuseBond,
+            )
+        } else {
+            (
+                Point::default(),
+                Anchor::Atom(atoms[0]),
+                Connection::ShareAtom,
+            )
+        };
+        let prepared = Prepared::new(&doc, &atoms).unwrap();
+        let (joined, _) = prepared.place(point, None, 5., anchor, mode).unwrap();
+        assert!(joined.models.is_empty(), "fuse {fuse}");
+    }
+}
+
+#[test]
 fn sharing_an_atom_between_two_depth_painted_molecules_keeps_the_host_scope() {
     let (mut doc, atoms) = fixture();
     doc.depth_appearance
@@ -187,7 +230,7 @@ fn sharing_an_atom_between_two_depth_painted_molecules_keeps_the_host_scope() {
 }
 
 #[test]
-fn sharing_an_atom_between_two_named_molecules_keeps_the_host_name() {
+fn sharing_an_atom_between_two_named_molecules_is_not_refused() {
     let (mut doc, atoms) = fixture();
     let annotation = caption(&mut doc, "methanol", Point::new(180., 30.));
     doc.molecule_names.push(MoleculeName {
