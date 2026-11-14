@@ -28,6 +28,19 @@ struct ClassCache {
     calculations: usize,
 }
 
+/// What Molecular properties shows for a drawing with attachment points:
+/// the formula, the mass and the number of defined atoms, if they can be
+/// counted. Without it every view checks and analyzes the drawing again.
+#[derive(Default)]
+struct CompositionCache {
+    /// Revision, file epoch and the whole selection: a selected bracket
+    /// changes the result as much as a selected atom.
+    key: Option<(u64, u64, Vec<u64>)>,
+    shown: Option<(String, f64, usize)>,
+    #[cfg(test)]
+    calculations: usize,
+}
+
 fn molecular_weight(mass: f64, two_decimal_weight: bool) -> String {
     let precision = if two_decimal_weight { 2 } else { 3 };
     format!("{mass:.precision$}")
@@ -311,6 +324,7 @@ pub(super) struct State {
     properties: Option<(PropertyKey, Result<Analysis, String>)>,
     whole_properties: Option<(PropertyKey, Result<Analysis, String>)>,
     classes: RefCell<ClassCache>,
+    composition: RefCell<CompositionCache>,
     arrow_hints: Option<(u64, u64, Vec<reshiki::reactions::ArrowSemanticsHint>)>,
 }
 impl State {
@@ -1218,29 +1232,48 @@ impl App {
             return container(body).padding(10).into();
         }
         if reshiki::attachments::present(&self.tab.doc) {
-            let selected = (!self.tab.selected.is_empty())
-                .then(|| reshiki::editing::selection(&self.tab.doc, &self.tab.selected));
-            let doc = selected.as_ref().unwrap_or(&self.tab.doc);
+            let (revision, epoch) = (self.tab.revision, self.tab.file_epoch);
+            let mut cache = self.tab.inspector_ui.composition.borrow_mut();
+            if !cache.key.as_ref().is_some_and(|(cached, file, ids)| {
+                (*cached, *file) == (revision, epoch) && *ids == self.tab.selected
+            }) {
+                let selected = (!self.tab.selected.is_empty())
+                    .then(|| reshiki::editing::selection(&self.tab.doc, &self.tab.selected));
+                let doc = selected.as_ref().unwrap_or(&self.tab.doc);
+                cache.shown = reshiki::attachments::composition(doc)
+                    .ok()
+                    .map(|composition| {
+                        (
+                            composition.display_formula,
+                            composition.mass,
+                            doc.atoms.iter().filter(|a| a.element != "*").count(),
+                        )
+                    });
+                cache.key = Some((revision, epoch, self.tab.selected.clone()));
+                #[cfg(test)]
+                {
+                    cache.calculations += 1;
+                }
+            }
             let mut body = column![
                 text(reshiki::attachments::ANALYSIS_NOTICE)
                     .size(11)
                     .style(muted_text)
             ]
             .spacing(8);
-            if let Ok(composition) = reshiki::attachments::composition(doc) {
+            if let Some((formula, mass, atoms)) = &cache.shown {
                 body = body
                     .push(
                         text(format!(
                             "{} · {}\u{a0}g/\u{2060}mol",
-                            self.shown_formula(&composition.display_formula),
-                            molecular_weight(composition.mass, self.appearance.two_decimal_weight)
+                            self.shown_formula(formula),
+                            molecular_weight(*mass, self.appearance.two_decimal_weight)
                         ))
                         .size(14),
                     )
                     .push(
                         text(format!(
-                            "{} defined atoms · Attachment points excluded",
-                            doc.atoms.iter().filter(|a| a.element != "*").count()
+                            "{atoms} defined atoms · Attachment points excluded"
                         ))
                         .size(11)
                         .style(muted_text),

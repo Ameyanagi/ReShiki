@@ -873,6 +873,54 @@ fn a_view_finds_the_opened_section_once() {
 }
 
 #[test]
+fn attachment_composition_is_counted_once_per_drawing_and_selection() {
+    use reshiki::document::Point;
+    let (mut app, _) = App::new();
+    let ring = reshiki::editing::ring(&mut app.tab.doc, Point::default(), 6, false, 42.);
+    let other = reshiki::editing::ring(&mut app.tab.doc, Point::new(300., 0.), 5, false, 42.);
+    let point = reshiki::attachments::add(
+        &mut app.tab.doc,
+        &ring,
+        reshiki::attachments::Kind::MultiCenter,
+    )
+    .unwrap();
+    let counted = |app: &App| {
+        drop(app.view());
+        let cache = app.tab.inspector_ui.composition.borrow();
+        (cache.calculations, cache.shown.clone().map(|shown| shown.2))
+    };
+    assert_eq!(counted(&app), (1, Some(11)));
+    assert_eq!(
+        counted(&app),
+        (1, Some(11)),
+        "an unchanged view counts again"
+    );
+    app.tab.selected = ring.iter().copied().chain([point]).collect();
+    assert_eq!(counted(&app), (2, Some(6)));
+    assert_eq!(counted(&app), (2, Some(6)));
+    // A selected object that is no atom is part of the scope too.
+    let arrow = app.tab.doc.next_id();
+    app.tab.doc.arrows.push(reshiki::document::Arrow::new(
+        arrow,
+        Point::new(0., 200.),
+        Point::new(80., 200.),
+        Default::default(),
+        Default::default(),
+    ));
+    app.tab.selected.push(arrow);
+    assert_eq!(counted(&app), (3, Some(6)));
+    app.tab.selected.clear();
+    let before = app.tab.doc.clone();
+    app.tab.doc.atoms.retain(|atom| atom.id != other[0]);
+    app.tab
+        .doc
+        .bonds
+        .retain(|bond| bond.a != other[0] && bond.b != other[0]);
+    app.changed(before);
+    assert_eq!(counted(&app), (4, Some(10)), "an edit is counted");
+}
+
+#[test]
 fn selected_2d_crystal_opens_structure() {
     use reshiki::models3d::Display;
     let (mut app, _) = App::new();
