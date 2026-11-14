@@ -293,7 +293,7 @@ fn an_unanswered_toast_counts_as_an_ask_after_a_restart() {
 }
 
 #[test]
-fn every_export_and_picture_copy_counts_once_wherever_its_drawing_went() {
+fn every_export_and_copy_counts_once_wherever_its_drawing_went() {
     let (mut app, _dir) = app_with(Record {
         uses: 0,
         ..asking(day("2026-11-01"))
@@ -339,44 +339,38 @@ fn every_export_and_picture_copy_counts_once_wherever_its_drawing_went() {
         selected: vec![],
     };
     let _ = app.receive(Message::CopyAsWritten(
-        key(&app, CopyFormat::Smiles),
-        false,
-        Ok(vec![]),
-    ));
-    let _ = app.receive(Message::CopyAsWritten(
         key(&app, CopyFormat::Png),
-        true,
         Err("Busy".into()),
     ));
-    // Without native clipboard support, Copy As SVG puts its source on the
-    // clipboard as text.
-    let _ = app.receive(Message::CopyAsWritten(
-        key(&app, CopyFormat::Svg),
-        false,
-        Ok(vec![]),
-    ));
-    assert_eq!(uses(&app), 0, "Text copies and failed copies do not count");
-    let _ = app.receive(Message::CopyAsWritten(
-        key(&app, CopyFormat::Svg),
-        true,
-        Ok(vec![]),
-    ));
-    assert_eq!(uses(&app), 1);
-    let written = |image_only| Message::ClipboardWritten {
+    let failed = Message::ClipboardWritten {
         epoch: 0,
         revision: 0,
         cut_ids: vec![],
-        result: Ok(CopyOutcome {
-            external_editable: false,
-            image_only,
-            notices: vec![],
-        }),
+        result: Err("Busy".into()),
     };
-    let _ = app.receive(written(true));
-    assert_eq!(uses(&app), 2);
-    // Copy puts a picture on the clipboard, except on Windows.
-    let _ = app.receive(written(false));
-    assert_eq!(uses(&app), 2 + u32::from(!cfg!(windows)));
+    let _ = app.receive(failed);
+    assert_eq!(uses(&app), 0, "Failed copies do not count");
+    // Copy As text, such as SMILES or CDXML for ChemDraw, counts as much as a
+    // picture.
+    let _ = app.receive(Message::CopyAsWritten(
+        key(&app, CopyFormat::Smiles),
+        Ok(vec![]),
+    ));
+    assert_eq!(uses(&app), 1);
+    // Copy counts on every platform, as does Copy Image.
+    for image_only in [false, true] {
+        let _ = app.receive(Message::ClipboardWritten {
+            epoch: 0,
+            revision: 0,
+            cut_ids: vec![],
+            result: Ok(CopyOutcome {
+                external_editable: false,
+                image_only,
+                notices: vec![],
+            }),
+        });
+    }
+    assert_eq!(uses(&app), 3);
     let before = uses(&app);
 
     // A copy that finishes after its drawing was replaced, or an export after
@@ -386,7 +380,7 @@ fn every_export_and_picture_copy_counts_once_wherever_its_drawing_went() {
     let id = app.tab.id;
     let _ = app.receive(Message::Tab(
         id,
-        Box::new(Message::CopyAsWritten(replaced, true, Ok(vec![]))),
+        Box::new(Message::CopyAsWritten(replaced, Ok(vec![]))),
     ));
     assert_eq!(uses(&app), before + 1);
     let _ = app.close_active_tab();
@@ -850,6 +844,21 @@ async fn the_updates_link_stars_reshiki_on_github() {
     assert_eq!(saved_record(&app).unwrap().state, Answer::Starred);
     assert!(!app.star.waiting(), "The toast never asks");
     assert!(app.updates.open, "About stays open");
+}
+
+#[tokio::test]
+#[ignore = "Opt-in renderer check"]
+async fn help_about_leads_to_the_star_link() {
+    let mut ui = Ui::new().await;
+    let (mut app, _dir) = app_with(asking(today() - Days::new(1)));
+    let _ = app.update(Message::ToggleHelp);
+    ui.focus(&app, "help-about");
+    for message in ui.key(&app, iced::keyboard::key::Named::Enter) {
+        let _ = app.update(message);
+    }
+    assert!(!app.help_open, "Help closes");
+    assert!(app.updates.open, "About opens");
+    assert!(ui.ids(&app).iter().any(|id| id == "updates-star"));
 }
 
 #[tokio::test]

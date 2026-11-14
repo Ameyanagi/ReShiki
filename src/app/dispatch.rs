@@ -266,7 +266,7 @@ impl App {
             Message::Naming(action) => return self.naming_action(action),
             Message::Shortcut(action) => return self.shortcut_action(action),
             Message::CopyAsPrepared(key, result) => return self.copy_as_prepared(key, *result),
-            Message::CopyAsWritten(key, _, result) => self.copy_as_written(key, result),
+            Message::CopyAsWritten(key, result) => self.copy_as_written(key, result),
             Message::ClipboardWritten {
                 epoch,
                 revision,

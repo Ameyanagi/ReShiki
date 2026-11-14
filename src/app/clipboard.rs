@@ -339,18 +339,11 @@ impl App {
                 self.error = true;
                 return Task::none();
             };
-            return write_text(text).chain(Task::done(Message::CopyAsWritten(
-                key,
-                false,
-                Ok(copy.notices),
-            )));
+            return write_text(text)
+                .chain(Task::done(Message::CopyAsWritten(key, Ok(copy.notices))));
         }
-        let picture = matches!(
-            key.format,
-            CopyFormat::Png | CopyFormat::Svg | CopyFormat::Pdf
-        );
         Task::perform(reshiki::clipboard::write_prepared(copy), move |result| {
-            Message::CopyAsWritten(key.clone(), picture, result)
+            Message::CopyAsWritten(key.clone(), result)
         })
     }
 

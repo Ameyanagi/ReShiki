@@ -182,7 +182,7 @@ fn copy_as_work_and_receipts_stay_with_the_originating_tab() {
             let message = if preparing {
                 Message::CopyAsPrepared(key, Box::new(Err("No structure output".into())))
             } else {
-                Message::CopyAsWritten(key, false, Ok(vec!["Retained format warning".into()]))
+                Message::CopyAsWritten(key, Ok(vec!["Retained format warning".into()]))
             };
             let _ = app.update(Message::Tab(id, Box::new(message)));
             front.assert_unchanged(&app);

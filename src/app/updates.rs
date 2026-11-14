@@ -104,6 +104,8 @@ impl App {
             Action::Show(open) => {
                 if !self.updates.restarting {
                     self.updates.open = open;
+                    // Help > About replaces Help.
+                    self.help_open &= !open;
                 }
             }
             Action::Poll => {

@@ -286,8 +286,7 @@ pub enum Message {
         clipboard::CopyAsKey,
         Box<Result<reshiki::clipboard::PreparedCopy, String>>,
     ),
-    /// Copy As finished; `true` once a picture, not text, is on the clipboard.
-    CopyAsWritten(clipboard::CopyAsKey, bool, Result<Vec<String>, String>),
+    CopyAsWritten(clipboard::CopyAsKey, Result<Vec<String>, String>),
     ClipboardWritten {
         epoch: u64,
         revision: u64,
@@ -944,7 +943,7 @@ impl App {
             .map(|p| &p.document)
             .unwrap_or(&self.tab.doc)
     }
-    /// The runtime's entry point. A finished export or picture copy counts
+    /// The runtime's entry point. A finished export or copy counts
     /// toward the GitHub star prompt here, once, even when its drawing has
     /// since closed or changed.
     pub fn receive(&mut self, message: Message) -> Task<Message> {

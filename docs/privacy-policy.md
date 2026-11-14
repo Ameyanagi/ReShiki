@@ -24,8 +24,8 @@ The network features below are separate from local drawing and calculations.
 ## GitHub star request
 
 The desktop app asks once whether you would star ReShiki on GitHub. It asks
-after you have exported a file or copied a picture five times, on a later day
-than your first launch, when you have not touched the window for 30 seconds. It
+after you have exported or copied a drawing five times, on a later day than
+your first launch, when you have not touched the window for 30 seconds. It
 never asks while you type in a field, drag, or have a menu, panel or dialog
 open. It never asks in a drawing from Office or LibreOffice, in the browser
 editor, or from the command line. **Star on GitHub** opens the project page in
@@ -33,8 +33,8 @@ your browser. Without a star, ReShiki asks again at most once: in a later
 feature release such as 0.16.0, at least 90 days later. This holds whether you
 choose **Not now** or quit with the card still open. The count and your answer
 stay in `star-prompt.json` in ReShiki's data folder. Nothing is sent anywhere.
-**ReShiki → Check for updates** always has a **Star ReShiki on GitHub ↗** link,
-which counts as a star too.
+**ReShiki → Check for updates**, also opened by **Help → About ReShiki**, always
+has a **Star ReShiki on GitHub ↗** link, which counts as a star too.
 
 ## Update checks
 

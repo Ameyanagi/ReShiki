@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 
 pub(super) const REPOSITORY: &str = "https://github.com/Ameyanagi/ReShiki";
 const THANKS: &str = "Opened GitHub in your browser. Thank you!";
-/// Exports and picture copies before the first ask.
+/// Exports and copies before the first ask.
 const USES: u32 = 5;
 const IDLE: Duration = Duration::from_secs(30);
 const TICK: Duration = Duration::from_secs(5);
@@ -37,7 +37,7 @@ pub(super) enum Answer {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(super) struct Record {
     pub first_launch_day: NaiveDate,
-    /// Successful exports and picture copies, counted up to [`USES`].
+    /// Successful exports and copies, counted up to [`USES`].
     pub uses: u32,
     pub state: Answer,
 }
@@ -130,9 +130,9 @@ pub(super) fn should_ask(record: Option<&Record>, moment: &Moment<'_>) -> bool {
         && moment.idle >= IDLE
 }
 
-/// Whether `message` reports a file exported or a picture put on the
-/// clipboard. [`App::receive`] counts each once, before any check of the
-/// drawing it came from.
+/// Whether `message` reports a file exported or a drawing copied, on every
+/// platform and in any format. [`App::receive`] counts each once, before any
+/// check of the drawing it came from.
 pub(super) fn counts(message: &Message) -> bool {
     match message {
         Message::Tab(_, message) => counts(message),
@@ -141,12 +141,8 @@ pub(super) fn counts(message: &Message) -> bool {
         | Message::Nmr(super::nmr::Action::Exported(Ok(Some(_))))
         | Message::ThemeFile(super::theme_files::Action::Saved(Ok(true)))
         | Message::DrawingStyle(super::document_styles::Action::Saved(Ok(true)))
-        | Message::CopyAsWritten(_, true, Ok(_)) => true,
-        // Windows puts a picture on the clipboard only for Copy Image.
-        Message::ClipboardWritten {
-            result: Ok(outcome),
-            ..
-        } => outcome.image_only || !cfg!(windows),
+        | Message::CopyAsWritten(_, Ok(_))
+        | Message::ClipboardWritten { result: Ok(_), .. } => true,
         _ => false,
     }
 }
@@ -218,7 +214,7 @@ impl State {
             })
     }
 
-    /// A successful export or picture copy.
+    /// A successful export or copy.
     pub(super) fn used(&mut self) {
         self.last_input = Instant::now();
         if self
