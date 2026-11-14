@@ -495,6 +495,9 @@ class TransientRetryTests(unittest.TestCase):
         self.assertEqual(run.call_count, 2)
         self.assertEqual(run.call_args.args[0][:2], ["hdiutil", "create"])
         self.assertIn("-ov", run.call_args.args[0])
+        # LZMA compression; every supported macOS (14 and later) opens it.
+        command = run.call_args.args[0]
+        self.assertEqual(command[command.index("-format") + 1], "ULMO")
 
     def test_disk_image_creation_raises_after_the_last_attempt(self):
         import installers

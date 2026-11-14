@@ -494,7 +494,7 @@ def create_disk_image(staging, output, *, sleep=time.sleep):
         "-srcfolder",
         staging,
         "-format",
-        "UDZO",
+        "ULMO",
         "-ov",
         output,
     ]
