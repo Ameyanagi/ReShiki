@@ -166,6 +166,8 @@ Everything that needs or captures from the pinned Python/RDKit reference lives i
 
 Pull requests run native tests and saved InChI, depiction, and aromatic-response fixtures on Linux x64 and Windows x64. The macOS ARM64 legs run only on stacked `merge/*` pull requests, pull requests labelled `full-ci`, `main`, nightly, release and manual runs (`scripts/ci_scope.py`). Documentation-only changes skip native checks. Expected results come from pinned RDKit captures; fixture updates retain their source hashes and platform provenance.
 
+On a pull request, the summary of the **Changed fixture rows** job lists the rows that each changed file under a `tests/fixtures/` folder gains and loses (`scripts/baseline_summary.py`). Read it when you review a fixture or baseline update. To print the same list locally, run `python3 scripts/baseline_summary.py "$(git merge-base origin/main HEAD)"`.
+
 CI runs the workspace tests with [cargo-nextest](https://nexte.st/) 0.9.150, split into two partitions. `.config/nextest.toml` runs the tests that start the naming worker one at a time. To run the same tests locally:
 
 ```sh
