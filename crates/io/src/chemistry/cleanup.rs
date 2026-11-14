@@ -727,6 +727,9 @@ fn unfold(
     fixed: &Coordinates,
     bond_length: f64,
 ) -> Result<Fold> {
+    if fixed.is_empty() {
+        return Ok(Fold::Clear);
+    }
     let (on, close) = (0.1 * bond_length, 0.5 * bond_length);
     let cell = |point: &Point3| {
         (
@@ -747,11 +750,14 @@ fn unfold(
                 let (x, y) = cell(point);
                 (-1..=1).any(|dx| {
                     (-1..=1).any(|dy| {
-                        cells.get(&(x + dx, y + dy)).is_some_and(|others| {
-                            others.iter().any(|&(other, q)| {
-                                counts(index, other) && (point.x - q.x).hypot(point.y - q.y) < limit
+                        cells
+                            .get(&(x.saturating_add(dx), y.saturating_add(dy)))
+                            .is_some_and(|others| {
+                                others.iter().any(|&(other, q)| {
+                                    counts(index, other)
+                                        && (point.x - q.x).hypot(point.y - q.y) < limit
+                                })
                             })
-                        })
                     })
                 })
             })

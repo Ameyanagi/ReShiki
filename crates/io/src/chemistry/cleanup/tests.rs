@@ -894,6 +894,37 @@ fn selected_cleanup_never_reflects_atoms_onto_other_selected_atoms() -> anyhow::
     Ok(())
 }
 
+/// A finite but huge coordinate fills the integer grid cell; its neighbour
+/// lookup must not overflow.
+#[test]
+fn unfold_accepts_huge_coordinates() -> anyhow::Result<()> {
+    let source = drawing(PROPYLBENZENE)?;
+    for selection in [vec![], vec![source.atoms[0].id]] {
+        let scope = if selection.is_empty() {
+            Scope::Drawing
+        } else {
+            Scope::SelectedAtoms
+        };
+        let prepared = prepare(
+            &source,
+            Options {
+                scope,
+                ..Default::default()
+            },
+            &selection,
+        )?;
+        let part = &prepared.parts[0];
+        let huge = Point3 {
+            x: 1e20,
+            y: 1e20,
+            z: 0.,
+        };
+        let mut layout = vec![huge; source.atoms.len()];
+        unfold(&part.molecule, &mut layout, &part.fixed, 1.)?;
+    }
+    Ok(())
+}
+
 /// Issue #1121: the solver's layout can be the mirror image of the drawing.
 #[test]
 fn cleanup_with_keep_orientation_keeps_the_handedness_of_the_drawing() -> anyhow::Result<()> {
