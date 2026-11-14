@@ -68,6 +68,7 @@ fn write(path: &Path, bytes: &[u8], mode: u32) -> Result<(), String> {
     // Save through links, even a chain whose last target is gone, so no link is
     // replaced; `with_file_name` resolves a relative target against its link's
     // folder. A loop is refused, as the OS refuses to open it.
+    let opened = path;
     let mut path = path.to_path_buf();
     for _ in 0..40 {
         if !path.is_symlink() {
@@ -77,7 +78,7 @@ fn write(path: &Path, bytes: &[u8], mode: u32) -> Result<(), String> {
         path = path.with_file_name(target);
     }
     if path.is_symlink() {
-        return Err(format!("Too many symbolic links: {}", path.display()));
+        return Err(format!("Too many symbolic links: {}", opened.display()));
     }
     let path = path.as_path();
     let parent = path
