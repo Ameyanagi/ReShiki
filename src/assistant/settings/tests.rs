@@ -63,12 +63,17 @@ fn unreadable_preferences_are_set_aside_before_a_save_replaces_them() {
     let bad = dir.path().join("assistant-preferences.json.bad");
     assert_eq!(std::fs::read(&bad).unwrap(), newer);
 
-    // A readable file and a missing one leave nothing behind.
+    // Saving over a readable file or a missing one keeps no copy.
     std::fs::remove_file(&bad).unwrap();
-    assert_eq!(Preferences::load_from(&path).model, None);
+    loaded.save_to(&path).unwrap();
     std::fs::remove_file(&path).unwrap();
-    let _ = Preferences::load_from(&path);
+    loaded.save_to(&path).unwrap();
     assert!(!bad.exists());
+
+    // A file too large to read is kept too.
+    std::fs::write(&path, vec![b' '; 65536]).unwrap();
+    loaded.save_to(&path).unwrap();
+    assert_eq!(std::fs::read(&bad).unwrap().len(), 65536);
 }
 #[test]
 fn a_save_keeps_an_unreadable_file_when_its_copy_cannot_be_written() {

@@ -135,7 +135,8 @@ def main():
         elif args.release:
             release(args.release)
         else:
-            sys.stdout.write(assemble())
+            # UTF-8 whatever the Windows code page is.
+            sys.stdout.buffer.write(assemble().encode())
     except ValueError as error:
         print(f"Changelog fragment error: {error}", file=sys.stderr)
         return 1

@@ -187,11 +187,11 @@ fn unreadable_preferences_are_set_aside_before_a_save_replaces_them() {
         newer
     );
 
-    // A readable file and a missing one leave nothing behind.
+    // Saving over a readable file or a missing one keeps no copy.
     std::fs::remove_file(dir.path().join("appearance.json.bad")).unwrap();
-    assert_eq!(Settings::load_from(&path).mode, Mode::default());
+    loaded.save_to(&path).unwrap();
     std::fs::remove_file(&path).unwrap();
-    let _ = Settings::load_from(&path);
+    loaded.save_to(&path).unwrap();
     assert!(!dir.path().join("appearance.json.bad").exists());
 }
 
