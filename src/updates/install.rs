@@ -14,6 +14,9 @@ pub struct Prepared {
     directory: tempfile::TempDir,
     target: PathBuf,
     payload: PathBuf,
+    /// The staged program the installer runs or installs, with its SHA-256
+    /// from when it was verified; [`handoff`] checks it again.
+    program: (PathBuf, String),
     handed_off: std::sync::atomic::AtomicBool,
 }
 impl Drop for Prepared {
@@ -127,6 +130,21 @@ async fn download(
     file.sync_all().await.map_err(|e| e.to_string())?;
     Ok(format!("{:x}", hash.finalize()))
 }
+/// The lowercase hexadecimal SHA-256 of the file at `path`.
+fn file_digest(path: &Path) -> Result<String, String> {
+    use std::io::BufRead;
+    let mut file = std::io::BufReader::new(std::fs::File::open(path).map_err(|e| e.to_string())?);
+    let mut hash = Sha256::new();
+    loop {
+        let chunk = file.fill_buf().map_err(|e| e.to_string())?;
+        if chunk.is_empty() {
+            return Ok(format!("{:x}", hash.finalize()));
+        }
+        hash.update(chunk);
+        let read = chunk.len();
+        file.consume(read);
+    }
+}
 #[cfg(not(windows))]
 fn command(command: &mut Command) -> Result<String, String> {
     let output = command.output().map_err(|e| e.to_string())?;
@@ -216,10 +234,20 @@ pub async fn prepare(
         .await;
     tokio::task::spawn_blocking(move || {
         let payload = stage(&asset, directory.path(), &release.version)?;
+        // The installer itself on Windows, else the application's executable.
+        let program = if cfg!(windows) {
+            payload.clone()
+        } else if cfg!(target_os = "macos") {
+            payload.join("Contents/MacOS/reshiki")
+        } else {
+            payload.join("reshiki")
+        };
+        let digest = file_digest(&program)?;
         Ok(Arc::new(Prepared {
             directory,
             target,
             payload,
+            program: (program, digest),
             handed_off: std::sync::atomic::AtomicBool::new(false),
         }))
     })
@@ -335,7 +363,19 @@ fn stage(asset: &Path, directory: &Path, version: &str) -> Result<PathBuf, Strin
 
 /// The helper acknowledges startup before the application exits. It waits for
 /// this process to terminate, then installs and reopens the saved tabs.
+/// Nothing starts when the staged program no longer has its verified digest.
 pub async fn handoff(prepared: Arc<Prepared>, drawings: Vec<PathBuf>) -> Result<(), String> {
+    // The update can wait a long time for the user between its checks and
+    // this handoff, so the staged program is checked again.
+    let staged = Arc::clone(&prepared);
+    let unchanged = tokio::task::spawn_blocking(move || {
+        file_digest(&staged.program.0).is_ok_and(|digest| digest == staged.program.1)
+    })
+    .await
+    .map_err(|e| e.to_string())?;
+    if !unchanged {
+        return Err("The downloaded update changed after it was checked. Nothing was installed; check for updates again.".into());
+    }
     let dir = prepared.directory.path();
     let ready = dir.join("ready");
     // A retry must receive an acknowledgement from the new helper, not a

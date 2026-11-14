@@ -303,3 +303,32 @@ fn only_supported_stable_assets_can_be_requested() {
         "reshiki-1.2.3-windows-arm64-setup.exe"
     );
 }
+
+/// S14: an update can wait between its checks and the restart. A staged
+/// program that changed in that time is not started.
+#[tokio::test]
+async fn a_staged_program_that_changed_is_not_installed() {
+    let directory = tempfile::tempdir().unwrap();
+    let stage = directory.path().to_owned();
+    let program = stage.join("payload");
+    std::fs::write(&program, b"verified").unwrap();
+    let digest = file_digest(&program).unwrap();
+    assert_eq!(digest, format!("{:x}", Sha256::digest(b"verified")));
+    let prepared = Arc::new(Prepared {
+        directory,
+        target: stage.join("installed"),
+        payload: program.clone(),
+        program: (program.clone(), digest),
+        handed_off: std::sync::atomic::AtomicBool::new(false),
+    });
+    std::fs::write(&program, b"replaced").unwrap();
+    assert_eq!(
+        handoff(Arc::clone(&prepared), vec![]).await.unwrap_err(),
+        "The downloaded update changed after it was checked. Nothing was installed; check for updates again."
+    );
+    // Nothing was started: no installer script, log or acknowledgement.
+    assert_eq!(std::fs::read_dir(&stage).unwrap().count(), 1);
+    std::fs::remove_file(&program).unwrap();
+    assert!(handoff(Arc::clone(&prepared), vec![]).await.is_err());
+    assert_eq!(std::fs::read_dir(&stage).unwrap().count(), 0);
+}
