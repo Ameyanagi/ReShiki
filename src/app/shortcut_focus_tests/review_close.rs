@@ -630,3 +630,41 @@ async fn settings_close_returns_focus_to_the_drawing() {
         assert_canvas_delete(&mut ui, &mut app).await;
     }
 }
+
+/// A floating NMR panel stays under Settings: its controls leave keyboard
+/// traversal and a click on it reaches Settings, not the panel.
+#[tokio::test]
+#[ignore = "Opt-in renderer input check"]
+async fn settings_covers_a_floating_nmr_panel() {
+    let mut ui = Ui::new().await;
+    let mut app = drawing_app();
+    let _ = app.update(Message::Nmr(crate::app::nmr::Action::Open));
+    let labels = ui
+        .semantics(&app)
+        .nodes
+        .into_iter()
+        .find(|node| node.id == "nmr.labels")
+        .expect("the floating NMR panel");
+    let _ = app.update(Message::Settings(crate::app::settings_page::Action::Open(
+        None,
+    )));
+    assert!(
+        ui.semantics(&app)
+            .nodes
+            .iter()
+            .all(|node| !node.id.starts_with("nmr.")),
+        "NMR controls leave traversal"
+    );
+    let point = labels.bounds.center();
+    for event in [
+        mouse::Event::CursorMoved { position: point },
+        mouse::Event::ButtonPressed(mouse::Button::Left),
+        mouse::Event::ButtonReleased(mouse::Button::Left),
+    ] {
+        let (_, messages) = ui.event(&app, Event::Mouse(event), mouse::Cursor::Available(point));
+        assert!(
+            messages.iter().all(|m| !matches!(m, Message::Nmr(_))),
+            "{messages:?}"
+        );
+    }
+}

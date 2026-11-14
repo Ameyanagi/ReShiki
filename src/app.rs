@@ -1289,12 +1289,14 @@ impl App {
             && (!self.commands.open || self.updates.open || self.assistant.viewed_image.is_some());
         reshiki::accessibility::focus_scope_with(
             file_shortcuts::wrap(
-                // The command palette sits above the floating NMR panel so its
-                // modal also keeps that panel from taking clicks.
+                // The command palette and Settings sit above the floating NMR
+                // panel so their modals also keep that panel from taking clicks.
                 self.with_prompt(self.with_recovery_manager(self.with_updates(
-                    self.with_assistant_image(self.with_commands(self.with_nmr(
-                        self.with_atom_text(
-                            self.with_settings(self.with_help(self.with_palette(self.workspace()))),
+                    self.with_assistant_image(self.with_settings(self.with_commands(
+                        self.with_nmr(
+                            self.with_atom_text(
+                                self.with_help(self.with_palette(self.workspace())),
+                            ),
                         ),
                     ))),
                 ))),
