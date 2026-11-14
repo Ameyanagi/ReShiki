@@ -70,3 +70,15 @@ fn unreadable_preferences_are_set_aside_before_a_save_replaces_them() {
     let _ = Preferences::load_from(&path);
     assert!(!bad.exists());
 }
+#[test]
+fn a_save_keeps_an_unreadable_file_when_its_copy_cannot_be_written() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("assistant-preferences.json");
+    let newer = br#"{"auto_apply":"a-value-from-a-newer-build","model":"gpt-6-astra"}"#;
+    std::fs::write(&path, newer).unwrap();
+    // A directory of the copy's name blocks writing it.
+    std::fs::create_dir(dir.path().join("assistant-preferences.json.bad")).unwrap();
+    let loaded = Preferences::load_from(&path);
+    assert!(loaded.save_to(&path).is_err());
+    assert_eq!(std::fs::read(&path).unwrap(), newer);
+}

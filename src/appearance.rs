@@ -110,12 +110,7 @@ impl Settings {
             }
             Some(settings)
         };
-        parsed().unwrap_or_else(|| {
-            // A copy of a file this build cannot read, such as a newer build's,
-            // outlives the next save. The file itself stays until then.
-            let _ = reshiki::storage::write_atomic(&path.with_extension("json.bad"), &bytes);
-            Self::default()
-        })
+        parsed().unwrap_or_default()
     }
     pub fn save(&self) -> Result<(), String> {
         if cfg!(test) {
@@ -126,6 +121,13 @@ impl Settings {
     fn save_to(&self, path: &std::path::Path) -> Result<(), String> {
         if let Some(parent) = path.parent() {
             reshiki::storage::create_dir_all(parent).map_err(|e| e.to_string())?;
+        }
+        // A file this build cannot read, such as a newer build's, is replaced
+        // only once a copy of it is kept.
+        if let Ok(old) = reshiki::storage::read(path)
+            && serde_json::from_slice::<Self>(&old).is_err()
+        {
+            reshiki::storage::write_atomic(&path.with_extension("json.bad"), &old)?;
         }
         reshiki::storage::write_atomic(path, &serde_json::to_vec(self).map_err(|e| e.to_string())?)
     }
