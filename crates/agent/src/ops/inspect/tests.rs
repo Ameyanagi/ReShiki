@@ -560,8 +560,9 @@ fn the_bounds_of_a_bonded_drawing_take_linear_time() {
         }
         doc
     };
+    // The fastest of several runs: other tests run at the same time.
     let fastest = |doc: &Document| {
-        (0..3)
+        (0..9)
             .map(|_| {
                 let start = std::time::Instant::now();
                 std::hint::black_box(doc.bounds());

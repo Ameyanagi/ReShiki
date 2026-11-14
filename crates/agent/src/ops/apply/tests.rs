@@ -280,8 +280,14 @@ impl Documents for Hooked {
         receipt
     }
 
-    fn fits(&self, who: &Principal, handle: &DocHandle, doc: &Document) -> Result<(), OpError> {
-        self.inner.fits(who, handle, doc)
+    fn fits(
+        &self,
+        who: &Principal,
+        handle: &DocHandle,
+        before: &Document,
+        doc: &Document,
+    ) -> Result<(), OpError> {
+        self.inner.fits(who, handle, before, doc)
     }
 
     fn commit(
@@ -997,6 +1003,16 @@ async fn an_edit_over_a_budget_is_refused_before_the_commit() {
             max_session_weight: 14,
             ..Budgets::default()
         },
+        // Room for the edited drawing, but not for the undo frame of 4 that
+        // the edit also keeps: 6 + 9 + 4 = 19.
+        Budgets {
+            max_session_weight: 16,
+            ..Budgets::default()
+        },
+        Budgets {
+            max_session_weight: 18,
+            ..Budgets::default()
+        },
     ] {
         let host = HeadlessHost::new("9.8.7", budgets);
         let document = create(&host, chain(&["C", "C"], 0.));
@@ -1020,4 +1036,16 @@ async fn an_edit_over_a_budget_is_refused_before_the_commit() {
         assert!(!committed.load(Ordering::Relaxed), "{}", error.message);
         assert_eq!(revision(&host, &document), 0);
     }
+    // With room for all three, the edit is applied.
+    let host = HeadlessHost::new(
+        "9.8.7",
+        Budgets {
+            max_session_weight: 19,
+            ..Budgets::default()
+        },
+    );
+    let document = create(&host, chain(&["C", "C"], 0.));
+    let source = create(&host, chain(&["C", "C", "C"], 5.));
+    apply_ok(&host, insert(&document, &source, None, Some(0), None)).await;
+    assert_eq!(revision(&host, &document), 1);
 }
