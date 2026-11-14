@@ -8,7 +8,7 @@ Review covered image alpha handling, bounded per-ligand edits, aromatic bond sty
 
 The local combined run passed **401 Rust tests, with 3 ignored**. Cargo check, Clippy with warnings denied, and formatting passed. The [final PR checks](https://github.com/Ameyanagi/ReShiki/actions/runs/35894780573) passed native Rust tests, captured chemistry fixtures, Python tests, and lint on macOS, Windows, and Linux, plus web checks. The [documentation run](https://github.com/Ameyanagi/ReShiki/actions/runs/35894780608) passed separately.
 
-The website passed diagnostics, production build, formatting, and local link/asset validation. Safari inspection covered the new Codex setup guide and illustrated change log. Seven new native screenshots show the actual macOS app; the [capture record](images/assistant-updates/README.md) identifies their source build and operations. Existing user drafts were preserved.
+The website passed diagnostics, production build, formatting, and local link/asset validation. Safari inspection covered the new Codex setup guide and illustrated change log. Seven new native screenshots show the actual macOS app; the [capture record](../images/assistant-updates/README.md) identifies their source build and operations. Existing user drafts were preserved.
 
 ## Published release and package verification
 
@@ -18,4 +18,4 @@ After publication, all eight public packages were downloaded and verified agains
 
 The public macOS ZIP and DMG are byte-identical to the signed artifacts tested locally. Those checks verified the Developer ID signature, stapled notarization ticket, Gatekeeper acceptance, DMG mounting and drag-to-install copying, and native chemistry with Python, uv, and the checkout unavailable. Computer Use inspection of the signed app confirmed version 0.7.1 and both aromatic Cp* ellipses in the wedge regression drawing. Existing user drafts were left open. Windows and Linux verification ran in CI; this record does not claim a local GUI inspection on those platforms.
 
-The [illustrated release notes](changes-0.7.1.md) retain the coordination-chemistry and editable-exchange limits; packaging does not establish chemical validity.
+The [illustrated release notes](../changes-0.7.1.md) retain the coordination-chemistry and editable-exchange limits; packaging does not establish chemical validity.

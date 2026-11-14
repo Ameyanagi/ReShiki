@@ -7,7 +7,7 @@ their contributor credits and links to the original comparisons and limits.
 
 [Release downloads](https://github.com/Ameyanagi/ReShiki/releases/tag/v0.13.1) ·
 [Previous release](changes-0.13.md) ·
-[Release validation](release-0.13.1-validation.md).
+[Release validation](changes/release-0.13.1-validation.md).
 
 ## File compatibility
 

@@ -8,7 +8,7 @@ The review covers changed production code throughout the application, native doc
 
 Issues found and corrected during review include large PNG allocation failures, chemistry validation blocking figure exports, styled metal contacts becoming invalid during return import, misleading clipboard status, stale reference-test assumptions, colored three-way ring junction geometry, premature narrowing during ellipse recognition, and internal-label angle placement and group return import. The junction uses independently exported vector coordinates as well as raster checks; it does not infer success from a similar-looking full-size picture.
 
-The [illustrated change log](changes-0.8.md) links the feature galleries and matched bug-fix captures. Groups and templates are available in their current form and may be revised in future releases.
+The [illustrated change log](../changes-0.8.md) links the feature galleries and matched bug-fix captures. Groups and templates are available in their current form and may be revised in future releases.
 
 ## Desktop checks
 
@@ -16,7 +16,7 @@ Computer Use checks on the optimized macOS app cover the editable shortcut galle
 
 The full gallery exported at 6627 × 5285 pixels and 300 dpi; its vector exports retain the same physical dimensions. Small drawings still export at 1200 dpi. Figure fallback retains the visible drawing and shows a chemistry-review notice. It does not declare the molecule chemically valid.
 
-Internal NH, CH₂, CCl₂, CF₂ and NMe examples were compared across four orientations and copied as editable structures in both directions. The returned gallery retains 80 atoms, 60 bonds, 12 compact groups, formula C56H144Cl8F8N8 and its molecular identity. Forty-eight bent/straight angle cases and finer transition cases establish the tested placement behavior. [Matched captures and details](changes/automatic-hydrogen.md).
+Internal NH, CH₂, CCl₂, CF₂ and NMe examples were compared across four orientations and copied as editable structures in both directions. The returned gallery retains 80 atoms, 60 bonds, 12 compact groups, formula C56H144Cl8F8N8 and its molecular identity. Forty-eight bent/straight angle cases and finer transition cases establish the tested placement behavior. [Matched captures and details](automatic-hydrogen.md).
 
 Existing user drafts were preserved. Graphical inspection was performed on macOS; Windows and Linux acceptance relies on their native CI and package checks, rather than a claim of local GUI inspection.
 

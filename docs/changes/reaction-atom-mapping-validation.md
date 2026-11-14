@@ -6,7 +6,7 @@ Imported atom maps were already retained in reaction chemistry, but their
 numbers did not appear on the drawing. This change derives visible indicators
 from `map_num`, keeps custom atom numbers independent, and adds manual map
 editing, reviewed automatic correspondence and a separate rigid alignment
-command. See the [usage guide](reactions.md#atom-mapping-and-label-placement).
+command. See the [usage guide](../reactions.md#atom-mapping-and-label-placement).
 
 This record covers the October 10, 2026 native macOS checks and focused tests.
 It does not claim general reaction-mechanism inference or comprehensive
@@ -22,9 +22,9 @@ atoms, two bonds, one reaction and maps `[0, 1, 1, 2, 2]` were already correct;
 the water agent was unmapped. The verified new app opened that exact native
 file unchanged, and all four positive maps became visible.
 
-| Historical native import: maps absent from canvas                                                                                    | Verified new app: same saved chemical input                                                                                                               |
-| ------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| ![Old native import retains mapped chemistry but shows no map numbers on the canvas](images/reaction-atom-mapping/before-native.jpg) | ![New native app displays maps 1 and 2 on methanol and formaldehyde while water remains unmapped](images/reaction-atom-mapping/imported-maps-visible.jpg) |
+| Historical native import: maps absent from canvas                                                                                       | Verified new app: same saved chemical input                                                                                                                  |
+| --------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| ![Old native import retains mapped chemistry but shows no map numbers on the canvas](../images/reaction-atom-mapping/before-native.jpg) | ![New native app displays maps 1 and 2 on methanol and formaldehyde while water remains unmapped](../images/reaction-atom-mapping/imported-maps-visible.jpg) |
 
 These are unedited native screenshots, not renderer fixtures. The old view is
 159% zoom and the new view is 144%, with different framing. They demonstrate
@@ -59,15 +59,15 @@ Starting with the saved old native input, the operator:
    the custom placement. Closing the saved tab and opening its exact path in
    a fresh tab retained the custom offset, with Undo/Redo disabled.
 
-| Manual map edit                                                                                                | Independent map-label placement                                                                                              |
-| -------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| ![Native Set assigns map 7 to the selected reactant carbon](images/reaction-atom-mapping/manual-map-seven.jpg) | ![The reactant oxygen map 2 handle moves independently of the atom](images/reaction-atom-mapping/manual-map-label-moved.jpg) |
+| Manual map edit                                                                                                   | Independent map-label placement                                                                                                 |
+| ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| ![Native Set assigns map 7 to the selected reactant carbon](../images/reaction-atom-mapping/manual-map-seven.jpg) | ![The reactant oxygen map 2 handle moves independently of the atom](../images/reaction-atom-mapping/manual-map-label-moved.jpg) |
 
-| Detached proposal before Apply                                                                                                                   | Main drawing after reviewed Apply                                                                                         |
-| ------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------- |
-| ![Two pairs appear in the review preview while the main reactant carbon is still unmapped](images/reaction-atom-mapping/review-before-apply.jpg) | ![Applying the reviewed proposal restores carbon map 1 on the main drawing](images/reaction-atom-mapping/applied-map.jpg) |
+| Detached proposal before Apply                                                                                                                      | Main drawing after reviewed Apply                                                                                            |
+| --------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| ![Two pairs appear in the review preview while the main reactant carbon is still unmapped](../images/reaction-atom-mapping/review-before-apply.jpg) | ![Applying the reviewed proposal restores carbon map 1 on the main drawing](../images/reaction-atom-mapping/applied-map.jpg) |
 
-![A fresh tab in the same running native app retains the saved custom oxygen map-label position](images/reaction-atom-mapping/custom-label-reopened.jpg)
+![A fresh tab in the same running native app retains the saved custom oxygen map-label position](../images/reaction-atom-mapping/custom-label-reopened.jpg)
 
 The actual custom-label save is 4,581 bytes, SHA-256
 `ce1c6c6aa0b00da79eb67226137f446b63584c347bd1010c7f90319d17379cdb`.
@@ -97,9 +97,9 @@ changes only product IDs 5/6/7 coordinates by a proper +90° rotation about
 their centroid. The verified app opened it, ran **Align mapped structures**,
 then Undo/Redo and native Save As.
 
-| Native controlled input, 130% zoom                                                                                                                     | Native Align result, 130% zoom                                                                                                                   |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| ![The whole oxidation product is rotated sideways while custom Cα and reactant maps remain visible](images/reaction-atom-mapping/alignment-before.jpg) | ![The complete product rotates into the mapped reactant orientation without losing maps or Cα](images/reaction-atom-mapping/alignment-after.jpg) |
+| Native controlled input, 130% zoom                                                                                                                        | Native Align result, 130% zoom                                                                                                                      |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ![The whole oxidation product is rotated sideways while custom Cα and reactant maps remain visible](../images/reaction-atom-mapping/alignment-before.jpg) | ![The complete product rotates into the mapped reactant orientation without losing maps or Cα](../images/reaction-atom-mapping/alignment-after.jpg) |
 
 The [actual native aligned save](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/evidence/reaction-atom-mapping/alignment-native-after.rsk)
 is 4,685 bytes, SHA-256
@@ -186,7 +186,7 @@ of mapped product structures.** Reuse `imported-maps-visible.jpg` and
 
 The new verifier, controlled fixtures, documentation and original application
 captures are offered under `MIT OR Apache-2.0`, following
-[CONTRIBUTING.md](../CONTRIBUTING.md). No third-party code or data is copied into
+[CONTRIBUTING.md](../../CONTRIBUTING.md). No third-party code or data is copied into
 this evidence package. Daylight/RDKit documentation links in the usage guide
 are references, not bundled implementations or producer outputs.
 

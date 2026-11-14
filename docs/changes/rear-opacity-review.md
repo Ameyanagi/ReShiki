@@ -1,7 +1,7 @@
 # Rear opacity review
 
 This is the historical review of the initial midplane implementation. Its
-original captures remain unchanged. The [2026-10-10 visibility correction](changes/rear-visibility-20261010.md)
+original captures remain unchanged. The [2026-10-10 visibility correction](rear-visibility-20261010.md)
 shows matched before/after evidence for exposed cage rims, with new native
 history, rotation and fresh-process checks.
 
@@ -11,15 +11,15 @@ appearance at 100%, makes rear ink lighter at 25%, and removes it at 0% while
 preserving front ink, molecular data and XYZ coordinates. This work is under
 review, stacked on `fix/projected-double-bonds` ([PR #271](https://github.com/Ameyanagi/ReShiki/pull/271)).
 
-| Parent before: no rear-opacity control                                                                            | Candidate default: 100%                                                                                       |
-| ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| ![Parent C60 view with opaque front and rear bonds and no rear-opacity field](images/rear-opacity/c60-before.jpg) | ![The same C60 at default 100% with the new rear-opacity field](images/rear-opacity/c60-rear-opacity-100.jpg) |
+| Parent before: no rear-opacity control                                                                               | Candidate default: 100%                                                                                          |
+| -------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| ![Parent C60 view with opaque front and rear bonds and no rear-opacity field](../images/rear-opacity/c60-before.jpg) | ![The same C60 at default 100% with the new rear-opacity field](../images/rear-opacity/c60-rear-opacity-100.jpg) |
 
-| 25%: faint rear ink                                                                                    | 0%: transparent rear ink                                                                                          |
-| ------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
-| ![C60 with rear ink at 25% and fully visible front bonds](images/rear-opacity/c60-rear-opacity-25.jpg) | ![The same C60 at 0% rear opacity with front bonds remaining visible](images/rear-opacity/c60-rear-opacity-0.jpg) |
+| 25%: faint rear ink                                                                                       | 0%: transparent rear ink                                                                                             |
+| --------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| ![C60 with rear ink at 25% and fully visible front bonds](../images/rear-opacity/c60-rear-opacity-25.jpg) | ![The same C60 at 0% rear opacity with front bonds remaining visible](../images/rear-opacity/c60-rear-opacity-0.jpg) |
 
-All four views use the same typed [native input](../tests/fixtures/rear-opacity/c60-rear-opacity-before-desktop.rsk),
+All four views use the same typed [native input](../../tests/fixtures/rear-opacity/c60-rear-opacity-before-desktop.rsk),
 209% Fit, light canvas, JACS/ACS, Arial 10 pt, keyboard drawing off, no selection,
 and expanded whole-drawing molecular properties on macOS arm64. Each shows C60,
 60 atoms, 90 bonds and the same formula, mass and canonical SMILES. The molecule's
@@ -60,9 +60,9 @@ the version and added depth-appearance scope. The 100% candidate differs from
 the typed parent only by version 19 → 22. Native Undo/Redo saves reproduce the
 appropriate 100%, 25% and 0% saves byte for byte.
 
-| Fresh process: reopen 0%                                                                                                              | Fresh process: reopen 25%                                                                                                          |
-| ------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| ![Freshly reopened C60 at 0% rear opacity with Undo and Redo disabled](images/rear-opacity/c60-rear-opacity-0-fresh-reopen-clean.jpg) | ![C60 reopened at 25% in a second tab with Undo and Redo disabled](images/rear-opacity/c60-rear-opacity-25-fresh-reopen-clean.jpg) |
+| Fresh process: reopen 0%                                                                                                                 | Fresh process: reopen 25%                                                                                                             |
+| ---------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| ![Freshly reopened C60 at 0% rear opacity with Undo and Redo disabled](../images/rear-opacity/c60-rear-opacity-0-fresh-reopen-clean.jpg) | ![C60 reopened at 25% in a second tab with Undo and Redo disabled](../images/rear-opacity/c60-rear-opacity-25-fresh-reopen-clean.jpg) |
 
 ROOT quit and reopened the saved 0% drawing in a fresh verified process, then
 opened 25% in a second tab. Both views keep 209% Fit and the same style and
@@ -141,7 +141,7 @@ Windows print/EMF runtime execution and a passing repository CI rerun remain pen
 record does not establish every molecule, external application or platform.
 
 [Evidence manifest](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/tests/fixtures/rear-opacity/evidence-manifest.json) ·
-[Fixture guide and portable checks](../tests/fixtures/rear-opacity/README.md)
+[Fixture guide and portable checks](../../tests/fixtures/rear-opacity/README.md)
 
 Release caption: **Make the back of a projected molecule lighter or transparent
 with Rear opacity, while keeping its front and molecular data unchanged.**

@@ -30,7 +30,7 @@ Default 100% keeps opaque paint; 25% makes rear ink lighter and 0% makes it
 transparent while keeping front ink, chemical data and XYZ. `.rsk` files keep
 the setting; SVG/PNG/PDF keep the appearance. Chemical exports report that rear
 opacity is not kept, and editable CDXML/CDX cannot keep it. EMF for Office
-accepts only 0% or 100%. [Guide](rear-opacity.md) · [Desktop/data review](rear-opacity-review.md).
+accepts only 0% or 100%. [Guide](rear-opacity.md) · [Desktop/data review](changes/rear-opacity-review.md).
 
 ## Styles, themes and aromatic fusion — 0.9
 
@@ -42,7 +42,7 @@ Contextual shortcuts, a single editable Help gallery, Haworth templates, ring in
 
 ## Coordination and editing updates — 0.7
 
-Typed multi-center and variable attachment nodes preserve target IDs through native editing and supported CDXML/CDX/V3000 exchange. Dummy handles are editor-only; defined Cp/Cp* groups retain atom counts. Shared toolbar alignment supports groups and captions, bonded movement follows length/angle constraints with Option/Alt release, and a dedicated 3D tilt tool supports preview and Undo. Inner ring curves preserve bond orders. The assistant retains sent images during a conversation and completed previews after timeout. In-app update installation protects unfinished work. See the [complete illustrated change log](changes-pr17.md) and [0.7 format/chemistry boundaries](changes-0.7.md#format-and-chemistry-boundaries).
+Typed multi-center and variable attachment nodes preserve target IDs through native editing and supported CDXML/CDX/V3000 exchange. Dummy handles are editor-only; defined Cp/Cp* groups retain atom counts. Shared toolbar alignment supports groups and captions, bonded movement follows length/angle constraints with Option/Alt release, and a dedicated 3D tilt tool supports preview and Undo. Inner ring curves preserve bond orders. The assistant retains sent images during a conversation and completed previews after timeout. In-app update installation protects unfinished work. See the [complete illustrated change log](changes/changes-pr17.md) and [0.7 format/chemistry boundaries](changes-0.7.md#format-and-chemistry-boundaries).
 
 ## Workspace and typography
 
@@ -188,7 +188,7 @@ Template placement offers explicit new-bond connection, shared-atom and fused-bo
 | AppleScript / public scripting interface       | Missing                       | The internal Rust chemistry interface is not a public document scripting interface.                                                                                                                                                                                                                                                                                                                                               |
 | Plugin/add-in integration                      | Missing                       | No stable extension interface.                                                                                                                                                                                                                                                                                                                                                                                                    |
 | Accessibility / keyboard-only drawing          | Incomplete                    | Iced workspace lacks semantic native controls for most drawing operations.                                                                                                                                                                                                                                                                                                                                                        |
-| Release distribution                           | Supported six-target workflow | Packages the Rust app and native InChI helper for six targets without Python or uv at runtime. Windows installers and signed/notarized macOS ZIP/DMG are included. Full graphical acceptance is separate from packaging checks. See [release validation](release-0.9.0-validation.md).                                                                                                                                            |
+| Release distribution                           | Supported six-target workflow | Packages the Rust app and native InChI helper for six targets without Python or uv at runtime. Windows installers and signed/notarized macOS ZIP/DMG are included. Full graphical acceptance is separate from packaging checks. See [release validation](changes/release-0.9.0-validation.md).                                                                                                                                    |
 
 ## Next work
 
@@ -204,7 +204,7 @@ must continue to pass; invalid input must preserve the user's drawing.
 
 ## Assistant and visual palettes — 0.6
 
-The assistant shows immediate activity, elapsed time, cancellation, public plans, measured structure counts, and editable previews while the canvas stays usable. Compositions include aligned rows, a central reaction with examples, grids, and outward branches sharing a reactant. Exact overview and close-up images are reviewed before automatic acceptance, with bounded editable corrections and visible unresolved findings. Epoch/revision checks protect existing work; applying a draft remains one Undo step. See [assistant](assistant.md), [tool palettes](tool-palettes.md), and the [0.6 release walkthrough](release-0.6-validation.md).
+The assistant shows immediate activity, elapsed time, cancellation, public plans, measured structure counts, and editable previews while the canvas stays usable. Compositions include aligned rows, a central reaction with examples, grids, and outward branches sharing a reactant. Exact overview and close-up images are reviewed before automatic acceptance, with bounded editable corrections and visible unresolved findings. Epoch/revision checks protect existing work; applying a draft remains one Undo step. See [assistant](assistant.md), [tool palettes](tool-palettes.md), and the [0.6 release walkthrough](changes/release-0.6-validation.md).
 
 ## Assistant and interface refinement
 

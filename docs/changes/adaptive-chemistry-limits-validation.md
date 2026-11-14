@@ -7,7 +7,7 @@ project creator and maintainer. These results describe the tested candidate;
 they are not a released capability or a guarantee for every eligible molecule.
 
 Larger 3D drawings and fused-ring imports use bounded calculation budgets
-adapted to available machine resources. The [resource policy](chemistry-resource-policy.md)
+adapted to available machine resources. The [resource policy](../chemistry-resource-policy.md)
 explains the admission rules, allocator accounting, deadlines and fallbacks.
 
 ## Source and application provenance
@@ -67,9 +67,9 @@ nonplanar seed from the actual geometry backend. It differs from #245's original
 a practical desktop comparison. It tests reuse of existing 3D geometry, rather
 than new embedding of an unseeded large molecule.
 
-| Baseline: 512-original-atom rejection                                                                                   | Candidate: admitted 3D preview                                                                                                                          |
-| ----------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| ![The same 513-atom input is rejected by the baseline's 512-atom 3D limit.](images/chemistry-limits/limits-513-cap.jpg) | ![The candidate opens a paused MMFF94s preview using existing 3D geometry at the same 13 percent zoom.](images/chemistry-limits/limits-513-preview.jpg) |
+| Baseline: 512-original-atom rejection                                                                                      | Candidate: admitted 3D preview                                                                                                                             |
+| -------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ![The same 513-atom input is rejected by the baseline's 512-atom 3D limit.](../images/chemistry-limits/limits-513-cap.jpg) | ![The candidate opens a paused MMFF94s preview using existing 3D geometry at the same 13 percent zoom.](../images/chemistry-limits/limits-513-preview.jpg) |
 
 The candidate's actual Properties panel shows **Paused · Existing 3D geometry**,
 MMFF94s and **−36.920 kcal/mol**. The retained
@@ -89,7 +89,7 @@ The following raw capture is after Redo and before Save As; its modified indicat
 and transient property calculation are visible. This separate interaction
 capture also changes orientation by one tilt, unlike the matched preview pair.
 
-![The applied 3D drawing is restored by Redo after one Undo; this is the state before Save As.](images/chemistry-limits/limits-513-applied-redo.jpg)
+![The applied 3D drawing is restored by Redo after one Undo; this is the state before Save As.](../images/chemistry-limits/limits-513-applied-redo.jpg)
 
 Independent native-file checks establish:
 
@@ -110,9 +110,9 @@ Independent native-file checks establish:
   cache `label_h` at atom 171 changes from 0 to 2; automatic depth appearance
   records all 513 original IDs with strength 0.62. `label_h` is a derived label
   field, separate from the preserved chemical hydrogen flags. See
-  [`Refresh::apply`](../crates/model/src/atom_labels/refresh.rs),
-  [`finish_preserving`](../crates/model/src/chemistry/document/output.rs) and
-  the [view projection](../crates/io/src/geometry/view.rs).
+  [`Refresh::apply`](../../crates/model/src/atom_labels/refresh.rs),
+  [`finish_preserving`](../../crates/model/src/chemistry/document/output.rs) and
+  the [view projection](../../crates/io/src/geometry/view.rs).
 
 The [second independent geometry check](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/fixtures/chemistry-limits/desktop-513-independent-check.json)
 records the proper-rotation fit and normalized chemical fields. Native Cancel
@@ -139,16 +139,16 @@ This is a failure/success import comparison, not a comparison at equal drawing
 scale. The successful interaction capture retains the visible orange keyboard
 focus marker because F8 was on in both initial runs.
 
-| Baseline: import fails, blank canvas at 100%                                                                                                             | Candidate: import succeeds, automatically fitted to 10%                                                                                                                    |
-| -------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| ![The baseline leaves an empty canvas and reports that the aromaticity work limit was exceeded.](images/chemistry-limits/limits-fused-import-budget.jpg) | ![The same fused-ring input imports successfully; Properties shows C452H154, 452 atoms, 601 bonds and 150 rings.](images/chemistry-limits/limits-fused-import-success.jpg) |
+| Baseline: import fails, blank canvas at 100%                                                                                                                | Candidate: import succeeds, automatically fitted to 10%                                                                                                                       |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ![The baseline leaves an empty canvas and reports that the aromaticity work limit was exceeded.](../images/chemistry-limits/limits-fused-import-budget.jpg) | ![The same fused-ring input imports successfully; Properties shows C452H154, 452 atoms, 601 bonds and 150 rings.](../images/chemistry-limits/limits-fused-import-success.jpg) |
 
 One **Undo** returned to a completely blank drawing with a clean title. **Redo**
 restored the graph. The operator then turned F8 off and saved the
 [native result](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/fixtures/chemistry-limits/fused-repeat37-desktop.rsk). This clean
 saved capture uses 10% zoom and has no keyboard focus marker:
 
-![The imported fused-ring drawing after Undo, Redo and Save As, with keyboard drawing turned off.](images/chemistry-limits/limits-fused-import-saved.jpg)
+![The imported fused-ring drawing after Undo, Redo and Save As, with keyboard drawing turned off.](../images/chemistry-limits/limits-fused-import-saved.jpg)
 
 An independent check parsed the exact input SMILES and the saved native file.
 The 452 carbon atom records match the SMILES parser's atom order and native ID
@@ -207,7 +207,7 @@ Native desktop evidence here is macOS only. Windows and Linux resource-probe
 runtime acceptance remains separate; cross-compilation and source inspection
 do not replace it. No new third-party material, external fixture dataset or
 dependency is bundled by this change; existing component notices remain in
-[NOTICE](../NOTICE).
+[NOTICE](../../NOTICE).
 
 ## Archived evidence
 

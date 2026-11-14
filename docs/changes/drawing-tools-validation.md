@@ -17,7 +17,7 @@ label dialog retains name, chemical/text mode and Apply/Cancel without a duplica
 alignment picker. Mixed values do not highlight a misleading alignment.
 
 Since 0.13.1 the editor also has an Alignment list under Label type; see
-[the atom label editor QA record](changes/qa-atom-label-editor.md).
+[the atom label editor QA record](qa-atom-label-editor.md).
 
 The updated app suite passed 152 tests (2 ignored). Coverage includes multiple
 selected groups, untouched unselected groups, unchanged atoms/bonds, mixed
@@ -90,9 +90,9 @@ Changing a Cp* ring edge to a wedge previously replaced its aromatic order with 
 
 The following native figure exports show the reported drawing before and after restoring the four affected Cp* edges. The wedge choices and other drawing objects are retained. This checks aromatic drawing behavior; the complex's metal/halide charge assignments remain outside this visual regression.
 
-| Before: ring order overwritten                                              | After: aromatic order retained                                                             |
-| --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| ![Cp* ellipses missing after wedge edits](images/aromatic-wedge-before.png) | ![Both Cp* ellipses retained with the same wedge choices](images/aromatic-wedge-after.png) |
+| Before: ring order overwritten                                                 | After: aromatic order retained                                                                |
+| ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------- |
+| ![Cp* ellipses missing after wedge edits](../images/aromatic-wedge-before.png) | ![Both Cp* ellipses retained with the same wedge choices](../images/aromatic-wedge-after.png) |
 
 Validation: 375 Rust tests passed (3 ignored), including aromatic styles on flat and tilted five-/six-member rings, chemical identity and stereo protection, partial curves, Cp* contacts, native round trips, figure/clipboard exports, click/drag/Properties editing and Undo/Redo. CDXML/CDX explicitly reject projection-only wedge appearances until they can preserve that distinction; plain aromatic exchange remains supported. No production unsafe blocks or panicking unwrap/expect calls were added.
 
@@ -104,4 +104,4 @@ The right-click menu groups object-specific commands before clipboard actions, o
 
 Validation: 160 app tests passed (2 ignored), plus all 9 editing tests. New coverage checks contextual visibility, all four menu tilt directions, preserved selection and unselected molecules, Undo/Redo, zoom-independent gestures, dead zones, nonfinite input, canceled/focus-lost/outside drags, tool changes, and aromatic ring interior hits without enabling ring fusion. All-target/all-feature Clippy and formatting passed. New code contains no unsafe blocks, panicking unwrap/expect, or explicit panic calls.
 
-Computer Use operated the optimized macOS build on an isolated two-ring document. Right-clicking the aromatic ring interior opened its contextual menu; Drag to tilt activated the new toolbar tool. A Shift-drag produced 60.000002° of X tilt. Saved bond records and the other ring's f32 coordinates were unchanged; retained XYZ bond-length error was below 0.00001 world units. Undo returned the selected ring to its plane; automated tests also cover Redo. Native screenshots: [menu](images/pr17/context-menu.png), [tilt submenu](images/pr17/context-tilt.png), [toolbar and result](images/pr17/tilt-tool.png). This is drawing-geometry validation, not coordination-chemistry validation.
+Computer Use operated the optimized macOS build on an isolated two-ring document. Right-clicking the aromatic ring interior opened its contextual menu; Drag to tilt activated the new toolbar tool. A Shift-drag produced 60.000002° of X tilt. Saved bond records and the other ring's f32 coordinates were unchanged; retained XYZ bond-length error was below 0.00001 world units. Undo returned the selected ring to its plane; automated tests also cover Redo. Native screenshots: [menu](../images/pr17/context-menu.png), [tilt submenu](../images/pr17/context-tilt.png), [toolbar and result](../images/pr17/tilt-tool.png). This is drawing-geometry validation, not coordination-chemistry validation.

@@ -24,7 +24,7 @@ Its presence in adapter enumeration does not establish hardware acceleration.
 
 ## Desktop measurements
 
-The checked-in [benchmark script](../scripts/benchmark_windows_renderer.ps1)
+The checked-in [benchmark script](../../scripts/benchmark_windows_renderer.ps1)
 opens a fresh copy of the bundled shortcut drawing: 483 atoms, 429 bonds,
 132 annotations and one arrow. Only the current viewport is visible. Each trial
 uses a 1280 × 820 window at 96 DPI, a separate application data directory and
@@ -151,9 +151,9 @@ All 11 GPU cases passed again. The representative captures below use unselected
 desktop views and were inspected for molecular geometry, readable text and clean
 presentation. Selection-control captures remain in the full test artifacts.
 
-| Light desktop                                                                                                                                         | Dark desktop                                                                                                                                        |
-| ----------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| ![WGPU rendering on the Radeon 780M: light desktop with a piperidin-4-one drawing and drawing-style panel.](images/wgpu-validation/linux-desktop.png) | ![WGPU rendering on the Radeon 780M: dark desktop with the same unselected piperidin-4-one drawing.](images/wgpu-validation/linux-dark-desktop.png) |
+| Light desktop                                                                                                                                            | Dark desktop                                                                                                                                           |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| ![WGPU rendering on the Radeon 780M: light desktop with a piperidin-4-one drawing and drawing-style panel.](../images/wgpu-validation/linux-desktop.png) | ![WGPU rendering on the Radeon 780M: dark desktop with the same unselected piperidin-4-one drawing.](../images/wgpu-validation/linux-dark-desktop.png) |
 
 These are offscreen rendering checks in a debug test build, not measurements of
 window presentation, input latency or frame rate. They establish Linux hardware

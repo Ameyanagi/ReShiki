@@ -1,6 +1,6 @@
 """Run the agent API P1 acceptance gates that a development machine can check.
 
-docs/agent-api-p1-validation.md defines gates G1-G8 and records their evidence.
+docs/changes/agent-api-p1-validation.md defines gates G1-G8 and records their evidence.
 With --local this runs the locally automatable subset in order: the G3-G7 cargo
 and uv commands, then the G8 audit, diff and grep checks. It prints a pass/fail
 table and every command line, and exits 1 if any check fails. A test command
@@ -21,7 +21,7 @@ from pathlib import Path
 from check_agent_dependencies import BASELINE_COMMIT
 
 ROOT = Path(__file__).resolve().parents[1]
-RECORD = "docs/agent-api-p1-validation.md"
+RECORD = "docs/changes/agent-api-p1-validation.md"
 OUTPUT_TAIL = 40
 
 # ops-1's byte pins of the Codex tool JSON and the Proposal and critique schemas.

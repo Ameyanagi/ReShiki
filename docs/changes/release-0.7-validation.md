@@ -20,7 +20,7 @@ The tagged release workflow must pass all five platform package checks, Windows 
 
 All eight public downloads were downloaded again and matched `SHA256SUMS`. All five portable archives identify version `0.7.0`, their intended platform/architecture and the exact release commit. The public macOS ZIP and DMG match the signed candidate verified locally: Developer ID signature, notarization ticket, Gatekeeper acceptance, DMG installation copy, and offline native chemistry with Python, uv and the checkout unavailable. No Windows/Linux GUI update or later-version in-app upgrade is claimed by those package checks.
 
-The live homepage displays **v0.7.0** and retains its working latest-release link and promotion video at desktop and mobile widths. Documentation and the illustrated changelog are deployed at [reshiki.com](https://reshiki.com/). No unsupported interchange or chemistry feature is promoted to validated support by packaging; the [0.7 release notes](changes-0.7.md) retain those limits.
+The live homepage displays **v0.7.0** and retains its working latest-release link and promotion video at desktop and mobile widths. Documentation and the illustrated changelog are deployed at [reshiki.com](https://reshiki.com/). No unsupported interchange or chemistry feature is promoted to validated support by packaging; the [0.7 release notes](../changes-0.7.md) retain those limits.
 
 ## Legacy reference expectations
 

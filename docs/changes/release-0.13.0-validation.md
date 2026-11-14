@@ -4,13 +4,13 @@ ReShiki 0.13.0 is planned for October 25, 2026. This record lists the checks run
 on the release preparation and the manual checks that remain before the tag is
 pushed. It does not yet record a tag run, a publishing run or the public
 downloads; add them here after the release, as the
-[0.12.0 record](release-0.12.0-validation.md) does. [Release notes](changes-0.13.md).
+[0.12.0 record](release-0.12.0-validation.md) does. [Release notes](../changes-0.13.md).
 
 ## Release preparation
 
 The release preparation pull request sets the version to 0.13.0 in `Cargo.toml`
 and `Cargo.lock`, moves the unreleased changes into the
-[release notes](changes-0.13.md), adds the GitHub release highlights in
+[release notes](../changes-0.13.md), adds the GitHub release highlights in
 `.github/release-notes/v0.13.0.md` and updates the install guide's file
 compatibility section. The npm package takes its version from `Cargo.toml` when
 the tag publishes it, so `packages/editor/package.json` is unchanged.

@@ -90,7 +90,7 @@ remains `CSR PENDING`, and the release policy remains `INVALID`. The integration
 has passed [test signing](https://github.com/Ameyanagi/ReShiki/actions/runs/37822934801),
 but production signing requires the Foundation's setup review, an issued
 certificate, the certificate pin and a successful approved production run. See
-[SignPath setup](signpath-setup.md). Test certificates are not publicly trusted.
+[SignPath setup](../signpath-setup.md). Test certificates are not publicly trusted.
 
 Vendor review requests were submitted on **2026-10-15** after maintainer approval:
 CrowdStrike, Arctic Wolf and Trapmine requests were sent by email, and SecureAge's
@@ -232,7 +232,7 @@ The new preference avoids unnecessary OpenGL/Vulkan driver initialization and
 retains the CPU/no-adapter software fallback. Effective explicit `ICED_BACKEND`
 preferences and all existing `WGPU_BACKEND` values remain respected. Graphics
 diagnostics also skip discovery when an explicit renderer list cannot select
-WGPU; see the [Windows guide](windows.md#release-performance-and-debugging).
+WGPU; see the [Windows guide](../windows.md#release-performance-and-debugging).
 
 A native Windows x64 release build completed successfully at 13:10 UTC on
 2026-10-15, using pinned Rust 1.99.0, `--locked` and
@@ -396,7 +396,7 @@ test-policy validation on both architectures. The nightly startup fix retains
 the existing application/outer-setup signing workflow. No evidence establishes
 that unsigned inner files caused the antivirus detections.
 At 16:23 UTC the portal still showed the production certificate as `CSR PENDING`
-and the release policy as `INVALID`. See [SignPath setup](signpath-setup.md) for
+and the release policy as `INVALID`. See [SignPath setup](../signpath-setup.md) for
 the existing integration and production activation requirements.
 
 ## Remaining acceptance

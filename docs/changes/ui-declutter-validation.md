@@ -8,7 +8,7 @@ fixture or a checklist does not mark a desktop workflow as passed.
 The source audit used `da5751d76db84c809b3562a3523536b459041cb8` on 2026-10-02.
 [PR #98](https://github.com/Ameyanagi/ReShiki/pull/98) records a macOS walkthrough
 and explicitly leaves Windows outstanding. The
-[0.10.0 release validation](../release-0.10.0-validation.md) also limits desktop
+[0.10.0 release validation](release-0.10.0-validation.md) also limits desktop
 interaction coverage to macOS. The [matched images](ui-declutter.md) are real
 application-widget renderer output at two sizes, from the disclosed historical
 commits. They are not native desktop captures of the final tabbed interface.

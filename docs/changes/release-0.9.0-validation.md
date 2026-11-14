@@ -1,6 +1,6 @@
 # ReShiki 0.9.0 release validation
 
-[ReShiki 0.9.0](https://github.com/Ameyanagi/ReShiki/releases/tag/v0.9.0) was published as the latest stable release on September 27, 2026. This record distinguishes source review, package checks and public-download verification against [0.8.0](https://github.com/Ameyanagi/ReShiki/releases/tag/v0.8.0). [Release notes](changes-0.9.md).
+[ReShiki 0.9.0](https://github.com/Ameyanagi/ReShiki/releases/tag/v0.9.0) was published as the latest stable release on September 27, 2026. This record distinguishes source review, package checks and public-download verification against [0.8.0](https://github.com/Ameyanagi/ReShiki/releases/tag/v0.8.0). [Release notes](../changes-0.9.md).
 
 ## Source review and desktop checks
 

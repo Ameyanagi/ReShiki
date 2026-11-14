@@ -1,6 +1,6 @@
 # ReShiki 0.11.0 release validation
 
-[ReShiki 0.11.0](https://github.com/Ameyanagi/ReShiki/releases/tag/v0.11.0) was published as the latest stable release at 02:13:53 UTC on October 6, 2026. GitHub identifies release `404240067` as stable, non-draft and latest. This record distinguishes source review, package checks and verification of the actual public downloads. [Release notes](changes-0.11.md).
+[ReShiki 0.11.0](https://github.com/Ameyanagi/ReShiki/releases/tag/v0.11.0) was published as the latest stable release at 02:13:53 UTC on October 6, 2026. GitHub identifies release `404240067` as stable, non-draft and latest. This record distinguishes source review, package checks and verification of the actual public downloads. [Release notes](../changes-0.11.md).
 
 ## Source review and package preparation
 

@@ -47,15 +47,15 @@ Raw executable SHA-256:
 All published captures and exports retain the original bytes: no crops,
 resizing, annotations or retouching. The native desktop captures are JPEG
 encoded by the capture provider and published with `.jpg` filenames.
-Renderer exports are PNG. The [evidence manifest](../tests/fixtures/drawing-tool-defaults/evidence-provenance.json)
+Renderer exports are PNG. The [evidence manifest](../../tests/fixtures/drawing-tool-defaults/evidence-provenance.json)
 records hashes, encoding and dimensions. The full scratch galleries and
 application bundles are kept outside Git.
 
 ## Chain icons and explanations — #250
 
-| Before                                                                                                                     | After                                                                                                                              |
-| -------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| ![Original Straight and Snaking chain icons on the blank-document toolbar](images/drawing-tool-defaults/blank-toolbar.jpg) | ![Conventional three-bond Straight icon and separate Snaking steering arrow](images/drawing-tool-defaults/blank-toolbar-after.jpg) |
+| Before                                                                                                                        | After                                                                                                                                 |
+| ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| ![Original Straight and Snaking chain icons on the blank-document toolbar](../images/drawing-tool-defaults/blank-toolbar.jpg) | ![Conventional three-bond Straight icon and separate Snaking steering arrow](../images/drawing-tool-defaults/blank-toolbar-after.jpg) |
 
 Both captures use a new blank document, light UI, Arial 10pt, JACS/ACS style,
 100% zoom, keyboard drawing on and the same full-window dimensions. The
@@ -69,9 +69,9 @@ shows a zigzag and curved steering arrow. Select or hover each button to read
 the corresponding regular-growth or steering/retracing hint. The existing
 uppercase **X** shortcut selects Straight; no new chain shortcut is introduced.
 
-| Straight settings                                                                                                                | Snaking settings                                                                                                             |
-| -------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| ![Selected Straight chain tool with regular 120-degree chain settings](images/drawing-tool-defaults/chain-straight-controls.jpg) | ![Selected Snaking chain tool with maximum-atom and angle settings](images/drawing-tool-defaults/chain-snaking-controls.jpg) |
+| Straight settings                                                                                                                   | Snaking settings                                                                                                                |
+| ----------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| ![Selected Straight chain tool with regular 120-degree chain settings](../images/drawing-tool-defaults/chain-straight-controls.jpg) | ![Selected Snaking chain tool with maximum-atom and angle settings](../images/drawing-tool-defaults/chain-snaking-controls.jpg) |
 
 The native review selected both tools and observed the Snaking guidance,
 “Steer while dragging · Retrace to shorten.” A Straight drag from (650, 800)
@@ -82,10 +82,10 @@ they do not claim a captured chain drawing.
 
 ## Orbital label readability — #90
 
-| Actual native desktop before                                                                                                                | Actual native desktop after                                                                                                                          |
-| ------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| ![Solid s orbital hides methanol OH while Properties still report CH4O and CO](images/drawing-tool-defaults/orbital-label-solid-before.jpg) | ![Same solid s orbital exposes OH with unchanged CH4O and CO properties](images/drawing-tool-defaults/orbital-label-solid-after.jpg)                 |
-| ![Gray p orbital crosses white methanol O on the dark canvas](images/drawing-tool-defaults/orbital-label-shaded-dark-before.jpg)            | ![Same gray p orbital clears white O on the dark canvas with unchanged properties](images/drawing-tool-defaults/orbital-label-shaded-dark-after.jpg) |
+| Actual native desktop before                                                                                                                   | Actual native desktop after                                                                                                                             |
+| ---------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ![Solid s orbital hides methanol OH while Properties still report CH4O and CO](../images/drawing-tool-defaults/orbital-label-solid-before.jpg) | ![Same solid s orbital exposes OH with unchanged CH4O and CO properties](../images/drawing-tool-defaults/orbital-label-solid-after.jpg)                 |
+| ![Gray p orbital crosses white methanol O on the dark canvas](../images/drawing-tool-defaults/orbital-label-shaded-dark-before.jpg)            | ![Same gray p orbital clears white O on the dark canvas with unchanged properties](../images/drawing-tool-defaults/orbital-label-shaded-dark-after.jpg) |
 
 Open the frozen solid-s/light or gray-p/dark fixture in each build. Use 250%
 zoom, F8 off, Arial 10pt, JACS/ACS style, the same camera and visible whole-drawing
@@ -104,14 +104,14 @@ backgrounds, physical figure scale and tight content bounds match within each
 pair. The solid s example is 624 × 624 pixels; all p examples are 527 × 624.
 These are application-rendered exports, not desktop interaction captures.
 
-| Original input and phase                | Before                                                                                                                                  | After                                                                                                                                             |
-| --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Solid s, back layer, light background   | ![Methanol OH hidden inside a solid s orbital before](images/drawing-tool-defaults/orbital-methanol-S-Solid-layer-1-Light-before.png)   | ![Same solid s orbital with readable OH after](images/drawing-tool-defaults/orbital-methanol-S-Solid-layer-1-Light-after.png)                     |
-| Solid p, front layer, light background  | ![Solid p orbital strokes cross methanol O before](images/drawing-tool-defaults/orbital-methanol-P-Solid-layer1-Light-before.png)       | ![Same solid p orbital clears the visible OH ink after](images/drawing-tool-defaults/orbital-methanol-P-Solid-layer1-Light-after.png)             |
-| Gray p, back layer, dark background     | ![Gray p orbital overlaps white methanol O before](images/drawing-tool-defaults/orbital-methanol-P-Shaded-layer-1-Dark-before.png)      | ![Same gray p orbital keeps white OH readable on dark paper after](images/drawing-tool-defaults/orbital-methanol-P-Shaded-layer-1-Dark-after.png) |
-| Outline p, front layer, dark background | ![Outline p orbital strokes cross white methanol O before](images/drawing-tool-defaults/orbital-methanol-P-Open-layer1-Dark-before.png) | ![Same outline p orbital leaves clearance around white OH after](images/drawing-tool-defaults/orbital-methanol-P-Open-layer1-Dark-after.png)      |
+| Original input and phase                | Before                                                                                                                                     | After                                                                                                                                                |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Solid s, back layer, light background   | ![Methanol OH hidden inside a solid s orbital before](../images/drawing-tool-defaults/orbital-methanol-S-Solid-layer-1-Light-before.png)   | ![Same solid s orbital with readable OH after](../images/drawing-tool-defaults/orbital-methanol-S-Solid-layer-1-Light-after.png)                     |
+| Solid p, front layer, light background  | ![Solid p orbital strokes cross methanol O before](../images/drawing-tool-defaults/orbital-methanol-P-Solid-layer1-Light-before.png)       | ![Same solid p orbital clears the visible OH ink after](../images/drawing-tool-defaults/orbital-methanol-P-Solid-layer1-Light-after.png)             |
+| Gray p, back layer, dark background     | ![Gray p orbital overlaps white methanol O before](../images/drawing-tool-defaults/orbital-methanol-P-Shaded-layer-1-Dark-before.png)      | ![Same gray p orbital keeps white OH readable on dark paper after](../images/drawing-tool-defaults/orbital-methanol-P-Shaded-layer-1-Dark-after.png) |
+| Outline p, front layer, dark background | ![Outline p orbital strokes cross white methanol O before](../images/drawing-tool-defaults/orbital-methanol-P-Open-layer1-Dark-before.png) | ![Same outline p orbital leaves clearance around white OH after](../images/drawing-tool-defaults/orbital-methanol-P-Open-layer1-Dark-after.png)      |
 
-Each [native fixture](../tests/fixtures/drawing-tool-defaults/) contains the
+Each [native fixture](../../tests/fixtures/drawing-tool-defaults) contains the
 same atoms, bond and orbital frame in both builds. The clearance removes orbital
 fill and original outline portions from label ink bounds; it introduces no
 background-colored objects or strokes. Unrelated orbital portions and geometry
@@ -120,7 +120,7 @@ change specifically protects visible atom labels.
 
 ### Placement controls and modifiers
 
-![Unchecked Snap to atoms controls in the context bar and Properties, with the actual Option/Alt free-placement hint](images/drawing-tool-defaults/orbital-snap-option-off.jpg)
+![Unchecked Snap to atoms controls in the context bar and Properties, with the actual Option/Alt free-placement hint](../images/drawing-tool-defaults/orbital-snap-option-off.jpg)
 
 This actual native screenshot is the command reference for the new
 **Option/Alt** bypass in the orbital-node target context. It shows the context
@@ -152,18 +152,18 @@ and preview/release equality at three zooms.
 
 ## Click-added lone pairs — #249
 
-| Before: one click on methanol O                                                                                                             | After: the same click and camera                                                                                                                 |
-| ------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| ![Methanol lone pair sits far above O before, with CH4O and CO properties visible](images/drawing-tool-defaults/lone-pair-click-before.jpg) | ![Same methanol lone pair sits closer to O after, with unchanged CH4O and CO properties](images/drawing-tool-defaults/lone-pair-click-after.jpg) |
+| Before: one click on methanol O                                                                                                                | After: the same click and camera                                                                                                                    |
+| ---------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ![Methanol lone pair sits far above O before, with CH4O and CO properties visible](../images/drawing-tool-defaults/lone-pair-click-before.jpg) | ![Same methanol lone pair sits closer to O after, with unchanged CH4O and CO properties](../images/drawing-tool-defaults/lone-pair-click-after.jpg) |
 
-Open [methanol-click-input.rsk](../tests/fixtures/drawing-tool-defaults/methanol-click-input.rsk)
+Open [methanol-click-input.rsk](../../tests/fixtures/drawing-tool-defaults/methanol-click-input.rsk)
 in each application. Keep F8 keyboard drawing off, JACS/ACS style, Arial 10pt,
 light background, the Properties panel visible and the same 250% camera. Choose
 **Lone pair** from **Chemical symbols**, click O once at desktop coordinate
 (968, 1012), then deselect on blank canvas at (1460, 590). The actual native
 review confirmed that one **Undo** removes the new mark and **Redo** restores
 it. After capture, the candidate drawing was saved through native **Save As**
-as [methanol-click-after-desktop.rsk](../tests/fixtures/drawing-tool-defaults/methanol-click-after-desktop.rsk).
+as [methanol-click-after-desktop.rsk](../../tests/fixtures/drawing-tool-defaults/methanol-click-after-desktop.rsk).
 
 The two full-window captures are 2560 × 1704 pixels. The before application has
 three public fixture tabs open; the after application has one. Pointer position
@@ -175,7 +175,7 @@ panel match; no selection handles remain.
 The actual Properties panels show **CH4O**, **2 atoms**, **1 bond** and canonical
 SMILES **CO** both before and after. Weight, exact mass, cLogP, TPSA, donor,
 acceptor, ring and unpaired-electron values also match. The separate
-[property comparison](../tests/fixtures/drawing-tool-defaults/properties-comparison.json)
+[property comparison](../../tests/fixtures/drawing-tool-defaults/properties-comparison.json)
 records those values and native-file checks.
 
 The saved native graph preserves atom IDs, elements and positions, explicit
@@ -245,6 +245,6 @@ performed in this macOS review.
   avoid nearby chemical ink; manual and previously saved offsets stay exact.
 
 Original code, tests, fixtures, documentation and ReShiki captures are offered
-under `MIT OR Apache-2.0` according to [CONTRIBUTING](../CONTRIBUTING.md).
+under `MIT OR Apache-2.0` according to [CONTRIBUTING](../../CONTRIBUTING.md).
 ChemDraw behavior was observed as a reference only. No third-party code, data
 or artwork was copied or bundled. Credit @Ameyanagi.

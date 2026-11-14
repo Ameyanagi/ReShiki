@@ -1,7 +1,7 @@
 import { defineConfig } from "astro/config";
 import starlight from "@astrojs/starlight";
 import starlightLlmsTxt from "starlight-llms-txt";
-import { historicalTopics } from "./scripts/doc-topics.mjs";
+import { historicalTopics, movedRecords } from "./scripts/doc-topics.mjs";
 
 const archivedPages = [
   "developer/changes-*",
@@ -19,7 +19,8 @@ export default defineConfig({
     "/reference/assistant": "/guide/assistant/",
     "/reference/atom-labels": "/guide/labels/",
     "/reference/bond-tools": "/guide/first-molecule/",
-    "/reference/capabilities": "/developer/capabilities/",
+    "/reference/capabilities":
+      "https://github.com/Ameyanagi/ReShiki/blob/main/docs/changes/capabilities.md",
     "/reference/chain-tools": "/guide/first-molecule/",
     "/reference/changes-0.2": "/developer/changes-0.2/",
     "/reference/clipboard": "/guide/sharing/",
@@ -50,7 +51,14 @@ export default defineConfig({
     "/reference/template-placement": "/guide/templates/",
     "/reference/tool-palettes": "/guide/first-molecule/",
     "/reference/typography": "/guide/labels/",
-    "/reference/workspace-review": "/developer/workspace-review/",
+    "/reference/workspace-review":
+      "https://github.com/Ameyanagi/ReShiki/blob/main/docs/changes/workspace-review.md",
+    ...Object.fromEntries(
+      movedRecords.map((name) => [
+        `/developer/${name}`,
+        `https://github.com/Ameyanagi/ReShiki/blob/main/docs/changes/${name}.md`,
+      ]),
+    ),
   },
   integrations: [
     starlight({
@@ -200,7 +208,6 @@ export default defineConfig({
                 { label: "Tool reference", slug: "developer/agent-reference" },
                 { label: "Agent skill", slug: "developer/agent-skill" },
                 { label: "Runtime safety", slug: "developer/runtime-safety" },
-                { label: "Acceptance record", slug: "developer/agent-api-p1-validation" },
               ],
             },
             {
@@ -213,7 +220,6 @@ export default defineConfig({
                 "assistant",
                 "atom-labels",
                 "bond-tools",
-                "capabilities",
                 "chain-tools",
                 "changes-0.2",
                 "chemistry-resource-policy",
@@ -245,7 +251,6 @@ export default defineConfig({
                 "tool-palettes",
                 "typography",
                 "windows",
-                "workspace-review",
               ].map((name) => ({ slug: `developer/${name}` })),
             },
           ],

@@ -11,7 +11,7 @@ your computer without Python, RDKit or uv.
 
 [Release downloads](https://github.com/Ameyanagi/ReShiki/releases/tag/v0.15.0) ·
 [Previous release](changes-0.14.md) ·
-[Release validation](release-0.15.0-validation.md).
+[Release validation](changes/release-0.15.0-validation.md).
 
 ## File compatibility
 
@@ -477,7 +477,7 @@ this release are by @Ameyanagi.
   ([#1068](https://github.com/Ameyanagi/ReShiki/pull/1068)).
 - **0.14.0 release validation.** The publication record of the tagged source,
   tag run and public downloads.
-  [Validation record](release-0.14.0-validation.md) ·
+  [Validation record](changes/release-0.14.0-validation.md) ·
   [PR #1066](https://github.com/Ameyanagi/ReShiki/pull/1066).
 - **Release preparation.** Update the version, the release notes and the
   documentation for 0.15.0.

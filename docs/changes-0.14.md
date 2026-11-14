@@ -12,7 +12,7 @@ still work on your computer without Python, RDKit or uv.
 
 [Release downloads](https://github.com/Ameyanagi/ReShiki/releases/tag/v0.14.0) ·
 [Previous release](changes-0.13.1.md) ·
-[Release validation](release-0.14.0-validation.md).
+[Release validation](changes/release-0.14.0-validation.md).
 
 ## File compatibility
 
@@ -517,7 +517,7 @@ contributor is named.
   [#605](https://github.com/Ameyanagi/ReShiki/pull/605)).
 - **0.13.1 release validation.** The publication record of the tagged source,
   tag runs and public downloads.
-  [Validation record](release-0.13.1-validation.md) ·
+  [Validation record](changes/release-0.13.1-validation.md) ·
   [PR #595](https://github.com/Ameyanagi/ReShiki/pull/595).
 - **Release preparation.** Update the version, the release notes and the
   documentation for 0.14.0.

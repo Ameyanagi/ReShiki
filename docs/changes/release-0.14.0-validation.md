@@ -3,14 +3,14 @@
 This record lists the checks run on the 0.14.0 release preparation and the
 checks that remain, and the [published release](#after-the-release): the tag
 run, the public downloads and the package registries.
-[Release notes](changes-0.14.md) · [Release procedure](releasing.md).
+[Release notes](../changes-0.14.md) · [Release procedure](../releasing.md).
 
 ## Release preparation
 
 The release preparation pull request sets the version to 0.14.0 in
 `Cargo.toml` (`[package]` and `[workspace.package]`, which the Python package
 follows) and `Cargo.lock`, moves the unreleased changes into the
-[release notes](changes-0.14.md), adds the GitHub release highlights in
+[release notes](../changes-0.14.md), adds the GitHub release highlights in
 `.github/release-notes/v0.14.0.md` and updates the install guide's file
 compatibility section. The npm package takes its version from `Cargo.toml`
 when the tag publishes it, so `packages/editor/package.json` is unchanged.
@@ -92,31 +92,31 @@ the drawing selected. After the panel closed, the next keys were Delete and
 then Cmd+Z, with no click in between. Each pair of screenshots shows the
 drawing after Delete and after Cmd+Z.
 
-| Panel                     | Closed with                    | Delete acted | Cmd+Z acted | Screenshots                                                                                                                                                     |
-| ------------------------- | ------------------------------ | ------------ | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Clean up preview          | Enter                          | yes          | yes         | [Delete](images/release-0.14.0/focus-restore/01-cleanup-enter-delete.jpg) · [Cmd+Z](images/release-0.14.0/focus-restore/01-cleanup-enter.jpg)                   |
-| Clean up preview          | Esc                            | yes          | yes         | [Delete](images/release-0.14.0/focus-restore/01-cleanup-esc-delete.jpg) · [Cmd+Z](images/release-0.14.0/focus-restore/01-cleanup-esc.jpg)                       |
-| 3D preview                | Enter                          | yes          | yes         | [Delete](images/release-0.14.0/focus-restore/02-3d-enter-delete.jpg) · [Cmd+Z](images/release-0.14.0/focus-restore/02-3d-enter.jpg)                             |
-| 3D preview                | Esc                            | yes          | yes         | [Delete](images/release-0.14.0/focus-restore/02-3d-esc-delete.jpg) · [Cmd+Z](images/release-0.14.0/focus-restore/02-3d-esc.jpg)                                 |
-| Atom label editor         | Enter                          | yes          | yes         | [Delete](images/release-0.14.0/focus-restore/03-atom-label-enter-delete.jpg) · [Cmd+Z](images/release-0.14.0/focus-restore/03-atom-label-enter.jpg)             |
-| Atom label editor         | Esc                            | yes          | yes         | [Delete](images/release-0.14.0/focus-restore/03-atom-label-esc-delete.jpg) · [Cmd+Z](images/release-0.14.0/focus-restore/03-atom-label-esc.jpg)                 |
-| Name import preview       | Enter in the name field        | yes          | yes         | [Delete](images/release-0.14.0/focus-restore/04-name-import-enter-delete.jpg) · [Cmd+Z](images/release-0.14.0/focus-restore/04-name-import-enter.jpg)           |
-| Name import preview       | Esc in the name field          | yes          | yes         | [Delete](images/release-0.14.0/focus-restore/04-name-import-esc-delete.jpg) · [Cmd+Z](images/release-0.14.0/focus-restore/04-name-import-esc.jpg)               |
-| Structure import          | **Insert** (Enter adds a line) | yes          | yes         | [Delete](images/release-0.14.0/focus-restore/05-structure-import-enter-delete.jpg) · [Cmd+Z](images/release-0.14.0/focus-restore/05-structure-import-enter.jpg) |
-| Structure import          | Esc in the structure field     | yes          | yes         | [Delete](images/release-0.14.0/focus-restore/05-structure-import-esc-delete.jpg) · [Cmd+Z](images/release-0.14.0/focus-restore/05-structure-import-esc.jpg)     |
-| Reaction mapping proposal | Enter on **Apply maps**        | yes          | yes         | [Delete](images/release-0.14.0/focus-restore/06-reaction-mapping-enter-delete.jpg) · [Cmd+Z](images/release-0.14.0/focus-restore/06-reaction-mapping-enter.jpg) |
-| Reaction mapping proposal | **Discard** (no Esc shortcut)  | yes          | yes         | [Delete](images/release-0.14.0/focus-restore/06-reaction-mapping-esc-delete.jpg) · [Cmd+Z](images/release-0.14.0/focus-restore/06-reaction-mapping-esc.jpg)     |
+| Panel                     | Closed with                    | Delete acted | Cmd+Z acted | Screenshots                                                                                                                                                           |
+| ------------------------- | ------------------------------ | ------------ | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Clean up preview          | Enter                          | yes          | yes         | [Delete](../images/release-0.14.0/focus-restore/01-cleanup-enter-delete.jpg) · [Cmd+Z](../images/release-0.14.0/focus-restore/01-cleanup-enter.jpg)                   |
+| Clean up preview          | Esc                            | yes          | yes         | [Delete](../images/release-0.14.0/focus-restore/01-cleanup-esc-delete.jpg) · [Cmd+Z](../images/release-0.14.0/focus-restore/01-cleanup-esc.jpg)                       |
+| 3D preview                | Enter                          | yes          | yes         | [Delete](../images/release-0.14.0/focus-restore/02-3d-enter-delete.jpg) · [Cmd+Z](../images/release-0.14.0/focus-restore/02-3d-enter.jpg)                             |
+| 3D preview                | Esc                            | yes          | yes         | [Delete](../images/release-0.14.0/focus-restore/02-3d-esc-delete.jpg) · [Cmd+Z](../images/release-0.14.0/focus-restore/02-3d-esc.jpg)                                 |
+| Atom label editor         | Enter                          | yes          | yes         | [Delete](../images/release-0.14.0/focus-restore/03-atom-label-enter-delete.jpg) · [Cmd+Z](../images/release-0.14.0/focus-restore/03-atom-label-enter.jpg)             |
+| Atom label editor         | Esc                            | yes          | yes         | [Delete](../images/release-0.14.0/focus-restore/03-atom-label-esc-delete.jpg) · [Cmd+Z](../images/release-0.14.0/focus-restore/03-atom-label-esc.jpg)                 |
+| Name import preview       | Enter in the name field        | yes          | yes         | [Delete](../images/release-0.14.0/focus-restore/04-name-import-enter-delete.jpg) · [Cmd+Z](../images/release-0.14.0/focus-restore/04-name-import-enter.jpg)           |
+| Name import preview       | Esc in the name field          | yes          | yes         | [Delete](../images/release-0.14.0/focus-restore/04-name-import-esc-delete.jpg) · [Cmd+Z](../images/release-0.14.0/focus-restore/04-name-import-esc.jpg)               |
+| Structure import          | **Insert** (Enter adds a line) | yes          | yes         | [Delete](../images/release-0.14.0/focus-restore/05-structure-import-enter-delete.jpg) · [Cmd+Z](../images/release-0.14.0/focus-restore/05-structure-import-enter.jpg) |
+| Structure import          | Esc in the structure field     | yes          | yes         | [Delete](../images/release-0.14.0/focus-restore/05-structure-import-esc-delete.jpg) · [Cmd+Z](../images/release-0.14.0/focus-restore/05-structure-import-esc.jpg)     |
+| Reaction mapping proposal | Enter on **Apply maps**        | yes          | yes         | [Delete](../images/release-0.14.0/focus-restore/06-reaction-mapping-enter-delete.jpg) · [Cmd+Z](../images/release-0.14.0/focus-restore/06-reaction-mapping-enter.jpg) |
+| Reaction mapping proposal | **Discard** (no Esc shortcut)  | yes          | yes         | [Delete](../images/release-0.14.0/focus-restore/06-reaction-mapping-esc-delete.jpg) · [Cmd+Z](../images/release-0.14.0/focus-restore/06-reaction-mapping-esc.jpg)     |
 
 Name and Structure import are sidebar panels: Enter, **Insert** and Esc return
 keyboard focus to the drawing and leave the sidebar open with its draft.
 Assistant review was not checked because it needs live assistant credentials;
 the automated `review_close_returns_focus_*` tests cover its local buttons.
 
-![After closing the Clean up preview with Esc, Delete removed the selected ethanol](images/release-0.14.0/focus-restore/01-cleanup-esc-delete.jpg)
+![After closing the Clean up preview with Esc, Delete removed the selected ethanol](../images/release-0.14.0/focus-restore/01-cleanup-esc-delete.jpg)
 
-![Cmd+Z then restored it, with "History restored" in the status bar](images/release-0.14.0/focus-restore/01-cleanup-esc.jpg)
+![Cmd+Z then restored it, with "History restored" in the status bar](../images/release-0.14.0/focus-restore/01-cleanup-esc.jpg)
 
-![After discarding the atom-map proposal, Cmd+Z restored the deleted reaction](images/release-0.14.0/focus-restore/06-reaction-mapping-esc.jpg)
+![After discarding the atom-map proposal, Cmd+Z restored the deleted reaction](../images/release-0.14.0/focus-restore/06-reaction-mapping-esc.jpg)
 
 ## Live RDKit reference suite
 
@@ -143,7 +143,7 @@ compared narrowly:
 - **Known issues kept as exact case lists:**
   [#1042](https://github.com/Ameyanagi/ReShiki/issues/1042) and
   [#1048](https://github.com/Ameyanagi/ReShiki/issues/1048); see
-  [Known limits](changes-0.14.md#known-limits).
+  [Known limits](../changes-0.14.md#known-limits).
 
 The complete suite then ran on the release branch on macOS ARM64, Linux x64
 and Windows x64:

@@ -1,12 +1,12 @@
 # Agent API P1 acceptance record
 
 This record defines acceptance gates G1-G8 for P1 of the experimental
-[agent API](agent-api.md), `reshiki --mcp` and `reshiki --cli`, and collects
+[agent API](../agent-api.md), `reshiki --mcp` and `reshiki --cli`, and collects
 their evidence. Each gate names its commands, what counts as a pass, and slots
 for run URLs, commit SHAs, client versions and dates. A gate passes only when
 every row in it has passed. The experimental label can be removed only after a
 stable release ships with all eight gates passing
-([experimental status](agent-api.md#experimental-status)).
+([experimental status](../agent-api.md#experimental-status)).
 
 P1 landed on `main` at `cfeec8fb` on 2026-10-08, as the merge of
 [PR #269](https://github.com/Ameyanagi/ReShiki/pull/269). Its tip `7cf6cada`
@@ -37,7 +37,7 @@ release run
 [37758838460](https://github.com/Ameyanagi/ReShiki/actions/runs/37758838460)
 then passed on the P1 tip.
 
-The [published Windows Nightly review](changes/nightly-windows-20261011.md) adds
+The [published Windows Nightly review](nightly-windows-20261011.md) adds
 a manual Windows x64 check of Nightly 0.11.0-nightly.20261011.38123945065.1:
 CLI information, ethanol conversion, MOL analysis, `.rsk` rendering and
 graphics information all exited zero.
@@ -88,7 +88,7 @@ The server must work in every MCP revision it advertises: 2026-07-28,
 2025-11-25 and 2025-06-18
 ([versioning](https://modelcontextprotocol.io/specification/2026-07-28/basic/versioning)).
 It accepts no older revision; an `initialize` that asks for 2025-03-26 gets
-2025-11-25 ([protocol revisions](agent-api.md#protocol-revisions)). These
+2025-11-25 ([protocol revisions](../agent-api.md#protocol-revisions)). These
 tests cover each revision:
 
 | Revision   | Tests                                                                                                                                                                                                                                               |
@@ -180,12 +180,12 @@ G4 cites the tests that own each behavior instead of repeating them.
 
 ## G7: docs and labels
 
-| Check                   | Command                                                                                                       | Passes when                                                                                                                                                      | Local                          | Owner                                |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ | ------------------------------------ |
-| Experimental labels     | `cargo test --locked --no-default-features -p reshiki --test agent_api_labels`                                | `server/discover`, `initialize`, `tools/list`, `info`, `--cli help` and CLI JSON carry the labels of `crates/agent/src/stability.rs` and every tool's four hints | Passed: 4 tests                | —                                    |
-| Filesystem fence        | `uv run --locked python -m unittest tests.test_agent_fs_fence`                                                | Each agent crate's `clippy.toml` disallows direct filesystem calls, and the agent, MCP and launch sources use no fenced token outside the access module          | Passed: 5 tests                | —                                    |
-| Documentation build     | `bun run docs:build`                                                                                          | Every page builds and the link check prints `Verified <n> local documentation links and assets.`                                                                 | Passed: 8,276 links and assets | —                                    |
-| Privacy-policy sign-off | The owner reviews [the agent API section](privacy-policy.md#optional-agent-api-and-command-line-experimental) | The owner confirms it matches the behavior above: grants for MCP, the user's authority for the CLI, no listener, no network, and what clients may forward        | —                              | Pending. TODO (owner): name and date |
+| Check                   | Command                                                                                                          | Passes when                                                                                                                                                      | Local                          | Owner                                |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ | ------------------------------------ |
+| Experimental labels     | `cargo test --locked --no-default-features -p reshiki --test agent_api_labels`                                   | `server/discover`, `initialize`, `tools/list`, `info`, `--cli help` and CLI JSON carry the labels of `crates/agent/src/stability.rs` and every tool's four hints | Passed: 4 tests                | —                                    |
+| Filesystem fence        | `uv run --locked python -m unittest tests.test_agent_fs_fence`                                                   | Each agent crate's `clippy.toml` disallows direct filesystem calls, and the agent, MCP and launch sources use no fenced token outside the access module          | Passed: 5 tests                | —                                    |
+| Documentation build     | `bun run docs:build`                                                                                             | Every page builds and the link check prints `Verified <n> local documentation links and assets.`                                                                 | Passed: 8,276 links and assets | —                                    |
+| Privacy-policy sign-off | The owner reviews [the agent API section](../privacy-policy.md#optional-agent-api-and-command-line-experimental) | The owner confirms it matches the behavior above: grants for MCP, the user's authority for the CLI, no listener, no network, and what clients may forward        | —                              | Pending. TODO (owner): name and date |
 
 The tool catalog the documentation describes is pinned too:
 `the_operation_catalog_bytes_are_pinned` in `crates/agent/tests/contract.rs`
@@ -259,5 +259,5 @@ on 2026-10-13:
    say "Nightly builds since 2026-10-08", the date of the first Nightly with
    the API.
 9. Done for the [status](#status) table. The
-   [client compatibility](agent-api.md#client-compatibility) table stays
+   [client compatibility](../agent-api.md#client-compatibility) table stays
    Pending until the owner completes G1(d).

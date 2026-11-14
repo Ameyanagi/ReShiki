@@ -1,12 +1,12 @@
 # PR #17: molecular editing and assistant review
 
-Illustrated development review of [PR #17](https://github.com/Ameyanagi/ReShiki/pull/17), prepared on 2026-09-23 and included in [ReShiki 0.7.0](changes-0.7.md). Development screenshots retain their original v0.6.1 build labels. See the [release validation record](release-0.7-validation.md) for publication checks.
+Illustrated development review of [PR #17](https://github.com/Ameyanagi/ReShiki/pull/17), prepared on 2026-09-23 and included in [ReShiki 0.7.0](../changes-0.7.md). Development screenshots retain their original v0.6.1 build labels. See the [release validation record](release-0.7-validation.md) for publication checks.
 
 ## Groups that retain their atoms
 
 Boc and the other ordinary presets (29 in total) are defined fragments, not just text. Cp is cyclopentadienyl (C5H5−); Cp* is pentamethylcyclopentadienyl (C10H15−). Their five-center attachment and real atoms remain in the drawing when the label is collapsed. Metal charge remains as entered. Composition excludes attachment points; it does not validate the complex's coordination chemistry.
 
-![Cp*2Fe with its counted composition](images/pr17/cp-star-formula.png)
+![Cp*2Fe with its counted composition](../images/pr17/cp-star-formula.png)
 
 *ReShiki release-build capture: collapsed Cp*2Fe reports C20H30Fe and 21 defined atoms. The two attachment points are excluded from the atom count.*
 
@@ -14,7 +14,7 @@ Select a group and press **Enter** to edit its label. **Chemical abbreviation** 
 
 Group label alignment defaults to **Automatic**. Select one or more groups and use the existing **Left / Center / Right toolbar buttons**. The adjacent **Auto / above** menu restores Automatic or chooses Stacked above. Captions use the same buttons; mixed selections are updated together in one Undo step. Justify remains a paragraph operation. The label dialog now only edits the label and its meaning. Overrides survive native/CDXML/CDX round trips and Undo/Redo without changing the fragment's atoms or bonds. Above currently places a single nickname above its anchor; ChemDraw's general multiline formula-token stacking is not implemented.
 
-![Group alignment in the shared top toolbar](images/pr17/group-alignment-options.png)
+![Group alignment in the shared top toolbar](../images/pr17/group-alignment-options.png)
 
 _Current release build: the Cp_ editor exposes alignment separately from the chemical abbreviation mode. The GUI check changed Cp* to Centered, saved it and verified that every atom and bond stayed identical.*
 
@@ -22,13 +22,13 @@ _Current release build: the Cp_ editor exposes alignment separately from the che
 
 Dragging a bonded atom or collapsed group uses the existing **Length** and **Angles** constraints. Hold **Option on macOS / Alt on Windows or Linux** to move freely, including during a drag. Whole molecules still translate freely. Conflicting constraints at a multiply bonded selection keep the geometry intact until free movement is requested.
 
-![Bond constraints exposed for a selected group](images/pr17/constrained-movement.png)
+![Bond constraints exposed for a selected group](../images/pr17/constrained-movement.png)
 
 _Current release build: selecting the upper Cp_ reveals Length, Angles and the modifier hint. GUI measurement gave 42.0000 world units at −135° with constraints, and 108.3621 units at −129.8362° for the same drag with Option. The configured 14.4 pt length is 42 world units.*
 
 Clean up no longer splits a Cp/Cp* group at its multi-center attachment and reports “Invalid abbreviation.” Attachment-containing components stay unchanged, with an explicit warning; independent ordinary molecules can still be cleaned. Invalid input and solver failures still return errors. Automatic geometry cleanup of these complexes remains unsupported.
 
-![Cp* cleanup preview with the explicit preservation warning](images/pr17/cleanup-cp-star.png)
+![Cp* cleanup preview with the explicit preservation warning](../images/pr17/cleanup-cp-star.png)
 
 _Current release build: the original Cp_ structure remains intact in the cleanup preview. Apply/Cancel and Undo are available.*
 
@@ -36,17 +36,17 @@ _Current release build: the original Cp_ structure remains intact in the cleanup
 
 The right-click menu now puts selection-specific editing first, groups Arrange & transform, Bond appearance and Attachment points into submenus, and separates clipboard commands from Delete. Irrelevant actions are omitted. Submenus keep their opening position when possible, and right-clicking an existing selection preserves it. Ring interiors now recognize aromatic and substituted rings as well as saturated ones.
 
-![Selection-aware right-click menu](images/pr17/context-menu.png)
+![Selection-aware right-click menu](../images/pr17/context-menu.png)
 
 _Current release-build capture: right-click inside a ring to select it and see its applicable commands. Empty canvas offers Undo/Redo, Paste, Select all and Fit drawing._
 
 Choose **3D tilt → Drag to tilt**, or the **tilted-ring tool in the second row of the left toolbar**. Drag vertically for X tilt and horizontally for Y tilt; hold **Shift** to snap each axis to 15°. A click selects the molecule; dragging empty space selects a region. The canvas previews the result, Escape cancels the gesture, and Undo restores the whole drag. Use **Done** or **V** to return to Select.
 
-![3D tilt from the right-click menu](images/pr17/context-tilt.png)
+![3D tilt from the right-click menu](../images/pr17/context-tilt.png)
 
 _The submenu offers X/Y ±15° steps and front-bond emphasis. Activating the tool keeps those controls above the canvas for repeated use._
 
-![3D tilt tool with a projected ring and an unchanged reference ring](images/pr17/tilt-tool.png)
+![3D tilt tool with a projected ring and an unchanged reference ring](../images/pr17/tilt-tool.png)
 
 _Current release-build GUI check: a Shift-drag tilted only the left ring by 60°. Saving confirmed unchanged bond records and right-ring coordinates, with less than 0.00001 world units of error in retained XYZ bond lengths. Undo restored the planar drawing; automated tests also cover Redo. Labels stay upright; tilt does not assign stereochemistry._
 
@@ -54,21 +54,21 @@ _Current release-build GUI check: a Shift-drag tilted only the left ring by 60°
 
 Shared bond outlines remove the reported white seams between wedges and ordinary bonds. Wedge tips retain at least the normal bond width. Hollow bonds, crossings and export caps use the corrected geometry. The visual matrix covers 144 combinations of ring size, tilt, width and bond styles.
 
-![Corrected bond junction regression drawing](images/pr17/bond-junctions.png)
+![Corrected bond junction regression drawing](../images/pr17/bond-junctions.png)
 
 _Actual app capture from an earlier stage of this PR, using the reported mixed-wedge regression fixture._
 
 **Shift+R** switches between saturated and aromatic ring presets with the same member count. Inner ring curves depict partial delocalization without changing bond orders. Projection transforms retain aromatic circles as ellipses; perspective is optional and does not assign stereochemistry. Element-based coloring applies to selected atoms or the whole drawing in one undoable action.
 
-![Flat coordination drawing with partial inner curves and colored atoms](images/pr17/coordination-figure.png)
+![Flat coordination drawing with partial inner curves and colored atoms](../images/pr17/coordination-figure.png)
 
 _Actual figure export from the source-image visual regression, not an app screenshot or a validated reference molecule. A nitrogen valence assignment and captioned overall charges still require chemical review. No tilt is applied._
 
-![Batch nitrogen coloring in the current build](images/pr17/element-colors.png)
+![Batch nitrogen coloring in the current build](../images/pr17/element-colors.png)
 
 _Current release build: Atoms… → N → Whole drawing colors all 10 nitrogen labels in one action; Undo restores them. Bonds and the other element colors stay unchanged. The fixture’s existing nitrogen-valence warning remains visible._
 
-![Retained ring depth and projection controls](images/pr17/ring-projection.png)
+![Retained ring depth and projection controls](../images/pr17/ring-projection.png)
 
 _Actual capture from an earlier PR stage: X/Y tilt acts in 15° steps, aromatic circles follow the plane, and labels remain upright. Emphasize front bonds uses depth without assigning stereochemistry. Reversing a tilt restores the retained geometry._
 
@@ -76,13 +76,13 @@ _Actual capture from an earlier PR stage: X/Y tilt acts in 15° steps, aromatic 
 
 Multi-center attachments reference all participating atoms; variable attachments reference alternative positions. They are distinct from plain dummy atoms, free text labels and legacy drawing centroids. Native editing, copy/delete/undo and fragment placement preserve or remap their target IDs. CDXML/CDX carry typed nodes; V3000 carries ALL/ANY endpoint lists.
 
-![An anonymous dummy marker visible in the editor](images/pr17/dummy-editor.png)
+![An anonymous dummy marker visible in the editor](../images/pr17/dummy-editor.png)
 
 _Actual app capture: the green handle at the junction is an editing aid. Anonymous dummy/attachment markers are omitted from SVG, PNG, PDF and Office clipboard figures. Visible group names and explicit text labels remain. Native/editable copies keep the underlying nodes._
 
 ChemDraw 26 was operated with Computer Use and native macOS events on isolated documents. η³-allyl, η⁶-arene, ferrocene and variable attachments were opened, edited and saved. Twelve common groups passed Check Structure and retained identical chemical graphs after Expand Label. All 29 ordinary presets have automated interchange coverage.
 
-![Common groups opened and checked in ChemDraw](images/pr17/chemdraw-groups.png)
+![Common groups opened and checked in ChemDraw](../images/pr17/chemdraw-groups.png)
 
 _Actual ChemDraw capture from this PR's interoperability checks. The earlier bare-N/NH export bug was corrected before this capture._
 
@@ -92,21 +92,21 @@ ChemDraw discarded nested multi-center definitions when resaving collapsed Cp la
 
 Pasted or chosen images are sent to the assistant when you press Send. The assistant creates editable drawing objects and keeps a reviewable preview. The sent image is retained in its chat message for later inspection during that session; clearing the composer does not remove it. Chat image history is not persisted across app restarts.
 
-![The smaller assistant with a pasted image ready to send](images/pr17/assistant-image.png)
+![The smaller assistant with a pasted image ready to send](../images/pr17/assistant-image.png)
 
 _Actual app capture from an earlier stage of this PR: the image is ready in the composer. This capture illustrates image input, not sent-message history._
 
-![Sent image retained after clearing the composer](images/pr17/sent-image-history.png)
+![Sent image retained after clearing the composer](../images/pr17/sent-image-history.png)
 
 _Current release build: after sending the test image, generation was stopped and the composer attachment removed. The chat message still retains the image. No generated chemistry was applied in this check._
 
-![Enlarged sent image with zoom and pan](images/pr17/sent-image-viewer.png)
+![Enlarged sent image with zoom and pan](../images/pr17/sent-image-viewer.png)
 
 _Clicking the chat thumbnail opens the source image in the window-sized viewer. Scroll zooms, drag pans, and Close/Escape returns to the conversation._
 
 GPT-6-Astra is the default when available. Source-image reconstruction favors the flat source layout. Progress-aware timeouts distinguish connection failure, inactivity and a hard turn limit; completed previews remain available after a timeout. These changes do not guarantee correct recognition of every chemical image.
 
-![In-app update controls](images/pr17/update-check.png)
+![In-app update controls](../images/pr17/update-check.png)
 
 _Actual release-build capture: Check updates, automatic checks and Update and restart. Installation is disabled because there is no newer public release. This is not evidence of a future-version upgrade._
 

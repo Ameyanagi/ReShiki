@@ -177,7 +177,7 @@ trial. Results and desktop captures go under
 foreground window, then restores them and the previous environment settings.
 CPU percentages are normalized across all logical processors. This measures
 CPU cost for the input workload, not achieved frame rate or input latency.
-See the [Windows VM validation](windows-gpu-validation.md) for measured results
+See the [Windows VM validation](changes/windows-gpu-validation.md) for measured results
 and their limits.
 
 The idle timer correction from v0.4.0 remains in place. The original Windows

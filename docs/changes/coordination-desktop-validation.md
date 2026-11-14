@@ -3,7 +3,7 @@
 **Merged, unreleased, in [PR #283](https://github.com/Ameyanagi/ReShiki/pull/283)**,
 addressing [#246](https://github.com/Ameyanagi/ReShiki/issues/246).
 Contribution: @Ameyanagi, project creator and maintainer. The
-[coordination guide](fragment-joining.md#coordination-contacts-in-place) describes
+[coordination guide](../fragment-joining.md#coordination-contacts-in-place) describes
 the supported donor/metal endpoints, keyboard action and interchange limits.
 
 Connect donor atoms to metals in place, including chelate closure, while
@@ -47,7 +47,7 @@ inspected for legibility and unrelated/private content before packaging.
 
 ## Ordinary rejection and the matching donor-10 contact
 
-Open the same [original native drawing](../tests/fixtures/coordination/co-en3-before.rsk)
+Open the same [original native drawing](../../tests/fixtures/coordination/co-en3-before.rsk)
 in each application. It contains Co1 with charge +3 and three complete NCCN
 ligands: **13 atoms, nine covalent bonds, C6H24CoN6+3**.
 
@@ -58,11 +58,11 @@ with no Undo entry. This distinction is visible in the panel and matters when
 matching the candidate: the candidate replay starts from a fresh original and
 explicitly adds **donor 10 → Co1** using **Coordinate in place…**.
 
-| Baseline: ordinary Connect, panel anchor 10, rejected                                                                                                                       | Candidate: explicit donor 10 → Co1 succeeds                                                                                                                                             |
-| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| ![Ordinary Move and attach uses Atom 10 and rejects Co3+ for lack of covalent valence; the original drawing is unchanged.](images/coordination/co-en3-connect-rejected.jpg) | ![Coordinate in place adds the matching donor-10 contact without moving atoms; whole Properties reports 13 atoms and 10 bonds.](images/coordination/co-en3-donor10-contact-success.jpg) |
+| Baseline: ordinary Connect, panel anchor 10, rejected                                                                                                                          | Candidate: explicit donor 10 → Co1 succeeds                                                                                                                                                |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| ![Ordinary Move and attach uses Atom 10 and rejects Co3+ for lack of covalent valence; the original drawing is unchanged.](../images/coordination/co-en3-connect-rejected.jpg) | ![Coordinate in place adds the matching donor-10 contact without moving atoms; whole Properties reports 13 atoms and 10 bonds.](../images/coordination/co-en3-donor10-contact-success.jpg) |
 
-The [one-contact native save](../tests/fixtures/coordination/co-en3-one-contact-desktop.rsk)
+The [one-contact native save](../../tests/fixtures/coordination/co-en3-one-contact-desktop.rsk)
 contains exactly one new directed order-5 bond, **10 → 1**, with plain dative
 appearance and no stereo. The independent
 [one-contact audit](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/fixtures/coordination/desktop-one-contact-independent-audit.json)
@@ -73,7 +73,7 @@ are finite. Co charge +3 and all six nitrogen H2 labels remain unchanged.
 Only the six carbon-derived H-label cache values refresh from 0 to 2, at IDs
 3/4/7/8/11/12. Those caches are distinct from the unchanged `explicit_h`,
 `no_implicit`, charge, isotope, aromatic and stereo fields. See the model's
-[derived-label refresh](../crates/model/src/atom_labels/refresh.rs). The same
+[derived-label refresh](../../crates/model/src/atom_labels/refresh.rs). The same
 cache update occurs in the complete desktop assembly and is not extra hydrogen
 atom insertion.
 
@@ -85,16 +85,16 @@ closes a chelate already in the same connected component; atoms stay in place.
 The result has **13 atoms and 15 bonds**, retaining all three NCCN skeletons,
 six NH2 donors and C6H24CoN6+3.
 
-![Whole Properties after adding all six donor-to-cobalt contacts reports 13 atoms, 15 bonds and unchanged formula.](images/coordination/co-en3-six-contacts-properties.jpg)
+![Whole Properties after adding all six donor-to-cobalt contacts reports 13 atoms, 15 bonds and unchanged formula.](../images/coordination/co-en3-six-contacts-properties.jpg)
 
 Repeating 13 → 1 made no edit. One header **Undo** then removed the previous
 actual contact, changing 15 bonds to 14; this proves the duplicate did not add
 another Undo entry. **Redo** restored 15 bonds. Save As produced
-[co-en3-desktop-assembled.rsk](../tests/fixtures/coordination/co-en3-desktop-assembled.rsk).
+[co-en3-desktop-assembled.rsk](../../tests/fixtures/coordination/co-en3-desktop-assembled.rsk).
 
-| Saved desktop assembly                                                                                                         | Reopened in a fresh process                                                                                                                          |
-| ------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| ![The complete six-contact complex after Save As, with 13 atoms and 15 bonds.](images/coordination/co-en3-assembled-saved.jpg) | ![Fresh-process reopening retains all six contacts and whole-drawing counts, with Undo disabled.](images/coordination/co-en3-assembled-reopened.jpg) |
+| Saved desktop assembly                                                                                                            | Reopened in a fresh process                                                                                                                             |
+| --------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ![The complete six-contact complex after Save As, with 13 atoms and 15 bonds.](../images/coordination/co-en3-assembled-saved.jpg) | ![Fresh-process reopening retains all six contacts and whole-drawing counts, with Undo disabled.](../images/coordination/co-en3-assembled-reopened.jpg) |
 
 The retained [independent audit](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/fixtures/coordination/desktop-native-independent-audit.json)
 confirms that all six new bonds are directed order 5 from donors
@@ -115,37 +115,37 @@ The labeled **Mark [**, **Connect ]** and **Coordinate }** controls show the
 donor/metal target context. These are two controls in the candidate application,
 not a frozen-base keyboard screenshot comparison.
 
-| Candidate ordinary ] rejects covalent attachment                                                                                                                                                                   | Candidate } adds the marked donor contact                                                                                                                                     |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| ![With donor N5 marked and Co1 active, ordinary Connect rejects the covalent operation; the labeled Mark, Connect and Coordinate controls are visible.](images/coordination/co-en3-keyboard-covalent-rejected.jpg) | ![Coordinate } adds donor 5 to Co1; the inspector currently shows only selected cobalt, one atom and zero bonds.](images/coordination/co-en3-keyboard-coordinate-success.jpg) |
+| Candidate ordinary ] rejects covalent attachment                                                                                                                                                                      | Candidate } adds the marked donor contact                                                                                                                                        |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ![With donor N5 marked and Co1 active, ordinary Connect rejects the covalent operation; the labeled Mark, Connect and Coordinate controls are visible.](../images/coordination/co-en3-keyboard-covalent-rejected.jpg) | ![Coordinate } adds donor 5 to Co1; the inspector currently shows only selected cobalt, one atom and zero bonds.](../images/coordination/co-en3-keyboard-coordinate-success.jpg) |
 
 The success inspector above is **Selection · Co+3 · 1 atom · 0 bonds**; those
 numbers are not the complete drawing. After clearing selection and turning F8
 off, the separate whole-drawing view reports **13 atoms, 10 bonds and the same
 C6H24CoN6+3 formula**. The native result is
-[co-en3-keyboard-desktop.rsk](../tests/fixtures/coordination/co-en3-keyboard-desktop.rsk).
+[co-en3-keyboard-desktop.rsk](../../tests/fixtures/coordination/co-en3-keyboard-desktop.rsk).
 
-![Unselected whole Properties after the keyboard contact reports the actual 13-atom, 10-bond drawing.](images/coordination/co-en3-keyboard-whole-properties.jpg)
+![Unselected whole Properties after the keyboard contact reports the actual 13-atom, 10-bond drawing.](../images/coordination/co-en3-keyboard-whole-properties.jpg)
 
 ## Projection tip changes paint, not donor direction
 
 Open the existing single-complex
-[co-en3-both-tips.rsk](../tests/fixtures/coordination/co-en3-both-tips.rsk),
+[co-en3-both-tips.rsk](../../tests/fixtures/coordination/co-en3-both-tips.rsk),
 **13 atoms/15 bonds**, at 221% with F8 off. Solid and hashed projection paint can
 be narrowed at donor or metal while chemical donor→Co direction remains fixed.
 This is not the external two-complex, 26-atom CDXML fixture.
 
-![One intact 13-atom complex shows solid and hashed dative projection narrowed at either endpoint.](images/coordination/co-en3-both-projection-tips.jpg)
+![One intact 13-atom complex shows solid and hashed dative projection narrowed at either endpoint.](../images/coordination/co-en3-both-projection-tips.jpg)
 
 Select the solid projected **5 → 1** bond and choose **Reverse projection tip**
 under Crossings & direction. The selected-bond capture deliberately shows this
 control and selection handles. Save As produced
-[co-en3-projection-tip-desktop.rsk](../tests/fixtures/coordination/co-en3-projection-tip-desktop.rsk),
+[co-en3-projection-tip-desktop.rsk](../../tests/fixtures/coordination/co-en3-projection-tip-desktop.rsk),
 then a fresh process reopened it with a clean title and Undo disabled.
 
-| Reverse projection tip on the selected bond                                                                                                                   | Saved result reopened, selection cleared                                                                                                                                   |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| ![The selected donor-5 contact is reversed only in projection appearance using the inspector command.](images/coordination/co-en3-reverse-projection-tip.jpg) | ![Fresh-process native reopening retains the changed projection tip and the same 13-atom, 15-bond chemical graph.](images/coordination/co-en3-projection-tip-reopened.jpg) |
+| Reverse projection tip on the selected bond                                                                                                                      | Saved result reopened, selection cleared                                                                                                                                      |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ![The selected donor-5 contact is reversed only in projection appearance using the inspector command.](../images/coordination/co-en3-reverse-projection-tip.jpg) | ![Fresh-process native reopening retains the changed projection tip and the same 13-atom, 15-bond chemical graph.](../images/coordination/co-en3-projection-tip-reopened.jpg) |
 
 The native audit compares the before and saved documents: only bond array
 index 10's `display` changes from **`wedge_end` to `wedge`**. Its endpoints stay
@@ -156,18 +156,18 @@ prove these invariants.
 ## External ChemDraw reference and interchange limits
 
 The original authored
-[paired CDXML source](../tests/fixtures/coordination/co-en3-external-source.cdxml)
+[paired CDXML source](../../tests/fixtures/coordination/co-en3-external-source.cdxml)
 contains **two** complete complexes, **26 atoms and 30 bonds**, with twelve
 donor→Co dative contacts. It asks for opposite Begin/End projection styles.
 Actual ChemDraw **26.0.0.6599** displays dative arrows rather than that paint:
 
-![ChemDraw 26 shows arrows for both complete complexes; this is chemical acceptance and not projection-paint fidelity.](images/coordination/co-en3-chemdraw-reference.jpg)
+![ChemDraw 26 shows arrows for both complete complexes; this is chemical acceptance and not projection-paint fidelity.](../images/coordination/co-en3-chemdraw-reference.jpg)
 
 This unchanged reference JPEG is 1150 × 1700, with ChemDraw's own page framing;
 its original `.png` filename contained JPEG bytes, so packaging only renames
 the extension. It is a separate external reference, not a matched ReShiki scale
 comparison. The actual
-[ChemDraw Save As roundtrip](../tests/fixtures/coordination/co-en3-chemdraw-roundtrip.cdxml)
+[ChemDraw Save As roundtrip](../../tests/fixtures/coordination/co-en3-chemdraw-roundtrip.cdxml)
 retains all 26 atoms, 30 bonds, twelve directed dative B→E contacts, Co charge
 +3 and all N H2 values, but removes every dative projection `Display` attribute.
 The [XML contract check](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/fixtures/coordination/xml-reference-contract.txt)
@@ -202,7 +202,7 @@ Native interaction checks above are macOS only and were not timed with a
 stopwatch. No source/test code, existing fixture bytes, solver run or new Cargo
 build changed during this documentation packaging. Original fixtures and
 captured evidence are identified in the fixture README; existing component
-notices remain in [NOTICE](../NOTICE).
+notices remain in [NOTICE](../../NOTICE).
 
 ## Archived evidence
 
