@@ -40,6 +40,7 @@ pub mod geometry;
 pub mod native_windows;
 pub mod nmr;
 pub mod payload;
+pub mod preview;
 pub mod recovery;
 pub mod task;
 pub mod template_library;
