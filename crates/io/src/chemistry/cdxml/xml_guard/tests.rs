@@ -9,25 +9,33 @@ fn nested(levels: usize) -> String {
     )
 }
 
+/// A file every reader accepts, with `count` attributes on one element.
 fn attributes(count: usize) -> String {
     let attributes: String = (0..count).map(|i| format!(" a{i}='1'")).collect();
-    format!("<CDXML><page><n{attributes}/></page></CDXML>")
+    format!(
+        "<CDXML BondLength=\"17\" BondSpacing=\"18\" LineWidth=\"0.75\" BoldWidth=\"2.6\" \
+        MarginWidth=\"2\" HashSpacing=\"2.6\" LabelFont=\"3\" LabelSize=\"12\">\
+        <fonttable><font id=\"3\" name=\"Arial\"/></fonttable><page{attributes}/></CDXML>"
+    )
 }
 
-/// Every reader that hands CDXML or stationery text to the XML parser.
-fn readers(text: &str) -> [(&'static str, bool); 5] {
+/// Every reader that hands CDXML or stationery text to the XML parser, and
+/// its error.
+fn readers(text: &str) -> [(&'static str, Result<(), String>); 5] {
+    fn error<T, E: ToString>(result: Result<T, E>) -> Result<(), String> {
+        result.map(|_| ()).map_err(|e| e.to_string())
+    }
     [
-        ("tree", Tree::parse_import(text).is_err()),
-        ("molecules", parse::read(text).is_err()),
-        ("bonds", bonds::read_native(text, &[], 1., &[]).is_err()),
-        ("presentation", presentation::parse(text).is_err()),
+        ("tree", error(Tree::parse_import(text))),
+        ("molecules", error(parse::read(text))),
+        ("bonds", error(bonds::read_native(text, &[], 1., &[]))),
+        ("presentation", error(presentation::parse(text))),
         (
             "style",
-            crate::document_styles::load_bytes(
+            error(crate::document_styles::load_bytes(
                 std::path::Path::new("style.cdxml"),
                 text.as_bytes().to_vec(),
-            )
-            .is_err(),
+            )),
         ),
     ]
 }
@@ -41,8 +49,8 @@ fn deep_nesting_is_refused_before_the_parser_can_overflow_its_stack() {
         .unwrap()
         .join()
         .unwrap();
-    for (reader, refused) in refused {
-        assert!(refused, "{reader}");
+    for (reader, result) in refused {
+        assert!(result.is_err(), "{reader}");
     }
 }
 
@@ -70,8 +78,15 @@ fn an_element_with_too_many_attributes_is_refused_before_parsing() {
         "<n a='1' b=\"2\">it's \"text\"</n>".repeat(300)
     );
     assert_eq!(check(&many), Ok(()));
-    for (reader, refused) in readers(&attributes(257)) {
-        assert!(refused, "{reader}");
+    for (reader, result) in readers(&attributes(256)) {
+        assert_eq!(result, Ok(()), "{reader}");
+    }
+    for (reader, result) in readers(&attributes(257)) {
+        let error = result.unwrap_err();
+        assert!(
+            error.ends_with("more than 256 attributes"),
+            "{reader}: {error}"
+        );
     }
 }
 
@@ -82,8 +97,8 @@ fn entity_declarations_are_refused_by_every_reader() {
         MarginWidth=\"2\" HashSpacing=\"2.6\" LabelFont=\"3\" LabelSize=\"12\">\
         <fonttable><font id=\"3\" name=\"&font;\"/></fonttable></CDXML>";
     assert_eq!(check(text), Err(Refused::Dtd));
-    for (reader, refused) in readers(text) {
-        assert!(refused, "{reader}");
+    for (reader, result) in readers(text) {
+        assert!(result.is_err(), "{reader}");
     }
     let error = crate::document_styles::load_bytes(
         std::path::Path::new("style.cdxml"),
