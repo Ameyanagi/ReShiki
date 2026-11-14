@@ -256,7 +256,10 @@ impl App {
                     self.assistant.status = "Ready for review · Nothing has been applied".into();
                     if self.assistant.preferences.auto_apply && !self.assistant.requires_apply {
                         if self.assistant_can_auto_apply() {
-                            return self.assistant_action(Action::Apply);
+                            let task = self.assistant_action(Action::Apply);
+                            self.assistant.waiting_apply_is_automatic =
+                                self.assistant.waiting_for_canvas_edit;
+                            return task;
                         }
                         if checked {
                             self.assistant.status =

@@ -38,6 +38,7 @@ impl App {
         }
         if self.tab.inline_text.is_some() || self.tab.joining.is_some() {
             self.assistant.waiting_for_canvas_edit = true;
+            self.assistant.waiting_apply_is_automatic = false;
             self.assistant.status =
                 "Ready · Finish or cancel the current canvas edit to apply".into();
             return Task::none();
