@@ -627,7 +627,8 @@ async fn prepare_source_image(
 /// registers. Codex's own tools and its subagents are turned off by start-up
 /// flags whose names a release can change, so any other item, such as a
 /// shell command, a file change, a subagent call, or an MCP or web call,
-/// stops the request. So does an item event that names no item.
+/// stops the request. So does an item event that names no item, and Codex
+/// compacting a thread that grew too long.
 fn refused_item(event: &Value) -> Option<String> {
     let item = event.pointer("/params/item");
     let kind = item
@@ -647,6 +648,10 @@ fn refused_item(event: &Value) -> Option<String> {
         _ => false,
     };
     (!allowed).then(|| {
+        if kind == "contextCompaction" {
+            return "The request grew too long for Codex. Start a new request with less context."
+                .into();
+        }
         format!(
             "Codex used a tool that ReShiki does not allow ({}). The request was stopped.",
             kind.chars().take(40).collect::<String>()

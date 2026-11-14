@@ -919,8 +919,8 @@ async fn a_turn_with_any_other_tool_fails() -> anyhow::Result<()> {
             "unknown",
         ),
         (json!({"method":"item/completed"}), "unknown"),
-        // Delegation and compaction are not canvas tools: the flag that turns
-        // subagents off is one of those a release can rename.
+        // Delegation is not a canvas tool: the flag that turns subagents off
+        // is one of those a release can rename.
         (
             item(
                 "test",
@@ -932,10 +932,6 @@ async fn a_turn_with_any_other_tool_fails() -> anyhow::Result<()> {
         (
             item("test", "item/started", json!({"type":"subAgentActivity"})),
             "subAgentActivity",
-        ),
-        (
-            item("test", "item/started", json!({"type":"contextCompaction"})),
-            "contextCompaction",
         ),
     ];
     let run = async |events: Vec<Value>| {
@@ -974,6 +970,16 @@ async fn a_turn_with_any_other_tool_fails() -> anyhow::Result<()> {
             )
         );
     }
+    // Codex compacts a thread that grew too long. That stops the request
+    // too, and says why, since no tool was used.
+    let compaction = item("test", "item/started", json!({"type":"contextCompaction"}));
+    let error = run(vec![compaction, message.clone(), done.clone()])
+        .await?
+        .unwrap_err();
+    assert_eq!(
+        error,
+        "The request grew too long for Codex. Start a new request with less context."
+    );
     Ok(())
 }
 
