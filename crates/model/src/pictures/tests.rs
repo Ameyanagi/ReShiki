@@ -177,6 +177,17 @@ fn stored_pictures_over_the_pixel_budget_are_refused_before_any_is_decoded() {
         Document::from_json(&drawing_of_headers(4)).unwrap_err(),
         "Drawing pictures exceed 64 MB or 64 million pixels"
     );
+    // A picture over its own limits keeps the error decoding gives it.
+    let mut oversized =
+        serde_json::from_slice::<serde_json::Value>(&drawing_of_headers(1)).unwrap();
+    let header = STANDARD.decode(oversized["graphics"][0]["picture"].as_str().unwrap());
+    let mut header = header.unwrap();
+    header[16..24].copy_from_slice(&[30_000_u32.to_be_bytes(), 30_000_u32.to_be_bytes()].concat());
+    oversized["graphics"][0]["picture"] = STANDARD.encode(&header).into();
+    assert_ne!(
+        Document::from_json(&serde_json::to_vec(&oversized).unwrap()).unwrap_err(),
+        "Drawing pictures exceed 64 MB or 64 million pixels"
+    );
     let mut doc = Document::default();
     doc.graphics.push(raster(4, 2).graphic(1, Point::default()));
     let reopened = Document::from_json(&serde_json::to_vec(&doc).unwrap()).unwrap();

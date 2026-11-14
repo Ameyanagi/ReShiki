@@ -94,8 +94,8 @@ pub(crate) const OVER_DRAWING_BUDGET: &str = "Drawing pictures exceed 64 MB or 6
 
 /// Refuse a stored drawing whose pictures are over the pixel budget from their
 /// PNG headers alone, before any picture is decoded. This reads the pictures
-/// and skips the rest of the drawing. A drawing or header it cannot read is
-/// left for the full read to refuse.
+/// and skips the rest of the drawing. A drawing or header it cannot read, and
+/// a picture over its own limits, are left for the full read to refuse.
 pub(crate) fn check_stored(json: &[u8]) -> Result<(), String> {
     #[derive(Deserialize)]
     struct Drawing {
@@ -124,7 +124,11 @@ pub(crate) fn check_stored(json: &[u8]) -> Result<(), String> {
                     .get(at..at + 4)
                     .map_or(0, |b| b.iter().fold(0_u64, |n, b| n << 8 | u64::from(*b)))
             };
-            pixels = pixels.saturating_add(side(16).saturating_mul(side(20)));
+            let (width, height) = (side(16), side(20));
+            // A picture over its own limits is refused, unread, by decoding.
+            if width.max(height) <= u64::from(MAX_SIDE) && width * height <= MAX_PIXELS {
+                pixels += width * height;
+            }
         }
         if pixels > DRAWING_PIXELS {
             return Err(OVER_DRAWING_BUDGET.into());
