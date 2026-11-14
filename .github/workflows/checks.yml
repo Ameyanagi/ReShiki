@@ -406,6 +406,15 @@ jobs:
           cargo nextest run --workspace --locked --no-default-features --profile ci
           --partition hash:${{ matrix.partition }}/2
           -E 'not binary_id(reshiki::metafile_worker) & not binary_id(reshiki-macos::native_print) & not (package(reshiki) & kind(lib) & test(/^naming::s2n_harness::/))'
+      - name: Keep the JUnit report of the workspace partition
+        if: ${{ always() && steps.actions_runtime_guard.outcome == 'success' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: nextest-junit-${{ matrix.platform.target }}-${{ matrix.partition }}
+          path: target/nextest/ci/junit.xml
+          # An earlier step failed, so nextest wrote no report.
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Test the shared naming corpus in one libtest process
         # Preserve the shared LazyLock baseline; balance against partition 1's extras.
         if: matrix.partition == 2

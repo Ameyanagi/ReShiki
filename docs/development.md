@@ -168,7 +168,7 @@ Pull requests run native tests and saved InChI, depiction, and aromatic-response
 
 On a pull request, the summary of the **Changed fixture rows** job lists the rows that each changed file under a `tests/fixtures/` folder gains and loses (`scripts/baseline_summary.py`). Read it when you review a fixture or baseline update. To print the same list locally, run `python3 scripts/baseline_summary.py "$(git merge-base origin/main HEAD)"`.
 
-CI runs the workspace tests with [cargo-nextest](https://nexte.st/) 0.9.150, split into two partitions. `.config/nextest.toml` runs the tests that start the naming worker one at a time. To run the same tests locally:
+CI runs the workspace tests with [cargo-nextest](https://nexte.st/) 0.9.150, split into two partitions. `.config/nextest.toml` runs the tests that start the naming worker one at a time and stops any test that runs for 10 minutes. Each job uploads the JUnit report of its partition as a `nextest-junit-*` artifact. To run the same tests locally:
 
 ```sh
 cargo nextest run --workspace --locked --no-default-features --profile ci \
