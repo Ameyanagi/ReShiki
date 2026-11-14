@@ -21,8 +21,5 @@ issues: [1121]
 - A MOL file whose `ZCH`, `HYD` or `IMPL_H` data group gives a charge or
   hydrogen count that is out of range is now an error, as it is in `M  CHG`.
   The value used to wrap, so a charge of 256 imported as 0.
-- SMILES and SMARTS text is trimmed the same way on every platform. Non-ASCII
-  characters at either end, such as a non-breaking space, are now an error
-  everywhere; macOS, Windows and x64 Linux used to drop them.
 - Recovery drafts made with a newer ReShiki are no longer hidden. The status
   bar shows how many there are, with **Open folder** to find the files.

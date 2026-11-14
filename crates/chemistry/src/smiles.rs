@@ -198,8 +198,14 @@ fn parse_with(text: &str, partial: bool) -> Result<Parsed> {
         return Err(Error::Limit);
     }
     let bytes = text.as_bytes();
-    let start = bytes.iter().position(|&b| b > 32).unwrap_or(bytes.len());
-    let end = bytes.iter().rposition(|&b| b > 32).map_or(start, |i| i + 1);
+    let start = bytes
+        .iter()
+        .position(|&b| (b as std::os::raw::c_char) > 32)
+        .unwrap_or(bytes.len());
+    let end = bytes
+        .iter()
+        .rposition(|&b| (b as std::os::raw::c_char) > 32)
+        .map_or(start, |i| i + 1);
     let mut reader = Reader {
         bytes: bytes.get(start..end).ok_or(Error::Limit)?,
         pos: 0,

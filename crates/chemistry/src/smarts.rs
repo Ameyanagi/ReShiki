@@ -57,14 +57,18 @@ fn parse(text: &str) -> Result<(usize, Query)> {
         ),
         None => (text, ""),
     };
-    // Trim ASCII space and control bytes at both boundaries. The reference
-    // lexer compares a native char, whose sign differs between platforms; a
-    // byte of 0x80 or above is content here on every platform.
+    // Match the reference lexer's native-char trimming at both boundaries.
     // Work on bytes; a boundary inside malformed/non-ASCII text is never sliced
     // as UTF-8 and cannot panic.
     let bytes = body.as_bytes();
-    let start = bytes.iter().position(|&b| b > 32).unwrap_or(bytes.len());
-    let end = bytes.iter().rposition(|&b| b > 32).map_or(start, |i| i + 1);
+    let start = bytes
+        .iter()
+        .position(|&b| (b as std::os::raw::c_char) > 32)
+        .unwrap_or(bytes.len());
+    let end = bytes
+        .iter()
+        .rposition(|&b| (b as std::os::raw::c_char) > 32)
+        .map_or(start, |i| i + 1);
     let mut parser = Parser {
         bytes: bytes.get(start..end).ok_or(Error::Limit)?,
         pos: 0,
