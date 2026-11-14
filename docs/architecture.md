@@ -141,7 +141,19 @@ Chemical naming comes from the external [nazuchem repository](https://github.com
 | `crates/model/src/style.rs` and `assets/drawing_style.json` | Shared JACS / ACS defaults, publication units and font advances                |
 | `reference/engine/worker.py`                                | Independent Python/RDKit reference, enabled by `rdkit-reference`               |
 
-Document coordinates use screen-style positive-down Y, with 28 world units per RDKit coordinate unit. The default single bond is 42 world units, representing 14.4 publication points in the JACS / ACS preset. The camera never changes stored coordinates or export size. Native documents save as JSON format version 30, version 31 when they contain a custom arrow-label gap, version 32 for ORTEP settings, version 33 for linked-model state, explicit file-geometry provenance or atom labels, version 34 for collapsed groups with two attachment atoms, version 35 for arrows with interior nodes or a custom crossing clearance, version 36 for enhanced stereo groups, or version 37 for atoms with three or four radical electrons, and accept versions 1–37 when reading; see [document format versions](#document-format-versions). Version 17 stores theme palette colors by name and custom colors as displayed; reading an older dark-canvas drawing converts its custom colors once to the lightness-flipped values it showed. Version 16 embeds custom themes and version 15 adds explicit reaction roles tied to arrow and atom IDs. A drawing from a newer ReShiki reports the document version it needs instead of a parse error. Version 14 adds validated per-document drawing settings; the physical coordinate scale remains fixed at 14.4/42 points per world unit. New presentation fields prompted version increments so older editors reject unsupported documents. History and camera are session state.
+Document coordinates use screen-style positive-down Y, with 28 world units
+per RDKit coordinate unit. The default single bond is 42 world units, or
+14.4 publication points in the JACS / ACS preset; this physical scale is fixed.
+The camera never changes stored coordinates or export size, and history and
+camera are session state.
+
+Native documents are JSON. Each drawing is saved at the lowest format version
+that holds its features, and this build reads versions 1–37; a drawing from a
+newer ReShiki reports the version it needs instead of a parse error. New
+presentation fields raise the version so older editors reject documents they
+cannot keep. [Document format versions](#document-format-versions) lists what
+each version added. Reading a dark-canvas drawing older than version 17
+converts its custom colors once to the lightness-flipped values it showed.
 
 Atoms retain formal charge, isotope, explicit-H count, implicit-H policy, map number and tetrahedral winding. Winding refers to an explicit ordered list of stable neighbor IDs. Molecule preparation compensates for neighbor permutations, preventing array reordering from reversing a stereocenter. Double-bond stereo stores its reference atoms separately. Topology edits invalidate affected stereo and derived labels; a background refresh recomputes chemistry. Explicit Check also refreshes computed properties.
 
