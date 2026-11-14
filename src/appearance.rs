@@ -97,25 +97,21 @@ impl Settings {
             .unwrap_or_default()
     }
     fn load_from(path: &std::path::Path) -> Self {
-        let Ok(bytes) = reshiki::storage::read(path) else {
-            return Self::default();
-        };
-        let parsed = || {
-            let mut settings: Self = serde_json::from_slice(&bytes).ok()?;
-            let legacy: serde_json::Value = serde_json::from_slice(&bytes).ok()?;
-            if legacy.get("mode").is_none()
-                && let Some(dark) = legacy.get("dark").and_then(|v| v.as_bool())
-            {
-                settings.mode = if dark { Mode::Dark } else { Mode::Light };
-            }
-            Some(settings)
-        };
-        parsed().unwrap_or_else(|| {
-            // A copy of a file this build cannot read, such as a newer build's,
-            // outlives the next save. The file itself stays until then.
-            let _ = reshiki::storage::write_atomic(&path.with_extension("json.bad"), &bytes);
-            Self::default()
-        })
+        reshiki::storage::read(path)
+            .ok()
+            .and_then(|bytes| Self::parse(&bytes))
+            .unwrap_or_default()
+    }
+    /// `None` for a file this build cannot read, such as a newer build's.
+    fn parse(bytes: &[u8]) -> Option<Self> {
+        let mut settings: Self = serde_json::from_slice(bytes).ok()?;
+        let legacy: serde_json::Value = serde_json::from_slice(bytes).ok()?;
+        if legacy.get("mode").is_none()
+            && let Some(dark) = legacy.get("dark").and_then(|v| v.as_bool())
+        {
+            settings.mode = if dark { Mode::Dark } else { Mode::Light };
+        }
+        Some(settings)
     }
     pub fn save(&self) -> Result<(), String> {
         if cfg!(test) {
@@ -126,6 +122,19 @@ impl Settings {
     fn save_to(&self, path: &std::path::Path) -> Result<(), String> {
         if let Some(parent) = path.parent() {
             reshiki::storage::create_dir_all(parent).map_err(|e| e.to_string())?;
+        }
+        // A file this build cannot read is replaced only once a copy of it is kept.
+        if let Ok(old) = reshiki::storage::read(path)
+            && Self::parse(&old).is_none()
+        {
+            let bad = path.with_extension("json.bad");
+            reshiki::storage::write_atomic(&bad, &old).map_err(|e| {
+                format!(
+                    "this version cannot read {}, and a copy could not be kept as {}: {e}",
+                    path.display(),
+                    bad.display()
+                )
+            })?;
         }
         reshiki::storage::write_atomic(path, &serde_json::to_vec(self).map_err(|e| e.to_string())?)
     }

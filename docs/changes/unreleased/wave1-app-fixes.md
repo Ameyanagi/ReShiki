@@ -17,9 +17,11 @@ issues: []
   `Drawing in PowerPoint (2).rsk`, and so on (fixes
   [issue #1119](https://github.com/Ameyanagi/ReShiki/issues/1119)).
 - A newer ReShiki's interface or assistant preferences that this version cannot
-  read are no longer lost. ReShiki starts with the default settings and keeps a
-  copy of the file as `appearance.json.bad` or `assistant-preferences.json.bad`
-  in its data folder.
+  read are no longer lost. ReShiki starts with the default settings and leaves
+  the file in place. Before the first changed setting replaces it, ReShiki keeps
+  a copy as `appearance.json.bad` or `assistant-preferences.json.bad` in its data
+  folder. If that copy cannot be written, the setting is not saved and ReShiki
+  says why.
 - **Expand generic structures** is available again after an expansion finishes
   while the recovery drafts dialog is open. The status bar says that the
   expansion was discarded.

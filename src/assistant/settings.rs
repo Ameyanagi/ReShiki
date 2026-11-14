@@ -137,18 +137,16 @@ impl Preferences {
             .unwrap_or_default()
     }
     fn load_from(path: &std::path::Path) -> Self {
-        let Ok(bytes) = std::fs::read(path) else {
-            return Self::default();
-        };
-        if bytes.len() < 65536
-            && let Ok(preferences) = serde_json::from_slice(&bytes)
-        {
-            return preferences;
-        }
-        // A copy of a file this build cannot read, such as a newer build's,
-        // outlives the next save. The file itself stays until then.
-        let _ = crate::storage::write_atomic(&path.with_extension("json.bad"), &bytes);
-        Self::default()
+        std::fs::read(path)
+            .ok()
+            .and_then(|bytes| Self::parse(&bytes))
+            .unwrap_or_default()
+    }
+    /// `None` for a file this build cannot read, such as a newer build's.
+    fn parse(bytes: &[u8]) -> Option<Self> {
+        (bytes.len() < 65536)
+            .then(|| serde_json::from_slice(bytes).ok())
+            .flatten()
     }
     pub fn save(&self) -> Result<(), String> {
         self.save_to(&Self::path().ok_or("No preferences directory")?)
@@ -156,6 +154,19 @@ impl Preferences {
     fn save_to(&self, path: &std::path::Path) -> Result<(), String> {
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        }
+        // A file this build cannot read is replaced only once a copy of it is kept.
+        if let Ok(old) = std::fs::read(path)
+            && Self::parse(&old).is_none()
+        {
+            let bad = path.with_extension("json.bad");
+            crate::storage::write_atomic(&bad, &old).map_err(|e| {
+                format!(
+                    "this version cannot read {}, and a copy could not be kept as {}: {e}",
+                    path.display(),
+                    bad.display()
+                )
+            })?;
         }
         crate::storage::write_atomic(path, &serde_json::to_vec(self).map_err(|e| e.to_string())?)
     }
