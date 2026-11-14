@@ -2660,10 +2660,10 @@ impl App {
                 .into()
         };
         // One line; the full text of long or multi-line messages is a tooltip.
-        let room = if self.recovered.is_empty() {
-            300.
-        } else {
+        let room = if self.recovery_banner_shown() {
             160.
+        } else {
+            300.
         };
         let has_details = self.status.contains('\n') || text_width(summary, 11.) > room;
         let message = if has_details {
@@ -2672,7 +2672,7 @@ impl App {
             message
         };
         let mut status = row![].spacing(8).align_y(Alignment::Center);
-        if !self.recovered.is_empty() {
+        if self.recovery_banner_shown() {
             status = status.push(self.recovery_banner());
         }
         status = status.push(

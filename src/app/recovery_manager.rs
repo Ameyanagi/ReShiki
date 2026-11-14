@@ -24,6 +24,8 @@ pub enum Action {
     Discard,
     ConfirmDiscard,
     Close,
+    /// Show the folder that holds the drafts a newer ReShiki made.
+    OpenFolder,
     Finished(u64, Outcome),
     #[cfg(target_arch = "wasm32")]
     OwnersReady(u64, Result<(), String>, Box<Action>),
@@ -66,9 +68,21 @@ pub(super) struct State {
     serial: u64,
     pending: Option<u64>,
     failure: Option<String>,
+    /// Abandoned drafts made with a newer ReShiki, which cannot be offered.
+    pub(super) newer: usize,
+    pub(super) folder: Option<PathBuf>,
 }
 
 impl State {
+    /// The startup state: `newer` unreadable drafts in `folder`.
+    pub(super) fn found(newer: usize, folder: Option<PathBuf>) -> Self {
+        Self {
+            newer,
+            folder,
+            ..Self::default()
+        }
+    }
+
     pub(super) fn open(&self) -> bool {
         self.dialog.is_some()
     }
@@ -88,6 +102,11 @@ pub(super) fn modal_key(key: &Key, modifiers: Modifiers) -> Option<Message> {
 }
 
 impl App {
+    /// Whether the status bar shows the recovery banner.
+    pub(super) fn recovery_banner_shown(&self) -> bool {
+        !self.recovered.is_empty() || self.recovery_manager.newer > 0
+    }
+
     pub(super) fn recovery_accessibility_context(&self) -> AccessibilityContext {
         AccessibilityContext {
             dialog: self.recovery_manager.dialog,
@@ -246,6 +265,15 @@ impl App {
                 });
             }
             Action::Close => self.recovery_manager.close(),
+            Action::OpenFolder => {
+                #[cfg(not(target_arch = "wasm32"))]
+                if let Some(folder) = &self.recovery_manager.folder
+                    && let Err(error) = open::that(folder)
+                {
+                    self.status = format!("Could not open the recovery folder: {error}");
+                    self.error = true;
+                }
+            }
             Action::Finished(..) => {}
             #[cfg(target_arch = "wasm32")]
             Action::OwnersReady(..) => {}

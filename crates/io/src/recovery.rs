@@ -23,6 +23,13 @@ pub struct Candidate {
 pub struct Recovery {
     pub session: PathBuf,
 }
+/// What [`Recovery::scan`] found.
+#[derive(Debug, Clone, Default)]
+pub struct Scan {
+    pub candidates: Vec<Candidate>,
+    /// Abandoned drafts this version cannot read because a newer one made them.
+    pub newer: usize,
+}
 impl Candidate {
     /// Only an abandoned draft may be restored or discarded. Recheck before
     /// acting: a process ID may have been reused since the startup scan.
@@ -60,12 +67,18 @@ impl Recovery {
         })
     }
     pub fn candidates(&self) -> Vec<Candidate> {
+        self.scan().candidates
+    }
+    /// The abandoned drafts to offer, newest first, and how many more were
+    /// made with a newer ReShiki.
+    pub fn scan(&self) -> Scan {
         let Some(parent) = self.session.parent() else {
-            return vec![];
+            return Scan::default();
         };
         let Ok(entries) = crate::storage::read_dir(parent) else {
-            return vec![];
+            return Scan::default();
         };
+        let mut newer = 0;
         let mut candidates: Vec<_> = entries
             .into_iter()
             .filter_map(|path| {
@@ -82,8 +95,25 @@ impl Recovery {
                     return None;
                 }
                 let bytes = crate::storage::read(&path).ok()?;
-                let mut snapshot: Snapshot = serde_json::from_slice(&bytes).ok()?;
-                snapshot.document.validate().ok()?;
+                let snapshot = serde_json::from_slice::<Snapshot>(&bytes)
+                    .ok()
+                    .filter(|snapshot| snapshot.document.validate().is_ok());
+                let Some(mut snapshot) = snapshot else {
+                    #[derive(Deserialize)]
+                    struct Probe {
+                        document: Version,
+                    }
+                    #[derive(Deserialize)]
+                    struct Version {
+                        version: u64,
+                    }
+                    if serde_json::from_slice::<Probe>(&bytes).is_ok_and(|probe| {
+                        probe.document.version > u64::from(crate::document::VERSION)
+                    }) {
+                        newer += 1;
+                    }
+                    return None;
+                };
                 snapshot.document.migrate();
                 Some(Candidate { path, snapshot })
             })
@@ -94,7 +124,7 @@ impl Recovery {
                 .cmp(&a.snapshot.saved_at)
                 .then_with(|| a.path.cmp(&b.path))
         });
-        candidates
+        Scan { candidates, newer }
     }
     pub fn save(&self, document: &Document, source: Option<PathBuf>) -> Result<(), String> {
         self.save_replacing(document, source, None)

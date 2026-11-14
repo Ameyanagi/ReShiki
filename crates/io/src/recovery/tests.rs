@@ -279,3 +279,26 @@ fn drafts_keep_3d_models() {
     assert_eq!(candidates[0].snapshot.document, doc.current());
     assert_eq!(candidates[0].snapshot.document.models, doc.models);
 }
+
+/// A draft from a newer ReShiki cannot be offered, but it is counted so the
+/// app can say it is there. A damaged file is neither.
+#[test]
+fn drafts_from_a_newer_version_are_counted_not_offered() {
+    let directory = tempfile::tempdir().unwrap();
+    let store = Recovery::in_directory(directory.path()).unwrap();
+    let readable = abandoned(directory.path(), "readable.rsk", 100);
+    let mut newer = serde_json::to_value(&readable.snapshot).unwrap();
+    newer["document"]["version"] = (crate::document::VERSION + 1).into();
+    newer["document"]["later_feature"] = true.into();
+    std::fs::write(
+        directory.path().join("4294967294-newer.json"),
+        serde_json::to_vec(&newer).unwrap(),
+    )
+    .unwrap();
+    std::fs::write(directory.path().join("4294967294-damaged.json"), b"{").unwrap();
+    let scan = store.scan();
+    assert_eq!(scan.candidates.len(), 1);
+    assert_eq!(scan.candidates[0].path, readable.path);
+    assert_eq!(scan.newer, 1);
+    assert_eq!(store.candidates().len(), 1);
+}

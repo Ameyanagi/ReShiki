@@ -268,7 +268,8 @@ fn completion(message: &Message) -> Option<Completion> {
             | super::recovery_manager::Action::RestoreAll
             | super::recovery_manager::Action::Discard
             | super::recovery_manager::Action::ConfirmDiscard
-            | super::recovery_manager::Action::Close => None,
+            | super::recovery_manager::Action::Close
+            | super::recovery_manager::Action::OpenFolder => None,
         },
         Message::Accessibility(action) => {
             use super::accessibility::Action;
