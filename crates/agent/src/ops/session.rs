@@ -464,6 +464,13 @@ impl Documents for SessionStore {
         })
     }
 
+    fn fits(&self, who: &Principal, handle: &DocHandle, doc: &Document) -> Result<(), OpError> {
+        self.check_objects(doc)?;
+        // A lower bound on what the commit weighs: it adds the undo frames.
+        let others = self.store().weight(who, Some(handle));
+        self.check_weight(others.saturating_add(cost(doc)))
+    }
+
     fn receipt(
         &self,
         who: &Principal,

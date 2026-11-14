@@ -495,6 +495,7 @@ fn edit(
         id_remap,
         deleted,
     } = edited;
+    store.fits(who, &document, &doc)?;
     let reconciled = match transaction::reconcile(&mut doc, (*snapshot.doc).clone()) {
         Ok(reconciled) => reconciled,
         Err(rejection) => {

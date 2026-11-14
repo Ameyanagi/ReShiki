@@ -159,6 +159,12 @@ pub trait Documents: Send + Sync {
         key: &IdempotencyKey,
     ) -> Result<Option<Arc<ToolResult>>, OpError>;
 
+    /// Fails when `doc` could not replace the document within the object
+    /// and session weight budgets, so an edit over them stops before its
+    /// reconciliation and label work. [`Documents::commit`] checks again,
+    /// with the undo frame and the pictures.
+    fn fits(&self, who: &Principal, handle: &DocHandle, doc: &Document) -> Result<(), OpError>;
+
     /// Applies `change` atomically and returns its receipt.
     fn commit(
         &self,
