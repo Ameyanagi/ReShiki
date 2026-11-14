@@ -1,0 +1,74 @@
+diff --git a/.cargo_vcs_info.json a/.cargo_vcs_info.json
+deleted file mode 100644
+index 1eb0807..0000000
+--- a/.cargo_vcs_info.json
++++ /dev/null
+@@ -1,6 +0,0 @@
+-{
+-  "git": {
+-    "sha1": "3997291f318a8bc06fa522f5579836fb3feb94df"
+-  },
+-  "path_in_vcs": "wgpu"
+-}
+\ No newline at end of file
+diff --git b/LICENSE b/LICENSE
+new file mode 100644
+index 0000000..f1148e2
+--- /dev/null
++++ b/LICENSE
+@@ -0,0 +1,18 @@
++Copyright 2019 Héctor Ramón, Iced contributors
++
++Permission is hereby granted, free of charge, to any person obtaining a copy of
++this software and associated documentation files (the "Software"), to deal in
++the Software without restriction, including without limitation the rights to
++use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
++the Software, and to permit persons to whom the Software is furnished to do so,
++subject to the following conditions:
++
++The above copyright notice and this permission notice shall be included in all
++copies or substantial portions of the Software.
++
++THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
++IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
++FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
++COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
++IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
++CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+diff --git b/UPSTREAM.json b/UPSTREAM.json
+new file mode 100644
+index 0000000..bb63088
+--- /dev/null
++++ b/UPSTREAM.json
+@@ -0,0 +1,16 @@
++{
++  "upstream": "https://github.com/iced-rs/iced/tree/3997291f318a8bc06fa522f5579836fb3feb94df/wgpu",
++  "version": "0.14.0",
++  "commit": "3997291f318a8bc06fa522f5579836fb3feb94df",
++  "license": "MIT",
++  "source": "crates.io iced_wgpu 0.14.0",
++  "upstream_file_sha256": {
++    "Cargo.toml": "25b9c6ee060874ed93645f49d1ec0e8056378a187ebb5660c97b8cef71380675",
++    "src/triangle/msaa.rs": "86c6319d50274fafcf775a759eedb0ae6fd8fc7e3f351c31688c690fd2fde3d8"
++  },
++  "purpose": "Release oversized MSAA targets when the window shrinks while preserving antialiasing.",
++  "local_changes": [
++    "src/triangle/msaa.rs: recreate MSAA targets whenever the region size differs, including when it shrinks; leave the ratio calculation unchanged",
++    "LICENSE (added): Iced's MIT license, which the crate package does not include; the same text as licenses/iced/LICENSE"
++  ]
++}
+diff --git a/src/triangle/msaa.rs b/src/triangle/msaa.rs
+index 8ca4946..71e4679 100644
+--- a/src/triangle/msaa.rs
++++ b/src/triangle/msaa.rs
+@@ -139,9 +139,7 @@ impl Pipeline {
+         let mut targets = self.targets.write().expect("Write MSAA targets");
+ 
+         match targets.as_mut() {
+-            Some(targets)
+-                if region_size.width <= targets.size.width
+-                    && region_size.height <= targets.size.height => {}
++            Some(targets) if region_size == targets.size => {}
+             _ => {
+                 *targets = Some(Targets::new(
+                     device,

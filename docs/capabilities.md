@@ -1,6 +1,6 @@
 # Capability report
 
-This page retains earlier desktop verification records, including their capability table, worker-based runtime and test counts. They describe the builds tested at each milestone. For current implementation and setup, see [architecture](architecture.md), [feature status](feature-status.md), [installation](getting-started.md) and [release signing](releasing.md).
+This page retains earlier desktop verification records, including their capability table, worker-based runtime and test counts. They describe the builds tested at each milestone. For current implementation and setup, see [architecture](architecture.md), [feature status](feature-status.md), [installation](https://reshiki.com/guide/install/) and [release signing](releasing.md).
 
 [Coordination in place](fragment-joining.md#coordination-contacts-in-place) adds explicit donor→metal contacts without moving atoms, including chelate closure. It preserves donor hydrogens, charge and dative projection paint; it does not infer complex geometry or Δ/Λ stereochemistry.
 

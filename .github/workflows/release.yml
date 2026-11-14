@@ -241,6 +241,10 @@ jobs:
       UV_PYTHON: ${{ matrix.python }}
       # Keep the Rust application independent of redistributable Windows CRT DLLs.
       RUSTFLAGS: ${{ endsWith(matrix.target, '-pc-windows-msvc') && '-C target-feature=+crt-static' || '' }}
+      # Cargo strips macOS into reshiki.dSYM. The MSVC linker writes no PDB for a
+      # stripped build, and build_release.py splits Linux symbols into reshiki.debug.
+      CARGO_PROFILE_RELEASE_STRIP: ${{ startsWith(matrix.artifact, 'macos') && 'symbols' || 'none' }}
+      CARGO_PROFILE_RELEASE_SPLIT_DEBUGINFO: ${{ startsWith(matrix.artifact, 'linux') && 'off' || 'packed' }}
     steps:
       - *actions_runtime
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -298,6 +302,17 @@ jobs:
         env:
           MACOSX_DEPLOYMENT_TARGET: "14.0"
         run: uv run --no-project --isolated --python 3.12.15 python scripts/build_release.py --target ${{ matrix.target }} --installer
+      # Symbols for crash reports; a workflow artifact, never a release download.
+      # Upload them before any cargo test step: those rebuild the app with test
+      # features in place, and the new PDB would not match the shipped exe.
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: symbols-${{ matrix.artifact }}
+          path: |
+            target/${{ matrix.target }}/release/reshiki.dSYM
+            target/${{ matrix.target }}/release/reshiki.pdb
+            target/${{ matrix.target }}/release/reshiki.debug
+          if-no-files-found: error
       - name: Check the application worker protocols and heap boundaries
         env:
           RESHIKI_REQUIRE_INCHI_HELPER: "1"

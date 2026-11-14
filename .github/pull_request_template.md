@@ -32,6 +32,9 @@ alone cannot demonstrate correctness.
 
 ## Release-note material
 
+<!-- Add docs/changes/unreleased/<branch-with-dashes>.md (see its README.md).
+     Do not edit docs/changes-unreleased.md or docs/contributors.md. -->
+
 One-sentence user-facing caption:
 
 Reusable image paths or permanent attachment links:

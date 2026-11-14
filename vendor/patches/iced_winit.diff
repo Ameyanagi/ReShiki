@@ -1,0 +1,247 @@
+diff --git a/.cargo_vcs_info.json a/.cargo_vcs_info.json
+deleted file mode 100644
+index 6731c42..0000000
+--- a/.cargo_vcs_info.json
++++ /dev/null
+@@ -1,6 +0,0 @@
+-{
+-  "git": {
+-    "sha1": "38237dd294da3256c2ac4d3f8288fc73956c91e0"
+-  },
+-  "path_in_vcs": "winit"
+-}
+\ No newline at end of file
+diff --git a/Cargo.toml b/Cargo.toml
+index 45aae44..fd21074 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -99,9 +99,11 @@ version = "0.4"
+ [target.'cfg(target_arch = "wasm32")'.dependencies.web-sys]
+ version = "0.3.69"
+ features = [
++    "CssStyleDeclaration",
+     "Document",
+-    "Window",
+     "HtmlCanvasElement",
++    "HtmlElement",
++    "Window",
+ ]
+ 
+ [target.'cfg(target_os = "linux")'.dependencies.mundy]
+diff --git b/LICENSE b/LICENSE
+new file mode 100644
+index 0000000..f1148e2
+--- /dev/null
++++ b/LICENSE
+@@ -0,0 +1,18 @@
++Copyright 2019 Héctor Ramón, Iced contributors
++
++Permission is hereby granted, free of charge, to any person obtaining a copy of
++this software and associated documentation files (the "Software"), to deal in
++the Software without restriction, including without limitation the rights to
++use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
++the Software, and to permit persons to whom the Software is furnished to do so,
++subject to the following conditions:
++
++The above copyright notice and this permission notice shall be included in all
++copies or substantial portions of the Software.
++
++THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
++IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
++FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
++COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
++IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
++CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+diff --git b/UPSTREAM.json b/UPSTREAM.json
+new file mode 100644
+index 0000000..77998d0
+--- /dev/null
++++ b/UPSTREAM.json
+@@ -0,0 +1,28 @@
++{
++  "upstream": "https://github.com/iced-rs/iced/tree/0.14/winit",
++  "version": "0.14.1",
++  "commit": "38237dd294da3256c2ac4d3f8288fc73956c91e0",
++  "license": "MIT",
++  "source": "crates.io iced_winit 0.14.1",
++  "upstream_file_sha256": {
++    "Cargo.toml": "1931e5f26d014a2b17a74028ae5d73f0d155aa2d1bc265b8db43fd43198835f1",
++    "Cargo.toml.orig": "7a684a0aca0cf8fb75c48f900662a0d10f0bc4a4cea6cd82181b428434c77a86",
++    "README.md": "4d630c9e4dfcfe0a61c8d61a7dedeb81e14a782312fdbe26c594eea43aa2921f",
++    "src/clipboard.rs": "a22787f6644d54c903e4f0a942ebd301a24b28ad64f730b9d66815117f00e757",
++    "src/conversion.rs": "1e382829eee4e06436ac485581a5eadc2c2f3d2a3f6c6625ae0531fa5316fa67",
++    "src/error.rs": "71ee4325daee93a87c897c933b3c4c4dfb2d8f6445b79d4c8fa54e192486ef94",
++    "src/lib.rs": "ba9fc11df9bc27959d5f26633bb81b42c47f459a3d4f8609cdacefddb133dce8",
++    "src/proxy.rs": "98fd36252bf8aec9b9708da5cbf5aaa3ab1bafee115366095b657972986aa53c",
++    "src/window.rs": "ce13c18da33760b65fb3402300de8d31e24f4cb0fe4cc0beec5d0b195d8ffc28",
++    "src/window/state.rs": "95482e880de39ce7ea0a7c9a200df2dd1c9ce8789e334736902061db23fb93c2"
++  },
++  "purpose": "Input methods in the browser build: winit 0.30's web backend implements none, so the page's composition events reach Iced's text widgets through this crate instead.",
++  "local_changes": [
++    "src/web_ime.rs (new, wasm32 only): on_input_method tells the page where a text widget's cursor is, or that none wants text; send queues winit Ime events from the page and wakes the window",
++    "src/lib.rs: declare web_ime on wasm32; deliver the queued Ime events before each window event; register the window that send wakes",
++    "src/lib.rs: on wasm32, size the canvas through CSSOM instead of a style attribute, which a strict Content-Security-Policy (style-src without 'unsafe-inline') blocks, leaving a 300x150 canvas",
++    "Cargo.toml: web-sys CssStyleDeclaration and HtmlElement for that",
++    "src/window.rs: on wasm32, report the input method area to web_ime when Iced enables, moves or disables it",
++    "LICENSE (added): Iced's MIT license, which the crate package does not include; the same text as licenses/iced/LICENSE"
++  ]
++}
+diff --git a/src/lib.rs b/src/lib.rs
+index fe3269c..262cd1b 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -29,6 +29,9 @@ pub use winit;
+ pub mod clipboard;
+ pub mod conversion;
+ 
++#[cfg(target_arch = "wasm32")]
++pub mod web_ime;
++
+ mod error;
+ mod proxy;
+ mod window;
+@@ -203,6 +206,19 @@ where
+             window_id: winit::window::WindowId,
+             event: winit::event::WindowEvent,
+         ) {
++            // ReShiki patch: the page's input method events, before the
++            // event that `web_ime::send` requested to deliver them.
++            #[cfg(target_arch = "wasm32")]
++            for ime in web_ime::take() {
++                self.process_event(
++                    event_loop,
++                    Event::EventLoopAwakened(winit::event::Event::WindowEvent {
++                        window_id,
++                        event: winit::event::WindowEvent::Ime(ime),
++                    }),
++                );
++            }
++
+             #[cfg(target_os = "windows")]
+             let is_move_or_resize = matches!(
+                 event,
+@@ -364,8 +380,10 @@ where
+                                         .canvas()
+                                         .expect("Get window canvas");
+ 
+-                                    let _ = canvas.set_attribute(
+-                                        "style",
++                                    // Through CSSOM, which a strict
++                                    // Content-Security-Policy allows, unlike
++                                    // a style attribute.
++                                    canvas.style().set_css_text(
+                                         "display: block; width: 100%; height: 100%",
+                                     );
+ 
+@@ -402,11 +420,17 @@ where
+                                     };
+                                 }
+ 
++                                let window = Arc::new(window);
++
++                                // ReShiki patch: input method events wake it.
++                                #[cfg(target_arch = "wasm32")]
++                                web_ime::set_window(&window);
++
+                                 self.process_event(
+                                     event_loop,
+                                     Event::WindowCreated {
+                                         id,
+-                                        window: Arc::new(window),
++                                        window,
+                                         exit_on_close_request,
+                                         make_visible: visible,
+                                         on_open,
+diff --git b/src/web_ime.rs b/src/web_ime.rs
+new file mode 100644
+index 0000000..16432b5
+--- /dev/null
++++ b/src/web_ime.rs
+@@ -0,0 +1,62 @@
++//! ReShiki patch: input methods in the browser.
++//!
++//! winit's web backend implements no input method: it ignores
++//! `set_ime_allowed` and `set_ime_cursor_area` and never sends
++//! [`winit::event::Ime`] events, because a canvas cannot receive composed
++//! text. The page can, with an editable element of its own. This module
++//! tells the page where a text widget wants input, and takes the page's
++//! composition events back into Iced as winit `Ime` events, so text widgets
++//! show and commit them as on the desktop.
++use crate::core::Rectangle;
++
++use std::cell::RefCell;
++use std::collections::VecDeque;
++use std::sync::{Arc, Weak};
++
++type Hook = Box<dyn Fn(Option<Rectangle>)>;
++
++thread_local! {
++    static HOOK: RefCell<Option<Hook>> = const { RefCell::new(None) };
++    static QUEUE: RefCell<VecDeque<winit::event::Ime>> = const { RefCell::new(VecDeque::new()) };
++    static WINDOW: RefCell<Weak<winit::window::Window>> = const { RefCell::new(Weak::new()) };
++}
++
++/// Call `hook` with the text cursor's area, in logical pixels from the
++/// canvas's top left corner, whenever a widget starts taking text or its
++/// cursor moves, and with `None` when no widget takes text.
++pub fn on_input_method(hook: impl Fn(Option<Rectangle>) + 'static) {
++    HOOK.with_borrow_mut(|current| *current = Some(Box::new(hook)));
++}
++
++/// Stop calling the hook given to [`on_input_method`].
++pub fn clear_input_method() {
++    HOOK.with_borrow_mut(|current| *current = None);
++}
++
++/// Hand Iced an input method event, as winit would on the desktop. It
++/// reaches the window with its next event, which this requests.
++pub fn send(event: winit::event::Ime) {
++    QUEUE.with_borrow_mut(|queue| queue.push_back(event));
++    if let Some(window) = WINDOW.with_borrow(Weak::upgrade) {
++        window.request_redraw();
++    }
++}
++
++/// The window that [`send`] wakes.
++pub(crate) fn set_window(window: &Arc<winit::window::Window>) {
++    WINDOW.with_borrow_mut(|current| *current = Arc::downgrade(window));
++}
++
++/// The events [`send`] queued, oldest first.
++pub(crate) fn take() -> Vec<winit::event::Ime> {
++    QUEUE.with_borrow_mut(|queue| queue.drain(..).collect())
++}
++
++/// Tell the page where text input goes, or that none does.
++pub(crate) fn input_area(area: Option<Rectangle>) {
++    HOOK.with_borrow(|hook| {
++        if let Some(hook) = hook {
++            hook(area);
++        }
++    });
++}
+diff --git a/src/window.rs b/src/window.rs
+index 24d6356..f552dec 100644
+--- a/src/window.rs
++++ b/src/window.rs
+@@ -284,6 +284,10 @@ where
+         }
+ 
+         if self.ime_state != Some((cursor, purpose)) {
++            // ReShiki patch: winit ignores the area in the browser.
++            #[cfg(target_arch = "wasm32")]
++            crate::web_ime::input_area(Some(cursor));
++
+             self.raw.set_ime_cursor_area(
+                 LogicalPosition::new(cursor.x, cursor.y),
+                 LogicalSize::new(cursor.width, cursor.height),
+@@ -296,6 +300,9 @@ where
+ 
+     fn disable_ime(&mut self) {
+         if self.ime_state.is_some() {
++            #[cfg(target_arch = "wasm32")]
++            crate::web_ime::input_area(None);
++
+             self.raw.set_ime_allowed(false);
+             self.ime_state = None;
+         }

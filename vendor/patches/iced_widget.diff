@@ -1,0 +1,226 @@
+diff --git a/.cargo_vcs_info.json a/.cargo_vcs_info.json
+deleted file mode 100644
+index 3afb88d..0000000
+--- a/.cargo_vcs_info.json
++++ /dev/null
+@@ -1,6 +0,0 @@
+-{
+-  "git": {
+-    "sha1": "54abf81d13fec06d4d9ac754b03ce2c3313e8a1f"
+-  },
+-  "path_in_vcs": "widget"
+-}
+\ No newline at end of file
+diff --git b/LICENSE b/LICENSE
+new file mode 100644
+index 0000000..f1148e2
+--- /dev/null
++++ b/LICENSE
+@@ -0,0 +1,18 @@
++Copyright 2019 Héctor Ramón, Iced contributors
++
++Permission is hereby granted, free of charge, to any person obtaining a copy of
++this software and associated documentation files (the "Software"), to deal in
++the Software without restriction, including without limitation the rights to
++use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
++the Software, and to permit persons to whom the Software is furnished to do so,
++subject to the following conditions:
++
++The above copyright notice and this permission notice shall be included in all
++copies or substantial portions of the Software.
++
++THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
++IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
++FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
++COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
++IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
++CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+diff --git b/UPSTREAM.json b/UPSTREAM.json
+new file mode 100644
+index 0000000..b348e68
+--- /dev/null
++++ b/UPSTREAM.json
+@@ -0,0 +1,18 @@
++{
++  "upstream": "https://github.com/iced-rs/iced/tree/54abf81d13fec06d4d9ac754b03ce2c3313e8a1f/widget",
++  "version": "0.14.2",
++  "commit": "54abf81d13fec06d4d9ac754b03ce2c3313e8a1f",
++  "license": "MIT",
++  "source": "crates.io iced_widget 0.14.2",
++  "upstream_file_sha256": {
++    "Cargo.toml": "e8e6b9a72fc0f97c84b8fb2703fe6cdccd738c6c01d2fadf018a012182de93b5",
++    "src/text_editor.rs": "cecf8686c90aa92066d55075beba545dfb7dd5a44bad0c1519fcb110a56070e1",
++    "src/text_input.rs": "7cd64b0f79c6000f2985cc290642698a814be5dcd7b7a56ae463b13ffe5c3b47"
++  },
++  "purpose": "Let idle text carets stop producing frames so the GPU driver can release memory while the field stays focused.",
++  "local_changes": [
++    "src/text_editor.rs: stop scheduling caret blink redraws 10 seconds after updated_at and keep the caret visible after that timeout; input method preedit and commit reset updated_at, as typing already does",
++    "src/text_input.rs: stop scheduling caret blink redraws 10 seconds after updated_at and keep the caret visible after that timeout; input method preedit resets updated_at, as commit already does; a click inside the field always requests a frame, so the blink restarts even when the cursor does not move",
++    "LICENSE (added): Iced's MIT license, which the crate package does not include; the same text as licenses/iced/LICENSE"
++  ]
++}
+diff --git a/src/text_editor.rs b/src/text_editor.rs
+index ceddb89..0ee17d6 100644
+--- a/src/text_editor.rs
++++ b/src/text_editor.rs
+@@ -542,6 +542,7 @@ struct Focus {
+ 
+ impl Focus {
+     const CURSOR_BLINK_INTERVAL_MILLIS: u128 = 500;
++    const CURSOR_BLINK_TIMEOUT_MILLIS: u128 = 10_000;
+ 
+     fn now() -> Self {
+         let now = Instant::now();
+@@ -554,10 +555,11 @@ impl Focus {
+     }
+ 
+     fn is_cursor_visible(&self) -> bool {
++        let elapsed = (self.now - self.updated_at).as_millis();
+         self.is_window_focused
+-            && ((self.now - self.updated_at).as_millis()
+-                / Self::CURSOR_BLINK_INTERVAL_MILLIS)
+-                .is_multiple_of(2)
++            && (elapsed >= Self::CURSOR_BLINK_TIMEOUT_MILLIS
++                || (elapsed / Self::CURSOR_BLINK_INTERVAL_MILLIS)
++                    .is_multiple_of(2))
+     }
+ }
+ 
+@@ -716,15 +718,20 @@ where
+                 {
+                     focus.now = *now;
+ 
+-                    let millis_until_redraw =
+-                        Focus::CURSOR_BLINK_INTERVAL_MILLIS
+-                            - (focus.now - focus.updated_at).as_millis()
+-                                % Focus::CURSOR_BLINK_INTERVAL_MILLIS;
++                    let elapsed = (focus.now - focus.updated_at).as_millis();
+ 
+-                    shell.request_redraw_at(
+-                        focus.now
+-                            + Duration::from_millis(millis_until_redraw as u64),
+-                    );
++                    if elapsed < Focus::CURSOR_BLINK_TIMEOUT_MILLIS {
++                        let millis_until_redraw =
++                            Focus::CURSOR_BLINK_INTERVAL_MILLIS
++                                - elapsed % Focus::CURSOR_BLINK_INTERVAL_MILLIS;
++
++                        shell.request_redraw_at(
++                            focus.now
++                                + Duration::from_millis(
++                                    millis_until_redraw as u64,
++                                ),
++                        );
++                    }
+                 }
+             }
+             _ => {}
+@@ -784,6 +791,10 @@ where
+                         shell.request_redraw();
+                     }
+                     Ime::Preedit { content, selection } => {
++                        if let Some(focus) = &mut state.focus {
++                            focus.updated_at = Instant::now();
++                        }
++
+                         state.preedit = Some(input_method::Preedit {
+                             content,
+                             selection,
+@@ -793,6 +804,10 @@ where
+                         shell.request_redraw();
+                     }
+                     Ime::Commit(text) => {
++                        if let Some(focus) = &mut state.focus {
++                            focus.updated_at = Instant::now();
++                        }
++
+                         shell.publish(on_edit(Action::Edit(Edit::Paste(
+                             Arc::new(text),
+                         ))));
+diff --git a/src/text_input.rs b/src/text_input.rs
+index 9c80dfd..b395d31 100644
+--- a/src/text_input.rs
++++ b/src/text_input.rs
+@@ -512,10 +512,11 @@ where
+                             position,
+                         );
+ 
++                    let elapsed = (focus.now - focus.updated_at).as_millis();
+                     let is_cursor_visible = !is_disabled
+-                        && ((focus.now - focus.updated_at).as_millis()
+-                            / CURSOR_BLINK_INTERVAL_MILLIS)
+-                            .is_multiple_of(2);
++                        && (elapsed >= CURSOR_BLINK_TIMEOUT_MILLIS
++                            || (elapsed / CURSOR_BLINK_INTERVAL_MILLIS)
++                                .is_multiple_of(2));
+ 
+                     let cursor = if is_cursor_visible {
+                         Some((
+@@ -718,7 +719,6 @@ where
+             Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left))
+             | Event::Touch(touch::Event::FingerPressed { .. }) => {
+                 let state = state::<Renderer>(tree);
+-                let cursor_before = state.cursor;
+ 
+                 let click_position = cursor.position_over(layout.bounds());
+ 
+@@ -818,9 +818,9 @@ where
+ 
+                     state.last_click = Some(click);
+ 
+-                    if cursor_before != state.cursor {
+-                        shell.request_redraw();
+-                    }
++                    // The click restarts the caret blink, which needs a frame
++                    // even when the cursor stays where it was.
++                    shell.request_redraw();
+ 
+                     shell.capture_event();
+                 }
+@@ -1277,7 +1277,9 @@ where
+                 input_method::Event::Preedit(content, selection) => {
+                     let state = state::<Renderer>(tree);
+ 
+-                    if state.is_focused.is_some() {
++                    if let Some(focus) = &mut state.is_focused {
++                        focus.updated_at = Instant::now();
++
+                         state.preedit = Some(input_method::Preedit {
+                             content: content.to_owned(),
+                             selection: selection.clone(),
+@@ -1339,15 +1341,19 @@ where
+                     ) {
+                         focus.now = *now;
+ 
+-                        let millis_until_redraw = CURSOR_BLINK_INTERVAL_MILLIS
+-                            - (*now - focus.updated_at).as_millis()
+-                                % CURSOR_BLINK_INTERVAL_MILLIS;
++                        let elapsed = (*now - focus.updated_at).as_millis();
+ 
+-                        shell.request_redraw_at(
+-                            *now + Duration::from_millis(
+-                                millis_until_redraw as u64,
+-                            ),
+-                        );
++                        if elapsed < CURSOR_BLINK_TIMEOUT_MILLIS {
++                            let millis_until_redraw =
++                                CURSOR_BLINK_INTERVAL_MILLIS
++                                    - elapsed % CURSOR_BLINK_INTERVAL_MILLIS;
++
++                            shell.request_redraw_at(
++                                *now + Duration::from_millis(
++                                    millis_until_redraw as u64,
++                                ),
++                            );
++                        }
+                     }
+ 
+                     shell.request_input_method(&self.input_method(
+@@ -1691,6 +1697,7 @@ fn replace_paragraph<Renderer>(
+ }
+ 
+ const CURSOR_BLINK_INTERVAL_MILLIS: u128 = 500;
++const CURSOR_BLINK_TIMEOUT_MILLIS: u128 = 10_000;
+ 
+ /// The possible status of a [`TextInput`].
+ #[derive(Debug, Clone, Copy, PartialEq, Eq)]

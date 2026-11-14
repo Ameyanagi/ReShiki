@@ -1,0 +1,360 @@
+diff --git a/.cargo_vcs_info.json a/.cargo_vcs_info.json
+deleted file mode 100644
+index e94798a..0000000
+--- a/.cargo_vcs_info.json
++++ /dev/null
+@@ -1,6 +0,0 @@
+-{
+-  "git": {
+-    "sha1": "42624c0fadf1998b1b804654cdae42a05a3c4628"
+-  },
+-  "path_in_vcs": ""
+-}
+\ No newline at end of file
+diff --git a/.github/workflows/test.yml a/.github/workflows/test.yml
+deleted file mode 100644
+index fd7e216..0000000
+--- a/.github/workflows/test.yml
++++ /dev/null
+@@ -1,20 +0,0 @@
+-name: Test
+-on: [push, pull_request]
+-jobs:
+-  all:
+-    runs-on: ${{ matrix.os }}
+-    strategy:
+-      matrix:
+-        os: [ubuntu-latest, windows-latest, macOS-latest]
+-        rust: [stable, beta]
+-    steps:
+-    - uses: hecrj/setup-rust-action@v1
+-      with:
+-        rust-version: ${{ matrix.rust }}
+-    - uses: actions/checkout@master
+-    - name: Run tests
+-      run: cargo test --verbose
+-    - name: Add Wasm target
+-      run: rustup target add wasm32-unknown-unknown
+-    - name: Run tests on Wasm
+-      run: cargo build --verbose --target wasm32-unknown-unknown
+diff --git a/.gitignore a/.gitignore
+deleted file mode 100644
+index 6936990..0000000
+--- a/.gitignore
++++ /dev/null
+@@ -1,3 +0,0 @@
+-/target
+-**/*.rs.bk
+-Cargo.lock
+diff --git a/Cargo.toml b/Cargo.toml
+index 4b2d39e..873498c 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -46,18 +46,6 @@ x11 = ["clipboard_x11"]
+ name = "window_clipboard"
+ path = "src/lib.rs"
+ 
+-[[example]]
+-name = "big_file"
+-path = "examples/big_file.rs"
+-
+-[[example]]
+-name = "read"
+-path = "examples/read.rs"
+-
+-[[example]]
+-name = "write"
+-path = "examples/write.rs"
+-
+ [dependencies.raw-window-handle]
+ version = "0.6"
+ features = ["std"]
+@@ -65,12 +53,6 @@ features = ["std"]
+ [dependencies.thiserror]
+ version = "2.0"
+ 
+-[dev-dependencies.rand]
+-version = "0.8"
+-
+-[dev-dependencies.winit]
+-version = "0.29"
+-
+ [target.'cfg(all(unix, not(any(target_os="macos", target_os="android", target_os="emscripten", target_os="ios", target_os="redox"))))'.dependencies.clipboard_wayland]
+ version = "0.2.2"
+ optional = true
+@@ -85,3 +67,17 @@ version = "0.1"
+ [target."cfg(windows)".dependencies.clipboard-win]
+ version = "5.0"
+ features = ["std"]
++
++# ReShiki patch: the browser clipboard for wasm32 (src/platform/web.rs).
++[target.'cfg(target_arch = "wasm32")'.dependencies.js-sys]
++version = "0.3"
++
++[target.'cfg(target_arch = "wasm32")'.dependencies.wasm-bindgen]
++version = "0.2"
++
++[target.'cfg(target_arch = "wasm32")'.dependencies.wasm-bindgen-futures]
++version = "0.4"
++
++[target.'cfg(target_arch = "wasm32")'.dependencies.web-sys]
++version = "0.3"
++features = ["Clipboard", "Navigator", "Window", "console"]
+diff --git b/UPSTREAM.json b/UPSTREAM.json
+new file mode 100644
+index 0000000..e1b77c0
+--- /dev/null
++++ b/UPSTREAM.json
+@@ -0,0 +1,27 @@
++{
++  "upstream": "https://github.com/hecrj/window_clipboard",
++  "version": "0.5.1",
++  "commit": "42624c0fadf1998b1b804654cdae42a05a3c4628",
++  "license": "MIT",
++  "source": "crates.io window_clipboard 0.5.1",
++  "upstream_file_sha256": {
++    "Cargo.toml": "1722786340ce8d82b0b6c50d38aff8c850ae180a2d0f1f47d3014e994cc27602",
++    "Cargo.toml.orig": "e232f34e8a0eda21d131c68e62a89c44fa8a83d7f55fc859dbdcfc61cf3471c4",
++    "LICENSE": "7faec985f3e9b1c4a1df646bfedc304ba67e409447f7ab7f4f591f68708d85dc",
++    "README.md": "4cad722cceb0b4a93fc963372e60b091f534595f3002db1f14c7038b3ce34009",
++    "rustfmt.toml": "a93fb86040c045a6e7bcd4a0d4c115adafffc7c3830851c7cfb8d2a602bb565c",
++    "src/lib.rs": "46b918a9875e0eb685ee6915bb95c2c7b5c4a3b4d394f3870341e891ae9312c1",
++    "src/platform/android.rs": "d46fd55505a025a8c9addd935696f5c275a3830006fb391215ee5cc888028951",
++    "src/platform/dummy.rs": "374ffaaeb1c058f74d9ee90d5830187fc033172ba9a4bba9e21f4791f292735e",
++    "src/platform/ios.rs": "a67f236b77d5257dc21a238f98545a678ea8075e024cf952dbc7ba1221fa10ff",
++    "src/platform/linux.rs": "96b93e00da33ba977d3593c80fee41a9fe17a1ffd79b3a169dfeccd50ef5a688",
++    "src/platform/macos.rs": "b291b4a4eef30a4d8149e17799d21532135e845ca9878d9e0fc2428d82dbaf88",
++    "src/platform/windows.rs": "43a20b96a762f9dae5e37431584930b65714c10e311ac93a65a7cfe5db827c77"
++  },
++  "purpose": "Give Iced's text fields the system clipboard in the browser build, where upstream falls back to a dummy provider whose read and write always fail.",
++  "local_changes": [
++    "src/platform/web.rs (new): on wasm32, write puts the text on the system clipboard with navigator.clipboard.writeText inside the key press, and read returns the text the page handed over from the paste event with set_contents, or the text last written",
++    "src/lib.rs: use the web platform on wasm32 and export set_contents there",
++    "Cargo.toml: js-sys, wasm-bindgen, wasm-bindgen-futures and web-sys for wasm32 only; examples and the example-only dev-dependencies (rand, winit 0.29) omitted so the fork resolves from the locked parent workspace; the original manifest is kept as Cargo.toml.orig"
++  ]
++}
+diff --git a/examples/big_file.rs a/examples/big_file.rs
+deleted file mode 100644
+index f666812..0000000
+--- a/examples/big_file.rs
++++ /dev/null
+@@ -1,56 +0,0 @@
+-use rand::distributions::{Alphanumeric, Distribution};
+-use window_clipboard::Clipboard;
+-use winit::{
+-    error::EventLoopError,
+-    event::{ElementState, Event, KeyEvent, WindowEvent},
+-    event_loop::EventLoop,
+-    keyboard::Key,
+-    window::WindowBuilder,
+-};
+-
+-fn main() -> Result<(), EventLoopError> {
+-    let mut rng = rand::thread_rng();
+-
+-    let data: String = Alphanumeric
+-        .sample_iter(&mut rng)
+-        .take(10_000_000)
+-        .map(char::from)
+-        .collect();
+-
+-    let event_loop = EventLoop::new().unwrap();
+-
+-    let window = WindowBuilder::new()
+-        .with_title("Press G to start the test!")
+-        .build(&event_loop)
+-        .unwrap();
+-
+-    let mut clipboard =
+-        unsafe { Clipboard::connect(&window) }.expect("Connect to clipboard");
+-
+-    clipboard.write(data.clone()).unwrap();
+-
+-    event_loop.run(move |event, elwt| match event {
+-        Event::WindowEvent {
+-            event:
+-                WindowEvent::KeyboardInput {
+-                    event:
+-                        KeyEvent {
+-                            logical_key: Key::Character(c),
+-                            state: ElementState::Released,
+-                            ..
+-                        },
+-                    ..
+-                },
+-            ..
+-        } if c == "G" => {
+-            let new_data = clipboard.read().expect("Read data");
+-            assert_eq!(data, new_data, "Data is equal");
+-            println!("Data copied successfully!");
+-        }
+-        Event::WindowEvent {
+-            event: WindowEvent::CloseRequested,
+-            window_id,
+-        } if window_id == window.id() => elwt.exit(),
+-        _ => {}
+-    })
+-}
+diff --git a/examples/read.rs a/examples/read.rs
+deleted file mode 100644
+index ddbaf8b..0000000
+--- a/examples/read.rs
++++ /dev/null
+@@ -1,30 +0,0 @@
+-use window_clipboard::Clipboard;
+-use winit::{
+-    error::EventLoopError,
+-    event::{Event, WindowEvent},
+-    event_loop::EventLoop,
+-    window::WindowBuilder,
+-};
+-
+-fn main() -> Result<(), EventLoopError> {
+-    let event_loop = EventLoop::new().unwrap();
+-
+-    let window = WindowBuilder::new()
+-        .with_title("A fantastic window!")
+-        .build(&event_loop)
+-        .unwrap();
+-
+-    let clipboard =
+-        unsafe { Clipboard::connect(&window) }.expect("Connect to clipboard");
+-
+-    event_loop.run(move |event, elwt| match event {
+-        Event::AboutToWait => {
+-            println!("{:?}", clipboard.read());
+-        }
+-        Event::WindowEvent {
+-            event: WindowEvent::CloseRequested,
+-            window_id,
+-        } if window_id == window.id() => elwt.exit(),
+-        _ => {}
+-    })
+-}
+diff --git a/examples/write.rs a/examples/write.rs
+deleted file mode 100644
+index 40e6263..0000000
+--- a/examples/write.rs
++++ /dev/null
+@@ -1,31 +0,0 @@
+-use window_clipboard::Clipboard;
+-use winit::{
+-    error::EventLoopError,
+-    event::{Event, WindowEvent},
+-    event_loop::EventLoop,
+-    window::WindowBuilder,
+-};
+-
+-fn main() -> Result<(), EventLoopError> {
+-    let event_loop = EventLoop::new().unwrap();
+-
+-    let window = WindowBuilder::new()
+-        .with_title("A fantastic window!")
+-        .build(&event_loop)
+-        .unwrap();
+-
+-    let mut clipboard =
+-        unsafe { Clipboard::connect(&window) }.expect("Connect to clipboard");
+-
+-    clipboard
+-        .write(String::from("Hello, world!"))
+-        .expect("Write to clipboard");
+-
+-    event_loop.run(move |event, elwt| match event {
+-        Event::WindowEvent {
+-            event: WindowEvent::CloseRequested,
+-            window_id,
+-        } if window_id == window.id() => elwt.exit(),
+-        _ => {}
+-    })
+-}
+diff --git a/src/lib.rs b/src/lib.rs
+index a9857e3..a2c4b00 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -27,7 +27,16 @@ mod platform;
+ #[path = "platform/android.rs"]
+ mod platform;
+ 
++#[cfg(target_arch = "wasm32")]
++#[path = "platform/web.rs"]
++mod platform;
++
++/// ReShiki patch: hand the browser clipboard the text a paste event gives.
++#[cfg(target_arch = "wasm32")]
++pub use platform::set_contents;
++
+ #[cfg(not(any(
++    target_arch = "wasm32",
+     all(
+         unix,
+         not(any(
+diff --git b/src/platform/web.rs b/src/platform/web.rs
+new file mode 100644
+index 0000000..ae51735
+--- /dev/null
++++ b/src/platform/web.rs
+@@ -0,0 +1,63 @@
++// ReShiki patch: the browser's clipboard for wasm32, in place of the dummy
++// provider whose read and write always fail.
++//
++// A page cannot read the clipboard while a key press is handled, so `read`
++// answers with the text the page hands over from the paste event with
++// `set_contents`, or that this clipboard last wrote. `write` starts
++// `navigator.clipboard.writeText` inside the key press, where the browser
++// allows it, and logs a refusal.
++use crate::ClipboardProvider;
++
++use raw_window_handle::HasDisplayHandle;
++use std::cell::RefCell;
++use std::error::Error;
++use wasm_bindgen::JsCast;
++
++thread_local! {
++    static CONTENTS: RefCell<Option<String>> = const { RefCell::new(None) };
++}
++
++/// Hand `read` the clipboard's text, as a paste event gives it, or none.
++pub fn set_contents(text: Option<String>) {
++    CONTENTS.with_borrow_mut(|contents| *contents = text);
++}
++
++struct Browser;
++
++pub fn connect<W: HasDisplayHandle>(
++    _window: &W,
++) -> Result<Box<dyn ClipboardProvider>, Box<dyn Error>> {
++    Ok(Box::new(Browser))
++}
++
++impl ClipboardProvider for Browser {
++    fn read(&self) -> Result<String, Box<dyn Error>> {
++        CONTENTS
++            .with_borrow(Clone::clone)
++            .ok_or_else(|| "The clipboard has no text".into())
++    }
++
++    fn write(&mut self, contents: String) -> Result<(), Box<dyn Error>> {
++        set_contents(Some(contents.clone()));
++        // `navigator.clipboard` is missing outside secure pages.
++        let clipboard = web_sys::window()
++            .and_then(|window| {
++                js_sys::Reflect::get(&window.navigator(), &"clipboard".into())
++                    .ok()
++            })
++            .and_then(|clipboard| clipboard.dyn_into::<web_sys::Clipboard>().ok())
++            .ok_or("This page has no clipboard access")?;
++        let written = clipboard.write_text(&contents);
++        wasm_bindgen_futures::spawn_local(async move {
++            if let Err(refused) =
++                wasm_bindgen_futures::JsFuture::from(written).await
++            {
++                web_sys::console::warn_2(
++                    &"Could not copy to the clipboard:".into(),
++                    &refused,
++                );
++            }
++        });
++        Ok(())
++    }
++}

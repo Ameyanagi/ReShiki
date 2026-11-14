@@ -1,6 +1,6 @@
 # ReShiki feature status and remaining work
 
-This inventory retains earlier workflow checks. For current packages and setup, see [installation](getting-started.md) and [release signing](releasing.md).
+This inventory retains earlier workflow checks. For current packages and setup, see [installation](https://reshiki.com/guide/install/) and [release signing](releasing.md).
 
 Workflow checks began on 2026-09-20 for version 0.2.0. This page describes
 ReShiki 0.15.0. Dated validation records describe their original milestones.

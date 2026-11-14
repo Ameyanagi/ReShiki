@@ -1,0 +1,1462 @@
+diff --git a/.cargo_vcs_info.json b/.cargo_vcs_info.json
+index 1a63a00..45f4707 100644
+--- a/.cargo_vcs_info.json
++++ b/.cargo_vcs_info.json
+@@ -3,4 +3,4 @@
+     "sha1": "31d81fed7551c8ccea456d9d8e2b1fd8bebb6995"
+   },
+   "path_in_vcs": "crates/zune-jpeg"
+-}
+\ No newline at end of file
++}
+diff --git a/.gitignore a/.gitignore
+deleted file mode 100644
+index c41cc9e..0000000
+--- a/.gitignore
++++ /dev/null
+@@ -1 +0,0 @@
+-/target
+\ No newline at end of file
+diff --git a/Benches.md a/Benches.md
+deleted file mode 100644
+index 296e96a..0000000
+--- a/Benches.md
++++ /dev/null
+@@ -1,79 +0,0 @@
+-# Benchmarks of popular jpeg libraries
+-
+-Here I compare how long it takes popular JPEG decoders to decode the below 7680*4320 image
+-of (now defunct ?) [Cutefish OS](https://en.cutefishos.com/) default wallpaper.
+-![img](benches/images/speed_bench.jpg)
+-
+-## About benchmarks
+-
+-Benchmarks are weird, especially IO & multi-threaded programs. This library uses both of the above hence performance may
+-vary.
+-
+-For best results shut down your machine, go take coffee, think about life and how it came to be and why people should
+-save the environment.
+-
+-Then power up your machine, if it's a laptop connect it to a power supply and if there is a setting for performance
+-mode, tweak it.
+-
+-Then run.
+-
+-## Benchmarks vs real world usage
+-
+-Real world usage may vary.
+-
+-Notice that I'm using a large image but probably most decoding will be small to medium images.
+-
+-To make the library thread safe, we do about 1.5-1.7x more allocations than libjpeg-turbo. Although, do note that the
+-allocations do not occur at ago, we allocate when needed and deallocate when not needed.
+-
+-Do note if memory bandwidth is a limitation. This is not for you.
+-
+-## Reproducibility
+-
+-The benchmarks are carried out on my local machine with an AMD Ryzen 5 4500u
+-
+-The benchmarks are reproducible.
+-
+-To reproduce them
+-
+-1. Clone this repository
+-2. Install rust(if you don't have it yet)
+-3. `cd` into the directory.
+-4. Run `cargo bench`
+-
+-## Performance features of the three libraries
+-
+-| feature                      | image-rs/jpeg-decoder | libjpeg-turbo | zune-jpeg |
+-|------------------------------|-----------------------|---------------|-----------|
+-| multithreaded                | ✅                     | ❌             | ❌         |
+-| platform specific intrinsics | ✅                     | ✅             | ✅         |
+-
+-- Image-rs/jpeg-decoder uses [rayon] under the hood but it's under a feature
+-  flag.
+-
+-- libjpeg-turbo uses hand-written asm for platform specific intrinsics, ported to
+-  the most common architectures out there but falls back to scalar
+-  code if it can't run in a platform.
+-
+-# Finally benchmarks
+-
+-[here]
+-
+-## Notes
+-
+-Benchmarks are ran at least once a week to catch regressions early and
+-are uploaded to Github pages.
+-
+-Machine specs can be found on the other [landing page]
+-
+-Benchmarks may not reflect real world usage(threads, other I/O machine bottlenecks)
+-
+-[landing page]:https://etemesi254.github.io/posts/Zune-Benchmarks/
+-
+-[here]:https://etemesi254.github.io/assets/criterion/report/index.html
+-
+-[libjpeg-turbo]:https://github.com/libjpeg-turbo/libjpeg-turbo
+-
+-[jpeg-decoder]:https://github.com/image-rs/jpeg-decoder
+-
+-[rayon]:https://github.com/rayon-rs/rayon
+\ No newline at end of file
+diff --git a/Cargo.toml b/Cargo.toml
+index 3969347..b83e057 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -16,14 +16,7 @@ name = "zune-jpeg"
+ version = "0.5.15"
+ authors = ["caleb <etemesicaleb@gmail.com>"]
+ build = false
+-exclude = [
+-    "/benches/images/*",
+-    "/tests/*",
+-    "/.idea/*",
+-    "/.gradle/*",
+-    "/test-images/*",
+-    "fuzz/*",
+-]
++exclude = ["/benches/images/*", "/tests/*", "/.idea/*", "/.gradle/*", "/test-images/*", "fuzz/*"]
+ autolib = false
+ autobins = false
+ autoexamples = false
+@@ -31,21 +24,13 @@ autotests = false
+ autobenches = false
+ description = "A fast, correct and safe jpeg decoder"
+ readme = "README.md"
+-keywords = [
+-    "jpeg",
+-    "jpeg-decoder",
+-    "decoder",
+-]
++keywords = ["jpeg", "jpeg-decoder", "decoder"]
+ categories = ["multimedia::images"]
+ license = "MIT OR Apache-2.0 OR Zlib"
+ repository = "https://github.com/etemesi254/zune-image/tree/dev/crates/zune-jpeg"
+ 
+ [features]
+-default = [
+-    "x86",
+-    "neon",
+-    "std",
+-]
++default = ["x86", "neon", "std"]
+ log = ["zune-core/log"]
+ neon = []
+ portable_simd = []
+diff --git a/Cargo.toml.orig b/Cargo.toml.orig
+index 1c8e614..37421fe 100644
+--- a/Cargo.toml.orig
++++ b/Cargo.toml.orig
+@@ -33,4 +33,4 @@ zune-core = { path = "../zune-core", version = "0.5.1" }
+ 
+ 
+ [dev-dependencies]
+-zune-ppm = { path = "../zune-ppm" }
+\ No newline at end of file
++zune-ppm = { path = "../zune-ppm" }
+diff --git a/Changelog.md a/Changelog.md
+deleted file mode 100644
+index e5a9be0..0000000
+--- a/Changelog.md
++++ /dev/null
+@@ -1,95 +0,0 @@
+-## Version 0.5.7
+-- Move scalar idct to wrapping maths.
+-- Simd upsampling (mhils)
+-- Faster zero idct check (mhils)
+-## Version 0.5.6
+- - Better support for truncated images (by https://github.com/mhils)
+- - fix 4:1:0 chroma subsampling (by https://github.com/mhils)
+- - Fix some crashes
+- - Fix some bug on last pixel sampling
+-
+-## Version 0.5.5
+-- Support direct conversion of Luma to RGBA
+-## Version 0.5.4
+-- Fix overriding color space when decoding Luma colorspace
+-## Version 0.5.3
+-- Fix some decoding of some images with markers in progressive segments, see https://github.com/etemesi254/zune-image/issues/295
+-## Version 0.5.1
+-
+-- Fix decoding of particular images with a non-standard subsample, (
+-  see https://github.com/etemesi254/zune-image/issues/291)
+-- Add better RGB color detection of images to match libjpeg and stb_image formats
+-
+------
+-
+-## Version 0.3.17
+-
+-- Fix no-std compilation
+-
+-## Version 0.3.16
+-
+-- Add support for decoding to BGR and BGRA
+-
+-## Version 0.3.14
+-
+-- Add ability to parse exif and ICC chunk.
+-- Fix images with one component that were down-sampled.
+-
+-### Version 0.3.13
+-
+-- Allow decoding into pre-allocated buffer
+-- Clarify documentation
+-
+-### Version 0.3.11
+-
+-- Add guards for SSE and AVX code paths(allows compiling for platforms that do not support it)
+-
+-### Version 0.3.0
+-
+-- Overhaul to the whole decoder.
+-- Single threaded version
+-- Lightweight.
+-
+-### Version 0.2.0
+-
+-- New `ZuneJpegOptions` struct, this is the now recommended way to set up decoding options for
+-  decoding
+-- Deprecated previous options setting functions.
+-- More code cleanups
+-- Fixed new bugs discovered by fuzzing
+-- Removed dependency on `num_cpu`
+-
+-### Version 0.1.5
+-
+-- Allow user to set memory limits in during decoding explicitly via `set_limits`
+-- Fixed some bugs discovered by fuzzing
+-- Correctly handle small images less than 16 pixels
+-- Gracefully handle incorrectly sampled images.
+-
+-### Version 0.1.4
+-
+-- Remove all `unsafe` instances except platform dependent intrinsics.
+-- Numerous bug fixes identified by fuzzing.
+-- Expose `ImageInfo` to the crate root.
+-
+-### Version 0.1.3
+-
+-- Fix numerous panics found by fuzzing(thanks to @[Shnatsel] for the corpus)
+-- Add new method `set_num_threads` that allows one to explicitly set the number of threads to use to decode the image.
+-
+-### Version 0.1.2
+-
+-- Add more sub checks, contributed by @[5225225]
+-- Privatize some modules.
+-
+-### Version 0.1.1
+-
+-- Fix rgba/rgbx decoding when avx optimized functions were used
+-- Initial support for fuzzing
+-- Remove `align_alloc` method which was unsound (Thanks to @[HeroicKatora] for pointing that out)
+-
+-[Shnatsel]:https://github.com/Shnatsel
+-
+-[HeroicKatora]:https://github.com/HeroicKatora
+-
+-[5225225]:https://github.com/5225225
+\ No newline at end of file
+diff --git b/LICENSE-IJG b/LICENSE-IJG
+new file mode 100644
+index 0000000..dbf8070
+--- /dev/null
++++ b/LICENSE-IJG
+@@ -0,0 +1,260 @@
++libjpeg-turbo note:  This file has been modified by The libjpeg-turbo Project
++to include only information relevant to libjpeg-turbo, to wordsmith certain
++sections, and to remove impolitic language that existed in the libjpeg v8
++README.  It is included only for reference.  Please see README.md for
++information specific to libjpeg-turbo.
++
++
++The Independent JPEG Group's JPEG software
++==========================================
++
++This distribution contains a release of the Independent JPEG Group's free JPEG
++software.  You are welcome to redistribute this software and to use it for any
++purpose, subject to the conditions under LEGAL ISSUES, below.
++
++This software is the work of Tom Lane, Guido Vollbeding, Philip Gladstone,
++Bill Allombert, Jim Boucher, Lee Crocker, Bob Friesenhahn, Ben Jackson,
++Julian Minguillon, Luis Ortiz, George Phillips, Davide Rossi, Ge' Weijers,
++and other members of the Independent JPEG Group.
++
++IJG is not affiliated with the ISO/IEC JTC1/SC29/WG1 standards committee
++(also known as JPEG, together with ITU-T SG16).
++
++
++DOCUMENTATION ROADMAP
++=====================
++
++This file contains the following sections:
++
++OVERVIEW            General description of JPEG and the IJG software.
++LEGAL ISSUES        Copyright, lack of warranty, terms of distribution.
++REFERENCES          Where to learn more about JPEG.
++ARCHIVE LOCATIONS   Where to find newer versions of this software.
++FILE FORMAT WARS    Software *not* to get.
++TO DO               Plans for future IJG releases.
++
++Other documentation files in the distribution are:
++
++User documentation:
++  doc/usage.txt         Usage instructions for cjpeg, djpeg, jpegtran,
++                        rdjpgcom, and wrjpgcom.
++  doc/*.1               Unix-style man pages for programs (same info as
++                        usage.txt).
++  doc/wizard.txt        Advanced usage instructions for JPEG wizards only.
++  doc/change.log        Version-to-version change highlights.
++Programmer and internal documentation:
++  doc/libjpeg.txt       How to use the JPEG library in your own programs.
++  src/example.c         Sample code for calling the JPEG library.
++  doc/structure.txt     Overview of the JPEG library's internal structure.
++  doc/coderules.txt     Coding style rules --- please read if you contribute
++                        code.
++
++Please read at least usage.txt.  Some information can also be found in the JPEG
++FAQ (Frequently Asked Questions) article.  See ARCHIVE LOCATIONS below to find
++out where to obtain the FAQ article.
++
++If you want to understand how the JPEG code works, we suggest reading one or
++more of the REFERENCES, then looking at the documentation files (in roughly
++the order listed) before diving into the code.
++
++
++OVERVIEW
++========
++
++This package contains C software to implement JPEG image encoding, decoding,
++and transcoding.  JPEG (pronounced "jay-peg") is a standardized compression
++method for full-color and grayscale images.  JPEG's strong suit is compressing
++photographic images or other types of images that have smooth color and
++brightness transitions between neighboring pixels.  Images with sharp lines or
++other abrupt features may not compress well with JPEG, and a higher JPEG
++quality may have to be used to avoid visible compression artifacts with such
++images.
++
++JPEG is normally lossy, meaning that the output pixels are not necessarily
++identical to the input pixels.  However, on photographic content and other
++"smooth" images, very good compression ratios can be obtained with no visible
++compression artifacts, and extremely high compression ratios are possible if
++you are willing to sacrifice image quality (by reducing the "quality" setting
++in the compressor.)
++
++This software implements JPEG baseline, extended-sequential, progressive, and
++lossless compression processes.  Provision is made for supporting all variants
++of these processes, although some uncommon parameter settings aren't
++implemented yet.  We have made no provision for supporting the hierarchical
++processes defined in the standard.
++
++We provide a set of library routines for reading and writing JPEG image files,
++plus two sample applications "cjpeg" and "djpeg", which use the library to
++perform conversion between JPEG and some other popular image file formats.
++The library is intended to be reused in other applications.
++
++In order to support file conversion and viewing software, we have included
++considerable functionality beyond the bare JPEG coding/decoding capability;
++for example, the color quantization modules are not strictly part of JPEG
++decoding, but they are essential for output to colormapped file formats.  These
++extra functions can be compiled out of the library if not required for a
++particular application.
++
++We have also included "jpegtran", a utility for lossless transcoding between
++different JPEG processes, and "rdjpgcom" and "wrjpgcom", two simple
++applications for inserting and extracting textual comments in JFIF files.
++
++The emphasis in designing this software has been on achieving portability and
++flexibility, while also making it fast enough to be useful.  In particular,
++the software is not intended to be read as a tutorial on JPEG.  (See the
++REFERENCES section for introductory material.)  Rather, it is intended to
++be reliable, portable, industrial-strength code.  We do not claim to have
++achieved that goal in every aspect of the software, but we strive for it.
++
++We welcome the use of this software as a component of commercial products.
++No royalty is required, but we do ask for an acknowledgement in product
++documentation, as described under LEGAL ISSUES.
++
++
++LEGAL ISSUES
++============
++
++In plain English:
++
++1. We don't promise that this software works.  (But if you find any bugs,
++   please let us know!)
++2. You can use this software for whatever you want.  You don't have to pay us.
++3. You may not pretend that you wrote this software.  If you use it in a
++   program, you must acknowledge somewhere in your documentation that
++   you've used the IJG code.
++
++In legalese:
++
++The authors make NO WARRANTY or representation, either express or implied,
++with respect to this software, its quality, accuracy, merchantability, or
++fitness for a particular purpose.  This software is provided "AS IS", and you,
++its user, assume the entire risk as to its quality and accuracy.
++
++This software is copyright (C) 1991-2020, Thomas G. Lane, Guido Vollbeding.
++All Rights Reserved except as specified below.
++
++Permission is hereby granted to use, copy, modify, and distribute this
++software (or portions thereof) for any purpose, without fee, subject to these
++conditions:
++(1) If any part of the source code for this software is distributed, then this
++README file must be included, with this copyright and no-warranty notice
++unaltered; and any additions, deletions, or changes to the original files
++must be clearly indicated in accompanying documentation.
++(2) If only executable code is distributed, then the accompanying
++documentation must state that "this software is based in part on the work of
++the Independent JPEG Group".
++(3) Permission for use of this software is granted only if the user accepts
++full responsibility for any undesirable consequences; the authors accept
++NO LIABILITY for damages of any kind.
++
++These conditions apply to any software derived from or based on the IJG code,
++not just to the unmodified library.  If you use our work, you ought to
++acknowledge us.
++
++Permission is NOT granted for the use of any IJG author's name or company name
++in advertising or publicity relating to this software or products derived from
++it.  This software may be referred to only as "the Independent JPEG Group's
++software".
++
++We specifically permit and encourage the use of this software as the basis of
++commercial products, provided that all warranty or liability claims are
++assumed by the product vendor.
++
++
++REFERENCES
++==========
++
++We recommend reading one or more of these references before trying to
++understand the innards of the JPEG software.
++
++The best short technical introduction to the JPEG compression algorithm is
++        Wallace, Gregory K.  "The JPEG Still Picture Compression Standard",
++        Communications of the ACM, April 1991 (vol. 34 no. 4), pp. 30-44.
++(Adjacent articles in that issue discuss MPEG motion picture compression,
++applications of JPEG, and related topics.)  If you don't have the CACM issue
++handy, a PDF file containing a revised version of Wallace's article is
++available at http://www.ijg.org/files/Wallace.JPEG.pdf.  The file (actually
++a preprint for an article that appeared in IEEE Trans. Consumer Electronics)
++omits the sample images that appeared in CACM, but it includes corrections
++and some added material.  Note: the Wallace article is copyright ACM and IEEE,
++and it may not be used for commercial purposes.
++
++A somewhat less technical, more leisurely introduction to JPEG can be found in
++"The Data Compression Book" by Mark Nelson and Jean-loup Gailly, published by
++M&T Books (New York), 2nd ed. 1996, ISBN 1-55851-434-1.  This book provides
++good explanations and example C code for a multitude of compression methods
++including JPEG.  It is an excellent source if you are comfortable reading C
++code but don't know much about data compression in general.  The book's JPEG
++sample code is far from industrial-strength, but when you are ready to look
++at a full implementation, you've got one here...
++
++The best currently available description of JPEG is the textbook "JPEG Still
++Image Data Compression Standard" by William B. Pennebaker and Joan L.
++Mitchell, published by Van Nostrand Reinhold, 1993, ISBN 0-442-01272-1.
++Price US$59.95, 638 pp.  The book includes the complete text of the ISO JPEG
++standards (DIS 10918-1 and draft DIS 10918-2).
++
++The original JPEG standard is divided into two parts, Part 1 being the actual
++specification, while Part 2 covers compliance testing methods.  Part 1 is
++titled "Digital Compression and Coding of Continuous-tone Still Images,
++Part 1: Requirements and guidelines" and has document numbers ISO/IEC IS
++10918-1, ITU-T T.81.  Part 2 is titled "Digital Compression and Coding of
++Continuous-tone Still Images, Part 2: Compliance testing" and has document
++numbers ISO/IEC IS 10918-2, ITU-T T.83.
++
++The JPEG standard does not specify all details of an interchangeable file
++format.  For the omitted details, we follow the "JFIF" conventions, revision
++1.02.  JFIF version 1 has been adopted as ISO/IEC 10918-5 (05/2013) and
++Recommendation ITU-T T.871 (05/2011): Information technology - Digital
++compression and coding of continuous-tone still images: JPEG File Interchange
++Format (JFIF).  It is available as a free download in PDF file format from
++https://www.iso.org/standard/54989.html and http://www.itu.int/rec/T-REC-T.871.
++A PDF file of the older JFIF 1.02 specification is available at
++http://www.w3.org/Graphics/JPEG/jfif3.pdf.
++
++The TIFF 6.0 file format specification can be obtained from
++http://mirrors.ctan.org/graphics/tiff/TIFF6.ps.gz.  The JPEG incorporation
++scheme found in the TIFF 6.0 spec of 3-June-92 has a number of serious
++problems.  IJG does not recommend use of the TIFF 6.0 design (TIFF Compression
++tag 6).  Instead, we recommend the JPEG design proposed by TIFF Technical Note
++#2 (Compression tag 7).  Copies of this Note can be obtained from
++http://www.ijg.org/files/.  It is expected that the next revision
++of the TIFF spec will replace the 6.0 JPEG design with the Note's design.
++Although IJG's own code does not support TIFF/JPEG, the free libtiff library
++uses our library to implement TIFF/JPEG per the Note.
++
++
++ARCHIVE LOCATIONS
++=================
++
++The "official" archive site for this software is www.ijg.org.
++The most recent released version can always be found there in
++directory "files".
++
++The JPEG FAQ (Frequently Asked Questions) article is a source of some
++general information about JPEG.  It is available at
++http://www.faqs.org/faqs/jpeg-faq.
++
++
++FILE FORMAT COMPATIBILITY
++=========================
++
++This software implements ITU T.81 | ISO/IEC 10918 with some extensions from
++ITU T.871 | ISO/IEC 10918-5 (JPEG File Interchange Format-- see REFERENCES).
++Informally, the term "JPEG image" or "JPEG file" most often refers to JFIF or
++a subset thereof, but there are other formats containing the name "JPEG" that
++are incompatible with the original JPEG standard or with JFIF (for instance,
++JPEG 2000 and JPEG XR).  This software therefore does not support these
++formats.  Indeed, one of the original reasons for developing this free software
++was to help force convergence on a common, interoperable format standard for
++JPEG files.
++
++JFIF is a minimal or "low end" representation.  TIFF/JPEG (TIFF revision 6.0 as
++modified by TIFF Technical Note #2) can be used for "high end" applications
++that need to record a lot of additional data about an image.
++
++
++TO DO
++=====
++
++Please send bug reports, offers of help, etc. to jpeg-info@jpegclub.org.
+diff --git b/NOTICE b/NOTICE
+new file mode 100644
+index 0000000..f94ba23
+--- /dev/null
++++ b/NOTICE
+@@ -0,0 +1,11 @@
++ReShiki distributes a modified zune-jpeg 0.5.15.
++Original source: https://github.com/etemesi254/zune-image
++Source commit: 31d81fed7551c8ccea456d9d8e2b1fd8bebb6995
++
++ReShiki changes (2026): chroma sampling at component edges and integer IDCT
++precision. These follow libjpeg-turbo 3.1.4.1 jdsample.c and jidctint.c.
++The original entropy decoder, color conversion and CPU dispatch are retained.
++See RESHIKI-PATCH.md in the source distribution for the patch details.
++
++Original zune-jpeg licenses: LICENSE-APACHE, LICENSE-MIT and LICENSE-ZLIB.
++The referenced Independent JPEG Group distribution terms are in LICENSE-IJG.
+diff --git a/README.md b/README.md
+index 606c987..3e07209 100644
+--- a/README.md
++++ b/README.md
+@@ -36,11 +36,11 @@ in order of importance
+    should be fixed when reported. `unsafe` is only used for SIMD intrinsics,
+    and can be turned off entirely both at compile time and at runtime.
+ 2. Speed - Get the data as quickly as possible, which means
+-    1. Platform intrinsics code where justifiable
+-    2. Carefully written platform independent code that allows the
+-       compiler to vectorize it.
+-    3. Regression tests.
+-    4. Watch the memory usage of the program
++   1. Platform intrinsics code where justifiable
++   2. Carefully written platform independent code that allows the
++      compiler to vectorize it.
++   3. Regression tests.
++   4. Watch the memory usage of the program
+ 3. Usability - Provide utility functions like different color conversions functions.
+ 
+ ## Non-Goals
+@@ -55,15 +55,15 @@ in order of importance
+ - [x] Fast Huffman Decoding
+ - [x] Fast color convert functions.
+ - [x] Support for extended colorspaces like GrayScale and RGBA
+-- [X] Single-threaded decoding.
+-- [X] Support for four component JPEGs, and esoteric color schemes like CYMK
+-- [X] Support for `no_std`
+-- [X] BGR/BGRA decoding support.
++- [x] Single-threaded decoding.
++- [x] Support for four component JPEGs, and esoteric color schemes like CYMK
++- [x] Support for `no_std`
++- [x] BGR/BGRA decoding support.
+ 
+ ## Crate Features
+ 
+ | feature | on  | Capabilities                                                                                |
+-|---------|-----|---------------------------------------------------------------------------------------------|
++| ------- | --- | ------------------------------------------------------------------------------------------- |
+ | `x86`   | yes | Enables `x86` specific instructions, specifically `avx` and `sse` for accelerated decoding. |
+ | `std`   | yes | Enable linking to the `std` crate                                                           |
+ 
+@@ -98,7 +98,5 @@ match [libjpeg-turbo] speeds but speeds are always +- 10 ms of this library.
+ For more up-to-date benchmarks, see the online repo with
+ benchmarks [here](https://etemesi254.github.io/assets/criterion/report/index.html)
+ 
+-
+-[libjpeg-turbo]:https://github.com/libjpeg-turbo/libjpeg-turbo/
+-
+-[image-rs/jpeg-decoder]:https://github.com/image-rs/jpeg-decoder/tree/master/src
++[libjpeg-turbo]: https://github.com/libjpeg-turbo/libjpeg-turbo/
++[image-rs/jpeg-decoder]: https://github.com/image-rs/jpeg-decoder/tree/master/src
+diff --git b/RESHIKI-PATCH.md b/RESHIKI-PATCH.md
+new file mode 100644
+index 0000000..8dbea00
+--- /dev/null
++++ b/RESHIKI-PATCH.md
+@@ -0,0 +1,38 @@
++# ReShiki JPEG sampling patch
++
++This directory retains the published `zune-jpeg` 0.5.15 source and its MIT,
++Apache-2.0, and Zlib licenses. The registry package checksum is
++`27bc9d5b815bc103f142aa054f561d9187d191692ec7c2d1e2b4737f8dbd7296`;
++upstream source commit `31d81fed7551c8ccea456d9d8e2b1fd8bebb6995`,
++`crates/zune-jpeg`. Registry bookkeeping, lockfile, changelog and benchmark notes
++are omitted. `Cargo.toml`, `Cargo.toml.orig`, `README.md` and `.cargo_vcs_info.json` have formatting-only changes required by the repository hooks. Trailing whitespace was removed from `src/color_convert/avx.rs`, `src/decoder.rs` and `src/upsampler/portable_simd.rs`. The application applies it through Cargo's `[patch.crates-io]`.
++
++The sampling and integer precision are checked against Pillow 12.3.0 with
++libjpeg-turbo 3.1.4.1. Reference algorithms are in that tag's
++[`src/jdsample.c`](https://github.com/libjpeg-turbo/libjpeg-turbo/blob/3.1.4.1/src/jdsample.c)
++and [`src/jidctint.c`](https://github.com/libjpeg-turbo/libjpeg-turbo/blob/3.1.4.1/src/jidctint.c).
++Their distribution terms are retained in `LICENSE-IJG`.
++
++Changes from the registry source:
++
++- `lib.rs` omits the ignored crate-level `macro_use` attribute, which Rust 1.99
++  diagnoses as invalid on crates. Module and external-crate attributes remain unchanged.
++- `mcu.rs::post_process` supplies real image dimensions to `worker.rs::upsample`.
++- `worker.rs::upsample` uses `upsampler/compatible.rs::sample` for horizontal,
++  vertical and combined 2:1 sampling. The checked scalar filter uses real
++  component edges, nearest-neighbor sampling when horizontal component width
++  is at most two, and libjpeg's alternating rounding biases. Combined filtering
++  rounds once. It shares the same implementation across CPU dispatch modes.
++  Other sampling ratios retain the upstream implementation.
++- `upsampler.rs` declares the additional private module.
++- `idct/{scalar,avx2,neon}.rs` use libjpeg's 13-bit integer constants and shifts,
++  including the specialized 4x4 path. The final rounding constant omits the
++  upstream extra first-pass bias. DC-only processing and SIMD dispatch stay
++  unchanged. No unsafe blocks or unsafe operations were added.
++
++No public API, feature defaults, dependency versions, allocation strategy,
++entropy decoding, metadata, orientation, or color conversion was changed.
++`reference/jpeg_sampling.rs` compares baseline and progressive JPEGs at 4:4:4,
++4:2:2 and 4:2:0, small/odd/MCU-boundary sizes, high-contrast/noise/gradient pixels,
++EXIF orientation, opacity, ordinary picture imports and scalar/SIMD decoding.
++The 2-level RGB allowance is unchanged; alpha and lossless formats remain exact.
+diff --git a/src/color_convert/avx.rs b/src/color_convert/avx.rs
+index 0bdd2f5..07059a8 100644
+--- a/src/color_convert/avx.rs
++++ b/src/color_convert/avx.rs
+@@ -268,24 +268,24 @@ unsafe fn ycbcr_to_rgba_unsafe(
+     // final transpose_u16
+     let g = _mm256_unpacklo_epi8(e, f); //abcd_abcd_abcd_abcd_abcd
+     let h = _mm256_unpackhi_epi8(e, f);
+-    
++
+     // undo packus shuffling...
+     let i = _mm256_permute2x128_si256::<{ shuffle(3, 2, 1, 0) }>(g, h);
+-    
++
+     let j = _mm256_permute2x128_si256::<{ shuffle(1, 2, 3, 0) }>(g, h);
+-    
++
+     let k = _mm256_permute2x128_si256::<{ shuffle(3, 2, 0, 1) }>(g, h);
+-    
++
+     let l = _mm256_permute2x128_si256::<{ shuffle(0, 3, 2, 1) }>(g, h);
+-    
++
+     let m = _mm256_blend_epi32::<0b1111_0000>(i, j);
+-    
++
+     let n = _mm256_blend_epi32::<0b1111_0000>(k, l);
+-    
++
+     // Store
+     // Use streaming instructions to prevent polluting the cache?
+     _mm256_storeu_si256(tmp.as_mut_ptr().cast(), m);
+-    
++
+     _mm256_storeu_si256(tmp[32..].as_mut_ptr().cast(), n);
+ 
+     *offset += 64;
+diff --git a/src/decoder.rs b/src/decoder.rs
+index c45f631..83eceaa 100644
+--- a/src/decoder.rs
++++ b/src/decoder.rs
+@@ -186,7 +186,7 @@ where
+             succ_high:         0,
+             succ_low:          0,
+             num_scans:         0,
+-            scan_subsampled:   false, 
++            scan_subsampled:   false,
+             idct_func:         choose_idct_func(&options),
+             idct_4x4_func:     choose_idct_4x4_func(&options),
+             idct_1x1_func:     choose_idct_1x1_func(&options),
+diff --git a/src/idct/avx2.rs b/src/idct/avx2.rs
+index aa7bbd8..d700254 100644
+--- a/src/idct/avx2.rs
++++ b/src/idct/avx2.rs
+@@ -38,7 +38,8 @@ use core::arch::x86_64::*;
+ 
+ use crate::unsafe_utils::{transpose, YmmRegister};
+ 
+-const SCALE_BITS: i32 = 512 + 65536 + (128 << 17);
++// ReShiki: match libjpeg's 13-bit accurate integer IDCT precision.
++const SCALE_BITS: i32 = 131072 + (128 << 18);
+ 
+ // Pack i32 to i16's,
+ // clamp them to be between 0-255
+@@ -179,16 +180,16 @@ pub unsafe fn idct_avx2(
+             // avx one should produce identical code.)
+ 
+             // even part
+-            let p1 = (row2 + row6) * 2217;
++            let p1 = (row2 + row6) * 4433;
+ 
+-            let mut t2 = p1 + row6 * -7567;
+-            let mut t3 = p1 + row2 * 3135;
++            let mut t2 = p1 + row6 * -15137;
++            let mut t3 = p1 + row2 * 6270;
+ 
+             let mut t0 = YmmRegister {
+-                mm256: _mm256_slli_epi32((row0 + row4).mm256, 12),
++                mm256: _mm256_slli_epi32((row0 + row4).mm256, 13),
+             };
+             let mut t1 = YmmRegister {
+-                mm256: _mm256_slli_epi32((row0 - row4).mm256, 12),
++                mm256: _mm256_slli_epi32((row0 - row4).mm256, 13),
+             };
+ 
+             let x0 = t0 + t3 + $SCALE_BITS;
+@@ -200,17 +201,17 @@ pub unsafe fn idct_avx2(
+             let p4 = row5 + row1;
+             let p1 = row7 + row1;
+             let p2 = row5 + row3;
+-            let p5 = (p3 + p4) * 4816;
++            let p5 = (p3 + p4) * 9633;
+ 
+-            t0 = row7 * 1223;
+-            t1 = row5 * 8410;
+-            t2 = row3 * 12586;
+-            t3 = row1 * 6149;
++            t0 = row7 * 2446;
++            t1 = row5 * 16819;
++            t2 = row3 * 25172;
++            t3 = row1 * 12299;
+ 
+-            let p1 = p5 + p1 * -3685;
+-            let p2 = p5 + (p2 * -10497);
+-            let p3 = p3 * -8034;
+-            let p4 = p4 * -1597;
++            let p1 = p5 + p1 * -7373;
++            let p2 = p5 + (p2 * -20995);
++            let p3 = p3 * -16069;
++            let p4 = p4 * -3196;
+ 
+             t3 += p1 + p4;
+             t2 += p2 + p3;
+@@ -230,13 +231,13 @@ pub unsafe fn idct_avx2(
+     }
+ 
+     // Process rows
+-    dct_pass!(512, 10);
++    dct_pass!(1024, 11);
+     transpose(
+         &mut row0, &mut row1, &mut row2, &mut row3, &mut row4, &mut row5, &mut row6, &mut row7,
+     );
+ 
+     // process columns
+-    dct_pass!(SCALE_BITS, 17);
++    dct_pass!(SCALE_BITS, 18);
+     transpose(
+         &mut row0, &mut row1, &mut row2, &mut row3, &mut row4, &mut row5, &mut row6, &mut row7,
+     );
+@@ -276,13 +277,13 @@ pub unsafe fn idct_avx2_4x4(
+     let mut row7 = YmmRegister { mm256: rw0 };
+ 
+     {
+-        row0.mm256 = _mm256_slli_epi32(row0.mm256, 12);
+-        row0 += 512;
++        row0.mm256 = _mm256_slli_epi32(row0.mm256, 13);
++        row0 += 1024;
+ 
+         let i2 = row2;
+ 
+-        let p1 = i2 * 2217;
+-        let p3 = i2 * 5352;
++        let p1 = i2 * 4433;
++        let p3 = i2 * 10703;
+ 
+         let x0 = row0 + p3;
+         let x1 = row0 + p1;
+@@ -293,26 +294,26 @@ pub unsafe fn idct_avx2_4x4(
+         let i4 = row3;
+         let i3 = row1;
+ 
+-        let p5 = (i4 + i3) * 4816;
++        let p5 = (i4 + i3) * 9633;
+ 
+-        let p1 = p5 + i3 * -3685;
+-        let p2 = p5 + i4 * -10497;
++        let p1 = p5 + i3 * -7373;
++        let p2 = p5 + i4 * -20995;
+ 
+-        let t3 = p5 + i3 * 867;
+-        let t2 = p5 + i4 * -5945;
++        let t3 = p5 + i3 * 1730;
++        let t2 = p5 + i4 * -11892;
+ 
+-        let t1 = p2 + i3 * -1597;
+-        let t0 = p1 + i4 * -8034;
++        let t1 = p2 + i3 * -3196;
++        let t0 = p1 + i4 * -16069;
+ 
+-        row0.mm256 = _mm256_srai_epi32((x0 + t3).mm256, 10);
+-        row1.mm256 = _mm256_srai_epi32((x1 + t2).mm256, 10);
+-        row2.mm256 = _mm256_srai_epi32((x2 + t1).mm256, 10);
+-        row3.mm256 = _mm256_srai_epi32((x3 + t0).mm256, 10);
++        row0.mm256 = _mm256_srai_epi32((x0 + t3).mm256, 11);
++        row1.mm256 = _mm256_srai_epi32((x1 + t2).mm256, 11);
++        row2.mm256 = _mm256_srai_epi32((x2 + t1).mm256, 11);
++        row3.mm256 = _mm256_srai_epi32((x3 + t0).mm256, 11);
+ 
+-        row4.mm256 = _mm256_srai_epi32((x3 - t0).mm256, 10);
+-        row5.mm256 = _mm256_srai_epi32((x2 - t1).mm256, 10);
+-        row6.mm256 = _mm256_srai_epi32((x1 - t2).mm256, 10);
+-        row7.mm256 = _mm256_srai_epi32((x0 - t3).mm256, 10);
++        row4.mm256 = _mm256_srai_epi32((x3 - t0).mm256, 11);
++        row5.mm256 = _mm256_srai_epi32((x2 - t1).mm256, 11);
++        row6.mm256 = _mm256_srai_epi32((x1 - t2).mm256, 11);
++        row7.mm256 = _mm256_srai_epi32((x0 - t3).mm256, 11);
+     }
+ 
+     transpose(
+@@ -323,11 +324,11 @@ pub unsafe fn idct_avx2_4x4(
+         let i2 = row2;
+         let i0 = row0;
+ 
+-        row0.mm256 = _mm256_slli_epi32(i0.mm256, 12);
++        row0.mm256 = _mm256_slli_epi32(i0.mm256, 13);
+         let t0 = row0 + SCALE_BITS;
+ 
+-        let t2 = i2 * 2217;
+-        let t3 = i2 * 5352;
++        let t2 = i2 * 4433;
++        let t3 = i2 * 10703;
+ 
+         // constants scaled things up by 1<<12, plus we had 1<<2 from first
+         // loop, plus horizontal and vertical each scale by sqrt(8) so together
+@@ -345,25 +346,25 @@ pub unsafe fn idct_avx2_4x4(
+         let i3 = row3;
+         let i1 = row1;
+ 
+-        let p5 = (i3 + i1) * 4816;
++        let p5 = (i3 + i1) * 9633;
+ 
+-        let p1 = p5 + i1 * -3685;
+-        let p2 = p5 + i3 * -10497;
++        let p1 = p5 + i1 * -7373;
++        let p2 = p5 + i3 * -20995;
+ 
+-        let t3 = p5 + i1 * 867;
+-        let t2 = p5 + i3 * -5945;
++        let t3 = p5 + i1 * 1730;
++        let t2 = p5 + i3 * -11892;
+ 
+-        let t1 = p2 + i1 * -1597;
+-        let t0 = p1 + i3 * -8034;
++        let t1 = p2 + i1 * -3196;
++        let t0 = p1 + i3 * -16069;
+ 
+-        row0.mm256 = _mm256_srai_epi32((x0 + t3).mm256, 17);
+-        row1.mm256 = _mm256_srai_epi32((x1 + t2).mm256, 17);
+-        row2.mm256 = _mm256_srai_epi32((x2 + t1).mm256, 17);
+-        row3.mm256 = _mm256_srai_epi32((x3 + t0).mm256, 17);
+-        row4.mm256 = _mm256_srai_epi32((x3 - t0).mm256, 17);
+-        row5.mm256 = _mm256_srai_epi32((x2 - t1).mm256, 17);
+-        row6.mm256 = _mm256_srai_epi32((x1 - t2).mm256, 17);
+-        row7.mm256 = _mm256_srai_epi32((x0 - t3).mm256, 17);
++        row0.mm256 = _mm256_srai_epi32((x0 + t3).mm256, 18);
++        row1.mm256 = _mm256_srai_epi32((x1 + t2).mm256, 18);
++        row2.mm256 = _mm256_srai_epi32((x2 + t1).mm256, 18);
++        row3.mm256 = _mm256_srai_epi32((x3 + t0).mm256, 18);
++        row4.mm256 = _mm256_srai_epi32((x3 - t0).mm256, 18);
++        row5.mm256 = _mm256_srai_epi32((x2 - t1).mm256, 18);
++        row6.mm256 = _mm256_srai_epi32((x1 - t2).mm256, 18);
++        row7.mm256 = _mm256_srai_epi32((x0 - t3).mm256, 18);
+     }
+ 
+     transpose(
+diff --git a/src/idct/neon.rs b/src/idct/neon.rs
+index 0453635..5461149 100644
+--- a/src/idct/neon.rs
++++ b/src/idct/neon.rs
+@@ -34,7 +34,8 @@ use core::arch::aarch64::*;
+ 
+ use crate::unsafe_utils::{transpose, YmmRegister};
+ 
+-const SCALE_BITS: i32 = 512 + 65536 + (128 << 17);
++// ReShiki: match libjpeg's 13-bit accurate integer IDCT precision.
++const SCALE_BITS: i32 = 131072 + (128 << 18);
+ 
+ #[inline]
+ #[target_feature(enable = "neon")]
+@@ -141,13 +142,13 @@ pub unsafe fn idct_neon(in_vector: &mut [i32; 64], out_vector: &mut [i16], strid
+                 // into multiply-acumulate pairs
+ 
+                 // even part
+-                let p1 = (row2 + row6) * 2217;
++                let p1 = (row2 + row6) * 4433;
+ 
+-                let mut t2 = p1 + row6 * -7567;
+-                let mut t3 = p1 + row2 * 3135;
++                let mut t2 = p1 + row6 * -15137;
++                let mut t3 = p1 + row2 * 6270;
+ 
+-                let mut t0 = (row0 + row4).const_shl::<12>();
+-                let mut t1 = (row0 - row4).const_shl::<12>();
++                let mut t0 = (row0 + row4).const_shl::<13>();
++                let mut t1 = (row0 - row4).const_shl::<13>();
+ 
+                 let x0 = t0 + t3 + $SCALE_BITS;
+                 let x3 = t0 - t3 + $SCALE_BITS;
+@@ -158,17 +159,17 @@ pub unsafe fn idct_neon(in_vector: &mut [i32; 64], out_vector: &mut [i16], strid
+                 let p4 = row5 + row1;
+                 let p1 = row7 + row1;
+                 let p2 = row5 + row3;
+-                let p5 = (p3 + p4) * 4816;
++                let p5 = (p3 + p4) * 9633;
+ 
+-                t0 = row7 * 1223;
+-                t1 = row5 * 8410;
+-                t2 = row3 * 12586;
+-                t3 = row1 * 6149;
++                t0 = row7 * 2446;
++                t1 = row5 * 16819;
++                t2 = row3 * 25172;
++                t3 = row1 * 12299;
+ 
+-                let p1 = p5 + p1 * -3685;
+-                let p2 = p5 + (p2 * -10497);
+-                let p3 = p3 * -8034;
+-                let p4 = p4 * -1597;
++                let p1 = p5 + p1 * -7373;
++                let p2 = p5 + (p2 * -20995);
++                let p3 = p3 * -16069;
++                let p4 = p4 * -3196;
+ 
+                 t3 += p1 + p4;
+                 t2 += p2 + p3;
+@@ -188,13 +189,13 @@ pub unsafe fn idct_neon(in_vector: &mut [i32; 64], out_vector: &mut [i16], strid
+         }
+ 
+         // Process rows
+-        dct_pass!(512, 10);
++        dct_pass!(1024, 11);
+         transpose(
+             &mut row0, &mut row1, &mut row2, &mut row3, &mut row4, &mut row5, &mut row6, &mut row7,
+         );
+ 
+         // process columns
+-        dct_pass!(SCALE_BITS, 17);
++        dct_pass!(SCALE_BITS, 18);
+         transpose(
+             &mut row0, &mut row1, &mut row2, &mut row3, &mut row4, &mut row5, &mut row6, &mut row7,
+         );
+diff --git a/src/idct/scalar.rs b/src/idct/scalar.rs
+index 624e2c8..e0e8505 100644
+--- a/src/idct/scalar.rs
++++ b/src/idct/scalar.rs
+@@ -10,7 +10,8 @@
+ //!
+ //! Not as fast as AVX one.
+ 
+-const SCALE_BITS: i32 = 512 + 65536 + (128 << 17);
++// ReShiki: match libjpeg's 13-bit accurate integer IDCT precision.
++const SCALE_BITS: i32 = 131072 + (128 << 18);
+ 
+ #[inline(always)]
+ fn wa(a: i32, b: i32) -> i32 {
+@@ -58,10 +59,10 @@ pub fn idct_int(in_vector: &mut [i32; 64], out_vector: &mut [i16], stride: usize
+         let p2 = in_vector[ptr + 16];
+         let p3 = in_vector[ptr + 48];
+ 
+-        let p1 = wm(wa(p2, p3), 2217);
++        let p1 = wm(wa(p2, p3), 4433);
+ 
+-        let t2 = wa(p1, wm(p3, -7567));
+-        let t3 = wa(p1, wm(p2, 3135));
++        let t2 = wa(p1, wm(p3, -15137));
++        let t3 = wa(p1, wm(p2, 6270));
+ 
+         let p2 = in_vector[ptr];
+         let p3 = in_vector[32 + ptr];
+@@ -69,10 +70,10 @@ pub fn idct_int(in_vector: &mut [i32; 64], out_vector: &mut [i16], stride: usize
+         let t0 = fsh(wa(p2, p3));
+         let t1 = fsh(ws(p2, p3));
+ 
+-        let x0 = wa(wa(t0, t3), 512);
+-        let x3 = wa(ws(t0, t3), 512);
+-        let x1 = wa(wa(t1, t2), 512);
+-        let x2 = wa(ws(t1, t2), 512);
++        let x0 = wa(wa(t0, t3), 1024);
++        let x3 = wa(ws(t0, t3), 1024);
++        let x1 = wa(wa(t1, t2), 1024);
++        let x2 = wa(ws(t1, t2), 1024);
+ 
+         let mut t0 = in_vector[ptr + 56];
+         let mut t1 = in_vector[ptr + 40];
+@@ -83,31 +84,31 @@ pub fn idct_int(in_vector: &mut [i32; 64], out_vector: &mut [i16], stride: usize
+         let p4 = wa(t1, t3);
+         let p1 = wa(t0, t3);
+         let p2 = wa(t1, t2);
+-        let p5 = wm(wa(p3, p4), 4816);
++        let p5 = wm(wa(p3, p4), 9633);
+ 
+-        t0 = wm(t0, 1223);
+-        t1 = wm(t1, 8410);
+-        t2 = wm(t2, 12586);
+-        t3 = wm(t3, 6149);
++        t0 = wm(t0, 2446);
++        t1 = wm(t1, 16819);
++        t2 = wm(t2, 25172);
++        t3 = wm(t3, 12299);
+ 
+-        let p1 = wa(p5, wm(p1, -3685));
+-        let p2 = wa(p5, wm(p2, -10497));
+-        let p3 = wm(p3, -8034);
+-        let p4 = wm(p4, -1597);
++        let p1 = wa(p5, wm(p1, -7373));
++        let p2 = wa(p5, wm(p2, -20995));
++        let p3 = wm(p3, -16069);
++        let p4 = wm(p4, -3196);
+ 
+         t3 = wa(t3, wa(p1, p4));
+         t2 = wa(t2, wa(p2, p3));
+         t1 = wa(t1, wa(p2, p4));
+         t0 = wa(t0, wa(p1, p3));
+ 
+-        in_vector[ptr] = ws(wa(x0, t3), 0) >> 10;
+-        in_vector[ptr + 8] = ws(wa(x1, t2), 0) >> 10;
+-        in_vector[ptr + 16] = ws(wa(x2, t1), 0) >> 10;
+-        in_vector[ptr + 24] = ws(wa(x3, t0), 0) >> 10;
+-        in_vector[ptr + 32] = ws(ws(x3, t0), 0) >> 10;
+-        in_vector[ptr + 40] = ws(ws(x2, t1), 0) >> 10;
+-        in_vector[ptr + 48] = ws(ws(x1, t2), 0) >> 10;
+-        in_vector[ptr + 56] = ws(ws(x0, t3), 0) >> 10;
++        in_vector[ptr] = ws(wa(x0, t3), 0) >> 11;
++        in_vector[ptr + 8] = ws(wa(x1, t2), 0) >> 11;
++        in_vector[ptr + 16] = ws(wa(x2, t1), 0) >> 11;
++        in_vector[ptr + 24] = ws(wa(x3, t0), 0) >> 11;
++        in_vector[ptr + 32] = ws(ws(x3, t0), 0) >> 11;
++        in_vector[ptr + 40] = ws(ws(x2, t1), 0) >> 11;
++        in_vector[ptr + 48] = ws(ws(x1, t2), 0) >> 11;
++        in_vector[ptr + 56] = ws(ws(x0, t3), 0) >> 11;
+     }
+ 
+     // horizontal pass
+@@ -115,9 +116,9 @@ pub fn idct_int(in_vector: &mut [i32; 64], out_vector: &mut [i16], stride: usize
+         let p2 = in_vector[i + 2];
+         let p3 = in_vector[i + 6];
+ 
+-        let p1 = wm(wa(p2, p3), 2217);
+-        let t2 = wa(p1, wm(p3, -7567));
+-        let t3 = wa(p1, wm(p2, 3135));
++        let p1 = wm(wa(p2, p3), 4433);
++        let t2 = wa(p1, wm(p3, -15137));
++        let t3 = wa(p1, wm(p2, 6270));
+ 
+         let p2 = in_vector[i];
+         let p3 = in_vector[i + 4];
+@@ -141,15 +142,15 @@ pub fn idct_int(in_vector: &mut [i32; 64], out_vector: &mut [i16], stride: usize
+         let p2 = wa(t1, t2);
+         let p5 = wm(wa(p3, p4), f2f(1.175875602));
+ 
+-        t0 = wm(t0, 1223);
+-        t1 = wm(t1, 8410);
+-        t2 = wm(t2, 12586);
+-        t3 = wm(t3, 6149);
++        t0 = wm(t0, 2446);
++        t1 = wm(t1, 16819);
++        t2 = wm(t2, 25172);
++        t3 = wm(t3, 12299);
+ 
+-        let p1 = wa(p5, wm(p1, -3685));
+-        let p2 = wa(p5, wm(p2, -10497));
+-        let p3 = wm(p3, -8034);
+-        let p4 = wm(p4, -1597);
++        let p1 = wa(p5, wm(p1, -7373));
++        let p2 = wa(p5, wm(p2, -20995));
++        let p3 = wm(p3, -16069);
++        let p4 = wm(p4, -3196);
+ 
+         t3 = wa(t3, wa(p1, p4));
+         t2 = wa(t2, wa(p2, p3));
+@@ -165,14 +166,14 @@ pub fn idct_int(in_vector: &mut [i32; 64], out_vector: &mut [i16], stride: usize
+             .try_into()
+             .unwrap();
+ 
+-        out[0] = clamp(wa(x0, t3) >> 17);
+-        out[1] = clamp(wa(x1, t2) >> 17);
+-        out[2] = clamp(wa(x2, t1) >> 17);
+-        out[3] = clamp(wa(x3, t0) >> 17);
+-        out[4] = clamp(ws(x3, t0) >> 17);
+-        out[5] = clamp(ws(x2, t1) >> 17);
+-        out[6] = clamp(ws(x1, t2) >> 17);
+-        out[7] = clamp(ws(x0, t3) >> 17);
++        out[0] = clamp(wa(x0, t3) >> 18);
++        out[1] = clamp(wa(x1, t2) >> 18);
++        out[2] = clamp(wa(x2, t1) >> 18);
++        out[3] = clamp(wa(x3, t0) >> 18);
++        out[4] = clamp(ws(x3, t0) >> 18);
++        out[5] = clamp(ws(x2, t1) >> 18);
++        out[6] = clamp(ws(x1, t2) >> 18);
++        out[7] = clamp(ws(x0, t3) >> 18);
+ 
+         i += 8;
+         pos += stride;
+@@ -181,15 +182,15 @@ pub fn idct_int(in_vector: &mut [i32; 64], out_vector: &mut [i16], stride: usize
+ 
+ #[inline]
+ #[allow(clippy::cast_possible_truncation)]
+-/// Multiply a number by 4096
++/// Multiply a number by 8192
+ fn f2f(x: f32) -> i32 {
+-    (x * 4096.0 + 0.5) as i32
++    (x * 8192.0 + 0.5) as i32
+ }
+ 
+ #[inline]
+-/// Multiply a number by 4096
++/// Multiply a number by 8192
+ fn fsh(x: i32) -> i32 {
+-    x << 12
++    x << 13
+ }
+ 
+ /// Clamp values between 0 and 255
+@@ -205,11 +206,11 @@ pub fn idct4x4(in_vector: &mut [i32; 64], out_vector: &mut [i16], stride: usize)
+ 
+     // vertical pass
+     for ptr in 0..4 {
+-        let i0 = wa(fsh(in_vector[ptr]), 512);
++        let i0 = wa(fsh(in_vector[ptr]), 1024);
+         let i2 = in_vector[ptr + 16];
+ 
+-        let p1 = wm(i2, 2217);
+-        let p3 = wm(i2, 5352);
++        let p1 = wm(i2, 4433);
++        let p3 = wm(i2, 10703);
+ 
+         let x0 = wa(i0, p3);
+         let x1 = wa(i0, p1);
+@@ -220,25 +221,25 @@ pub fn idct4x4(in_vector: &mut [i32; 64], out_vector: &mut [i16], stride: usize)
+         let i4 = in_vector[ptr + 24];
+         let i3 = in_vector[ptr + 8];
+ 
+-        let p5 = wm(wa(i4, i3), 4816);
++        let p5 = wm(wa(i4, i3), 9633);
+ 
+-        let p1 = wa(p5, wm(i3, -3685));
+-        let p2 = wa(p5, wm(i4, -10497));
++        let p1 = wa(p5, wm(i3, -7373));
++        let p2 = wa(p5, wm(i4, -20995));
+ 
+-        let t3 = wa(p5, wm(i3, 867));
+-        let t2 = wa(p5, wm(i4, -5945));
++        let t3 = wa(p5, wm(i3, 1730));
++        let t2 = wa(p5, wm(i4, -11892));
+ 
+-        let t1 = wa(p2, wm(i3, -1597));
+-        let t0 = wa(p1, wm(i4, -8034));
++        let t1 = wa(p2, wm(i3, -3196));
++        let t0 = wa(p1, wm(i4, -16069));
+ 
+-        in_vector[ptr] = wa(x0, t3) >> 10;
+-        in_vector[ptr + 8] = wa(x1, t2) >> 10;
+-        in_vector[ptr + 16] = wa(x2, t1) >> 10;
+-        in_vector[ptr + 24] = wa(x3, t0) >> 10;
+-        in_vector[ptr + 32] = ws(x3, t0) >> 10;
+-        in_vector[ptr + 40] = ws(x2, t1) >> 10;
+-        in_vector[ptr + 48] = ws(x1, t2) >> 10;
+-        in_vector[ptr + 56] = ws(x0, t3) >> 10;
++        in_vector[ptr] = wa(x0, t3) >> 11;
++        in_vector[ptr + 8] = wa(x1, t2) >> 11;
++        in_vector[ptr + 16] = wa(x2, t1) >> 11;
++        in_vector[ptr + 24] = wa(x3, t0) >> 11;
++        in_vector[ptr + 32] = ws(x3, t0) >> 11;
++        in_vector[ptr + 40] = ws(x2, t1) >> 11;
++        in_vector[ptr + 48] = ws(x1, t2) >> 11;
++        in_vector[ptr + 56] = ws(x0, t3) >> 11;
+     }
+ 
+     // horizontal pass
+@@ -247,8 +248,8 @@ pub fn idct4x4(in_vector: &mut [i32; 64], out_vector: &mut [i16], stride: usize)
+         let i0 = in_vector[i];
+ 
+         let t0 = wa(fsh(i0), SCALE_BITS);
+-        let t2 = wm(i2, 2217);
+-        let t3 = wm(i2, 5352);
++        let t2 = wm(i2, 4433);
++        let t3 = wm(i2, 10703);
+ 
+         let x0 = wa(t0, t3);
+         let x3 = ws(t0, t3);
+@@ -261,14 +262,14 @@ pub fn idct4x4(in_vector: &mut [i32; 64], out_vector: &mut [i16], stride: usize)
+ 
+         let p5 = wm(wa(i3, i1), f2f(1.175875602));
+ 
+-        let p1 = wa(p5, wm(i1, -3685));
+-        let p2 = wa(p5, wm(i3, -10497));
++        let p1 = wa(p5, wm(i1, -7373));
++        let p2 = wa(p5, wm(i3, -20995));
+ 
+-        let t3 = wa(p5, wm(i1, 867));
+-        let t2 = wa(p5, wm(i3, -5945));
++        let t3 = wa(p5, wm(i1, 1730));
++        let t2 = wa(p5, wm(i3, -11892));
+ 
+-        let t1 = wa(p2, wm(i1, -1597));
+-        let t0 = wa(p1, wm(i3, -8034));
++        let t1 = wa(p2, wm(i1, -3196));
++        let t0 = wa(p1, wm(i3, -16069));
+ 
+         // to prevent some bad images from crashing
+         let mut tmp = [0; 8];
+@@ -280,14 +281,14 @@ pub fn idct4x4(in_vector: &mut [i32; 64], out_vector: &mut [i16], stride: usize)
+             .unwrap();
+ 
+         out.copy_from_slice(&[
+-            clamp(wa(x0, t3) >> 17),
+-            clamp(wa(x1, t2) >> 17),
+-            clamp(wa(x2, t1) >> 17),
+-            clamp(wa(x3, t0) >> 17),
+-            clamp(ws(x3, t0) >> 17),
+-            clamp(ws(x2, t1) >> 17),
+-            clamp(ws(x1, t2) >> 17),
+-            clamp(ws(x0, t3) >> 17)
++            clamp(wa(x0, t3) >> 18),
++            clamp(wa(x1, t2) >> 18),
++            clamp(wa(x2, t1) >> 18),
++            clamp(wa(x3, t0) >> 18),
++            clamp(ws(x3, t0) >> 18),
++            clamp(ws(x2, t1) >> 18),
++            clamp(ws(x1, t2) >> 18),
++            clamp(ws(x0, t3) >> 18)
+         ]);
+ 
+         pos += stride;
+diff --git a/src/lib.rs b/src/lib.rs
+index c97749e..e818234 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -163,7 +163,6 @@
+ #![cfg_attr(not(any(feature = "x86", feature = "neon")), forbid(unsafe_code))]
+ #![cfg_attr(not(feature = "std"), no_std)]
+ #![cfg_attr(feature = "portable_simd", feature(portable_simd))]
+-#![macro_use]
+ extern crate alloc;
+ extern crate core;
+ 
+diff --git a/src/mcu.rs b/src/mcu.rs
+index 98e6ca1..4ff0dd5 100644
+--- a/src/mcu.rs
++++ b/src/mcu.rs
+@@ -848,7 +848,9 @@ impl<T: ZByteReaderTrait> JpegDecoder<T> {
+                     mcu_height,
+                     i,
+                     upsampler_scratch_space,
+-                    is_vertically_sampled
++                    is_vertically_sampled,
++                    width,
++                    usize::from(self.info.height)
+                 )?;
+             }
+ 
+diff --git b/src/upsampler/compatible.rs b/src/upsampler/compatible.rs
+new file mode 100644
+index 0000000..330b988
+--- /dev/null
++++ b/src/upsampler/compatible.rs
+@@ -0,0 +1,87 @@
++//! libjpeg-compatible chroma sampling using actual component dimensions.
++//!
++//! The filter weights, alternating rounding bias, small-width box sampling,
++//! and edge extension follow libjpeg-turbo 3.1.4.1 src/jdsample.c. This safe
++//! scalar implementation is shared by all CPU paths; IDCT and color-conversion
++//! SIMD dispatch remain upstream's. See RESHIKI-PATCH.md for source provenance.
++use crate::errors::DecodeErrors;
++
++pub(crate) struct Frame {
++    pub width: usize,
++    pub height: usize,
++    pub row: usize,
++    pub horizontal: bool,
++    pub vertical: bool,
++}
++fn invalid() -> DecodeErrors {
++    DecodeErrors::FormatStatic("Invalid component bounds for chroma sampling")
++}
++fn at(input: &[i16], index: usize) -> Result<i32, DecodeErrors> {
++    input.get(index).copied().map(i32::from).ok_or_else(invalid)
++}
++
++pub(crate) fn sample(
++    current: &[i16],
++    above: &[i16],
++    below: &[i16],
++    output: &mut [i16],
++    frame: Frame,
++) -> Result<(), DecodeErrors> {
++    let Frame {
++        width,
++        height,
++        row,
++        horizontal,
++        vertical,
++    } = frame;
++    let hs = if horizontal { 2 } else { 1 };
++    let vs = if vertical { 2 } else { 1 };
++    let stride = current.len().checked_mul(hs).ok_or_else(invalid)?;
++    let length = stride.checked_mul(vs).ok_or_else(invalid)?;
++    if width == 0 || height == 0 || width > current.len() || stride == 0 {
++        return Err(invalid());
++    }
++    let output = output.get_mut(..length).ok_or_else(invalid)?;
++    let current = current.get(..width).ok_or_else(invalid)?;
++    // libjpeg's horizontal fancy routines require at least three real samples.
++    // A <=2-wide H2V2 component uses box sampling in both dimensions.
++    let fancy = !horizontal || width > 2;
++    for (v, target) in output.chunks_exact_mut(stride).enumerate() {
++        let far = if !vertical
++            || !fancy
++            || (v == 0 && row == 0)
++            || (v == 1 && row.saturating_add(1) >= height)
++        {
++            current
++        } else if v == 0 {
++            above.get(..width).ok_or_else(invalid)?
++        } else {
++            below.get(..width).ok_or_else(invalid)?
++        };
++        for (x, value) in target.iter_mut().take(width * hs).enumerate() {
++            let near = x / hs;
++            let other = if x % 2 == 0 {
++                near.saturating_sub(1)
++            } else {
++                near.saturating_add(1).min(width - 1)
++            };
++            let a = at(current, near)?;
++            let result = if !fancy {
++                a
++            } else if horizontal && vertical {
++                let b = at(current, other)?;
++                let near_sum = 3 * a + at(far, near)?;
++                let far_sum = 3 * b + at(far, other)?;
++                (3 * near_sum + far_sum + if x % 2 == 0 { 8 } else { 7 }) >> 4
++            } else if horizontal {
++                (3 * a + at(current, other)? + if x % 2 == 0 { 1 } else { 2 }) >> 2
++            } else if vertical {
++                (3 * a + at(far, near)? + if v == 0 { 1 } else { 2 }) >> 2
++            } else {
++                a
++            };
++            *value = i16::try_from(result).map_err(|_| invalid())?;
++        }
++    }
++    Ok(())
++}
+diff --git a/src/upsampler/portable_simd.rs b/src/upsampler/portable_simd.rs
+index 0eddd67..c0e566c 100644
+--- a/src/upsampler/portable_simd.rs
++++ b/src/upsampler/portable_simd.rs
+@@ -152,7 +152,7 @@ pub fn upsample_hv_simd(
+     output: &mut [i16],
+ ) {
+     assert_eq!(input.len() * 4, output.len());
+-    
++
+     assert!(input.len() * 2 <= scratch_space.len());
+     let scratch_space = &mut scratch_space[..input.len() * 2];
+ 
+diff --git a/src/upsampler.rs b/src/upsampler.rs
+index 7068abf..9c6c34a 100644
+--- a/src/upsampler.rs
++++ b/src/upsampler.rs
+@@ -89,6 +89,7 @@ mod neon;
+ #[cfg(feature = "portable_simd")]
+ mod portable_simd;
+ mod scalar;
++pub(crate) mod compatible;
+ 
+ // choose the best possible implementation for this platform
+ #[allow(unused_variables)]
+diff --git a/src/worker.rs b/src/worker.rs
+index 83927d7..9f6f9c4 100644
+--- a/src/worker.rs
++++ b/src/worker.rs
+@@ -373,8 +373,8 @@ fn color_convert_ycbcr(
+     }
+ }
+ pub(crate) fn upsample(
+-    component: &mut Components, mcu_height: usize, i: usize, upsampler_scratch_space: &mut [i16],
+-    has_vertical_sample: bool
++    component: &mut Components, mcu_height: usize, i: usize, _upsampler_scratch_space: &mut [i16],
++    has_vertical_sample: bool, image_width: usize, image_height: usize
+ ) -> Result<(), DecodeErrors> {
+     match component.sample_ratio {
+         SampleRatios::V | SampleRatios::HV => {
+@@ -417,7 +417,16 @@ pub(crate) fn upsample(
+                 let row = &component.row[..];
+                 let row_up = &component.row_up[..];
+                 let row_down = &component.raw_coeff[0..stride];
+-                (component.up_sampler)(row, row_up, row_down, upsampler_scratch_space, dest);
++                crate::upsampler::compatible::sample(
++                    row, row_up, row_down, dest,
++                    crate::upsampler::compatible::Frame {
++                        width: image_width.div_ceil(if component.sample_ratio == SampleRatios::HV { 2 } else { 1 }),
++                        height: image_height.div_ceil(2),
++                        row: i * (component.raw_coeff.len() / stride) - 1,
++                        horizontal: component.sample_ratio == SampleRatios::HV,
++                        vertical: true,
++                    },
++                )?;
+             }
+ 
+             // we have the Y component width stride.
+@@ -492,13 +501,16 @@ pub(crate) fn upsample(
+ 
+                 if upsample {
+                     // upsample
+-                    (component.up_sampler)(
+-                        curr_row,
+-                        row_up,
+-                        row_down,
+-                        upsampler_scratch_space,
+-                        dest
+-                    );
++                    crate::upsampler::compatible::sample(
++                        curr_row, row_up, row_down, dest,
++                        crate::upsampler::compatible::Frame {
++                            width: image_width.div_ceil(if component.sample_ratio == SampleRatios::HV { 2 } else { 1 }),
++                            height: image_height.div_ceil(2),
++                            row: i * stop_offset + pos,
++                            horizontal: component.sample_ratio == SampleRatios::HV,
++                            vertical: true,
++                        },
++                    )?;
+                 }
+             }
+         }
+@@ -546,7 +558,13 @@ pub(crate) fn upsample(
+             {
+                 // upsample using the fn pointer, should only be H, so no need for
+                 // row up and row down
+-                (component.up_sampler)(single_row, &[], &[], &mut [], output_stride);
++                crate::upsampler::compatible::sample(
++                    single_row, &[], &[], output_stride,
++                    crate::upsampler::compatible::Frame {
++                        width: image_width.div_ceil(2), height: image_height,
++                        row: 0, horizontal: true, vertical: false,
++                    },
++                )?;
+             }
+         }
+         SampleRatios::Generic(h, v) => {

@@ -70,6 +70,16 @@ class NightlyApplicationWorkflowTests(unittest.TestCase):
                     self.assertEqual(resolved, expected)
 
 
+class ReleaseSymbolsWorkflowTests(unittest.TestCase):
+    def test_symbols_are_uploaded_before_tests_rebuild_the_binary(self):
+        # `cargo test --test ...` rebuilds the app with dev-dependency features
+        # into the same path, so later symbols would not match the shipped exe.
+        build = job(RELEASE, "build")
+        symbols = build.index("name: symbols-${{ matrix.artifact }}")
+        self.assertLess(build.index("name: Build and test extracted portable archive"), symbols)
+        self.assertLess(symbols, build.index("run: cargo test"))
+
+
 class WindowsSigningWorkflowTests(unittest.TestCase):
     def test_stable_tags_force_release_policy_and_callers_select_their_policy(self):
         enabled = re.search(r"^          SIGN_WINDOWS: (.*)$", RELEASE, re.M)[1]
