@@ -28,10 +28,10 @@ Downloaded apps include these texts in their `Licenses` directory
 | Linux x64         | `linux-x64.tar.gz`        | Extract, then run `reshiki`                     |
 | Linux ARM         | `linux-arm64.tar.gz`      | Extract, then run `reshiki`                     |
 
-Windows setup installs for your account. Mac downloads are signed and notarized. Windows downloads are not code-signed yet, so Windows may warn before running setup. Portable ZIP downloads are also available. Keep a portable download’s extracted contents together.
-
-Read the [Code signing policy](/developer/code-signing-policy/) and
-[privacy policy](/developer/privacy-policy/).
+Windows setup installs for your account. Portable ZIP downloads are also
+available; keep a portable download’s extracted contents together. Windows may
+warn before running setup: the [code signing policy](/developer/code-signing-policy/)
+gives each platform’s signing status. See also the [privacy policy](/developer/privacy-policy/).
 
 To uninstall on Windows, open **Settings → Apps**, select **ReShiki**, and choose
 **Uninstall**. Uninstalling removes the installed application and its shortcuts;
@@ -63,7 +63,11 @@ launcher and icon.
 
 ### File compatibility
 
-ReShiki 0.15.0 saves each drawing in the lowest document version that can hold it. Most drawings use version 30, which ReShiki 0.13.1 and 0.14.0 open. A drawing with an arrow node or a custom **Crossing clearance** (version 35), a stereocentre in an AND or OR stereo group (36) or an atom with three or four unpaired electrons (37) needs 0.15.0. A custom reaction-label gap, ORTEP settings, a generated 3D model or a two-sided residue group (31–34) needs 0.14.0. ReShiki 0.13.0 and earlier cannot open any version 30 drawing. Older versions ask you to update. A `.reshiki-style` file with a custom crossing clearance cannot be loaded by 0.14.0 or earlier. Older drawings still open in 0.15.0. If you share files with someone using an earlier version, keep a copy saved by that version before saving in 0.15.0. See [file compatibility](/developer/changes-0.15/#file-compatibility).
+Older drawings open in ReShiki 0.15.0, and most drawings it saves also open in
+0.13.1 and 0.14.0. A few new features need 0.15.0. If you share files with
+someone on an older version, keep a copy saved by that version. The
+[file compatibility table](/developer/changes-0.15/#file-compatibility) lists
+which features need which version.
 
 ## Try it in your browser
 
@@ -92,7 +96,7 @@ whenever you can. In the browser:
 
 Nightly builds are optional prereleases for testing upcoming changes from `main`. For everyday work, use the [latest stable release](https://github.com/Ameyanagi/ReShiki/releases/latest).
 
-To try a nightly, open [GitHub Releases](https://github.com/Ameyanagi/ReShiki/releases), choose a release named **Nightly** with the **Pre-release** label, and use its operating-system and architecture download table. New nightlies include signed, notarized macOS DMG/ZIP downloads, Windows setup/ZIP downloads, and Linux tar.gz archives. Windows and Linux packages remain unsigned.
+To try a nightly, open [GitHub Releases](https://github.com/Ameyanagi/ReShiki/releases), choose a release named **Nightly** with the **Pre-release** label, and use its operating-system and architecture download table. New nightlies include macOS DMG/ZIP downloads, Windows setup/ZIP downloads and Linux tar.gz archives, signed as the [code signing policy](/developer/code-signing-policy/) describes.
 
 Installers replace the existing ReShiki installation. To retain Stable, choose a portable archive and extract it into a separate folder, keeping its contents together. Use copies of drawings when testing. Older nightlies may offer only unsigned portable archives; the release notes identify the available packages.
 
@@ -124,7 +128,18 @@ Click **ReShiki** at the top left → **Check for updates**. Choose **Stable** (
   alt="ReShiki’s Nightly update window offers a manual download and links portable archives through Release notes."
 />
 
-On **Stable**, when an update is available, save your drawings and choose **Update and restart**. ReShiki downloads the matching release, verifies its checksum (and the developer signature on macOS), installs it, and reopens every saved tab in its original order, with the previously front tab in front again. Installation waits for unsaved drawings, pending atom-label edits, assistant drafts and unfinished text/image input to be resolved. Clear the assistant input or attachment when finished with it. If a download or verification fails, the running app stays in place. **Release notes** opens the release page. Automatic checks never install an update without your click.
+On **Stable**, when an update is available, save your drawings and choose
+**Update and restart**. ReShiki then:
+
+- waits until unsaved drawings, atom-label edits, assistant drafts and
+  assistant input or attachments are resolved;
+- downloads the matching release and verifies its checksum (and, on macOS, the
+  developer signature);
+- installs it and reopens every saved tab in its original order.
+
+If a download or verification fails, the running app stays in place.
+**Release notes** opens the release page. Automatic checks never install an
+update without your click.
 
 On **Nightly**, choose **Download nightly ↗** to download the DMG or Windows setup for your operating system and architecture when available. Older nightlies fall back to ZIP; Linux uses tar.gz. Installation remains manual. **Release notes** opens the selected build’s table with both installer and portable options, notes and checksums. Nightlies do not use the automatic stable installer. Older app versions label this button **Download portable ↗** and always choose an archive.
 

@@ -16,7 +16,7 @@ Evidence comes from ReShiki source, regression tests, saved interchange fixtures
 and desktop editing checks. Detailed feature documents record the tests and
 applicable boundaries.
 
-Most drawings saved by ReShiki 0.15.0 use document version 30, which ReShiki 0.13.1 and 0.14.0 open and 0.13.0 and earlier cannot. Drawings that use some newer features need versions 31–34 (0.14.0) or 35–37 (0.15.0). Older drawings still open in 0.15.0. See [file compatibility](changes-0.15.md#file-compatibility).
+Which ReShiki versions open a saved drawing is listed in the [file compatibility table](changes-0.15.md#file-compatibility).
 
 ## Agent API — experimental
 
