@@ -92,10 +92,11 @@ pub const DRAWING_BYTES: usize = 64 * 1024 * 1024;
 pub const DRAWING_PIXELS: u64 = 64_000_000;
 pub(crate) const OVER_DRAWING_BUDGET: &str = "Drawing pictures exceed 64 MB or 64 million pixels";
 
-/// Refuse a stored drawing whose pictures are over the pixel budget from their
-/// PNG headers alone, before any picture is decoded. This reads the pictures
-/// and skips the rest of the drawing. A drawing or header it cannot read, and
-/// a picture over its own limits, are left for the full read to refuse.
+/// Refuse a stored drawing whose pictures are over the drawing's budget from
+/// their stored size and PNG headers alone, before any picture is decoded.
+/// This reads the pictures and skips the rest of the drawing. A header it
+/// cannot read, and a picture over its own limits, are left for the full read
+/// to refuse: it stops there, so it decodes no more than the budget.
 pub(crate) fn check_stored(json: &[u8]) -> Result<(), String> {
     #[derive(Deserialize)]
     struct Drawing {
@@ -107,15 +108,17 @@ pub(crate) fn check_stored(json: &[u8]) -> Result<(), String> {
         #[serde(default)]
         picture: Option<Stored>,
     }
-    let Ok(drawing) = serde_json::from_slice::<Drawing>(json) else {
-        return Ok(());
-    };
-    let mut pixels = 0_u64;
+    let drawing: Drawing = serde_json::from_slice(json).map_err(|e| e.to_string())?;
+    let (mut bytes, mut pixels) = (0_usize, 0_u64);
     for picture in drawing.graphics.iter().filter_map(|g| g.picture.as_ref()) {
-        let png = match picture {
-            Stored::Png(png) => png,
-            Stored::Metafile(stored) => &stored.png,
+        let (png, emf) = match picture {
+            Stored::Png(png) => (png, ""),
+            Stored::Metafile(stored) => (&stored.png, stored.emf.as_str()),
         };
+        bytes += [png, emf]
+            .map(|text| text.trim_end_matches('=').len() * 3 / 4)
+            .iter()
+            .sum::<usize>();
         // The signature and the size at the start of the first chunk.
         let header = png.get(..32).and_then(|head| STANDARD.decode(head).ok());
         if let Some(header) = header.filter(|h| h.starts_with(b"\x89PNG\r\n\x1a\n\0\0\0\rIHDR")) {
@@ -130,7 +133,7 @@ pub(crate) fn check_stored(json: &[u8]) -> Result<(), String> {
                 pixels += width * height;
             }
         }
-        if pixels > DRAWING_PIXELS {
+        if bytes > DRAWING_BYTES || pixels > DRAWING_PIXELS {
             return Err(OVER_DRAWING_BUDGET.into());
         }
     }

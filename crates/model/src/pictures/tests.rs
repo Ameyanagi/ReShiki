@@ -193,3 +193,42 @@ fn stored_pictures_over_the_pixel_budget_are_refused_before_any_is_decoded() {
     let reopened = Document::from_json(&serde_json::to_vec(&doc).unwrap()).unwrap();
     assert_eq!(reopened.graphics, doc.graphics);
 }
+
+#[test]
+fn a_stored_picture_that_is_not_text_is_refused_before_any_is_decoded() {
+    // Five headers over the pixel budget, then a picture the drawing cannot
+    // hold. The refusal is for that picture, not a header's missing pixels.
+    let mut json = serde_json::from_slice::<serde_json::Value>(&drawing_of_headers(6)).unwrap();
+    json["graphics"][5]["picture"] = 0.into();
+    let error = Document::from_json(&serde_json::to_vec(&json).unwrap()).unwrap_err();
+    assert!(error.contains("untagged enum Stored"), "{error}");
+}
+
+#[test]
+fn stored_pictures_over_the_byte_budget_are_refused_before_any_is_decoded() {
+    // Five pictures of one pixel and 13 MiB each: within every limit but the
+    // 64 MiB a drawing stores.
+    let mut png = raster(1, 1).png().to_vec();
+    png.resize(13 * 1024 * 1024, 0);
+    let stored = serde_json::to_string(&STANDARD.encode(&png)).unwrap();
+    let mut doc = Document::default();
+    doc.graphics.push(raster(1, 1).graphic(1, Point::default()));
+    let one = serde_json::to_string(&doc.graphics[0]).unwrap();
+    let (before, after) = one
+        .split_once(&serde_json::to_string(&doc.graphics[0].picture).unwrap())
+        .unwrap();
+    let graphic = format!("{before}{stored}{after}");
+    let drawing = |count: usize| {
+        serde_json::to_string(&doc)
+            .unwrap()
+            .replace(&one, &vec![graphic.as_str(); count].join(","))
+    };
+    assert_eq!(
+        Document::from_json(drawing(5).as_bytes()).unwrap_err(),
+        "Drawing pictures exceed 64 MB or 64 million pixels"
+    );
+    assert_ne!(
+        Document::from_json(drawing(4).as_bytes()).unwrap_err(),
+        "Drawing pictures exceed 64 MB or 64 million pixels"
+    );
+}
