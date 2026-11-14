@@ -649,6 +649,27 @@ fn clipboard_png_keeps_the_fixed_preferred_resolution() {
 }
 
 #[test]
+fn png_fits_sizes_a_scene_to_the_pixel_as_the_parsed_svg_does() {
+    use crate::document::Point;
+    // At 1200 dpi this is 10,822 x 7,392 pixels, just under 80 million. Scaling
+    // in another order than the SVG parser rounds the width up to 10,823.
+    let (lo, hi) = (Point::new(0., 0.), Point::new(1893.8502, 1293.43));
+    let budget = RasterBudget::clipboard(false);
+    let points = crate::style::DEFAULT.points_per_world();
+    let tree = parse_svg(format!(
+        "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 1 1\" width=\"{}pt\" height=\"{}pt\"/>",
+        hi.x * points,
+        hi.y * points
+    ))
+    .unwrap();
+    assert_eq!(
+        png_dimensions(tree.size().width(), tree.size().height(), budget),
+        Ok((10_822, 7_392, crate::style::DEFAULT.png_dpi))
+    );
+    assert_eq!(png_fits((lo, hi), budget), Ok(()));
+}
+
+#[test]
 fn figure_budgets_step_down_the_resolution_ladder_to_72_dpi() {
     let [(_, doc), _] = parity_fixtures();
     let tree = parse_svg(scene::svg_with_background(&doc)).unwrap();

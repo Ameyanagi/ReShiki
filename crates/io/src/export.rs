@@ -526,14 +526,10 @@ fn png_fits(
     (lo, hi): (crate::document::Point, crate::document::Point),
     budget: RasterBudget,
 ) -> Result<(), String> {
-    // SVG user units are CSS pixels; the drawing is sized in points.
-    let pixels = crate::style::DEFAULT.points_per_world() * 96. / 72.;
-    png_dimensions(
-        ((hi.x - lo.x) * pixels).max(1.),
-        ((hi.y - lo.y) * pixels).max(1.),
-        budget,
-    )
-    .map(|_| ())
+    // The SVG gives its size in points, and the parser turns points into CSS
+    // pixels. Round in the same order so the size matches to the pixel.
+    let pixels = |span: f32| (span * crate::style::DEFAULT.points_per_world() * 96. / 72.).max(1.);
+    png_dimensions(pixels(hi.x - lo.x), pixels(hi.y - lo.y), budget).map(|_| ())
 }
 
 /// At least this many bytes of path data are written for `group` with its
