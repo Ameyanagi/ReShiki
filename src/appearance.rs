@@ -111,9 +111,9 @@ impl Settings {
             Some(settings)
         };
         parsed().unwrap_or_else(|| {
-            // A file this build cannot read, such as a newer build's, is kept
-            // beside the one the next save writes.
-            let _ = reshiki::storage::rename(path, &path.with_extension("json.bad"));
+            // A copy of a file this build cannot read, such as a newer build's,
+            // outlives the next save. The file itself stays until then.
+            let _ = reshiki::storage::write_atomic(&path.with_extension("json.bad"), &bytes);
             Self::default()
         })
     }

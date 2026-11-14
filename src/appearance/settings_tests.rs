@@ -146,9 +146,8 @@ fn older_preferences_keep_interface_choice_and_default_to_light_canvas() {
         let loaded = Settings::load_from(&path);
         assert_eq!(loaded.mode, Mode::MatchCanvas);
         assert_eq!(loaded.canvas_theme, CanvasTheme::Light);
-        // The unreadable file was set aside, so there is none left to read.
-        assert!(!path.exists());
     }
+    std::fs::remove_file(&path).unwrap();
     assert_eq!(Settings::load_from(&path).canvas_theme, CanvasTheme::Light);
 }
 
@@ -180,6 +179,8 @@ fn unreadable_preferences_are_set_aside_before_a_save_replaces_them() {
     std::fs::write(&path, newer).unwrap();
     let loaded = Settings::load_from(&path);
     assert_eq!(loaded.mode, Mode::default());
+    // Loading alone leaves the newer build's file in place.
+    assert_eq!(std::fs::read(&path).unwrap(), newer);
     loaded.save_to(&path).unwrap();
     assert_eq!(
         std::fs::read(dir.path().join("appearance.json.bad")).unwrap(),

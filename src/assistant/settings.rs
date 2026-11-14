@@ -145,9 +145,9 @@ impl Preferences {
         {
             return preferences;
         }
-        // A file this build cannot read, such as a newer build's, is kept
-        // beside the one the next save writes.
-        let _ = std::fs::rename(path, path.with_extension("json.bad"));
+        // A copy of a file this build cannot read, such as a newer build's,
+        // outlives the next save. The file itself stays until then.
+        let _ = crate::storage::write_atomic(&path.with_extension("json.bad"), &bytes);
         Self::default()
     }
     pub fn save(&self) -> Result<(), String> {

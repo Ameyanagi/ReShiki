@@ -57,6 +57,8 @@ fn unreadable_preferences_are_set_aside_before_a_save_replaces_them() {
     std::fs::write(&path, newer).unwrap();
     let loaded = Preferences::load_from(&path);
     assert_eq!(loaded.model, None);
+    // Loading alone leaves the newer build's file in place.
+    assert_eq!(std::fs::read(&path).unwrap(), newer);
     loaded.save_to(&path).unwrap();
     let bad = dir.path().join("assistant-preferences.json.bad");
     assert_eq!(std::fs::read(&bad).unwrap(), newer);
