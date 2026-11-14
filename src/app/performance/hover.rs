@@ -29,10 +29,10 @@ fn drawing() -> Document {
     doc
 }
 
-struct Ui {
-    renderer: iced::Renderer,
-    tree: Tree,
-    size: Size,
+pub(super) struct Ui {
+    pub(super) renderer: iced::Renderer,
+    pub(super) tree: Tree,
+    pub(super) size: Size,
 }
 
 impl Ui {
@@ -61,7 +61,7 @@ impl Ui {
         messages
     }
 
-    fn draw(&mut self, app: &App, cursor: iced::Point) {
+    pub(super) fn draw(&mut self, app: &App, cursor: iced::Point) {
         use iced::advanced::Renderer as _;
         let viewport = Rectangle::with_size(self.size);
         let theme = app.theme();
