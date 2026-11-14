@@ -17,5 +17,5 @@ issues: []
   description.
 - **`reshiki --cli name --json`.** The JSON line also has `warnings` and
   `versions`, as the JSON of the other commands does. The
-  [command-line reference](../../agent-cli.md#name) now covers
+  [command-line reference](agent-cli.md#name) now covers
   `--isotope-style` and says that charge-balanced salts are named.
