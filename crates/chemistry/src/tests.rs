@@ -302,3 +302,11 @@ fn dense_ring_analysis_needs_no_reference_override() -> anyhow::Result<()> {
     assert_eq!(response, original);
     Ok(())
 }
+
+/// As for SMILES: a non-ASCII byte is content, not whitespace to trim.
+#[test]
+fn smarts_non_ascii_bytes_are_content_on_every_platform() {
+    assert_eq!(crate::smarts::validate("CCO\n").unwrap(), 3);
+    assert!(crate::smarts::validate("CCO\u{a0}").is_err());
+    assert!(crate::smarts::validate("\u{a0}CCO").is_err());
+}

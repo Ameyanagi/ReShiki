@@ -1437,3 +1437,12 @@ fn terminal_hydride_is_no_stereo_ligand() -> anyhow::Result<()> {
     }
     Ok(())
 }
+
+/// Trimming used the platform `char`, signed on some targets, so a trailing
+/// non-ASCII byte was whitespace on macOS and x64 but content on Linux arm64.
+#[test]
+fn non_ascii_bytes_are_content_on_every_platform() {
+    assert_eq!(super::parse(" CCO\n").unwrap().graph.atoms.len(), 3);
+    assert!(super::parse("CCO\u{a0}").is_err());
+    assert!(super::parse("\u{a0}CCO").is_err());
+}
