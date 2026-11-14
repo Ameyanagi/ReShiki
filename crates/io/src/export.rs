@@ -121,10 +121,36 @@ pub async fn publication(
     editable: bool,
     max_pixels: u64,
 ) -> Result<Publication, String> {
+    publication_within(engine, doc, format, pages, editable, max_pixels, usize::MAX).await
+}
+
+/// [`publication`] for a caller that accepts at most `max_bytes`: an
+/// `svg-office` figure certain to be larger fails early with [`OVER_BYTES`].
+/// The caller still checks the size of the figure it gets.
+pub async fn publication_within(
+    engine: &crate::engine::LocalEngine,
+    doc: Document,
+    format: &'static str,
+    pages: bool,
+    editable: bool,
+    max_pixels: u64,
+    max_bytes: usize,
+) -> Result<Publication, String> {
     if format == "png" && !pages {
-        // Before the chemistry check and the render, which cost the most.
+        use crate::document::Point;
         doc.validate()?;
-        png_fits(&doc, RasterBudget::file(max_pixels))?;
+        // Atoms too far apart for a PNG are a cheap sign that the figure will
+        // not fit. Measuring its scene now saves the chemistry check.
+        let budget = RasterBudget::file(max_pixels);
+        let atoms = || doc.atoms.iter().map(|atom| atom.position);
+        let lo = atoms().reduce(|lo, at| Point::new(lo.x.min(at.x), lo.y.min(at.y)));
+        let hi = atoms().reduce(|hi, at| Point::new(hi.x.max(at.x), hi.y.max(at.y)));
+        if lo
+            .zip(hi)
+            .is_some_and(|span| png_fits(span, budget).is_err())
+        {
+            png_fits(scene::bounds(&scene::primitives(&doc)), budget)?;
+        }
     }
     let (doc, notice) = figure_document(engine, doc).await?;
     let doc = doc.current();
@@ -157,7 +183,17 @@ pub async fn publication(
                 detail: None,
             })
         } else {
-            figure_with_budget_and_drawing(&doc, format, max_pixels, drawing.as_deref())
+            with_attachment_notice(
+                &doc,
+                render_drawing(
+                    &doc,
+                    format,
+                    false,
+                    RasterBudget::file(max_pixels),
+                    max_bytes,
+                    drawing.as_deref(),
+                ),
+            )
         }?;
         Ok::<_, String>((figure, detail))
     })
@@ -185,25 +221,23 @@ pub fn drawing(doc: &Document, format: &str) -> Result<Vec<u8>, String> {
 pub fn figure(doc: &Document, format: &str) -> Result<Figure, String> {
     with_attachment_notice(
         doc,
-        render_drawing(doc, format, false, RasterBudget::FILE, None),
+        render_drawing(doc, format, false, RasterBudget::FILE, usize::MAX, None),
     )
 }
 
 /// [`figure`] with PNG resolution chosen to fit `max_pixels`, capped at
 /// [`FILE_PIXELS`].
 pub fn figure_with_budget(doc: &Document, format: &str, max_pixels: u64) -> Result<Figure, String> {
-    figure_with_budget_and_drawing(doc, format, max_pixels, None)
-}
-
-fn figure_with_budget_and_drawing(
-    doc: &Document,
-    format: &str,
-    max_pixels: u64,
-    drawing: Option<&[u8]>,
-) -> Result<Figure, String> {
     with_attachment_notice(
         doc,
-        render_drawing(doc, format, false, RasterBudget::file(max_pixels), drawing),
+        render_drawing(
+            doc,
+            format,
+            false,
+            RasterBudget::file(max_pixels),
+            usize::MAX,
+            None,
+        ),
     )
 }
 
@@ -230,7 +264,7 @@ pub fn clipboard_figure_with_drawing(
 ) -> Result<Figure, String> {
     with_attachment_notice(
         doc,
-        render_drawing(doc, format, true, RasterBudget::FILE, drawing),
+        render_drawing(doc, format, true, RasterBudget::FILE, usize::MAX, drawing),
     )
 }
 
@@ -257,12 +291,18 @@ fn with_attachment_notice(
     Ok(figure)
 }
 
+/// The refusal of a figure that is certain to be larger than `max_bytes`.
+pub const OVER_BYTES: &str = "The figure is larger than the output limit";
+
 /// `file_budget` bounds file PNGs; clipboard PNGs use the clipboard budget.
+/// An SVG with outlined text that cannot fit `max_bytes` is refused before it
+/// is written; the caller still checks the size of the figure it gets.
 fn render_drawing(
     doc: &Document,
     format: &str,
     clipboard: bool,
     file_budget: RasterBudget,
+    max_bytes: usize,
     drawing: Option<&[u8]>,
 ) -> Result<Figure, String> {
     doc.validate()?;
@@ -271,16 +311,13 @@ fn render_drawing(
     } else {
         file_budget
     };
+    let primitives = scene::primitives(doc);
     if format == "png" {
-        png_fits(doc, budget)?;
+        png_fits(scene::bounds(&primitives), budget)?;
     }
     #[cfg(test)]
     SCENES.with(|scenes| scenes.set(scenes.get() + 1));
-    let svg = if clipboard {
-        scene::svg(doc)
-    } else {
-        scene::svg_with_background(doc)
-    };
+    let svg = scene::svg_of(doc, primitives, !clipboard);
     if format == "svg" {
         let mut bytes = svg.into_bytes();
         if let Some(drawing) = drawing {
@@ -293,10 +330,16 @@ fn render_drawing(
     }
     let tree = parse_svg(svg)?;
     let mut figure = match format {
-        "svg-office" => office_svg(&tree).map(|bytes| Figure {
-            bytes,
-            detail: None,
-        }),
+        "svg-office" => {
+            // Before the outlines are written, which costs as much as parsing.
+            if outlined_floor(tree.root()) > max_bytes {
+                return Err(OVER_BYTES.into());
+            }
+            office_svg(&tree).map(|bytes| Figure {
+                bytes,
+                detail: None,
+            })
+        }
         #[cfg(windows)]
         "emf" => if clipboard {
             crate::native_windows::metafile(&tree, doc)
@@ -472,43 +515,59 @@ impl RasterBudget {
 
 #[cfg(test)]
 thread_local! {
-    /// Scenes built for a figure on this thread.
+    /// Scenes written as SVG for a figure on this thread.
     static SCENES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
-/// Refuse a PNG that cannot fit `budget` before the drawing is rendered. A
-/// drawing whose atoms fit goes on to be rendered and measured as before. One
-/// whose atoms alone do not fit is measured from its scene, which is exact and
-/// costs less than rendering it.
-fn png_fits(doc: &Document, budget: RasterBudget) -> Result<(), String> {
-    use crate::document::Point;
-    let Some(first) = doc.atoms.first() else {
-        return Ok(());
-    };
+/// Refuse a PNG of a scene with these bounds that cannot fit `budget`. The
+/// bounds of a scene are the size of its figure, so this is exact before the
+/// scene is written and parsed.
+fn png_fits(
+    (lo, hi): (crate::document::Point, crate::document::Point),
+    budget: RasterBudget,
+) -> Result<(), String> {
     // SVG user units are CSS pixels; the drawing is sized in points.
     let pixels = crate::style::DEFAULT.points_per_world() * 96. / 72.;
-    let fits = |lo: Point, hi: Point| {
-        png_dimensions(
-            ((hi.x - lo.x) * pixels).max(1.),
-            ((hi.y - lo.y) * pixels).max(1.),
-            budget,
-        )
+    png_dimensions(
+        ((hi.x - lo.x) * pixels).max(1.),
+        ((hi.y - lo.y) * pixels).max(1.),
+        budget,
+    )
+    .map(|_| ())
+}
+
+/// At least this many bytes of path data are written for `group` with its
+/// text outlined. Each segment is a letter and its numbers, each followed by
+/// a space, and a number has at least the digits of its whole part.
+fn outlined_floor(group: &resvg::usvg::Group) -> usize {
+    use resvg::{tiny_skia::PathSegment, usvg::Node};
+    let point = |p: resvg::tiny_skia::Point| {
+        [p.x, p.y]
+            .map(|v| 2 + (v.abs() as u32).checked_ilog10().unwrap_or(0) as usize)
+            .iter()
+            .sum::<usize>()
     };
-    let span = doc
-        .atoms
+    group
+        .children()
         .iter()
-        .fold((first.position, first.position), |(lo, hi), atom| {
-            let at = atom.position;
-            (
-                Point::new(lo.x.min(at.x), lo.y.min(at.y)),
-                Point::new(hi.x.max(at.x), hi.y.max(at.y)),
-            )
-        });
-    if fits(span.0, span.1).is_ok() {
-        return Ok(());
-    }
-    let (lo, hi) = scene::bounds(&scene::primitives(doc));
-    fits(lo, hi).map(|_| ())
+        .map(|node| match node {
+            Node::Group(group) => outlined_floor(group),
+            Node::Text(text) => outlined_floor(text.flattened()),
+            Node::Path(path) => path
+                .data()
+                .segments()
+                .map(|segment| {
+                    2 + match segment {
+                        PathSegment::MoveTo(p) | PathSegment::LineTo(p) => point(p),
+                        PathSegment::QuadTo(a, p) => point(a) + point(p),
+                        PathSegment::CubicTo(a, b, p) => point(a) + point(b) + point(p),
+                        PathSegment::Close => 0,
+                    }
+                })
+                .sum(),
+            Node::Image(_) => 0,
+        })
+        .sum()
 }
 
 /// Choose resolution before allocating pixels. PNG resolution metadata keeps

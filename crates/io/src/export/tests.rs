@@ -316,25 +316,84 @@ fn png_sides_are_capped_whatever_the_pixel_count() {
 }
 
 #[test]
-fn an_oversized_png_is_refused_before_the_drawing_is_rendered() {
+fn an_oversized_png_is_refused_before_the_scene_is_written() {
     use crate::document::Point;
-    let rendered = || SCENES.with(std::cell::Cell::get);
-    let mut doc = Document::default();
-    doc.add_atom("C", Point::default());
-    doc.add_atom("N", Point::new(200_000., 200_000.));
-    let before = rendered();
-    for result in [
-        figure(&doc, "png"),
-        figure_with_budget(&doc, "png", 1_000),
-        clipboard_figure(&doc, "png"),
-    ] {
-        let error = result.err().unwrap();
-        assert!(error.starts_with("Drawing is too large for a"), "{error}");
+    let written = || SCENES.with(std::cell::Cell::get);
+    let mut atoms = Document::default();
+    atoms.add_atom("C", Point::default());
+    atoms.add_atom("N", Point::new(200_000., 200_000.));
+    // One line of text, far shorter than a text box holds, beside an atom.
+    let mut text = Document::default();
+    text.add_atom("C", Point::default());
+    text.annotations.push(crate::document::Annotation {
+        id: text.next_id(),
+        position: Point::default(),
+        text: "x".repeat(10_000),
+        format: Default::default(),
+    });
+    let mut text_alone = text.clone();
+    text_alone.atoms.clear();
+    let mut graphic = Document::default();
+    graphic.graphics.push(crate::graphics::Graphic::dragged(
+        1,
+        crate::graphics::GraphicKind::Rectangle,
+        Point::default(),
+        Point::new(200_000., 200_000.),
+        Default::default(),
+        Default::default(),
+        false,
+    ));
+    for doc in [&atoms, &text, &text_alone, &graphic] {
+        doc.validate().unwrap();
+        let before = written();
+        for result in [
+            figure(doc, "png"),
+            figure_with_budget(doc, "png", 1_000),
+            clipboard_figure(doc, "png"),
+        ] {
+            let error = result.err().unwrap();
+            assert!(error.starts_with("Drawing is too large for a"), "{error}");
+        }
+        assert_eq!(written(), before);
     }
-    assert_eq!(rendered(), before);
     // Vector formats have no pixel budget.
-    assert!(figure(&doc, "svg").is_ok());
-    assert_eq!(rendered(), before + 1);
+    let before = written();
+    assert!(figure(&atoms, "svg").is_ok());
+    assert_eq!(written(), before + 1);
+}
+
+#[test]
+fn outlined_svg_is_never_smaller_than_its_floor() {
+    let doc = Document::from_json(include_bytes!(
+        "../../../../assets/examples/shortcut-examples.rsk"
+    ))
+    .unwrap();
+    let tree = parse_svg(scene::svg_with_background(&doc)).unwrap();
+    let (floor, outlined) = (
+        outlined_floor(tree.root()),
+        office_svg(&tree).unwrap().len(),
+    );
+    // Close enough to refuse a figure of twice the limit.
+    assert!(
+        outlined / 2 < floor && floor <= outlined,
+        "{floor} {outlined}"
+    );
+    let limit = |max_bytes| {
+        render_drawing(
+            &doc,
+            "svg-office",
+            false,
+            RasterBudget::FILE,
+            max_bytes,
+            None,
+        )
+        .map(|figure| figure.bytes.len())
+    };
+    assert_eq!(limit(floor - 1), Err(OVER_BYTES.into()));
+    // A limit the floor fits is left to the caller, which has the exact size.
+    assert_eq!(limit(floor), Ok(outlined));
+    // Live text is the scene as written: there is nothing to save.
+    assert!(render_drawing(&doc, "svg", false, RasterBudget::FILE, 1, None).is_ok());
 }
 
 #[test]
