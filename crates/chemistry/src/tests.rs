@@ -302,3 +302,12 @@ fn dense_ring_analysis_needs_no_reference_override() -> anyhow::Result<()> {
     assert_eq!(response, original);
     Ok(())
 }
+
+/// As for SMILES: a non-ASCII byte at either end is trimmed, never content.
+#[test]
+fn smarts_non_ascii_bytes_at_the_ends_are_trimmed_on_every_platform() {
+    for text in ["CCO\n", "CCO\u{a0}", "\u{3000}CCO"] {
+        assert_eq!(crate::smarts::validate(text).unwrap(), 3, "{text:?}");
+    }
+    assert!(crate::smarts::validate("CC\u{a0}O").is_err());
+}

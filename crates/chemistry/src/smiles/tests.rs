@@ -1437,3 +1437,18 @@ fn terminal_hydride_is_no_stereo_ligand() -> anyhow::Result<()> {
     }
     Ok(())
 }
+
+/// Trimming used the platform `char`, signed on some targets, so a non-ASCII
+/// byte at either end was dropped on macOS and x64 but kept on Linux arm64.
+#[test]
+fn non_ascii_bytes_at_the_ends_are_trimmed_on_every_platform() {
+    for text in [
+        " CCO\n",
+        "CCO\u{a0}",
+        "\u{3000}CCO",
+        "\u{3000} CCO \u{a0}\n",
+    ] {
+        assert_eq!(super::parse(text).unwrap().graph.atoms.len(), 3, "{text:?}");
+    }
+    assert!(super::parse("CC\u{a0}O").is_err());
+}

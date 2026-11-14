@@ -25,3 +25,6 @@ issues: [1121]
   charge of 200 imported as -56.
 - Recovery drafts made with a newer ReShiki are no longer hidden. The status
   bar shows how many there are, with **Open folder** to find the files.
+- SMILES and SMARTS text is trimmed the same way on every platform: characters
+  outside ASCII at either end, such as a no-break space after a pasted
+  structure, are dropped. Linux on arm64 used to reject such text.

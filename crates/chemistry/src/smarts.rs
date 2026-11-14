@@ -57,17 +57,17 @@ fn parse(text: &str) -> Result<(usize, Query)> {
         ),
         None => (text, ""),
     };
-    // Match the reference lexer's native-char trimming at both boundaries.
+    // Match the reference lexer's signed-char trimming at both boundaries.
     // Work on bytes; a boundary inside malformed/non-ASCII text is never sliced
     // as UTF-8 and cannot panic.
     let bytes = body.as_bytes();
     let start = bytes
         .iter()
-        .position(|&b| (b as std::os::raw::c_char) > 32)
+        .position(|&b| crate::smiles::boundary_content(b))
         .unwrap_or(bytes.len());
     let end = bytes
         .iter()
-        .rposition(|&b| (b as std::os::raw::c_char) > 32)
+        .rposition(|&b| crate::smiles::boundary_content(b))
         .map_or(start, |i| i + 1);
     let mut parser = Parser {
         bytes: bytes.get(start..end).ok_or(Error::Limit)?,
