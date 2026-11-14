@@ -65,10 +65,15 @@ fn write(path: &Path, bytes: &[u8], mode: u32) -> Result<(), String> {
     if let Some(key) = browser::key(path) {
         return browser::write(&key, bytes);
     }
-    let target = path
-        .is_symlink()
-        .then(|| std::fs::canonicalize(path).ok())
-        .flatten();
+    // A link whose target is gone is saved through too, recreating the target;
+    // `with_file_name` resolves a relative target against the link's folder.
+    let target = if path.is_symlink() {
+        let target = std::fs::canonicalize(path)
+            .or_else(|_| std::fs::read_link(path).map(|target| path.with_file_name(target)));
+        Some(target.map_err(|e| e.to_string())?)
+    } else {
+        None
+    };
     let path = target.as_deref().unwrap_or(path);
     let parent = path
         .parent()

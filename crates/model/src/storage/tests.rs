@@ -106,6 +106,18 @@ fn saving_keeps_the_file_mode_and_writes_through_a_symbolic_link() {
     assert_eq!(std::fs::read(&path).unwrap(), b"third");
     assert_eq!(mode(&path), 0o640);
 }
+#[cfg(unix)]
+#[test]
+fn saving_through_a_link_whose_target_is_gone_recreates_the_target() {
+    let directory = tempfile::tempdir().unwrap();
+    std::fs::create_dir(directory.path().join("drawings")).unwrap();
+    let link = directory.path().join("link.reshiki");
+    std::os::unix::fs::symlink("drawings/drawing.reshiki", &link).unwrap();
+    write_saved(&link, b"saved").unwrap();
+    assert!(link.is_symlink());
+    let target = directory.path().join("drawings/drawing.reshiki");
+    assert_eq!(std::fs::read(target).unwrap(), b"saved");
+}
 #[test]
 fn desktop_data_files_are_the_file_system() {
     let directory = tempfile::tempdir().unwrap();
