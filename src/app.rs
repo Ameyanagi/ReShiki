@@ -492,6 +492,8 @@ impl App {
     pub(super) fn begin_file_epoch(&mut self) {
         self.sync_drawing_panel_context();
         self.cancel_engine_job();
+        // A file import has no engine job, and its result for the old epoch is ignored.
+        self.tab.busy = false;
         self.tab.file_epoch = self.next_epoch();
         self.tab.stereo_notes.clear();
         // Invalidate tickets before clearing gestures that may switch the front tab's tool.
