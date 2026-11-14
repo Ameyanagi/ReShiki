@@ -33,7 +33,8 @@ your browser. Without a star, ReShiki asks again at most once: in a later
 feature release such as 0.16.0, at least 90 days later. This holds whether you
 choose **Not now** or quit with the card still open. The count and your answer
 stay in `star-prompt.json` in ReShiki's data folder. Nothing is sent anywhere.
-**ReShiki → Check for updates** always has a **Star on GitHub ↗** link.
+**ReShiki → Check for updates** always has a **Star ReShiki on GitHub ↗** link,
+which counts as a star too.
 
 ## Update checks
 

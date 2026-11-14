@@ -403,12 +403,9 @@ impl App {
                 header,
                 version,
                 text("The browser editor updates with the page that hosts it.").size(15),
-                row![
-                    reshiki::accessibility::button("updates-notes", "Get the desktop app", "Get the desktop app ↗")
-                        .on_press(msg(Action::Download))
-                        .style(button::text),
-                    star_link(),
-                ],
+                reshiki::accessibility::button("updates-notes", "Get the desktop app", "Get the desktop app ↗")
+                    .on_press(msg(Action::Download))
+                    .style(button::text),
             ]
         } else { column![
             header,
@@ -453,7 +450,9 @@ impl App {
             }),
             row![
                 reshiki::accessibility::button("updates-notes", "Open release notes", "Release notes ↗").on_press(msg(Action::Download)).style(button::text),
-                star_link(),
+                reshiki::accessibility::button("updates-star", "Star ReShiki on GitHub", "Star ReShiki on GitHub ↗")
+                    .on_press(Message::Star(super::star_prompt::Action::Star { toast: false }))
+                    .style(button::text),
             ],
             text(if state.channel == Channel::Nightly { "Checks once a day. Nightlies are installed manually. Downloads prefer installers when available; Release notes also links portable archives." } else { "Checks once a day. Stable updates are verified before installation. Your saved tabs reopen after restarting." })
                 .size(12)
@@ -495,16 +494,6 @@ impl App {
         .center_y(Length::Fill);
         reshiki::accessibility::focus_scope(stack![content, backdrop, dialog])
     }
-}
-
-/// The plain link that About always shows; see star_prompt.rs.
-fn star_link<'a>() -> Element<'a, Message> {
-    reshiki::accessibility::button("updates-star", "Star ReShiki on GitHub", "Star on GitHub ↗")
-        .on_press(Message::Star(super::star_prompt::Action::Star {
-            toast: false,
-        }))
-        .style(button::text)
-        .into()
 }
 
 #[cfg(test)]
