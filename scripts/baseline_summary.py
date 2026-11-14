@@ -8,6 +8,7 @@ $GITHUB_STEP_SUMMARY when that is set.
 
 import gzip
 import os
+import re
 import subprocess
 import sys
 from collections import Counter
@@ -16,6 +17,7 @@ from pathlib import Path
 FIXTURES = ":(glob)**/tests/fixtures/**"
 ROW_LIMIT = 40  # rows shown per file
 ROW_WIDTH = 300  # characters shown per row
+SUMMARY_BYTES = 900_000  # GitHub rejects a step summary over 1 MiB
 
 
 def row_changes(old, new, keyed):
@@ -60,6 +62,31 @@ def content(root, revision, path):
     return data
 
 
+def quoted(path):
+    """The path as inline code that no character in it can end."""
+    path = "".join(
+        char if char.isprintable() else char.encode("unicode_escape").decode("ascii")
+        for char in path
+    )
+    ticks = re.findall("`+", path)
+    if not ticks:
+        return f"`{path}`"
+    fence = "`" * (len(max(ticks, key=len)) + 1)
+    return f"{fence} {path} {fence}"
+
+
+def clip(text, limit=SUMMARY_BYTES):
+    data = text.encode("utf-8")
+    if len(data) <= limit:
+        return text
+    # Cut at the end of a line, then close a code block that the cut left open.
+    kept = data[:limit].decode("utf-8", errors="ignore")
+    kept = kept[: kept.rfind("\n") + 1]
+    if sum(line.startswith("```") for line in kept.split("\n")) % 2:
+        kept += "```\n"
+    return kept + "\nThe rest of the list is too long to show.\n"
+
+
 def summary(base, head="HEAD", root="."):
     paths = subprocess.check_output(
         ["git", "-C", str(root), "diff", "--no-renames", "--name-only", "-z", base, head]
@@ -76,11 +103,11 @@ def summary(base, head="HEAD", root="."):
                 raise ValueError
             old, new = old.decode("utf-8"), new.decode("utf-8")
         except ValueError:
-            lines += [f"- `{path}`: binary, {len(old)} to {len(new)} bytes", ""]
+            lines += [f"- {quoted(path)}: binary, {len(old)} to {len(new)} bytes", ""]
             continue
         changes = row_changes(old, new, keyed=path.endswith(".tsv"))
         removed = sum(row.startswith("-") for row in changes)
-        lines += [f"- `{path}`: {removed} removed, {len(changes) - removed} added", ""]
+        lines += [f"- {quoted(path)}: {removed} removed, {len(changes) - removed} added", ""]
         shown = [row[:ROW_WIDTH] for row in changes[:ROW_LIMIT]]
         if len(changes) > ROW_LIMIT:
             shown.append(f"... {len(changes) - ROW_LIMIT} more rows")
@@ -94,8 +121,7 @@ def main():
     target = os.environ.get("GITHUB_STEP_SUMMARY")
     if target and text:
         with Path(target).open("a", encoding="utf-8") as output:
-            # GitHub rejects a step summary over 1 MiB.
-            output.write(text[:900_000])
+            output.write(clip(text))
     print(text or "No fixture files changed.")
 
 

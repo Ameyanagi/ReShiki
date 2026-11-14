@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from scripts.baseline_summary import ROW_LIMIT, row_changes, summary
+from scripts.baseline_summary import ROW_LIMIT, clip, quoted, row_changes, summary
 
 BASELINE = Path(__file__).parent / "fixtures/s2n/baseline.tsv"
 
@@ -106,6 +106,28 @@ class BaselineSummaryTests(unittest.TestCase):
         self.assertIn(f"+ row {ROW_LIMIT - 1}\n", text)
         self.assertNotIn(f"+ row {ROW_LIMIT}\n", text)
         self.assertIn("5 more rows", text)
+
+    def test_a_path_cannot_add_its_own_markdown_to_the_summary(self):
+        self.assertEqual(quoted("tests/fixtures/a.tsv"), "`tests/fixtures/a.tsv`")
+        self.assertEqual(quoted("a`\n# Fake\x1b\udc80"), "`` a`\\n# Fake\\x1b\\udc80 ``")
+        self.assertEqual(quoted("``a```"), "```` ``a``` ````")
+
+    def test_a_long_summary_is_cut_by_bytes_at_a_line_end_and_its_code_block_is_closed(self):
+        text = "- `a`: 0 removed, 3 added\n\n```diff\n+ \u00e9\u00e9\u00e9\n+ \u65e5\u672c\u8a9e\n+ c\n```\n"
+        self.assertEqual(clip(text, len(text.encode("utf-8"))), text)
+        # The limit falls inside the second row, between the bytes of one character.
+        limit = len(text[: text.index("\u672c")].encode("utf-8")) + 1
+        clipped = clip(text, limit)
+        self.assertEqual(
+            clipped,
+            "- `a`: 0 removed, 3 added\n\n```diff\n+ \u00e9\u00e9\u00e9\n```\n"
+            "\nThe rest of the list is too long to show.\n",
+        )
+        # A cut between two files leaves no block open.
+        self.assertEqual(
+            clip(text + text, len(text.encode("utf-8")) + 5),
+            text + "\nThe rest of the list is too long to show.\n",
+        )
 
 
 if __name__ == "__main__":
