@@ -339,11 +339,18 @@ impl App {
                 self.error = true;
                 return Task::none();
             };
-            return write_text(text)
-                .chain(Task::done(Message::CopyAsWritten(key, Ok(copy.notices))));
+            return write_text(text).chain(Task::done(Message::CopyAsWritten(
+                key,
+                false,
+                Ok(copy.notices),
+            )));
         }
+        let picture = matches!(
+            key.format,
+            CopyFormat::Png | CopyFormat::Svg | CopyFormat::Pdf
+        );
         Task::perform(reshiki::clipboard::write_prepared(copy), move |result| {
-            Message::CopyAsWritten(key.clone(), result)
+            Message::CopyAsWritten(key.clone(), picture, result)
         })
     }
 
@@ -355,12 +362,6 @@ impl App {
         }
         match result {
             Ok(notices) => {
-                if matches!(
-                    key.format,
-                    CopyFormat::Png | CopyFormat::Svg | CopyFormat::Pdf
-                ) {
-                    self.star.used();
-                }
                 let scope = match (
                     !key.selected.is_empty(),
                     key.revision == self.tab.revision && key.selected == self.tab.selected,
@@ -458,10 +459,6 @@ impl App {
                 return;
             }
         };
-        // Windows puts a picture on the clipboard only for Copy Image.
-        if outcome.image_only || !cfg!(windows) {
-            self.star.used();
-        }
         let cut = !cut_ids.is_empty();
         let stale_cut = cut && (epoch != self.tab.file_epoch || revision != self.tab.revision);
         if cut && !stale_cut {

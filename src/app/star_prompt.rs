@@ -6,6 +6,7 @@ use chrono::NaiveDate;
 use iced::time::{Duration, Instant};
 use iced::widget::{canvas, column, container, opaque, row, text};
 use iced::{Alignment, Border, Color, Element, Length, Subscription, Task, Theme};
+use reshiki::updates::CURRENT_VERSION;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
@@ -15,7 +16,7 @@ const THANKS: &str = "Opened GitHub in your browser. Thank you!";
 const USES: u32 = 5;
 const IDLE: Duration = Duration::from_secs(30);
 const TICK: Duration = Duration::from_secs(5);
-/// Days after a "Not now" before a feature release may ask again.
+/// Days after the first ask before a feature release may ask again.
 const REASK_DAYS: i64 = 90;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -23,12 +24,13 @@ const REASK_DAYS: i64 = 90;
 pub(super) enum Answer {
     Asking,
     Starred,
-    /// "Not now" or × on the first ask, in this version on this day.
-    Dismissed {
+    /// Asked once, in this version on this day, without a star: closed, "Not
+    /// now", or still open when ReShiki quit.
+    Asked {
         version: String,
         day: NaiveDate,
     },
-    /// Closed on the second ask: never again.
+    /// Asked twice: never again.
     Done,
 }
 
@@ -44,37 +46,63 @@ impl Record {
     fn path() -> Result<PathBuf, String> {
         Ok(reshiki::compatibility::data_directory()?.join("star-prompt.json"))
     }
-    /// The record, a new one from today, or `None` for a file this build
-    /// cannot read or a data folder it cannot write: then it never asks.
+    fn new(today: NaiveDate) -> Self {
+        Self {
+            first_launch_day: today,
+            uses: 0,
+            state: Answer::Asking,
+        }
+    }
+    /// The saved record, or a new one from today. `None`, for a file this
+    /// build cannot read or a data folder it cannot write, never asks.
     fn load(path: &Path, today: NaiveDate) -> Option<Self> {
         match reshiki::storage::read(path) {
             Ok(bytes) => Self::parse(&bytes),
-            Err(_) if path.exists() => None,
-            Err(_) => {
-                let record = Self {
-                    first_launch_day: today,
-                    uses: 0,
-                    state: Answer::Asking,
-                };
-                record.save(path).ok().map(|()| record)
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                Self::change(path, Self::new(today), |_| true).map(|(record, _)| record)
             }
+            Err(_) => None,
         }
     }
     /// `None` for a file this build cannot read, such as a newer build's.
     fn parse(bytes: &[u8]) -> Option<Self> {
         serde_json::from_slice(bytes).ok()
     }
-    fn save(&self, path: &Path) -> Result<(), String> {
-        if let Some(parent) = path.parent() {
-            reshiki::storage::create_dir_all(parent).map_err(|e| e.to_string())?;
+    /// Applies `edit` to the saved record and saves it if `edit` returns true.
+    /// A lock beside the record keeps another running ReShiki from losing this
+    /// change, or this one from losing its. A file that a newer build wrote
+    /// meanwhile is kept as `.json.bad`, and `fallback` stands in for it.
+    /// `None` when the record cannot be read or saved.
+    fn change(
+        path: &Path,
+        fallback: Self,
+        edit: impl FnOnce(&mut Self) -> bool,
+    ) -> Option<(Self, bool)> {
+        reshiki::storage::create_dir_all(path.parent()?).ok()?;
+        let lock = std::fs::File::options()
+            .create(true)
+            .truncate(false)
+            .write(true)
+            .open(path.with_extension("lock"))
+            .ok()?;
+        lock.lock().ok()?;
+        let mut record = match reshiki::storage::read(path) {
+            Ok(bytes) => match Self::parse(&bytes) {
+                Some(record) => record,
+                None => {
+                    reshiki::storage::write_atomic(&path.with_extension("json.bad"), &bytes)
+                        .ok()?;
+                    fallback
+                }
+            },
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => fallback,
+            Err(_) => return None,
+        };
+        let changed = edit(&mut record);
+        if changed {
+            reshiki::storage::write_atomic(path, &serde_json::to_vec(&record).ok()?).ok()?;
         }
-        // A file this build cannot read is replaced only once a copy of it is kept.
-        if let Ok(old) = reshiki::storage::read(path)
-            && Self::parse(&old).is_none()
-        {
-            reshiki::storage::write_atomic(&path.with_extension("json.bad"), &old)?;
-        }
-        reshiki::storage::write_atomic(path, &serde_json::to_vec(self).map_err(|e| e.to_string())?)
+        Some((record, changed))
     }
     /// Everything that the record, the day and the version decide.
     pub(super) fn may_ask(&self, today: NaiveDate, version: &str) -> bool {
@@ -82,20 +110,36 @@ impl Record {
             && today > self.first_launch_day
             && match &self.state {
                 Answer::Asking => true,
-                Answer::Dismissed { version: old, day } => {
+                Answer::Asked { version: old, day } => {
                     feature_release(old, version) && (today - *day).num_days() >= REASK_DAYS
                 }
                 Answer::Starred | Answer::Done => false,
             }
     }
+    /// Records an ask, if one is due: the first notes the version and day,
+    /// the second ends the asks.
+    fn ask(&mut self, today: NaiveDate, version: &str) -> bool {
+        if !self.may_ask(today, version) {
+            return false;
+        }
+        self.state = match self.state {
+            Answer::Asking => Answer::Asked {
+                version: version.into(),
+                day: today,
+            },
+            _ => Answer::Done,
+        };
+        true
+    }
 }
 
-/// A stable release with a higher major or minor version than `old`.
+/// A stable feature release (x.y.0) with a higher major or minor version than
+/// `old`.
 fn feature_release(old: &str, version: &str) -> bool {
     let (Ok(old), Ok(new)) = (semver::Version::parse(old), semver::Version::parse(version)) else {
         return false;
     };
-    new.pre.is_empty() && (new.major, new.minor) > (old.major, old.minor)
+    new.pre.is_empty() && new.patch == 0 && (new.major, new.minor) > (old.major, old.minor)
 }
 
 /// What the window is doing when the timer fires.
@@ -109,12 +153,33 @@ pub(super) struct Moment<'a> {
     pub busy: bool,
 }
 
-/// Whether to show the toast now.
+/// Whether to show the toast now, once no field or control has keyboard focus.
 pub(super) fn should_ask(record: Option<&Record>, moment: &Moment<'_>) -> bool {
     record.is_some_and(|record| record.may_ask(moment.today, moment.version))
         && moment.focused
         && !moment.busy
         && moment.idle >= IDLE
+}
+
+/// Whether `message` reports a file exported or a picture put on the
+/// clipboard. [`App::receive`] counts each once, before any check of the
+/// drawing it came from.
+pub(super) fn counts(message: &Message) -> bool {
+    match message {
+        Message::Tab(_, message) => counts(message),
+        Message::Exported(Ok(Some(_)))
+        | Message::FigureExported(Ok(Some(_)))
+        | Message::Nmr(super::nmr::Action::Exported(Ok(Some(_))))
+        | Message::ThemeFile(super::theme_files::Action::Saved(Ok(true)))
+        | Message::DrawingStyle(super::document_styles::Action::Saved(Ok(true)))
+        | Message::CopyAsWritten(_, true, Ok(_)) => true,
+        // Windows puts a picture on the clipboard only for Copy Image.
+        Message::ClipboardWritten {
+            result: Ok(outcome),
+            ..
+        } => outcome.image_only || !cfg!(windows),
+        _ => false,
+    }
 }
 
 fn today() -> NaiveDate {
@@ -123,10 +188,13 @@ fn today() -> NaiveDate {
 
 #[derive(Debug, Clone)]
 pub enum Action {
-    /// Keyboard, pointer or scroll input; `Some` for a mouse button press or release.
-    Input(Option<bool>),
-    Focused(bool),
+    /// Window focus, or pointer, keyboard or touch input.
+    Event(iced::Event),
     Tick,
+    /// Whether a field or control had keyboard focus when the timer fired.
+    Checked {
+        focused: bool,
+    },
     /// Star on GitHub, in the toast or in About.
     Star {
         toast: bool,
@@ -138,13 +206,16 @@ pub enum Action {
 
 pub(super) struct State {
     path: Option<PathBuf>,
+    /// The record as last read or saved; `None` asks no more in this run.
     record: Option<Record>,
     /// Asked in this run: never twice.
     asked: bool,
     pub open: bool,
     last_input: Instant,
     focused: bool,
+    /// A mouse button or fingers held down, as in a drag.
     pressed: bool,
+    fingers: Vec<iced::touch::Finger>,
 }
 
 impl State {
@@ -155,6 +226,10 @@ impl State {
         } else {
             Record::path().ok()
         };
+        Self::at(path)
+    }
+
+    fn at(path: Option<PathBuf>) -> Self {
         let record = path.as_deref().and_then(|path| Record::load(path, today()));
         Self {
             path,
@@ -164,36 +239,21 @@ impl State {
             last_input: Instant::now(),
             focused: true,
             pressed: false,
+            fingers: Vec::new(),
         }
     }
 
-    /// Whether a later tick may still show the toast in this run.
-    fn possible(&self) -> bool {
+    /// Whether this run may still ask, perhaps after more uses or on a later day.
+    fn waiting(&self) -> bool {
         !self.asked
             && self
                 .record
                 .as_ref()
-                .is_some_and(|record| record.may_ask(today(), reshiki::updates::CURRENT_VERSION))
-    }
-
-    pub(super) fn subscription(&self) -> Subscription<Message> {
-        if !self.possible() {
-            return Subscription::none();
-        }
-        Subscription::batch([
-            iced::time::every(TICK).map(|_| Message::Star(Action::Tick)),
-            iced::event::listen_with(|event, _, _| {
-                use iced::{Event, mouse, window};
-                Some(Message::Star(match event {
-                    Event::Window(window::Event::Focused) => Action::Focused(true),
-                    Event::Window(window::Event::Unfocused) => Action::Focused(false),
-                    Event::Mouse(mouse::Event::ButtonPressed(_)) => Action::Input(Some(true)),
-                    Event::Mouse(mouse::Event::ButtonReleased(_)) => Action::Input(Some(false)),
-                    Event::Mouse(_) | Event::Keyboard(_) | Event::Touch(_) => Action::Input(None),
-                    _ => return None,
-                }))
-            }),
-        ])
+                .is_some_and(|record| match &record.state {
+                    Answer::Asking => true,
+                    Answer::Asked { version, .. } => feature_release(version, CURRENT_VERSION),
+                    Answer::Starred | Answer::Done => false,
+                })
     }
 
     /// A successful export or picture copy.
@@ -204,45 +264,129 @@ impl State {
             .as_ref()
             .is_some_and(|record| record.uses < USES)
         {
-            self.change(|record| record.uses += 1);
+            self.change(|record| {
+                let counted = record.uses < USES;
+                record.uses += u32::from(counted);
+                counted
+            });
         }
     }
 
-    /// Applies `edit` and saves. A record that cannot be saved is dropped, so
-    /// this run asks no more.
-    fn change(&mut self, edit: impl FnOnce(&mut Record)) {
-        let (Some(record), Some(path)) = (self.record.as_mut(), self.path.as_deref()) else {
-            return;
+    /// [`Record::change`] on the saved record, which then replaces this run's
+    /// copy. A record that cannot be read or saved is dropped, so this run
+    /// asks no more. Returns whether `edit` changed it.
+    fn change(&mut self, edit: impl FnOnce(&mut Record) -> bool) -> bool {
+        let (Some(record), Some(path)) = (self.record.take(), self.path.as_deref()) else {
+            return false;
         };
-        edit(record);
-        if record.save(path).is_err() {
-            self.record = None;
+        match Record::change(path, record, edit) {
+            Some((record, changed)) => {
+                self.record = Some(record);
+                changed
+            }
+            None => false,
         }
     }
 }
 
+/// The events the toast's timing needs: focus and held buttons and fingers
+/// always, and with `all` every other input too.
+fn input(event: iced::Event, all: bool) -> Option<Message> {
+    use iced::{Event, mouse, touch, window};
+    let held = matches!(
+        event,
+        Event::Window(window::Event::Focused | window::Event::Unfocused)
+            | Event::Mouse(mouse::Event::ButtonPressed(_) | mouse::Event::ButtonReleased(_))
+            | Event::Touch(
+                touch::Event::FingerPressed { .. }
+                    | touch::Event::FingerLifted { .. }
+                    | touch::Event::FingerLost { .. }
+            )
+    );
+    let other = matches!(
+        event,
+        Event::Mouse(_) | Event::Keyboard(_) | Event::Touch(_)
+    );
+    (held || all && other).then_some(Message::Star(Action::Event(event)))
+}
+
 impl App {
+    /// Focus, held buttons and fingers are followed while this run may still
+    /// ask, so that the toast never opens in the background or mid-drag;
+    /// every input once the uses are reached; and the timer only while an ask
+    /// is due in a focused window on a drawing ReShiki owns.
+    pub(super) fn star_subscription(&self) -> Subscription<Message> {
+        if !self.star.waiting() {
+            return Subscription::none();
+        }
+        let all = self
+            .star
+            .record
+            .as_ref()
+            .is_some_and(|record| record.uses >= USES);
+        let events = if all {
+            iced::event::listen_with(|event, _, _| input(event, true))
+        } else {
+            iced::event::listen_with(|event, _, _| input(event, false))
+        };
+        let timer = if self.star_timer() {
+            iced::time::every(TICK).map(|_| Message::Star(Action::Tick))
+        } else {
+            Subscription::none()
+        };
+        Subscription::batch([events, timer])
+    }
+
+    fn star_timer(&self) -> bool {
+        self.star.waiting()
+            && self.star.focused
+            && self.tab.office.is_none()
+            && self
+                .star
+                .record
+                .as_ref()
+                .is_some_and(|record| record.may_ask(today(), CURRENT_VERSION))
+    }
+
     pub(super) fn star_action(&mut self, action: Action) -> Task<Message> {
         match action {
-            Action::Input(pressed) => {
-                self.star.last_input = Instant::now();
-                if let Some(pressed) = pressed {
-                    self.star.pressed = pressed;
+            Action::Event(event) => {
+                use iced::{Event, mouse, touch, window};
+                let star = &mut self.star;
+                star.last_input = Instant::now();
+                match event {
+                    Event::Window(window::Event::Focused) => star.focused = true,
+                    Event::Window(window::Event::Unfocused) => star.focused = false,
+                    Event::Mouse(mouse::Event::ButtonPressed(_)) => star.pressed = true,
+                    Event::Mouse(mouse::Event::ButtonReleased(_)) => star.pressed = false,
+                    Event::Touch(touch::Event::FingerPressed { id, .. }) => star.fingers.push(id),
+                    Event::Touch(
+                        touch::Event::FingerLifted { id, .. } | touch::Event::FingerLost { id, .. },
+                    ) => star.fingers.retain(|finger| *finger != id),
+                    _ => {}
                 }
             }
-            Action::Focused(focused) => {
-                self.star.last_input = Instant::now();
-                self.star.focused = focused;
-            }
             Action::Tick => {
-                let moment = Moment {
-                    today: today(),
-                    version: reshiki::updates::CURRENT_VERSION,
-                    idle: self.star.last_input.elapsed(),
-                    focused: self.star.focused,
-                    busy: self.star_busy(),
-                };
-                if !self.star.asked && should_ask(self.star.record.as_ref(), &moment) {
+                if self.star_ready() {
+                    use iced::advanced::widget::{operate, operation::focusable};
+                    return operate(focusable::count()).map(|count| {
+                        Message::Star(Action::Checked {
+                            focused: count.focused.is_some(),
+                        })
+                    });
+                }
+            }
+            Action::Checked { focused } => {
+                let today = today();
+                // The ask is saved before it shows, so that quitting without
+                // an answer still counts, and a folder that cannot keep the
+                // answer is never asked.
+                if !focused
+                    && self.star_ready()
+                    && self
+                        .star
+                        .change(|record| record.ask(today, CURRENT_VERSION))
+                {
                     self.star.asked = true;
                     self.star.open = true;
                     return self.accessibility_refresh();
@@ -250,7 +394,10 @@ impl App {
             }
             Action::Star { toast } => {
                 self.star.open = false;
-                self.star.change(|record| record.state = Answer::Starred);
+                self.star.change(|record| {
+                    record.state = Answer::Starred;
+                    true
+                });
                 let open = Task::perform(reshiki::updates::open_url(REPOSITORY.into()), |result| {
                     Message::Star(Action::Opened(result))
                 });
@@ -261,17 +408,7 @@ impl App {
                 };
             }
             Action::Dismiss => {
-                let today = today();
                 self.star.open = false;
-                self.star.change(|record| {
-                    record.state = match record.state {
-                        Answer::Asking => Answer::Dismissed {
-                            version: reshiki::updates::CURRENT_VERSION.into(),
-                            day: today,
-                        },
-                        _ => Answer::Done,
-                    }
-                });
                 return Task::batch([super::focus_drawing(), self.accessibility_refresh()]);
             }
             Action::Opened(result) => {
@@ -282,9 +419,22 @@ impl App {
         Task::none()
     }
 
-    /// Anything the toast must not interrupt.
+    /// Every rule but keyboard focus, which a tick checks in the view.
+    fn star_ready(&self) -> bool {
+        let moment = Moment {
+            today: today(),
+            version: CURRENT_VERSION,
+            idle: self.star.last_input.elapsed(),
+            focused: self.star.focused,
+            busy: self.star_busy(),
+        };
+        !self.star.asked && should_ask(self.star.record.as_ref(), &moment)
+    }
+
+    /// Anything the toast must not interrupt, besides a focused field.
     fn star_busy(&self) -> bool {
         self.star.pressed
+            || !self.star.fingers.is_empty()
             || self.tab.office.is_some()
             || self.prompt.is_some()
             || self.pending.is_some()
@@ -296,10 +446,14 @@ impl App {
             || self.palette.is_some()
             || self.context_menu.is_some()
             || self.style_menu.is_some()
+            || self.tabs.menu
+            || self.assistant.menu.is_some()
             || self.assistant.viewed_image.is_some()
             || self.theme_library.editor.is_some()
             || self.imports.menu
             || self.imports.examples_menu
+            || self.imports.dragging()
+            || self.tab.nmr.overlay_open()
             || self.tab.inspector_ui.menu_open()
             || self.tab.atom_text.is_some()
             || self.tab.inline_text.is_some()

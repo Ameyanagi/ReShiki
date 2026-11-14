@@ -94,6 +94,10 @@ pub struct State {
     dropped: Vec<PathBuf>,
 }
 impl State {
+    /// Files are being dragged over the window.
+    pub(super) fn dragging(&self) -> bool {
+        !self.hovered.is_empty()
+    }
     #[cfg(test)]
     pub fn is_blank(&self) -> bool {
         self.format.is_none()

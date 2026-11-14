@@ -1,6 +1,10 @@
 use super::*;
-use crate::app::{clipboard::CopyAsKey, figure_export::Saved, nmr, workspace::layout_snapshots};
+use crate::app::{
+    clipboard::CopyAsKey, document_styles, figure_export::Saved, import, nmr, theme_files,
+    workspace::layout_snapshots,
+};
 use chrono::Days;
+use iced::{Event, mouse, touch, window};
 use reshiki::clipboard::{CopyFormat, CopyOutcome};
 
 fn day(text: &str) -> NaiveDate {
@@ -15,17 +19,17 @@ fn asking(first_launch_day: NaiveDate) -> Record {
     }
 }
 
+fn save(path: &Path, record: &Record) {
+    std::fs::write(path, serde_json::to_vec(record).unwrap()).unwrap();
+}
+
 /// A test app whose record lives in a temporary data folder.
 fn app_with(record: Record) -> (App, tempfile::TempDir) {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("star-prompt.json");
-    record.save(&path).unwrap();
+    save(&path, &record);
     let (mut app, _) = App::new();
-    app.star = State {
-        path: Some(path),
-        record: Some(record),
-        ..State::load()
-    };
+    app.star = State::at(Some(path));
     (app, dir)
 }
 
@@ -41,6 +45,19 @@ fn saved_record(app: &App) -> Option<Record> {
 /// Input stopped `IDLE` ago.
 fn idle(app: &mut App) {
     app.star.last_input = Instant::now().checked_sub(IDLE).unwrap();
+}
+
+fn event(app: &mut App, event: Event) {
+    let _ = app.update(Message::Star(Action::Event(event)));
+}
+
+/// A timer tick after `IDLE` without input, with the drawing holding the
+/// keyboard; whether the toast is open afterwards.
+fn tick(app: &mut App) -> bool {
+    idle(app);
+    let _ = app.update(Message::Star(Action::Tick));
+    let _ = app.update(Message::Star(Action::Checked { focused: false }));
+    app.star.open
 }
 
 #[test]
@@ -95,13 +112,15 @@ fn asks_only_when_every_rule_holds() {
         assert!(!should_ask(Some(&record), &years));
     }
 
-    // The re-ask: a feature release at least 90 days after "Not now".
-    let dismissed_on = day("2026-11-02");
-    for (dismissed, running, days, expected) in [
+    // The re-ask: a stable x.y.0 feature release at least 90 days after the first.
+    let asked_on = day("2026-11-02");
+    for (asked, running, days, expected) in [
         ("0.15.0", "0.16.0", 90, true),
         ("0.15.0", "0.16.0", 89, false),
         ("0.15.0", "1.0.0", 90, true),
         ("0.15.0", "0.15.1", 365, false),
+        ("0.15.0", "0.16.1", 365, false),
+        ("0.15.0", "1.0.1", 365, false),
         ("0.15.0", "0.15.0", 365, false),
         ("0.15.0", "0.16.0-nightly.20270201.1.1", 365, false),
         ("0.16.0-nightly.20261101.1.1", "0.16.0", 365, false),
@@ -109,21 +128,21 @@ fn asks_only_when_every_rule_holds() {
         ("not a version", "0.16.0", 365, false),
     ] {
         let record = Record {
-            state: Answer::Dismissed {
-                version: dismissed.into(),
-                day: dismissed_on,
+            state: Answer::Asked {
+                version: asked.into(),
+                day: asked_on,
             },
             ..record.clone()
         };
         let moment = Moment {
-            today: dismissed_on + Days::new(days),
+            today: asked_on + Days::new(days),
             version: running,
             ..ready
         };
         assert_eq!(
             should_ask(Some(&record), &moment),
             expected,
-            "{dismissed} → {running} after {days} days"
+            "{asked} → {running} after {days} days"
         );
     }
 }
@@ -150,7 +169,7 @@ fn record_round_trips_and_keeps_a_newer_file() {
     for state in [
         Answer::Starred,
         Answer::Done,
-        Answer::Dismissed {
+        Answer::Asked {
             version: "0.15.0".into(),
             day: today,
         },
@@ -160,7 +179,11 @@ fn record_round_trips_and_keeps_a_newer_file() {
             state,
             ..new.clone()
         };
-        record.save(&path).unwrap();
+        let saved = Record::change(&path, new.clone(), |saved| {
+            *saved = record.clone();
+            true
+        });
+        assert_eq!(saved, Some((record.clone(), true)));
         assert_eq!(Record::load(&path, today), Some(record));
     }
 
@@ -171,8 +194,11 @@ fn record_round_trips_and_keeps_a_newer_file() {
     assert_eq!(std::fs::read(&path).unwrap(), newer);
     let bad = path.with_extension("json.bad");
     assert!(!bad.exists());
-    // Replacing it keeps a copy first.
-    new.save(&path).unwrap();
+    // A change that finds one keeps a copy before replacing it.
+    assert_eq!(
+        Record::change(&path, new.clone(), |_| true),
+        Some((new.clone(), true))
+    );
     assert_eq!(std::fs::read(&bad).unwrap(), newer);
     assert_eq!(Record::load(&path, today), Some(new));
 
@@ -187,7 +213,95 @@ fn record_round_trips_and_keeps_a_newer_file() {
 }
 
 #[test]
-fn exports_and_picture_copies_count_up_to_the_threshold() {
+fn a_record_that_stops_reading_or_saving_ends_the_asks_and_is_left_alone() {
+    // Read after the first load fails: nothing is written over it.
+    let (mut app, dir) = app_with(Record {
+        uses: 0,
+        ..asking(day("2026-11-01"))
+    });
+    let path = dir.path().join("star-prompt.json");
+    std::fs::remove_file(&path).unwrap();
+    std::fs::create_dir(&path).unwrap();
+    app.star.used();
+    assert_eq!(app.star.record, None);
+    assert!(path.is_dir());
+    assert!(!path.with_extension("json.bad").exists());
+
+    // A valid record in a folder that cannot save the ask never shows the toast.
+    let (mut app, dir) = app_with(asking(today() - Days::new(1)));
+    let path = dir.path().join("star-prompt.json");
+    let before = std::fs::read(&path).unwrap();
+    std::fs::create_dir(path.with_extension("lock")).unwrap();
+    assert!(app.star.record.is_some(), "Loading only reads");
+    assert!(!tick(&mut app));
+    assert_eq!(app.star.record, None);
+    assert_eq!(std::fs::read(&path).unwrap(), before);
+}
+
+#[test]
+fn two_running_copies_keep_each_others_counts_and_answers() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("star-prompt.json");
+    let saved = || Record::parse(&std::fs::read(&path).unwrap()).unwrap();
+    let running = || {
+        let (mut app, _) = App::new();
+        app.star = State::at(Some(path.clone()));
+        app
+    };
+    let export = || {
+        Message::FigureExported(Ok(Some(Saved {
+            path: "Molecule.png".into(),
+            details: vec![],
+        })))
+    };
+    save(
+        &path,
+        &Record {
+            uses: 3,
+            ..asking(today() - Days::new(1))
+        },
+    );
+    let (mut a, mut b) = (running(), running());
+    let _ = a.receive(export());
+    let _ = b.receive(export());
+    assert_eq!(saved().uses, USES, "Both uses count");
+    let _ = a.update(Message::Star(Action::Star { toast: false }));
+    // B starts from A's answer, so it never asks.
+    assert!(!tick(&mut b));
+    assert_eq!(b.star.record.as_ref().unwrap().state, Answer::Starred);
+    assert_eq!(saved().state, Answer::Starred);
+    assert!(!b.star.waiting());
+
+    // An ask that the other copy already made is not made again.
+    save(&path, &asking(today() - Days::new(1)));
+    let (mut a, mut b) = (running(), running());
+    assert!(tick(&mut a));
+    assert!(!tick(&mut b));
+    assert!(matches!(saved().state, Answer::Asked { .. }));
+}
+
+#[test]
+fn an_unanswered_toast_counts_as_an_ask_after_a_restart() {
+    let (mut app, dir) = app_with(asking(today() - Days::new(1)));
+    assert!(tick(&mut app));
+    let asked = Answer::Asked {
+        version: CURRENT_VERSION.into(),
+        day: today(),
+    };
+    assert_eq!(
+        saved_record(&app).unwrap().state,
+        asked,
+        "Saved before it shows"
+    );
+    // Quit without an answer, then start again.
+    let (mut app, _) = App::new();
+    app.star = State::at(Some(dir.path().join("star-prompt.json")));
+    assert!(!app.star.waiting());
+    assert!(!tick(&mut app));
+}
+
+#[test]
+fn every_export_and_picture_copy_counts_once_wherever_its_drawing_went() {
     let (mut app, _dir) = app_with(Record {
         uses: 0,
         ..asking(day("2026-11-01"))
@@ -199,38 +313,63 @@ fn exports_and_picture_copies_count_up_to_the_threshold() {
             details: vec![],
         })
     };
-    let _ = app.update(Message::FigureExported(Ok(saved())));
+    let _ = app.receive(Message::FigureExported(Ok(saved())));
     assert_eq!(uses(&app), 1);
-    let _ = app.update(Message::FigureExported(Ok(None)));
-    let _ = app.update(Message::FigureExported(Err("Disk full".into())));
+    let _ = app.receive(Message::FigureExported(Ok(None)));
+    let _ = app.receive(Message::FigureExported(Err("Disk full".into())));
+    let _ = app.receive(Message::ThemeFile(theme_files::Action::Saved(Ok(false))));
     assert_eq!(uses(&app), 1, "Canceled and failed exports do not count");
-    let _ = app.update(Message::Exported(Ok(saved())));
+    let _ = app.receive(Message::Exported(Ok(saved())));
     assert_eq!(uses(&app), 2);
-    let _ = app.update(Message::Nmr(nmr::Action::Exported(Ok(Some(
+    let _ = app.receive(Message::Nmr(nmr::Action::Exported(Ok(Some(
         "Shifts.csv".into(),
     )))));
     assert_eq!(uses(&app), 3);
+    let _ = app.receive(Message::ThemeFile(theme_files::Action::Saved(Ok(true))));
+    assert_eq!(uses(&app), 4);
+    let _ = app.receive(Message::DrawingStyle(document_styles::Action::Saved(Ok(
+        true,
+    ))));
+    assert_eq!(uses(&app), USES);
+    assert_eq!(saved_record(&app).unwrap().uses, USES);
+    // The count stops at the threshold.
+    let _ = app.receive(Message::FigureExported(Ok(saved())));
+    assert_eq!(uses(&app), USES);
 
+    let (mut app, _dir) = app_with(Record {
+        uses: 0,
+        ..asking(day("2026-11-01"))
+    });
     let key = |app: &App, format| CopyAsKey {
         epoch: app.tab.file_epoch,
         revision: app.tab.revision,
         format,
         selected: vec![],
     };
-    let _ = app.update(Message::CopyAsWritten(
+    let _ = app.receive(Message::CopyAsWritten(
         key(&app, CopyFormat::Smiles),
+        false,
         Ok(vec![]),
     ));
-    let _ = app.update(Message::CopyAsWritten(
+    let _ = app.receive(Message::CopyAsWritten(
         key(&app, CopyFormat::Png),
+        true,
         Err("Busy".into()),
     ));
-    assert_eq!(uses(&app), 3, "Text copies and failed copies do not count");
-    let _ = app.update(Message::CopyAsWritten(
+    // Without native clipboard support, Copy As SVG puts its source on the
+    // clipboard as text.
+    let _ = app.receive(Message::CopyAsWritten(
         key(&app, CopyFormat::Svg),
+        false,
         Ok(vec![]),
     ));
-    assert_eq!(uses(&app), 4);
+    assert_eq!(uses(&app), 0, "Text copies and failed copies do not count");
+    let _ = app.receive(Message::CopyAsWritten(
+        key(&app, CopyFormat::Svg),
+        true,
+        Ok(vec![]),
+    ));
+    assert_eq!(uses(&app), 1);
     let written = |image_only| Message::ClipboardWritten {
         epoch: 0,
         revision: 0,
@@ -241,80 +380,207 @@ fn exports_and_picture_copies_count_up_to_the_threshold() {
             notices: vec![],
         }),
     };
-    let _ = app.update(written(true));
-    assert_eq!(uses(&app), USES);
-    assert_eq!(saved_record(&app).unwrap().uses, USES);
-    // The count stops at the threshold, so later copies write nothing.
-    let _ = app.update(Message::FigureExported(Ok(saved())));
-    assert_eq!(uses(&app), USES);
-
+    let _ = app.receive(written(true));
+    assert_eq!(uses(&app), 2);
     // Copy puts a picture on the clipboard, except on Windows.
-    let (mut app, _dir) = app_with(Record {
-        uses: 0,
-        ..asking(day("2026-11-01"))
-    });
-    let _ = app.update(written(false));
-    assert_eq!(uses(&app), u32::from(!cfg!(windows)));
+    let _ = app.receive(written(false));
+    assert_eq!(uses(&app), 2 + u32::from(!cfg!(windows)));
+    let before = uses(&app);
+
+    // A copy that finishes after its drawing was replaced, or an export after
+    // its tab closed, still counts, once.
+    let mut replaced = key(&app, CopyFormat::Png);
+    replaced.epoch += 1;
+    let id = app.tab.id;
+    let _ = app.receive(Message::Tab(
+        id,
+        Box::new(Message::CopyAsWritten(replaced, true, Ok(vec![]))),
+    ));
+    assert_eq!(uses(&app), before + 1);
+    let _ = app.close_active_tab();
+    assert_ne!(app.tab.id, id);
+    let _ = app.receive(Message::Tab(
+        id,
+        Box::new(Message::FigureExported(Ok(saved()))),
+    ));
+    assert_eq!(uses(&app), before + 2);
 }
 
 #[test]
 fn the_toast_waits_for_a_quiet_moment_and_asks_once_per_run() {
     let today = today();
     let (mut app, _dir) = app_with(asking(today - Days::new(1)));
-    assert!(app.star.possible());
-    let tick = |app: &mut App| {
-        let _ = app.update(Message::Star(Action::Tick));
-        app.star.open
-    };
-    let _ = app.update(Message::Star(Action::Input(None)));
-    assert!(!tick(&mut app), "Input within 30 seconds");
-    idle(&mut app);
+    assert!(app.star.waiting());
+    let _ = app.update(Message::Star(Action::Event(Event::Keyboard(
+        iced::keyboard::Event::ModifiersChanged(iced::keyboard::Modifiers::empty()),
+    ))));
+    let _ = app.update(Message::Star(Action::Checked { focused: false }));
+    assert!(!app.star.open, "Input within 30 seconds");
     app.help_open = true;
     assert!(!tick(&mut app), "Help is open");
     app.help_open = false;
+    idle(&mut app);
+    let _ = app.update(Message::Star(Action::Checked { focused: true }));
+    assert!(!app.star.open, "A field or control has the keyboard");
     app.tab.office = Some(crate::session::Binding::standalone(
         "Drawing in Word.rsk".into(),
         crate::session::Host::LibreOffice,
     ));
+    assert!(!app.star_timer(), "No timer for a drawing from LibreOffice");
     assert!(!tick(&mut app), "The drawing belongs to LibreOffice");
     app.tab.office = None;
-    let _ = app.update(Message::Star(Action::Focused(false)));
-    idle(&mut app);
+    assert!(app.star_timer());
+    event(&mut app, Event::Window(window::Event::Unfocused));
+    assert!(!app.star_timer(), "No timer in the background");
     assert!(!tick(&mut app), "The window is in the background");
-    let _ = app.update(Message::Star(Action::Focused(true)));
-    let _ = app.update(Message::Star(Action::Input(Some(true))));
-    idle(&mut app);
+    event(&mut app, Event::Window(window::Event::Focused));
+    event(
+        &mut app,
+        Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+    );
     assert!(!tick(&mut app), "A mouse button is held, as in a drag");
-    let _ = app.update(Message::Star(Action::Input(Some(false))));
-    idle(&mut app);
+    event(
+        &mut app,
+        Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
+    );
     assert!(tick(&mut app));
-    assert!(!app.star.possible(), "No timer once it has asked");
+    assert!(
+        !app.star.waiting(),
+        "No listener or timer once it has asked"
+    );
 
     let _ = app.update(Message::Star(Action::Dismiss));
     assert!(!app.star.open);
-    let dismissed = Answer::Dismissed {
-        version: reshiki::updates::CURRENT_VERSION.into(),
+    let asked = Answer::Asked {
+        version: CURRENT_VERSION.into(),
         day: today,
     };
-    assert_eq!(app.star.record.as_ref().unwrap().state, dismissed);
-    assert_eq!(saved_record(&app).unwrap().state, dismissed);
-    idle(&mut app);
+    assert_eq!(app.star.record.as_ref().unwrap().state, asked);
+    assert_eq!(saved_record(&app).unwrap().state, asked);
     assert!(!tick(&mut app), "At most once per run");
 }
 
 #[test]
-fn the_second_close_or_a_star_ends_the_asks() {
-    let first = day("2026-01-01");
+fn focus_and_held_input_are_followed_before_the_count_is_reached() {
     let (mut app, _dir) = app_with(Record {
-        state: Answer::Dismissed {
-            version: "0.1.0".into(),
-            day: first,
-        },
-        ..asking(first)
+        uses: USES - 1,
+        ..asking(today() - Days::new(1))
     });
-    app.star.open = true;
-    let _ = app.update(Message::Star(Action::Dismiss));
-    assert_eq!(saved_record(&app).unwrap().state, Answer::Done);
+    let moved = Event::Mouse(mouse::Event::CursorMoved {
+        position: iced::Point::ORIGIN,
+    });
+    let finger = |id| touch::Finger(id);
+    let pressed = Event::Touch(touch::Event::FingerPressed {
+        id: finger(1),
+        position: iced::Point::ORIGIN,
+    });
+    // Until the count is reached, only focus and held buttons and fingers.
+    for (event, held) in [
+        (Event::Window(window::Event::Unfocused), true),
+        (
+            Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
+            true,
+        ),
+        (pressed.clone(), true),
+        (moved.clone(), false),
+    ] {
+        assert_eq!(input(event.clone(), false).is_some(), held, "{event:?}");
+        assert!(input(event, true).is_some());
+    }
+    assert!(
+        input(
+            Event::Window(window::Event::Moved(iced::Point::ORIGIN)),
+            true
+        )
+        .is_none()
+    );
+
+    // The window goes to the background, then an export reaches the count.
+    event(&mut app, Event::Window(window::Event::Unfocused));
+    let _ = app.receive(Message::FigureExported(Ok(Some(Saved {
+        path: "Molecule.png".into(),
+        details: vec![],
+    }))));
+    assert!(
+        app.star
+            .record
+            .as_ref()
+            .unwrap()
+            .may_ask(today(), CURRENT_VERSION)
+    );
+    assert!(!app.star_timer());
+    assert!(!tick(&mut app), "Never in the background");
+    event(&mut app, Event::Window(window::Event::Focused));
+    assert!(app.star_timer());
+
+    // A finger held still, as in a touch drag, keeps it closed until lifted or lost.
+    event(&mut app, pressed);
+    event(
+        &mut app,
+        Event::Touch(touch::Event::FingerPressed {
+            id: finger(2),
+            position: iced::Point::ORIGIN,
+        }),
+    );
+    event(
+        &mut app,
+        Event::Touch(touch::Event::FingerLifted {
+            id: finger(2),
+            position: iced::Point::ORIGIN,
+        }),
+    );
+    assert!(!tick(&mut app), "A finger is still down");
+    event(
+        &mut app,
+        Event::Touch(touch::Event::FingerLost {
+            id: finger(1),
+            position: iced::Point::ORIGIN,
+        }),
+    );
+    assert!(tick(&mut app));
+}
+
+#[test]
+fn menus_panels_and_drags_keep_the_toast_away() {
+    type Open = fn(&mut App);
+    let cases: [(&str, Open); 6] = [
+        ("Tabs ▾ menu", |app| app.tabs.menu = true),
+        ("Assistant menu", |app| {
+            app.assistant.menu = Some(crate::app::assistant::Menu::Models);
+        }),
+        ("Floating NMR palette", |app| app.tab.nmr.open = true),
+        ("Insert menu", |app| app.imports.menu = true),
+        ("Files dragged over the window", |app| {
+            let _ = app.update(Message::Imports(import::Action::Hovered(
+                "Molecule.mol".into(),
+            )));
+        }),
+        ("Updates", |app| app.updates.open = true),
+    ];
+    for (name, open) in cases {
+        let (mut app, _dir) = app_with(asking(today() - Days::new(1)));
+        assert!(!app.star_busy());
+        open(&mut app);
+        assert!(app.star_busy(), "{name}");
+        assert!(!tick(&mut app), "{name}");
+    }
+}
+
+#[test]
+fn the_second_ask_or_a_star_ends_the_asks() {
+    let first = day("2026-01-01");
+    let mut record = asking(first);
+    assert!(record.ask(first + Days::new(1), "0.1.0"));
+    let asked = Answer::Asked {
+        version: "0.1.0".into(),
+        day: first + Days::new(1),
+    };
+    assert_eq!(record.state, asked);
+    assert!(!record.ask(first + Days::new(2), "0.1.0"));
+    assert_eq!(record.state, asked);
+    assert!(record.ask(first + Days::new(91), "0.2.0"));
+    assert_eq!(record.state, Answer::Done);
+    assert!(!record.ask(first + Days::new(900), "9.0.0"));
 
     for toast in [true, false] {
         let (mut app, _dir) = app_with(asking(first));
@@ -450,21 +716,33 @@ impl Ui {
             .collect()
     }
 
-    /// Updates the app, then applies the widget operations its task returns.
+    /// Updates the app, then applies the widget operations its task returns
+    /// and the toast's own messages that they produce.
     async fn update(&mut self, app: &mut App, message: Message) {
         use iced::advanced::widget::operation::Outcome;
         use iced::futures::StreamExt;
-        let Some(mut stream) = iced_runtime::task::into_stream(app.update(message)) else {
-            return;
-        };
-        while let Some(action) = stream.next().await {
-            if let iced_runtime::Action::Widget(operation) = action {
-                let mut current = Some(operation);
-                while let Some(mut operation) = current.take() {
-                    self.operate(app, operation.as_mut());
-                    if let Outcome::Chain(next) = operation.finish() {
-                        current = Some(next);
+        let mut queue = vec![message];
+        while let Some(message) = queue.pop() {
+            let Some(mut stream) = iced_runtime::task::into_stream(app.update(message)) else {
+                continue;
+            };
+            while let Some(action) = stream.next().await {
+                match action {
+                    iced_runtime::Action::Widget(operation) => {
+                        let mut current = Some(operation);
+                        while let Some(mut operation) = current.take() {
+                            self.operate(app, operation.as_mut());
+                            if let Outcome::Chain(next) = operation.finish() {
+                                current = Some(next);
+                            }
+                        }
                     }
+                    iced_runtime::Action::Output(
+                        message @ Message::Star(Action::Checked { .. }),
+                    ) => {
+                        queue.push(message);
+                    }
+                    _ => {}
                 }
             }
         }
@@ -544,6 +822,25 @@ async fn the_toast_takes_no_focus_is_reached_by_tab_and_returns_focus_to_the_dra
     let mut ui = Ui::new().await;
     let (mut app, _dir) = app_with(asking(today() - Days::new(1)));
     benzene(&mut app);
+    // Not while a field has the keyboard.
+    let _ = app.update(Message::Inspector(crate::app::InspectorTab::Import));
+    let mut focus: Box<dyn iced::advanced::widget::Operation> =
+        Box::new(reshiki::accessibility::FocusControl::new(import::INPUT));
+    loop {
+        ui.operate(&app, focus.as_mut());
+        match focus.finish() {
+            iced::advanced::widget::operation::Outcome::Chain(next) => focus = next,
+            _ => break,
+        }
+    }
+    assert_eq!(ui.focused(&app), [import::INPUT]);
+    idle(&mut app);
+    ui.update(&mut app, Message::Star(Action::Tick)).await;
+    assert!(!app.star.open, "The Import field has the keyboard");
+    ui.operate(
+        &app,
+        &mut iced::advanced::widget::operation::focusable::unfocus::<()>(),
+    );
     idle(&mut app);
     ui.update(&mut app, Message::Star(Action::Tick)).await;
     assert!(app.star.open);
@@ -592,7 +889,7 @@ async fn star_prompt_evidence() {
         benzene(&mut app);
         ui.picture(&mut app, &directory.join(format!("canvas-{theme}.png")));
         idle(&mut app);
-        let _ = app.update(Message::Star(Action::Tick));
+        ui.update(&mut app, Message::Star(Action::Tick)).await;
         assert!(app.star.open);
         ui.picture(&mut app, &directory.join(format!("toast-{theme}.png")));
         let _ = app.update(Message::Star(Action::Dismiss));

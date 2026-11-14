@@ -175,7 +175,6 @@ impl App {
         self.figure_exporting = false;
         match result {
             Ok(Some(saved)) => {
-                self.star.used();
                 self.status = super::files::export_status(
                     &saved.path,
                     &saved.details,

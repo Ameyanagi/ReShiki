@@ -352,7 +352,7 @@ async fn predicate_cases(key: optimization::Key) -> Vec<(&'static str, Message, 
         ),
         (
             "CopyAsWritten",
-            Message::CopyAsWritten(copy, Err(FAILURE.into())),
+            Message::CopyAsWritten(copy, false, Err(FAILURE.into())),
             [true, true, true, true, true],
         ),
         (

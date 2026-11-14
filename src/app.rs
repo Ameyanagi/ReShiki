@@ -286,7 +286,8 @@ pub enum Message {
         clipboard::CopyAsKey,
         Box<Result<reshiki::clipboard::PreparedCopy, String>>,
     ),
-    CopyAsWritten(clipboard::CopyAsKey, Result<Vec<String>, String>),
+    /// Copy As finished; `true` once a picture, not text, is on the clipboard.
+    CopyAsWritten(clipboard::CopyAsKey, bool, Result<Vec<String>, String>),
     ClipboardWritten {
         epoch: u64,
         revision: u64,
@@ -652,7 +653,7 @@ impl App {
             #[cfg(target_os = "linux")]
             iced::window::open_events().map(Message::LinuxClipboardWindow),
             self.updates.subscription(),
-            self.star.subscription(),
+            self.star_subscription(),
             self.properties_subscription(),
             self.engine_subscription(),
             #[cfg(target_arch = "wasm32")]
@@ -942,6 +943,15 @@ impl App {
             })
             .map(|p| &p.document)
             .unwrap_or(&self.tab.doc)
+    }
+    /// The runtime's entry point. A finished export or picture copy counts
+    /// toward the GitHub star prompt here, once, even when its drawing has
+    /// since closed or changed.
+    pub fn receive(&mut self, message: Message) -> Task<Message> {
+        if star_prompt::counts(&message) {
+            self.star.used();
+        }
+        self.update(message)
     }
     pub fn update(&mut self, message: Message) -> Task<Message> {
         // Modifier releases must reach buttons even when a widget or modal captures input.

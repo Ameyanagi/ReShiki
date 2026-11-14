@@ -330,7 +330,6 @@ impl App {
     ) -> Task<Message> {
         match result {
             Ok(Some(path)) => {
-                self.star.used();
                 self.status = format!("Exported predicted NMR shifts to {}", path.display());
                 self.error = false;
             }
