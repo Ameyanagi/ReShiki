@@ -374,8 +374,13 @@ impl App {
             }
             #[cfg(not(target_arch = "wasm32"))]
             Action::IsStarred(starred) => {
+                // GitHub could not tell: no ask in this run, as `checking`
+                // stays set; a later launch asks GitHub again.
+                let Some(starred) = starred else {
+                    return Task::none();
+                };
                 self.star.checking = false;
-                if starred == Some(true) {
+                if starred {
                     self.star.signed_in = None;
                     self.star.change(|record| {
                         record.state = Answer::Starred;
@@ -483,9 +488,10 @@ impl App {
     /// asked. The asks after use come first; the sign-in ask counts apart.
     fn star_show(&mut self) -> Task<Message> {
         let today = today();
-        let asked = self
+        let used = self
             .star
-            .change(|record| record.ask(today, CURRENT_VERSION))
+            .change(|record| record.ask(today, CURRENT_VERSION));
+        let asked = used
             || self.star.signed_in.is_some()
                 && self.star.change(|record| {
                     let due = record.signed_in_ask == SignedInAsk::Due;
@@ -495,7 +501,8 @@ impl App {
         if !asked {
             return Task::none();
         }
-        self.star.signed_in = None;
+        // A sign-in ask still due waits its few minutes again after this card.
+        self.star.signed_in = self.star.signed_in.filter(|_| used).map(|_| Instant::now());
         self.star.open = true;
         self.accessibility_refresh()
     }

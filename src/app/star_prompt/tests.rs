@@ -603,11 +603,38 @@ fn someone_who_starred_on_github_is_never_asked() {
     assert!(app.star.signed_in.is_none());
     assert!(!tick(&mut app));
 
-    // GitHub could not tell: the card shows as it would signed out.
+    // GitHub could not tell: no ask in this run, since they may have starred.
     let (mut app, _dir) = app_with(asking(day("2026-01-01")));
     idle(&mut app);
+    app.star.checking = true;
     let _ = app.update(Message::Star(Action::IsStarred(None)));
-    assert!(app.star.open);
+    assert!(!app.star.open);
+    assert!(app.star.checking, "asks GitHub no more in this run");
+}
+
+#[test]
+#[cfg(not(target_arch = "wasm32"))]
+fn the_sign_in_ask_waits_again_after_the_card_after_use() {
+    let first = day("2026-01-01");
+    let (mut app, _dir) = app_with(asking(first));
+    app.star_github_signed_in();
+    app.star.signed_in = Some(Instant::now().checked_sub(AFTER_SIGN_IN).unwrap());
+    assert!(tick(&mut app));
+    let record = saved_record(&app).unwrap();
+    assert!(
+        matches!(record.state, Answer::Asked { .. }),
+        "the ask after use"
+    );
+    assert_eq!(record.signed_in_ask, SignedInAsk::Due, "still due");
+    let _ = app.update(Message::Star(Action::Dismiss));
+    assert!(!tick(&mut app), "not right after that card");
+    let since = app.star.signed_in.expect("still asks in this run");
+    app.star.signed_in = Some(since.checked_sub(AFTER_SIGN_IN).unwrap());
+    assert!(tick(&mut app));
+    assert_eq!(
+        saved_record(&app).unwrap().signed_in_ask,
+        SignedInAsk::Asked
+    );
 }
 
 #[test]

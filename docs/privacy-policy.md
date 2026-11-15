@@ -41,9 +41,9 @@ has a **Star ReShiki on GitHub ↗** link, which counts as a star too.
 
 ## GitHub sign-in and Send
 
+Apart from one check whether you starred ReShiki before the star card shows,
 GitHub is contacted only after you choose **Sign in with GitHub**, open or send
-a drawing, open **Versions**, or choose a star. Nothing is sent in the
-background.
+a drawing, open **Versions**, or choose a star.
 
 - **On GitHub:** ReShiki reads the repositories you allowed ReShiki to use, the
   folders you open and the drawings you open or list in **Versions**. **Send**
