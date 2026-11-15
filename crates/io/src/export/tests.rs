@@ -1546,3 +1546,35 @@ fn exports_share_the_measuring_font_database() {
         &crate::style::fontdb()
     ));
 }
+
+#[test]
+fn previews_fit_the_box_on_the_chosen_background_and_show_the_png_pixels() {
+    let doc = dark_ink_drawing();
+    // On white the dark canvas's white ink turns black, as in the export.
+    let (width, height, pixels) =
+        png_preview(&doc, Background::Color([255; 3]), (400, 400), None).unwrap();
+    assert!(width == 400 || height == 400, "{width} × {height}");
+    assert!(width <= 400 && height <= 400);
+    let pixels: Vec<[u8; 4]> = pixels.as_chunks::<4>().0.to_vec();
+    assert_eq!(pixels.len(), (width * height) as usize);
+    assert_eq!(pixels[0], [255; 4]);
+    assert!(pixels.contains(&[0, 0, 0, 255]), "dark ink");
+    let (_, _, clear) = png_preview(&doc, Background::Transparent, (400, 400), None).unwrap();
+    assert_eq!(clear[..4], [0; 4]);
+    // A PNG at a resolution below the box shows the file's own pixels.
+    let file = figure_with_budget_and_drawing(
+        &doc,
+        "png",
+        Background::Canvas,
+        RasterBudget::file(150, FILE_PIXELS),
+        None,
+    )
+    .unwrap();
+    let (width, height, pixels) =
+        png_preview(&doc, Background::Canvas, (4000, 4000), Some(150)).unwrap();
+    let reader = png::Decoder::new(std::io::Cursor::new(&file.bytes))
+        .read_info()
+        .unwrap();
+    assert_eq!((width, height), (reader.info().width, reader.info().height));
+    assert_eq!(pixels.as_chunks::<4>().0.to_vec(), rgba(&file.bytes));
+}

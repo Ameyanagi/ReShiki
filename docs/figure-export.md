@@ -30,6 +30,8 @@ Copied pictures and exported files each have their own background. Choose it in 
 
 On **White**, **Black** or **Custom**, black and white ink swap when that makes the drawing readable: dark ink on a light background, light ink on a dark one. Every other color stays as the drawing's canvas shows it: colored atoms, palette colors and custom colors. 3D models keep the drawing's color theme. **Canvas** keeps the drawing's own colors, and **Transparent** keeps the canvas ink, as copies always did.
 
+**Settings → Copy & export** shows a **Preview** of the current drawing as copied and as exported, each on its background. The **Export** tab shows the exported picture above the **Export** button, with its size. The previews come from the same renderer as the files, with the same ink swap. A checkerboard marks transparent areas.
+
 To copy a picture on another background once, right-click the drawing and choose **Copy image on**, then a background or one of your saved colors. A tick marks your default. **Change the default…** opens **Settings → Copy & export**.
 
 The background applies to PNG, SVG, PDF, **Export pages as PDF** and EMF for Office. On Windows, the Office preview that **Copy** adds uses the copy background too. When Office rebuilds it after you edit the embedded drawing, it uses the copy background set at that time.
@@ -38,7 +40,7 @@ The background applies to PNG, SVG, PDF, **Export pages as PDF** and EMF for Off
 
 Copied pictures and exported files each have their own PNG resolution: 150, 300, 600 or 1200 dpi. Copies default to 300 dpi, which keeps them small and quick to paste into slides and chats. Exported files default to 1200 dpi, which suits journal line art. Choose them in **Settings → Copy & export → PNG resolution**, or for exported files in **Export → Figure → Resolution** when **PNG** is chosen. ReShiki remembers both choices. The resolution is an app preference. It does not change the drawing or its drawing style.
 
-The size in centimeters is the same at every resolution: a higher resolution puts more pixels into the same printed size, and the PNG records its resolution so other apps place it at that size. The **Resolution** menu shows the drawing's size in centimeters and its pixel size at each setting. In Settings, close-ups show part of the current drawing at each resolution, made by the same renderer as the exported file and shown at the same size, so you can see what a lower resolution loses. When the drawing is empty, they show a sample structure.
+The size in centimeters is the same at every resolution: a higher resolution puts more pixels into the same printed size, and the PNG records its resolution so other apps place it at that size. The **Resolution** menu shows the drawing's size in centimeters and its pixel size at each setting. In Settings, close-ups show part of the current drawing at each resolution, made by the same renderer as the exported file and shown at the same size, so you can see what a lower resolution loses. When the drawing is empty, they show a sample structure. On PNG, the **Export** tab's preview shows the file's pixels at the chosen resolution, scaled to fit.
 
 ## Text in SVG files
 
