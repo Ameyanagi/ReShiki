@@ -32,7 +32,7 @@ On **White**, **Black** or **Custom**, black and white ink swap when that makes 
 
 **Settings → Copy & export** shows a **Preview** of the current drawing as copied and as exported, each on its background. The **Export** tab shows the exported picture above the **Export** button, with its size. The previews come from the same renderer as the files, with the same ink swap. A checkerboard marks transparent areas.
 
-To copy a picture on another background once, right-click the drawing and choose **Copy image on**, then a background or one of your saved colors. A tick marks your default. **Change the default…** opens **Settings → Copy & export**.
+To copy a picture on another background once, right-click the drawing and choose **Copy image on**, then a background or one of your saved colors. A tick marks your default. **Editable drawing**, below the colors, starts at your default each time the menu opens. Click it to change it for this copy: the menu stays open, and **(not default)** shows while it differs. **Change the default…** opens **Settings → Copy & export**.
 
 The background applies to PNG, SVG, PDF, **Export pages as PDF** and EMF for Office. On Windows, the Office preview that **Copy** adds uses the copy background too. When Office rebuilds it after you edit the embedded drawing, it uses the copy background set at that time.
 
@@ -52,12 +52,14 @@ Turn on **Keep text editable**, below the export button when **SVG** is chosen, 
 
 A PNG, SVG or single-figure PDF from ReShiki can carry the ReShiki drawing inside the file. Paste that picture into ReShiki, drop the file on the window, or open it with **File → Open**, and you get the editable drawing back instead of a picture. **Import → Paste picture** still inserts raster images instead of restoring their drawing. SVG and PDF without a ReShiki drawing cannot be imported.
 
-- One switch decides for both copies and files: **Include editable drawing**, below the export button on the **Export** tab, or **Put the editable drawing in pictures** in **Settings → Copy & export**. It is on by default, and ReShiki remembers your choice.
+- **Put the editable drawing in pictures** in **Settings → Copy & export** is the default for copies and files. It is on by default, and ReShiki remembers your choice.
+- To change it for one copy, right-click the drawing, choose **Copy image on**, click **Editable drawing**, then a background. **Cmd/Ctrl+C** and **Copy image** always follow the default.
+- **Include editable drawing**, below the export button on the **Export** tab, starts at the default each time the tab opens and applies to exports from the tab. The line under it shows the default. When you change it, **Restore default** appears beside it to go back.
 - With it on, **Copy**, **Copy image** and **Copy as → PNG / SVG / PDF** put the drawing in their PNG, SVG and PDF pictures when it fits the limit, and **file export** adds it to PNG, SVG and single-figure PDF files.
 - With it off, copied and exported pictures carry no drawing. On Windows, **Copy** then pastes into Word and PowerPoint as a picture, not as an embedded ReShiki drawing. Copying between ReShiki windows still keeps the drawing, because ReShiki puts its own copy of it on the clipboard. The browser editor can keep the drawing only inside the copied picture, so with the switch off, copies pasted into another ReShiki tab have no drawing either.
 - **Export pages as PDF** never includes it, because page edges can clip parts of the drawing. **EMF for Office** does not carry it yet.
 
-The drawing inside a picture holds exactly what the picture shows: the selected objects for a copy of a selection, and the whole drawing for a file export. It has no file paths, user names, recent colors, import notes, page setup, recovery data or Undo history. Anyone who gets the picture can open that drawing in ReShiki, so turn **Include editable drawing** off for figures you send to a journal or publish. In a PNG, the drawing is a text chunk after the image data. PNG files from older versions, which put it before the image data, still open as drawings.
+The drawing inside a picture holds exactly what the picture shows: the selected objects for a copy of a selection, and the whole drawing for a file export. It has no file paths, user names, recent colors, import notes, page setup, recovery data or Undo history. Anyone who gets the picture can open that drawing in ReShiki, so leave the editable drawing out of figures you send to a journal or publish. In a PNG, the drawing is a text chunk after the image data. PNG files from older versions, which put it before the image data, still open as drawings.
 
 A drawing larger than 2 MB compressed, usually one with large embedded photos, is not put in pictures. The status bar says so, and the file or clipboard picture is still written. Normal **Copy** keeps the editable drawing for ReShiki either way.
 

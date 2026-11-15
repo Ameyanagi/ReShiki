@@ -2,8 +2,8 @@
 
 **Settings** gathers ReShiki's app-wide preferences on one page. They apply to
 every drawing and save as you change them. The controls you already know, such
-as **View → Smart guides** or **Include editable drawing** on the **Export**
-tab, stay where they are and change the same preference.
+as **View → Smart guides** or **Background** on the **Export** tab, stay where
+they are and change the same preference.
 
 ## Use it
 
@@ -14,7 +14,11 @@ tab, stay where they are and change the same preference.
    setting whose name or description contains the words.
 3. Change a setting. It saves at once. If it cannot be saved, its section says
    why.
-4. Press **Esc**, press **Cmd+,** or **Ctrl+,** again, or click **Done**. The
+4. To put a section back as ReShiki ships it, click **Restore defaults** at the
+   bottom of the section. The status bar says, for example, **Copy & export
+   restored to defaults**. The button is dimmed when the section already has
+   its defaults.
+5. Press **Esc**, press **Cmd+,** or **Ctrl+,** again, or click **Done**. The
    keyboard goes back to the drawing.
 
 | Section        | Settings                                                                                                                                                                                                                                                                                                                                    |
@@ -41,6 +45,12 @@ on its background, with a checkerboard where it is transparent. ReShiki makes
 the previews in the background after each change to the drawing or to a
 background. An empty drawing shows a sample structure instead.
 
+**Restore defaults** changes only its own section. In **Copy & export** it sets
+copied pictures to **Transparent** at 300 dpi and exported files to **Canvas**
+at 1200 dpi, and turns **Put the editable drawing in pictures** on and **Keep
+text editable in SVG files** off. Your colors and the **Custom** color stay.
+There is no Undo, as these are preferences: change a setting again to go back.
+
 Under **PNG resolution**, **Copied pictures** defaults to 300 dpi and
 **Exported files** to 1200 dpi. Below them, a close-up of the current drawing at
 each resolution shows the pixels the PNG will have, at the same size on screen,
@@ -58,8 +68,10 @@ change to the drawing. An empty drawing shows a sample structure instead. See
   closes the whole page, also while you search.
 - **Write Ξ/ξ for unknown configuration** waits while a name is being made, as
   it does on the **Names** panel.
-- **Put the editable drawing in pictures** is the same switch as **Include
-  editable drawing** on the **Export** tab. See
+- **Put the editable drawing in pictures** is the default for copies and
+  exports. **Editable drawing** in **Copy image on** changes it for one copy,
+  and **Include editable drawing** on the **Export** tab for the tab's exports.
+  Neither changes the default. See
   [Keep the drawing editable inside a picture](figure-export.md#keep-the-drawing-editable-inside-a-picture)
   for what it puts in pictures and who can read it.
 - **Keep text editable in SVG files** applies to exported SVG files. SVG for
@@ -86,3 +98,9 @@ change to the drawing. An empty drawing shows a sample structure instead. See
   ReShiki writes a PNG.
 - Assistant preferences stay in `assistant-preferences.json`, and update
   preferences in `update-preferences.json` and `update-channel.json`.
+- **Restore defaults** sets the section's keys to the values a new
+  `appearance.json` has, and leaves `custom_background` and
+  `background_colors` alone. In **Assistant** it clears the model and the
+  reasoning levels and turns **Accept all edits** off. In **Updates** it turns
+  automatic checks on and chooses **Stable**, which checks that channel. It is
+  disabled while an update is being saved or installed.

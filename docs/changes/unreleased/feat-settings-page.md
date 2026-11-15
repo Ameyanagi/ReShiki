@@ -28,9 +28,14 @@ issues: []
   at each resolution, and the **Export** tab has a **Resolution** menu with the
   drawing's size in centimeters and pixels. See
   [PNG resolution](figure-export.md#png-resolution).
-- **Include editable drawing** now also applies to **Copy**, **Copy image** and
-  **Copy as**. With it off, copied pictures carry no drawing, and on Windows
-  **Copy** pastes into Office as a picture. Pasting between ReShiki windows
-  still keeps the drawing, except in the browser editor.
+- **Put the editable drawing in pictures** in **Settings → Copy & export** now
+  also applies to **Copy**, **Copy image** and **Copy as**. With it off, copied
+  pictures carry no drawing, and on Windows **Copy** pastes into Office as a
+  picture. Pasting between ReShiki windows still keeps the drawing, except in
+  the browser editor. **Editable drawing** in **Copy image on** changes it for
+  one copy, and **Include editable drawing** on the **Export** tab for that
+  tab's exports, with **Restore default** to go back.
+- Each **Settings** section has **Restore defaults**, which puts only that
+  section back as ReShiki ships it. Your saved colors stay.
 - A PNG's editable drawing now sits after the image data. PNG files from older
   versions still open as drawings.
