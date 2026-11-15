@@ -14,7 +14,7 @@ use std::sync::Arc;
 
 const EDITOR_HINT: &str = "Auto-map keeps maps you set. Reagents are not mapped.";
 const ALIGN_HINT: &str = "Moves complete product molecules";
-const MOVE_HINT: &str = "Drag the map numbers on the canvas · Escape finishes";
+const MOVE_HINT: &str = "Drag the map numbers on the canvas · Esc finishes";
 const PROPOSAL_HINT: &str =
     "Graph matching suggests correspondence; it does not determine a reaction mechanism.";
 
@@ -349,7 +349,7 @@ impl App {
             .map(|a| a.id)
             .collect();
         self.tool = Tool::EditPoints;
-        self.status = "Drag atom-map handles · Escape finishes".into();
+        self.status = "Drag atom-map handles · Esc finishes".into();
     }
     fn commit_mapping(&mut self, edit: impl FnOnce(&Document) -> Result<Document, String>) {
         let before = self.tab.doc.clone();

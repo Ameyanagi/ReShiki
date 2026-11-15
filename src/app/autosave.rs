@@ -407,7 +407,7 @@ impl App {
     pub(super) fn restore_recovered_selection(&mut self, selected: impl Fn(&Candidate) -> bool) {
         #[cfg(target_arch = "wasm32")]
         if !reshiki::storage::browser::owners_verified() {
-            self.status = "Could not verify open ReShiki pages · The recovery drafts are still available · Try again".into();
+            self.status = "Could not check open ReShiki pages · Drafts kept · Try again".into();
             self.error = true;
             return;
         }

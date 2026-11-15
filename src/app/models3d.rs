@@ -220,7 +220,7 @@ impl App {
         if self.tab.model_job.take().is_none() {
             return false;
         }
-        self.status = "3D model cancelled · Drawing unchanged".into();
+        self.status = "3D model canceled · Drawing unchanged".into();
         self.error = false;
         true
     }
@@ -329,7 +329,7 @@ impl App {
                     self.status = if restore {
                         "Original 2D drawing restored".into()
                     } else {
-                        status(display, previous)
+                        status(display)
                     };
                     self.start_morph(&atoms, previous, display);
                     self.reveal_model(&atoms, display);
@@ -382,8 +382,7 @@ impl App {
             other.linked_atoms.iter().any(|id| atoms.contains(id))
                 && other.linked_atoms.iter().any(|id| !atoms.contains(id))
         }) {
-            self.status =
-                "3D model not generated: the source must be one connected structure".into();
+            self.status = "No 3D model: the source must be one connected structure".into();
             self.error = true;
             return Task::none();
         }
@@ -406,8 +405,7 @@ impl App {
                 .iter()
                 .any(|model| model.is_file_derived() && atoms.iter().any(|id| model.contains(*id)))
         {
-            self.status =
-                "3D model not generated: the structure includes file-derived geometry".into();
+            self.status = "No 3D model: the structure has geometry from a file".into();
             self.error = true;
             return Task::none();
         }
@@ -584,7 +582,6 @@ impl App {
             self.error = false;
             return;
         }
-        let previous = model.display;
         let origin = models3d::frame_origin(&self.tab.doc, model);
         // The drawn layout stays on the model, for Original drawing.
         let drawn = model
@@ -631,10 +628,7 @@ impl App {
                 let before = std::mem::replace(&mut self.tab.doc, doc);
                 self.commit_model(before, false);
                 if !self.error {
-                    self.status = format!(
-                        "Shown as 2D from the 3D view · Undo restores {}",
-                        restored(previous)
-                    );
+                    self.status = "Shown as 2D from the 3D view".into();
                 }
             }
             Err(error) => {
@@ -674,7 +668,7 @@ impl App {
         models3d::set_display(&mut self.tab.doc, index, display);
         self.changed(before);
         if !self.error {
-            self.status = status(display, previous);
+            self.status = status(display);
             self.start_morph(&atoms, previous, display);
             self.reveal_model(&atoms, display);
         }
@@ -738,7 +732,7 @@ impl App {
         }
         self.changed(before);
         if !self.error {
-            self.status = "3D conformer regenerated · Undo restores the previous model".into();
+            self.status = "3D conformer regenerated".into();
         }
     }
 
@@ -1593,22 +1587,14 @@ impl App {
     }
 }
 
-/// The new view and the one Undo brings back.
-fn status(display: Display, previous: Display) -> String {
+/// The view now shown.
+fn status(display: Display) -> String {
     let shown = match display {
         Display::TwoD => "2D",
         Display::ThreeD => "3D model",
         Display::Both => "2D and 3D",
     };
-    format!("Shown as {shown} · Undo restores {}", restored(previous))
-}
-
-fn restored(previous: Display) -> &'static str {
-    match previous {
-        Display::TwoD => "the 2D drawing",
-        Display::ThreeD => "the 3D model",
-        Display::Both => "2D and 3D",
-    }
+    format!("Shown as {shown}")
 }
 
 #[cfg(test)]

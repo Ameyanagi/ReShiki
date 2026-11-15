@@ -233,16 +233,14 @@ impl App {
                                 (outcome.into_document(&self.tab.doc), status)
                             })
                         } else {
-                            connect_atoms(&self.tab.doc, a, b).map(|doc| {
-                                (doc, "Connected marked atom · Undo restores the open chain")
-                            })
+                            connect_atoms(&self.tab.doc, a, b)
+                                .map(|doc| (doc, "Marked atom connected"))
                         }
                     });
                 // commit_hotkey ignores the success status when an edit failed.
-                let status = result.as_ref().map_or(
-                    "Connected marked atom · Undo restores the open chain",
-                    |(_, status)| *status,
-                );
+                let status = result
+                    .as_ref()
+                    .map_or("Marked atom connected", |(_, status)| *status);
                 if self.commit_hotkey(result.map(|(doc, _)| (doc, target.atoms())), status) {
                     self.tab.keyboard_drawing.clear_mark();
                     self.tab.keyboard_drawing.set_target(target, &self.tab.doc);

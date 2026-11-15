@@ -65,7 +65,7 @@ async fn resolve_with(
         &cancel,
         slots,
         "Local parser is unavailable",
-        "Local name parsing was cancelled",
+        "Local name parsing was canceled",
         "Local parser worker failed",
         run,
     )
@@ -94,7 +94,7 @@ fn run(name: &str, cancel: &Cancel) -> Result<Record, Error> {
 #[cfg(not(target_arch = "wasm32"))]
 fn run_with_executable(name: &str, cancel: &Cancel, executable: &Path) -> Result<Record, Error> {
     if cancel.stopped() {
-        return Err(Error::Cancelled("Local name parsing was cancelled".into()));
+        return Err(Error::Cancelled("Local name parsing was canceled".into()));
     }
     let request = parse_request(name)?;
     let output = client::run_worker("reshiki-native-name-", &request, cancel, || Ok(executable))?;
@@ -354,7 +354,7 @@ fn parse_reply_with_mode(bytes: &[u8], name: &str, generation: bool) -> Result<R
             || crate::chemistry::stereo::perception::has_unspecified_stereo(&identity_state)
                 .map_err(Error::Rejected)?
         {
-            return Err(Error::Rejected("A rotation sign is accepted only beside R/S descriptors that specify every stereocentre and double bond; the sign itself is never used to assign configuration".into()));
+            return Err(Error::Rejected("A rotation sign is accepted only beside R/S descriptors that specify every stereocenter and double bond; the sign itself is never used to assign configuration".into()));
         }
         for sign in signs {
             warnings.push(format!(

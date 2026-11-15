@@ -650,23 +650,21 @@ async fn touch_uses_finger_position_for_submenu_clicks_and_outside_dismissal() {
 
 #[tokio::test]
 #[ignore = "Opt-in real renderer/menu input regression"]
-async fn compact_menu_pins_copy_and_delete_with_keyboard_and_accessibility_order() {
+async fn compact_menu_pins_delete_with_keyboard_and_accessibility_order() {
     let mut ui = Ui::new(Size::new(600., 1000.)).await;
     let mut app = selected_ring(Point::new(15., 15.));
-    let copy = index(&app, Page::Main, "Copy");
+    let properties = index(&app, Page::Main, "Properties…");
     let delete = index(&app, Page::Main, "Delete");
     let (_, _, panels) = ui.inspect(&app, 0, delete);
     ui.viewport.height = panels[0].height / 2.;
-    let (body, _, _) = ui.row_text_layout(&app, 0, copy);
-    for index in [copy, delete] {
-        let (row, _, panels) = ui.inspect(&app, 0, index);
-        assert!(panels[0].contains(row.position()));
-        assert!(panels[0].contains(Point::new(row.x + row.width, row.y + row.height)));
-        assert!(
-            !body.contains(row.center()),
-            "Footer rows are outside the scroll area"
-        );
-    }
+    let (body, _, _) = ui.row_text_layout(&app, 0, properties);
+    let (row, _, panels) = ui.inspect(&app, 0, delete);
+    assert!(panels[0].contains(row.position()));
+    assert!(panels[0].contains(Point::new(row.x + row.width, row.y + row.height)));
+    assert!(
+        !body.contains(row.center()),
+        "The footer row is outside the scroll area"
+    );
 
     let mut widget = view(&app);
     let node = widget.as_widget_mut().layout(
@@ -689,7 +687,7 @@ async fn compact_menu_pins_copy_and_delete_with_keyboard_and_accessibility_order
         .collect();
     assert_eq!(names.iter().filter(|name| **name == "Copy").count(), 1);
     assert_eq!(names.iter().filter(|name| **name == "Delete").count(), 1);
-    assert_eq!(&names[names.len() - 2..], ["Copy", "Delete"]);
+    assert_eq!(names.last(), Some(&"Delete"));
     drop(widget);
 
     let first = app
@@ -702,7 +700,7 @@ async fn compact_menu_pins_copy_and_delete_with_keyboard_and_accessibility_order
         (Named::End, delete),
         (Named::ArrowDown, first),
         (Named::ArrowUp, delete),
-        (Named::ArrowUp, copy),
+        (Named::ArrowUp, properties),
     ] {
         ui.key(&mut app, key);
         assert_eq!(
@@ -711,7 +709,6 @@ async fn compact_menu_pins_copy_and_delete_with_keyboard_and_accessibility_order
         );
     }
     ui.key(&mut app, Named::Home);
-    let properties = index(&app, Page::Main, "Properties…");
     let (before, _, _) = ui.inspect(&app, 0, properties);
     let (pinned, _, _) = ui.inspect(&app, 0, delete);
     ui.event(
@@ -881,7 +878,7 @@ async fn grabbed_scrollbar_keeps_scrolling_outside_panel_and_releases_there() {
     let original = app.tab.doc.clone();
     let target = index(&app, Page::Main, "Properties…");
     let (_, _, natural_panels) = ui.inspect(&app, 0, target);
-    // Properties is the last scrolling row; Copy and Delete stay in the footer.
+    // Properties is the last scrolling row; Delete stays in the footer.
     let content_height = natural_panels[0].height;
     ui.viewport = Rectangle::with_size(Size::new(600., content_height / 2.));
     let (before, viewport, panels) = ui.inspect(&app, 0, target);

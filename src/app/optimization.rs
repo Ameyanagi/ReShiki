@@ -713,7 +713,7 @@ impl App {
             };
             let task = if session.blocked() {
                 session.phase = Phase::Failed;
-                self.status = "3D preview · Strict checks failed · Choose Relaxed to optimize without valence checks".into();
+                self.status = "3D preview · Strict checks failed · Try Relaxed".into();
                 Task::none()
             } else {
                 self.status = "Generating stereo-preserving 3D · MMFF94s".into();
@@ -726,7 +726,7 @@ impl App {
         }
         if matches!(action, Action::Cancel) {
             self.cancel_optimization();
-            self.status = "3D preview cancelled · Drawing unchanged".into();
+            self.status = "3D preview canceled · Drawing unchanged".into();
             self.error = false;
             return super::focus_drawing();
         }
@@ -848,9 +848,9 @@ impl App {
                 self.changed(before);
                 if !self.error {
                     self.status = if relaxed {
-                        "3D projection applied · Relaxed: chemistry not validated · Undo restores the original drawing"
+                        "3D projection applied · Relaxed: chemistry not validated"
                     } else {
-                        "3D projection applied · Undo restores the original drawing"
+                        "3D projection applied"
                     }
                     .into();
                 }

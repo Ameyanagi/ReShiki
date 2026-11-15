@@ -90,7 +90,7 @@ async fn cancel_drops_the_active_future_and_preserves_the_drawing() {
     assert_eq!(app.tab.revision, revision);
     assert!(!app.tab.busy);
     assert!(app.tab.engine_job.is_none());
-    assert_eq!(app.status, "Operation cancelled");
+    assert_eq!(app.status, "Operation canceled");
 }
 
 #[test]

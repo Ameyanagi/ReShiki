@@ -92,14 +92,13 @@ impl App {
             || self.tab.joining.is_some()
             || self.tab.cleanup.is_some()
         {
-            self.status =
-                "Drawing changed while loading the picture · Replace it again when ready".into();
+            self.status = "Drawing changed while loading · Replace the picture again".into();
             return;
         }
         let picture = match result {
             Ok(Some(picture)) => picture,
             Ok(None) => {
-                self.status = "Picture replacement cancelled".into();
+                self.status = "Picture replacement canceled".into();
                 return;
             }
             Err(error) => {
@@ -142,7 +141,7 @@ impl App {
         self.sync_graphics();
         self.sync_arrows();
         self.sync_bonds();
-        self.status = "Picture replaced · Undo restores the original".into();
+        self.status = "Picture replaced".into();
     }
     pub(super) fn reveal_picture(&mut self, id: u64) {
         if let Some(g) = self
@@ -290,7 +289,7 @@ impl App {
         use iced::Alignment;
         use iced::widget::{checkbox, column, row, text};
         let message = Message::Pictures;
-        let mut panel = column![section("PICTURE")].spacing(9);
+        let mut panel = column![section("Picture")].spacing(9);
         if let Some(g) = self.selected_picture() {
             if let Some(p) = &g.picture {
                 if p.emf().is_some() {

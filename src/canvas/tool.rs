@@ -67,7 +67,7 @@ impl Tool {
             Self::Select => "Double-click selects a molecule · Shift-click adds",
             Self::Lasso => "Draw around objects · Shift adds · Option/Alt drag removes",
             Self::Tilt => "Drag a ring or selection to tilt · Shift snaps to 15°",
-            Self::StretchBond { .. } => "Drag the moving branch along the bond · Escape cancels",
+            Self::StretchBond { .. } => "Drag the moving branch along the bond · Esc cancels",
             Self::Chain(ChainMode::Straight) => {
                 "Drag a regular zigzag toward the pointer · Ctrl bends · Shift flips the start · Option/Alt draws freely"
             }
@@ -95,20 +95,18 @@ impl Tool {
             Self::RingPreset(_) => {
                 "Click to place or attach · Drag rotates in 15° steps · Option/Alt rotates freely or connects by a bond"
             }
-            Self::Template => "Click to place or attach · Drag to orient · Escape cancels",
+            Self::Template => "Click to place or attach · Drag to orient · Esc cancels",
             Self::Arrow => {
                 "Click to place or change an arrow · Click again to switch · Drag to draw"
             }
             Self::Text => {
                 if crate::platform::mac() {
-                    "Click an atom to name it · Double-click or Option-click another atom to repeat the label · Click empty space for a caption · Escape clears the remembered label"
+                    "Click an atom to name it · Double-click or Option-click another atom to repeat the label · Click empty space for a caption · Esc clears the remembered label"
                 } else {
-                    "Click an atom to name it · Double-click or Alt-click another atom to repeat the label · Click empty space for a caption · Escape clears the remembered label"
+                    "Click an atom to name it · Double-click or Alt-click another atom to repeat the label · Click empty space for a caption · Esc clears the remembered label"
                 }
             }
-            Self::Erase => {
-                "Drag to erase atoms, bonds and objects along the stroke · Undo restores the whole stroke"
-            }
+            Self::Erase => "Drag to erase atoms, bonds and objects along the stroke",
             Self::Graphic(GraphicKind::Symbol(_)) => {
                 "Click an atom to attach · Drag from it to orbit in 15° steps · Option/Alt or Shift places freely · Click empty space for a free symbol"
             }
@@ -116,16 +114,16 @@ impl Tool {
                 "Click to place · Drag from the node for size and direction · Shift snaps to 15° · Option/Alt bypasses atom snapping"
             }
             Self::Graphic(GraphicKind::Path) => {
-                "Drag the first segment · Click adds a line · Drag adds a curve · Click the first node to close · Escape cancels"
+                "Drag the first segment · Click adds a line · Drag adds a curve · Click the first node to close · Esc cancels"
             }
             Self::Graphic(GraphicKind::Arc) => {
-                "Drag an ellipse frame · Shift makes it circular · Escape cancels"
+                "Drag an ellipse frame · Shift makes it circular · Esc cancels"
             }
             Self::Graphic(_) => {
-                "Drag to draw · Shift constrains proportions or angle · Escape cancels"
+                "Drag to draw · Shift constrains proportions or angle · Esc cancels"
             }
             Self::EditPoints => {
-                "Drag anchors or control points · Double-click nodes to change type · Option/Alt-drag a handle makes a corner · Click a selected arrow's shaft to add a node · Atom marks orbit in 15° steps; Option/Alt or Shift frees · Escape returns to Select"
+                "Drag anchors or control points · Double-click nodes to change type · Option/Alt-drag a handle makes a corner · Click a selected arrow's shaft to add a node · Atom marks orbit in 15° steps; Option/Alt or Shift frees · Esc returns to Select"
             }
         }
     }

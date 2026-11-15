@@ -525,7 +525,7 @@ impl App {
             ),
             icon_button(
                 Icon::Inspector,
-                "Show or hide inspector",
+                "Show/hide side panel",
                 Some(Message::ToggleInspector),
                 self.inspector_open
             )
@@ -583,7 +583,7 @@ impl App {
             (
                 Tool::Select,
                 if keyboard {
-                    "Select / move · Escape or toolbar"
+                    "Select / move · Esc or toolbar"
                 } else {
                     "Select / move · v"
                 },
@@ -624,7 +624,7 @@ impl App {
             (self.toolbar.symbol, symbols.as_str()),
             (self.toolbar.orbital, orbitals.as_str()),
         ];
-        let mut palette = column![section("TOOLS")]
+        let mut palette = column![section("Tools")]
             .spacing(6)
             .align_x(Alignment::Center);
         for pair in tools.chunks(2) {
@@ -634,7 +634,7 @@ impl App {
             }
             palette = palette.push(line);
         }
-        palette = palette.push(Space::new().height(10)).push(section("ATOMS"));
+        palette = palette.push(Space::new().height(10)).push(section("Atoms"));
         for pair in PALETTE_ELEMENTS.chunks(3) {
             let mut line = row![].spacing(2);
             for &symbol in pair {
@@ -1695,7 +1695,7 @@ impl App {
         use super::template_library::Action as A;
         let action = Message::Templates;
         let state = &self.templates;
-        let mut body = column![section("TEMPLATE LIBRARY")].spacing(8);
+        let mut body = column![section("Template library")].spacing(8);
         body = self.template_browse_controls(body);
         if let Some(error) = &state.notice {
             body = body.push(
@@ -1707,9 +1707,9 @@ impl App {
         if state.editing {
             body = body
                 .push(section(if state.draft.is_some() {
-                    "NEW TEMPLATE"
+                    "New template"
                 } else {
-                    "EDIT TEMPLATE"
+                    "Edit template"
                 }))
                 .push(
                     crate::appearance::text_input("Template name", &state.name)
@@ -1886,7 +1886,7 @@ impl App {
             )
             .push(
                 text(if state.repeat {
-                    "Click again to add another copy. Escape finishes placement."
+                    "Click again to add another copy. Esc finishes placement."
                 } else {
                     "Returns to Select after one placement."
                 })
@@ -1936,9 +1936,7 @@ impl App {
                     entry.0 += 1;
                 }
             }
-            body = body
-                .push(horizontal_line())
-                .push(text("CATEGORIES").size(10).style(muted_text));
+            body = body.push(horizontal_line()).push(section("Categories"));
             for (name, (count, sample)) in categories {
                 let preview: Element<'_, Message> =
                     canvas(crate::canvas::TemplateThumbnail(&sample.document))
@@ -2086,7 +2084,7 @@ impl App {
             ]
             .spacing(6),
             horizontal_line(),
-            text("COMMON GROUP OR RESIDUE").size(11).style(muted_text),
+            section("Common group or residue"),
             crate::appearance::pick_list(choices, Some(self.abbreviations.preset.clone()), move |s| action(A::Preset(s))).width(Length::Fill).text_size(14),
             item(
                 "Find selected label",
@@ -2112,17 +2110,17 @@ impl App {
             ),
             text(if self.tab.selected.is_empty() { "Searches the whole drawing." } else { "Complete groups in the selection only." }).size(11).style(muted_text),
             horizontal_line(),
-            text("NAME A SELECTED FRAGMENT").size(11).style(muted_text),
+            section("Name a selected fragment"),
             fragment_labels,
             item(
-                "Contract selection",
+                "Abbreviate selection",
                 action(A::Contract),
                 !self.tab.selected.is_empty() && !label.is_empty(),
                 "Select a connected fragment whose outside bonds meet at most two selected atoms. A custom name does not change its chemistry.",
                 if self.tab.selected.is_empty() { "Select a connected fragment first" } else { "Enter a label first" },
             ),
             item(
-                "Define abbreviation from selection",
+                "Save as abbreviation",
                 action(A::Define),
                 !self.tab.selected.is_empty() && !label.is_empty(),
                 "Saves the selected group and its one outside bond to your abbreviations, so typing this label on any endpoint creates it.",
@@ -2240,7 +2238,7 @@ impl App {
         }
         let mut body = column![
             command("‹ Properties", Message::Inspector(InspectorTab::Properties)),
-            section("ATOM LABELS"),
+            section("Atom labels"),
             crate::appearance::pick_list(
                 [Scope::Drawing, Scope::Selection],
                 Some(self.tab.labels.scope),
@@ -2278,7 +2276,7 @@ impl App {
                     .size(11)
                     .style(muted_text),
                 horizontal_line(),
-                section("ATOM NUMBERS"),
+                section("Atom numbers"),
                 row![
                     crate::appearance::text_input("1, atom1, a, α…", &self.tab.labels.seed)
                         .on_input(|s| Message::Labels(A::Seed(s)))
@@ -2364,7 +2362,7 @@ impl App {
         use reshiki::atom_labels::AxialDescriptors;
         body = body
             .push(horizontal_line())
-            .push(section("STEREOCHEMISTRY"))
+            .push(section("Stereochemistry"))
             .push(hover_hint(
                 checkbox(stereo)
                     .label("Show stereodescriptors\n(R/S, E/Z…)")
@@ -2402,7 +2400,7 @@ impl App {
             )
             .push(
                 checkbox(self.tab.doc.atom_labels.mark_undefined_stereocentres)
-                    .label("Mark undefined stereocentres")
+                    .label("Mark undefined stereocenters")
                     .text_size(12)
                     .on_toggle_maybe((stereo && self.tab.doc.atom_labels.stereo).then_some(|v| Message::Labels(A::MarkUndefined(v)))),
             )
@@ -2417,7 +2415,7 @@ impl App {
                     .label("Steroid α/β (3β, 5α…)")
                     .text_size(12)
                     .on_toggle_maybe(stereo.then_some(|v| Message::Labels(A::SteroidAlphaBeta(v)))),
-                "α: below the ring plane, β: above it, in standard steroid orientation; other centres keep R/S",
+                "α: below the ring plane, β: above it, in standard steroid orientation; other centers keep R/S",
                 tooltip::Position::Left,
             ))
             .push(
@@ -2504,7 +2502,7 @@ impl App {
     ) -> Element<'a, Message> {
         use super::atom_labels::Action as A;
         body.push(horizontal_line())
-            .push(section("INDICATOR APPEARANCE"))
+            .push(section("Indicator appearance"))
             .push(
                 row![
                     crate::appearance::text_input("Size in pt", &self.tab.labels.size)
@@ -2696,7 +2694,7 @@ impl App {
             status = status.push(text(progress).size(11)).push(hover_hint(
                 accessible_command("engine.cancel", "Cancel chemistry operation", "Cancel")
                     .on_press(Message::CancelEngine(key)),
-                "Cancel this operation · Escape",
+                "Cancel this operation · Esc",
                 tooltip::Position::Top,
             ));
         }
@@ -3245,8 +3243,9 @@ fn icon_button_at(
     )
     .into()
 }
-pub(super) fn section(label: &str) -> iced::widget::Text<'_> {
-    text(label).size(10).style(muted_text)
+/// A small heading. Callers write it in sentence case; it is drawn in capitals.
+pub(super) fn section<'a>(label: &str) -> iced::widget::Text<'a> {
+    text(label.to_uppercase()).size(10).style(muted_text)
 }
 fn ink() -> Color {
     Color::from_rgb8(37, 43, 51)

@@ -123,7 +123,7 @@ impl App {
                     | Message::Updates(updates::Action::Install)
             )
         {
-            self.status = "Finish opening the requested drawings before closing the editor".into();
+            self.status = "Wait for the drawings to open, then close the editor".into();
             return Break(Task::none());
         }
         Continue(message)
@@ -430,9 +430,7 @@ impl App {
             .iter()
             .any(|g| g.members.iter().any(|id| self.tab.selected.contains(id)))
         {
-            self.status =
-                "Expand the selected abbreviation before changing individual atom properties"
-                    .into();
+            self.status = "Expand the abbreviation to change its atoms".into();
             self.error = true;
             return Break(Task::none());
         }

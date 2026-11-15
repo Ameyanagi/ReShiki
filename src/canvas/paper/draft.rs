@@ -28,7 +28,7 @@ impl MoleculeCanvas<'_> {
             *ring_selection = Some(drag.ids.clone());
             let (x, y) = (tilt::wrap(x), tilt::wrap(y));
             *template_notice = Some((
-                format!("3D tilt · X {x:+.0}° · Y {y:+.0}° · Shift snaps · Escape cancels"),
+                format!("3D tilt · X {x:+.0}° · Y {y:+.0}° · Shift snaps · Esc cancels"),
                 true,
             ));
         }

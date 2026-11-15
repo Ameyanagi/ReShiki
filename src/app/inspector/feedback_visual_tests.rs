@@ -228,7 +228,7 @@ async fn feedback_layout_and_visual_evidence() {
                 .any(|(text, _)| text.starts_with("Invalid drawing:"))
         );
     }
-    // The same recalculation as the panel's Check structure button.
+    // The same recalculation as the panel's Recalculate button.
     refresh(&mut generic).await;
     if !baseline {
         assert!(contains(

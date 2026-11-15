@@ -189,7 +189,7 @@ impl App {
         } else {
             self.tab.inline_text = None;
             self.error = false;
-            self.status = "Text edit cancelled".into();
+            self.status = "Text edit canceled".into();
         }
         self.tab.autosaved_revision = None;
         self.tab.autosave.edited_draft();
@@ -247,7 +247,7 @@ impl App {
                 self.tab.fit_to_view = false;
                 self.error = false;
                 self.status = format!(
-                    "Editing text · {} applies · Escape cancels",
+                    "Editing text · {} applies · Esc cancels",
                     super::shortcuts::keys(iced::keyboard::Modifiers::COMMAND, "Enter")
                 );
                 self.sync_style_inputs();

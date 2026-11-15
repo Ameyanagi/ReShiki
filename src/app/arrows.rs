@@ -325,10 +325,10 @@ impl App {
             .count();
         let has_selection = selected_arrows > 0;
         let heading = match (selected_arrows, self.tab.selected.len()) {
-            (0, _) => "ARROW TOOL".into(),
-            (1, 1) => "ARROW PROPERTIES".into(),
-            (1, _) => "ARROW PROPERTIES · 1 arrow".into(),
-            (count, _) => format!("ARROW PROPERTIES · {count} arrows"),
+            (0, _) => "Arrow tool".into(),
+            (1, 1) => "Arrow properties".into(),
+            (1, _) => "Arrow properties · 1 arrow".into(),
+            (count, _) => format!("Arrow properties · {count} arrows"),
         };
         let number = |label: &'static str, field: Field| {
             let value = self
@@ -369,7 +369,7 @@ impl App {
             .align_y(Alignment::Center)
         };
         let mut panel = column![
-            text(heading).size(10).style(muted_text),
+            super::workspace::section(&heading),
             canvas(crate::canvas::ArrowPreview {
                 arrow: self
                     .tab
@@ -527,7 +527,7 @@ impl App {
                 commands = commands.push(
                     row![
                         hover_hint(
-                            accessible_command("arrow.symmetrise", "Symmetrise", "Symmetrise")
+                            accessible_command("arrow.symmetrize", "Symmetrize", "Symmetrize")
                                 .width(Length::Fill)
                                 .on_press(Message::Graphics(super::graphics::Action::Cleanup(
                                     super::graphics::Cleanup::Symmetrise { upright: false },

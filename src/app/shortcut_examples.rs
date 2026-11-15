@@ -43,8 +43,7 @@ impl App {
         self.tab.camera.center = Point::new(STYLE.world(270.), STYLE.world(210.));
         self.tab.camera.zoom = 0.5;
         self.tab.fit_to_view = false;
-        self.status =
-            "Shortcut examples · Pan or zoom to browse; double-click to select, then copy".into();
+        self.status = "Shortcut examples · Double-click to select, then copy".into();
         self.error = false;
         Ok(())
     }

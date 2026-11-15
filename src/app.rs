@@ -125,7 +125,7 @@ pub(crate) use workspace::text_width;
 
 /// The status bar's idle message.
 const READY: &str = "Ready · Choose a tool to start drawing";
-const CELL_REMOVED_NOTICE: &str = "Unit cell removed by the edit · Undo restores it";
+const CELL_REMOVED_NOTICE: &str = "Unit cell removed by the edit";
 
 // App::fit_bounds: screen pixels kept free around the fitted drawing, the
 // smallest usable viewport side (pixels) and the smallest fitted extent (world
@@ -731,7 +731,7 @@ impl App {
                 self.status = match rejection {
                     reshiki::transaction::Rejection::Reactions(error) => error,
                     reshiki::transaction::Rejection::Invalid(error) => {
-                        format!("Edit cancelled: {error}")
+                        format!("Edit canceled: {error}")
                     }
                 };
                 // The rollback removed whatever the edit added and had selected.

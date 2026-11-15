@@ -178,7 +178,7 @@ impl App {
             .width(Length::Fill)
         };
         column![
-            workspace::section("ARC ANGLES"),
+            workspace::section("Arc angles"),
             self.arc_presets(true),
             row![
                 field(

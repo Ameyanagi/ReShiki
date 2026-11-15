@@ -130,7 +130,7 @@ the tab's keyboard drawing preference.
 **Enter** uses the hotspot while keyboard drawing is on: an atom opens its
 label draft, while a bond or empty position opens Properties. It does not
 contract a multi-atom selection. Turn keyboard drawing off with F8 to use
-classic Enter for **Contract selection**, or to edit the label of a fully
+classic Enter for **Abbreviate selection**, or to edit the label of a fully
 selected existing abbreviation.
 
 For a branch, navigate back to the desired atom and press **0**. For closure,
@@ -224,7 +224,7 @@ new carbon so another growth key continues the chain. At an internal carbon,
 **2** adds only oxygen and keeps the hotspot on the existing carbon.
 
 With keyboard drawing off and multiple atoms selected, **Enter** opens
-**Contract selection** so you can name the fragment. A fully selected existing
+**Abbreviate selection** so you can name the fragment. A fully selected existing
 abbreviation opens its label draft instead. With keyboard drawing on, Enter
 uses the active hotspot as described above.
 
@@ -357,17 +357,17 @@ With nothing selected, these keys format the whole label. Chemical abbreviations
 
 ## Arrange and transform a selection
 
-| Keys                     | Action                                         |
-| ------------------------ | ---------------------------------------------- |
-| Alt+Up / Down            | Rotate −15° / +15°                             |
-| Alt+Left / Right         | Rotate −1° / +1°                               |
-| Shift+Alt+Up / Down      | 3D tilt around X by −12° / +12°                |
-| Shift+Alt+Left / Right   | 3D tilt around Y by +12° / −12°                |
-| Cmd/Ctrl+Shift+V / H     | Flip horizontally / vertically                 |
-| Cmd/Ctrl+Shift+Alt+L / R | Align left / right edges                       |
-| Cmd/Ctrl+Shift+Alt+T / B | Align top / bottom edges                       |
-| Cmd/Ctrl+Shift+Alt+C     | Align to the same vertical midpoint (same Y)   |
-| Cmd/Ctrl+Shift+Alt+M     | Align to the same horizontal midpoint (same X) |
-| Cmd/Ctrl+Shift+Alt+H / V | Distribute horizontally / vertically           |
+| Keys                     | Action                               |
+| ------------------------ | ------------------------------------ |
+| Alt+Up / Down            | Rotate −15° / +15°                   |
+| Alt+Left / Right         | Rotate −1° / +1°                     |
+| Shift+Alt+Up / Down      | 3D tilt around X by −12° / +12°      |
+| Shift+Alt+Left / Right   | 3D tilt around Y by +12° / −12°      |
+| Cmd/Ctrl+Shift+V / H     | Flip horizontal / vertical           |
+| Cmd/Ctrl+Shift+Alt+L / R | Align left / right edges             |
+| Cmd/Ctrl+Shift+Alt+T / B | Align top / bottom edges             |
+| Cmd/Ctrl+Shift+Alt+C     | Align middle (same Y)                |
+| Cmd/Ctrl+Shift+Alt+M     | Align center (same X)                |
+| Cmd/Ctrl+Shift+Alt+H / V | Distribute horizontally / vertically |
 
 Tilt changes the drawing projection, not chemical stereochemistry. Aromatic circles and inner curves follow their owning atoms. Select a whole molecule or group to transform it together.

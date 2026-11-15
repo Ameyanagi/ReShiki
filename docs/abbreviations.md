@@ -23,7 +23,7 @@ Properties → Labels & chemistry → Chemical abbreviations provides compact la
 
 - Select one terminal atom and choose a common group such as OMe, Boc, Ph, TBS, TBDPS or OTBDPS, then **Replace selected endpoint**. This changes the chemistry and preserves the outside connecting bond.
 - **Contract common groups** finds supported groups in the selected atoms, or the whole drawing when nothing is selected. A group only claims atoms whose charge, unpaired electrons, isotope and hydrogen count match its definition, so a charged or labelled atom stays visible. When a larger group cannot apply because a smaller group takes its outside atom, the smaller candidates are used instead (MeNHBoc contracts to Boc and Me).
-- Select a connected fragment whose outside bonds meet at most two selected atoms, enter a name and optional reversed label, and choose **Contract selection**. This changes presentation only.
+- Select a connected fragment whose outside bonds meet at most two selected atoms, enter a name and optional reversed label, and choose **Abbreviate selection**. This changes presentation only.
 - **Expand selected** or **Expand all** restores the internal atoms for editing. A collapsed group selects, moves, copies and deletes as a unit. Individual atom-property changes require expansion.
 
 Each action is one Undo step. Native version-10 documents preserve custom names and reversed labels. SVG, PDF and PNG display the abbreviated drawing. Editable binary/XML exchange carries explicit nested chemical fragments; imported labels can expand back to real atoms. Common reversed labels are recognized on import. Custom reversed spellings are native-only.
@@ -171,7 +171,7 @@ finds them.
 3. Open **Properties → Labels & chemistry → Chemical abbreviations**. Under
    **Name a selected fragment**, enter the label and, optionally, the label
    to show when the bond leaves on the right.
-4. Choose **Define abbreviation from selection**.
+4. Choose **Save as abbreviation**.
 
 ReShiki saves the group to your abbreviations file and shows the selection
 collapsed under the new label, in one Undo step. Undo restores the drawing; the

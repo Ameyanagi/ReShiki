@@ -42,9 +42,9 @@ On a multi-segment path, head sizing uses the whole path when an end segment
 is too short.
 
 Select pen paths, Bézier curves or curved arrows and choose **Smooth** or
-**Symmetrise** from the canvas menu or command palette. Both commands apply to
+**Symmetrize** from the canvas menu or command palette. Both commands apply to
 the whole selection in one Undo step. They are also buttons in the
-inspector's Pen path panel (as **Smooth path** and **Symmetrise**) and the
+inspector's Pen path panel (as **Smooth path** and **Symmetrize**) and the
 curved arrow panel.
 
 **Smooth** aligns cubic handles at joints bent less than 20°, following the
@@ -55,9 +55,9 @@ angle and length of a lopsided bow when the end angles differ by less than 20°.
 nodes ([Add nodes to an arrow](arrows.md#add-nodes-to-an-arrow)) it applies
 the path rules to the interior nodes; the ends stay in place.
 
-**Symmetrise** finds the best mirror axis, including tilted axes, and averages
+**Symmetrize** finds the best mirror axis, including tilted axes, and averages
 both sides. Hold Shift when clicking it to use a vertical or horizontal axis;
-the palette also has **Symmetrise upright**. Shapes too far from symmetric are
+the palette also has **Symmetrize upright**. Shapes too far from symmetric are
 left unchanged with a reason in the status bar. Curved arrows, including
 arrows with nodes, use the perpendicular bisector of their endpoints; Shift has
 no effect on them. Arrow

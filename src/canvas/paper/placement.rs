@@ -201,7 +201,7 @@ impl MoleculeCanvas<'_> {
                     *ring_selection = Some(ids);
                     *template_notice = Some((
                         format!(
-                            "{preset} · Drag rotates in 15° steps · Option/Alt rotates freely and connects from an atom · Escape cancels"
+                            "{preset} · Drag rotates in 15° steps · Option/Alt rotates freely and connects from an atom · Esc cancels"
                         ),
                         true,
                     ));
@@ -273,11 +273,10 @@ impl MoleculeCanvas<'_> {
                 Some(Ok((document, ids))) => {
                     *template_notice = Some((
                         if self.joining.is_some() {
-                            "Move & attach preview · Click or release to join · Escape cancels"
-                                .into()
+                            "Move & attach preview · Click or release to join · Esc cancels".into()
                         } else {
                             format!(
-                                "Preview · {} new objects ({} atoms) · Shift/Ctrl drag snaps 15° · Escape cancels",
+                                "Preview · {} new objects ({} atoms) · Shift/Ctrl drag snaps 15° · Esc cancels",
                                 document
                                     .all_ids()
                                     .len()
