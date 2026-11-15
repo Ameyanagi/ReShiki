@@ -591,7 +591,8 @@ impl App {
         &'a self,
         base: Element<'a, Message>,
     ) -> Element<'a, Message> {
-        let toast = self.star.open.then(|| {
+        // Hidden while a GitHub dialog or popover is open; it comes back after.
+        let toast = (self.star.open && !self.github_dialog()).then(|| {
             container(opaque(toast()))
                 .align_right(Length::Fill)
                 .align_bottom(Length::Fill)

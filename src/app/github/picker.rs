@@ -1432,7 +1432,7 @@ impl App {
                             text(meta)
                                 .size(10)
                                 .style(muted_text)
-                                .wrapping(text::Wrapping::None)
+                                .wrapping(text::Wrapping::WordOrGlyph)
                         }))
                         .spacing(4);
                         reshiki::accessibility::button(format!("github-file-{at}"), spoken, content)
