@@ -2,7 +2,7 @@
 
 ReShiki 0.9.0 adds publisher drawing styles, editable light/dark color themes, and consistent aromatic ring fusion. It includes [PR #39](https://github.com/Ameyanagi/ReShiki/pull/39), [PR #40](https://github.com/Ameyanagi/ReShiki/pull/40), [PR #41](https://github.com/Ameyanagi/ReShiki/pull/41), and the documentation in [PR #51](https://github.com/Ameyanagi/ReShiki/pull/51).
 
-**Released September 27, 2026.** [Download 0.9.0](https://github.com/Ameyanagi/ReShiki/releases/tag/v0.9.0) · [Release validation](release-0.9.0-validation.md) · [Previous release](changes-0.8.md)
+**Released September 27, 2026.** [Download 0.9.0](https://github.com/Ameyanagi/ReShiki/releases/tag/v0.9.0) · [Release validation](changes/release-0.9.0-validation.md) · [Previous release](changes-0.8.md)
 
 ## Publisher drawing styles
 
@@ -66,7 +66,7 @@ ReShiki reads native document versions 1–16. Drawings with embedded custom the
 
 Aromatic fusion covers eligible neutral five- and six-membered conjugated regions with bounded planning. General regular-ring placement issues remain tracked in [#43](https://github.com/Ameyanagi/ReShiki/issues/43) and [#44](https://github.com/Ameyanagi/ReShiki/issues/44). Not every shape can be made aromatic without changing its chemistry. Clipboard support and explicit conversions remain documented in the [compatibility table](clipboard.md#changes-made-for-an-external-copy).
 
-Automated checks run on macOS, Windows and Linux; desktop interaction checks were performed on macOS. The [release validation record](release-0.9.0-validation.md) distinguishes source checks, package verification and publication status.
+Automated checks run on macOS, Windows and Linux; desktop interaction checks were performed on macOS. The [release validation record](changes/release-0.9.0-validation.md) distinguishes source checks, package verification and publication status.
 
 ## Contributor credits
 

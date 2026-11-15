@@ -162,6 +162,28 @@ fn objects_counts_each_category_once() {
 }
 
 #[test]
+fn cost_counts_annotation_text_by_its_bytes() {
+    let mut doc: Document = serde_json::from_value(json!({
+        "version": crate::document::VERSION,
+        "atoms": [],
+        "bonds": [],
+        "annotations": [
+            {"id": 1, "position": {"x": 0, "y": 0}, "text": "x"},
+            {"id": 2, "position": {"x": 0, "y": 0}, "text": "y"},
+        ],
+    }))
+    .unwrap();
+    assert_eq!(cost(&doc), 3);
+    // Text can grow without adding an object: two full text boxes weigh as
+    // much as 2,048 objects.
+    for annotation in &mut doc.annotations {
+        annotation.text = "x".repeat(crate::document::MAX_ANNOTATION_TEXT);
+    }
+    assert_eq!(objects(&doc), 2);
+    assert_eq!(cost(&doc), 3 + 2 * 1024);
+}
+
+#[test]
 fn picture_memory_counts_a_shared_picture_once() {
     let shared = picture();
     let size = shared.png().len() as u64;

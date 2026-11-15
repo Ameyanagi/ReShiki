@@ -135,7 +135,7 @@ struct Exported {
 /// exports a drawing.
 ///
 /// - svg, pdf and png: [`publication`](crate::export::publication) with
-///   [`Budgets::export_png_pixels`], as `App::export_figure`
+///   [`Budgets::export_png_pixels`] and [`Budgets::max_output_bytes`], as `App::export_figure`
 ///   (src/app/figure_export.rs) calls it with `FILE_PIXELS`. Its details
 ///   become the warnings in order: the PNG size first, then the notice that
 ///   the drawing was preserved for review. The receipt's detail is the PNG
@@ -144,6 +144,8 @@ struct Exported {
 ///   format set, as `App::export_drawing` (src/app/files.rs) sends it. Its
 ///   warnings become the warnings. No output is [`ErrorKind::Failed`]; the
 ///   app would save an empty file (src/app/engine_jobs.rs `engine_done`).
+///   An empty InChI is [`ErrorKind::Failed`] too: the InChI library gives no
+///   identifier for some drawings, such as one with a wildcard atom.
 ///
 /// Every error is [`ErrorKind::Failed`] with the app's message, except a file
 /// over [`Budgets::max_output_bytes`], which is [`ErrorKind::Budget`].
@@ -165,13 +167,14 @@ pub(crate) async fn export_bytes(
         } else {
             name
         };
-        crate::export::publication(
+        crate::export::publication_within(
             engine,
             doc,
             figure_format,
             pages,
             false,
             budgets.export_png_pixels,
+            budgets.max_output_bytes,
         )
         .await
         .map(|Publication { bytes, details }| {
@@ -189,11 +192,26 @@ pub(crate) async fn export_bytes(
             let output = response
                 .output
                 .ok_or_else(|| format!("The chemistry engine returned no {name} output"))?;
+            if format == Format::Inchi && output.is_empty() {
+                return Err("InChI has no identifier for this drawing".into());
+            }
             Ok((output.into_bytes(), None, response.warnings))
         })
     };
     ctx.checkpoint()?;
-    let (bytes, detail, messages) = made.map_err(OpError::failed)?;
+    let (bytes, detail, messages) = made.map_err(|error| {
+        if error == crate::export::OVER_BYTES {
+            OpError::new(
+                ErrorKind::Budget,
+                format!(
+                    "The {name} file is more than {0} bytes; max_output_bytes allows at most {0}. Use live text or pdf, or reduce the drawing",
+                    budgets.max_output_bytes
+                ),
+            )
+        } else {
+            OpError::failed(error)
+        }
+    })?;
     if bytes.len() > budgets.max_output_bytes {
         return Err(OpError::new(
             ErrorKind::Budget,

@@ -62,6 +62,11 @@ pub enum Error {
     Defaults(String),
 }
 type Result<T> = std::result::Result<T, Error>;
+impl From<super::xml_guard::Refused> for Error {
+    fn from(refused: super::xml_guard::Refused) -> Self {
+        Self::Xml(refused.to_string())
+    }
+}
 
 const BYTE_LIMIT: usize = 16 * 1024 * 1024;
 const NODE_LIMIT: u32 = 400_000;
@@ -73,11 +78,10 @@ fn named(node: Node<'_, '_>, name: &str) -> bool {
 }
 
 fn bounded(document: &Document<'_>) -> Result<()> {
-    if document.input_text().len() > BYTE_LIMIT
-        || super::xml_guard::has_entity_declaration(document.input_text())
-    {
+    if document.input_text().len() > BYTE_LIMIT {
         return Err(Error::Limit);
     }
+    super::xml_guard::check(document.input_text())?;
     let (mut objects, mut properties) = (0usize, 0usize);
     for (index, node) in document.descendants().enumerate() {
         if index >= NODE_LIMIT as usize {
@@ -99,11 +103,12 @@ fn bounded(document: &Document<'_>) -> Result<()> {
 }
 
 /// Parse with the same explicit limits applied to externally supplied Nodes.
-/// External DTD declarations may be present, but entity definitions are rejected.
+/// External DTD declarations may be present, but an internal subset with declarations is refused.
 pub fn parse(text: &str) -> Result<Document<'_>> {
-    if text.len() > BYTE_LIMIT || super::xml_guard::has_entity_declaration(text) {
+    if text.len() > BYTE_LIMIT {
         return Err(Error::Limit);
     }
+    super::xml_guard::check(text)?;
     let document = Document::parse_with_options(
         text,
         roxmltree::ParsingOptions {

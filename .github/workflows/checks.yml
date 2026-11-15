@@ -503,6 +503,11 @@ jobs:
         run: cargo test --locked --features rdkit-reference --test inchi_reader --test depict_geometry --test depict_rings --test depict_attachment --test depict_seeds --test depict_templates --test depict_collision --test depict_expansion --test depict_finalize --no-fail-fast
       - name: Replay complete aromatic response fixtures
         run: cargo test --locked --features rdkit-reference --test native_aromatic complete_aromatic_responses_match_goldens -- --exact
+      # The performance harnesses run in a release test build, which has no
+      # debug assertions; only this step compiles the tests that way.
+      - name: Build the release test executable for the performance harnesses
+        if: runner.os == 'Linux'
+        run: cargo test --release --locked --no-default-features --bin reshiki --no-run
       # macOS runners are the scarcest, so the macOS Python checks and the arm64
       # geometry tests run here and not as jobs of their own. Keep the two steps
       # below the same as the python and geometry jobs.

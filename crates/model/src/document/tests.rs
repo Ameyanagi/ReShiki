@@ -583,3 +583,39 @@ fn custom_crossing_clearance_raises_the_saved_version() {
     assert_eq!(reopened.version, crate::document::MULTI_NODE_ARROWS);
     assert_eq!(reopened.drawing_style.crossing_clearance_pt, 0.4);
 }
+
+#[test]
+fn annotation_text_is_capped_per_text_box_and_per_drawing() {
+    let mut doc = Document::default();
+    let add = |doc: &mut Document, bytes: usize| {
+        let id = doc.next_id();
+        doc.annotations.push(Annotation {
+            id,
+            position: Point::default(),
+            text: "x".repeat(bytes),
+            format: Default::default(),
+        });
+    };
+    add(&mut doc, MAX_ANNOTATION_TEXT);
+    assert_eq!(doc.validate(), Ok(()));
+    doc.annotations[0].text.push('x');
+    assert_eq!(
+        doc.validate().unwrap_err(),
+        "A text box can hold at most 64 KB of text"
+    );
+    let json = serde_json::to_vec(&doc).unwrap();
+    assert_eq!(
+        Document::from_json(&json).unwrap_err(),
+        "A text box can hold at most 64 KB of text"
+    );
+    doc.annotations[0].text.pop();
+    for _ in 1..MAX_DRAWING_TEXT / MAX_ANNOTATION_TEXT {
+        add(&mut doc, MAX_ANNOTATION_TEXT);
+    }
+    assert_eq!(doc.validate(), Ok(()));
+    add(&mut doc, 1);
+    assert_eq!(
+        doc.validate().unwrap_err(),
+        "A drawing can hold at most 1 MB of text"
+    );
+}

@@ -788,6 +788,171 @@ fn selected_cleanup_keeps_two_fixed_atoms_at_their_original_angle() -> anyhow::R
     Ok(())
 }
 
+/// Issue #1181: the solver can close a ring on the wrong side of the two
+/// fixed atoms that hold it, on top of other fixed atoms.
+#[test]
+fn selected_cleanup_reflects_atoms_folded_onto_fixed_atoms() -> anyhow::Result<()> {
+    let hexagon: Vec<_> = (0..6)
+        .map(|i| (f64::from(i) * PI / 3.).sin_cos())
+        .map(|(sin, cos)| (1.5 * cos, 1.5 * sin))
+        .collect();
+    let source = drawing_at("c1ccccc1", &hexagon)?;
+    let selected = [source.atoms[0].id, source.atoms[1].id];
+    let cleaned = prepare(
+        &source,
+        Options {
+            scope: Scope::SelectedAtoms,
+            ..Default::default()
+        },
+        &selected,
+    )?
+    .finish_with(|request| {
+        // Atoms 0 and 1 hang on fixed atoms 5 and 2; fold them onto 4 and 3.
+        let mut points = request.molecule.positions.clone();
+        points[0] = points[4];
+        points[1] = points[3];
+        Ok::<_, Error>(points)
+    })?;
+    assert!(cleaned.warnings.is_empty(), "{:?}", cleaned.warnings);
+    for (before, after) in source.atoms.iter().zip(&cleaned.document.atoms) {
+        assert!(
+            before.position.distance(after.position) < 1e-3,
+            "atom {} moved from {:?} to {:?}",
+            before.id,
+            before.position,
+            after.position
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn selected_cleanup_leaves_atoms_it_cannot_unfold_with_a_warning() -> anyhow::Result<()> {
+    let source = drawing(PROPYLBENZENE)?;
+    // The methyl carbon hangs on one fixed atom, so no reflection is defined.
+    let cleaned = prepare(
+        &source,
+        Options {
+            scope: Scope::SelectedAtoms,
+            ..Default::default()
+        },
+        &[source.atoms[0].id],
+    )?
+    .finish_with(|request| {
+        let mut points = request.molecule.positions.clone();
+        points[0] = points[2];
+        Ok::<_, Error>(points)
+    })?;
+    assert_eq!(cleaned.document.atoms, source.atoms);
+    assert_eq!(cleaned.document.bonds, source.bonds);
+    assert_eq!(
+        cleaned.warnings,
+        [
+            "Selected atoms in 1 molecule(s) kept unchanged: cleaned up, they would lie on other atoms. Choose Selected molecules."
+        ]
+    );
+    Ok(())
+}
+
+/// Issue #1181: a group turned back to its free side can land on selected
+/// atoms outside the group, which are not fixed.
+#[test]
+fn selected_cleanup_never_reflects_atoms_onto_other_selected_atoms() -> anyhow::Result<()> {
+    let mut points = vec![(3., 0.)];
+    points.extend(
+        (0..6)
+            .map(|i| (f64::from(i) * PI / 3.).sin_cos())
+            .map(|(sin, cos)| (1.5 * cos, 1.5 * sin)),
+    );
+    let source = drawing_at("Cc1ccccc1", &points)?;
+    let selected = [0, 2, 3].map(|index| source.atoms[index].id);
+    let cleaned = prepare(
+        &source,
+        Options {
+            scope: Scope::SelectedAtoms,
+            ..Default::default()
+        },
+        &selected,
+    )?
+    .finish_with(|request| {
+        // Atoms 2 and 3 hang on fixed atoms 1 and 4; fold them onto 6 and 5.
+        // The methyl carbon sits where the reflection puts atom 2 back.
+        let mut points = request.molecule.positions.clone();
+        points[0] = points[2];
+        points[2] = points[6];
+        points[3] = points[5];
+        Ok::<_, Error>(points)
+    })?;
+    assert_eq!(cleaned.document.atoms, source.atoms);
+    assert_eq!(cleaned.document.bonds, source.bonds);
+    assert_eq!(
+        cleaned.warnings,
+        [
+            "Selected atoms in 1 molecule(s) kept unchanged: cleaned up, they would lie on other atoms. Choose Selected molecules."
+        ]
+    );
+    Ok(())
+}
+
+/// A finite but huge coordinate fills the integer grid cell; its neighbour
+/// lookup must not overflow.
+#[test]
+fn unfold_accepts_huge_coordinates() -> anyhow::Result<()> {
+    let source = drawing(PROPYLBENZENE)?;
+    for selection in [vec![], vec![source.atoms[0].id]] {
+        let scope = if selection.is_empty() {
+            Scope::Drawing
+        } else {
+            Scope::SelectedAtoms
+        };
+        let prepared = prepare(
+            &source,
+            Options {
+                scope,
+                ..Default::default()
+            },
+            &selection,
+        )?;
+        let part = &prepared.parts[0];
+        let huge = Point3 {
+            x: 1e20,
+            y: 1e20,
+            z: 0.,
+        };
+        let mut layout = vec![huge; source.atoms.len()];
+        unfold(&part.molecule, &mut layout, &part.fixed, 1.)?;
+    }
+    Ok(())
+}
+
+/// Stacked ineligible atoms must not make proximity searches quadratic.
+#[test]
+fn near_skips_ineligible_sources() -> anyhow::Result<()> {
+    let layout = vec![
+        Point3 {
+            x: 0.,
+            y: 0.,
+            z: 0.,
+        };
+        2_000
+    ];
+    let calls = std::cell::Cell::new(0);
+    let counts = |_, other| {
+        calls.set(calls.get() + 1);
+        other == layout.len() - 1
+    };
+    let flags = near(&layout, 0.5, 0.1, &|_| false, &counts);
+    assert_eq!(calls.get(), 0);
+    assert_eq!(flags, vec![false; layout.len()]);
+
+    let flags = near(&layout, 0.5, 0.1, &|index| index == 0, &counts);
+    assert!(calls.get() <= layout.len());
+    let mut expected = vec![false; layout.len()];
+    expected[0] = true;
+    assert_eq!(flags, expected);
+    Ok(())
+}
+
 /// Issue #1121: the solver's layout can be the mirror image of the drawing.
 #[test]
 fn cleanup_with_keep_orientation_keeps_the_handedness_of_the_drawing() -> anyhow::Result<()> {

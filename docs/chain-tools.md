@@ -1,49 +1,71 @@
 # Chain drawing and bond constraints
 
-Added 2026-09-20. **JACS / ACS remains the default**: Arial 10 pt, black drawing color, 14.4 pt bonds and 0.6 pt lines. Straight and snaking chain tools share the same document, chemistry and export pipeline as individually drawn bonds.
+Straight and snaking chain tools share the document, chemistry and export
+pipeline with individually drawn bonds. This page covers how they behave; the
+[first-molecule guide](https://reshiki.com/guide/first-molecule/#add-a-ring-or-chain)
+shows how to draw them.
 
-## Drawing workflow
+## Gestures
 
-- Choose **Straight chain** (uppercase `X`) and drag to grow a zigzag. The preview counts new carbon atoms and bonds. Set **Atoms** for an exact size, or clear it to **Auto** so drag distance controls size. Counts include existing attachment endpoints. Clicking places the chosen size; Auto click places six atoms.
-- Choose **Snaking chain** from the toolbar to steer while dragging, or hold Ctrl during a straight-chain drag to begin bending. Retrace an earlier vertex to remove the tail. The **Max atoms** field caps a snaking gesture; it does not force a short drag to create the full maximum.
-- Start on an atom to extend its molecule. Ending near another atom reuses that atom when it is close to the final generated point. Starting and ending attachment atoms retain their IDs and elements. A click at an existing chain end continues the zigzag along its existing direction.
-- Shift changes the starting zigzag side. For a straight chain it changes the whole preview; for a snaking chain it sets the first turn. Overlapping an intermediate atom shows a red preview and leaves the document unchanged on release.
-- Escape, losing window focus, or releasing outside the canvas cancels. Retracing a drag all the way to its start also cancels. The entire chain is one history edit; Undo/Redo removes/restores all its new atoms and bonds together.
+- A straight chain is one zigzag whose size follows the drag, or the **Atoms**
+  count when one is set. A click with **Auto** places six atoms. Counts include
+  existing attachment endpoints.
+- A snaking chain follows pointer events at the preferred step size. Retracing
+  an earlier vertex removes the tail; retracing to the start cancels.
+  **Max atoms** caps the gesture and does not force a short drag to the full
+  count. Ctrl during a straight-chain drag switches it to snaking.
+- Starting on an atom extends its molecule. The final point reuses an existing
+  atom only when that atom is close to it. Attachment atoms keep their IDs and
+  elements. A click at a chain end continues the zigzag in its current
+  direction.
+- Overlapping an intermediate atom marks the preview red, and release leaves the
+  document unchanged. Escape, focus loss and release outside the canvas also
+  cancel.
+- The whole chain is one history edit, so Undo and Redo remove or restore all its
+  new atoms and bonds together.
 
-The straight-chain toolbar icon uses a four-carbon zigzag with conventional 120° bends. The snaking icon adds a steering arrow above that zigzag; it describes pointer steering and retracing, rather than a cis/trans conformation. Hover either tool for its interaction description.
+The straight-chain icon is a four-carbon zigzag with 120° bends. The snaking
+icon adds a steering arrow, which stands for pointer steering and retracing, not
+a cis/trans conformation.
 
 ## Constraints and defaults
 
-The contextual controls independently enable **Length** and **Angles**. Bond direction snapping uses 15° increments; chain interiors default to 120°. Hold Alt to temporarily release both constraints. Existing-atom attachment takes precedence over nominal bond length at the attachment itself.
+**Length** and **Angles** are independent. Bond direction snaps in 15°
+increments and chain interiors default to 120°. Alt releases both constraints
+for the current gesture. At an existing attachment atom, the atom's position
+takes precedence over the nominal bond length.
 
-The length field accepts publication points, from 1 to 300 pt. The chain angle accepts 1–179°. Straight chains can change length continuously when Length is off; with both constraints off their final endpoint follows the pointer. Snaking chains grow toward pointer events at the preferred step size and can use a shorter final step with Length off. Very acute angles or crowded geometry can produce overlaps that need another direction or a larger bond length.
+Length accepts 1 to 300 pt and the chain angle 1 to 179°. With Length off, a
+straight chain changes length continuously and a snaking chain can end with a
+shorter step; with both constraints off, a straight chain's endpoint follows the
+pointer. Very acute angles or crowded geometry can overlap; choose another
+direction or a longer bond.
 
-The **JACS / ACS** control restores 14.4 pt length, 120° chain angle and both constraints. It changes tool settings, not the existing drawing. Startup and **every new document** restore JACS/ACS drawing and typography defaults, including after another document used custom settings. Tool preferences are session state, not document-wide style definitions; saved object geometry and formatting persist. Cleanup still uses the shared JACS/ACS preset.
+**Reset bonds** restores the document's bond length, a 120° chain angle and both
+constraints. It changes tool settings, not the drawing. Each new document starts
+from the JACS / ACS drawing and text defaults, even after another document used
+custom ones. Tool settings are session state; saved geometry and formatting stay
+with each object.
 
 ## Grouped molecules
 
-New atoms remain in the groups of a molecule they extend. Joining separately grouped molecules unites overlapping groups while retaining their captions and integral-group status. Properly nested groups remain nested where possible. This also applies to ordinary bond edits and template growth through the common editing path. Native and CDXML tests cover joining two grouped, captioned fragments without splitting the resulting molecule across group boundaries.
+New atoms join the groups of the molecule they extend. Joining separately
+grouped molecules merges the overlapping groups and keeps their captions and
+integral status. Properly nested groups stay nested where possible. Ordinary
+bond edits and template growth use the same editing path. Native and CDXML
+tests join two grouped, captioned fragments without splitting the result across
+group boundaries.
 
-## Reference and verification
+## Limits
 
-Desktop checks exercised fixed constraints, free drawing, exact-count insertion and multi-segment snaking. An interchange fixture contains 16-, 6- and 20-carbon chains with a 14.40 pt bond length and coordinate rounding below 0.01 pt.
+- Chains create carbon atoms joined by single bonds. Changing elements or bond
+  orders and running Check are separate steps. Geometry checks do not validate
+  valence.
+- A gesture creates at most 512 chain atoms. Drawing does not auto-pan the
+  view, route around obstacles or shorten a chain at an interior collision.
+- Chain angle and length are tool settings, not a document style editor. They do
+  not restyle existing molecules, rings or imported documents.
 
-ReShiki desktop verification:
-
-1. Drew a chain in one drag; Check returned `C6H14`, six atoms and five bonds. Reading the saved native file confirmed each bond is 42 world units, or 14.4 pt.
-2. Reopened it, set Atoms to four and clicked an endpoint. The original endpoint was reused and the result was a continuous nine-carbon chain, `C9H20`.
-3. Changed the preferred length to 20 pt, then used the JACS/ACS reset. The field returned to 14.4 without modifying existing objects.
-4. Drew a snaking path with multiple pointer segments and captured the live **10 new C · 9 bonds** preview. Release produced those exact counts. One Undo removed the whole chain and Redo restored it.
-5. Checked, fitted and saved the combined two-component drawing: `C19H42`, 19 atoms and 17 bonds, all with 14.4 pt lengths.
-6. In the packaged app, selected Times New Roman, 18 pt, bold, red text and 20 pt bonds, then created a new document from the focused length field. The controls returned to Arial, 10 pt, normal black text and 14.4 pt bonds; the `X` drawing shortcut worked immediately afterward. Open, Save and Save As were also exercised from that field without inserting their command letters into its value. The file shortcuts are handled before widget text input.
-
-Current validation: **83 Rust tests and 23 Python tests**, plus formatting and Clippy. New tests cover independent constraints, exact sizes up to 512 atoms, variable length, snaking and retracing, fast pointer events, preview/commit identity, native/MOL/CDXML persistence, group growth, Undo/Redo and JACS defaults after New. Local desktop evidence is under ignored `artifacts/chain-qa-20260920/`.
-
-## Remaining limits
-
-- Chains create carbon atoms connected by ordinary single bonds. Element replacement, bond-order editing and Check remain separate operations. Geometry checks do not replace full valence validation.
-- A gesture is limited to 512 chain atoms. There is no viewport auto-pan while drawing, global routing around obstacles, or automatic shortening of a chain at an interior collision.
-- Chain angle and length controls do not yet constitute a complete document style/stationery editor. They do not restyle existing molecules, rings or imported documents.
-- ReShiki labels whether a count is exact or a cap and explicitly includes attachment atoms.
-
-The [full gap audit](feature-status.md) tracks the remaining template, chemistry, layout and application workflows.
+The original 2026-09-20 desktop and test checks are in
+[the chain tools record](changes/chain-tools-20260920.md). The
+[feature status](feature-status.md) page tracks the remaining gaps.
