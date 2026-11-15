@@ -60,7 +60,7 @@ impl App {
         }
         let verb = match command {
             Cleanup::Smooth => "Smoothed",
-            Cleanup::Symmetrise { .. } => "Symmetrised",
+            Cleanup::Symmetrise { .. } => "Symmetrized",
         };
         let status = if changed > 0 {
             format!(

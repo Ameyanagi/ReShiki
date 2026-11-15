@@ -290,7 +290,7 @@ async fn drawing_polish_renderer_palette() {
             Some(&directory().join(format!("palette-{}.png", size.width))),
         );
         if !baseline() && size.width == 1600. {
-            for symbol in ["H", "C", "N", "O", "S", "P", "F", "Cl", "Br", "Fe", "*"] {
+            for symbol in ["H", "C", "N", "O", "S", "P", "F", "Cl", "Br", "*", "R"] {
                 ui.activate(&mut app, &format!("element-{symbol}"));
                 assert_eq!(app.element, symbol);
             }
@@ -508,7 +508,7 @@ async fn drawing_polish_renderer_structure_input() {
 
 #[tokio::test]
 #[ignore = "Prepare the real import → cleanup fixture for rotation-overlay QA"]
-async fn prepare_rotation_polish_fixture() -> Result<(), String> {
+async fn manual_prepare_rotation_polish_fixture() -> Result<(), String> {
     use reshiki::engine::ChemistryEngine;
     let engine = LocalEngine::default();
     let imported = engine

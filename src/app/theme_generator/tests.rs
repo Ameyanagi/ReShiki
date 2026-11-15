@@ -300,7 +300,7 @@ fn stale_and_invalid_drafts_cannot_apply_and_tables_cover_every_element() {
 }
 #[tokio::test]
 #[ignore = "Manual theme workbench snapshots in a temporary directory"]
-async fn theme_generator_headless_snapshot() {
+async fn manual_theme_generator_headless_snapshot() {
     use iced::advanced::{layout, mouse, renderer::Headless, widget::Tree};
     let (mut app, _) = App::new();
     app.tab.busy = false;

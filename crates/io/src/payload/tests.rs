@@ -226,14 +226,25 @@ fn png_payload_has_standard_itxt_and_valid_crcs_and_decodes_pixels() {
         kinds.push(kind.to_vec());
         remaining = &remaining[12 + length..];
     }
-    assert_eq!(kinds[0], b"IHDR");
-    assert_eq!(kinds[1], b"iTXt");
+    // After the pixels, so readers that stop at the image data skip it.
+    assert_eq!(kinds, [&b"IHDR"[..], b"IDAT", b"iTXt", b"IEND"]);
     let decoder = png::Decoder::new(std::io::Cursor::new(&bytes));
     let mut reader = decoder.read_info().unwrap();
     let mut pixels = vec![0; reader.output_buffer_size()];
     let info = reader.next_frame(&mut pixels).unwrap();
     assert_eq!(&pixels[..info.buffer_size()], &[12, 34, 56, 255]);
     assert_eq!(read(&bytes).unwrap().unwrap(), doc);
+}
+
+#[test]
+fn png_payload_right_after_ihdr_from_older_versions_still_reads() {
+    let doc = drawing();
+    let mut data = KEYWORD.to_vec();
+    data.extend_from_slice(&[0; 5]);
+    data.extend_from_slice(STANDARD.encode(encode(&doc).unwrap()).as_bytes());
+    let old = insert_chunk(png(), b"iTXt", &data);
+    assert_eq!(&old[37..41], b"iTXt");
+    assert_eq!(read(&old).unwrap().unwrap(), doc);
 }
 
 #[test]
@@ -253,8 +264,9 @@ fn png_without_payload_is_absent_and_stops_at_iend() {
 #[test]
 fn damaged_present_payload_is_an_error() {
     let bytes = embed("png", png(), &encode(&drawing()).unwrap()).unwrap();
+    let chunk = find(&bytes, b"iTXt").unwrap() - 4;
     let mut bad_crc = bytes.clone();
-    bad_crc[33 + 8 + KEYWORD.len() + 5] ^= 1;
+    bad_crc[chunk + 8 + KEYWORD.len() + 5] ^= 1;
     assert!(read(&bad_crc).unwrap().is_err());
     let text = b"dev.reshiki.drawing\0\0\0\0\0!";
     assert!(
@@ -266,7 +278,7 @@ fn damaged_present_payload_is_an_error() {
     let mut text = b"dev.reshiki.drawing\0\0\0\0\0".to_vec();
     text.extend_from_slice(STANDARD.encode(b"broken envelope").as_bytes());
     assert!(read(&insert_chunk(png(), b"iTXt", &text)).unwrap().is_err());
-    let end = 33 + 8 + KEYWORD.len() + 5;
+    let end = chunk + 8 + KEYWORD.len() + 5;
     assert!(
         read(&bytes[..end])
             .unwrap()
@@ -286,7 +298,9 @@ fn embed_rejects_other_formats_and_invalid_png_headers() {
     assert!(embed("pdf", png(), &[]).is_err());
     assert!(embed("png", vec![], &[]).is_err());
     assert!(embed("png", png()[..32].to_vec(), &[]).is_err());
-    assert!(embed("svg", png(), &[]).is_err());
+    let png = png();
+    assert!(embed("png", png[..png.len() - 1].to_vec(), &[]).is_err());
+    assert!(embed("svg", png, &[]).is_err());
     assert!(embed("svg", b"<html/>".to_vec(), &[]).is_err());
 }
 

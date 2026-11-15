@@ -128,7 +128,7 @@ fn undefined_note_selects_double_bond_endpoints_and_atom_centres() {
         .find(|note| note.kind == Kind::Undefined)
         .unwrap();
     assert_eq!(note.atoms, vec![1]);
-    assert!(app.status.contains("1 undefined stereocentre"));
+    assert!(app.status.contains("1 undefined stereocenter"));
     assert_eq!(app.tab.selected, vec![1]);
     // Selection includes both ends, even when a notice has no atom entries.
     app.tab.stereo_notes = vec![Note {
@@ -247,7 +247,7 @@ fn redraw_is_undoable_and_reports_processed_centres() {
         .collect();
     app.stereo_action(Action::Redraw);
     assert!(!app.error, "{}", app.status);
-    assert_eq!(app.status, "Redrew stereo bonds at 1 stereocentre");
+    assert_eq!(app.status, "Redrew stereo bonds at 1 stereocenter");
     assert!(
         app.tab
             .doc
@@ -284,7 +284,7 @@ fn redraw_is_undoable_and_reports_processed_centres() {
     assert_eq!(app.tab.doc, original);
     let mut achiral = fixture_app(Document::default());
     achiral.stereo_action(Action::Redraw);
-    assert_eq!(achiral.status, "No stereocentres to redraw");
+    assert_eq!(achiral.status, "No stereocenters to redraw");
 }
 
 #[test]

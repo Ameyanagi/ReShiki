@@ -30,7 +30,7 @@ fn open(doc: Document) -> App {
 
 #[test]
 #[ignore = "release-mode inspector and undo benchmark"]
-fn select_all_workloads() {
+fn manual_select_all_workloads() {
     println!("workload,median_ms,p95_ms");
     for copies in [1, 4, 16] {
         let mut app = open(gallery(copies));
@@ -62,7 +62,7 @@ fn select_all_workloads() {
 
 #[tokio::test]
 #[ignore = "release-mode template panel benchmark; requires a headless renderer"]
-async fn template_panel_workloads() {
+async fn manual_template_panel_workloads() {
     let mut app = open(gallery(1));
     let mut ui = Ui {
         renderer: <iced::Renderer as Headless>::new(
@@ -146,7 +146,7 @@ fn modeled(atoms: usize, kind: &str) -> Document {
 /// of that size without a model.
 #[test]
 #[ignore = "release-mode stored-model select-all benchmark"]
-fn model_select_all_workloads() {
+fn manual_model_select_all_workloads() {
     println!("workload,median_ms,p95_ms");
     for kind in ["plain", "model", "crystal"] {
         for atoms in [250, 1000, 4000] {
@@ -181,7 +181,7 @@ fn resident_mb() -> f64 {
 /// Run alone: the counters are process-wide.
 #[test]
 #[ignore = "release-mode undo history memory measurement"]
-fn history_memory() {
+fn manual_history_memory() {
     use crate::allocation_metrics::{reset, snapshot};
     const MB: f64 = (1 << 20) as f64;
     // What one copy of the drawing costs, and which part an edit changes.

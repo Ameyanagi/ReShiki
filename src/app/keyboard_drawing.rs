@@ -21,7 +21,7 @@ pub enum Action {
 
 /// Entering a drawing mode explicitly hands Enter/Space ownership back from
 /// its opener button or an inspector field to the application's key router.
-struct ReleaseFocus;
+pub(super) struct ReleaseFocus;
 impl<T: 'static> Operation<T> for ReleaseFocus {
     fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation<T>)) {
         operate(self);
@@ -142,6 +142,7 @@ impl App {
 
     fn keyboard_drawing_blocked(&self) -> bool {
         self.help_open
+            || self.settings.open
             || self.commands.open
             || self.updates.open
             || self.assistant.viewed_image.is_some()
@@ -205,7 +206,7 @@ impl App {
                 if let Target::Atom(id) = self.tab.keyboard_drawing.target() {
                     self.tab.keyboard_drawing.mark(id);
                     self.status =
-                        format!("Marked atom {id} · Navigate to another atom, then ] to connect");
+                        format!("Marked atom {id} · Go to another atom, then ] to connect");
                     self.error = false;
                 } else {
                     self.status = "Navigate to an atom, then [ to mark it".into();
@@ -233,16 +234,14 @@ impl App {
                                 (outcome.into_document(&self.tab.doc), status)
                             })
                         } else {
-                            connect_atoms(&self.tab.doc, a, b).map(|doc| {
-                                (doc, "Connected marked atom · Undo restores the open chain")
-                            })
+                            connect_atoms(&self.tab.doc, a, b)
+                                .map(|doc| (doc, "Marked atom connected"))
                         }
                     });
                 // commit_hotkey ignores the success status when an edit failed.
-                let status = result.as_ref().map_or(
-                    "Connected marked atom · Undo restores the open chain",
-                    |(_, status)| *status,
-                );
+                let status = result
+                    .as_ref()
+                    .map_or("Marked atom connected", |(_, status)| *status);
                 if self.commit_hotkey(result.map(|(doc, _)| (doc, target.atoms())), status) {
                     self.tab.keyboard_drawing.clear_mark();
                     self.tab.keyboard_drawing.set_target(target, &self.tab.doc);

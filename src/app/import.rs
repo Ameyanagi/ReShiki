@@ -605,10 +605,7 @@ impl App {
         self.sync_arrows();
         self.sync_bonds();
         self.reveal_inserted();
-        self.status = format!(
-            "Inserted {} · Drag to position · Delete or Undo to remove",
-            batch.label
-        );
+        self.status = format!("Inserted {} · Drag to position", batch.label);
         for warning in batch.warnings {
             self.status.push_str(" · ");
             self.status.push_str(&warning);

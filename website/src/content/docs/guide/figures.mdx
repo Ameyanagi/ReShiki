@@ -25,7 +25,7 @@ Styles and themes are separate files. A theme can use RGB or OKLCH colors and in
 
 To highlight part of a structure, select its atoms or bonds, then choose **Color → Apply to → Highlights** and a **Tint** color. The color stays behind the atom labels and bonds after deselection. Use the crossed-out **Clear highlights** swatch to remove it. Moving, copying and Undo preserve the highlights; ordinary ink colors remain separately editable. Coloring a contracted label keeps existing internal highlight colors and colors its unhighlighted members.
 
-File exports and printing include the visible canvas colors and background. Clipboard images and editable ChemDraw copies use a **transparent background** while retaining the visible ink, ring fills and highlights. White ink copied from a dark canvas needs a suitably dark destination. Older files remain readable. Files saved by a newer build may not open in an older one; see [file compatibility](/guide/install/#file-compatibility). [Style, color and contrast details](/developer/drawing-styles/).
+File exports and printing include the visible canvas colors and background by default. Clipboard images and editable ChemDraw copies use a **transparent background** while retaining the visible ink, ring fills and highlights. **Settings → Copy & export** sets another background for copied pictures or exported files, such as white for a journal. See [Background](/developer/figure-export/#background). White ink copied from a dark canvas needs a suitably dark destination. Older files remain readable. Files saved by a newer build may not open in an older one; see [file compatibility](/guide/install/#file-compatibility). [Style, color and contrast details](/developer/drawing-styles/).
 
 ## Add artwork
 
@@ -75,13 +75,13 @@ To reshape a path, select it and choose **Edit curve points** in **Properties**.
 
 ## Align objects
 
-Select two or more molecules, arrows, or groups. Right-click the selection and choose **Align middles** to put them on the same horizontal centerline. **Align & distribute…** offers the other edges, centers, and spacing options, as do the **Align** and **Distribute** menus at the right end of the context row. Molecules and groups move together, preserving their internal layout. Undo restores the previous positions.
+Select two or more molecules, arrows, or groups. Right-click the selection and choose **Arrange & transform → Align middle** to put them on the same horizontal centerline. The same submenu offers the other edges, centers, and spacing options, as do the **Align** and **Distribute** menus at the right end of the context row. Molecules and groups move together, preserving their internal layout. Undo restores the previous positions.
 
 Right-click an atom, bond, arrow, or selected object for editing commands and its relevant properties. Commands with a keyboard shortcut show it at the right of the menu. Right-click within an existing selection to keep all its objects selected. **Escape** or a click outside closes the menu. Use the middle mouse button to pan.
 
 <Screenshot
   src="/manual/context-menu.webp"
-  alt="A selection context menu with Align middles, grouping, bond and arrow commands."
+  alt="A selection context menu with Align middle, grouping, bond and arrow commands."
 />
 
 <Screenshot

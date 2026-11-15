@@ -369,6 +369,8 @@ async fn figures_are_the_publication_export() {
             },
             false,
             false,
+            crate::export::Background::Canvas,
+            crate::style::DEFAULT.png_dpi,
             Budgets::default().export_png_pixels,
         )
         .await

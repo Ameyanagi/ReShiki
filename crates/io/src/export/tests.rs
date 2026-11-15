@@ -26,15 +26,26 @@ async fn editable_png_contains_the_prepared_drawing_and_preserves_pixels() -> an
         "png",
         false,
         false,
+        Background::Canvas,
+        crate::style::DEFAULT.png_dpi,
         export::FILE_PIXELS,
     )
     .await
     .map_err(anyhow::Error::msg)?;
     assert!(crate::payload::read(&plain.bytes).is_none());
     assert_eq!(plain.details.len(), 1);
-    let editable = export::publication(&engine, doc, "png", false, true, export::FILE_PIXELS)
-        .await
-        .map_err(anyhow::Error::msg)?;
+    let editable = export::publication(
+        &engine,
+        doc,
+        "png",
+        false,
+        true,
+        Background::Canvas,
+        crate::style::DEFAULT.png_dpi,
+        export::FILE_PIXELS,
+    )
+    .await
+    .map_err(anyhow::Error::msg)?;
     let embedded = crate::payload::read(&editable.bytes)
         .context("embedded drawing")?
         .map_err(anyhow::Error::msg)?;
@@ -89,6 +100,8 @@ async fn editable_png_preserves_custom_colors_from_older_dark_snapshots() {
             "png",
             false,
             true,
+            Background::Canvas,
+            crate::style::DEFAULT.png_dpi,
             FILE_PIXELS,
         )
         .await
@@ -144,6 +157,8 @@ async fn editable_figure_export_skips_a_drawing_over_the_embed_limit() {
             format,
             false,
             true,
+            Background::Canvas,
+            crate::style::DEFAULT.png_dpi,
             FILE_PIXELS,
         )
         .await
@@ -282,35 +297,35 @@ fn raster_budget_rejects_invalid_and_extreme_sizes_without_allocating() {
         (10., f32::INFINITY),
         (f32::MAX, f32::MAX),
     ] {
-        assert!(png_dimensions(width, height, RasterBudget::FILE).is_err());
+        assert!(png_dimensions(width, height, RasterBudget::file(1200, FILE_PIXELS)).is_err());
     }
     assert_eq!(
-        png_dimensions(100., 100., RasterBudget::FILE),
+        png_dimensions(100., 100., RasterBudget::file(1200, FILE_PIXELS)),
         Ok((1250, 1250, 1200))
     );
     assert_eq!(
-        png_dimensions(800., 800., RasterBudget::FILE),
+        png_dimensions(800., 800., RasterBudget::file(1200, FILE_PIXELS)),
         Ok((5000, 5000, 600))
     );
-    assert!(png_dimensions(800., 800., RasterBudget::clipboard(false)).is_err());
+    assert!(png_dimensions(800., 800., RasterBudget::clipboard(false, 1200)).is_err());
 }
 
 #[test]
 fn png_sides_are_capped_whatever_the_pixel_count() {
     // One long line: 2.6 million pixels at 72 dpi, but 43,688 of them wide.
     assert_eq!(
-        png_dimensions(58_250., 80., RasterBudget::FILE)
+        png_dimensions(58_250., 80., RasterBudget::file(1200, FILE_PIXELS))
             .err()
             .as_deref(),
         Some("Drawing is too large for a PNG even at 72 dpi; use SVG or PDF.")
     );
     // The widest PNG, and one that steps down a resolution to stay within it.
     assert_eq!(
-        png_dimensions(43_689., 80., RasterBudget::FILE),
+        png_dimensions(43_689., 80., RasterBudget::file(1200, FILE_PIXELS)),
         Ok((FILE_SIDE, 60, 72))
     );
     assert_eq!(
-        png_dimensions(3_000., 80., RasterBudget::FILE),
+        png_dimensions(3_000., 80., RasterBudget::file(1200, FILE_PIXELS)),
         Ok((18_750, 500, 600))
     );
 }
@@ -383,7 +398,8 @@ fn outlined_svg_is_never_smaller_than_its_floor() {
             &doc,
             "svg-office",
             false,
-            RasterBudget::FILE,
+            Background::Canvas,
+            RasterBudget::file(1200, FILE_PIXELS),
             max_bytes,
             None,
         )
@@ -393,17 +409,28 @@ fn outlined_svg_is_never_smaller_than_its_floor() {
     // A limit the floor fits is left to the caller, which has the exact size.
     assert_eq!(limit(floor), Ok(outlined));
     // Live text is the scene as written: there is nothing to save.
-    assert!(render_drawing(&doc, "svg", false, RasterBudget::FILE, 1, None).is_ok());
+    assert!(
+        render_drawing(
+            &doc,
+            "svg",
+            false,
+            Background::Canvas,
+            RasterBudget::file(1200, FILE_PIXELS),
+            1,
+            None,
+        )
+        .is_ok()
+    );
 }
 
 #[test]
 fn windows_clipboard_resolution_fits_dib_office_and_native_picture_limits() {
-    let budget = RasterBudget::clipboard(true);
+    let budget = RasterBudget::clipboard(true, 1200);
     assert_eq!(png_dimensions(100., 100., budget), Ok((1250, 1250, 1200)));
     // The old fixed 1200 DPI raster passes the export budget (50M pixels),
     // but its 24-bit DIB alone is 150 MB. The Office RGBA preview is larger.
     assert_eq!(
-        png_dimensions(800., 400., RasterBudget::clipboard(false)),
+        png_dimensions(800., 400., RasterBudget::clipboard(false, 1200)),
         Ok((10000, 5000, 1200))
     );
     assert_eq!(png_dimensions(800., 400., budget), Ok((5000, 2500, 600)));
@@ -471,6 +498,278 @@ fn clipboard_is_transparent_and_files_keep_canvas_background() {
             );
         }
     }
+}
+
+/// A dark-canvas drawing: a bond and an O label in Ink, and a custom red label.
+fn dark_ink_drawing() -> Document {
+    use crate::{
+        canvas_theme::CanvasTheme,
+        document::{Annotation, Point},
+        typography::TextFormat,
+    };
+    let mut doc = Document {
+        canvas_theme: CanvasTheme::Dark,
+        ..Default::default()
+    };
+    let a = doc.add_atom("C", Point::default());
+    let b = doc.add_atom("O", Point::new(40., 0.));
+    doc.add_bond(a, b, 1, "plain");
+    let mut format = TextFormat::default();
+    format.style.color = crate::palette::Color::Custom([180, 50, 55]);
+    doc.annotations.push(Annotation {
+        id: doc.next_id(),
+        position: Point::new(0., 40.),
+        text: "N".into(),
+        format,
+    });
+    doc
+}
+
+fn rgba(png: &[u8]) -> Vec<[u8; 4]> {
+    let mut reader = png::Decoder::new(std::io::Cursor::new(png))
+        .read_info()
+        .unwrap();
+    let mut pixels = vec![0; reader.output_buffer_size()];
+    let frame = reader.next_frame(&mut pixels).unwrap();
+    pixels[..frame.buffer_size()].as_chunks::<4>().0.to_vec()
+}
+
+#[test]
+fn picture_backgrounds_paint_the_png_and_swap_black_and_white_ink() {
+    let doc = dark_ink_drawing();
+    let navy = [30, 42, 68];
+    let paper = [244, 239, 230];
+    // Background, corner pixel, and the ink that must appear.
+    let cases = [
+        (Background::Transparent, [0, 0, 0, 0], [255, 255, 255]),
+        (Background::Canvas, [0, 0, 0, 255], [255, 255, 255]),
+        (Background::Color([255; 3]), [255, 255, 255, 255], [0, 0, 0]),
+        (Background::Color([0; 3]), [0, 0, 0, 255], [255, 255, 255]),
+        (Background::Color(paper), [244, 239, 230, 255], [0, 0, 0]),
+        (Background::Color(navy), [30, 42, 68, 255], [255, 255, 255]),
+    ];
+    for (background, corner, ink) in cases {
+        for clipboard in [true, false] {
+            let bytes = if clipboard {
+                clipboard_figure_with_drawing(
+                    &doc,
+                    "png",
+                    background,
+                    crate::style::DEFAULT.png_dpi,
+                    None,
+                )
+            } else {
+                figure_with_budget_and_drawing(
+                    &doc,
+                    "png",
+                    background,
+                    RasterBudget::file(1200, FILE_PIXELS),
+                    None,
+                )
+            }
+            .unwrap()
+            .bytes;
+            let pixels = rgba(&bytes);
+            assert_eq!(pixels[0], corner, "{background:?}");
+            assert_eq!(pixels[pixels.len() - 1], corner, "{background:?}");
+            assert!(
+                pixels.iter().any(|p| p[..3] == ink && p[3] == 255),
+                "{background:?} keeps readable ink"
+            );
+            let other = ink.map(|c| 255 - c);
+            assert!(
+                !pixels
+                    .iter()
+                    .any(|p| p[..3] == other && p[3] == 255 && *p != corner),
+                "{background:?} has no ink of the other brightness"
+            );
+            // The custom color stays exact on every background.
+            assert!(pixels.iter().any(|p| p[..3] == [180, 50, 55]));
+        }
+    }
+}
+
+/// Office rebuilds the preview of an edited drawing on Copy's background.
+#[cfg(windows)]
+#[test]
+fn office_preview_rebuild_keeps_the_copy_background() {
+    let doc = dark_ink_drawing();
+    let white = office_preview(
+        &doc,
+        Background::Color([255; 3]),
+        crate::style::DEFAULT.png_dpi,
+    )
+    .unwrap();
+    let pixels = rgba(&white.png);
+    assert_eq!(pixels[0], [255; 4]);
+    assert!(pixels.contains(&[0, 0, 0, 255]), "dark ink");
+    let transparent =
+        office_preview(&doc, Background::Transparent, crate::style::DEFAULT.png_dpi).unwrap();
+    assert_eq!(rgba(&transparent.png)[0], [0; 4]);
+    assert_ne!(white.metafile, transparent.metafile);
+}
+
+#[test]
+fn picture_backgrounds_keep_palette_and_element_colors() {
+    use crate::{
+        canvas_theme::{CanvasTheme, ColorTheme, element_color},
+        document::{Annotation, Point},
+        palette::{Color, Hue, Palette, Row},
+        typography::TextFormat,
+    };
+    for canvas in CanvasTheme::ALL {
+        let mut doc = Document {
+            canvas_theme: canvas,
+            color_theme: ColorTheme::Jmol,
+            ..Default::default()
+        };
+        doc.add_atom("N", Point::default());
+        let blue = Color::Palette(Hue::Blue, Row::Strong);
+        let mut format = TextFormat::default();
+        format.style.color = blue;
+        doc.annotations.push(Annotation {
+            id: doc.next_id(),
+            position: Point::new(0., 40.),
+            text: "M".into(),
+            format,
+        });
+        // The colors as the drawing's own canvas shows them.
+        let expected = [
+            Palette::of(&doc).rgb(blue),
+            element_color(&doc, "N", canvas),
+        ];
+        let paper = if canvas.is_light() { [0; 3] } else { [255; 3] };
+        for clipboard in [true, false] {
+            let background = Background::Color(paper);
+            let bytes = if clipboard {
+                clipboard_figure_with_drawing(
+                    &doc,
+                    "png",
+                    background,
+                    crate::style::DEFAULT.png_dpi,
+                    None,
+                )
+            } else {
+                figure_with_budget_and_drawing(
+                    &doc,
+                    "png",
+                    background,
+                    RasterBudget::file(1200, FILE_PIXELS),
+                    None,
+                )
+            }
+            .unwrap()
+            .bytes;
+            let pixels = rgba(&bytes);
+            for rgb in expected {
+                assert!(
+                    pixels.iter().any(|p| p[..3] == rgb && p[3] == 255),
+                    "{canvas} drawing on {paper:?} keeps {rgb:?}"
+                );
+            }
+        }
+    }
+}
+
+/// A 3D model keeps the drawing's theme, a user theme too, when a color
+/// background flips the canvas: its balls match the same drawing on that canvas.
+#[test]
+fn picture_backgrounds_keep_the_theme_of_3d_models() {
+    use crate::{
+        canvas_theme::{CanvasTheme, ColorTheme},
+        models3d::{Display, ForceField, Model3d, Placed, set_display},
+    };
+    let mut doc = Document {
+        canvas_theme: CanvasTheme::Dark,
+        color_theme: ColorTheme::Jmol,
+        ..Default::default()
+    };
+    let c = doc.add_atom("C", crate::document::Point::new(0., 0.));
+    let o = doc.add_atom("O", crate::document::Point::new(30., 0.));
+    doc.add_bond(c, o, 2, "plain");
+    let atoms = [(c, [-0.6, 0., -0.2]), (o, [0.6, 0., 0.2])]
+        .map(|(id, xyz)| Placed { id, xyz })
+        .to_vec();
+    doc.models
+        .push(Model3d::new(&doc, atoms, vec![], ForceField::Mmff94s));
+    crate::models3d::require_version(&mut doc);
+    assert!(set_display(&mut doc, 0, Display::ThreeD));
+    crate::palette::set_hues(&mut doc, crate::palette::Hues::default());
+    assert!(doc.custom_theme.is_some());
+    let gradients = |doc: &Document, background| {
+        let svg = String::from_utf8(
+            figure_with_budget_and_drawing(
+                doc,
+                "svg",
+                background,
+                RasterBudget::file(1200, FILE_PIXELS),
+                None,
+            )
+            .unwrap()
+            .bytes,
+        )
+        .unwrap();
+        svg.split("<radialGradient")
+            .skip(1)
+            .map(|g| {
+                g.split_once('>')
+                    .unwrap()
+                    .1
+                    .split("</radialGradient")
+                    .next()
+                    .unwrap()
+                    .to_owned()
+            })
+            .collect::<Vec<_>>()
+    };
+    let white = gradients(&doc, Background::Color([255; 3]));
+    assert!(!white.is_empty());
+    let light = Document {
+        canvas_theme: CanvasTheme::Light,
+        ..doc.clone()
+    };
+    assert_eq!(white, gradients(&light, Background::Canvas));
+    let publication = Document {
+        color_theme: ColorTheme::Publication,
+        custom_theme: None,
+        ..light
+    };
+    assert_ne!(white, gradients(&publication, Background::Canvas));
+}
+
+#[test]
+fn picture_backgrounds_reach_svg_paper_and_ink() {
+    let doc = dark_ink_drawing();
+    let svg = |background| {
+        String::from_utf8(
+            figure_with_budget_and_drawing(
+                &doc,
+                "svg",
+                background,
+                RasterBudget::file(1200, FILE_PIXELS),
+                None,
+            )
+            .unwrap()
+            .bytes,
+        )
+        .unwrap()
+    };
+    let white = svg(Background::Color([255; 3]));
+    assert!(white.contains("<rect") && white.contains("fill=\"rgb(255,255,255)\""));
+    assert!(white.contains("rgb(0,0,0)"), "dark ink on white");
+    let canvas = svg(Background::Canvas);
+    assert!(canvas.contains("fill=\"rgb(0,0,0)\"/>") && canvas.contains("rgb(255,255,255)"));
+    assert!(!svg(Background::Transparent).contains("<rect"));
+    assert_eq!(
+        svg(Background::Canvas),
+        String::from_utf8(drawing(&doc, "svg").unwrap()).unwrap(),
+        "file export keeps the canvas by default"
+    );
+    assert_eq!(
+        svg(Background::Transparent),
+        scene::svg(&doc),
+        "transparent keeps the canvas ink, as Copy did"
+    );
 }
 #[test]
 fn outlined_svg_and_office_exports_preserve_text_geometry_and_physical_size() {
@@ -648,13 +947,167 @@ fn clipboard_png_keeps_the_fixed_preferred_resolution() {
     );
 }
 
+/// The resolution and physical size a PNG's pHYs chunk records.
+fn png_physical(png: &[u8]) -> (u32, f64, f64) {
+    let reader = png::Decoder::new(std::io::Cursor::new(png))
+        .read_info()
+        .unwrap();
+    let info = reader.info();
+    let dims = info.pixel_dims.unwrap();
+    assert_eq!(dims.unit, png::Unit::Meter);
+    assert_eq!(dims.xppu, dims.yppu);
+    let per_inch = f64::from(dims.xppu) * 0.0254;
+    (
+        per_inch.round() as u32,
+        f64::from(info.width) / per_inch,
+        f64::from(info.height) / per_inch,
+    )
+}
+
+#[tokio::test]
+async fn file_png_uses_the_chosen_resolution_at_the_same_physical_size() {
+    let [(_, doc), _] = parity_fixtures();
+    let engine = crate::engine::LocalEngine::in_process();
+    let mut sizes = Vec::new();
+    for dpi in [150, 300, 600, 1200] {
+        let png = publication(
+            &engine,
+            doc.clone(),
+            "png",
+            false,
+            false,
+            Background::Canvas,
+            dpi,
+            FILE_PIXELS,
+        )
+        .await
+        .unwrap();
+        let (recorded, width, height) = png_physical(&png.bytes);
+        assert_eq!(recorded, dpi);
+        assert!(
+            png.details[0].ends_with(&format!("at {dpi} dpi")),
+            "{:?}",
+            png.details
+        );
+        sizes.push((dpi, width, height));
+    }
+    let (_, width, height) = sizes[3];
+    for (dpi, w, h) in sizes {
+        // Whole pixels round the size up by less than one pixel.
+        let pixel = 1. / f64::from(dpi);
+        assert!(
+            (w - width).abs() <= pixel && (h - height).abs() <= pixel,
+            "{dpi} dpi"
+        );
+    }
+    let at = |dpi| {
+        let size = parse_svg(scene::svg_with_background(&doc)).unwrap().size();
+        png_pixels((size.width(), size.height()), dpi)
+    };
+    let (w300, _) = at(300);
+    let (w1200, _) = at(1200);
+    assert!(
+        w1200 >= 4 * w300 - 4 && w1200 <= 4 * w300,
+        "{w300} and {w1200}"
+    );
+}
+
+#[test]
+fn a_lower_chosen_resolution_steps_down_from_itself_and_errors_name_it() {
+    // 4000 × 4000 CSS pixels: 125 million pixels at 300 dpi, 39 million at 150.
+    assert_eq!(
+        png_dimensions(4000., 4000., RasterBudget::file(300, FILE_PIXELS)),
+        Ok((6250, 6250, 150))
+    );
+    for dpi in [300, 600, 1200] {
+        assert_eq!(
+            png_dimensions(4000., 4000., RasterBudget::clipboard(false, dpi)),
+            Err(format!(
+                "Drawing is too large for a {dpi} dpi PNG; use SVG or PDF."
+            ))
+        );
+    }
+    // A drawing that fits keeps the chosen resolution, never a higher one.
+    assert_eq!(
+        png_dimensions(96., 48., RasterBudget::file(150, FILE_PIXELS)),
+        Ok((150, 75, 150))
+    );
+    assert_eq!(
+        png_dimensions(96., 48., RasterBudget::clipboard(true, 300)),
+        Ok((300, 150, 300))
+    );
+}
+
+#[test]
+fn close_ups_are_the_exported_pixels_at_each_resolution() {
+    let [(_, doc), _] = parity_fixtures();
+    let (lo, hi) = scene::bounds(&scene::primitives(&doc));
+    let middle = |a: &crate::document::Atom| {
+        (a.position.x - (lo.x + hi.x) / 2.).hypot(a.position.y - (lo.y + hi.y) / 2.)
+    };
+    let focus = doc
+        .atoms
+        .iter()
+        .min_by(|a, b| middle(a).total_cmp(&middle(b)))
+        .unwrap()
+        .position;
+    let dpis = [150, 300, 600, 1200];
+    let close_ups = png_close_ups(&doc, Background::Canvas, focus, 12., &dpis).unwrap();
+    let tree = parse_svg(scene::svg_with_background(&doc)).unwrap();
+    assert_eq!(close_ups.size, (tree.size().width(), tree.size().height()));
+    let sides: Vec<_> = close_ups.pixels.iter().map(|(side, _)| *side).collect();
+    // 12 points is 1/6 inch.
+    assert_eq!(sides, [25, 50, 100, 200]);
+    for ((side, pixels), dpi) in close_ups.pixels.iter().zip(dpis) {
+        assert_eq!(pixels.len(), (side * side * 4) as usize);
+        // The close-up is a piece of the file export at the same resolution.
+        let file = figure_with_budget_and_drawing(
+            &doc,
+            "png",
+            Background::Canvas,
+            RasterBudget::file(dpi, FILE_PIXELS),
+            None,
+        )
+        .unwrap();
+        let reader = png::Decoder::new(std::io::Cursor::new(&file.bytes))
+            .read_info()
+            .unwrap();
+        let width = reader.info().width as usize;
+        let whole = rgba(&file.bytes);
+        let close: Vec<[u8; 4]> = pixels.as_chunks::<4>().0.to_vec();
+        let side = *side as usize;
+        // The close-up's corner, 6 points up and left of the focus.
+        let inch = |v: f32| v * crate::style::DEFAULT.points_per_world() / 72.;
+        let corner = |at: f32, lo: f32| ((inch(at - lo) - 6. / 72.) * dpi as f32).round() as usize;
+        let (x, y) = (corner(focus.x, lo.x), corner(focus.y, lo.y));
+        for row in 0..side {
+            let start = (y + row) * width + x;
+            for (a, b) in whole[start..start + side]
+                .iter()
+                .zip(&close[row * side..(row + 1) * side])
+            {
+                // Antialiasing may differ by one coverage step (16 of 255)
+                // where the picture starts at a different pixel.
+                assert!(
+                    a.iter().zip(b).all(|(a, b)| a.abs_diff(*b) <= 16),
+                    "{dpi} dpi close-up differs from the export: {a:?} and {b:?}"
+                );
+            }
+        }
+        assert!(
+            close.iter().any(|p| p != &close[0]),
+            "{dpi} dpi close-up shows ink"
+        );
+    }
+}
+
 #[test]
 fn png_fits_sizes_a_scene_to_the_pixel_as_the_parsed_svg_does() {
     use crate::document::Point;
     // At 1200 dpi this is 10,822 x 7,392 pixels, just under 80 million. Scaling
     // in another order than the SVG parser rounds the width up to 10,823.
     let (lo, hi) = (Point::new(0., 0.), Point::new(1893.8502, 1293.43));
-    let budget = RasterBudget::clipboard(false);
+    let budget = RasterBudget::clipboard(false, 1200);
     let points = crate::style::DEFAULT.points_per_world();
     let tree = parse_svg(format!(
         "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 1 1\" width=\"{}pt\" height=\"{}pt\"/>",
@@ -905,9 +1358,15 @@ fn editable_pdf_has_catalog_xmp_without_compression_and_valid_cross_references()
 
     let doc = vector_payload_document();
     let envelope = crate::payload::encode(&doc).unwrap();
-    let bytes = clipboard_figure_with_drawing(&doc, "pdf", Some(&envelope))
-        .unwrap()
-        .bytes;
+    let bytes = clipboard_figure_with_drawing(
+        &doc,
+        "pdf",
+        Background::Transparent,
+        crate::style::DEFAULT.png_dpi,
+        Some(&envelope),
+    )
+    .unwrap()
+    .bytes;
     let catalog = pdf_text_object(&bytes, 1);
     let metadata_id = catalog
         .split_once("/Metadata ")
@@ -954,12 +1413,30 @@ async fn publication_vectors_include_the_prepared_drawing_only_when_enabled() {
     let engine = Default::default();
     let mut live_drawing = None;
     for format in ["svg", "svg-office", "pdf"] {
-        let plain = publication(&engine, doc.clone(), format, false, false, FILE_PIXELS)
-            .await
-            .unwrap();
-        let editable = publication(&engine, doc.clone(), format, false, true, FILE_PIXELS)
-            .await
-            .unwrap();
+        let plain = publication(
+            &engine,
+            doc.clone(),
+            format,
+            false,
+            false,
+            Background::Canvas,
+            crate::style::DEFAULT.png_dpi,
+            FILE_PIXELS,
+        )
+        .await
+        .unwrap();
+        let editable = publication(
+            &engine,
+            doc.clone(),
+            format,
+            false,
+            true,
+            Background::Canvas,
+            crate::style::DEFAULT.png_dpi,
+            FILE_PIXELS,
+        )
+        .await
+        .unwrap();
         assert!(crate::payload::read(&plain.bytes).is_none(), "{format}");
         let restored = crate::payload::read(&editable.bytes).unwrap().unwrap();
         assert_eq!(
@@ -1000,12 +1477,30 @@ async fn publication_vectors_include_the_prepared_drawing_only_when_enabled() {
     }
     let mut pages = doc;
     pages.page_layout = Some(Default::default());
-    let plain = publication(&engine, pages.clone(), "pdf", true, false, FILE_PIXELS)
-        .await
-        .unwrap();
-    let editable = publication(&engine, pages, "pdf", true, true, FILE_PIXELS)
-        .await
-        .unwrap();
+    let plain = publication(
+        &engine,
+        pages.clone(),
+        "pdf",
+        true,
+        false,
+        Background::Canvas,
+        crate::style::DEFAULT.png_dpi,
+        FILE_PIXELS,
+    )
+    .await
+    .unwrap();
+    let editable = publication(
+        &engine,
+        pages,
+        "pdf",
+        true,
+        true,
+        Background::Canvas,
+        crate::style::DEFAULT.png_dpi,
+        FILE_PIXELS,
+    )
+    .await
+    .unwrap();
     assert_eq!(editable.details, plain.details);
     assert!(crate::payload::read(&editable.bytes).is_none());
 }
@@ -1050,4 +1545,69 @@ fn exports_share_the_measuring_font_database() {
         tree.fontdb(),
         &crate::style::fontdb()
     ));
+}
+
+#[test]
+fn previews_fit_the_box_on_the_chosen_background_and_show_the_png_pixels() {
+    let doc = dark_ink_drawing();
+    // On white the dark canvas's white ink turns black, as in the export.
+    let Fitted {
+        size,
+        pixels: (width, height),
+        rgba: pixels,
+    } = png_preview(&doc, Background::Color([255; 3]), (400, 400), None).unwrap();
+    assert!(width == 400 || height == 400, "{width} × {height}");
+    assert!(width <= 400 && height <= 400);
+    assert!(size.0 > 0. && size.1 > 0.);
+    let pixels: Vec<[u8; 4]> = pixels.as_chunks::<4>().0.to_vec();
+    assert_eq!(pixels.len(), (width * height) as usize);
+    assert_eq!(pixels[0], [255; 4]);
+    assert!(pixels.contains(&[0, 0, 0, 255]), "dark ink");
+    let clear = png_preview(&doc, Background::Transparent, (400, 400), None).unwrap();
+    assert_eq!(clear.rgba[..4], [0; 4]);
+    // A PNG at a resolution below the box shows the file's own pixels.
+    let file = figure_with_budget_and_drawing(
+        &doc,
+        "png",
+        Background::Canvas,
+        RasterBudget::file(150, FILE_PIXELS),
+        None,
+    )
+    .unwrap();
+    let Fitted {
+        pixels: (width, height),
+        rgba: pixels,
+        ..
+    } = png_preview(&doc, Background::Canvas, (4000, 4000), Some(150)).unwrap();
+    let reader = png::Decoder::new(std::io::Cursor::new(&file.bytes))
+        .read_info()
+        .unwrap();
+    assert_eq!((width, height), (reader.info().width, reader.info().height));
+    assert_eq!(pixels.as_chunks::<4>().0.to_vec(), rgba(&file.bytes));
+    // A PNG larger than the tile is scaled down to fit it, ink and all.
+    assert!(width > 48 && height > 28, "{width} × {height}");
+    let Fitted {
+        pixels: (width, height),
+        rgba: pixels,
+        ..
+    } = png_preview(&doc, Background::Color([255; 3]), (48, 28), Some(150)).unwrap();
+    assert!((width == 48 && height <= 28) || (height == 28 && width <= 48));
+    assert!(
+        pixels
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .any(|p| p[..3].iter().all(|&c| c < 96))
+    );
+}
+
+/// A large drawing is written at a lower resolution, and its label says so.
+#[test]
+fn file_sizes_follow_the_adaptive_budget() {
+    // 30 × 15 cm.
+    let size = (30. / 2.54 * 96., 15. / 2.54 * 96.);
+    assert_eq!(png_file_size(size, 300).unwrap().2, 300);
+    let (width, height, dpi) = png_file_size(size, 1200).unwrap();
+    assert_eq!(dpi, 600);
+    assert_eq!((width, height), png_pixels(size, 600));
 }

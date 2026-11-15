@@ -11,6 +11,7 @@ fn run_item(app: &mut App, page: Page, label: &str) -> Result<(), String> {
                 label: name,
                 action,
                 enabled: true,
+                ..
             } if name == label => Some(action),
             _ => None,
         })
@@ -53,7 +54,7 @@ fn redraw_stereo_bonds_is_available_for_atom_selections_and_dispatches() {
     assert!(labels(&app, Page::Main).contains(&"Redraw stereo bonds"));
     run_item(&mut app, Page::Main, "Redraw stereo bonds").unwrap();
     assert!(!app.error, "{}", app.status);
-    assert_eq!(app.status, "Redrew stereo bonds at 1 stereocentre");
+    assert_eq!(app.status, "Redrew stereo bonds at 1 stereocenter");
     app.tab.selected = vec![other, br];
     assert_eq!(enabled(&app, Page::Main, "Redraw stereo bonds"), Some(true));
     app.tab.busy = true;
@@ -111,7 +112,7 @@ fn path_cleanup_entries_follow_eligible_selection_and_run_through_menu() {
     assert!(!labels(&app, Page::Main).contains(&"Smooth"));
     app.tab.selected = vec![1];
     assert!(labels(&app, Page::Main).contains(&"Smooth"));
-    assert!(labels(&app, Page::Main).contains(&"Symmetrise"));
+    assert!(labels(&app, Page::Main).contains(&"Symmetrize"));
     let before = app.tab.doc.clone();
     run_item(&mut app, Page::Main, "Smooth").unwrap();
     assert_eq!(app.status, "Smoothed 1 object");
@@ -130,9 +131,9 @@ fn path_cleanup_entries_follow_eligible_selection_and_run_through_menu() {
         Default::default(),
     ));
     app.tab.selected = vec![2];
-    assert!(!labels(&app, Page::Main).contains(&"Symmetrise"));
+    assert!(!labels(&app, Page::Main).contains(&"Symmetrize"));
     app.tab.doc.arrows[0].cubic = Some([World::new(20., -20.), World::new(80., -22.)]);
-    assert!(labels(&app, Page::Main).contains(&"Symmetrise"));
+    assert!(labels(&app, Page::Main).contains(&"Symmetrize"));
 }
 
 /// Labels and separators ("—") of a menu page, in order.
@@ -201,14 +202,14 @@ fn centre_ring_charge_menu_requires_a_complete_charged_circle_and_is_undoable() 
     app.tab.busy = false;
     let ids = reshiki::editing::ring(&mut app.tab.doc, World::default(), 5, true, 5.);
     app.tab.selected = ids.clone();
-    assert!(!labels(&app, Page::Bonds).contains(&"Centre charge in ring"));
+    assert!(!labels(&app, Page::Bonds).contains(&"Center charge in ring"));
     app.tab.doc.atom_mut(ids[0]).unwrap().charge = -1;
     assert_eq!(
-        enabled(&app, Page::Bonds, "Centre charge in ring"),
+        enabled(&app, Page::Bonds, "Center charge in ring"),
         Some(true)
     );
     let before = app.tab.doc.clone();
-    run_item(&mut app, Page::Bonds, "Centre charge in ring").unwrap();
+    run_item(&mut app, Page::Bonds, "Center charge in ring").unwrap();
     assert!(!app.error, "{}", app.status);
     assert!(
         app.tab
@@ -222,7 +223,7 @@ fn centre_ring_charge_menu_requires_a_complete_charged_circle_and_is_undoable() 
     assert_eq!(app.tab.doc, before);
     assert!(!app.tab.history.can_undo());
     app.tab.selected.pop();
-    assert!(!labels(&app, Page::Bonds).contains(&"Centre charge in ring"));
+    assert!(!labels(&app, Page::Bonds).contains(&"Center charge in ring"));
 }
 
 #[test]
@@ -298,16 +299,20 @@ fn atom_menu_groups_editing_naming_connecting_and_clipboard_commands() -> Result
             "Arrange & transform",
             "—",
             "Cut",
+            "Copy",
+            "Copy image on",
             "Copy as",
             "Paste",
             "Duplicate",
             "—",
             "Properties…",
             "—",
-            "Copy",
-            "—",
             "Delete"
         ]
+        .into_iter()
+        // Copy image on needs a native clipboard, as Copy image does.
+        .filter(|label| *label != "Copy image on" || reshiki::clipboard::available())
+        .collect::<Vec<_>>()
     );
     // Join and Merge both stay, unavailable below their minimum selection.
     assert_eq!(
@@ -505,6 +510,7 @@ fn expansion_command(app: &App) -> Result<Action, String> {
                 label: "Expand generic structures",
                 action,
                 enabled: true,
+                ..
             } => Some(action),
             _ => None,
         })
@@ -556,6 +562,7 @@ fn expand_context_follows_grouped_graphics_and_generated_name_captions() -> Resu
                 label: "Expand generic structures",
                 enabled: true,
                 action: Action::Run(message),
+                ..
             } if matches!(message.as_ref(), Message::Generic(Generic::ExpandComponent(ids)) if *ids == [hit])
         )));
     }
@@ -704,6 +711,7 @@ async fn expand_pet_from_ring_bond_context_opens_complete_product() {
                 label: "Expand generic structures",
                 action,
                 enabled: true,
+                ..
             } => Some(action),
             _ => None,
         })
@@ -772,6 +780,7 @@ async fn expand_context_uses_clicked_molecule_when_selection_contains_another_mo
                 label: "Expand generic structures",
                 action,
                 enabled: true,
+                ..
             } => Some(action),
             _ => None,
         })
@@ -830,7 +839,7 @@ fn chemical_name_menu_uses_clicked_component_and_switches_between_show_and_hide(
         hit: vec![first[0]],
     });
     assert!(app.context_entries(Page::Main).iter().any(|entry| matches!(entry,
-        Entry::Item { label: "Show chemical name", enabled: true, action: Action::Run(message) }
+        Entry::Item { label: "Show chemical name", enabled: true, action: Action::Run(message), .. }
             if matches!(message.as_ref(), Message::Naming(super::super::naming::Action::ShowMoleculeName(atoms)) if *atoms == first)
     )));
     reshiki::molecule_names::show(
@@ -907,7 +916,7 @@ fn chemical_names_entry_selects_the_clicked_molecule_and_opens_its_inspector() -
     assert!(app.context_menu.is_none());
     assert_eq!(app.inspector_tab, InspectorTab::Names);
     assert!(app.inspector_open);
-    assert_eq!(app.inspector_width(), 300.);
+    assert_eq!(app.inspector_width(), 320.);
     let mut selected = app.tab.selected.clone();
     selected.sort_unstable();
     first.sort_unstable();
@@ -1131,10 +1140,14 @@ fn context_commands_follow_the_target_without_modifying_the_drawing() -> Result<
             "Undo",
             "Redo",
             "Paste",
+            "Copy image on",
             "Copy as",
             "Select all",
             "Fit drawing"
         ]
+        .into_iter()
+        .filter(|label| *label != "Copy image on" || reshiki::clipboard::available())
+        .collect::<Vec<_>>()
     );
     app.tab.selected = vec![atom];
     let single = labels(&app, Page::Main);
@@ -1155,10 +1168,10 @@ fn context_commands_follow_the_target_without_modifying_the_drawing() -> Result<
     }
     assert!(!molecule.contains(&"Bond in front"));
     assert!(labels(&app, Page::Bonds).contains(&"Bond in front"));
-    assert!(!labels(&app, Page::Align).contains(&"Align middles"));
+    assert!(!labels(&app, Page::Align).contains(&"Align middle"));
     app.tab.selected.push(arrow);
     assert!(!labels(&app, Page::Main).contains(&"Attachment points"));
-    assert!(labels(&app, Page::Align).contains(&"Align middles"));
+    assert!(labels(&app, Page::Align).contains(&"Align middle"));
     app.tab.selected = vec![arrow];
     let arrow_items = labels(&app, Page::Main);
     assert!(arrow_items.contains(&"Reverse arrow"));
@@ -1167,6 +1180,58 @@ fn context_commands_follow_the_target_without_modifying_the_drawing() -> Result<
     assert_eq!(app.tab.doc, before);
     assert!(!app.tab.history.can_undo());
     Ok(())
+}
+
+/// Align, distribute and flip have one name in the right-click menu, the
+/// context row menus and the command palette.
+#[test]
+fn arrange_commands_have_one_name_on_every_surface() {
+    let (mut app, _) = App::new();
+    app.tab.doc = reshiki::rings::Preset::Regular.document(42., false);
+    let arrow = app.tab.doc.next_id();
+    app.tab.doc.arrows.push(Arrow::new(
+        arrow,
+        World::new(100., 100.),
+        World::new(160., 100.),
+        Default::default(),
+        Default::default(),
+    ));
+    app.tab.selected = app.tab.doc.all_ids();
+    let menu: Vec<_> = app
+        .context_entries(Page::Align)
+        .into_iter()
+        .filter_map(|entry| match entry {
+            Entry::Item {
+                label,
+                action: Action::Run(message),
+                ..
+            } => Some((format!("{message:?}"), label)),
+            _ => None,
+        })
+        .collect();
+    let palette = super::super::command_palette::catalog::build(&app);
+    let commands = [
+        &Command::HORIZONTAL[..],
+        &Command::VERTICAL,
+        &Command::DISTRIBUTE,
+        &Command::TRANSFORM[..2],
+    ];
+    for command in commands.concat() {
+        let message = format!("{:?}", command.message());
+        assert!(
+            menu.contains(&(message.clone(), command.name())),
+            "{message} is {} in the right-click menu",
+            command.name()
+        );
+        assert!(
+            palette.iter().any(|c| {
+                matches!(&c.run, super::super::command_palette::catalog::Run::Send(messages)
+                    if format!("{:?}", messages[0]) == message && c.name == command.name())
+            }),
+            "{message} is {} in the palette",
+            command.name()
+        );
+    }
 }
 
 #[test]
@@ -1518,4 +1583,119 @@ fn show_properties_menu_ticks_shown_rows_and_starts_with_weight() -> Result<(), 
             .is_some_and(|menu| menu.children.len() == 1)
     );
     Ok(())
+}
+
+#[test]
+fn copy_image_on_lists_backgrounds_then_saved_colors_and_ticks_the_default() {
+    use crate::appearance::Background;
+    let (mut app, _) = App::new();
+    app.appearance.background_colors = vec![[30, 42, 68]];
+    app.appearance.copy_background = Background::Canvas;
+    // The submenu sits before Copy as, with or without a selection.
+    let main = labels(&app, Page::Main);
+    let at = main.iter().position(|label| *label == "Copy image on");
+    assert_eq!(
+        at.map(|at| main[at + 1]),
+        reshiki::clipboard::available().then_some("Copy as")
+    );
+    let entries = app.context_entries(Page::CopyImageOn);
+    let rows: Vec<_> = entries
+        .iter()
+        .filter_map(|entry| match entry {
+            Entry::Item { label, swatch, .. } => Some((shown(label, *swatch), *swatch)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        rows,
+        [
+            ("Transparent".into(), Some((Paper::Transparent, false))),
+            ("Canvas".into(), Some((Paper::Canvas, true))),
+            ("White".into(), Some((Paper::Color([255; 3]), false))),
+            ("Black".into(), Some((Paper::Color([0; 3]), false))),
+            ("#1E2A44".into(), Some((Paper::Color([30, 42, 68]), false))),
+            ("Editable drawing".into(), None),
+            ("Change the default…".into(), None),
+        ]
+    );
+    // A pick copies on that background once; the default stays.
+    let Some(Entry::Item { action, .. }) = entries.get(2) else {
+        panic!("White row");
+    };
+    assert!(matches!(
+        action,
+        Action::Run(message) if matches!(**message, Message::CopyImageOn(Paper::Color([255, 255, 255]), true))
+    ));
+    app.context_menu = Some(State::new(Point::ORIGIN, Page::Main));
+    let _ = app.context_action(Action::Run(Box::new(Message::Settings(
+        crate::app::settings_page::Action::Open(Some(
+            crate::app::settings_page::Section::CopyExport,
+        )),
+    ))));
+    assert!(app.context_menu.is_none());
+    assert_eq!(app.appearance.copy_background, Background::Canvas);
+}
+
+/// Copy image on's Editable drawing row starts at the Settings default each
+/// time the menu opens, stays open when toggled, and changes only that copy.
+#[test]
+fn copy_image_on_editable_drawing_changes_one_copy_and_keeps_the_default() {
+    let (mut app, _) = App::new();
+    app.appearance.export_editable_drawing = false;
+    // Opened on its own: the main menu lists Copy image on only where a
+    // native clipboard is available, which a headless Linux session lacks.
+    let open = |app: &mut App| {
+        app.context_menu = Some(State::new(Point::ORIGIN, Page::CopyImageOn));
+    };
+    let row = |app: &App, find: fn(&Action) -> bool| {
+        app.context_entries(Page::CopyImageOn)
+            .iter()
+            .position(|entry| matches!(entry, Entry::Item { action, .. } if find(action)))
+            .expect("row")
+    };
+    let editable = |action: &Action| matches!(action, Action::Editable);
+    let background = |action: &Action| match action {
+        Action::Run(message) => matches!(**message, Message::CopyImageOn(..)),
+        _ => false,
+    };
+    // What each background row copies with: the same pictures dispatch uses.
+    let copies = |app: &App| {
+        app.context_entries(Page::CopyImageOn)
+            .into_iter()
+            .filter_map(|entry| match entry {
+                Entry::Item {
+                    action: Action::Run(message),
+                    ..
+                } => match *message {
+                    Message::CopyImageOn(paper, editable) => {
+                        Some(app.copy_pictures(Some((paper, editable))).editable)
+                    }
+                    _ => None,
+                },
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+    };
+    open(&mut app);
+    assert!(!app.copy_editable(), "starts at the default");
+    assert_eq!(copies(&app), [false; 4]);
+    let _ = app.context_action(Action::Activate(0, row(&app, editable)));
+    assert!(app.context_menu.is_some(), "the menu stays open");
+    assert!(app.copy_editable());
+    assert_eq!(copies(&app), [true; 4], "every background copies with it");
+    assert!(!app.appearance.export_editable_drawing, "the default stays");
+    // Picking a background copies once and closes the menu.
+    let _ = app.context_action(Action::Activate(0, row(&app, background)));
+    assert!(app.context_menu.is_none());
+    assert!(app.clipboard_working(), "the copy started");
+    assert!(!app.appearance.export_editable_drawing);
+    assert!(
+        !app.copy_pictures(None).editable,
+        "Copy, Copy image and Copy as follow the default"
+    );
+    open(&mut app);
+    assert!(
+        !app.copy_editable(),
+        "a new menu starts at the default again"
+    );
 }

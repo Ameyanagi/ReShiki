@@ -100,7 +100,7 @@ fn capture(name: &str, mut app: App, expected: Result<bool, &str>) -> Value {
 
 #[test]
 #[ignore = "Capture whole document, error, draft and history states before/after a refactor"]
-fn numeric_transform_memory_characterization() {
+fn manual_numeric_transform_memory_characterization() {
     let mut cases = vec![];
     let mut app = super::tests::fixture();
     let _ = app.update(Message::NumericTransform(Action::Proportional(false)));
@@ -209,7 +209,7 @@ fn numeric_transform_memory_characterization() {
 
 #[test]
 #[ignore = "Allocation profiling workload: 30 isolated four-field numeric candidates"]
-fn numeric_transform_candidate_memory_workload() {
+fn manual_numeric_transform_candidate_memory_workload() {
     for boundary_stereo in [false, true] {
         let app = profiling_fixture(boundary_stereo);
         let fields = [Field::Rotation, Field::TiltX, Field::TiltY, Field::Scale];

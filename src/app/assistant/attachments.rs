@@ -86,15 +86,14 @@ impl App {
         match result {
             Ok(Some(_)) if self.assistant.busy => {
                 self.assistant.status =
-                    "Finish or stop the current request, then paste the image again.".into();
+                    "Finish or stop the request, then paste the image again".into();
             }
             Ok(Some(image)) => {
                 // Keep the exact source for follow-up requests and show it in the composer.
                 self.assistant.source_image = Some(image);
                 self.assistant.clear_example();
                 self.assistant.error = false;
-                self.assistant.status =
-                    "Image attached · Add instructions or Send to draw its structure.".into();
+                self.assistant.status = "Image attached · Add instructions or choose Send".into();
             }
             Ok(None) if !image_only => {
                 self.assistant.reading_image = true;
@@ -107,8 +106,7 @@ impl App {
                 });
             }
             Ok(None) => {
-                self.assistant.status =
-                    "Copy an image, then choose Paste image, or open an image file.".into();
+                self.assistant.status = "Copy an image first, or open an image file".into();
             }
             Err(error) => {
                 self.assistant.error = true;

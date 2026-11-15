@@ -510,7 +510,7 @@ fn text_drafts_keep_both_shortcuts_out_of_the_drawing() {
 
 #[tokio::test]
 #[ignore = "Manual application-renderer captures and focused-widget key verification"]
-async fn molecule_shortcut_visual_evidence() {
+async fn manual_molecule_shortcut_visual_evidence() {
     use iced::advanced::{layout, mouse, renderer::Headless, widget::Tree};
     let mut app = app();
     app.inspector_open = false;

@@ -97,7 +97,7 @@ impl Ui {
 
 #[tokio::test]
 #[ignore = "Release-mode complete hover update and renderer profiling"]
-async fn hover_workloads() {
+async fn manual_hover_workloads() {
     let doc = drawing();
     println!(
         "drawing,{} atoms,{} bonds,{} abbreviations",
@@ -204,7 +204,7 @@ async fn hover_workloads() {
 /// native camera and path, but still excludes returned tasks and GPU presentation.
 #[tokio::test]
 #[ignore = "Release-mode native-pointer widget/app/overlay profiling"]
-async fn native_pointer_hover_workloads() {
+async fn manual_native_pointer_hover_workloads() {
     let (mut app, _) = App::new();
     app.recovered.clear();
     app.tab.doc = drawing();

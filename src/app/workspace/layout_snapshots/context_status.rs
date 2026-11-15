@@ -74,7 +74,7 @@ const SCENES: &[(&str, Setup)] = &[
 
 #[tokio::test]
 #[ignore = "Opt-in GPU snapshots of the context row and status bar; set RESHIKI_UI_QA_DIR"]
-async fn context_row_and_status_snapshots() {
+async fn manual_context_row_and_status_snapshots() {
     let mut renderer = <iced::Renderer as Headless>::new(
         iced::Font::with_name(reshiki::style::ui_font_family()),
         iced::Pixels(16.),

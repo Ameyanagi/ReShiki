@@ -367,7 +367,7 @@ endpoint; **0** adds a branch while keeping its origin active. Ring attachment
 keeps the attachment hotspot. **Enter** opens the active atom's label draft,
 even after a ring operation selected several atoms.
 At a bond or empty hotspot, Enter opens Properties. To name a selected fragment
-with **Contract selection**, turn keyboard drawing off with F8 first; classic
+with **Abbreviate selection**, turn keyboard drawing off with F8 first; classic
 Enter edits an existing selected abbreviation or contracts a multi-atom
 selection. With hotspot drawing on, the active atom takes priority over the
 selection.
@@ -421,7 +421,7 @@ visible target; Left, Right, Up, and Down prefer connected targets.
 | 1 / 0                           | At an atom with available valence, press 1; navigate back and press 0                                   | 1 advances to the new endpoint; 0 leaves the branch origin active                                                                                 |
 | v / l                           | Try v at an atom, a bond, or an empty hotspot; try l at an atom or empty hotspot, then at a double bond | v attaches/fuses/seeds a three-member ring; l enters Cl or places the double line left; neither selects a tool while its chemistry action applies |
 | Enter / Escape                  | Seed a ring with 3 and press Enter with its ring selection intact; press Escape                         | Only the active atom's label draft opens; Escape closes the draft and keyboard drawing remains on                                                 |
-| F8; Enter                       | Select several uncontracted atoms, turn keyboard drawing off, then press Enter                          | Classic Contract selection opens; a fully selected existing abbreviation instead opens its label draft                                            |
+| F8; Enter                       | Select several uncontracted atoms, turn keyboard drawing off, then press Enter                          | Classic Abbreviate selection opens; a fully selected existing abbreviation instead opens its label draft                                          |
 | [                               | At an open-chain endpoint, press [; repeat at a bond target                                             | Mark the atom without an edit; a bond target only shows the atom-target hint                                                                      |
 | ]                               | After [, navigate to the other nonbonded endpoint with available valence and press ]                    | Add one single bond, keep the current atom active, and clear the mark; rejected connections do not edit the graph                                 |
 | Cmd/Ctrl+Z; Cmd/Ctrl+Shift+Z    | Undo/Redo a connection, growth, or branch; Windows also accepts Ctrl+Y                                  | Restore the graph, hotspot, and mark for each committed edit; navigation and marking alone add no Undo entries                                    |

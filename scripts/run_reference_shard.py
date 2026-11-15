@@ -21,6 +21,9 @@ TARGET_SECONDS = {
     "native_aromatic": 609,
     "engine_migration": 437,
     "inchi_generator": 342,
+    # Every file under tests/ in one binary. An estimate: 185 s on an Apple
+    # Silicon Mac (2026-11-15); no Windows live run has measured it yet.
+    "it": 300,
     "abbreviation_replacement": 200,
     "native_import": 181,
     "reaction_smiles": 165,
@@ -36,7 +39,6 @@ TARGET_SECONDS = {
     "drawing_output": 55,
     "perception": 49,
     "sanitize": 49,
-    "composed_native_roundtrip": 47,
     "drawn_stereo": 46,
     "metafile_worker": 46,
     "reaction_output": 45,
@@ -52,7 +54,6 @@ TARGET_SECONDS = {
     "document_preparation": 28,
     "stereo": 27,
     "cip_ranking": 26,
-    "stated_ez_wedges": 25,
     "cdxml_scene": 23,
     "cip_molecule": 21,
     "native_cleanup": 21,

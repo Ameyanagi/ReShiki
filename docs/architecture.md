@@ -66,6 +66,8 @@ Chemical naming comes from the external [nazuchem repository](https://github.com
 
 ## Modules
 
+The table lists the modules to know first. The [module index](modules.md) lists every module file with a one-line description; it is generated from each file's `//!` comment.
+
 | File                                                        | Responsibility                                                                 |
 | ----------------------------------------------------------- | ------------------------------------------------------------------------------ |
 | `crates/model/src/document.rs`                              | Atoms, bonds, text, arrows, stable object IDs, validation, undo/redo snapshots |

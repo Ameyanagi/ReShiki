@@ -106,7 +106,7 @@ pub fn snapshot(doc: &Document, ids: &[u64], scope: Scope) -> Result<Document, S
     Ok(result)
 }
 pub fn prepare(doc: Document, title: String) -> Result<Prepared, String> {
-    let pdf = crate::export::pages_pdf(&doc)?;
+    let pdf = crate::export::pages_pdf(&doc, crate::export::Background::Canvas)?;
     if pdf.len() > 128 * 1024 * 1024 {
         return Err("The print snapshot exceeds 128 MB. Print a smaller selection.".into());
     }

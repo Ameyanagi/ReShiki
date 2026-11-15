@@ -304,13 +304,12 @@ impl App {
         self.try_replace_document(candidate, selected)?;
         self.sync_numeric_transforms();
         self.error = false;
-        self.status = "Drawing geometry updated · Undo restores the operation".into();
+        self.status = "Drawing geometry updated".into();
         Ok(())
     }
     pub(super) fn reference_transform_action(&mut self, action: Action) {
         if self.tab.drawing_edit_active() {
-            self.status =
-                "Finish the active drawing edit before changing reference geometry".into();
+            self.status = "Finish the current edit before using reference geometry".into();
             self.error = true;
             return;
         }
