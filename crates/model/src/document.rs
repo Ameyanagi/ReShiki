@@ -298,6 +298,11 @@ pub const RADICAL_ELECTRONS: u32 = 37;
 /// | 37 | Three or four radical electrons on an atom. |
 pub const VERSION: u32 = 37;
 
+/// Bytes of text in one annotation. Layout time grows faster than the text.
+pub const MAX_ANNOTATION_TEXT: usize = 64 * 1024;
+/// Bytes of annotation text in one drawing.
+pub const MAX_DRAWING_TEXT: usize = 1024 * 1024;
+
 fn newer_version(version: u64) -> String {
     format!(
         "This drawing was made with a newer version of ReShiki (document version {version}). Update ReShiki to open it."
@@ -415,6 +420,7 @@ impl Document {
         {
             return Err(newer_version(version));
         }
+        crate::pictures::check_stored(bytes)?;
         let mut doc: Self = serde_json::from_slice(bytes).map_err(|e| e.to_string())?;
         doc.validate()?;
         doc.migrate();
@@ -782,6 +788,17 @@ impl Document {
                 "Distance-derived bonds need document version {DISTANCE_BONDS} or later"
             ));
         }
+        // First, so that nothing lays out text beyond these limits.
+        let mut text = 0_usize;
+        for annotation in &self.annotations {
+            if annotation.text.len() > MAX_ANNOTATION_TEXT {
+                return Err("A text box can hold at most 64 KB of text".into());
+            }
+            text += annotation.text.len();
+        }
+        if text > MAX_DRAWING_TEXT {
+            return Err("A drawing can hold at most 1 MB of text".into());
+        }
         crate::projection::validate(self)?;
         crate::depth_appearance::validate(self)?;
         crate::ring_fills::validate(self)?;
@@ -798,8 +815,10 @@ impl Document {
             picture_bytes = picture_bytes.saturating_add(picture.stored_bytes());
             picture_pixels = picture_pixels
                 .saturating_add(u64::from(picture.width()) * u64::from(picture.height()));
-            if picture_bytes > 64 * 1024 * 1024 || picture_pixels > 64_000_000 {
-                return Err("Drawing pictures exceed 64 MB or 64 million pixels".into());
+            if picture_bytes > crate::pictures::DRAWING_BYTES
+                || picture_pixels > crate::pictures::DRAWING_PIXELS
+            {
+                return Err(crate::pictures::OVER_DRAWING_BUDGET.into());
             }
         }
         if self.version > VERSION {

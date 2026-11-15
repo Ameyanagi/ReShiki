@@ -220,12 +220,15 @@ fn generated_presentation_preflight_rejects_large_cartesian_annotations_before_m
     for id in [1, 3, 5, 7, 9] {
         source = atom_text::apply(&source, id, "[C,N]", Mode::Auto).unwrap();
     }
-    source.annotations.push(crate::document::Annotation {
-        id: source.next_id(),
-        position: Point::new(0., 140.),
-        text: "a".repeat(200_000),
-        format: Default::default(),
-    });
+    // 200,000 bytes of text, within the limit of one text box.
+    for _ in 0..4 {
+        source.annotations.push(crate::document::Annotation {
+            id: source.next_id(),
+            position: Point::new(0., 140.),
+            text: "a".repeat(50_000),
+            format: Default::default(),
+        });
+    }
     source.validate().unwrap();
     let before = source.clone();
     probe::reset();

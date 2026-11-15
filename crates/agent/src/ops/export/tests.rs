@@ -222,10 +222,11 @@ async fn svg_export_budget_counts_the_outlined_bytes() {
     let live = scene::svg_with_background(&doc).into_bytes();
     let outlined = crate::export::outlined_svg(scene::svg_with_background(&doc)).unwrap();
     assert!(outlined.len() > live.len());
+    // One byte short: the exact size comes from the finished file.
     let (host, handle) = hosting_with(
-        doc,
+        doc.clone(),
         Budgets {
-            max_output_bytes: live.len(),
+            max_output_bytes: outlined.len() - 1,
             ..Budgets::default()
         },
     );
@@ -235,6 +236,26 @@ async fn svg_export_budget_counts_the_outlined_bytes() {
     assert!(
         message.starts_with(&format!("The svg file is {} bytes;", outlined.len())),
         "{message}"
+    );
+    // Far short: refused before the outlines are written.
+    let (host, handle) = hosting_with(
+        doc,
+        Budgets {
+            max_output_bytes: live.len(),
+            ..Budgets::default()
+        },
+    );
+    let result = export_call(&host, &handle, "svg", Value::Null).await;
+    assert_eq!(
+        error(&result),
+        (
+            "budget",
+            format!(
+                "The svg file is more than {0} bytes; max_output_bytes allows at most {0}. Use live text or pdf, or reduce the drawing",
+                live.len()
+            )
+            .as_str()
+        )
     );
     let live = host
         .call(call(

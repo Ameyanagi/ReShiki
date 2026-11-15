@@ -121,6 +121,37 @@ pub async fn publication(
     editable: bool,
     max_pixels: u64,
 ) -> Result<Publication, String> {
+    publication_within(engine, doc, format, pages, editable, max_pixels, usize::MAX).await
+}
+
+/// [`publication`] for a caller that accepts at most `max_bytes`: an
+/// `svg-office` figure certain to be larger fails early with [`OVER_BYTES`].
+/// The caller still checks the size of the figure it gets.
+pub async fn publication_within(
+    engine: &crate::engine::LocalEngine,
+    doc: Document,
+    format: &'static str,
+    pages: bool,
+    editable: bool,
+    max_pixels: u64,
+    max_bytes: usize,
+) -> Result<Publication, String> {
+    if format == "png" && !pages {
+        use crate::document::Point;
+        doc.validate()?;
+        // Atoms too far apart for a PNG are a cheap sign that the figure will
+        // not fit. Measuring its scene now saves the chemistry check.
+        let budget = RasterBudget::file(max_pixels);
+        let atoms = || doc.atoms.iter().map(|atom| atom.position);
+        let lo = atoms().reduce(|lo, at| Point::new(lo.x.min(at.x), lo.y.min(at.y)));
+        let hi = atoms().reduce(|hi, at| Point::new(hi.x.max(at.x), hi.y.max(at.y)));
+        if lo
+            .zip(hi)
+            .is_some_and(|span| png_fits(span, budget).is_err())
+        {
+            png_fits(scene::bounds(&scene::primitives(&doc)), budget)?;
+        }
+    }
     let (doc, notice) = figure_document(engine, doc).await?;
     let doc = doc.current();
     let attachment_notice = pages
@@ -152,7 +183,17 @@ pub async fn publication(
                 detail: None,
             })
         } else {
-            figure_with_budget_and_drawing(&doc, format, max_pixels, drawing.as_deref())
+            with_attachment_notice(
+                &doc,
+                render_drawing(
+                    &doc,
+                    format,
+                    false,
+                    RasterBudget::file(max_pixels),
+                    max_bytes,
+                    drawing.as_deref(),
+                ),
+            )
         }?;
         Ok::<_, String>((figure, detail))
     })
@@ -180,34 +221,22 @@ pub fn drawing(doc: &Document, format: &str) -> Result<Vec<u8>, String> {
 pub fn figure(doc: &Document, format: &str) -> Result<Figure, String> {
     with_attachment_notice(
         doc,
-        render_drawing(doc, format, false, RasterBudget::FILE, None),
+        render_drawing(doc, format, false, RasterBudget::FILE, usize::MAX, None),
     )
 }
 
 /// [`figure`] with PNG resolution chosen to fit `max_pixels`, capped at
 /// [`FILE_PIXELS`].
 pub fn figure_with_budget(doc: &Document, format: &str, max_pixels: u64) -> Result<Figure, String> {
-    figure_with_budget_and_drawing(doc, format, max_pixels, None)
-}
-
-fn figure_with_budget_and_drawing(
-    doc: &Document,
-    format: &str,
-    max_pixels: u64,
-    drawing: Option<&[u8]>,
-) -> Result<Figure, String> {
     with_attachment_notice(
         doc,
         render_drawing(
             doc,
             format,
             false,
-            RasterBudget {
-                adaptive: true,
-                pixels: max_pixels.min(FILE_PIXELS),
-                side: u32::MAX,
-            },
-            drawing,
+            RasterBudget::file(max_pixels),
+            usize::MAX,
+            None,
         ),
     )
 }
@@ -235,7 +264,7 @@ pub fn clipboard_figure_with_drawing(
 ) -> Result<Figure, String> {
     with_attachment_notice(
         doc,
-        render_drawing(doc, format, true, RasterBudget::FILE, drawing),
+        render_drawing(doc, format, true, RasterBudget::FILE, usize::MAX, drawing),
     )
 }
 
@@ -262,20 +291,33 @@ fn with_attachment_notice(
     Ok(figure)
 }
 
+/// The refusal of a figure that is certain to be larger than `max_bytes`.
+pub const OVER_BYTES: &str = "The figure is larger than the output limit";
+
 /// `file_budget` bounds file PNGs; clipboard PNGs use the clipboard budget.
+/// An SVG with outlined text that cannot fit `max_bytes` is refused before it
+/// is written; the caller still checks the size of the figure it gets.
 fn render_drawing(
     doc: &Document,
     format: &str,
     clipboard: bool,
     file_budget: RasterBudget,
+    max_bytes: usize,
     drawing: Option<&[u8]>,
 ) -> Result<Figure, String> {
     doc.validate()?;
-    let svg = if clipboard {
-        scene::svg(doc)
+    let budget = if clipboard {
+        RasterBudget::clipboard(cfg!(windows))
     } else {
-        scene::svg_with_background(doc)
+        file_budget
     };
+    let primitives = scene::primitives(doc);
+    if format == "png" {
+        png_fits(scene::bounds(&primitives), budget)?;
+    }
+    #[cfg(test)]
+    SCENES.with(|scenes| scenes.set(scenes.get() + 1));
+    let svg = scene::svg_of(doc, primitives, !clipboard);
     if format == "svg" {
         let mut bytes = svg.into_bytes();
         if let Some(drawing) = drawing {
@@ -288,10 +330,16 @@ fn render_drawing(
     }
     let tree = parse_svg(svg)?;
     let mut figure = match format {
-        "svg-office" => office_svg(&tree).map(|bytes| Figure {
-            bytes,
-            detail: None,
-        }),
+        "svg-office" => {
+            // Before the outlines are written, which costs as much as parsing.
+            if outlined_floor(tree.root()) > max_bytes {
+                return Err(OVER_BYTES.into());
+            }
+            office_svg(&tree).map(|bytes| Figure {
+                bytes,
+                detail: None,
+            })
+        }
         #[cfg(windows)]
         "emf" => if clipboard {
             crate::native_windows::metafile(&tree, doc)
@@ -307,11 +355,6 @@ fn render_drawing(
             detail: None,
         }),
         "png" => {
-            let budget = if clipboard {
-                RasterBudget::clipboard(cfg!(windows))
-            } else {
-                file_budget
-            };
             let (width, height, dpi) =
                 png_dimensions(tree.size().width(), tree.size().height(), budget)?;
             let scale = dpi as f32 / 96.0;
@@ -427,6 +470,9 @@ fn single_pdf(tree: &resvg::usvg::Tree, drawing: Option<&[u8]>) -> Result<Vec<u8
 
 /// The pixel budget of a file-export PNG.
 pub const FILE_PIXELS: u64 = 80_000_000;
+/// The longest side of an exported PNG. Many image readers refuse a longer
+/// one, and a single line of text can be that long within the pixel budget.
+pub const FILE_SIDE: u32 = 32_767;
 
 #[derive(Clone, Copy)]
 struct RasterBudget {
@@ -435,11 +481,19 @@ struct RasterBudget {
     side: u32,
 }
 impl RasterBudget {
-    const FILE: Self = Self {
-        adaptive: true,
-        pixels: FILE_PIXELS,
-        side: u32::MAX,
-    };
+    const FILE: Self = Self::file(FILE_PIXELS);
+
+    const fn file(pixels: u64) -> Self {
+        Self {
+            adaptive: true,
+            pixels: if pixels < FILE_PIXELS {
+                pixels
+            } else {
+                FILE_PIXELS
+            },
+            side: FILE_SIDE,
+        }
+    }
 
     fn clipboard(windows: bool) -> Self {
         if windows {
@@ -457,6 +511,59 @@ impl RasterBudget {
             }
         }
     }
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Scenes written as SVG for a figure on this thread.
+    static SCENES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Refuse a PNG of a scene with these bounds that cannot fit `budget`. The
+/// bounds of a scene are the size of its figure, so this is exact before the
+/// scene is written and parsed.
+fn png_fits(
+    (lo, hi): (crate::document::Point, crate::document::Point),
+    budget: RasterBudget,
+) -> Result<(), String> {
+    // The SVG gives its size in points, and the parser turns points into CSS
+    // pixels. Round in the same order so the size matches to the pixel.
+    let pixels = |span: f32| (span * crate::style::DEFAULT.points_per_world() * 96. / 72.).max(1.);
+    png_dimensions(pixels(hi.x - lo.x), pixels(hi.y - lo.y), budget).map(|_| ())
+}
+
+/// At least this many bytes of path data are written for `group` with its
+/// text outlined. Each segment is a letter and its numbers, each followed by
+/// a space, and a number has at least the digits of its whole part.
+fn outlined_floor(group: &resvg::usvg::Group) -> usize {
+    use resvg::{tiny_skia::PathSegment, usvg::Node};
+    let point = |p: resvg::tiny_skia::Point| {
+        [p.x, p.y]
+            .map(|v| 2 + (v.abs() as u32).checked_ilog10().unwrap_or(0) as usize)
+            .iter()
+            .sum::<usize>()
+    };
+    group
+        .children()
+        .iter()
+        .map(|node| match node {
+            Node::Group(group) => outlined_floor(group),
+            Node::Text(text) => outlined_floor(text.flattened()),
+            Node::Path(path) => path
+                .data()
+                .segments()
+                .map(|segment| {
+                    2 + match segment {
+                        PathSegment::MoveTo(p) | PathSegment::LineTo(p) => point(p),
+                        PathSegment::QuadTo(a, p) => point(a) + point(p),
+                        PathSegment::CubicTo(a, b, p) => point(a) + point(b) + point(p),
+                        PathSegment::Close => 0,
+                    }
+                })
+                .sum(),
+            Node::Image(_) => 0,
+        })
+        .sum()
 }
 
 /// Choose resolution before allocating pixels. PNG resolution metadata keeps
