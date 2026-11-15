@@ -1475,6 +1475,9 @@ fn show_properties_menu_ticks_shown_rows_and_starts_with_weight() -> Result<(), 
             )
         })
         .ok_or("Missing Show properties")?;
+    // ArrowRight only opens the list.
+    let _ = app.context_action(Action::FocusedKey(0, index, Named::ArrowRight));
+    assert!(app.tab.doc.property_captions.is_empty());
     // Clicking the row itself shows Mol. Wt. and opens the list.
     let _ = app.context_action(Action::Activate(0, index));
     assert!(shown(&app.tab.doc, &ethanol, Property::Weight));
@@ -1499,5 +1502,20 @@ fn show_properties_menu_ticks_shown_rows_and_starts_with_weight() -> Result<(), 
     let _ = app.update(Message::Undo);
     assert!(!shown(&app.tab.doc, &ethanol, Property::Formula));
     assert!(shown(&app.tab.doc, &ethanol, Property::Weight));
+    // Enter on the row does what a click does.
+    let _ = app.update(Message::Undo);
+    assert!(app.tab.doc.property_captions.is_empty());
+    app.edit(Edit::ContextMenu {
+        position: Point::new(30., 40.),
+        selected: vec![ethanol[0]],
+        hit: vec![ethanol[0]],
+    });
+    let _ = app.context_action(Action::FocusedKey(0, index, Named::Enter));
+    assert!(shown(&app.tab.doc, &ethanol, Property::Weight));
+    assert!(
+        app.context_menu
+            .as_ref()
+            .is_some_and(|menu| menu.children.len() == 1)
+    );
     Ok(())
 }

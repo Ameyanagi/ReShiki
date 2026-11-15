@@ -725,6 +725,10 @@ impl App {
         self.changed_continuing(before, false);
     }
     fn changed_continuing(&mut self, before: Document, continuing: bool) {
+        // Mol. Wt. captions follow View → 2-decimal MW with every edit.
+        for link in &mut self.tab.doc.property_captions {
+            link.two_decimal_weight = self.appearance.two_decimal_weight;
+        }
         if self.settles_unchanged(&before) {
             return;
         }

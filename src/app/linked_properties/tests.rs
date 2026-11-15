@@ -52,3 +52,22 @@ fn pin_shows_and_hides_a_line_with_undo() {
     let _ = app.update(Message::Undo);
     assert_eq!(caption(&app), Some("Mol. Wt.: 46.07"));
 }
+
+#[test]
+fn weight_captions_follow_the_two_decimal_setting() {
+    use crate::app::view_settings::Action::TwoDecimalWeight;
+    let (mut app, _) = App::new();
+    let atoms = ethanol(&mut app);
+    app.appearance.two_decimal_weight = true;
+    let _ = app.update(Message::ToggleProperty(atoms.clone(), Property::Weight));
+    assert_eq!(caption(&app), Some("Mol. Wt.: 46.07"));
+    app.view_action(TwoDecimalWeight(false));
+    assert_eq!(caption(&app), Some("Mol. Wt.: 46.069"));
+    // One Undo step, and the next edit follows the setting again.
+    let _ = app.update(Message::Undo);
+    assert_eq!(caption(&app), Some("Mol. Wt.: 46.07"));
+    let before = app.tab.doc.clone();
+    app.tab.doc.translate(&atoms, 10., 0.);
+    app.changed(before);
+    assert_eq!(caption(&app), Some("Mol. Wt.: 46.069"));
+}

@@ -394,6 +394,17 @@ impl App {
         self.property_target(hit.unwrap_or(&[]))
     }
 
+    /// Choosing "Show properties" itself, by click, Enter or Space, shows
+    /// Mol. Wt. when the molecule has no caption yet.
+    fn show_default_property(&mut self, page: Page) {
+        if page == Page::Properties
+            && let Some(target) = self.context_property_target()
+            && reshiki::linked_properties::caption(&self.tab.doc, &target).is_none()
+        {
+            self.toggle_property(&target, reshiki::linked_properties::Property::Weight);
+        }
+    }
+
     /// One row per property, in the Properties panel's order.
     fn property_entries(&self) -> Vec<Entry> {
         let Some(target) = self.context_property_target() else {
@@ -873,14 +884,8 @@ impl App {
                     ..
                 }) = entry
                 {
-                    if matches!(action, Action::Page(Page::Properties))
-                        && let Some(target) = self.context_property_target()
-                        && reshiki::linked_properties::caption(&self.tab.doc, &target).is_none()
-                    {
-                        // Clicking the row itself shows the default line.
-                        self.toggle_property(&target, reshiki::linked_properties::Property::Weight);
-                    }
-                    if matches!(action, Action::Page(_)) {
+                    if let Action::Page(page) = action {
+                        self.show_default_property(page);
                         self.context_hover(level, index, true);
                     } else {
                         return self.context_action(action);
@@ -1021,8 +1026,12 @@ impl App {
                         ..
                     }) = entries.get(index)
                     {
+                        let child = *child;
+                        if key != Named::ArrowRight {
+                            self.show_default_property(child);
+                        }
                         let first = self
-                            .context_entries(*child)
+                            .context_entries(child)
                             .iter()
                             .position(|entry| matches!(entry, Entry::Item { enabled: true, .. }));
                         self.context_hover(level, index, true);
