@@ -24,6 +24,8 @@ pub enum Page {
     Tilt,
     /// Show the selected molecule as 2D, 3D or both.
     Model,
+    /// Property lines under the clicked molecule, ticked when shown.
+    Properties,
     Attachments,
     CopyAs,
     // Menus anchored under context row buttons.
@@ -40,6 +42,8 @@ mod tests;
 #[cfg(test)]
 mod view_parity_tests;
 const SHORTCUT_GAP: f32 = 12.;
+/// The tick column of rows that show whether they are on.
+const TICK_WIDTH: f32 = 16.;
 const SCROLLBAR_WIDTH: f32 = 10.;
 const SCROLLBAR_GAP: f32 = 4.;
 
@@ -194,6 +198,7 @@ impl App {
                 Hint("Labels stay upright. Undo restores the previous view."),
             ],
             Page::Model => self.model_entries(),
+            Page::Properties => self.property_entries(),
             Page::Align => self.align_entries(atoms, multiple),
             Page::Bonds => self.bond_entries(bonds),
             Page::AlignObjects => self.arrange_entries(&[&Command::HORIZONTAL, &Command::VERTICAL]),
@@ -358,6 +363,9 @@ impl App {
                 true,
             ));
         }
+        if self.context_property_target().is_some() {
+            entries.push(Entry::page("Show properties", Page::Properties));
+        }
         let connected: Vec<_> = reshiki::editing::groups(&self.tab.doc, &self.tab.doc.all_ids())
             .into_iter()
             .filter(|ids| {
@@ -376,6 +384,38 @@ impl App {
             ));
         }
         entries
+    }
+
+    fn context_property_target(&self) -> Option<Vec<u64>> {
+        let hit = self
+            .context_menu
+            .as_ref()
+            .and_then(|menu| menu.hit.as_deref());
+        self.property_target(hit.unwrap_or(&[]))
+    }
+
+    /// One row per property, in the Properties panel's order.
+    fn property_entries(&self) -> Vec<Entry> {
+        let Some(target) = self.context_property_target() else {
+            return vec![];
+        };
+        reshiki::linked_properties::Property::ALL
+            .into_iter()
+            .map(|p| Entry::command(p.name(), Message::ToggleProperty(target.clone(), p), true))
+            .collect()
+    }
+
+    /// Whether a property row is ticked; `None` for other rows.
+    fn ticked(&self, action: &Action) -> Option<bool> {
+        match action {
+            Action::Run(message) => match message.as_ref() {
+                Message::ToggleProperty(atoms, property) => Some(
+                    reshiki::linked_properties::shown(&self.tab.doc, atoms, *property),
+                ),
+                _ => None,
+            },
+            _ => None,
+        }
     }
 
     /// The Structure section's 2D / 3D / Both, with 2D in either layout; the
@@ -833,6 +873,13 @@ impl App {
                     ..
                 }) = entry
                 {
+                    if matches!(action, Action::Page(Page::Properties))
+                        && let Some(target) = self.context_property_target()
+                        && reshiki::linked_properties::caption(&self.tab.doc, &target).is_none()
+                    {
+                        // Clicking the row itself shows the default line.
+                        self.toggle_property(&target, reshiki::linked_properties::Property::Weight);
+                    }
                     if matches!(action, Action::Page(_)) {
                         self.context_hover(level, index, true);
                     } else {
@@ -1015,6 +1062,9 @@ impl App {
             .filter_map(|entry| match entry {
                 Entry::Item { label, action, .. } => Some(
                     text_width(label, 12.)
+                        + self
+                            .ticked(action)
+                            .map_or(0., |_| TICK_WIDTH + SHORTCUT_GAP)
                         + if matches!(action, Action::Page(_)) {
                             24.
                         } else {
@@ -1105,9 +1155,18 @@ impl App {
                     } else {
                         label
                     };
-                    let mut content = row![label]
+                    let mut content = row![]
                         .spacing(SHORTCUT_GAP)
                         .align_y(iced::Alignment::Center);
+                    let ticked = self.ticked(&action);
+                    if let Some(ticked) = ticked {
+                        content = content.push(
+                            text(if ticked { "✓" } else { "" })
+                                .size(12)
+                                .width(TICK_WIDTH),
+                        );
+                    }
+                    content = content.push(label);
                     if matches!(action, Action::Page(_)) {
                         content = content.push(text("›").size(16));
                     } else if let Some(keys) = shortcut(&action) {
@@ -1128,7 +1187,11 @@ impl App {
                     }
                     let pointer = !menu.keyboard;
                     let id = item_id(page, index, &action);
-                    let item = reshiki::accessibility::button(id, accessible_name, content)
+                    let mut item = reshiki::accessibility::button(id, accessible_name, content);
+                    if let Some(ticked) = ticked {
+                        item = item.checked(ticked);
+                    }
+                    let item = item
                         .padding([6, 10])
                         .width(Length::Fill)
                         .style(move |theme: &iced::Theme, status| {

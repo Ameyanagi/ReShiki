@@ -112,6 +112,7 @@ impl App {
             Message::CaptionAction(action) => self.caption_action(action),
             Message::TextStyle(change) => self.apply_text_style(change),
             Message::FormatChemicalName => self.format_chemical_name(),
+            Message::ToggleProperty(atoms, property) => self.toggle_property(&atoms, property),
             Message::FontSize(value) => self.tab.font_size_input = value,
             Message::ApplyFontSize => self.apply_font_size_input(),
             Message::ClearRingFill => self.apply_ring_color(None),

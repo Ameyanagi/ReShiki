@@ -22,6 +22,9 @@ struct ClassCache {
     calculations: usize,
 }
 
+/// The pin beside a property row.
+const PIN: f32 = 20.;
+
 fn molecular_weight(mass: f64, two_decimal_weight: bool) -> String {
     let precision = if two_decimal_weight { 2 } else { 3 };
     format!("{mass:.precision$}")
@@ -1184,6 +1187,38 @@ impl App {
         )
     }
 
+    /// Show this property under the selected molecule, or hide it.
+    fn property_pin(&self, property: reshiki::linked_properties::Property) -> Element<'_, Message> {
+        use super::icons::{Glyph, Icon};
+        let target = self.property_target(&[]);
+        let available = target.is_some();
+        let shown = target
+            .as_ref()
+            .is_some_and(|atoms| reshiki::linked_properties::shown(&self.tab.doc, atoms, property));
+        hover_hint(
+            reshiki::accessibility::button(
+                format!("property-pin-{property:?}"),
+                format!("Show {} under the molecule", property.name()),
+                iced::widget::canvas(Glyph(Icon::Pin, shown))
+                    .width(PIN)
+                    .height(PIN),
+            )
+            .padding(0)
+            .checked(shown)
+            .style(control(shown))
+            .on_press_maybe(target.map(|atoms| Message::ToggleProperty(atoms, property))),
+            if shown {
+                "Hide from the molecule"
+            } else if available {
+                "Show under the molecule"
+            } else {
+                "Select one molecule to show this under it"
+            },
+            tooltip::Position::Left,
+        )
+        .into()
+    }
+
     fn molecular_properties(&self) -> Element<'_, Message> {
         // Let the crystal subsystem decide which drawings need a constrained
         // analysis scope, including distance provenance retained without a cell.
@@ -1287,9 +1322,21 @@ impl App {
             );
         }
         if let Some(a) = self.property_analysis() {
+            use reshiki::linked_properties::Property;
             let unpaired = unpaired_electrons(&self.tab.doc, a, key.as_ref().map(|_| &ids));
-            for (label, hint, value) in
-                property_rows(a, self.appearance.two_decimal_weight, unpaired)
+            let rows =
+                std::iter::once(("Formula", None, self.shown_formula(&a.display_formula))).chain(
+                    property_rows(a, self.appearance.two_decimal_weight, unpaired),
+                );
+            let pins = [
+                Some(Property::Formula),
+                Some(Property::Weight),
+                Some(Property::ExactMass),
+                Some(Property::LogP),
+                Some(Property::Tpsa),
+            ];
+            for ((label, hint, value), pin) in
+                rows.zip(pins.into_iter().chain(std::iter::repeat(None)))
             {
                 let label = text(label).size(11).style(muted_text).width(Length::Fill);
                 let label: Element<'_, Message> = if let Some(hint) = hint {
@@ -1297,11 +1344,26 @@ impl App {
                 } else {
                     label.into()
                 };
-                body = body.push(row![label, text(value).size(12)].align_y(Alignment::Center));
+                let mut line = row![label, text(value).size(12)]
+                    .spacing(6)
+                    .align_y(Alignment::Center);
+                if let Some(property) = pin {
+                    line = line.push(self.property_pin(property));
+                }
+                body = body.push(line);
             }
             if let Some(analysis) = self.elemental_analysis(a) {
                 body = body
-                    .push(text("Elemental analysis").size(11).style(muted_text))
+                    .push(
+                        row![
+                            text("Elemental analysis")
+                                .size(11)
+                                .style(muted_text)
+                                .width(Length::Fill),
+                            self.property_pin(Property::Analysis)
+                        ]
+                        .align_y(Alignment::Center),
+                    )
                     .push(
                         text(analysis.replace(", ", ",\u{a0}"))
                             .size(12)
