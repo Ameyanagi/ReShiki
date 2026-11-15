@@ -90,8 +90,8 @@ fn typed_error_display_preserves_message_bytes() {
         "",
         "Enter a chemical name of at most 2048 bytes without control characters",
         "Local parser worker failed: fixture failure",
-        "Local name parsing was cancelled",
-        "Local name generation was cancelled",
+        "Local name parsing was canceled",
+        "Local name generation was canceled",
         "OPSIN details · complete stereochemistry",
     ] {
         for error in [

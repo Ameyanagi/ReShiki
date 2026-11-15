@@ -117,6 +117,10 @@ pub(super) fn materialize(
             }
             result.groups.retain(|g| !g.members.contains(id));
             result.abbreviations.retain(|g| !g.members.contains(id));
+            // The caption follows the rest of its molecule.
+            for link in &mut result.property_captions {
+                link.atoms.retain(|a| a != id);
+            }
             crate::projection::sync_centroids(&mut result);
             result.invalidate_chemistry(&[target]);
             Ok(result)

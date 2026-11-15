@@ -5,8 +5,7 @@
 //! The admission and cancellation checks hold whatever the timing: a fast
 //! server only makes them weaker, never false. Every session runs under a
 //! 60 s watchdog with an empty data folder.
-#[path = "common/headless.rs"]
-mod headless;
+use crate::headless;
 
 use headless::{McpSession, StderrMode, cancel, modern_call, modern_meta};
 use reshiki_agent::ops::budget::Budgets;

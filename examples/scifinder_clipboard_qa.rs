@@ -57,7 +57,7 @@ async fn main() -> anyhow::Result<()> {
         } else {
             CopyFormat::ChemDoodleReaction
         };
-        let copy = heap_future(|| prepare_as(engine.clone(), chemical, format))
+        let copy = heap_future(|| prepare_as(engine.clone(), chemical, format, Default::default()))
             .await
             .map_err(anyhow::Error::msg)?;
         let text = copy.text().context("Missing chemical text")?;

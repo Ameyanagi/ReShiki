@@ -19,6 +19,14 @@ pub(crate) struct Graph<'d> {
     bonds: HashMap<u64, Vec<usize>>,
     /// Each bond's end positions, by bond index.
     ends: Vec<Option<(Point, Point)>>,
+    collapsed: crate::abbreviations::Membership<'d>,
+    cells: std::cell::OnceCell<Cells>,
+}
+
+/// Atom indices by square cell, in document order.
+struct Cells {
+    size: f32,
+    atoms: HashMap<(i32, i32), Vec<usize>>,
 }
 
 impl<'d> Graph<'d> {
@@ -49,6 +57,8 @@ impl<'d> Graph<'d> {
             atoms,
             bonds,
             ends,
+            collapsed: crate::abbreviations::Membership::new(doc),
+            cells: std::cell::OnceCell::new(),
         }
     }
 
@@ -75,6 +85,57 @@ impl<'d> Graph<'d> {
     /// The end positions of the bond at this index, when both atoms exist.
     pub(crate) fn ends(&self, index: usize) -> Option<(Point, Point)> {
         self.ends.get(index).copied().flatten()
+    }
+
+    /// The atoms no farther than `reach` from `at` along both axes, in
+    /// document order.
+    pub(crate) fn near(&self, at: Point, reach: f32) -> Vec<&'d Atom> {
+        let doc = self.doc;
+        let inside = |atom: &&Atom| {
+            (atom.position.x - at.x).abs() <= reach && (atom.position.y - at.y).abs() <= reach
+        };
+        // Cells sized by the first reach asked for: label sizes rarely differ
+        // much within a drawing.
+        let Cells { size, atoms } = self.cells.get_or_init(|| {
+            let size = reach.max(1.);
+            let mut atoms: HashMap<_, Vec<usize>> = HashMap::new();
+            for (index, atom) in doc.atoms.iter().enumerate() {
+                let key = (atom.position.x / size, atom.position.y / size);
+                atoms
+                    .entry((key.0.floor() as i32, key.1.floor() as i32))
+                    .or_default()
+                    .push(index);
+            }
+            Cells { size, atoms }
+        });
+        // A reach of more cells than there are atoms is cheaper to scan.
+        if (2. * reach / size + 2.).powi(2) > doc.atoms.len() as f32 {
+            return doc.atoms.iter().filter(inside).collect();
+        }
+        let span =
+            |v: f32| ((v - reach) / size).floor() as i32..=((v + reach) / size).floor() as i32;
+        let mut found: Vec<usize> = span(at.x)
+            .flat_map(|x| span(at.y).map(move |y| (x, y)))
+            .filter_map(|key| atoms.get(&key))
+            .flatten()
+            .copied()
+            .collect();
+        found.sort_unstable();
+        found
+            .into_iter()
+            .filter_map(|index| doc.atoms.get(index))
+            .filter(inside)
+            .collect()
+    }
+
+    /// [`Document::atom_visible`] without rescanning every abbreviation.
+    pub(crate) fn atom_visible(&self, id: u64) -> bool {
+        self.collapsed.atom_visible(id)
+    }
+
+    /// [`Document::bond_visible`] without rescanning every abbreviation.
+    pub(crate) fn bond_visible(&self, a: u64, b: u64) -> bool {
+        self.collapsed.bond_visible(a, b)
     }
 
     /// [`crate::atom_labels::visible`] without rescanning every bond.
@@ -118,6 +179,7 @@ mod tests {
             assert_eq!(indexed, scanned);
             assert_eq!(graph.degree(id), scanned.len());
             assert_eq!(graph.visible(atom), crate::atom_labels::visible(atom, &doc));
+            assert_eq!(graph.atom_visible(id), doc.atom_visible(id));
         }
         for (i, bond) in doc.bonds.iter().enumerate() {
             let ends = doc
@@ -125,6 +187,38 @@ mod tests {
                 .zip(doc.atom(bond.b))
                 .map(|(a, b)| (a.position, b.position));
             assert_eq!(graph.ends(i), ends);
+            assert_eq!(
+                graph.bond_visible(bond.a, bond.b),
+                doc.bond_visible(bond.a, bond.b)
+            );
+        }
+        // The first reach sets the cell size; later ones span several cells,
+        // one cell or the whole drawing.
+        for reach in [40., 150., 3., 1e6] {
+            for atom in &doc.atoms {
+                let at = atom.position;
+                let scanned: Vec<_> = doc
+                    .atoms
+                    .iter()
+                    .filter(|other| {
+                        (other.position.x - at.x).abs() <= reach
+                            && (other.position.y - at.y).abs() <= reach
+                    })
+                    .map(std::ptr::from_ref)
+                    .collect();
+                let indexed: Vec<_> = graph
+                    .near(at, reach)
+                    .into_iter()
+                    .map(std::ptr::from_ref)
+                    .collect();
+                assert_eq!(indexed, scanned);
+            }
+        }
+        for group in &doc.abbreviations {
+            assert_eq!(
+                group.faces_left_in(&doc, Some(&graph)),
+                group.faces_left(&doc)
+            );
         }
         assert!(graph.atom(u64::MAX).is_none());
         assert_eq!(graph.bonds(u64::MAX).count(), 0);

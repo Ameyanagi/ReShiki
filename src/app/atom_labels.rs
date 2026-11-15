@@ -237,13 +237,13 @@ impl App {
                 self.tab.labels.cancel_locants();
                 self.tab.labels.ring_atoms_only = value;
                 if pending {
-                    self.status = "IUPAC locant numbering cancelled".into();
+                    self.status = "IUPAC locant numbering canceled".into();
                     self.error = false;
                 }
             }
             Action::CancelLocants => {
                 self.tab.labels.cancel_locants();
-                self.status = "IUPAC locant numbering cancelled".into();
+                self.status = "IUPAC locant numbering canceled".into();
                 self.error = false;
             }
             Action::ReplaceLocants => {
@@ -353,9 +353,7 @@ impl App {
         self.error = false;
         self.changed(before);
         if !self.error {
-            self.status = format!(
-                "IUPAC locants applied to {count} atoms · Undo restores the previous numbers"
-            );
+            self.status = format!("IUPAC locants applied to {count} atoms");
         }
     }
 
@@ -375,8 +373,7 @@ impl App {
             Action::PositionIndicators => {
                 self.tab.selected = ids;
                 self.tool = Tool::EditPoints;
-                self.status =
-                    "Drag a number, atom map or stereochemistry handle · Escape finishes".into();
+                self.status = "Drag a number, map or stereo label · Esc finishes".into();
             }
             Action::Carbons(value) => {
                 if self.tab.labels.scope == Scope::Drawing {

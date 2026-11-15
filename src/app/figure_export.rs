@@ -148,6 +148,11 @@ impl App {
         let doc = self.tab.doc.clone();
         let engine = self.engine.clone();
         let stem = self.export_stem();
+        let background = self
+            .appearance
+            .export_background
+            .paper(self.appearance.custom_background);
+        let dpi = self.appearance.export_dpi.get();
         Task::perform(
             async move {
                 let p = reshiki::export::publication(
@@ -156,6 +161,8 @@ impl App {
                     render_format,
                     pages,
                     editable,
+                    background,
+                    dpi,
                     reshiki::export::FILE_PIXELS,
                 )
                 .await?;

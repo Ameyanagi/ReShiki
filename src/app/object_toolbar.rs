@@ -55,12 +55,12 @@ impl Command {
         match self {
             Self::Layer(true) => "Bring to front",
             Self::Layer(false) => "Send to back",
-            Self::Align(Arrange::AlignLeft) => "Align left edges",
-            Self::Align(Arrange::AlignHorizontal) => "Align horizontal centers",
-            Self::Align(Arrange::AlignRight) => "Align right edges",
-            Self::Align(Arrange::AlignTop) => "Align top edges",
-            Self::Align(Arrange::AlignVertical) => "Align vertical centers",
-            Self::Align(Arrange::AlignBottom) => "Align bottom edges",
+            Self::Align(Arrange::AlignLeft) => "Align left",
+            Self::Align(Arrange::AlignHorizontal) => "Align center",
+            Self::Align(Arrange::AlignRight) => "Align right",
+            Self::Align(Arrange::AlignTop) => "Align top",
+            Self::Align(Arrange::AlignVertical) => "Align middle",
+            Self::Align(Arrange::AlignBottom) => "Align bottom",
             Self::Align(Arrange::DistributeHorizontal) => "Distribute horizontally",
             Self::Align(Arrange::DistributeVertical) => "Distribute vertically",
             Self::Reflect(true) => "Flip horizontal",
@@ -138,10 +138,7 @@ impl App {
         match action {
             Action::Visible(visible) => {
                 self.appearance.arrange_controls = visible;
-                if let Err(error) = self.appearance.save() {
-                    self.status = format!("Could not save arrange controls preference: {error}");
-                    self.error = true;
-                }
+                self.save_preference(super::settings_page::Section::Drawing, "arrange controls");
             }
             Action::Layer(front) => self.layer_objects(front, true, true),
         }

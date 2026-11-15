@@ -278,7 +278,7 @@ fn molecule_name_caption_refuses_bond_without_document_or_history_changes() {
     assert_unchanged_failure(&app, &before, revision, &[text]);
     assert_eq!(
         app.status,
-        "This text is a molecule name; it stays a caption"
+        "This text belongs to a molecule; it stays a caption"
     );
 }
 
@@ -428,7 +428,7 @@ fn molecule_caption_hover_shows_a_refusal_hint_without_an_error() {
     app.edit(Edit::Hover(Some(point)));
     assert_eq!(
         app.status,
-        "This text is a molecule name; it stays a caption"
+        "This text belongs to a molecule; it stays a caption"
     );
     assert!(!app.error);
     app.edit(Edit::Hover(None));

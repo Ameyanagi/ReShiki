@@ -490,7 +490,8 @@ fn main() -> anyhow::Result<()> {
         fs::create_dir_all(&out)?;
         fs::write(
             out.join("shortcut-examples.pdf"),
-            reshiki::export::pages_pdf(&build_document(true)?).map_err(anyhow::Error::msg)?,
+            reshiki::export::pages_pdf(&build_document(true)?, reshiki::export::Background::Canvas)
+                .map_err(anyhow::Error::msg)?,
         )?;
     }
     Ok(())

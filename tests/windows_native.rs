@@ -246,9 +246,10 @@ async fn windows_clipboard_roundtrip_preserves_editable_drawing_and_copy_image()
     let original: Document =
         serde_json::from_str(include_str!("fixtures/ui-drawn-ethanol.reshiki")).unwrap();
     let engine = reshiki::engine::LocalEngine::default();
-    let outcome = reshiki::clipboard::copy(engine.clone(), original.clone(), false)
-        .await
-        .unwrap();
+    let outcome =
+        reshiki::clipboard::copy(engine.clone(), original.clone(), false, Default::default())
+            .await
+            .unwrap();
     assert!(outcome.external_editable);
     let pasted = reshiki::clipboard::paste(engine.clone(), false)
         .await
@@ -257,7 +258,7 @@ async fn windows_clipboard_roundtrip_preserves_editable_drawing_and_copy_image()
     assert_eq!(pasted.bonds.len(), original.bonds.len());
     assert_eq!(pasted.annotations[0].text, original.annotations[0].text);
     assert_eq!(pasted.arrows.len(), original.arrows.len());
-    reshiki::clipboard::copy(engine.clone(), original.clone(), true)
+    reshiki::clipboard::copy(engine.clone(), original.clone(), true, Default::default())
         .await
         .unwrap();
     let image = reshiki::clipboard::paste(engine, true).await.unwrap();

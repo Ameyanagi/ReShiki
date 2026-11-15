@@ -29,10 +29,10 @@ fn drawing() -> Document {
     doc
 }
 
-struct Ui {
-    renderer: iced::Renderer,
-    tree: Tree,
-    size: Size,
+pub(super) struct Ui {
+    pub(super) renderer: iced::Renderer,
+    pub(super) tree: Tree,
+    pub(super) size: Size,
 }
 
 impl Ui {
@@ -61,7 +61,7 @@ impl Ui {
         messages
     }
 
-    fn draw(&mut self, app: &App, cursor: iced::Point) {
+    pub(super) fn draw(&mut self, app: &App, cursor: iced::Point) {
         use iced::advanced::Renderer as _;
         let viewport = Rectangle::with_size(self.size);
         let theme = app.theme();
@@ -97,7 +97,7 @@ impl Ui {
 
 #[tokio::test]
 #[ignore = "Release-mode complete hover update and renderer profiling"]
-async fn hover_workloads() {
+async fn manual_hover_workloads() {
     let doc = drawing();
     println!(
         "drawing,{} atoms,{} bonds,{} abbreviations",
@@ -204,7 +204,7 @@ async fn hover_workloads() {
 /// native camera and path, but still excludes returned tasks and GPU presentation.
 #[tokio::test]
 #[ignore = "Release-mode native-pointer widget/app/overlay profiling"]
-async fn native_pointer_hover_workloads() {
+async fn manual_native_pointer_hover_workloads() {
     let (mut app, _) = App::new();
     app.recovered.clear();
     app.tab.doc = drawing();

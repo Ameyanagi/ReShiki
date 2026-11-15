@@ -8,8 +8,7 @@
 //! of tests/assistant.rs. Every child has an empty data folder and a
 //! watchdog, and inherits RESHIKI_INCHI_HELPER as CI sets it
 //! (.github/workflows/checks.yml).
-#[path = "common/headless.rs"]
-mod headless;
+use crate::headless;
 
 use base64::{Engine, engine::general_purpose::STANDARD};
 use headless::{McpSession, StderrMode};
@@ -377,6 +376,8 @@ fn native_figures_match_the_library() {
                 format,
                 false,
                 false,
+                export::Background::Canvas,
+                reshiki::style::DEFAULT.png_dpi,
                 budget,
             ))
             .expect("a publication figure");
@@ -427,6 +428,8 @@ fn figure_warnings_come_in_ops_order() {
             "png",
             false,
             false,
+            export::Background::Canvas,
+            reshiki::style::DEFAULT.png_dpi,
             Budgets::default().export_png_pixels,
         ))
         .expect("a publication figure");

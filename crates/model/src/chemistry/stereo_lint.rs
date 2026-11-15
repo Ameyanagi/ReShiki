@@ -585,7 +585,7 @@ pub fn check(document: &Document, style: bool) -> Vec<Note> {
                         )
                     } else {
                         format!(
-                            "Stereo bond at {} has no effect: its narrow end is not a stereocentre",
+                            "Stereo bond at {} has no effect: its narrow end is not a stereocenter",
                             atom_name(document, bond.a)
                         )
                     };
@@ -598,9 +598,9 @@ pub fn check(document: &Document, style: bool) -> Vec<Note> {
                 }
                 if style && component.centre(a) && component.centre(b) {
                     let message = if matches!(bond.display.as_str(), "hash" | "hashed") {
-                        "Hashed bonds between two stereocentres are always ambiguous; redraw stereo bonds"
+                        "Hashed bonds between two stereocenters are always ambiguous; redraw stereo bonds"
                     } else {
-                        "Stereo bond between two stereocentres; redraw stereo bonds onto a substituent"
+                        "Stereo bond between two stereocenters; redraw stereo bonds onto a substituent"
                     };
                     notes.push(Note {
                         kind: Kind::BetweenCentres,
@@ -631,7 +631,7 @@ pub fn check(document: &Document, style: bool) -> Vec<Note> {
                         kind: Kind::WavyAlkeneCentre,
                         atoms: vec![],
                         bonds: vec![(bond.a, bond.b)],
-                        message: "Wavy bond joins a double-bond atom to a stereocentre; \
+                        message: "Wavy bond joins a double-bond atom to a stereocenter; \
                                   redraw stereo bonds and use another bond to indicate \
                                   unknown configuration"
                             .into(),
@@ -773,8 +773,8 @@ pub fn check(document: &Document, style: bool) -> Vec<Note> {
                 "{} ({})",
                 count(
                     missing.atoms.len(),
-                    "undefined stereocentre",
-                    "undefined stereocentres"
+                    "undefined stereocenter",
+                    "undefined stereocenters"
                 ),
                 missing
                     .atoms

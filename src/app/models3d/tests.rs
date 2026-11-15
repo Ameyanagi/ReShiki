@@ -222,7 +222,7 @@ fn delayed_generation_feedback_tracks_its_job_and_escape_really_cancels() {
     assert!(app.model_generation().is_none());
     assert_eq!(app.tab.doc, before);
     assert_eq!(frames(&app), 0);
-    assert_eq!(app.status, "3D model cancelled · Drawing unchanged");
+    assert_eq!(app.status, "3D model canceled · Drawing unchanged");
     let _ = app.update(Message::Models3d(Action::Generated(key, Ok(result))));
     assert_eq!(
         app.tab.doc, before,
@@ -503,7 +503,7 @@ fn cancelling_and_stale_results_say_so() {
     assert_eq!(app.pending(&atoms), Some(Display::ThreeD));
     show(&mut app, Display::TwoD);
     assert!(app.tab.model_job.is_none());
-    assert!(app.status.contains("cancelled"), "{}", app.status);
+    assert!(app.status.contains("canceled"), "{}", app.status);
 
     show(&mut app, Display::ThreeD);
     let (key, result) = generated(&app);
@@ -561,22 +561,13 @@ fn the_status_names_the_view_undo_restores() {
     show(&mut app, Display::Both);
     let (key, result) = generated(&app);
     let _ = app.update(Message::Models3d(Action::Generated(key, Ok(result))));
-    assert_eq!(
-        app.status,
-        "Shown as 2D and 3D · Undo restores the 2D drawing"
-    );
+    assert_eq!(app.status, "Shown as 2D and 3D");
     show(&mut app, Display::TwoD);
-    assert_eq!(app.status, "Shown as 2D · Undo restores 2D and 3D");
+    assert_eq!(app.status, "Shown as 2D");
     show(&mut app, Display::ThreeD);
-    assert_eq!(
-        app.status,
-        "Shown as 3D model · Undo restores the 2D drawing"
-    );
+    assert_eq!(app.status, "Shown as 3D model");
     show(&mut app, Display::Both);
-    assert_eq!(
-        app.status,
-        "Shown as 2D and 3D · Undo restores the 3D model"
-    );
+    assert_eq!(app.status, "Shown as 2D and 3D");
 }
 
 fn set(app: &mut App, setting: Setting) {

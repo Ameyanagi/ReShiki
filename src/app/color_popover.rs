@@ -512,52 +512,20 @@ impl App {
                     .into(),
             });
         }
-        let swatches = paper(
-            column![
-                paper_label("STRONG", canvas_theme),
-                palette_row(
-                    &palette,
-                    Row::Strong,
-                    hues,
-                    SWATCH,
-                    chosen(Paint::Ink),
-                    |hue| chosen(Paint::Palette(hue, Row::Strong))
-                ),
-                paper_label("TINT", canvas_theme),
-                palette_row(&palette, Row::Tint, hues, SWATCH, no_fill, |hue| {
-                    chosen(Paint::Palette(hue, Row::Tint))
-                }),
-                paper_label("CUSTOM · EXACT ON BOTH CANVASES", canvas_theme),
-                custom,
-            ]
-            .spacing(5),
-            canvas_theme,
+        let swatches = palette_swatches(
+            &palette,
+            hues,
+            [chosen(Paint::Ink), no_fill],
+            chosen,
+            Some(custom.into()),
         );
-        let input = row![
-            text("Color").size(12).style(muted_text),
-            reshiki::accessibility::text_input(
-                INPUT,
-                "Custom color: hexadecimal, RGB or OKLCH",
-                "#1F4E79 · 31, 78, 121 · oklch(…)",
-                &self.tab.text_color_input
-            )
-            .style(crate::appearance::input_style)
-            .on_input(Message::TextColor)
-            .on_submit(Message::ApplyTextColor)
-            .size(12)
-            .padding(6)
-            .width(Length::Fill),
-            reshiki::accessibility::button(
-                "style-color-apply",
-                "Apply custom color",
-                text("Apply").size(12)
-            )
-            .padding([6, 10])
-            .style(crate::appearance::secondary)
-            .on_press(Message::ApplyTextColor),
-        ]
-        .spacing(8)
-        .align_y(Alignment::Center);
+        let input = color_box(
+            (INPUT, "Custom color: hexadecimal, RGB or OKLCH"),
+            &self.tab.text_color_input,
+            Message::TextColor,
+            Message::ApplyTextColor,
+            ("style-color-apply", "Apply custom color", "Apply"),
+        );
         let mut body = column![head, swatches, input].spacing(10);
         if invalid {
             body = body.push(text(HINT).size(11).style(text::danger));
@@ -620,11 +588,7 @@ impl App {
             .spacing(6)
             .align_y(Alignment::Center),
         );
-        container(body)
-            .width(WIDTH)
-            .padding(12)
-            .style(surface)
-            .into()
+        card(body)
     }
 
     fn hue_editor(&self, edit: &HueEdit) -> Element<'_, Message> {
@@ -802,6 +766,73 @@ impl App {
         .style(surface)
         .into()
     }
+}
+
+/// The theme palette on its paper, with `first` before each row's hues (Ink,
+/// then no fill) and an optional custom row below. Each entry is (current,
+/// message); a missing message disables the swatch.
+pub(super) fn palette_swatches<'a>(
+    palette: &Palette,
+    hues: Hues,
+    [ink, no_fill]: [(bool, Option<Message>); 2],
+    chosen: impl Fn(Paint) -> (bool, Option<Message>),
+    custom: Option<Element<'a, Message>>,
+) -> container::Container<'a, Message> {
+    let canvas_theme = palette.canvas;
+    let mut rows = column![
+        paper_label("STRONG", canvas_theme),
+        palette_row(palette, Row::Strong, hues, SWATCH, ink, |hue| {
+            chosen(Paint::Palette(hue, Row::Strong))
+        }),
+        paper_label("TINT", canvas_theme),
+        palette_row(palette, Row::Tint, hues, SWATCH, no_fill, |hue| {
+            chosen(Paint::Palette(hue, Row::Tint))
+        }),
+    ]
+    .spacing(5);
+    if let Some(custom) = custom {
+        rows = rows
+            .push(paper_label("CUSTOM · EXACT ON BOTH CANVASES", canvas_theme))
+            .push(custom);
+    }
+    paper(rows, canvas_theme)
+}
+
+/// The box for typing a hexadecimal, RGB or OKLCH color, with its accessible
+/// id and name, and its button's id, name and label.
+pub(super) fn color_box<'a>(
+    (id, name): (&'static str, &'static str),
+    value: &'a str,
+    on_input: impl Fn(String) -> Message + 'a,
+    submit: Message,
+    (button_id, button_name, label): (&'static str, &'static str, &'static str),
+) -> Element<'a, Message> {
+    row![
+        text("Color").size(12).style(muted_text),
+        reshiki::accessibility::text_input(id, name, "#1F4E79 · 31, 78, 121 · oklch(…)", value)
+            .style(crate::appearance::input_style)
+            .on_input(on_input)
+            .on_submit(submit.clone())
+            .size(12)
+            .padding(6)
+            .width(Length::Fill),
+        reshiki::accessibility::button(button_id, button_name, text(label).size(12))
+            .padding([6, 10])
+            .style(crate::appearance::secondary)
+            .on_press(submit),
+    ]
+    .spacing(8)
+    .align_y(Alignment::Center)
+    .into()
+}
+
+/// A color popover's card.
+pub(super) fn card<'a>(body: impl Into<Element<'a, Message>>) -> Element<'a, Message> {
+    container(body)
+        .width(WIDTH)
+        .padding(12)
+        .style(surface)
+        .into()
 }
 
 /// Ink (Strong row) or no fill (Tint row), then the row's eight hues. Each

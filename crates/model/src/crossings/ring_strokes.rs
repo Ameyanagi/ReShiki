@@ -192,7 +192,7 @@ pub(crate) fn ring_stroke_with(
         {
             continue;
         }
-        if ring.contains_bond(bond.a, bond.b) || !doc.bond_visible(bond.a, bond.b) {
+        if ring.contains_bond(bond.a, bond.b) || !graph.bond_visible(bond.a, bond.b) {
             continue;
         }
         let length = a.distance(b);

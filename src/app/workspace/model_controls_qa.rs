@@ -48,7 +48,7 @@ fn semantics(
 
 #[tokio::test]
 #[ignore = "Opt-in GPU evidence: RESHIKI_QA_MODEL_INPUTS and RESHIKI_QA_MODEL_OUTPUT required"]
-async fn model_controls_renderer_evidence() {
+async fn manual_model_controls_renderer_evidence() {
     let input = std::path::PathBuf::from(std::env::var_os("RESHIKI_QA_MODEL_INPUTS").unwrap());
     let output = std::path::PathBuf::from(std::env::var_os("RESHIKI_QA_MODEL_OUTPUT").unwrap());
     let baseline = std::env::var_os("RESHIKI_QA_MODELS_BASELINE").is_some();

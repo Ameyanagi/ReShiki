@@ -9,8 +9,7 @@
 //! images and exported files are compared with an in-process HeadlessHost on
 //! the same machine, and the goldens tools-modern.jsonl and
 //! tools-legacy.jsonl snapshot structure only (see [`structure`]).
-#[path = "common/headless.rs"]
-mod headless;
+use crate::headless;
 
 use base64::{Engine, engine::general_purpose::STANDARD};
 use headless::{McpSession, StderrMode};

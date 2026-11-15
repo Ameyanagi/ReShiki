@@ -1739,8 +1739,8 @@ pub(super) const PROPERTIES: &[Property] = &[
     Property {
         code: 0x0bb0,
         name: "ChemicalPropertyType",
-        kind: "UINT32",
-        variants: &[("Unspecified", 0), ("ChemicalName", 1)],
+        kind: "CDXObjectIDArray",
+        variants: &[],
     },
     Property {
         code: 0x0bb1,
@@ -1751,7 +1751,7 @@ pub(super) const PROPERTIES: &[Property] = &[
     Property {
         code: 0x0bb2,
         name: "ChemicalPropertyIsActive",
-        kind: "CDXBoolean",
+        kind: "CDXBooleanImplied",
         variants: &[],
     },
     Property {

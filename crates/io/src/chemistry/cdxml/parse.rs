@@ -119,6 +119,7 @@ pub(super) fn read(text: &str) -> Result<Parsed> {
             | "objecttag"
             | "embeddedobject"
             | "ColoredMolecularArea"
+            | "chemicalproperty"
             | "annotation" => (),
             "scheme" | "step" => (),
             _ => return Err(Error::Unsupported("drawing object")),

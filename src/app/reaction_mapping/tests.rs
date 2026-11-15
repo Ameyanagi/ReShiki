@@ -241,7 +241,7 @@ fn position_action_sets_status_and_preserves_error_and_history() {
     let mut app = action_app();
     app.tab.doc = mapping::set_map(&app.tab.doc, 1, 27).unwrap();
     let _ = app.mapping_action(Action::Position);
-    assert_outcome(&app, "Drag atom-map handles · Escape finishes", true, 0);
+    assert_outcome(&app, "Drag atom-map handles · Esc finishes", true, 0);
     assert_eq!(app.tab.selected, vec![1]);
     assert_eq!(app.tool, Tool::EditPoints);
 }

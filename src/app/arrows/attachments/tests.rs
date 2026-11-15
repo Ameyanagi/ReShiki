@@ -118,10 +118,7 @@ fn rejected_document_edit_still_cancels_arrow_source() {
     assert!(app.tab.arrows.source().is_none());
     assert_eq!(app.tab.doc, before);
     assert!(app.error);
-    assert_eq!(
-        app.status,
-        "Edit cancelled: Invalid bond endpoints or order"
-    );
+    assert_eq!(app.status, "Edit canceled: Invalid bond endpoints or order");
     assert!(!app.tab.history.can_undo());
 }
 

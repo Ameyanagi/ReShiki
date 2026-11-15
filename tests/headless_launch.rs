@@ -1,7 +1,6 @@
 //! Only a first token of exactly `--mcp` or `--cli` enters a headless mode.
 //! No test here spawns an argv that reaches the GUI.
-#[path = "common/headless.rs"]
-mod headless;
+use crate::headless;
 
 use std::{
     process::{Output, Stdio},

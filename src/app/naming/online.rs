@@ -78,13 +78,17 @@ impl App {
                 column![
                     text("Send this name to PubChem?").size(13),
                     text(name).size(13).wrapping(text::Wrapping::WordOrGlyph),
-                    text("This uses the internet and sends the name to pubchem.ncbi.nlm.nih.gov (NCBI). Your drawing is not sent. Review the returned structure before inserting.")
+                    text("Sends only the name to pubchem.ncbi.nlm.nih.gov (NCBI). Your drawing stays here.")
                         .size(11),
                     row![
                         accessible_command("naming.online-dismiss", "Cancel online lookup", "Cancel")
                             .on_press(Message::Naming(Action::DismissOnline)),
-                        accessible_command("naming.online-confirm", "Send this name to PubChem", "Send name")
-                            .on_press(Message::Naming(Action::ConfirmOnline(*serial))),
+                        crate::app::workspace::hover_hint(
+                            accessible_command("naming.online-confirm", "Send this name to PubChem", "Send name")
+                                .on_press(Message::Naming(Action::ConfirmOnline(*serial))),
+                            "Review the returned structure before inserting it",
+                            iced::widget::tooltip::Position::Top,
+                        ),
                     ].spacing(8),
                 ].spacing(8),
             )

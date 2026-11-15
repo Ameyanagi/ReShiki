@@ -3,7 +3,7 @@
 use super::{Camera, Document, Rectangle, SelectionBox, nmr};
 use reshiki::rear_opacity::Paint;
 use reshiki::scene::{self, Primitive};
-use std::{collections::HashSet, rc::Rc};
+use std::{cell::RefCell, collections::HashSet, rc::Rc};
 
 #[derive(Default)]
 pub(super) struct SceneCache {
@@ -25,6 +25,32 @@ pub(super) struct SceneCache {
     ring_interiors: Option<Rc<reshiki::editing::RingInteriors>>,
     /// Keyed by the objects a preview redraws itself.
     remainder: Option<(Vec<u64>, Option<Rc<super::paper::Remainder>>)>,
+    /// A [`Frame`] compared the drawing and still holds it.
+    compared: bool,
+    #[cfg(test)]
+    pub comparisons: usize,
+}
+
+/// One draw of the canvas. It compares the drawing with the cached one as it
+/// begins; the borrowed drawing cannot change before the draw ends.
+pub(super) struct Frame<'a>(&'a RefCell<SceneCache>);
+
+impl<'a> Frame<'a> {
+    pub fn begin(cache: &'a RefCell<SceneCache>, doc: &Document) -> Self {
+        let mut scene = cache.borrow_mut();
+        scene.document(doc);
+        scene.compared = true;
+        Self(cache)
+    }
+}
+
+impl Drop for Frame<'_> {
+    fn drop(&mut self) {
+        // A panic may unwind through a borrowed cache.
+        if let Ok(mut scene) = self.0.try_borrow_mut() {
+            scene.compared = false;
+        }
+    }
 }
 
 #[derive(Default)]
@@ -76,6 +102,14 @@ impl NmrKey {
 
 impl SceneCache {
     fn document(&mut self, doc: &Document) {
+        if self.compared {
+            debug_assert!(self.document.as_ref() == Some(doc));
+            return;
+        }
+        #[cfg(test)]
+        {
+            self.comparisons += 1;
+        }
         if self.document.as_ref() != Some(doc) {
             self.document = Some(doc.clone());
             self.scene = None;

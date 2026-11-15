@@ -674,8 +674,9 @@ fn flattening_a_stale_model_requires_update_after_addition_or_deletion() {
     }
 }
 
-/// #409: links to what the prepared molecule leaves out (its name caption, an
-/// arrow's condition text, another molecule's depth fade) never stop a model.
+/// #409: links to what the prepared molecule leaves out (its name or property
+/// caption, an arrow's condition text, another molecule's depth fade) never
+/// stop a model.
 #[test]
 fn links_outside_the_molecule_do_not_stop_a_model() {
     use crate::arrow_labels::{ArrowLabel, Side};
@@ -700,6 +701,17 @@ fn links_outside_the_molecule_do_not_stop_a_model() {
                 smiles: "CCO".into(),
                 text: "ethanol".into(),
             });
+    };
+    let captioned: fn(&mut Document) = |doc| {
+        let atoms = crate::molecule_names::component(doc, 3);
+        crate::linked_properties::toggle(
+            doc,
+            &atoms,
+            crate::linked_properties::Property::Weight,
+            Default::default(),
+            true,
+        )
+        .unwrap();
     };
     let labelled: fn(&mut Document) = |doc| {
         let arrow = doc.next_id();
@@ -735,15 +747,17 @@ fn links_outside_the_molecule_do_not_stop_a_model() {
             max: 3,
         });
     };
-    for link in [named, labelled, faded, linked] {
+    for link in [named, captioned, labelled, faded, linked] {
         let mut doc = ethanol();
         link(&mut doc);
         doc.validate().unwrap();
+        Prepared::relaxed(&doc, &[3]).unwrap();
         let prepared = Prepared::new(&doc, &[3]).unwrap();
         let mut model = prepared.model(&optimized(&prepared, vec![])).unwrap();
         model.display = crate::models3d::Display::Both;
         let links = (
             doc.molecule_names.clone(),
+            doc.property_captions.clone(),
             doc.arrow_labels.clone(),
             doc.depth_appearance.clone(),
             doc.generic.clone(),
@@ -754,6 +768,7 @@ fn links_outside_the_molecule_do_not_stop_a_model() {
         assert_eq!(
             (
                 doc.molecule_names,
+                doc.property_captions,
                 doc.arrow_labels,
                 doc.depth_appearance,
                 doc.generic

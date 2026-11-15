@@ -76,6 +76,7 @@ struct Context {
         bool,
         bool,
         bool,
+        bool,
     ),
 }
 
@@ -197,6 +198,7 @@ impl App {
             self.inspector_tab,
             self.tool,
             self.help_open,
+            self.settings.open,
             self.commands.open,
             self.updates.open,
             self.assistant.viewed_image.is_some(),

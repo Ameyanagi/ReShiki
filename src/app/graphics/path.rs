@@ -197,7 +197,7 @@ impl App {
     }
     pub(super) fn path_controls(&self) -> Element<'_, Message> {
         let send = |a| Message::Graphics(super::Action::Path(a));
-        let mut panel = column![section("PEN PATH")].spacing(8);
+        let mut panel = column![section("Pen path")].spacing(8);
         // Outside the Pen path tool, Done in the context row ends editing and
         // the tool itself starts a new path.
         let drawing = self.tool == Tool::Graphic(GraphicKind::Path);
@@ -313,7 +313,7 @@ impl App {
                             tooltip::Position::Bottom,
                         ),
                         hover_hint(
-                            path_button("pen-symmetrise", "Symmetrise")
+                            path_button("pen-symmetrize", "Symmetrize")
                                 .on_press(cleanup(super::Cleanup::Symmetrise { upright: false })),
                             super::SYMMETRISE_HINT,
                             tooltip::Position::Bottom,

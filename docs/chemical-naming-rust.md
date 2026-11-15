@@ -71,7 +71,7 @@ or **Insert caption**.
    the next insertion. **Use original name below** switches back to the typed
    name.
 4. To name a drawn molecule, select it and choose **Generate selected name** in
-   the same Details area. **GENERATED SYSTEMATIC NAME · OPENCLATURA** shows the
+   the same Details area. **GENERATED SYSTEMATIC NAME** shows the
    result with **Copy name** and **Insert caption**.
 
 Opening Details does not open the preview or insert anything. Changing the

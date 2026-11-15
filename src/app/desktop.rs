@@ -10,8 +10,7 @@ use tokio::sync::mpsc::Receiver;
 static EVENTS: event_slot::Slot<Receiver<Event>> = event_slot::Slot::new();
 const EVENT_CAPACITY: usize = 16;
 const LEASE_POLL: Duration = Duration::from_secs(1);
-const LOST_PROXY_STATUS: &str =
-    "The Office launch session ended. Save this retained drawing to another file.";
+const LOST_PROXY_STATUS: &str = "Office session ended · Save this drawing to another file";
 #[derive(Debug, Clone)]
 pub enum Action {
     Request(Event),

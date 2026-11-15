@@ -54,9 +54,7 @@ impl App {
         let conflict = self.office_path_conflict(&binding);
         if self.exit.frozen() || self.updates.restarting || conflict || !binding.preparable() {
             binding.reject();
-            self.status =
-                "This drawing already belongs to another edit session, or the editor is closing"
-                    .into();
+            self.status = "Drawing is in another edit session, or the editor is closing".into();
             self.error = true;
             return Task::none();
         }
