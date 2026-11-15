@@ -184,14 +184,14 @@ fn differing<'a, T: PartialEq, K: Hash + Eq>(
     key: impl Fn(&T) -> K,
 ) -> impl Iterator<Item = &'a T> {
     let start = a.iter().zip(b).take_while(|(x, y)| x == y).count();
-    let (a, b) = (&a[start..], &b[start..]);
+    let (a, b) = (a.split_at(start).1, b.split_at(start).1);
     let end = a
         .iter()
         .rev()
         .zip(b.iter().rev())
         .take_while(|(x, y)| x == y)
         .count();
-    let (a, b) = (&a[..a.len() - end], &b[..b.len() - end]);
+    let (a, b) = (a.split_at(a.len() - end).0, b.split_at(b.len() - end).0);
     let before: HashMap<_, _> = a.iter().map(|x| (key(x), x)).collect();
     let kept: HashSet<_> = b
         .iter()
