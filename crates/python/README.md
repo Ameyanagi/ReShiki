@@ -97,7 +97,8 @@ or timeout error. Each network request has a 15-second timeout.
 
 Errors from ReShiki itself are `reshiki.ReShikiError`, a `ValueError` whose
 `code` is `invalid_arguments` for a format, option or style that is not
-accepted, and `failed` when a structure cannot be read, drawn or written.
+accepted, or for a constructor given another kind of content (a reaction for
+`Molecule`), and `failed` when a structure cannot be read, drawn or written.
 
 An input that imports with a change or an assumption, such as a SMILES bond of
 any order (`~`), issues a `reshiki.StructureWarning` through

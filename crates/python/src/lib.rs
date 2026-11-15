@@ -45,6 +45,9 @@ fn parse(
     data: Vec<u8>,
     format: &str,
 ) -> PyResult<(Py<PyBytes>, String, Vec<String>)> {
+    if !drawing::is_input_format(format) {
+        return Err(invalid(py)(format!("Unsupported input format: '{format}'")));
+    }
     let (data, kind, warnings) = py
         .detach(|| {
             drawing::run(async {

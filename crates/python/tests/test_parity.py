@@ -62,8 +62,17 @@ def test_errors_carry_the_operation_error_code() -> None:
         reshiki.Molecule.from_smiles("C(")
     assert unreadable.value.code == "failed"
     assert isinstance(unreadable.value, ValueError)
+    # Malformed content in a supported format, under any of its names.
+    for format in ("mol", "sdf", "cif", ".SMI"):
+        with pytest.raises(reshiki.ReShikiError) as malformed:
+            reshiki.parse("C(", format=format)
+        assert malformed.value.code == "failed", format
     molecule = reshiki.Molecule.from_smiles("CCO")
     for call in (
+        lambda: reshiki.parse("CCO", format="nonsense"),
+        # A constructor given another kind of content.
+        lambda: reshiki.Molecule.from_smiles("CCO>>CC=O"),
+        lambda: reshiki.Reaction.from_smiles("CCO"),
         lambda: molecule.export("xyz"),
         lambda: molecule.export("png", width=0),
         lambda: molecule.export("svg", svg_text="bold"),
@@ -72,6 +81,9 @@ def test_errors_carry_the_operation_error_code() -> None:
         with pytest.raises(reshiki.ReShikiError) as invalid:
             call()
         assert invalid.value.code == "invalid_arguments"
+        assert isinstance(invalid.value, ValueError)
+    with pytest.raises(reshiki.ReShikiError, match="Unsupported input format: 'nonsense'"):
+        reshiki.parse("CCO", format="nonsense")
 
 
 def test_export_is_render_and_save_can_refuse_to_overwrite(tmp_path: Path) -> None:

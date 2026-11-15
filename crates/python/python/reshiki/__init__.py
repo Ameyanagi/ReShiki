@@ -167,9 +167,10 @@ def _from_constructor(cls: type[_D], result: tuple[bytes, str, list[str]]) -> _D
     else:
         expected = Drawing
     if not isinstance(drawing, expected):
-        raise ValueError(
+        raise ReShikiError(
             f"{cls.__name__} requires {expected.__name__.lower()} content; "
-            f"received {type(drawing).__name__.lower()}"
+            f"received {type(drawing).__name__.lower()}",
+            "invalid_arguments",
         )
     return cls(drawing._data)
 

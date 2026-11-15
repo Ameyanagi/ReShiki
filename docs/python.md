@@ -83,10 +83,10 @@ ReShiki raises `reshiki.ReShikiError`, a `ValueError`, so `except ValueError`
 keeps working. Its `code` is the [error code](agent-api.md#error-codes) the MCP
 tools and the command line report for the same failure:
 
-| `code`              | Meaning                                           |
-| ------------------- | ------------------------------------------------- |
-| `invalid_arguments` | A format, option or style is not accepted         |
-| `failed`            | The structure could not be read, drawn or written |
+| `code`              | Meaning                                                                                 |
+| ------------------- | --------------------------------------------------------------------------------------- |
+| `invalid_arguments` | A format, option or style is not accepted, or a constructor got another kind of content |
+| `failed`            | The structure could not be read, drawn or written                                       |
 
 ```python
 try:
