@@ -102,8 +102,10 @@ pub enum Action {
     Preview(PreviewKey, Result<Preview, String>),
 }
 
-/// A drawing at a revision: its tab, file epoch and revision.
-pub type PreviewKey = (super::document_tab::TabId, u64, u64);
+/// A drawing at a revision: its tab, file epoch, revision and label
+/// generation. Labels from the chemistry engine change the drawing without a
+/// new revision.
+pub type PreviewKey = (super::document_tab::TabId, u64, u64, u64);
 
 /// The drawing as PNG at each of [`Dpi::ALL`], for Settings and the Export tab.
 #[derive(Debug, Clone)]
@@ -236,6 +238,8 @@ impl App {
             Action::Close => {
                 settings.open = false;
                 settings.color = None;
+                // A field focused before Settings opened would keep the keys.
+                return iced::advanced::widget::operate(super::keyboard_drawing::ReleaseFocus);
             }
             Action::Section(section) => {
                 settings.section = section;
@@ -311,7 +315,8 @@ impl App {
             || (self.inspector_open
                 && self.inspector_tab == super::InspectorTab::Export
                 && self.tab.inspector_ui.figure == super::inspector::FigureFormat::Png);
-        let key = (self.tab.id, self.tab.file_epoch, self.tab.revision);
+        let tab = &self.tab;
+        let key = (tab.id, tab.file_epoch, tab.revision, tab.label_generation);
         let settings = &mut self.settings;
         if !shown
             || settings.rendering == Some(key)
@@ -598,7 +603,7 @@ impl App {
                         ),
                         Item::wide(
                             "Your colors",
-                            "Pick one to copy pictures on it, as Custom. On white, black or a color, black and white ink swap so a dark drawing stays readable; colored atoms and other colors stay as they are. Canvas keeps the drawing's own colors.",
+                            "Pick one to copy pictures on it, as Custom. Custom is one color for copies and exported files, so exports set to Custom change too. On white, black or a color, black and white ink swap so a dark drawing stays readable. Colored atoms and other colors stay as they are. Canvas keeps the drawing's own colors.",
                             self.saved_colors(),
                         ),
                     ],
@@ -629,7 +634,11 @@ impl App {
                         Item::check(
                             "settings-editable-drawing",
                             "Put the editable drawing in pictures",
-                            "Paste or open the picture in ReShiki to get the drawing back. Anyone who gets the picture can do the same. Copying between ReShiki windows keeps the drawing either way.",
+                            if cfg!(target_arch = "wasm32") {
+                                "Paste or open the picture in ReShiki to get the drawing back. Anyone who gets the picture can do the same. With it off, copies pasted into another ReShiki tab have no drawing either."
+                            } else {
+                                "Paste or open the picture in ReShiki to get the drawing back. Anyone who gets the picture can do the same. Copying between ReShiki windows keeps the drawing either way."
+                            },
                             a.export_editable_drawing,
                             Message::View(View::ExportEditableDrawing(!a.export_editable_drawing)),
                         ),
@@ -904,7 +913,7 @@ impl App {
                 if choices_now.models.is_empty() {
                     "Connect the assistant to load your available models."
                 } else {
-                    "Default uses GPT-6 Astra when available; otherwise your account default."
+                    "Default uses GPT-6 Astra when available, or else your account default."
                 },
                 crate::appearance::close_on_escape(
                     crate::appearance::pick_list(models, selected, |model: Model| {
@@ -1158,14 +1167,7 @@ fn choices<'a, T: Clone + PartialEq + 'a>(
 
 /// The PNG resolution presets, as in a segmented choice.
 fn dpi_choices<'a>(id: &str, selected: Dpi, action: fn(Dpi) -> Action) -> Element<'a, Message> {
-    let options = Dpi::ALL.map(|dpi| {
-        let label = if dpi.get() == 1200 {
-            "1200 dpi".to_owned()
-        } else {
-            dpi.get().to_string()
-        };
-        (dpi, label)
-    });
+    let options = Dpi::ALL.map(|dpi| (dpi, format!("{} dpi", dpi.get())));
     choices(id, &options, selected, |dpi| Message::Settings(action(dpi)))
 }
 

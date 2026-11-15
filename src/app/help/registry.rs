@@ -595,7 +595,7 @@ pub(crate) fn entries() -> Vec<Entry> {
         entry(
             label(Message::Settings(settings_page::Action::Open(None))),
             "Settings",
-            "Open the app-wide preferences; Esc closes them",
+            "Open the app-wide preferences. Esc closes them.",
             Anywhere,
             &["preferences", "options", "background"],
         ),

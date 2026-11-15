@@ -243,7 +243,10 @@ fn png_resolution_rows_and_the_export_tab_change_the_preferences() {
 #[test]
 fn close_ups_render_once_per_drawing_revision() {
     let mut app = app();
-    let key = |app: &App| (app.tab.id, app.tab.file_epoch, app.tab.revision);
+    let key = |app: &App| {
+        let tab = &app.tab;
+        (tab.id, tab.file_epoch, tab.revision, tab.label_generation)
+    };
     let _ = app.update(Message::Settings(Action::Query(String::new())));
     assert_eq!(app.settings.rendering, None, "hidden: nothing renders");
     let _ = app.update(Message::Settings(Action::Open(Some(Section::CopyExport))));
@@ -282,6 +285,15 @@ fn close_ups_render_once_per_drawing_revision() {
     };
     assert_eq!(*shown, second);
     assert!(!preview.sample);
+    // Labels from the chemistry engine change the drawing without a revision.
+    app.tab.label_generation += 1;
+    let _ = app.update(Message::Settings(Action::Query(String::new())));
+    let third = key(&app);
+    assert_eq!(app.settings.rendering, Some(third));
+    let _ = app.update(Message::Settings(Action::Preview(
+        third,
+        Preview::render(&app.tab.doc),
+    )));
 
     // The Export tab's PNG resolution also needs the drawing's size.
     let _ = app.update(Message::Settings(Action::Close));
@@ -417,7 +429,8 @@ fn evidence_app(app: &mut App) {
 
 /// Delivers the close-ups of the drawing as it is now.
 fn show_close_ups(app: &mut App) {
-    let key = (app.tab.id, app.tab.file_epoch, app.tab.revision);
+    let tab = &app.tab;
+    let key = (tab.id, tab.file_epoch, tab.revision, tab.label_generation);
     let preview = Preview::render(&app.tab.doc);
     let _ = app.update(Message::Settings(Action::Preview(key, preview)));
 }

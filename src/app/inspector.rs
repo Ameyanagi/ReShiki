@@ -143,7 +143,7 @@ impl FigureFormat {
             }
             Self::SvgOffice => "Physical-size picture for Microsoft Office. Text becomes outlines.",
             Self::Png => {
-                "Pixels at the resolution below. Large drawings use a lower one; the size in centimeters stays the same."
+                "Pixels at the resolution below. Large drawings use a lower one. The size in centimeters stays the same."
             }
             #[cfg(windows)]
             Self::Emf => {

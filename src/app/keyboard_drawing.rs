@@ -21,7 +21,7 @@ pub enum Action {
 
 /// Entering a drawing mode explicitly hands Enter/Space ownership back from
 /// its opener button or an inspector field to the application's key router.
-struct ReleaseFocus;
+pub(super) struct ReleaseFocus;
 impl<T: 'static> Operation<T> for ReleaseFocus {
     fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation<T>)) {
         operate(self);

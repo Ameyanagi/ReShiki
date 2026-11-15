@@ -559,7 +559,8 @@ async fn review_close_returns_focus_failed_structure_insert_keeps_editor() {
 }
 
 /// Settings opens on Command+, with its search field focused and keeps every
-/// key; Escape, Command+, and Done each return them to the drawing.
+/// key; Escape, Command+, and Done each return them to the drawing, also when
+/// a field had focus before Settings opened.
 #[tokio::test]
 #[ignore = "Opt-in renderer input check"]
 async fn settings_close_returns_focus_to_the_drawing() {
@@ -568,6 +569,8 @@ async fn settings_close_returns_focus_to_the_drawing() {
         let mut app = drawing_app();
         let drawing = app.tab.doc.clone();
         let selected = app.tab.selected.clone();
+        open_import(&mut ui, &mut app).await;
+        let import = app.import_input_id();
         let comma = || Key::Character(",".into());
         ui.key(
             &mut app,
@@ -620,13 +623,11 @@ async fn settings_close_returns_focus_to_the_drawing() {
                 )
                 .await
             }
-            _ => {
-                let done = ui.text(&app, "Done");
-                ui.click(&mut app, done.center());
-            }
+            _ => click_running_tasks(&mut ui, &mut app, "settings-done").await,
         }
         assert!(!app.settings.open, "{closing}");
         assert_eq!(app.tab.selected, selected);
+        assert!(!ui.input(&app, import).1, "{closing}");
         assert_canvas_delete(&mut ui, &mut app).await;
     }
 }
