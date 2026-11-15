@@ -396,6 +396,8 @@ impl App {
                     self.github.starred = true;
                     self.status = STARRED.into();
                     self.error = false;
+                    // About's link is named as it now shows.
+                    return self.accessibility_refresh();
                 }
                 // As when signed out: the repository page in the browser.
                 Err(_) => {
