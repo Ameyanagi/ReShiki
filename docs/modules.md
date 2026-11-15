@@ -127,6 +127,7 @@ explains how the crates and modules fit together.
 - `src/app/palettes.rs`: Compact visual flyouts for toolbar families.
 - `src/app/performance.rs`: Opt-in, release-mode timings of editing work on the event-loop thread.
 - `src/app/performance/hover.rs`: Hover profiling through the application update and the real widget renderer.
+- `src/app/performance/redraw.rs`: Redraw and memory workloads
 - `src/app/pictures.rs`: Asynchronous picture replacement and selection-aware size controls.
 - `src/app/popover.rs`: A menu or panel anchored to a toolbar button, drawn over the surrounding rows so that nothing moves.
 - `src/app/printing.rs`
@@ -158,6 +159,7 @@ explains how the crates and modules fit together.
 - `src/app/workspace.rs`
 - `src/app/workspace/inspector_motion_qa.rs`: Matched captures from the actual widget tree and renderer; opt-in only.
 - `src/app/workspace/layout_snapshots.rs`: Opt-in headless snapshots of key UI states at the default and minimum window sizes.
+- `src/app/workspace/layout_snapshots/context_status.rs`: Snapshots of the context row in keyboard drawing, the Check drawing findings and the status bar at the minimum and default window sizes.
 - `src/app/workspace/layout_snapshots/features.rs`: Snapshot scenes for the UI surfaces added after the maintainability refactor (40c8d82a)
 - `src/app/workspace/layout_snapshots/property_continuity.rs`: Matched real renderer fixtures for molecular Properties continuity.
 - `src/app/workspace/model_controls_qa.rs`: Opt-in real-renderer captures at the issue's 1600 × 1000 logical pixels.
@@ -721,6 +723,7 @@ explains how the crates and modules fit together.
 - `crates/model/src/scene/graph.rs`: Atom and bond lookups by atom ID, built once per scene stage instead of scanning the whole drawing for every atom or bond.
 - `crates/model/src/scene/group_labels.rs`: Decisions made when a chemical label is placed, using its actual glyph ink.
 - `crates/model/src/scene/occlusion.rs`: Vector ink sources for chemical depth occlusion.
+- `crates/model/src/scene/performance.rs`: Opt-in release-mode measurements of how model queries grow with the drawing.
 - `crates/model/src/scene/projected_bonds.rs`: Secondary rails in a retained ring face, projected without rescaling XY.
 - `crates/model/src/scene/svg.rs`: SVG serialization of the scene primitives.
 - `crates/model/src/scientific.rs`: Chemical marks and orbital diagrams.

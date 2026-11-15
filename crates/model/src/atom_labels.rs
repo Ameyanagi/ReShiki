@@ -1,5 +1,6 @@
 //! Atom-label appearance and owned number/stereochemistry indicators.
 //! Indicator appearance never changes the molecular graph or map numbers.
+use crate::scene::graph::Graph;
 use crate::{
     abbreviations::LabelAlignment,
     document::{Atom, Bond, Document, Point},
@@ -228,10 +229,11 @@ pub fn set_alignment(doc: &mut Document, id: u64, alignment: LabelAlignment) {
 pub(crate) fn attachment_range(
     atom: &Atom,
     doc: &Document,
+    graph: Option<&Graph<'_>>,
     text: &str,
 ) -> Option<std::ops::Range<usize>> {
     let attachment = atom.display.label_attachment;
-    let directions = bond_directions(atom, doc);
+    let directions = bond_directions(atom, doc, graph);
     if attachment.is_auto() && directions.len() > 1 {
         return None;
     }
@@ -250,11 +252,15 @@ fn horizontal_side(directions: &[Point]) -> Option<bool> {
 /// The side a generic label such as [Cl,Br,I] with one horizontal bond meets
 /// that bond with, so the text extends away from the molecule. None keeps it
 /// centered: no bond, a vertical bond, or two or more bonds (every link node).
-pub(crate) fn generic_label_side(atom: &Atom, doc: &Document) -> Option<bool> {
+pub(crate) fn generic_label_side(
+    atom: &Atom,
+    doc: &Document,
+    graph: Option<&Graph<'_>>,
+) -> Option<bool> {
     if !doc.generic.owns_label(atom.id) {
         return None;
     }
-    match bond_directions(atom, doc).as_slice() {
+    match bond_directions(atom, doc, graph).as_slice() {
         directions @ [_] => horizontal_side(directions),
         _ => None,
     }
@@ -264,23 +270,15 @@ pub(crate) fn generic_label_side(atom: &Atom, doc: &Document) -> Option<bool> {
 /// bond visible. Use atom centers here: asking for a trimmed bond would call
 /// label layout again. Short, internal and explicit label attachments keep
 /// their existing positioning.
-pub(crate) fn short_bond_label_side(atom: &Atom, doc: &Document, width: f32) -> Option<bool> {
-    let mut neighbours = doc.bonds.iter().filter_map(|bond| {
-        let other = if bond.a == atom.id {
-            bond.b
-        } else if bond.b == atom.id {
-            bond.a
-        } else {
-            return None;
-        };
-        doc.bond_visible(atom.id, other)
-            .then(|| doc.atom(other))
-            .flatten()
-    });
-    let other = neighbours.next()?;
-    if neighbours.next().is_some() {
+pub(crate) fn short_bond_label_side(
+    atom: &Atom,
+    doc: &Document,
+    graph: Option<&Graph<'_>>,
+    width: f32,
+) -> Option<bool> {
+    let &[other] = visible_neighbors(atom, doc, graph).as_slice() else {
         return None;
-    }
+    };
     let direction = Point::new(
         other.position.x - atom.position.x,
         other.position.y - atom.position.y,
@@ -291,12 +289,16 @@ pub(crate) fn short_bond_label_side(atom: &Atom, doc: &Document, width: f32) -> 
 
 /// Resolve the side of an atom-label appendage without changing chemistry or
 /// saved preferences. Terminal labels retain the usual inline form.
-pub(crate) fn appendage_position(atom: &Atom, doc: &Document) -> HydrogenPosition {
+pub(crate) fn appendage_position(
+    atom: &Atom,
+    doc: &Document,
+    graph: Option<&Graph<'_>>,
+) -> HydrogenPosition {
     use HydrogenPosition as H;
     if atom.display.hydrogen_position != H::Auto {
         return atom.display.hydrogen_position;
     }
-    let directions = bond_directions(atom, doc);
+    let directions = bond_directions(atom, doc, graph);
     // Isolated hydrogen halides conventionally read HF, HCl, HBr and HI.
     let hydrogens = if atom.no_implicit {
         atom.explicit_h
@@ -361,22 +363,47 @@ pub(crate) fn appendage_position(atom: &Atom, doc: &Document) -> HydrogenPositio
     }
     best.0
 }
+/// The atoms at the other end of the visible bonds leaving an atom, in bond
+/// order. A pass over every label lends its `graph`; without one this scans
+/// every bond.
+fn visible_neighbors<'d>(
+    atom: &Atom,
+    doc: &'d Document,
+    graph: Option<&Graph<'d>>,
+) -> Vec<&'d Atom> {
+    let other = |bond: &crate::document::Bond| {
+        let id = if bond.a == atom.id {
+            bond.b
+        } else if bond.b == atom.id {
+            bond.a
+        } else {
+            return None;
+        };
+        match graph {
+            Some(graph) => graph
+                .bond_visible(atom.id, id)
+                .then(|| graph.atom(id))
+                .flatten(),
+            None => doc
+                .bond_visible(atom.id, id)
+                .then(|| doc.atom(id))
+                .flatten(),
+        }
+    };
+    match graph {
+        Some(graph) => graph
+            .bonds(atom.id)
+            .filter_map(|(_, bond)| other(bond))
+            .collect(),
+        None => doc.bonds.iter().filter_map(other).collect(),
+    }
+}
+
 /// Unit directions of the visible bonds leaving an atom.
-fn bond_directions(atom: &Atom, doc: &Document) -> Vec<Point> {
-    doc.bonds
-        .iter()
-        .filter_map(|bond| {
-            let id = if bond.a == atom.id {
-                bond.b
-            } else if bond.b == atom.id {
-                bond.a
-            } else {
-                return None;
-            };
-            if !doc.bond_visible(atom.id, id) {
-                return None;
-            }
-            let other = doc.atom(id)?;
+fn bond_directions(atom: &Atom, doc: &Document, graph: Option<&Graph<'_>>) -> Vec<Point> {
+    visible_neighbors(atom, doc, graph)
+        .into_iter()
+        .filter_map(|other| {
             let dx = other.position.x - atom.position.x;
             let dy = other.position.y - atom.position.y;
             let length = dx.hypot(dy);
@@ -388,9 +415,13 @@ fn bond_directions(atom: &Atom, doc: &Document) -> Vec<Point> {
 /// Automatic sides that leave at least 60 degrees to every visible bond, with
 /// the greatest bond clearance first. Label layout uses these when the usual
 /// automatic side would collide with a nearby label or charge.
-pub(crate) fn appendage_alternatives(atom: &Atom, doc: &Document) -> Vec<HydrogenPosition> {
+pub(crate) fn appendage_alternatives(
+    atom: &Atom,
+    doc: &Document,
+    graph: Option<&Graph<'_>>,
+) -> Vec<HydrogenPosition> {
     use HydrogenPosition as H;
-    let directions = bond_directions(atom, doc);
+    let directions = bond_directions(atom, doc, graph);
     let mut sides: Vec<_> = [
         (H::Above, 0., -1.),
         (H::Below, 0., 1.),

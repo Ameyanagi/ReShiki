@@ -283,6 +283,16 @@ impl Abbreviation {
     }
 
     pub fn faces_left(&self, doc: &Document) -> bool {
+        self.faces_left_in(doc, None)
+    }
+
+    /// [`Self::faces_left`]; a pass over every label lends its `graph`
+    /// instead of scanning every atom and bond.
+    pub(crate) fn faces_left_in(
+        &self,
+        doc: &Document,
+        graph: Option<&crate::scene::graph::Graph<'_>>,
+    ) -> bool {
         match self.alignment {
             LabelAlignment::Left => return false,
             LabelAlignment::Right => return true,
@@ -291,28 +301,42 @@ impl Abbreviation {
         if self.exit.is_some() {
             return false;
         }
-        let Some(anchor) = doc.atom(self.anchor) else {
+        let atom = |id| match graph {
+            Some(graph) => graph.atom(id),
+            None => doc.atom(id),
+        };
+        let Some(anchor) = atom(self.anchor) else {
             return false;
         };
-        doc.bonds
-            .iter()
-            .find_map(|b| {
-                let other = if b.a == self.anchor {
-                    b.b
-                } else if b.b == self.anchor {
-                    b.a
-                } else {
-                    return None;
-                };
-                (!self.members.contains(&other))
-                    .then(|| doc.atom(other))
-                    .flatten()
-            })
-            .is_some_and(|a| a.position.x > anchor.position.x + 0.1)
+        let outside = |b: &crate::document::Bond| {
+            let other = if b.a == self.anchor {
+                b.b
+            } else if b.b == self.anchor {
+                b.a
+            } else {
+                return None;
+            };
+            (!self.members.contains(&other))
+                .then(|| atom(other))
+                .flatten()
+        };
+        match graph {
+            Some(graph) => graph.bonds(self.anchor).find_map(|(_, b)| outside(b)),
+            None => doc.bonds.iter().find_map(outside),
+        }
+        .is_some_and(|a| a.position.x > anchor.position.x + 0.1)
     }
 
     pub fn text<'a>(&'a self, doc: &Document) -> &'a str {
-        if self.faces_left(doc) && !self.reverse_label.trim().is_empty() {
+        self.text_in(doc, None)
+    }
+
+    pub(crate) fn text_in<'a>(
+        &'a self,
+        doc: &Document,
+        graph: Option<&crate::scene::graph::Graph<'_>>,
+    ) -> &'a str {
+        if self.faces_left_in(doc, graph) && !self.reverse_label.trim().is_empty() {
             &self.reverse_label
         } else {
             &self.label
@@ -449,6 +473,133 @@ pub(crate) fn anchor_range(text: &str, left: bool) -> std::ops::Range<usize> {
     character.map(|(i, c)| i..i + c.len_utf8()).unwrap_or(0..0)
 }
 
+/// A drawing as it is painted and picked: bonds leaving a two-attachment
+/// abbreviation end at its label. Without such a bond this is the document
+/// itself.
+pub enum Drawn<'d> {
+    Unchanged(&'d Document),
+    Remapped(std::rc::Rc<Document>),
+}
+
+impl std::ops::Deref for Drawn<'_> {
+    type Target = Document;
+    fn deref(&self) -> &Document {
+        match self {
+            Self::Unchanged(doc) => doc,
+            Self::Remapped(doc) => doc,
+        }
+    }
+}
+
+impl AsRef<Document> for Drawn<'_> {
+    fn as_ref(&self) -> &Document {
+        self
+    }
+}
+
+thread_local! {
+    /// The last remapped drawing, with its document's own bonds. Drawing,
+    /// label layout and picking each ask for it, often several times per
+    /// pointer move; while the document stays the same they share one copy.
+    static DRAWN: std::cell::RefCell<Option<(Vec<crate::document::Bond>, std::rc::Rc<Document>)>> =
+        const { std::cell::RefCell::new(None) };
+}
+#[cfg(test)]
+thread_local! {
+    static COPIES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+/// How often this thread copied a drawing for [`Document::abbreviation_render_copy`].
+#[cfg(test)]
+pub(crate) fn render_copy_count() -> usize {
+    COPIES.with(std::cell::Cell::get)
+}
+
+/// Whether two documents agree in everything but their bonds. Listing every
+/// field keeps a new one from being left out.
+fn same_except_bonds(a: &Document, b: &Document) -> bool {
+    let Document {
+        generic,
+        canvas_theme,
+        color_theme,
+        custom_theme,
+        drawing_style,
+        page_layout,
+        abbreviations,
+        atom_labels,
+        ring_fills,
+        depth_appearance,
+        version,
+        atoms,
+        bonds: _,
+        annotations,
+        molecule_names,
+        arrows,
+        arrow_labels,
+        graphics,
+        groups,
+        reactions,
+        models,
+        recent_colors,
+    } = a;
+    *atoms == b.atoms
+        && *abbreviations == b.abbreviations
+        && *annotations == b.annotations
+        && *arrows == b.arrows
+        && *graphics == b.graphics
+        && *generic == b.generic
+        && *canvas_theme == b.canvas_theme
+        && *color_theme == b.color_theme
+        && *custom_theme == b.custom_theme
+        && *drawing_style == b.drawing_style
+        && *page_layout == b.page_layout
+        && *atom_labels == b.atom_labels
+        && *ring_fills == b.ring_fills
+        && *depth_appearance == b.depth_appearance
+        && *version == b.version
+        && *molecule_names == b.molecule_names
+        && *arrow_labels == b.arrow_labels
+        && *groups == b.groups
+        && *reactions == b.reactions
+        && *models == b.models
+        && *recent_colors == b.recent_colors
+}
+
+/// The abbreviations holding each atom, built once for a pass over the whole
+/// drawing. [`Document::atom_visible`] and [`Document::bond_visible`] scan
+/// every abbreviation, which is fine for one atom or bond but not for all.
+pub(crate) struct Membership<'d>(HashMap<u64, Vec<&'d Abbreviation>>);
+
+impl<'d> Membership<'d> {
+    pub(crate) fn new(doc: &'d Document) -> Self {
+        let mut groups: HashMap<u64, Vec<&Abbreviation>> = HashMap::new();
+        for group in &doc.abbreviations {
+            for id in &group.members {
+                groups.entry(*id).or_default().push(group);
+            }
+        }
+        Self(groups)
+    }
+    pub(crate) fn of(&self, id: u64) -> &[&'d Abbreviation] {
+        self.0.get(&id).map_or(&[], Vec::as_slice)
+    }
+    /// [`Document::atom_visible`].
+    pub(crate) fn atom_visible(&self, id: u64) -> bool {
+        !self.of(id).iter().any(|g| g.anchor != id)
+    }
+    /// [`Document::bond_visible`].
+    pub(crate) fn bond_visible(&self, a: u64, b: u64) -> bool {
+        let shared = |g: &Abbreviation| self.of(b).iter().any(|h| std::ptr::eq(*h, g));
+        !(self
+            .of(a)
+            .iter()
+            .any(|g| shared(g) || g.anchor != a && g.exit != Some(a))
+            || self
+                .of(b)
+                .iter()
+                .any(|g| g.anchor != b && g.exit != Some(b)))
+    }
+}
+
 impl Document {
     pub fn abbreviation(&self, anchor: u64) -> Option<&Abbreviation> {
         self.abbreviations.iter().find(|a| a.anchor == anchor)
@@ -481,14 +632,15 @@ impl Document {
 
     /// Shared view for label layout, drawing and picking. Only external bond
     /// endpoints change; member atoms and the chemical graph stay in the document.
-    pub fn abbreviation_render_copy(&self) -> std::borrow::Cow<'_, Self> {
+    /// Repeated calls on an unchanged document share one copy.
+    pub fn abbreviation_render_copy(&self) -> Drawn<'_> {
         let exits: std::collections::HashMap<_, _> = self
             .abbreviations
             .iter()
             .filter_map(|group| group.exit.map(|exit| (exit, group)))
             .collect();
         if exits.is_empty() {
-            return std::borrow::Cow::Borrowed(self);
+            return Drawn::Unchanged(self);
         }
         let endpoint = |id, other| {
             exits
@@ -501,13 +653,25 @@ impl Document {
             .iter()
             .any(|bond| (endpoint(bond.a, bond.b), endpoint(bond.b, bond.a)) != (bond.a, bond.b))
         {
-            return std::borrow::Cow::Borrowed(self);
+            return Drawn::Unchanged(self);
         }
-        let mut drawn = self.clone();
-        for bond in &mut drawn.bonds {
-            (bond.a, bond.b) = (endpoint(bond.a, bond.b), endpoint(bond.b, bond.a));
-        }
-        std::borrow::Cow::Owned(drawn)
+        DRAWN.with_borrow_mut(|last| {
+            if let Some((bonds, drawn)) = last
+                && *bonds == self.bonds
+                && same_except_bonds(self, drawn)
+            {
+                return Drawn::Remapped(drawn.clone());
+            }
+            #[cfg(test)]
+            COPIES.with(|count| count.set(count.get() + 1));
+            let mut drawn = self.clone();
+            for bond in &mut drawn.bonds {
+                (bond.a, bond.b) = (endpoint(bond.a, bond.b), endpoint(bond.b, bond.a));
+            }
+            let drawn = std::rc::Rc::new(drawn);
+            *last = Some((self.bonds.clone(), drawn.clone()));
+            Drawn::Remapped(drawn)
+        })
     }
     /// Any selected member pulls in the whole abbreviation. The result is in
     /// [`Document::all_ids`] order.

@@ -394,3 +394,37 @@ fn retained_ring_hits_reuse_geometry_and_invalidate_on_real_document_changes() {
     doc.models[0].display = reshiki::models3d::Display::TwoD;
     assert!(cache.ring_at(&doc, moved).is_some());
 }
+
+#[test]
+fn a_draw_compares_the_drawing_once_and_the_next_one_sees_an_edit() {
+    let cache = RefCell::new(SceneCache::default());
+    let mut doc = drawing();
+    let ids = doc.all_ids();
+    let camera = Camera {
+        center: Point::default(),
+        zoom: 1.,
+    };
+    let bounds = Rectangle::with_size(iced::Size::new(400., 300.));
+    let draw = |doc: &Document| {
+        let _frame = Frame::begin(&cache, doc);
+        let scene = cache.borrow_mut().render(doc, &ids).1;
+        cache.borrow_mut().opacity(doc);
+        cache.borrow_mut().selection(doc, &ids, camera, bounds);
+        cache.borrow_mut().foreground_orbital(doc);
+        scene
+    };
+    let first = draw(&doc);
+    assert_eq!(cache.borrow().comparisons, 1);
+    assert!(Rc::ptr_eq(&first, &draw(&doc)));
+    assert_eq!(cache.borrow().comparisons, 2);
+    // Between draws every call compares again, as an event handler needs.
+    cache.borrow_mut().opacity(&doc);
+    assert_eq!(cache.borrow().comparisons, 3);
+    doc.atoms[0].position.x -= 25.;
+    let edited = draw(&doc);
+    assert!(!Rc::ptr_eq(&first, &edited));
+    assert_eq!(
+        format!("{edited:?}"),
+        format!("{:?}", scene::primitives(&doc))
+    );
+}

@@ -178,6 +178,11 @@ impl App {
             Message::Import => return Some(self.import_input()),
             Message::Example(smiles) => return Some(self.insert_example(smiles)),
             Message::Analyze => return Some(self.analyze_drawing()),
+            // Closing the findings list hands the keys back to the drawing.
+            Message::Stereo(super::stereo::Action::Results(false)) => {
+                self.check_results = false;
+                return Some(super::focus_drawing());
+            }
             Message::Stereo(action) => self.stereo_action(action),
             Message::Cleanup(action) => return Some(self.cleanup_action(action)),
             Message::Undo => self.step_history(false),
