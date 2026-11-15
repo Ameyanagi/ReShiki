@@ -209,7 +209,7 @@ label, because the retained geometry was keyed on the camera center.
 
 ```sh
 cargo test --release --locked --bin reshiki \
-  canvas::performance::preview_workloads -- --ignored --exact --nocapture
+  canvas::performance::manual_preview_workloads -- --ignored --exact --nocapture
 ```
 
 The benchmark uses the gallery at 1×, 4× and 16× (483, 1,932 and 7,728 atoms) in

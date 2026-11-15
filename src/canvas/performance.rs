@@ -234,7 +234,7 @@ async fn manual_idle_redraw_workloads() {
 /// the gallery in view; "offscreen" moves the camera away from all of it.
 #[tokio::test]
 #[ignore = "Release-mode canvas preview profiling; requires a headless renderer"]
-async fn preview_workloads() {
+async fn manual_preview_workloads() {
     let backend = std::env::var("RESHIKI_PERF_RENDERER").ok();
     let renderer = <Renderer as Headless>::new(
         iced::Font::with_name(reshiki::style::ui_font_family()),
