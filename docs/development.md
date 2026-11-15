@@ -298,7 +298,7 @@ Pull requests run native tests and saved InChI, depiction, and aromatic-response
 
 On a pull request, the summary of the **Changed fixture rows** job lists the rows that each changed file under a `tests/fixtures/` folder gains and loses (`scripts/baseline_summary.py`). Read it when you review a fixture or baseline update. To print the same list locally, run `python3 scripts/baseline_summary.py "$(git merge-base origin/main HEAD)"`.
 
-CI runs the workspace tests with [cargo-nextest](https://nexte.st/) 0.9.150, split into two partitions; [Run the checks](#run-the-checks) gives the same commands. Each job uploads the JUnit report of its partition as a `nextest-junit-*` artifact.
+CI runs the workspace tests with [cargo-nextest](https://nexte.st/) 0.9.150; [Run the checks](#run-the-checks) gives the same commands. On each platform the **rust build** job compiles the tests once and passes them on as a `cargo nextest archive` file. Two **rust** partition jobs run that file without compiling, while the build job runs the tests that nextest leaves out. Each partition uploads its JUnit report as a `nextest-junit-*` artifact.
 
 The **Browser build (wasm32)** job checks the browser build on the same pull requests: Clippy with `-D warnings` for the editor and the headless library (`reshiki-web`) for `wasm32-unknown-unknown`, with the crates and target `scripts/build_wasm.sh` builds, then `bun test` in `packages/editor` against a debug build of the headless library. It skips with the native checks for documentation-only changes, and only release tags build the optimised bundle. The `web` job lints `packages/editor` with oxlint on every pull request. To run the same checks locally:
 
