@@ -8,6 +8,9 @@ when you add a page, a review record or an image.
   only Markdown files at the top level of `docs/`.
 - **Review records.** Each change gets one record at `docs/changes/<topic>.md`.
   Say what was checked and what the result was. Use at most three images.
+  Validation and review records, including each release's
+  `docs/changes/release-<version>-validation.md`, stay out of the website.
+  Pages link to them on GitHub.
 - **Images.** Put screenshots in `docs/images/<topic>/`. Every file there must be
   linked from a page, a record or the website.
 - **Test inputs.** Put files that tests read in `tests/fixtures/<topic>/`. Code never

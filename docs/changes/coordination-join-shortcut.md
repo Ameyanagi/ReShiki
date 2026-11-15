@@ -136,7 +136,7 @@ reopen; six contacts were exercised on macOS. All native-host CI passed on
 Windows producer head `44d198c4`. Linux desktop interaction remains pending.
 Existing projection and interchange limits remain in the
 [coordination guide](../fragment-joining.md#coordination-contacts-in-place) and
-[earlier desktop record](../coordination-desktop-validation.md).
+[earlier desktop record](coordination-desktop-validation.md).
 
 Release-note caption: Select a donor and metal, then use Ctrl+J (⌘J on macOS)
 to add an in-place directed coordination contact, including chelate closure.

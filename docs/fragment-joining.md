@@ -174,6 +174,6 @@ Direction and donor-valence semantics follow the
 [RDKit Book](https://github.com/rdkit/rdkit/blob/master/Docs/Book/RDKit_Book.rst).
 Revvity also documents unified coordination/dative behavior in its
 [official release notes](https://revvitysignals.com/whats-new/all?sort_order=ASC).
-The [desktop validation](coordination-desktop-validation.md) and the
+The [desktop validation](changes/coordination-desktop-validation.md) and the
 [selected-pair shortcut record](changes/coordination-join-shortcut.md) describe
 the checks for this feature.

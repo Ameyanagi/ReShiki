@@ -1,7 +1,7 @@
 # Drawing-tool defaults visual fixtures
 
 These original ReShiki methanol fixtures accompany
-[the visual review](../../../docs/drawing-tool-defaults-review.md) for
+[the visual review](../../../docs/changes/drawing-tool-defaults-review.md) for
 #250/#90/#249. Base: `51fa0991`; implementation: `81227315`.
 
 - `methanol-click-input.rsk` is the unchanged native input used in both actual
