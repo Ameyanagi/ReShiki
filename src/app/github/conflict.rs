@@ -95,7 +95,11 @@ impl App {
         let saved = std::fs::metadata(&path)
             .and_then(|meta| meta.modified())
             .ok()
-            .map(|time| chrono::DateTime::<chrono::Local>::from(time).format("%H:%M").to_string());
+            .map(|time| {
+                chrono::DateTime::<chrono::Local>::from(time)
+                    .format("%H:%M")
+                    .to_string()
+            });
         Some(Review {
             key: key.clone(),
             repo_path: conflict.repo_path.clone(),
@@ -241,7 +245,9 @@ impl App {
         self.status = match (choice, &copy) {
             (Choice::KeepMine, _) => "Kept yours".into(),
             (Choice::KeepBoth, Some(copy)) => format!("Kept both · yours is {}", file_name(copy)),
-            _ if tab.is_some() && conflict.theirs.is_some() => format!("Kept GitHub’s · {undo} brings yours back"),
+            _ if tab.is_some() && conflict.theirs.is_some() => {
+                format!("Kept GitHub’s · {undo} brings yours back")
+            }
             _ => "Kept GitHub’s".into(),
         };
         self.error = false;
@@ -354,7 +360,11 @@ pub(super) fn view(review: &Review) -> Element<'_, Message> {
         )
         .spacing(6);
     let keep_both = tooltip(
-        button("github-keep-both", "Keep both", Action::Resolve(Choice::KeepBoth)),
+        button(
+            "github-keep-both",
+            "Keep both",
+            Action::Resolve(Choice::KeepBoth),
+        ),
         container(text(format!("Yours becomes {}", review.copy)).size(12))
             .padding([4, 8])
             .style(container::rounded_box),

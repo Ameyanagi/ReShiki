@@ -112,7 +112,11 @@ pub(super) fn monogram(name: &str) -> String {
     let letters: String = match words.as_slice() {
         [] => "?".into(),
         [one] => one.chars().take(2).collect(),
-        [first, second, ..] => first.chars().take(1).chain(second.chars().take(1)).collect(),
+        [first, second, ..] => first
+            .chars()
+            .take(1)
+            .chain(second.chars().take(1))
+            .collect(),
     };
     letters.to_uppercase()
 }

@@ -370,29 +370,37 @@ pub(crate) fn build(app: &App) -> Vec<Command> {
     list.extend(files());
     // GitHub rows only where they apply now, such as Send for unsent drawings.
     #[cfg(not(target_arch = "wasm32"))]
-    list.extend(app.github_palette().into_iter().map(|(name, detail, action)| {
-        use crate::app::github::Action;
-        // Words an exact query ranks first; see `github_word`.
-        let words = match &action {
-            Some(Action::ShowVersions) => "github repo history versions saves commits",
-            Some(Action::ShowSend) => "github repo send push commit",
-            Some(Action::Review) => "github repo review conflict",
-            Some(Action::CopyLink | Action::OpenOnGitHub) => "github repo link url",
-            Some(Action::SignIn | Action::SignOut) => "github repo account login",
-            _ => "github repo repository",
-        };
-        let command = Command::new(
-            name,
-            Category::File,
-            detail,
-            words,
-            Run::Send(action.iter().cloned().map(Message::GitHub).collect()),
-        );
-        match action {
-            Some(_) => command,
-            None => command.need(Need::Blocked("Everything is on GitHub")),
-        }
-    }));
+    list.extend(
+        app.github_palette()
+            .into_iter()
+            .map(|(name, detail, action)| {
+                use crate::app::github::Action;
+                // Words an exact query ranks first; see `github_word`.
+                let words = match &action {
+                    Some(Action::ShowVersions) => "github repo history versions saves commits",
+                    Some(Action::ShowSend) | None => "github repo send push commit",
+                    Some(Action::Review) => "github repo review conflict",
+                    Some(Action::CopyLink | Action::OpenOnGitHub) => "github repo link url",
+                    Some(Action::SignIn | Action::SignOut) => "github repo account login",
+                    _ => "github repo repository",
+                };
+                let command = Command::new(
+                    name,
+                    Category::File,
+                    detail,
+                    words,
+                    // An unavailable row (Nothing to send) still names Send, so
+                    // its words rank it; Blocked keeps it from running.
+                    Run::Send(vec![Message::GitHub(
+                        action.clone().unwrap_or(Action::ShowSend),
+                    )]),
+                );
+                match action {
+                    Some(_) => command,
+                    None => command.need(Need::Blocked("Everything is on GitHub")),
+                }
+            }),
+    );
     list.extend(view(app));
     list.extend(tools());
     if cfg!(target_arch = "wasm32") {

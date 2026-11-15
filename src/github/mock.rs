@@ -619,7 +619,11 @@ fn repo_api(
                 before != blob_at(commit)
             };
             // `sha` may name a branch, as GitHub allows.
-            let head = repo.refs.get(&query["sha"]).unwrap_or(&query["sha"]).clone();
+            let head = repo
+                .refs
+                .get(&query["sha"])
+                .unwrap_or(&query["sha"])
+                .clone();
             let items: Vec<Value> = repo
                 .history(&head)
                 .iter()
@@ -628,7 +632,11 @@ fn repo_api(
                 .take(size)
                 .map(|commit| {
                     let made = &repo.commits[commit];
-                    let name = if made.author == LOGIN { "Octo Test" } else { &made.author };
+                    let name = if made.author == LOGIN {
+                        "Octo Test"
+                    } else {
+                        &made.author
+                    };
                     json!({
                         "sha": commit,
                         "commit": {

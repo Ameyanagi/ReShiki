@@ -122,7 +122,11 @@ fn changed_text_is_boxed() {
     let right = edited(&left, |doc| doc.annotations[0].text = "Step 2".into());
     let found = diff(&left, &right);
     assert_eq!(found.right.ids, HashSet::from([id]));
-    assert_eq!(boxes(&right, &found.right).len(), 1, "text is filled softly");
+    assert_eq!(
+        boxes(&right, &found.right).len(),
+        1,
+        "text is filled softly"
+    );
 }
 
 #[test]
@@ -186,11 +190,7 @@ fn what_differs_is_painted_on_copies_and_both_drawings_stay_as_they_are() {
     let other = edited(&plain, |doc| doc.bonds[0].order = 3);
     let compare = Compare::new(Ok(plain.clone()), other);
     let shown = compare.shown[1].as_ref().unwrap();
-    let painted = shown
-        .bonds
-        .iter()
-        .find(|b| (b.a, b.b) == bond)
-        .unwrap();
+    let painted = shown.bonds.iter().find(|b| (b.a, b.b) == bond).unwrap();
     assert_eq!(painted.highlight, Some(DIFF));
 }
 

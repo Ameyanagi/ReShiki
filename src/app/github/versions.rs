@@ -398,7 +398,10 @@ impl App {
         let versions = &self.github.versions;
         let front = self.github.locate(self.tab.path.as_deref());
         if front.is_none() {
-            return text("Not a GitHub drawing.").size(12).style(muted_text).into();
+            return text("Not a GitHub drawing.")
+                .size(12)
+                .style(muted_text)
+                .into();
         }
         let selected = versions.selected.as_ref();
         let group = |label: &'static str| text(label).size(12).style(muted_text);

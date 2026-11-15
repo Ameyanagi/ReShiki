@@ -627,11 +627,9 @@ fn toast<'a>() -> Element<'a, Message> {
         weight: iced::font::Weight::Bold,
         ..iced::Font::with_name(reshiki::style::ui_font_family())
     });
-    let body = text(
-        "A star helps other chemists find it.",
-    )
-    .size(13)
-    .style(muted_text);
+    let body = text("A star helps other chemists find it.")
+        .size(13)
+        .style(muted_text);
     let close = reshiki::accessibility::button("star-close", "Close", text("×").size(16))
         .on_press(Message::Star(Action::Dismiss))
         .padding([0, 6])

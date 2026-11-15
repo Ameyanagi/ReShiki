@@ -161,7 +161,10 @@ pub(super) fn painted(doc: &Document, marks: &Marks) -> Document {
         }
     }
     for bond in &mut doc.bonds {
-        if marks.bonds.contains(&(bond.a.min(bond.b), bond.a.max(bond.b))) {
+        if marks
+            .bonds
+            .contains(&(bond.a.min(bond.b), bond.a.max(bond.b)))
+        {
             bond.highlight = Some(DIFF);
         }
     }

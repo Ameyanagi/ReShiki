@@ -203,7 +203,9 @@ impl State {
 
     /// The repository kept in folder `key`, as GitHub names it now.
     fn named(&self, key: &RepoKey) -> RepoKey {
-        self.states.get(key).map_or_else(|| key.clone(), RepoState::key)
+        self.states
+            .get(key)
+            .map_or_else(|| key.clone(), RepoState::key)
     }
 
     /// The repository's id, when known.
@@ -445,7 +447,10 @@ impl App {
     }
 
     /// Repositories seen for the first time keep a color.
-    fn github_seen<'a>(&mut self, repos: impl IntoIterator<Item = (u64, &'a RepoKey)>) -> Task<Message> {
+    fn github_seen<'a>(
+        &mut self,
+        repos: impl IntoIterator<Item = (u64, &'a RepoKey)>,
+    ) -> Task<Message> {
         let mut new = false;
         for (id, key) in repos {
             new |= identity::assign(&mut self.github.prefs, id, key);
@@ -775,8 +780,10 @@ impl App {
                     .get(&key)
                     .and_then(|found| found.first())
                     .is_some_and(|conflict| conflict.commit == commit);
+                // A late failure never erases details already shown.
                 if let Some(Dialog::Conflict(review)) = &mut self.github.dialog
                     && current
+                    && found.is_some()
                     && review.key == key
                     && review.repo_path == repo_path
                 {
@@ -790,8 +797,18 @@ impl App {
                 if self.github.locate(self.tab.path.as_deref()).is_none() {
                     return Task::none();
                 }
+                let top = (self.inspector_tab != InspectorTab::Versions).then(|| {
+                    iced::widget::operation::snap_to(
+                        "inspector-content",
+                        iced::widget::operation::RelativeOffset { x: 0., y: 0. },
+                    )
+                });
                 let task = self.show_inspector_tab(InspectorTab::Versions);
-                return Task::batch([task.unwrap_or_else(Task::none), self.github_follow()]);
+                return Task::batch([
+                    task.unwrap_or_else(Task::none),
+                    top.unwrap_or_else(Task::none),
+                    self.github_follow(),
+                ]);
             }
             Action::Versions(action) => return self.versions_action(action),
             Action::Color(key, hue) => {
@@ -979,6 +996,7 @@ impl App {
     fn github_link(&self) -> Option<String> {
         let (key, repo_path) = self.github.locate(self.tab.path.as_deref())?;
         let state = self.github.states.get(&key)?;
+        state.files.get(&repo_path)?.base_blob.as_ref()?;
         let path = format!(
             "/{}/{}/blob/{}/{repo_path}",
             state.owner, state.repo, state.branch
@@ -1131,7 +1149,9 @@ impl App {
                 };
                 let status = match (changed, outcome.sent.len(), kept) {
                     (Some(changed), 0, _) => format!("Not sent · {changed} changed on GitHub"),
-                    (Some(changed), sent, _) => format!("Sent {sent} · {changed} changed on GitHub"),
+                    (Some(changed), sent, _) => {
+                        format!("Sent {sent} · {changed} changed on GitHub")
+                    }
                     (None, _, Some(kept)) => format!("{kept} · sent"),
                     (None, ..) => "Sent to GitHub".into(),
                 };
@@ -1220,10 +1240,7 @@ impl App {
 
     /// Before a tab closes: asks whether to send its saved, unsent drawing.
     /// `None` closes it now.
-    pub(super) fn github_before_close(
-        &mut self,
-        id: TabId,
-    ) -> Option<Task<Message>> {
+    pub(super) fn github_before_close(&mut self, id: TabId) -> Option<Task<Message>> {
         if self.github.later.remove(&id) || self.github.closing.is_some() {
             return None;
         }
@@ -1235,7 +1252,10 @@ impl App {
         self.github.closing = Some(Closing::Tab(id, self.tab.revision));
         // Send takes every unsent drawing of the repository: say so.
         let body = match self.github.unsent.get(&key).map_or(0, Vec::len) {
-            count if count > 1 => format!("Sends {count} drawings in {}.", self.github.named(&key).repo),
+            count if count > 1 => format!(
+                "Sends {count} drawings in {}.",
+                self.github.named(&key).repo
+            ),
             _ => "Saved on this computer only.".into(),
         };
         Some(ask_send(
@@ -1465,8 +1485,12 @@ impl App {
             }
             rows.push(("History".into(), name.clone(), Some(Action::ShowVersions)));
             // A drawing GitHub has never had has no link yet.
-            if self.github_chip_state(&key) != Chip::New {
-                rows.push(("Copy GitHub link".into(), name.clone(), Some(Action::CopyLink)));
+            if self.github_link().is_some() {
+                rows.push((
+                    "Copy GitHub link".into(),
+                    name.clone(),
+                    Some(Action::CopyLink),
+                ));
                 rows.push(("Open on GitHub ↗".into(), name, Some(Action::OpenOnGitHub)));
             }
         }
@@ -1506,7 +1530,12 @@ impl App {
         );
         // Signed in: a disc with the account's initial; unsent: a dot.
         let account = state.login().map(|login| {
-            let initial = login.chars().next().unwrap_or('?').to_uppercase().to_string();
+            let initial = login
+                .chars()
+                .next()
+                .unwrap_or('?')
+                .to_uppercase()
+                .to_string();
             container(
                 container(text(initial).size(7.5).style(|theme: &Theme| text::Style {
                     color: Some(theme.palette().background),
@@ -1605,7 +1634,9 @@ impl App {
     pub(super) fn github_chip(&self) -> Option<Element<'_, Message>> {
         let (key, repo_path) = self.github.locate(self.tab.path.as_deref())?;
         let state = &self.github;
-        let folder = repo_path.rsplit_once('/').map(|(folder, _)| folder.to_owned());
+        let folder = repo_path
+            .rsplit_once('/')
+            .map(|(folder, _)| folder.to_owned());
         // `lab-notes / scheme`, with a long folder shortened in the middle.
         let name = match &folder {
             Some(folder) => format!("{} / {}", self.github_label(&key), middle(folder)),
@@ -1619,9 +1650,13 @@ impl App {
                 .padding([4, 9])
         };
         // The name opens the picker in the drawing's folder.
+        let full = match &folder {
+            Some(folder) => format!("{} / {folder}", self.github_label(&key)),
+            None => self.github_label(&key),
+        };
         let place = reshiki::accessibility::button(
             "github-chip-place",
-            format!("{name}, open from GitHub here"),
+            format!("{full}, open from GitHub here"),
             row![
                 identity::dot(move |theme: &Theme| identity::color(theme, hue)),
                 text(name.clone()).size(12),
@@ -1646,7 +1681,10 @@ impl App {
             ),
             Chip::NotSent => (
                 Some("· Not sent".to_owned()),
-                Some(action("github-retry", "Retry", Action::ShowSend).style(super::workspace::control(true))),
+                Some(
+                    action("github-retry", "Retry", Action::ShowSend)
+                        .style(super::workspace::control(true)),
+                ),
                 "not sent".to_owned(),
             ),
             Chip::New | Chip::Unsent(_) => {
@@ -1656,7 +1694,10 @@ impl App {
                 };
                 (
                     Some(format!("· {said}")),
-                    Some(action("github-send-chip", "Send", Action::ShowSend).style(super::workspace::control(true))),
+                    Some(
+                        action("github-send-chip", "Send", Action::ShowSend)
+                            .style(super::workspace::control(true)),
+                    ),
                     said,
                 )
             }
@@ -1730,7 +1771,9 @@ impl App {
         let letters = identity::monograms(&self.github_open_repos())
             .remove(&key)
             .unwrap_or_else(|| identity::monogram(&named.repo));
-        let unsent = self.github_waiting(&key, |tab| self.shown_edited(tab)).len();
+        let unsent = self
+            .github_waiting(&key, |tab| self.shown_edited(tab))
+            .len();
         let spoken = match unsent {
             0 => self.github_label(&key),
             n => format!("{}, {n} unsent", self.github_label(&key)),
@@ -1924,13 +1967,26 @@ fn suffix_shown(chip: Chip) -> bool {
     chip != Chip::Review
 }
 
-/// `a/b/c/d` → `a/…/d` when it is long.
+/// A folder path of at most 24 characters: `scheme/…/drafts`, or the
+/// start and end of one long name.
 fn middle(folder: &str) -> String {
+    const ROOM: usize = 24;
+    let chars: Vec<char> = folder.chars().collect();
+    if chars.len() <= ROOM {
+        return folder.to_owned();
+    }
+    let ends = |head: usize, tail: usize| {
+        let head: String = chars.iter().take(head).collect();
+        let tail: String = chars.iter().skip(chars.len() - tail).collect();
+        format!("{head}…{tail}")
+    };
     match (folder.split_once('/'), folder.rsplit_once('/')) {
-        (Some((first, _)), Some((_, last))) if folder.chars().count() > 24 => {
+        (Some((first, _)), Some((_, last)))
+            if first.chars().count() + last.chars().count() + 3 <= ROOM =>
+        {
             format!("{first}/…/{last}")
         }
-        _ => folder.to_owned(),
+        _ => ends(ROOM / 2, ROOM / 2 - 1),
     }
 }
 

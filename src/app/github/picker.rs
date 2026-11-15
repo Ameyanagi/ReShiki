@@ -50,8 +50,9 @@ pub(in crate::app) struct Picker {
     pub(super) signed_out: bool,
     /// The only or last used repository was chosen once on opening.
     chosen: bool,
-    /// Folders still to open on the way to where the picker was asked to
-    /// show, outermost first.
+    /// Where the picker was asked to show (see `ShowIn`): the repository,
+    /// once listed, and the folders still to open, outermost first.
+    target: Option<RepoKey>,
     goto: Vec<String>,
     /// The highlighted repository in the filtered list.
     highlighted: usize,
@@ -91,6 +92,7 @@ impl Picker {
             repos: None,
             signed_out: false,
             chosen: false,
+            target: None,
             goto: Vec::new(),
             highlighted: 0,
             repo: None,
@@ -256,6 +258,10 @@ impl App {
         }
         let repos = picker.repos.as_deref().unwrap_or_default();
         let chosen = match repos {
+            _ if picker.target.is_some() => picker
+                .target
+                .clone()
+                .filter(|key| repos.iter().any(|repo| repo.key == *key)),
             [only] => Some(only.key.clone()),
             _ => repos
                 .iter()
@@ -269,63 +275,32 @@ impl App {
     pub(super) fn picker_action(&mut self, action: Action) -> Task<Message> {
         match action {
             Action::Show(mode) => {
-                self.github.menu = false;
-                if !self.github.configured() {
-                    return Task::none();
-                }
                 let stem = std::path::Path::new(&self.tab.name())
                     .file_stem()
                     .map_or("Drawing".into(), |stem| stem.to_string_lossy().into_owned());
-                let mut picker = Picker::new(mode, stem);
-                if self.github.client().is_none() {
-                    // The repositories known here, greyed, until signed in.
-                    picker.signed_out = true;
-                    let known = self
-                        .github
-                        .root
-                        .as_deref()
-                        .map(workcopy::known)
-                        .unwrap_or_default();
-                    let repos: Vec<Repo> = known
-                        .into_iter()
-                        .map(|state| Repo {
-                            id: state.repo_id,
-                            key: state.key(),
-                            private: state.private,
-                            default_branch: state.branch.clone(),
-                            push: true,
-                        })
-                        .collect();
-                    picker.listed(&repos, self.github.prefs.last);
-                } else if !self.github.repos.is_empty() {
-                    picker.listed(&self.github.repos, self.github.prefs.last);
-                }
-                self.github.dialog = Some(Dialog::Picker(Box::new(picker)));
-                let focus = match mode {
-                    Mode::Open => iced::widget::operation::focus(SEARCH),
-                    Mode::SendTo => iced::widget::operation::focus(SAVE_NAME)
-                        .chain(iced::widget::operation::select_all(SAVE_NAME)),
+                return self.picker_show(Picker::new(mode, stem));
+            }
+            Action::SignIn => {
+                let again = match self.picker() {
+                    Some(Picker {
+                        target: Some(key),
+                        goto,
+                        ..
+                    }) => Action::ShowIn(key.clone(), goto.join("/")),
+                    picker => Action::Show(picker.map_or(Mode::Open, |picker| picker.mode)),
                 };
-                return Task::batch([self.github_list(), focus, self.picker_choose()]);
+                return self.github_sign_in(Some(GitHubAction::Picker(again)));
             }
             Action::ShowIn(key, folder) => {
-                let shown = self.picker_action(Action::Show(Mode::Open));
-                let known = self.github.repos.iter().any(|repo| repo.key == key);
-                let Some(picker) = self.picker().filter(|picker| !picker.signed_out && known)
-                else {
-                    return shown;
-                };
-                picker.chosen = true;
+                // Shown first, then chosen once listed (or signed in).
+                let mut picker = Picker::new(Mode::Open, String::new());
+                picker.target = Some(key);
                 picker.goto = folder
                     .split('/')
                     .filter(|name| !name.is_empty())
                     .map(str::to_owned)
                     .collect();
-                return Task::batch([shown, self.picker_action(Action::PickRepo(key))]);
-            }
-            Action::SignIn => {
-                let mode = self.picker().map_or(Mode::Open, |picker| picker.mode);
-                return self.github_sign_in(Some(GitHubAction::Picker(Action::Show(mode))));
+                return self.picker_show(picker);
             }
             Action::Search(search) => {
                 if let Some(picker) = self.picker() {
@@ -367,6 +342,13 @@ impl App {
                     return Task::none();
                 };
                 picker.generation = generation;
+                // Another repository than the one asked for ends that walk;
+                // a download still running is for the repository left.
+                if picker.target.take().as_ref() != Some(&key) {
+                    picker.goto.clear();
+                }
+                picker.request = 0;
+                picker.busy = false;
                 picker.repo = Some(repo.clone());
                 picker.search.clear();
                 picker.root = None;
@@ -405,8 +387,11 @@ impl App {
                         picker.names = entries.iter().map(|entry| entry.name.clone()).collect();
                         let entries = shown(entries);
                         picker.selected = None;
-                        let drawings: Vec<Entry> =
-                            entries.iter().filter(|entry| !entry.folder).cloned().collect();
+                        let drawings: Vec<Entry> = entries
+                            .iter()
+                            .filter(|entry| !entry.folder)
+                            .cloned()
+                            .collect();
                         let wanted: Vec<String> = drawings
                             .iter()
                             .filter(|entry| !picker.thumbs.contains_key(&entry.sha))
@@ -418,13 +403,32 @@ impl App {
                             .collect();
                         picker.waiting = paths.len();
                         // On the way to a folder asked for: open the next one.
+                        // One GitHub does not have yet is opened as new.
                         if !picker.goto.is_empty() {
                             let next = picker.goto.remove(0);
-                            if entries.iter().any(|entry| entry.folder && entry.name == next) {
+                            if let Some(entry) = entries
+                                .iter()
+                                .find(|entry| entry.folder && entry.name == next)
+                            {
+                                let (repo, sha) = (picker.repo.clone(), entry.sha.clone());
+                                picker.trail.push((next, sha.clone()));
                                 picker.entries = Some(entries);
-                                return self.picker_action(Action::Folder(next));
+                                return match (self.github.client(), repo) {
+                                    (Some(client), Some(repo)) => {
+                                        self.picker_list(client, repo, sha)
+                                    }
+                                    _ => Task::none(),
+                                };
                             }
-                            picker.goto.clear();
+                            picker.trail.push((next, String::new()));
+                            let rest = std::mem::take(&mut picker.goto);
+                            picker
+                                .trail
+                                .extend(rest.into_iter().map(|name| (name, String::new())));
+                            picker.entries = Some(Vec::new());
+                            picker.names.clear();
+                            picker.waiting = 0;
+                            return Task::none();
                         }
                         picker.entries = Some(entries);
                         picker.sort();
@@ -446,9 +450,7 @@ impl App {
                 if let Some((who, date)) = found
                     && let Ok(at) = DateTime::parse_from_rfc3339(&date)
                 {
-                    picker
-                        .changed
-                        .insert(name, (who, at.with_timezone(&Local)));
+                    picker.changed.insert(name, (who, at.with_timezone(&Local)));
                 }
                 picker.waiting = picker.waiting.saturating_sub(1);
                 if picker.waiting == 0 {
@@ -472,6 +474,7 @@ impl App {
                 ) else {
                     return Task::none();
                 };
+                picker.goto.clear();
                 picker.trail.push((name, entry.sha.clone()));
                 return self.picker_list(client, repo, entry.sha);
             }
@@ -491,6 +494,7 @@ impl App {
                 if depth >= picker.trail.len() {
                     return Task::none();
                 }
+                picker.goto.clear();
                 picker.trail.truncate(depth);
                 let tree = picker
                     .trail
@@ -687,6 +691,45 @@ impl App {
         Task::none()
     }
 
+    /// Shows `picker`: the repositories GitHub lists or, signed out, those
+    /// known here, greyed; then lists them again.
+    fn picker_show(&mut self, mut picker: Picker) -> Task<Message> {
+        self.github.menu = false;
+        if !self.github.configured() {
+            return Task::none();
+        }
+        if self.github.client().is_none() {
+            // The repositories known here, greyed, until signed in.
+            picker.signed_out = true;
+            let known = self
+                .github
+                .root
+                .as_deref()
+                .map(workcopy::known)
+                .unwrap_or_default();
+            let repos: Vec<Repo> = known
+                .into_iter()
+                .map(|state| Repo {
+                    id: state.repo_id,
+                    key: state.key(),
+                    private: state.private,
+                    default_branch: state.branch.clone(),
+                    push: true,
+                })
+                .collect();
+            picker.listed(&repos, self.github.prefs.last);
+        } else if !self.github.repos.is_empty() {
+            picker.listed(&self.github.repos, self.github.prefs.last);
+        }
+        let focus = match picker.mode {
+            Mode::Open => iced::widget::operation::focus(SEARCH),
+            Mode::SendTo => iced::widget::operation::focus(SAVE_NAME)
+                .chain(iced::widget::operation::select_all(SAVE_NAME)),
+        };
+        self.github.dialog = Some(Dialog::Picker(Box::new(picker)));
+        Task::batch([self.github_list(), focus, self.picker_choose()])
+    }
+
     /// A number for a picker request, never given before in this run.
     fn github_request(&mut self) -> u64 {
         self.github.seq += 1;
@@ -741,6 +784,9 @@ impl App {
         picker.entries = None;
         picker.selected = None;
         picker.new_item = None;
+        // A download still running is for the folder left.
+        picker.request = 0;
+        picker.busy = false;
         perform(
             async move {
                 let entries = api::tree(&client, &repo.key, &tree).await?;
@@ -885,9 +931,17 @@ impl App {
             return Task::none();
         };
         let typed = picker.save_name.trim();
-        let stem = typed.strip_suffix(".rsk").unwrap_or(typed).trim().to_owned();
+        let stem = typed
+            .strip_suffix(".rsk")
+            .unwrap_or(typed)
+            .trim()
+            .to_owned();
         // A name, not a path: the folder is the one open in the picker.
-        let stem = if stem.contains(['/', '\\']) { String::new() } else { stem };
+        let stem = if stem.contains(['/', '\\']) {
+            String::new()
+        } else {
+            stem
+        };
         let name = format!("{stem}.rsk");
         let preview = format!("{stem}.svg");
         let taken = picker
@@ -954,7 +1008,11 @@ impl App {
         };
         let typed = typed.trim();
         // A name, not a path: the folder is the one open in the picker.
-        let typed = if typed.contains(['/', '\\']) { "" } else { typed };
+        let typed = if typed.contains(['/', '\\']) {
+            ""
+        } else {
+            typed
+        };
         if folder {
             if typed.is_empty() || !workcopy::valid_repo_path(&picker.repo_path(typed)) {
                 picker.error = Some(CANT_OPEN.into());
@@ -972,7 +1030,11 @@ impl App {
             picker.error = None;
             return Task::none();
         }
-        let stem = typed.strip_suffix(".rsk").unwrap_or(typed).trim().to_owned();
+        let stem = typed
+            .strip_suffix(".rsk")
+            .unwrap_or(typed)
+            .trim()
+            .to_owned();
         let (name, preview) = (format!("{stem}.rsk"), format!("{stem}.svg"));
         let taken = picker
             .names
@@ -1037,13 +1099,20 @@ impl App {
         let mut name = row![].align_y(Alignment::Center);
         if shared_name {
             spoken = format!("{}/{}", repo.key.owner, repo.key.repo);
-            name = name.push(text(format!("{}/", repo.key.owner)).size(12).style(muted_text));
+            name = name.push(
+                text(format!("{}/", repo.key.owner))
+                    .size(12)
+                    .style(muted_text),
+            );
         }
         name = name.push(text(repo.key.repo.clone()).size(12));
-        let mut content = row![identity::tile(hue, identity::monogram(&repo.key.repo)), name]
-            .spacing(8)
-            .align_y(Alignment::Center)
-            .push(Space::new().width(Length::Fill));
+        let mut content = row![
+            identity::tile(hue, identity::monogram(&repo.key.repo)),
+            name
+        ]
+        .spacing(8)
+        .align_y(Alignment::Center)
+        .push(Space::new().width(Length::Fill));
         if conflicts > 0 {
             spoken.push_str(&format!(", {conflicts} changed on GitHub"));
             content = content.push(state_dot(true, conflicts));
@@ -1061,9 +1130,7 @@ impl App {
             .width(Length::Fill)
             .padding([4, 6])
             .style(crate::app::workspace::control(current || highlighted))
-            .on_press_maybe(
-                (!picker.signed_out).then(|| msg(Action::PickRepo(repo.key.clone()))),
-            )
+            .on_press_maybe((!picker.signed_out).then(|| msg(Action::PickRepo(repo.key.clone()))))
             .into()
     }
 
@@ -1187,11 +1254,15 @@ impl App {
         let center = |content: Element<'a, Message>| container(content).center(Length::Fill).into();
         if picker.signed_out {
             return center(
-                reshiki::accessibility::button("github-picker-sign-in", "Sign in…", text("Sign in…").size(13))
-                    .padding([8, 16])
-                    .style(crate::appearance::primary)
-                    .on_press(msg(Action::SignIn))
-                    .into(),
+                reshiki::accessibility::button(
+                    "github-picker-sign-in",
+                    "Sign in…",
+                    text("Sign in…").size(13),
+                )
+                .padding([8, 16])
+                .style(crate::appearance::primary)
+                .on_press(msg(Action::SignIn))
+                .into(),
             );
         }
         if picker.repos.as_ref().is_some_and(Vec::is_empty) {
@@ -1213,7 +1284,12 @@ impl App {
             );
         }
         let Some(repo) = &picker.repo else {
-            return center(text("Choose a repository.").size(13).style(muted_text).into());
+            return center(
+                text("Choose a repository.")
+                    .size(13)
+                    .style(muted_text)
+                    .into(),
+            );
         };
         // `lab-notes / scheme`: the parents are muted and go back there.
         let mut crumbs = row![].spacing(6).align_y(Alignment::Center);
@@ -1359,16 +1435,12 @@ impl App {
                                 .wrapping(text::Wrapping::None)
                         }))
                         .spacing(4);
-                        reshiki::accessibility::button(
-                            format!("github-file-{at}"),
-                            spoken,
-                            content,
-                        )
-                        .width(128)
-                        .padding(6)
-                        .style(crate::app::workspace::control(selected))
-                        .on_press(msg(Action::Select(at)))
-                        .into()
+                        reshiki::accessibility::button(format!("github-file-{at}"), spoken, content)
+                            .width(128)
+                            .padding(6)
+                            .style(crate::app::workspace::control(selected))
+                            .on_press(msg(Action::Select(at)))
+                            .into()
                     });
                 let creating: Vec<Element<'_, Message>> = match picker.mode {
                     Mode::Open => vec![new_item_tile(picker, false), new_item_tile(picker, true)],
@@ -1452,14 +1524,16 @@ fn new_item_tile(picker: &Picker, folder: bool) -> Element<'_, Message> {
                     .align_y(Alignment::Center)
                     .into()
             };
-            return container(column![
-                container(text("+").size(22).style(muted_text))
-                    .center_x(Length::Fill)
-                    .center_y(84)
-                    .style(thumb_frame),
-                field,
-            ]
-            .spacing(4))
+            return container(
+                column![
+                    container(text("+").size(22).style(muted_text))
+                        .center_x(Length::Fill)
+                        .center_y(84)
+                        .style(thumb_frame),
+                    field,
+                ]
+                .spacing(4),
+            )
             .width(128)
             .padding(6)
             .into();
@@ -1475,7 +1549,11 @@ fn new_item_tile(picker: &Picker, folder: bool) -> Element<'_, Message> {
         .into(),
     };
     reshiki::accessibility::button(
-        if folder { "github-new-folder" } else { "github-new-drawing" },
+        if folder {
+            "github-new-folder"
+        } else {
+            "github-new-drawing"
+        },
         label,
         content,
     )
@@ -1508,7 +1586,19 @@ fn state_dot<'a>(conflict: bool, count: usize) -> Element<'a, Message> {
         }
     });
     if count == 0 {
-        return dot;
+        // A conflict is also a "!", so color is not the only sign.
+        return match conflict {
+            true => row![
+                dot,
+                text("!").size(11).style(|theme: &Theme| text::Style {
+                    color: Some(theme.palette().warning),
+                })
+            ]
+            .spacing(2)
+            .align_y(Alignment::Center)
+            .into(),
+            false => dot,
+        };
     }
     row![dot, text(count.to_string()).size(11).style(muted_text)]
         .spacing(4)

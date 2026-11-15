@@ -197,7 +197,8 @@ impl App {
         // The GitHub menu, and the account, change which controls exist:
         // one bit each.
         #[cfg(not(target_arch = "wasm32"))]
-        let github_menu = u8::from(self.github.menu) | u8::from(self.github.client().is_some()) << 1;
+        let github_menu =
+            u8::from(self.github.menu) | u8::from(self.github.client().is_some()) << 1;
         #[cfg(target_arch = "wasm32")]
         let github_menu = 0;
         let surface = (

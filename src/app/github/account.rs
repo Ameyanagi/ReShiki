@@ -64,15 +64,17 @@ impl App {
             // Why the last sign-in ended, such as an expired code.
             Account::SignedOut(Some(note)) => column![
                 text(note.clone()).size(13),
-                row![button("github-sign-in", "Sign in…", Action::SignIn, true), cancel].spacing(8),
+                row![
+                    button("github-sign-in", "Sign in…", Action::SignIn, true),
+                    cancel
+                ]
+                .spacing(8),
             ]
             .spacing(14)
             .align_x(Alignment::Center)
             .into(),
             _ => column![
-                text("Asking GitHub for a code…")
-                    .size(13)
-                    .style(muted_text),
+                text("Asking GitHub for a code…").size(13).style(muted_text),
                 cancel,
             ]
             .spacing(14)

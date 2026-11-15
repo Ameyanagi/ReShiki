@@ -2767,7 +2767,7 @@ impl App {
                         container::Style {
                             background: Some(
                                 crate::appearance::themed(theme, Color::from_rgb8(168, 52, 47))
-                                .into(),
+                                    .into(),
                             ),
                             border: Border {
                                 radius: 4.0.into(),
