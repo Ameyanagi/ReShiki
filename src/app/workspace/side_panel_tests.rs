@@ -207,6 +207,66 @@ fn r_group_with_user_abbreviation_child() {
     }
 }
 
+/// On a narrow row the selection commands stay in view and the global modes
+/// fold into ⋯ first: the row always shows a leading run of the commands.
+#[tokio::test]
+#[ignore = "Opt-in real renderer layout check"]
+async fn a_narrow_context_row_keeps_selection_commands_ahead_of_global_modes() -> Result<(), String>
+{
+    use iced::advanced::{renderer::Headless, widget::operation};
+    let mut renderer = <iced::Renderer as Headless>::new(
+        iced::Font::with_name(reshiki::style::ui_font_family()),
+        iced::Pixels(16.),
+        None,
+    )
+    .await
+    .ok_or("No renderer")?;
+    let (mut app, _) = App::new();
+    let _ = app.update(Message::KeyboardDrawing(
+        crate::app::keyboard_drawing::Action::Leave,
+    ));
+    app.tab.doc = reshiki::rings::Preset::Regular.document(42., false);
+    app.tab.selected = app.tab.doc.all_ids();
+    let commands = app.context_commands();
+    let labels: Vec<_> = commands.iter().map(|c| c.label).collect();
+    assert_eq!(
+        labels[labels.len() - 2..],
+        ["3D optimize…", "Keyboard drawing"]
+    );
+    let hints: Vec<_> = commands.iter().map(|c| c.hint).collect();
+    let mut partly_folded = 0;
+    for width in (360..=1200).step_by(40) {
+        let size = iced::Size::new(width as f32, 46.);
+        let mut ui = iced_runtime::UserInterface::build(
+            app.context_bar(),
+            size,
+            iced_runtime::user_interface::Cache::new(),
+            &mut renderer,
+        );
+        let mut collect = reshiki::accessibility::Collect::new(iced::Rectangle::with_size(size));
+        ui.operate(&renderer, &mut operation::black_box(&mut collect));
+        let nodes = &collect.snapshot().nodes;
+        let shown: Vec<_> = nodes
+            .iter()
+            .filter(|node| hints.contains(&node.name.as_str()))
+            .map(|node| node.name.as_str())
+            .collect();
+        eprintln!("{width} px: {shown:?}");
+        assert_eq!(shown, hints[..shown.len()], "{width} px");
+        let more = nodes.iter().find(|node| node.id == "context-overflow");
+        assert_eq!(more.is_some(), shown.len() < hints.len(), "{width} px");
+        if let Some(more) = more
+            && !shown.is_empty()
+        {
+            partly_folded += 1;
+            assert!(more.name.contains("Keyboard drawing (F8)"), "{}", more.name);
+            assert!(!more.name.contains("Join"), "{width} px: {}", more.name);
+        }
+    }
+    assert!(partly_folded > 0);
+    Ok(())
+}
+
 /// Each 12 px tab label fits its segment with room to spare.
 #[test]
 fn inspector_tab_labels_fit_their_segments() {

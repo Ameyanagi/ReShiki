@@ -867,10 +867,12 @@ impl App {
         }
     }
 
-    /// Context row commands in fold order: the first ones fold into ⋯ first.
+    /// Context row commands: selection commands first, global modes last.
+    /// A short row folds them into ⋯ from the end.
     pub(super) fn context_commands(&self) -> Vec<RowCommand> {
         let mut commands = self.standard_context_commands();
-        if self.keyboard_drawing_active() {
+        let keyboard = self.keyboard_drawing_active();
+        if keyboard {
             use super::keyboard_drawing::Action;
             use reshiki::keyboard_drawing::Target;
             let atom = match self.tab.keyboard_drawing.target() {
@@ -878,9 +880,6 @@ impl App {
                 _ => None,
             };
             let marked = self.tab.keyboard_drawing.marked();
-            commands.retain(|command| {
-                !matches!(command.message, Message::KeyboardDrawing(Action::Toggle))
-            });
             commands.extend([
                 RowCommand {
                     label: "Mark [",
@@ -917,6 +916,24 @@ impl App {
                 },
             ]);
         }
+        if matches!(self.tool, Tool::Select | Tool::Lasso) {
+            commands.push(RowCommand {
+                label: "3D optimize…",
+                menu: "3D optimize…",
+                hint: "Generate an optimized conformer using MMFF or UFF; preview before applying",
+                message: Message::Optimization(super::optimization::Action::Begin),
+                enabled: !self.tab.doc.atoms.is_empty() && !self.tab.busy,
+            });
+            if !keyboard {
+                commands.push(RowCommand {
+                    label: "Keyboard drawing",
+                    menu: "Keyboard drawing (F8)",
+                    hint: "Draw with digits and letters; navigate atoms and bonds with arrows (F8)",
+                    message: Message::KeyboardDrawing(super::keyboard_drawing::Action::Toggle),
+                    enabled: !self.tab.busy,
+                });
+            }
+        }
         commands
     }
 
@@ -934,128 +951,112 @@ impl App {
                 enabled: true,
             });
         }
-        if matches!(self.tool, Tool::Select | Tool::Lasso) {
-            commands.extend([
-                RowCommand {
-                    label: "3D optimize…",
-                    menu: "3D optimize…",
-                    hint: "Generate an optimized conformer using MMFF or UFF; preview before applying",
-                    message: Message::Optimization(super::optimization::Action::Begin),
-                    enabled: !self.tab.doc.atoms.is_empty() && !self.tab.busy,
-                },
-                RowCommand {
-                    label: "Keyboard drawing",
-                    menu: "Keyboard drawing (F8)",
-                    hint: "Draw with digits and letters; navigate atoms and bonds with arrows (F8)",
-                    message: Message::KeyboardDrawing(super::keyboard_drawing::Action::Toggle),
-                    enabled: !self.tab.busy,
-                },
-            ]);
-            let ids = self.depth_ids();
-            if ids
-                .iter()
-                .any(|id| self.tab.doc.atom(*id).is_some_and(|a| a.depth != 0.))
-                || reshiki::depth_appearance::has(&self.tab.doc, &ids)
-            {
-                let automatic = reshiki::depth_appearance::is_automatic_for(&self.tab.doc, &ids);
-                commands.push(RowCommand {
-                    label: if automatic {
-                        "Freeze depth"
-                    } else {
-                        "Enhance depth"
-                    },
-                    menu: if automatic {
-                        "Freeze depth appearance"
-                    } else {
-                        "Enhance depth appearance"
-                    },
-                    hint: if automatic {
-                        "Keep the current depth colors"
-                    } else {
-                        "Fade bonds behind the front face"
-                    },
-                    message: Message::DepthAppearance(super::depth_appearance::Action::Enhance(
-                        !automatic,
-                    )),
-                    enabled: true,
-                });
-                if reshiki::depth_appearance::has(&self.tab.doc, &ids) {
-                    commands.push(RowCommand {
-                        label: "Clear depth",
-                        menu: "Clear depth appearance",
-                        hint: "Restore base colors while keeping the current 3D projection",
-                        message: Message::DepthAppearance(super::depth_appearance::Action::Clear),
-                        enabled: true,
-                    });
-                    if !self.tab.selected.is_empty() {
-                        commands.push(RowCommand {
-                            label: "Original ink",
-                            menu: "Use original ink for selection",
-                            hint: "Keep selected atoms and bonds in their editable base colors",
-                            message: Message::DepthAppearance(
-                                super::depth_appearance::Action::OriginalInk,
-                            ),
-                            enabled: true,
-                        });
-                    }
-                }
-            }
-        }
-        if !matches!(self.tool, Tool::Select | Tool::Lasso) || self.tab.selected.is_empty() {
+        if !matches!(self.tool, Tool::Select | Tool::Lasso) {
             return commands;
         }
-        commands.extend(self.selected_join_commands());
-        commands.extend(self.selected_attach_commands());
-        if let Some(graphic) = self.selected_open_paths().next() {
-            use reshiki::arrows::Head;
-            let heads = graphic.heads.unwrap_or_default();
-            for (start, current) in [(true, heads.tail), (false, heads.head)] {
-                let add = current == Head::None;
-                let label = match (start, add) {
-                    (true, true) => "Start head",
-                    (true, false) => "No start head",
-                    (false, true) => "End head",
-                    (false, false) => "No end head",
-                };
-                let head = if add { Head::Full } else { Head::None };
+        if !self.tab.selected.is_empty() {
+            commands.extend(self.selected_join_commands());
+            commands.extend(self.selected_attach_commands());
+            if let Some(graphic) = self.selected_open_paths().next() {
+                use reshiki::arrows::Head;
+                let heads = graphic.heads.unwrap_or_default();
+                for (start, current) in [(true, heads.tail), (false, heads.head)] {
+                    let add = current == Head::None;
+                    let label = match (start, add) {
+                        (true, true) => "Start head",
+                        (true, false) => "No start head",
+                        (false, true) => "End head",
+                        (false, false) => "No end head",
+                    };
+                    let head = if add { Head::Full } else { Head::None };
+                    commands.push(RowCommand {
+                        label,
+                        menu: label,
+                        hint: match (start, add) {
+                            (true, true) => "Add an arrowhead at the path's start",
+                            (true, false) => "Remove the arrowhead at the path's start",
+                            (false, true) => "Add an arrowhead at the path's end",
+                            (false, false) => "Remove the arrowhead at the path's end",
+                        },
+                        message: Message::Graphics(if start {
+                            super::graphics::Action::Tail(head)
+                        } else {
+                            super::graphics::Action::Head(head)
+                        }),
+                        enabled: true,
+                    });
+                }
+            }
+            commands.push(RowCommand {
+                label: "Group",
+                menu: "Group",
+                hint: "Group",
+                message: Message::Group,
+                enabled: self.can_group(),
+            });
+            if !self
+                .tab
+                .doc
+                .outer_selected_groups(&self.tab.selected)
+                .is_empty()
+            {
                 commands.push(RowCommand {
-                    label,
-                    menu: label,
-                    hint: match (start, add) {
-                        (true, true) => "Add an arrowhead at the path's start",
-                        (true, false) => "Remove the arrowhead at the path's start",
-                        (false, true) => "Add an arrowhead at the path's end",
-                        (false, false) => "Remove the arrowhead at the path's end",
-                    },
-                    message: Message::Graphics(if start {
-                        super::graphics::Action::Tail(head)
-                    } else {
-                        super::graphics::Action::Head(head)
-                    }),
+                    label: "Ungroup",
+                    menu: "Ungroup",
+                    hint: "Ungroup",
+                    message: Message::Ungroup,
                     enabled: true,
                 });
             }
         }
-        commands.push(RowCommand {
-            label: "Group",
-            menu: "Group",
-            hint: "Group",
-            message: Message::Group,
-            enabled: self.can_group(),
-        });
-        if !self
-            .tab
-            .doc
-            .outer_selected_groups(&self.tab.selected)
-            .is_empty()
+        let ids = self.depth_ids();
+        if ids
+            .iter()
+            .any(|id| self.tab.doc.atom(*id).is_some_and(|a| a.depth != 0.))
+            || reshiki::depth_appearance::has(&self.tab.doc, &ids)
         {
+            let automatic = reshiki::depth_appearance::is_automatic_for(&self.tab.doc, &ids);
             commands.push(RowCommand {
-                label: "Ungroup",
-                menu: "Ungroup",
-                hint: "Ungroup",
-                message: Message::Ungroup,
+                label: if automatic {
+                    "Freeze depth"
+                } else {
+                    "Enhance depth"
+                },
+                menu: if automatic {
+                    "Freeze depth appearance"
+                } else {
+                    "Enhance depth appearance"
+                },
+                hint: if automatic {
+                    "Keep the current depth colors"
+                } else {
+                    "Fade bonds behind the front face"
+                },
+                message: Message::DepthAppearance(super::depth_appearance::Action::Enhance(
+                    !automatic,
+                )),
                 enabled: true,
             });
+            if reshiki::depth_appearance::has(&self.tab.doc, &ids) {
+                commands.push(RowCommand {
+                    label: "Clear depth",
+                    menu: "Clear depth appearance",
+                    hint: "Restore base colors while keeping the current 3D projection",
+                    message: Message::DepthAppearance(super::depth_appearance::Action::Clear),
+                    enabled: true,
+                });
+                if !self.tab.selected.is_empty() {
+                    commands.push(RowCommand {
+                        label: "Original ink",
+                        menu: "Use original ink for selection",
+                        hint: "Keep selected atoms and bonds in their editable base colors",
+                        message: Message::DepthAppearance(
+                            super::depth_appearance::Action::OriginalInk,
+                        ),
+                        enabled: true,
+                    });
+                }
+            }
         }
         commands
     }
@@ -1194,8 +1195,9 @@ impl App {
             row = row.push(option);
         }
         let (folded, compact) = (fit.folded, fit.compact);
+        let shown = commands.len() - folded;
         let mut x = CONTEXT_PADDING + fit.fixed;
-        for (index, (c, w)) in commands.iter().zip(&widths).enumerate().skip(folded) {
+        for (index, (c, w)) in commands.iter().zip(&widths).enumerate().take(shown) {
             row = row.push(hover_keys(
                 reshiki::accessibility::button(
                     keyboard_control_id(&c.message)
@@ -1213,7 +1215,7 @@ impl App {
             x += CONTEXT_GAP + w;
         }
         if folded > 0 {
-            let labels: Vec<_> = commands.iter().take(folded).map(|c| c.menu).collect();
+            let labels: Vec<_> = commands.iter().skip(shown).map(|c| c.menu).collect();
             let page = super::context_menu::Page::More(folded);
             row = row.push(
                 self.menu_anchor(
@@ -2977,7 +2979,7 @@ struct Fold<'a> {
 /// How a context row fits its width.
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct Fit {
-    /// Commands folded into ⋯, from the front.
+    /// Commands folded into ⋯, from the end.
     folded: usize,
     /// The arrange group is one Arrange ▾ button.
     compact: bool,
@@ -2990,7 +2992,7 @@ struct Fit {
 }
 
 /// A short row gives way in this order until it fits `width`: commands fold
-/// into ⋯ one by one, the arrange group collapses, the selection summary
+/// into ⋯ one by one from the end, the arrange group collapses, the selection summary
 /// hides, and the tool name shortens.
 fn fit(width: f32, row: &Fold<'_>) -> Fit {
     let n = row.commands.len();
@@ -3009,7 +3011,7 @@ fn fit(width: f32, row: &Fold<'_>) -> Fit {
             + row
                 .commands
                 .iter()
-                .skip(fit.folded)
+                .take(n - fit.folded)
                 .map(|w| CONTEXT_GAP + w)
                 .sum::<f32>()
             + if fit.folded > 0 {

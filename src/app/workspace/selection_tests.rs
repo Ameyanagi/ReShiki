@@ -127,7 +127,7 @@ fn row_commands_leave_clipboard_to_menus_and_shortcuts() {
     let labels: Vec<_> = app.context_commands().iter().map(|c| c.label).collect();
     assert_eq!(
         labels,
-        ["3D optimize…", "Mark [", "Connect ]", "Coordinate }"]
+        ["Mark [", "Connect ]", "Coordinate }", "3D optimize…"]
     );
     assert!(app.context_commands().iter().all(|command| !matches!(
         command.message,
@@ -144,13 +144,13 @@ fn row_commands_leave_clipboard_to_menus_and_shortcuts() {
     assert_eq!(
         labels,
         [
-            "3D optimize…",
-            "Keyboard drawing",
             "Join",
             "Merge atoms",
             "Move & attach…",
             "Coordinate in place…",
-            "Group"
+            "Group",
+            "3D optimize…",
+            "Keyboard drawing"
         ]
     );
     let _ = app.update(Message::Group);
@@ -158,14 +158,14 @@ fn row_commands_leave_clipboard_to_menus_and_shortcuts() {
     assert_eq!(
         labels,
         [
-            "3D optimize…",
-            "Keyboard drawing",
             "Join",
             "Merge atoms",
             "Move & attach…",
             "Coordinate in place…",
             "Group",
-            "Ungroup"
+            "Ungroup",
+            "3D optimize…",
+            "Keyboard drawing"
         ]
     );
     assert!(

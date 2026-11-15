@@ -31,7 +31,7 @@ pub enum Page {
     Distribute,
     Order,
     Arrange,
-    /// The first n context row commands, folded into ⋯.
+    /// The last n context row commands, folded into ⋯.
     More(usize),
 }
 
@@ -206,12 +206,15 @@ impl App {
                 self.arrange_entries(&[&Command::TRANSFORM]),
             ]
             .join(&Separator),
-            Page::More(folded) => self
-                .context_commands()
-                .into_iter()
-                .take(folded)
-                .map(|c| command(c.menu, c.message, c.enabled))
-                .collect(),
+            Page::More(folded) => {
+                let commands = self.context_commands();
+                let shown = commands.len().saturating_sub(folded);
+                commands
+                    .into_iter()
+                    .skip(shown)
+                    .map(|c| command(c.menu, c.message, c.enabled))
+                    .collect()
+            }
             Page::Attachments => vec![
                 Hint("Attach to selected atoms"),
                 command(
