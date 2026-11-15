@@ -382,3 +382,11 @@ fn report_helpers_handle_reports_without_statistics() {
         assert_eq!(report.shifts().next(), None);
     }
 }
+
+#[test]
+fn the_embedded_index_is_the_source_at_under_60_percent_of_its_size() {
+    let source = include_bytes!("../../../../data/nmr/index.tsv");
+    let embedded = miniz_oxide::inflate::decompress_to_vec(BUNDLED_TSV).unwrap();
+    assert!(embedded == source);
+    assert!(BUNDLED_TSV.len() * 10 < source.len() * 6);
+}
