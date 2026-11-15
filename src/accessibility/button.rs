@@ -388,6 +388,9 @@ pub(super) fn focus_ring(
     viewport: &Rectangle,
 ) {
     use iced::advanced::Renderer as _;
+    if super::inert::DRAWING.get() {
+        return;
+    }
     let ring = bounds.expand(3.);
     let Some(clip) = ring.intersection(viewport) else {
         return;

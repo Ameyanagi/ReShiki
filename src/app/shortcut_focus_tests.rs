@@ -653,6 +653,79 @@ async fn help_runs_a_clicked_row_with_enter() {
     assert!(!app.tab.selected.is_empty(), "Select all ran");
 }
 
+/// A control focused before Help opens, such as by a Tab typed ahead of `?`,
+/// keeps its focus behind the dialog so closing Help returns to it, but only
+/// the dialog's focused control shows a ring.
+#[tokio::test]
+#[ignore = "Opt-in renderer input check"]
+async fn help_hides_the_focus_ring_of_the_control_behind_it() {
+    use iced::advanced::{Renderer as _, renderer};
+    fn pixels(ui: &mut Ui, app: &App) -> Vec<u8> {
+        let theme = app.theme();
+        let mut view = app.view();
+        ui.tree.diff(view.as_widget());
+        let size = ui.viewport.size();
+        let node = (view.as_widget_mut()).layout(
+            &mut ui.tree,
+            &ui.renderer,
+            &layout::Limits::new(size, size),
+        );
+        ui.renderer.reset(ui.viewport);
+        view.as_widget().draw(
+            &ui.tree,
+            &mut ui.renderer,
+            &theme,
+            &renderer::Style {
+                text_color: theme.palette().text,
+            },
+            Layout::new(&node),
+            mouse::Cursor::Unavailable,
+            &ui.viewport,
+        );
+        let size = Size::new(size.width as u32, size.height as u32);
+        Headless::screenshot(&mut ui.renderer, size, 1., theme.palette().background)
+    }
+    let mut shots = Vec::new();
+    let mut ring = Rectangle::default();
+    for focused_behind in [false, true] {
+        let mut ui = Ui::new().await;
+        let (mut app, _) = App::new();
+        let tab = Key::Named(Named::Tab);
+        if focused_behind {
+            ui.key(&mut app, tab.clone(), Code::Tab, Modifiers::empty(), None)
+                .await;
+            assert_eq!(ui.focused(&app), ["header-about"]);
+            ring = ui.bounds(&app, "header-about").expand(4.);
+        }
+        let task = app.update(Message::ToggleHelp);
+        ui.run_task(&mut app, task).await;
+        ui.key(&mut app, tab, Code::Tab, Modifiers::empty(), None)
+            .await;
+        assert_eq!(ui.focused(&app), ["help-examples"]);
+        shots.push(pixels(&mut ui, &app));
+        if focused_behind {
+            let task = app.update(Message::ToggleHelp);
+            ui.run_task(&mut app, task).await;
+            assert_eq!(ui.focused(&app), ["header-about"], "Help returns focus");
+        }
+    }
+    // RGBA rows of the 1280 px wide window, cropped to the ring's band.
+    let crop = |pixels: &[u8]| {
+        (pixels.chunks(1280 * 4))
+            .skip(ring.y as usize)
+            .take(ring.height as usize)
+            .flat_map(|row| {
+                row.chunks(4)
+                    .skip(ring.x as usize)
+                    .take(ring.width as usize)
+            })
+            .flatten()
+            .copied()
+            .collect::<Vec<_>>()
+    };
+    assert!(crop(&shots[0]) == crop(&shots[1]), "a ring behind Help");
+}
+
 #[tokio::test]
 #[ignore = "Opt-in renderer input check"]
 async fn help_run_never_runs_a_row_selected_after_it_started() {
