@@ -128,9 +128,10 @@ pub fn hidden(a: &Atom, doc: &Document) -> bool {
 }
 
 pub fn editor_markers(doc: &Document) -> impl Iterator<Item = &Atom> {
+    // The cheap test first: visibility scans every abbreviation.
     doc.atoms
         .iter()
-        .filter(|a| doc.atom_visible(a.id) && hidden(a, doc))
+        .filter(|a| hidden(a, doc) && doc.atom_visible(a.id))
 }
 
 /// Include a selected point's target atoms; complete target selections also

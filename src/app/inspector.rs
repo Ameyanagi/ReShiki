@@ -14,10 +14,29 @@ use std::{
     collections::{BTreeSet, HashMap, HashSet},
 };
 
+#[cfg(test)]
+thread_local! {
+    /// How often [`App::opened_section`] ran.
+    static OPENED_SECTIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 #[derive(Default)]
 struct ClassCache {
     key: Option<PropertyKey>,
     matches: Vec<&'static reshiki::chemistry::classes::Class>,
+    #[cfg(test)]
+    calculations: usize,
+}
+
+/// What Molecular properties shows for a drawing with attachment points:
+/// the formula, the mass and the number of defined atoms, if they can be
+/// counted. Without it every view checks and analyzes the drawing again.
+#[derive(Default)]
+struct CompositionCache {
+    /// Revision, file epoch and the whole selection: a selected bracket
+    /// changes the result as much as a selected atom.
+    key: Option<(u64, u64, Vec<u64>)>,
+    shown: Option<(String, f64, usize)>,
     #[cfg(test)]
     calculations: usize,
 }
@@ -305,6 +324,7 @@ pub(super) struct State {
     properties: Option<(PropertyKey, Result<Analysis, String>)>,
     whole_properties: Option<(PropertyKey, Result<Analysis, String>)>,
     classes: RefCell<ClassCache>,
+    composition: RefCell<CompositionCache>,
     arrow_hints: Option<(u64, u64, Vec<reshiki::reactions::ArrowSemanticsHint>)>,
 }
 impl State {
@@ -947,6 +967,7 @@ impl App {
 
     fn ordinary_properties_panel(&self) -> Element<'_, Message> {
         let selected: HashSet<_> = self.tab.selected.iter().copied().collect();
+        let opened = self.opened_section();
         let mut body = column![
             text(if self.tab.selected.is_empty() {
                 if self.tool.selects() {
@@ -962,16 +983,14 @@ impl App {
             .style(muted_text)
         ]
         .spacing(10);
-        let crystal_first = self.selected_existing_model().is_some_and(|model| {
+        let model = self.selected_existing_model();
+        let crystal_first = model.is_some_and(|model| {
             model.cell.is_some() && model.display == reshiki::models3d::Display::TwoD
         });
         if crystal_first && let Some(section) = self.structure_section() {
             body = body.push(section);
         }
-        if self
-            .selected_existing_model()
-            .is_some_and(|model| model.display == reshiki::models3d::Display::ThreeD)
-        {
+        if model.is_some_and(|model| model.display == reshiki::models3d::Display::ThreeD) {
             body = body.push(
                 super::workspace::accessible_command(
                     "model-controls-open",
@@ -993,7 +1012,7 @@ impl App {
         // Keep the active ring tool's placement card visible above the expanded values.
         let ring_tool = matches!(self.tool, Tool::RingPreset(_));
         if molecular_first && !ring_tool {
-            body = body.push(self.molecular_section());
+            body = body.push(self.molecular_section(opened));
         }
         if let Tool::RingPreset(preset) = self.tool {
             use reshiki::rings::Preset;
@@ -1036,7 +1055,7 @@ impl App {
             ));
         }
         if molecular_first && ring_tool {
-            body = body.push(self.molecular_section());
+            body = body.push(self.molecular_section(opened));
         }
         if matches!(self.tool, Tool::Graphic(_))
             || self
@@ -1077,7 +1096,7 @@ impl App {
             body = body.push(card(container(self.text_panel()).padding(12)));
         }
         if !self.tab.selected.is_empty() {
-            body = body.push(self.selection_panel(&selected));
+            body = body.push(self.selection_panel(&selected, opened));
         }
         // The card replaces the informational notice of a generic drawing.
         if let Some(section) = self.generic_structure_section() {
@@ -1098,7 +1117,7 @@ impl App {
             });
         }
         if !molecular_first {
-            body = body.push(self.molecular_section());
+            body = body.push(self.molecular_section(opened));
         }
         if !self.tab.stereo_notes.is_empty() {
             body = body.push(card(
@@ -1174,12 +1193,12 @@ impl App {
         .into()
     }
 
-    fn molecular_section(&self) -> Element<'_, Message> {
+    fn molecular_section(&self, opened: Option<Section>) -> Element<'_, Message> {
         self.inspector_section_lazy(
             Section::Molecule,
             "Molecular properties",
             self.property_summary(),
-            self.opened_section() == Some(Section::Molecule),
+            opened == Some(Section::Molecule),
             || self.molecular_properties(),
         )
     }
@@ -1211,29 +1230,48 @@ impl App {
             return container(body).padding(10).into();
         }
         if reshiki::attachments::present(&self.tab.doc) {
-            let selected = (!self.tab.selected.is_empty())
-                .then(|| reshiki::editing::selection(&self.tab.doc, &self.tab.selected));
-            let doc = selected.as_ref().unwrap_or(&self.tab.doc);
+            let (revision, epoch) = (self.tab.revision, self.tab.file_epoch);
+            let mut cache = self.tab.inspector_ui.composition.borrow_mut();
+            if !cache.key.as_ref().is_some_and(|(cached, file, ids)| {
+                (*cached, *file) == (revision, epoch) && *ids == self.tab.selected
+            }) {
+                let selected = (!self.tab.selected.is_empty())
+                    .then(|| reshiki::editing::selection(&self.tab.doc, &self.tab.selected));
+                let doc = selected.as_ref().unwrap_or(&self.tab.doc);
+                cache.shown = reshiki::attachments::composition(doc)
+                    .ok()
+                    .map(|composition| {
+                        (
+                            composition.display_formula,
+                            composition.mass,
+                            doc.atoms.iter().filter(|a| a.element != "*").count(),
+                        )
+                    });
+                cache.key = Some((revision, epoch, self.tab.selected.clone()));
+                #[cfg(test)]
+                {
+                    cache.calculations += 1;
+                }
+            }
             let mut body = column![
                 text(reshiki::attachments::ANALYSIS_NOTICE)
                     .size(11)
                     .style(muted_text)
             ]
             .spacing(8);
-            if let Ok(composition) = reshiki::attachments::composition(doc) {
+            if let Some((formula, mass, atoms)) = &cache.shown {
                 body = body
                     .push(
                         text(format!(
                             "{} · {}\u{a0}g/\u{2060}mol",
-                            self.shown_formula(&composition.display_formula),
-                            molecular_weight(composition.mass, self.appearance.two_decimal_weight)
+                            self.shown_formula(formula),
+                            molecular_weight(*mass, self.appearance.two_decimal_weight)
                         ))
                         .size(14),
                     )
                     .push(
                         text(format!(
-                            "{} defined atoms · Attachment points excluded",
-                            doc.atoms.iter().filter(|a| a.element != "*").count()
+                            "{atoms} defined atoms · Attachment points excluded"
                         ))
                         .size(11)
                         .style(muted_text),
@@ -1429,6 +1467,8 @@ impl App {
     /// The one section a selection opens. Sections the user opened or
     /// closed keep that state.
     fn opened_section(&self) -> Option<Section> {
+        #[cfg(test)]
+        OPENED_SECTIONS.with(|count| count.set(count.get() + 1));
         if self.tab.selected.is_empty() {
             return (!self.tab.doc.atoms.is_empty()).then_some(Section::Molecule);
         }
@@ -1446,15 +1486,13 @@ impl App {
             .any(|b| selected.contains(&b.a) && selected.contains(&b.b))
         {
             // Whole molecules, as a double-click or Select all gives, keep their properties open.
-            let whole = reshiki::reactions::molecules(&self.tab.doc, &self.tab.selected)
-                .iter()
-                .flatten()
-                .all(|id| selected.contains(id));
-            return Some(if whole {
-                Section::Molecule
-            } else {
-                Section::Bonds
-            });
+            return Some(
+                if reshiki::reactions::whole_molecules(&self.tab.doc, &selected) {
+                    Section::Molecule
+                } else {
+                    Section::Bonds
+                },
+            );
         }
         let atoms: Vec<_> = self
             .tab
@@ -1540,8 +1578,11 @@ impl App {
         })
     }
 
-    fn selection_panel(&self, selected: &HashSet<u64>) -> Element<'_, Message> {
-        let opened = self.opened_section();
+    fn selection_panel(
+        &self,
+        selected: &HashSet<u64>,
+        opened: Option<Section>,
+    ) -> Element<'_, Message> {
         let atoms: Vec<_> = self
             .tab
             .doc
@@ -1567,13 +1608,12 @@ impl App {
             );
         }
         if let Some(first) = bonds.first() {
-            let controls = self.bond_appearance_controls(first, &atoms, &bonds);
-            body = body.push(self.inspector_section(
+            body = body.push(self.inspector_section_lazy(
                 Section::Bonds,
                 "Bond appearance",
                 "",
                 opened == Some(Section::Bonds),
-                controls,
+                || self.bond_appearance_controls(first, &atoms, &bonds),
             ));
             body = body.push(
                 self.inspector_section(
@@ -1601,13 +1641,12 @@ impl App {
             );
         }
         if let Some(first) = atoms.first() {
-            let controls = self.atom_detail_controls(first, &atoms);
-            body = body.push(self.inspector_section(
+            body = body.push(self.inspector_section_lazy(
                 Section::Atoms,
                 "Atom details",
                 "Charge, isotope & electron marks",
                 opened == Some(Section::Atoms),
-                controls,
+                || self.atom_detail_controls(first, &atoms),
             ));
         }
         if let Some(section) = self.stereo_group_section(&atoms) {
