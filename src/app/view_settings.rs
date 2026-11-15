@@ -90,12 +90,11 @@ impl App {
     }
     fn set_two_decimal_weight(&mut self, enabled: bool) {
         self.appearance.two_decimal_weight = enabled;
-        // Mol. Wt. captions change at once, in one Undo step. Under a preview
-        // they change with the next edit.
+        // Mol. Wt. captions change at once, in one Undo step. During a preview
+        // or a text draft they change with the next edit.
         let tab = &self.tab;
         if !tab.busy
-            && tab.cleanup.is_none()
-            && tab.optimization.is_none()
+            && !tab.drawing_edit_active()
             && tab
                 .doc
                 .property_captions
@@ -104,6 +103,7 @@ impl App {
         {
             let before = self.tab.doc.clone();
             self.changed(before);
+            self.sync_typography();
         }
         if let Err(error) = self.appearance.save() {
             self.status = format!("Could not save molecular weight display preference: {error}");

@@ -61,8 +61,13 @@ fn weight_captions_follow_the_two_decimal_setting() {
     app.appearance.two_decimal_weight = true;
     let _ = app.update(Message::ToggleProperty(atoms.clone(), Property::Weight));
     assert_eq!(caption(&app), Some("Mol. Wt.: 46.07"));
+    // With the caption selected, its text box in Properties follows too.
+    let id = app.tab.doc.property_captions[0].annotation;
+    app.tab.selected = vec![id];
+    app.sync_typography();
     app.view_action(TwoDecimalWeight(false));
     assert_eq!(caption(&app), Some("Mol. Wt.: 46.069"));
+    assert_eq!(app.tab.caption, "Mol. Wt.: 46.069");
     // One Undo step, and the next edit follows the setting again.
     let _ = app.update(Message::Undo);
     assert_eq!(caption(&app), Some("Mol. Wt.: 46.07"));
