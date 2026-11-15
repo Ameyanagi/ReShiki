@@ -88,7 +88,7 @@ fn property_rows(
         ("Rings", None, a.rings.to_string()),
         (
             "Unpaired electrons",
-            Some("Radical electrons in the analysed structure, from radical marks or atoms with fewer hydrogens than their valence; a singlet's electron pair is not counted".into()),
+            Some("Radical electrons in the analyzed structure, from radical marks or atoms with fewer hydrogens than their valence; a singlet's electron pair is not counted".into()),
             unpaired.to_string(),
         ),
     ]
@@ -701,7 +701,8 @@ impl App {
                     Ok(id) => {
                         self.tab.selected = vec![id];
                         self.changed(before);
-                        self.status = "Attachment point added · Draw a bond from * to the metal or substituent".into();
+                        self.status =
+                            "Attachment point added · Bond * to the metal or substituent".into();
                         self.error = false;
                     }
                     Err(error) => {
@@ -1003,9 +1004,10 @@ impl App {
         }
         let color_issues = reshiki::canvas_theme::label_contrast_issues(&self.tab.doc);
         if !color_issues.is_empty() {
-            body = body.push(text(format!(
-                "{} atom label(s) have low contrast against the canvas or a ring fill. Adjust the label or fill color.", color_issues.len()
-            )).size(11).style(muted_text));
+            body = body.push(text(match color_issues.len() {
+                1 => "1 atom label has low contrast against the canvas or a ring fill. Adjust the label or fill color.".into(),
+                n => format!("{n} atom labels have low contrast against the canvas or a ring fill. Adjust the labels or fill colors."),
+            }).size(11).style(muted_text));
         }
         let molecular_first = self.tab.selected.is_empty()
             || self.property_key().is_some_and(|key| !key.atoms.is_empty());
@@ -1123,7 +1125,7 @@ impl App {
         if !self.tab.stereo_notes.is_empty() {
             body = body.push(card(
                 container(self.stereo_note_lines(
-                    column![text("STEREOCHEMISTRY").size(11).style(muted_text)].spacing(5),
+                    column![super::workspace::section("Stereochemistry")].spacing(5),
                     "stereo",
                 ))
                 .padding(12),
@@ -1427,7 +1429,7 @@ impl App {
                 if key.is_some() {
                     "Recalculate selection"
                 } else {
-                    "Check structure"
+                    "Recalculate"
                 },
                 Message::InspectorAction(Action::RefreshProperties),
             )
@@ -1714,8 +1716,8 @@ impl App {
         };
         let mut body = column![
             text(match centres.len() {
-                1 => "Group of the selected stereocentre".into(),
-                n => format!("Group of the {n} selected stereocentres"),
+                1 => "Group of the selected stereocenter".into(),
+                n => format!("Group of the {n} selected stereocenters"),
             })
             .size(11)
             .style(muted_text),
@@ -1726,7 +1728,7 @@ impl App {
             .text_size(12)
             .padding(7)
             .width(Length::Fill),
-            text("abs: exactly as drawn. AND: racemic, the drawn form and its mirror image 1:1. OR: one of the two forms, not known which. Centres in the same group flip together.")
+            text("abs: exactly as drawn. AND: racemic, the drawn form and its mirror image 1:1. OR: one of the two forms, not known which. Centers in the same group flip together.")
                 .size(11)
                 .style(muted_text),
         ]
@@ -1829,7 +1831,7 @@ impl App {
             });
             controls = controls.push(
                 checkbox(centered)
-                    .label("Centre charge in ring")
+                    .label("Center charge in ring")
                     .on_toggle(|_| Message::CenterRingCharge)
                     .text_size(12),
             );
@@ -2299,7 +2301,7 @@ impl App {
             "Editable document",
             ".rsk · retains the complete drawing",
             true,
-            command("Save native document…", Message::SaveAs).width(Length::Fill),
+            command(super::files::SAVE_AS, Message::SaveAs).width(Length::Fill),
         ))
         .into()
     }

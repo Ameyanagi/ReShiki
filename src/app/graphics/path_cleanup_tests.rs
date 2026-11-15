@@ -57,7 +57,7 @@ fn cleanup_of_two_paths_and_an_arrow_is_one_undo_step() {
         (Cleanup::Smooth, "Smoothed 3 objects", false),
         (
             Cleanup::Symmetrise { upright: false },
-            "Symmetrised 3 objects",
+            "Symmetrized 3 objects",
             true,
         ),
     ] {
@@ -125,7 +125,7 @@ fn cleanup_reports_empty_selection_and_refusals_without_history() {
     assert!(app.error);
     assert!(
         app.status
-            .starts_with("Symmetrised 1 object; Not symmetric enough:")
+            .starts_with("Symmetrized 1 object; Not symmetric enough:")
     );
     assert_eq!(app.tab.doc.arrows, before.arrows);
     let _ = app.update(Message::Undo);
@@ -173,7 +173,7 @@ fn shift_leaves_arrow_symmetrisation_unchanged() {
             upright: false,
         })));
         assert_eq!(app.tab.doc.arrows[0], expected);
-        assert_eq!(app.status, "Symmetrised 1 object");
+        assert_eq!(app.status, "Symmetrized 1 object");
         assert!(!app.error);
     }
 }

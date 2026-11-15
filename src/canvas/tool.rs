@@ -69,7 +69,7 @@ impl Tool {
             Self::Lasso => format!("Draw around objects · Shift adds · {alt}-drag removes"),
             Self::Tilt => "Drag a ring or selection to tilt · Shift snaps to 15°".into(),
             Self::StretchBond { .. } => {
-                "Drag the moving branch along the bond · Escape cancels".into()
+                "Drag the moving branch along the bond · Esc cancels".into()
             }
             Self::Chain(ChainMode::Straight) => format!(
                 "Drag a regular zigzag toward the pointer · Ctrl bends · Shift flips the start · {alt} draws freely"
@@ -101,17 +101,14 @@ impl Tool {
             Self::RingPreset(_) => format!(
                 "Click to place or attach · Drag rotates in 15° steps · {alt} rotates freely or connects by a bond"
             ),
-            Self::Template => "Click to place or attach · Drag to orient · Escape cancels".into(),
+            Self::Template => "Click to place or attach · Drag to orient · Esc cancels".into(),
             Self::Arrow => {
                 "Click to place or change an arrow · Click again to switch · Drag to draw".into()
             }
             Self::Text => format!(
-                "Click an atom to name it · Double-click or {alt}-click another atom to repeat the label · Click empty space for a caption · Escape clears the remembered label"
+                "Click an atom to name it · Double-click or {alt}-click another atom to repeat the label · Click empty space for a caption · Esc clears the remembered label"
             ),
-            Self::Erase => {
-                "Drag to erase atoms, bonds and objects along the stroke · Undo restores the whole stroke"
-                    .into()
-            }
+            Self::Erase => "Drag to erase atoms, bonds and objects along the stroke".into(),
             Self::Graphic(GraphicKind::Symbol(_)) => format!(
                 "Click an atom to attach · Drag from it to orbit in 15° steps · {alt} or Shift places freely · Click empty space for a free symbol"
             ),
@@ -119,17 +116,17 @@ impl Tool {
                 "Click to place · Drag from the node for size and direction · Shift snaps to 15° · {alt} bypasses atom snapping"
             ),
             Self::Graphic(GraphicKind::Path) => {
-                "Drag the first segment · Click adds a line · Drag adds a curve · Click the first node to close · Escape cancels"
+                "Drag the first segment · Click adds a line · Drag adds a curve · Click the first node to close · Esc cancels"
                     .into()
             }
             Self::Graphic(GraphicKind::Arc) => {
-                "Drag an ellipse frame · Shift makes it circular · Escape cancels".into()
+                "Drag an ellipse frame · Shift makes it circular · Esc cancels".into()
             }
             Self::Graphic(_) => {
-                "Drag to draw · Shift constrains proportions or angle · Escape cancels".into()
+                "Drag to draw · Shift constrains proportions or angle · Esc cancels".into()
             }
             Self::EditPoints => format!(
-                "Drag anchors or control points · Double-click nodes to change type · {alt}-drag a handle makes a corner · Click a selected arrow's shaft to add a node · Atom marks orbit in 15° steps; {alt} or Shift frees · Escape returns to Select"
+                "Drag anchors or control points · Double-click nodes to change type · {alt}-drag a handle makes a corner · Click a selected arrow's shaft to add a node · Atom marks orbit in 15° steps; {alt} or Shift frees · Esc returns to Select"
             ),
         }
     }

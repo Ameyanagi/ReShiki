@@ -563,7 +563,7 @@ async fn cancellation_kills_and_reaps_child_and_removes_private_payload() {
         .unwrap()
         .unwrap_err();
     assert!(matches!(error, Error::Cancelled(_)));
-    assert!(error.to_string().contains("cancelled"));
+    assert!(error.to_string().contains("canceled"));
     let cancellation_elapsed = cancellation_started.elapsed();
     eprintln!(
         "cancellation phases: startup={startup_elapsed:?}; cancellation_before_cleanup_check={cancellation_elapsed:?}"

@@ -148,6 +148,8 @@ jobs:
       - run: bun run lint:js
       - run: bun run format:check
       - run: bun scripts/check_docs_tree.mjs
+      - name: Check app text
+        run: python3 scripts/copy_lint.py
   office-addin:
     name: Office add-in JavaScript regressions
     runs-on: ubuntu-24.04

@@ -616,7 +616,7 @@ fn stale_and_failed_background_engine_results_release_their_tab() {
         assert!(tab.status.contains(if failed {
             "Calculation failed"
         } else {
-            "newer edits"
+            "Newer edits"
         }));
     }
 }

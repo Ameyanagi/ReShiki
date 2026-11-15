@@ -191,7 +191,7 @@ impl App {
                     Message::InspectorAction(inspector::Action::DepthBonds),
                     bonds,
                 ),
-                Hint("Labels stay upright. Undo restores the previous view."),
+                Hint("Labels stay upright"),
             ],
             Page::Model => self.model_entries(),
             Page::Align => self.align_entries(atoms, multiple),
@@ -244,7 +244,7 @@ impl App {
 
     /// The selection menu, in groups: edit the clicked atom, name or select
     /// its molecule, connect and reshape, generic structures, the clipboard,
-    /// then Properties and the pinned Copy/Delete footer.
+    /// then Properties and Delete, pinned in the footer.
     fn main_entries(&self, atoms: bool, bonds: bool, tilt: bool) -> Vec<Entry> {
         let command = Entry::command;
         [
@@ -263,6 +263,7 @@ impl App {
             },
             vec![
                 command("Cut", Message::Copy(true), true),
+                command("Copy", Message::Copy(false), true),
                 Entry::page("Copy as", Page::CopyAs),
                 command("Paste", Message::Paste, !self.tab.clipboard_busy),
                 command("Duplicate", Message::Duplicate, true),
@@ -272,7 +273,6 @@ impl App {
                 action: Action::Properties(false),
                 enabled: true,
             }],
-            vec![command("Copy", Message::Copy(false), true)],
             vec![command("Delete", Message::Delete, true)],
         ]
         .into_iter()
@@ -325,7 +325,7 @@ impl App {
         }
         if selected_atoms > 1 {
             entries.push(command(
-                "Create group label…",
+                "Abbreviate selection…",
                 Message::AtomText(super::atom_text::Action::ContractSelection),
                 true,
             ));
@@ -430,7 +430,7 @@ impl App {
             let in_molecules = |id: &u64| molecules.iter().any(|ids| ids.contains(id));
             if fischer.iter().any(in_molecules) {
                 entries.push(command(
-                    "Convert to Wedge Drawing",
+                    "Convert to wedge drawing",
                     Message::Cleanup(super::cleanup::Action::ToWedge),
                     !self.tab.busy,
                 ));
@@ -442,7 +442,7 @@ impl App {
                 .any(|a| matches!(a.cip_label.as_deref(), Some("R" | "S")) && in_molecules(&a.id))
             {
                 entries.push(command(
-                    "Convert to Fischer Projection",
+                    "Convert to Fischer projection",
                     Message::Cleanup(super::cleanup::Action::ToFischer),
                     !self.tab.busy,
                 ));
@@ -455,7 +455,7 @@ impl App {
                     .is_some_and(|a| a.stereo.is_some() || a.cip_label.is_some())
             {
                 entries.push(command(
-                    "Invert Configuration Here",
+                    "Invert configuration here",
                     Message::Stereo(super::stereo::Action::Invert),
                     !self.tab.busy,
                 ));
@@ -558,7 +558,7 @@ impl App {
                 true,
             ));
             entries.push(command(
-                "Symmetrise",
+                "Symmetrize",
                 Message::Graphics(super::graphics::Action::Cleanup(
                     super::graphics::Cleanup::Symmetrise { upright: false },
                 )),
@@ -666,12 +666,12 @@ impl App {
         if multiple {
             entries.push(Separator);
             for (label, action) in [
-                ("Align left edges", Arrange::AlignLeft),
-                ("Align horizontal centers", Arrange::AlignHorizontal),
-                ("Align right edges", Arrange::AlignRight),
-                ("Align top edges", Arrange::AlignTop),
-                ("Align middles", Arrange::AlignVertical),
-                ("Align bottom edges", Arrange::AlignBottom),
+                ("Align left", Arrange::AlignLeft),
+                ("Align center", Arrange::AlignHorizontal),
+                ("Align right", Arrange::AlignRight),
+                ("Align top", Arrange::AlignTop),
+                ("Align middle", Arrange::AlignVertical),
+                ("Align bottom", Arrange::AlignBottom),
                 ("Distribute horizontally", Arrange::DistributeHorizontal),
                 ("Distribute vertically", Arrange::DistributeVertical),
             ] {
@@ -714,7 +714,7 @@ impl App {
         }
         if reshiki::aromatic::charge_circle(&self.tab.doc, &self.tab.selected).is_some() {
             entries.push(command(
-                "Centre charge in ring",
+                "Center charge in ring",
                 Message::CenterRingCharge,
                 true,
             ));
@@ -1061,9 +1061,9 @@ impl App {
                 .iter()
                 .position(|entry| {
                     matches!(entry, Entry::Item { action: Action::Run(message), .. }
-                    if matches!(message.as_ref(), Message::Copy(false)))
+                    if matches!(message.as_ref(), Message::Delete))
                 })
-                .map(|index| index - 1) // Include the separator above Copy.
+                .map(|index| index - 1) // Include the separator above Delete.
         } else {
             None
         };

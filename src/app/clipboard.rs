@@ -305,7 +305,7 @@ impl App {
         }
         if key.revision != self.tab.revision || key.selected != self.tab.selected {
             self.finish_copy_as();
-            self.status = "Drawing or selection changed; copy again · Clipboard unchanged".into();
+            self.status = "Drawing changed · Copy again · Clipboard unchanged".into();
             self.error = false;
             return Task::none();
         }
@@ -465,7 +465,7 @@ impl App {
             self.sync_bonds();
         }
         let action = if stale_cut {
-            "Copied previous selection; Cut cancelled because the drawing changed"
+            "Drawing changed · Cut canceled · Previous selection copied"
         } else if cut {
             if cfg!(windows) {
                 "Selection cut · editable drawing copied"
@@ -506,8 +506,7 @@ impl App {
             || self.tab.joining.is_some()
             || self.tab.cleanup.is_some()
         {
-            self.status =
-                "Drawing changed while reading the clipboard · Paste again to insert here".into();
+            self.status = "Drawing changed during paste · Paste again".into();
             return;
         }
         let outcome = match result.and_then(|mut outcome| {

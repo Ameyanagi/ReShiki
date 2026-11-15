@@ -586,7 +586,7 @@ fn a_split_source_retains_all_links_and_refuses_a_partial_update() {
             assert_eq!(frames(&app), count);
             assert_eq!(
                 app.status,
-                "3D model not generated: the source must be one connected structure"
+                "No 3D model: the source must be one connected structure"
             );
         }
     }
@@ -616,7 +616,7 @@ fn updating_a_joined_fragment_refuses_to_drop_another_models_disconnected_source
         assert_eq!(frames(&app), count);
         assert_eq!(
             app.status,
-            "3D model not generated: the source must be one connected structure"
+            "No 3D model: the source must be one connected structure"
         );
     }
 }

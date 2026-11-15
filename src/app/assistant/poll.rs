@@ -18,7 +18,7 @@ impl App {
                 return self.assistant_action(Action::Apply);
             }
             self.assistant.status =
-                "Ready for review · It replaces objects outside your selection".into();
+                "Ready for review · It replaces objects outside the selection".into();
         }
         if self.assistant.busy
             && let Some(canvas) = &self.assistant.canvas

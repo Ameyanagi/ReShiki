@@ -381,7 +381,7 @@ fn cleanup_preview_admits_only_its_controls_and_view_aids() {
             .is_break()
     );
     assert!(app.tab.cleanup.is_none());
-    assert_eq!(app.status, "Cleanup cancelled · Drawing unchanged");
+    assert_eq!(app.status, "Cleanup canceled · Drawing unchanged");
 }
 
 #[test]
