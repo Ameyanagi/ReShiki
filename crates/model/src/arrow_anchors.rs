@@ -104,11 +104,8 @@ impl Target {
             }
         }
     }
-    fn included(&self, ids: &HashSet<u64>) -> bool {
-        match *self {
-            Self::Atom { atom } | Self::LonePair { atom, .. } => ids.contains(&atom),
-            Self::Bond { a, b, .. } => ids.contains(&a) && ids.contains(&b),
-        }
+    fn included(&self, moved: impl Fn(u64) -> bool) -> bool {
+        self.atoms().all(moved)
     }
     /// Remaps referenced atoms, returning false when any atom is missing.
     pub(crate) fn remap(&mut self, mapping: &HashMap<u64, u64>) -> bool {
@@ -1365,13 +1362,22 @@ pub(crate) fn remap_for_join(
 /// offset to the transformed endpoint before absolute reconciliation.
 pub fn transformed(doc: &mut Document, ids: &[u64], vector: impl Fn(Point) -> Point) {
     let ids: HashSet<_> = ids.iter().copied().collect();
+    transformed_units(doc, |id| ids.contains(&id).then_some(0), vector);
+}
+
+/// [`transformed`] for several disjoint selections that each received their
+/// own transform: `selection` names the one an object belongs to. A target
+/// in another selection than its arrow detaches.
+pub(crate) fn transformed_units(
+    doc: &mut Document,
+    selection: impl Fn(u64) -> Option<usize>,
+    vector: impl Fn(Point) -> Point,
+) {
     let plans: Vec<_> = doc
         .arrows
         .iter()
         .map(|a| {
-            if !ids.contains(&a.id) {
-                return None;
-            }
+            let moved = selection(a.id)?;
             Some(
                 [
                     (a.start, a.start_anchor.clone()),
@@ -1379,7 +1385,7 @@ pub fn transformed(doc: &mut Document, ids: &[u64], vector: impl Fn(Point) -> Po
                 ]
                 .map(|(endpoint, anchor)| {
                     let mut anchor = anchor?;
-                    if !anchor.target.included(&ids) {
+                    if !anchor.target.included(|id| selection(id) == Some(moved)) {
                         return None;
                     }
                     anchor.direction = unit(vector(anchor.direction));

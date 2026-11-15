@@ -379,6 +379,12 @@ pub(super) fn overshoot(style: &crate::style::DrawingStyle, bond: &crate::docume
     }
 }
 
+#[cfg(test)]
+thread_local! {
+    /// Bond pairs the sweep looked at, before any geometry.
+    static PAIRS_VISITED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 /// Sorted sweep avoids checking every pair of well-separated molecules.
 pub fn gaps(doc: &Document) -> Vec<Vec<Gap>> {
     gaps_with_opacity(doc, &crate::rear_opacity::Paint::new(doc))
@@ -408,7 +414,7 @@ pub(crate) fn gaps_with_opacity(
         .iter()
         .enumerate()
         .filter_map(|(i, b)| {
-            if !doc.bond_visible(b.a, b.b) {
+            if !graph.bond_visible(b.a, b.b) {
                 return None;
             }
             let (from, to) = graph.ends(i)?;
@@ -416,18 +422,59 @@ pub(crate) fn gaps_with_opacity(
         })
         .collect();
     segments.sort_by(|(_, a, b), (_, c, d)| a.x.min(b.x).total_cmp(&c.x.min(d.x)));
-    let mut active: Vec<(usize, Point, Point)> = vec![];
+    // A sweep along x over bands of y: a bond meets only the earlier bonds
+    // that still reach it along x and lie in the bands it touches. Tall
+    // drawings get taller bands, so one bond never spans too many.
+    let (top, bottom) = segments
+        .iter()
+        .flat_map(|(_, a, b)| [a.y, b.y])
+        .fold((f32::INFINITY, f32::NEG_INFINITY), |(lo, hi), y| {
+            (lo.min(y), hi.max(y))
+        });
+    let height = (style.bond_length_world + 4. * pad).max((bottom - top) / 4096.);
+    let band = |y: f32| ((y - top) / height).floor() as usize;
+    // Positions in `segments` of the bonds touching each band.
+    let mut active: Vec<Vec<usize>> = vec![vec![]; band(bottom).saturating_add(1)];
     let rails: Vec<std::cell::OnceCell<Rails>> =
         (0..doc.bonds.len()).map(|_| Default::default()).collect();
     let rail = |index: usize| {
         let bond = doc.bonds.get(index)?;
         Some(rails.get(index)?.get_or_init(|| sides.rails(bond)))
     };
+    // The depth of each bond that lies at one depth. Two such bonds at the
+    // same depth knock ink out only where their centerlines cross.
+    let level: Vec<_> = doc
+        .bonds
+        .iter()
+        .map(|bond| {
+            let (a, b) = (graph.atom(bond.a)?.depth, graph.atom(bond.b)?.depth);
+            (a == b).then_some(a)
+        })
+        .collect();
+    let level = |index: usize| level.get(index).copied().flatten();
     let mut budget = 200_000_usize;
-    for (i, a, b) in segments {
-        active.retain(|(_, c, d)| c.x.max(d.x) + 2. * pad >= a.x.min(b.x));
-        for &(j, c, d) in &active {
-            if a.y.min(b.y) > c.y.max(d.y) + 2. * pad || a.y.max(b.y) < c.y.min(d.y) - 2. * pad {
+    for (rank, &(i, a, b)) in segments.iter().enumerate() {
+        let (left, low, high) = (a.x.min(b.x), a.y.min(b.y), a.y.max(b.y));
+        let mut near = vec![];
+        for touching in active
+            .iter_mut()
+            .take(band(high + 2. * pad).saturating_add(1))
+            .skip(band(low - 2. * pad))
+        {
+            touching.retain(|other| {
+                segments
+                    .get(*other)
+                    .is_some_and(|(_, c, d)| c.x.max(d.x) + 2. * pad >= left)
+            });
+            near.extend_from_slice(touching);
+        }
+        // Earlier bonds in sweep order, each once.
+        near.sort_unstable();
+        near.dedup();
+        #[cfg(test)]
+        PAIRS_VISITED.with(|count| count.set(count.get() + near.len()));
+        for (j, c, d) in near.into_iter().filter_map(|at| segments.get(at).copied()) {
+            if low > c.y.max(d.y) + 2. * pad || high < c.y.min(d.y) - 2. * pad {
                 continue;
             }
             if budget == 0 {
@@ -443,6 +490,11 @@ pub(crate) fn gaps_with_opacity(
             {
                 continue;
             }
+            if level(i).is_some_and(|depth| level(j) == Some(depth))
+                && !centerlines_cross(a, b, c, d)
+            {
+                continue;
+            }
             for (rear, front) in [((i, a, b), (j, c, d)), ((j, c, d), (i, a, b))] {
                 let (Some(under), Some(over)) = (rail(rear.0), rail(front.0)) else {
                     continue;
@@ -453,7 +505,13 @@ pub(crate) fn gaps_with_opacity(
                 }
             }
         }
-        active.push((i, a, b));
+        for touching in active
+            .iter_mut()
+            .take(band(high).saturating_add(1))
+            .skip(band(low))
+        {
+            touching.push(rank);
+        }
     }
     gaps
 }
