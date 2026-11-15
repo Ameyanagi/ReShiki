@@ -659,6 +659,31 @@ async fn a_save_still_writing_is_waited_for() {
     assert_eq!(std::fs::read(&path).unwrap(), drawing(30.));
 }
 
+#[tokio::test]
+async fn a_choice_made_while_another_tab_saves_can_be_made_again() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_in(dir.path());
+    conflicted(&mut app, &path, Some(drawing(30.)));
+    edit(&mut app);
+    let other = open_other(&mut app, dir.path());
+    app.file_io.saving = true;
+    app.file_io.saving_tab = Some(app.tab.id);
+    github(&mut app, Action::Resolve(send::Choice::KeepBoth));
+    // The other tab's save lands; nothing of this drawing was saved.
+    app.file_io.saving = false;
+    let _ = app.github_saved(true, Some((other, app.tab.doc.clone())));
+    github(&mut app, Action::Resolve(send::Choice::KeepBoth));
+    assert!(app.file_io.saving, "the second choice saves first");
+    app.file_io.saving = false;
+    let edited = app.tab.doc.file_json().unwrap();
+    std::fs::write(&path, &edited).unwrap();
+    app.tab.mark_saved(app.tab.doc.clone());
+    let saved = app.github_saved(true, Some((path.clone(), app.tab.doc.clone())));
+    run(&mut app, saved).await;
+    let copy = workcopy::working_path(dir.path(), &repo().key, "ring (2).rsk");
+    assert_eq!(std::fs::read(&copy).unwrap(), edited);
+}
+
 #[test]
 fn several_conflicts_are_shown_one_after_another() {
     let dir = tempfile::tempdir().unwrap();

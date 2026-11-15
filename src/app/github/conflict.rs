@@ -122,8 +122,12 @@ impl App {
             // A save still writing would land over what is kept: wait for it.
             let writing = self.file_io.saving && self.file_io.saving_tab == Some(self.tab.id);
             if self.dirty() || writing {
-                self.github.resolving = Some((key, choice));
-                return crate::app::tagged(self.save_drawing(false), self.tab.id);
+                let save = crate::app::tagged(self.save_drawing(false), self.tab.id);
+                // While another tab saves, none starts: the choice can be made again.
+                if self.file_io.saving && self.file_io.saving_tab == Some(self.tab.id) {
+                    self.github.resolving = Some((key, choice));
+                }
+                return save;
             }
         }
         self.github_settle(key, choice)
