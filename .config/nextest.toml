@@ -1,11 +1,13 @@
 [test-groups]
-naming-worker = { max-threads = 1 }
+naming-worker = { max-threads = 2 }
 native-clipboard = { max-threads = 1 }
 
 [[profile.default.overrides]]
-# Nextest processes cannot share naming's in-process semaphores, so tests that
-# launch the naming worker run one at a time, as libtest's semaphores ran them:
-# app callers in the bin, naming/CLI/clipboard callers, and process-limit fixtures.
+# Nextest processes cannot share naming's in-process semaphores, so this group
+# limits the tests that launch the naming worker: app callers in the bin,
+# naming/CLI/clipboard callers, and process-limit fixtures. Two run at a time.
+# One at a time set the whole test phase (Windows 618 s, macOS 550 s). Two used
+# 293 MiB at their peak; each worker is limited to 384 MiB (macOS, 2026-11-15).
 filter = """
 package(reshiki) & (
   (kind(bin) & test(/^app::(atom_labels|clipboard|naming|shortcut_focus_tests::review_close|workspace::(layout_snapshots|view_parity_tests))::/))
@@ -25,4 +27,12 @@ test-group = 'native-clipboard'
 [profile.ci]
 fail-fast = false
 status-level = "skip"
-# Keep defaults: no retries, PASS/SKIP output above, and 60-second slow reports.
+# No retries. A test is reported as slow after 60 seconds and stopped as failed
+# after 15 minutes, so a hang fails the job in minutes, not at the job timeout.
+# The slowest test took 222 seconds with one worker test at a time (cold Windows
+# run, 2026-11-13) and 319 seconds with two on a busy Mac.
+slow-timeout = { period = "60s", terminate-after = 15 }
+
+[profile.ci.junit]
+# target/nextest/ci/junit.xml; checks.yml uploads it from each partition.
+path = "junit.xml"
