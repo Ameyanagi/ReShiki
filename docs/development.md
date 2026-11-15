@@ -319,6 +319,12 @@ bun run docs:build
 
 Edit the visual manual in `website/src/content/docs/guide/` and developer notes in `docs/*.md`. The sync script generates ignored Starlight copies of the developer notes; edit their originals. It builds the unreleased changes page with `scripts/assemble_changelog.py` from the [release-note fragments](changes/unreleased/README.md), so it needs `python3` (`python` on Windows). Landing page, navigation and theme live in `website/`. The production build checks local page and asset links. Follow [writing and terms](writing-style.md) for wording, UI labels and feature names.
 
+The [module index](modules.md) is generated from the first sentence of each Rust file's `//!` comment. After you add, move or remove a module file, or change that sentence, rewrite the page; a Python test fails while it is out of date:
+
+```sh
+python3 scripts/module_index.py
+```
+
 The Documentation workflow checks pull requests and deploys main to [GitHub Pages](https://reshiki.com/). Pages must use **GitHub Actions** as its source. See [release builds and signing](releasing.md) for distribution setup.
 
 ## UI conventions
