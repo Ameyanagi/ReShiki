@@ -1,7 +1,7 @@
 # Privacy policy
 
 This page describes ReShiki's application and project website. Updated
-2026-10-23. ReShiki is maintained by
+2026-11-15. ReShiki is maintained by
 [@Ameyanagi](https://github.com/Ameyanagi); its source and documentation are
 available in the [project repository](https://github.com/Ameyanagi/ReShiki).
 
@@ -20,6 +20,21 @@ your choice; that application's handling of it is separate from ReShiki.
 
 ReShiki does not include an automatic usage-analytics or crash-report uploader.
 The network features below are separate from local drawing and calculations.
+
+## GitHub star request
+
+The desktop app asks once whether you would star ReShiki on GitHub. It asks
+after you have exported or copied a drawing five times, on a later day than
+your first launch, when you have not touched the window for 30 seconds. It
+never asks while you type in a field, drag, or have a menu, panel or dialog
+open. It never asks in a drawing from Office or LibreOffice, in the browser
+editor, or from the command line. **Star on GitHub** opens the project page in
+your browser. Without a star, ReShiki asks again at most once: in a later
+feature release such as 0.16.0, at least 90 days later. This holds whether you
+choose **Not now** or quit with the card still open. The count and your answer
+stay in `star-prompt.json` in ReShiki's data folder. Nothing is sent anywhere.
+**ReShiki → Check for updates**, also opened by **Help → About ReShiki**, always
+has a **Star ReShiki on GitHub ↗** link, which counts as a star too.
 
 ## Update checks
 

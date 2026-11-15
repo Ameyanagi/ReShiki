@@ -125,6 +125,8 @@ swash = "0.2.10"
 svg2pdf = { version = "0.13", default-features = false, features = ["text", "image"] }
 semver = "1"
 time = "0.3"
+# Local calendar days for the GitHub star prompt.
+chrono = { version = "0.4", default-features = false, features = ["clock", "serde"] }
 roxmltree = "0.20"
 tiff = "0.11.3"
 thiserror = "2"

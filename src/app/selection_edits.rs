@@ -154,7 +154,7 @@ impl App {
     }
     pub(super) fn invert_selection(&mut self) {
         let selected = self.tab.doc.expand_groups(&self.tab.selected);
-        self.tab.selected = self
+        let ids = self
             .tab
             .doc
             .all_ids()
@@ -162,9 +162,7 @@ impl App {
             .filter(|id| !selected.contains(id))
             .collect();
         self.tool = Tool::Select;
-        self.sync_typography();
-        self.sync_graphics();
-        self.sync_arrows();
+        self.set_selection(ids);
     }
     pub(super) fn duplicate_selection(&mut self) {
         let part = editing::selection(&self.tab.doc, &self.tab.selected);
@@ -234,3 +232,6 @@ impl App {
         }
     }
 }
+
+#[cfg(test)]
+mod tests;

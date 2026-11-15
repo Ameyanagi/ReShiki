@@ -1,112 +1,13 @@
-# Windows
+# Windows development
 
-Use the Windows x64 or ARM64 setup or portable ZIP. Windows ARM requires
-Windows 11. The app and chemistry tools run natively and work offline.
+This page covers Windows builds, renderers and their checks. For using
+ReShiki on Windows, see the [Windows guide](https://reshiki.com/guide/windows/);
+to set up a Windows build, see [Build and test](development.md).
 
-## Keyboard and files
-
-Windows uses Ctrl for application shortcuts: Ctrl+N/O/S for new/open/save,
-Ctrl+W to close a tab, Ctrl+Tab or Ctrl+1–9 to switch tabs, Ctrl+Z to undo,
-Ctrl+Y or Ctrl+Shift+Z to redo, and Ctrl+A/C/X/V to select, copy, cut and
-paste. Ctrl+Shift+G ungroups; Ctrl+G groups. Alt allows free bond drawing and
-moves without smart guides. Escape leaves the current tool or cancels a draft.
-
-Use `.rsk` for an editable original, including pages, pictures and styles.
-SVG/PDF/PNG and EMF export figures; chemical interchange formats retain their supported
-subset. Windows file dialogs support paths containing spaces and Unicode.
-
-**Export → Figure → EMF for Office** saves a vector picture for Microsoft
-Office with outlined text, the canvas background and the drawing's physical
-dimensions. **SVG for Office** gives the same physical size and outlined text
-as SVG. Keep the `.rsk` file to edit the original drawing. See
-[figure export](figure-export.md) for format details and limits.
-
-**Import → Choose file…** also inserts `.emf` pictures, such as spectra, at the
-size recorded in the file. The `.rsk` file keeps the original EMF and a preview;
-other platforms show the preview. See [pictures](pictures.md).
-
-When ReShiki is running, opening another file adds it as a tab in the existing
-window, and a file that is already open switches to its tab. Each drawing
-opened from Office gets its own tab, named after its application (for example
-`Drawing in PowerPoint.rsk`), and saving it updates only that Office document. See
-[the open-in-tab record](changes/windows-linux-open-tabs.md) for the transport
-and its limits.
-
-## Clipboard
-
-Normal Copy/Paste within ReShiki retains editable atoms, bonds, captions, arrows,
-graphics, pictures and groups. Cut removes the selection only after the clipboard write
-succeeds. Ctrl+Shift+C copies an image; **Import → Paste picture** explicitly pastes a picture.
-
-Windows Copy provides native ReShiki data, supported editable interchange data
-and an editable Office object containing the complete drawing and a preview.
-The editable preview uses vector paths for bonds and outlined text, preserving
-smooth edges when resized and transparency over colored pages and slides.
-Copy also provides a standard bitmap, so new Outlook, Teams and browser-based
-apps paste a picture, while Office keeps the editable object.
-Copy Image provides PNG, SVG, PDF and a standard bitmap. PNG preserves
-transparency and resolution; the standard bitmap uses a white background.
-PNG file export also uses a white background.
-Imported external formats remain subject to the [clipboard limits](clipboard.md).
-See [clipboard compatibility](clipboard-compatibility.md) for what each app
-receives. New Outlook, Teams and other web-based apps receive nothing from
-normal Copy; use Copy Image for them
-([#1146](https://github.com/Ameyanagi/ReShiki/issues/1146)).
-
-To copy an embedded ChemDraw structure from PowerPoint, select the whole object
-on the slide and press **Ctrl+C**, then press **Ctrl+V** in ReShiki. Objects
-containing supported ChemDraw CDX import as editable atoms and bonds. A picture
-alone remains a picture; **Import → Paste picture** explicitly chooses the preview.
-See the [validation and review checklist](changes/windows-chemdraw-paste-2026-10-05.md)
-for this import path and its limits.
-
-### Edit a drawing in Office
-
-1. Select objects in ReShiki and use **Ctrl+C**.
-2. Paste into desktop Word, PowerPoint or Excel. If necessary, use **Paste
-   Special → ReShiki drawing object**.
-3. Double-click the drawing to open it in ReShiki. Keep the Office document open.
-4. Edit and press **Ctrl+S**. ReShiki confirms when Office accepts the update.
-5. Close the drawing's tab (Ctrl+W) and save the Office document.
-
-The Office file contains the drawing; it does not depend on an external
-`.rsk` file. ReShiki must be installed to edit it. The installer registers
-the editor, and the portable version registers its current location when you
-copy. After moving a portable installation, copy once from its new location.
-If Office closes or rejects an update, ReShiki reports the error and retains
-a local copy. Use **Save as** to keep a separate editable original.
-
-Use **Copy Image** for a static figure or for applications that only accept
-pictures. Its SVG outlines text so Office cannot shift atom labels. Existing
-pictures are not converted into editable chemistry by installing this update.
-To refresh an existing embedded ReShiki object's older bitmap preview,
-double-click it, press **Ctrl+S** in ReShiki, then save the Office document.
-
-Excel adds its own white fill and outline to newly pasted OLE objects. Select
-the object, press **Ctrl+1**, and choose **Colors and Lines → Fill → No fill**
-to show worksheet cells through the transparent preview. Its outline is also
-controlled by Excel. ReShiki's preview itself contains no background fill.
-
-### Share with a Mac
-
-The `.rsk` file format works on both platforms. For a document that needs
-editing on a Mac, keep that original alongside the Office document and replace
-the figure after editing it. The Windows OLE double-click workflow is not
-available in Mac Office. ReShiki's macOS clipboard, native printing and renderer
-remain separate from the Windows implementation. See [platform boundaries](clipboard.md#office-and-macos).
-
-## Printing
-
-Use Page setup to choose the paper, orientation, margins and page grid, and
-preview the drawing. Ctrl+P or Export → Print opens the Windows print dialog.
-Choose the printer, page range, copies and driver preferences. Microsoft Print
-to PDF produces a local PDF when that Windows printer is installed. Print
-selection uses a separate snapshot of the selected objects.
-
-The drawing retains publication dimensions. Text prints as vector outlines,
-and pictures preserve their placement and transparency. Export PDF when you
-need the application's embedded-font PDF rather than printer output. Cancelling
-printing leaves the drawing, selection and undo history intact.
+Windows clipboard, printing and process detection are implemented in Rust and
+linked into the application. No .NET runtime, C# compiler or extra native helper
+is needed. The editor forbids unsafe Rust; Win32 FFI is isolated in
+`native/windows`, with bounded data and ownership guards.
 
 ## Release performance and debugging
 
@@ -177,18 +78,13 @@ trial. Results and desktop captures go under
 foreground window, then restores them and the previous environment settings.
 CPU percentages are normalized across all logical processors. This measures
 CPU cost for the input workload, not achieved frame rate or input latency.
-See the [Windows VM validation](windows-gpu-validation.md) for measured results
+See the [Windows VM validation](changes/windows-gpu-validation.md) for measured results
 and their limits.
 
 The idle timer correction from v0.4.0 remains in place. The original Windows
 software-only choice avoided expensive editing through WARP; it was separate
 from the v0.3.0 idle-redraw issue that continuously used about 89% CPU on the
 earlier test VM.
-
-Windows clipboard, printing and process detection are implemented in Rust and
-linked into the application. No .NET runtime, C# compiler or extra native helper
-is needed. The editor forbids unsafe Rust; Win32 FFI is isolated in
-`native/windows`, with bounded data and ownership guards.
 
 The experimental `reshiki.exe --cli` commands (ReShiki 0.12.0 and later) follow
 the same rule as `--graphics-info`: release builds have

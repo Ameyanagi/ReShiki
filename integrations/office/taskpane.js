@@ -208,7 +208,10 @@ try {
   token = (
     await (
       await fetch("/bootstrap.json", {
-        headers: { "X-ReShiki-Bootstrap": "1" },
+        // The companion writes a one-time nonce into each page it serves.
+        headers: {
+          "X-ReShiki-Bootstrap": document.querySelector('meta[name="reshiki-bootstrap"]').content,
+        },
         cache: "no-store",
         credentials: "omit",
       })

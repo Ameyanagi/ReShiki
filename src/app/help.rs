@@ -232,6 +232,14 @@ impl App {
                         .style(muted_text)
                         .width(Length::Fill),
                     reshiki::accessibility::button(
+                        "help-about",
+                        "About ReShiki",
+                        text("About ReShiki").size(13)
+                    )
+                    .padding([7, 14])
+                    .on_press(Message::Updates(super::updates::Action::Show(true)))
+                    .style(control(false)),
+                    reshiki::accessibility::button(
                         "help-examples",
                         "Open shortcut examples: one editable drawing with labeled examples, in a new tab",
                         text("Open shortcut examples").size(13)

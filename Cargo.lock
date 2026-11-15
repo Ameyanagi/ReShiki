@@ -4127,6 +4127,7 @@ dependencies = [
  "accesskit_consumer",
  "anyhow",
  "base64 0.22.1",
+ "chrono",
  "cosmolkit-inchi",
  "directories-next",
  "flate2",

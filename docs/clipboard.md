@@ -55,7 +55,7 @@ Tracked in [#110](https://github.com/Ameyanagi/ReShiki/issues/110). Clipboard re
 
 ## Office and macOS
 
-On Windows, normal Copy supplies an editable Office object with the full drawing and a cached preview. Double-click opens ReShiki; **Ctrl+S** updates the open Office document. Copy Image supplies a static figure whose SVG text, as on every platform, is converted to outlines to preserve label placement. SVG file export, the agent tools, `reshiki --cli` and the Python package also outline text by default; **Keep text editable** in **Export → Figure**, `svg_text: "live"`, `--svg-text live` and `text="live"` keep it as text ([Text in SVG files](figure-export.md#text-in-svg-files), [Missing fonts](typography.md#missing-fonts)). [Office editing steps](windows.md#edit-a-drawing-in-office).
+On Windows, normal Copy supplies an editable Office object with the full drawing and a cached preview. Double-click opens ReShiki; **Ctrl+S** updates the open Office document. Copy Image supplies a static figure whose SVG text, as on every platform, is converted to outlines to preserve label placement. SVG file export, the agent tools, `reshiki --cli` and the Python package also outline text by default; **Keep text editable** in **Export → Figure**, `svg_text: "live"`, `--svg-text live` and `text="live"` keep it as text ([Text in SVG files](figure-export.md#text-in-svg-files), [Missing fonts](typography.md#missing-fonts)). [Office editing steps](https://reshiki.com/guide/windows/#copy-editable-drawings-or-pictures).
 
 Windows desktop Office supports ReShiki OLE objects. Copy the object back into ReShiki to recover its native drawing; Paste picture explicitly reads its preview. Normal Copy also offers a standard bitmap, so new Outlook, Teams and browser-based apps paste a picture; Word, PowerPoint and Excel still choose the editable object. It omits standalone PNG and SVG, which Office would prefer over the object, and keeps the metafile presentation that Office requires. Copy Image gives a static picture in every application.
 
@@ -110,7 +110,26 @@ their ownership metadata survives.
 
 ## In the browser
 
-The browser editor uses the page's clipboard, which holds only text, HTML, PNG and, in Chrome and Edge, SVG. **Cmd/Ctrl+C** puts a PNG picture of the selection on it, the same picture as HTML for Word, Google Docs and mail, and SMILES as text when the selection has molecules; the picture in the HTML also carries the ReShiki drawing, so pasting it back into a browser editor keeps it editable. **Cmd/Ctrl+Shift+C** copies just the picture, **Copy as → PNG** the PNG and **Copy as → SVG** the SVG with its source as text; that SVG draws its text as outlines, like the desktop app's. **Cmd/Ctrl+V** tries a ReShiki drawing, then text that imports as chemistry (SMILES, MOL, CDXML, InChI and the others above), then PNG or SVG with a ReShiki drawing, or a PNG as a picture; **Import → Paste picture** takes the raster picture. Browsers cannot put PDF or CDX on the clipboard, or read ChemDraw's or Office's own formats, so use **Export** for PDF and CDX, and copy CDXML text from ChemDraw (**Edit → Copy As → CDXML Text**) for an editable structure. The status bar says when a copy or paste worked, or why the browser refused: for example, when clipboard access is blocked for the site or the page is not on https. A page that embeds the editor in its own iframe must allow `clipboard-read` and `clipboard-write`.
+The browser editor uses the page's clipboard, which holds only text, HTML,
+PNG and, in Chrome and Edge, SVG.
+
+| Command                    | Clipboard contents                                                                                                                                                                      |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Cmd/Ctrl+C**             | A PNG picture of the selection, the same picture as HTML for Word, Google Docs and mail, and SMILES as text when the selection has molecules. The picture carries the editable drawing. |
+| **Cmd/Ctrl+Shift+C**       | The picture only.                                                                                                                                                                       |
+| **Copy as → PNG**          | The PNG.                                                                                                                                                                                |
+| **Copy as → SVG**          | The SVG, and its source as text. Its text is drawn as outlines, as in the desktop app.                                                                                                  |
+| **Cmd/Ctrl+V**             | The first that works: a ReShiki drawing, text that imports as chemistry (SMILES, MOL, CDXML, InChI and the others above), a PNG or SVG with a ReShiki drawing, or a PNG as a picture.   |
+| **Import → Paste picture** | The raster picture.                                                                                                                                                                     |
+
+Browsers cannot put PDF or CDX on the clipboard, or read ChemDraw's or
+Office's own formats. Use **Export** for PDF and CDX, and copy CDXML text from
+ChemDraw (**Edit → Copy As → CDXML Text**) for an editable structure.
+
+The status bar says when a copy or paste worked, or why the browser refused
+it, for example when the site may not use the clipboard or the page is not on
+https. A page that embeds the editor in its own iframe must allow
+`clipboard-read` and `clipboard-write`.
 
 Text fields, such as the font box, Help search, the Import boxes, captions and property fields, copy, cut and paste plain text through the system clipboard with **Cmd/Ctrl+C**, **X** and **V**, as on the desktop. Pasting into a field uses the browser's own paste, so it needs no clipboard-read permission or asynchronous clipboard prompt. The clipboard text goes directly to the focused field, including Japanese and other composed text.
 
