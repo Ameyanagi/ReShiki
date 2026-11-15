@@ -142,6 +142,27 @@ struct Packet {
     generation: Option<String>,
 }
 
+/// How copied PNG, SVG and PDF pictures look, the PNG's resolution, and
+/// whether they carry the editable drawing. ReShiki's own clipboard data
+/// always keeps the drawing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Pictures {
+    pub background: export::Background,
+    pub dpi: u32,
+    pub editable: bool,
+}
+impl Default for Pictures {
+    /// Transparent 1200 dpi pictures with the editable drawing, as Copy made
+    /// them before these preferences.
+    fn default() -> Self {
+        Self {
+            background: export::Background::Transparent,
+            dpi: crate::style::DEFAULT.png_dpi,
+            editable: true,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct CopyOutcome {
     pub external_editable: bool,
@@ -331,9 +352,19 @@ pub async fn copy(
     engine: LocalEngine,
     original: Document,
     image_only: bool,
+    pictures: Pictures,
 ) -> Result<CopyOutcome, String> {
-    let (outcome, representations) = prepare_copy(engine, original, image_only).await?;
-    let operation = if cfg!(windows) && !image_only {
+    let (outcome, representations) = prepare_copy_with_limit(
+        engine,
+        original,
+        image_only,
+        cfg!(target_arch = "wasm32"),
+        payload::EMBED_LIMIT,
+        pictures,
+    )
+    .await?;
+    // Office's embedded object is the drawing, so it follows the switch too.
+    let operation = if cfg!(windows) && !image_only && pictures.editable {
         "write_embedded"
     } else {
         "write"
@@ -342,6 +373,7 @@ pub async fn copy(
     Ok(outcome)
 }
 
+#[cfg(test)]
 async fn prepare_copy(
     engine: LocalEngine,
     original: Document,
@@ -350,24 +382,34 @@ async fn prepare_copy(
     prepare_copy_for(engine, original, image_only, cfg!(target_arch = "wasm32")).await
 }
 
-/// A browser can hold neither CDX nor PDF, so its copy has SMILES text for
-/// other apps instead, when the drawing has one. Linux desktop also includes
-/// SMILES when chemical text copy selects that format.
+#[cfg(test)]
 async fn prepare_copy_for(
     engine: LocalEngine,
     original: Document,
     image_only: bool,
     browser: bool,
 ) -> Result<(CopyOutcome, Vec<Representation>), String> {
-    prepare_copy_with_limit(engine, original, image_only, browser, payload::EMBED_LIMIT).await
+    prepare_copy_with_limit(
+        engine,
+        original,
+        image_only,
+        browser,
+        payload::EMBED_LIMIT,
+        Pictures::default(),
+    )
+    .await
 }
 
+/// A browser can hold neither CDX nor PDF, so its copy has SMILES text for
+/// other apps instead, when the drawing has one. Linux desktop also includes
+/// SMILES when chemical text copy selects that format.
 async fn prepare_copy_with_limit(
     engine: LocalEngine,
     original: Document,
     image_only: bool,
     browser: bool,
     embed_limit: usize,
+    pictures: Pictures,
 ) -> Result<(CopyOutcome, Vec<Representation>), String> {
     original.validate()?;
     if original.all_ids().is_empty() {
@@ -390,7 +432,10 @@ async fn prepare_copy_with_limit(
     // Marked like a saved file, so pasting it never migrates its colors again.
     let doc = doc.current();
     let mut representations = Vec::new();
-    if !image_only {
+    // The browser keeps ReShiki's drawing in the HTML picture other apps
+    // paste, so it leaves it out with the pictures' drawing.
+    let native = !browser || pictures.editable;
+    if !image_only && native {
         representations.push(Representation::new(
             NATIVE,
             &serde_json::to_vec(&doc).map_err(|e| e.to_string())?,
@@ -474,10 +519,11 @@ async fn prepare_copy_with_limit(
     }
     let (images, oversized) = crate::task::spawn_blocking(move || {
         let envelope = payload::encode(&doc)?;
-        let drawing = (envelope.len() <= embed_limit).then_some(envelope.as_slice());
+        let fits = envelope.len() <= embed_limit;
+        let drawing = (pictures.editable && fits).then_some(envelope.as_slice());
         Ok::<_, String>((
-            copy_images_with_drawing(&doc, image_only, browser, drawing),
-            drawing.is_none(),
+            copy_images_with_drawing(&doc, image_only, browser, pictures, drawing, fits && native),
+            pictures.editable && !fits,
         ))
     })
     .await
@@ -510,7 +556,7 @@ async fn prepare_copy_with_limit(
                         .filter(|d| d.unit == png::Unit::Meter)
                         .map(|d| (f64::from(d.xppu) * 0.0254).round() as u32);
                     if let Some(dpi) = dpi
-                        && dpi < crate::style::DEFAULT.png_dpi
+                        && dpi < pictures.dpi
                     {
                         outcome.notices.push(format!(
                             "Raster preview uses {dpi} dpi to fit the clipboard; vector formats retain full quality"
@@ -557,6 +603,7 @@ async fn prepare_copy_with_limit(
 fn clipboard_figure(
     doc: &Document,
     format: &str,
+    pictures: Pictures,
     drawing: Option<&[u8]>,
 ) -> Result<export::Figure, String> {
     let format = if format == "svg" {
@@ -564,7 +611,7 @@ fn clipboard_figure(
     } else {
         format
     };
-    export::clipboard_figure_with_drawing(doc, format, drawing)
+    export::clipboard_figure_with_drawing(doc, format, pictures.background, pictures.dpi, drawing)
 }
 
 #[cfg(test)]
@@ -573,14 +620,17 @@ fn copy_images(
     image_only: bool,
     browser: bool,
 ) -> Vec<(&'static str, Result<Representation, String>)> {
-    copy_images_with_drawing(doc, image_only, browser, None)
+    copy_images_with_drawing(doc, image_only, browser, Pictures::default(), None, false)
 }
 
+/// `native` adds ReShiki's own drawing to Copy image, for pasting into ReShiki.
 fn copy_images_with_drawing(
     doc: &Document,
     image_only: bool,
     browser: bool,
+    pictures: Pictures,
     drawing: Option<&[u8]>,
+    native: bool,
 ) -> Vec<(&'static str, Result<Representation, String>)> {
     let mut images: Vec<_> = [
         ("com.adobe.pdf", "pdf"),
@@ -590,7 +640,7 @@ fn copy_images_with_drawing(
     .into_iter()
     .filter(|(_, format)| !browser || *format != "pdf")
     .map(|(kind, format)| {
-        let image = clipboard_figure(doc, format, drawing);
+        let image = clipboard_figure(doc, format, pictures, drawing);
         (
             format,
             image.map(|figure| Representation::new(kind, &figure.bytes)),
@@ -598,16 +648,17 @@ fn copy_images_with_drawing(
     })
     .collect();
     #[cfg(windows)]
-    if !image_only && !browser {
+    if !image_only && !browser && pictures.editable {
         images.push((
             "Office preview",
-            crate::native_windows::office_metafile(doc)
+            crate::native_windows::office_metafile(doc, pictures.background)
                 .map(|bytes| Representation::new("dev.reshiki.office-metafile", &bytes)),
         ));
     }
     // Copy Image's own drawing keeps to the limit of the one in its pictures,
-    // so a huge drawing cannot overflow the clipboard.
-    if image_only && drawing.is_some() {
+    // so a huge drawing cannot overflow the clipboard. It stays when the
+    // pictures leave the drawing out.
+    if image_only && native {
         let native = serde_json::to_vec(&payload::visible(doc))
             .map(|bytes| Representation::new(NATIVE, &bytes))
             .map_err(|e| e.to_string());

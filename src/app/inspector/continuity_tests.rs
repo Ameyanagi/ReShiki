@@ -464,7 +464,7 @@ impl iced::advanced::widget::Operation for PanelText {
 
 #[tokio::test]
 #[ignore = "Opt-in real renderer Molecular Properties text regression"]
-async fn rendered_panel_keeps_whole_mass_and_uses_singular_counts() {
+async fn rendered_panel_keeps_whole_mass_and_counts_only_the_whole_drawing() {
     use iced::advanced::{renderer::Headless, widget::operation};
     let mut renderer = <iced::Renderer as Headless>::new(
         iced::Font::with_name(reshiki::style::ui_font_family()),
@@ -489,7 +489,7 @@ async fn rendered_panel_keeps_whole_mass_and_uses_singular_counts() {
     settle(&mut app, false).await;
     let panel_text = |app: &App, renderer: &mut iced::Renderer| {
         let mut ui = iced_runtime::UserInterface::build(
-            app.molecular_section(),
+            app.molecular_section(app.opened_section()),
             iced::Size::new(300., 800.),
             iced_runtime::user_interface::Cache::new(),
             renderer,
@@ -507,12 +507,18 @@ async fn rendered_panel_keeps_whole_mass_and_uses_singular_counts() {
         assert!(text.contains("Whole drawing · C₈H₈ · 104.152\u{a0}g/\u{2060}mol"));
         assert!(text.contains("Selection · C₂H₄ · 28.054\u{a0}g/\u{2060}mol"));
     }
+    // A selection's counts are the panel's summary; the section does not
+    // repeat them.
     app.tab.selected = vec![first];
     choose(&mut app, true);
     settle(&mut app, false).await;
     let text = panel_text(&app, &mut renderer);
-    assert!(text.contains("1 atom · 0 bonds"));
-    assert!(!text.contains("1 atoms"));
+    assert!(!text.contains("1 atom"), "{text}");
+    app.tab.selected.clear();
+    choose(&mut app, true);
+    settle(&mut app, false).await;
+    let text = panel_text(&app, &mut renderer);
+    assert!(text.contains("8 atoms · 8 bonds"), "{text}");
 }
 
 #[tokio::test]

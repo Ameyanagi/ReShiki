@@ -371,7 +371,7 @@ fn tool_errors_become_is_error_results() {
         assert_eq!(
             Value::Object(result.value),
             json!({
-                "error": {"code": kind.code(), "message": "It went wrong"},
+                "error": {"code": kind.code(), "message": "It went wrong", "retryable": kind.retryable()},
                 "versions": versions_value(),
             })
         );

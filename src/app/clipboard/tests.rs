@@ -426,7 +426,7 @@ fn an_ordinary_copy_outliving_its_tab_cannot_overtake_a_new_copy_as() {
     app.tab.selected = vec![atom];
     app.tab.saved = app.tab.doc.clone();
     let (id, epoch, revision) = (app.tab.id, app.tab.file_epoch, app.tab.revision);
-    let _task = app.copy_native(false, false);
+    let _task = app.copy_native(false, false, None);
     assert!(app.native_copy_busy);
     let _ = app.close_active_tab();
     app.tab.doc.add_atom("N", Point::default());
@@ -842,8 +842,7 @@ fn engine_insert_keeps_placement_selection_status_and_one_undo() {
     assert_eq!(app.tab.history.undo_frames().count(), 1);
     assert_eq!(app.tab.history.frames(), 1);
     assert!(!app.error);
-    let status =
-        "Inserted structure · Drag to position · Delete or Undo to remove · Source layout retained";
+    let status = "Structure inserted · Drag to position · Source layout retained";
     assert_eq!(app.status, status);
     assert_eq!(app.tool, Tool::Select);
     let _ = app.update(Message::Undo);

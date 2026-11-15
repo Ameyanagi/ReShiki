@@ -107,6 +107,7 @@ impl NativeTree {
                 Role::Button | Role::ToggleButton => accesskit::Role::Button,
                 Role::TextInput => accesskit::Role::TextInput,
                 Role::TextArea => accesskit::Role::MultilineTextInput,
+                Role::Image => accesskit::Role::Image,
             });
             native.set_label(node.name.clone());
             native.set_author_id(node.id.clone());
@@ -126,7 +127,7 @@ impl NativeTree {
             if let Some(value) = &node.value {
                 native.set_value(value.clone());
             }
-            if node.enabled {
+            if node.enabled && node.role != Role::Image {
                 self.live.insert(id, (node.id.clone(), node.role));
                 native.add_action(if matches!(node.role, Role::TextInput | Role::TextArea) {
                     Action::SetValue

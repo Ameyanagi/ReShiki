@@ -139,6 +139,7 @@ async fn reaction_fixture(
             engine.clone(),
             document.clone(),
             reshiki::clipboard::CopyFormat::ChemDoodleReaction,
+            Default::default(),
         )
     })
     .await

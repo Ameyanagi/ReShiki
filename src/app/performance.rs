@@ -4,6 +4,7 @@ use reshiki::engine::ChemistryEngine;
 use std::{hint::black_box, time::Instant};
 
 mod hover;
+mod redraw;
 
 fn measure(name: &str, mut work: impl FnMut()) {
     for _ in 0..3 {
@@ -21,7 +22,7 @@ fn measure(name: &str, mut work: impl FnMut()) {
 
 #[test]
 #[ignore = "release-mode editing benchmark"]
-fn editing_workloads() {
+fn manual_editing_workloads() {
     println!("workload,median_ms,p95_ms");
     let gallery: Document =
         serde_json::from_str(include_str!("../../assets/examples/shortcut-examples.rsk")).unwrap();
@@ -111,7 +112,7 @@ fn editing_workloads() {
 
 #[test]
 #[ignore = "release-mode camera benchmark"]
-fn camera_workloads() {
+fn manual_camera_workloads() {
     println!("workload,median_ms,p95_ms");
     let gallery: Document =
         serde_json::from_str(include_str!("../../assets/examples/shortcut-examples.rsk")).unwrap();
@@ -136,7 +137,7 @@ fn camera_workloads() {
 
 #[test]
 #[ignore = "release-mode unsaved-changes benchmark"]
-fn unsaved_changes_check() {
+fn manual_unsaved_changes_check() {
     println!("workload,median_ms,p95_ms");
     let gallery: Document =
         serde_json::from_str(include_str!("../../assets/examples/shortcut-examples.rsk")).unwrap();
@@ -169,7 +170,7 @@ fn unsaved_changes_check() {
 
 #[test]
 #[ignore = "release-mode label landing benchmark"]
-fn label_landing() {
+fn manual_label_landing() {
     use reshiki::atom_labels::refresh::Refresh;
     use std::sync::Arc;
     println!("workload,median_ms,p95_ms,revision_bumps");

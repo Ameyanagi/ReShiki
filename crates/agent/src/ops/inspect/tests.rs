@@ -170,7 +170,13 @@ async fn inspect_ok(host: &HeadlessHost, handle: &str, ids: Value) -> Value {
     let result = inspect_call(host, handle, ids).await;
     assert!(!result.is_error, "{:?}", result.value);
     assert!(result.images.is_empty() && result.files.is_empty());
-    Value::Object(result.value)
+    assert_eq!(result.value["warnings"], json!([]));
+    assert_eq!(result.value["validation"], json!({"status": "valid"}));
+    assert_eq!(
+        result.value["versions"],
+        crate::ops::wire::versions_json(&Versions::current("9.8.7"))
+    );
+    result.value["value"].clone()
 }
 
 fn strings(ids: &[u64]) -> Value {
@@ -232,10 +238,6 @@ async fn the_whole_drawing_is_summarized_with_string_ids() {
     assert_eq!(summary["expanded_ids"], Value::Null);
     assert_eq!(summary["truncated"], false);
     assert_eq!(summary["note"], NOTE);
-    assert_eq!(
-        summary["versions"],
-        versions_json(&Versions::current("9.8.7"))
-    );
     let (min, max) = doc.bounds();
     assert_eq!(
         summary["bounds"],
@@ -341,8 +343,6 @@ async fn numbers_appear_only_under_allowlisted_keys() {
     let (host, handle) = hosting(doc, Budgets::default());
     let mut summary = inspect_ok(&host, &handle, Value::Null).await;
     let object = summary.as_object_mut().unwrap();
-    // versions are the result's, not the drawing's.
-    object.remove("versions").unwrap();
     let counts = object.remove("counts").unwrap();
     assert!(counts.as_object().unwrap().values().all(Value::is_u64));
     let mut found = BTreeSet::new();
@@ -373,7 +373,7 @@ async fn unknown_ids_name_the_first_missing_one() {
         assert!(result.is_error);
         assert_eq!(
             result.value["error"],
-            json!({"code": "unknown_object", "message": format!("Object {first} is not in the drawing")})
+            json!({"code": "unknown_object", "message": format!("Object {first} is not in the drawing"), "retryable": false, "param": "ids"})
         );
     }
 }

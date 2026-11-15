@@ -28,6 +28,7 @@ OBJECTS = {
     0x8008: "curve",
     0x8009: "embeddedobject",
     0x8011: "objecttag",
+    0x8020: "chemicalproperty",
     0x8027: "arrow",
     0x802B: "annotation",
     0x8032: "ColoredMolecularArea",
@@ -62,6 +63,10 @@ PROPERTIES[0xA39] = ("Closed", "CDXBooleanImplied", {})
 # Native ChemDraw document annotations accompany clipboard ring-fill drawings.
 PROPERTIES[0x1500] = ("Keyword", "CDXString", {})
 PROPERTIES[0x1501] = ("Content", "CDXString", {})
+# ChemDraw 26 linked property text: one UINT32 type per caption line with no
+# count (stored like an object ID list), and a zero-length flag while live.
+PROPERTIES[0xBB0] = ("ChemicalPropertyType", "CDXObjectIDArray", {})
+PROPERTIES[0xBB2] = ("ChemicalPropertyIsActive", "CDXBooleanImplied", {})
 BY_NAME = {v[0]: (k, v[1], v[2]) for k, v in PROPERTIES.items()}
 INTS = {
     "INT8": "b",

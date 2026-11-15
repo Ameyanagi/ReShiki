@@ -14,16 +14,7 @@ const ATTACH_SYMBOLS_HINT: &str = concat!(
     "Attached charges and radicals update chemistry. Lone pairs annotate the atom. ",
     "H and attachment symbols use free placement."
 );
-const ORBITAL_PLACEMENT_HINT: &str = concat!(
-    "Drag from the orbital node to set direction and size. Click uses one bond length. ",
-    "Shift snaps to 15°. Option/Alt bypasses atom snapping. ",
-    "Group with a molecule to move them together."
-);
 pub(super) const SNAP_ORBITALS_LABEL: &str = "Snap to atoms";
-const SNAP_ORBITALS_HINT: &str = concat!(
-    "Snap the orbital node to the nearest atom · ",
-    "Hold Option/Alt to place freely · Applies to new orbitals"
-);
 
 #[cfg(test)]
 mod tests;
@@ -183,7 +174,10 @@ impl App {
                 .on_toggle(|snap| Message::Graphics(Action::SnapOrbitals(snap)))
                 .size(14)
                 .text_size(11),
-            SNAP_ORBITALS_HINT,
+            format!(
+                "Snap the orbital node to the nearest atom · Hold {} to place freely · Applies to new orbitals",
+                crate::platform::alt_key()
+            ),
             tooltip::Position::Bottom,
         )
         .into()
@@ -229,9 +223,9 @@ impl App {
             };
         let mut panel = column![
             section(if selected.is_empty() {
-                "DRAWING STYLE"
+                "Drawing style"
             } else {
-                "GRAPHIC STYLE"
+                "Graphic style"
             }),
             text(kind.to_string()).size(14),
             row![
@@ -330,7 +324,10 @@ impl App {
                         .text_size(12)
                         .padding(6)
                         .width(Length::Fill),
-                        ORBITAL_PLACEMENT_HINT,
+                        format!(
+                            "Drag from the orbital node to set direction and size. Click uses one bond length. Shift snaps to 15°. {} bypasses atom snapping. Group with a molecule to move them together.",
+                            crate::platform::alt_key()
+                        ),
                         tooltip::Position::Top,
                     ))
                     .push(

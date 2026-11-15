@@ -3,8 +3,8 @@
 //!
 //! Reading follows the shared structure-format mapping, with explicit
 //! `.smi` and `.smiles` rows for the agent's extension allowlist.
-//! Writing follows the operation export formats, which exclude EMF and CDX,
-//! plus native `.rsk` drawings (`Document::file_json`).
+//! Writing follows the operation export formats, which exclude EMF, plus
+//! native `.rsk` drawings (`Document::file_json`).
 use super::{AccessError, echo};
 use std::{path::Path, sync::LazyLock};
 
@@ -36,10 +36,10 @@ pub const FILE_FORMATS: &[FileFormat] = &[
     row("reshiki", Some("reshiki"), None),
     row("moruno", Some("reshiki"), None),
     row("mol", Some("mol"), Some("mol")),
-    row("rxn", Some("rxn"), None),
-    row("rsmi", Some("rsmi"), None),
+    row("rxn", Some("rxn"), Some("rxn")),
+    row("rsmi", Some("rsmi"), Some("rsmi")),
     row("cdxml", Some("cdxml"), Some("cdxml")),
-    row("cdx", Some("cdx"), None),
+    row("cdx", Some("cdx"), Some("cdx")),
     row("smi", Some("smiles"), Some("smiles")),
     row("smiles", Some("smiles"), Some("smiles")),
     row("inchi", Some("inchi"), Some("inchi")),

@@ -38,9 +38,9 @@ const ATTACH_INTRO: &str = "Pick the attachment atom or bond in the preview.";
 const COORDINATION_INTRO: &str =
     "Pick the donor (N, O, S or P) in the preview, then click a metal on the drawing.";
 /// The full donor, chelate and stereo notes are in docs/fragment-joining.md.
-const COORDINATION_HINT: &str = "Atoms stay in place · Escape cancels · One Undo step per contact";
+const COORDINATION_HINT: &str = "Atoms stay in place · Esc cancels";
 /// Dragging from the destination orients the fragment in every join mode.
-const JOIN_HINT: &str = "Drag to orient · Shift/Ctrl snaps · Escape cancels";
+const JOIN_HINT: &str = "Drag to orient · Shift/Ctrl snaps · Esc cancels";
 
 /// What Join (⌘J) does, in the row and menu tooltip and in Help.
 pub(super) const JOIN_COMMAND_HINT: &str =
@@ -177,14 +177,12 @@ impl App {
             RowCommand {
                 label: "Join",
                 menu: "Join selected atoms or bonds",
-                hint: JOIN_COMMAND_HINT,
                 message: Message::Shortcut(shortcuts::Action::Join),
                 enabled: active && atoms && self.tab.selected.len() >= 2,
             },
             RowCommand {
                 label: "Merge atoms",
                 menu: "Merge selected atoms",
-                hint: "Merge three or more atoms into the first selected atom; surrounding atoms stay in place",
                 message: Message::Shortcut(shortcuts::Action::MergeAtoms),
                 enabled: active && atoms && self.tab.selected.len() >= 3,
             },
@@ -204,14 +202,12 @@ impl App {
             RowCommand {
                 label: "Move & attach…",
                 menu: "Move & attach…",
-                hint: "Join the selection to another structure at an atom or bond",
                 message: Message::Join(Action::Begin),
                 enabled: atoms,
             },
             RowCommand {
                 label: "Coordinate in place…",
                 menu: "Coordinate in place…",
-                hint: "Pick a donor (N, O, S or P), then a metal; atoms and hydrogens stay in place",
                 message: Message::Join(Action::BeginCoordination),
                 enabled: atoms,
             },
@@ -338,7 +334,7 @@ impl App {
             Action::Cancel => {
                 self.cancel_join();
                 self.error = false;
-                self.status = "Move & attach cancelled".into();
+                self.status = "Move & attach canceled".into();
             }
             Action::Anchor(anchor) => {
                 if let Some(state) = &mut self.tab.joining
@@ -455,13 +451,13 @@ impl App {
 }
 
 /// The canvas status for a coordination placement that changed the drawing.
-pub(super) const CONTACT_ADDED: &str = "Donor → metal contact added in place · Undo removes it";
+pub(super) const CONTACT_ADDED: &str = "Donor → metal contact added in place";
 
 pub(super) fn coordination_status(outcome: &Coordination, marked: bool) -> &'static str {
     match (outcome, marked) {
         (Coordination::Added(_), false) => CONTACT_ADDED,
         (Coordination::AlreadyPresent, false) => "This donor is already coordinated to that metal",
-        (Coordination::Added(_), true) => "Marked donor → metal contact added · Undo removes it",
+        (Coordination::Added(_), true) => "Marked donor → metal contact added",
         (Coordination::AlreadyPresent, true) => {
             "This marked donor is already coordinated to that metal"
         }

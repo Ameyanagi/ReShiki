@@ -931,8 +931,9 @@ impl Attachment<'_> {
             version: _,
             atoms,
             bonds,
-            annotations: _,
+            annotations,
             molecule_names,
+            property_captions,
             // Their anchors follow in `remap_for_join` below.
             arrows: _,
             arrow_labels: _,
@@ -1008,6 +1009,28 @@ impl Attachment<'_> {
             }
         }
         molecule_names.retain(|name| !name.atoms.is_empty());
+        // Property captions follow the same rule. An incoming caption left
+        // with no atoms repeats the host's, so it goes; the commit updates the rest.
+        let linked: HashSet<_> = doc
+            .property_captions
+            .iter()
+            .flat_map(|n| &n.atoms)
+            .collect();
+        for link in property_captions.iter_mut() {
+            link.atoms.retain(|id| !host_keeps(&linked, *id));
+            for id in &mut link.atoms {
+                *id = mapped(*id);
+            }
+            link.atoms.sort_unstable();
+            link.atoms.dedup();
+        }
+        let repeated: Vec<_> = property_captions
+            .iter()
+            .filter(|link| link.atoms.is_empty())
+            .map(|link| link.annotation)
+            .collect();
+        annotations.retain(|a| !repeated.contains(&a.id));
+        property_captions.retain(|link| !link.atoms.is_empty());
         for scope in depth_appearance.iter_mut() {
             scope.retain_members(|id| !host_keeps(&painted, id));
         }

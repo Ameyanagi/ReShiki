@@ -191,7 +191,7 @@ edit made while the live cell is still present can conservatively retain
 unvalidated crystal context on new in-cell bonds too; redraw them in a
 separate edit after the cell is removed to use ordinary chemical bonds.
 
-**Check structure** reports that analysis was skipped instead of claiming the
+**Recalculate** reports that analysis was skipped instead of claiming the
 graph passed valence checks. Molecular identifiers and MOL export require a
 chemically assigned graph. CDXML/CDX can export the unvalidated drawing with
 a notice that the lattice and distance-bond provenance are omitted; use native

@@ -154,6 +154,7 @@ impl App {
             if self.tab.inline_text.is_some()
                 || self.tab.atom_text.is_some()
                 || self.help_open
+                || self.settings.open
                 || self.commands.open
                 || self.updates.open
                 || self.github_dialog()
@@ -191,7 +192,7 @@ impl App {
         // Reuse normal selection synchronization without expanding a molecule
         // into unrelated captions or structures in its user-created group.
         self.edit(Edit::Select(ids));
-        self.status = "Selected the most recently edited molecule(s)".into();
+        self.status = "Recently edited molecules selected".into();
         self.error = false;
     }
 
@@ -207,8 +208,7 @@ impl App {
                 if !self.error {
                     self.tool = Tool::Select;
                     self.edit(Edit::Select(ids));
-                    self.status =
-                        "Reaction arrow and product copy created · Undo removes both".into();
+                    self.status = "Reaction arrow and product copy added".into();
                 }
             }
             Err(error) => {

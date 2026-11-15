@@ -32,6 +32,7 @@ pub(super) enum Icon {
     Export,
     Inspector,
     Keyboard,
+    Settings,
     More,
     Lock(bool),
     /// A cloud with an arrow up: GitHub.
@@ -40,6 +41,8 @@ pub(super) enum Icon {
         expect(dead_code, reason = "The browser editor has no GitHub sign-in")
     )]
     Cloud,
+    /// Shown under the molecule when inked; light when not.
+    Pin,
     ModelStyle(reshiki::models3d::Style),
 }
 pub(super) struct Glyph(pub Icon, pub bool);
@@ -72,6 +75,7 @@ impl Glyph {
             Icon::Moon => chrome::moon(f, ink),
 
             Icon::Keyboard => chrome::keyboard(f, ink),
+            Icon::Settings => chrome::gear(f, ink),
             Icon::Tool(Tool::Chain(mode)) => tools::chain(f, ink, mode),
             Icon::Tool(Tool::Graphic(kind)) => tools::graphic(f, ink, kind),
             Icon::Tool(Tool::EditPoints) => tools::edit_points(f, ink),
@@ -111,6 +115,7 @@ impl Glyph {
             Icon::More => chrome::more(f, ink),
             Icon::Lock(locked) => chrome::lock(f, ink, locked),
             Icon::Cloud => commands::cloud(f, ink),
+            Icon::Pin => chrome::pin(f, ink),
             Icon::ModelStyle(style) => chrome::model_style(f, ink, style),
         }
     }

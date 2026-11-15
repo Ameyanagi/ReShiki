@@ -55,7 +55,7 @@ impl App {
             .align_y(Alignment::Center)
         };
         column![
-            section("ARROWHEADS"),
+            section("Arrowheads"),
             row![
                 text("End").size(11).width(44),
                 crate::appearance::pick_list(Head::ALL, Some(heads.head), |value| {

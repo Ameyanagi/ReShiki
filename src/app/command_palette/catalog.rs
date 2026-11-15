@@ -591,9 +591,9 @@ fn bonds() -> Vec<Command> {
     );
     list.push(
         send(
-            "Centre charge in ring",
+            "Center charge in ring",
             Bond,
-            "Toggle the net charge at the centre of a selected aromatic ion circle",
+            "Toggle the net charge at the center of a selected aromatic ion circle",
             "center charge cyclopentadienide tropylium delocalized",
             Message::CenterRingCharge,
         )
@@ -716,49 +716,49 @@ fn edits() -> Vec<Command> {
         ),
         selection("Ungroup", "Split a group", "split", Message::Ungroup),
         selection(
-            "Flip horizontally",
+            "Flip horizontal",
             "Mirror the selection left to right",
             "mirror reflect",
             Message::Transform(Transform::FlipHorizontal),
         )
         .need(Need::Flippable),
         selection(
-            "Flip vertically",
+            "Flip vertical",
             "Mirror the selection top to bottom",
             "mirror reflect",
             Message::Transform(Transform::FlipVertical),
         )
         .need(Need::Flippable),
         selection(
-            "Clean up structure",
+            "Clean up…",
             "Preview a cleaned-up layout",
             "tidy beautify layout",
             Message::Cleanup(cleanup::Action::Begin),
         )
         .keys(keys(Modifiers::COMMAND | Modifiers::SHIFT, "K")),
         send(
-            "Convert to Wedge Drawing",
+            "Convert to wedge drawing",
             Edit,
             "Replace Fischer projections with ordinary stereochemical drawings",
             "fischer mills stereochemistry projection cleanup",
             Message::Cleanup(cleanup::Action::ToWedge),
         ),
         selection(
-            "Convert to Fischer Projection",
+            "Convert to Fischer projection",
             "Arrange a selected acyclic molecule as a Fischer projection",
             "wedge carbohydrate amino acid stereochemistry vertical chain",
             Message::Cleanup(cleanup::Action::ToFischer),
         ),
         Command::new(
-            "Invert Configuration Here",
+            "Invert configuration here",
             Edit,
-            "Invert the configuration of one selected stereocentre",
+            "Invert the configuration of one selected stereocenter",
             "stereochemistry enantiomer epimer anomer alpha beta fischer haworth",
             Run::OnAtoms(Message::Stereo(super::super::stereo::Action::Invert)),
         )
         .need(Need::OneAtom),
         selection(
-            "3D optimization",
+            "3D optimize…",
             "Generate an optimized 3D conformer",
             "conformer mmff uff geometry optimize",
             Message::Optimization(optimization::Action::Begin),
@@ -853,7 +853,7 @@ fn edits() -> Vec<Command> {
             )),
         ),
         selection(
-            "Symmetrise",
+            "Symmetrize",
             "Average a path, curve or curved arrow across its best mirror axis",
             "symmetric symmetry pen bezier bow",
             Message::Graphics(super::super::graphics::Action::Cleanup(
@@ -861,7 +861,7 @@ fn edits() -> Vec<Command> {
             )),
         ),
         selection(
-            "Symmetrise upright",
+            "Symmetrize upright",
             "Average a path or curve across its best vertical or horizontal mirror axis",
             "symmetric symmetry pen bezier bow",
             Message::Graphics(super::super::graphics::Action::Cleanup(
@@ -920,10 +920,10 @@ fn edits() -> Vec<Command> {
     }
     for (name, arrange) in [
         ("Align left", Arrange::AlignLeft),
-        ("Align centers vertically", Arrange::AlignVertical),
+        ("Align center", Arrange::AlignHorizontal),
         ("Align right", Arrange::AlignRight),
         ("Align top", Arrange::AlignTop),
-        ("Align middles horizontally", Arrange::AlignHorizontal),
+        ("Align middle", Arrange::AlignVertical),
         ("Align bottom", Arrange::AlignBottom),
         ("Distribute horizontally", Arrange::DistributeHorizontal),
         ("Distribute vertically", Arrange::DistributeVertical),
@@ -1040,7 +1040,7 @@ fn analysis() -> Vec<Command> {
             Message::Reaction(reactions::Action::Open),
         ),
         send(
-            "Atom mapping",
+            "Atom maps",
             Analyze,
             "Open reaction atom mapping",
             "reaction map",
@@ -1057,7 +1057,7 @@ fn analysis() -> Vec<Command> {
             ]),
         ),
         send(
-            "AI assistant",
+            "Assistant",
             Analyze,
             "Open the drawing assistant",
             "ai codex chat",
@@ -1103,7 +1103,7 @@ fn files() -> Vec<Command> {
         )
         .alias(&["w", "write"]),
         send(
-            "Save as…",
+            super::super::files::SAVE_AS,
             File,
             "Save a copy under a new name",
             "file write",
@@ -1192,7 +1192,7 @@ fn files() -> Vec<Command> {
             Message::Printing(printing::Action::Start(reshiki::printing::Scope::Document)),
         ),
         send(
-            "Page setup",
+            "Page setup…",
             File,
             "Set the page size and orientation",
             "paper layout a4 letter",
@@ -1430,7 +1430,7 @@ fn view(app: &App) -> Vec<Command> {
             Message::View(view_settings::Action::Toggle),
         ),
         send(
-            "Toggle inspector",
+            "Show/hide side panel",
             View,
             "Show or hide the side panel",
             "panel sidebar",
@@ -1493,7 +1493,7 @@ fn view(app: &App) -> Vec<Command> {
                 "Show steroid α/β"
             },
             View,
-            "Use steroid locants and α/β for gonane ring stereocentres; other centres keep R/S",
+            "Use steroid locants and α/β for gonane ring stereocenters; other centers keep R/S",
             "steroid alpha beta gonane 3β 5α",
             Message::Labels(Labels::SteroidAlphaBeta(
                 !app.tab.doc.atom_labels.steroid_alpha_beta,
@@ -1507,6 +1507,14 @@ fn view(app: &App) -> Vec<Command> {
             Message::ToggleHelp,
         )
         .keys(super::super::help::registry::finder_keys()),
+        send(
+            "Settings",
+            View,
+            "App-wide preferences: appearance, drawing, copy and export backgrounds, names, updates",
+            "preferences options background transparent export copy picture editable",
+            Message::Settings(super::super::settings_page::Action::Open(None)),
+        )
+        .alias(&["settings", "preferences"]),
         send(
             "Shortcut examples",
             View,

@@ -172,6 +172,7 @@ fn validate(text: &str) -> Result<Tree> {
                 | "objecttag"
                 | "embeddedobject"
                 | "ColoredMolecularArea"
+                | "chemicalproperty"
                 | "annotation"
                 | "scheme"
                 | "step"

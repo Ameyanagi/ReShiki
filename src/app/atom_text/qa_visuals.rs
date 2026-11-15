@@ -85,7 +85,7 @@ fn read(directory: &Path, name: &str) -> Document {
 
 #[tokio::test]
 #[ignore = "Opt-in matched full-app stereo, polyol and repeat renderer evidence"]
-async fn stereo_repeat_visual_evidence() {
+async fn manual_stereo_repeat_visual_evidence() {
     let directory = std::path::PathBuf::from(
         std::env::var_os("RESHIKI_STEREO_REPEAT_QA_DIR").expect("Set RESHIKI_STEREO_REPEAT_QA_DIR"),
     );

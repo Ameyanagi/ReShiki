@@ -4375,9 +4375,9 @@ dependencies = [
 name = "reshiki-web"
 version = "0.1.0"
 dependencies = [
+ "js-sys",
  "reshiki-io",
  "reshiki-model",
- "resvg",
  "wasm-bindgen",
  "wasm-bindgen-futures",
 ]

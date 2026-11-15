@@ -183,6 +183,7 @@ fn dump(app: &App, out: &mut String) {
                     label,
                     action,
                     enabled,
+                    ..
                 } => writeln!(
                     out,
                     "Item|{label}|{action:?}|{enabled}|{:?}",
@@ -197,7 +198,7 @@ fn dump(app: &App, out: &mut String) {
 
 #[test]
 #[ignore = "Baseline/candidate context entries; requires RESHIKI_VIEW_PARITY and RESHIKI_DATA_DIR"]
-fn entries_match_captured_baseline() {
+fn manual_entries_match_captured_baseline() {
     let directory = std::path::PathBuf::from(
         std::env::var("RESHIKI_VIEW_PARITY")
             .expect("Set RESHIKI_VIEW_PARITY to the baseline artifact directory"),

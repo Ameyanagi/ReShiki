@@ -1,7 +1,7 @@
 """Immutable chemical drawings backed by the same engine as the ReShiki app.
 
-Text exports (SVG, CDXML, MOL, SDF, SMILES and InChI) return ``str``;
-PNG, PDF and RSK exports return ``bytes``. Optional integrations are loaded
+Text exports (SVG, CDXML, MOL, RXN, SDF, SMILES, reaction SMILES and InChI)
+return ``str``; PNG, PDF, CDX and RSK exports return ``bytes``. Optional integrations are loaded
 only when used; import ``reshiki.pandas`` to register the pandas accessor.
 """
 
@@ -16,9 +16,21 @@ from dataclasses import dataclass, field
 from os import PathLike
 from pathlib import Path
 from types import MappingProxyType, ModuleType
-from typing import TYPE_CHECKING, Any, Generic, Iterable, Literal, Mapping, TypeAlias, TypeVar, cast
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Generic,
+    Iterable,
+    Literal,
+    Mapping,
+    TypeAlias,
+    TypeVar,
+    cast,
+    overload,
+)
 
 from . import _native
+from ._errors import ReShikiError
 
 if TYPE_CHECKING:
     from . import excel as excel
@@ -32,9 +44,11 @@ __all__ = [
     "StyleContext",
     "Properties",
     "RenderResults",
+    "ReShikiError",
     "StructureWarning",
     "parse",
     "render",
+    "export",
     "convert",
     "properties",
     "render_many",
@@ -43,8 +57,11 @@ __all__ = [
     "excel",
 ]
 
-_TEXT_FORMATS = frozenset({"svg", "cdxml", "mol", "sdf", "smiles", "inchi"})
-_OUTPUT_FORMATS = _TEXT_FORMATS | {"png", "pdf", "rsk", "emf"}
+_TEXT_FORMATS = frozenset({"svg", "cdxml", "mol", "rxn", "sdf", "smiles", "rsmi", "inchi"})
+_OUTPUT_FORMATS = _TEXT_FORMATS | {"png", "pdf", "cdx", "rsk", "emf"}
+_TextFormat: TypeAlias = Literal["svg", "cdxml", "mol", "rxn", "sdf", "smiles", "rsmi", "inchi"]
+_BinaryFormat: TypeAlias = Literal["png", "pdf", "cdx", "rsk"]
+_SvgText: TypeAlias = Literal["outline", "live"]
 _FORMAT_ALIASES = {
     "smi": "smiles",
     "molfile": "mol",
@@ -87,8 +104,16 @@ def _output_format(value: str) -> str:
             "EMF output is planned in follow-up #462 (editable Office pictures)"
         )
     if name not in _OUTPUT_FORMATS:
-        raise ValueError(f"Unsupported output format: {value!r}")
+        raise ReShikiError(f"Unsupported output format: {value!r}", "invalid_arguments")
     return name
+
+
+def _svg_text(svg_text: str | None, text: str | None) -> str:
+    """The SVG text mode: ``svg_text``, or its older spelling ``text``; outlines by default."""
+    if svg_text is not None and text is not None and svg_text != text:
+        raise ReShikiError("Pass svg_text only; text is its older name", "invalid_arguments")
+    mode = svg_text if svg_text is not None else text
+    return "outline" if mode is None else mode
 
 
 def _data(value: str | bytes) -> bytes:
@@ -142,9 +167,10 @@ def _from_constructor(cls: type[_D], result: tuple[bytes, str, list[str]]) -> _D
     else:
         expected = Drawing
     if not isinstance(drawing, expected):
-        raise ValueError(
+        raise ReShikiError(
             f"{cls.__name__} requires {expected.__name__.lower()} content; "
-            f"received {type(drawing).__name__.lower()}"
+            f"received {type(drawing).__name__.lower()}",
+            "invalid_arguments",
         )
     return cls(drawing._data)
 
@@ -209,14 +235,14 @@ def _size(width: int | None, height: int | None, dpi: float | None) -> None:
         if value is not None and (
             isinstance(value, bool) or not isinstance(value, int) or value <= 0
         ):
-            raise ValueError(f"{name} must be a positive integer")
+            raise ReShikiError(f"{name} must be a positive integer", "invalid_arguments")
     if dpi is not None and (
         isinstance(dpi, bool)
         or not isinstance(dpi, (int, float))
         or not math.isfinite(dpi)
         or dpi <= 0
     ):
-        raise ValueError("dpi must be a positive finite number")
+        raise ReShikiError("dpi must be a positive finite number", "invalid_arguments")
 
 
 @dataclass(frozen=True)
@@ -291,7 +317,14 @@ class Drawing:
             return type(self)(self._data)
         return type(self)(_native.with_style(self._data, encoded))
 
-    def render(
+    @overload
+    def export(self, format: _TextFormat, **options: Any) -> str: ...
+    @overload
+    def export(self, format: _BinaryFormat = "png", **options: Any) -> bytes: ...
+    @overload
+    def export(self, format: str = "png", **options: Any) -> bytes | str: ...
+
+    def export(
         self,
         format: str = "png",
         *,
@@ -299,19 +332,32 @@ class Drawing:
         width: int | None = None,
         height: int | None = None,
         dpi: float | None = None,
-        text: Literal["outline", "live"] = "outline",
+        svg_text: _SvgText | None = None,
+        text: _SvgText | None = None,
         **overrides: Any,
     ) -> bytes | str:
         """Export this document; optional dimensions fit within a pixel box.
 
-        SVG text is drawn as outlines; text='live' keeps <text> elements.
+        This is what the app's Export command, the MCP ``export`` tool and
+        ``reshiki --cli convert`` make. SVG text is drawn as outlines;
+        ``svg_text='live'`` keeps <text> elements (``text=`` is the older
+        spelling of the same option).
         """
         name = _output_format(format)
         _size(width, height, dpi)
         result = _native.render(
-            self._data, name, _style_json(style, overrides), width, height, dpi, svg_text=text
+            self._data,
+            name,
+            _style_json(style, overrides),
+            width,
+            height,
+            dpi,
+            svg_text=_svg_text(svg_text, text),
         )
         return result.decode("utf-8") if name in _TEXT_FORMATS else result
+
+    #: The original name of :meth:`export`; both stay.
+    render = export
 
     def png(
         self,
@@ -322,10 +368,7 @@ class Drawing:
         dpi: float | None = None,
         **overrides: Any,
     ) -> bytes:
-        return cast(
-            bytes,
-            self.render("png", style=style, width=width, height=height, dpi=dpi, **overrides),
-        )
+        return self.render("png", style=style, width=width, height=height, dpi=dpi, **overrides)
 
     def svg(
         self,
@@ -334,15 +377,20 @@ class Drawing:
         width: int | None = None,
         height: int | None = None,
         dpi: float | None = None,
-        text: Literal["outline", "live"] = "outline",
+        svg_text: _SvgText | None = None,
+        text: _SvgText | None = None,
         **overrides: Any,
     ) -> str:
-        """SVG text is drawn as outlines; text='live' keeps <text> elements."""
-        return cast(
-            str,
-            self.render(
-                "svg", style=style, width=width, height=height, dpi=dpi, text=text, **overrides
-            ),
+        """SVG text is drawn as outlines; svg_text='live' keeps <text> elements."""
+        return self.export(
+            "svg",
+            style=style,
+            width=width,
+            height=height,
+            dpi=dpi,
+            svg_text=svg_text,
+            text=text,
+            **overrides,
         )
 
     def pdf(
@@ -354,40 +402,66 @@ class Drawing:
         dpi: float | None = None,
         **overrides: Any,
     ) -> bytes:
-        return cast(
-            bytes,
-            self.render("pdf", style=style, width=width, height=height, dpi=dpi, **overrides),
-        )
+        return self.render("pdf", style=style, width=width, height=height, dpi=dpi, **overrides)
 
     def emf(self, **options: Any) -> bytes:
         return cast(bytes, self.render("emf", **options))
 
     def cdxml(self, **options: Any) -> str:
-        return cast(str, self.render("cdxml", **options))
+        return self.render("cdxml", **options)
+
+    def cdx(self, **options: Any) -> bytes:
+        """The binary ChemDraw file."""
+        return self.render("cdx", **options)
+
+    def rxn(self, **options: Any) -> str:
+        """The MDL reaction file of a reaction drawing."""
+        return self.render("rxn", **options)
+
+    def rsmi(self, **options: Any) -> str:
+        """The reaction SMILES of a reaction drawing."""
+        return self.render("rsmi", **options)
 
     def mol(self, **options: Any) -> str:
-        return cast(str, self.render("mol", **options))
+        return self.render("mol", **options)
 
     def sdf(self, **options: Any) -> str:
-        return cast(str, self.render("sdf", **options))
+        return self.render("sdf", **options)
 
     def smiles(self, **options: Any) -> str:
-        return cast(str, self.render("smiles", **options))
+        return self.render("smiles", **options)
 
     def inchi(self, **options: Any) -> str:
-        return cast(str, self.render("inchi", **options))
+        return self.render("inchi", **options)
 
     def rsk(self, **options: Any) -> bytes:
-        return cast(bytes, self.render("rsk", **options))
+        return self.render("rsk", **options)
 
-    def save(self, path: str | PathLike[str], *, format: str | None = None, **options: Any) -> Path:
-        """Export to a file, choosing the format from its extension by default."""
+    def save(
+        self,
+        path: str | PathLike[str],
+        *,
+        format: str | None = None,
+        overwrite: bool = True,
+        **options: Any,
+    ) -> Path:
+        """Export to a file, choosing the format from its extension by default.
+
+        An existing file is replaced unless ``overwrite=False``, which raises
+        ``FileExistsError`` instead, as the MCP ``file_save`` tool refuses
+        without ``overwrite`` and the CLI without ``--force``.
+        """
         destination = Path(path)
         name = format or destination.suffix.lstrip(".")
         if not name:
-            raise ValueError("A filename extension or explicit format is required")
+            raise ReShikiError(
+                "A filename extension or explicit format is required", "invalid_arguments"
+            )
         output = self.render(name, **options)
-        destination.write_bytes(output.encode("utf-8") if isinstance(output, str) else output)
+        data = output.encode("utf-8") if isinstance(output, str) else output
+        # "xb" creates the file and fails if it exists, without a check-then-write gap.
+        with destination.open("wb" if overwrite else "xb") as file:
+            file.write(data)
         return destination
 
     def properties(self) -> Properties:
@@ -448,18 +522,37 @@ def _drawing(value: Drawing | str | bytes | PathLike[str]) -> Drawing:
     return parse(value)
 
 
-def render(
-    input: Drawing | str | bytes | PathLike[str], format: str = "png", **options: Any
-) -> bytes | str:
-    """Parse and render a structure in one call."""
-    return _drawing(input).render(format, **options)
+_Input: TypeAlias = "Drawing | str | bytes | PathLike[str]"
 
 
-def convert(
-    input: Drawing | str | bytes | PathLike[str], *, to: str, **options: Any
-) -> bytes | str:
+@overload
+def export(input: _Input, format: _TextFormat, **options: Any) -> str: ...
+@overload
+def export(input: _Input, format: _BinaryFormat = "png", **options: Any) -> bytes: ...
+@overload
+def export(input: _Input, format: str = "png", **options: Any) -> bytes | str: ...
+
+
+def export(input: _Input, format: str = "png", **options: Any) -> bytes | str:
+    """Parse and export a structure in one call."""
+    return _drawing(input).export(format, **options)
+
+
+#: The original name of :func:`export`; both stay.
+render = export
+
+
+@overload
+def convert(input: _Input, *, to: _TextFormat, **options: Any) -> str: ...
+@overload
+def convert(input: _Input, *, to: _BinaryFormat, **options: Any) -> bytes: ...
+@overload
+def convert(input: _Input, *, to: str, **options: Any) -> bytes | str: ...
+
+
+def convert(input: _Input, *, to: str, **options: Any) -> bytes | str:
     """Convert a structure to a supported output format."""
-    return _drawing(input).render(to, **options)
+    return _drawing(input).export(to, **options)
 
 
 def properties(input: Drawing | str | bytes | PathLike[str]) -> Properties:
@@ -493,7 +586,8 @@ def render_many(
     width: int | None = None,
     height: int | None = None,
     dpi: float | None = None,
-    text: Literal["outline", "live"] = "outline",
+    svg_text: _SvgText | None = None,
+    text: _SvgText | None = None,
     **overrides: Any,
 ) -> RenderResults:
     """Render rows in parallel; bad rows are ``None`` unless ``errors='raise'``.
@@ -501,10 +595,10 @@ def render_many(
     Error and warning indexes are zero based and retain the original input order.
     Import warnings are collected in the result instead of emitted individually.
     Configuration errors (such as invalid dimensions or styles) always raise.
-    SVG text is drawn as outlines; text='live' keeps <text> elements.
+    SVG text is drawn as outlines; svg_text='live' keeps <text> elements.
     """
     if errors not in {"none", "raise"}:
-        raise ValueError("errors must be 'none' or 'raise'")
+        raise ReShikiError("errors must be 'none' or 'raise'", "invalid_arguments")
     name = _output_format(format)
     _size(width, height, dpi)
     style_json = _style_json(style, overrides)
@@ -526,7 +620,7 @@ def render_many(
             # Keep indexes stable without parsing invalid Python inputs natively.
             items.append((b"", "auto"))
     values, failures, messages = _native.render_many(
-        items, name, style_json, width, height, dpi, svg_text=text
+        items, name, style_json, width, height, dpi, svg_text=_svg_text(svg_text, text)
     )
     merged = dict(failures)
     merged.update(early_errors)
@@ -535,7 +629,7 @@ def render_many(
         values[index] = None
     if failures and errors == "raise":
         index, message = failures[0]
-        raise ValueError(f"Row {index}: {message}")
+        raise ReShikiError(f"Row {index}: {message}")
     return RenderResults(
         (
             value.decode("utf-8") if value is not None and name in _TEXT_FORMATS else value

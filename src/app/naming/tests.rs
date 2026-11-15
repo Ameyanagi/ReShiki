@@ -496,7 +496,7 @@ fn cancelling_structure_naming_preserves_name_import_notice() {
         assert!(!app.tab.naming.is_pending());
         assert!(app.tab.naming.local_cancel.is_none());
         assert_eq!(app.tab.naming.notice.as_ref().unwrap().detail, notice);
-        let detail = "Local name generation was cancelled";
+        let detail = "Local name generation was canceled";
         if generate {
             assert_eq!(app.tab.naming.structure_error.as_deref(), Some(detail));
         } else {
@@ -743,7 +743,7 @@ async fn name_preview_is_placed_beside_a_caption_only_drawing() -> Result<(), St
     assert_eq!(app.tab.history.undo_frames().count(), 1);
     assert_eq!(app.tab.history.frames(), 1);
     assert!(!app.error);
-    let status = "Inserted editable name result · Undo removes the insertion";
+    let status = "Name result inserted";
     assert_eq!(app.status, status);
     let _ = app.update(Message::Undo);
     assert_eq!(app.tab.doc, before);
@@ -1208,7 +1208,7 @@ fn local_parse_cancels_obsolete_tickets() {
     assert!(app.tab.naming.local_cancel.is_none());
     let notice = app.tab.naming.notice.as_ref().unwrap();
     assert_eq!(notice.kind, NoticeKind::Retry);
-    assert_eq!(notice.detail, "Local name parsing was cancelled");
+    assert_eq!(notice.detail, "Local name parsing was canceled");
     assert_eq!(notice.summary(), notice.detail);
     let _ = app.naming_action(Action::Finished(
         ticket,

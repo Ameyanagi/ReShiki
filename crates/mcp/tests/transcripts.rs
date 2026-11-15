@@ -681,6 +681,7 @@ fn a_result_over_the_cap_is_a_budget_error() {
         json!({
             "code": "budget",
             "message": "Result exceeds 4096 bytes; request a smaller render or fewer objects",
+            "retryable": false,
         })
     );
     finish(session, &host, "big");

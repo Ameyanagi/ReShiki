@@ -114,6 +114,7 @@ impl App {
             Message::CaptionAction(action) => self.caption_action(action),
             Message::TextStyle(change) => self.apply_text_style(change),
             Message::FormatChemicalName => self.format_chemical_name(),
+            Message::ToggleProperty(atoms, property) => self.toggle_property(&atoms, property),
             Message::FontSize(value) => self.tab.font_size_input = value,
             Message::ApplyFontSize => self.apply_font_size_input(),
             Message::ClearRingFill => self.apply_ring_color(None),
@@ -136,7 +137,11 @@ impl App {
             Message::ArrowLabelGap(action) => self.arrow_label_gap_action(action),
             Message::CustomElement(s) => self.custom_element = s,
             Message::ApplyElement => self.apply_custom_element(),
-            Message::CopyImage => return Some(self.copy_native(false, true)),
+            Message::CopyImage => return Some(self.copy_native(false, true, None)),
+            Message::CopyImageOn(background, editable) => {
+                return Some(self.copy_native(false, true, Some((background, editable))));
+            }
+            Message::Settings(action) => return Some(self.settings_action(action)),
             Message::CopyAs(format) => return Some(self.copy_as(format)),
             Message::Copy(cut) => return Some(self.copy_selection(cut)),
             Message::PastePicture => return Some(self.paste_native(true)),
@@ -180,6 +185,11 @@ impl App {
             Message::Import => return Some(self.import_input()),
             Message::Example(smiles) => return Some(self.insert_example(smiles)),
             Message::Analyze => return Some(self.analyze_drawing()),
+            // Closing the findings list hands the keys back to the drawing.
+            Message::Stereo(super::stereo::Action::Results(false)) => {
+                self.check_results = false;
+                return Some(super::focus_drawing());
+            }
             Message::Stereo(action) => self.stereo_action(action),
             Message::Cleanup(action) => return Some(self.cleanup_action(action)),
             Message::Undo => self.step_history(false),
@@ -229,6 +239,9 @@ impl App {
             Message::Save => return Some(self.save_drawing(false)),
             Message::SaveAs => return Some(self.save_drawing(true)),
             Message::Export(format) => return Some(self.export_drawing(format)),
+            Message::ExportFigure(format, editable) => {
+                return Some(self.export_figure(format, false, editable));
+            }
             Message::FigureExported(result) => self.figure_exported(result),
             message @ (Message::EngineDone { .. }
             | Message::EngineFinished { .. }

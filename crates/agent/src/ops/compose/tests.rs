@@ -1,6 +1,7 @@
 use super::*;
 use crate::{
     Molecule, Step,
+    document::Point,
     ops::{
         exec::Hooks,
         headless::HeadlessHost,
@@ -286,10 +287,8 @@ async fn the_default_style_composes_as_the_assistant_without_a_canvas() {
     assert_eq!(value["atoms"], 14);
     assert_eq!(value["bonds"], doc.bonds.len());
     assert_eq!(value["arrows"], 1);
-    assert_eq!(
-        value["bounds"],
-        json!(scene::selection_bounds(&doc, &doc.all_ids()).unwrap())
-    );
+    let (min, max) = scene::selection_bounds(&doc, &doc.all_ids()).unwrap();
+    assert_eq!(value["bounds"], json!({"min": min, "max": max}));
     assert_eq!(
         value["review_issues"],
         json!(review::quality(&doc, &proposal.composition))
@@ -463,7 +462,7 @@ async fn an_invalid_proposal_is_a_tool_error_that_creates_nothing() {
     assert!(result.is_error);
     assert_eq!(
         result.value["error"],
-        json!({"code": "invalid_arguments", "message": "Use at most 32 molecules with short labels and valid SMILES"})
+        json!({"code": "invalid_arguments", "message": "Use at most 32 molecules with short labels and valid SMILES", "retryable": false})
     );
     assert!(host.store().list(&Principal::local()).is_empty());
 }

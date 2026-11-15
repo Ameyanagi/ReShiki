@@ -148,3 +148,5 @@ pub fn read(text: &str) -> Result<Parsed> {
 
 #[cfg(test)]
 mod generic_tests;
+#[cfg(test)]
+mod properties_tests;

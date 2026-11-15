@@ -126,6 +126,8 @@ pub struct State {
     preferences: Preferences,
     preferences_dirty: bool,
     preferences_saving: bool,
+    /// Why the last preference save failed, for Settings.
+    preferences_error: Option<String>,
     pub(super) menu: Option<Menu>,
     search: String,
     follow_chat: bool,

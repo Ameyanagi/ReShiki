@@ -61,72 +61,73 @@ impl Tool {
     /// The tool's usage hint, shown in the tooltip on the context row's tool
     /// name and reused by the status after a gesture starts. The one source of
     /// tool instructions: the context row adds only live keys (Ring's ⇧R).
-    pub fn hint(self) -> &'static str {
+    pub fn hint(self) -> String {
         use reshiki::rings::Preset;
+        let alt = crate::platform::alt_key();
         match self {
-            Self::Select => "Double-click selects a molecule · Shift-click adds",
-            Self::Lasso => "Draw around objects · Shift adds · Option/Alt drag removes",
-            Self::Tilt => "Drag a ring or selection to tilt · Shift snaps to 15°",
-            Self::StretchBond { .. } => "Drag the moving branch along the bond · Escape cancels",
-            Self::Chain(ChainMode::Straight) => {
-                "Drag a regular zigzag toward the pointer · Ctrl bends · Shift flips the start · Option/Alt draws freely"
+            Self::Select => "Double-click selects a molecule · Shift-click adds".into(),
+            Self::Lasso => format!("Draw around objects · Shift adds · {alt}-drag removes"),
+            Self::Tilt => "Drag a ring or selection to tilt · Shift snaps to 15°".into(),
+            Self::StretchBond { .. } => {
+                "Drag the moving branch along the bond · Esc cancels".into()
             }
-            Self::Chain(ChainMode::Snaking) => {
-                "Steer while dragging · Retrace to shorten · Shift flips the start · Option/Alt draws freely"
-            }
+            Self::Chain(ChainMode::Straight) => format!(
+                "Drag a regular zigzag toward the pointer · Ctrl bends · Shift flips the start · {alt} draws freely"
+            ),
+            Self::Chain(ChainMode::Snaking) => format!(
+                "Steer while dragging · Retrace to shorten · Shift flips the start · {alt} draws freely"
+            ),
             Self::Bond(2) => {
                 "Click a bond to make it double · Click again to shift centered / left / right"
+                    .into()
             }
             Self::Bond(_) => {
                 "Click an endpoint to grow · Drag to draw · Click a bond to cycle single → double → triple"
+                    .into()
             }
             Self::Wedge | Self::Hash | Self::Wavy | Self::StyledBond(_) => {
                 "Click an endpoint to grow a chain · Drag to choose direction · Click a bond to change it"
+                    .into()
             }
             Self::Atom => {
-                "Click to add or replace an atom · Drag from an atom to add it with a bond"
+                "Click to add or replace an atom · Drag from an atom to add it with a bond".into()
             }
-            Self::Ring | Self::RingPreset(Preset::Regular) => {
-                "Click to place or attach · Drag rotates in 15° steps · Option/Alt rotates freely"
-            }
-            Self::RingPreset(Preset::Cyclopentadiene) => {
-                "Click to place or attach · Drag rotates in 15° steps · Option/Alt rotates freely or connects · Shift swaps double bonds"
-            }
-            Self::RingPreset(_) => {
-                "Click to place or attach · Drag rotates in 15° steps · Option/Alt rotates freely or connects by a bond"
-            }
-            Self::Template => "Click to place or attach · Drag to orient · Escape cancels",
+            Self::Ring | Self::RingPreset(Preset::Regular) => format!(
+                "Click to place or attach · Drag rotates in 15° steps · {alt} rotates freely"
+            ),
+            Self::RingPreset(Preset::Cyclopentadiene) => format!(
+                "Click to place or attach · Drag rotates in 15° steps · {alt} rotates freely or connects · Shift swaps double bonds"
+            ),
+            Self::RingPreset(_) => format!(
+                "Click to place or attach · Drag rotates in 15° steps · {alt} rotates freely or connects by a bond"
+            ),
+            Self::Template => "Click to place or attach · Drag to orient · Esc cancels".into(),
             Self::Arrow => {
-                "Click to place or change an arrow · Click again to switch · Drag to draw"
+                "Click to place or change an arrow · Click again to switch · Drag to draw".into()
             }
-            Self::Text => {
-                if crate::platform::mac() {
-                    "Click an atom to name it · Double-click or Option-click another atom to repeat the label · Click empty space for a caption · Escape clears the remembered label"
-                } else {
-                    "Click an atom to name it · Double-click or Alt-click another atom to repeat the label · Click empty space for a caption · Escape clears the remembered label"
-                }
-            }
-            Self::Erase => {
-                "Drag to erase atoms, bonds and objects along the stroke · Undo restores the whole stroke"
-            }
-            Self::Graphic(GraphicKind::Symbol(_)) => {
-                "Click an atom to attach · Drag from it to orbit in 15° steps · Option/Alt or Shift places freely · Click empty space for a free symbol"
-            }
-            Self::Graphic(GraphicKind::Orbital(_)) => {
-                "Click to place · Drag from the node for size and direction · Shift snaps to 15° · Option/Alt bypasses atom snapping"
-            }
+            Self::Text => format!(
+                "Click an atom to name it · Double-click or {alt}-click another atom to repeat the label · Click empty space for a caption · Esc clears the remembered label"
+            ),
+            Self::Erase => "Drag to erase atoms, bonds and objects along the stroke".into(),
+            Self::Graphic(GraphicKind::Symbol(_)) => format!(
+                "Click an atom to attach · Drag from it to orbit in 15° steps · {alt} or Shift places freely · Click empty space for a free symbol"
+            ),
+            Self::Graphic(GraphicKind::Orbital(_)) => format!(
+                "Click to place · Drag from the node for size and direction · Shift snaps to 15° · {alt} bypasses atom snapping"
+            ),
             Self::Graphic(GraphicKind::Path) => {
-                "Drag the first segment · Click adds a line · Drag adds a curve · Click the first node to close · Escape cancels"
+                "Drag the first segment · Click adds a line · Drag adds a curve · Click the first node to close · Esc cancels"
+                    .into()
             }
             Self::Graphic(GraphicKind::Arc) => {
-                "Drag an ellipse frame · Shift makes it circular · Escape cancels"
+                "Drag an ellipse frame · Shift makes it circular · Esc cancels".into()
             }
             Self::Graphic(_) => {
-                "Drag to draw · Shift constrains proportions or angle · Escape cancels"
+                "Drag to draw · Shift constrains proportions or angle · Esc cancels".into()
             }
-            Self::EditPoints => {
-                "Drag anchors or control points · Double-click nodes to change type · Option/Alt-drag a handle makes a corner · Click a selected arrow's shaft to add a node · Atom marks orbit in 15° steps; Option/Alt or Shift frees · Escape returns to Select"
-            }
+            Self::EditPoints => format!(
+                "Drag anchors or control points · Double-click nodes to change type · {alt}-drag a handle makes a corner · Click a selected arrow's shaft to add a node · Atom marks orbit in 15° steps; {alt} or Shift frees · Esc returns to Select"
+            ),
         }
     }
 }

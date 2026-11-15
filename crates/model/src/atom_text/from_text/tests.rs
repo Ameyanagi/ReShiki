@@ -383,7 +383,7 @@ fn molecule_names_and_reaction_conditions_stay_captions() {
         (
             named,
             id,
-            "This text is a molecule name; it stays a caption",
+            "This text belongs to a molecule; it stays a caption",
         ),
         (
             reaction,

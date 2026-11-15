@@ -152,6 +152,7 @@ pub(super) fn certify_translation(
         bonds,
         annotations,
         molecule_names,
+        property_captions,
         arrows,
         arrow_labels,
         graphics,
@@ -291,6 +292,12 @@ pub(super) fn certify_translation(
         undo(&mut l.annotation)?;
     }
     for n in molecule_names {
+        undo(&mut n.annotation)?;
+        for id in &mut n.atoms {
+            undo(id)?;
+        }
+    }
+    for n in property_captions {
         undo(&mut n.annotation)?;
         for id in &mut n.atoms {
             undo(id)?;

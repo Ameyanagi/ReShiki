@@ -86,6 +86,8 @@ pub(super) struct DocumentTab {
     pub(super) label_generation: u64,
     pub(super) chemistry_notice: Option<String>,
     pub(super) stereo_notes: Vec<reshiki::chemistry::stereo_lint::Note>,
+    /// A finding's atoms pulsing on the canvas, and when the pulse began.
+    pub(super) pulse: Option<(Vec<u64>, iced::time::Instant)>,
     pub(super) reactions: reactions::State,
     pub(super) naming: naming::State,
     pub(super) mapping: reaction_mapping::State,
@@ -207,6 +209,7 @@ impl DocumentTab {
             label_generation: 0,
             chemistry_notice: None,
             stereo_notes: vec![],
+            pulse: None,
             reactions: Default::default(),
             naming: Default::default(),
             mapping: Default::default(),

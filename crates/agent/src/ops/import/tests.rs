@@ -69,7 +69,7 @@ async fn inspect_ok(host: &HeadlessHost, document: &Value) -> Value {
         .await
         .unwrap();
     assert!(!result.is_error, "{:?}", result.value);
-    Value::Object(result.value)
+    result.value["value"].clone()
 }
 
 /// The stored document behind an import result.
@@ -89,7 +89,9 @@ fn counts(atoms: usize, bonds: usize, arrows: usize, annotations: usize, graphic
 fn formats_are_exactly_the_published_import_formats() {
     for name in IMPORT_FORMATS {
         let format: Format = serde_json::from_value(json!(name)).unwrap();
-        assert_eq!(format.name(), *name);
+        // rsk is another name for reshiki.
+        let expected = if *name == "rsk" { "reshiki" } else { name };
+        assert_eq!(format.name(), expected);
     }
     assert!(serde_json::from_value::<Format>(json!("emf")).is_err());
     assert!(serde_json::from_value::<Format>(json!("SMILES")).is_err());
@@ -424,7 +426,7 @@ async fn invalid_smiles_fails_with_the_engine_message() {
     assert_eq!(
         Value::Object(result.value),
         json!({
-            "error": {"code": "failed", "message": expected},
+            "error": {"code": "failed", "message": expected, "retryable": false},
             "versions": versions_json(&Versions::current("9.8.7")),
         })
     );
@@ -481,7 +483,7 @@ fn a_rejected_drawing_is_an_error_envelope() {
             "warnings": [{"message": "engine note"}],
             "validation": {"status": "rejected", "reason": "invalid", "message": rejection.message()},
             "versions": versions_json(&Versions::current("9.8.7")),
-            "error": {"code": "rejected", "message": rejection.message()},
+            "error": {"code": "rejected", "message": rejection.message(), "retryable": false},
         })
     );
 }

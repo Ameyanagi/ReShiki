@@ -96,16 +96,38 @@ cargo nextest run --workspace --locked --no-default-features --profile ci `
 The other commands are the same in both shells.
 
 Without cargo-nextest, `cargo test --workspace --locked` runs the same tests in
-one command. `.config/nextest.toml` runs the tests that start the naming worker
-one at a time.
+one command. `.config/nextest.toml` runs at most two of the tests that start
+the naming worker at a time and stops any test that runs for 15 minutes.
 
 To test one library layer, select its crate. Integration tests, binaries and
 examples belong to the root `reshiki` package, so qualify them with
-`-p reshiki`:
+`-p reshiki`. The files under `tests/` are modules of one test binary, `it`, so
+that the application library links once and not once per file. Select one
+file's tests by its module name:
 
 ```sh
 cargo test --locked -p reshiki-model
-cargo test --locked -p reshiki --test theme_reference
+cargo test --locked -p reshiki --test it theme_reference::
+```
+
+A new file under `tests/` needs a `mod` line in `tests/it.rs`; a test there
+fails while one is missing. Three files stay separate targets in `Cargo.toml`:
+`metafile_worker` has its own `main`, `picture_memory` its own global
+allocator, and `release.yml` builds `agent_api_windows_pipes` alone in the
+release profile.
+
+The agent goldens under `tests/fixtures/agent-contract/` and
+`tests/fixtures/agent-skill/` change only with an intentional contract change;
+the README in each folder says how to regenerate them. The MCP transcripts
+under `tests/fixtures/mcp/` and `crates/mcp/tests/transcripts/` are edited by
+hand to the new expected lines. `tests/fixtures/agent-api/parity.json` holds
+one molecule and one reaction with the answers the command line
+(`tests/cli.rs`), the Python package (`crates/python/tests/test_parity.py`) and
+the JavaScript package (`packages/editor/test/parity.test.ts`) must all give.
+Rewrite it from a built binary:
+
+```sh
+uv run --locked python scripts/agent_parity_fixture.py target/debug/reshiki
 ```
 
 A single-package build resolves features for that package alone, so the first
@@ -125,11 +147,11 @@ Run `bun install --frozen-lockfile` to install the web tools and the Lefthook
 hooks; `bun run --bun lefthook install` reinstalls them. Python changes also
 need `uv sync --locked`.
 
-Hooks check staged file types: Oxlint and `bun fmt` for web and configuration
-files, Ruff and ty for Python, and Cargo fmt and Clippy for Rust. Clippy
-type-checks libraries and binaries; CI lints tests and examples too. Hooks do
-not rewrite or restage changes. The repository uses LF line endings, including
-on Windows.
+Pre-commit hooks check staged file types: Oxlint and `bun fmt` for web and
+configuration files, Ruff and ty for Python, and Cargo fmt for Rust. A pre-push
+hook runs Clippy when the push changes Rust or Cargo files. Clippy type-checks
+libraries and binaries; CI lints tests and examples too. Hooks do not rewrite or
+restage changes. The repository uses LF line endings, including on Windows.
 
 ```sh
 bun run lint:js
@@ -201,14 +223,15 @@ The other naming tests do start helper processes; run them as CI does, with `RES
 
 Tests that need a real renderer or a baseline folder are marked `#[ignore]`. Run them with `-- --ignored`, or with `-- --include-ignored` to run the ordinary tests too. Add `--test-threads=1` for renderer pixel tests. On macOS the only headless renderer is WGPU on Metal; Tiny Skia is built only on Windows.
 
-| Variable                | Used by                                                            | Meaning                                                                                                                                                                                                                                                |
-| ----------------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `RESHIKI_DATA_DIR`      | View parity, UI snapshots and other app-level renderer tests       | The app's data folder: `App::new` reads recovery drafts and the template library from it. Point it at a new, empty folder before each run, so your own data cannot change the result.                                                                  |
-| `RESHIKI_UI_QA_DIR`     | `ui_layout_snapshots`                                              | Folder for PNG snapshots of key UI states at 1280 and 1040 px. Without it, the test writes to `reshiki-ui-qa` in the temporary folder.                                                                                                                 |
-| `RESHIKI_VIEW_PARITY`   | `views_match_captured_baseline`, `entries_match_captured_baseline` | Baseline folder for view and right-click menu parity. `RESHIKI_VIEW_PARITY_CAPTURE=1` writes the baseline; otherwise the test compares. `RESHIKI_VIEW_PARITY_ONLY` limits a capture to a case-name prefix during development; compare mode refuses it. |
-| `RESHIKI_CANVAS_PIXELS` | Canvas, paper-layer, text-placement and icon pixel baselines       | Baseline folder. `RESHIKI_CANVAS_CAPTURE_BASELINE=1` writes the baseline; otherwise the test compares.                                                                                                                                                 |
-| `RESHIKI_PERF_RENDERER` | Pixel, view-parity and canvas performance tests                    | Headless backend: `wgpu`, or `tiny-skia` on Windows. Without it, the default backend runs.                                                                                                                                                             |
-| `RESHIKI_MODEL_PARITY`  | `reshiki-model` captured-baseline tests                            | Baseline folder for model output. `RESHIKI_MODEL_CAPTURE_BASELINE=1` writes it.                                                                                                                                                                        |
+| Variable                | Used by                                                                          | Meaning                                                                                                                                                                                                                                                |
+| ----------------------- | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `RESHIKI_DATA_DIR`      | View parity, UI snapshots and other app-level renderer tests                     | The app's data folder: `App::new` reads recovery drafts and the template library from it. Point it at a new, empty folder before each run, so your own data cannot change the result.                                                                  |
+| `RESHIKI_UI_QA_DIR`     | `manual_ui_layout_snapshots`                                                     | Folder for PNG snapshots of key UI states at 1280 and 1040 px. Without it, the test writes to `reshiki-ui-qa` in the temporary folder.                                                                                                                 |
+| `RESHIKI_UI_QA_SCALE`   | `manual_ui_layout_snapshots`, `manual_settings_snapshots`                        | Pixel density of the snapshots, such as `2` for 2× images. Without it, they are 1×.                                                                                                                                                                    |
+| `RESHIKI_VIEW_PARITY`   | `manual_views_match_captured_baseline`, `manual_entries_match_captured_baseline` | Baseline folder for view and right-click menu parity. `RESHIKI_VIEW_PARITY_CAPTURE=1` writes the baseline; otherwise the test compares. `RESHIKI_VIEW_PARITY_ONLY` limits a capture to a case-name prefix during development; compare mode refuses it. |
+| `RESHIKI_CANVAS_PIXELS` | Canvas, paper-layer, text-placement and icon pixel baselines                     | Baseline folder. `RESHIKI_CANVAS_CAPTURE_BASELINE=1` writes the baseline; otherwise the test compares.                                                                                                                                                 |
+| `RESHIKI_PERF_RENDERER` | Pixel, view-parity and canvas performance tests                                  | Headless backend: `wgpu`, or `tiny-skia` on Windows. Without it, the default backend runs.                                                                                                                                                             |
+| `RESHIKI_MODEL_PARITY`  | `reshiki-model` captured-baseline tests                                          | Baseline folder for model output. `RESHIKI_MODEL_CAPTURE_BASELINE=1` writes it.                                                                                                                                                                        |
 
 Capture a baseline on the parent commit, then compare on your change:
 
@@ -216,12 +239,21 @@ Capture a baseline on the parent commit, then compare on your change:
 export RESHIKI_DATA_DIR="$PWD/artifacts/test-data"
 rm -rf "$RESHIKI_DATA_DIR" && mkdir -p "$RESHIKI_DATA_DIR"
 RESHIKI_VIEW_PARITY="$PWD/artifacts/view-parity" RESHIKI_VIEW_PARITY_CAPTURE=1 \
-  cargo test --locked --bin reshiki views_match_captured_baseline -- --ignored --nocapture
+  cargo test --locked --bin reshiki manual_views_match_captured_baseline -- --ignored --nocapture
 ```
 
 For the comparison, empty `RESHIKI_DATA_DIR` again and run the same command without `RESHIKI_VIEW_PARITY_CAPTURE`. Set `RESHIKI_NAMING_HELPER` and `RESHIKI_INCHI_HELPER` the same way for both runs: with the naming helper set, view parity also registers the cases that need chemical names.
 
-On Windows, CI runs every ignored `app::naming::` test, the `app::nmr::` and `canvas::nmr::` tests with `--include-ignored --test-threads=1`, and a few named focus and menu tests (`.github/workflows/checks.yml`). A new naming renderer test therefore runs there without a workflow change.
+On Windows, CI runs every ignored test of the application binary whose name does not start with `manual_` or end in `_child`, and the accessibility tests of the root library. A new renderer test in the application runs there without a workflow change:
+
+```sh
+cargo nextest run --locked --no-default-features --lib --bin reshiki --profile ci --run-ignored ignored-only --test-threads 2 \
+  -E '(binary_id(reshiki::bin/reshiki) & not test(/(^|::)manual_[^:]+$/) & not test(/_child$/)) | (package(reshiki) & kind(lib) & test(/^accessibility::tests::/))'
+```
+
+Start a test's name with `manual_` when it is a tool and not a check: a benchmark or profile, a baseline comparison, or a capture that needs its own folder or variables. Nothing in CI runs a `manual_` test, so keep its assertions few.
+
+End a test's name with `_child` when another test starts it in a new process and sets its environment, as `define_group_child` is started. CI runs it only through that parent test.
 
 ## Optional RDKit reference tests
 
@@ -274,7 +306,9 @@ Everything that needs or captures from the pinned Python/RDKit reference lives i
 
 Pull requests run native tests and saved InChI, depiction, and aromatic-response fixtures on Linux x64 and Windows x64. The macOS ARM64 legs run only on stacked `merge/*` pull requests, pull requests labelled `full-ci`, `main`, nightly, release and manual runs (`scripts/ci_scope.py`). Documentation-only changes skip native checks. Expected results come from pinned RDKit captures; fixture updates retain their source hashes and platform provenance.
 
-CI runs the workspace tests with [cargo-nextest](https://nexte.st/) 0.9.150, split into two partitions; [Run the checks](#run-the-checks) gives the same commands.
+On a pull request, the summary of the **Changed fixture rows** job lists the rows that each changed file under a `tests/fixtures/` folder gains and loses (`scripts/baseline_summary.py`). Read it when you review a fixture or baseline update. To print the same list locally, run `python3 scripts/baseline_summary.py "$(git merge-base origin/main HEAD)"`.
+
+CI runs the workspace tests with [cargo-nextest](https://nexte.st/) 0.9.150; [Run the checks](#run-the-checks) gives the same commands. On each platform the **rust build** job compiles the tests once and passes them on as a `cargo nextest archive` file. Two **rust** partition jobs run that file without compiling. The **rust extra** job runs beside them and covers the tests that nextest leaves out: the Windows renderer tests, the naming corpus, the custom harnesses and the doc tests. **Rust checks** passes only when all of these jobs pass. Each partition uploads its JUnit report as a `nextest-junit-*` artifact.
 
 The **Browser build (wasm32)** job checks the browser build on the same pull requests: Clippy with `-D warnings` for the editor and the headless library (`reshiki-web`) for `wasm32-unknown-unknown`, with the crates and target `scripts/build_wasm.sh` builds, then `bun test` in `packages/editor` against a debug build of the headless library. It skips with the native checks for documentation-only changes, and only release tags build the optimised bundle. The `web` job lints `packages/editor` with oxlint on every pull request. To run the same checks locally:
 
@@ -302,6 +336,12 @@ bun run docs:build
 ```
 
 Edit the visual manual in `website/src/content/docs/guide/` and developer notes in `docs/*.md`. The sync script generates ignored Starlight copies of the developer notes; edit their originals. It builds the unreleased changes page with `scripts/assemble_changelog.py` from the [release-note fragments](changes/unreleased/README.md), so it needs `python3` (`python` on Windows). Landing page, navigation and theme live in `website/`. The production build checks local page and asset links. Follow [writing and terms](writing-style.md) for wording, UI labels and feature names.
+
+The [module index](modules.md) is generated from the first sentence of each Rust file's `//!` comment. After you add, move or remove a module file, or change that sentence, rewrite the page; a Python test fails while it is out of date:
+
+```sh
+python3 scripts/module_index.py
+```
 
 The Documentation workflow checks pull requests and deploys main to [GitHub Pages](https://reshiki.com/). Pages must use **GitHub Actions** as its source. See [release builds and signing](releasing.md) for distribution setup.
 

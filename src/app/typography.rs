@@ -247,6 +247,7 @@ impl App {
         {
             return Some(self.current_text_style().color);
         }
+        let selected: std::collections::HashSet<_> = self.tab.selected.iter().copied().collect();
         let mut colors = Vec::new();
         if self.tab.color_scope != ColorScope::Bonds {
             // Mixed captions already establish a mixed selection. Check them
@@ -256,7 +257,7 @@ impl App {
                 .doc
                 .annotations
                 .iter()
-                .filter(|a| self.tab.selected.contains(&a.id))
+                .filter(|a| selected.contains(&a.id))
                 .flat_map(|a| {
                     a.text
                         .is_empty()
@@ -278,9 +279,7 @@ impl App {
                     .doc
                     .atoms
                     .iter()
-                    .filter(|a| {
-                        self.tab.selected.contains(&a.id) && self.tab.doc.atom_visible(a.id)
-                    })
+                    .filter(|a| selected.contains(&a.id) && self.tab.doc.atom_visible(a.id))
                     .map(|a| self.atom_paint(a)),
             );
         }
@@ -291,8 +290,8 @@ impl App {
                     .bonds
                     .iter()
                     .filter(|b| {
-                        self.tab.selected.contains(&b.a)
-                            && self.tab.selected.contains(&b.b)
+                        selected.contains(&b.a)
+                            && selected.contains(&b.b)
                             && self.tab.doc.bond_visible(b.a, b.b)
                     })
                     .map(|b| b.color),
@@ -580,12 +579,13 @@ impl App {
             "Select every atom of a ring to change its interior color".into()
         } else {
             format!(
-                "{} {count} ring interior(s)",
+                "{} {count} ring {}",
                 if color.is_some() {
                     "Colored"
                 } else {
                     "Cleared"
-                }
+                },
+                if count == 1 { "interior" } else { "interiors" }
             )
         };
     }
@@ -748,7 +748,7 @@ impl App {
     pub(super) fn text_panel(&self) -> Element<'_, Message> {
         if self.tab.inline_text.is_some() {
             return column![
-                section("EDITING ON CANVAS"),
+                section("Editing on canvas"),
                 text("Select text in the canvas editor, then use the Style toolbar to format it.")
                     .size(12)
                     .style(muted_text),
@@ -771,7 +771,7 @@ impl App {
         }
         if self.tool == Tool::Text {
             let mut body = column![
-                section("TEXT LABELS"),
+                section("Text labels"),
                 text(
                     "Click the canvas to type a new label, or click an existing label to edit it."
                 )
@@ -810,7 +810,7 @@ impl App {
             .caption_target
             .is_some_and(|id| self.tab.selected.contains(&id));
         column![
-            section(if selected { "EDIT TEXT" } else { "NEW TEXT" }),
+            section(if selected { "Edit text" } else { "New text" }),
             text(if selected {
                 "Changes appear on the drawing as you type."
             } else {

@@ -89,7 +89,7 @@ impl App {
         }
         self.changed(before);
         if !self.error {
-            self.status = format!("Chemical name shown: {text} · Undo removes it");
+            self.status = format!("Chemical name shown: {text}");
         }
     }
 
@@ -101,7 +101,7 @@ impl App {
         if reshiki::molecule_names::hide(&mut self.tab.doc, atoms) {
             self.changed(before);
             if !self.error {
-                self.status = "Chemical name hidden · Undo restores it".into();
+                self.status = "Chemical name hidden".into();
             }
         }
     }

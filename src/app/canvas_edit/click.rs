@@ -1,5 +1,5 @@
 //! Clicks on the canvas, by tool.
-use crate::app::App;
+use crate::app::{App, palettes::R_GROUP};
 use crate::canvas::{self, Edit, Tool};
 use reshiki::document::{Annotation, Document, Point};
 use reshiki::editing;
@@ -9,6 +9,18 @@ impl App {
         let hit = canvas::hit_object(&self.tab.doc, p, 10.0 / self.tab.camera.zoom);
         let mut charge_kept = None;
         match self.tool {
+            Tool::Atom if self.element == R_GROUP => {
+                let id = self
+                    .tab
+                    .doc
+                    .nearest(p, 10.0 / self.tab.camera.zoom)
+                    .unwrap_or_else(|| self.tab.doc.add_atom("*", p));
+                if !self.label_r_group(id) {
+                    self.tab.doc = before;
+                    return;
+                }
+                self.tab.selected = vec![id];
+            }
             Tool::Atom => {
                 if let Some(id) = self.tab.doc.nearest(p, 10.0 / self.tab.camera.zoom) {
                     self.tab.doc.invalidate_chemistry(&[id]);
@@ -85,6 +97,31 @@ impl App {
             && let Some(status) = charge_kept
         {
             self.status = status;
+        }
+    }
+    /// The element the Atom tool places: an R group starts as a `*` atom.
+    pub(in crate::app) fn atom_tool_element(&self) -> &str {
+        if self.element == R_GROUP {
+            "*"
+        } else {
+            &self.element
+        }
+    }
+    /// Turns the atom into an R group, a `*` atom labeled R; false after
+    /// reporting why it cannot be one. Text mode, so a user abbreviation
+    /// named R never replaces the placeholder.
+    pub(super) fn label_r_group(&mut self, id: u64) -> bool {
+        match reshiki::atom_text::apply(&self.tab.doc, id, R_GROUP, reshiki::atom_text::Mode::Text)
+        {
+            Ok(doc) => {
+                self.tab.doc = doc;
+                true
+            }
+            Err(error) => {
+                self.status = error;
+                self.error = true;
+                false
+            }
         }
     }
     fn click_bond_tool(&mut self, p: Point, before: Document) {

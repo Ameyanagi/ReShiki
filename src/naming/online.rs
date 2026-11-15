@@ -58,7 +58,7 @@ fn unavailable() -> Error {
     )
 }
 fn cancelled() -> Error {
-    Error::Cancelled("Online name lookup was cancelled".into())
+    Error::Cancelled("Online name lookup was canceled".into())
 }
 fn invalid() -> Error {
     Error::Worker("PubChem returned an invalid or incomplete molecular response".into())

@@ -254,13 +254,16 @@ pub const MULTI_NODE_ARROWS: u32 = 35;
 pub const STEREO_GROUPS: u32 = 36;
 /// Atoms with three or four radical (nonbonding) electrons.
 pub const RADICAL_ELECTRONS: u32 = 37;
+/// Property captions linked to their molecules.
+pub const PROPERTY_CAPTIONS: u32 = 38;
 
 /// The newest document format this build reads. Native output uses version 30
 /// unless a custom reaction-label gap requires version 31, ORTEP settings
 /// require version 32, model polish requires version 33 or two-sided groups
 /// require version 34, arrows with interior nodes or a custom crossing
-/// clearance require version 35, stereo groups require version 36, or atoms
-/// with three or four radical electrons require version 37.
+/// clearance require version 35, stereo groups require version 36, atoms
+/// with three or four radical electrons require version 37, or linked
+/// property captions require version 38.
 /// Optional atom-label settings, including steroid α/β display, retain this
 /// version; older readers may ignore those presentation preferences.
 ///
@@ -296,7 +299,8 @@ pub const RADICAL_ELECTRONS: u32 = 37;
 /// | 35 | Arrows with interior nodes (#761); also used for a custom crossing clearance (#1111). |
 /// | 36 | Enhanced stereo groups (#766). |
 /// | 37 | Three or four radical electrons on an atom. |
-pub const VERSION: u32 = 37;
+/// | 38 | Property captions linked to their molecules (#1175). |
+pub const VERSION: u32 = 38;
 
 /// Bytes of text in one annotation. Layout time grows faster than the text.
 pub const MAX_ANNOTATION_TEXT: usize = 64 * 1024;
@@ -351,6 +355,9 @@ pub struct Document {
     /// cannot preserve its molecule association.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub molecule_names: Vec<crate::molecule_names::MoleculeName>,
+    /// Optional native links; older readers keep the caption as plain text.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub property_captions: Vec<crate::linked_properties::PropertyCaption>,
     #[serde(default)]
     pub arrows: Vec<Arrow>,
     /// Text owned by an arrow; older readers keep the text but not the link.
@@ -391,6 +398,7 @@ impl Default for Document {
             bonds: vec![],
             annotations: vec![],
             molecule_names: vec![],
+            property_captions: vec![],
             arrows: vec![],
             arrow_labels: vec![],
             graphics: vec![],
@@ -469,7 +477,9 @@ impl Document {
     }
     /// Use the newest feature floor needed by the drawing's saved fields.
     pub fn file_version(&self) -> u32 {
-        if self.atoms.iter().any(|a| a.radical_electrons > 2) {
+        if !self.property_captions.is_empty() {
+            PROPERTY_CAPTIONS
+        } else if self.atoms.iter().any(|a| a.radical_electrons > 2) {
             RADICAL_ELECTRONS
         } else if self.atoms.iter().any(|a| a.stereo_group.is_some()) {
             STEREO_GROUPS
@@ -646,6 +656,7 @@ impl Document {
             .retain(|b| !ids.contains(&b.a) && !ids.contains(&b.b));
         self.annotations.retain(|a| !ids.contains(&a.id));
         crate::molecule_names::prune(self);
+        crate::linked_properties::prune(self);
         crate::models3d::prune(self);
         self.arrows.retain(|a| !ids.contains(&a.id));
         self.graphics.retain(|a| !ids.contains(&a.id));
@@ -685,6 +696,47 @@ impl Document {
         crate::arrow_anchors::transformed(self, ids, |v| v);
         crate::arrow_labels::translated(self, ids);
     }
+    /// [`Self::translate`] for disjoint units that each move by their own
+    /// offset, in one pass over the drawing instead of one pass per unit.
+    pub(crate) fn translate_units(&mut self, units: &[(Vec<u64>, f32, f32)]) {
+        let collapsed = crate::abbreviations::Membership::new(self);
+        let mut unit = std::collections::HashMap::new();
+        let mut expanded = std::collections::HashSet::new();
+        for (index, (ids, ..)) in units.iter().enumerate() {
+            for id in ids {
+                unit.insert(*id, index);
+                // Any selected member pulls in the whole abbreviation, once.
+                for group in collapsed.of(*id) {
+                    if expanded.insert((index, std::ptr::from_ref(*group))) {
+                        unit.extend(group.members.iter().map(|member| (*member, index)));
+                    }
+                }
+            }
+        }
+        let offset = |id: u64, p: Point| match unit.get(&id).and_then(|i| units.get(*i)) {
+            Some((_, dx, dy)) => p.offset(*dx, *dy),
+            None => p,
+        };
+        for graphic in &mut self.graphics {
+            graphic.origin = offset(graphic.id, graphic.origin);
+        }
+        for a in &mut self.atoms {
+            a.position = offset(a.id, a.position);
+        }
+        for a in &mut self.annotations {
+            a.position = offset(a.id, a.position);
+        }
+        for a in &mut self.arrows {
+            // Mapping an arrow writes out its implied bend, so leave the
+            // arrows outside every unit alone.
+            if let Some((_, dx, dy)) = unit.get(&a.id).and_then(|i| units.get(*i)) {
+                a.map_points(|p| p.offset(*dx, *dy));
+            }
+        }
+        crate::projection::sync_centroids(self);
+        crate::arrow_anchors::transformed_units(self, |id| unit.get(&id).copied(), |v| v);
+        crate::arrow_labels::translated_units(self, |id| unit.get(&id).copied());
+    }
     /// Every object ID, in [`Document::object_ids`] order.
     pub fn all_ids(&self) -> Vec<u64> {
         self.object_ids().collect()
@@ -718,6 +770,7 @@ impl Document {
             bonds,
             annotations,
             molecule_names,
+            property_captions,
             arrows,
             arrow_labels,
             graphics,
@@ -739,6 +792,7 @@ impl Document {
         ring_fills.clear();
         depth_appearance.clear();
         molecule_names.clear();
+        property_captions.clear();
         *generic = Generic::default();
     }
     /// Whether the document contains any drawing content.
@@ -759,6 +813,7 @@ impl Document {
             bonds,
             annotations,
             molecule_names,
+            property_captions,
             arrows,
             arrow_labels,
             graphics,
@@ -780,6 +835,7 @@ impl Document {
             || !ring_fills.is_empty()
             || !depth_appearance.is_empty()
             || !molecule_names.is_empty()
+            || !property_captions.is_empty()
             || !generic.is_empty()
     }
     pub fn validate(&self) -> Result<(), String> {
@@ -944,6 +1000,7 @@ impl Document {
             a.format.validate(&a.text)?;
         }
         crate::molecule_names::validate(self)?;
+        crate::linked_properties::validate(self)?;
         crate::arrow_labels::validate(self)?;
         for graphic in &self.graphics {
             graphic.validate()?;
@@ -966,8 +1023,9 @@ pub struct History {
     undo: VecDeque<Document>,
     redo: VecDeque<Document>,
     limit: usize,
-    /// Estimated undo bytes ([`frame_bytes`]) above which the oldest frames
-    /// are dropped, down to [`History::MIN_STEPS`].
+    /// Estimated bytes of all frames ([`frame_bytes`]) above which the oldest
+    /// undo frames, then the furthest redo frames, are dropped, down to
+    /// [`History::MIN_STEPS`].
     max_bytes: usize,
 }
 /// The editor keeps 100 undo frames, fewer on large drawings: about 128 MB of
@@ -992,6 +1050,7 @@ fn frame_bytes(doc: &Document) -> usize {
         + doc.arrows.len()
         + doc.arrow_labels.len()
         + doc.molecule_names.len()
+        + doc.property_captions.len()
         + doc.graphics.len()
         + doc.groups.len()
         + doc.reactions.len()
@@ -1023,6 +1082,7 @@ fn frame_bytes(doc: &Document) -> usize {
         + bytes(&doc.arrows[..])
         + bytes(&doc.arrow_labels[..])
         + bytes(&doc.molecule_names[..])
+        + bytes(&doc.property_captions[..])
         + bytes(&doc.graphics[..])
         + bytes(&doc.groups[..])
         + bytes(&doc.reactions[..])
@@ -1090,17 +1150,36 @@ impl History {
         if self.undo.len() > self.limit {
             let _ = self.undo.pop_front();
         }
-        if self.max_bytes != usize::MAX {
-            let mut total: usize = self.undo.iter().map(frame_bytes).sum();
-            while total > self.max_bytes && self.undo.len() > Self::MIN_STEPS {
-                total -= self.undo.pop_front().as_ref().map_or(0, frame_bytes);
-            }
-        }
+        self.cap();
         true
+    }
+    /// Keeps this history within its own byte limit.
+    fn cap(&mut self) {
+        if self.max_bytes != usize::MAX {
+            let over = self.bytes().saturating_sub(self.max_bytes);
+            self.release(over, Self::MIN_STEPS);
+        }
+    }
+    /// Estimated bytes of the undo and redo frames, as the byte limit counts
+    /// them.
+    pub fn bytes(&self) -> usize {
+        self.undo.iter().chain(&self.redo).map(frame_bytes).sum()
+    }
+    /// Drops frames until at least `bytes` estimated bytes are released or
+    /// `keep` frames remain: the oldest undo steps first, then the redo steps
+    /// furthest ahead. Returns the bytes released.
+    pub fn release(&mut self, bytes: usize, keep: usize) -> usize {
+        let mut released = 0;
+        while released < bytes && self.frames() > keep {
+            let frame = self.undo.pop_front().or_else(|| self.redo.pop_front());
+            released += frame.as_ref().map_or(0, frame_bytes);
+        }
+        released
     }
     pub fn undo(&mut self, doc: &mut Document) -> bool {
         if let Some(prev) = self.undo.pop_back() {
             self.redo.push_back(std::mem::replace(doc, prev));
+            self.cap();
             true
         } else {
             false
@@ -1109,6 +1188,7 @@ impl History {
     pub fn redo(&mut self, doc: &mut Document) -> bool {
         if let Some(next) = self.redo.pop_back() {
             self.undo.push_back(std::mem::replace(doc, next));
+            self.cap();
             true
         } else {
             false

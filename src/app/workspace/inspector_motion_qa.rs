@@ -186,7 +186,7 @@ fn save_input(app: &mut App, output: &Path, name: &str) {
 
 #[tokio::test]
 #[ignore = "Opt-in GPU evidence: RESHIKI_QA_INSPECTOR_OUTPUT required"]
-async fn inspector_motion_renderer_evidence() {
+async fn manual_inspector_motion_renderer_evidence() {
     let output = std::path::PathBuf::from(std::env::var_os("RESHIKI_QA_INSPECTOR_OUTPUT").unwrap());
     let baseline = std::env::var_os("RESHIKI_QA_INSPECTOR_BASELINE").is_some();
     std::fs::create_dir_all(&output).unwrap();

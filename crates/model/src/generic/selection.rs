@@ -190,6 +190,12 @@ pub(super) fn component(doc: &Document, hit: &[u64], work: &mut Work) -> Result<
             std::iter::once(name.annotation).chain(name.atoms.iter().copied()),
         );
     }
+    for link in &doc.property_captions {
+        connect(
+            &mut adjacent,
+            std::iter::once(link.annotation).chain(link.atoms.iter().copied()),
+        );
+    }
     for unit in &doc.generic.repeats {
         connect(
             &mut adjacent,
