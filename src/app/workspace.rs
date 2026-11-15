@@ -849,60 +849,9 @@ impl App {
         }
     }
 
-    /// Context row commands in fold order: the first ones fold into ⋯ first.
+    /// Context row commands, most important first: a short row folds them
+    /// into ⋯ from the end. Selection commands come before global ones.
     pub(super) fn context_commands(&self) -> Vec<RowCommand> {
-        let mut commands = self.standard_context_commands();
-        if self.keyboard_drawing_active() {
-            use super::keyboard_drawing::Action;
-            use reshiki::keyboard_drawing::Target;
-            let atom = match self.tab.keyboard_drawing.target() {
-                Target::Atom(id) => Some(id),
-                _ => None,
-            };
-            let marked = self.tab.keyboard_drawing.marked();
-            commands.retain(|command| {
-                !matches!(command.message, Message::KeyboardDrawing(Action::Toggle))
-            });
-            commands.extend([
-                RowCommand {
-                    label: "Mark [",
-                    menu: "Mark atom [",
-                    hint: if atom.is_some() {
-                        "Mark the active atom for a connection · ["
-                    } else {
-                        "Choose an atom with arrows or the mouse before marking · ["
-                    },
-                    message: Message::KeyboardDrawing(Action::Mark),
-                    enabled: atom.is_some(),
-                },
-                RowCommand {
-                    label: "Connect ]",
-                    menu: "Connect to marked atom ]",
-                    hint: if marked.is_none() {
-                        "Mark an atom with [ before connecting · ]"
-                    } else if atom.is_none() {
-                        "Choose an atom with arrows or the mouse to connect · ]"
-                    } else if atom == marked {
-                        "Choose a different atom to connect to the marked atom · ]"
-                    } else {
-                        "Connect the active atom to the marked atom · ]"
-                    },
-                    message: Message::KeyboardDrawing(Action::Connect),
-                    enabled: atom.zip(marked).is_some_and(|(a, b)| a != b),
-                },
-                RowCommand {
-                    label: "Coordinate }",
-                    menu: "Coordinate marked donor to active metal }",
-                    hint: "Mark a donor N/O/S/P with [, choose a metal, then } for a directed dative contact in place",
-                    message: Message::KeyboardDrawing(Action::Coordinate),
-                    enabled: atom.zip(marked).is_some_and(|(a, b)| a != b),
-                },
-            ]);
-        }
-        commands
-    }
-
-    fn standard_context_commands(&self) -> Vec<RowCommand> {
         let mut commands = Vec::new();
         let constraints = self.tool.bond_preset().is_some()
             || matches!(self.tool, Tool::Chain(_))
@@ -911,87 +860,108 @@ impl App {
             commands.push(RowCommand {
                 label: "Reset",
                 menu: "Reset bonds",
-                hint: "Reset bonds · Restore this document's bond length and drawing constraints",
                 message: Message::ResetBondDrawing,
                 enabled: true,
             });
         }
-        if matches!(self.tool, Tool::Select | Tool::Lasso) {
-            commands.extend([
-                RowCommand {
-                    label: "3D optimize…",
-                    menu: "3D optimize…",
-                    hint: "Generate an optimized conformer using MMFF or UFF; preview before applying",
-                    message: Message::Optimization(super::optimization::Action::Begin),
-                    enabled: !self.tab.doc.atoms.is_empty() && !self.tab.busy,
-                },
-                RowCommand {
-                    label: "Keyboard drawing",
-                    menu: "Keyboard drawing (F8)",
-                    hint: "Draw with digits and letters; navigate atoms and bonds with arrows (F8)",
-                    message: Message::KeyboardDrawing(super::keyboard_drawing::Action::Toggle),
-                    enabled: !self.tab.busy,
-                },
-            ]);
-            let ids = self.depth_ids();
-            if ids
-                .iter()
-                .any(|id| self.tab.doc.atom(*id).is_some_and(|a| a.depth != 0.))
-                || reshiki::depth_appearance::has(&self.tab.doc, &ids)
-            {
-                let automatic = reshiki::depth_appearance::is_automatic_for(&self.tab.doc, &ids);
-                commands.push(RowCommand {
-                    label: if automatic {
-                        "Freeze depth"
-                    } else {
-                        "Enhance depth"
-                    },
-                    menu: if automatic {
-                        "Freeze depth appearance"
-                    } else {
-                        "Enhance depth appearance"
-                    },
-                    hint: if automatic {
-                        "Keep the current depth colors"
-                    } else {
-                        "Fade bonds behind the front face"
-                    },
-                    message: Message::DepthAppearance(super::depth_appearance::Action::Enhance(
-                        !automatic,
-                    )),
-                    enabled: true,
-                });
-                if reshiki::depth_appearance::has(&self.tab.doc, &ids) {
-                    commands.push(RowCommand {
-                        label: "Clear depth",
-                        menu: "Clear depth appearance",
-                        hint: "Restore base colors while keeping the current 3D projection",
-                        message: Message::DepthAppearance(super::depth_appearance::Action::Clear),
-                        enabled: true,
-                    });
-                    if !self.tab.selected.is_empty() {
-                        commands.push(RowCommand {
-                            label: "Original ink",
-                            menu: "Use original ink for selection",
-                            hint: "Keep selected atoms and bonds in their editable base colors",
-                            message: Message::DepthAppearance(
-                                super::depth_appearance::Action::OriginalInk,
-                            ),
-                            enabled: true,
-                        });
-                    }
-                }
-            }
-        }
-        if !matches!(self.tool, Tool::Select | Tool::Lasso) || self.tab.selected.is_empty() {
+        if !matches!(self.tool, Tool::Select | Tool::Lasso) {
             return commands;
         }
-        commands.extend(self.selected_join_commands());
-        commands.extend(self.selected_attach_commands());
-        if let Some(graphic) = self.selected_open_paths().next() {
-            use reshiki::arrows::Head;
-            let heads = graphic.heads.unwrap_or_default();
-            for (start, current) in [(true, heads.tail), (false, heads.head)] {
+        let keyboard = self.keyboard_drawing_active();
+        if keyboard {
+            commands.extend(self.keyboard_drawing_commands());
+        }
+        if !self.tab.selected.is_empty() {
+            commands.extend(self.selected_join_commands());
+            commands.extend(self.selected_attach_commands());
+            commands.extend(self.path_head_commands());
+            commands.push(RowCommand {
+                label: "Group",
+                menu: "Group",
+                message: Message::Group,
+                enabled: self.can_group(),
+            });
+            if !self
+                .tab
+                .doc
+                .outer_selected_groups(&self.tab.selected)
+                .is_empty()
+            {
+                commands.push(RowCommand {
+                    label: "Ungroup",
+                    menu: "Ungroup",
+                    message: Message::Ungroup,
+                    enabled: true,
+                });
+            }
+        }
+        commands.extend(self.depth_commands());
+        if !keyboard {
+            commands.push(RowCommand {
+                label: "Keyboard drawing",
+                menu: "Keyboard drawing",
+                message: Message::KeyboardDrawing(super::keyboard_drawing::Action::Toggle),
+                enabled: !self.tab.busy,
+            });
+        }
+        commands.push(RowCommand {
+            label: "3D optimize…",
+            menu: "3D optimize…",
+            message: Message::Optimization(super::optimization::Action::Begin),
+            enabled: !self.tab.doc.atoms.is_empty() && !self.tab.busy,
+        });
+        commands
+    }
+
+    /// Mark appears once an atom is the target; Connect and Coordinate once
+    /// an atom is marked, and they need a different target atom.
+    fn keyboard_drawing_commands(&self) -> Vec<RowCommand> {
+        use super::keyboard_drawing::Action;
+        use reshiki::keyboard_drawing::Target;
+        let atom = match self.tab.keyboard_drawing.target() {
+            Target::Atom(id) => Some(id),
+            _ => None,
+        };
+        let marked = self.tab.keyboard_drawing.marked();
+        let mut commands = Vec::new();
+        if atom.is_some() {
+            commands.push(RowCommand {
+                label: "Mark",
+                menu: "Mark atom",
+                message: Message::KeyboardDrawing(Action::Mark),
+                enabled: true,
+            });
+        }
+        if marked.is_some() {
+            let enabled = atom.zip(marked).is_some_and(|(a, b)| a != b);
+            commands.extend([
+                RowCommand {
+                    label: "Connect",
+                    menu: "Connect to marked atom",
+                    message: Message::KeyboardDrawing(Action::Connect),
+                    enabled,
+                },
+                RowCommand {
+                    label: "Coordinate",
+                    menu: "Coordinate marked donor to metal",
+                    message: Message::KeyboardDrawing(Action::Coordinate),
+                    enabled,
+                },
+            ]);
+        }
+        commands
+    }
+
+    /// Arrowheads for a selected open path.
+    fn path_head_commands(&self) -> Vec<RowCommand> {
+        use reshiki::arrows::Head;
+        let Some(graphic) = self.selected_open_paths().next() else {
+            return vec![];
+        };
+        let heads = graphic.heads.unwrap_or_default();
+        [(true, heads.tail), (false, heads.head)]
+            .into_iter()
+            .map(|(start, current)| {
                 let add = current == Head::None;
                 let label = match (start, add) {
                     (true, true) => "Start head",
@@ -1000,44 +970,63 @@ impl App {
                     (false, false) => "No end head",
                 };
                 let head = if add { Head::Full } else { Head::None };
-                commands.push(RowCommand {
+                RowCommand {
                     label,
                     menu: label,
-                    hint: match (start, add) {
-                        (true, true) => "Add an arrowhead at the path's start",
-                        (true, false) => "Remove the arrowhead at the path's start",
-                        (false, true) => "Add an arrowhead at the path's end",
-                        (false, false) => "Remove the arrowhead at the path's end",
-                    },
                     message: Message::Graphics(if start {
                         super::graphics::Action::Tail(head)
                     } else {
                         super::graphics::Action::Head(head)
                     }),
                     enabled: true,
-                });
-            }
-        }
-        commands.push(RowCommand {
-            label: "Group",
-            menu: "Group",
-            hint: "Group",
-            message: Message::Group,
-            enabled: self.can_group(),
-        });
-        if !self
-            .tab
-            .doc
-            .outer_selected_groups(&self.tab.selected)
-            .is_empty()
+                }
+            })
+            .collect()
+    }
+
+    /// Depth appearance of a tilted drawing.
+    fn depth_commands(&self) -> Vec<RowCommand> {
+        use super::depth_appearance::Action;
+        let ids = self.depth_ids();
+        let shown = reshiki::depth_appearance::has(&self.tab.doc, &ids);
+        if !shown
+            && !ids
+                .iter()
+                .any(|id| self.tab.doc.atom(*id).is_some_and(|a| a.depth != 0.))
         {
+            return vec![];
+        }
+        let automatic = reshiki::depth_appearance::is_automatic_for(&self.tab.doc, &ids);
+        let mut commands = vec![if automatic {
+            RowCommand {
+                label: "Freeze depth",
+                menu: "Freeze depth appearance",
+                message: Message::DepthAppearance(Action::Enhance(false)),
+                enabled: true,
+            }
+        } else {
+            RowCommand {
+                label: "Enhance depth",
+                menu: "Enhance depth appearance",
+                message: Message::DepthAppearance(Action::Enhance(true)),
+                enabled: true,
+            }
+        }];
+        if shown {
             commands.push(RowCommand {
-                label: "Ungroup",
-                menu: "Ungroup",
-                hint: "Ungroup",
-                message: Message::Ungroup,
+                label: "Clear depth",
+                menu: "Clear depth appearance",
+                message: Message::DepthAppearance(Action::Clear),
                 enabled: true,
             });
+            if !self.tab.selected.is_empty() {
+                commands.push(RowCommand {
+                    label: "Original ink",
+                    menu: "Use original ink for selection",
+                    message: Message::DepthAppearance(Action::OriginalInk),
+                    enabled: true,
+                });
+            }
         }
         commands
     }
@@ -1088,9 +1077,17 @@ impl App {
             tool_name(self.tool)
         };
         let commands = self.context_commands();
+        let chips: Vec<Option<String>> = commands.iter().map(|c| c.keycap()).collect();
         let widths: Vec<f32> = commands
             .iter()
-            .map(|c| text_width(c.label, 12.) + 18.)
+            .zip(&chips)
+            .map(|(c, chip)| {
+                text_width(c.label, 12.)
+                    + 18.
+                    + chip
+                        .as_deref()
+                        .map_or(0., |key| KEYCAP_GAP + keycap_width(key))
+            })
             .collect();
         let select = matches!(self.tool, Tool::Select | Tool::Lasso);
         let arrange = (select && self.appearance.arrange_controls).then_some((
@@ -1176,26 +1173,36 @@ impl App {
             row = row.push(option);
         }
         let (folded, compact) = (fit.folded, fit.compact);
+        let shown = commands.len() - folded;
         let mut x = CONTEXT_PADDING + fit.fixed;
-        for (index, (c, w)) in commands.iter().zip(&widths).enumerate().skip(folded) {
+        for (index, ((c, w), chip)) in commands.iter().zip(&widths).zip(chips).enumerate() {
+            if index == shown {
+                break;
+            }
+            let mut label = row![text(c.label).size(12)]
+                .spacing(KEYCAP_GAP)
+                .align_y(Alignment::Center);
+            if let Some(key) = chip {
+                label = label.push(keycap(key, c.enabled));
+            }
             row = row.push(hover_keys(
                 reshiki::accessibility::button(
                     keyboard_control_id(&c.message)
                         .map_or_else(|| format!("context-command-{index}"), str::to_owned),
-                    c.hint,
-                    text(c.label).size(12),
+                    c.menu,
+                    label,
                 )
                 .padding([7, 9])
                 .style(control(false))
                 .on_press_maybe(c.enabled.then(|| c.message.clone())),
-                c.hint,
+                c.menu,
                 super::shortcuts::label(&c.message),
                 tooltip::Position::Bottom,
             ));
             x += CONTEXT_GAP + w;
         }
         if folded > 0 {
-            let labels: Vec<_> = commands.iter().take(folded).map(|c| c.menu).collect();
+            let labels: Vec<_> = commands.iter().skip(shown).map(|c| c.menu).collect();
             let page = super::context_menu::Page::More(folded);
             row = row.push(
                 self.menu_anchor(
@@ -2876,12 +2883,54 @@ fn context_frame<'a>(content: impl Into<Element<'a, Message>>) -> Element<'a, Me
 /// A context row command that can fold into the ⋯ menu.
 pub(super) struct RowCommand {
     pub label: &'static str,
-    /// The label in the ⋯ menu, away from the controls it belongs to.
+    /// The full name: in the ⋯ menu, the tooltip and the accessibility tree.
     pub menu: &'static str,
-    /// Tooltip text, followed by the shortcut if there is one.
-    pub hint: &'static str,
     pub message: Message,
     pub enabled: bool,
+}
+
+impl RowCommand {
+    /// The single key of a keyboard drawing command, shown on its button.
+    fn keycap(&self) -> Option<String> {
+        matches!(self.message, Message::KeyboardDrawing(_))
+            .then(|| super::shortcuts::label(&self.message))
+            .flatten()
+    }
+}
+
+/// Space between a command's label and its keycap.
+const KEYCAP_GAP: f32 = 6.;
+
+/// Width of `keycap`: the key, its padding and its border.
+fn keycap_width(key: &str) -> f32 {
+    text_width(key, 11.) + 12.
+}
+
+/// A key drawn as a small outlined cap, as in “Mark [”.
+fn keycap<'a>(key: String, enabled: bool) -> Element<'a, Message> {
+    container(
+        rich_text(super::shortcuts::spans(&key))
+            .size(11)
+            .line_height(1.),
+    )
+    .padding([1, 5])
+    .style(move |theme: &Theme| {
+        let ink = if enabled {
+            theme.palette().text
+        } else {
+            crate::appearance::muted(theme)
+        };
+        container::Style {
+            text_color: Some(ink),
+            border: Border {
+                color: Color { a: 0.35, ..ink },
+                width: 1.,
+                radius: 4.0.into(),
+            },
+            ..Default::default()
+        }
+    })
+    .into()
 }
 
 /// Shared by the inline context row and its foreground overflow menu.
@@ -2913,7 +2962,7 @@ struct Fold<'a> {
 /// How a context row fits its width.
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct Fit {
-    /// Commands folded into ⋯, from the front.
+    /// Commands folded into ⋯, from the end.
     folded: usize,
     /// The arrange group is one Arrange ▾ button.
     compact: bool,
@@ -2926,7 +2975,7 @@ struct Fit {
 }
 
 /// A short row gives way in this order until it fits `width`: commands fold
-/// into ⋯ one by one, the arrange group collapses, the selection summary
+/// into ⋯ one by one from the end, the arrange group collapses, the selection summary
 /// hides, and the tool name shortens.
 fn fit(width: f32, row: &Fold<'_>) -> Fit {
     let n = row.commands.len();
@@ -2945,7 +2994,7 @@ fn fit(width: f32, row: &Fold<'_>) -> Fit {
             + row
                 .commands
                 .iter()
-                .skip(fit.folded)
+                .take(n - fit.folded)
                 .map(|w| CONTEXT_GAP + w)
                 .sum::<f32>()
             + if fit.folded > 0 {

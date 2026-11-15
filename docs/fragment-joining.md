@@ -72,7 +72,7 @@ one Undo step.
 You can also select the donor and the metal, or whole ligands with the metal,
 and press **Ctrl+J** (**⌘J** on macOS). In keyboard
 drawing, mark the donor with **[**, move to the metal, then choose
-**Coordinate }** or press **}** (Shift+] on a US keyboard). See
+**Coordinate** or press **}** (Shift+] on a US keyboard). See
 [keyboard drawing](3d-keyboard-drawing.md).
 
 Each contact you add, or each Join, is one Undo step, and adding a contact that
