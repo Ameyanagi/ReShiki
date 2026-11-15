@@ -56,7 +56,10 @@ fn receipts_outside_the_matrix_preserve_predicates_and_wrapper_routing() {
         ),
         (
             Message::Settings(crate::app::settings_page::Action::Preview(
-                (crate::app::document_tab::TabId(0), 0, 0, 0),
+                (
+                    (crate::app::document_tab::TabId(0), 0, 0, 0),
+                    [(reshiki::export::Background::Canvas, None); 2],
+                ),
                 Err("failure".into()),
             )),
             [false; 5],

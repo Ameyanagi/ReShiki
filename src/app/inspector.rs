@@ -2164,6 +2164,33 @@ impl App {
         )
     }
 
+    /// What Export writes: the picture on its background, with its size.
+    fn export_picture(&self, figure: FigureFormat) -> Element<'_, Message> {
+        let preview = self
+            .settings
+            .preview
+            .as_ref()
+            .and_then(|(_, preview)| preview.as_ref().ok());
+        let size = preview.map(|p| match figure {
+            FigureFormat::Png => format!(
+                "{} · {}",
+                p.centimeters(),
+                p.pixels(self.appearance.export_dpi)
+            ),
+            _ => p.centimeters(),
+        });
+        let sample = preview
+            .is_some_and(|p| p.sample)
+            .then_some("A sample structure, as the drawing is empty.");
+        column![
+            container(self.picture(true)).center_x(Length::Fill),
+            size.map(|size| text(size).size(11).style(muted_text)),
+            sample.map(|sample| text(sample).size(11).style(muted_text)),
+        ]
+        .spacing(4)
+        .into()
+    }
+
     pub(super) fn export_panel(&self) -> Element<'_, Message> {
         let figure = self.tab.inspector_ui.figure;
         let chemical = self.tab.inspector_ui.chemical;
@@ -2213,6 +2240,7 @@ impl App {
                 .wrap(),
             ]
             .spacing(6),
+            self.export_picture(figure),
             reshiki::accessibility::button(
                 "export-figure",
                 format!("Export {figure} figure"),

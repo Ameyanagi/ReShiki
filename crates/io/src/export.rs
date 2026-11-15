@@ -463,7 +463,7 @@ fn render_drawing(
         "png" => {
             let (width, height, dpi) =
                 png_dimensions(tree.size().width(), tree.size().height(), budget)?;
-            let pixmap = raster(&tree, paper, dpi, (width, height), (0., 0.))?;
+            let pixmap = raster(&tree, paper, dpi as f32, (width, height), (0., 0.))?;
             let mut bytes = Vec::new();
             {
                 let mut encoder = png::Encoder::new(&mut bytes, width, height);
@@ -499,11 +499,11 @@ fn render_drawing(
 fn raster(
     tree: &resvg::usvg::Tree,
     paper: Option<[u8; 3]>,
-    dpi: u32,
+    dpi: f32,
     size: (u32, u32),
     origin: (f32, f32),
 ) -> Result<resvg::tiny_skia::Pixmap, String> {
-    let scale = dpi as f32 / 96.0;
+    let scale = dpi / 96.0;
     let mut pixmap =
         resvg::tiny_skia::Pixmap::new(size.0, size.1).ok_or("Could not allocate image")?;
     if let Some([r, g, b]) = paper {
@@ -570,7 +570,7 @@ pub fn png_close_ups(
             let pixels = (side * dpi_f).round() as u32;
             // Whole pixels, so the close-up shows the file's own pixels.
             let origin = ((corner.0 * dpi_f).round(), (corner.1 * dpi_f).round());
-            let pixmap = raster(&tree, paper, dpi, (pixels, pixels), origin)?;
+            let pixmap = raster(&tree, paper, dpi_f, (pixels, pixels), origin)?;
             Ok((pixels, straight_alpha(pixmap)))
         })
         .collect::<Result<_, String>>()?;
@@ -578,6 +578,26 @@ pub fn png_close_ups(
         size: (tree.size().width(), tree.size().height()),
         pixels,
     })
+}
+
+/// The whole PNG export of `doc` on `background`, scaled to fit `fit`
+/// pixels, but at no more than `dpi`: its width, height and RGBA pixels.
+pub fn png_preview(
+    doc: &Document,
+    background: Background,
+    fit: (u32, u32),
+    dpi: Option<u32>,
+) -> Result<(u32, u32, Vec<u8>), String> {
+    doc.validate()?;
+    let (doc, paper) = background.apply(doc);
+    let tree = parse_svg(scene::svg_on(doc.as_ref(), paper))?;
+    let (width, height) = (tree.size().width(), tree.size().height());
+    let fitted = 96. * (fit.0 as f32 / width).min(fit.1 as f32 / height);
+    let dpi = dpi.map_or(fitted, |dpi| fitted.min(dpi as f32));
+    let side = |css: f32, fit: u32| ((css * dpi / 96.).ceil() as u32).clamp(1, fit);
+    let size = (side(width, fit.0), side(height, fit.1));
+    let pixmap = raster(&tree, paper, dpi, size, (0., 0.))?;
+    Ok((size.0, size.1, straight_alpha(pixmap)))
 }
 
 /// A PNG export's width and height in pixels at `dpi`, for a picture

@@ -25,6 +25,8 @@ const SAVED_COLORS: usize = 8;
 const CLOSE_UP_POINTS: f32 = 12.;
 /// The side of a close-up on screen, the same at every resolution.
 const CLOSE_UP_SIZE: f32 = 120.;
+/// The box a whole picture fits on screen.
+const PICTURE: (f32, f32) = (240., 140.);
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum Section {
@@ -103,25 +105,33 @@ pub enum Action {
 }
 
 /// A drawing at a revision: its tab, file epoch, revision and label
-/// generation. Labels from the chemistry engine change the drawing without a
-/// new revision.
-pub type PreviewKey = (super::document_tab::TabId, u64, u64, u64);
+/// generation, and the [`Pictures`] made of it. Labels from the chemistry
+/// engine change the drawing without a new revision.
+pub type PreviewKey = ((super::document_tab::TabId, u64, u64, u64), Pictures);
 
-/// The drawing as PNG at each of [`Dpi::ALL`], for Settings and the Export tab.
+/// The backgrounds of the copied and the exported picture, and the PNG
+/// resolution the exported one shows, while the Export tab is on PNG.
+pub type Pictures = [(Paper, Option<u32>); 2];
+
+/// The drawing as PNG at each of [`Dpi::ALL`], and as copied and exported,
+/// for Settings and the Export tab.
 #[derive(Debug, Clone)]
 pub struct Preview {
     /// The whole picture in CSS pixels, 96 to the inch.
     pub(super) size: (f32, f32),
     /// A close-up at each resolution.
     tiles: Vec<image::Handle>,
+    /// The whole picture as copied and as exported, fitted to [`PICTURE`].
+    pictures: [image::Handle; 2],
     /// Whether the close-ups show a sample structure, as the drawing is empty.
-    sample: bool,
+    pub(super) sample: bool,
 }
 
 impl Preview {
     /// Renders the PNG export of `doc`, or of a sample structure when it is
-    /// empty, around its first atom that is not carbon.
-    fn render(doc: &Document) -> Result<Self, String> {
+    /// empty: close-ups around its first atom that is not carbon, and the
+    /// whole `pictures`. Twice the box's pixels stay sharp on Retina screens.
+    fn render(doc: &Document, pictures: Pictures) -> Result<Self, String> {
         let sample = doc.all_ids().is_empty();
         let doc = if sample { &sample_structure() } else { doc };
         let focus = match doc
@@ -143,6 +153,11 @@ impl Preview {
             CLOSE_UP_POINTS,
             &Dpi::ALL.map(Dpi::get),
         )?;
+        let fit = ((PICTURE.0 * 2.) as u32, (PICTURE.1 * 2.) as u32);
+        let [copy, export] = pictures.map(|(paper, dpi)| {
+            let (width, height, rgba) = reshiki::export::png_preview(doc, paper, fit, dpi)?;
+            Ok::<_, String>(image::Handle::from_rgba(width, height, rgba))
+        });
         Ok(Self {
             size: close_ups.size,
             tiles: close_ups
@@ -150,6 +165,7 @@ impl Preview {
                 .into_iter()
                 .map(|(side, rgba)| image::Handle::from_rgba(side, side, rgba))
                 .collect(),
+            pictures: [copy?, export?],
             sample,
         })
     }
@@ -203,9 +219,9 @@ pub(super) struct State {
     /// While the color picker is open: the typed color, and whether it could
     /// not be read.
     color: Option<(String, bool)>,
-    /// The latest PNG close-ups, and the drawing they show.
+    /// The latest close-ups and pictures, and the drawing they show.
     pub(super) preview: Option<(PreviewKey, Result<Preview, String>)>,
-    /// The drawing whose close-ups are being rendered.
+    /// The drawing whose close-ups and pictures are being rendered.
     rendering: Option<PreviewKey>,
     /// The last failed save of a preference, and the section it shows in.
     save_error: Option<(Section, String)>,
@@ -311,15 +327,32 @@ impl App {
         Task::none()
     }
 
-    /// Renders the front drawing's PNG close-ups off the UI thread, once per
-    /// revision, while Settings or the Export tab's PNG resolution shows them.
+    /// The front drawing now, and the pictures Settings and the Export tab
+    /// show of it.
+    fn preview_key(&self) -> PreviewKey {
+        let (tab, a) = (&self.tab, &self.appearance);
+        let png = self.inspector_open
+            && self.inspector_tab == super::InspectorTab::Export
+            && tab.inspector_ui.figure == super::inspector::FigureFormat::Png;
+        (
+            (tab.id, tab.file_epoch, tab.revision, tab.label_generation),
+            [
+                (a.copy_background.paper(a.custom_background), None),
+                (
+                    a.export_background.paper(a.custom_background),
+                    png.then(|| a.export_dpi.get()),
+                ),
+            ],
+        )
+    }
+
+    /// Renders the front drawing's close-ups and pictures off the UI thread,
+    /// once per revision and choice, while Settings or the Export tab shows
+    /// them.
     pub(super) fn render_png_preview(&mut self) -> Task<Message> {
         let shown = self.settings.open
-            || (self.inspector_open
-                && self.inspector_tab == super::InspectorTab::Export
-                && self.tab.inspector_ui.figure == super::inspector::FigureFormat::Png);
-        let tab = &self.tab;
-        let key = (tab.id, tab.file_epoch, tab.revision, tab.label_generation);
+            || (self.inspector_open && self.inspector_tab == super::InspectorTab::Export);
+        let key = self.preview_key();
         let settings = &mut self.settings;
         if !shown
             || settings.rendering == Some(key)
@@ -334,7 +367,7 @@ impl App {
         let doc = self.tab.doc.clone();
         Task::perform(
             async move {
-                reshiki::task::spawn_blocking(move || Preview::render(&doc))
+                reshiki::task::spawn_blocking(move || Preview::render(&doc, key.1))
                     .await
                     .map_err(|error| error.to_string())?
             },
@@ -619,8 +652,17 @@ impl App {
                             ),
                         ),
                         Item::wide(
+                            "Preview",
+                            "This drawing, as each one writes it.",
+                            row![
+                                self.captioned_picture(false, "Copied pictures"),
+                                self.captioned_picture(true, "Exported files"),
+                            ]
+                            .spacing(16),
+                        ),
+                        Item::wide(
                             "Your colors",
-                            "Pick one to copy pictures on it, as Custom. Custom is one color for copies and exported files, so exports set to Custom change too. On white, black or a color, black and white ink swap so a dark drawing stays readable. Colored atoms and other colors stay as they are. Canvas keeps the drawing's own colors.",
+                            "Pick one to use it as Custom.",
                             self.saved_colors(),
                         ),
                     ],
@@ -635,12 +677,12 @@ impl App {
                         ),
                         Item::choice(
                             "Exported files",
-                            "1200 dpi suits journal line art. The size in centimeters stays the same at every setting.",
+                            "1200 dpi suits journal line art.",
                             dpi_choices("settings-export-dpi", a.export_dpi, Action::ExportDpi),
                         ),
                         Item::wide(
                             "Close-ups",
-                            "This drawing at each resolution, shown at the same size. The whole drawing's pixel size is underneath.",
+                            "This drawing at each resolution.",
                             self.dpi_strip(),
                         ),
                     ],
@@ -651,18 +693,14 @@ impl App {
                         Item::check(
                             "settings-editable-drawing",
                             "Put the editable drawing in pictures",
-                            if cfg!(target_arch = "wasm32") {
-                                "Paste or open the picture in ReShiki to get the drawing back. Anyone who gets the picture can do the same. With it off, copies pasted into another ReShiki tab have no drawing either."
-                            } else {
-                                "Paste or open the picture in ReShiki to get the drawing back. Anyone who gets the picture can do the same. Copying between ReShiki windows keeps the drawing either way."
-                            },
+                            "ReShiki can reopen the picture as this drawing. Anyone with it can too.",
                             a.export_editable_drawing,
                             Message::View(View::ExportEditableDrawing(!a.export_editable_drawing)),
                         ),
                         Item::check(
                             "settings-svg-text",
                             "Keep text editable in SVG files",
-                            "Labels stay text in illustration apps, but each app draws them with its own font. SVG for Office and copied SVG always use outlines.",
+                            "Labels stay text, in each app's own font.",
                             a.export_svg_live_text,
                             Message::View(View::ExportSvgLiveText(!a.export_svg_live_text)),
                         ),
@@ -797,6 +835,70 @@ impl App {
             .push(Element::new(
                 super::popover::popover(add, picker, close.clone()).on_escape(close),
             ))
+            .into()
+    }
+
+    /// The copied or exported picture with its name and background.
+    fn captioned_picture(&self, exported: bool, name: &str) -> Element<'_, Message> {
+        let a = &self.appearance;
+        let background = if exported {
+            a.export_background
+        } else {
+            a.copy_background
+        };
+        column![
+            self.picture(exported),
+            text(format!("{name} · {}", background.label()))
+                .size(12)
+                .style(muted_text),
+        ]
+        .spacing(4)
+        .into()
+    }
+
+    /// The whole copied or exported picture, fitted to a tile, on a
+    /// checkerboard where it is transparent. Just a preview of the exported
+    /// picture: it does nothing when clicked.
+    pub(super) fn picture(&self, exported: bool) -> Element<'_, Message> {
+        let content: Element<'_, Message> = match &self.settings.preview {
+            Some(((_, [(copy_paper, _), (export_paper, _)]), Ok(preview))) => {
+                let [copy, export] = &preview.pictures;
+                let (handle, paper) = if exported {
+                    (export, export_paper)
+                } else {
+                    (copy, copy_paper)
+                };
+                let (width, height) = preview.size;
+                let scale = (PICTURE.0 / width).min(PICTURE.1 / height);
+                let (width, height) = (width * scale, height * scale);
+                let picture = image(handle.clone()).width(width).height(height);
+                if *paper == Paper::Transparent {
+                    stack![swatch(Paper::Transparent, width, height), picture].into()
+                } else {
+                    picture.into()
+                }
+            }
+            Some((_, Err(error))) => text(error.clone()).size(11).style(text::danger).into(),
+            None => Space::new().into(),
+        };
+        container(content)
+            .center_x(PICTURE.0 + 2.)
+            .center_y(PICTURE.1 + 2.)
+            // A grey tile, so white and black paper show their edges.
+            .style(|theme| {
+                crate::appearance::container(
+                    theme,
+                    container::Style {
+                        background: Some(Color::from_rgb8(242, 244, 246).into()),
+                        border: Border {
+                            color: Color::from_rgb8(224, 228, 233),
+                            width: 1.,
+                            radius: 6.into(),
+                        },
+                        ..Default::default()
+                    },
+                )
+            })
             .into()
     }
 
@@ -1274,7 +1376,7 @@ impl canvas::Program<Message> for Swatch {
         match self.0 {
             Paper::Transparent => {
                 frame.fill(&outline, Color::WHITE);
-                let cell = (bounds.height / 3.).max(3.);
+                let cell = (bounds.height / 3.).clamp(3., 8.);
                 let grey = Color::from_rgb8(201, 206, 211);
                 let (columns, rows) = (
                     (bounds.width / cell).ceil() as usize,
