@@ -3,7 +3,7 @@ use crate::ops::{
     error::ErrorKind,
     headless::HeadlessHost,
     host::{Call, ToolHost},
-    naming::{Named, Naming, NamingFuture},
+    naming::{Named, Naming, NamingFuture, Resolved},
     wire::{Principal, RequestId},
 };
 use serde_json::json;
@@ -174,19 +174,38 @@ fn error_free_pdf() -> Value {
 struct Ethanol;
 
 impl Naming for Ethanol {
-    fn resolve(&self, name: String) -> NamingFuture<String> {
+    fn resolve(&self, name: String) -> NamingFuture<Resolved> {
         Box::pin(async move {
-            if name == "ethanol" {
-                Ok("CCO".to_owned())
-            } else {
-                Err(format!("Could not interpret chemical name {name:?}"))
+            match name.as_str() {
+                "ethanol" => Ok(Resolved {
+                    smiles: "CCO".into(),
+                    prepared: None,
+                    identity: "CCO".into(),
+                    warnings: vec!["A parser warning.".into()],
+                }),
+                // The hook's check rejects the drawing of this one.
+                "methanol" => Ok(Resolved {
+                    smiles: "CO".into(),
+                    prepared: None,
+                    identity: "another structure".into(),
+                    warnings: Vec::new(),
+                }),
+                _ => Err(format!("Could not interpret chemical name {name:?}")),
             }
         })
     }
 
-    fn generate(&self, doc: crate::document::Document) -> NamingFuture<Named> {
+    fn verify(&self, identity: &str, doc: &crate::document::Document) -> Result<(), String> {
+        if identity == "CCO" && doc.atoms.len() == 3 {
+            Ok(())
+        } else {
+            Err("The drawing is not the named structure".into())
+        }
+    }
+
+    fn generate(&self, doc: crate::document::Document) -> NamingFuture<(Named, Vec<String>)> {
         Box::pin(async move {
-            Ok(Named {
+            let named = Named {
                 name: format!("a drawing of {} atoms", doc.atoms.len()),
                 status: "preferred".into(),
                 preferred: true,
@@ -194,7 +213,8 @@ impl Naming for Ethanol {
                 detail: "A test name.".into(),
                 aliases: vec!["alcohol".into()],
                 alternatives: Vec::new(),
-            })
+            };
+            Ok((named, vec!["A naming warning.".into()]))
         })
     }
 }
@@ -221,12 +241,30 @@ async fn names_need_the_hosts_naming_hook() {
     assert_eq!(result.value["error"]["code"], "unsupported");
 
     let host = host().with_naming(Arc::new(Ethanol));
-    let converted = ok(&host, "convert", convert).await;
+    // The hook's warnings reach the envelope, in every direction.
+    let warning = |text: &str| json!([{"message": text}]);
+    let converted = ok(&host, "convert", convert.clone()).await;
     assert_eq!(converted.files[0].bytes, b"CCO");
+    assert_eq!(converted.value["warnings"], warning("A parser warning."));
     let imported = ok(&host, "import", name).await;
+    assert_eq!(imported.value["warnings"], warning("A parser warning."));
     let value = &imported.value["value"];
     assert_eq!(value["analysis"]["formula"], "C2H6O");
     let named = ok(&host, "name", json!({"document": value["document"]})).await;
+    assert_eq!(named.value["warnings"], warning("A naming warning."));
+    // A drawing the hook's check rejects is a failed call and no document.
+    let before = open_documents(&host).await;
+    let methanol = json!({"format": "name", "text": "methanol"});
+    convert["input"] = methanol.clone();
+    for (tool, arguments) in [("import", methanol), ("convert", convert)] {
+        let result = host.call(call(tool, arguments)).await.unwrap();
+        assert_eq!(result.value["error"]["code"], "failed", "{tool}");
+        assert_eq!(
+            result.value["error"]["message"], "The drawing is not the named structure",
+            "{tool}"
+        );
+    }
+    assert_eq!(open_documents(&host).await, before);
     assert_eq!(
         named.value["value"],
         json!({

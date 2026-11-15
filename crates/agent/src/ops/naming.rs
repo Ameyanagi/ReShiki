@@ -12,9 +12,10 @@ use super::{
     policy::Access,
     result::ToolResult,
     store::Documents,
-    wire::{DocHandle, Principal, handle_schema},
+    wire::{DocHandle, Principal, handle_schema, warnings},
 };
 use crate::{
+    chemistry::smiles::Prepared,
     document::Document,
     envelope::Versions,
     tool_spec::{Hints, ToolSpec},
@@ -29,11 +30,29 @@ pub type NamingFuture<T> = Pin<Box<dyn Future<Output = Result<T, String>> + Send
 /// Local, offline name and structure conversion. Errors are client-facing
 /// messages.
 pub trait Naming: Send + Sync + 'static {
-    /// The SMILES of a chemical name.
-    fn resolve(&self, name: String) -> NamingFuture<String>;
+    /// The structure of a chemical name.
+    fn resolve(&self, name: String) -> NamingFuture<Resolved>;
 
-    /// The systematic name of a whole drawing.
-    fn generate(&self, doc: Document) -> NamingFuture<Named>;
+    /// Checks that `doc`, the drawing imported from a [`Resolved`] structure,
+    /// still has its `identity`.
+    fn verify(&self, identity: &str, doc: &Document) -> Result<(), String>;
+
+    /// The systematic name of a whole drawing, and the warnings about it.
+    fn generate(&self, doc: Document) -> NamingFuture<(Named, Vec<String>)>;
+}
+
+/// The structure a name resolved to.
+#[derive(Debug, Clone)]
+pub struct Resolved {
+    /// Naming SMILES: private atom-map markers carry axial configuration, so
+    /// it is read as the engine's `naming_smiles`, never as ordinary SMILES.
+    pub smiles: String,
+    /// The prepared graph, imported in place of `smiles` when there is one.
+    pub prepared: Option<Prepared>,
+    /// The canonical identity the imported drawing must keep.
+    pub identity: String,
+    /// The name parser's warnings.
+    pub warnings: Vec<String>,
 }
 
 /// The host's naming hook, when it has one.
@@ -127,5 +146,6 @@ pub(crate) async fn name(
         .await?;
     let named = naming.generate(doc).await.map_err(OpError::failed);
     ctx.checkpoint()?;
-    Ok(ToolResult::valid(named?, Vec::new(), versions))
+    let (named, messages) = named?;
+    Ok(ToolResult::valid(named, warnings(messages), versions))
 }

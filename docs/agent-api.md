@@ -133,8 +133,10 @@ Chemical names work in both directions, offline. `import` with
 a new document, and `convert` takes the same input. `name` returns the
 systematic name of a document's molecule with its `status` (`preferred`,
 `not_preferred` or `unverified`), the `reason`, a `detail` sentence, curated
-`aliases` and other valid `alternatives`. `format: "auto"` never reads text as
-a name. A name the parser cannot read, which includes some trade names such as
+`aliases` and other valid `alternatives`. `warnings` carries what the name
+parser assumed, such as an ignored rotation sign, and what a name leaves out,
+such as a stereocentre drawn without a configuration. `format: "auto"` never
+reads text as a name. A name the parser cannot read, which includes some trade names such as
 `aspirin`, fails with `failed`; the systematic or common chemical name, such
 as `acetylsalicylic acid`, works.
 

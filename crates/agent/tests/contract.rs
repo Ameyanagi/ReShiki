@@ -480,13 +480,27 @@ fn assert_result_keys(tool: &str, result: &Value, source: &str) {
 struct Named;
 
 impl Naming for Named {
-    fn resolve(&self, _: String) -> NamingFuture<String> {
-        Box::pin(async { Ok("C".to_owned()) })
+    fn resolve(&self, _: String) -> NamingFuture<naming::Resolved> {
+        Box::pin(async {
+            Ok(naming::Resolved {
+                smiles: "C".into(),
+                prepared: None,
+                identity: "C".into(),
+                warnings: Vec::new(),
+            })
+        })
     }
 
-    fn generate(&self, _: reshiki_model::document::Document) -> NamingFuture<naming::Named> {
+    fn verify(&self, _: &str, _: &reshiki_model::document::Document) -> Result<(), String> {
+        Ok(())
+    }
+
+    fn generate(
+        &self,
+        _: reshiki_model::document::Document,
+    ) -> NamingFuture<(naming::Named, Vec<String>)> {
         Box::pin(async {
-            Ok(naming::Named {
+            let named = naming::Named {
                 name: "methane".into(),
                 status: "preferred".into(),
                 preferred: true,
@@ -494,7 +508,8 @@ impl Naming for Named {
                 detail: String::new(),
                 aliases: Vec::new(),
                 alternatives: Vec::new(),
-            })
+            };
+            Ok((named, Vec::new()))
         })
     }
 }

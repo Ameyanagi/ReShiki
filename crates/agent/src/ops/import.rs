@@ -6,7 +6,7 @@ use super::{
     documents::IMPORT_FORMATS,
     error::{ErrorKind, OpError},
     exec::Context,
-    naming::{Hook, hook},
+    naming::{Hook, Resolved, hook},
     result::ToolResult,
     store::Documents,
     wire::{AnalysisJson, DocHandle, Principal, Revision, warnings},
@@ -181,8 +181,10 @@ pub(crate) struct Read {
     pub(crate) analysis: Option<Analysis>,
 }
 
-/// Reads `text` as `format` without touching the store. A `name` is first
-/// resolved to SMILES by the host's naming hook, then read as SMILES.
+/// Reads `text` as `format` without touching the store. A `name` is resolved
+/// by the host's naming hook and imported as the app's name tool imports it:
+/// from the prepared graph, then checked against the name's identity. Its
+/// parser warnings come before the import's.
 pub(crate) async fn read(
     ctx: &Context,
     engine: &LocalEngine,
@@ -190,16 +192,25 @@ pub(crate) async fn read(
     import: Import,
 ) -> Result<Read, OpError> {
     let Import { format, text } = import;
-    let (format, text) = if format == Format::Name {
+    if format == Format::Name {
+        let naming = Arc::clone(hook(naming)?);
         ctx.checkpoint()?;
         // A name read from a file or a pipe ends in a line break.
-        let name = text.trim().to_owned();
-        let smiles = hook(naming)?.resolve(name).await.map_err(OpError::failed);
+        let resolved = naming.resolve(text.trim().to_owned()).await;
         ctx.checkpoint()?;
-        (Format::Smiles, smiles?)
-    } else {
-        (format, text)
-    };
+        let Resolved {
+            smiles,
+            prepared,
+            identity,
+            warnings,
+        } = resolved.map_err(OpError::failed)?;
+        let request = match prepared {
+            Some(prepared) => Request::import_prepared(prepared),
+            None => Request::import("naming_smiles", &smiles),
+        };
+        let check = move |doc: &Document| naming.verify(&identity, doc);
+        return engine_read(ctx, engine, request, warnings, Some(Box::new(check))).await;
+    }
     if format == Format::Reshiki {
         // As the app opens a native file (src/app/files.rs).
         let doc = ctx
@@ -231,17 +242,39 @@ pub(crate) async fn read(
     };
     let mut request = Request::import(name, "");
     request.text = Some(text);
+    engine_read(ctx, engine, request, Vec::new(), None).await
+}
+
+/// Checks an engine drawing before it is finalized.
+type Check = Box<dyn FnOnce(&Document) -> Result<(), String> + Send>;
+
+/// Runs the import `request`; its warnings follow `warnings`.
+async fn engine_read(
+    ctx: &Context,
+    engine: &LocalEngine,
+    request: Request,
+    mut warnings: Vec<String>,
+    check: Option<Check>,
+) -> Result<Read, OpError> {
     ctx.checkpoint()?;
     let response = engine.request(request).await.map_err(OpError::failed);
     ctx.checkpoint()?;
     let Response {
         document,
         analysis,
-        warnings,
+        warnings: more,
         ..
     } = response?;
+    warnings.extend(more);
     let document = document.ok_or_else(|| OpError::failed("Import returned no drawing"))?;
-    let doc = ctx.blocking(move || Ok(finalize(&document))).await?;
+    let doc = ctx
+        .blocking(move || {
+            if let Some(check) = check {
+                check(&document).map_err(OpError::failed)?;
+            }
+            Ok(finalize(&document))
+        })
+        .await?;
     Ok(Read {
         doc,
         warnings,
