@@ -18,6 +18,9 @@ issues: []
   and exported files. The **Export** tab has the same
   **Background** choice, and the right-click menu has **Copy image on** for one
   copy. See [Exporting figures](figure-export.md#background).
+- **Settings → Copy & export** previews the drawing as copied and as exported,
+  each on its background. The **Export** tab previews the file it will write,
+  above the **Export** button.
 - Copied pictures and exported files each have a PNG resolution of 150, 300,
   600 or 1200 dpi. Copies now default to 300 dpi, which pastes faster and
   smaller. Exported files stay at 1200 dpi. The size in centimeters is the same

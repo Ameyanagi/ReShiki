@@ -21,7 +21,7 @@ tab, stay where they are and change the same preference.
 | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Appearance     | **Interface** (**Match canvas**, **Light**, **Dark**) and **Canvas for new drawings**. Each drawing keeps its own canvas once made.                                                                                                                                                                              |
 | Drawing        | **Smart guides**, **Arrange controls** and **Drawing Style units** (pt, mm, cm).                                                                                                                                                                                                                                 |
-| Copy & export  | The background of **Copied pictures** and **Exported files**, **Your colors**, the **PNG resolution** of each (150, 300, 600 or 1200 dpi) with close-ups of the drawing, **Put the editable drawing in pictures** and **Keep text editable in SVG files**. See [Exporting figures](figure-export.md#background). |
+| Copy & export  | The background of **Copied pictures** and **Exported files** with a **Preview** of each, **Your colors**, the **PNG resolution** of each (150, 300, 600 or 1200 dpi) with close-ups of the drawing, **Put the editable drawing in pictures** and **Keep text editable in SVG files**. See [Exporting figures](figure-export.md#background). |
 | Names & checks | **Chemical name typography**, **Molecular weight** (3 or 2 decimals), **IUPAC style notes in Check drawing** and **Write Ξ/ξ for unknown configuration**.                                                                                                                                                        |
 | Assistant      | **Model**, **Reasoning** and **Accept all edits**. The model and reasoning lists fill in once the assistant connects.                                                                                                                                                                                            |
 | Updates        | **Check for updates automatically** and **Channel** (**Stable** or **Nightly**). Changing the channel checks for that channel's latest release.                                                                                                                                                                  |
@@ -32,11 +32,20 @@ and click **Add**. The new color becomes the **Custom** color, and copied
 pictures use it. Click a saved color to do the same with it. ReShiki keeps the
 eight newest colors. **Custom** is one color for copied pictures and exported
 files, so when exported files use **Custom**, they change to the new color too.
+On **White**, **Black** or **Custom**, black and white ink swap so a dark
+drawing stays readable. Colored atoms and other colors stay as they are, and
+**Canvas** keeps the drawing's own colors.
+
+**Preview** shows the current drawing as **Copy** and **Export** write it, each
+on its background, with a checkerboard where it is transparent. ReShiki makes
+the previews in the background after each change to the drawing or to a
+background. An empty drawing shows a sample structure instead.
 
 Under **PNG resolution**, **Copied pictures** defaults to 300 dpi and
 **Exported files** to 1200 dpi. Below them, a close-up of the current drawing at
 each resolution shows the pixels the PNG will have, at the same size on screen,
-with the whole drawing's pixel size underneath. **Copy** and **Export** tags mark
+with the whole drawing's pixel size underneath. The size in centimeters stays
+the same at every setting. **Copy** and **Export** tags mark
 the resolutions in use. The close-ups are made in the background after each
 change to the drawing. An empty drawing shows a sample structure instead. See
 [PNG resolution](figure-export.md#png-resolution).
@@ -49,6 +58,12 @@ change to the drawing. An empty drawing shows a sample structure instead. See
   closes the whole page, also while you search.
 - **Write Ξ/ξ for unknown configuration** waits while a name is being made, as
   it does on the **Names** panel.
+- **Put the editable drawing in pictures** is the same switch as **Include
+  editable drawing** on the **Export** tab. See
+  [Keep the drawing editable inside a picture](figure-export.md#keep-the-drawing-editable-inside-a-picture)
+  for what it puts in pictures and who can read it.
+- **Keep text editable in SVG files** applies to exported SVG files. SVG for
+  Office and copied SVG always turn text into outlines.
 - Settings changes nothing in a drawing that is already open, except where the
   preference itself does, such as **Interface**.
 
