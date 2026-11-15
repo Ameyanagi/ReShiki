@@ -43,40 +43,104 @@ async fn every_atom_button_is_visible_at_the_default_window_size() -> Result<(),
     .await
     .ok_or("No renderer")?;
     let (app, _) = App::new();
-    let mut hidden = Vec::new();
-    for size in [iced::Size::new(1280., 848.), iced::Size::new(1040., 680.)] {
-        let mut ui = iced_runtime::UserInterface::build(
-            app.view(),
-            size,
-            iced_runtime::user_interface::Cache::new(),
-            &mut renderer,
-        );
+    // Shorter windows scroll to the atoms; see the next test.
+    let size = iced::Size::new(1280., 848.);
+    let mut ui = iced_runtime::UserInterface::build(
+        app.view(),
+        size,
+        iced_runtime::user_interface::Cache::new(),
+        &mut renderer,
+    );
+    let mut collect = reshiki::accessibility::Collect::new(iced::Rectangle::with_size(size));
+    ui.operate(&renderer, &mut operation::black_box(&mut collect));
+    let nodes = &collect.snapshot().nodes;
+    let atoms: Vec<_> = nodes
+        .iter()
+        .filter(|node| node.id.starts_with("element-"))
+        .collect();
+    assert_eq!(atoms.len(), 11);
+    let hidden: Vec<_> = atoms
+        .iter()
+        .filter(|node| node.visible_bounds != Some(node.bounds))
+        .map(|node| &node.id)
+        .collect();
+    assert!(hidden.is_empty(), "{hidden:?}");
+    assert!(nodes.iter().any(|node| node.id == "help-open"));
+    Ok(())
+}
+
+/// At the minimum window the tools and atoms scroll as one list: the atoms
+/// start below the fold, scroll up with the tools, and the last atom row clears
+/// the fade at the end, while the Help button stays where it is.
+#[tokio::test]
+#[ignore = "Opt-in real renderer layout check"]
+async fn tools_and_atoms_scroll_together_at_the_minimum_window() -> Result<(), String> {
+    use iced::advanced::{renderer::Headless, widget::operation};
+    let mut renderer = <iced::Renderer as Headless>::new(
+        iced::Font::with_name(reshiki::style::ui_font_family()),
+        iced::Pixels(16.),
+        None,
+    )
+    .await
+    .ok_or("No renderer")?;
+    let (app, _) = App::new();
+    let size = iced::Size::new(1040., 680.);
+    let mut ui = iced_runtime::UserInterface::build(
+        app.view(),
+        size,
+        iced_runtime::user_interface::Cache::new(),
+        &mut renderer,
+    );
+    fn nodes(
+        ui: &mut iced_runtime::UserInterface<'_, Message, Theme, iced::Renderer>,
+        renderer: &iced::Renderer,
+        size: iced::Size,
+    ) -> Vec<reshiki::accessibility::Node> {
         let mut collect = reshiki::accessibility::Collect::new(iced::Rectangle::with_size(size));
-        ui.operate(&renderer, &mut operation::black_box(&mut collect));
-        let atoms: Vec<_> = collect
-            .snapshot()
-            .nodes
-            .iter()
-            .filter(|node| node.id.starts_with("element-"))
-            .collect();
-        let visible = atoms
-            .iter()
-            .filter(|node| node.visible_bounds == Some(node.bounds))
-            .count();
-        eprintln!(
-            "{size:?}: {visible} of {} atom buttons visible",
-            atoms.len()
-        );
-        hidden.push((size, atoms.len() - visible));
-        assert!(
-            collect
-                .snapshot()
-                .nodes
-                .iter()
-                .any(|node| node.id == "help-open")
-        );
+        ui.operate(renderer, &mut operation::black_box(&mut collect));
+        collect.snapshot().nodes.clone()
     }
-    assert!(hidden.iter().all(|(_, hidden)| *hidden == 0), "{hidden:?}");
+    let find = |nodes: &[reshiki::accessibility::Node], id: &str| {
+        nodes
+            .iter()
+            .find(|node| node.id == id)
+            .cloned()
+            .ok_or(format!("No {id}"))
+    };
+    let shown = |node: &reshiki::accessibility::Node| node.visible_bounds == Some(node.bounds);
+    let top = nodes(&mut ui, &renderer, size);
+    let (select, r_group, help) = (
+        find(&top, "tool-Select")?,
+        find(&top, "element-R")?,
+        find(&top, "help-open")?,
+    );
+    assert!(shown(&select) && shown(&help));
+    assert!(!shown(&r_group), "{r_group:?}");
+    ui.update(
+        &[iced::Event::Mouse(iced::mouse::Event::WheelScrolled {
+            delta: iced::mouse::ScrollDelta::Pixels { x: 0., y: -2000. },
+        })],
+        iced::mouse::Cursor::Available(select.bounds.center()),
+        &mut renderer,
+        &mut iced::advanced::clipboard::Null,
+        &mut Vec::new(),
+    );
+    let end = nodes(&mut ui, &renderer, size);
+    let scrolled = select.bounds.y - find(&end, "tool-Select")?.bounds.y;
+    assert!(scrolled > 0.);
+    assert_eq!(
+        r_group.bounds.y - find(&end, "element-R")?.bounds.y,
+        scrolled
+    );
+    let atoms: Vec<_> = end
+        .iter()
+        .filter(|node| node.id.starts_with("element-"))
+        .collect();
+    assert!(atoms.iter().all(|node| shown(node)), "{atoms:?}");
+    assert_eq!(find(&end, "help-open")?.bounds, help.bounds);
+    // The last atom row sits above the fade, which ends at the scroll area's bottom.
+    let r_group = find(&end, "element-R")?;
+    assert!(r_group.bounds.y + r_group.bounds.height + PALETTE_FADE <= help.bounds.y - 10.);
     Ok(())
 }
 

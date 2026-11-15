@@ -634,28 +634,6 @@ impl App {
             }
             grid = grid.push(line);
         }
-        // Only the tools scroll. The bottom padding lets the last row clear
-        // the fade once scrolled to the end.
-        let tools = scrollable(
-            container(grid)
-                .center_x(Length::Fill)
-                .padding(iced::Padding::ZERO.bottom(PALETTE_FADE)),
-        )
-        .height(Length::Fill)
-        .direction(scrollable::Direction::Vertical(
-            scrollable::Scrollbar::new().width(6).scroller_width(6),
-        ));
-        let fade = column![
-            Space::new().height(Length::Fill),
-            row![
-                container(Space::new())
-                    .width(Length::Fill)
-                    .height(PALETTE_FADE)
-                    .style(palette_fade),
-                // Keep the scrollbar clear of the fade.
-                Space::new().width(8),
-            ],
-        ];
         let mut atoms = column![section("ATOMS")].spacing(ATOM_GAP);
         for line in PALETTE_ELEMENTS {
             atoms = atoms.push(
@@ -665,9 +643,38 @@ impl App {
                 .spacing(ATOM_GAP),
             );
         }
+        // Tools and atoms scroll together, so either list can grow. The
+        // area spans the panel's full width to keep its scrollbar right of
+        // the atoms; the bottom padding lets the last row clear the fade.
+        let tools = scrollable(
+            container(
+                column![grid, atoms.width(3. * ATOM_BUTTON + 2. * ATOM_GAP)]
+                    .spacing(10)
+                    .align_x(Alignment::Center),
+            )
+            .center_x(Length::Fill)
+            .padding(iced::Padding::ZERO.bottom(PALETTE_FADE)),
+        )
+        .height(Length::Fill)
+        .direction(scrollable::Direction::Vertical(
+            scrollable::Scrollbar::new()
+                .width(6)
+                .scroller_width(6)
+                .margin(1),
+        ));
+        let fade = column![
+            Space::new().height(Length::Fill),
+            container(
+                container(Space::new())
+                    .width(Length::Fill)
+                    .height(PALETTE_FADE)
+                    .style(palette_fade)
+            )
+            // Keep the scrollbar clear of the fade.
+            .padding([0, 8]),
+        ];
         let palette = column![
             iced::widget::stack![tools, fade].height(Length::Fill),
-            atoms.width(3. * ATOM_BUTTON + 2. * ATOM_GAP),
             self.help_palette_button()
         ]
         .spacing(10)
@@ -675,7 +682,7 @@ impl App {
         container(palette)
             .width(PALETTE_WIDTH)
             .height(Length::Fill)
-            .padding([14, 8])
+            .padding([14, 0])
             .style(panel)
             .into()
     }
@@ -2917,7 +2924,7 @@ fn segment_portion(label: &str) -> u16 {
 /// Tool buttons and the gap between their rows: a 34 px pitch.
 const TOOL_BUTTON: f32 = 32.;
 const TOOL_GAP: f32 = 2.;
-/// The scrolled tools fade out this far above the atoms.
+/// The scrolled tools and atoms fade out this far above the Help button.
 const PALETTE_FADE: f32 = 16.;
 const ATOM_BUTTON: f32 = 28.;
 const ATOM_GAP: f32 = 2.;
