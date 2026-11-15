@@ -238,4 +238,35 @@ async fn preview_fragments_match_whole_previews() {
     }
     println!("SPLIT,{split} of {frames} frames");
     assert!(split * 2 > frames, "only {split} of {frames} frames split");
+
+    // An automatic attached number makes room for every atom, even one that
+    // draws nothing: moving an anonymous dummy next to it moves the number.
+    let mut doc = Document::default();
+    let nitrogen = doc.add_atom("N", World::new(0., 0.));
+    doc.atom_mut(nitrogen).unwrap().display.number = Some(reshiki::atom_labels::Number {
+        text: "7".into(),
+        offset: None,
+        style: reshiki::atom_labels::number_style(),
+    });
+    let dummy = doc.add_atom("*", World::new(500., 0.));
+    let ids = [dummy];
+    let mut canvas = chain_canvas(&doc, ChainMode::Straight);
+    canvas.camera = Camera {
+        center: World::default(),
+        zoom: 1.25,
+    };
+    canvas.tool = Tool::Select;
+    canvas.smart_guides = false;
+    canvas.selected = &ids;
+    let state = State {
+        gesture: Some(Gesture::Move {
+            start: World::new(500., 0.),
+            ids: vec![dummy],
+            clicked: vec![dummy],
+        }),
+        cursor: Some(canvas.camera.screen(World::new(-25., 0.), bounds)),
+        ..State::default()
+    };
+    let ((fragment, _), (whole, _)) = (shot(&canvas, &state, true), shot(&canvas, &state, false));
+    assert!(fragment == whole, "the attached number stayed where it was");
 }

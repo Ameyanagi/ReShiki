@@ -3,12 +3,15 @@
 //! A ring, template or bond preview, or a partial move, changes a few atoms of
 //! a large drawing. Their connected molecules are drawn from the preview; the
 //! rest keeps its scene and tessellation. The split applies only while the two
-//! parts' ink stays apart, so no crossing gap, halo or paint order between
-//! them can differ from drawing the whole preview.
+//! parts stay apart: no ink, atom, bond or automatic indicator's reach of one
+//! comes near the other's. Then no crossing gap, halo,
+//! paint order or automatic label placement can differ from drawing the whole
+//! preview.
 use crate::canvas::{Camera, World, cache::SceneCache, markers::Markers};
 use reshiki::document::Document;
 use reshiki::graphics::PathCommand;
 use reshiki::scene::{self, Primitive};
+use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
 use std::rc::Rc;
@@ -24,33 +27,40 @@ pub(in crate::canvas) struct Remainder {
     pub scene: Rc<[Primitive]>,
     /// Empty: the preview draws its own selection markers below both parts.
     pub markers: Rc<Markers>,
-    ink: Vec<(World, World)>,
+    layout: Vec<(World, World)>,
 }
 
 impl Remainder {
-    pub fn new(scene: Rc<[Primitive]>) -> Self {
-        let mut ink = Vec::new();
-        for p in scene.iter() {
-            push_ink(p, &mut ink);
-        }
-        Self {
-            ink,
+    /// `doc` without the sorted `excluded` objects, or `None` when an object
+    /// that stays references one of them. `scene` gives `doc`'s own scene,
+    /// used when nothing is excluded.
+    pub fn new(
+        doc: &Document,
+        excluded: &[u64],
+        scene: impl FnOnce() -> Rc<[Primitive]>,
+    ) -> Option<Self> {
+        let (part, scene) = if excluded.is_empty() {
+            (Cow::Borrowed(doc), scene())
+        } else {
+            let kept: Vec<_> = doc
+                .object_ids()
+                .filter(|id| excluded.binary_search(id).is_err())
+                .collect();
+            let part = reshiki::editing::preserved_expansion_selection(doc, &kept).ok()?;
+            if part
+                .object_ids()
+                .any(|id| excluded.binary_search(&id).is_ok())
+            {
+                return None;
+            }
+            let scene = scene::primitives(&part).into();
+            (Cow::Owned(part), scene)
+        };
+        Some(Self {
+            layout: layout(&part, &scene),
             markers: Rc::default(),
             scene,
-        }
-    }
-
-    /// The scene of `doc` without the sorted `excluded` objects, or `None`
-    /// when an object that stays references one of them.
-    pub fn scene_without(doc: &Document, excluded: &[u64]) -> Option<Rc<[Primitive]>> {
-        let kept: Vec<_> = doc
-            .object_ids()
-            .filter(|id| excluded.binary_search(id).is_err())
-            .collect();
-        let part = reshiki::editing::preserved_expansion_selection(doc, &kept).ok()?;
-        part.object_ids()
-            .all(|id| excluded.binary_search(&id).is_err())
-            .then(|| scene::primitives(&part).into())
+        })
     }
 }
 
@@ -61,7 +71,7 @@ pub(super) struct Fragment {
 
 impl Fragment {
     /// Split `preview` against the cached `base`, or `None` when it changes
-    /// more than atoms, bonds and abbreviations, or the parts' ink would meet.
+    /// more than atoms, bonds and abbreviations, or the parts would meet.
     pub fn new(
         cache: &mut SceneCache,
         base: &Document,
@@ -85,12 +95,11 @@ impl Fragment {
         excluded.sort_unstable();
         let remainder = cache.remainder(base, &excluded)?;
         let scene = scene::primitives(&part);
-        let mut fragment = Vec::new();
-        for p in &scene {
-            push_ink(p, &mut fragment);
-        }
-        // A pixel of antialiasing and a little more for estimated text widths.
-        let margin = 3. / camera.zoom;
+        let mut fragment = layout(&part, &scene);
+        // A pixel of antialiasing and a little more for estimated text widths,
+        // plus the gap automatic hydrogens, charges and group labels keep from
+        // other ink: 0.12 of their font size.
+        let margin = 3. / camera.zoom + 0.12 * label_font(preview);
         for (lo, hi) in &mut fragment {
             *lo = lo.offset(-margin, -margin);
             *hi = hi.offset(margin, margin);
@@ -103,7 +112,7 @@ impl Fragment {
         });
         let apart = all.is_none_or(|all| {
             remainder
-                .ink
+                .layout
                 .iter()
                 .filter(|rest| overlap(rest, &all))
                 .all(|rest| !fragment.iter().any(|f| overlap(rest, f)))
@@ -217,6 +226,53 @@ fn molecules(base: &Document, preview: &Document, mut atoms: HashSet<u64>) -> Ha
         }
     }
     atoms
+}
+
+/// The largest label font size, in world units.
+fn label_font(doc: &Document) -> f32 {
+    let styles = doc
+        .atoms
+        .iter()
+        .filter_map(|a| a.text_style.as_ref())
+        .chain(
+            doc.abbreviations
+                .iter()
+                .filter_map(|g| g.label_style.as_ref()),
+        );
+    let pt = styles
+        .map(|style| style.size_pt)
+        .fold(doc.drawing_style.font_size_pt, f32::max);
+    doc.drawing_style.world(pt)
+}
+
+/// Where `doc`'s drawing `scene` paints, and what automatic placement in
+/// another molecule would avoid even without ink: atoms, bonds (both may be
+/// invisible) and where each automatic indicator searches.
+fn layout(doc: &Document, scene: &[Primitive]) -> Vec<(World, World)> {
+    let mut boxes = Vec::new();
+    for p in scene {
+        push_ink(p, &mut boxes);
+    }
+    boxes.extend(
+        doc.atoms
+            .iter()
+            .map(|a| (a.position.offset(-3., -3.), a.position.offset(3., 3.))),
+    );
+    boxes.extend(doc.bonds.iter().filter_map(|b| {
+        let (p, q) = (doc.atom(b.a)?.position, doc.atom(b.b)?.position);
+        Some((
+            World::new(p.x.min(q.x), p.y.min(q.y)),
+            World::new(p.x.max(q.x), p.y.max(q.y)),
+        ))
+    }));
+    // Indicators avoid label line boxes, which reach beyond the ink by less
+    // than half the font size.
+    let font = label_font(doc) / 2.;
+    for indicator in reshiki::atom_labels::indicators(doc) {
+        let (c, reach) = (indicator.center, indicator.reach() + font);
+        boxes.push((c.offset(-reach, -reach), c.offset(reach, reach)));
+    }
+    boxes
 }
 
 /// Where a primitive can paint. A path holds every bond of one color, so

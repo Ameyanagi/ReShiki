@@ -208,12 +208,8 @@ impl SceneCache {
         use super::paper::Remainder;
         self.document(doc);
         if !matches!(&self.remainder, Some((key, _)) if key == excluded) {
-            let scene = if excluded.is_empty() {
-                Some(self.scene(doc))
-            } else {
-                Remainder::scene_without(doc, excluded)
-            };
-            self.remainder = Some((excluded.to_vec(), scene.map(|s| Rc::new(Remainder::new(s)))));
+            let part = Remainder::new(doc, excluded, || self.scene(doc)).map(Rc::new);
+            self.remainder = Some((excluded.to_vec(), part));
         }
         self.remainder.as_ref().and_then(|(_, part)| part.clone())
     }

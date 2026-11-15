@@ -900,6 +900,16 @@ pub struct Indicator {
     pub roman_parentheses: bool,
 }
 impl Indicator {
+    /// How far from its center an atom, bond or text can change where
+    /// automatic placement puts this indicator. Candidates keep 3 units from
+    /// reserved text (itself padded by 3) and 7 from bonds, and an atom nearer
+    /// the candidate than its anchor (1.3 times for stereo groups) counts too;
+    /// the anchor lies within the outermost radius of the center.
+    pub fn reach(&self) -> f32 {
+        let radius = indicator_radii(self.height)[4] + outward_extent(self.width, self.height);
+        1.3 * radius + self.width.max(self.height) / 2. + 10.
+    }
+
     pub fn primitives(&self) -> Vec<crate::scene::Primitive> {
         let format =
             owned_indicator_format(self.owner, &self.text, &self.style, self.roman_parentheses);
