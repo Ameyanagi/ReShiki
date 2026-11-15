@@ -30,14 +30,15 @@ To add a background color, click **+** under **Your colors**. Pick a palette
 color, or type the color as `#1F4E79`, `31, 78, 121` or `oklch(0.42 0.09 250)`
 and click **Add**. The new color becomes the **Custom** color, and copied
 pictures use it. Click a saved color to do the same with it. ReShiki keeps the
-eight newest colors.
+eight newest colors. **Custom** is one color for copied pictures and exported
+files, so when exported files use **Custom**, they change to the new color too.
 
 Under **PNG resolution**, **Copied pictures** defaults to 300 dpi and
 **Exported files** to 1200 dpi. Below them, a close-up of the current drawing at
 each resolution shows the pixels the PNG will have, at the same size on screen,
 with the whole drawing's pixel size underneath. **Copy** and **Export** tags mark
 the resolutions in use. The close-ups are made in the background after each
-change to the drawing; an empty drawing shows a sample structure instead. See
+change to the drawing. An empty drawing shows a sample structure instead. See
 [PNG resolution](figure-export.md#png-resolution).
 
 ## Limits
