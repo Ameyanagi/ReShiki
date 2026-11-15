@@ -361,7 +361,7 @@ impl App {
                         .style(button::text),
                 )
                 .push(horizontal_line())
-                .push(
+                .push(super::workspace::hover_hint(
                     command(if self.tab.selected.is_empty() {
                         "Center drawing on page"
                     } else {
@@ -371,14 +371,9 @@ impl App {
                         !self.tab.selected.is_empty(),
                     )))
                     .style(button::text),
-                )
-                .push(
-                    text(
-                        "Centering keeps whole molecules together and preserves the drawing scale.",
-                    )
-                    .size(11)
-                    .style(super::workspace::muted_text),
-                )
+                    "Keeps whole molecules together and the drawing scale",
+                    iced::widget::tooltip::Position::Top,
+                ))
                 .push(
                     command("Export pages as PDF…")
                         .style(crate::appearance::primary)
@@ -397,11 +392,22 @@ impl App {
             }
             let overflow = layout.overflow(&self.tab.doc);
             if overflow > 0 {
-                body = body.push(text(format!("{overflow} items cross a page edge or sit outside the pages. PDF pages clip at paper edges.")).size(11).style(crate::appearance::text_color(iced::Color::from_rgb8(168,91,36))));
+                body = body.push(overflow_warning(overflow));
             }
-            body = body.push(horizontal_line())
-                .push(text("Margins are guides and do not print. Use cropped drawing exports for figures that will be placed in another document.").size(11).style(super::workspace::muted_text))
-                .push(command("Remove page layout").on_press(Message::Pages(Action::Remove)).style(button::text));
+            body = body
+                .push(horizontal_line())
+                .push(super::workspace::hover_hint(
+                    text("Margins do not print")
+                        .size(11)
+                        .style(super::workspace::muted_text),
+                    "For a figure in another document, export the cropped drawing",
+                    iced::widget::tooltip::Position::Top,
+                ))
+                .push(
+                    command("Remove page layout")
+                        .on_press(Message::Pages(Action::Remove))
+                        .style(button::text),
+                );
         } else {
             body = body.push(text("Choose a paper size and margins to prepare a publication or a multipage PDF.").size(12))
                 .push(command("Page setup…").on_press(Message::Pages(Action::Open)));
@@ -568,7 +574,7 @@ impl App {
             }
             let overflow = layout.overflow(&self.tab.doc);
             if overflow > 0 {
-                body=body.push(text(format!("{overflow} objects cross a page edge or sit outside the pages. PDF pages clip at paper edges.")).size(11).style(crate::appearance::text_color(iced::Color::from_rgb8(168,91,36))));
+                body = body.push(overflow_warning(overflow));
             }
             body = body.push(
                 command("Remove page layout")
@@ -576,8 +582,32 @@ impl App {
                     .style(button::text),
             );
         }
-        body.push(text("Page setup does not move or resize objects. Margin guides do not appear in exports. Drawing exports remain cropped to the artwork.").size(11).style(super::workspace::muted_text)).into()
+        body.push(super::workspace::hover_hint(
+            text("Objects stay in place · Margins do not print")
+                .size(11)
+                .style(super::workspace::muted_text),
+            "Drawing exports stay cropped to the artwork",
+            iced::widget::tooltip::Position::Top,
+        ))
+        .into()
     }
+}
+
+/// Objects that cross a page edge or sit outside the pages.
+fn overflow_warning<'a>(overflow: usize) -> Element<'a, Message> {
+    super::workspace::hover_hint(
+        text(match overflow {
+            1 => "1 object is off the pages".into(),
+            n => format!("{n} objects are off the pages"),
+        })
+        .size(11)
+        .style(crate::appearance::text_color(iced::Color::from_rgb8(
+            168, 91, 36,
+        ))),
+        "Crosses a page edge or sits outside the pages · PDF pages clip at paper edges",
+        iced::widget::tooltip::Position::Top,
+    )
+    .into()
 }
 
 #[cfg(test)]

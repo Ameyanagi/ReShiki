@@ -210,12 +210,17 @@ pub(super) fn graphic_options(family: Family) -> Vec<(String, GraphicOption)> {
     options
 }
 
+/// The ATOMS palette's R group: the Atom tool places a `*` atom labeled R.
+pub(super) const R_GROUP: &str = "R";
+
 // Hover hints show one key that selects this tool on empty, unselected canvas.
 // Contextual atom/bond actions belong in Help, not in tool-selection hints.
 pub(super) fn element_hint(symbol: &str) -> String {
     use iced::keyboard::Modifiers;
     let shift = |key| super::shortcuts::keys(Modifiers::SHIFT, key);
     let key = match symbol {
+        "*" => return "Dummy atom *".into(),
+        R_GROUP => return "R group".into(),
         "C" => "c".into(),
         "N" => "n".into(),
         "O" => "o".into(),

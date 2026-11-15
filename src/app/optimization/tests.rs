@@ -1300,7 +1300,7 @@ async fn properties_preview_controls_fit_scroll_and_keep_canvas_toolbar_height()
             before, after,
             "Preview keeps the ordinary 46 px canvas toolbar and viewport"
         );
-        assert_eq!(app.inspector_width(), 300.);
+        assert_eq!(app.inspector_width(), 320.);
         let snapshot = ui.snapshot(&app);
         let controls: Vec<_> = snapshot
             .nodes
@@ -1310,9 +1310,9 @@ async fn properties_preview_controls_fit_scroll_and_keep_canvas_toolbar_height()
         assert_eq!(controls.len(), 19);
         for control in controls {
             assert!(
-                control.bounds.x >= size.width - 300. - 0.5
+                control.bounds.x >= size.width - 320. - 0.5
                     && control.bounds.x + control.bounds.width <= size.width + 0.5,
-                "{control:?} must fit the 300 px Properties panel"
+                "{control:?} must fit the 320 px Properties panel"
             );
         }
         for running in [false, true] {

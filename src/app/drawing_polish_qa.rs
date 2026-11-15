@@ -290,7 +290,7 @@ async fn drawing_polish_renderer_palette() {
             Some(&directory().join(format!("palette-{}.png", size.width))),
         );
         if !baseline() && size.width == 1600. {
-            for symbol in ["H", "C", "N", "O", "S", "P", "F", "Cl", "Br", "Fe", "*"] {
+            for symbol in ["H", "C", "N", "O", "S", "P", "F", "Cl", "Br", "*", "R"] {
                 ui.activate(&mut app, &format!("element-{symbol}"));
                 assert_eq!(app.element, symbol);
             }

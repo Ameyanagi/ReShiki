@@ -6,7 +6,7 @@
 //! Unlike [`super::STATES`], a scene may finish background work (NMR
 //! prediction, local naming, auto-mapping, expansion) the way the event loop
 //! would, activate a control by its accessibility id, and scroll the
-//! inspector. Naming scenes need `RESHIKI_NAMING_HELPER` and
+//! inspector or the tool palette. Naming scenes need `RESHIKI_NAMING_HELPER` and
 //! `RESHIKI_INCHI_HELPER`, as the naming tests do; set `RESHIKI_DATA_DIR` to
 //! an empty directory so saved templates and drafts do not appear.
 use super::*;
@@ -20,8 +20,9 @@ use std::cell::Cell;
 /// What a scene may ask of the harness besides messages.
 pub(in crate::app::workspace) struct Driver<'a> {
     renderer: &'a iced::Renderer,
-    /// Wheel lines to scroll the inspector by before the screenshot.
-    scroll: Cell<Option<f32>>,
+    /// Wheel lines to scroll the inspector (or the palette, if true) by
+    /// before the screenshot.
+    scroll: Cell<Option<(bool, f32)>>,
 }
 
 impl<'a> Driver<'a> {
@@ -32,8 +33,20 @@ impl<'a> Driver<'a> {
         }
     }
 
-    pub(in crate::app::workspace) fn scroll(&self) -> Option<f32> {
-        self.scroll.get()
+    /// The point to scroll at in a window of this size, and the wheel lines.
+    pub(in crate::app::workspace) fn scroll(
+        &self,
+        app: &App,
+        size: Size,
+    ) -> Option<(iced::Point, f32)> {
+        self.scroll.get().map(|(palette, lines)| {
+            let x = if palette {
+                PALETTE_WIDTH / 2.
+            } else {
+                size.width - app.inspector_width() / 2.
+            };
+            (iced::Point::new(x, size.height / 2.), lines)
+        })
     }
 
     /// Activates the enabled control with this accessibility id, as a click
@@ -65,7 +78,12 @@ impl<'a> Driver<'a> {
 
     /// Scrolls the inspector down by this many wheel lines.
     fn scroll_inspector(&self, lines: f32) {
-        self.scroll.set(Some(lines));
+        self.scroll.set(Some((false, lines)));
+    }
+
+    /// Scrolls the tool palette down by this many wheel lines.
+    fn scroll_palette(&self, lines: f32) {
+        self.scroll.set(Some((true, lines)));
     }
 }
 
@@ -727,6 +745,12 @@ fn model_polish_lower(app: &mut App, driver: &Driver<'_>) {
     driver.scroll_inspector(-6.);
 }
 
+/// The tools and atoms scrolled to the end: on a short window the last atom
+/// row clears the fade and the Help button stays below.
+fn palette_atoms(_: &mut App, driver: &Driver<'_>) {
+    driver.scroll_palette(-40.);
+}
+
 /// Free-base porphine placed, and found by searching the template library.
 fn porphine(app: &mut App, _: &Driver<'_>) {
     let template = reshiki::templates::LIBRARY
@@ -913,7 +937,7 @@ fn bond_from_text(app: &mut App, _: &Driver<'_>) {
     }));
 }
 
-pub(in crate::app::workspace) const STATES: [(&str, Scene); 44] = [
+pub(in crate::app::workspace) const STATES: [(&str, Scene); 45] = [
     ("nmr-proton", nmr_proton),
     ("nmr-carbon-labels", nmr_carbon_labels),
     ("nmr-label-menu", nmr_label_menu),
@@ -958,6 +982,7 @@ pub(in crate::app::workspace) const STATES: [(&str, Scene); 44] = [
     ("atom-label-editor-formatted", atom_label_editor_formatted),
     ("bond-from-text-hint", bond_from_text_hint),
     ("bond-from-text", bond_from_text),
+    ("palette-atoms", palette_atoms),
 ];
 
 pub(in crate::app::workspace) fn needs_naming(name: &str) -> bool {
@@ -997,7 +1022,7 @@ async fn models3d_polish_layout_snapshots() {
 }
 
 /// Settles the view as the window first shows, plays the scene, lets the
-/// view settle again, scrolls the inspector if the scene asked, then saves
+/// view settle again, scrolls where the scene asked, then saves
 /// the screenshot. The tree persists throughout, so first-show sensors fire
 /// before the scene and cannot close the menus it opens.
 pub(super) fn capture(
@@ -1011,10 +1036,9 @@ pub(super) fn capture(
     settle_view(app, renderer, &mut tree, size);
     let driver = Driver::new(renderer);
     scene(app, &driver);
-    let scroll = driver.scroll();
+    let scroll = driver.scroll(app, size);
     settle_view(app, renderer, &mut tree, size);
-    if let Some(lines) = scroll {
-        let at = iced::Point::new(size.width - app.inspector_width() / 2., size.height / 2.);
+    if let Some((at, lines)) = scroll {
         let mut messages = Vec::new();
         {
             let mut view = app.view();
