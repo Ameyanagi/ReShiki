@@ -287,8 +287,7 @@ impl App {
             self.tab.doc.canvas_theme = theme;
             self.changed(before);
             self.sync_color_input();
-            self.status =
-                format!("{theme} canvas · Copies keep ink colors, transparent background");
+            self.status = format!("{theme} canvas · Copies: ink colors, transparent background");
         }
         // An explicit choice also sets the starting canvas for future drawings.
         // Opening a file and Undo/Redo never pass through this preference update.

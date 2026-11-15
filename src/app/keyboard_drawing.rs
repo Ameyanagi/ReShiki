@@ -205,7 +205,7 @@ impl App {
                 if let Target::Atom(id) = self.tab.keyboard_drawing.target() {
                     self.tab.keyboard_drawing.mark(id);
                     self.status =
-                        format!("Marked atom {id} · Navigate to another atom, then ] to connect");
+                        format!("Marked atom {id} · Go to another atom, then ] to connect");
                     self.error = false;
                 } else {
                     self.status = "Navigate to an atom, then [ to mark it".into();

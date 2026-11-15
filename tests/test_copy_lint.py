@@ -39,10 +39,49 @@ class CopyLintTest(unittest.TestCase):
         self.assertIn("Undo", found[3][1])
         self.assertIn("sentence case", found[4][1])
 
-    def test_measures_status_without_placeholders(self):
-        fits = "x" * 60
-        self.assertEqual(problems(f'self.status = format!("{fits}{{name}}");'), [])
-        self.assertEqual(len(problems(f'self.status =\n    "{fits}x".into();')), 1)
+    def test_counts_each_placeholder_as_a_short_word(self):
+        self.assertEqual(problems(f'self.status = format!("{"x" * 55}{{name}}");'), [])
+        self.assertEqual(len(problems(f'self.status = format!("{"x" * 56}{{name}}");')), 1)
+        self.assertEqual(len(problems(f'self.status =\n    "{"x" * 61}".into();')), 1)
+        # Only the first line shows in the status bar.
+        self.assertEqual(problems(f'self.status = format!("Copied\\n{"x" * 70}");'), [])
+
+    def test_measures_constant_and_conditional_statuses(self):
+        long = "x" * 61
+        found = problems(
+            f'const LONG: &str =\n    "{long}";\n'
+            "app.status = LONG.into();\n"
+            f'self.status = if ok {{ "Done".into() }} else {{ "{long}".into() }};\n'
+            f'self.status = match n {{ 0 => return, n => format!("{{n}}{long}") }};\n'
+        )
+        self.assertEqual(len(found), 3)
+        shared = list(copy_lint.problems(APP, "self.status = OTHER.into();", {"OTHER": long}))
+        self.assertEqual([line for line, _ in shared], [1])
+
+    def test_reads_multiline_raw_and_char_literals(self):
+        found = list(
+            copy_lint.problems(
+                APP,
+                "let quote = '\"';\n"
+                'let tip = "R/S: stereocenter.\\n\\\n    r/s: pseudoasymmetric centre.";\n'
+                'let raw = r#"Colour "inside" raw"#;\n'
+                'let groups = "abs: as drawn.\\nCentres flip together.";\n',
+            )
+        )
+        self.assertEqual([line for line, _ in found], [2, 4, 5])
+        self.assertIn("centre", found[0][1])
+        self.assertIn("Colour", found[1][1])
+        self.assertIn("Centres", found[2][1])
+
+    def test_accepts_us_words_that_share_a_stem(self):
+        self.assertEqual(
+            problems(
+                'self.status = "Cancellation requested".into();\n'
+                'let a = "Analysis ready · 3 analyses";\n'
+            ),
+            [],
+        )
+        self.assertEqual(len(problems('let a = "Cancelled";\nlet b = "Cancelling";')), 2)
 
     def test_skips_comments_identifiers_and_test_code(self):
         self.assertEqual(

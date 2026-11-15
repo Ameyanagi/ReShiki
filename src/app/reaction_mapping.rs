@@ -249,7 +249,7 @@ impl App {
                 self.status = if proposal.complete {
                     "Atom-map proposal ready to review"
                 } else {
-                    "Search budget reached · Review the feasible proposal or add manual anchors"
+                    "Search budget reached · Review the proposal or add anchors"
                 }
                 .into();
                 self.error = false;

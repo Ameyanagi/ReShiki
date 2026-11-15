@@ -155,10 +155,7 @@ fn strict_failure_waits_for_relaxed_and_relaxed_results_are_labeled() {
         session.approximations,
         vec!["Started from the drawn coordinates".to_owned()]
     );
-    assert!(
-        app.status
-            .starts_with("Relaxed 3D preview · Chemistry not validated")
-    );
+    assert!(app.status.starts_with("Relaxed 3D, not validated"));
 
     // Strict stays unavailable for this molecule; Relaxed reuses its preparation.
     let _ = app.optimization_action(Action::Mode(Mode::Strict));

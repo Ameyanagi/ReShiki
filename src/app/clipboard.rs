@@ -465,7 +465,7 @@ impl App {
             self.sync_bonds();
         }
         let action = if stale_cut {
-            "Copied previous selection; Cut canceled because the drawing changed"
+            "Drawing changed · Cut canceled · Previous selection copied"
         } else if cut {
             if cfg!(windows) {
                 "Selection cut · editable drawing copied"

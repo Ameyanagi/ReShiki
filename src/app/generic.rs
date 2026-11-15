@@ -8,7 +8,7 @@ use reshiki::document::Point;
 use reshiki::generic::{Limits, PreparedExpansion, RepeatPattern, RepeatUnit};
 
 pub(super) const EXPANSION_DISCARDED: &str =
-    "Generic expansion was discarded because another edit was open; expand again";
+    "Expansion discarded · Another edit was open · Expand again";
 
 pub(super) const EXPAND: &str = "Expand generic structures";
 const EXPAND_HINT: &str = "Opens all concrete structures together in one new tab";

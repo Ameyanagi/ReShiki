@@ -127,7 +127,7 @@ Enforced in `crates/model/src/reaction_mapping/search.rs` (`Budget::default`), s
 
 - The search has 20,000,000 work units and 250,000 search states.
 - Running out of work before the search has a full correspondence is an error: "Auto-map search budget reached before a full correspondence was found; add manual anchors".
-- A search that reaches either limit after that keeps its best feasible mapping. The status reads "Search budget reached · Review the feasible proposal or add manual anchors", and the review panel shows "Budget reached · optimality and uniqueness unknown" above **Apply maps**.
+- A search that reaches either limit after that keeps its best feasible mapping. The status reads "Search budget reached · Review the proposal or add anchors", and the review panel shows "Budget reached · optimality and uniqueness unknown" above **Apply maps**.
 
 ### 3D geometry
 

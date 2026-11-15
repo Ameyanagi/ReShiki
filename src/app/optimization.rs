@@ -872,13 +872,9 @@ impl App {
                 Phase::Paused
             };
             self.status = match (session.mode, result.converged) {
-                (Mode::Relaxed, _) => {
-                    "Relaxed 3D preview · Chemistry not validated · Enter to apply · Esc to cancel"
-                }
+                (Mode::Relaxed, _) => "Relaxed 3D, not validated · Enter to apply · Esc to cancel",
                 (Mode::Strict, true) => "3D preview converged · Enter to apply · Esc to cancel",
-                (Mode::Strict, false) => {
-                    "3D preview · Pin or drag atoms · Enter to apply · Esc to cancel"
-                }
+                (Mode::Strict, false) => "Pin or drag atoms · Enter to apply · Esc to cancel",
             }
             .into();
             self.error = false;
@@ -911,9 +907,11 @@ impl App {
                                 session.field
                             ),
                             Mode::Strict if session.blocked() => {
-                                "Strict checks failed · Choose Relaxed to optimize without valence checks".into()
+                                "Strict checks failed · Relaxed skips valence checks".into()
                             }
-                            Mode::Strict => format!("Generating stereo-preserving 3D · {}", session.field),
+                            Mode::Strict => {
+                                format!("Generating stereo-preserving 3D · {}", session.field)
+                            }
                         };
                         self.error = false;
                         task

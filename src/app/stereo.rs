@@ -175,7 +175,7 @@ impl App {
         self.tab.selected = units(&notes);
         self.changed(before);
         self.status = format!(
-            "Reversed {} stereo bond{} · Check drawing to update notices",
+            "Reversed {} stereo bond{} · Check drawing again",
             affected.len(),
             if affected.len() == 1 { "" } else { "s" }
         );

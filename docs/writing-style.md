@@ -101,5 +101,8 @@ rules, plus these:
 
 `scripts/copy_lint.py` checks the rules it can: spelling, `(s)` plurals,
 "Escape" in text, Undo tails, capitals passed to `section()` and the status
-message length. The `web` job in Checks runs it; run it locally with
-`python3 scripts/copy_lint.py`.
+message length. For the length it reads every string and `&str` constant
+assigned to a `status`, including each branch of an `if` or `match`, and counts
+a `{placeholder}` as 5 characters. It cannot follow a message through a local
+variable, so check those by hand. The `web` job in Checks runs it; run it
+locally with `python3 scripts/copy_lint.py`.

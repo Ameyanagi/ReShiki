@@ -388,7 +388,7 @@ impl App {
                 "No matching common groups in this selection".into()
             } else {
                 format!(
-                    "{count} abbreviation{} · Full chemistry retained · Expand to edit internal atoms",
+                    "{count} abbreviation{} · Chemistry kept · Expand to edit",
                     if count == 1 { "" } else { "s" }
                 )
             };

@@ -430,7 +430,7 @@ impl App {
         self.status = match count {
             0 => return,
             1 => "Recovered drawing · Save to keep a new copy".into(),
-            n => format!("Recovered {n} drawings as tabs · Save them to keep new copies"),
+            n => format!("Recovered {n} drawings · Save each to keep a copy"),
         };
         self.error = false;
     }
