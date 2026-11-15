@@ -62,7 +62,9 @@ pub(super) const BACKGROUND_STEPS: usize = 5;
 
 const TAB_HEIGHT: f32 = 30.;
 const TAB_PADDING: f32 = 8.;
-const TAB_MIN: f32 = 88.;
+/// Three tabs of this width still fit the header of the smallest window
+/// beside the GitHub button.
+const TAB_MIN: f32 = 84.;
 /// The narrowest the tab in front gets when it alone shows.
 const TAB_FLOOR: f32 = 64.;
 const TAB_MAX: f32 = 200.;
