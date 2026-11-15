@@ -382,8 +382,7 @@ impl CdxmlScene {
             atom.centroid = attachment.members;
         }
         // After generic labels, so a generic structure shows no values.
-        let imported = document.clone();
-        crate::linked_properties::reconcile(document, &imported);
+        crate::linked_properties::reconcile(document, &Default::default());
         Ok(())
     }
 }

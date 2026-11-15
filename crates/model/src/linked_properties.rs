@@ -5,7 +5,7 @@
 //! Editing the text makes it plain text, as with linked chemical names;
 //! deleting the molecule removes it.
 use crate::{
-    document::{Annotation, Document, Point},
+    document::{Annotation, Atom, Bond, Document, Point},
     typography::{Script, StyleChange, TextAlign, TextFormat, TextSpan},
 };
 use serde::{Deserialize, Serialize};
@@ -101,8 +101,13 @@ struct Values {
     percent: Vec<(String, f64)>,
 }
 
+#[cfg(test)]
+thread_local! { static CALCULATIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) }; }
+
 /// The Properties panel's calculation, for one molecule.
 fn values(doc: &Document, atoms: &[u64]) -> Option<Values> {
+    #[cfg(test)]
+    CALCULATIONS.with(|c| c.set(c.get() + 1));
     use crate::chemistry::{descriptors, document, properties, rings};
     let molecule = document::prepare(&crate::editing::analysis_document(doc, atoms)).ok()?;
     let graph = &molecule.state.graph;
@@ -335,10 +340,32 @@ pub fn toggle(
     Ok(())
 }
 
+/// The molecule's atoms, wherever they are drawn, and its bonds.
+fn chemistry(doc: &Document, atoms: &[u64]) -> (Vec<Atom>, Vec<Bond>) {
+    let atoms: HashSet<_> = atoms.iter().collect();
+    (
+        doc.atoms
+            .iter()
+            .filter(|a| atoms.contains(&a.id))
+            .map(|a| Atom {
+                position: Point::default(),
+                ..a.clone()
+            })
+            .collect(),
+        doc.bonds
+            .iter()
+            .filter(|b| atoms.contains(&b.a) || atoms.contains(&b.b))
+            .cloned()
+            .collect(),
+    )
+}
+
 /// Called in the same transaction as the edit: each linked caption follows its
 /// molecule's atoms and position. Edited text unlinks it. A deleted molecule
 /// removes its caption. Molecules joined together keep the first caption, and
-/// a split molecule keeps its caption on the largest piece.
+/// a split molecule keeps its caption on the largest piece. Only a molecule
+/// whose atoms or bonds changed is recalculated; an empty `before`
+/// recalculates every caption.
 pub fn reconcile(doc: &mut Document, before: &Document) {
     let links = std::mem::take(&mut doc.property_captions);
     let mut claimed = HashSet::new();
@@ -382,9 +409,18 @@ pub fn reconcile(doc: &mut Document, before: &Document) {
                     .any(|a| a.id == link.annotation && a.position == caption.position)
             })
             .and_then(|old| anchor(before, &old.atoms));
+        let unchanged = previous.is_some_and(|old| {
+            old.properties == link.properties
+                && old.two_decimal_weight == link.two_decimal_weight
+                && before.drawing_style == doc.drawing_style
+                && before.generic == doc.generic
+                && chemistry(before, &whole) == chemistry(doc, &whole)
+        });
         link.atoms = whole;
-        let shown = link.properties.clone();
-        refresh(doc, &mut link, &mut caption, &shown);
+        if !unchanged {
+            let shown = link.properties.clone();
+            refresh(doc, &mut link, &mut caption, &shown);
+        }
         if let Some((from, to)) = shift.zip(anchor(doc, &link.atoms)) {
             caption.position = caption.position.offset(to.x - from.x, to.y - from.y);
         }

@@ -444,3 +444,19 @@ fn styled_parts_stay_styled_when_the_values_change() {
     assert!(!caption.format.at(0).bold);
     assert!(caption.format.at("Formula: ".len()).formula);
 }
+
+#[test]
+fn moving_a_molecule_does_not_recalculate_it() {
+    let (mut doc, atoms) = shown_doc(&[Property::Weight], true);
+    let mut history = History::default();
+    CALCULATIONS.with(|c| c.set(0));
+    edit(&mut doc, &mut history, |doc| {
+        doc.translate(&atoms, 40., 10.)
+    });
+    assert_eq!(CALCULATIONS.with(|c| c.get()), 0);
+    edit(&mut doc, &mut history, |doc| {
+        doc.atom_mut(atoms[6]).unwrap().element = "N".into();
+    });
+    assert_eq!(CALCULATIONS.with(|c| c.get()), 1);
+    assert_eq!(text(&doc), "Mol. Wt.: 93.13");
+}
