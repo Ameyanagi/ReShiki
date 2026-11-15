@@ -1446,7 +1446,10 @@ pub fn selected_molecule(doc: &Document, selected: &[u64]) -> Option<Vec<u64>> {
     let component = doc
         .models
         .iter()
-        .find(|model| atoms.iter().all(|id| model.contains(*id)))
+        .find(|model| {
+            let linked = model.ids();
+            atoms.iter().all(|id| linked.contains(id))
+        })
         .map_or_else(
             || crate::molecule_names::component(doc, first),
             |model| model.linked_ids(doc),

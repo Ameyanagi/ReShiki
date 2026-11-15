@@ -983,16 +983,14 @@ impl App {
             .style(muted_text)
         ]
         .spacing(10);
-        let crystal_first = self.selected_existing_model().is_some_and(|model| {
+        let model = self.selected_existing_model();
+        let crystal_first = model.is_some_and(|model| {
             model.cell.is_some() && model.display == reshiki::models3d::Display::TwoD
         });
         if crystal_first && let Some(section) = self.structure_section() {
             body = body.push(section);
         }
-        if self
-            .selected_existing_model()
-            .is_some_and(|model| model.display == reshiki::models3d::Display::ThreeD)
-        {
+        if model.is_some_and(|model| model.display == reshiki::models3d::Display::ThreeD) {
             body = body.push(
                 super::workspace::accessible_command(
                     "model-controls-open",
