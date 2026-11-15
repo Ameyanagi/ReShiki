@@ -327,6 +327,15 @@ impl App {
         self.tabs.menu = false;
         self.theme_library.editor = None;
         self.assistant.menu = None;
+        // A question about the save format is about the tab it was asked on:
+        // a file opened from Finder meanwhile cancels it, and its close.
+        if matches!(
+            self.prompt,
+            Some(super::prompt::Prompt::KeepFormat(_) | super::prompt::Prompt::SaveAs)
+        ) {
+            self.prompt = None;
+            self.pending = None;
+        }
     }
 
     fn enter_tab(&mut self) {
@@ -624,7 +633,7 @@ impl App {
                 } else {
                     0.
                 };
-                (2. * TAB_PADDING + text_width(&tab.name(), 12.) + dot + SPACING + CLOSE)
+                (2. * TAB_PADDING + text_width(&tab.label(), 12.) + dot + SPACING + CLOSE)
                     .clamp(TAB_MIN, TAB_MAX)
             })
             .collect();
@@ -668,7 +677,7 @@ impl App {
         let room =
             width - 2. * TAB_PADDING - SPACING - CLOSE - if edited { DOT + SPACING } else { 0. };
         let mut label = row![
-            text(elide(&tab.name(), room))
+            text(elide(&tab.label(), room))
                 .size(12)
                 .wrapping(text::Wrapping::None)
         ]
@@ -743,7 +752,7 @@ impl App {
         let popup = self.tabs.menu.then(|| {
             let mut items = column![].spacing(1);
             for tab in hidden {
-                let mut label = row![text(elide(&tab.name(), 170.)).size(12)]
+                let mut label = row![text(elide(&tab.label(), 170.)).size(12)]
                     .spacing(SPACING)
                     .align_y(Alignment::Center);
                 if self.shown_edited(tab) {

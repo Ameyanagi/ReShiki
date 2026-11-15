@@ -112,7 +112,7 @@ rules, plus these:
 | Flip horizontal / vertical  | Flip horizontally, Flip vertically                     |
 | Page setup…                 | Edit page setup…, Set up pages…                        |
 | Recalculate                 | Check structure (Check drawing is a different command) |
-| Save as .rsk…               | Save native document…                                  |
+| Save as…                    | Save native document…                                  |
 | Abbreviate selection…       | Create group label…, Contract selection                |
 | Save as abbreviation        | Define abbreviation from selection                     |
 | 3D optimize…                | 3D optimization                                        |

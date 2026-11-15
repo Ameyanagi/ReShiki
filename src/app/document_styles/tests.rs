@@ -318,7 +318,7 @@ fn interface_mode_never_changes_canvas_or_exports() {
 }
 
 #[test]
-fn canvas_colors_and_quick_presets_are_independent_undo_steps() {
+fn colors_and_quick_presets_are_independent_undo_steps_and_the_canvas_is_none() {
     use reshiki::canvas_theme::CanvasTheme;
     let (mut app, _) = App::new();
     app.tab.doc = reshiki::rings::Preset::Regular.document(42., false);
@@ -326,7 +326,6 @@ fn canvas_colors_and_quick_presets_are_independent_undo_steps() {
     let _ = app.update(Message::ColorTheme(
         reshiki::canvas_theme::ColorTheme::Presentation,
     ));
-    let colored = app.tab.doc.clone();
     let _ = app.update(Message::CanvasTheme(CanvasTheme::Dark));
     assert_eq!(app.tab.doc.drawing_style, original.drawing_style);
     assert_eq!(app.tab.doc.atoms, original.atoms);
@@ -341,12 +340,12 @@ fn canvas_colors_and_quick_presets_are_independent_undo_steps() {
     );
     let _ = app.update(Message::Undo);
     assert_eq!(app.tab.doc, dark);
+    // The canvas is view state: Undo goes past it to the colors and keeps it.
     let _ = app.update(Message::Undo);
-    assert_eq!(app.tab.doc, colored);
-    let _ = app.update(Message::Undo);
-    assert_eq!(app.tab.doc, original);
-    let _ = app.update(Message::Redo);
-    assert_eq!(app.tab.doc, colored);
+    assert_eq!(app.tab.doc.atoms, original.atoms);
+    assert_eq!(app.tab.doc.color_theme, original.color_theme);
+    assert_eq!(app.tab.doc.canvas_theme, CanvasTheme::Dark);
+    assert!(!app.tab.history.can_undo());
     let _ = app.update(Message::Redo);
     assert_eq!(app.tab.doc, dark);
     let _ = app.update(Message::QuickDrawingStyle(Choice::Details));
