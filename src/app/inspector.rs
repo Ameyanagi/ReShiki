@@ -1,5 +1,5 @@
 //! Selection-focused properties and task-based export controls.
-use super::workspace::{command, control, hover_hint, keyed_command, muted_text};
+use super::workspace::{control, hover_hint, keyed_command, muted_text};
 use super::{App, InspectorTab, Message};
 use crate::canvas::Tool;
 use iced::widget::{button, checkbox, column, container, row, text, tooltip};
@@ -405,6 +405,16 @@ const GENERIC_PROPERTIES: &str =
 fn deferred_generic_properties(error: &str) -> Option<&'static str> {
     (error.strip_prefix("Invalid drawing: ") == Some(reshiki::generic::NOTICE))
         .then_some(GENERIC_PROPERTIES)
+}
+
+/// A panel action: a full-width secondary button, so it reads as a control
+/// rather than a label. Two side by side share the row.
+fn command(label: &str, message: Message) -> button::Button<'_, Message> {
+    button(text(label).size(12).width(Length::Fill).center())
+        .padding([6, 8])
+        .width(Length::Fill)
+        .on_press(message)
+        .style(crate::appearance::secondary)
 }
 
 pub(super) fn card<'a>(body: impl Into<Element<'a, Message>>) -> Element<'a, Message> {
@@ -922,7 +932,7 @@ impl App {
         }
         if self.tab.inspector_ui.model_controls && self.selected_visible_model() {
             let mut body = column![
-                command(
+                super::workspace::command(
                     "‹ All properties",
                     Message::InspectorAction(Action::ModelControls(false)),
                 ),
@@ -962,6 +972,20 @@ impl App {
             .style(muted_text)
         ]
         .spacing(10);
+        if let Some(error) = self
+            .tab
+            .chemistry_notice
+            .as_deref()
+            .filter(|notice| *notice != reshiki::atom_labels::refresh::GENERIC_NOTICE)
+        {
+            body = body.push(if let Some(notice) = deferred_generic_properties(error) {
+                text(notice).size(12).style(muted_text)
+            } else {
+                text(error)
+                    .size(12)
+                    .style(crate::appearance::text_color(Color::from_rgb8(182, 66, 61)))
+            });
+        }
         let crystal_first = self.selected_existing_model().is_some_and(|model| {
             model.cell.is_some() && model.display == reshiki::models3d::Display::TwoD
         });
@@ -979,14 +1003,22 @@ impl App {
                     "3D model controls…",
                 )
                 .width(Length::Fill)
+                .style(crate::appearance::secondary)
                 .on_press(Message::InspectorAction(Action::ModelControls(true))),
             );
         }
         let color_issues = reshiki::canvas_theme::label_contrast_issues(&self.tab.doc);
         if !color_issues.is_empty() {
-            body = body.push(text(format!(
-                "{} atom label(s) have low contrast against the canvas or a ring fill. Adjust the label or fill color.", color_issues.len()
-            )).size(11).style(muted_text));
+            body = body.push(hover_hint(
+                text(match color_issues.len() {
+                    1 => "1 label has low contrast".into(),
+                    n => format!("{n} labels have low contrast"),
+                })
+                .size(11)
+                .style(muted_text),
+                "Against the canvas or a ring fill · Change the label or fill color",
+                tooltip::Position::Bottom,
+            ));
         }
         let molecular_first = self.tab.selected.is_empty()
             || self.property_key().is_some_and(|key| !key.atoms.is_empty());
@@ -1083,20 +1115,6 @@ impl App {
         if let Some(section) = self.generic_structure_section() {
             body = body.push(section);
         }
-        if let Some(error) = self
-            .tab
-            .chemistry_notice
-            .as_deref()
-            .filter(|notice| *notice != reshiki::atom_labels::refresh::GENERIC_NOTICE)
-        {
-            body = body.push(if let Some(notice) = deferred_generic_properties(error) {
-                text(notice).size(12).style(muted_text)
-            } else {
-                text(error)
-                    .size(12)
-                    .style(crate::appearance::text_color(Color::from_rgb8(182, 66, 61)))
-            });
-        }
         if !molecular_first {
             body = body.push(self.molecular_section());
         }
@@ -1147,7 +1165,7 @@ impl App {
         if let Some(section) = self.rear_opacity_section(self.depth_ids()) {
             body = body.push(section);
         }
-        body.push(
+        body = body.push(
             self.inspector_section(
                 Section::DrawingStyle,
                 "Drawing style",
@@ -1170,6 +1188,26 @@ impl App {
                 ]
                 .spacing(8),
             ),
+        );
+        if self.tab.selected.is_empty() {
+            return body.into();
+        }
+        body.push(
+            reshiki::accessibility::button(
+                "selection-delete",
+                "Delete selection",
+                text("Delete selection")
+                    .size(12)
+                    .width(Length::Fill)
+                    .center(),
+            )
+            .padding([6, 8])
+            .width(Length::Fill)
+            .style(|theme, status| iced::widget::button::Style {
+                text_color: crate::appearance::themed(theme, Color::from_rgb8(174, 57, 52)),
+                ..crate::appearance::secondary(theme, status)
+            })
+            .on_press(Message::Delete),
         )
         .into()
     }
@@ -1259,11 +1297,12 @@ impl App {
         } else {
             (self.tab.doc.atoms.len(), self.tab.doc.bonds.len())
         };
-        let mut body = column![
+        // A selection's counts are already the panel's summary.
+        let mut body = column![key.is_none().then(|| {
             text(super::workspace::atom_bond_counts(atoms, bonds))
                 .size(11)
                 .style(muted_text)
-        ]
+        })]
         .spacing(8);
         for hint in self.checked_arrow_hints() {
             body = body.push(text(hint.kind.message()).size(11).style(muted_text));
@@ -1281,7 +1320,7 @@ impl App {
                 .any(|b| ids.contains(&b.a) != ids.contains(&b.b))
         {
             body = body.push(
-                text("Selected fragment: implicit hydrogens are recalculated at cut bonds.")
+                text("Implicit H recalculated at cut bonds")
                     .size(11)
                     .style(muted_text),
             );
@@ -1299,15 +1338,15 @@ impl App {
                 };
                 body = body.push(row![label, text(value).size(12)].align_y(Alignment::Center));
             }
-            if let Some(analysis) = self.elemental_analysis(a) {
+            let elemental = self.elemental_analysis(a);
+            if let Some(analysis) = &elemental {
                 body = body
                     .push(text("Elemental analysis").size(11).style(muted_text))
                     .push(
                         text(analysis.replace(", ", ",\u{a0}"))
                             .size(12)
                             .wrapping(text::Wrapping::WordOrGlyph),
-                    )
-                    .push(command("Copy analysis", Message::CopyAnalysis));
+                    );
             }
             let classes = self.property_classes();
             if !classes.is_empty() {
@@ -1348,11 +1387,25 @@ impl App {
                         .wrapping(text::Wrapping::WordOrGlyph)
                 }))
                 .push(
-                    command("Copy SMILES", Message::CopySmiles)
-                        .on_press_maybe((!a.smiles.is_empty()).then_some(Message::CopySmiles)),
+                    row![
+                        command("Copy SMILES", Message::CopySmiles)
+                            .on_press_maybe((!a.smiles.is_empty()).then_some(Message::CopySmiles)),
+                        elemental.map(|_| command("Copy analysis", Message::CopyAnalysis)),
+                    ]
+                    .spacing(6),
                 );
         } else if atoms == 0 {
-            return body.push(text(if key.is_some() { "Select atoms or bonds to calculate their properties. Clear the selection to use the whole drawing." } else { "Draw or import a molecule to calculate its properties." }).size(12).style(muted_text)).into();
+            return body
+                .push(
+                    text(if key.is_some() {
+                        "Clear the selection for the whole drawing"
+                    } else {
+                        "Draw or import a molecule"
+                    })
+                    .size(12)
+                    .style(muted_text),
+                )
+                .into();
         } else if let Some(Err(error)) = self.property_result(&self.property_request_key()) {
             body = body.push(if let Some(notice) = deferred_generic_properties(error) {
                 text(notice).size(12).style(muted_text)
@@ -1372,29 +1425,31 @@ impl App {
                 .style(muted_text),
             );
         }
-        body = body.push(
-            reshiki::accessibility::button(
-                "nmr.open",
-                "Predict NMR shifts for the selected molecule",
-                text("Predict NMR…").size(12),
-            )
-            .padding([7, 9])
-            .on_press(Message::Nmr(super::nmr::Action::Open))
-            .style(control(false)),
-        );
         body.push(
-            command(
-                if key.is_some() {
-                    "Recalculate selection"
-                } else {
-                    "Check structure"
-                },
-                Message::InspectorAction(Action::RefreshProperties),
-            )
-            .on_press_maybe(
-                (!self.tab.busy && self.tab.inspector_ui.pending.is_none())
-                    .then_some(Message::InspectorAction(Action::RefreshProperties)),
-            ),
+            column![
+                reshiki::accessibility::button(
+                    "nmr.open",
+                    "Predict NMR shifts for the selected molecule",
+                    text("Predict NMR…").size(12).width(Length::Fill).center(),
+                )
+                .padding([6, 8])
+                .width(Length::Fill)
+                .on_press(Message::Nmr(super::nmr::Action::Open))
+                .style(crate::appearance::secondary),
+                command(
+                    if key.is_some() {
+                        "Recalculate selection"
+                    } else {
+                        "Check structure"
+                    },
+                    Message::InspectorAction(Action::RefreshProperties),
+                )
+                .on_press_maybe(
+                    (!self.tab.busy && self.tab.inspector_ui.pending.is_none())
+                        .then_some(Message::InspectorAction(Action::RefreshProperties)),
+                ),
+            ]
+            .spacing(6),
         )
         .into()
     }
@@ -1563,7 +1618,8 @@ impl App {
                     "Edit atom label…",
                     Message::AtomText(super::atom_text::Action::Begin(None)),
                 )
-                .width(Length::Fill),
+                .width(Length::Fill)
+                .style(crate::appearance::secondary),
             );
         }
         if let Some(first) = bonds.first() {
@@ -1621,17 +1677,7 @@ impl App {
             false,
             || self.grouping_controls(),
         ));
-        body.push(
-            button(
-                text("Delete selection")
-                    .size(12)
-                    .style(crate::appearance::text_color(Color::from_rgb8(174, 57, 52))),
-            )
-            .style(button::text)
-            .padding(7)
-            .on_press(Message::Delete),
-        )
-        .into()
+        body.into()
     }
 
     /// Assign the selected stereocentres to ABS, an AND group or an OR group.
@@ -1678,16 +1724,17 @@ impl App {
             })
             .size(11)
             .style(muted_text),
-            crate::appearance::pick_list(choices, current, |choice| {
-                Message::InspectorAction(Action::StereoGroup(choice))
-            })
-            .placeholder("Mixed groups")
-            .text_size(12)
-            .padding(7)
-            .width(Length::Fill),
-            text("abs: exactly as drawn. AND: racemic, the drawn form and its mirror image 1:1. OR: one of the two forms, not known which. Centres in the same group flip together.")
-                .size(11)
-                .style(muted_text),
+            hover_hint(
+                crate::appearance::pick_list(choices, current, |choice| {
+                    Message::InspectorAction(Action::StereoGroup(choice))
+                })
+                .placeholder("Mixed groups")
+                .text_size(12)
+                .padding(7)
+                .width(Length::Fill),
+                "abs: exactly as drawn · AND: racemic, 1:1 with the mirror image · OR: one of the two, unknown which · Centers in one group flip together",
+                tooltip::Position::Top,
+            ),
         ]
         .spacing(7);
         if gaps {
@@ -1939,8 +1986,11 @@ impl App {
                     .width(Length::Fill)
             ]
             .spacing(6),
-            command("Invert selection", Message::InvertSelection),
-            command("Bracket ion", Message::BracketIon),
+            row![
+                command("Invert selection", Message::InvertSelection),
+                command("Bracket ion", Message::BracketIon),
+            ]
+            .spacing(6),
             crate::appearance::pick_list(
                 [
                     reshiki::graphics::GraphicKind::Brackets,
@@ -2226,7 +2276,8 @@ impl App {
                 .on_press_maybe(self.printing.active.is_none().then_some(Message::Printing(
                     super::printing::Action::Start(reshiki::printing::Scope::Document),
                 )))
-                .width(Length::Fill),
+                .width(Length::Fill)
+                .style(crate::appearance::secondary),
             );
             if !self.tab.selected.is_empty() {
                 pages = pages.push(
