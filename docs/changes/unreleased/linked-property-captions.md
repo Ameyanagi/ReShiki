@@ -10,6 +10,8 @@ issues: [1175]
   Undo step. Editing its text makes it ordinary text; deleting the molecule
   deletes it.
 - CDXML and CDX save the caption as ChemDraw linked property text, and ChemDraw
-  files with linked property text open with the link. ChemDraw files that
-  contain it used to be refused. `.rsk` files with these captions use document
+  files with linked property text open with the link. A caption with cLogP or
+  TPSA is saved as plain text, and so is ChemDraw text over more than one
+  molecule when it opens. ChemDraw files that contain linked property text used
+  to be refused. `.rsk` files with these captions use document
   version 38.
