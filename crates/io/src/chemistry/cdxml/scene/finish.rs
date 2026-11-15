@@ -335,7 +335,10 @@ impl CdxmlScene {
             .property_captions
             .into_iter()
             .filter(|link| {
-                let whole = crate::molecule_names::component(document, link.atoms[0]);
+                let whole = link
+                    .atoms
+                    .first()
+                    .map_or(vec![], |id| crate::molecule_names::component(document, *id));
                 link.atoms.iter().all(|id| whole.contains(id))
                     && whole.first().is_some_and(|first| claimed.insert(*first))
             })
