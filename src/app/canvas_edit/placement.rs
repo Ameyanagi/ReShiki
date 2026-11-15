@@ -390,7 +390,11 @@ impl App {
             match result {
                 Ok((doc, id)) => {
                     self.tab.doc = doc;
-                    if self.element == crate::app::palettes::R_GROUP && !self.label_r_group(id) {
+                    // An existing endpoint keeps its element and label.
+                    if b.is_none()
+                        && self.element == crate::app::palettes::R_GROUP
+                        && !self.label_r_group(id)
+                    {
                         self.tab.doc = before;
                         return;
                     }

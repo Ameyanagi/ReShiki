@@ -108,9 +108,10 @@ impl App {
         }
     }
     /// Turns the atom into an R group, a `*` atom labeled R; false after
-    /// reporting why it cannot be one.
+    /// reporting why it cannot be one. Text mode, so a user abbreviation
+    /// named R never replaces the placeholder.
     pub(super) fn label_r_group(&mut self, id: u64) -> bool {
-        match reshiki::atom_text::apply(&self.tab.doc, id, R_GROUP, reshiki::atom_text::Mode::Auto)
+        match reshiki::atom_text::apply(&self.tab.doc, id, R_GROUP, reshiki::atom_text::Mode::Text)
         {
             Ok(doc) => {
                 self.tab.doc = doc;

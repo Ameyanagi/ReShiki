@@ -118,6 +118,95 @@ fn the_r_group_button_places_labeled_dummy_atoms() -> Result<(), String> {
     Ok(())
 }
 
+/// A bond drag with R keeps existing endpoints: connecting two atoms, then
+/// dragging again along their bond, leaves both elements and labels alone.
+#[test]
+fn the_r_group_button_keeps_existing_bond_endpoints() -> Result<(), String> {
+    use reshiki::document::Point;
+    let (mut app, _) = App::new();
+    let carbon = app.tab.doc.add_atom("C", Point::default());
+    let oxygen = app.tab.doc.add_atom("O", Point::new(42., 0.));
+    let _ = app.update(Message::Element("R".into()));
+    let endpoints = |app: &App| {
+        [carbon, oxygen].map(|id| {
+            app.tab
+                .doc
+                .atom(id)
+                .map(|atom| (atom.element.clone(), atom.display.variable.clone()))
+        })
+    };
+    let unchanged = [Some(("C".to_string(), None)), Some(("O".to_string(), None))];
+    for _ in 0..2 {
+        app.edit(crate::canvas::Edit::Bond(
+            Point::default(),
+            Point::new(42., 0.),
+            Some(carbon),
+            Some(oxygen),
+        ));
+        assert!(!app.error, "{}", app.status);
+        assert_eq!(endpoints(&app), unchanged);
+        assert_eq!(app.tab.doc.atoms.len(), 2);
+        assert_eq!(app.tab.doc.bonds.len(), 1);
+    }
+    Ok(())
+}
+
+/// A user abbreviation named R does not take over the R button: it still
+/// places one `*` atom labeled R. The catalog is process-wide, so the check
+/// runs in its own process.
+#[test]
+fn the_r_group_button_ignores_a_user_abbreviation_named_r() {
+    let directory = tempfile::tempdir().unwrap();
+    let output = std::process::Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "app::workspace::side_panel_tests::r_group_with_user_abbreviation_child",
+            "--ignored",
+            "--nocapture",
+        ])
+        .env("RESHIKI_DATA_DIR", directory.path())
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
+#[ignore = "Runs only in the isolated R group test subprocess"]
+fn r_group_with_user_abbreviation_child() {
+    use reshiki::document::Point;
+    let errors = reshiki::chemistry::abbreviations::set_user(Some(
+        r#"{"format": 1, "groups": [{"label": "R", "smiles": "*CC"}]}"#,
+    ));
+    assert!(errors.is_empty(), "{errors:?}");
+    let (mut app, _) = App::new();
+    let source = app.tab.doc.add_atom("C", Point::default());
+    // Typed in Automatic mode, R now names the user's group.
+    let typed =
+        reshiki::atom_text::apply(&app.tab.doc, source, "R", reshiki::atom_text::Mode::Auto)
+            .unwrap();
+    assert!(typed.abbreviation(source).is_some());
+    let _ = app.update(Message::Element("R".into()));
+    app.edit(crate::canvas::Edit::Click(Point::new(200., 0.)));
+    app.edit(crate::canvas::Edit::Bond(
+        Point::default(),
+        Point::new(42., 0.),
+        Some(source),
+        None,
+    ));
+    assert!(!app.error, "{}", app.status);
+    assert!(app.tab.doc.abbreviations.is_empty());
+    assert_eq!(app.tab.doc.atoms.len(), 3);
+    for atom in app.tab.doc.atoms.iter().filter(|atom| atom.id != source) {
+        assert_eq!(atom.element, "*");
+        assert_eq!(atom.display.variable.as_deref(), Some("R"));
+    }
+}
+
 /// Each 12 px tab label fits its segment with room to spare.
 #[test]
 fn inspector_tab_labels_fit_their_segments() {
