@@ -9,7 +9,11 @@ pub mod auth;
 pub mod client;
 pub mod config;
 pub mod credentials;
+#[cfg(test)]
+pub(crate) mod mock;
 pub mod send;
+#[cfg(test)]
+mod tests;
 pub mod workcopy;
 
 /// A repository by the names GitHub last gave it.
