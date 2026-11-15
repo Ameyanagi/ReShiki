@@ -411,6 +411,27 @@ class ReleaseTests(unittest.TestCase):
         workflow = (root / ".github/workflows/release.yml").read_text(encoding="utf-8")
         self.assertNotIn("/release/reshiki", workflow)
         self.assertNotIn("CARGO_PROFILE_RELEASE_", workflow)
+        # Only macOS strips in Cargo (into reshiki.dSYM). Windows needs an
+        # unstripped link for reshiki.pdb; Linux keeps its symbols in the
+        # binary for build_release.py to split into reshiki.debug.
+        for setting in (
+            "CARGO_PROFILE_DIST_STRIP: "
+            "${{ startsWith(matrix.artifact, 'macos') && 'symbols' || 'none' }}",
+            "CARGO_PROFILE_DIST_SPLIT_DEBUGINFO: "
+            "${{ startsWith(matrix.artifact, 'linux') && 'off' || 'packed' }}",
+        ):
+            self.assertEqual(workflow.count(setting), 1, setting)
+        for path in (
+            "target/${{ matrix.target }}/dist/reshiki.dSYM",
+            "target/${{ matrix.target }}/dist/reshiki.pdb",
+            "target/${{ matrix.target }}/dist/reshiki.debug",
+            "RESHIKI_TEST_PACKAGED_APP: ${{ github.workspace }}/target/${{ matrix.target }}"
+            "/dist/reshiki${{ runner.os == 'Windows' && '.exe' || '' }}",
+        ):
+            self.assertIn(path, workflow)
+        script = (root / "scripts/build_release.py").read_text(encoding="utf-8")
+        self.assertIn('"cargo", "build", "--profile", "dist", "--locked"', script)
+        self.assertIn('target_directory() / target / "dist"', script)
 
     def test_native_headers_reject_mislabeled_or_damaged_archives(self):
         elf = bytearray(64)
