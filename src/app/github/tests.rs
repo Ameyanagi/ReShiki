@@ -32,6 +32,17 @@ fn drawing(atoms: f32) -> Vec<u8> {
         .unwrap()
 }
 
+/// A GitHub at a closed port on this computer: every call fails at once
+/// as offline, and nothing leaves the computer.
+fn nowhere() -> config::Endpoints {
+    let closed = "http://127.0.0.1:9".to_owned();
+    config::Endpoints {
+        api: closed.clone(),
+        web: closed,
+        overridden: true,
+    }
+}
+
 /// An app whose GitHub folder is `dir`, signed in, with `ring.rsk` opened
 /// from GitHub and in front.
 fn app_in(dir: &Path) -> (App, PathBuf) {
@@ -39,6 +50,7 @@ fn app_in(dir: &Path) -> (App, PathBuf) {
     let github = &mut app.github;
     github.root = Some(dir.to_owned());
     github.client_id = Some("test".into());
+    github.ends = nowhere();
     github.account = Account::SignedIn {
         login: "octo".into(),
         remembered: true,
@@ -89,12 +101,56 @@ fn save_here(app: &mut App, path: &Path) -> Vec<u8> {
     std::fs::write(path, &bytes).unwrap();
     app.tab.doc = Document::from_native_file(&bytes).unwrap();
     app.tab.mark_saved(app.tab.doc.clone());
-    let _ = app.github_saved(Some(path.to_owned()));
+    let _ = app.github_saved(true, Some((path.to_owned(), app.tab.doc.clone())));
     bytes
 }
 
 fn github(app: &mut App, action: Action) {
     let _ = app.update(Message::GitHub(action));
+}
+
+/// Runs `task` and what its messages start, as the app would. The test
+/// GitHub is [`nowhere`], so a send fails as offline.
+async fn run(app: &mut App, task: Task<Message>) {
+    use iced::futures::StreamExt;
+    let mut tasks = std::collections::VecDeque::from([task]);
+    while let Some(task) = tasks.pop_front() {
+        let Some(mut stream) = iced_runtime::task::into_stream(task) else {
+            continue;
+        };
+        while let Some(action) = stream.next().await {
+            if let iced_runtime::Action::Output(message) = action {
+                tasks.push_back(app.update(message));
+            }
+        }
+    }
+}
+
+/// `b.rsk` of the same repository, opened in a new tab in front.
+fn open_other(app: &mut App, dir: &Path) -> PathBuf {
+    let path = workcopy::working_path(dir, &repo().key, "b.rsk");
+    let bytes = drawing(60.);
+    std::fs::write(&path, &bytes).unwrap();
+    let state = app.github.states.get_mut(&repo().key).unwrap();
+    state.files.insert(
+        "b.rsk".into(),
+        FileState {
+            base_commit: sha('c'),
+            base_blob: Some(sha('9')),
+            base_hash: workcopy::hash(&bytes),
+            conflict: None,
+        },
+    );
+    app.add_tab();
+    app.show_opened(
+        Document::from_native_file(&bytes).unwrap(),
+        Some(path.clone()),
+    );
+    path
+}
+
+fn edit(app: &mut App) {
+    app.tab.doc.atoms[0].position.x += 20.;
 }
 
 #[test]
@@ -161,7 +217,7 @@ fn signed_in_without_repositories_asks_to_choose_them() {
         login: "octo".into(),
         repos: Vec::new(),
     };
-    github(&mut app, Action::SignedIn(generation, Ok((account, true))));
+    github(&mut app, Action::SignedIn(generation, Ok(account)));
     assert!(matches!(&app.github.account, Account::NeedsInstall { login } if login == "octo"));
     let account = gh::Account {
         login: "octo".into(),
@@ -402,6 +458,7 @@ fn restoring_a_version_is_one_undo_step_and_a_new_save() {
     github(&mut app, Action::Versions(versions::Action::Open));
     assert_eq!(app.strip().count(), tabs + 1);
     assert!(app.tab.path.is_none());
+    assert!(app.dirty(), "closing it asks");
     assert!(app.tab.name().starts_with("ring · "));
 }
 
@@ -563,8 +620,8 @@ fn keep_githubs_deletion_leaves_yours_open_unsaved() {
     assert!(app.dirty(), "an unsaved drawing");
 }
 
-#[test]
-fn unsaved_edits_are_saved_first_and_are_what_is_kept() {
+#[tokio::test]
+async fn unsaved_edits_are_saved_first_and_are_what_is_kept() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, path) = app_in(dir.path());
     conflicted(&mut app, &path, Some(drawing(30.)));
@@ -577,14 +634,15 @@ fn unsaved_edits_are_saved_first_and_are_what_is_kept() {
     let edited = app.tab.doc.file_json().unwrap();
     std::fs::write(&path, &edited).unwrap();
     app.tab.mark_saved(app.tab.doc.clone());
-    let _ = app.github_saved(Some(path.clone()));
+    let saved = app.github_saved(true, Some((path.clone(), app.tab.doc.clone())));
+    run(&mut app, saved).await;
     let copy = workcopy::working_path(dir.path(), &repo().key, "ring (2).rsk");
     assert_eq!(std::fs::read(&copy).unwrap(), edited);
     assert_eq!(std::fs::read(&path).unwrap(), drawing(30.));
 }
 
-#[test]
-fn a_save_still_writing_is_waited_for() {
+#[tokio::test]
+async fn a_save_still_writing_is_waited_for() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, path) = app_in(dir.path());
     let mine = conflicted(&mut app, &path, Some(drawing(30.)));
@@ -595,7 +653,8 @@ fn a_save_still_writing_is_waited_for() {
     assert!(!copy.exists(), "nothing is kept before the save lands");
     assert_eq!(std::fs::read(&path).unwrap(), mine);
     app.file_io.saving = false;
-    let _ = app.github_saved(Some(path.clone()));
+    let saved = app.github_saved(true, Some((path.clone(), app.tab.doc.clone())));
+    run(&mut app, saved).await;
     assert_eq!(std::fs::read(&copy).unwrap(), mine);
     assert_eq!(std::fs::read(&path).unwrap(), drawing(30.));
 }
@@ -693,4 +752,352 @@ fn a_version_compares_with_the_drawing_now() {
     assert!(!compare.marks[1].is_empty());
     let _ = app.update(Message::Escape);
     assert!(app.github.dialog.is_none());
+}
+
+#[tokio::test]
+async fn send_saves_every_open_drawing_of_the_repository_first() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, ring) = app_in(dir.path());
+    edit(&mut app);
+    let other = open_other(&mut app, dir.path());
+    edit(&mut app);
+    github(&mut app, Action::ShowSend);
+    let Some(Dialog::Send(draft)) = &app.github.dialog else {
+        panic!("no Send box");
+    };
+    assert_eq!(draft.files, ["ring.rsk", "b.rsk"], "the tab behind too");
+
+    let send = app.update(Message::GitHub(Action::Send));
+    run(&mut app, send).await;
+    assert!(app.strip().all(|tab| !app.edited(tab)), "both saved");
+    for (path, name) in [(&ring, "ring.rsk"), (&other, "b.rsk")] {
+        let tab = app
+            .strip()
+            .find(|tab| tab.path.as_ref() == Some(path))
+            .unwrap();
+        let saved = std::fs::read(path).unwrap();
+        let doc = Document::from_native_file(&saved).unwrap();
+        assert!(super::super::same_drawing(&doc, &tab.doc));
+        // Each save is a version, the one behind the front tab too.
+        let kept = workcopy::snapshots(dir.path(), &repo().key, name).unwrap();
+        assert_eq!(std::fs::read(&kept.last().unwrap().path).unwrap(), saved);
+    }
+    // Then one send of both, which fails here as offline.
+    assert!(app.github.failed.contains_key(&repo().key));
+    assert_eq!(unsent(&app), ["b.rsk", "ring.rsk"]);
+}
+
+#[tokio::test]
+async fn a_save_for_send_lands_in_its_tab_after_switching_tabs() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, ring) = app_in(dir.path());
+    edit(&mut app);
+    let id = app.tab.id;
+    github(&mut app, Action::ShowSend);
+    let send = app.update(Message::GitHub(Action::Send));
+    app.add_tab();
+    run(&mut app, send).await;
+    let tab = app.strip().find(|tab| tab.id == id).unwrap();
+    assert!(!app.edited(tab), "marked saved in its own tab");
+    let saved = Document::from_native_file(&std::fs::read(&ring).unwrap()).unwrap();
+    assert!(super::super::same_drawing(&saved, &tab.doc));
+    assert_eq!(
+        workcopy::snapshots(dir.path(), &repo().key, "ring.rsk")
+            .unwrap()
+            .len(),
+        1
+    );
+    assert!(app.github.failed.contains_key(&repo().key), "and sent");
+}
+
+#[tokio::test]
+async fn a_canceled_sign_in_is_never_kept() {
+    let (mut app, _) = App::new();
+    app.github.client_id = Some("test".into());
+    app.github.ends = nowhere();
+    let tokens = Tokens {
+        login: String::new(),
+        access: "unused".into(),
+        access_expires_at: None,
+        refresh: None,
+        refresh_expires_at: None,
+    };
+    let reply = br#"{"device_code":"d","user_code":"WDJB-MJHT","verification_uri":"https://github.com/login/device","expires_in":900,"interval":5}"#;
+    let account = gh::Account {
+        login: "octo".into(),
+        repos: vec![repo()],
+    };
+    for cancel in [true, false] {
+        github(&mut app, Action::ShowAccount);
+        github(&mut app, Action::SignIn);
+        let generation = app.github.generation;
+        let code = auth::parse_code(reply, &app.github.ends).unwrap();
+        github(&mut app, Action::CodeReady(generation, Ok(code)));
+        github(
+            &mut app,
+            Action::Polled(generation, Ok(auth::Poll::Done(tokens.clone()))),
+        );
+        if cancel {
+            let _ = app.update(Message::Escape);
+        }
+        let signed_in = app.update(Message::GitHub(Action::SignedIn(
+            generation,
+            Ok(account.clone()),
+        )));
+        run(&mut app, signed_in).await;
+        let kept = credentials::load().await.unwrap();
+        if cancel {
+            assert!(matches!(app.github.account, Account::SignedOut(None)));
+            assert_eq!(kept, None);
+        } else {
+            assert!(matches!(
+                app.github.account,
+                Account::SignedIn {
+                    remembered: true,
+                    ..
+                }
+            ));
+            assert_eq!(kept.map(|tokens| tokens.login).as_deref(), Some("octo"));
+        }
+    }
+    credentials::delete().await.unwrap();
+}
+
+/// Closes the tab in front without the GitHub question.
+fn close_front(app: &mut App) {
+    let path = app.tab.path.clone();
+    app.github.later.insert(app.tab.id);
+    let _ = app.update(Message::Tabs(tabs::Action::Close(None)));
+    assert!(
+        app.strip()
+            .all(|tab| tab.path.is_none() || tab.path != path)
+    );
+}
+
+/// The picker on `repo()`, its top folder listed with `names`.
+fn picker_at(app: &mut App, mode: Mode, names: &[&str]) {
+    app.github.repos = vec![repo()];
+    github(app, Action::Picker(picker::Action::Show(mode)));
+    github(app, Action::Picker(picker::Action::PickRepo(repo().key)));
+    let entries = names
+        .iter()
+        .map(|name| gh::Entry {
+            name: (*name).into(),
+            sha: sha('7'),
+            folder: false,
+        })
+        .collect();
+    let generation = picker_generation(app);
+    github(
+        app,
+        Action::Picker(picker::Action::Listing(generation, Ok((sha('8'), entries)))),
+    );
+}
+
+fn picker_generation(app: &App) -> u64 {
+    match &app.github.dialog {
+        Some(Dialog::Picker(picker)) => picker.generation,
+        other => panic!("no picker: {other:?}"),
+    }
+}
+
+fn picker_error(app: &App) -> Option<String> {
+    match &app.github.dialog {
+        Some(Dialog::Picker(picker)) => picker.error.clone(),
+        other => panic!("no picker: {other:?}"),
+    }
+}
+
+#[test]
+fn a_closed_pickers_late_reply_never_reaches_a_new_one() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = app_in(dir.path());
+    app.github.repos = vec![repo()];
+    github(&mut app, Action::Picker(picker::Action::Show(Mode::Open)));
+    github(
+        &mut app,
+        Action::Picker(picker::Action::PickRepo(repo().key)),
+    );
+    let late = picker_generation(&app);
+    github(&mut app, Action::Close);
+    github(&mut app, Action::Picker(picker::Action::Show(Mode::Open)));
+    github(
+        &mut app,
+        Action::Picker(picker::Action::PickRepo(repo().key)),
+    );
+    assert_ne!(picker_generation(&app), late);
+    let entry = gh::Entry {
+        name: "late.rsk".into(),
+        sha: sha('7'),
+        folder: false,
+    };
+    github(
+        &mut app,
+        Action::Picker(picker::Action::Listing(late, Ok((sha('8'), vec![entry])))),
+    );
+    let Some(Dialog::Picker(picker)) = &app.github.dialog else {
+        panic!("no picker");
+    };
+    assert!(picker.entries.is_none(), "still listing");
+}
+
+#[test]
+fn save_here_never_takes_the_name_of_a_preview_already_there() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = app_in(dir.path());
+    app.add_tab();
+    picker_at(&mut app, Mode::SaveHere, &["x.svg"]);
+    github(
+        &mut app,
+        Action::Picker(picker::Action::SaveName("x".into())),
+    );
+    github(&mut app, Action::Picker(picker::Action::SaveHere));
+    assert_eq!(picker_error(&app).as_deref(), Some("Name taken"));
+    assert_eq!(app.tab.path, None);
+}
+
+#[test]
+fn a_working_copy_unlike_its_base_is_never_downloaded_over() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_in(dir.path());
+    let mine = save_here(&mut app, &path);
+    // A state.json from a newer ReShiki: the state cannot be read.
+    app.github.states.clear();
+    let folder = path.parent().unwrap().parent().unwrap();
+    std::fs::write(folder.join("state.json"), r#"{"version":99}"#).unwrap();
+    close_front(&mut app);
+
+    picker_at(&mut app, Mode::Open, &["ring.rsk"]);
+    github(&mut app, Action::Picker(picker::Action::Open));
+    assert!(app.github.dialog.is_none(), "opened, not downloaded");
+    assert_eq!(app.status, "Opened your unsent version");
+    assert_eq!(std::fs::read(&path).unwrap(), mine);
+}
+
+#[test]
+fn a_renamed_repository_keeps_its_folder_here() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_in(dir.path());
+    save_here(&mut app, &path);
+    close_front(&mut app);
+    let renamed = Repo {
+        key: RepoKey {
+            owner: "octo".into(),
+            repo: "lab2".into(),
+        },
+        ..repo()
+    };
+    app.github.repos = vec![renamed.clone()];
+    github(&mut app, Action::Picker(picker::Action::Show(Mode::Open)));
+    github(
+        &mut app,
+        Action::Picker(picker::Action::PickRepo(renamed.key.clone())),
+    );
+    let entry = gh::Entry {
+        name: "ring.rsk".into(),
+        sha: sha('7'),
+        folder: false,
+    };
+    let generation = picker_generation(&app);
+    github(
+        &mut app,
+        Action::Picker(picker::Action::Listing(
+            generation,
+            Ok((sha('8'), vec![entry])),
+        )),
+    );
+    github(&mut app, Action::Picker(picker::Action::Open));
+    assert!(app.github.dialog.is_none(), "the unsent drawing opens");
+    assert!(!workcopy::working_path(dir.path(), &renamed.key, "ring.rsk").exists());
+
+    // Versions asks GitHub under the names it has now.
+    app.github.states.get_mut(&repo().key).unwrap().repo = "lab2".into();
+    app.show_opened(
+        Document::from_native_file(&std::fs::read(&path).unwrap()).unwrap(),
+        Some(path.clone()),
+    );
+    github(&mut app, Action::ShowVersions);
+    assert_eq!(app.github.versions.named, Some(renamed.key));
+}
+
+#[test]
+fn a_conflict_saved_back_to_its_base_is_cleared_by_review() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_in(dir.path());
+    conflicted(&mut app, &path, Some(drawing(30.)));
+    let _ = app.update(Message::Escape);
+    app.github.conflicts.clear();
+    app.github.sending.clear();
+    std::fs::write(&path, drawing(42.)).unwrap();
+    github(&mut app, Action::Review);
+    assert_eq!(app.github_conflicts(&repo().key), 0);
+    assert!(app.github.sending.is_empty(), "nothing to send");
+}
+
+#[test]
+fn restore_waits_for_a_save_in_progress() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _path) = app_in(dir.path());
+    github(&mut app, Action::ShowVersions);
+    let generation = app.github.versions.generation;
+    let old = Arc::new(Document::from_native_file(&drawing(30.)).unwrap());
+    let id = "1763200000000".to_owned();
+    github(
+        &mut app,
+        Action::Versions(versions::Action::LocalLoaded(
+            generation,
+            Ok(vec![(id.clone(), old)]),
+        )),
+    );
+    github(
+        &mut app,
+        Action::Versions(versions::Action::Select(versions::Pick::Local(id))),
+    );
+    app.file_io.saving = true;
+    let before = app.tab.doc.clone();
+    github(&mut app, Action::Versions(versions::Action::Restore));
+    assert_eq!(app.tab.doc, before);
+    assert_eq!(app.status, "Wait for the save to finish");
+}
+
+#[test]
+fn versions_list_again_after_a_send_and_a_sign_in() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_in(dir.path());
+    let bytes = save_here(&mut app, &path);
+    github(&mut app, Action::ShowVersions);
+    let generation = app.github.versions.generation;
+    let outcome = SendOutcome {
+        repo: repo(),
+        commit: sha('d'),
+        sent: vec![("ring.rsk".into(), sha('e'), workcopy::hash(&bytes))],
+        conflicts: Vec::new(),
+    };
+    github(
+        &mut app,
+        Action::Sent(repo().key, workcopy::now_id(), Ok(outcome)),
+    );
+    assert!(app.github.versions.generation > generation);
+
+    let generation = app.github.versions.generation;
+    let next = app.github.generation;
+    let account = gh::Account {
+        login: "octo".into(),
+        repos: vec![repo()],
+    };
+    github(&mut app, Action::SignedIn(next, Ok(account)));
+    assert!(app.github.versions.generation > generation);
+}
+
+#[test]
+fn closing_again_waits_for_the_send_it_started() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_in(dir.path());
+    save_here(&mut app, &path);
+    let window = iced::window::Id::unique();
+    let _ = app.update(Message::Close(window));
+    github(&mut app, Action::CloseAnswer(true));
+    assert!(app.github.sending.contains(&repo().key));
+    let _ = app.update(Message::Close(window));
+    assert!(!app.exit.frozen(), "still sending");
 }

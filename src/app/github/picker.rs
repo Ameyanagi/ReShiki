@@ -29,8 +29,9 @@ pub enum Mode {
 #[derive(Debug)]
 pub(in crate::app) struct Picker {
     mode: Mode,
-    /// Rises with every listing, so a late one drops.
-    generation: u64,
+    /// The last request's number, from one count for every picker, so a
+    /// late reply drops, even in a picker opened since.
+    pub(super) generation: u64,
     search: String,
     /// `None` until GitHub lists them.
     repos: Option<Vec<Repo>>,
@@ -41,7 +42,9 @@ pub(in crate::app) struct Picker {
     root: Option<String>,
     trail: Vec<(String, String)>,
     /// Folders first, then drawings; `None` while listing.
-    entries: Option<Vec<Entry>>,
+    pub(super) entries: Option<Vec<Entry>>,
+    /// Every name in the folder, previews and other files too.
+    names: Vec<String>,
     selected: Option<usize>,
     thumbs: HashMap<String, Option<Arc<Document>>>,
     new_repo: Option<String>,
@@ -62,6 +65,7 @@ impl Picker {
             root: None,
             trail: Vec::new(),
             entries: None,
+            names: Vec::new(),
             selected: None,
             thumbs: HashMap::new(),
             new_repo: None,
@@ -219,11 +223,11 @@ impl App {
                 let Some(client) = self.github.client() else {
                     return Task::none();
                 };
+                let generation = self.github_request();
                 let Some(picker) = self.picker() else {
                     return Task::none();
                 };
-                picker.generation += 1;
-                let generation = picker.generation;
+                picker.generation = generation;
                 picker.repo = Some(repo.clone());
                 picker.root = None;
                 picker.trail.clear();
@@ -258,6 +262,7 @@ impl App {
                         if picker.root.is_none() {
                             picker.root = Some(tree);
                         }
+                        picker.names = entries.iter().map(|entry| entry.name.clone()).collect();
                         let entries = shown(entries);
                         picker.selected = (!entries.is_empty()).then_some(0);
                         let wanted: Vec<String> = entries
@@ -272,6 +277,7 @@ impl App {
                     }
                     Err(_) => {
                         picker.entries = Some(Vec::new());
+                        picker.names.clear();
                         picker.error = failed;
                     }
                 }
@@ -373,14 +379,11 @@ impl App {
                     }
                 };
                 let root = self.github.root.clone().unwrap_or_default();
-                let state = self
-                    .github
-                    .states
-                    .entry(repo.key.clone())
-                    .or_insert_with(|| RepoState::new(&repo));
-                return match workcopy::checkout(&root, &repo.key, state, &repo_path, &download) {
+                let key = self.github_folder(&repo);
+                let state = self.github_tracked(&key, &repo);
+                return match workcopy::checkout(&root, &key, state, &repo_path, &download) {
                     Ok(path) => {
-                        let persist = self.github_persist(&repo.key);
+                        let persist = self.github_persist(&key);
                         let close = self.github_close_dialog();
                         Task::batch([persist, close, crate::app::files::open_paths(vec![path])])
                     }
@@ -421,8 +424,10 @@ impl App {
                     return Task::none();
                 };
                 picker.busy = true;
-                picker.generation += 1;
-                let generation = picker.generation;
+                let generation = self.github_request();
+                if let Some(picker) = self.picker() {
+                    picker.generation = generation;
+                }
                 return perform(
                     async move { api::create_repo(&client, &name).await },
                     move |result| GitHubAction::Picker(Action::RepoCreated(generation, result)),
@@ -466,19 +471,52 @@ impl App {
         Task::none()
     }
 
+    /// A number for a picker request, never given before in this run.
+    fn github_request(&mut self) -> u64 {
+        self.github.seq += 1;
+        self.github.seq
+    }
+
+    /// The folder of `repo` here: the one its drawings first went to, even
+    /// after GitHub renamed it.
+    fn github_folder(&self, repo: &Repo) -> RepoKey {
+        let mut known = self.github.states.iter();
+        if let Some((key, _)) = known.find(|(_, state)| state.repo_id == repo.id) {
+            return key.clone();
+        }
+        match &self.github.root {
+            Some(root) => workcopy::folder(root, repo),
+            None => repo.key.clone(),
+        }
+    }
+
+    /// The state of `repo`, kept in folder `key`, under GitHub's names now.
+    fn github_tracked(&mut self, key: &RepoKey, repo: &Repo) -> &mut RepoState {
+        // Read from disk first, if kept there.
+        self.github_state(key);
+        let state = self
+            .github
+            .states
+            .entry(key.clone())
+            .or_insert_with(|| RepoState::new(repo));
+        state.owner.clone_from(&repo.key.owner);
+        state.repo.clone_from(&repo.key.repo);
+        state
+    }
+
     fn picker_list(
         &mut self,
         client: gh::client::Client,
         repo: Repo,
         tree: String,
     ) -> Task<Message> {
+        let generation = self.github_request();
         let Some(picker) = self.picker() else {
             return Task::none();
         };
-        picker.generation += 1;
+        picker.generation = generation;
         picker.entries = None;
         picker.selected = None;
-        let generation = picker.generation;
         perform(
             async move {
                 let entries = api::tree(&client, &repo.key, &tree).await?;
@@ -532,7 +570,7 @@ impl App {
             return Task::none();
         }
         let repo_path = picker.repo_path(&entry.name);
-        let key = repo.key.clone();
+        let key = self.github_folder(&repo);
         let collides = self
             .github_state(&key)
             .is_some_and(|state| state.collides(&repo_path));
@@ -543,13 +581,15 @@ impl App {
             return Task::none();
         }
         let path = workcopy::working_path(&root, &key, &repo_path);
-        // An open tab, or a working copy with saves not on GitHub yet, opens
-        // as it is: never downloaded over.
+        // An open tab, or a working copy that differs from what was last
+        // synced (or with no record of that), opens as it is: never
+        // downloaded over.
         let open = self.strip().any(|tab| tab.path.as_ref() == Some(&path));
-        let tracked = self
+        let base = self
             .github_state(&key)
-            .is_some_and(|state| state.files.contains_key(&repo_path));
-        let unsent = tracked && path.exists() && self.github_unsent(Some(&path)).is_some();
+            .and_then(|state| state.files.get(&repo_path))
+            .map(|file| file.base_hash.clone());
+        let unsent = std::fs::read(&path).is_ok_and(|bytes| base != Some(workcopy::hash(&bytes)));
         if open || unsent {
             let close = self.github_close_dialog();
             if unsent && !open {
@@ -557,13 +597,13 @@ impl App {
             }
             return Task::batch([close, crate::app::files::open_paths(vec![path])]);
         }
+        let generation = self.github_request();
         let Some(picker) = self.picker() else {
             return Task::none();
         };
         picker.busy = true;
         picker.error = None;
-        picker.generation += 1;
-        let generation = picker.generation;
+        picker.generation = generation;
         perform(
             {
                 let (repo, repo_path) = (repo.clone(), repo_path.clone());
@@ -584,7 +624,8 @@ impl App {
         let Some(picker) = self.picker() else {
             return Task::none();
         };
-        let Some(repo) = picker.repo.clone() else {
+        // The folder's names are known once it is listed.
+        let (Some(repo), Some(_)) = (picker.repo.clone(), picker.entries.as_ref()) else {
             return Task::none();
         };
         let name = picker.save_name.trim().to_owned();
@@ -594,13 +635,14 @@ impl App {
             format!("{name}.rsk")
         };
         let stem = name.trim_end_matches(".rsk");
+        let preview = format!("{stem}.svg");
         let taken = picker
-            .entries
+            .names
             .iter()
-            .flatten()
-            .any(|entry| entry.name == name || entry.name == format!("{stem}.svg"));
+            .any(|taken| *taken == name || *taken == preview);
         let repo_path = picker.repo_path(&name);
-        let collides = self.github_state(&repo.key).is_some_and(|state| {
+        let key = self.github_folder(&repo);
+        let collides = self.github_state(&key).is_some_and(|state| {
             state.collides(&repo_path) || state.files.contains_key(&repo_path)
         });
         let refusal = if !workcopy::valid_repo_path(&repo_path) || stem.is_empty() {
@@ -616,7 +658,6 @@ impl App {
             }
             return Task::none();
         }
-        let key = repo.key.clone();
         let path = workcopy::working_path(&root, &key, &repo_path);
         if let Some(folder) = path.parent()
             && let Err(error) = std::fs::create_dir_all(folder)
@@ -626,18 +667,17 @@ impl App {
             }
             return Task::none();
         }
-        self.github
-            .states
-            .entry(key.clone())
-            .or_insert_with(|| RepoState::new(&repo))
+        self.github_tracked(&key, &repo)
             .files
             .insert(repo_path.clone(), FileState::default());
         let persist = self.github_persist(&key);
         let close = self.github_close_dialog();
         self.tab.path = Some(path);
         self.tab.untitled_name = None;
-        self.github.after_save = Some((key, reshiki::github::send::default_message(&[repo_path])));
-        Task::batch([persist, close, self.save_drawing(false)])
+        let message = reshiki::github::send::default_message(&[repo_path]);
+        self.github.after_save = Some((key, message, vec![self.tab.id]));
+        let save = crate::app::tagged(self.save_drawing(false), self.tab.id);
+        Task::batch([persist, close, save])
     }
 
     pub(super) fn picker_view<'a>(&'a self, picker: &'a Picker) -> Element<'a, Message> {
@@ -764,7 +804,10 @@ impl App {
             )
             .padding([7, 12])
             .style(crate::appearance::primary)
-            .on_press_maybe((!picker.busy && picker.repo.is_some()).then(|| msg(Action::SaveHere))),
+            .on_press_maybe(
+                (!picker.busy && picker.repo.is_some() && picker.entries.is_some())
+                    .then(|| msg(Action::SaveHere)),
+            ),
         });
         column![
             text(match picker.mode {

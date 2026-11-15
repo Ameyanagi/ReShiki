@@ -94,6 +94,7 @@ pub(super) struct State {
     pub(super) menu: bool,
     /// Keyed by the repository's folder here.
     states: HashMap<RepoKey, RepoState>,
+    /// Rises with every state write and picker request, so late ones drop.
     seq: u64,
     unsent: HashMap<RepoKey, Vec<String>>,
     sending: HashSet<RepoKey>,
@@ -102,8 +103,9 @@ pub(super) struct State {
     conflicts: HashMap<RepoKey, Vec<send::Conflict>>,
     /// A choice waiting for its drawing to be saved.
     resolving: Option<(RepoKey, send::Choice)>,
-    /// A Send waiting for the drawing in front to be saved, with its message.
-    after_save: Option<(RepoKey, String)>,
+    /// A Send waiting for the open drawings of its repository to be saved:
+    /// its message, and the tabs still to save.
+    after_save: Option<(RepoKey, String, Vec<TabId>)>,
     closing: Option<Closing>,
     /// Tabs answered Later, and a window close answered once.
     later: HashSet<TabId>,
@@ -186,7 +188,9 @@ pub enum Action {
     Polled(u64, Result<auth::Poll, gh::Error>),
     CopyCode,
     OpenVerification,
-    SignedIn(u64, Result<(gh::Account, bool), gh::Error>),
+    SignedIn(u64, Result<gh::Account, gh::Error>),
+    /// `false`: the sign-in lasts until ReShiki quits.
+    Remembered(u64, bool),
     SignOut,
     SignedOut(Result<(), String>),
     ChooseRepositories,
@@ -199,6 +203,8 @@ pub enum Action {
     ShowSend,
     SendMessage(String),
     Send,
+    /// Saves the next drawing a Send waits for, or sends.
+    SaveNext,
     Sent(RepoKey, String, Result<send::SendOutcome, gh::Error>),
     Recorded(RepoKey, Result<Option<workcopy::SaveMeta>, String>),
     Persisted(RepoKey, Result<(), String>),
@@ -207,6 +213,8 @@ pub enum Action {
     /// The conflict dialog for the drawing in front's repository.
     Review,
     Resolve(send::Choice),
+    /// The choice, once the save it waited for has landed.
+    Settle(RepoKey, send::Choice),
     ShowVersions,
     Versions(versions::Action),
 }
@@ -342,6 +350,8 @@ impl App {
                                 login,
                                 remembered: true,
                             };
+                            // Versions lists GitHub's versions again.
+                            self.github.versions.target = None;
                             self.star_github_ready();
                         }
                     }
@@ -425,7 +435,7 @@ impl App {
                         };
                         self.github.client = Some(client.clone());
                         return perform(
-                            async move { api::sign_in(&client).await },
+                            async move { api::account(&client).await },
                             move |result| Action::SignedIn(generation, result),
                         );
                     }
@@ -449,13 +459,31 @@ impl App {
                     return Task::none();
                 }
                 match result {
-                    Ok((account, remembered)) => {
-                        self.github_listed(account, remembered);
+                    Ok(account) => {
+                        // Kept for the next launch only now, so a canceled
+                        // sign-in is never kept.
+                        let (client, login) = (self.github.client.clone(), account.login.clone());
+                        self.github_listed(account, true);
+                        self.github.versions.target = None;
                         self.star_github_signed_in();
                         self.status = "Signed in to GitHub".into();
                         self.error = false;
+                        if let Some(client) = client {
+                            return perform(
+                                async move { client.remember(&login).await },
+                                move |kept| Action::Remembered(generation, kept),
+                            );
+                        }
                     }
                     Err(error) => self.github_signed_out(Some(error.to_string())),
+                }
+            }
+            Action::Remembered(generation, kept) => {
+                if let (true, Account::SignedIn { remembered, .. }) = (
+                    generation == self.github.generation,
+                    &mut self.github.account,
+                ) {
+                    *remembered = kept;
                 }
             }
             Action::SignOut => {
@@ -518,7 +546,7 @@ impl App {
             Action::Picker(action) => return self.picker_action(action),
             Action::ShowSend => {
                 self.github.menu = false;
-                let Some((key, repo_path)) = self.github.locate(self.tab.path.as_deref()) else {
+                let Some((key, _)) = self.github.locate(self.tab.path.as_deref()) else {
                     return self
                         .github_action(Action::Picker(picker::Action::Show(Mode::SaveHere)));
                 };
@@ -527,8 +555,10 @@ impl App {
                 }
                 self.github_refresh(&key);
                 let mut files = self.github.unsent.get(&key).cloned().unwrap_or_default();
-                if self.dirty() && !files.contains(&repo_path) {
-                    files.push(repo_path);
+                for (_, path) in self.github_edited(&key) {
+                    if !files.contains(&path) {
+                        files.push(path);
+                    }
                 }
                 if files.is_empty() {
                     self.status = "Nothing to send".into();
@@ -563,14 +593,13 @@ impl App {
                 if !self.finish_inline(true) {
                     return close;
                 }
-                // Send what the drawing in front shows: save it first, as Cmd+S does.
-                let front = self.github.locate(self.tab.path.as_deref());
-                if self.dirty() && front.is_some_and(|(key, _)| key == draft.key) {
-                    self.github.after_save = Some((draft.key, message));
-                    return Task::batch([close, self.save_drawing(false)]);
-                }
-                return Task::batch([close, self.github_send(draft.key, message, None)]);
+                // Send what the drawings show: each is saved first, as Cmd+S does.
+                let tabs = self.github_edited(&draft.key);
+                let tabs = tabs.into_iter().map(|(id, _)| id).collect();
+                self.github.after_save = Some((draft.key, message, tabs));
+                return Task::batch([close, self.github_save_next()]);
             }
+            Action::SaveNext => return self.github_save_next(),
             Action::Sent(key, sent_at, result) => return self.github_sent(key, sent_at, result),
             Action::Recorded(key, result) => {
                 if let Err(error) = result {
@@ -595,6 +624,7 @@ impl App {
                 }
             }
             Action::Resolve(choice) => return self.github_resolve(choice),
+            Action::Settle(key, choice) => return self.github_settle(key, choice),
             Action::ShowVersions => {
                 self.github.menu = false;
                 if self.github.locate(self.tab.path.as_deref()).is_none() {
@@ -677,17 +707,68 @@ impl App {
         }
     }
 
-    /// After every save: a GitHub drawing keeps the save as a version, and a
-    /// Send waiting for this save goes on.
-    pub(super) fn github_saved(&mut self, saved: Option<PathBuf>) -> Task<Message> {
-        let waiting = self.github.after_save.take();
-        let Some(path) = saved else {
-            self.github.resolving = None;
+    /// The open drawings of `key` with unsaved edits, by tab and repository path.
+    fn github_edited(&self, key: &RepoKey) -> Vec<(TabId, String)> {
+        self.strip()
+            .filter(|tab| self.edited(tab))
+            .filter_map(|tab| {
+                let (other, path) = self.github.locate(tab.path.as_deref())?;
+                (other == *key).then_some((tab.id, path))
+            })
+            .collect()
+    }
+
+    /// Saves the next drawing the Send waits for, in its own tab as Cmd+S
+    /// does; once all are saved, sends. A save already writing calls back.
+    fn github_save_next(&mut self) -> Task<Message> {
+        let Some((_, _, tabs)) = &self.github.after_save else {
             return Task::none();
+        };
+        if self.file_io.saving {
+            return Task::none();
+        }
+        let next = tabs
+            .iter()
+            .copied()
+            .find(|id| self.strip().any(|tab| tab.id == *id && self.edited(tab)));
+        if let Some(id) = next {
+            let save = self.in_tab(id, |app| app.save_drawing(false));
+            return super::tagged(save.unwrap_or_else(Task::none), id);
+        }
+        let Some((key, message, _)) = self.github.after_save.take() else {
+            return Task::none();
+        };
+        self.github_send(key, message, None)
+    }
+
+    /// After every save of an open tab, with that tab in front: a GitHub
+    /// drawing keeps what was written as a version, and a Send or a choice
+    /// waiting for this save goes on.
+    pub(super) fn github_saved(
+        &mut self,
+        saved: bool,
+        written: Option<(PathBuf, reshiki::document::Document)>,
+    ) -> Task<Message> {
+        let id = self.tab.id;
+        if !saved {
+            // A save failed or was canceled: what waited for it waits for the user.
+            self.github.after_save = None;
+            self.github.resolving = None;
+        } else if let Some((_, _, tabs)) = &mut self.github.after_save
+            && !self.tab.dirty()
+        {
+            tabs.retain(|tab| *tab != id);
+        }
+        let next = match self.github.after_save {
+            Some(_) => Task::done(Message::GitHub(Action::SaveNext)),
+            None => Task::none(),
+        };
+        let Some((path, doc)) = written else {
+            return next;
         };
         let resolve = self.github_resolve_saved(&path);
         let Some((key, repo_path)) = self.github.locate(Some(&path)) else {
-            return Task::none();
+            return Task::batch([next, resolve]);
         };
         let root = self.github.root.clone().unwrap_or_default();
         let base = self
@@ -698,7 +779,7 @@ impl App {
             {
                 let key = key.clone();
                 async move {
-                    let bytes = reshiki::storage::read(&path).map_err(|error| error.to_string())?;
+                    let bytes = doc.file_json()?;
                     workcopy::snapshot(&root, &key, &repo_path, bytes, base).await
                 }
             },
@@ -708,13 +789,7 @@ impl App {
             },
         );
         self.github_refresh(&key);
-        let send = match waiting {
-            Some((waiting, message)) if waiting == key && !self.dirty() => {
-                self.github_send(key, message, None)
-            }
-            _ => Task::none(),
-        };
-        Task::batch([record, send, resolve])
+        Task::batch([record, next, resolve])
     }
 
     /// One commit of every unsent drawing of `key` (or of those in `only`),
@@ -795,6 +870,16 @@ impl App {
                     },
                 ));
                 self.github_refresh(&key);
+                // Versions lists again, with the new commit.
+                if self
+                    .github
+                    .versions
+                    .target
+                    .as_ref()
+                    .is_some_and(|(at, _)| *at == key)
+                {
+                    self.github.versions.target = None;
+                }
                 let conflicts = self.github_conflicts(&key);
                 self.error = conflicts > 0;
                 self.status = match conflicts {
@@ -866,8 +951,12 @@ impl App {
         window: iced::window::Id,
         discarded: &[TabId],
     ) -> Option<Task<Message>> {
-        if std::mem::take(&mut self.github.window_answered) || self.github.closing.is_some() {
+        if std::mem::take(&mut self.github.window_answered) {
             return None;
+        }
+        // A close already waits for an answer or a send: this one waits too.
+        if self.github.closing.is_some() {
+            return Some(Task::none());
         }
         let paths: Vec<_> = self.strip().filter_map(|tab| tab.path.clone()).collect();
         let keys: HashSet<RepoKey> = paths
@@ -1200,17 +1289,19 @@ fn poll_after(generation: u64, wait: std::time::Duration) -> Task<Message> {
 
 const SEND_MESSAGE: &str = "github-send-message";
 
+/// `3 drawings: a.rsk, b.rsk, c.rsk`, so nothing is sent unseen.
 fn send_view(draft: &SendDraft) -> Element<'_, Message> {
-    let mut files = column![].spacing(2);
-    for file in &draft.files {
-        files = files.push(text(file.as_str()).size(13));
-    }
+    let names = draft.files.join(", ");
+    let files = match draft.files.len() {
+        1 => format!("1 drawing: {names}"),
+        n => format!("{n} drawings: {names}"),
+    };
     column![
         text(SEND).size(18),
         text(format!("{}/{}", draft.key.owner, draft.key.repo))
             .size(12)
             .style(super::workspace::muted_text),
-        iced::widget::scrollable(files).height(Length::Shrink),
+        iced::widget::scrollable(text(files).size(13)).height(Length::Shrink),
         reshiki::accessibility::text_input(SEND_MESSAGE, "Message", "Message", &draft.message)
             .style(crate::appearance::input_style)
             .on_input(|message| Message::GitHub(Action::SendMessage(message)))

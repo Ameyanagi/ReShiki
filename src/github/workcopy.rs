@@ -174,6 +174,32 @@ fn read_state(path: &Path) -> Result<Option<RepoState>, String> {
         .map_err(|error| error.to_string())
 }
 
+/// The folder that `repo`'s drawings went to when it was first opened here,
+/// found by its id, so a rename on GitHub keeps them; for a repository new
+/// here, its names now.
+pub fn folder(root: &Path, repo: &super::Repo) -> RepoKey {
+    let names = |dir: &Path| -> Vec<String> {
+        std::fs::read_dir(dir)
+            .into_iter()
+            .flatten()
+            .flatten()
+            .filter_map(|entry| entry.file_name().into_string().ok())
+            .collect()
+    };
+    for owner in names(root) {
+        for name in names(&root.join(&owner)) {
+            let key = RepoKey {
+                owner: owner.clone(),
+                repo: name,
+            };
+            if load(root, &key).is_ok_and(|state| state.is_some_and(|s| s.repo_id == repo.id)) {
+                return key;
+            }
+        }
+    }
+    repo.key.clone()
+}
+
 /// `None`: nothing from this repository has been opened here.
 pub fn load(root: &Path, key: &RepoKey) -> Result<Option<RepoState>, String> {
     read_state(&repo_dir(root, key).join("state.json"))

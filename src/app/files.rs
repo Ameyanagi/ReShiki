@@ -510,7 +510,32 @@ impl super::App {
         Task::none()
     }
 
+    /// Every finished save of a tab still open, in front or behind it, comes
+    /// here, with that tab in front.
     pub(super) fn file_saved(
+        &mut self,
+        epoch: u64,
+        snapshot: Box<reshiki::document::Document>,
+        result: Result<Option<Saved>, String>,
+    ) -> iced::Task<super::Message> {
+        // A GitHub drawing keeps what this save wrote as a version.
+        #[cfg(not(target_arch = "wasm32"))]
+        let written = match &result {
+            Ok(Some(path)) if epoch == self.tab.file_epoch => self
+                .github
+                .locate(Some(path))
+                .map(|_| (path.clone(), (*snapshot).clone())),
+            _ => None,
+        };
+        #[cfg(not(target_arch = "wasm32"))]
+        let saved = matches!(&result, Ok(Some(_))) && epoch == self.tab.file_epoch;
+        let task = self.drawing_saved(epoch, snapshot, result);
+        #[cfg(not(target_arch = "wasm32"))]
+        let task = iced::Task::batch([task, self.github_saved(saved, written)]);
+        task
+    }
+
+    fn drawing_saved(
         &mut self,
         epoch: u64,
         snapshot: Box<reshiki::document::Document>,

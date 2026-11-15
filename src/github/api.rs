@@ -163,14 +163,6 @@ pub async fn account(client: &Client) -> Result<Account, Error> {
     Ok(Account { login, repos: all })
 }
 
-/// Finish a sign-in just made: name the user, keep the sign-in, list the
-/// repositories. `false`: the sign-in won't be remembered on this computer.
-pub async fn sign_in(client: &Client) -> Result<(Account, bool), Error> {
-    let account = account(client).await?;
-    let remembered = client.remember(&account.login).await;
-    Ok((account, remembered))
-}
-
 /// By id, so a renamed repository or a changed default branch is found.
 pub async fn repo(client: &Client, id: u64) -> Result<Repo, Error> {
     let reply: RepoReply = call(client, Method::GET, &format!("/repositories/{id}"), None).await?;

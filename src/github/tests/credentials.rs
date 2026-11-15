@@ -35,11 +35,13 @@ async fn a_store_that_fails_still_signs_in_for_this_run() {
     let mut fresh = mock.tokens();
     fresh.login.clear();
     let client = Client::new("mock-client".into(), mock.ends(), Some(fresh)).unwrap();
-    let (account, remembered) = api::sign_in(&client).await.unwrap();
+    let account = api::account(&client).await.unwrap();
     assert_eq!(account.login, "octo-test");
-    assert!(!remembered && !client.remembered().await);
+    assert!(!client.remember(&account.login).await && !client.remembered().await);
     // The sign-in still works.
     assert_eq!(api::user(&client).await.as_deref(), Ok("octo-test"));
+    // Signing out has nothing to forget, so the store is not asked.
+    assert_eq!(client.sign_out().await, Ok(()));
     memory::fail(false);
     assert_eq!(credentials::load().await, Ok(None));
 }
@@ -51,10 +53,14 @@ async fn a_working_store_remembers_the_sign_in_with_its_login() {
     let mut fresh = mock.tokens();
     fresh.login.clear();
     let client = Client::new("mock-client".into(), mock.ends(), Some(fresh.clone())).unwrap();
-    let (_, remembered) = api::sign_in(&client).await.unwrap();
-    assert!(remembered);
+    // Naming the user keeps nothing: a canceled sign-in is never stored.
+    let account = api::account(&client).await.unwrap();
+    assert_eq!(credentials::load().await, Ok(None));
+    assert!(client.remember(&account.login).await);
     fresh.login = "octo-test".into();
     assert_eq!(credentials::load().await, Ok(Some(fresh)));
+    assert_eq!(client.sign_out().await, Ok(()));
+    assert_eq!(credentials::load().await, Ok(None));
 }
 
 /// By hand on macOS, Windows x64 and Linux x64: the real Keychain, Credential

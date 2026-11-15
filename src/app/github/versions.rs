@@ -14,6 +14,8 @@ use std::sync::Arc;
 pub(super) struct Versions {
     /// The drawing listed, by repository folder and repository path.
     pub(super) target: Option<(RepoKey, String)>,
+    /// The repository as GitHub last named it, for asking GitHub.
+    pub(super) named: Option<RepoKey>,
     pub(super) generation: u64,
     /// Newest first; `None` while reading.
     local: Option<Vec<(String, Arc<Document>)>>,
@@ -102,10 +104,14 @@ impl App {
             self.github.versions.remote = Some(Vec::new());
             return local;
         };
-        let Some(branch) = self.github_state(&key).map(|state| state.branch.clone()) else {
+        let Some((key, branch)) = self
+            .github_state(&key)
+            .map(|state| (state.key(), state.branch.clone()))
+        else {
             self.github.versions.remote = Some(Vec::new());
             return local;
         };
+        self.github.versions.named = Some(key.clone());
         let generation = self.github.versions.generation;
         let remote = perform(
             async move {
@@ -150,12 +156,15 @@ impl App {
     }
 
     fn versions_docs(&mut self, commits: Vec<String>) -> Task<Message> {
-        let (Some(client), Some((key, repo_path))) =
-            (self.github.client(), self.github.versions.target.clone())
-        else {
+        let versions = &self.github.versions;
+        let (Some(client), Some(key), Some((_, repo_path))) = (
+            self.github.client(),
+            versions.named.clone(),
+            versions.target.clone(),
+        ) else {
             return Task::none();
         };
-        let generation = self.github.versions.generation;
+        let generation = versions.generation;
         Task::batch(commits.into_iter().map(|commit| {
             let (client, key, repo_path) = (client.clone(), key.clone(), repo_path.clone());
             let at = commit.clone();
@@ -221,8 +230,9 @@ impl App {
             }
             Action::LoadMore => {
                 let versions = &self.github.versions;
-                let (Some(client), Some((key, repo_path)), Some(head)) = (
+                let (Some(client), Some(key), Some((_, repo_path)), Some(head)) = (
                     self.github.client(),
+                    versions.named.clone(),
                     versions.target.clone(),
                     versions.head.clone(),
                 ) else {
@@ -259,6 +269,8 @@ impl App {
                     .unwrap_or_default();
                 self.open_target(None);
                 self.show_opened((*doc).clone(), None);
+                // Unsaved, so closing it asks: it may be the last copy of a save.
+                self.tab.mark_saved(Document::default());
                 self.tab.untitled_name = Some(format!("{stem} · {label}"));
                 return crate::app::focus_drawing();
             }
@@ -279,12 +291,17 @@ impl App {
                     self.error = true;
                     return Task::none();
                 }
+                if self.file_io.saving {
+                    self.status = "Wait for the save to finish".into();
+                    self.error = true;
+                    return Task::none();
+                }
                 if let Err(error) = self.try_replace_document((*doc).clone(), Vec::new()) {
                     self.status = error;
                     self.error = true;
                     return Task::none();
                 }
-                let save = self.save_drawing(false);
+                let save = crate::app::tagged(self.save_drawing(false), self.tab.id);
                 self.status = format!("Restored {label}");
                 self.error = false;
                 return save;

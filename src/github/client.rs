@@ -31,6 +31,8 @@ struct Session {
     tokens: Option<Tokens>,
     /// Whether the credential store holds the current tokens.
     remembered: bool,
+    /// Whether the credential store may hold a sign-in to forget.
+    kept: bool,
 }
 
 pub(super) fn http(ends: &Endpoints) -> Result<reqwest::Client, Error> {
@@ -60,9 +62,13 @@ pub(super) async fn read(mut response: reqwest::Response, limit: usize) -> Resul
 }
 
 impl Client {
-    /// `tokens` come from the credential store, or from a sign-in just made
-    /// (then [`Self::remember`] stores them once GitHub has named the user).
+    /// `tokens` come from the credential store, or from a sign-in just made,
+    /// with no login yet (then [`Self::remember`] stores them once GitHub has
+    /// named the user).
     pub fn new(client_id: String, ends: Endpoints, tokens: Option<Tokens>) -> Result<Self, Error> {
+        let kept = tokens
+            .as_ref()
+            .is_some_and(|tokens| !tokens.login.is_empty());
         Ok(Self {
             http: http(&ends)?,
             ends,
@@ -70,6 +76,7 @@ impl Client {
             session: Arc::new(tokio::sync::Mutex::new(Session {
                 tokens,
                 remembered: true,
+                kept,
             })),
         })
     }
@@ -83,6 +90,7 @@ impl Client {
         };
         tokens.login = login.to_owned();
         session.remembered = credentials::store(tokens).await.is_ok();
+        session.kept |= session.remembered;
         session.remembered
     }
 
@@ -91,10 +99,14 @@ impl Client {
     }
 
     /// Waits for a refresh in flight, so nothing is stored after signing out.
-    /// An error means the credential store still holds the sign-in.
+    /// An error means the credential store still holds the sign-in. A sign-in
+    /// never stored leaves the store alone: with no keyring there is none.
     pub async fn sign_out(&self) -> Result<(), String> {
         let mut session = self.session.lock().await;
         session.tokens = None;
+        if !std::mem::take(&mut session.kept) {
+            return Ok(());
+        }
         credentials::delete().await
     }
 
@@ -121,6 +133,7 @@ impl Client {
                 // in memory first, and stays there even when it cannot be stored.
                 let stored = credentials::store(session.tokens.insert(fresh)).await;
                 session.remembered = stored.is_ok();
+                session.kept |= session.remembered;
                 Ok(access)
             }
             Err(Error::SignInExpired) => {

@@ -15,8 +15,10 @@ beside it, so drawings show on GitHub.
 3. Choose **GitHub → Open from GitHub…**. Pick a repository, open folders, select
    a drawing and choose **Open**.
 4. Edit and save as usual. The status bar shows **1 not on GitHub**.
-5. Choose **Send** in the status bar. Change the message if you like, then
-   choose **Send**. The status bar shows **On GitHub**.
+5. Choose **Send** in the status bar. The Send box lists what it sends, such
+   as **2 drawings: a.rsk, b.rsk**. Change the message if you like, then
+   choose **Send**. ReShiki first saves every open drawing of that repository,
+   as **Save** does. The status bar shows **On GitHub**.
 
 To put a drawing that is not on GitHub yet into a repository, choose
 **GitHub → Send to GitHub**. Pick a repository and folder, name the drawing,
@@ -56,8 +58,8 @@ The same commands are in the command palette: **Open from GitHub…**,
   their `.svg` previews.
 - A change to the drawing's style or settings is not highlighted. The compare
   says **Style or settings changed** instead.
-- Send sends the saved files. It saves the drawing in front first; drawings in
-  other tabs are sent as last saved.
+- Send sends saved files. It first saves every open drawing of that
+  repository; a drawing that is not open is sent as last saved.
 - On Linux without a keyring, the sign-in lasts until ReShiki quits:
   **Sign-in won't be remembered on this computer.**
 

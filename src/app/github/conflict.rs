@@ -35,21 +35,40 @@ fn file_name(repo_path: &str) -> String {
 impl App {
     /// The first conflict of `key` that this run knows. With none known
     /// (ReShiki restarted since), the drawings in conflict are sent again:
-    /// GitHub's versions come back as conflicts.
+    /// GitHub's versions come back as conflicts. A drawing saved back to
+    /// what it was based on is in conflict no more.
     pub(super) fn github_review(&mut self, key: RepoKey, done: usize) -> Task<Message> {
         if let Some(review) = self.conflict_review(&key, done) {
             self.github.dialog = Some(Dialog::Conflict(Box::new(review)));
             return self.accessibility_refresh();
         }
-        let marked: Vec<String> = self.github_state(&key).map_or_else(Vec::new, |state| {
-            let files = state.files.iter();
-            files
-                .filter(|(_, file)| file.conflict.is_some())
-                .map(|(path, _)| path.clone())
-                .collect()
-        });
+        self.github_refresh(&key);
+        let unsent = self.github.unsent.get(&key).cloned().unwrap_or_default();
+        let Some(state) = self.github_state(&key) else {
+            return Task::none();
+        };
+        let (mut marked, mut cleared) = (Vec::new(), false);
+        for (path, file) in &mut state.files {
+            if file.conflict.is_none() {
+                continue;
+            }
+            if unsent.contains(path) {
+                marked.push(path.clone());
+            } else {
+                file.conflict = None;
+                cleared = true;
+            }
+        }
+        let persist = if cleared {
+            self.github_persist(&key)
+        } else {
+            Task::none()
+        };
+        if marked.is_empty() {
+            return persist;
+        }
         let message = send::default_message(&marked);
-        self.github_send(key, message, Some(marked))
+        Task::batch([persist, self.github_send(key, message, Some(marked))])
     }
 
     fn conflict_review(&self, key: &RepoKey, done: usize) -> Option<Review> {
@@ -104,28 +123,29 @@ impl App {
             let writing = self.file_io.saving && self.file_io.saving_tab == Some(self.tab.id);
             if self.dirty() || writing {
                 self.github.resolving = Some((key, choice));
-                return self.save_drawing(false);
+                return crate::app::tagged(self.save_drawing(false), self.tab.id);
             }
         }
         self.github_settle(key, choice)
     }
 
-    /// After the save [`Self::github_resolve`] waited for.
+    /// After a save of the drawing [`Self::github_resolve`] waited for, with
+    /// its tab in front: settles once nothing is left unsaved.
     pub(super) fn github_resolve_saved(&mut self, saved: &std::path::Path) -> Task<Message> {
-        let Some((key, choice)) = self.github.resolving.take() else {
+        let waited =
+            matches!(&self.github.dialog, Some(Dialog::Conflict(review)) if review.path == saved);
+        let Some((key, choice)) = self.github.resolving.take_if(|_| waited) else {
             return Task::none();
         };
-        match &self.github.dialog {
-            Some(Dialog::Conflict(review)) if review.path == saved && !self.dirty() => {
-                self.github_settle(key, choice)
-            }
-            _ => Task::none(),
+        if self.dirty() {
+            return Task::none();
         }
+        Task::done(Message::GitHub(Action::Settle(key, choice)))
     }
 
     /// Writes the choice here, shows it in the drawing's tab, then shows the
     /// next conflict or, after the last, sends.
-    fn github_settle(&mut self, key: RepoKey, choice: Choice) -> Task<Message> {
+    pub(super) fn github_settle(&mut self, key: RepoKey, choice: Choice) -> Task<Message> {
         let Some(root) = self.github.root.clone() else {
             return Task::none();
         };

@@ -84,17 +84,7 @@ impl App {
             return Break(self.autosaved(key, result));
         }
         if let Message::Saved(epoch, snapshot, result) = message {
-            #[cfg(not(target_arch = "wasm32"))]
-            let saved = result
-                .as_ref()
-                .ok()
-                .and_then(Option::clone)
-                .filter(|_| epoch == self.tab.file_epoch);
-            let task = self.file_saved(epoch, snapshot, result);
-            // A GitHub drawing keeps the save as a version.
-            #[cfg(not(target_arch = "wasm32"))]
-            let task = Task::batch([task, self.github_saved(saved)]);
-            return Break(task);
+            return Break(self.file_saved(epoch, snapshot, result));
         }
         if let Message::Templates(template_library::Action::Finished(serial, result)) = message {
             return Break(self.template_finished(serial, result));

@@ -247,3 +247,23 @@ async fn saves_are_kept_as_versions_up_to_fifty() {
         [kept[49].clone()]
     );
 }
+
+#[tokio::test]
+async fn a_renamed_repository_keeps_the_folder_it_was_first_opened_in() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    workcopy::persist(root, &key(), state(), 1).await.unwrap();
+    let renamed = Repo {
+        id: 7,
+        key: RepoKey {
+            owner: "octo-test".into(),
+            repo: "lab-book".into(),
+        },
+        private: true,
+        default_branch: "main".into(),
+        push: true,
+    };
+    assert_eq!(workcopy::folder(root, &renamed), key());
+    let other = Repo { id: 8, ..renamed };
+    assert_eq!(workcopy::folder(root, &other), other.key);
+}

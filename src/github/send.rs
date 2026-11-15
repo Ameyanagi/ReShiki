@@ -127,6 +127,12 @@ pub async fn send(
         for file in files {
             let remote = folders.blob(&file.repo_path).await?;
             if remote == file.base_blob {
+                // A new drawing's preview never goes over a file already there.
+                let preview = svg_path(&file.repo_path);
+                if file.base_blob.is_none() && folders.blob(&preview).await?.is_some() {
+                    let name = preview.rsplit('/').next().unwrap_or_default();
+                    return Err(Error::Rejected(format!("“{name}” is already on GitHub.")));
+                }
                 clean.push(file);
                 continue;
             }

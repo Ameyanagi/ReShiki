@@ -162,6 +162,19 @@ async fn a_head_that_moved_elsewhere_is_built_on() {
 }
 
 #[tokio::test]
+async fn a_new_drawing_never_replaces_a_preview_name_already_on_github() {
+    let (mock, client) = notes(&[("a.svg", b"<svg>mine</svg>")]).await;
+    let before = commits(&mock);
+    let result = send::send(&client, 1, "Update a.rsk", &[out("a.rsk", b"new", None)]).await;
+    assert_eq!(
+        result,
+        Err(Error::Rejected("“a.svg” is already on GitHub.".into()))
+    );
+    assert_eq!(remote(&mock, "a.svg").unwrap(), b"<svg>mine</svg>");
+    assert_eq!(commits(&mock), before);
+}
+
+#[tokio::test]
 async fn a_drawing_changed_on_github_is_left_out_as_a_conflict() {
     let (mock, client) = notes(&[("dir/a.rsk", b"old a"), ("dir/b.rsk", b"old b")]).await;
     let theirs = mock
