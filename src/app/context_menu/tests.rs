@@ -1505,9 +1505,10 @@ fn copy_image_on_lists_backgrounds_then_saved_colors_and_ticks_the_default() {
 fn copy_image_on_editable_drawing_changes_one_copy_and_keeps_the_default() {
     let (mut app, _) = App::new();
     app.appearance.export_editable_drawing = false;
+    // Opened on its own: the main menu lists Copy image on only where a
+    // native clipboard is available, which a headless Linux session lacks.
     let open = |app: &mut App| {
-        app.context_menu = Some(State::new(Point::ORIGIN, Page::Main));
-        let _ = app.context_action(Action::Page(Page::CopyImageOn));
+        app.context_menu = Some(State::new(Point::ORIGIN, Page::CopyImageOn));
     };
     let row = |app: &App, find: fn(&Action) -> bool| {
         app.context_entries(Page::CopyImageOn)
@@ -1541,13 +1542,13 @@ fn copy_image_on_editable_drawing_changes_one_copy_and_keeps_the_default() {
     open(&mut app);
     assert!(!app.copy_editable(), "starts at the default");
     assert_eq!(copies(&app), [false; 4]);
-    let _ = app.context_action(Action::Activate(1, row(&app, editable)));
+    let _ = app.context_action(Action::Activate(0, row(&app, editable)));
     assert!(app.context_menu.is_some(), "the menu stays open");
     assert!(app.copy_editable());
     assert_eq!(copies(&app), [true; 4], "every background copies with it");
     assert!(!app.appearance.export_editable_drawing, "the default stays");
     // Picking a background copies once and closes the menu.
-    let _ = app.context_action(Action::Activate(1, row(&app, background)));
+    let _ = app.context_action(Action::Activate(0, row(&app, background)));
     assert!(app.context_menu.is_none());
     assert!(app.clipboard_working(), "the copy started");
     assert!(!app.appearance.export_editable_drawing);
