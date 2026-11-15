@@ -306,7 +306,7 @@ async fn errors_are_a_protocol_error_or_coded_tool_errors() {
         "base_revision": "1",
         "idempotency_key": null,
     });
-    // A stale call says what to retry from, without reading the message.
+    // A stale call says which revision the document has, without reading the message.
     let result = host.call(call("apply", stale)).await.unwrap();
     assert_eq!(
         result.value["error"],

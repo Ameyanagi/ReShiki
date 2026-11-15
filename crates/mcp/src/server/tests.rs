@@ -74,8 +74,10 @@ fn get_info_labels_the_server_experimental() {
         convert does it in one call and keeps no document. document_new, import, compose and \
         file_open each create a document and return its handle. Use render to look at a PNG \
         preview, analyze for properties, inspect for object IDs. apply edits in one undo step: \
-        pass the target document's latest revision as base_revision; after stale, retry from \
-        error.current_revision with a new idempotency_key. export returns a file inline; \
+        pass the target document's latest revision as base_revision; after stale, inspect again \
+        and reconsider the edit before you retry with a new idempotency_key; \
+        error.current_revision only says which revision the document has now. export returns a \
+        file inline; \
         file_save writes only into a granted folder and never overwrites unless overwrite is \
         true. Close documents you no longer need with document_close. Object IDs and revisions \
         are decimal strings. No folders are granted: use import and export. Chemical names work \
