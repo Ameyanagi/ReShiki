@@ -243,8 +243,8 @@ jobs:
       RUSTFLAGS: ${{ endsWith(matrix.target, '-pc-windows-msvc') && '-C target-feature=+crt-static' || '' }}
       # Cargo strips macOS into reshiki.dSYM. The MSVC linker writes no PDB for a
       # stripped build, and build_release.py splits Linux symbols into reshiki.debug.
-      CARGO_PROFILE_RELEASE_STRIP: ${{ startsWith(matrix.artifact, 'macos') && 'symbols' || 'none' }}
-      CARGO_PROFILE_RELEASE_SPLIT_DEBUGINFO: ${{ startsWith(matrix.artifact, 'linux') && 'off' || 'packed' }}
+      CARGO_PROFILE_DIST_STRIP: ${{ startsWith(matrix.artifact, 'macos') && 'symbols' || 'none' }}
+      CARGO_PROFILE_DIST_SPLIT_DEBUGINFO: ${{ startsWith(matrix.artifact, 'linux') && 'off' || 'packed' }}
     steps:
       - *actions_runtime
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -300,21 +300,21 @@ jobs:
           MACOSX_DEPLOYMENT_TARGET: "14.0"
         run: uv run --no-project --isolated --python 3.12.15 python scripts/build_release.py --target ${{ matrix.target }} --installer
       # Symbols for crash reports; a workflow artifact, never a release download.
-      # Upload them before any cargo test step: those rebuild the app with test
-      # features in place, and the new PDB would not match the shipped exe.
+      # The published build has its own profile folder, so the cargo test steps
+      # below (release profile) cannot replace them.
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: symbols-${{ matrix.artifact }}
           path: |
-            target/${{ matrix.target }}/release/reshiki.dSYM
-            target/${{ matrix.target }}/release/reshiki.pdb
-            target/${{ matrix.target }}/release/reshiki.debug
+            target/${{ matrix.target }}/dist/reshiki.dSYM
+            target/${{ matrix.target }}/dist/reshiki.pdb
+            target/${{ matrix.target }}/dist/reshiki.debug
           if-no-files-found: error
       - name: Check the application worker protocols and heap boundaries
         env:
           RESHIKI_REQUIRE_INCHI_HELPER: "1"
           RESHIKI_REQUIRE_GEOMETRY_APP: "1"
-          RESHIKI_TEST_PACKAGED_APP: ${{ github.workspace }}/target/${{ matrix.target }}/release/reshiki${{ runner.os == 'Windows' && '.exe' || '' }}
+          RESHIKI_TEST_PACKAGED_APP: ${{ github.workspace }}/target/${{ matrix.target }}/dist/reshiki${{ runner.os == 'Windows' && '.exe' || '' }}
         run: uv run --no-project --with certifi==2026.10.23 --isolated --python 3.12.15 python -m unittest tests.test_inchi_helper_protocol tests.test_inchi_distribution.HelperTests.test_packaged_application_worker_executes_when_supplied_for_validation tests.test_geometry_distribution.GeometryWorkerTests.test_packaged_application_worker_executes_when_supplied_for_validation
       # The default shell, as for every other Windows cargo step: under bash,
       # Git's /usr/bin/link shadows the MSVC linker.
@@ -331,7 +331,7 @@ jobs:
       - name: Compare geometry energies and gradients with the pinned independent oracle
         if: matrix.native_only != true
         env:
-          RESHIKI_GEOMETRY_REFERENCE_APP: ${{ github.workspace }}/target/${{ matrix.target }}/release/reshiki${{ runner.os == 'Windows' && '.exe' || '' }}
+          RESHIKI_GEOMETRY_REFERENCE_APP: ${{ github.workspace }}/target/${{ matrix.target }}/dist/reshiki${{ runner.os == 'Windows' && '.exe' || '' }}
           RESHIKI_REQUIRE_GEOMETRY_REFERENCE: "1"
         # The geometry oracle keeps its own RDKit, not the locked reference pin:
         # under 2026.09 every ETKDG embedding changes (energies are identical).
@@ -346,16 +346,16 @@ jobs:
         env:
           MACOSX_DEPLOYMENT_TARGET: "14.0"
           RESHIKI_REQUIRE_INCHI_HELPER: "1"
-          RESHIKI_INCHI_HELPER: ${{ github.workspace }}/target/x86_64-apple-darwin/release/reshiki
-          RESHIKI_NAMING_HELPER: ${{ github.workspace }}/target/x86_64-apple-darwin/release/reshiki
+          RESHIKI_INCHI_HELPER: ${{ github.workspace }}/target/x86_64-apple-darwin/dist/reshiki
+          RESHIKI_NAMING_HELPER: ${{ github.workspace }}/target/x86_64-apple-darwin/dist/reshiki
         run: cargo test --release --locked --no-default-features --lib --target x86_64-apple-darwin
       - name: Test the nightly application and renderer regressions
         if: inputs.nightly
         env:
           MACOSX_DEPLOYMENT_TARGET: "14.0"
           RESHIKI_REQUIRE_INCHI_HELPER: "1"
-          RESHIKI_INCHI_HELPER: ${{ github.workspace }}/target/${{ matrix.target }}/release/reshiki${{ runner.os == 'Windows' && '.exe' || '' }}
-          RESHIKI_NAMING_HELPER: ${{ github.workspace }}/target/${{ matrix.target }}/release/reshiki${{ runner.os == 'Windows' && '.exe' || '' }}
+          RESHIKI_INCHI_HELPER: ${{ github.workspace }}/target/${{ matrix.target }}/dist/reshiki${{ runner.os == 'Windows' && '.exe' || '' }}
+          RESHIKI_NAMING_HELPER: ${{ github.workspace }}/target/${{ matrix.target }}/dist/reshiki${{ runner.os == 'Windows' && '.exe' || '' }}
         run: cargo test --release --locked --no-default-features --bin reshiki --target ${{ matrix.target }}
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:

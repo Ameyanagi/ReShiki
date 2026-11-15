@@ -233,6 +233,14 @@ debug = "line-tables-only"
 split-debuginfo = "packed"
 strip = "symbols"
 
+# Published builds only (scripts/build_release.py): the whole program as one
+# optimized unit. It makes a smaller executable and a much slower build, so
+# tests and local runs keep the release profile.
+[profile.dist]
+inherits = "release"
+lto = "fat"
+codegen-units = 1
+
 # Keep interactive geometry within its worker deadline in development builds,
 # using the same optimized solver crates (ETKDG, MMFF/UFF, model) as numerical tests.
 [profile.dev.package.cosmolkit]
