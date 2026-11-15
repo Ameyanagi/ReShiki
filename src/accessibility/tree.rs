@@ -107,6 +107,7 @@ impl NativeTree {
                 Role::Button | Role::ToggleButton => accesskit::Role::Button,
                 Role::TextInput => accesskit::Role::TextInput,
                 Role::TextArea => accesskit::Role::MultilineTextInput,
+                Role::ComboBox => accesskit::Role::ComboBox,
             });
             native.set_label(node.name.clone());
             native.set_author_id(node.id.clone());
@@ -128,7 +129,7 @@ impl NativeTree {
             }
             if node.enabled {
                 self.live.insert(id, (node.id.clone(), node.role));
-                native.add_action(if matches!(node.role, Role::TextInput | Role::TextArea) {
+                native.add_action(if node.role.takes_value() {
                     Action::SetValue
                 } else {
                     Action::Click
@@ -169,7 +170,7 @@ impl NativeTree {
             return None;
         }
         let (id, role) = self.live.get(&request.target_node)?;
-        if request.action == Action::SetValue && matches!(role, Role::TextInput | Role::TextArea) {
+        if request.action == Action::SetValue && role.takes_value() {
             return match &request.data {
                 Some(accesskit::ActionData::Value(value)) if value.len() <= 16384 => {
                     Some(Request::SetValue(id.clone(), value.to_string()))
@@ -181,9 +182,7 @@ impl NativeTree {
             return None;
         }
         match request.action {
-            Action::Click if !matches!(role, Role::TextInput | Role::TextArea) => {
-                Some(Request::Activate(id.clone()))
-            }
+            Action::Click if !role.takes_value() => Some(Request::Activate(id.clone())),
             Action::Focus => Some(Request::Focus(id.clone())),
             Action::ScrollIntoView => Some(Request::Reveal(id.clone())),
             _ => None,

@@ -337,6 +337,90 @@ async fn tabs_style_buttons_and_canvas_theme_are_named_controls() {
         (theme.name.as_str(), theme.checked),
         ("Dark canvas", Some(false))
     );
+    for (id, name) in [
+        ("text-style-font", "Font"),
+        ("journal-preset", "Journal preset"),
+        ("color-theme", "Color theme"),
+    ] {
+        let select = node(id.into());
+        assert_eq!((select.name.as_str(), select.role), (name, Role::ComboBox));
+        assert!(select.value.as_ref().is_some_and(|v| !v.is_empty()), "{id}");
+    }
+}
+
+/// The journal preset and color theme choose options from the keyboard and
+/// by name from assistive technology; the font list by name.
+#[tokio::test]
+#[ignore = "Opt-in renderer input check"]
+async fn style_lists_choose_options_by_keyboard_and_by_name() {
+    use reshiki::document_styles::Preset;
+    let mut ui = Ui::new().await;
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let value = |ui: &mut Ui, app: &App, id: &str| {
+        (ui.semantics(app).nodes.into_iter())
+            .find(|node| node.id == id)
+            .and_then(|node| node.value)
+            .unwrap()
+    };
+    let first = Preset::ALL[0].to_string();
+    let second = Preset::ALL[1].to_string();
+    let message = |ui: &mut Ui, app: &App, id: &str, name: &str| {
+        let mut set = reshiki::accessibility::SetValue::<Message>::new(id, name.into());
+        ui.inspect(
+            app,
+            &mut iced::advanced::widget::operation::black_box(&mut set),
+        );
+        match iced::advanced::widget::Operation::finish(&set) {
+            iced::advanced::widget::operation::Outcome::Some(message) => Some(message),
+            _ => None,
+        }
+    };
+    // By name: an option name chooses it; any other name does nothing.
+    let chosen = message(&mut ui, &app, "journal-preset", &first).expect("a preset");
+    apply(&mut app, vec![chosen]);
+    assert_eq!(value(&mut ui, &app, "journal-preset"), first);
+    assert!(message(&mut ui, &app, "journal-preset", "Manage styles…").is_none());
+    assert!(message(&mut ui, &app, "color-theme", "Manage themes…").is_none());
+    let family = reshiki::style::font_families()[0];
+    assert!(matches!(
+        message(&mut ui, &app, "text-style-font", family),
+        Some(Message::TextStyle(reshiki::typography::StyleChange::Family(f))) if f == family
+    ));
+
+    // Keyboard: ↓ and ↑ choose the next and previous preset.
+    ui.focus_control(&mut app, "journal-preset").await;
+    assert_eq!(ui.focused(&app), vec!["journal-preset".to_owned()]);
+    let (status, messages) = ui.event(
+        &app,
+        press(
+            Key::Named(Named::ArrowDown),
+            Code::ArrowDown,
+            Modifiers::empty(),
+            None,
+        ),
+        mouse::Cursor::Unavailable,
+    );
+    assert_eq!(status, iced::event::Status::Captured);
+    apply(&mut app, messages);
+    assert_eq!(value(&mut ui, &app, "journal-preset"), second);
+    let (_, messages) = ui.event(
+        &app,
+        press(
+            Key::Named(Named::ArrowUp),
+            Code::ArrowUp,
+            Modifiers::empty(),
+            None,
+        ),
+        mouse::Cursor::Unavailable,
+    );
+    apply(&mut app, messages);
+    assert_eq!(value(&mut ui, &app, "journal-preset"), first);
+
+    // A click on the color theme moves focus to it.
+    let theme = ui.bounds(&app, "color-theme").center();
+    ui.drag(&mut app, theme, theme).await;
+    assert_eq!(ui.focused(&app), vec!["color-theme".to_owned()]);
 }
 
 impl Ui {

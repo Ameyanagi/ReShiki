@@ -147,17 +147,24 @@ impl App {
         };
         let mut tools = row![
             text("STYLE").size(10).style(muted_text),
-            combo_box(
-                &self.font_options,
-                "Search fonts…",
-                Some(&style.family),
-                |family| Message::TextStyle(StyleChange::Family(family))
-            )
-            .width(152)
-            .input_style(crate::appearance::input_style)
-            .menu_style(crate::appearance::dropdown_menu)
-            .size(12)
-            .padding(6),
+            reshiki::accessibility::select(
+                "text-style-font",
+                "Font",
+                reshiki::style::font_families().to_vec(),
+                style.family.clone(),
+                |family| Message::TextStyle(StyleChange::Family(family.into())),
+                combo_box(
+                    &self.font_options,
+                    "Search fonts…",
+                    Some(&style.family),
+                    |family| Message::TextStyle(StyleChange::Family(family))
+                )
+                .width(152)
+                .input_style(crate::appearance::input_style)
+                .menu_style(crate::appearance::dropdown_menu)
+                .size(12)
+                .padding(6),
+            ),
             hover_hint(
                 reshiki::accessibility::text_input(
                     "text-style-size",
@@ -2801,6 +2808,7 @@ impl App {
     /// settings, kept beside View and zoom.
     fn document_settings(&self) -> [Element<'_, Message>; 3] {
         use super::document_styles::Choice;
+        use super::theme_files::Choice as ThemeChoice;
         use reshiki::document_styles::Preset;
         let current = Preset::ALL
             .into_iter()
@@ -2808,35 +2816,55 @@ impl App {
             .map(Choice::Journal)
             .unwrap_or(Choice::Custom);
         let (themes, theme) = self.theme_choices();
+        let themes_only: Vec<_> = (themes.iter())
+            .filter(|choice| **choice != ThemeChoice::Manage)
+            .cloned()
+            .collect();
         let dark = self.tab.doc.canvas_theme.is_dark();
         [
             hover_hint(
-                crate::appearance::close_on_escape(
-                    crate::appearance::pick_list(
-                        Preset::ALL
-                            .into_iter()
-                            .map(Choice::Journal)
-                            .chain([Choice::Details])
-                            .collect::<Vec<_>>(),
-                        Some(current),
-                        Message::QuickDrawingStyle,
-                    )
-                    .text_size(11)
-                    .padding([4, 8]),
+                // Manage styles… opens the inspector, so ↑ ↓ skip it.
+                reshiki::accessibility::select(
+                    "journal-preset",
+                    "Journal preset",
+                    Preset::ALL.to_vec(),
+                    current.to_string(),
+                    |preset| Message::QuickDrawingStyle(Choice::Journal(preset)),
+                    crate::appearance::close_on_escape(
+                        crate::appearance::pick_list(
+                            Preset::ALL
+                                .into_iter()
+                                .map(Choice::Journal)
+                                .chain([Choice::Details])
+                                .collect::<Vec<_>>(),
+                            Some(current),
+                            Message::QuickDrawingStyle,
+                        )
+                        .text_size(11)
+                        .padding([4, 8]),
+                    ),
                 ),
                 "Journal preset · Bond length, line widths and label font",
                 tooltip::Position::Top,
             )
             .into(),
             hover_hint(
-                crate::appearance::close_on_escape(
-                    crate::appearance::pick_list(themes, Some(theme.clone()), |choice| {
-                        Message::ThemeFile(super::theme_files::Action::Choose(choice))
-                    })
-                    // Sizes the list for an embedded theme's name, which is not an option.
-                    .placeholder(theme.to_string())
-                    .text_size(11)
-                    .padding([4, 8]),
+                // Manage themes… opens the theme editor, so ↑ ↓ skip it.
+                reshiki::accessibility::select(
+                    "color-theme",
+                    "Color theme",
+                    themes_only,
+                    theme.to_string(),
+                    |choice| Message::ThemeFile(super::theme_files::Action::Choose(choice)),
+                    crate::appearance::close_on_escape(
+                        crate::appearance::pick_list(themes, Some(theme.clone()), |choice| {
+                            Message::ThemeFile(super::theme_files::Action::Choose(choice))
+                        })
+                        // Sizes the list for an embedded theme's name, which is not an option.
+                        .placeholder(theme.to_string())
+                        .text_size(11)
+                        .padding([4, 8]),
+                    ),
                 ),
                 "Color theme",
                 tooltip::Position::Top,
