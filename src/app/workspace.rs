@@ -291,6 +291,8 @@ impl App {
             morph: self.model_morph(),
             model_generation: self.model_generation(),
             element: self.atom_tool_element(),
+            atom_label: (self.element == super::palettes::R_GROUP)
+                .then_some(super::palettes::R_GROUP),
             joining: self.tab.joining.as_ref().map(|s| (&s.prepared, s.anchor)),
             hidden_annotation: self.inline_label_id(),
             bond_drawing: self.tab.bond_drawing,

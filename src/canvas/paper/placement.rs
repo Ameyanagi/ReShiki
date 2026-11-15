@@ -453,6 +453,20 @@ impl MoleculeCanvas<'_> {
                 } else {
                     reshiki::editing::add_bonded_atom(self.doc, *id, end, target, self.element)
                 };
+                // As on release: a new endpoint takes the tool's label, an
+                // existing one keeps its own.
+                let result = result.and_then(|(drawing, added)| {
+                    let drawing = match self.atom_label.filter(|_| target.is_none()) {
+                        Some(label) => reshiki::atom_text::apply(
+                            &drawing,
+                            added,
+                            label,
+                            reshiki::atom_text::Mode::Text,
+                        )?,
+                        None => drawing,
+                    };
+                    Ok((drawing, added))
+                });
                 if let Ok((drawing, added)) = result {
                     *preview = Cow::Owned(drawing);
                     *ring_selection = Some(vec![*id, added]);

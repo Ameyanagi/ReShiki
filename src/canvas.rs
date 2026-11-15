@@ -616,6 +616,8 @@ pub struct MoleculeCanvas<'a> {
     pub chain_drawing: ChainDrawing,
     pub doc: &'a Document,
     pub element: &'a str,
+    /// The label the Atom tool gives each new atom: `R` on an R group's `*`.
+    pub atom_label: Option<&'a str>,
     pub selected: &'a [u64],
     pub(crate) reviewing_pair: bool,
     pub tool: Tool,
@@ -664,6 +666,7 @@ impl<'a> MoleculeCanvas<'a> {
             chain_drawing: styles.chain_drawing,
             doc,
             element: "C",
+            atom_label: None,
             selected,
             reviewing_pair: false,
             tool: Tool::Select,
