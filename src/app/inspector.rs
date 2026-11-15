@@ -1104,6 +1104,7 @@ impl App {
             body = body.push(card(
                 container(self.stereo_note_lines(
                     column![text("STEREOCHEMISTRY").size(11).style(muted_text)].spacing(5),
+                    "stereo",
                 ))
                 .padding(12),
             ));

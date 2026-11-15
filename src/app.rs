@@ -433,6 +433,8 @@ pub struct App {
     grid: bool,
     guides: canvas::guides::Guides,
     view_open: bool,
+    /// The list of Check drawing findings is open.
+    check_results: bool,
     appearance: crate::appearance::Settings,
     engine: LocalEngine,
     figure_exporting: bool,
@@ -550,6 +552,7 @@ impl App {
             grid: false,
             guides: Default::default(),
             view_open: false,
+            check_results: false,
             appearance,
             engine: LocalEngine::default(),
             figure_exporting: false,
@@ -650,6 +653,7 @@ impl App {
             self.updates.subscription(),
             self.properties_subscription(),
             self.engine_subscription(),
+            self.pulse_subscription(),
             #[cfg(target_arch = "wasm32")]
             self.naming_subscription(),
             if self.assistant.needs_poll() {

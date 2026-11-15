@@ -246,6 +246,10 @@ impl App {
             self.tabs.menu = false;
             return Break(Task::none());
         }
+        if self.check_results && matches!(message, Message::Escape) {
+            self.check_results = false;
+            return Break(super::focus_drawing());
+        }
         Continue(message)
     }
 
@@ -254,6 +258,7 @@ impl App {
             message,
             Message::Canvas(Edit::Hover(_) | Edit::PointerHover(_))
                 | Message::Tick
+                | Message::Stereo(super::stereo::Action::Pulse)
                 | Message::InspectorScroll(_)
                 | Message::EngineDone { .. }
                 | Message::EngineFinished { .. }
@@ -274,6 +279,10 @@ impl App {
             }
             if !matches!(message, Message::Tabs(tabs::Action::Menu(_))) {
                 self.tabs.menu = false;
+            }
+            // Its rows select and pulse findings; Check again keeps it open.
+            if !matches!(message, Message::Stereo(_) | Message::Analyze) {
+                self.check_results = false;
             }
         }
     }

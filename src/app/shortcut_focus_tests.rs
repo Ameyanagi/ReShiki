@@ -52,16 +52,37 @@ impl Ui {
         );
         let mut messages = Vec::new();
         let mut shell = Shell::new(&mut messages);
-        view.as_widget_mut().update(
+        // An open popover sees the event first, as in the app.
+        if let Some(overlay) = view.as_widget_mut().overlay(
             &mut self.tree,
-            &event,
             Layout::new(&node),
-            cursor,
             &self.renderer,
-            &mut iced::advanced::clipboard::Null,
-            &mut shell,
             &self.viewport,
-        );
+            iced::Vector::ZERO,
+        ) {
+            let mut nested = iced::advanced::overlay::Nested::new(overlay);
+            let node = nested.layout(&self.renderer, self.viewport.size());
+            nested.update(
+                &event,
+                Layout::new(&node),
+                cursor,
+                &self.renderer,
+                &mut iced::advanced::clipboard::Null,
+                &mut shell,
+            );
+        }
+        if shell.event_status() == iced::event::Status::Ignored {
+            view.as_widget_mut().update(
+                &mut self.tree,
+                &event,
+                Layout::new(&node),
+                cursor,
+                &self.renderer,
+                &mut iced::advanced::clipboard::Null,
+                &mut shell,
+                &self.viewport,
+            );
+        }
         let status = shell.event_status();
         if status == iced::event::Status::Ignored
             && let Event::Keyboard(keyboard::Event::KeyPressed {
@@ -91,6 +112,18 @@ impl Ui {
             &self.renderer,
             operation,
         );
+        // Open popovers, as the app's accessibility tree sees them.
+        if let Some(overlay) = view.as_widget_mut().overlay(
+            &mut self.tree,
+            Layout::new(&node),
+            &self.renderer,
+            &self.viewport,
+            iced::Vector::ZERO,
+        ) {
+            let mut nested = iced::advanced::overlay::Nested::new(overlay);
+            let node = nested.layout(&self.renderer, self.viewport.size());
+            nested.operate(Layout::new(&node), &self.renderer, operation);
+        }
     }
 
     fn input(&mut self, app: &App, target: &'static str) -> (Rectangle, bool) {

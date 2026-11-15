@@ -557,3 +557,27 @@ async fn review_close_returns_focus_failed_structure_insert_keeps_editor() {
     close(&mut ui, &mut app, false).await;
     assert_canvas_delete(&mut ui, &mut app).await;
 }
+
+#[tokio::test]
+#[ignore = "Opt-in renderer input check"]
+async fn review_close_returns_focus_check_findings() {
+    use reshiki::chemistry::stereo_lint::{Kind, Note};
+    let mut ui = Ui::new().await;
+    let mut app = drawing_app();
+    let first = app.tab.doc.atoms[0].id;
+    app.tab.stereo_notes = vec![Note {
+        kind: Kind::Undefined,
+        atoms: vec![first],
+        bonds: vec![],
+        message: "1 undefined stereocentre (C1)".into(),
+    }];
+    click_running_tasks(&mut ui, &mut app, "header-check").await;
+    assert!(app.check_results, "The counted button opens the findings");
+    click_running_tasks(&mut ui, &mut app, "check-finding-0").await;
+    assert!(app.check_results, "Choosing a finding keeps the list open");
+    assert_eq!(app.tab.selected, vec![first]);
+    close(&mut ui, &mut app, false).await;
+    assert!(!app.check_results);
+    assert_eq!(app.tab.selected, vec![first]);
+    assert_canvas_delete(&mut ui, &mut app).await;
+}

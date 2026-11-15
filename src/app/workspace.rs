@@ -280,7 +280,9 @@ impl App {
     fn drawing_canvas(&self) -> Element<'_, Edit> {
         canvas(MoleculeCanvas {
             nmr: self.nmr_canvas(),
-            locant_highlight: self.naming_canvas_highlight(),
+            locant_highlight: self
+                .pulse_atoms()
+                .unwrap_or_else(|| self.naming_canvas_highlight()),
             optimizer: self.optimization_canvas(),
             keyboard_target: if self.keyboard_drawing_active() {
                 self.tab.keyboard_drawing.point(self.display_document())
@@ -412,6 +414,90 @@ impl App {
         reshiki::accessibility::focus_scope(container(bar).padding([8, 12]).style(panel))
     }
 
+    /// Check drawing. Its findings stay as a count on the button until the
+    /// drawing changes; the button then opens their list.
+    fn check_button(&self) -> Element<'_, Message> {
+        use super::stereo::Action;
+        let findings = self.tab.stereo_notes.len();
+        let open = self.check_results && findings > 0;
+        let hint = match findings {
+            _ if self.tab.busy => "Checking…".to_owned(),
+            0 => "Check drawing".to_owned(),
+            1 => "Check drawing · 1 finding".to_owned(),
+            n => format!("Check drawing · {n} findings"),
+        };
+        let message = match findings {
+            _ if self.tab.busy => None,
+            0 => Some(Message::Analyze),
+            _ => Some(Message::Stereo(Action::Results(!open))),
+        };
+        let mut button = reshiki::accessibility::button(
+            "header-check",
+            hint.clone(),
+            iced::widget::canvas(Glyph(Icon::Check, message.is_some()))
+                .width(24)
+                .height(24),
+        )
+        .width(36)
+        .height(36)
+        .padding(6)
+        .style(control(open))
+        .on_press_maybe(message);
+        if findings > 0 {
+            button = button.expanded(open);
+        }
+        let mut anchor = iced::widget::stack![button];
+        if findings > 0 {
+            anchor = anchor.push(
+                container(
+                    container(text(findings.to_string()).size(9).line_height(1.))
+                        .padding([2, 4])
+                        .style(|theme: &Theme| container::Style {
+                            background: Some(
+                                crate::appearance::themed(theme, Color::from_rgb8(168, 52, 47))
+                                    .into(),
+                            ),
+                            text_color: Some(Color::WHITE),
+                            border: Border {
+                                color: theme.palette().background,
+                                width: 1.5,
+                                radius: 7.0.into(),
+                            },
+                            ..Default::default()
+                        }),
+                )
+                .width(Length::Fill)
+                .align_right(Length::Fill),
+            );
+        }
+        let anchor: Element<'_, Message> = if open {
+            anchor.into()
+        } else {
+            hover_hint(anchor, hint, tooltip::Position::Bottom).into()
+        };
+        let popup = open.then(|| {
+            let header = row![
+                section("FINDINGS"),
+                Space::new().width(Length::Fill),
+                accessible_command("check-again", "Check drawing again", "Check again")
+                    .padding([4, 8])
+                    .style(crate::appearance::secondary)
+                    .on_press_maybe((!self.tab.busy).then_some(Message::Analyze)),
+            ]
+            .padding(iced::Padding::ZERO.left(8).bottom(4))
+            .align_y(Alignment::Center);
+            container(self.stereo_note_lines(column![header].spacing(2), "check"))
+                .width(320)
+                .padding(8)
+                .style(super::color_popover::surface)
+                .into()
+        });
+        Element::new(
+            super::popover::popover(anchor, popup, Message::Stereo(Action::Results(false)))
+                .align_end(),
+        )
+    }
+
     fn command_bar(&self) -> Element<'_, Message> {
         // The browser build updates with its page and has no local assistant.
         let browser = cfg!(target_arch = "wasm32");
@@ -498,16 +584,7 @@ impl App {
                 Some(Message::Inspector(InspectorTab::Import)),
                 self.inspector_open && self.inspector_tab == InspectorTab::Import
             ),
-            icon_button(
-                Icon::Check,
-                if self.tab.busy {
-                    "Checking…"
-                } else {
-                    "Check drawing"
-                },
-                (!self.tab.busy).then_some(Message::Analyze),
-                false
-            ),
+            self.check_button(),
             icon_button(
                 Icon::Cleanup,
                 keyed(
@@ -2467,42 +2544,56 @@ impl App {
                     .text_size(12)
                     .on_toggle(|v| Message::Stereo(super::stereo::Action::IupacStyleNotes(v))),
             );
-        self.stereo_note_lines(body)
+        self.stereo_note_lines(body, "stereo")
     }
 
+    /// The stereo findings and their fixes; `ids` keeps the accessibility
+    /// ids of the findings list apart from the panel's.
     pub(super) fn stereo_note_lines<'a>(
         &'a self,
         mut body: iced::widget::Column<'a, Message>,
+        ids: &str,
     ) -> iced::widget::Column<'a, Message> {
         use super::stereo::Action;
+        use reshiki::chemistry::stereo_lint::Kind;
         for (index, note) in self.tab.stereo_notes.iter().enumerate() {
             body = body.push(
-                button(text(&note.message).size(11).style(muted_text))
-                    .on_press(Message::Stereo(Action::Select(index)))
-                    .padding([4, 0])
-                    .style(button::text),
+                reshiki::accessibility::button(
+                    format!("{ids}-finding-{index}"),
+                    note.message.as_str(),
+                    row![finding_dot(), text(&note.message).size(12)]
+                        .spacing(8)
+                        .align_y(Alignment::Center),
+                )
+                .on_press(Message::Stereo(Action::Select(index)))
+                .width(Length::Fill)
+                .padding([6, 8])
+                .style(control(false)),
             );
         }
-        if self
-            .tab
-            .stereo_notes
-            .iter()
-            .any(|note| note.kind == reshiki::chemistry::stereo_lint::Kind::Reversed)
-        {
-            body = body.push(command("Reverse", Message::Stereo(Action::Reverse)));
+        let notes = &self.tab.stereo_notes;
+        // Undefined stereocentres have no stereo bonds to fix.
+        if !notes.iter().any(|note| note.kind != Kind::Undefined) {
+            return body;
         }
-        if self
-            .tab
-            .stereo_notes
-            .iter()
-            .any(|note| note.kind != reshiki::chemistry::stereo_lint::Kind::Undefined)
-        {
-            body = body.push(command(
+        let mut actions = row![].spacing(6);
+        if notes.iter().any(|note| note.kind == Kind::Reversed) {
+            actions = actions.push(
+                accessible_command(format!("{ids}-reverse"), "Reverse", "Reverse")
+                    .on_press(Message::Stereo(Action::Reverse))
+                    .style(crate::appearance::secondary),
+            );
+        }
+        actions = actions.push(
+            accessible_command(
+                format!("{ids}-redraw"),
                 "Redraw stereo bonds",
-                Message::Stereo(Action::Redraw),
-            ));
-        }
-        body
+                "Redraw stereo bonds",
+            )
+            .on_press(Message::Stereo(Action::Redraw))
+            .style(crate::appearance::secondary),
+        );
+        body.push(container(actions).padding([4, 0]))
     }
 
     fn atom_label_indicator_section<'a>(
@@ -3296,6 +3387,21 @@ fn icon_button_at(
 }
 pub(super) fn section(label: &str) -> iced::widget::Text<'_> {
     text(label).size(10).style(muted_text)
+}
+/// The marker of a Check drawing finding, in the color of its count badge.
+fn finding_dot<'a>() -> Element<'a, Message> {
+    container(Space::new().width(6).height(6))
+        .style(|theme: &Theme| container::Style {
+            background: Some(
+                crate::appearance::themed(theme, Color::from_rgb8(168, 52, 47)).into(),
+            ),
+            border: Border {
+                radius: 3.0.into(),
+                ..Default::default()
+            },
+            ..Default::default()
+        })
+        .into()
 }
 fn ink() -> Color {
     Color::from_rgb8(37, 43, 51)

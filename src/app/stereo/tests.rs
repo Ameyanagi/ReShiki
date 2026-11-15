@@ -150,7 +150,7 @@ fn note_card_hides_redraw_for_undefined_only_notices() {
         (vec![Kind::Undefined, Kind::Undefined], 2),
         (vec![Kind::NonWedgeOnly], 2),
         (vec![Kind::Undefined, Kind::NonWedgeOnly], 3),
-        (vec![Kind::Reversed], 3),
+        (vec![Kind::Reversed], 2),
     ] {
         app.tab.stereo_notes = kinds
             .iter()
@@ -161,8 +161,9 @@ fn note_card_hides_redraw_for_undefined_only_notices() {
                 message: "notice".into(),
             })
             .collect();
-        let view: iced::Element<'_, Message> =
-            app.stereo_note_lines(iced::widget::Column::new()).into();
+        let view: iced::Element<'_, Message> = app
+            .stereo_note_lines(iced::widget::Column::new(), "stereo")
+            .into();
         assert_eq!(view.as_widget().children().len(), button_count, "{kinds:?}");
     }
 }
@@ -424,4 +425,46 @@ fn invert_configuration_here_requires_one_defined_atom() {
         assert_eq!(app.tab.doc, original);
         assert!(!app.tab.history.can_undo());
     }
+}
+
+#[test]
+fn findings_stay_on_the_check_button_until_the_drawing_changes() {
+    let mut app = fixture_app(drawing("plain", false));
+    checked(&mut app, vec![], true);
+    assert_eq!(app.tab.stereo_notes.len(), 1);
+    // The button opens the list; Escape or another command closes it.
+    let _ = app.update(Message::Stereo(Action::Results(true)));
+    assert!(app.check_results);
+    let _ = app.update(Message::Escape);
+    assert!(!app.check_results);
+    let _ = app.update(Message::Stereo(Action::Results(true)));
+    let _ = app.update(Message::Fit);
+    assert!(!app.check_results);
+    // A finding selects and pulses its atoms and keeps the list open.
+    let _ = app.update(Message::Stereo(Action::Results(true)));
+    app.tab.selected.clear();
+    let _ = app.update(Message::Stereo(Action::Select(0)));
+    assert!(app.check_results);
+    assert_eq!(app.tab.selected, vec![1]);
+    assert_eq!(app.pulse_atoms(), Some([1].as_slice()));
+    // Pulse ticks keep the list open and end the pulse after its blinks.
+    let _ = app.update(Message::Stereo(Action::Pulse));
+    assert!(app.check_results && app.tab.pulse.is_some());
+    if let Some((_, start)) = &mut app.tab.pulse {
+        *start -= std::time::Duration::from_secs(2);
+    }
+    let _ = app.update(Message::Stereo(Action::Pulse));
+    assert!(app.tab.pulse.is_none() && app.pulse_atoms().is_none());
+    // An edit clears the findings, and the list with them.
+    let before = app.tab.doc.clone();
+    app.tab.doc.add_atom("C", Point::new(200., 0.));
+    app.changed(before);
+    assert!(app.tab.stereo_notes.is_empty());
+    // A clean check closes the list, so later findings do not open it.
+    let mut clean = Document::default();
+    clean.add_atom("C", Point::default());
+    app.tab.doc = clean;
+    checked(&mut app, vec![], true);
+    assert!(app.tab.stereo_notes.is_empty());
+    assert!(!app.check_results);
 }
