@@ -17,20 +17,28 @@ tab, stay where they are and change the same preference.
 4. Press **Esc**, press **Cmd+,** or **Ctrl+,** again, or click **Done**. The
    keyboard goes back to the drawing.
 
-| Section        | Settings                                                                                                                                                                                                               |
-| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Appearance     | **Interface** (**Match canvas**, **Light**, **Dark**) and **Canvas for new drawings**. Each drawing keeps its own canvas once made.                                                                                    |
-| Drawing        | **Smart guides**, **Arrange controls** and **Drawing Style units** (pt, mm, cm).                                                                                                                                       |
-| Copy & export  | The background of **Copied pictures** and **Exported files**, **Your colors**, **Put the editable drawing in pictures** and **Keep text editable in SVG files**. See [Exporting figures](figure-export.md#background). |
-| Names & checks | **Chemical name typography**, **Molecular weight** (3 or 2 decimals), **IUPAC style notes in Check drawing** and **Write Ξ/ξ for unknown configuration**.                                                              |
-| Assistant      | **Model**, **Reasoning** and **Accept all edits**. The model and reasoning lists fill in once the assistant connects.                                                                                                  |
-| Updates        | **Check for updates automatically** and **Channel** (**Stable** or **Nightly**). Changing the channel checks for that channel's latest release.                                                                        |
+| Section        | Settings                                                                                                                                                                                                                                                                                                         |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Appearance     | **Interface** (**Match canvas**, **Light**, **Dark**) and **Canvas for new drawings**. Each drawing keeps its own canvas once made.                                                                                                                                                                              |
+| Drawing        | **Smart guides**, **Arrange controls** and **Drawing Style units** (pt, mm, cm).                                                                                                                                                                                                                                 |
+| Copy & export  | The background of **Copied pictures** and **Exported files**, **Your colors**, the **PNG resolution** of each (150, 300, 600 or 1200 dpi) with close-ups of the drawing, **Put the editable drawing in pictures** and **Keep text editable in SVG files**. See [Exporting figures](figure-export.md#background). |
+| Names & checks | **Chemical name typography**, **Molecular weight** (3 or 2 decimals), **IUPAC style notes in Check drawing** and **Write Ξ/ξ for unknown configuration**.                                                                                                                                                        |
+| Assistant      | **Model**, **Reasoning** and **Accept all edits**. The model and reasoning lists fill in once the assistant connects.                                                                                                                                                                                            |
+| Updates        | **Check for updates automatically** and **Channel** (**Stable** or **Nightly**). Changing the channel checks for that channel's latest release.                                                                                                                                                                  |
 
 To add a background color, click **+** under **Your colors**. Pick a palette
 color, or type the color as `#1F4E79`, `31, 78, 121` or `oklch(0.42 0.09 250)`
 and click **Add**. The new color becomes the **Custom** color, and copied
 pictures use it. Click a saved color to do the same with it. ReShiki keeps the
 eight newest colors.
+
+Under **PNG resolution**, **Copied pictures** defaults to 300 dpi and
+**Exported files** to 1200 dpi. Below them, a close-up of the current drawing at
+each resolution shows the pixels the PNG will have, at the same size on screen,
+with the whole drawing's pixel size underneath. **Copy** and **Export** tags mark
+the resolutions in use. The close-ups are made in the background after each
+change to the drawing; an empty drawing shows a sample structure instead. See
+[PNG resolution](figure-export.md#png-resolution).
 
 ## Limits
 
@@ -52,8 +60,13 @@ eight newest colors.
 - The appearance preferences and the new background keys live in
   `appearance.json` in ReShiki's data folder: `copy_background`,
   `export_background` (`transparent`, `canvas`, `white`, `black` or `custom`),
-  `custom_background` and `background_colors`. A file from an older version
-  loads with copies transparent and exports on the canvas. A file this version
-  cannot read is kept as `appearance.json.bad` before a change replaces it.
+  `custom_background` and `background_colors`. The PNG resolutions are
+  `copy_dpi` and `export_dpi`, each 150, 300, 600 or 1200. A file from an older
+  version loads with copies transparent at 300 dpi and exports on the canvas at
+  1200 dpi. A file this version cannot read, such as one with another
+  resolution, is kept as `appearance.json.bad` before a change replaces it.
+- The drawing style's own PNG resolution stays 1200 dpi, so drawings and
+  styles saved by any version still load. The app preference applies only when
+  ReShiki writes a PNG.
 - Assistant preferences stay in `assistant-preferences.json`, and update
   preferences in `update-preferences.json` and `update-channel.json`.

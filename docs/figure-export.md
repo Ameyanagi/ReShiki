@@ -7,7 +7,7 @@ Open **Export → Figure**, choose a format from the menu (**Vector**: **SVG**, 
 | PDF                      | Vector artwork at the drawing's physical publication size.                                                  |
 | SVG                      | Vector artwork for illustration and layout applications. Text becomes outlines unless you keep it editable. |
 | SVG for Office           | Physical-size SVG for Word and PowerPoint. Text always becomes outlines, so labels stay in place.           |
-| PNG                      | An opaque image, normally at 1200 dpi, with physical resolution metadata.                                   |
+| PNG                      | An opaque image at the chosen resolution (1200 dpi by default), with physical resolution metadata.          |
 | EMF for Office (Windows) | Vector picture for Microsoft Office at the drawing's physical size. Text becomes vector outlines.           |
 
 By default, file exports in all formats include the document’s canvas colors and background, and copied pictures use a transparent background, preserving the visible ink for slides and other documents. **Canvas: Dark** exports white bonds and labels on black paper; **View → Interface** changes only the surrounding UI. To change either default, see [Background](#background).
@@ -31,6 +31,12 @@ On **White**, **Black** or **Custom**, black and white ink swap when that makes 
 To copy a picture on another background once, right-click the drawing and choose **Copy image on**, then a background or one of your saved colors. A tick marks your default; **Change the default…** opens **Settings → Copy & export**.
 
 The background applies to PNG, SVG, PDF, **Export pages as PDF** and EMF for Office. On Windows, the Office preview that **Copy** adds uses the copy background too, also when Office rebuilds it after you edit the embedded drawing.
+
+## PNG resolution
+
+Copied pictures and exported files each have their own PNG resolution: 150, 300, 600 or 1200 dpi. Copies default to 300 dpi, which keeps them small and quick to paste into slides and chats. Exported files default to 1200 dpi, which suits journal line art. Choose them in **Settings → Copy & export → PNG resolution**, or for exported files in **Export → Figure → Resolution** when **PNG** is chosen. ReShiki remembers both choices. The resolution is an app preference; it does not change the drawing or its drawing style.
+
+The size in centimeters is the same at every resolution: a higher resolution puts more pixels into the same printed size, and the PNG records its resolution so other apps place it at that size. The **Resolution** menu shows the drawing's size in centimeters and its pixel size at each setting. In Settings, close-ups show part of the current drawing at each resolution, made by the same renderer as the exported file and shown at the same size, so you can see what a lower resolution loses. When the drawing is empty, they show a sample structure.
 
 ## Text in SVG files
 
@@ -63,9 +69,9 @@ EMF file export is available on Windows only and supports figures up to 40 inche
 
 ## Large PNG drawings
 
-Large drawings, including the complete shortcut gallery, may exceed the image memory limit at 1200 dpi. File export automatically chooses the highest resolution that fits, from 1200, 600, 300, 150, 96 and 72 dpi, with a limit of 80 million pixels. This changes pixel density, not the physical dimensions, drawing content or native document.
+Large drawings, including the complete shortcut gallery, may exceed the image memory limit at the chosen resolution. File export then uses the highest lower resolution that fits, from 600, 300, 150, 96 and 72 dpi, with a limit of 80 million pixels. It never uses a resolution above the one you chose. This changes pixel density, not the physical dimensions, drawing content or native document.
 
-The saved-file status reports the actual width, height and DPI. Use SVG or PDF if you need vector quality at any magnification. Exceptionally large drawings that exceed the limit even at 72 dpi still require a vector format. Clipboard PNG images retain their fixed 1200-dpi sizing and can be omitted for an oversized drawing; see [clipboard support](clipboard.md).
+The saved-file status reports the actual width, height and DPI. Use SVG or PDF if you need vector quality at any magnification. Exceptionally large drawings that exceed the limit even at 72 dpi still require a vector format. On macOS and Linux, a copied PNG keeps the copy resolution; a drawing too large for it gets no PNG, and the notice names that resolution, for example "too large for a 300 dpi PNG". On Windows, a copied PNG uses a lower resolution when it would not fit the clipboard; see [clipboard support](clipboard.md).
 
 ## Drawings with unresolved chemistry
 

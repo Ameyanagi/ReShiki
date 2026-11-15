@@ -17,6 +17,13 @@ issues: []
   **Custom** in **Settings → Copy & export**. The **Export** tab has the same
   **Background** choice, and the right-click menu has **Copy image on** for one
   copy. See [Exporting figures](figure-export.md#background).
+- Copied pictures and exported files each have a PNG resolution of 150, 300,
+  600 or 1200 dpi. Copies now default to 300 dpi, which pastes faster and
+  smaller; exported files stay at 1200 dpi. The size in centimeters is the same
+  at every setting. **Settings → Copy & export** shows close-ups of the drawing
+  at each resolution, and the **Export** tab has a **Resolution** menu with the
+  drawing's size in centimeters and pixels. See
+  [PNG resolution](figure-export.md#png-resolution).
 - **Include editable drawing** now also applies to **Copy**, **Copy image** and
   **Copy as**. With it off, copied pictures carry no drawing; pasting between
   ReShiki windows still keeps it.
