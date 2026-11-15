@@ -76,3 +76,18 @@ fn weight_captions_follow_the_two_decimal_setting() {
     app.changed(before);
     assert_eq!(caption(&app), Some("Mol. Wt.: 46.069"));
 }
+
+#[test]
+fn weight_captions_in_other_tabs_follow_the_setting() {
+    use crate::app::view_settings::Action::TwoDecimalWeight;
+    let (mut app, _) = App::new();
+    let atoms = ethanol(&mut app);
+    app.appearance.two_decimal_weight = true;
+    let _ = app.update(Message::ToggleProperty(atoms, Property::Weight));
+    app.add_tab();
+    app.view_action(TwoDecimalWeight(false));
+    app.select_tab(0);
+    assert_eq!(caption(&app), Some("Mol. Wt.: 46.069"));
+    let _ = app.update(Message::Undo);
+    assert_eq!(caption(&app), Some("Mol. Wt.: 46.07"));
+}
