@@ -165,7 +165,7 @@ Both Mac builds use the fixed abbreviation drawing coordinates recorded on Apple
 
 The **npm** job runs in the `npm` GitHub environment, which GitHub creates on its first run. It publishes with npm trusted publishing (OIDC) when the repository variable `NPM_TRUSTED_PUBLISHING` is `true`, and otherwise with the `NPM_TOKEN` secret. The npm account `ameyanagi` owns the `@ameyanagi` scope.
 
-npm can only add a trusted publisher to a package that already exists, so the first version of each package is published with a token, and every later one through trusted publishing. `@ameyanagi/reshiki-headless` is new after 0.15.0: until it has had these steps, a release publishes `@ameyanagi/reshiki` and leaves a notice for the headless package.
+npm can only add a trusted publisher to a package that already exists, so the first version of each package is published with a token, and every later one through trusted publishing. With trusted publishing on, the job still uses `NPM_TOKEN`, when it is set, for a package npm does not have yet. `@ameyanagi/reshiki-headless` is new after 0.15.0, so the next tag publishes its first version with the token, if npm accepts it. Then add that package's trusted publisher (step 2) before the following release.
 
 1. **First publish, with a token.** Create a [granular access token](https://docs.npmjs.com/creating-and-viewing-access-tokens) with **Packages and scopes: Read and write**, for all packages or the `@ameyanagi` scope, and a short expiry. Add it as the repository (or `npm` environment) secret `NPM_TOKEN`. Then publish main's version without a new tag:
 
@@ -195,7 +195,7 @@ npm can only add a trusted publisher to a package that already exists, so the fi
    | Environment name        | `npm`         |
    | Allow direct publishing | on            |
 
-   Then set the repository variable `NPM_TRUSTED_PUBLISHING` to `true` (**Settings → Secrets and variables → Actions → Variables**). From then on the job uses OIDC (`id-token: write`, npm 11.5.1 or later from Node 24, provenance included) and ignores `NPM_TOKEN`. npm expires a new trusted publisher that has not published within 2 days. If yours expired before a release, delete it and add it again.
+   Then set the repository variable `NPM_TRUSTED_PUBLISHING` to `true` (**Settings → Secrets and variables → Actions → Variables**). From then on the job uses OIDC (`id-token: write`, npm 11.5.1 or later from Node 24, provenance included) and uses `NPM_TOKEN` only for a package npm does not have yet. npm expires a new trusted publisher that has not published within 2 days. If yours expired before a release, delete it and add it again.
 
 3. **Delete the token.** Once a version has published through trusted publishing, delete the `NPM_TOKEN` secret and revoke the token on npmjs.com. Under each package's **Settings → Publishing access**, choose to require two-factor authentication and disallow tokens. Trusted publishing keeps working.
 
@@ -305,7 +305,7 @@ Build runners are macOS 14 on Apple Silicon, macOS 15 on Intel, Windows Server 2
 
 Build on the target operating system with Rust 1.99.1, a C/C++ compiler and Python 3.12. On Windows, use `python` instead of `python3`. Archives are written to `dist/releases/`.
 
-`scripts/build_release.py` builds with Cargo's `dist` profile: the `release` profile with fat link-time optimization and one codegen unit. This makes the executable smaller and the build much slower, so `cargo build --release`, `cargo test --release` and development bundles keep the `release` profile. The published binary is in `target/<target>/dist/`.
+`scripts/build_release.py` builds with Cargo's `dist` profile: the `release` profile with fat link-time optimization and one codegen unit. This makes the executable smaller and the build much slower, so `cargo build --release`, `cargo test --release` and development bundles keep the `release` profile. The published binary is in `target/<target>/dist/`. The Release builds workflow sets `CARGO_PROFILE_DIST_LTO=thin` for macOS. On macOS arm64 the fat-LTO link peaks at 8.3 GB and the thin-LTO link at 7.2 GB, and the arm64 runner has 7 GB. Thin LTO makes that executable 72.6 MB instead of 67.3 MB.
 
 Shipped executables carry no symbols. Published builds keep line tables in a separate symbol file for crash reports: `reshiki.dSYM` on macOS, `reshiki.pdb` on Windows and `reshiki.debug` on Linux, next to the binary in `target/<target>/dist/`. The Release builds workflow uploads them as the `symbols-<platform>` workflow artifact, not as a release download. Cargo strips macOS builds itself. In CI, Windows builds are not stripped, because the MSVC linker then writes no PDB, and `scripts/build_release.py` splits the Linux symbols off with `objcopy`. The Python wheel is stripped too. Never set `panic = "abort"`: the app recovers from panics.
 
