@@ -13,8 +13,9 @@ issues: []
   ring tool in the **Properties** tab is kept the same way.
 - An unchanged large drawing costs less to redraw: about 3 ms instead of 14 ms
   for a 7,700-atom drawing, whether or not it is in view.
-- Undo history has one memory budget for all tabs, about 256 MB, where each tab
-  had its own 128 MB. When an edit goes over the budget, the tabs behind the
-  front one give up their oldest Undo steps first and keep at least 5. The front
-  tab keeps at least 20, as before. Five tabs with a 7,700-atom drawing each now
-  hold about 320 MB of history instead of 700 MB.
+- Undo and redo history has one memory budget for all tabs, about 256 MB, where
+  each tab had its own 128 MB. When the history goes over the budget, the tabs
+  behind the front one give way first: each gives up its oldest Undo steps, then
+  the Redo steps furthest ahead, and keeps at least 5 steps. The front tab keeps
+  at least 20, as before. Five tabs with a 7,700-atom drawing each now hold
+  about 320 MB of history instead of 700 MB.
