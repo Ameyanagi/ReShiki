@@ -53,6 +53,7 @@ test("Excel pane keeps insertion available but never re-enables or launches unsu
     document: {
       getElementById: (id) => nodes.get(id),
       querySelectorAll: () => ["paste", "file", "edit", "copy"].map((id) => nodes.get(id)),
+      querySelector: () => ({ content: "test-nonce" }),
     },
     setTimeout: (callback) => {
       timers.push(callback);

@@ -8,7 +8,7 @@ import Screenshot from "../../../components/Screenshot.astro";
 Download the Windows x64 or ARM64 installer and open ReShiki from Start.
 See [installation](/guide/install/).
 
-ReShiki includes native drawing and chemistry tools; no Python or uv setup is required. The Windows/Office screenshots below are retained from the earlier Windows verification and may show older toolbar layouts. The current controls are illustrated throughout the other guides.
+The Windows and Office screenshots below come from an earlier version and may show an older toolbar. The other guides show the current controls.
 
 ## Use Windows shortcuts
 
@@ -24,7 +24,7 @@ Use **Ctrl+N/O/S** for new, open and save. **Ctrl+Z** undoes an edit;
 
 When ReShiki is already running, opening another drawing, for example by double-clicking a `.rsk` file, adds it as a tab in the existing window. If the file is already open, ReShiki switches to its tab. If the tab in front is an unchanged, empty Untitled drawing, the file opens there.
 
-Each drawing opened from Office gets its own tab. Saving in that tab updates only the Office document it came from.
+Each drawing opened from Office gets its own tab, named after its application, such as `Drawing in PowerPoint.rsk`. Saving in that tab updates only the Office document it came from.
 
 ## Copy editable drawings or pictures
 
@@ -38,7 +38,9 @@ object. Double-click the pasted drawing to open ReShiki, edit it and press
 **Ctrl+S**. Keep Office open until ReShiki confirms the update, then save the
 Office document. If the destination chooses another format, use **Paste Special
 → ReShiki drawing object**. Install ReShiki on a receiving Windows computer to
-edit the object there. A portable copy registers its location when you copy.
+edit the object there. A portable copy registers its location when you copy;
+after moving it, copy once from the new location. If Office closes or rejects
+an update, ReShiki says so and keeps a local copy.
 
 The editable preview uses vector bonds and outlined text, with a transparent
 background. It stays smooth when enlarged over a colored slide or worksheet.
@@ -60,7 +62,7 @@ worksheet through it. Excel also controls the object's outline.
 />
 
 <Screenshot
-  src="/manual/windows/excel-editable.png"
+  src="/manual/windows/excel-editable.webp"
   alt="The edited ReShiki figure enlarged in Excel, with worksheet gridlines visible after setting the Excel object fill to No fill."
 />
 
@@ -80,6 +82,11 @@ replace figures on a Mac; see [clipboard platform boundaries](/developer/clipboa
   src="/manual/windows/word-clipboard.png"
   alt="Microsoft Word at 200 percent zoom, showing correctly aligned atom labels in static ReShiki pictures."
 />
+
+To paste a ChemDraw structure embedded in PowerPoint, select the whole object
+on the slide, press **Ctrl+C**, then press **Ctrl+V** in ReShiki. Objects with
+ChemDraw CDX data paste as editable atoms and bonds; a picture alone stays a
+picture.
 
 ## Insert EMF pictures
 
@@ -112,7 +119,9 @@ snapshot of the selected objects. Cancel leaves the drawing unchanged.
 
 ## Performance
 
-Use a release build for performance checks. Windows uses a direct 2D software
-renderer to avoid expensive GPU emulation on virtual machines and remote
-desktops. The idle timer fix is included in v0.4.0. See [Windows development and verification](/developer/windows/)
-for the tested scope and remaining hardware checks.
+Use a release build for performance checks. ReShiki draws with the graphics
+card when Windows reports one. On virtual machines and remote desktops that
+offer only a software adapter, or when the graphics card fails to start, it
+uses a direct 2D software renderer instead, which avoids slow GPU emulation.
+See [Windows development](/developer/windows/) for renderer choices, the tested
+scope and remaining hardware checks.

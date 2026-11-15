@@ -34,7 +34,7 @@ pub(crate) mod schemes;
 mod stereo;
 mod tree;
 mod variables;
-mod xml_guard;
+pub(crate) mod xml_guard;
 
 #[cfg(test)]
 mod coordination_tests;
@@ -81,6 +81,14 @@ pub enum Error {
     Stereo(String),
 }
 type Result<T> = std::result::Result<T, Error>;
+impl From<xml_guard::Refused> for Error {
+    fn from(refused: xml_guard::Refused) -> Self {
+        match refused {
+            xml_guard::Refused::Dtd => Self::Unsupported("internal DTD declarations"),
+            _ => Self::Invalid(refused.to_string()),
+        }
+    }
+}
 
 const PREDICATES: &[(&str, &[&str])] = &[
     ("RingBondCount", &["Unspecified", "-1"]),

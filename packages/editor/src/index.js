@@ -27,15 +27,15 @@ export async function read(data, format) {
   return output;
 }
 
-export async function convert(data, from, to) {
+export async function convert(data, from, to, options = {}) {
   await init();
-  const output = await wasm.convert(bytes(data), from, to);
+  const output = await wasm.convert(bytes(data), from, to, options.svgText);
   return BINARY.has(to) ? output : decoder.decode(output);
 }
 
-export async function renderSvg(data, format) {
+export async function renderSvg(data, format, options = {}) {
   await init();
-  return wasm.renderSvg(bytes(data), format);
+  return wasm.renderSvg(bytes(data), format, options.svgText);
 }
 
 export async function renderPng(data, format, options = {}) {

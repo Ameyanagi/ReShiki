@@ -167,6 +167,10 @@ across documents and history.
 | Deadline                                                                    | `timeout` at the next cooperative checkpoint             |
 | Preview render                                                              | `invalid_arguments` for a side, `budget` for the pixels  |
 | PNG export                                                                  | Resolution steps down from the style's dpi until it fits |
+| Chemical names (`import` format `name`, `convert`, `name`)                  | `failed`                                                 |
+
+A chemical name is at most 2,048 bytes and a molecule to name 512 atoms; the
+work runs in the app's bounded [naming worker](#naming-worker).
 
 MCP framing and process limits also apply:
 

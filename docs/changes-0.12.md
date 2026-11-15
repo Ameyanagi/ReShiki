@@ -66,7 +66,7 @@ their contributor credits and links to their reviews.
 - **Double bonds on tilted cages.** The second stroke of a double bond in a
   tilted C60 or other cage follows its ring face instead of floating. Molecular
   coordinates and properties do not change.
-  [Review](projected-double-bonds-review.md) ·
+  [Review](changes/projected-double-bonds-review.md) ·
   [#271](https://github.com/Ameyanagi/ReShiki/pull/271) · @Ameyanagi.
 
 - **Reference align/stretch.** Turn a bond or shape edge to an exact angle,
@@ -118,7 +118,7 @@ their contributor credits and links to their reviews.
   contact as a wedge or hash.
   [How to use](https://reshiki.com/guide/editing/) ·
   [Details](fragment-joining.md#coordination-contacts-in-place) ·
-  [Review](coordination-desktop-validation.md) ·
+  [Review](changes/coordination-desktop-validation.md) ·
   [Shortcut review](changes/coordination-join-shortcut.md) ·
   [#283](https://github.com/Ameyanagi/ReShiki/pull/283) · @Ameyanagi.
 
@@ -178,7 +178,7 @@ their contributor credits and links to their reviews.
   around atom labels, and new lone pairs sit closer to their atom. Marks you
   placed yourself do not move.
   [Details](scientific-symbols.md) ·
-  [Review](drawing-tool-defaults-review.md) ·
+  [Review](changes/drawing-tool-defaults-review.md) ·
   [Image](images/drawing-tool-defaults/lone-pair-click-after.jpg) ·
   [#277](https://github.com/Ameyanagi/ReShiki/pull/277) · issues
   [#250](https://github.com/Ameyanagi/ReShiki/issues/250),
@@ -193,7 +193,7 @@ their contributor credits and links to their reviews.
   the reactants.
   [How to use](https://reshiki.com/guide/reactions/) ·
   [Details](reactions.md#atom-mapping-and-label-placement) ·
-  [Review](reaction-atom-mapping-validation.md) ·
+  [Review](changes/reaction-atom-mapping-validation.md) ·
   [#294](https://github.com/Ameyanagi/ReShiki/pull/294) · @Ameyanagi.
 
 ## Chemistry tools
@@ -222,14 +222,14 @@ their contributor credits and links to their reviews.
   shifts for one molecule. Each value links to its atom, and the report floats
   beside the drawing or docks under **Predict → NMR**.
   [How to use](https://reshiki.com/guide/nmr/) ·
-  [Details](nmr-prediction.md) · [Review](nmr-visual-review.md) ·
+  [Details](nmr-prediction.md) · [Review](changes/nmr-visual-review.md) ·
   [#272](https://github.com/Ameyanagi/ReShiki/pull/272) · @Ameyanagi.
 
 - **Limits that fit your computer.** 3D work on larger drawings and imports of
   fused rings get calculation limits that scale with the free memory of your
   computer. A job that starts can still stop at its time limit.
   [Details](chemistry-resource-policy.md) ·
-  [Review](adaptive-chemistry-limits-validation.md) ·
+  [Review](changes/adaptive-chemistry-limits-validation.md) ·
   [#279](https://github.com/Ameyanagi/ReShiki/pull/279) · issues
   [#245](https://github.com/Ameyanagi/ReShiki/issues/245),
   [#248](https://github.com/Ameyanagi/ReShiki/issues/248) · @Ameyanagi.
@@ -343,7 +343,7 @@ their contributor credits and links to their reviews.
   [Overview](agent-api.md) ·
   [Command line](agent-cli.md) ·
   [Privacy](privacy-policy.md#optional-agent-api-and-command-line-experimental) ·
-  [Acceptance record](agent-api-p1-validation.md) · @Ameyanagi.
+  [Acceptance record](changes/agent-api-p1-validation.md) · @Ameyanagi.
 - **Agent skill (experimental).** `reshiki --cli skill -o FOLDER` writes an
   Agent Skill that teaches Claude Code, Codex and other agents to use ReShiki:
   the workflow, command recipes with your executable's path, the tool
@@ -374,41 +374,4 @@ their contributor credits and links to their reviews.
 
 ## Build and verification
 
-- **Nightly naming checks.** Application and renderer tests use the naming
-  helper built for each Windows, macOS and Linux release target. After the
-  missing-helper failures in
-  [run 38116417137](https://github.com/Ameyanagi/ReShiki/actions/runs/38116417137),
-  [Nightly run 38123945065](https://github.com/Ameyanagi/ReShiki/actions/runs/38123945065)
-  built all six platforms and published
-  [0.11.0-nightly.20261011.38123945065.1](https://github.com/Ameyanagi/ReShiki/releases/tag/nightly-0.11.0-nightly.20261011.38123945065.1)
-  from `8e38151190eb2c3814df23a3eb166fb21c972d64`.
-  [#304](https://github.com/Ameyanagi/ReShiki/pull/304) · @Ameyanagi.
-- **Windows Nightly check.** Arc editing with Undo/Redo, tab activation, ethanol
-  insertion with its caption and a floating NMR report passed on the published
-  Windows Nightly at 100% display scale.
-  [Record](changes/nightly-windows-20261011.md) ·
-  [#306](https://github.com/Ameyanagi/ReShiki/pull/306) · @Ameyanagi.
-- **Windows signing.** SignPath-signed x64 and ARM64 applications and installers
-  are verified, and internal test-signed Nightly artifacts are kept.
-  [Setup guide](signpath-setup.md) ·
-  [#270](https://github.com/Ameyanagi/ReShiki/pull/270) · @Ameyanagi.
-- **Assistant image benchmark.** A source-tree tool records graph identity,
-  unfinished drafts and failures for eight original synthetic images. The
-  cohort is small and does not measure accuracy on real scans.
-  [Method and results](assistant-benchmark.md) ·
-  [Provisional preview](assistant-benchmark-results/baseline-20261009/cyclic-gly4/run-2/provisional.png) ·
-  [#281](https://github.com/Ameyanagi/ReShiki/pull/281), merged through
-  [#300](https://github.com/Ameyanagi/ReShiki/pull/300) · @Ameyanagi.
-- **Combined reviews.** The features were also checked together:
-  [drawing tools and NMR](changes/drawing-tools-integration.md)
-  ([#297](https://github.com/Ameyanagi/ReShiki/pull/297)); chemical names,
-  captions and atom maps
-  ([#298](https://github.com/Ameyanagi/ReShiki/pull/298)); and coordination,
-  Join, generic structures, Office and Windows
-  ([review](changes/coordination-join-integration.md),
-  [#300](https://github.com/Ameyanagi/ReShiki/pull/300), with the adaptive
-  limits and Assistant source from
-  [#299](https://github.com/Ameyanagi/ReShiki/pull/299)).
-- **Release preparation.** Update the version, the release notes and the
-  documentation for 0.12.0.
-  [#320](https://github.com/Ameyanagi/ReShiki/pull/320) · @Ameyanagi.
+Build, CI and release checks are in the [release validation record](changes/release-0.12.0-validation.md#build-and-verification).

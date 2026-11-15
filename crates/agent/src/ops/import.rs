@@ -6,6 +6,7 @@ use super::{
     documents::IMPORT_FORMATS,
     error::{ErrorKind, OpError},
     exec::Context,
+    naming::{Hook, Resolved, hook},
     result::ToolResult,
     store::Documents,
     wire::{AnalysisJson, DocHandle, Principal, Revision, warnings},
@@ -25,7 +26,7 @@ use std::sync::Arc;
 pub const IMPORT: ToolSpec = ToolSpec {
     name: "import",
     title: Some("Import structure"),
-    description: "Import structure text as a new session document and return its handle, revision, object counts and molecular analysis. Every call creates another document, even for the same text; close the ones you no longer need with document_close.",
+    description: "Import structure text or a chemical name as a new session document and return its handle, revision, object counts and molecular analysis. Every call creates another document, even for the same text; close the ones you no longer need with document_close.",
     input_schema: schema,
     hints: Some(Hints {
         read_only: false,
@@ -35,11 +36,11 @@ pub const IMPORT: ToolSpec = ToolSpec {
     }),
 };
 
-fn schema() -> Value {
+pub(crate) fn schema() -> Value {
     json!({
         "type": "object",
         "properties": {
-            "format": {"type": "string", "enum": IMPORT_FORMATS, "description": "rsmi is reaction SMILES; cdx takes the binary file as base64 text; reshiki takes a native ReShiki drawing's JSON; auto tells SMILES, MOL, RXN, reaction SMILES, InChI and CDXML apart."},
+            "format": {"type": "string", "enum": IMPORT_FORMATS, "description": "rsmi is reaction SMILES; cdx takes the binary file as base64 text; reshiki (also rsk) takes a native ReShiki drawing's JSON; name takes a chemical name such as caffeine or 2-methylpropan-1-ol, parsed offline; auto tells SMILES, MOL, RXN, reaction SMILES, InChI and CDXML apart and never reads text as a name."},
             "text": {"type": "string", "description": "At most max_text_bytes, or max_cdx_base64 for cdx; info reports both."},
         },
         "required": ["format", "text"],
@@ -59,12 +60,15 @@ pub(crate) enum Format {
     Inchi,
     Cdxml,
     Cdx,
+    #[serde(alias = "rsk")]
     Reshiki,
+    Name,
 }
 
 impl Format {
-    /// The name in [`IMPORT_FORMATS`], which is also the engine's format name
-    /// for every format but `auto` and `reshiki`.
+    /// The name in [`IMPORT_FORMATS`] (`reshiki` for `rsk` too), which is
+    /// also the engine's format name for every format but `auto`, `reshiki`
+    /// and `name`.
     pub(crate) fn name(self) -> &'static str {
         match self {
             Self::Auto => "auto",
@@ -76,6 +80,7 @@ impl Format {
             Self::Cdxml => "cdxml",
             Self::Cdx => "cdx",
             Self::Reshiki => "reshiki",
+            Self::Name => "name",
         }
     }
 }
@@ -105,7 +110,8 @@ pub(crate) fn decode(args: Value, budgets: &Budgets) -> Result<Import, OpError> 
                 "The text is {} bytes; {name} allows at most {limit}",
                 import.text.len()
             ),
-        ));
+        )
+        .param("text"));
     }
     Ok(import)
 }
@@ -169,15 +175,42 @@ pub fn finalize(response: &Document) -> Result<Document, Rejection> {
 }
 
 /// The drawing to store, or the rejection of an engine drawing.
-struct Read {
-    doc: Result<Document, Rejection>,
-    warnings: Vec<String>,
-    analysis: Option<Analysis>,
+pub(crate) struct Read {
+    pub(crate) doc: Result<Document, Rejection>,
+    pub(crate) warnings: Vec<String>,
+    pub(crate) analysis: Option<Analysis>,
 }
 
-/// Reads `text` as `format` without touching the store.
-async fn read(ctx: &Context, engine: &LocalEngine, import: Import) -> Result<Read, OpError> {
+/// Reads `text` as `format` without touching the store. A `name` is resolved
+/// by the host's naming hook and imported as the app's name tool imports it:
+/// from the prepared graph, then checked against the name's identity. Its
+/// parser warnings come before the import's.
+pub(crate) async fn read(
+    ctx: &Context,
+    engine: &LocalEngine,
+    naming: &Hook,
+    import: Import,
+) -> Result<Read, OpError> {
     let Import { format, text } = import;
+    if format == Format::Name {
+        let naming = Arc::clone(hook(naming)?);
+        // A name read from a file or a pipe ends in a line break.
+        let resolved = ctx
+            .cancellable(naming.resolve(text.trim().to_owned()))
+            .await?;
+        let Resolved {
+            smiles,
+            prepared,
+            identity,
+            warnings,
+        } = resolved.map_err(OpError::failed)?;
+        let request = match prepared {
+            Some(prepared) => Request::import_prepared(prepared),
+            None => Request::import("naming_smiles", &smiles),
+        };
+        let check = move |doc: &Document| naming.verify(&identity, doc);
+        return engine_read(ctx, engine, request, warnings, Some(Box::new(check))).await;
+    }
     if format == Format::Reshiki {
         // As the app opens a native file (src/app/files.rs).
         let doc = ctx
@@ -209,17 +242,39 @@ async fn read(ctx: &Context, engine: &LocalEngine, import: Import) -> Result<Rea
     };
     let mut request = Request::import(name, "");
     request.text = Some(text);
+    engine_read(ctx, engine, request, Vec::new(), None).await
+}
+
+/// Checks an engine drawing before it is finalized.
+type Check = Box<dyn FnOnce(&Document) -> Result<(), String> + Send>;
+
+/// Runs the import `request`; its warnings follow `warnings`.
+async fn engine_read(
+    ctx: &Context,
+    engine: &LocalEngine,
+    request: Request,
+    mut warnings: Vec<String>,
+    check: Option<Check>,
+) -> Result<Read, OpError> {
     ctx.checkpoint()?;
     let response = engine.request(request).await.map_err(OpError::failed);
     ctx.checkpoint()?;
     let Response {
         document,
         analysis,
-        warnings,
+        warnings: more,
         ..
     } = response?;
+    warnings.extend(more);
     let document = document.ok_or_else(|| OpError::failed("Import returned no drawing"))?;
-    let doc = ctx.blocking(move || Ok(finalize(&document))).await?;
+    let doc = ctx
+        .blocking(move || {
+            if let Some(check) = check {
+                check(&document).map_err(OpError::failed)?;
+            }
+            Ok(finalize(&document))
+        })
+        .await?;
     Ok(Read {
         doc,
         warnings,
@@ -234,11 +289,12 @@ pub(crate) async fn import(
     ctx: Context,
     store: Arc<dyn Documents>,
     engine: LocalEngine,
+    naming: Hook,
     who: Principal,
     versions: Versions,
     import: Import,
 ) -> Result<ToolResult, OpError> {
-    import_document(ctx, store, engine, who, versions, import, None).await
+    import_document(ctx, store, engine, naming, who, versions, import, None).await
 }
 
 /// Reads `import` into a new session document; `source`, when given, joins
@@ -248,10 +304,12 @@ pub(crate) async fn import(
 /// goes to the engine, and its drawing is [`finalize`]d. The store's create is
 /// the effect. It is not idempotent: a cancel that arrives after it leaves a
 /// listed document the caller can close.
+#[allow(clippy::too_many_arguments)]
 pub(crate) async fn import_document(
     mut ctx: Context,
     store: Arc<dyn Documents>,
     engine: LocalEngine,
+    naming: Hook,
     who: Principal,
     versions: Versions,
     import: Import,
@@ -261,7 +319,7 @@ pub(crate) async fn import_document(
         doc,
         warnings: messages,
         analysis,
-    } = read(&ctx, &engine, import).await?;
+    } = read(&ctx, &engine, &naming, import).await?;
     let doc = match doc {
         Ok(doc) => doc,
         Err(rejection) => return Ok(ToolResult::rejected(rejection, messages, &versions)),

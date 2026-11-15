@@ -14,7 +14,11 @@ impl App {
             && self.tab.joining.is_none()
         {
             self.assistant.waiting_for_canvas_edit = false;
-            return self.assistant_action(Action::Apply);
+            if !self.assistant.waiting_apply_is_automatic || self.assistant_can_auto_apply() {
+                return self.assistant_action(Action::Apply);
+            }
+            self.assistant.status =
+                "Ready for review · It replaces objects outside the selection".into();
         }
         if self.assistant.busy
             && let Some(canvas) = &self.assistant.canvas

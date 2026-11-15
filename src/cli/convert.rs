@@ -8,7 +8,7 @@ use serde_json::{Map, Value, json};
 use std::io::Write;
 
 /// Formats never written to a terminal.
-const BINARY: &[&str] = &["pdf", "png"];
+const BINARY: &[&str] = &["pdf", "png", "cdx"];
 
 /// Converts as `convert` says. `terminal` tells whether stdout is one.
 ///
@@ -28,7 +28,7 @@ pub(crate) async fn run(
     write(&mut session, document, export, out, err).await
 }
 
-/// Refuses to write pdf or png to stdout when it is a terminal.
+/// Refuses to write pdf, png or cdx to stdout when it is a terminal.
 pub(crate) fn refuse_binary(format: &str, output: &Output, terminal: bool) -> Result<(), CliError> {
     if *output == Output::Stdout && terminal && BINARY.contains(&format) {
         return Err(CliError::Usage(

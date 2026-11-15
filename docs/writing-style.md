@@ -37,6 +37,28 @@ Each feature page in `docs/` has the same shape:
 Copy every fact from the code. Keep headings that other pages link to, or
 update every link in the same commit (`git grep` the anchor).
 
+## Release notes
+
+Each `docs/changes-<version>.md` has the same sections, in this order:
+
+1. `# ReShiki <version>` and one paragraph of at most 60 words on what the
+   release adds.
+2. A link row: release downloads · previous release · release validation
+   record (`changes/release-<version>-validation.md`).
+3. `## File compatibility`: the document version table and who can open what.
+   This is the only place for these rules. The README and the install guide
+   link here.
+4. `## Highlights`: at most eight bullets, each with a bold lead-in.
+5. One section per area, such as `## Stereochemistry` or `## Desktop`. Each
+   bullet says what changed for the user and links its pull request or issue.
+6. `## Known limits`.
+7. `## Build and verification`: one line that links the validation record.
+   CI, test and release-procedure details go in that record, not in the notes.
+
+Keep other repeated facts in one place as well. Signing status lives in the
+[code signing policy](code-signing-policy.md); other pages say one sentence and
+link it.
+
 ## Status and reviews
 
 - Pages that describe a feature say what it does today. They do not mention

@@ -1,6 +1,7 @@
 use super::*;
 use crate::ops::{error::ErrorKind, wire::ObjectId};
 use serde::Serializer;
+use serde_json::json;
 
 fn versions() -> Versions {
     Versions {
@@ -55,7 +56,7 @@ fn valid_keeps_the_existing_encoding_failure_warning() {
 
 #[test]
 fn rejected_preserves_compact_error_envelope_bytes() {
-    const JSON: &str = r#"{"error":{"code":"rejected","message":"Bad IDs"},"validation":{"message":"Bad IDs","reason":"invalid","status":"rejected"},"value":null,"versions":{"app":"9.8.7","document":3,"engine_protocol":2,"operation_api":1},"warnings":[{"message":"first"},{"message":"second"}]}"#;
+    const JSON: &str = r#"{"error":{"code":"rejected","message":"Bad IDs","retryable":false},"validation":{"message":"Bad IDs","reason":"invalid","status":"rejected"},"value":null,"versions":{"app":"9.8.7","document":3,"engine_protocol":2,"operation_api":1},"warnings":[{"message":"first"},{"message":"second"}]}"#;
     let result = ToolResult::rejected(
         Rejection::Invalid("Bad IDs".into()),
         vec!["first".into(), "second".into()],
@@ -77,7 +78,7 @@ fn rejected_preserves_compact_error_envelope_bytes() {
 
 #[test]
 fn plain_and_attachments_keep_the_object_and_error_flag() {
-    const ERROR_JSON: &str = r#"{"error":{"code":"failed","message":"It went wrong"},"versions":{"app":"9.8.7","document":3,"engine_protocol":2,"operation_api":1}}"#;
+    const ERROR_JSON: &str = r#"{"error":{"code":"failed","message":"It went wrong","retryable":false},"versions":{"app":"9.8.7","document":3,"engine_protocol":2,"operation_api":1}}"#;
     let value = Map::from_iter([("answer".into(), json!(42))]);
     let plain = ToolResult::plain(value.clone());
     assert_eq!(plain.value, value);

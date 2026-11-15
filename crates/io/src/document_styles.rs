@@ -86,6 +86,8 @@ pub fn to_bytes(path: &std::path::Path, style: &DrawingStyle) -> Result<Vec<u8>,
 /// Stationery supplies label typography and bond dimensions. Page layout,
 /// artwork, colors and independent caption styles are outside DrawingStyle.
 fn from_chemdraw_xml(xml: &str, name: &str) -> Result<DrawingStyle, String> {
+    crate::chemistry::cdxml::xml_guard::check(xml)
+        .map_err(|refused| format!("Invalid ChemDraw style: {refused}"))?;
     let tree = roxmltree::Document::parse_with_options(
         xml,
         roxmltree::ParsingOptions {

@@ -159,6 +159,20 @@ pub trait Documents: Send + Sync {
         key: &IdempotencyKey,
     ) -> Result<Option<Arc<ToolResult>>, OpError>;
 
+    /// Fails when `doc` could not replace the document, whose drawing is
+    /// `before`, within the session's budgets, so an edit over them stops
+    /// before its reconciliation and label work. It counts what
+    /// [`Documents::commit`] counts for an edit that records a step: `doc`,
+    /// `before` as the new undo frame, and the history that is kept. An
+    /// edit that changes nothing always fits. The commit checks again.
+    fn fits(
+        &self,
+        who: &Principal,
+        handle: &DocHandle,
+        before: &Document,
+        doc: &Document,
+    ) -> Result<(), OpError>;
+
     /// Applies `change` atomically and returns its receipt.
     fn commit(
         &self,

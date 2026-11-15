@@ -201,7 +201,7 @@ fn tool_errors_are_is_error_results() {
             UNLIMITED,
         ));
         let structured = json!({
-            "error": {"code": kind.code(), "message": "it failed"},
+            "error": {"code": kind.code(), "message": "it failed", "retryable": kind.retryable()},
             "versions": {
                 "app": "0.0.0-test",
                 "operation_api": versions().operation_api,
@@ -241,6 +241,7 @@ fn assert_cap_boundary(r: &ToolResult) {
                 "Result exceeds {} bytes; request a smaller render or fewer objects",
                 exact - 1
             ),
+            "retryable": false,
         })
     );
     assert_eq!(over["content"].as_array().unwrap().len(), 1);

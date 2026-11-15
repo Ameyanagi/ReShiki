@@ -9,11 +9,11 @@ use super::{
     progress,
     result::ToolResult,
     store::Documents,
-    wire::{DocHandle, Principal, Revision, described, handle_schema, nullable, warnings},
+    wire::{Bounds, DocHandle, Principal, Revision, described, handle_schema, nullable, warnings},
 };
 use crate::{
     DrawingSettings, Proposal, composition,
-    document::{Document, Point},
+    document::Document,
     engine::LocalEngine,
     envelope::Versions,
     progress::Event,
@@ -35,7 +35,7 @@ pub const NO_DRAWING: &str = "A drawing needs at least one molecule, reaction or
 pub const COMPOSE: ToolSpec = ToolSpec {
     name: "compose",
     title: Some("Compose scheme"),
-    description: "Lay out a Proposal as a new session document, as ReShiki's assistant composes its drafts: molecules and reactions from SMILES, or one editable sketch diagram, never both. Returns the document's handle and revision, its atom, bond and arrow counts, its bounds, layout review issues and the layout changes made. Use render to look at it. Every call creates another document; close the ones you no longer need with document_close.",
+    description: "Lay out a Proposal as a new session document, as ReShiki's assistant composes its drafts: molecules and reactions from SMILES, or one editable sketch diagram, never both. Before the first sketch, call schema with name sketch for its fields. Returns the document's handle and revision, its atom, bond and arrow counts, its bounds, layout review issues and the layout changes made. Use render to look at it. Every call creates another document; close the ones you no longer need with document_close.",
     input_schema: schema,
     hints: Some(Hints {
         read_only: false,
@@ -47,33 +47,20 @@ pub const COMPOSE: ToolSpec = ToolSpec {
 
 /// Proposal subschemas that occur more than once, published once under
 /// `$defs`: each name and where its first copy is.
-const SHARED: &[(&str, &str)] = &[
-    ("molecules", "/properties/molecules"),
-    (
-        "point",
-        "/properties/sketch/anyOf/1/properties/arrows/items/properties/start",
-    ),
-    (
-        "color",
-        "/properties/sketch/anyOf/1/properties/captions/items/properties/color",
-    ),
-];
+const SHARED: &[(&str, &str)] = &[("molecules", "/properties/molecules")];
 
-/// Sentences of the sketch description that repeat its first sentences or
-/// the descriptions of `centroids.kind` and `bonds.ring_arc`.
-const REPEATED: &[&str] = &[
-    " Use centroids with kind multi_center for haptic contacts (all target atoms), kind variable for alternative attachment positions, and null only for nonchemical drawing anchors.",
-    " Use ring_arc on consecutive ring bonds for partial inner curves, preserving their underlying bond orders.",
-    " Leave molecules and reactions empty.",
-];
+/// What compose lists in place of the sketch object's fields.
+pub const SKETCH_PLACEHOLDER: &str = "One editable diagram with explicit coordinates, for coordination complexes, macrocycles, projected organometallics and source arrangements that SMILES layout cannot preserve; use SMILES for ordinary molecules. Its fields and drawing rules are not listed here: call schema with name sketch before the first sketch. Keep molecules and reactions empty when using sketch.";
 
 /// The Proposal schema is derived from the assistant's [`crate::schema`],
 /// which stays as `canvas_preview` publishes it, and made smaller:
 ///
 /// - `explanation` and `replace_ids` are left out, because compose always
 ///   creates a new document; [`decode`] fills them in and still accepts them;
-/// - each [`SHARED`] subschema is stated once under `$defs`;
-/// - the [`REPEATED`] sentences are removed.
+/// - the sketch object is listed as a plain object described by
+///   [`SKETCH_PLACEHOLDER`]; the `schema` tool returns its fields
+///   ([`super::schema::sketch`]), and [`decode`] checks them as before;
+/// - each [`SHARED`] subschema is stated once under `$defs`.
 fn schema() -> Value {
     let mut proposal = crate::schema();
     for name in ["explanation", "replace_ids"] {
@@ -90,12 +77,8 @@ fn schema() -> Value {
             required.retain(|required| required != name);
         }
     }
-    if let Some(Value::String(text)) =
-        proposal.pointer_mut("/properties/sketch/anyOf/1/description")
-    {
-        for sentence in REPEATED {
-            *text = text.replace(sentence, "");
-        }
+    if let Some(sketch) = proposal.pointer_mut(super::schema::SKETCH) {
+        *sketch = json!({"type": "object", "description": SKETCH_PLACEHOLDER});
     }
     let mut defs = Map::new();
     for (name, pointer) in SHARED {
@@ -194,7 +177,7 @@ struct Report {
     atoms: usize,
     bonds: usize,
     arrows: usize,
-    bounds: Option<(Point, Point)>,
+    bounds: Option<Bounds>,
     review_issues: Vec<String>,
     changes: Vec<String>,
 }
@@ -300,7 +283,8 @@ pub(crate) async fn compose(
                 atoms: doc.atoms.len(),
                 bonds: doc.bonds.len(),
                 arrows: doc.arrows.len(),
-                bounds: scene::selection_bounds(&doc, &doc.all_ids()),
+                bounds: scene::selection_bounds(&doc, &doc.all_ids())
+                    .map(|(min, max)| Bounds { min, max }),
                 review_issues,
                 changes,
             };

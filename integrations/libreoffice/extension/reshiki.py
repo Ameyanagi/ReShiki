@@ -179,7 +179,19 @@ def settings_path(ctx):
     return Path(uno.fileUrlToSystemPath(url)) / "reshiki-integration.json"
 
 
+def installed_executables():
+    """Where the installer and the macOS app put ReShiki."""
+    if os.name == "nt":
+        return [str(Path(os.environ.get("LOCALAPPDATA", "")) / "Programs/ReShiki/reshiki.exe")]
+    return ["/Applications/ReShiki.app/Contents/MacOS/reshiki"]
+
+
 def executable(ctx):
+    """The chosen app, else the installed app, else `reshiki` on PATH.
+
+    PATH comes last, so a program named reshiki in an earlier PATH folder
+    cannot replace the chosen or installed application.
+    """
     settings = settings_path(ctx)
     if settings.exists():
         candidate = Path(json.loads(settings.read_text(encoding="utf-8"))["executable"])
@@ -188,14 +200,7 @@ def executable(ctx):
         raise RuntimeError(
             "The configured ReShiki app has moved. Use ReShiki → Choose ReShiki App."
         )
-    candidates = [shutil.which("reshiki")]
-    if os.name == "nt":
-        candidates += [
-            str(Path(os.environ.get("LOCALAPPDATA", "")) / "Programs/ReShiki/reshiki.exe")
-        ]
-    else:
-        candidates += ["/Applications/ReShiki.app/Contents/MacOS/reshiki"]
-    for candidate in candidates:
+    for candidate in [*installed_executables(), shutil.which("reshiki")]:
         if candidate and Path(candidate).is_file():
             return str(Path(candidate).resolve())
     raise RuntimeError(

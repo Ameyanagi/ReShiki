@@ -1,5 +1,6 @@
 //! Resource budgets for the operation API and the document cost helpers they
 //! are measured with.
+use super::error::{ErrorKind, OpError};
 use crate::{
     canvas_tools::{PREVIEW_HEIGHT, PREVIEW_WIDTH},
     document::Document,
@@ -162,6 +163,20 @@ impl Budgets {
     }
 }
 
+impl Budgets {
+    /// [`ErrorKind::Budget`] when `doc` has more than `max_objects` objects.
+    pub(crate) fn check_objects(&self, doc: &Document) -> Result<(), OpError> {
+        let (count, limit) = (objects(doc), self.max_objects);
+        if count > limit {
+            return Err(OpError::new(
+                ErrorKind::Budget,
+                format!("The drawing has {count} objects; the limit is {limit}"),
+            ));
+        }
+        Ok(())
+    }
+}
+
 /// Atoms, bonds, annotations, arrows, graphics and groups in `doc`.
 pub fn objects(doc: &Document) -> usize {
     doc.atoms.len()
@@ -173,9 +188,13 @@ pub fn objects(doc: &Document) -> usize {
 }
 
 /// The weight of one document or history frame: [`objects`] plus one, so an
-/// empty document still counts.
+/// empty document still counts, plus one for every 64 bytes of annotation
+/// text, so a few objects holding much text are not nearly free.
 pub fn cost(doc: &Document) -> u64 {
-    (objects(doc) as u64).saturating_add(1)
+    let text: usize = doc.annotations.iter().map(|a| a.text.len()).sum();
+    (objects(doc) as u64)
+        .saturating_add(1)
+        .saturating_add(text as u64 / 64)
 }
 
 /// Stored PNG and original EMF bytes in `docs`, counting each storage once.

@@ -1,0 +1,26 @@
+{
+  "molecule": {
+    "smiles": "CC(=O)Oc1ccccc1C(=O)O",
+    "outputs": {
+      "smiles": "CC(=O)Oc1ccccc1C(=O)O",
+      "inchi": "InChI=1S/C9H8O4/c1-6(10)13-8-5-3-2-4-7(8)9(11)12/h2-5H,1H3,(H,11,12)"
+    },
+    "properties": {
+      "formula": "C9H8O4",
+      "mass": 180.159,
+      "exact_mass": 180.042258736,
+      "logp": 1.3101,
+      "tpsa": 63.6,
+      "donors": 1,
+      "acceptors": 3,
+      "rings": 1,
+      "inchikey": "BSYNRYMUTXBXSQ-UHFFFAOYSA-N"
+    }
+  },
+  "reaction": {
+    "rsmi": "CCO>>CC=O",
+    "outputs": {
+      "rsmi": "CCO>>CC=O"
+    }
+  }
+}
