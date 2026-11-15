@@ -685,6 +685,21 @@ async fn a_choice_made_while_another_tab_saves_can_be_made_again() {
 }
 
 #[test]
+fn a_choice_never_waits_for_a_closing_tabs_save() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_in(dir.path());
+    conflicted(&mut app, &path, Some(drawing(30.)));
+    edit(&mut app);
+    open_other(&mut app, dir.path());
+    // The other tab is closing and saving first.
+    app.pending = Some(crate::app::Pending::CloseTab(app.tab.id));
+    app.file_io.saving = true;
+    app.file_io.saving_tab = Some(app.tab.id);
+    github(&mut app, Action::Resolve(send::Choice::KeepBoth));
+    assert!(app.github.resolving.is_none(), "it can be made again");
+}
+
+#[test]
 fn several_conflicts_are_shown_one_after_another() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, path) = app_in(dir.path());

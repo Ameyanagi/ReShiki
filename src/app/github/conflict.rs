@@ -120,11 +120,14 @@ impl App {
                 return Task::none();
             }
             // A save still writing would land over what is kept: wait for it.
-            let writing = self.file_io.saving && self.file_io.saving_tab == Some(self.tab.id);
+            let id = self.tab.id;
+            let writing = self.file_io.saving && self.file_io.saving_tab == Some(id);
             if self.dirty() || writing {
-                let save = crate::app::tagged(self.save_drawing(false), self.tab.id);
-                // While another tab saves, none starts: the choice can be made again.
-                if self.file_io.saving && self.file_io.saving_tab == Some(self.tab.id) {
+                // A tab closing goes first and is the one saved.
+                let save = self.save_drawing(false);
+                let save = crate::app::tagged(save, self.tab.id);
+                // Unless this drawing's save is under way, the choice can be made again.
+                if self.file_io.saving && self.file_io.saving_tab == Some(id) {
                     self.github.resolving = Some((key, choice));
                 }
                 return save;
