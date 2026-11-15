@@ -258,7 +258,12 @@ async fn preview_workloads() {
             let name = |workload: &str| format!("g{copies}x_{view}_{workload}");
             let mut canvas = tests::chain_canvas(&doc, ChainMode::Straight);
             canvas.camera = camera;
-            let hover = camera.screen(free, bounds);
+            // Offscreen, the preview stays in view over empty paper.
+            let hover = if view == "onscreen" {
+                camera.screen(free, bounds)
+            } else {
+                Point::new(500., 300.)
+            };
             let start = camera.screen(end_position, bounds);
             let mut state = State {
                 cursor: Some(hover),

@@ -213,6 +213,24 @@ async fn preview_fragments_match_whole_previews() {
                         );
                         frames += 1;
                         split += usize::from(partial < full);
+                        // One split frame per case, for review.
+                        if let Some(directory) = std::env::var_os("RESHIKI_PREVIEW_EVIDENCE")
+                            && partial < full
+                            && zoom == 1.25
+                            && (x, y) == (3, 1)
+                        {
+                            let directory = std::path::PathBuf::from(directory);
+                            std::fs::create_dir_all(&directory).unwrap();
+                            for (name, pixels) in [("split", &fragment), ("whole", &whole)] {
+                                image::RgbaImage::from_raw(size.width, size.height, pixels.clone())
+                                    .unwrap()
+                                    .save(
+                                        directory
+                                            .join(format!("{case}-{}-{name}.png", center.y as i32)),
+                                    )
+                                    .unwrap();
+                            }
+                        }
                     }
                 }
             }
