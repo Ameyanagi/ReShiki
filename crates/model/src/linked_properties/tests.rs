@@ -407,3 +407,40 @@ fn analysis_without_values_uses_its_caption_label() {
     let (text, _) = write(None, &[Property::Analysis], true);
     assert_eq!(text, "Anal. Calcd: –");
 }
+
+#[test]
+fn styled_parts_stay_styled_when_the_values_change() {
+    let (mut doc, atoms) = shown_doc(&[Property::Weight], true);
+    let mut history = History::default();
+    let number = "Mol. Wt.: ".len().."Mol. Wt.: 94.11".len();
+    edit(&mut doc, &mut history, |doc| {
+        let caption = &mut doc.annotations[0];
+        let text = caption.text.clone();
+        caption.format.apply(
+            &text,
+            Some(number.clone()),
+            &crate::typography::StyleChange::Bold(true),
+        );
+    });
+    edit(&mut doc, &mut history, |doc| {
+        let methyl = doc.add_atom("C", Point::new(-60., 0.));
+        doc.add_bond(atoms[3], methyl, 1, "plain");
+    });
+    // A line shown above it keeps the number's styling on its own line.
+    let anisole = doc.property_captions[0].atoms.clone();
+    toggle(
+        &mut doc,
+        &anisole,
+        Property::Formula,
+        TextFormat::default(),
+        true,
+    )
+    .unwrap();
+    let caption = &doc.annotations[0];
+    assert_eq!(caption.text, "Formula: C7H8O\nMol. Wt.: 108.14");
+    let weight = caption.text.find("108.14").unwrap();
+    assert!((weight..caption.text.len()).all(|i| caption.format.at(i).bold));
+    assert!(!caption.format.at(weight - 1).bold);
+    assert!(!caption.format.at(0).bold);
+    assert!(caption.format.at("Formula: ".len()).formula);
+}

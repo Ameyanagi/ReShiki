@@ -6,10 +6,13 @@
 //! deleting the molecule removes it.
 use crate::{
     document::{Annotation, Document, Point},
-    typography::{Script, TextAlign, TextFormat, TextSpan},
+    typography::{Script, StyleChange, TextAlign, TextFormat, TextSpan},
 };
 use serde::{Deserialize, Serialize};
-use std::{collections::HashSet, ops::Range};
+use std::{
+    collections::{HashMap, HashSet},
+    ops::Range,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -190,8 +193,14 @@ fn write(
 }
 
 /// Rewrite the caption from its molecule, keeping its style and center.
-/// Unchanged text also keeps the style of any part of it.
-fn refresh(doc: &Document, link: &mut PropertyCaption, caption: &mut Annotation) {
+/// `shown` is the properties of the current text. Each line changes like a
+/// typed edit of that property's line, so styling stays where the text stays.
+fn refresh(
+    doc: &Document,
+    link: &mut PropertyCaption,
+    caption: &mut Annotation,
+    shown: &[Property],
+) {
     let (text, formulas) = write(
         values(doc, &link.atoms).as_ref(),
         &link.properties,
@@ -199,16 +208,41 @@ fn refresh(doc: &Document, link: &mut PropertyCaption, caption: &mut Annotation)
     );
     if text != caption.text {
         let center = caption.position.x + caption.size().0 / 2.;
-        let mut style = caption.format.style.clone();
-        style.formula = true;
-        caption.format.spans = formulas
-            .into_iter()
-            .map(|r| TextSpan {
-                start: r.start,
-                end: r.end,
-                style: style.clone(),
-            })
-            .collect();
+        let mut lines = HashMap::new();
+        let mut start = 0;
+        for (property, line) in shown.iter().zip(caption.text.split('\n')) {
+            lines.insert(*property, start..start + line.len());
+            start += line.len() + 1;
+        }
+        let mut styles = vec![];
+        for (property, line) in link.properties.iter().zip(text.split('\n')) {
+            if !styles.is_empty() {
+                styles.push(caption.format.style.clone());
+            }
+            let old = lines.get(property).cloned().unwrap_or_default();
+            let mut format = caption.format.clone();
+            format.spans = caption
+                .format
+                .spans
+                .iter()
+                .filter(|s| s.start < old.end && old.start < s.end)
+                .map(|s| TextSpan {
+                    start: s.start.max(old.start) - old.start,
+                    end: s.end.min(old.end) - old.start,
+                    style: s.style.clone(),
+                })
+                .collect();
+            let old = &caption.text[old];
+            // An empty range at the end makes `edited` find the changed part.
+            format.edited(old, line, old.len()..old.len());
+            styles.extend(line.char_indices().map(|(i, _)| format.at(i).clone()));
+        }
+        for ((i, _), style) in text.char_indices().zip(&mut styles) {
+            if formulas.iter().any(|r| r.contains(&i)) {
+                StyleChange::Formula(true).apply(style);
+            }
+        }
+        caption.format.pack(&text, styles);
         caption.text = text.clone();
         caption.position.x = center - caption.size().0 / 2.;
     }
@@ -272,6 +306,7 @@ pub fn toggle(
             }
         }
     };
+    let shown = link.properties.clone();
     if link.properties.contains(&property) {
         link.properties.retain(|p| *p != property);
     } else {
@@ -292,7 +327,7 @@ pub fn toggle(
         .cloned()
         .ok_or("The property caption is missing")?;
     // An edited caption is plain text; showing a property links it again.
-    refresh(doc, &mut link, &mut caption);
+    refresh(doc, &mut link, &mut caption, &shown);
     if let Some(current) = doc.annotations.iter_mut().find(|a| a.id == link.annotation) {
         *current = caption;
     }
@@ -348,7 +383,8 @@ pub fn reconcile(doc: &mut Document, before: &Document) {
             })
             .and_then(|old| anchor(before, &old.atoms));
         link.atoms = whole;
-        refresh(doc, &mut link, &mut caption);
+        let shown = link.properties.clone();
+        refresh(doc, &mut link, &mut caption, &shown);
         if let Some((from, to)) = shift.zip(anchor(doc, &link.atoms)) {
             caption.position = caption.position.offset(to.x - from.x, to.y - from.y);
         }
