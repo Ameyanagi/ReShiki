@@ -222,11 +222,17 @@ fn a_record_that_stops_reading_or_saving_ends_the_asks_and_is_left_alone() {
         let before = std::fs::read(&path).unwrap();
         let mode = |mode| std::fs::Permissions::from_mode(mode);
         std::fs::set_permissions(dir.path(), mode(0o555)).unwrap();
-        assert!(app.star.record.is_some(), "Loading only reads");
-        assert!(!tick(&mut app));
+        // Root (some CI containers) ignores folder permissions; nothing to test there.
+        let enforced = std::fs::write(dir.path().join("probe"), b"").is_err();
+        if enforced {
+            assert!(app.star.record.is_some(), "Loading only reads");
+            assert!(!tick(&mut app));
+        }
         std::fs::set_permissions(dir.path(), mode(0o755)).unwrap();
-        assert_eq!(app.star.record, None);
-        assert_eq!(std::fs::read(&path).unwrap(), before);
+        if enforced {
+            assert_eq!(app.star.record, None);
+            assert_eq!(std::fs::read(&path).unwrap(), before);
+        }
     }
 }
 
