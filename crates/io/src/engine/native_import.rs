@@ -550,6 +550,8 @@ fn coordinates(state: &State, properties: &[Vec<(Vec<u8>, Vec<u8>)>]) -> Result<
     let mut layout = chain_layout::improve(state, &ranks, positions);
     let row = if molecular::refine() {
         chemistry::layout_refinement::straighten(state, &mut layout.positions, None);
+        // After the rigid straightening, which turns every component together.
+        chemistry::layout_refinement::upright_rings(state, &mut layout.positions);
         // Input wedge flags are read against these coordinates, so a reflection
         // would invert them (#1037). Rotation and translation keep their meaning.
         if !state

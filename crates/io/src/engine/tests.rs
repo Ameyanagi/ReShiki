@@ -506,7 +506,7 @@ async fn cleanup_keeps_the_hidden_drawing_of_a_molecule_shown_in_3d() {
     doc.add_bond(c1, c2, 1, "plain");
     doc.add_bond(c2, o, 1, "plain");
     let c3 = doc.add_atom("C", Point::new(200., 0.));
-    let o2 = doc.add_atom("O", Point::new(205., 9.));
+    let o2 = doc.add_atom("O", Point::new(209., 4.));
     doc.add_bond(c3, o2, 1, "plain");
     let atoms = [
         (c1, [-1.2, -0.2, 0.1]),
