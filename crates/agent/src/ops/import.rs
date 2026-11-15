@@ -194,10 +194,10 @@ pub(crate) async fn read(
     let Import { format, text } = import;
     if format == Format::Name {
         let naming = Arc::clone(hook(naming)?);
-        ctx.checkpoint()?;
         // A name read from a file or a pipe ends in a line break.
-        let resolved = naming.resolve(text.trim().to_owned()).await;
-        ctx.checkpoint()?;
+        let resolved = ctx
+            .cancellable(naming.resolve(text.trim().to_owned()))
+            .await?;
         let Resolved {
             smiles,
             prepared,

@@ -144,8 +144,7 @@ pub(crate) async fn name(
             Ok(Arc::unwrap_or_clone(snapshot.doc))
         })
         .await?;
-    let named = naming.generate(doc).await.map_err(OpError::failed);
-    ctx.checkpoint()?;
-    let (named, messages) = named?;
+    let named = ctx.cancellable(naming.generate(doc)).await?;
+    let (named, messages) = named.map_err(OpError::failed)?;
     Ok(ToolResult::valid(named, warnings(messages), versions))
 }
