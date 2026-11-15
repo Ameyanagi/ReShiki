@@ -15,7 +15,7 @@ The live portal still shows `Release certificate 2026` as `CSR PENDING` and
 `release-signing` as `INVALID`. The certificate has no validity dates yet.
 `SIGNPATH_ENABLED` and `SIGNPATH_NIGHTLY_ENABLED` remain `false`; internal
 nightly test signing remains enabled. Test signatures are not publicly trusted.
-The [Windows security investigation](release-0.12.0-windows-security.md) records
+The [Windows security investigation](changes/release-0.12.0-windows-security.md) records
 the current installer detections and the separate proposed inner-executable
 signing extension, which is not part of the nightly startup fix.
 

@@ -17,7 +17,7 @@ Above places a single nickname above the attachment. Automatic internal labels
 such as CCl₂ or NMe keep the attachment element at the bond junction and place
 the remaining part according to the bond angles. General multiline formula-token
 stacking is not implemented. Native/CDXML/CDX preserve the
-override, and Undo/Redo restores it. See the [illustrated PR review](changes-pr17.md).
+override, and Undo/Redo restores it. See the [illustrated PR review](changes/changes-pr17.md).
 
 Properties → Labels & chemistry → Chemical abbreviations provides compact labels while retaining the complete atom/bond graph. Formula, mass, SMILES and molecular identity use the full structure.
 

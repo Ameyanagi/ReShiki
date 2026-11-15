@@ -222,10 +222,11 @@ async fn svg_export_budget_counts_the_outlined_bytes() {
     let live = scene::svg_with_background(&doc).into_bytes();
     let outlined = crate::export::outlined_svg(scene::svg_with_background(&doc)).unwrap();
     assert!(outlined.len() > live.len());
+    // One byte short: the exact size comes from the finished file.
     let (host, handle) = hosting_with(
-        doc,
+        doc.clone(),
         Budgets {
-            max_output_bytes: live.len(),
+            max_output_bytes: outlined.len() - 1,
             ..Budgets::default()
         },
     );
@@ -235,6 +236,26 @@ async fn svg_export_budget_counts_the_outlined_bytes() {
     assert!(
         message.starts_with(&format!("The svg file is {} bytes;", outlined.len())),
         "{message}"
+    );
+    // Far short: refused before the outlines are written.
+    let (host, handle) = hosting_with(
+        doc,
+        Budgets {
+            max_output_bytes: live.len(),
+            ..Budgets::default()
+        },
+    );
+    let result = export_call(&host, &handle, "svg", Value::Null).await;
+    assert_eq!(
+        error(&result),
+        (
+            "budget",
+            format!(
+                "The svg file is more than {0} bytes; max_output_bytes allows at most {0}. Use live text or pdf, or reduce the drawing",
+                live.len()
+            )
+            .as_str()
+        )
     );
     let live = host
         .call(call(
@@ -452,4 +473,29 @@ async fn exporting_never_changes_the_document() {
         .unwrap();
     assert_eq!(after.revision, before.revision);
     assert!(Arc::ptr_eq(&after.doc, &before.doc));
+}
+
+/// S13: InChI has no identifier for a wildcard atom (or for a drawing over
+/// its atom limit). The export says so instead of returning an empty file.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn an_empty_inchi_is_an_error_not_an_empty_file() {
+    let host = HeadlessHost::new("9.8.7", Budgets::default());
+    let imported = host
+        .call(call("import", json!({"format": "smiles", "text": "*C"})))
+        .await
+        .unwrap();
+    assert!(!imported.is_error, "{:?}", imported.value);
+    let handle = DocHandle::new(imported.value["value"]["document"].as_str().unwrap()).unwrap();
+    let result = export_call(&host, &handle, "inchi", Value::Null).await;
+    assert_eq!(
+        error(&result),
+        ("failed", "InChI has no identifier for this drawing")
+    );
+    assert!(result.files.is_empty());
+    // The other chemistry formats still export it.
+    assert!(
+        !export_ok(&host, &handle, "smiles").await.files[0]
+            .bytes
+            .is_empty()
+    );
 }

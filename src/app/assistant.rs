@@ -107,6 +107,9 @@ pub struct State {
     /// The drawing this conversation and its canvas tools belong to.
     pub(super) tab: Option<TabId>,
     waiting_for_canvas_edit: bool,
+    /// The waiting Apply came from **Accept all edits**, so it checks the
+    /// selection again when the canvas edit ends.
+    waiting_apply_is_automatic: bool,
     input: text_editor::Content,
     source_image: Option<reshiki::pictures::Picture>,
     pub(super) viewed_image: Option<reshiki::pictures::Picture>,

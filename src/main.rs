@@ -209,7 +209,7 @@ fn run(
     let boot = move || app::App::with_startup(startup.clone());
     // In the browser, the host page's requests and change callback join in.
     #[cfg(not(target_arch = "wasm32"))]
-    let (update, subscription) = (app::App::update, app::App::subscription);
+    let (update, subscription) = (app::App::receive, app::App::subscription);
     #[cfg(target_arch = "wasm32")]
     let (update, subscription) = (web::update, web::subscription);
     iced::application(boot, update, app::App::view)

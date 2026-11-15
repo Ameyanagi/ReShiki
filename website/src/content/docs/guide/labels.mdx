@@ -10,7 +10,7 @@ import Screenshot from "../../../components/Screenshot.astro";
 Choose **Text** (**t**, lowercase), click the canvas, and type. Double-click a caption to edit it. Select a text range to change its font, size, bold/italic, subscript, superscript, or color. **Done** or **Cmd/Ctrl+Enter** applies; **Escape** cancels.
 
 <Screenshot
-  src="/manual/caption-editing.png"
+  src="/manual/caption-editing.webp"
   alt="Editing a caption with the same font and formatting controls used for labels."
 />
 
@@ -23,7 +23,7 @@ Atom numbers are placed automatically on the open side of their atom, clear of b
 Adding a charge to a skeletal carbon leaves the carbon label implicit. The charge remains visible at the vertex. Explicit carbon-label settings, isotope labels, and isolated atoms remain visible.
 
 <Screenshot
-  src="/manual/atom-labels.png"
+  src="/manual/atom-labels.webp"
   alt="Atom numbering, hydrogen labels, and stereochemistry controls."
 />
 
@@ -130,7 +130,23 @@ When you point at a caption with a bond tool, the status bar says whether it can
 
 ## Choose where a bond meets a text label
 
-A bond meets the attachment atom inside a multi-atom text label, not the middle of the label. In **MeO**, **AcS**, **BnO** or **SPh** the bond meets the O or S; nicknames such as Me, Ac, Bn and Ph, hydrogens and counts never take the bond, even when they spell an element symbol (Ac). When a label names several atoms, the bond meets the one nearest it: **CO2Me** attaches at C with the bond on its left, and **MeO2C** attaches at C with the bond on its right. Text that names no atom, such as **Boc** or **M**, stays centered, and so does text spelled for the other side, such as **MeO** with its bond on the left, so the bond is not hidden behind Me. Type **OMe** for that direction. A text label inside a chain, with two or more bonds, also stays centered unless you choose otherwise. Chemical groups such as **OAc** or **CO2Me** typed in **Automatic** mode always attach at their real anchor atom and switch to their reverse spelling (AcO, MeO2C) as needed.
+A bond meets the attachment atom inside a multi-atom text label, not the
+middle of the label:
+
+- In **MeO**, **AcS**, **BnO** or **SPh**, the bond meets the O or S.
+  Nicknames such as Me, Ac, Bn and Ph, hydrogens and counts never take the
+  bond, even when they spell an element symbol (Ac).
+- When a label names several atoms, the bond meets the nearest one: **CO2Me**
+  attaches at C with the bond on its left, and **MeO2C** at C with the bond on
+  its right.
+- Text that names no atom, such as **Boc** or **M**, stays centered. So does
+  text spelled for the other side, such as **MeO** with its bond on the left,
+  so the bond is not hidden behind Me; type **OMe** instead.
+- A text label inside a chain, with two or more bonds, stays centered unless
+  you choose otherwise.
+- Chemical groups such as **OAc** or **CO2Me** typed in **Automatic** mode
+  always attach at their real anchor atom and switch to their reverse spelling
+  (AcO, MeO2C) as needed.
 
 To choose differently, select the atom and open **Properties → Labels & chemistry → Atom labels & numbering…**. With **Selected atoms** as the scope, use **Bond attachment (text labels)**:
 
@@ -145,9 +161,9 @@ The choice is saved in the .rsk file and applies to the canvas and to SVG, PDF a
 
 Select the target atoms, right-click → **Attachment points…**, and choose **Multi-center attachment** for simultaneous participation, such as η6-arene or η3-allyl. **Variable attachment** represents alternative attachment positions. Draw a bond from the new point to a metal or substituent. These are distinct from a plain dummy atom or drawing centroid.
 
-Anonymous dummy and attachment handles remain visible in the editor but disappear from figures and image copies. Explicit labels remain visible. Native editing retains target IDs; supported editable exchange uses CDXML/CDX attachment nodes or V3000 ALL/ANY lists. See [the verified scope and limitations](/developer/chemdraw-attachment-comparison/).
+Anonymous dummy and attachment handles remain visible in the editor but disappear from figures and image copies. Explicit labels remain visible. Native editing retains target IDs; supported editable exchange uses CDXML/CDX attachment nodes or V3000 ALL/ANY lists. See [the verified scope and limitations](https://github.com/Ameyanagi/ReShiki/blob/main/docs/changes/chemdraw-attachment-comparison.md).
 
 <Screenshot
-  src="/manual/abbreviations.png"
+  src="/manual/abbreviations.webp"
   alt="An OMe abbreviation with Expand selected available."
 />

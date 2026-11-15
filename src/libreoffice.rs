@@ -4,6 +4,7 @@
 //! starts this installed executable and passes native drawing bytes on stdin.
 use crate::{document::Document, export, scene};
 use base64::{Engine as _, engine::general_purpose::STANDARD};
+use reshiki_agent::ops::budget::{self, Budgets};
 use serde::Serialize;
 use std::io::{Read, Write};
 
@@ -23,6 +24,13 @@ fn preview(bytes: &[u8]) -> Result<Preview, String> {
         return Err("Embedded drawing exceeds 64 MB".into());
     }
     let doc = Document::from_json(bytes)?;
+    // The object limit of an agent import, checked before any rendering.
+    let (objects, limit) = (budget::objects(&doc), Budgets::default().max_objects);
+    if objects > limit {
+        return Err(format!(
+            "The drawing has {objects} objects; the limit is {limit}"
+        ));
+    }
     let png = export::clipboard_png(&doc)?;
     if png.len() > LIMIT {
         return Err("Embedded preview exceeds 64 MB".into());
@@ -60,6 +68,9 @@ pub fn run(argument: Option<&std::ffi::OsStr>) -> Option<Result<(), String>> {
     ) {
         return None;
     }
+    // The heap ceiling `--cli` and `--mcp` start with. Past it the bounded
+    // allocator prints one line and exits 75.
+    reshiki_process_heap::begin(crate::cli::heap::DEFAULT_HEAP_MIB * 1024 * 1024);
     Some((|| {
         let bytes = if mode == "--libreoffice-clipboard" {
             let runtime = tokio::runtime::Runtime::new().map_err(|e| e.to_string())?;

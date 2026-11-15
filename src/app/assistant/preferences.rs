@@ -41,14 +41,12 @@ impl App {
         self.assistant.menu = None;
         if value
             && !self.assistant.requires_apply
-            && self
-                .assistant
-                .draft
-                .as_ref()
-                .is_some_and(|d| d.review.can_auto_apply())
+            && self.assistant_can_auto_apply()
             && !self.assistant.busy
         {
-            return self.assistant_action(Action::Apply);
+            let task = self.assistant_action(Action::Apply);
+            self.assistant.waiting_apply_is_automatic = self.assistant.waiting_for_canvas_edit;
+            return task;
         }
         Task::none()
     }

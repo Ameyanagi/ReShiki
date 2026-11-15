@@ -1217,7 +1217,7 @@ fn requests() -> impl iced::futures::Stream<Item = Message> {
 /// The app's update, then the page's callbacks for what changed: the drawing
 /// in front, whether any tab has unsaved changes, and the title.
 pub(crate) fn update(app: &mut App, message: Message) -> Task<Message> {
-    let task = app.update(message);
+    let task = app.receive(message);
     // Captions ask for fonts as they are drawn; the interface's names do here.
     for text in app.interface_text() {
         text_drawn(&text);

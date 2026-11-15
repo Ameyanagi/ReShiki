@@ -283,7 +283,7 @@ By @Ameyanagi in [PR #68](https://github.com/Ameyanagi/ReShiki/pull/68).
 
 Windows builds include WGPU with a Tiny Skia fallback. CPU-only environments keep
 the direct software renderer, and explicit renderer overrides remain available
-for testing. The [validation record](windows-gpu-validation.md) includes Windows
+for testing. The [validation record](changes/windows-gpu-validation.md) includes Windows
 VM measurements and real Radeon GPU rendering on Linux; physical Windows GPU
 performance remains unmeasured.
 

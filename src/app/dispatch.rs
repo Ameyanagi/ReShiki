@@ -25,6 +25,7 @@ impl App {
             | Message::CopyFrame(_)
             | Message::Assistant(_)
             | Message::Updates(_)
+            | Message::Star(_)
             | Message::Palette(_)
             | Message::InlineText(_)
             | Message::AtomText(_)
