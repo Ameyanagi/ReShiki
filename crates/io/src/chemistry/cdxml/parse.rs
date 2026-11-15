@@ -61,9 +61,7 @@ pub(super) fn read(text: &str) -> Result<Parsed> {
     if text.len() > 16 * 1024 * 1024 {
         return Err(Error::Limit);
     }
-    if super::xml_guard::has_entity_declaration(text) {
-        return Err(Error::Unsupported("DTD entities"));
-    }
+    super::xml_guard::check(text)?;
     let document = roxmltree::Document::parse_with_options(
         text,
         roxmltree::ParsingOptions {

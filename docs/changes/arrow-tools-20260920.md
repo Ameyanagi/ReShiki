@@ -1,7 +1,7 @@
 # Arrow tools: original checks (2026-09-20)
 
 These checks describe the first arrow build, not the current toolbar. The
-[0.6 release walkthrough](../release-0.6-validation.md) covers the current
+[0.6 release walkthrough](release-0.6-validation.md) covers the current
 toolbar and rendering, and the [arrow page](../arrows.md) describes how arrows
 work today.
 

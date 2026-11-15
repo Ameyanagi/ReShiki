@@ -1,6 +1,6 @@
 # Selection and ring placement
 
-Updated 2026-09-17 after reports of missing bond targets, an unwanted persistent bond preview, and a substituent drawn inside a newly attached ring.
+How ReShiki targets atoms and bonds under the pointer, previews bonds and places attached rings.
 
 ## Behavior
 

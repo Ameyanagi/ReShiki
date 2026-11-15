@@ -60,7 +60,7 @@ Three packages wrap these layers for other hosts. None is a default member:
 
 `scripts/build_wasm.sh` builds the browser editor from the `reshiki` executable crate, `reshiki-web` and `reshiki-web-worker`. `packages/editor/` is the npm package `@ameyanagi/reshiki` that wraps those WebAssembly modules.
 
-`reshiki::chemistry` combines the core with both adapter layers, so existing imports keep working. Crate boundaries enforce the layering: a lower crate cannot import a higher one. The layer crates are workspace default members, so `cargo test` and the pre-commit checks cover them. The leaf crates are workspace members but not default members: `cargo test --workspace`, as in the [native checks](development.md#native-checks) and CI, also runs their tests. Release builds still produce exactly one executable with `cargo build --release --bin reshiki`; `build.rs` stays in the root package. The agent API adds no executable: `reshiki --mcp` and `reshiki --cli` are modes of the same binary, like the chemistry workers.
+`reshiki::chemistry` combines the core with both adapter layers, so existing imports keep working. Crate boundaries enforce the layering: a lower crate cannot import a higher one. The layer crates are workspace default members, so `cargo test` and the pre-commit checks cover them. The leaf crates are workspace members but not default members: `cargo test --workspace`, as in [Run the checks](development.md#run-the-checks) and CI, also runs their tests. Release builds still produce exactly one executable with `cargo build --release --bin reshiki`; `build.rs` stays in the root package. The agent API adds no executable: `reshiki --mcp` and `reshiki --cli` are modes of the same binary, like the chemistry workers.
 
 Chemical naming comes from the external [nazuchem repository](https://github.com/Ameyanagi/nazuchem), at the nazuchem revision pinned in `Cargo.toml`. ReShiki uses four of its five crates as dependencies, outside the workspace: `nazuchem-ir` holds shared naming types, `nazuchem-kernel` supplies perception and canonical identity, and `nazuchem-n2s` and `nazuchem-s2n` provide the two engines. The facade crate `nazuchem` is unused by ReShiki. The n2s engine is a Rust port of OPSIN by Daniel Lowe under MIT, tracking upstream main after 2.9.0 (commit `42e87ac6`; phane nomenclature included). Its [porting ledger and provenance](https://github.com/Ameyanagi/nazuchem/blob/main/crates/nazuchem-n2s/PORTING.md) and crate-local license texts live in that repository. ReShiki retains the host budgets, worker transport, application integration, catalog and naming regression harness.
 
@@ -141,7 +141,19 @@ Chemical naming comes from the external [nazuchem repository](https://github.com
 | `crates/model/src/style.rs` and `assets/drawing_style.json` | Shared JACS / ACS defaults, publication units and font advances                |
 | `reference/engine/worker.py`                                | Independent Python/RDKit reference, enabled by `rdkit-reference`               |
 
-Document coordinates use screen-style positive-down Y, with 28 world units per RDKit coordinate unit. The default single bond is 42 world units, representing 14.4 publication points in the JACS / ACS preset. The camera never changes stored coordinates or export size. Native documents save as JSON format version 30, version 31 when they contain a custom arrow-label gap, version 32 for ORTEP settings, version 33 for linked-model state, explicit file-geometry provenance or atom labels, version 34 for collapsed groups with two attachment atoms, version 35 for arrows with interior nodes or a custom crossing clearance, version 36 for enhanced stereo groups, or version 37 for atoms with three or four radical electrons, and accept versions 1–37 when reading; see [document format versions](#document-format-versions). Version 17 stores theme palette colors by name and custom colors as displayed; reading an older dark-canvas drawing converts its custom colors once to the lightness-flipped values it showed. Version 16 embeds custom themes and version 15 adds explicit reaction roles tied to arrow and atom IDs. A drawing from a newer ReShiki reports the document version it needs instead of a parse error. Version 14 adds validated per-document drawing settings; the physical coordinate scale remains fixed at 14.4/42 points per world unit. New presentation fields prompted version increments so older editors reject unsupported documents. History and camera are session state.
+Document coordinates use screen-style positive-down Y, with 28 world units
+per RDKit coordinate unit. The default single bond is 42 world units, or
+14.4 publication points in the JACS / ACS preset; this physical scale is fixed.
+The camera never changes stored coordinates or export size, and history and
+camera are session state.
+
+Native documents are JSON. Each drawing is saved at the lowest format version
+that holds its features, and this build reads versions 1–37; a drawing from a
+newer ReShiki reports the version it needs instead of a parse error. New
+presentation fields raise the version so older editors reject documents they
+cannot keep. [Document format versions](#document-format-versions) lists what
+each version added. Reading a dark-canvas drawing older than version 17
+converts its custom colors once to the lightness-flipped values it showed.
 
 Atoms retain formal charge, isotope, explicit-H count, implicit-H policy, map number and tetrahedral winding. Winding refers to an explicit ordered list of stable neighbor IDs. Molecule preparation compensates for neighbor permutations, preventing array reordering from reversing a stereocenter. Double-bond stereo stores its reference atoms separately. Topology edits invalidate affected stereo and derived labels; a background refresh recomputes chemistry. Explicit Check also refreshes computed properties.
 

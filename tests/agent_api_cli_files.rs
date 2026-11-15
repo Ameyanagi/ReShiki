@@ -1,6 +1,6 @@
 //! `reshiki --cli` files through the real binary. Paths on the command line
-//! carry the user's own authority: no folder grants, no extension
-//! allowlist, and none of the MCP file tools' checks on what a path names.
+//! carry the user's own authority: no folder grants and no extension
+//! allowlist. An input must still be a regular file.
 //!
 //! Every run has an empty data folder, a temporary working folder and a
 //! watchdog, and inherits RESHIKI_INCHI_HELPER as CI sets it
@@ -154,11 +154,13 @@ fn a_non_utf8_output_name_is_written_as_given() {
     }
 }
 
-/// Input from a FIFO is read as the user names it: the CLI does not apply
-/// the MCP file tools' regular-file check.
+/// S25: a named input that is not a regular file is refused before it is
+/// opened. Opening a FIFO with no writer would wait for one; this one has
+/// none, so a CLI that opened it would run into the watchdog. The same text
+/// still streams through standard input.
 #[cfg(unix)]
 #[test]
-fn input_from_a_fifo_is_read() {
+fn input_from_a_fifo_is_refused_and_standard_input_still_streams() {
     let dir = tempfile::tempdir().expect("working folder");
     let fifo = dir.path().join("input.fifo");
     let made = std::process::Command::new("mkfifo")
@@ -166,18 +168,32 @@ fn input_from_a_fifo_is_read() {
         .status()
         .expect("run mkfifo");
     assert!(made.success(), "mkfifo failed");
-    // Opening a FIFO for writing waits for its reader, the CLI.
-    let writer = {
-        let fifo = fifo.clone();
-        std::thread::spawn(move || fs::write(fifo, "CCO"))
-    };
-    let output = cli(
+    fn convert(input: &str) -> [&str; 6] {
+        ["convert", input, "--from", "smiles", "-o", "e.mol"]
+    }
+    let refused = headless::run_cli(
         dir.path(),
-        &["convert", "input.fifo", "--from", "smiles", "-o", "e.mol"],
+        &convert("input.fifo"),
+        b"",
+        Duration::from_secs(20),
     );
-    // A failed run may leave the writer waiting; it is left behind.
-    assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
-    writer.join().expect("writer").expect("write the FIFO");
+    assert_eq!(refused.status.code(), Some(1), "{}", text(&refused.stderr));
+    assert!(
+        text(&refused.stderr)
+            .contains("cannot read input.fifo: not a regular file; use - to read standard input"),
+        "{}",
+        text(&refused.stderr)
+    );
+    assert!(!dir.path().join("e.mol").exists());
+    // A folder is refused the same way.
+    let folder = cli(dir.path(), &convert("."));
+    assert!(
+        text(&folder.stderr).contains("not a regular file"),
+        "{}",
+        text(&folder.stderr)
+    );
+    let piped = headless::run_cli(dir.path(), &convert("-"), b"CCO", CONVERT);
+    assert_eq!(piped.status.code(), Some(0), "{}", text(&piped.stderr));
     let molfile = fs::read(dir.path().join("e.mol")).expect("e.mol");
     assert!(text(&molfile).contains("M  END"), "{}", text(&molfile));
 }

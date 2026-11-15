@@ -255,9 +255,7 @@ pub fn read_native(
     if text.len() > 16 * 1024 * 1024 || parts.len() > MAX_ATOMS {
         return Err(Error::Limit);
     }
-    if super::xml_guard::has_entity_declaration(text) {
-        return Err(Error::Invalid("DTD entities are unsupported".into()));
-    }
+    super::xml_guard::check(text).map_err(|refused| Error::Invalid(refused.to_string()))?;
     let document = roxmltree::Document::parse_with_options(
         text,
         roxmltree::ParsingOptions {

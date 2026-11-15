@@ -381,7 +381,7 @@ command, option, output and exit code.
 ## Protocol revisions
 
 The server accepts the three MCP revisions below. Automated tests pin each
-one; see the [acceptance record](agent-api-p1-validation.md#g1-protocol-interop).
+one; see the [acceptance record](changes/agent-api-p1-validation.md#g1-protocol-interop).
 
 | Revision   | How it is negotiated                      | Notes                                                                                                                                                                                        |
 | ---------- | ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -418,7 +418,7 @@ The label is removed only when all of these hold:
 
 1. The owner signs off on the tool and result schemas.
 2. One stable release includes the API with
-   [acceptance gates G1-G8](agent-api-p1-validation.md) passing.
+   [acceptance gates G1-G8](changes/agent-api-p1-validation.md) passing.
 3. No breaking change has been made for a number of consecutive Nightly
    weeks that the owner sets at that sign-off.
 
@@ -426,7 +426,7 @@ The label is removed only when all of these hold:
 
 Each client is checked by hand with its snippet from
 [Connect AI agents](https://reshiki.com/guide/agents/#3-connect-your-client).
-The [P1 acceptance record](agent-api-p1-validation.md#g1-protocol-interop)
+The [P1 acceptance record](changes/agent-api-p1-validation.md#g1-protocol-interop)
 holds the evidence of each check: the client version, the MCP revision
 observed, the tools listed, a rendered image, a render cancelled from the
 client, and saves inside and outside the granted folder, with dates.
