@@ -714,15 +714,16 @@ async fn compact_menu_pins_delete_with_keyboard_and_accessibility_order() {
     assert_eq!(copy_viewport, body, "Copy scrolls with the body");
     let (before, _, _) = ui.inspect(&app, 0, properties);
     let (pinned, _, _) = ui.inspect(&app, 0, delete);
-    // Moving the pointer ends keyboard navigation, which otherwise keeps the
-    // focused row in view.
-    ui.hover(&mut app, body.center());
+    // Moving the pointer onto a row ends keyboard navigation, which otherwise
+    // keeps the focused row in view. A separator would not end it.
+    let pointer = ui.inspect(&app, 0, first).0.center();
+    ui.hover(&mut app, pointer);
     ui.event(
         &mut app,
         Event::Mouse(mouse::Event::WheelScrolled {
             delta: mouse::ScrollDelta::Lines { x: 0., y: -30. },
         }),
-        mouse::Cursor::Available(body.center()),
+        mouse::Cursor::Available(pointer),
     );
     let (after, _, _) = ui.inspect(&app, 0, properties);
     assert!(after.y < before.y, "The body scrolls");
