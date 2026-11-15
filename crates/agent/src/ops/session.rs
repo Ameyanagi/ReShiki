@@ -220,17 +220,6 @@ impl SessionStore {
         store
     }
 
-    fn check_objects(&self, doc: &Document) -> Result<(), OpError> {
-        let count = objects(doc);
-        if count > self.budgets.max_objects {
-            return Err(budget(format!(
-                "The drawing has {count} objects; the limit is {}",
-                self.budgets.max_objects
-            )));
-        }
-        Ok(())
-    }
-
     fn check_weight(&self, weight: u64) -> Result<(), OpError> {
         if weight > self.budgets.max_session_weight {
             return Err(budget(format!(
@@ -269,7 +258,7 @@ impl SessionStore {
         doc: &Document,
         frame: &Document,
     ) -> Result<(), OpError> {
-        self.check_objects(doc)?;
+        self.budgets.check_objects(doc)?;
         let undo_len = entry.history.undo_frames().len();
         let dropped = usize::from(undo_len.saturating_add(1) > entry.history.limit());
         let kept = || entry.history.undo_frames().skip(dropped);
@@ -405,7 +394,7 @@ impl Documents for SessionStore {
                 "At most {max} session documents can be open; close one with document_close"
             )));
         }
-        self.check_objects(&doc)?;
+        self.budgets.check_objects(&doc)?;
         let weight = cost(&doc);
         self.check_weight(store.weight(who, None).saturating_add(weight))?;
         self.check_pictures(

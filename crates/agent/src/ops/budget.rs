@@ -1,5 +1,6 @@
 //! Resource budgets for the operation API and the document cost helpers they
 //! are measured with.
+use super::error::{ErrorKind, OpError};
 use crate::{
     canvas_tools::{PREVIEW_HEIGHT, PREVIEW_WIDTH},
     document::Document,
@@ -157,6 +158,20 @@ impl Budgets {
                 > render.max_pixels
         {
             return Err("The default render size must be within the render limits".into());
+        }
+        Ok(())
+    }
+}
+
+impl Budgets {
+    /// [`ErrorKind::Budget`] when `doc` has more than `max_objects` objects.
+    pub(crate) fn check_objects(&self, doc: &Document) -> Result<(), OpError> {
+        let (count, limit) = (objects(doc), self.max_objects);
+        if count > limit {
+            return Err(OpError::new(
+                ErrorKind::Budget,
+                format!("The drawing has {count} objects; the limit is {limit}"),
+            ));
         }
         Ok(())
     }

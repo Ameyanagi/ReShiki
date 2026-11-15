@@ -198,6 +198,7 @@ pub(crate) async fn convert(
         Ok(doc) => doc,
         Err(rejection) => return Ok(ToolResult::rejected(rejection, messages, &versions)),
     };
+    budgets.check_objects(&doc)?;
     let mut warnings = warnings(messages);
     let analysis = analysis.map(AnalysisJson::from);
     match output {
