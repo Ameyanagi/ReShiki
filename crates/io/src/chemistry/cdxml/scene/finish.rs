@@ -320,6 +320,19 @@ impl CdxmlScene {
             .collect::<Result<_>>()?;
         document.groups = self.base.groups;
         document.ring_fills = self.base.ring_fills;
+        // Imported links show ReShiki's own lines at once, as after an edit.
+        document.property_captions = self.base.property_captions;
+        for link in &mut document.property_captions {
+            if let Some(caption) = document
+                .annotations
+                .iter()
+                .find(|a| a.id == link.annotation)
+            {
+                link.text = caption.text.clone();
+            }
+        }
+        let imported = document.clone();
+        crate::linked_properties::reconcile(document, &imported);
         document.abbreviations = self.base.abbreviations;
         if document
             .abbreviations

@@ -2,6 +2,7 @@
 mod circles;
 mod ellipses;
 mod finish;
+mod properties;
 mod ring_fills;
 #[cfg(test)]
 mod tests;
@@ -95,6 +96,8 @@ pub struct NativeScene {
     pub graphics: Vec<NativeGraphic>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub ring_fills: Vec<crate::ring_fills::RingFill>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub property_captions: Vec<crate::linked_properties::PropertyCaption>,
     pub groups: Vec<crate::grouping::Group>,
     pub abbreviations: Vec<crate::abbreviations::Abbreviation>,
 }
@@ -428,6 +431,8 @@ pub fn assemble_cdxml(prepared: &PreparedCdxml) -> Result<CdxmlScene> {
         objects.put(source, fill.atoms.clone())?;
         base.ring_fills.push(fill);
     }
+    base.property_captions =
+        properties::read(&nodes, &order, &tree, prepared, &association, &objects)?;
     graphic_objects(
         &filtered_source,
         prepared,
@@ -511,6 +516,7 @@ fn base_scene(prepared: &PreparedCdxml) -> NativeScene {
         atom_labels: Default::default(),
         graphics: Vec::new(),
         ring_fills: Vec::new(),
+        property_captions: Vec::new(),
         groups: Vec::new(),
         abbreviations: Vec::new(),
     }
