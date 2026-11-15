@@ -173,6 +173,7 @@ async fn oversized_picture_payload_is_omitted_from_all_formats_with_one_notice()
                 image_only,
                 browser,
                 0,
+                Pictures::default(),
             )
             .await
             .unwrap();
@@ -216,13 +217,84 @@ async fn oversized_picture_payload_is_omitted_from_all_formats_with_one_notice()
     }
 }
 
+/// With the editable drawing off, Copy and Copy image put no drawing in their
+/// pictures, but ReShiki's own clipboard data still carries it on the desktop.
+/// The browser's only place for it is the HTML picture, so it has none. The
+/// pictures take the chosen background, and the PNG the chosen resolution.
+#[tokio::test]
+async fn pictures_follow_the_editable_drawing_switch_and_background() {
+    let mut source = Document::default();
+    source.add_atom("O", Default::default());
+    let pictures = Pictures {
+        background: export::Background::Color([255; 3]),
+        dpi: 300,
+        editable: false,
+    };
+
+    for browser in [false, true] {
+        for image_only in [false, true] {
+            let (outcome, representations) = prepare_copy_with_limit(
+                LocalEngine::in_process(),
+                source.clone(),
+                image_only,
+                browser,
+                payload::EMBED_LIMIT,
+                pictures,
+            )
+            .await
+            .unwrap();
+            assert!(
+                !outcome.notices.iter().any(|n| n.contains("too large")),
+                "{:?}",
+                outcome.notices
+            );
+            let mut count = 0;
+            for picture in &representations {
+                if matches!(
+                    picture.kind.as_str(),
+                    "public.png" | "public.svg-image" | "com.adobe.pdf"
+                ) {
+                    assert!(payload::read(&picture.bytes().unwrap()).is_none());
+                    count += 1;
+                }
+                if picture.kind == "public.png" {
+                    let bytes = picture.bytes().unwrap();
+                    let raster = image::load_from_memory(&bytes).unwrap().into_rgba8();
+                    assert_eq!(raster.get_pixel(0, 0).0, [255, 255, 255, 255]);
+                    let reader = png::Decoder::new(std::io::Cursor::new(&bytes))
+                        .read_info()
+                        .unwrap();
+                    let dims = reader.info().pixel_dims.unwrap();
+                    assert_eq!(dims.xppu, (300. / 0.0254_f64).round() as u32);
+                }
+            }
+            assert_eq!(count, if browser { 2 } else { 3 });
+            let native = representations.iter().find(|item| item.kind == NATIVE);
+            if browser {
+                assert!(native.is_none());
+                for (_, data) in browser::web_items(&representations).unwrap() {
+                    assert!(!String::from_utf8_lossy(&data).contains("data-reshiki"));
+                }
+                continue;
+            }
+            assert_eq!(
+                Document::from_json(&native.unwrap().bytes().unwrap())
+                    .unwrap()
+                    .all_ids(),
+                source.all_ids(),
+                "ReShiki-to-ReShiki paste keeps the drawing"
+            );
+        }
+    }
+}
+
 #[tokio::test]
 async fn vector_only_paste_restores_the_drawing_and_paste_picture_refuses_it() {
     let mut source = Document::default();
     source.add_atom("O", Default::default());
     let envelope = payload::encode(&source).unwrap();
     for (format, kind) in [("pdf", "com.adobe.pdf"), ("svg", "public.svg-image")] {
-        let bytes = clipboard_figure(&source, format, Some(&envelope))
+        let bytes = clipboard_figure(&source, format, Pictures::default(), Some(&envelope))
             .unwrap()
             .bytes;
         let item = Representation::new(kind, &bytes);
@@ -271,7 +343,9 @@ async fn an_office_copy_back_restores_the_drawing_from_its_vector_picture() {
     let office_png = export::clipboard_png(&source).unwrap();
     for (format, kind) in [("pdf", "com.adobe.pdf"), ("svg", "public.svg-image")] {
         for drawing in [Some(envelope.as_slice()), None] {
-            let vector = clipboard_figure(&source, format, drawing).unwrap().bytes;
+            let vector = clipboard_figure(&source, format, Pictures::default(), drawing)
+                .unwrap()
+                .bytes;
             let pasted = paste_packet_with_warnings(
                 LocalEngine::in_process(),
                 Packet {
@@ -297,7 +371,9 @@ async fn vector_paste_distinguishes_unreadable_drawings_from_plain_pictures() {
     source.add_atom("O", Default::default());
     for (format, kind) in [("pdf", "com.adobe.pdf"), ("svg", "public.svg-image")] {
         for drawing in [None, Some(b"invalid".as_slice())] {
-            let bytes = clipboard_figure(&source, format, drawing).unwrap().bytes;
+            let bytes = clipboard_figure(&source, format, Pictures::default(), drawing)
+                .unwrap()
+                .bytes;
             let error = import_representation(
                 LocalEngine::in_process(),
                 Representation::new(kind, &bytes),
@@ -1270,7 +1346,14 @@ async fn copy_image_retains_the_drawing_and_raster_paste_keeps_the_picture() {
     ))
     .unwrap();
     let envelope = payload::encode(&doc).unwrap();
-    let images = copy_images_with_drawing(&doc, true, false, Some(&envelope));
+    let images = copy_images_with_drawing(
+        &doc,
+        true,
+        false,
+        Pictures::default(),
+        Some(&envelope),
+        true,
+    );
     let svg = images
         .iter()
         .find(|(format, _)| *format == "svg")
@@ -1475,9 +1558,14 @@ async fn platform_packets_prefer_chemical_text_over_pictures_and_skip_other_text
         "../../tests/fixtures/ui-drawn-ethanol.reshiki"
     ))
     .unwrap();
-    let mol = prepare_as(Default::default(), source.clone(), CopyFormat::Mol)
-        .await
-        .unwrap();
+    let mol = prepare_as(
+        Default::default(),
+        source.clone(),
+        CopyFormat::Mol,
+        Default::default(),
+    )
+    .await
+    .unwrap();
     let mol_text = mol.text().unwrap();
     let png = paste_test_picture("public.png", image::ImageFormat::Png);
     let tiff = paste_test_picture("public.tiff", image::ImageFormat::Tiff);
@@ -1589,9 +1677,14 @@ async fn failed_native_cdx_and_cdxml_fall_through_and_newer_drawing_error_is_ret
         "../../tests/fixtures/ui-drawn-ethanol.reshiki"
     ))
     .unwrap();
-    let mol = prepare_as(Default::default(), source.clone(), CopyFormat::Mol)
-        .await
-        .unwrap();
+    let mol = prepare_as(
+        Default::default(),
+        source.clone(),
+        CopyFormat::Mol,
+        Default::default(),
+    )
+    .await
+    .unwrap();
     let mol = Representation::new("com.mdli.molfile", mol.text().unwrap().as_bytes());
     source.bonds[0].a = u64::MAX;
     let invalid_native = Representation::new(NATIVE, &serde_json::to_vec(&source).unwrap());

@@ -21,7 +21,7 @@ pub enum Action {
 
 /// Entering a drawing mode explicitly hands Enter/Space ownership back from
 /// its opener button or an inspector field to the application's key router.
-struct ReleaseFocus;
+pub(super) struct ReleaseFocus;
 impl<T: 'static> Operation<T> for ReleaseFocus {
     fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation<T>)) {
         operate(self);
@@ -142,6 +142,7 @@ impl App {
 
     fn keyboard_drawing_blocked(&self) -> bool {
         self.help_open
+            || self.settings.open
             || self.commands.open
             || self.updates.open
             || self.assistant.viewed_image.is_some()

@@ -10,6 +10,7 @@ explains how the crates and modules fit together.
 
 - `src/accessibility/button.rs`
 - `src/accessibility/editor.rs`: Native semantics attached to an app-owned, editable Iced text editor.
+- `src/accessibility/image.rs`: A picture that screen readers name.
 - `src/accessibility/inert.rs`: A drawn modal background keeps its state but receives no input or operations.
 - `src/accessibility/mod.rs`: Semantics and keyboard behavior attached to the controls that are drawn.
 - `src/accessibility/operations.rs`
@@ -140,6 +141,7 @@ explains how the crates and modules fit together.
 - `src/app/results.rs`: One exhaustive table of async completions, their owners and modal admissions.
 - `src/app/ring_edits.rs`: Ring tool settings and the selected ring's aromaticity.
 - `src/app/selection_edits.rs`: Selection, grouping, framing and arrangement commands.
+- `src/app/settings_page.rs`: Settings
 - `src/app/shortcut_examples.rs`: An editable, unbound copy of the bundled reference in a document tab.
 - `src/app/shortcuts.rs`
 - `src/app/star_prompt.rs`: The "Enjoying ReShiki?" toast, which asks once for a GitHub star after real use, and again at most once after a later feature release.

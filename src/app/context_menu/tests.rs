@@ -11,6 +11,7 @@ fn run_item(app: &mut App, page: Page, label: &str) -> Result<(), String> {
                 label: name,
                 action,
                 enabled: true,
+                ..
             } if name == label => Some(action),
             _ => None,
         })
@@ -298,6 +299,7 @@ fn atom_menu_groups_editing_naming_connecting_and_clipboard_commands() -> Result
             "—",
             "Cut",
             "Copy",
+            "Copy image on",
             "Copy as",
             "Paste",
             "Duplicate",
@@ -306,6 +308,10 @@ fn atom_menu_groups_editing_naming_connecting_and_clipboard_commands() -> Result
             "—",
             "Delete"
         ]
+        .into_iter()
+        // Copy image on needs a native clipboard, as Copy image does.
+        .filter(|label| *label != "Copy image on" || reshiki::clipboard::available())
+        .collect::<Vec<_>>()
     );
     // Join and Merge both stay, unavailable below their minimum selection.
     assert_eq!(
@@ -503,6 +509,7 @@ fn expansion_command(app: &App) -> Result<Action, String> {
                 label: "Expand generic structures",
                 action,
                 enabled: true,
+                ..
             } => Some(action),
             _ => None,
         })
@@ -554,6 +561,7 @@ fn expand_context_follows_grouped_graphics_and_generated_name_captions() -> Resu
                 label: "Expand generic structures",
                 enabled: true,
                 action: Action::Run(message),
+                ..
             } if matches!(message.as_ref(), Message::Generic(Generic::ExpandComponent(ids)) if *ids == [hit])
         )));
     }
@@ -702,6 +710,7 @@ async fn expand_pet_from_ring_bond_context_opens_complete_product() {
                 label: "Expand generic structures",
                 action,
                 enabled: true,
+                ..
             } => Some(action),
             _ => None,
         })
@@ -770,6 +779,7 @@ async fn expand_context_uses_clicked_molecule_when_selection_contains_another_mo
                 label: "Expand generic structures",
                 action,
                 enabled: true,
+                ..
             } => Some(action),
             _ => None,
         })
@@ -828,7 +838,7 @@ fn chemical_name_menu_uses_clicked_component_and_switches_between_show_and_hide(
         hit: vec![first[0]],
     });
     assert!(app.context_entries(Page::Main).iter().any(|entry| matches!(entry,
-        Entry::Item { label: "Show chemical name", enabled: true, action: Action::Run(message) }
+        Entry::Item { label: "Show chemical name", enabled: true, action: Action::Run(message), .. }
             if matches!(message.as_ref(), Message::Naming(super::super::naming::Action::ShowMoleculeName(atoms)) if *atoms == first)
     )));
     reshiki::molecule_names::show(
@@ -1129,10 +1139,14 @@ fn context_commands_follow_the_target_without_modifying_the_drawing() -> Result<
             "Undo",
             "Redo",
             "Paste",
+            "Copy image on",
             "Copy as",
             "Select all",
             "Fit drawing"
         ]
+        .into_iter()
+        .filter(|label| *label != "Copy image on" || reshiki::clipboard::available())
+        .collect::<Vec<_>>()
     );
     app.tab.selected = vec![atom];
     let single = labels(&app, Page::Main);
@@ -1483,4 +1497,119 @@ fn chemical_name_format_menu_targets_annotations_and_uses_document_history() {
     let _ = app.update(Message::Undo);
     assert_eq!(app.tab.doc, before);
     assert!(!app.tab.history.can_undo());
+}
+
+#[test]
+fn copy_image_on_lists_backgrounds_then_saved_colors_and_ticks_the_default() {
+    use crate::appearance::Background;
+    let (mut app, _) = App::new();
+    app.appearance.background_colors = vec![[30, 42, 68]];
+    app.appearance.copy_background = Background::Canvas;
+    // The submenu sits before Copy as, with or without a selection.
+    let main = labels(&app, Page::Main);
+    let at = main.iter().position(|label| *label == "Copy image on");
+    assert_eq!(
+        at.map(|at| main[at + 1]),
+        reshiki::clipboard::available().then_some("Copy as")
+    );
+    let entries = app.context_entries(Page::CopyImageOn);
+    let rows: Vec<_> = entries
+        .iter()
+        .filter_map(|entry| match entry {
+            Entry::Item { label, swatch, .. } => Some((shown(label, *swatch), *swatch)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        rows,
+        [
+            ("Transparent".into(), Some((Paper::Transparent, false))),
+            ("Canvas".into(), Some((Paper::Canvas, true))),
+            ("White".into(), Some((Paper::Color([255; 3]), false))),
+            ("Black".into(), Some((Paper::Color([0; 3]), false))),
+            ("#1E2A44".into(), Some((Paper::Color([30, 42, 68]), false))),
+            ("Editable drawing".into(), None),
+            ("Change the default…".into(), None),
+        ]
+    );
+    // A pick copies on that background once; the default stays.
+    let Some(Entry::Item { action, .. }) = entries.get(2) else {
+        panic!("White row");
+    };
+    assert!(matches!(
+        action,
+        Action::Run(message) if matches!(**message, Message::CopyImageOn(Paper::Color([255, 255, 255]), true))
+    ));
+    app.context_menu = Some(State::new(Point::ORIGIN, Page::Main));
+    let _ = app.context_action(Action::Run(Box::new(Message::Settings(
+        crate::app::settings_page::Action::Open(Some(
+            crate::app::settings_page::Section::CopyExport,
+        )),
+    ))));
+    assert!(app.context_menu.is_none());
+    assert_eq!(app.appearance.copy_background, Background::Canvas);
+}
+
+/// Copy image on's Editable drawing row starts at the Settings default each
+/// time the menu opens, stays open when toggled, and changes only that copy.
+#[test]
+fn copy_image_on_editable_drawing_changes_one_copy_and_keeps_the_default() {
+    let (mut app, _) = App::new();
+    app.appearance.export_editable_drawing = false;
+    // Opened on its own: the main menu lists Copy image on only where a
+    // native clipboard is available, which a headless Linux session lacks.
+    let open = |app: &mut App| {
+        app.context_menu = Some(State::new(Point::ORIGIN, Page::CopyImageOn));
+    };
+    let row = |app: &App, find: fn(&Action) -> bool| {
+        app.context_entries(Page::CopyImageOn)
+            .iter()
+            .position(|entry| matches!(entry, Entry::Item { action, .. } if find(action)))
+            .expect("row")
+    };
+    let editable = |action: &Action| matches!(action, Action::Editable);
+    let background = |action: &Action| match action {
+        Action::Run(message) => matches!(**message, Message::CopyImageOn(..)),
+        _ => false,
+    };
+    // What each background row copies with: the same pictures dispatch uses.
+    let copies = |app: &App| {
+        app.context_entries(Page::CopyImageOn)
+            .into_iter()
+            .filter_map(|entry| match entry {
+                Entry::Item {
+                    action: Action::Run(message),
+                    ..
+                } => match *message {
+                    Message::CopyImageOn(paper, editable) => {
+                        Some(app.copy_pictures(Some((paper, editable))).editable)
+                    }
+                    _ => None,
+                },
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+    };
+    open(&mut app);
+    assert!(!app.copy_editable(), "starts at the default");
+    assert_eq!(copies(&app), [false; 4]);
+    let _ = app.context_action(Action::Activate(0, row(&app, editable)));
+    assert!(app.context_menu.is_some(), "the menu stays open");
+    assert!(app.copy_editable());
+    assert_eq!(copies(&app), [true; 4], "every background copies with it");
+    assert!(!app.appearance.export_editable_drawing, "the default stays");
+    // Picking a background copies once and closes the menu.
+    let _ = app.context_action(Action::Activate(0, row(&app, background)));
+    assert!(app.context_menu.is_none());
+    assert!(app.clipboard_working(), "the copy started");
+    assert!(!app.appearance.export_editable_drawing);
+    assert!(
+        !app.copy_pictures(None).editable,
+        "Copy, Copy image and Copy as follow the default"
+    );
+    open(&mut app);
+    assert!(
+        !app.copy_editable(),
+        "a new menu starts at the default again"
+    );
 }

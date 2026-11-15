@@ -76,7 +76,7 @@ const engineeringNotes = {
     "publication-pages",
     "ruviz-integration",
   ],
-  Platform: ["assistant", "assistant-benchmark", "framework-research"],
+  Platform: ["assistant", "assistant-benchmark", "framework-research", "settings"],
 };
 
 export default defineConfig({

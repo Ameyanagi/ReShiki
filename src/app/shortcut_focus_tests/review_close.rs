@@ -558,6 +558,118 @@ async fn review_close_returns_focus_failed_structure_insert_keeps_editor() {
     assert_canvas_delete(&mut ui, &mut app).await;
 }
 
+/// Settings opens on Command+, with its search field focused and keeps every
+/// key; Esc, Command+, and Done each return them to the drawing, also when
+/// a field had focus before Settings opened.
+#[tokio::test]
+#[ignore = "Opt-in renderer input check"]
+async fn settings_close_returns_focus_to_the_drawing() {
+    let mut ui = Ui::new().await;
+    for closing in ["Esc", "Command+,", "Done"] {
+        let mut app = drawing_app();
+        let drawing = app.tab.doc.clone();
+        let selected = app.tab.selected.clone();
+        open_import(&mut ui, &mut app).await;
+        let import = app.import_input_id();
+        let comma = || Key::Character(",".into());
+        ui.key(
+            &mut app,
+            comma(),
+            Code::Comma,
+            Modifiers::COMMAND,
+            Some(","),
+        )
+        .await;
+        assert!(app.settings.open, "{closing}");
+        assert!(ui.input(&app, "settings-search").1, "search has focus");
+        for (text, code) in [("g", Code::KeyG), ("u", Code::KeyU)] {
+            ui.key(
+                &mut app,
+                Key::Character(text.into()),
+                code,
+                Modifiers::empty(),
+                Some(text),
+            )
+            .await;
+        }
+        ui.key(
+            &mut app,
+            Key::Named(Named::Delete),
+            Code::Delete,
+            Modifiers::empty(),
+            None,
+        )
+        .await;
+        assert_eq!(ui.input_value(&app, "settings-search"), "gu");
+        assert_eq!(app.tab.doc, drawing, "keys stay in Settings");
+        match closing {
+            "Esc" => {
+                ui.key(
+                    &mut app,
+                    Key::Named(Named::Escape),
+                    Code::Escape,
+                    Modifiers::empty(),
+                    None,
+                )
+                .await
+            }
+            "Command+," => {
+                ui.key(
+                    &mut app,
+                    comma(),
+                    Code::Comma,
+                    Modifiers::COMMAND,
+                    Some(","),
+                )
+                .await
+            }
+            _ => click_running_tasks(&mut ui, &mut app, "settings-done").await,
+        }
+        assert!(!app.settings.open, "{closing}");
+        assert_eq!(app.tab.selected, selected);
+        assert!(!ui.input(&app, import).1, "{closing}");
+        assert_canvas_delete(&mut ui, &mut app).await;
+    }
+}
+
+/// A floating NMR panel stays under Settings: its controls leave keyboard
+/// traversal and a click on it reaches Settings, not the panel.
+#[tokio::test]
+#[ignore = "Opt-in renderer input check"]
+async fn settings_covers_a_floating_nmr_panel() {
+    let mut ui = Ui::new().await;
+    let mut app = drawing_app();
+    let _ = app.update(Message::Nmr(crate::app::nmr::Action::Open));
+    let labels = ui
+        .semantics(&app)
+        .nodes
+        .into_iter()
+        .find(|node| node.id == "nmr.labels")
+        .expect("the floating NMR panel");
+    let _ = app.update(Message::Settings(crate::app::settings_page::Action::Open(
+        None,
+    )));
+    assert!(
+        ui.semantics(&app)
+            .nodes
+            .iter()
+            .all(|node| !node.id.starts_with("nmr.")),
+        "NMR controls leave traversal"
+    );
+    let point = labels.bounds.center();
+    for event in [
+        mouse::Event::CursorMoved { position: point },
+        mouse::Event::ButtonPressed(mouse::Button::Left),
+        mouse::Event::ButtonReleased(mouse::Button::Left),
+    ] {
+        let (_, messages) = ui.event(&app, Event::Mouse(event), mouse::Cursor::Available(point));
+        assert!(
+            messages.iter().all(|m| !matches!(m, Message::Nmr(_))),
+            "{messages:?}"
+        );
+    }
+}
+
 #[tokio::test]
 #[ignore = "Opt-in renderer input check"]
 async fn review_close_returns_focus_check_findings() {

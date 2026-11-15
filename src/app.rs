@@ -94,6 +94,7 @@ mod ring_edits;
 #[cfg(test)]
 mod rotation_tests;
 mod selection_edits;
+mod settings_page;
 mod shortcut_examples;
 #[cfg(test)]
 mod shortcut_focus_tests;
@@ -223,6 +224,7 @@ pub enum Message {
     Naming(naming::Action),
     InsertInput,
     ToggleHelp,
+    Settings(settings_page::Action),
     Help(help::Action),
     Commands(command_palette::Action),
     OpenShortcutExamples,
@@ -275,11 +277,17 @@ pub enum Message {
     Open,
     Save,
     Export(&'static str),
+    /// Export the figure from the Export tab, with or without the editable
+    /// drawing.
+    ExportFigure(&'static str, bool),
     CopySmiles,
     CopyAnalysis,
     CopyChemicalText,
     Copy(bool),
     CopyImage,
+    /// Copy image on this background, with or without the editable drawing,
+    /// for this copy only.
+    CopyImageOn(reshiki::export::Background, bool),
     CopyAs(reshiki::clipboard::CopyFormat),
     CopyFrame(clipboard::FrameAction),
     CopyAsPrepared(
@@ -465,7 +473,11 @@ pub struct App {
     exit: autosave::Exit,
     inspector_open: bool,
     inspector_tab: InspectorTab,
+    /// The Export tab's Include editable drawing choice; `None` follows the
+    /// Settings default.
+    export_tab_editable: Option<bool>,
     help_open: bool,
+    settings: settings_page::State,
     help: help::State,
     commands: command_palette::State,
     viewport: iced::Size,
@@ -581,7 +593,9 @@ impl App {
             exit: autosave::Exit::default(),
             inspector_open: true,
             inspector_tab: InspectorTab::Properties,
+            export_tab_editable: None,
             help_open: false,
+            settings: settings_page::State::default(),
             help: help::State::default(),
             commands: command_palette::State::default(),
             viewport: iced::Size::new(850.0, 600.0),
@@ -999,6 +1013,7 @@ impl App {
         let mut task = self.handle(message);
         self.sync_drawing_panel_context();
         self.settle_deferred_label_layout();
+        task = Task::batch([task, self.render_png_preview()]);
         // Any message may change the drawing, some (previews, background
         // labels) without a new revision, so the next view compares afresh.
         self.tab.forget_unsaved();
@@ -1085,6 +1100,14 @@ impl App {
         if let Message::Accessibility(action) = message {
             return ControlFlow::Break(self.accessibility_action(action));
         }
+        let message = match message {
+            Message::Settings(
+                action @ (settings_page::Action::Preview(..) | settings_page::Action::CloseUps(..)),
+            ) => {
+                return ControlFlow::Break(self.settings_action(action));
+            }
+            message => message,
+        };
         if let Message::CopyFrame(action) = message {
             return ControlFlow::Break(self.copy_frame(action));
         }
@@ -1301,6 +1324,7 @@ impl App {
             || self.updates.open
             || self.assistant.viewed_image.is_some()
             || self.help_open
+            || self.settings.open
             || self.tab.atom_text.is_some()
             || self.palette.is_some();
         // The command palette's Tab cycles its filter, unless a dialog is over it.
@@ -1309,17 +1333,23 @@ impl App {
             && (!self.commands.open || self.updates.open || self.assistant.viewed_image.is_some());
         reshiki::accessibility::focus_scope_with(
             file_shortcuts::wrap(
-                // The command palette sits above the floating NMR panel so its
-                // modal also keeps that panel from taking clicks.
+                // The command palette and Settings sit above the floating NMR
+                // panel so their modals also keep that panel from taking clicks.
                 self.with_prompt(self.with_recovery_manager(self.with_updates(
-                    self.with_assistant_image(self.with_commands(self.with_nmr(
-                        self.with_atom_text(self.with_help(self.with_palette(self.workspace()))),
+                    self.with_assistant_image(self.with_settings(self.with_commands(
+                        self.with_nmr(
+                            self.with_atom_text(
+                                self.with_help(self.with_palette(self.workspace())),
+                            ),
+                        ),
                     ))),
                 ))),
                 if self.prompt.is_some() {
                     Some(prompt::modal_key)
                 } else if self.recovery_manager.open() {
                     Some(recovery_manager::modal_key)
+                } else if self.settings.open {
+                    Some(settings_page::modal_key)
                 } else if self.help_open {
                     Some(help::modal_key)
                 } else if self.commands.open {

@@ -5,6 +5,8 @@ use super::{App, InspectorTab, Message, inspector};
 use crate::canvas::Tool;
 use iced::widget::{button, column, container, rich_text, row, scrollable, text};
 use iced::{Border, Color, Element, Length, Point, Task, keyboard::key::Named};
+use reshiki::export::Background as Paper;
+use std::borrow::Cow;
 
 mod cascade;
 #[cfg(test)]
@@ -26,6 +28,8 @@ pub enum Page {
     Model,
     Attachments,
     CopyAs,
+    /// Copy image on a background for this copy only.
+    CopyImageOn,
     // Menus anchored under context row buttons.
     AlignObjects,
     Distribute,
@@ -40,6 +44,8 @@ mod tests;
 #[cfg(test)]
 mod view_parity_tests;
 const SHORTCUT_GAP: f32 = 12.;
+/// The tick and swatch before a background row's label.
+const SWATCH_WIDTH: f32 = 32.;
 const SCROLLBAR_WIDTH: f32 = 10.;
 const SCROLLBAR_GAP: f32 = 4.;
 
@@ -78,6 +84,8 @@ pub enum Action {
     FocusedKey(usize, usize, Named),
     Run(Box<Message>),
     Properties(bool),
+    /// Flip the Editable drawing choice of Copy image on; the menu stays open.
+    Editable,
 }
 pub(super) struct State {
     pub position: Point,
@@ -87,6 +95,8 @@ pub(super) struct State {
     children: Vec<Child>,
     focused: Option<(usize, usize)>,
     keyboard: bool,
+    /// Copy image on's Editable drawing choice; `None` follows the default.
+    editable: Option<bool>,
 }
 #[derive(Clone, Copy)]
 struct Child {
@@ -102,6 +112,7 @@ impl State {
             children: vec![],
             focused: None,
             keyboard: false,
+            editable: None,
         }
     }
 
@@ -120,9 +131,24 @@ enum Entry {
         label: &'static str,
         action: Action,
         enabled: bool,
+        /// A background swatch, and whether it is the Copy default.
+        swatch: Option<(Paper, bool)>,
     },
     Separator,
     Hint(&'static str),
+}
+/// Copy image on's check row.
+const EDITABLE: &str = "Editable drawing";
+/// Beside the check row while it differs from the Settings default.
+const NOT_DEFAULT: &str = "(not default)";
+/// The label of a saved color's row, which shows the color's code instead.
+const SAVED_COLOR: &str = "Saved color";
+/// The text a row shows: its label, or a saved color's code.
+fn shown(label: &'static str, swatch: Option<(Paper, bool)>) -> Cow<'static, str> {
+    match swatch {
+        Some((Paper::Color(rgb), _)) if label == SAVED_COLOR => reshiki::palette::hex(rgb).into(),
+        _ => label.into(),
+    }
 }
 impl Entry {
     fn command(label: &'static str, message: Message, enabled: bool) -> Self {
@@ -130,6 +156,7 @@ impl Entry {
             label,
             action: Action::Run(Box::new(message)),
             enabled,
+            swatch: None,
         }
     }
     fn page(label: &'static str, page: Page) -> Self {
@@ -137,6 +164,7 @@ impl Entry {
             label,
             action: Action::Page(page),
             enabled: true,
+            swatch: None,
         }
     }
 }
@@ -166,6 +194,10 @@ impl App {
                 command("Redo", Message::Redo, self.tab.history.can_redo()),
                 Separator,
                 command("Paste", Message::Paste, !self.tab.clipboard_busy),
+            ]
+            .into_iter()
+            .chain(self.copy_image_on_entry())
+            .chain([
                 submenu("Copy as", Page::CopyAs),
                 command(
                     "Select all",
@@ -174,9 +206,11 @@ impl App {
                 ),
                 Separator,
                 command("Fit drawing", Message::Fit, true),
-            ],
+            ])
+            .collect(),
             Page::Main => self.main_entries(atoms, bonds, tilt),
             Page::CopyAs => self.copy_as_entries(),
+            Page::CopyImageOn => self.copy_image_on_entries(),
             Page::Tilt => vec![
                 Hint("3D tilt · selected objects"),
                 command("Drag to tilt", Message::Tool(Tool::Tilt), tilt),
@@ -261,17 +295,23 @@ impl App {
             } else {
                 vec![]
             },
-            vec![
+            [
                 command("Cut", Message::Copy(true), true),
                 command("Copy", Message::Copy(false), true),
+            ]
+            .into_iter()
+            .chain(self.copy_image_on_entry())
+            .chain([
                 Entry::page("Copy as", Page::CopyAs),
                 command("Paste", Message::Paste, !self.tab.clipboard_busy),
                 command("Duplicate", Message::Duplicate, true),
-            ],
+            ])
+            .collect(),
             vec![Entry::Item {
                 label: "Properties…",
                 action: Action::Properties(false),
                 enabled: true,
+                swatch: None,
             }],
             vec![command("Delete", Message::Delete, true)],
         ]
@@ -588,6 +628,76 @@ impl App {
         )]
     }
 
+    /// Copy image on ›, where a native clipboard can hold pictures.
+    fn copy_image_on_entry(&self) -> Option<Entry> {
+        reshiki::clipboard::available().then(|| Entry::page("Copy image on", Page::CopyImageOn))
+    }
+
+    /// Whether this Copy image on includes the editable drawing.
+    fn copy_editable(&self) -> bool {
+        self.context_menu
+            .as_ref()
+            .and_then(|menu| menu.editable)
+            .unwrap_or(self.appearance.export_editable_drawing)
+    }
+
+    /// The backgrounds and saved colors for one Copy image; a tick marks the
+    /// Copy default. Then whether it includes the editable drawing, and a row
+    /// that opens Settings to change the defaults.
+    fn copy_image_on_entries(&self) -> Vec<Entry> {
+        use crate::appearance::Background;
+        let appearance = &self.appearance;
+        let default = appearance
+            .copy_background
+            .paper(appearance.custom_background);
+        let enabled = !self.clipboard_working();
+        let editable = self.copy_editable();
+        let item = |label: &'static str, paper: Paper| Entry::Item {
+            label,
+            action: Action::Run(Box::new(Message::CopyImageOn(paper, editable))),
+            enabled,
+            swatch: Some((paper, paper == default)),
+        };
+        let mut entries: Vec<_> = [
+            Background::Transparent,
+            Background::Canvas,
+            Background::White,
+            Background::Black,
+        ]
+        .into_iter()
+        .map(|background| {
+            item(
+                background.label(),
+                background.paper(appearance.custom_background),
+            )
+        })
+        .collect();
+        if !appearance.background_colors.is_empty() {
+            entries.push(Entry::Separator);
+            entries.extend(
+                appearance
+                    .background_colors
+                    .iter()
+                    .map(|&rgb| item(SAVED_COLOR, Paper::Color(rgb))),
+            );
+        }
+        entries.push(Entry::Separator);
+        entries.push(Entry::Item {
+            label: EDITABLE,
+            action: Action::Editable,
+            enabled,
+            swatch: None,
+        });
+        entries.push(Entry::command(
+            "Change the default…",
+            Message::Settings(super::settings_page::Action::Open(Some(
+                super::settings_page::Section::CopyExport,
+            ))),
+            true,
+        ));
+        entries
+    }
+
     fn copy_as_entries(&self) -> Vec<Entry> {
         use Entry::{Hint, Separator};
         let command = Entry::command;
@@ -770,6 +880,7 @@ impl App {
                 label: first.unavailable(),
                 action: Action::Close,
                 enabled: false,
+                swatch: None,
             }];
         }
         groups
@@ -860,6 +971,12 @@ impl App {
             Action::Run(message) => {
                 self.context_menu = None;
                 return self.update(*message);
+            }
+            Action::Editable => {
+                let editable = !self.copy_editable();
+                if let Some(menu) = &mut self.context_menu {
+                    menu.editable = Some(editable);
+                }
             }
             Action::Properties(molecular) => {
                 self.context_menu = None;
@@ -1016,8 +1133,22 @@ impl App {
             .context_entries(page)
             .iter()
             .filter_map(|entry| match entry {
-                Entry::Item { label, action, .. } => Some(
-                    text_width(label, 12.)
+                Entry::Item {
+                    label,
+                    action,
+                    swatch,
+                    ..
+                } => Some(
+                    text_width(&shown(label, *swatch), 12.)
+                        + match (swatch, action) {
+                            (Some(_), _) => {
+                                SWATCH_WIDTH + SHORTCUT_GAP + text_width("Default", 11.)
+                            }
+                            (None, Action::Editable) => {
+                                SWATCH_WIDTH + SHORTCUT_GAP + text_width(NOT_DEFAULT, 11.)
+                            }
+                            _ => 0.,
+                        }
                         + if matches!(action, Action::Page(_)) {
                             24.
                         } else {
@@ -1073,8 +1204,22 @@ impl App {
                     label,
                     action,
                     enabled,
+                    swatch,
                 } => {
                     let destructive = matches!(&action, Action::Run(message) if matches!(message.as_ref(), Message::Delete));
+                    let label = shown(label, swatch);
+                    // Copy image on's check row: on, and whether that is the default.
+                    let check = matches!(action, Action::Editable).then(|| {
+                        let on = self.copy_editable();
+                        (on, on == self.appearance.export_editable_drawing)
+                    });
+                    let accessible_name = match swatch {
+                        Some((_, true)) => format!("{label} (default)"),
+                        _ if check.is_some_and(|(_, default)| !default) => {
+                            format!("{label} {NOT_DEFAULT}")
+                        }
+                        _ => label.to_string(),
+                    };
                     let hint = matches!(&action, Action::Run(message) if matches!(
                         message.as_ref(),
                         Message::Graphics(super::graphics::Action::Cleanup(
@@ -1082,16 +1227,41 @@ impl App {
                         ))
                     ))
                     .then_some(super::graphics::SYMMETRISE_HINT);
-                    let name = label;
                     let label = text(label).size(12).width(Length::Fill);
                     let label = if destructive {
                         label.style(crate::appearance::text_color(Color::from_rgb8(167, 59, 51)))
                     } else {
                         label
                     };
-                    let mut content = row![label]
+                    let mut content = row![]
                         .spacing(SHORTCUT_GAP)
                         .align_y(iced::Alignment::Center);
+                    if let Some((paper, default)) = swatch {
+                        content = content.push(
+                            row![
+                                text(if default { "✓" } else { "" }).size(12).width(12),
+                                super::settings_page::swatch(paper, 14., 12.),
+                            ]
+                            .spacing(6)
+                            .align_y(iced::Alignment::Center),
+                        );
+                    }
+                    if let Some((on, _)) = check {
+                        content = content
+                            .push(text(if on { "✓" } else { "" }).size(12).width(SWATCH_WIDTH));
+                    }
+                    content = content.push(label);
+                    if swatch.is_some_and(|(_, default)| default) {
+                        content = content
+                            .push(text("Default").size(11).style(super::workspace::muted_text));
+                    }
+                    if check.is_some_and(|(_, default)| !default) {
+                        content = content.push(
+                            text(NOT_DEFAULT)
+                                .size(11)
+                                .style(super::workspace::muted_text),
+                        );
+                    }
                     if matches!(action, Action::Page(_)) {
                         content = content.push(text("›").size(16));
                     } else if let Some(keys) = shortcut(&action) {
@@ -1112,7 +1282,7 @@ impl App {
                     }
                     let pointer = !menu.keyboard;
                     let id = item_id(page, index, &action);
-                    let item = reshiki::accessibility::button(id, name, content)
+                    let item = reshiki::accessibility::button(id, accessible_name, content)
                         .padding([6, 10])
                         .width(Length::Fill)
                         .style(move |theme: &iced::Theme, status| {
@@ -1137,6 +1307,10 @@ impl App {
                         .on_press_maybe(
                             enabled.then_some(Message::ContextMenu(Action::Activate(level, index))),
                         );
+                    let item = match check {
+                        Some((on, _)) => item.checked(on),
+                        None => item,
+                    };
                     items.push(index);
                     let item: Element<'_, Message> = if let Some(hint) = hint {
                         super::workspace::hover_hint(

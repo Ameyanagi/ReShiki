@@ -1,7 +1,7 @@
 //! The browser's clipboard. A page may write only text/plain, text/html,
 //! image/png and, in Chromium, image/svg+xml, and read the same back, so PDF
 //! and CDX stay with the desktop app. The editable drawing travels in the
-//! HTML flavor's picture, which other apps show as a plain image.
+//! HTML flavor's PNG or SVG picture, which other apps show as a plain image.
 use super::{NATIVE, Representation};
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 
@@ -19,16 +19,23 @@ pub(super) fn web_items(
             .transpose()
     };
     let mut items = Vec::new();
+    let drawing = find(NATIVE)?;
+    let svg = find("public.svg-image")?;
     if let Some(png) = find("public.png")? {
         items.push((
             "text/html",
-            html(&png, find(NATIVE)?.as_deref()).into_bytes(),
+            html("image/png", &png, drawing.as_deref()).into_bytes(),
         ));
         items.push(("image/png", png));
+    } else if let (Some(svg), Some(_)) = (&svg, &drawing) {
+        items.push((
+            "text/html",
+            html("image/svg+xml", svg, drawing.as_deref()).into_bytes(),
+        ));
     } else if let Some(html) = find("public.html")? {
         items.push(("text/html", html));
     }
-    if let Some(svg) = find("public.svg-image")? {
+    if let Some(svg) = svg {
         items.push(("image/svg+xml", svg));
     }
     if let Some(text) = find("public.utf8-plain-text")? {
@@ -37,10 +44,10 @@ pub(super) fn web_items(
     Ok(items)
 }
 
-/// A picture for rich-text apps, sized by its resolution, that carries the
-/// drawing for ReShiki.
-fn html(png: &[u8], drawing: Option<&[u8]>) -> String {
-    let size = png::Decoder::new(std::io::Cursor::new(png))
+/// A picture for rich-text apps that carries the drawing for ReShiki. A PNG
+/// is sized by its resolution; an SVG has its own size.
+fn html(mime: &str, picture: &[u8], drawing: Option<&[u8]>) -> String {
+    let size = png::Decoder::new(std::io::Cursor::new(picture))
         .read_info()
         .ok()
         .and_then(|reader| {
@@ -63,8 +70,8 @@ fn html(png: &[u8], drawing: Option<&[u8]>) -> String {
         .map(|drawing| format!(r#" {ATTRIBUTE}="{}""#, STANDARD.encode(drawing)))
         .unwrap_or_default();
     format!(
-        r#"<img src="data:image/png;base64,{}" alt="Chemical drawing"{size}{data}>"#,
-        STANDARD.encode(png)
+        r#"<img src="data:{mime};base64,{}" alt="Chemical drawing"{size}{data}>"#,
+        STANDARD.encode(picture)
     )
 }
 

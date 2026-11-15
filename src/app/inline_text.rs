@@ -830,8 +830,10 @@ pub(super) fn commits_draft(message: &Message) -> bool {
             | Message::SaveAs
             | Message::Close(_)
             | Message::Export(_)
+            | Message::ExportFigure(..)
             | Message::Copy(_)
             | Message::CopyImage
+            | Message::CopyImageOn(..)
             | Message::CopyAs(_)
             | Message::CopySmiles
             | Message::CopyAnalysis

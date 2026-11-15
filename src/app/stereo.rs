@@ -156,10 +156,7 @@ impl App {
                     if enabled { "on" } else { "off" }
                 );
                 self.error = false;
-                if let Err(error) = self.appearance.save() {
-                    self.status = format!("Could not save IUPAC style notes preference: {error}");
-                    self.error = true;
-                }
+                self.save_preference(super::settings_page::Section::Names, "IUPAC style notes");
             }
         }
     }

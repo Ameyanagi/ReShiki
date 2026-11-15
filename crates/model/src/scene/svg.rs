@@ -9,7 +9,11 @@ fn escape(s: &str) -> String {
         .replace('"', "&quot;")
 }
 
-pub(super) fn render_svg(doc: &Document, drawing: Vec<Primitive>, background: bool) -> String {
+pub(super) fn render_svg(
+    doc: &Document,
+    drawing: Vec<Primitive>,
+    paper: Option<[u8; 3]>,
+) -> String {
     let (lo, hi) = bounds(&drawing);
     let mut s = format!(
         "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"{} {} {} {}\" width=\"{}pt\" height=\"{}pt\">\n",
@@ -21,8 +25,7 @@ pub(super) fn render_svg(doc: &Document, drawing: Vec<Primitive>, background: bo
         (hi.y - lo.y) * STYLE.points_per_world()
     );
     let theme = doc.canvas_theme;
-    if background {
-        let [r, g, b] = theme.background();
+    if let Some([r, g, b]) = paper {
         s.push_str(&format!(
             "<rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" fill=\"rgb({r},{g},{b})\"/>\n",
             lo.x,
@@ -33,7 +36,7 @@ pub(super) fn render_svg(doc: &Document, drawing: Vec<Primitive>, background: bo
     }
     let frame = Frame {
         theme,
-        paper: background.then(|| theme.background()),
+        paper,
         lo,
         hi,
         gradients: Default::default(),

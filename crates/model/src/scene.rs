@@ -3457,12 +3457,11 @@ pub fn bounds(drawing: &[Primitive]) -> (Point, Point) {
 }
 /// The themed drawing with a transparent surround, for compositing and geometry checks.
 pub fn svg(doc: &Document) -> String {
-    svg_of(doc, primitives(doc), false)
+    svg_of(doc, primitives(doc), None)
 }
-/// [`svg`], or [`svg_with_background`] with `background`, from the
-/// [`primitives`] of `doc` when they are already made.
-pub fn svg_of(doc: &Document, drawing: Vec<Primitive>, background: bool) -> String {
-    svg::render_svg(doc, drawing, background)
+/// [`svg_on`] from the [`primitives`] of `doc` when they are already made.
+pub fn svg_of(doc: &Document, drawing: Vec<Primitive>, paper: Option<[u8; 3]>) -> String {
+    svg::render_svg(doc, drawing, paper)
 }
 /// Part of a scene alone over `lo..hi`, for rasterizing it the way figure
 /// export does: the canvas paints 3D models this way.
@@ -3471,7 +3470,11 @@ pub fn svg_part(drawing: &[Primitive], lo: Point, hi: Point) -> String {
 }
 /// A figure carries the canvas background when exported or copied.
 pub fn svg_with_background(doc: &Document) -> String {
-    svg_of(doc, primitives(doc), true)
+    svg_of(doc, primitives(doc), Some(doc.canvas_theme.background()))
+}
+/// The drawing on `paper`, or with a transparent surround for `None`.
+pub fn svg_on(doc: &Document, paper: Option<[u8; 3]>) -> String {
+    svg_of(doc, primitives(doc), paper)
 }
 
 #[cfg(test)]

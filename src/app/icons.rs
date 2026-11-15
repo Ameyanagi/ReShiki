@@ -32,6 +32,7 @@ pub(super) enum Icon {
     Export,
     Inspector,
     Keyboard,
+    Settings,
     More,
     Lock(bool),
     ModelStyle(reshiki::models3d::Style),
@@ -66,6 +67,7 @@ impl Glyph {
             Icon::Moon => chrome::moon(f, ink),
 
             Icon::Keyboard => chrome::keyboard(f, ink),
+            Icon::Settings => chrome::gear(f, ink),
             Icon::Tool(Tool::Chain(mode)) => tools::chain(f, ink, mode),
             Icon::Tool(Tool::Graphic(kind)) => tools::graphic(f, ink, kind),
             Icon::Tool(Tool::EditPoints) => tools::edit_points(f, ink),

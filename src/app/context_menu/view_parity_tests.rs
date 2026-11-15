@@ -183,6 +183,7 @@ fn dump(app: &App, out: &mut String) {
                     label,
                     action,
                     enabled,
+                    ..
                 } => writeln!(
                     out,
                     "Item|{label}|{action:?}|{enabled}|{:?}",

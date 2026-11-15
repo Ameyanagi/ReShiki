@@ -216,7 +216,7 @@ pub(super) struct State {
     preview: Option<Preview>,
     smiles: String,
     acknowledged: bool,
-    structure: Option<(Ticket, Record)>,
+    pub(super) structure: Option<(Ticket, Record)>,
     /// The atoms Generate named, and their parent locants once named.
     structure_atoms: Vec<u64>,
     structure_locants: HashMap<u64, String>,
@@ -641,11 +641,10 @@ impl App {
             Action::WriteUnknownStereo(enabled) => {
                 self.appearance.write_unknown_stereo = enabled;
                 self.tab.naming.structure = None;
-                if let Err(error) = self.appearance.save() {
-                    self.status =
-                        format!("Could not save unknown configuration preference: {error}");
-                    self.error = true;
-                }
+                self.save_preference(
+                    super::settings_page::Section::Names,
+                    "unknown configuration",
+                );
             }
             Action::Generate => {
                 if self.tab.naming.pending.is_some() {
@@ -807,6 +806,12 @@ impl App {
             && self.tab.atom_text.is_none()
             && self.tab.joining.is_none()
             && self.tab.optimization.is_none()
+    }
+
+    /// No naming request is running. A running one keeps the preferences it
+    /// started with, so they wait for it.
+    pub(super) fn naming_idle(&self) -> bool {
+        self.tab.naming.pending.is_none()
     }
 
     pub(super) fn naming_can_show_molecule(&self) -> bool {

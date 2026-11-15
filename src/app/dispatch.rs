@@ -134,7 +134,11 @@ impl App {
             Message::ArrowLabelGap(action) => self.arrow_label_gap_action(action),
             Message::CustomElement(s) => self.custom_element = s,
             Message::ApplyElement => self.apply_custom_element(),
-            Message::CopyImage => return Some(self.copy_native(false, true)),
+            Message::CopyImage => return Some(self.copy_native(false, true, None)),
+            Message::CopyImageOn(background, editable) => {
+                return Some(self.copy_native(false, true, Some((background, editable))));
+            }
+            Message::Settings(action) => return Some(self.settings_action(action)),
             Message::CopyAs(format) => return Some(self.copy_as(format)),
             Message::Copy(cut) => return Some(self.copy_selection(cut)),
             Message::PastePicture => return Some(self.paste_native(true)),
@@ -232,6 +236,9 @@ impl App {
             Message::Save => return Some(self.save_drawing(false)),
             Message::SaveAs => return Some(self.save_drawing(true)),
             Message::Export(format) => return Some(self.export_drawing(format)),
+            Message::ExportFigure(format, editable) => {
+                return Some(self.export_figure(format, false, editable));
+            }
             Message::FigureExported(result) => self.figure_exported(result),
             message @ (Message::EngineDone { .. }
             | Message::EngineFinished { .. }

@@ -56,12 +56,13 @@ async fn main() -> anyhow::Result<()> {
             paged.page_layout = Some(reshiki::pages::Layout::around(&paged));
             fs::write(
                 dir.join("pages.pdf"),
-                export::pages_pdf(&paged).map_err(anyhow::Error::msg)?,
+                export::pages_pdf(&paged, export::Background::Canvas)
+                    .map_err(anyhow::Error::msg)?,
             )?;
         }
     }
     if std::env::args().any(|arg| arg == "--copy") {
-        let result = reshiki::clipboard::copy(Default::default(), doc, false)
+        let result = reshiki::clipboard::copy(Default::default(), doc, false, Default::default())
             .await
             .map_err(anyhow::Error::msg)?;
         anyhow::ensure!(

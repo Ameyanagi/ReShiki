@@ -335,6 +335,7 @@ bond and tool actions. Ring palette hover hints show one tool-selection key.
 | ------------------------- | --------------------------------------------------------------------------- |
 | ? / F1 / Cmd/Ctrl+Shift+/ | Searchable shortcut finder and editable examples                            |
 | :                         | Command palette: search for a command and run it                            |
+| Cmd/Ctrl+,                | Settings. Esc or Cmd/Ctrl+, closes them.                                    |
 | Cmd/Ctrl+N / O / S        | New / open, each in a new tab / save                                        |
 | Cmd/Ctrl+Shift+S          | Save as .rsk…                                                               |
 | Cmd/Ctrl+W                | Close tab                                                                   |
