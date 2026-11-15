@@ -1,7 +1,8 @@
 # Writing and terms
 
 These rules apply to the user guide (`website/src/content/docs/guide/`), the
-feature pages in `docs/*.md` and the release notes.
+feature pages in `docs/*.md` and the release notes. [App text](#app-text) adds
+the rules for the strings the app shows.
 
 ## Sentences
 
@@ -58,3 +59,47 @@ update every link in the same commit (`git grep` the anchor).
 | Reference align/stretch | exact reference geometry                                |
 | Coordinate in place     | coordination attachment, Coordinate…                    |
 | `.rsk` file             | native file, native format, ReShiki native              |
+
+## App text
+
+The labels, tooltips, hints and status messages in `src/` follow the same
+rules, plus these:
+
+| Text            | Limit         | Shape                                                                        |
+| --------------- | ------------- | ---------------------------------------------------------------------------- |
+| Label           | 30 characters | The command's name in sentence case: **Align middle**, **Page setup…**       |
+| Tooltip         | 80 characters | The name and its key: **Straight chain ⇧X**. Steps belong in the hint.       |
+| Status message  | 60 characters | The result: "3D projection applied". Undo is always there; don't mention it. |
+| Section heading | 30 characters | Sentence case in the code. `section()` draws it in capitals.                 |
+
+- End a label with `…` when the command asks for more before it acts.
+- Use one name for a command on every surface: toolbar, context row, right-click
+  menu, command palette, Properties and Help.
+- Write US English: center, color, canceled, stereocenter, symmetrize.
+- Write real plurals: "1 template", "3 templates", never "template(s)".
+- Name keys as their keycaps: Esc, Enter, Tab, Delete, ⇧. Take shortcuts from
+  `shortcuts::keys`, which writes ⌘/⌥ on macOS and Ctrl/Alt elsewhere.
+- A label is also the control's accessibility name. In tests, find a control by
+  its accessibility id, not its label, so a label change needs no test change.
+
+| Use                         | Not                                                    |
+| --------------------------- | ------------------------------------------------------ |
+| drawing                     | document, canvas (for the user's work)                 |
+| Align left / center / right | Align left edges, Align horizontal centers             |
+| Align top / middle / bottom | Align top edges, Align middles, Align vertical centers |
+| Flip horizontal / vertical  | Flip horizontally, Flip vertically                     |
+| Page setup…                 | Edit page setup…, Set up pages…                        |
+| Recalculate                 | Check structure (Check drawing is a different command) |
+| Save as .rsk…               | Save native document…                                  |
+| Abbreviate selection…       | Create group label…, Contract selection                |
+| Save as abbreviation        | Define abbreviation from selection                     |
+| 3D optimize…                | 3D optimization                                        |
+| Clean up…                   | Clean up structure, Tidy                               |
+| Atom maps                   | Atom mapping                                           |
+| Show/hide side panel        | Toggle inspector, Show or hide inspector               |
+| Assistant                   | AI assistant, Codex (for the panel)                    |
+
+`scripts/copy_lint.py` checks the rules it can: spelling, `(s)` plurals,
+"Escape" in text, Undo tails, capitals passed to `section()` and the status
+message length. The `web` job in Checks runs it; run it locally with
+`python3 scripts/copy_lint.py`.
