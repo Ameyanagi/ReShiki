@@ -170,19 +170,17 @@ Press **:** for the **command palette**: type part of a command, such as **benze
 
 [Open the complete shortcut reference and editable examples](/guide/shortcuts/).
 
-## Clean up a selection
+## Clean up a drawing
 
-1. Select a molecule or the atoms you want to adjust.
-2. Click **Clean up…**.
-3. Compare with **Show original**, then **Apply** or **Cancel**.
+1. Select a molecule or the atoms you want to adjust, or select nothing to clean up every structure.
+2. Click **Clean up** in the toolbar, or press **Cmd/Ctrl+Shift+K**.
+3. Press **Cmd/Ctrl+Z** to see the original again, and Redo to return to the cleaned drawing.
 
 <Screenshot
   src="/manual/cleanup.webp"
-  alt="Cleanup preview with selection scope, Show original, Keep orientation, Apply and Cancel."
+  alt="A cleaned benzene ring standing upright, with the Clean up options menu open: Keep, Free and IUPAC fused rings orientation, and Selected atoms or Whole molecules."
 />
 
-**Selected atoms** keeps the rest fixed. **Selected molecules** includes each complete molecule touched by the selection. Other molecules stay in place. **Keep orientation** preserves the drawing's direction.
-
-Apply is one Undo step. Cleanup adjusts molecular geometry; it does not arrange an entire reaction scheme.
+Clean up applies at once as one Undo step. It keeps the drawing's size and stands six-membered rings upright, turning them at most 30°. The **▾** beside the button sets the orientation (**Keep**, **Free** or **IUPAC fused rings**) and what a selection cleans: **Selected atoms** keeps the rest fixed, **Whole molecules** includes each complete molecule touched by the selection. Other molecules stay in place. Cleanup adjusts molecular geometry; it does not arrange an entire reaction scheme.
 
 Attachment-containing complexes, including Cp/Cp\* groups, retain their geometry with an explicit limitation. Independent ordinary molecules can still be cleaned; unsupported complex geometry is not replaced by a guessed arrangement.

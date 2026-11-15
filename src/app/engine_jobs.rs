@@ -1,5 +1,5 @@
 //! Chemistry engine jobs: launching requests and applying their results.
-use super::{App, CleanupPreview, Job, Message, cleanup::CleanupJob, export_file, input_request};
+use super::{App, Job, Message, export_file, input_request};
 use crate::canvas::Tool;
 use iced::{Subscription, Task};
 use reshiki::{
@@ -210,7 +210,7 @@ impl App {
             return Task::none();
         }
         match kind {
-            Job::Clean(job) => self.cleanup_preview_ready(job, revision, response),
+            Job::Clean(_) => self.cleanup_ready(response),
             Job::Projection(name) => self.projection_ready(name, response),
             Job::Insert => return self.structure_inserted(response),
             Job::AromaticDisplay => self.aromatic_display_ready(response),
@@ -237,23 +237,28 @@ impl App {
             }
         }
     }
-    fn cleanup_preview_ready(&mut self, job: CleanupJob, revision: u64, response: Response) {
-        if let Some(document) = response.document {
-            if let Err(error) = document.validate() {
-                self.status = error;
-                self.error = true;
-            } else {
-                self.tab.cleanup = Some(CleanupPreview {
-                    job,
-                    warnings: response.warnings,
-                    document,
-                    analysis: response.analysis,
-                    revision,
-                    epoch: self.tab.file_epoch,
-                    original: false,
-                });
-                self.status = "Cleanup preview · Enter to apply · Esc to cancel".into();
-                self.error = false;
+    /// The cleaned drawing replaces the original as one Undo step; Undo and
+    /// Redo compare the two.
+    fn cleanup_ready(&mut self, response: Response) {
+        let Some(document) = response.document else {
+            return;
+        };
+        if let Err(error) = document.validate() {
+            self.status = error;
+            self.error = true;
+            return;
+        }
+        let before = std::mem::replace(&mut self.tab.doc, document);
+        self.changed(before);
+        if !self.error {
+            self.tab.analysis = response.analysis;
+            self.status = format!(
+                "Cleaned up · {} undoes",
+                super::shortcuts::keys(iced::keyboard::Modifiers::COMMAND, "Z")
+            );
+            for warning in &response.warnings {
+                self.status.push_str(" · ");
+                self.status.push_str(warning);
             }
         }
     }

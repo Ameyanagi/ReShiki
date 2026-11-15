@@ -801,7 +801,6 @@ impl App {
     pub(in crate::app) fn naming_can_edit(&self) -> bool {
         !self.tab.busy
             && self.pending.is_none()
-            && self.tab.cleanup.is_none()
             && self.tab.inline_text.is_none()
             && self.tab.atom_text.is_none()
             && self.tab.joining.is_none()

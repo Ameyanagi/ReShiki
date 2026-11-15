@@ -1,8 +1,8 @@
 //! Modal gates that run before message dispatch. Their order decides which modal surface wins.
 use super::{
-    App, InspectorTab, Message, atom_text, cleanup, color_popover, command_palette,
-    document_styles, generic, import, inline_text, joining, object_toolbar, optimization, results,
-    tabs, template_library, theme_generator, updates, view_settings,
+    App, InspectorTab, Message, atom_text, cleanup, color_popover, document_styles, generic,
+    import, inline_text, joining, object_toolbar, optimization, results, tabs, template_library,
+    theme_generator, updates, view_settings,
 };
 use crate::canvas::{self, Edit, Tool};
 use iced::Task;
@@ -56,7 +56,6 @@ impl App {
         let message = self.escape_gate(message)?;
         let message = self.inline_text_gate(message)?;
         let message = self.palette_assistant_gate(message)?;
-        let message = self.cleanup_preview_gate(message)?;
         self.abbreviation_member_gate(message)
     }
 
@@ -254,6 +253,10 @@ impl App {
             self.check_results = false;
             return Break(super::focus_drawing());
         }
+        if self.cleanup_menu && matches!(message, Message::Escape) {
+            self.cleanup_menu = false;
+            return Break(super::focus_drawing());
+        }
         Continue(message)
     }
 
@@ -286,6 +289,9 @@ impl App {
             // Its rows select and pulse findings; Check again keeps it open.
             if !matches!(message, Message::Stereo(_) | Message::Analyze) {
                 self.check_results = false;
+            }
+            if !matches!(message, Message::Cleanup(cleanup::Action::Menu(_))) {
+                self.cleanup_menu = false;
             }
         }
     }
@@ -395,39 +401,6 @@ impl App {
         Continue(message)
     }
 
-    // Preview close routing is exercised in src/app/shortcut_focus_tests/review_close.rs.
-    fn cleanup_preview_gate(&mut self, message: Message) -> Gate {
-        if self.tab.cleanup.is_some() {
-            if matches!(&message, Message::ContextKey(key) if key == "Enter") {
-                return Break(self.update(Message::Cleanup(cleanup::Action::Apply)));
-            }
-            if matches!(message, Message::Tool(Tool::Select)) {
-                return Break(self.update(Message::Cleanup(cleanup::Action::Cancel)));
-            }
-            if !(matches!(
-                &message,
-                // Begin stays blocked: it would restart cleanup under the preview.
-                Message::Cleanup(
-                    cleanup::Action::Apply
-                        | cleanup::Action::Cancel
-                        | cleanup::Action::Original(_)
-                        | cleanup::Action::Scope(_)
-                        | cleanup::Action::Orientation(_),
-                )
-            ) || matches!(message, Message::Commands(command_palette::Action::Close))
-                || preview_passthrough(&message)
-                || results::admitted(results::Modal::Cleanup, &message))
-                && !self.answers_save_dialog(&message)
-            {
-                if !matches!(message, Message::Canvas(_)) {
-                    self.status = "Cleanup preview · Enter to apply · Esc to cancel".into();
-                }
-                return Break(Task::none());
-            }
-        }
-        Continue(message)
-    }
-
     fn abbreviation_member_gate(&mut self, message: Message) -> Gate {
         if matches!(
             &message,
@@ -450,7 +423,7 @@ impl App {
     }
 }
 
-/// View/window lifecycle and classified results shared by the cleanup and 3D previews.
+/// View/window lifecycle and classified results the 3D preview lets through.
 pub(super) fn preview_passthrough(message: &Message) -> bool {
     matches!(
         message,

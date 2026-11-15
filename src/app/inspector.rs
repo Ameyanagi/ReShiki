@@ -647,7 +647,6 @@ impl App {
             || self.inspector_tab != InspectorTab::Properties
             || self.tab.busy
             || self.tab.erase_stroke
-            || self.tab.cleanup.is_some()
             || self.tab.optimization.is_some()
             || self.tab.inspector_ui.pending.is_some()
         {
