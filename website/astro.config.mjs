@@ -279,6 +279,7 @@ export default defineConfig({
           items: [
             { label: "Python package", slug: "developer/python" },
             { label: "Browser editor (npm)", slug: "developer/npm-package" },
+            { label: "Headless library (npm)", slug: "developer/npm-headless" },
             { label: "CAS SciFinder", slug: "developer/scifinder-handoff" },
             { label: "Agent API overview", slug: "developer/agent-api" },
             { label: "Agent command line", slug: "developer/agent-cli" },

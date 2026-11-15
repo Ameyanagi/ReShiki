@@ -144,7 +144,7 @@ The packaged demo names its JavaScript and WebAssembly by content hash (`src/edi
 
 Leave `/demo/` and `/demo/index.html` out of the rule, so a release reaches visitors within the 10-minute default.
 
-The **npm** job then publishes the browser package `@ameyanagi/reshiki` (`packages/editor`) from the build the **web_demo** job tested, so the WebAssembly is built only once. It runs the package tests, sets the package version to the app's version from `Cargo.toml` (which the tag matches, so `v0.13.1` publishes `0.13.1`; the `version` in `packages/editor/package.json` is only a placeholder), and publishes with `npm publish --provenance`. Stable versions get the `latest` dist-tag. Prerelease tags such as `v0.13.1-rc.1` get `next`, and a stable version older than the current `latest` gets `release-<major.minor>`, so `bun add @ameyanagi/reshiki` keeps installing the newest stable release, the same way the GitHub release is marked as a prerelease. Nightly builds never publish to npm. A version already on npm is skipped, so rerunning a release is safe. Without a credential, or when npm refuses it (an expired token, or a trusted publisher that is not set up), the job leaves a notice and succeeds, so npm never fails a release. See [Configure npm publishing](#configure-npm-publishing).
+The **npm** job then publishes the two browser packages, the editor `@ameyanagi/reshiki` (`packages/editor`) and the headless library `@ameyanagi/reshiki-headless` (`packages/headless`), from the build the **web_demo** job tested, so the WebAssembly is built only once. It runs both packages' tests, sets each package version to the app's version from `Cargo.toml` (which the tag matches, so `v0.13.1` publishes `0.13.1`; the `version` in each `package.json` is only a placeholder), and publishes each with `npm publish --provenance`. Stable versions get the `latest` dist-tag. Prerelease tags such as `v0.13.1-rc.1` get `next`, and a stable version older than the current `latest` gets `release-<major.minor>`, so `bun add @ameyanagi/reshiki` keeps installing the newest stable release, the same way the GitHub release is marked as a prerelease. Nightly builds never publish to npm. A version already on npm is skipped, so rerunning a release is safe. Without a credential, or when npm refuses it for a package (an expired token, or a trusted publisher that is not set up), the job leaves a notice for that package and succeeds, so npm never fails a release. See [Configure npm publishing](#configure-npm-publishing).
 
 The **pypi** job publishes the Python package `reshiki` (`crates/python`) after the GitHub release. The reusable **Python wheels** workflow (`python-wheels.yml`) builds abi3 wheels for all six targets: manylinux2014 x64 and ARM64, macOS ARM64 and Intel, and Windows x64 and ARM64. It runs the Python tests against the built wheel on Linux x64, Linux ARM64, macOS ARM64 and Windows x64; the tests' RDKit has no Intel macOS or Windows ARM64 wheel. The wheel version is the app's version from `Cargo.toml`, which maturin writes in PEP 440 form, so `v0.13.1` publishes `0.13.1` and `v0.13.1-rc.1` publishes `0.13.1rc1`. pip and uv skip prereleases unless asked for one. There is no sdist: the package compiles assets, presets and vendored crates from the repository root, which a maturin source distribution cannot include. Nightly builds never publish to PyPI, and files already on PyPI are skipped, so rerunning a release is safe. Pull requests that change `crates/python` or that workflow build and test the same wheels without publishing. See [Configure PyPI publishing](#configure-pypi-publishing).
 
@@ -165,7 +165,7 @@ Both Mac builds use the fixed abbreviation drawing coordinates recorded on Apple
 
 The **npm** job runs in the `npm` GitHub environment, which GitHub creates on its first run. It publishes with npm trusted publishing (OIDC) when the repository variable `NPM_TRUSTED_PUBLISHING` is `true`, and otherwise with the `NPM_TOKEN` secret. The npm account `ameyanagi` owns the `@ameyanagi` scope.
 
-npm can only add a trusted publisher to a package that already exists, so the first version is published with a token, and every later one through trusted publishing:
+npm can only add a trusted publisher to a package that already exists, so the first version of each package is published with a token, and every later one through trusted publishing. `@ameyanagi/reshiki-headless` is new after 0.15.0: until it has had these steps, a release publishes `@ameyanagi/reshiki` and leaves a notice for the headless package.
 
 1. **First publish, with a token.** Create a [granular access token](https://docs.npmjs.com/creating-and-viewing-access-tokens) with **Packages and scopes: Read and write**, for all packages or the `@ameyanagi` scope, and a short expiry. Add it as the repository (or `npm` environment) secret `NPM_TOKEN`. Then publish main's version without a new tag:
 
@@ -174,7 +174,7 @@ npm can only add a trusted publisher to a package that already exists, so the fi
    gh run watch "$(gh run list --workflow release.yml --limit 1 --json databaseId -q '.[0].databaseId')"
    ```
 
-   `npm_only` skips every build, signing, GitHub release and demo job. The npm job builds and tests the package, then publishes the version in `Cargo.toml` on main. The next `v*` tag also uses the token while it is set. If npm refuses the token, the job ends with a notice: npm is restricting tokens that bypass two-factor authentication for direct publishing. In that case, publish the first version by hand from a checkout of main, with two-factor authentication:
+   `npm_only` skips every build, signing, GitHub release and demo job. The npm job builds and tests the packages, then publishes the version in `Cargo.toml` on main. The next `v*` tag also uses the token while it is set. If npm refuses the token, the job ends with a notice: npm is restricting tokens that bypass two-factor authentication for direct publishing. In that case, publish the first version by hand from a checkout of main, with two-factor authentication (shown for the editor; use `packages/headless` for the headless package):
 
    ```sh
    scripts/build_wasm.sh --test
@@ -185,7 +185,7 @@ npm can only add a trusted publisher to a package that already exists, so the fi
    git checkout package.json
    ```
 
-2. **Add the trusted publisher.** Open **npmjs.com → Packages → @ameyanagi/reshiki → Settings → Trusted publishing**, choose **GitHub Actions** and enter:
+2. **Add the trusted publisher.** For each package, open **npmjs.com → Packages → @ameyanagi/reshiki** (then **@ameyanagi/reshiki-headless**) **→ Settings → Trusted publishing**, choose **GitHub Actions** and enter:
 
    | Field                   | Value         |
    | ----------------------- | ------------- |
@@ -197,7 +197,7 @@ npm can only add a trusted publisher to a package that already exists, so the fi
 
    Then set the repository variable `NPM_TRUSTED_PUBLISHING` to `true` (**Settings → Secrets and variables → Actions → Variables**). From then on the job uses OIDC (`id-token: write`, npm 11.5.1 or later from Node 24, provenance included) and ignores `NPM_TOKEN`. npm expires a new trusted publisher that has not published within 2 days. If yours expired before a release, delete it and add it again.
 
-3. **Delete the token.** Once a version has published through trusted publishing, delete the `NPM_TOKEN` secret and revoke the token on npmjs.com. Under the package's **Settings → Publishing access**, choose to require two-factor authentication and disallow tokens. Trusted publishing keeps working.
+3. **Delete the token.** Once a version has published through trusted publishing, delete the `NPM_TOKEN` secret and revoke the token on npmjs.com. Under each package's **Settings → Publishing access**, choose to require two-factor authentication and disallow tokens. Trusted publishing keeps working.
 
 After that, every version tag publishes to npm with no further steps.
 

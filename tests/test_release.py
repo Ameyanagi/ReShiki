@@ -433,6 +433,32 @@ class ReleaseTests(unittest.TestCase):
         self.assertIn('"cargo", "build", "--profile", "dist", "--locked"', script)
         self.assertIn('target_directory() / target / "dist"', script)
 
+    def test_each_npm_package_ships_only_its_own_webassembly(self):
+        root = Path(__file__).resolve().parents[1]
+        exports = {
+            name: json.loads((root / "packages" / name / "package.json").read_text("utf-8"))[
+                "exports"
+            ]
+            for name in ("editor", "headless")
+        }
+        self.assertEqual(
+            exports["headless"],
+            {
+                ".": {"types": "./src/index.d.ts", "default": "./src/index.js"},
+                "./reshiki_web_bg.wasm": "./dist/wasm/reshiki_web_bg.wasm",
+            },
+        )
+        self.assertNotIn(".", exports["editor"])
+        self.assertNotIn("dist/wasm", json.dumps(exports["editor"]))
+        script = (root / "scripts/build_wasm.sh").read_text(encoding="utf-8")
+        self.assertIn(
+            "reshiki_web:headless/dist/wasm reshiki:editor/dist/editor \\\n"
+            "  reshiki_web_worker:editor/dist/worker",
+            script,
+        )
+        workflow = (root / ".github/workflows/release.yml").read_text(encoding="utf-8")
+        self.assertIn("for package in headless editor; do", workflow)
+
     def test_native_headers_reject_mislabeled_or_damaged_archives(self):
         elf = bytearray(64)
         elf[:6] = b"\x7fELF\x02\x01"

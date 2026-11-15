@@ -58,7 +58,7 @@ Three packages wrap these layers for other hosts. None is a default member:
 - `reshiki-web-worker` (`crates/web-worker/`): the browser editor's Web Worker for heavy jobs such as naming and structure conversion, built on the `reshiki` library.
 - `reshiki-python` (`crates/python/`): the Python package `reshiki` (see [Python](python.md)), built on `reshiki-io` and `reshiki-model` with maturin.
 
-`scripts/build_wasm.sh` builds the browser editor from the `reshiki` executable crate, `reshiki-web` and `reshiki-web-worker`. `packages/editor/` is the npm package `@ameyanagi/reshiki` that wraps those WebAssembly modules.
+`scripts/build_wasm.sh` builds the browser editor from the `reshiki` executable crate, `reshiki-web` and `reshiki-web-worker`. `packages/editor/` is the npm package `@ameyanagi/reshiki`, which wraps the editor and its worker, and `packages/headless/` is `@ameyanagi/reshiki-headless`, which wraps `reshiki-web`. Each package ships only its own WebAssembly modules.
 
 `reshiki::chemistry` combines the core with both adapter layers, so existing imports keep working. Crate boundaries enforce the layering: a lower crate cannot import a higher one. The layer crates are workspace default members, so `cargo test` and the pre-commit checks cover them. The leaf crates are workspace members but not default members: `cargo test --workspace`, as in [Run the checks](development.md#run-the-checks) and CI, also runs their tests. Release builds still produce exactly one executable with `cargo build --profile dist --bin reshiki`; `build.rs` stays in the root package. The agent API adds no executable: `reshiki --mcp` and `reshiki --cli` are modes of the same binary, like the chemistry workers.
 
