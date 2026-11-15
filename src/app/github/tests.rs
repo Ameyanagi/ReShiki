@@ -1110,7 +1110,7 @@ async fn a_send_waiting_for_a_closed_tabs_save_goes_on() {
     save_here(&mut app, &path);
     app.github.after_save = Some((repo().key, "Update ring.rsk".into(), Vec::new()));
     app.file_io.saving = true;
-    let closed = Message::Saved(0, Box::new(Document::default()), Ok(None));
+    let closed = Message::Saved(0, Box::default(), Ok(None));
     let task = app.update(Message::Tab(TabId(u64::MAX), Box::new(closed)));
     run(&mut app, task).await;
     assert!(app.github.after_save.is_none());
