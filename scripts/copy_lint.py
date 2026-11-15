@@ -42,6 +42,7 @@ RULES = [
 SECTION = re.compile(r'\bsection\(\s*"((?:[^"\\]|\\.)*)"')
 STATUS = re.compile(r"\bstatus\s*=(?![=>])")
 CONSTANT = re.compile(r"\bconst\s+([A-Z][A-Z0-9_]*)\s*:\s*&(?:'static\s+)?str\s*=\s*")
+CONCAT = re.compile(r"concat!\s*\(")
 NAME = re.compile(r"\b[A-Z][A-Z0-9_]+\b")
 PLACEHOLDER = re.compile(r"\{[^{}]*\}")
 CONTINUATION = re.compile(r"\\\n\s*")
@@ -74,10 +75,19 @@ def literals(code: str, start: int = 0, end: int | None = None):
 
 
 def constants(code: str) -> dict[str, str]:
+    """String constants, with the parts of a concat! joined."""
     found = {}
     for constant in CONSTANT.finditer(code):
-        literal = next(literals(code, constant.end()), None)
-        if literal and literal[0] == constant.end():
+        start = constant.end()
+        concat = CONCAT.match(code, start)
+        if concat:
+            end = expression_end(code, concat.end())
+            found[constant.group(1)] = "".join(
+                text for _, text in literals(code, concat.end(), end)
+            )
+            continue
+        literal = next(literals(code, start), None)
+        if literal and literal[0] == start:
             found[constant.group(1)] = literal[1]
     return found
 

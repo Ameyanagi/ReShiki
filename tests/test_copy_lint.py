@@ -58,6 +58,18 @@ class CopyLintTest(unittest.TestCase):
         shared = list(copy_lint.problems(APP, "self.status = OTHER.into();", {"OTHER": long}))
         self.assertEqual([line for line, _ in shared], [1])
 
+    def test_joins_concat_constants(self):
+        found = problems(
+            "const LONG: &str = concat!(\n"
+            f'    "{"x" * 40}",\n'
+            f'    "{"y" * 21}\\n",\n'
+            '    "Tooltip text",\n'
+            ");\n"
+            "self.status = LONG.into();\n"
+        )
+        self.assertEqual(len(found), 1)
+        self.assertIn("(61)", found[0])
+
     def test_reads_multiline_raw_and_char_literals(self):
         found = list(
             copy_lint.problems(
