@@ -2724,12 +2724,6 @@ impl App {
     }
 
     fn status_bar(&self) -> Element<'_, Message> {
-        responsive(|size| self.status_bar_at(size.width))
-            .height(Length::Shrink)
-            .into()
-    }
-
-    fn status_bar_at(&self, width: f32) -> Element<'_, Message> {
         let summary = self.status.lines().next().unwrap_or(&self.status);
         let error = self.error;
         let style = move |theme: &Theme| iced::widget::text::Style {
@@ -2743,53 +2737,56 @@ impl App {
                 crate::appearance::muted(theme)
             }),
         };
-        // Key symbols, as in "⇧⌘G ungroups", use the shortcut font.
-        let message: Element<'_, Message> = if summary.contains(super::shortcuts::symbol) {
-            rich_text(super::shortcuts::spans(summary))
-                .size(11)
-                .wrapping(text::Wrapping::None)
-                .style(style)
-                .into()
-        } else {
-            text(summary)
-                .size(11)
-                .wrapping(text::Wrapping::None)
-                .style(style)
-                .into()
-        };
-        // One line; the full text of long or multi-line messages is a tooltip.
-        let room = if self.recovery_banner_shown() {
-            160.
-        } else {
-            300.
-        };
-        let has_details = self.status.contains('\n') || text_width(summary, 11.) > room;
-        let message = if has_details {
-            hover_hint(message, self.status.as_str(), tooltip::Position::Top).into()
-        } else {
-            message
-        };
+        // One line in the room left beside the controls; the full text of
+        // long or multi-line messages is a tooltip.
+        let line = responsive(move |size| {
+            // Key symbols, as in "⇧⌘G ungroups", use the shortcut font.
+            let message: Element<'_, Message> = if summary.contains(super::shortcuts::symbol) {
+                rich_text(super::shortcuts::spans(summary))
+                    .size(11)
+                    .wrapping(text::Wrapping::None)
+                    .style(style)
+                    .into()
+            } else {
+                text(summary)
+                    .size(11)
+                    .wrapping(text::Wrapping::None)
+                    .style(style)
+                    .into()
+            };
+            let has_details = self.status.contains('\n') || text_width(summary, 11.) > size.width;
+            if !has_details {
+                return container(message).id("status-message").into();
+            }
+            // Keep the cue outside the clipped message so it remains visible
+            // beside the controls.
+            row![
+                container(hover_hint(
+                    message,
+                    self.status.as_str(),
+                    tooltip::Position::Top
+                ))
+                .id("status-message")
+                .width(Length::Fill)
+                .clip(true),
+                hover_hint(
+                    container(text("…").size(14).style(style))
+                        .id("status-details")
+                        .padding([0, 3]),
+                    self.status.as_str(),
+                    tooltip::Position::Top,
+                ),
+            ]
+            .spacing(8)
+            .align_y(Alignment::Center)
+            .into()
+        })
+        .height(Length::Shrink);
         let mut status = row![].spacing(8).align_y(Alignment::Center);
         if self.recovery_banner_shown() {
             status = status.push(self.recovery_banner());
         }
-        status = status.push(
-            container(message)
-                .id("status-message")
-                .width(Length::Fill)
-                .clip(true),
-        );
-        if has_details {
-            // Keep the cue outside the clipped message so it remains visible
-            // beside the document controls even when the line runs out of room.
-            status = status.push(hover_hint(
-                container(text("…").size(14).style(style))
-                    .id("status-details")
-                    .padding([0, 3]),
-                self.status.as_str(),
-                tooltip::Position::Top,
-            ));
-        }
+        status = status.push(line);
         if let Some((key, progress)) = self.engine_progress() {
             status = status.push(text(progress).size(11)).push(hover_hint(
                 accessible_command("engine.cancel", "Cancel chemistry operation", "Cancel")
@@ -2861,19 +2858,11 @@ impl App {
                 accessible_command("status-fit", "Fit drawing in view", "Fit")
                     .on_press(Message::Fit),
             );
-        // Reserve the notification row's height before delayed progress appears.
-        // At narrower widths, its controls must not compete with view/zoom.
-        let status = status.width(Length::Fill).height(32);
-        let content: Element<'_, Message> = if width < 1280. {
-            column![status, container(controls).align_right(Length::Fill)]
-                .spacing(4)
-                .into()
-        } else {
-            row![status, controls]
-                .spacing(8)
-                .align_y(Alignment::Center)
-                .into()
-        };
+        // One row at every width: the message shortens, its full text stays
+        // in the tooltip, and the controls keep their place.
+        let content = row![status.width(Length::Fill).height(32), controls]
+            .spacing(8)
+            .align_y(Alignment::Center);
         container(content)
             .id("status-bar")
             .padding([6, 14])
