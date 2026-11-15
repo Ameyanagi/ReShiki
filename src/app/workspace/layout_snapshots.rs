@@ -411,7 +411,7 @@ fn smart_guides(renderer: &mut iced::Renderer, size: Size, output: &Path) {
 
 pub(super) type Setup = fn(&mut App);
 
-pub(super) const STATES: [(&str, Setup); 20] = [
+pub(super) const STATES: [(&str, Setup); 24] = [
     ("default", |_| {}),
     ("molecule", molecule),
     ("copy-as", |app| {
@@ -452,6 +452,21 @@ pub(super) const STATES: [(&str, Setup); 20] = [
     ("atom-assistant", |app| {
         atom(app);
         assistant(app);
+    }),
+    ("templates", |app| {
+        let _ = app.update(Message::Inspector(InspectorTab::Templates));
+    }),
+    ("export", |app| {
+        molecule(app);
+        let _ = app.update(Message::Inspector(InspectorTab::Export));
+    }),
+    ("view-options", |app| {
+        let _ = app.update(Message::View(crate::app::view_settings::Action::Toggle));
+    }),
+    // A chemistry error with a selection: the error sits under the summary.
+    ("molecule-error", |app| {
+        molecule(app);
+        app.tab.chemistry_notice = Some("Atom 1 exceeds its allowed valence".into());
     }),
 ];
 
