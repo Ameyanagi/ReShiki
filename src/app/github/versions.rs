@@ -369,7 +369,7 @@ impl App {
                 }
             }
         }
-        body = body.push(crate::app::workspace::section("ON GITHUB"));
+        body = body.push(crate::app::workspace::section("On GitHub"));
         match &versions.remote {
             None => body = body.push(text("Listing…").size(12).style(muted_text)),
             Some(remote) if remote.is_empty() && self.github.client().is_none() => {
