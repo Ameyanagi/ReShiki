@@ -961,7 +961,7 @@ async fn help_returns_keyboard_focus_and_preserves_the_underlying_input_selectio
                 .filter(|node| node.id.starts_with("help-row-"))
                 .count();
             assert!(rows > 0);
-            assert_eq!(modal.nodes.len() - rows, 4);
+            assert_eq!(modal.nodes.len() - rows, 5);
             assert!(modal.nodes.iter().all(|node| node.id.starts_with("help-")));
             assert!(matches!(
                 ui.activate(&app, "help-open"),
@@ -977,6 +977,7 @@ async fn help_returns_keyboard_focus_and_preserves_the_underlying_input_selectio
             for id in [
                 "help-close",
                 "help-search",
+                "help-about",
                 "help-examples",
                 "help-done",
                 "help-close",

@@ -151,6 +151,11 @@ impl State {
         self.labels.menu = false;
     }
 
+    /// The floating palette or the label menu is open.
+    pub(in crate::app) fn overlay_open(&self) -> bool {
+        self.open && !self.dock.docked || self.labels.menu
+    }
+
     pub(super) fn set_label_menu(&mut self, open: bool) {
         self.labels.menu = open && self.labels.visible;
     }

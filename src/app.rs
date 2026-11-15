@@ -98,6 +98,7 @@ mod shortcut_examples;
 #[cfg(test)]
 mod shortcut_focus_tests;
 mod shortcuts;
+mod star_prompt;
 mod startup;
 mod stereo;
 mod tabs;
@@ -170,6 +171,7 @@ pub enum Message {
     NumericTransform(numeric_transforms::Action),
     Nmr(nmr::Action),
     Updates(updates::Action),
+    Star(star_prompt::Action),
     Reaction(reactions::Action),
     Mapping(reaction_mapping::Action),
     Generic(generic::Action),
@@ -419,6 +421,7 @@ pub struct App {
     context_menu: Option<context_menu::State>,
     style_menu: Option<color_popover::Menu>,
     updates: updates::State,
+    star: star_prompt::State,
     theme_library: theme_files::State,
     palette: Option<palettes::Family>,
     toolbar: palettes::Memory,
@@ -529,6 +532,7 @@ impl App {
             tab: DocumentTab::new(recovery, appearance.canvas_theme),
             tabs: tabs::State::new(recovery_root),
             updates: updates::State::new(),
+            star: star_prompt::State::load(),
             theme_library: theme_files::State::load(),
             palette: None,
             toolbar: palettes::Memory::default(),
@@ -648,6 +652,7 @@ impl App {
             #[cfg(target_os = "linux")]
             iced::window::open_events().map(Message::LinuxClipboardWindow),
             self.updates.subscription(),
+            self.star_subscription(),
             self.properties_subscription(),
             self.engine_subscription(),
             #[cfg(target_arch = "wasm32")]
@@ -938,11 +943,24 @@ impl App {
             .map(|p| &p.document)
             .unwrap_or(&self.tab.doc)
     }
+    /// The runtime's entry point. A finished export or copy counts
+    /// toward the GitHub star prompt here, once, even when its drawing has
+    /// since closed or changed.
+    pub fn receive(&mut self, message: Message) -> Task<Message> {
+        if star_prompt::counts(&message) {
+            self.star.used();
+        }
+        self.update(message)
+    }
     pub fn update(&mut self, message: Message) -> Task<Message> {
         // Modifier releases must reach buttons even when a widget or modal captures input.
         if let Message::ModifiersChanged(modifiers) = message {
             self.shift_held = modifiers.shift();
             return Task::none();
+        }
+        // Input timing and the toast's own buttons skip the editing pipeline.
+        if let Message::Star(action) = message {
+            return self.star_action(action);
         }
         // A touch can confirm its mouse press and move/release together. Each
         // edit still passes through the same focus and preview gates as a mouse.
