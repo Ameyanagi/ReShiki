@@ -131,10 +131,15 @@ impl App {
                       change: StyleChange|
          -> Element<'_, Message> {
             hover_hint(
-                button(text(label).size(14))
-                    .padding([5, 8])
-                    .style(control(active))
-                    .on_press(Message::TextStyle(change)),
+                reshiki::accessibility::button(
+                    format!("text-style-{}", help.to_lowercase().replace(' ', "-")),
+                    help,
+                    text(label).size(14),
+                )
+                .padding([5, 8])
+                .style(control(active))
+                .checked(active)
+                .on_press(Message::TextStyle(change)),
                 help,
                 tooltip::Position::Bottom,
             )
@@ -154,12 +159,18 @@ impl App {
             .size(12)
             .padding(6),
             hover_hint(
-                crate::appearance::text_input("pt", &self.tab.font_size_input)
-                    .on_input(Message::FontSize)
-                    .on_submit(Message::ApplyFontSize)
-                    .width(46)
-                    .size(12)
-                    .padding(6),
+                reshiki::accessibility::text_input(
+                    "text-style-size",
+                    "Font size in points",
+                    "pt",
+                    &self.tab.font_size_input
+                )
+                .style(crate::appearance::input_style)
+                .on_input(Message::FontSize)
+                .on_submit(Message::ApplyFontSize)
+                .width(46)
+                .size(12)
+                .padding(6),
                 "Font size in points · Enter to apply",
                 tooltip::Position::Bottom
             ),
@@ -1638,25 +1649,28 @@ impl App {
             ("Import", InspectorTab::Import),
             ("Export", InspectorTab::Export),
         ] {
+            let selected = self.inspector_tab == tab
+                || (tab == InspectorTab::Properties
+                    && matches!(
+                        self.inspector_tab,
+                        InspectorTab::Reactions
+                            | InspectorTab::Labels
+                            | InspectorTab::Abbreviations
+                            | InspectorTab::Pages
+                            | InspectorTab::DrawingStyle
+                    ));
             tabs = tabs.push(
                 // Compact labels keep all five tabs inside the 256 px panels
                 // (about 238 px of tabs in 244 px); 11 px labels would need
                 // about 297 px, more than even the 300 px panels offer.
-                button(text(label).size(10))
-                    .padding([7, 3])
-                    .style(control(
-                        self.inspector_tab == tab
-                            || (tab == InspectorTab::Properties
-                                && matches!(
-                                    self.inspector_tab,
-                                    InspectorTab::Reactions
-                                        | InspectorTab::Labels
-                                        | InspectorTab::Abbreviations
-                                        | InspectorTab::Pages
-                                        | InspectorTab::DrawingStyle
-                                )),
-                    ))
-                    .on_press(Message::Inspector(tab)),
+                reshiki::accessibility::button(
+                    format!("inspector-tab-{}", label.to_lowercase()),
+                    format!("{label} tab{}", if selected { ", selected" } else { "" }),
+                    text(label).size(10),
+                )
+                .padding([7, 3])
+                .style(control(selected))
+                .on_press(Message::Inspector(tab)),
             );
         }
         let body = match self.inspector_tab {
@@ -2829,13 +2843,16 @@ impl App {
             )
             .into(),
             hover_hint(
-                button(
+                reshiki::accessibility::button(
+                    "canvas-theme",
+                    "Dark canvas",
                     iced::widget::canvas(Glyph(if dark { Icon::Moon } else { Icon::Sun }, true))
                         .width(24)
                         .height(24),
                 )
                 .padding(3)
                 .style(control(false))
+                .checked(dark)
                 .on_press(Message::CanvasTheme(self.tab.doc.canvas_theme.toggled())),
                 if dark {
                     "Dark canvas · Switch to light · Remembered for new drawings"

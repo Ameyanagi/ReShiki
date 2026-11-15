@@ -299,6 +299,48 @@ fn assistant_app() -> App {
 
 #[tokio::test]
 #[ignore = "Opt-in renderer input check"]
+async fn tabs_style_buttons_and_canvas_theme_are_named_controls() {
+    use reshiki::accessibility::Role;
+    let mut ui = Ui::new().await;
+    let (mut app, _) = App::new();
+    let first = app.tab.id.0;
+    app.add_tab();
+    app.tab.path = Some("aldol.rsk".into());
+    let second = app.tab.id.0;
+    let snapshot = ui.semantics(&app);
+    assert!(snapshot.duplicate_ids.is_empty());
+    let node = |id: String| {
+        (snapshot.nodes.iter())
+            .find(|node| node.id == id)
+            .unwrap_or_else(|| panic!("{id} is in the accessibility tree"))
+    };
+    assert_eq!(node(format!("document-tab-{first}")).name, "Untitled tab");
+    assert_eq!(
+        node(format!("document-tab-{second}")).name,
+        "aldol.rsk tab, selected"
+    );
+    assert_eq!(
+        node(format!("document-tab-close-{second}")).name,
+        "Close aldol.rsk"
+    );
+    assert_eq!(node("document-tab-new".into()).name, "New tab");
+    assert_eq!(
+        node("inspector-tab-properties".into()).name,
+        "Properties tab, selected"
+    );
+    assert_eq!(node("inspector-tab-export".into()).name, "Export tab");
+    let bold = node("text-style-bold".into());
+    assert_eq!((bold.role, bold.checked), (Role::ToggleButton, Some(false)));
+    assert_eq!(node("text-style-size".into()).role, Role::TextInput);
+    let theme = node("canvas-theme".into());
+    assert_eq!(
+        (theme.name.as_str(), theme.checked),
+        ("Dark canvas", Some(false))
+    );
+}
+
+#[tokio::test]
+#[ignore = "Opt-in renderer input check"]
 async fn tool_palette_pointer_gestures_and_keyboard_activation_have_one_owner() {
     use super::palettes;
     use crate::canvas::Tool;
