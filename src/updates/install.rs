@@ -382,7 +382,7 @@ fn same_publisher(report: &str) -> Result<(), String> {
 /// Whether a `tar -tv` listing holds only regular files and folders. A
 /// symbolic or hard link could point a later entry outside the folder the
 /// archive is unpacked into.
-#[cfg(any(target_os = "linux", test))]
+#[cfg(any(target_os = "linux", all(test, unix)))]
 fn only_files_and_folders(listing: &str) -> bool {
     listing.lines().all(|line| {
         matches!(line.as_bytes().first(), Some(b'-' | b'd')) && !line.contains(" link to ")
