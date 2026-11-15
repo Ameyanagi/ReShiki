@@ -837,3 +837,201 @@ async fn source_color_review_notes_do_not_block_automatic_application() -> anyho
     server.shutdown().await;
     Ok(())
 }
+
+/// S6: the app turns Codex's own tools off with start-up flags, whose names
+/// a Codex release can change. A turn holding anything but messages,
+/// reasoning and the canvas tools therefore fails, on any thread, and so
+/// does an item event that names no item.
+#[cfg(unix)]
+#[tokio::test]
+async fn a_turn_with_any_other_tool_fails() -> anyhow::Result<()> {
+    let item = |thread: &str, method: &str, item: Value| json!({"method":method,"params":{"threadId":thread,"item":item}});
+    let valid = json!({"summary":"ok","issues":[],"edits":[]});
+    let [message, done] = final_message("test", "final_answer", &valid.to_string());
+    let allowed = [
+        item("test", "item/started", json!({"type":"userMessage"})),
+        item("test", "item/started", json!({"type":"reasoning"})),
+        item("test", "item/completed", json!({"type":"reasoning"})),
+        item(
+            "test",
+            "item/started",
+            json!({"type":"dynamicToolCall","tool":"canvas_preview"}),
+        ),
+        item(
+            "child",
+            "item/completed",
+            json!({"type":"agentMessage","text":"child"}),
+        ),
+    ];
+    let refused = [
+        (
+            item(
+                "test",
+                "item/started",
+                json!({"type":"commandExecution","command":"ls"}),
+            ),
+            "commandExecution",
+        ),
+        (
+            item(
+                "child",
+                "item/started",
+                json!({"type":"commandExecution","command":"ls"}),
+            ),
+            "commandExecution",
+        ),
+        (
+            item("test", "item/completed", json!({"type":"fileChange"})),
+            "fileChange",
+        ),
+        (
+            item(
+                "test",
+                "item/started",
+                json!({"type":"mcpToolCall","tool":"canvas_plan"}),
+            ),
+            "mcpToolCall",
+        ),
+        (
+            item("test", "item/started", json!({"type":"webSearch"})),
+            "webSearch",
+        ),
+        (
+            item(
+                "test",
+                "item/started",
+                json!({"type":"dynamicToolCall","tool":"shell"}),
+            ),
+            "dynamicToolCall",
+        ),
+        (
+            item(
+                "test",
+                "item/started",
+                json!({"type":"a tool of a later release"}),
+            ),
+            "a tool of a later release",
+        ),
+        (item("test", "item/started", json!({})), "unknown"),
+        // An item event with no item at all.
+        (
+            json!({"method":"item/started","params":{"threadId":"test"}}),
+            "unknown",
+        ),
+        (json!({"method":"item/completed"}), "unknown"),
+        // Delegation is not a canvas tool: the flag that turns subagents off
+        // is one of those a release can rename.
+        (
+            item(
+                "test",
+                "item/started",
+                json!({"type":"collabAgentToolCall"}),
+            ),
+            "collabAgentToolCall",
+        ),
+        (
+            item("test", "item/started", json!({"type":"subAgentActivity"})),
+            "subAgentActivity",
+        ),
+    ];
+    let run = async |events: Vec<Value>| {
+        let (mut server, _evidence) = fake_turns(json!([events])).await?;
+        let (tx, _rx) = tokio::sync::mpsc::channel(32);
+        let turn = Turn {
+            thread: "test",
+            effort: "low",
+            tier: None,
+            progress: &tx,
+            canvas: None,
+            source: None,
+        };
+        let result = run_turn(
+            &mut server,
+            &turn,
+            json!([]),
+            super::super::review::schema(),
+            false,
+        )
+        .await;
+        server.shutdown().await;
+        anyhow::Ok(result)
+    };
+    let mut events = allowed.to_vec();
+    events.extend([message.clone(), done.clone()]);
+    assert_eq!(run(events).await?, Ok(valid));
+    for (event, kind) in refused {
+        let error = run(vec![event, message.clone(), done.clone()])
+            .await?
+            .unwrap_err();
+        assert_eq!(
+            error,
+            format!(
+                "Codex used a tool that ReShiki does not allow ({kind}). The request was stopped."
+            )
+        );
+    }
+    // Codex compacts a thread that grew too long. That stops the request
+    // too, and says why, since no tool was used.
+    let compaction = item("test", "item/started", json!({"type":"contextCompaction"}));
+    let error = run(vec![compaction, message.clone(), done.clone()])
+        .await?
+        .unwrap_err();
+    assert_eq!(
+        error,
+        "The request grew too long for Codex. Start a new request with less context."
+    );
+    Ok(())
+}
+
+/// S20: a reply that cannot be read may quote the drawing, so none of it is
+/// written to stderr. The test runs itself again as a child to read stderr.
+#[cfg(unix)]
+#[tokio::test]
+async fn an_unreadable_reply_is_not_written_to_stderr() -> anyhow::Result<()> {
+    const CHILD: &str = "RESHIKI_TEST_UNREADABLE_REPLY";
+    const REPLY: &str = "private-reply-text";
+    if std::env::var_os(CHILD).is_none() {
+        let name = format!(
+            "{}::an_unreadable_reply_is_not_written_to_stderr",
+            module_path!().split_once("::").map_or("", |(_, path)| path)
+        );
+        let output = std::process::Command::new(std::env::current_exe()?)
+            .args(["--exact", &name, "--nocapture"])
+            .env(CHILD, "1")
+            .output()?;
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(output.status.success(), "{stderr}");
+        assert!(
+            String::from_utf8_lossy(&output.stdout).contains("1 passed"),
+            "the child ran no test"
+        );
+        assert!(
+            stderr.contains("Codex returned invalid structured output"),
+            "{stderr}"
+        );
+        assert!(!stderr.contains(REPLY), "{stderr}");
+        return Ok(());
+    }
+    let unreadable = final_message("test", "final_answer", &format!("{{{REPLY}"));
+    let (mut server, _evidence) = fake_turns(json!([unreadable.clone(), unreadable])).await?;
+    let (tx, _rx) = tokio::sync::mpsc::channel(32);
+    let turn = Turn {
+        thread: "test",
+        effort: "low",
+        tier: None,
+        progress: &tx,
+        canvas: None,
+        source: None,
+    };
+    let result = run_turn(
+        &mut server,
+        &turn,
+        json!([]),
+        super::super::review::schema(),
+        false,
+    )
+    .await;
+    server.shutdown().await;
+    assert_eq!(result.unwrap_err(), "The model's reply couldn't be read.");
+    Ok(())
+}

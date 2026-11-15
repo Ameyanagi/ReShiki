@@ -48,7 +48,7 @@ The interface was rendered offscreen at 1280 × 820 and 1040 × 680. Pointer eve
 
 ## Canvas colors and interface appearance
 
-The status bar controls left of **View** separate **journal style**, **canvas color theme**, and **canvas brightness**. The sun/moon button shows the current canvas mode; click it to switch between white and black paper. The brightness you choose is remembered for new drawings and the next launch. Opening a saved drawing keeps that drawing’s canvas brightness, and Undo/Redo changes only the drawing. These controls are also available in **Page setup**. They do not change bond dimensions, font sizes, or bold formatting.
+The status bar controls left of **View** separate **journal style**, **canvas color theme**, and **canvas brightness**. The sun/moon button shows the current canvas mode; click it to switch between white and black paper. The brightness you choose is remembered for new drawings and the next launch. Opening a saved drawing keeps that drawing’s canvas brightness, and Undo/Redo changes only the drawing. These controls are also available in **Page setup…**. They do not change bond dimensions, font sizes, or bold formatting.
 
 The color theme offers:
 
@@ -66,7 +66,48 @@ Canvas colors are saved with the document and participate in Undo/Redo. File exp
 
 **View → Interface** controls only the surrounding interface: **Match canvas**, **Light**, or **Dark**. The preference is remembered between launches and never changes the drawing, document history, clipboard, or exports. There is no separate dark drawing preset.
 
-Swatch colors come from the theme's palette: eight named hues (Red, Orange, Amber, Green, Teal, Blue, Indigo, Purple) plus **Ink**, which is black on the light canvas and white on the dark one. The **Strong** row colors bonds, text and strokes; the **Tint** row colors fills and ring interiors. Each row has one OKLCH lightness per theme and canvas, so palette colors follow the theme and the canvas brightness, and moving a hue in the theme recolors every use of it. **Edit hues…** in the color popover moves a hue in 10° steps (click a column, then a chip; ← and → also step) with a per-hue reset and **Restore default hues**. Editing a built-in theme saves a copy in the drawing, such as "Publication · custom hues". Ring tints keep white bonds at 5:1 on the dark canvas. Automatic element labels in both modes adjust perceptual lightness to target 5:1 against the paper and every associated ring fill. Explicit atom colors are preserved. A typed hex value is a custom color: it stays exact on both canvases, and the drawing keeps the last eight. Copy and paste between ReShiki drawings keeps palette colors and Ink, so pasted objects follow the receiving drawing's theme, canvas and hues. Colors imported or pasted from ChemDraw and other sources are custom and keep their source appearance, except imported black and black pasted onto the light canvas, which become Ink. Drawings from earlier versions turn their old swatch colors into the matching palette colors and keep every other color as it appeared: earlier versions showed custom colors lightness-flipped on the dark canvas, so an older dark-canvas drawing stores the flipped colors once when it is opened, pasted or restored. Exports, the clipboard and CDX/CDXML write the colors as they appear. Copying still leaves the area outside the drawing transparent; the colored ring interior remains part of the drawing. ChemDraw discards fills hidden inside contracted abbreviations, so CDX/CDXML export and editable copies expand abbreviated groups that contain filled rings. Unfilled abbreviations remain contracted, and the original ReShiki drawing stays unchanged.
+### Palette colors
+
+Swatch colors come from the theme's palette: eight named hues (Red, Orange,
+Amber, Green, Teal, Blue, Indigo, Purple) plus **Ink**, which is black on the
+light canvas and white on the dark one.
+
+- The **Strong** row colors bonds, text and strokes; the **Tint** row colors
+  fills and ring interiors.
+- Each row has one OKLCH lightness per theme and canvas, so palette colors
+  follow the theme and the canvas brightness. Moving a hue in the theme
+  recolors every use of it.
+- **Edit hues…** in the color popover moves a hue in 10° steps: click a column,
+  then a chip, or press ← and →. Each hue has a reset, and **Restore default
+  hues** resets them all. Editing a built-in theme saves a copy in the drawing,
+  such as "Publication · custom hues".
+- Ring tints keep white bonds at 5:1 contrast on the dark canvas. Automatic
+  element labels adjust their lightness to 5:1 against the paper and every
+  ring fill behind them. Explicit atom colors are kept.
+
+### Custom colors
+
+A typed hex value is a custom color. It stays exact on both canvases, and the
+drawing keeps the last eight. Colors imported or pasted from ChemDraw and other
+sources are custom and keep their source appearance, except black that is
+imported, or pasted onto the light canvas, which becomes Ink.
+
+Drawings from earlier versions turn their old swatch colors into the matching
+palette colors and keep every other color as it appeared. Earlier versions
+showed custom colors lightness-flipped on the dark canvas, so an older
+dark-canvas drawing stores the flipped colors once when it is opened, pasted or
+restored.
+
+### Colors in copies and exports
+
+- Copy and paste between ReShiki drawings keeps palette colors and Ink, so
+  pasted objects follow the receiving drawing's theme, canvas and hues.
+- Exports, the clipboard and CDX/CDXML write colors as they appear. Copies
+  leave the area outside the drawing transparent; a colored ring interior is
+  part of the drawing.
+- ChemDraw drops fills hidden inside contracted abbreviations, so CDX/CDXML
+  export and editable copies expand abbreviations that contain filled rings.
+  Other abbreviations stay contracted, and the ReShiki drawing is unchanged.
 
 ## Highlight parts of a structure
 

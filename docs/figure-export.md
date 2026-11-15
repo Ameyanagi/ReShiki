@@ -7,12 +7,40 @@ Open **Export → Figure**, choose a format from the menu (**Vector**: **SVG**, 
 | PDF                      | Vector artwork at the drawing's physical publication size.                                                  |
 | SVG                      | Vector artwork for illustration and layout applications. Text becomes outlines unless you keep it editable. |
 | SVG for Office           | Physical-size SVG for Word and PowerPoint. Text always becomes outlines, so labels stay in place.           |
-| PNG                      | An opaque image, normally at 1200 dpi, with physical resolution metadata.                                   |
+| PNG                      | An opaque image at the chosen resolution (1200 dpi by default), with physical resolution metadata.          |
 | EMF for Office (Windows) | Vector picture for Microsoft Office at the drawing's physical size. Text becomes vector outlines.           |
 
-File exports in all formats include the document’s canvas colors and background. **Copy image** instead uses a transparent background, preserving the visible ink for slides and other documents. **Canvas: Dark** exports white bonds and labels on black paper; **View → Interface** changes only the surrounding UI.
+By default, file exports in all formats include the document’s canvas colors and background, and copied pictures use a transparent background, preserving the visible ink for slides and other documents. **Canvas: Dark** exports white bonds and labels on black paper; **View → Interface** changes only the surrounding UI. To change either default, see [Background](#background).
 
 Canvas zoom, rulers, grid and crosshair do not affect the exported figure. **Export pages as PDF** uses an explicitly configured publication layout; ordinary figure export crops to the artwork. See [publication pages](publication-pages.md).
+
+## Background
+
+Copied pictures and exported files each have their own background. Choose it in **Settings → Copy & export**, or for exported files in **Export → Figure → Background**. ReShiki remembers both choices.
+
+| Background  | Result                                                                                  |
+| ----------- | --------------------------------------------------------------------------------------- |
+| Transparent | No background. Slides and documents show through. The default for copies.               |
+| Canvas      | The drawing as you see it, on its own canvas color. The default for exported files.     |
+| White       | White paper, for journals and posters. A drawing on a dark canvas switches to dark ink. |
+| Black       | Black paper, for dark slides. Black ink switches to white.                              |
+| Custom      | The color chosen under **Settings → Copy & export → Your colors**.                      |
+
+**Custom** is one color for both copied pictures and exported files. Choosing a saved color makes it the copy background and changes the color of exports set to **Custom** too.
+
+On **White**, **Black** or **Custom**, black and white ink swap when that makes the drawing readable: dark ink on a light background, light ink on a dark one. Every other color stays as the drawing's canvas shows it: colored atoms, palette colors and custom colors. 3D models keep the drawing's color theme. **Canvas** keeps the drawing's own colors, and **Transparent** keeps the canvas ink, as copies always did.
+
+**Settings → Copy & export** shows a **Preview** of the current drawing as copied and as exported, each on its background. The **Export** tab shows the exported picture above the **Export** button, with its size. The previews come from the same renderer as the files, with the same ink swap. A checkerboard marks transparent areas.
+
+To copy a picture on another background once, right-click the drawing and choose **Copy image on**, then a background or one of your saved colors. A tick marks your default. **Editable drawing**, below the colors, starts at your default each time the menu opens. Click it to change it for this copy: the menu stays open, and **(not default)** shows while it differs. **Change the default…** opens **Settings → Copy & export**.
+
+The background applies to PNG, SVG, PDF, **Export pages as PDF** and EMF for Office. On Windows, the Office preview that **Copy** adds uses the copy background too. When Office rebuilds it after you edit the embedded drawing, it uses the copy background set at that time.
+
+## PNG resolution
+
+Copied pictures and exported files each have their own PNG resolution: 150, 300, 600 or 1200 dpi. Copies default to 300 dpi, which keeps them small and quick to paste into slides and chats. Exported files default to 1200 dpi, which suits journal line art. Choose them in **Settings → Copy & export → PNG resolution**, or for exported files in **Export → Figure → Resolution** when **PNG** is chosen. ReShiki remembers both choices. The resolution is an app preference. It does not change the drawing or its drawing style.
+
+The size in centimeters is the same at every resolution: a higher resolution puts more pixels into the same printed size, and the PNG records its resolution so other apps place it at that size. The **Resolution** menu shows the drawing's size in centimeters and its pixel size at each setting. In Settings, close-ups show part of the current drawing at each resolution, made by the same renderer as the exported file and shown at the same size, so you can see what a lower resolution loses. When the drawing is empty, they show a sample structure on the drawing's canvas. On PNG, the **Export** tab's preview shows the file's pixels at the chosen resolution, scaled to fit.
 
 ## Text in SVG files
 
@@ -24,10 +52,14 @@ Turn on **Keep text editable**, below the export button when **SVG** is chosen, 
 
 A PNG, SVG or single-figure PDF from ReShiki can carry the ReShiki drawing inside the file. Paste that picture into ReShiki, drop the file on the window, or open it with **File → Open**, and you get the editable drawing back instead of a picture. **Import → Paste picture** still inserts raster images instead of restoring their drawing. SVG and PDF without a ReShiki drawing cannot be imported.
 
-- **Copy**, **Copy image** and **Copy as → PNG / SVG / PDF** put the drawing in their PNG, SVG and PDF pictures when it fits the limit.
-- **File export** adds it when **Include editable drawing** is on, below the export button. It is on by default, and ReShiki remembers your choice. **Export pages as PDF** never includes it, because page edges can clip parts of the drawing. **EMF for Office** does not carry it yet.
+- **Put the editable drawing in pictures** in **Settings → Copy & export** is the default for copies and files. It is on by default, and ReShiki remembers your choice.
+- With it on, **Copy**, **Copy image** and **Copy as → PNG / SVG / PDF** put the drawing in their PNG, SVG and PDF pictures when it fits the limit, and **file export** adds it to PNG, SVG and single-figure PDF files.
+- With it off, copied and exported pictures carry no drawing. On Windows, **Copy** then pastes into Word and PowerPoint as a picture, not as an embedded ReShiki drawing. Copying between ReShiki windows still keeps the drawing, because ReShiki puts its own copy of it on the clipboard. The browser editor can keep the drawing only inside the copied picture, so with the switch off, copies pasted into another ReShiki tab have no drawing either.
+- To change it for one copy, right-click the drawing, choose **Copy image on**, click **Editable drawing**, then a background. **Cmd/Ctrl+C**, **Copy image** and **Copy as** always follow the default.
+- **Include editable drawing**, below the export button on the **Export** tab, starts at the default each time the tab opens and applies to exports from the tab. Exports from the command palette follow the default. The line under it shows the default. When you change it, **Restore default** appears beside it to go back.
+- **Export pages as PDF** never includes the editable drawing, because page edges can clip parts of the drawing. **EMF for Office** does not carry it yet.
 
-The drawing inside a picture holds exactly what the picture shows: the selected objects for a copy of a selection, and the whole drawing for a file export. It has no file paths, user names, recent colors, import notes, page setup, recovery data or Undo history. Anyone who gets the picture can open that drawing in ReShiki, so turn **Include editable drawing** off for figures you send to a journal or publish.
+The drawing inside a picture holds exactly what the picture shows: the selected objects for a copy of a selection, and the whole drawing for a file export. It has no file paths, user names, recent colors, import notes, page setup, recovery data or Undo history. Anyone who gets the picture can open that drawing in ReShiki, so leave the editable drawing out of figures you send to a journal or publish. In a PNG, the drawing is a text chunk after the image data. PNG files from older versions, which put it before the image data, still open as drawings.
 
 A drawing larger than 2 MB compressed, usually one with large embedded photos, is not put in pictures. The status bar says so, and the file or clipboard picture is still written. Normal **Copy** keeps the editable drawing for ReShiki either way.
 
@@ -43,9 +75,9 @@ EMF file export is available on Windows only and supports figures up to 40 inche
 
 ## Large PNG drawings
 
-Large drawings, including the complete shortcut gallery, may exceed the image memory limit at 1200 dpi. File export automatically chooses the highest resolution that fits, from 1200, 600, 300, 150, 96 and 72 dpi, with a limit of 80 million pixels and 32,767 pixels on a side. This changes pixel density, not the physical dimensions, drawing content or the `.rsk` file.
+Large drawings, including the complete shortcut gallery, may exceed the image memory limit at the chosen resolution. File export then uses the highest lower resolution that fits, from 600, 300, 150, 96 and 72 dpi, with a limit of 80 million pixels and 32,767 pixels on a side. It never uses a resolution above the one you chose. This changes pixel density, not the physical dimensions, drawing content or the `.rsk` file. The **Resolution** menu and the **Export** tab's preview then show the resolution used, for example _7087 × 3544 px at 600 dpi_.
 
-The saved-file status reports the actual width, height and DPI. Use SVG or PDF if you need vector quality at any magnification. Exceptionally large drawings that exceed the limit even at 72 dpi still require a vector format. Clipboard PNG images retain their fixed 1200-dpi sizing and can be omitted for an oversized drawing; see [clipboard support](clipboard.md).
+The saved-file status reports the actual width, height and DPI. Use SVG or PDF if you need vector quality at any magnification. Exceptionally large drawings that exceed the limit even at 72 dpi still require a vector format. On macOS and Linux, a copied PNG keeps the copy resolution. A drawing too large for it gets no PNG, and the notice names that resolution, for example "too large for a 300 dpi PNG". On Windows, a copied PNG uses a lower resolution when it would not fit the clipboard. See [clipboard support](clipboard.md).
 
 ## Drawings with unresolved chemistry
 

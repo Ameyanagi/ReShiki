@@ -13,8 +13,10 @@
 //!   no `--receipt`, stdout stays empty. Every JSON line carries
 //!   `"experimental": true` except `schema proposal`, which prints the raw
 //!   JSON Schema; plain-text output carries no banner.
-//! - Warnings go to stderr as `reshiki: warning: {message}`, errors as
-//!   `reshiki: error: {message}` and usage errors as `reshiki: {message}`.
+//! - Warnings go to stderr as `reshiki: warning: {message}`, an operation
+//!   error as `reshiki: error[{code}]: {message}` with the operation error
+//!   code, any other error as `reshiki: error: {message}` and usage errors
+//!   as `reshiki: {message}`.
 //! - An operation, input or file error exits [`FAILURE`] (1), a usage error
 //!   [`USAGE`] (2), and a failed write to stdout [`FAILURE`].
 //!
@@ -167,7 +169,11 @@ async fn run_command(
             let _ = writeln!(err, "{USAGE_PREFIX}{message}");
             Ok(USAGE)
         }
-        Err(CliError::Tool(message) | CliError::Failed(message)) => {
+        Err(CliError::Tool { code, message }) => {
+            let _ = writeln!(err, "reshiki: error[{code}]: {message}");
+            Ok(FAILURE)
+        }
+        Err(CliError::Failed(message)) => {
             let _ = writeln!(err, "{ERROR_PREFIX}{message}");
             Ok(FAILURE)
         }

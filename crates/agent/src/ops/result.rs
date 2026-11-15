@@ -8,7 +8,7 @@ use crate::{
     transaction::Rejection,
 };
 use serde::Serialize;
-use serde_json::{Map, Value, json};
+use serde_json::{Map, Value};
 
 /// What a tool call produced. Transports map it to their own content types.
 ///
@@ -19,7 +19,7 @@ pub struct ToolResult {
     pub value: Map<String, Value>,
     pub images: Vec<Image>,
     pub files: Vec<Blob>,
-    /// A tool execution error: `value` includes `{error: {code, message}, versions}`.
+    /// A tool execution error: `value` includes `{error, versions}`.
     pub is_error: bool,
 }
 
@@ -71,19 +71,19 @@ impl ToolResult {
         self
     }
 
-    /// The tool execution error result `{error: {code, message}, versions}`.
+    /// The tool execution error result `{error, versions}`.
     pub fn error(error: &OpError, versions: &Versions) -> Self {
         Self {
             is_error: true,
             ..Self::plain(Map::from_iter([
-                ("error".to_owned(), error_json(error)),
+                ("error".to_owned(), error.json()),
                 ("versions".to_owned(), versions_json(versions)),
             ]))
         }
     }
 
     /// A rejected edit: an error envelope with validation `rejected` and a
-    /// `null` value, plus the `{error: {code, message}}` of every tool error.
+    /// `null` value, plus the `error` member of every tool error ([`OpError::json`]).
     pub fn rejected(rejection: Rejection, messages: Vec<String>, versions: &Versions) -> Self {
         let error = OpError::from(rejection.clone());
         let mut value = envelope_json(&Envelope {
@@ -92,17 +92,12 @@ impl ToolResult {
             validation: ValidationStatus::Rejected(rejection),
             versions: versions.clone(),
         });
-        value.insert("error".to_owned(), error_json(&error));
+        value.insert("error".to_owned(), error.json());
         Self {
             is_error: true,
             ..Self::plain(value)
         }
     }
-}
-
-/// The common error member of plain tool errors and rejected envelopes.
-fn error_json(error: &OpError) -> Value {
-    json!({"code": error.kind.code(), "message": error.message})
 }
 
 #[cfg(test)]

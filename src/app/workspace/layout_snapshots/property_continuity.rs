@@ -36,7 +36,7 @@ async fn properties(app: &mut App) {
 
 #[tokio::test]
 #[ignore = "Opt-in matched Properties renderer evidence; set RESHIKI_PROPERTY_QA_DIR"]
-async fn property_continuity_snapshots() {
+async fn manual_property_continuity_snapshots() {
     let directory = std::env::var_os("RESHIKI_PROPERTY_QA_DIR")
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|| std::env::temp_dir().join("reshiki-property-qa"));

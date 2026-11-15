@@ -3912,6 +3912,7 @@ dependencies = [
  "accesskit_consumer",
  "anyhow",
  "base64 0.22.1",
+ "chrono",
  "cosmolkit-inchi",
  "directories-next",
  "flate2",
@@ -4158,9 +4159,9 @@ dependencies = [
 name = "reshiki-web"
 version = "0.1.0"
 dependencies = [
+ "js-sys",
  "reshiki-io",
  "reshiki-model",
- "resvg",
  "wasm-bindgen",
  "wasm-bindgen-futures",
 ]

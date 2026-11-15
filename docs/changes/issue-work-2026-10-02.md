@@ -210,7 +210,7 @@ with product 4.18.26080.4, engine 1.1.26080.3 and signatures 1.459.510.0.
 Protection settings were unchanged. These are unsigned development files,
 not release installers: the result does not establish browser reputation,
 installation/upgrade behavior, Bitdefender behavior or closure of #62.
-See the [security-evidence contract](../windows-security-evidence.md).
+See the [security-evidence contract](windows-security-evidence.md).
 
 The immutable native macOS app receipts were:
 

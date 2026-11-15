@@ -52,16 +52,37 @@ impl Ui {
         );
         let mut messages = Vec::new();
         let mut shell = Shell::new(&mut messages);
-        view.as_widget_mut().update(
+        // An open popover sees the event first, as in the app.
+        if let Some(overlay) = view.as_widget_mut().overlay(
             &mut self.tree,
-            &event,
             Layout::new(&node),
-            cursor,
             &self.renderer,
-            &mut iced::advanced::clipboard::Null,
-            &mut shell,
             &self.viewport,
-        );
+            iced::Vector::ZERO,
+        ) {
+            let mut nested = iced::advanced::overlay::Nested::new(overlay);
+            let node = nested.layout(&self.renderer, self.viewport.size());
+            nested.update(
+                &event,
+                Layout::new(&node),
+                cursor,
+                &self.renderer,
+                &mut iced::advanced::clipboard::Null,
+                &mut shell,
+            );
+        }
+        if shell.event_status() == iced::event::Status::Ignored {
+            view.as_widget_mut().update(
+                &mut self.tree,
+                &event,
+                Layout::new(&node),
+                cursor,
+                &self.renderer,
+                &mut iced::advanced::clipboard::Null,
+                &mut shell,
+                &self.viewport,
+            );
+        }
         let status = shell.event_status();
         if status == iced::event::Status::Ignored
             && let Event::Keyboard(keyboard::Event::KeyPressed {
@@ -91,6 +112,18 @@ impl Ui {
             &self.renderer,
             operation,
         );
+        // Open popovers, as the app's accessibility tree sees them.
+        if let Some(overlay) = view.as_widget_mut().overlay(
+            &mut self.tree,
+            Layout::new(&node),
+            &self.renderer,
+            &self.viewport,
+            iced::Vector::ZERO,
+        ) {
+            let mut nested = iced::advanced::overlay::Nested::new(overlay);
+            let node = nested.layout(&self.renderer, self.viewport.size());
+            nested.operate(Layout::new(&node), &self.renderer, operation);
+        }
     }
 
     fn input(&mut self, app: &App, target: &'static str) -> (Rectangle, bool) {
@@ -324,11 +357,16 @@ async fn tabs_style_buttons_and_canvas_theme_are_named_controls() {
         "Close aldol.rsk"
     );
     assert_eq!(node("document-tab-new".into()).name, "New tab");
+    let properties = node("inspector-tab-Properties".into());
     assert_eq!(
-        node("inspector-tab-properties".into()).name,
-        "Properties tab, selected"
+        (properties.name.as_str(), properties.checked),
+        ("Properties tab", Some(true))
     );
-    assert_eq!(node("inspector-tab-export".into()).name, "Export tab");
+    let export = node("inspector-tab-Export".into());
+    assert_eq!(
+        (export.name.as_str(), export.checked),
+        ("Export tab", Some(false))
+    );
     let bold = node("text-style-bold".into());
     assert_eq!((bold.role, bold.checked), (Role::ToggleButton, Some(false)));
     assert_eq!(node("text-style-size".into()).role, Role::TextInput);
@@ -701,7 +739,7 @@ async fn help_hides_the_focus_ring_of_the_control_behind_it() {
         ui.run_task(&mut app, task).await;
         ui.key(&mut app, tab, Code::Tab, Modifiers::empty(), None)
             .await;
-        assert_eq!(ui.focused(&app), ["help-examples"]);
+        assert_eq!(ui.focused(&app), ["help-about"]);
         shots.push(pixels(&mut ui, &app));
         if focused_behind {
             let task = app.update(Message::ToggleHelp);
@@ -1369,6 +1407,7 @@ async fn updates_automatic_check_supports_modal_keyboard_traversal_and_activatio
         "updates-check",
         "updates-automatic",
         "updates-notes",
+        "updates-star",
         "updates-close",
     ] {
         let (status, messages) =
@@ -1377,7 +1416,7 @@ async fn updates_automatic_check_supports_modal_keyboard_traversal_and_activatio
         assert!(messages.is_empty());
         assert_eq!(focused(&mut ui, &app), vec![expected]);
     }
-    for expected in ["updates-notes", "updates-automatic"] {
+    for expected in ["updates-star", "updates-notes", "updates-automatic"] {
         let (status, messages) = ui.event(&app, tab(Modifiers::SHIFT), mouse::Cursor::Unavailable);
         assert_eq!(status, iced::event::Status::Captured);
         assert!(messages.is_empty());
@@ -1423,6 +1462,7 @@ async fn updates_automatic_check_supports_modal_keyboard_traversal_and_activatio
         "updates-close",
         "updates-check",
         "updates-notes",
+        "updates-star",
         "updates-close",
     ] {
         let (_, messages) = ui.event(&app, tab(Modifiers::empty()), mouse::Cursor::Unavailable);
@@ -1430,7 +1470,7 @@ async fn updates_automatic_check_supports_modal_keyboard_traversal_and_activatio
         assert_eq!(focused(&mut ui, &app), vec![expected]);
     }
     let _ = app.update(Message::Updates(updates::Action::Saved(Ok(()))));
-    for expected in ["updates-notes", "updates-automatic"] {
+    for expected in ["updates-star", "updates-notes", "updates-automatic"] {
         let (_, messages) = ui.event(&app, tab(Modifiers::SHIFT), mouse::Cursor::Unavailable);
         assert!(messages.is_empty());
         assert_eq!(focused(&mut ui, &app), vec![expected]);
@@ -1482,7 +1522,7 @@ async fn updates_automatic_check_supports_modal_keyboard_traversal_and_activatio
         ),
         "The checkbox and its focus wrapper must publish one mouse action: {click_messages:?}"
     );
-    for expected in ["updates-notes", "updates-close"] {
+    for expected in ["updates-notes", "updates-star", "updates-close"] {
         let (_, messages) = ui.event(&app, tab(Modifiers::empty()), mouse::Cursor::Unavailable);
         assert!(messages.is_empty());
         assert_eq!(focused(&mut ui, &app), vec![expected]);

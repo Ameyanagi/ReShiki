@@ -400,7 +400,7 @@ fn apply_entry(
                 || old.alignment != crate::abbreviations::LabelAlignment::Right)
                 .then_some(old.alignment),
             None if !reversible => None,
-            None => (crate::atom_labels::appendage_position(atom, doc)
+            None => (crate::atom_labels::appendage_position(atom, doc, None)
                 == crate::atom_labels::HydrogenPosition::Left
                 && result
                     .abbreviation(id)

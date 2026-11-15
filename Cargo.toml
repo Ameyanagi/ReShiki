@@ -3,6 +3,8 @@ name = "reshiki"
 version = "0.15.0"
 edition = "2024"
 default-run = "reshiki"
+# The [[test]] targets below list every integration test binary.
+autotests = false
 description = "A molecular drawing workspace"
 # Original ReShiki code; see LICENSE for third-party exclusions and notices.
 license = "MIT OR Apache-2.0"
@@ -122,6 +124,8 @@ sys-locale = "0.3"
 svg2pdf = { version = "0.13", default-features = false, features = ["text", "image"] }
 semver = "1"
 time = "0.3"
+# Local calendar days for the GitHub star prompt.
+chrono = { version = "0.4", default-features = false, features = ["clock", "serde"] }
 roxmltree = "0.20"
 tiff = "0.11.3"
 thiserror = "2"
@@ -346,12 +350,27 @@ iced_wgpu = { path = "vendor/iced_wgpu" }
 # Give Iced's text fields the system clipboard in the browser.
 window_clipboard = { path = "vendor/window_clipboard" }
 
-# Independent oracle suites live in reference/ and require the development reference.
+# Every other file under tests/ is a module of `it`. release.yml builds
+# agent_api_windows_pipes alone in the release profile, metafile_worker has its
+# own main and picture_memory its own global allocator.
+[[test]]
+name = "it"
+path = "tests/it.rs"
+
+[[test]]
+name = "agent_api_windows_pipes"
+path = "tests/agent_api_windows_pipes.rs"
 
 [[test]]
 name = "metafile_worker"
 path = "tests/metafile_worker.rs"
 harness = false
+
+[[test]]
+name = "picture_memory"
+path = "tests/picture_memory.rs"
+
+# Independent oracle suites live in reference/ and require the development reference.
 
 [[test]]
 name = "abbreviation_detection"

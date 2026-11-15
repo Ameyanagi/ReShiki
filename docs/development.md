@@ -1,12 +1,27 @@
 # Development
 
-ReShiki uses one Rust application executable for the editor, chemistry and native integrations, and Astro Starlight for documentation. Python/RDKit is an optional test reference.
+ReShiki is one Rust application executable for the editor, chemistry and
+native integrations, with Astro Starlight for this website. Python and RDKit
+are only an optional test reference.
 
-## Build and run
+## Prerequisites
 
-Install Rust 1.99.1 with rustfmt and Clippy, a C/C++ compiler, and Python 3.12 for the build scripts. The repository pins this compiler and its rustfmt/Clippy components in `rust-toolchain.toml`, and CI uses the same version. On Windows, use a Visual Studio tools shell matching your Rust target.
+| Tool              | macOS                                                            | Windows                                                                             | Linux (Ubuntu or Debian package names)                                                                                                             |
+| ----------------- | ---------------------------------------------------------------- | ----------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Rust              | [rustup](https://rustup.rs/)                                     | [rustup](https://rustup.rs/) with the MSVC toolchain                                | [rustup](https://rustup.rs/)                                                                                                                       |
+| C/C++ compiler    | Xcode Command Line Tools (`xcode-select --install`)              | Visual Studio Build Tools with **Desktop development with C++** and the Windows SDK | `build-essential pkg-config`                                                                                                                       |
+| System libraries  | None                                                             | None                                                                                | `libxkbcommon-dev libwayland-dev libx11-dev libxrandr-dev libxi-dev libxcursor-dev libxinerama-dev libgl1-mesa-dev libfontconfig1-dev libudev-dev` |
+| Python and uv     | Python 3.12 and [uv](https://docs.astral.sh/uv/) 0.12.3 or later | Python 3.12 (run as `python`) and uv 0.12.3 or later                                | Python 3.12 and uv 0.12.3 or later                                                                                                                 |
+| Hooks and website | [Bun 1.4.4](https://bun.com/docs/installation)                   | Bun 1.4.4                                                                           | Bun 1.4.4                                                                                                                                          |
+| Test runner       | [cargo-nextest](https://nexte.st/) 0.9.150, optional             | cargo-nextest 0.9.150, optional                                                     | cargo-nextest 0.9.150, optional                                                                                                                    |
 
-On macOS, Cargo defaults C/C++ dependencies to Apple Clang from `/usr/bin`, so a GCC installation earlier on `PATH` does not change the compiler. Set `CC_aarch64_apple_darwin` and `CXX_aarch64_apple_darwin` (or the `x86_64_apple_darwin` equivalents for Intel) explicitly to override these repository defaults.
+`rust-toolchain.toml` pins Rust 1.99.1 with rustfmt and Clippy; rustup installs
+it on the first build, and CI uses the same version. The Linux list is the one
+the CI images install. On Windows, run every command from a Visual Studio tools
+shell that matches your Rust target: x64, or ARM64 for
+`--target aarch64-pc-windows-msvc`.
+
+## First build
 
 ```sh
 git clone https://github.com/Ameyanagi/ReShiki.git reshiki
@@ -14,46 +29,161 @@ cd reshiki
 cargo run --locked
 ```
 
-For Windows ARM, build with `--target aarch64-pc-windows-msvc` from an ARM64 Visual Studio tools shell. The application relaunches itself for bounded InChI, geometry and naming work, and for some platform services; see [worker modes](architecture.md#worker-modes). There are no sibling runtime executables or Swift build steps. For offline Cargo builds, populate the dependency cache first and set `CARGO_NET_OFFLINE=true`.
+The application relaunches itself for bounded InChI, geometry and naming
+work, and for some platform services; see [worker modes](architecture.md#worker-modes).
+There are no sibling runtime executables or Swift build steps. For offline
+builds, populate the Cargo cache first and set `CARGO_NET_OFFLINE=true`.
+Measure performance with `cargo run --release --locked`; debug builds do much
+more work when drawing.
 
-## Native checks
+## Test environment
+
+Tests that start helper processes need these variables. Set them in each shell
+after you build the helpers (see [Run the checks](#run-the-checks)). Use
+absolute paths. If you set `CARGO_TARGET_DIR`, point at the binary there.
+
+| Variable                       | sh                                                                               | PowerShell                                                                                         |
+| ------------------------------ | -------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `RESHIKI_INCHI_HELPER`         | `export RESHIKI_INCHI_HELPER="$PWD/artifacts/inchi-helper/reshiki-inchi-helper"` | `$env:RESHIKI_INCHI_HELPER = (Resolve-Path artifacts/inchi-helper/reshiki-inchi-helper.exe).Path`  |
+| `RESHIKI_REQUIRE_INCHI_HELPER` | `export RESHIKI_REQUIRE_INCHI_HELPER=1`                                          | `$env:RESHIKI_REQUIRE_INCHI_HELPER = '1'`                                                          |
+| `RESHIKI_NAMING_HELPER`        | `export RESHIKI_NAMING_HELPER="$PWD/target/debug/reshiki"`                       | `$env:RESHIKI_NAMING_HELPER = (Resolve-Path target/debug/reshiki.exe).Path`                        |
+| `RESHIKI_DATA_DIR`             | `export RESHIKI_DATA_DIR="$(mktemp -d)"`                                         | `$env:RESHIKI_DATA_DIR = (New-Item -ItemType Directory (Join-Path $env:TEMP (New-Guid))).FullName` |
+
+- `RESHIKI_INCHI_HELPER` is the development InChI helper. With
+  `RESHIKI_REQUIRE_INCHI_HELPER=1`, tests fail instead of skipping when a
+  helper is missing.
+- `RESHIKI_NAMING_HELPER` is the built app, which naming tests start in its
+  `--naming-worker` mode. Rebuild it after you change naming or worker code,
+  because the tests run it as built.
+- `RESHIKI_DATA_DIR` keeps app-level tests away from your own recovery drafts
+  and templates. Use a new, empty folder for each run.
+
+Default tests do not need Python or RDKit. Windows clipboard tests replace the
+desktop clipboard with test data.
+
+## Run the checks
+
+Build the helpers, then lint:
 
 ```sh
-python3 scripts/build_inchi_helper.py
-export RESHIKI_INCHI_HELPER="$PWD/artifacts/inchi-helper/reshiki-inchi-helper"
-export RESHIKI_REQUIRE_INCHI_HELPER=1
+uv run --no-project python scripts/build_inchi_helper.py
+cargo build --locked --bin reshiki
 cargo fmt --all --check
 cargo clippy --workspace --all-targets --locked -- -D warnings
-cargo check --workspace --all-targets --locked
-cargo build --locked --bin reshiki
-export RESHIKI_NAMING_HELPER="$PWD/target/debug/reshiki"
-cargo test --workspace --locked
+```
+
+Run the tests as CI does, with cargo-nextest. The targets left out of the
+nextest run have custom harnesses or share one baseline in one process, so they
+run under `cargo test`:
+
+```sh
+cargo nextest run --workspace --locked --no-default-features --profile ci \
+  -E 'not binary_id(reshiki::metafile_worker) & not binary_id(reshiki-macos::native_print) & not (package(reshiki) & kind(lib) & test(/^naming::s2n_harness::/))'
+cargo test --locked --no-default-features -p reshiki --lib naming::s2n_harness::
+cargo test --locked --no-default-features --test metafile_worker
+cargo test --locked --no-default-features -p reshiki-macos --test native_print
+cargo test --workspace --locked --no-default-features --doc
 cargo run --locked -- --engine-check
 ```
 
-To test one library layer, select its crate. Integration tests, binaries and examples belong to the root `reshiki` package, so qualify them with `-p reshiki`:
+PowerShell continues a line with a backtick instead of a backslash:
 
-```sh
-cargo test --locked -p reshiki-chemistry
-cargo test --locked -p reshiki-model
-cargo test --locked -p reshiki-io
-cargo test --locked -p reshiki-agent
-cargo test --locked -p reshiki-mcp
-cargo test --locked -p reshiki-metafile
-cargo test --locked -p reshiki --test theme_reference
+```powershell
+cargo nextest run --workspace --locked --no-default-features --profile ci `
+  -E 'not binary_id(reshiki::metafile_worker) & not binary_id(reshiki-macos::native_print) & not (package(reshiki) & kind(lib) & test(/^naming::s2n_harness::/))'
 ```
 
-A single-package build resolves features for that package alone, so the first run may compile some dependencies again with a smaller feature set. `reshiki-metafile` is not a default member, so plain `cargo test` skips its tests. See [crates and layering](architecture.md#crates-and-layering) for what each crate contains.
+The other commands are the same in both shells.
+
+Without cargo-nextest, `cargo test --workspace --locked` runs the same tests in
+one command. `.config/nextest.toml` runs at most two of the tests that start
+the naming worker at a time and stops any test that runs for 15 minutes.
+
+To test one library layer, select its crate. Integration tests, binaries and
+examples belong to the root `reshiki` package, so qualify them with
+`-p reshiki`. The files under `tests/` are modules of one test binary, `it`, so
+that the application library links once and not once per file. Select one
+file's tests by its module name:
+
+```sh
+cargo test --locked -p reshiki-model
+cargo test --locked -p reshiki --test it theme_reference::
+```
+
+A new file under `tests/` needs a `mod` line in `tests/it.rs`; a test there
+fails while one is missing. Three files stay separate targets in `Cargo.toml`:
+`metafile_worker` has its own `main`, `picture_memory` its own global
+allocator, and `release.yml` builds `agent_api_windows_pipes` alone in the
+release profile.
+
+The agent goldens under `tests/fixtures/agent-contract/` and
+`tests/fixtures/agent-skill/` change only with an intentional contract change;
+the README in each folder says how to regenerate them. The MCP transcripts
+under `tests/fixtures/mcp/` and `crates/mcp/tests/transcripts/` are edited by
+hand to the new expected lines. `tests/fixtures/agent-api/parity.json` holds
+one molecule and one reaction with the answers the command line
+(`tests/cli.rs`), the Python package (`crates/python/tests/test_parity.py`) and
+the JavaScript package (`packages/editor/test/parity.test.ts`) must all give.
+Rewrite it from a built binary:
+
+```sh
+uv run --locked python scripts/agent_parity_fixture.py target/debug/reshiki
+```
+
+A single-package build resolves features for that package alone, so the first
+run may compile some dependencies again. `reshiki-metafile` is not a default
+member, so plain `cargo test` skips it. See [crates and layering](architecture.md#crates-and-layering)
+for what each crate contains.
 
 The naming project's five crates now live in [Ameyanagi/nazuchem](https://github.com/Ameyanagi/nazuchem). ReShiki uses `nazuchem-ir`, `nazuchem-kernel`, `nazuchem-n2s` and `nazuchem-s2n` as git dependencies at the nazuchem revision pinned in `Cargo.toml`; it does not use the facade crate `nazuchem`. Run the engine unit tests and oracle gates in that repository. ReShiki's `cargo test --workspace --locked` covers the adapters, naming integration tests and worker response snapshot; it does not run dependency unit tests. Use the [structure-to-name harness](structure-to-name-harness.md#run) for focused ReShiki naming checks.
 
-Naming integration tests start the built application in its `--naming-worker` mode. Build it first and point `RESHIKI_NAMING_HELPER` at it with an absolute path; if you set `CARGO_TARGET_DIR`, use the binary there. Without the variable, the tests fail with "Naming integration tests require RESHIKI_NAMING_HELPER…". Rebuild the binary after you change naming or worker code, because the tests run it as built.
-
 The [structure-to-name harness](structure-to-name-harness.md) measures naming coverage and openclatura parity with an in-process OPSIN round trip, without a helper executable. Its fast subset runs normally; the full corpus is opt-in and runs nightly in CI.
 
-The development-only helper and fault-injection stub let library tests exercise subprocess transport independently of the GUI entry point. Keep `RESHIKI_INCHI_HELPER` set while running those tests. In PowerShell, use `python`, set `$env:RESHIKI_INCHI_HELPER = (Resolve-Path artifacts/inchi-helper/reshiki-inchi-helper.exe).Path`, and set `$env:RESHIKI_REQUIRE_INCHI_HELPER = '1'`. After `cargo build --locked --bin reshiki`, set `$env:RESHIKI_NAMING_HELPER = (Resolve-Path target/debug/reshiki.exe).Path`. Required mode fails if native test binaries are missing. Default tests do not require Python or RDKit. Windows clipboard tests replace the desktop clipboard with test data.
-
 Archive and installer checks run the installed app twice with Python, uv and the checkout unavailable. They reject separate worker executables, Python payloads and chemistry-environment creation. Release CI also runs the complete InChI framing and heap suite against the application’s `--inchi-worker` mode.
+
+## Pre-commit checks
+
+Run `bun install --frozen-lockfile` to install the web tools and the Lefthook
+hooks; `bun run --bun lefthook install` reinstalls them. Python changes also
+need `uv sync --locked`.
+
+Pre-commit hooks check staged file types: Oxlint and `bun fmt` for web and
+configuration files, Ruff and ty for Python, and Cargo fmt for Rust. A pre-push
+hook runs Clippy when the push changes Rust or Cargo files. Clippy type-checks
+libraries and binaries; CI lints tests and examples too. Hooks do not rewrite or
+restage changes. The repository uses LF line endings, including on Windows.
+
+```sh
+bun run lint:js
+bun run format:check
+uv run --locked ruff check reference scripts tests
+uv run --locked ruff format --check reference scripts tests
+uv run --locked ty check
+uv run --locked python -m unittest discover -s tests -p 'test_*.py'
+```
+
+To format, use `bun run format`, `uv run --locked ruff format reference scripts tests`
+or `cargo fmt --all`.
+
+## Troubleshooting
+
+- **"Naming integration tests require RESHIKI_NAMING_HELPER…"**: run
+  `cargo build --locked --bin reshiki` and set `RESHIKI_NAMING_HELPER` to the
+  binary with an absolute path.
+- **A naming test still fails after a fix**: rebuild `reshiki`; the tests run
+  the helper as built.
+- **macOS uses the wrong C compiler**: Cargo uses Apple Clang from `/usr/bin`,
+  even with GCC earlier on `PATH`. To override it, set
+  `CC_aarch64_apple_darwin` and `CXX_aarch64_apple_darwin` (or the
+  `x86_64_apple_darwin` equivalents on Intel).
+- **Windows cannot find `link.exe` or the SDK**: open a Visual Studio tools
+  shell for your target architecture and run Cargo from there.
+- **Linux build fails in a `-sys` crate**: install the system libraries from
+  [Prerequisites](#prerequisites); `pkg-config` must find them.
+- **`--locked` fails**: `Cargo.lock` does not match `Cargo.toml`. With a local
+  nazuchem patch, omit `--locked` (see [Working on nazuchem](#working-on-nazuchem)).
+- **A renderer test is skipped**: tests that need a real renderer are
+  `#[ignore]`; see [Opt-in renderer tests](#opt-in-renderer-tests).
 
 ## Working on nazuchem
 
@@ -93,14 +223,15 @@ The other naming tests do start helper processes; run them as CI does, with `RES
 
 Tests that need a real renderer or a baseline folder are marked `#[ignore]`. Run them with `-- --ignored`, or with `-- --include-ignored` to run the ordinary tests too. Add `--test-threads=1` for renderer pixel tests. On macOS the only headless renderer is WGPU on Metal; Tiny Skia is built only on Windows.
 
-| Variable                | Used by                                                            | Meaning                                                                                                                                                                                                                                                |
-| ----------------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `RESHIKI_DATA_DIR`      | View parity, UI snapshots and other app-level renderer tests       | The app's data folder: `App::new` reads recovery drafts and the template library from it. Point it at a new, empty folder before each run, so your own data cannot change the result.                                                                  |
-| `RESHIKI_UI_QA_DIR`     | `ui_layout_snapshots`                                              | Folder for PNG snapshots of key UI states at 1280 and 1040 px. Without it, the test writes to `reshiki-ui-qa` in the temporary folder.                                                                                                                 |
-| `RESHIKI_VIEW_PARITY`   | `views_match_captured_baseline`, `entries_match_captured_baseline` | Baseline folder for view and right-click menu parity. `RESHIKI_VIEW_PARITY_CAPTURE=1` writes the baseline; otherwise the test compares. `RESHIKI_VIEW_PARITY_ONLY` limits a capture to a case-name prefix during development; compare mode refuses it. |
-| `RESHIKI_CANVAS_PIXELS` | Canvas, paper-layer, text-placement and icon pixel baselines       | Baseline folder. `RESHIKI_CANVAS_CAPTURE_BASELINE=1` writes the baseline; otherwise the test compares.                                                                                                                                                 |
-| `RESHIKI_PERF_RENDERER` | Pixel, view-parity and canvas performance tests                    | Headless backend: `wgpu`, or `tiny-skia` on Windows. Without it, the default backend runs.                                                                                                                                                             |
-| `RESHIKI_MODEL_PARITY`  | `reshiki-model` captured-baseline tests                            | Baseline folder for model output. `RESHIKI_MODEL_CAPTURE_BASELINE=1` writes it.                                                                                                                                                                        |
+| Variable                | Used by                                                                          | Meaning                                                                                                                                                                                                                                                |
+| ----------------------- | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `RESHIKI_DATA_DIR`      | View parity, UI snapshots and other app-level renderer tests                     | The app's data folder: `App::new` reads recovery drafts and the template library from it. Point it at a new, empty folder before each run, so your own data cannot change the result.                                                                  |
+| `RESHIKI_UI_QA_DIR`     | `manual_ui_layout_snapshots`                                                     | Folder for PNG snapshots of key UI states at 1280 and 1040 px. Without it, the test writes to `reshiki-ui-qa` in the temporary folder.                                                                                                                 |
+| `RESHIKI_UI_QA_SCALE`   | `manual_ui_layout_snapshots`, `manual_settings_snapshots`                        | Pixel density of the snapshots, such as `2` for 2× images. Without it, they are 1×.                                                                                                                                                                    |
+| `RESHIKI_VIEW_PARITY`   | `manual_views_match_captured_baseline`, `manual_entries_match_captured_baseline` | Baseline folder for view and right-click menu parity. `RESHIKI_VIEW_PARITY_CAPTURE=1` writes the baseline; otherwise the test compares. `RESHIKI_VIEW_PARITY_ONLY` limits a capture to a case-name prefix during development; compare mode refuses it. |
+| `RESHIKI_CANVAS_PIXELS` | Canvas, paper-layer, text-placement and icon pixel baselines                     | Baseline folder. `RESHIKI_CANVAS_CAPTURE_BASELINE=1` writes the baseline; otherwise the test compares.                                                                                                                                                 |
+| `RESHIKI_PERF_RENDERER` | Pixel, view-parity and canvas performance tests                                  | Headless backend: `wgpu`, or `tiny-skia` on Windows. Without it, the default backend runs.                                                                                                                                                             |
+| `RESHIKI_MODEL_PARITY`  | `reshiki-model` captured-baseline tests                                          | Baseline folder for model output. `RESHIKI_MODEL_CAPTURE_BASELINE=1` writes it.                                                                                                                                                                        |
 
 Capture a baseline on the parent commit, then compare on your change:
 
@@ -108,12 +239,21 @@ Capture a baseline on the parent commit, then compare on your change:
 export RESHIKI_DATA_DIR="$PWD/artifacts/test-data"
 rm -rf "$RESHIKI_DATA_DIR" && mkdir -p "$RESHIKI_DATA_DIR"
 RESHIKI_VIEW_PARITY="$PWD/artifacts/view-parity" RESHIKI_VIEW_PARITY_CAPTURE=1 \
-  cargo test --locked --bin reshiki views_match_captured_baseline -- --ignored --nocapture
+  cargo test --locked --bin reshiki manual_views_match_captured_baseline -- --ignored --nocapture
 ```
 
 For the comparison, empty `RESHIKI_DATA_DIR` again and run the same command without `RESHIKI_VIEW_PARITY_CAPTURE`. Set `RESHIKI_NAMING_HELPER` and `RESHIKI_INCHI_HELPER` the same way for both runs: with the naming helper set, view parity also registers the cases that need chemical names.
 
-On Windows, CI runs every ignored `app::naming::` test, the `app::nmr::` and `canvas::nmr::` tests with `--include-ignored --test-threads=1`, and a few named focus and menu tests (`.github/workflows/checks.yml`). A new naming renderer test therefore runs there without a workflow change.
+On Windows, CI runs every ignored test of the application binary whose name does not start with `manual_` or end in `_child`, and the accessibility tests of the root library. A new renderer test in the application runs there without a workflow change:
+
+```sh
+cargo nextest run --locked --no-default-features --lib --bin reshiki --profile ci --run-ignored ignored-only --test-threads 2 \
+  -E '(binary_id(reshiki::bin/reshiki) & not test(/(^|::)manual_[^:]+$/) & not test(/_child$/)) | (package(reshiki) & kind(lib) & test(/^accessibility::tests::/))'
+```
+
+Start a test's name with `manual_` when it is a tool and not a check: a benchmark or profile, a baseline comparison, or a capture that needs its own folder or variables. Nothing in CI runs a `manual_` test, so keep its assertions few.
+
+End a test's name with `_child` when another test starts it in a new process and sets its environment, as `define_group_child` is started. CI runs it only through that parent test.
 
 ## Optional RDKit reference tests
 
@@ -166,17 +306,9 @@ Everything that needs or captures from the pinned Python/RDKit reference lives i
 
 Pull requests run native tests and saved InChI, depiction, and aromatic-response fixtures on Linux x64 and Windows x64. The macOS ARM64 legs run only on stacked `merge/*` pull requests, pull requests labelled `full-ci`, `main`, nightly, release and manual runs (`scripts/ci_scope.py`). Documentation-only changes skip native checks. Expected results come from pinned RDKit captures; fixture updates retain their source hashes and platform provenance.
 
-CI runs the workspace tests with [cargo-nextest](https://nexte.st/) 0.9.150, split into two partitions. `.config/nextest.toml` runs the tests that start the naming worker one at a time. To run the same tests locally:
+On a pull request, the summary of the **Changed fixture rows** job lists the rows that each changed file under a `tests/fixtures/` folder gains and loses (`scripts/baseline_summary.py`). Read it when you review a fixture or baseline update. To print the same list locally, run `python3 scripts/baseline_summary.py "$(git merge-base origin/main HEAD)"`.
 
-```sh
-cargo nextest run --workspace --locked --no-default-features --profile ci \
-  -E 'not binary_id(reshiki::metafile_worker) & not binary_id(reshiki-macos::native_print) & not (package(reshiki) & kind(lib) & test(/^naming::s2n_harness::/))'
-cargo test --locked --no-default-features -p reshiki --lib naming::s2n_harness::
-cargo test --locked --no-default-features --test metafile_worker
-cargo test --workspace --locked --no-default-features --doc
-```
-
-The excluded targets have custom harnesses or share one baseline in one process, so they run under `cargo test`. Plain `cargo test --workspace --locked`, as in [native checks](#native-checks), also covers them.
+CI runs the workspace tests with [cargo-nextest](https://nexte.st/) 0.9.150; [Run the checks](#run-the-checks) gives the same commands. On each platform the **rust build** job compiles the tests once and passes them on as a `cargo nextest archive` file. Two **rust** partition jobs run that file without compiling. The **rust extra** job runs beside them and covers the tests that nextest leaves out: the Windows renderer tests, the naming corpus, the custom harnesses and the doc tests. **Rust checks** passes only when all of these jobs pass. Each partition uploads its JUnit report as a `nextest-junit-*` artifact.
 
 The **Browser build (wasm32)** job checks the browser build on the same pull requests: Clippy with `-D warnings` for the editor and the headless library (`reshiki-web`) for `wasm32-unknown-unknown`, with the crates and target `scripts/build_wasm.sh` builds, then `bun test` in `packages/editor` against a debug build of the headless library. It skips with the native checks for documentation-only changes, and only release tags build the optimised bundle. The `web` job lints `packages/editor` with oxlint on every pull request. To run the same checks locally:
 
@@ -195,22 +327,6 @@ To refresh aromatic-fixture provenance after an unrelated worker-source change, 
 
 Windows ARM64 and Linux ARM64 remain release targets with package and installer checks.
 
-## Pre-commit checks
-
-Install [Bun 1.4.4](https://bun.com/docs/installation), then run `bun install --frozen-lockfile` to install the web tools and Lefthook hooks. Use `bun run --bun lefthook install` to reinstall hooks. Python changes also need the uv development environment above.
-
-Hooks check staged file types: Oxlint and `bun fmt` for web and configuration files, Ruff/ty for Python, and Cargo fmt and Clippy for Rust. Clippy type-checks libraries and binaries; CI lints tests and examples on every pull request. They do not rewrite or restage changes. Rust checks run sequentially. The repository uses LF line endings, including on Windows.
-
-```sh
-bun run lint:js
-bun run format:check
-uv run --locked ruff check reference scripts tests
-uv run --locked ruff format --check reference scripts tests
-uv run --locked ty check
-```
-
-To format, use `bun run format`, `uv run --locked ruff format reference scripts tests`, or `cargo fmt --all`.
-
 ## Documentation
 
 ```sh
@@ -221,6 +337,12 @@ bun run docs:build
 
 Edit the visual manual in `website/src/content/docs/guide/` and developer notes in `docs/*.md`. The sync script generates ignored Starlight copies of the developer notes; edit their originals. It builds the unreleased changes page with `scripts/assemble_changelog.py` from the [release-note fragments](changes/unreleased/README.md), so it needs `python3` (`python` on Windows). Landing page, navigation and theme live in `website/`. The production build checks local page and asset links. Follow [writing and terms](writing-style.md) for wording, UI labels and feature names.
 
+The [module index](modules.md) is generated from the first sentence of each Rust file's `//!` comment. After you add, move or remove a module file, or change that sentence, rewrite the page; a Python test fails while it is out of date:
+
+```sh
+python3 scripts/module_index.py
+```
+
 The Documentation workflow checks pull requests and deploys main to [GitHub Pages](https://reshiki.com/). Pages must use **GitHub Actions** as its source. See [release builds and signing](releasing.md) for distribution setup.
 
 ## UI conventions
@@ -229,4 +351,5 @@ Every floating surface (menus, popovers, palettes, dialogs) wraps its shadow in 
 
 ## Windows development
 
-Use the MSVC Rust toolchain with Visual Studio Build Tools and the Windows SDK. Measure performance with `cargo run --release --locked`. Windows automatic startup uses Direct3D 12 consistently for adapter discovery and Iced's WGPU initialization, then selects Tiny Skia directly when discovery finds only CPU rendering or no adapters. Explicit `ICED_BACKEND` preferences bypass automatic configuration; existing `WGPU_BACKEND` values are preserved, including empty or invalid lists. `--graphics-info` reports the requested WGPU APIs, discovered adapters and renderer preference; it does not create a window or validate a graphics device. This reduces unnecessary graphics driver initialization but does not recover from native driver crashes. Clipboard, printing and Office integration are Rust code linked into the app. See the [Windows guide](windows.md).
+Windows renderers, `--graphics-info`, the renderer benchmark and the Windows
+verification scope are in [Windows development](windows.md).

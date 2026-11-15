@@ -52,6 +52,17 @@ pub struct State {
     error: Option<String>,
 }
 impl State {
+    /// Whether a preference save is in progress, which holds both preferences.
+    pub(super) fn saving(&self) -> bool {
+        self.saving
+    }
+    /// Whether the channel can change: no save, install or restart is running.
+    pub(super) fn idle(&self) -> bool {
+        !self.saving && !self.installing && !self.restarting
+    }
+    pub(super) fn error(&self) -> Option<&str> {
+        self.error.as_deref()
+    }
     pub fn new() -> Self {
         let preferences = if cfg!(test) {
             Preferences::default()
@@ -104,6 +115,8 @@ impl App {
             Action::Show(open) => {
                 if !self.updates.restarting {
                     self.updates.open = open;
+                    // Help > About replaces Help.
+                    self.help_open &= !open;
                 }
             }
             Action::Poll => {
@@ -264,12 +277,27 @@ impl App {
     fn save_update_preferences(&mut self) -> Task<Message> {
         self.updates.saving = true;
         Task::perform(
-            updates::save_preferences(Preferences {
-                automatic: self.updates.automatic,
-                channel: self.updates.channel,
-            }),
+            updates::save_preferences(self.update_preferences()),
             |result| Message::Updates(Action::Saved(result)),
         )
+    }
+
+    pub(super) fn update_preferences(&self) -> Preferences {
+        Preferences {
+            automatic: self.updates.automatic,
+            channel: self.updates.channel,
+        }
+    }
+
+    /// Automatic checks on the Stable channel, as at first launch.
+    pub(super) fn restore_update_defaults(&mut self) -> Task<Message> {
+        let defaults = Preferences::default();
+        self.updates.automatic = defaults.automatic;
+        if self.updates.channel == defaults.channel {
+            self.save_update_preferences()
+        } else {
+            self.update_action(Action::Channel(defaults.channel))
+        }
     }
 
     fn update_restart_blocker(&self) -> Option<&'static str> {
@@ -448,7 +476,12 @@ impl App {
                 text_color: theme.palette().text,
                 ..Default::default()
             }),
-            reshiki::accessibility::button("updates-notes", "Open release notes", "Release notes ↗").on_press(msg(Action::Download)).style(button::text),
+            row![
+                reshiki::accessibility::button("updates-notes", "Open release notes", "Release notes ↗").on_press(msg(Action::Download)).style(button::text),
+                reshiki::accessibility::button("updates-star", "Star ReShiki on GitHub", "Star ReShiki on GitHub ↗")
+                    .on_press(Message::Star(super::star_prompt::Action::Star { toast: false }))
+                    .style(button::text),
+            ],
             text(if state.channel == Channel::Nightly { "Checks once a day. Nightlies are installed manually. Downloads prefer installers when available; Release notes also links portable archives." } else { "Checks once a day. Stable updates are verified before installation. Your saved tabs reopen after restarting." })
                 .size(12)
                 .style(super::workspace::muted_text),

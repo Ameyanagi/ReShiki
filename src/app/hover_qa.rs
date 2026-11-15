@@ -94,7 +94,7 @@ impl Ui {
 
 #[tokio::test]
 #[ignore = "Exact-gallery real widget pan/zoom and 151-position hover evidence"]
-async fn large_gallery_pointer_renderer() {
+async fn manual_large_gallery_pointer_renderer() {
     let fixture = std::env::var_os("RESHIKI_HOVER_QA_DRAWING").expect("Exact issue fixture path");
     let doc = Document::from_json(&std::fs::read(fixture).unwrap()).unwrap();
     assert_eq!(doc.atoms.len(), 7728);

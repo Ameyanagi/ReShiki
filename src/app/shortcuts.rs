@@ -145,6 +145,7 @@ fn binding(message: &Message) -> Option<(Modifiers, &'static str)> {
         Message::Copy(cut) => (command, if *cut { "X" } else { "C" }),
         Message::Paste => (command, "V"),
         Message::CopyImage => (shift, "C"),
+        Message::Settings(super::settings_page::Action::Open(None)) => (command, ","),
         Message::Optimization(super::optimization::Action::Begin) => (shift, "D"),
         Message::SelectAll => (command, "A"),
         Message::InvertSelection => (shift, "A"),
@@ -169,8 +170,19 @@ fn binding(message: &Message) -> Option<(Modifiers, &'static str)> {
             },
         ),
         Message::Delete => (Modifiers::empty(), "Delete"),
-        Message::KeyboardDrawing(super::keyboard_drawing::Action::Toggle) => {
-            (Modifiers::empty(), "F8")
+        Message::KeyboardDrawing(action) => {
+            use super::keyboard_drawing::Action;
+            (
+                Modifiers::empty(),
+                match action {
+                    Action::Toggle => "F8",
+                    // Keys of the keyboard drawing mode, through `keyboard_context_key`.
+                    Action::Mark => "[",
+                    Action::Connect => "]",
+                    Action::Coordinate => "}",
+                    _ => return None,
+                },
+            )
         }
         Message::Shortcut(Action::SelectRing(size)) => (
             Modifiers::SHIFT,
@@ -264,6 +276,7 @@ pub(super) fn key_message(key: &Key, modified: &Key, mods: Modifiers) -> Option<
             "l" => Message::Shortcut(Action::FixedLength),
             "e" => Message::Shortcut(Action::FixedAngles),
             "/" => Message::Fit,
+            "," => Message::Settings(super::settings_page::Action::Open(None)),
             ";" => Message::Shortcut(Action::Rulers),
             "[" => Message::BondDepth(false),
             "]" => Message::BondDepth(true),

@@ -118,7 +118,7 @@ impl App {
     pub(super) fn cancel_cleanup(&mut self) {
         self.tab.cleanup_serial = self.tab.cleanup_serial.wrapping_add(1);
         self.tab.cleanup = None;
-        self.status = "Cleanup cancelled · Drawing unchanged".into();
+        self.status = "Cleanup canceled · Drawing unchanged".into();
         self.error = false;
     }
     pub(super) fn apply_cleanup(&mut self) {
@@ -135,7 +135,7 @@ impl App {
             self.changed(before);
             if !self.error {
                 self.tab.analysis = preview.analysis;
-                self.status = "Cleanup applied · Undo restores the original layout".into();
+                self.status = "Cleanup applied".into();
             }
         }
     }

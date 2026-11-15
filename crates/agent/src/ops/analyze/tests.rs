@@ -238,7 +238,7 @@ async fn unknown_ids_name_the_first_missing_one() {
         assert!(result.is_error);
         assert_eq!(
             result.value["error"],
-            json!({"code": "unknown_object", "message": format!("Object {first} is not in the drawing")})
+            json!({"code": "unknown_object", "message": format!("Object {first} is not in the drawing"), "retryable": false, "param": "ids"})
         );
     }
 }
@@ -252,7 +252,7 @@ async fn a_selection_without_atoms_is_refused() {
         assert!(result.is_error);
         assert_eq!(
             result.value["error"],
-            json!({"code": "invalid_arguments", "message": NO_ATOMS})
+            json!({"code": "invalid_arguments", "message": NO_ATOMS, "retryable": false})
         );
     }
 }

@@ -25,7 +25,7 @@ pub(super) fn snapshot(app: &mut App, renderer: &mut iced::Renderer, path: &Path
 
 #[tokio::test]
 #[ignore = "Capture with isolated RESHIKI_DATA_DIR, RESHIKI_RECOVERY_QA_INPUT and RESHIKI_RECOVERY_QA_OUTPUT"]
-async fn recovery_banner_evidence() -> anyhow::Result<()> {
+async fn manual_recovery_banner_evidence() -> anyhow::Result<()> {
     let input = std::path::PathBuf::from(
         std::env::var_os("RESHIKI_RECOVERY_QA_INPUT").expect("Fixture folder"),
     );

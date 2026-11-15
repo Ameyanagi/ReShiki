@@ -2,7 +2,16 @@
 
 ## Find a shortcut
 
-Open **Help** at the bottom of the tool strip, or press **?** (away from atoms and bonds; over one, **?** opens its properties), **F1** or **Cmd/Ctrl+Shift+/** (Cmd+? on macOS). **Cmd/Ctrl+/** remains **Fit drawing**. Help is a searchable list of every shortcut. Type part of an action, description or key: **wedge**, **boc**, **ring**, **⇧R** or **shift r** all work, and a few synonyms per entry such as **stereo** or **naphthalene** find the matching key. Lowercase and uppercase keys rank separately: **r** finds the ring tool and Variable R, while **R** finds the saturated/aromatic toggle. With keyboard drawing on and Select or Lasso active, rows that work in that mode win equal-score ties; classic empty-canvas keys carry an **F8 off** note. With keyboard drawing off or another drawing tool active, the usual registry tie-break applies. An empty search always keeps registry order.
+Open **Help** at the bottom of the tool strip, or press **F1**,
+**Cmd/Ctrl+Shift+/** (Cmd+? on macOS) or **?** away from atoms and bonds (over
+one, **?** opens its properties). Help lists every shortcut. Search by action,
+description or key: **wedge**, **boc**, **⇧R** and **shift r** all work, and
+synonyms such as **stereo** find their keys. **r** and **R** are different keys.
+
+- With keyboard drawing on and Select or Lasso active, rows for that mode rank
+  first among equal matches; classic empty-canvas keys carry an **F8 off** note.
+- An empty search lists shortcuts in their usual order.
+- **Cmd/Ctrl+/** stays **Fit drawing**.
 
 Each row shows the keys as the menus show them (symbols on macOS, words elsewhere), the action, a one-line description and where it applies: atom, bond, selection, empty canvas, keyboard drawing or anywhere. **Up/Down** (or Page Up/Page Down) move the selection, a click selects a row, and **Escape** closes Help. A row that is also a [command](#run-a-command), such as **Select all** or **Fit drawing**, is marked **Run ↩**: **Enter** or the **Run** button under its description runs it and closes Help. After a click on a row, typing and **Enter** still go to the search. When the command cannot run now, the reason is shown under **Run**. Other rows are reference only; selecting one never changes the drawing.
 
@@ -10,7 +19,23 @@ The preview pane labels its drawings **Example: before** and **Example: after**.
 
 ## Run a command
 
-Press **:** to open the **command palette**. Over an atom or bond **:** opens it too, since it has no drawing meaning there; inside a text field, **:** is typed as usual. Type part of a command and press **Enter** (or click a row) to run it; unlike Help, the palette runs the command and closes. **Up/Down** move, **Page Up/Page Down** move a screenful, **Home/End** go to the first and last result, and **Escape** closes. Each one-line row shows its category and its shortcut, if it has one, so the palette also teaches the keys; the selected row's description is shown below the list. The chips under the search field (**All**, **Insert**, **Bond**…) show how many results each category has: click one, or press **Tab** / **Shift+Tab**, to show only that category.
+Press **:** to open the **command palette**, also over an atom or bond; in a
+text field, **:** types a colon. Type part of a command and press **Enter** or
+click a row: unlike Help, the palette runs the command and closes. Each row
+shows its category and shortcut, so the palette also teaches the keys, and the
+selected row's description appears below the list.
+
+| Key                         | Action                                  |
+| --------------------------- | --------------------------------------- |
+| **Up** / **Down**           | Move one row                            |
+| **Page Up** / **Page Down** | Move a screenful                        |
+| **Home** / **End**          | First or last result                    |
+| **Tab** / **Shift+Tab**     | Show only the next or previous category |
+| **Enter**                   | Run the selected command                |
+| **Escape**                  | Close                                   |
+
+The chips under the search field (**All**, **Insert**, **Bond**…) show how
+many results each category has; click one to show only that category.
 
 Commands opens near the top of the window, horizontally centered, and shrinks
 to fit its results up to its maximum height. Its hint names the pointed target
@@ -24,12 +49,38 @@ The palette searches the same way as Help. Each word you type may start any word
 - **Bond** and **Atom** edits: every bond style (single, double, triple, wedges, wavy, bold, dashed, dative, hydrogen bond…), double-bond line position, bond direction and depth, charge, radicals and the contextual atom keys (extend chain, carbonyl, tert-butyl, Cp ligand…).
 - **Edit**, **Analyze**, **File**, **View** and **Tool** commands from the menus, toolbar and panels: undo, flips, rotation, alignment, clean up, 3D optimization, **Predict NMR**, formula and properties, naming, reaction roles and mapping, save, export formats, copy formats, zoom, guides, themes, journal styles, every inspector panel and every drawing tool, including a tool for each ring preset (**Benzene tool**, **Cyclopentadiene tool**, **Chair A/B tool**, **Haworth 5/6 tool**) that chooses the Ring tool with that preset.
 
-Commands act on the **selection**; with nothing selected, on the atom or bond under the pointer (or the keyboard-drawing hotspot). **double bond** makes the selected bonds double; with no bond, it chooses the double-bond tool. **benzene** attaches a ring to the selected atom or fuses it to the selected bond the same way the **a** key does, and otherwise adds it at the center of the view and selects it. Every edit is one Undo step. Commands whose name or shortcut key matches rank above those matched only by keyword or description. A command that needs a target it does not have stays listed, greyed and below the commands that can run, with the reason under the list. With an empty search, recently run commands come first; commands for the current target rank higher. Before any command has run, a **Start here** group leads instead: **Import structure or name**, **Benzene**, **Open…**, **Clean up structure**, **Molecular formula and properties**, **Predict NMR**, **Export panel** and **Help & shortcuts**, with the rest under **More commands**. Recent commands that cannot run come after those that can.
+Commands act on the **selection**; with nothing selected, on the atom or bond under the pointer (or the keyboard-drawing hotspot). **double bond** makes the selected bonds double; with no bond, it chooses the double-bond tool. **benzene** attaches a ring to the selected atom or fuses it to the selected bond the same way the **a** key does, and otherwise adds it at the center of the view and selects it. Every edit is one Undo step. Commands whose name or shortcut key matches rank above those matched only by keyword or description. A command that needs a target it does not have stays listed, greyed and below the commands that can run, with the reason under the list. With an empty search, recently run commands come first; commands for the current target rank higher. Before any command has run, a **Start here** group leads instead: **Import structure or name**, **Benzene**, **Open…**, **Clean up…**, **Molecular formula and properties**, **Predict NMR**, **Export panel** and **Help & shortcuts**, with the rest under **More commands**. Recent commands that cannot run come after those that can.
 
 A template command places once and returns to Select, including when placement
 is refused. It keeps the Templates tool's **Keep placing** preference unchanged.
 
-Some commands take a value after their word: **rotate 30** (or **rotate ccw 30**), **tilt up 20** (also **down**, **left**, **right**, or **tilt x -15** and **tilt y 15**, in degrees as the Tilt X/Y fields take them), **scale 150** (percent, relative and uniform, as the Scale field), **zoom 150**, **charge -1**, **element Pd**, **font size 12**, **bond length 14** (for new bonds), **ring 7** and **chain 5**. Any prefix of two or more letters works for the word, as in **rot 30**, **zo 150**, **ch -1** or **bond len 14**; the row with the value ranks first, greyed with the reason when it cannot run yet, and the chemical-name row below is not offered. Font sizes accept **4–144 pt**, rings **3–8 atoms** and chains **1–512 atoms**; values outside those ranges stay first, greyed with the allowed range. Tilt turns a molecule shown as a 3D model, as the Tilt X/Y fields do; scale follows the Scale field, which asks you to switch such a molecule to 2D first. A flip of a selection shown only as 3D models is also greyed; for one whole model, scale and flip offer **Show as 2D drawing** immediately below. Each command is one Undo step. When nothing matches well, the palette offers to insert the text as a chemical name (**ibuprofen**) or, if it is valid SMILES, as SMILES (**c1ccccc1O**).
+Some commands take a value after their word. Any prefix of two or more
+letters works for the word, as in **rot 30**, **zo 150**, **ch -1** or
+**bond len 14**.
+
+| Type                                                                               | Value                                             |
+| ---------------------------------------------------------------------------------- | ------------------------------------------------- |
+| **rotate 30**, **rotate ccw 30**                                                   | Degrees                                           |
+| **tilt up 20** (also **down**, **left**, **right**), **tilt x -15**, **tilt y 15** | Degrees, as the Tilt X/Y fields take them         |
+| **scale 150**                                                                      | Percent, relative and uniform, as the Scale field |
+| **zoom 150**                                                                       | Percent                                           |
+| **charge -1**                                                                      | Charge                                            |
+| **element Pd**                                                                     | Element symbol                                    |
+| **font size 12**                                                                   | 4–144 pt                                          |
+| **bond length 14**                                                                 | Length for new bonds                              |
+| **ring 7**, **chain 5**                                                            | Rings of 3–8 atoms, chains of 1–512 atoms         |
+
+- The row with the value ranks first, and the chemical-name row is not
+  offered. A row that cannot run yet is greyed with the reason, and a value out
+  of range is greyed with the allowed range.
+- Tilt turns a molecule shown as a 3D model, as the Tilt X/Y fields do. Scale
+  follows the Scale field, which asks you to switch such a molecule to 2D
+  first. Flipping a selection shown only as 3D models is greyed too; for one
+  whole model, scale and flip offer **Show as 2D drawing** right below.
+- Each command is one Undo step.
+
+When nothing matches well, the palette offers to insert the text as a chemical
+name (**ibuprofen**) or, if it is valid SMILES, as SMILES (**c1ccccc1O**).
 
 Vim-style commands rank first when typed exactly:
 
@@ -130,7 +181,7 @@ the tab's keyboard drawing preference.
 **Enter** uses the hotspot while keyboard drawing is on: an atom opens its
 label draft, while a bond or empty position opens Properties. It does not
 contract a multi-atom selection. Turn keyboard drawing off with F8 to use
-classic Enter for **Contract selection**, or to edit the label of a fully
+classic Enter for **Abbreviate selection**, or to edit the label of a fully
 selected existing abbreviation.
 
 For a branch, navigate back to the desired atom and press **0**. For closure,
@@ -224,7 +275,7 @@ new carbon so another growth key continues the chain. At an internal carbon,
 **2** adds only oxygen and keeps the hotspot on the existing carbon.
 
 With keyboard drawing off and multiple atoms selected, **Enter** opens
-**Contract selection** so you can name the fragment. A fully selected existing
+**Abbreviate selection** so you can name the fragment. A fully selected existing
 abbreviation opens its label draft instead. With keyboard drawing on, Enter
 uses the active hotspot as described above.
 
@@ -284,8 +335,9 @@ bond and tool actions. Ring palette hover hints show one tool-selection key.
 | ------------------------- | --------------------------------------------------------------------------- |
 | ? / F1 / Cmd/Ctrl+Shift+/ | Searchable shortcut finder and editable examples                            |
 | :                         | Command palette: search for a command and run it                            |
+| Cmd/Ctrl+,                | Settings. Esc or Cmd/Ctrl+, closes them.                                    |
 | Cmd/Ctrl+N / O / S        | New / open, each in a new tab / save                                        |
-| Cmd/Ctrl+Shift+S          | Save as                                                                     |
+| Cmd/Ctrl+Shift+S          | Save as .rsk…                                                               |
 | Cmd/Ctrl+W                | Close tab                                                                   |
 | Ctrl+Tab / Ctrl+Shift+Tab | Next / previous tab                                                         |
 | Cmd/Ctrl+1–8 / 9          | Tab 1–8 / last tab                                                          |
@@ -357,17 +409,17 @@ With nothing selected, these keys format the whole label. Chemical abbreviations
 
 ## Arrange and transform a selection
 
-| Keys                     | Action                                         |
-| ------------------------ | ---------------------------------------------- |
-| Alt+Up / Down            | Rotate −15° / +15°                             |
-| Alt+Left / Right         | Rotate −1° / +1°                               |
-| Shift+Alt+Up / Down      | 3D tilt around X by −12° / +12°                |
-| Shift+Alt+Left / Right   | 3D tilt around Y by +12° / −12°                |
-| Cmd/Ctrl+Shift+V / H     | Flip horizontally / vertically                 |
-| Cmd/Ctrl+Shift+Alt+L / R | Align left / right edges                       |
-| Cmd/Ctrl+Shift+Alt+T / B | Align top / bottom edges                       |
-| Cmd/Ctrl+Shift+Alt+C     | Align to the same vertical midpoint (same Y)   |
-| Cmd/Ctrl+Shift+Alt+M     | Align to the same horizontal midpoint (same X) |
-| Cmd/Ctrl+Shift+Alt+H / V | Distribute horizontally / vertically           |
+| Keys                     | Action                               |
+| ------------------------ | ------------------------------------ |
+| Alt+Up / Down            | Rotate −15° / +15°                   |
+| Alt+Left / Right         | Rotate −1° / +1°                     |
+| Shift+Alt+Up / Down      | 3D tilt around X by −12° / +12°      |
+| Shift+Alt+Left / Right   | 3D tilt around Y by +12° / −12°      |
+| Cmd/Ctrl+Shift+V / H     | Flip horizontal / vertical           |
+| Cmd/Ctrl+Shift+Alt+L / R | Align left / right edges             |
+| Cmd/Ctrl+Shift+Alt+T / B | Align top / bottom edges             |
+| Cmd/Ctrl+Shift+Alt+C     | Align middle (same Y)                |
+| Cmd/Ctrl+Shift+Alt+M     | Align center (same X)                |
+| Cmd/Ctrl+Shift+Alt+H / V | Distribute horizontally / vertically |
 
 Tilt changes the drawing projection, not chemical stereochemistry. Aromatic circles and inner curves follow their owning atoms. Select a whole molecule or group to transform it together.

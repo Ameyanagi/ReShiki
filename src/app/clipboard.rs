@@ -188,12 +188,13 @@ impl App {
     ) -> Task<Message> {
         let format = key.format;
         let engine = self.engine.clone();
+        let pictures = self.copy_pictures(None);
         Task::perform(
             async move {
                 if chemical_text {
                     reshiki::clipboard::prepare_chemical_text(engine, snapshot, format).await
                 } else {
-                    reshiki::clipboard::prepare_as(engine, snapshot, format).await
+                    reshiki::clipboard::prepare_as(engine, snapshot, format, pictures).await
                 }
             },
             move |result| Message::CopyAsPrepared(key.clone(), Box::new(result)),
@@ -305,7 +306,7 @@ impl App {
         }
         if key.revision != self.tab.revision || key.selected != self.tab.selected {
             self.finish_copy_as();
-            self.status = "Drawing or selection changed; copy again · Clipboard unchanged".into();
+            self.status = "Drawing changed · Copy again · Clipboard unchanged".into();
             self.error = false;
             return Task::none();
         }
@@ -381,7 +382,30 @@ impl App {
         }
     }
 
-    pub(super) fn copy_native(&mut self, cut: bool, image_only: bool) -> Task<Message> {
+    /// How one copy's pictures look: on the Copy defaults, or on `once`'s
+    /// background and editable drawing choice.
+    pub(super) fn copy_pictures(
+        &self,
+        once: Option<(reshiki::export::Background, bool)>,
+    ) -> reshiki::clipboard::Pictures {
+        let a = &self.appearance;
+        let (background, editable) =
+            once.unwrap_or_else(|| (a.copy_paper(), a.export_editable_drawing));
+        reshiki::clipboard::Pictures {
+            background,
+            dpi: a.copy_dpi.get(),
+            editable,
+        }
+    }
+
+    /// Copy, or Copy image when `image_only`; `once` overrides the Copy
+    /// background and editable drawing defaults for this copy only.
+    pub(super) fn copy_native(
+        &mut self,
+        cut: bool,
+        image_only: bool,
+        once: Option<(reshiki::export::Background, bool)>,
+    ) -> Task<Message> {
         if self.clipboard_working() {
             self.status = "A clipboard operation is already in progress".into();
             return Task::none();
@@ -406,7 +430,12 @@ impl App {
         self.error = false;
         self.status = "Preparing clipboard…".into();
         Task::perform(
-            reshiki::clipboard::copy(self.engine.clone(), snapshot, image_only),
+            reshiki::clipboard::copy(
+                self.engine.clone(),
+                snapshot,
+                image_only,
+                self.copy_pictures(once),
+            ),
             move |result| Message::ClipboardWritten {
                 epoch,
                 revision,
@@ -465,7 +494,7 @@ impl App {
             self.sync_bonds();
         }
         let action = if stale_cut {
-            "Copied previous selection; Cut cancelled because the drawing changed"
+            "Drawing changed · Cut canceled · Previous selection copied"
         } else if cut {
             if cfg!(windows) {
                 "Selection cut · editable drawing copied"
@@ -506,8 +535,7 @@ impl App {
             || self.tab.joining.is_some()
             || self.tab.cleanup.is_some()
         {
-            self.status =
-                "Drawing changed while reading the clipboard · Paste again to insert here".into();
+            self.status = "Drawing changed during paste · Paste again".into();
             return;
         }
         let outcome = match result.and_then(|mut outcome| {
@@ -579,7 +607,7 @@ impl App {
             return Task::none();
         }
         if reshiki::clipboard::available() {
-            return self.copy_native(cut, false);
+            return self.copy_native(cut, false, None);
         }
         if self.tab.selected.is_empty() {
             self.status = "Select objects to copy".into();

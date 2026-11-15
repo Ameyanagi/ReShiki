@@ -366,6 +366,7 @@ fn write_impl(
     // Abbreviations move bonds into nested fragments. Native areas must be
     // created beside their final bond owners.
     w.ring_fills()?;
+    w.property_captions()?;
     if !document.ring_fills.is_empty() || document.canvas_theme.is_dark() {
         // Editable readers need a distinct stacking ordinal for every object.
         // Equal Z values on atoms/bonds can make an opaque fill cover them.

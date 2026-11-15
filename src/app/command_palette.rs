@@ -31,7 +31,7 @@ pub(super) const START_HERE: [&str; 8] = [
     "Import structure or name",
     "Benzene",
     "Open…",
-    "Clean up structure",
+    "Clean up…",
     "Molecular formula and properties",
     "Predict NMR",
     "Export panel",

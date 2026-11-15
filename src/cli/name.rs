@@ -3,7 +3,7 @@ use super::{
     args::{Input, Name},
     host::{CliError, Session, labelled},
 };
-use crate::naming::{self, NameStatus};
+use crate::naming;
 use serde_json::{Map, Value, json};
 use std::io::Write;
 
@@ -40,45 +40,13 @@ pub(crate) async fn run(
     .await
     .map_err(|error| CliError::Failed(error.to_string()))?;
     if name.json || name.locants {
-        let status = record.name_status.ok_or_else(|| {
-            CliError::Failed("internal error: generated name has no status".into())
-        })?;
-        let assessment = json!(status);
-        let mut value = Map::from_iter([
-            ("name".into(), json!(record.title)),
-            (
-                "preferred".into(),
-                json!(matches!(status, NameStatus::Preferred)),
-            ),
-            ("status".into(), json!(assessment.get("status"))),
-            ("reason".into(), json!(assessment.get("reason"))),
-            ("detail".into(), json!(status.detail())),
-            (
-                "aliases".into(),
-                json!(
-                    record
-                        .synonyms
-                        .iter()
-                        .map(|alias| &alias.name)
-                        .collect::<Vec<_>>()
-                ),
-            ),
-            (
-                "alternatives".into(),
-                record
-                    .alternatives
-                    .iter()
-                    .map(|alternative| {
-                        let assessment = json!(alternative.status);
-                        json!({
-                            "name": alternative.name,
-                            "status": assessment.get("status"),
-                            "reason": assessment.get("reason"),
-                        })
-                    })
-                    .collect(),
-            ),
-        ]);
+        // The value of the MCP name tool, so both report a name the same way.
+        let named = naming::named(&record).map_err(CliError::Failed)?;
+        let Ok(Value::Object(mut value)) = serde_json::to_value(named) else {
+            return Err(CliError::Failed(
+                "internal error: name is not an object".into(),
+            ));
+        };
         if name.locants {
             let locants = record
                 .locants
@@ -96,11 +64,13 @@ pub(crate) async fn run(
                 ),
             );
         }
-        // The import's warnings and versions, as analyze reports its own.
+        // The import's warnings, validation and versions, as analyze reports
+        // its own.
         let mut field = |name: &str| (name.to_owned(), imported.remove(name).unwrap_or_default());
         let result = Map::from_iter([
             ("value".into(), Value::Object(value)),
             field("warnings"),
+            field("validation"),
             field("versions"),
         ]);
         writeln!(out, "{}", labelled(result)).map_err(CliError::Stdout)

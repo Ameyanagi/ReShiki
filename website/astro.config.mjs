@@ -1,12 +1,83 @@
 import { defineConfig } from "astro/config";
 import starlight from "@astrojs/starlight";
 import starlightLlmsTxt from "starlight-llms-txt";
-import { historicalTopics } from "./scripts/doc-topics.mjs";
+import { readdirSync } from "node:fs";
+import { historicalTopics, movedRecords } from "./scripts/doc-topics.mjs";
 
 const archivedPages = [
   "developer/changes-*",
   ...historicalTopics.map((topic) => `developer/${topic}`),
 ];
+
+// Release notes, newest first: one docs/changes-<version>.md per release, so a
+// new release appears without editing this file. All but the newest five fold away.
+const releases = readdirSync(new URL("../docs/", import.meta.url))
+  .map((name) => /^changes-(\d+)\.(\d+)(?:\.(\d+))?\.md$/.exec(name))
+  .filter(Boolean)
+  .map(([name, ...parts]) => ({
+    slug: `developer/${name.slice(0, -3)}`,
+    version: parts.map((part) => Number(part ?? 0)),
+  }))
+  .sort(
+    (a, b) =>
+      b.version[0] - a.version[0] || b.version[1] - a.version[1] || b.version[2] - a.version[2],
+  )
+  .map(({ slug, version }) => ({ slug, label: `ReShiki ${version.join(".")}` }));
+const releaseNotes = [
+  { label: "Unreleased changes", slug: "developer/changes-unreleased" },
+  ...releases.slice(0, 5),
+  { label: "Older releases", collapsed: true, items: releases.slice(5) },
+];
+
+// Implementation notes behind the guides, by area.
+const engineeringNotes = {
+  Drawing: [
+    "bond-tools",
+    "chain-tools",
+    "tool-palettes",
+    "3d-keyboard-drawing",
+    "ring-presets",
+    "template-library",
+    "template-placement",
+    "fragment-joining",
+    "haworth-projections",
+    "porphine-core",
+    "selection-and-groups",
+    "selection-transforms",
+    "selection-cleanup",
+    "selection-and-ring-placement",
+    "reference-geometry",
+    "rear-opacity",
+    "abbreviations",
+    "atom-labels",
+    "typography",
+    "arrows",
+    "reactions",
+    "graphics",
+    "scientific-symbols",
+    "drawing-styles",
+    "jacs-style",
+  ],
+  Chemistry: [
+    "chemical-naming-rust",
+    "structure-to-name-harness",
+    "nmr-prediction",
+    "generic-structures",
+    "mol-import-3d",
+    "chemistry-resource-policy",
+    "geometry-backend",
+  ],
+  Exchange: [
+    "clipboard",
+    "clipboard-compatibility",
+    "haworth-interchange",
+    "pictures",
+    "figure-export",
+    "publication-pages",
+    "ruviz-integration",
+  ],
+  Platform: ["assistant", "assistant-benchmark", "framework-research", "settings"],
+};
 
 export default defineConfig({
   output: "static",
@@ -19,11 +90,12 @@ export default defineConfig({
     "/reference/assistant": "/guide/assistant/",
     "/reference/atom-labels": "/guide/labels/",
     "/reference/bond-tools": "/guide/first-molecule/",
-    "/reference/capabilities": "/developer/capabilities/",
+    "/reference/capabilities":
+      "https://github.com/Ameyanagi/ReShiki/blob/main/docs/changes/capabilities.md",
     "/reference/chain-tools": "/guide/first-molecule/",
     "/reference/changes-0.2": "/developer/changes-0.2/",
     "/reference/clipboard": "/guide/sharing/",
-    "/reference/contextual-shortcuts": "/guide/editing/",
+    "/reference/contextual-shortcuts": "/guide/shortcuts/",
     "/reference/development": "/developer/development/",
     "/reference/drawing-styles": "/guide/figures/",
     "/reference/feature-status": "/developer/feature-status/",
@@ -50,7 +122,16 @@ export default defineConfig({
     "/reference/template-placement": "/guide/templates/",
     "/reference/tool-palettes": "/guide/first-molecule/",
     "/reference/typography": "/guide/labels/",
-    "/reference/workspace-review": "/developer/workspace-review/",
+    "/reference/workspace-review":
+      "https://github.com/Ameyanagi/ReShiki/blob/main/docs/changes/workspace-review.md",
+    "/developer/contextual-shortcuts": "/guide/shortcuts/",
+    "/developer/assistant-setup": "/guide/assistant-setup/",
+    ...Object.fromEntries(
+      movedRecords.map((name) => [
+        `/developer/${name}`,
+        `https://github.com/Ameyanagi/ReShiki/blob/main/docs/changes/${name}.md`,
+      ]),
+    ),
   },
   integrations: [
     starlight({
@@ -138,117 +219,99 @@ export default defineConfig({
       customCss: ["./src/styles/custom.css"],
       components: { Header: "./src/components/DocsHeader.astro" },
       sidebar: [
-        { label: "Why I’m building ReShiki", slug: "why" },
         {
-          label: "User guide",
+          label: "Start",
           items: [
+            { label: "Why I’m building ReShiki", slug: "why" },
             { label: "Install ReShiki", slug: "guide/install" },
-            { label: "Windows", slug: "guide/windows" },
             { label: "Draw your first molecule", slug: "guide/first-molecule" },
+          ],
+        },
+        {
+          label: "Draw",
+          items: [
             { label: "Build with templates", slug: "guide/templates" },
             { label: "Select and edit", slug: "guide/editing" },
-            { label: "Shortcuts and examples", slug: "guide/shortcuts" },
             { label: "Labels and abbreviations", slug: "guide/labels" },
-            { label: "Use chemical names", slug: "guide/names" },
-            { label: "Predict NMR shifts", slug: "guide/nmr" },
-            { label: "Expand generic structures", slug: "guide/generic-structures" },
             { label: "Draw a reaction", slug: "guide/reactions" },
-            { label: "Set up Codex", slug: "guide/assistant-setup" },
-            { label: "Draw with the assistant", slug: "guide/assistant" },
-            { label: "Connect AI agents (experimental)", slug: "guide/agents" },
+          ],
+        },
+        {
+          label: "Finish and share",
+          items: [
             { label: "Prepare a figure", slug: "guide/figures" },
+            { label: "Journal drawing presets", slug: "developer/journal-drawing-presets" },
             { label: "Color palettes", slug: "guide/color-palettes" },
             { label: "Save and share", slug: "guide/sharing" },
             { label: "Acknowledging ReShiki", slug: "guide/acknowledgments" },
           ],
         },
         {
+          label: "Chemistry tools",
+          items: [
+            { label: "Use chemical names", slug: "guide/names" },
+            { label: "Predict NMR shifts", slug: "guide/nmr" },
+            { label: "Expand generic structures", slug: "guide/generic-structures" },
+            { label: "Crystal structures", slug: "developer/crystal-structures" },
+          ],
+        },
+        {
+          label: "AI",
+          items: [
+            { label: "Set up Codex", slug: "guide/assistant-setup" },
+            { label: "Draw with the assistant", slug: "guide/assistant" },
+            { label: "Connect AI agents (experimental)", slug: "guide/agents" },
+          ],
+        },
+        {
+          label: "Reference",
+          items: [
+            { label: "Shortcuts and examples", slug: "guide/shortcuts" },
+            { label: "Windows", slug: "guide/windows" },
+            { label: "Privacy policy", slug: "developer/privacy-policy" },
+            { label: "Code signing policy", slug: "developer/code-signing-policy" },
+          ],
+        },
+        { label: "Release notes", collapsed: true, items: releaseNotes },
+        {
+          label: "Integrations",
+          collapsed: true,
+          items: [
+            { label: "Python package", slug: "developer/python" },
+            { label: "Browser editor (npm)", slug: "developer/npm-package" },
+            { label: "CAS SciFinder", slug: "developer/scifinder-handoff" },
+            { label: "Agent API overview", slug: "developer/agent-api" },
+            { label: "Agent command line", slug: "developer/agent-cli" },
+            { label: "Agent tool reference", slug: "developer/agent-reference" },
+            { label: "Agent skill", slug: "developer/agent-skill" },
+            { label: "Runtime safety", slug: "developer/runtime-safety" },
+          ],
+        },
+        {
           label: "Developer",
           collapsed: true,
           items: [
-            { label: "ReShiki 0.15.0", slug: "developer/changes-0.15" },
-            { label: "ReShiki 0.14.0", slug: "developer/changes-0.14" },
-            { label: "ReShiki 0.13.1", slug: "developer/changes-0.13.1" },
-            { label: "ReShiki 0.13.0", slug: "developer/changes-0.13" },
-            { label: "ReShiki 0.12.0", slug: "developer/changes-0.12" },
-            { label: "ReShiki 0.11.0", slug: "developer/changes-0.11" },
-            { label: "ReShiki 0.10.0", slug: "developer/changes-0.10" },
-            { label: "ReShiki 0.9.1", slug: "developer/changes-0.9.1" },
-            { label: "ReShiki 0.9.0", slug: "developer/changes-0.9" },
-            { label: "ReShiki 0.8.0", slug: "developer/changes-0.8" },
-            { label: "Unreleased changes", slug: "developer/changes-unreleased" },
             { label: "Build and test", slug: "developer/development" },
             { label: "Architecture", slug: "developer/architecture" },
+            { label: "Module index", slug: "developer/modules" },
+            { label: "Windows development", slug: "developer/windows" },
             { label: "Release and signing", slug: "developer/releasing" },
-            { label: "Code signing policy", slug: "developer/code-signing-policy" },
-            { label: "Privacy policy", slug: "developer/privacy-policy" },
-            { label: "ReShiki 0.3.0", slug: "developer/changes-0.3" },
-            { label: "ReShiki 0.4.0", slug: "developer/changes-0.4" },
-            { label: "ReShiki 0.5.0", slug: "developer/changes-0.5" },
-            { label: "ReShiki 0.6.0", slug: "developer/changes-0.6" },
-            { label: "ReShiki 0.6.1", slug: "developer/changes-0.6.1" },
-            { label: "ReShiki 0.7.0", slug: "developer/changes-0.7" },
-            { label: "ReShiki 0.7.1", slug: "developer/changes-0.7.1" },
-            { label: "Runtime safety", slug: "developer/runtime-safety" },
+            { label: "SignPath setup", slug: "developer/signpath-setup" },
+            { label: "Writing and terms", slug: "developer/writing-style" },
+            { label: "Visual evidence for changes", slug: "developer/visual-review" },
             { label: "Feature status", slug: "developer/feature-status" },
-            {
-              label: "Agent API (experimental)",
-              collapsed: true,
-              items: [
-                { label: "Overview", slug: "developer/agent-api" },
-                { label: "Command line", slug: "developer/agent-cli" },
-                { label: "Tool reference", slug: "developer/agent-reference" },
-                { label: "Agent skill", slug: "developer/agent-skill" },
-                { label: "Runtime safety", slug: "developer/runtime-safety" },
-                { label: "Acceptance record", slug: "developer/agent-api-p1-validation" },
-              ],
-            },
-            {
-              label: "Engineering notes",
-              collapsed: true,
-              items: [
-                "3d-keyboard-drawing",
-                "abbreviations",
-                "arrows",
-                "assistant",
-                "atom-labels",
-                "bond-tools",
-                "capabilities",
-                "chain-tools",
-                "changes-0.2",
-                "chemistry-resource-policy",
-                "clipboard",
-                "clipboard-compatibility",
-                "contextual-shortcuts",
-                "crystal-structures",
-                "drawing-styles",
-                "figure-export",
-                "fragment-joining",
-                "framework-research",
-                "geometry-backend",
-                "graphics",
-                "jacs-style",
-                "pictures",
-                "publication-pages",
-                "reactions",
-                "ring-presets",
-                "roadmap",
-                "ruviz-integration",
-                "scientific-symbols",
-                "selection-and-groups",
-                "selection-and-ring-placement",
-                "selection-cleanup",
-                "selection-transforms",
-                "signpath-setup",
-                "template-library",
-                "template-placement",
-                "tool-palettes",
-                "typography",
-                "windows",
-                "workspace-review",
-              ].map((name) => ({ slug: `developer/${name}` })),
-            },
+            { label: "Roadmap", slug: "developer/roadmap" },
+            { label: "Contributors", slug: "developer/contributors" },
           ],
+        },
+        {
+          label: "Engineering notes",
+          collapsed: true,
+          items: Object.entries(engineeringNotes).map(([label, topics]) => ({
+            label,
+            collapsed: true,
+            items: topics.map((name) => ({ slug: `developer/${name}` })),
+          })),
         },
       ],
     }),

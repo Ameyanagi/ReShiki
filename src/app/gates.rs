@@ -74,6 +74,10 @@ impl App {
     }
 
     fn early_results_gate(&mut self, message: Message) -> Gate {
+        if let Message::Stereo(action @ super::stereo::Action::Pulse) = message {
+            self.stereo_action(action);
+            return Break(Task::none());
+        }
         if let Message::Generic(generic::Action::Expanded { source, epoch, .. }) = &message
             && self.generic_expansion_blocked()
         {
@@ -125,7 +129,7 @@ impl App {
                     | Message::Updates(updates::Action::Install)
             )
         {
-            self.status = "Finish opening the requested drawings before closing the editor".into();
+            self.status = "Wait for the drawings to open, then close the editor".into();
             return Break(Task::none());
         }
         Continue(message)
@@ -248,6 +252,10 @@ impl App {
             self.tabs.menu = false;
             return Break(Task::none());
         }
+        if self.check_results && matches!(message, Message::Escape) {
+            self.check_results = false;
+            return Break(super::focus_drawing());
+        }
         Continue(message)
     }
 
@@ -276,6 +284,10 @@ impl App {
             }
             if !matches!(message, Message::Tabs(tabs::Action::Menu(_))) {
                 self.tabs.menu = false;
+            }
+            // Its rows select and pulse findings; Check again keeps it open.
+            if !matches!(message, Message::Stereo(_) | Message::Analyze) {
+                self.check_results = false;
             }
         }
     }
@@ -432,9 +444,7 @@ impl App {
             .iter()
             .any(|g| g.members.iter().any(|id| self.tab.selected.contains(id)))
         {
-            self.status =
-                "Expand the selected abbreviation before changing individual atom properties"
-                    .into();
+            self.status = "Expand the abbreviation to change its atoms".into();
             self.error = true;
             return Break(Task::none());
         }

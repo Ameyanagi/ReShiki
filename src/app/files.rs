@@ -4,13 +4,14 @@ use iced::Task;
 use reshiki::engine::Request;
 use std::path::PathBuf;
 
+/// The name of Save As in Export, the toolbar and the palette.
+pub(super) const SAVE_AS: &str = "Save as .rsk…";
 #[cfg(not(target_arch = "wasm32"))]
 const SAVE: &str = "Save";
 #[cfg(not(target_arch = "wasm32"))]
 const DONT_SAVE: &str = "Don’t Save";
 #[cfg(not(target_arch = "wasm32"))]
-const ADDIN_SAVE_STATUS: &str =
-    "Saving recovery draft and waiting for Microsoft 365 to confirm the drawing update…";
+const ADDIN_SAVE_STATUS: &str = "Saving draft · Waiting for Microsoft 365 to confirm…";
 #[cfg(not(target_arch = "wasm32"))]
 const OFFICE_SESSION_ENDED: &str =
     "The Office edit session has ended; save this drawing to another file";
@@ -219,6 +220,15 @@ pub(super) fn browser_files(files: Vec<(String, Vec<u8>)>) -> Vec<Picked> {
         .collect()
 }
 
+/// Opens `path` for reading. Anything but a regular file is refused before it
+/// is opened: opening a named pipe with no writer would wait forever.
+fn open(path: &std::path::Path) -> std::io::Result<std::fs::File> {
+    if !std::fs::metadata(path)?.is_file() {
+        return Err(std::io::Error::other("not a regular file"));
+    }
+    std::fs::File::open(path)
+}
+
 /// Read files up to `limit` on a blocking worker.
 pub(super) async fn read_paths(paths: Vec<PathBuf>, limit: Limit) -> Result<Vec<Picked>, String> {
     use std::io::Read;
@@ -227,7 +237,7 @@ pub(super) async fn read_paths(paths: Vec<PathBuf>, limit: Limit) -> Result<Vec<
             .into_iter()
             .map(|path| {
                 let mut contents = Vec::new();
-                std::fs::File::open(&path)
+                open(&path)
                     .and_then(|file| {
                         file.take(limit(&path).saturating_add(1))
                             .read_to_end(&mut contents)
@@ -345,6 +355,9 @@ fn prepare(path: &std::path::Path, contents: Vec<u8>) -> Result<Prepared, String
         let format = reshiki::compatibility::file_format(path)
             .or_else(|| matches!(extension.as_str(), "smi" | "smiles").then_some("smiles"))
             .ok_or_else(|| super::import::unsupported_file(path))?;
+        if contents.len() as u64 > super::import::limit(path) {
+            return Err("File exceeds 16 MB".into());
+        }
         Ok(Prepared::Import {
             format,
             contents: super::import::contents(format, contents)?,
@@ -357,7 +370,14 @@ fn prepare(path: &std::path::Path, contents: Vec<u8>) -> Result<Prepared, String
 pub(super) async fn read(path: PathBuf) -> Opened {
     let source = path.clone();
     let result = reshiki::task::spawn_blocking(move || {
-        let contents = std::fs::read(&source).map_err(|e| e.to_string())?;
+        let mut contents = Vec::new();
+        open(&source)
+            .and_then(|file| {
+                use std::io::Read;
+                file.take(super::import::open_limit(&source).saturating_add(1))
+                    .read_to_end(&mut contents)
+            })
+            .map_err(|e| e.to_string())?;
         prepare(&source, contents)
     })
     .await
@@ -379,7 +399,7 @@ pub(super) fn open_dialog(
         "Open a ReShiki, editable PNG/SVG/PDF, MOL, RXN, CDXML, CDX, SMILES, CIF, PDB, POSCAR or XYZ file",
         None,
         false,
-        unlimited,
+        super::import::open_limit,
     ))
     .then(move |files| {
         open_picked(
@@ -546,9 +566,9 @@ impl super::App {
                         .as_ref()
                         .is_some_and(|binding| binding.host == Host::LibreOffice)
                     {
-                        "Drawing saved for LibreOffice. Return to the document to check the update."
+                        "Saved for LibreOffice · Check the update in the document"
                     } else {
-                        "Drawing updated in Office. Save the Office document to keep it."
+                        "Drawing updated in Office · Save the Office document"
                     }
                     .into()
                 } else {

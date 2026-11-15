@@ -8,7 +8,7 @@ async fn main() -> anyhow::Result<()> {
         .context("usage: copy_drawing INPUT.rsk")?;
     let document: reshiki::document::Document = serde_json::from_slice(&std::fs::read(path)?)?;
     document.validate().map_err(anyhow::Error::msg)?;
-    let result = reshiki::clipboard::copy(Default::default(), document, false)
+    let result = reshiki::clipboard::copy(Default::default(), document, false, Default::default())
         .await
         .map_err(anyhow::Error::msg)?;
     let mut output = std::io::stdout().lock();

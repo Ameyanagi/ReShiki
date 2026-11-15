@@ -164,6 +164,8 @@ async fn ops_export_details_match_the_app_figure_export() {
             app_format,
             false,
             false,
+            reshiki::export::Background::Canvas,
+            reshiki::style::DEFAULT.png_dpi,
             reshiki::export::FILE_PIXELS,
         )
         .await

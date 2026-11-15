@@ -71,6 +71,18 @@ impl MoleculeCanvas<'_> {
         doc
     }
 
+    /// The drawing copy an Atom tool drag shows.
+    #[cfg(test)]
+    pub(super) fn bonded_atom_preview_document(
+        &self,
+        state: &State,
+        bounds: Rectangle,
+    ) -> Document {
+        let mut draft = Draft::new(self.doc);
+        self.preview_bonded_atom(&mut draft, state, bounds);
+        draft.preview.into_owned()
+    }
+
     /// The drawing copy a model turn or morph shows.
     #[cfg(test)]
     pub(super) fn model_preview_document(&self, state: &State, bounds: Rectangle) -> Document {
@@ -126,7 +138,9 @@ impl MoleculeCanvas<'_> {
             .map(|context| context.marker_ids())
             .unwrap_or_default();
         let cached_camera = (self.hidden_annotation.is_none()
-            && (translation.is_some() || *preview == *self.doc))
+            && (translation.is_some()
+                || matches!(&preview, Cow::Borrowed(doc) if std::ptr::eq(*doc, self.doc))
+                || *preview == *self.doc))
             .then(|| {
                 let delta = translation.unwrap_or_default();
                 Camera {

@@ -1476,3 +1476,34 @@ fn the_default_crossing_clearance_keeps_its_cuts_for_any_stroke_width() {
     style.crossing_clearance_pt = 0.1;
     assert_eq!(super::crossing_gap(&style, 0.), style.world(0.1));
 }
+
+/// The sweep pairs only bonds that are close along both axes: a column or a
+/// row of far-apart bonds costs nothing per pair, and a grid only its
+/// neighbours.
+#[test]
+fn bonds_far_apart_along_either_axis_are_never_paired() {
+    let visited = |place: &dyn Fn(usize) -> Point, count: usize| {
+        let mut doc = Document::default();
+        for index in 0..count {
+            let at = place(index);
+            let (a, b) = (
+                doc.add_atom("C", at),
+                doc.add_atom("C", at.offset(40., 25.)),
+            );
+            doc.add_bond(a, b, 1, "plain");
+        }
+        let before = super::PAIRS_VISITED.with(std::cell::Cell::get);
+        assert!(super::gaps(&doc).iter().all(Vec::is_empty));
+        super::PAIRS_VISITED.with(std::cell::Cell::get) - before
+    };
+    assert_eq!(visited(&|i| Point::new(0., i as f32 * 300.), 400), 0);
+    assert_eq!(visited(&|i| Point::new(i as f32 * 300., 0.), 400), 0);
+    assert_eq!(
+        visited(&|i| Point::new(i as f32 * 300., i as f32 * -300.), 400),
+        0
+    );
+    // A very tall drawing has coarser bands, never more than 4,097 of them.
+    assert_eq!(visited(&|i| Point::new(0., i as f32 * 1e6), 400), 0);
+    // Bonds on top of one another are still all paired.
+    assert_eq!(visited(&|_| Point::default(), 40), 40 * 39 / 2);
+}

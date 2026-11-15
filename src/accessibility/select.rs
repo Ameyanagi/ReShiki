@@ -1,3 +1,5 @@
+//! A named combo box around a pick list or combo box, for assistive technology.
+
 use super::{LiveValueAction, Node, Role, ValueQuery};
 use iced::advanced::{
     Clipboard, Layout, Shell, Widget, layout, mouse, overlay, renderer,

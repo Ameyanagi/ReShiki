@@ -62,6 +62,7 @@ mod inspector;
 mod joining;
 mod keyboard_drawing;
 mod label_refresh;
+mod linked_properties;
 mod molecule_shortcuts;
 mod naming;
 mod nmr;
@@ -94,10 +95,12 @@ mod ring_edits;
 #[cfg(test)]
 mod rotation_tests;
 mod selection_edits;
+mod settings_page;
 mod shortcut_examples;
 #[cfg(test)]
 mod shortcut_focus_tests;
 mod shortcuts;
+mod star_prompt;
 mod startup;
 mod stereo;
 mod tabs;
@@ -125,7 +128,7 @@ pub(crate) use workspace::text_width;
 
 /// The status bar's idle message.
 const READY: &str = "Ready · Choose a tool to start drawing";
-const CELL_REMOVED_NOTICE: &str = "Unit cell removed by the edit · Undo restores it";
+const CELL_REMOVED_NOTICE: &str = "Unit cell removed by the edit";
 
 // App::fit_bounds: screen pixels kept free around the fitted drawing, the
 // smallest usable viewport side (pixels) and the smallest fitted extent (world
@@ -170,6 +173,7 @@ pub enum Message {
     NumericTransform(numeric_transforms::Action),
     Nmr(nmr::Action),
     Updates(updates::Action),
+    Star(star_prompt::Action),
     Reaction(reactions::Action),
     Mapping(reaction_mapping::Action),
     Generic(generic::Action),
@@ -221,6 +225,7 @@ pub enum Message {
     Naming(naming::Action),
     InsertInput,
     ToggleHelp,
+    Settings(settings_page::Action),
     Help(help::Action),
     Commands(command_palette::Action),
     OpenShortcutExamples,
@@ -231,6 +236,8 @@ pub enum Message {
     CaptionAction(iced::widget::text_editor::Action),
     TextStyle(reshiki::typography::StyleChange),
     FormatChemicalName,
+    /// Show or hide one property line under a whole molecule.
+    ToggleProperty(Vec<u64>, reshiki::linked_properties::Property),
     FontSize(String),
     ApplyFontSize,
     ColorScope(typography::ColorScope),
@@ -273,11 +280,17 @@ pub enum Message {
     Open,
     Save,
     Export(&'static str),
+    /// Export the figure from the Export tab, with or without the editable
+    /// drawing.
+    ExportFigure(&'static str, bool),
     CopySmiles,
     CopyAnalysis,
     CopyChemicalText,
     Copy(bool),
     CopyImage,
+    /// Copy image on this background, with or without the editable drawing,
+    /// for this copy only.
+    CopyImageOn(reshiki::export::Background, bool),
     CopyAs(reshiki::clipboard::CopyFormat),
     CopyFrame(clipboard::FrameAction),
     CopyAsPrepared(
@@ -419,6 +432,7 @@ pub struct App {
     context_menu: Option<context_menu::State>,
     style_menu: Option<color_popover::Menu>,
     updates: updates::State,
+    star: star_prompt::State,
     theme_library: theme_files::State,
     palette: Option<palettes::Family>,
     toolbar: palettes::Memory,
@@ -433,6 +447,8 @@ pub struct App {
     grid: bool,
     guides: canvas::guides::Guides,
     view_open: bool,
+    /// The list of Check drawing findings is open.
+    check_results: bool,
     appearance: crate::appearance::Settings,
     engine: LocalEngine,
     figure_exporting: bool,
@@ -460,7 +476,11 @@ pub struct App {
     exit: autosave::Exit,
     inspector_open: bool,
     inspector_tab: InspectorTab,
+    /// The Export tab's Include editable drawing choice; `None` follows the
+    /// Settings default.
+    export_tab_editable: Option<bool>,
     help_open: bool,
+    settings: settings_page::State,
     help: help::State,
     commands: command_palette::State,
     viewport: iced::Size,
@@ -529,6 +549,7 @@ impl App {
             tab: DocumentTab::new(recovery, appearance.canvas_theme),
             tabs: tabs::State::new(recovery_root),
             updates: updates::State::new(),
+            star: star_prompt::State::load(),
             theme_library: theme_files::State::load(),
             palette: None,
             toolbar: palettes::Memory::default(),
@@ -550,6 +571,7 @@ impl App {
             grid: false,
             guides: Default::default(),
             view_open: false,
+            check_results: false,
             appearance,
             engine: LocalEngine::default(),
             figure_exporting: false,
@@ -574,7 +596,9 @@ impl App {
             exit: autosave::Exit::default(),
             inspector_open: true,
             inspector_tab: InspectorTab::Properties,
+            export_tab_editable: None,
             help_open: false,
+            settings: settings_page::State::default(),
             help: help::State::default(),
             commands: command_palette::State::default(),
             viewport: iced::Size::new(850.0, 600.0),
@@ -648,8 +672,10 @@ impl App {
             #[cfg(target_os = "linux")]
             iced::window::open_events().map(Message::LinuxClipboardWindow),
             self.updates.subscription(),
+            self.star_subscription(),
             self.properties_subscription(),
             self.engine_subscription(),
+            self.pulse_subscription(),
             #[cfg(target_arch = "wasm32")]
             self.naming_subscription(),
             if self.assistant.needs_poll() {
@@ -717,6 +743,10 @@ impl App {
         self.changed_continuing(before, false);
     }
     fn changed_continuing(&mut self, before: Document, continuing: bool) {
+        // Mol. Wt. captions follow View → 2-decimal MW with every edit.
+        for link in &mut self.tab.doc.property_captions {
+            link.two_decimal_weight = self.appearance.two_decimal_weight;
+        }
         if self.settles_unchanged(&before) {
             return;
         }
@@ -731,7 +761,7 @@ impl App {
                 self.status = match rejection {
                     reshiki::transaction::Rejection::Reactions(error) => error,
                     reshiki::transaction::Rejection::Invalid(error) => {
-                        format!("Edit cancelled: {error}")
+                        format!("Edit canceled: {error}")
                     }
                 };
                 // The rollback removed whatever the edit added and had selected.
@@ -813,23 +843,9 @@ impl App {
         });
         let committed = reconciled.commit(&mut self.tab.doc, &mut self.tab.history, continuing);
         self.label_layout_settled();
-        if committed.chemistry_changed {
-            self.tab.labels_dirty = true;
-            self.tab.chemistry_notice = None;
-        }
         if committed.recorded {
-            self.tab.stereo_notes.clear();
-            let previous = self.tab.revision;
-            self.tab.revision = self.tab.revision.wrapping_add(1);
-            if committed.chemistry_changed {
-                self.tab.analysis = None;
-            } else {
-                let (epoch, revision) = (self.tab.file_epoch, self.tab.revision);
-                self.tab
-                    .inspector_ui
-                    .advance_revision(epoch, previous, revision);
-            }
-            self.error = false;
+            self.trim_histories(tabs::HISTORY_BYTES);
+            self.drawing_revised(committed.chemistry_changed);
             self.status = if unit_cell_removed {
                 CELL_REMOVED_NOTICE
             } else if committed.chemistry_changed {
@@ -846,6 +862,25 @@ impl App {
         let existing: std::collections::HashSet<_> = self.tab.doc.all_ids().into_iter().collect();
         self.tab.selected.retain(|id| existing.contains(id));
         self.sync_arrow_label_gap_input();
+    }
+    /// What every recorded change of the drawing needs, whether an edit made
+    /// it or Undo or Redo restored it. Results for the previous revision are
+    /// dropped when the chemistry changed and carried over when it did not.
+    fn drawing_revised(&mut self, chemistry_changed: bool) {
+        self.tab.stereo_notes.clear();
+        let previous = self.tab.revision;
+        self.tab.revision = previous.wrapping_add(1);
+        if chemistry_changed {
+            self.tab.analysis = None;
+            self.tab.chemistry_notice = None;
+            self.tab.labels_dirty = true;
+        } else {
+            let (epoch, revision) = (self.tab.file_epoch, self.tab.revision);
+            self.tab
+                .inspector_ui
+                .advance_revision(epoch, previous, revision);
+        }
+        self.error = false;
     }
     fn fit(&mut self) {
         if self.display_document().all_ids().is_empty() {
@@ -938,11 +973,24 @@ impl App {
             .map(|p| &p.document)
             .unwrap_or(&self.tab.doc)
     }
+    /// The runtime's entry point. A finished export or copy counts
+    /// toward the GitHub star prompt here, once, even when its drawing has
+    /// since closed or changed.
+    pub fn receive(&mut self, message: Message) -> Task<Message> {
+        if star_prompt::counts(&message) {
+            self.star.used();
+        }
+        self.update(message)
+    }
     pub fn update(&mut self, message: Message) -> Task<Message> {
         // Modifier releases must reach buttons even when a widget or modal captures input.
         if let Message::ModifiersChanged(modifiers) = message {
             self.shift_held = modifiers.shift();
             return Task::none();
+        }
+        // Input timing and the toast's own buttons skip the editing pipeline.
+        if let Message::Star(action) = message {
+            return self.star_action(action);
         }
         // A touch can confirm its mouse press and move/release together. Each
         // edit still passes through the same focus and preview gates as a mouse.
@@ -972,6 +1020,7 @@ impl App {
         let mut task = self.handle(message);
         self.sync_drawing_panel_context();
         self.settle_deferred_label_layout();
+        task = Task::batch([task, self.render_png_preview()]);
         // Any message may change the drawing, some (previews, background
         // labels) without a new revision, so the next view compares afresh.
         self.tab.forget_unsaved();
@@ -1058,6 +1107,14 @@ impl App {
         if let Message::Accessibility(action) = message {
             return ControlFlow::Break(self.accessibility_action(action));
         }
+        let message = match message {
+            Message::Settings(
+                action @ (settings_page::Action::Preview(..) | settings_page::Action::CloseUps(..)),
+            ) => {
+                return ControlFlow::Break(self.settings_action(action));
+            }
+            message => message,
+        };
         if let Message::CopyFrame(action) = message {
             return ControlFlow::Break(self.copy_frame(action));
         }
@@ -1274,6 +1331,7 @@ impl App {
             || self.updates.open
             || self.assistant.viewed_image.is_some()
             || self.help_open
+            || self.settings.open
             || self.tab.atom_text.is_some()
             || self.palette.is_some();
         // The command palette's Tab cycles its filter, unless a dialog is over it.
@@ -1282,17 +1340,23 @@ impl App {
             && (!self.commands.open || self.updates.open || self.assistant.viewed_image.is_some());
         reshiki::accessibility::focus_scope_with(
             file_shortcuts::wrap(
-                // The command palette sits above the floating NMR panel so its
-                // modal also keeps that panel from taking clicks.
+                // The command palette and Settings sit above the floating NMR
+                // panel so their modals also keep that panel from taking clicks.
                 self.with_prompt(self.with_recovery_manager(self.with_updates(
-                    self.with_assistant_image(self.with_commands(self.with_nmr(
-                        self.with_atom_text(self.with_help(self.with_palette(self.workspace()))),
+                    self.with_assistant_image(self.with_settings(self.with_commands(
+                        self.with_nmr(
+                            self.with_atom_text(
+                                self.with_help(self.with_palette(self.workspace())),
+                            ),
+                        ),
                     ))),
                 ))),
                 if self.prompt.is_some() {
                     Some(prompt::modal_key)
                 } else if self.recovery_manager.open() {
                     Some(recovery_manager::modal_key)
+                } else if self.settings.open {
+                    Some(settings_page::modal_key)
                 } else if self.help_open {
                     Some(help::modal_key)
                 } else if self.commands.open {
@@ -1332,6 +1396,7 @@ fn same_drawing(a: &Document, b: &Document) -> bool {
         && a.bonds.iter().zip(&b.bonds).all(|(a, b)| same_bond(a, b))
         && a.annotations == b.annotations
         && a.molecule_names == b.molecule_names
+        && a.property_captions == b.property_captions
         && a.arrows == b.arrows
         && a.arrow_labels == b.arrow_labels
         && a.graphics == b.graphics

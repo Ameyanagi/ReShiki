@@ -47,7 +47,7 @@ use crate::transaction::Rejection;
 
 /// The operation API version, separate from the engine protocol and the
 /// document version.
-pub const OPERATION_API_VERSION: u32 = 1;
+pub const OPERATION_API_VERSION: u32 = 2;
 
 /// The four version numbers a result reports; each changes independently.
 #[derive(Debug, Clone, PartialEq, Eq)]

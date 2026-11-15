@@ -5,6 +5,8 @@ use super::{App, InspectorTab, Message, inspector};
 use crate::canvas::Tool;
 use iced::widget::{button, column, container, rich_text, row, scrollable, text};
 use iced::{Border, Color, Element, Length, Point, Task, keyboard::key::Named};
+use reshiki::export::Background as Paper;
+use std::borrow::Cow;
 
 mod cascade;
 #[cfg(test)]
@@ -24,14 +26,18 @@ pub enum Page {
     Tilt,
     /// Show the selected molecule as 2D, 3D or both.
     Model,
+    /// Property lines under the clicked molecule, ticked when shown.
+    Properties,
     Attachments,
     CopyAs,
+    /// Copy image on a background for this copy only.
+    CopyImageOn,
     // Menus anchored under context row buttons.
     AlignObjects,
     Distribute,
     Order,
     Arrange,
-    /// The first n context row commands, folded into ⋯.
+    /// The last n context row commands, folded into ⋯.
     More(usize),
 }
 
@@ -40,6 +46,10 @@ mod tests;
 #[cfg(test)]
 mod view_parity_tests;
 const SHORTCUT_GAP: f32 = 12.;
+/// The tick column of rows that show whether they are on.
+const TICK_WIDTH: f32 = 16.;
+/// The tick and swatch before a background row's label.
+const SWATCH_WIDTH: f32 = 32.;
 const SCROLLBAR_WIDTH: f32 = 10.;
 const SCROLLBAR_GAP: f32 = 4.;
 
@@ -78,6 +88,8 @@ pub enum Action {
     FocusedKey(usize, usize, Named),
     Run(Box<Message>),
     Properties(bool),
+    /// Flip the Editable drawing choice of Copy image on; the menu stays open.
+    Editable,
 }
 pub(super) struct State {
     pub position: Point,
@@ -87,6 +99,8 @@ pub(super) struct State {
     children: Vec<Child>,
     focused: Option<(usize, usize)>,
     keyboard: bool,
+    /// Copy image on's Editable drawing choice; `None` follows the default.
+    editable: Option<bool>,
 }
 #[derive(Clone, Copy)]
 struct Child {
@@ -102,6 +116,7 @@ impl State {
             children: vec![],
             focused: None,
             keyboard: false,
+            editable: None,
         }
     }
 
@@ -120,9 +135,24 @@ enum Entry {
         label: &'static str,
         action: Action,
         enabled: bool,
+        /// A background swatch, and whether it is the Copy default.
+        swatch: Option<(Paper, bool)>,
     },
     Separator,
     Hint(&'static str),
+}
+/// Copy image on's check row.
+const EDITABLE: &str = "Editable drawing";
+/// Beside the check row while it differs from the Settings default.
+const NOT_DEFAULT: &str = "(not default)";
+/// The label of a saved color's row, which shows the color's code instead.
+const SAVED_COLOR: &str = "Saved color";
+/// The text a row shows: its label, or a saved color's code.
+fn shown(label: &'static str, swatch: Option<(Paper, bool)>) -> Cow<'static, str> {
+    match swatch {
+        Some((Paper::Color(rgb), _)) if label == SAVED_COLOR => reshiki::palette::hex(rgb).into(),
+        _ => label.into(),
+    }
 }
 impl Entry {
     fn command(label: &'static str, message: Message, enabled: bool) -> Self {
@@ -130,6 +160,7 @@ impl Entry {
             label,
             action: Action::Run(Box::new(message)),
             enabled,
+            swatch: None,
         }
     }
     fn page(label: &'static str, page: Page) -> Self {
@@ -137,6 +168,7 @@ impl Entry {
             label,
             action: Action::Page(page),
             enabled: true,
+            swatch: None,
         }
     }
 }
@@ -166,6 +198,10 @@ impl App {
                 command("Redo", Message::Redo, self.tab.history.can_redo()),
                 Separator,
                 command("Paste", Message::Paste, !self.tab.clipboard_busy),
+            ]
+            .into_iter()
+            .chain(self.copy_image_on_entry())
+            .chain([
                 submenu("Copy as", Page::CopyAs),
                 command(
                     "Select all",
@@ -174,9 +210,11 @@ impl App {
                 ),
                 Separator,
                 command("Fit drawing", Message::Fit, true),
-            ],
+            ])
+            .collect(),
             Page::Main => self.main_entries(atoms, bonds, tilt),
             Page::CopyAs => self.copy_as_entries(),
+            Page::CopyImageOn => self.copy_image_on_entries(),
             Page::Tilt => vec![
                 Hint("3D tilt · selected objects"),
                 command("Drag to tilt", Message::Tool(Tool::Tilt), tilt),
@@ -191,9 +229,10 @@ impl App {
                     Message::InspectorAction(inspector::Action::DepthBonds),
                     bonds,
                 ),
-                Hint("Labels stay upright. Undo restores the previous view."),
+                Hint("Labels stay upright"),
             ],
             Page::Model => self.model_entries(),
+            Page::Properties => self.property_entries(),
             Page::Align => self.align_entries(atoms, multiple),
             Page::Bonds => self.bond_entries(bonds),
             Page::AlignObjects => self.arrange_entries(&[&Command::HORIZONTAL, &Command::VERTICAL]),
@@ -206,12 +245,15 @@ impl App {
                 self.arrange_entries(&[&Command::TRANSFORM]),
             ]
             .join(&Separator),
-            Page::More(folded) => self
-                .context_commands()
-                .into_iter()
-                .take(folded)
-                .map(|c| command(c.menu, c.message, c.enabled))
-                .collect(),
+            Page::More(folded) => {
+                let commands = self.context_commands();
+                let shown = commands.len().saturating_sub(folded);
+                commands
+                    .into_iter()
+                    .skip(shown)
+                    .map(|c| command(c.menu, c.message, c.enabled))
+                    .collect()
+            }
             Page::Attachments => vec![
                 Hint("Attach to selected atoms"),
                 command(
@@ -241,7 +283,7 @@ impl App {
 
     /// The selection menu, in groups: edit the clicked atom, name or select
     /// its molecule, connect and reshape, generic structures, the clipboard,
-    /// then Properties and the pinned Copy/Delete footer.
+    /// then Properties and Delete, pinned in the footer.
     fn main_entries(&self, atoms: bool, bonds: bool, tilt: bool) -> Vec<Entry> {
         let command = Entry::command;
         [
@@ -258,18 +300,24 @@ impl App {
             } else {
                 vec![]
             },
-            vec![
+            [
                 command("Cut", Message::Copy(true), true),
+                command("Copy", Message::Copy(false), true),
+            ]
+            .into_iter()
+            .chain(self.copy_image_on_entry())
+            .chain([
                 Entry::page("Copy as", Page::CopyAs),
                 command("Paste", Message::Paste, !self.tab.clipboard_busy),
                 command("Duplicate", Message::Duplicate, true),
-            ],
+            ])
+            .collect(),
             vec![Entry::Item {
                 label: "Properties…",
                 action: Action::Properties(false),
                 enabled: true,
+                swatch: None,
             }],
-            vec![command("Copy", Message::Copy(false), true)],
             vec![command("Delete", Message::Delete, true)],
         ]
         .into_iter()
@@ -322,7 +370,7 @@ impl App {
         }
         if selected_atoms > 1 {
             entries.push(command(
-                "Create group label…",
+                "Abbreviate selection…",
                 Message::AtomText(super::atom_text::Action::ContractSelection),
                 true,
             ));
@@ -358,6 +406,9 @@ impl App {
                 true,
             ));
         }
+        if self.context_property_target().is_some() {
+            entries.push(Entry::page("Show properties", Page::Properties));
+        }
         let connected: Vec<_> = reshiki::editing::groups(&self.tab.doc, &self.tab.doc.all_ids())
             .into_iter()
             .filter(|ids| {
@@ -376,6 +427,49 @@ impl App {
             ));
         }
         entries
+    }
+
+    fn context_property_target(&self) -> Option<Vec<u64>> {
+        let hit = self
+            .context_menu
+            .as_ref()
+            .and_then(|menu| menu.hit.as_deref());
+        self.property_target(hit.unwrap_or(&[]))
+    }
+
+    /// Choosing "Show properties" itself, by click, Enter or Space, shows
+    /// Mol. Wt. when the molecule has no caption yet.
+    fn show_default_property(&mut self, page: Page) {
+        if page == Page::Properties
+            && let Some(target) = self.context_property_target()
+            && reshiki::linked_properties::caption(&self.tab.doc, &target).is_none()
+        {
+            self.toggle_property(&target, reshiki::linked_properties::Property::Weight);
+        }
+    }
+
+    /// One row per property, in the Properties panel's order.
+    fn property_entries(&self) -> Vec<Entry> {
+        let Some(target) = self.context_property_target() else {
+            return vec![];
+        };
+        reshiki::linked_properties::Property::ALL
+            .into_iter()
+            .map(|p| Entry::command(p.name(), Message::ToggleProperty(target.clone(), p), true))
+            .collect()
+    }
+
+    /// Whether a property row is ticked; `None` for other rows.
+    fn ticked(&self, action: &Action) -> Option<bool> {
+        match action {
+            Action::Run(message) => match message.as_ref() {
+                Message::ToggleProperty(atoms, property) => Some(
+                    reshiki::linked_properties::shown(&self.tab.doc, atoms, *property),
+                ),
+                _ => None,
+            },
+            _ => None,
+        }
     }
 
     /// The Structure section's 2D / 3D / Both, with 2D in either layout; the
@@ -427,7 +521,7 @@ impl App {
             let in_molecules = |id: &u64| molecules.iter().any(|ids| ids.contains(id));
             if fischer.iter().any(in_molecules) {
                 entries.push(command(
-                    "Convert to Wedge Drawing",
+                    "Convert to wedge drawing",
                     Message::Cleanup(super::cleanup::Action::ToWedge),
                     !self.tab.busy,
                 ));
@@ -439,7 +533,7 @@ impl App {
                 .any(|a| matches!(a.cip_label.as_deref(), Some("R" | "S")) && in_molecules(&a.id))
             {
                 entries.push(command(
-                    "Convert to Fischer Projection",
+                    "Convert to Fischer projection",
                     Message::Cleanup(super::cleanup::Action::ToFischer),
                     !self.tab.busy,
                 ));
@@ -452,7 +546,7 @@ impl App {
                     .is_some_and(|a| a.stereo.is_some() || a.cip_label.is_some())
             {
                 entries.push(command(
-                    "Invert Configuration Here",
+                    "Invert configuration here",
                     Message::Stereo(super::stereo::Action::Invert),
                     !self.tab.busy,
                 ));
@@ -555,7 +649,7 @@ impl App {
                 true,
             ));
             entries.push(command(
-                "Symmetrise",
+                "Symmetrize",
                 Message::Graphics(super::graphics::Action::Cleanup(
                     super::graphics::Cleanup::Symmetrise { upright: false },
                 )),
@@ -583,6 +677,76 @@ impl App {
             Message::Generic(super::generic::Action::ExpandComponent(target.to_vec())),
             self.generic_expand_enabled(),
         )]
+    }
+
+    /// Copy image on ›, where a native clipboard can hold pictures.
+    fn copy_image_on_entry(&self) -> Option<Entry> {
+        reshiki::clipboard::available().then(|| Entry::page("Copy image on", Page::CopyImageOn))
+    }
+
+    /// Whether this Copy image on includes the editable drawing.
+    fn copy_editable(&self) -> bool {
+        self.context_menu
+            .as_ref()
+            .and_then(|menu| menu.editable)
+            .unwrap_or(self.appearance.export_editable_drawing)
+    }
+
+    /// The backgrounds and saved colors for one Copy image; a tick marks the
+    /// Copy default. Then whether it includes the editable drawing, and a row
+    /// that opens Settings to change the defaults.
+    fn copy_image_on_entries(&self) -> Vec<Entry> {
+        use crate::appearance::Background;
+        let appearance = &self.appearance;
+        let default = appearance
+            .copy_background
+            .paper(appearance.custom_background);
+        let enabled = !self.clipboard_working();
+        let editable = self.copy_editable();
+        let item = |label: &'static str, paper: Paper| Entry::Item {
+            label,
+            action: Action::Run(Box::new(Message::CopyImageOn(paper, editable))),
+            enabled,
+            swatch: Some((paper, paper == default)),
+        };
+        let mut entries: Vec<_> = [
+            Background::Transparent,
+            Background::Canvas,
+            Background::White,
+            Background::Black,
+        ]
+        .into_iter()
+        .map(|background| {
+            item(
+                background.label(),
+                background.paper(appearance.custom_background),
+            )
+        })
+        .collect();
+        if !appearance.background_colors.is_empty() {
+            entries.push(Entry::Separator);
+            entries.extend(
+                appearance
+                    .background_colors
+                    .iter()
+                    .map(|&rgb| item(SAVED_COLOR, Paper::Color(rgb))),
+            );
+        }
+        entries.push(Entry::Separator);
+        entries.push(Entry::Item {
+            label: EDITABLE,
+            action: Action::Editable,
+            enabled,
+            swatch: None,
+        });
+        entries.push(Entry::command(
+            "Change the default…",
+            Message::Settings(super::settings_page::Action::Open(Some(
+                super::settings_page::Section::CopyExport,
+            ))),
+            true,
+        ));
+        entries
     }
 
     fn copy_as_entries(&self) -> Vec<Entry> {
@@ -663,12 +827,12 @@ impl App {
         if multiple {
             entries.push(Separator);
             for (label, action) in [
-                ("Align left edges", Arrange::AlignLeft),
-                ("Align horizontal centers", Arrange::AlignHorizontal),
-                ("Align right edges", Arrange::AlignRight),
-                ("Align top edges", Arrange::AlignTop),
-                ("Align middles", Arrange::AlignVertical),
-                ("Align bottom edges", Arrange::AlignBottom),
+                ("Align left", Arrange::AlignLeft),
+                ("Align center", Arrange::AlignHorizontal),
+                ("Align right", Arrange::AlignRight),
+                ("Align top", Arrange::AlignTop),
+                ("Align middle", Arrange::AlignVertical),
+                ("Align bottom", Arrange::AlignBottom),
                 ("Distribute horizontally", Arrange::DistributeHorizontal),
                 ("Distribute vertically", Arrange::DistributeVertical),
             ] {
@@ -711,7 +875,7 @@ impl App {
         }
         if reshiki::aromatic::charge_circle(&self.tab.doc, &self.tab.selected).is_some() {
             entries.push(command(
-                "Centre charge in ring",
+                "Center charge in ring",
                 Message::CenterRingCharge,
                 true,
             ));
@@ -767,6 +931,7 @@ impl App {
                 label: first.unavailable(),
                 action: Action::Close,
                 enabled: false,
+                swatch: None,
             }];
         }
         groups
@@ -833,7 +998,8 @@ impl App {
                     ..
                 }) = entry
                 {
-                    if matches!(action, Action::Page(_)) {
+                    if let Action::Page(page) = action {
+                        self.show_default_property(page);
                         self.context_hover(level, index, true);
                     } else {
                         return self.context_action(action);
@@ -857,6 +1023,12 @@ impl App {
             Action::Run(message) => {
                 self.context_menu = None;
                 return self.update(*message);
+            }
+            Action::Editable => {
+                let editable = !self.copy_editable();
+                if let Some(menu) = &mut self.context_menu {
+                    menu.editable = Some(editable);
+                }
             }
             Action::Properties(molecular) => {
                 self.context_menu = None;
@@ -974,8 +1146,12 @@ impl App {
                         ..
                     }) = entries.get(index)
                     {
+                        let child = *child;
+                        if key != Named::ArrowRight {
+                            self.show_default_property(child);
+                        }
                         let first = self
-                            .context_entries(*child)
+                            .context_entries(child)
                             .iter()
                             .position(|entry| matches!(entry, Entry::Item { enabled: true, .. }));
                         self.context_hover(level, index, true);
@@ -1013,8 +1189,25 @@ impl App {
             .context_entries(page)
             .iter()
             .filter_map(|entry| match entry {
-                Entry::Item { label, action, .. } => Some(
-                    text_width(label, 12.)
+                Entry::Item {
+                    label,
+                    action,
+                    swatch,
+                    ..
+                } => Some(
+                    text_width(&shown(label, *swatch), 12.)
+                        + match (swatch, action) {
+                            (Some(_), _) => {
+                                SWATCH_WIDTH + SHORTCUT_GAP + text_width("Default", 11.)
+                            }
+                            (None, Action::Editable) => {
+                                SWATCH_WIDTH + SHORTCUT_GAP + text_width(NOT_DEFAULT, 11.)
+                            }
+                            _ => 0.,
+                        }
+                        + self
+                            .ticked(action)
+                            .map_or(0., |_| TICK_WIDTH + SHORTCUT_GAP)
                         + if matches!(action, Action::Page(_)) {
                             24.
                         } else {
@@ -1042,11 +1235,6 @@ impl App {
         let mut footer = column![].spacing(1);
         let mut items = Vec::new();
         let mut submenus = Vec::new();
-        let keyboard_commands = if matches!(page, Page::More(_)) {
-            self.context_commands()
-        } else {
-            Vec::new()
-        };
         if matches!(page, Page::Main) && !self.tab.selected.is_empty() {
             entries = entries.push(
                 container(
@@ -1063,9 +1251,9 @@ impl App {
                 .iter()
                 .position(|entry| {
                     matches!(entry, Entry::Item { action: Action::Run(message), .. }
-                    if matches!(message.as_ref(), Message::Copy(false)))
+                    if matches!(message.as_ref(), Message::Delete))
                 })
-                .map(|index| index - 1) // Include the separator above Copy.
+                .map(|index| index - 1) // Include the separator above Delete.
         } else {
             None
         };
@@ -1075,39 +1263,72 @@ impl App {
                     label,
                     action,
                     enabled,
+                    swatch,
                 } => {
                     let destructive = matches!(&action, Action::Run(message) if matches!(message.as_ref(), Message::Delete));
-                    let keyboard_hint = match &action {
-                        Action::Run(message) => super::workspace::keyboard_control_id(message)
-                            .and_then(|id| {
-                                keyboard_commands.iter().find(|command| {
-                                    super::workspace::keyboard_control_id(&command.message)
-                                        == Some(id)
-                                })
-                            })
-                            .map(|command| command.hint),
-                        _ => None,
+                    let label = shown(label, swatch);
+                    // Copy image on's check row: on, and whether that is the default.
+                    let check = matches!(action, Action::Editable).then(|| {
+                        let on = self.copy_editable();
+                        (on, on == self.appearance.export_editable_drawing)
+                    });
+                    let accessible_name = match swatch {
+                        Some((_, true)) => format!("{label} (default)"),
+                        _ if check.is_some_and(|(_, default)| !default) => {
+                            format!("{label} {NOT_DEFAULT}")
+                        }
+                        _ => label.to_string(),
                     };
-                    let accessible_name = keyboard_hint.unwrap_or(label);
-                    let hint = if matches!(&action, Action::Run(message) if matches!(
+                    let hint = matches!(&action, Action::Run(message) if matches!(
                         message.as_ref(),
                         Message::Graphics(super::graphics::Action::Cleanup(
                             super::graphics::Cleanup::Symmetrise { .. }
                         ))
-                    )) {
-                        Some(super::graphics::SYMMETRISE_HINT)
-                    } else {
-                        keyboard_hint
-                    };
+                    ))
+                    .then_some(super::graphics::SYMMETRISE_HINT);
                     let label = text(label).size(12).width(Length::Fill);
                     let label = if destructive {
                         label.style(crate::appearance::text_color(Color::from_rgb8(167, 59, 51)))
                     } else {
                         label
                     };
-                    let mut content = row![label]
+                    let mut content = row![]
                         .spacing(SHORTCUT_GAP)
                         .align_y(iced::Alignment::Center);
+                    let ticked = self.ticked(&action);
+                    if let Some(ticked) = ticked {
+                        content = content.push(
+                            text(if ticked { "✓" } else { "" })
+                                .size(12)
+                                .width(TICK_WIDTH),
+                        );
+                    }
+                    if let Some((paper, default)) = swatch {
+                        content = content.push(
+                            row![
+                                text(if default { "✓" } else { "" }).size(12).width(12),
+                                super::settings_page::swatch(paper, 14., 12.),
+                            ]
+                            .spacing(6)
+                            .align_y(iced::Alignment::Center),
+                        );
+                    }
+                    if let Some((on, _)) = check {
+                        content = content
+                            .push(text(if on { "✓" } else { "" }).size(12).width(SWATCH_WIDTH));
+                    }
+                    content = content.push(label);
+                    if swatch.is_some_and(|(_, default)| default) {
+                        content = content
+                            .push(text("Default").size(11).style(super::workspace::muted_text));
+                    }
+                    if check.is_some_and(|(_, default)| !default) {
+                        content = content.push(
+                            text(NOT_DEFAULT)
+                                .size(11)
+                                .style(super::workspace::muted_text),
+                        );
+                    }
                     if matches!(action, Action::Page(_)) {
                         content = content.push(text("›").size(16));
                     } else if let Some(keys) = shortcut(&action) {
@@ -1153,6 +1374,10 @@ impl App {
                         .on_press_maybe(
                             enabled.then_some(Message::ContextMenu(Action::Activate(level, index))),
                         );
+                    let item = match check.map(|(on, _)| on).or(ticked) {
+                        Some(on) => item.checked(on),
+                        None => item,
+                    };
                     items.push(index);
                     let item: Element<'_, Message> = if let Some(hint) = hint {
                         super::workspace::hover_hint(

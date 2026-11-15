@@ -113,18 +113,28 @@ async fn unsupported_chemistry_has_no_prepared_payload() {
     for (doc, message) in cases {
         let (format, chemical) = chemical_text_snapshot(&doc, &doc).unwrap();
         assert_eq!(format, CopyFormat::ChemDoodleReaction);
-        let error = prepare_as(Default::default(), doc, CopyFormat::ChemDoodleReaction)
-            .await
-            .unwrap_err();
+        let error = prepare_as(
+            Default::default(),
+            doc,
+            CopyFormat::ChemDoodleReaction,
+            Default::default(),
+        )
+        .await
+        .unwrap_err();
         assert!(error.contains(message), "{error}");
         let chemical_error = prepare_chemical_text(Default::default(), chemical, format)
             .await
             .unwrap_err();
         assert_eq!(chemical_error, error);
     }
-    let prepared = prepare_as(Default::default(), source, CopyFormat::ChemDoodleReaction)
-        .await
-        .unwrap();
+    let prepared = prepare_as(
+        Default::default(),
+        source,
+        CopyFormat::ChemDoodleReaction,
+        Default::default(),
+    )
+    .await
+    .unwrap();
     assert!(prepared.text().unwrap().contains("\"synthetic\""));
     assert!(!prepared.notices.is_empty());
 }

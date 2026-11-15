@@ -52,7 +52,7 @@
     {"name": "format_cdxml", "rule": "import.format_enum", "base": "smiles", "patch": [{"op": "replace", "path": "/arguments/format", "value": "cdxml"}], "expect": "both_accept"},
     {"name": "format_cdx", "rule": "import.format_enum", "base": "smiles", "patch": [{"op": "replace", "path": "/arguments/format", "value": "cdx"}], "expect": "both_accept"},
     {"name": "format_reshiki", "rule": "import.format_enum", "base": "smiles", "patch": [{"op": "replace", "path": "/arguments/format", "value": "reshiki"}], "expect": "both_accept"},
-    {"name": "format_emf", "rule": "import.format_enum", "base": "smiles", "patch": [{"op": "replace", "path": "/arguments/format", "value": "emf"}], "expect": "both_reject", "message": "unknown variant `emf`, expected one of `auto`, `smiles`, `mol`, `rxn`, `rsmi`, `inchi`, `cdxml`, `cdx`, `reshiki`"},
+    {"name": "format_emf", "rule": "import.format_enum", "base": "smiles", "patch": [{"op": "replace", "path": "/arguments/format", "value": "emf"}], "expect": "both_reject", "message": "unknown variant `emf`, expected one of `auto`, `smiles`, `mol`, `rxn`, `rsmi`, `inchi`, `cdxml`, `cdx`, `reshiki`, `rsk`, `name`"},
     {"name": "format_export_only", "rule": "import.format_enum", "base": "smiles", "patch": [{"op": "replace", "path": "/arguments/format", "value": "png"}], "expect": "both_reject"},
     {"name": "format_upper_case", "rule": "import.format_enum", "base": "smiles", "patch": [{"op": "replace", "path": "/arguments/format", "value": "SMILES"}], "expect": "both_reject"},
     {"name": "format_empty", "rule": "import.format_enum", "base": "smiles", "patch": [{"op": "replace", "path": "/arguments/format", "value": ""}], "expect": "both_reject"},

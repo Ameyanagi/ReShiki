@@ -6,6 +6,21 @@ use iced::Task;
 use reshiki::assistant;
 
 impl App {
+    /// Whether **Accept all edits** may apply the draft without review: its
+    /// final version passed the visual review, and it replaces nothing
+    /// outside the current selection. A proposal names the objects it
+    /// replaces itself, and text in an opened drawing can shape that choice;
+    /// one that names none replaces what was selected when the request was
+    /// sent, which may no longer be selected.
+    pub(super) fn assistant_can_auto_apply(&self) -> bool {
+        let selected = self
+            .tab
+            .doc
+            .expand_abbreviation_selection(&self.tab.selected);
+        self.assistant.draft.as_ref().is_some_and(|draft| {
+            draft.review.can_auto_apply() && draft.replace.iter().all(|id| selected.contains(id))
+        })
+    }
     pub(super) fn assistant_reject(&mut self) {
         self.assistant.waiting_for_canvas_edit = false;
         self.assistant.draft = None;
@@ -23,6 +38,7 @@ impl App {
         }
         if self.tab.inline_text.is_some() || self.tab.joining.is_some() {
             self.assistant.waiting_for_canvas_edit = true;
+            self.assistant.waiting_apply_is_automatic = false;
             self.assistant.status =
                 "Ready · Finish or cancel the current canvas edit to apply".into();
             return Task::none();
@@ -33,7 +49,8 @@ impl App {
         if draft.epoch != self.tab.file_epoch
             || (!draft.replace.is_empty() && draft.revision != self.tab.revision)
         {
-            self.assistant.status = "This proposal targets a drawing or selection that changed. Send a follow-up to refresh it.".into();
+            self.assistant.status =
+                "The drawing changed · Send a follow-up to refresh the draft".into();
             self.assistant.error = true;
             return Task::none();
         }
@@ -62,13 +79,10 @@ impl App {
                     .clamp(0.05, 2.5);
                     self.tab.fit_to_view = false;
                 }
-                self.assistant.record(
-                    "ReShiki",
-                    "Applied to the drawing. Undo restores the previous drawing.".into(),
-                );
-                self.assistant.status = "Applied · Undo is available".into();
-                self.status =
-                    "Assistant drawing applied · Undo restores the previous drawing".into();
+                self.assistant
+                    .record("ReShiki", "Applied to the drawing.".into());
+                self.assistant.status = "Applied".into();
+                self.status = "Assistant drawing applied".into();
             }
             Err(error) => {
                 self.assistant.error = true;

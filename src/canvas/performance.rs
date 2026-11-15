@@ -43,7 +43,7 @@ fn measure(name: &str, count: usize, mut run: impl FnMut(usize)) {
 
 #[tokio::test]
 #[ignore = "Canvas grid profiling; requires a headless renderer"]
-async fn dense_grid_cache() {
+async fn manual_dense_grid_cache() {
     let backend = std::env::var("RESHIKI_PERF_RENDERER").ok();
     let renderer = <Renderer as Headless>::new(
         iced::Font::with_name(reshiki::style::ui_font_family()),
@@ -83,7 +83,7 @@ async fn dense_grid_cache() {
 
 #[tokio::test]
 #[ignore = "Release-mode canvas workload profiling; requires a headless renderer"]
-async fn loaded_canvas_workloads() {
+async fn manual_loaded_canvas_workloads() {
     let backend = std::env::var("RESHIKI_PERF_RENDERER").ok();
     let renderer = <Renderer as Headless>::new(
         iced::Font::with_name(reshiki::style::ui_font_family()),
@@ -183,6 +183,49 @@ async fn loaded_canvas_workloads() {
             black_box(canvas.draw(&state, &renderer, &Theme::Light, bounds, cursor));
         });
         assert_eq!(doc.atoms.len(), original.atoms.len() * copies);
+    }
+}
+
+/// An unchanged drawing redrawn with the Select tool and nothing selected,
+/// in view and with the whole drawing off-screen.
+#[tokio::test]
+#[ignore = "Release-mode idle redraw profiling; requires a headless renderer"]
+async fn manual_idle_redraw_workloads() {
+    let renderer = <Renderer as Headless>::new(
+        iced::Font::with_name(reshiki::style::ui_font_family()),
+        iced::Pixels(16.),
+        std::env::var("RESHIKI_PERF_RENDERER").ok().as_deref(),
+    )
+    .await
+    .expect("Headless renderer");
+    println!("Renderer: {}", renderer.name());
+    let gallery: Document =
+        serde_json::from_str(include_str!("../../assets/examples/shortcut-examples.rsk")).unwrap();
+    let bounds = Rectangle::with_size(iced::Size::new(1066., 570.));
+    let point = Point::new(350., 250.);
+    let cursor = mouse::Cursor::Available(point);
+    println!("PERF,workload,iterations,median_ms,p95_ms,mean_ms");
+    for copies in [1, 4, 16] {
+        let mut doc = Document::default();
+        for copy in 0..copies {
+            let offset = World::new((copy % 4) as f32 * 1800., (copy / 4) as f32 * 1800.);
+            reshiki::editing::append(&mut doc, &gallery, offset);
+        }
+        let mut canvas = tests::chain_canvas(&doc, ChainMode::Straight);
+        canvas.tool = Tool::Select;
+        let state = State {
+            cursor: Some(point),
+            ..Default::default()
+        };
+        for (place, center) in [
+            ("onscreen", World::new(378., 294.)),
+            ("offscreen", World::new(-50_000., -50_000.)),
+        ] {
+            canvas.camera = Camera { center, zoom: 0.5 };
+            measure(&format!("gallery_{copies}x_{place}_idle_draw"), 30, |_| {
+                black_box(canvas.draw(&state, &renderer, &Theme::Light, bounds, cursor));
+            });
+        }
     }
 }
 

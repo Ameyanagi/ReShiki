@@ -27,4 +27,4 @@ The assistant reviews overview and close-up images of the exact proposed drawing
 
 Downloads support Apple Silicon macOS, Windows x64/ARM64, and Linux x64/ARM64. Save and export dialogs add the selected extension when it is omitted. New drawings use the shorter `.rsk` extension and the same readable JSON format. Existing `.reshiki` and `.moruno` drawings remain compatible; saving them preserves their filenames. Keep portable package contents together so the application can find its bundled native helper. Python remains a developer build-script and optional reference-test dependency only.
 
-See the [installation guide](/guide/install/), [assistant walkthrough](/guide/assistant/), and [release preparation record](release-0.6-validation.md).
+See the [installation guide](/guide/install/), [assistant walkthrough](/guide/assistant/), and [release preparation record](changes/release-0.6-validation.md).

@@ -128,14 +128,14 @@ fn malformed_page_layouts_fail_without_mutating_drawing() {
         assert_eq!(copy, doc);
         copy.page_layout = Some(layout);
         assert!(copy.validate().is_err());
-        assert!(reshiki::export::pages_pdf(&copy).is_err());
+        assert!(reshiki::export::pages_pdf(&copy, reshiki::export::Background::Canvas).is_err());
     }
 }
 #[test]
 fn page_pdf_uses_all_sheets_while_drawing_exports_stay_cropped() {
     let mut doc = drawing();
     let cropped = reshiki::scene::svg(&doc);
-    assert!(reshiki::export::pages_pdf(&doc).is_err());
+    assert!(reshiki::export::pages_pdf(&doc, reshiki::export::Background::Canvas).is_err());
     doc.page_layout = Some(Layout {
         width_pt: 612.,
         height_pt: 792.,
@@ -144,7 +144,7 @@ fn page_pdf_uses_all_sheets_while_drawing_exports_stay_cropped() {
         ..Default::default()
     });
     assert_eq!(reshiki::scene::svg(&doc), cropped);
-    let pdf = reshiki::export::pages_pdf(&doc).unwrap();
+    let pdf = reshiki::export::pages_pdf(&doc, reshiki::export::Background::Canvas).unwrap();
     let text = String::from_utf8_lossy(&pdf);
     assert!(text.starts_with("%PDF-"));
     assert!(text.contains("/Count 4"));

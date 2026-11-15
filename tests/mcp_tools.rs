@@ -9,8 +9,7 @@
 //! images and exported files are compared with an in-process HeadlessHost on
 //! the same machine, and the goldens tools-modern.jsonl and
 //! tools-legacy.jsonl snapshot structure only (see [`structure`]).
-#[path = "common/headless.rs"]
-mod headless;
+use crate::headless;
 
 use base64::{Engine, engine::general_purpose::STANDARD};
 use headless::{McpSession, StderrMode};
@@ -275,7 +274,7 @@ fn the_tools_work_end_to_end(era: Era) {
     let info = client.ok("info", json!({}));
     let info = &info["structuredContent"];
     assert_eq!(info["versions"]["document"], reshiki::document::VERSION);
-    assert_eq!(info["operation_api"], 1);
+    assert_eq!(info["value"]["operation_api"], 2);
 
     let import = json!({"format": "smiles", "text": "CCO"});
     let imported = client.ok("import", import.clone());
@@ -383,11 +382,56 @@ fn the_tools_work_end_to_end(era: Era) {
     );
     assert_eq!(
         error,
-        json!({"code": "invalid_arguments", "message": expected})
+        json!({"code": "invalid_arguments", "message": expected, "retryable": false})
     );
 
     let error = client.tool_error("inspect", json!({"document": "doc_0", "ids": null}));
     assert_eq!(error["code"], "unknown_document", "{error}");
+
+    // Chemical names, offline, through the app's naming worker: a name in
+    // and a name out.
+    let named = client.ok("import", json!({"format": "name", "text": "ethanol"}));
+    let value = &named["structuredContent"]["value"];
+    assert_eq!(value["analysis"]["smiles"], "CCO", "{value}");
+    let name = client.ok("name", json!({"document": handle(value)}));
+    let value = &name["structuredContent"]["value"];
+    assert_eq!(value["name"], "ethanol", "{value}");
+    assert_eq!(value["status"], "preferred", "{value}");
+    let error = client.tool_error(
+        "import",
+        json!({"format": "name", "text": "notachemicalname"}),
+    );
+    assert_eq!(error["code"], "failed", "{error}");
+
+    // convert returns the render tool's preview in one call and keeps no
+    // document; schema returns the sketch fields compose leaves out.
+    let before = client.ok("document_list", json!({}));
+    let converted = client.ok(
+        "convert",
+        json!({
+            "input": {"format": "smiles", "text": "CCO"},
+            "to": "preview",
+            "pages": null,
+            "svg_text": null,
+            "max_width": null,
+            "max_height": null,
+        }),
+    );
+    // The preview of the same SMILES, which render drew above.
+    assert_eq!(
+        converted["content"][1]["data"],
+        rendered["content"][1]["data"]
+    );
+    let after = client.ok("document_list", json!({}));
+    assert_eq!(
+        after["structuredContent"]["value"]["documents"],
+        before["structuredContent"]["value"]["documents"]
+    );
+    let schema = client.ok("schema", json!({"name": "sketch"}));
+    assert_eq!(
+        schema["structuredContent"]["value"]["schema"],
+        reshiki_agent::ops::schema::sketch()
+    );
 
     // The cancellation follows at once; the layout takes far longer.
     let id = client.send(

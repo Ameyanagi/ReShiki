@@ -8,11 +8,11 @@ import Screenshot from "../../../components/Screenshot.astro";
 
 ## Keep an editable original
 
-**Save** writes a `.rsk` file with the complete drawing. If you enter a name without an extension, ReShiki adds `.rsk`, for example `Esterification.rsk`. Use **Save as** for a separate version. Reopen it with **Open**.
+**Save** writes a `.rsk` file with the complete drawing. If you enter a name without an extension, ReShiki adds `.rsk`, for example `Esterification.rsk`. Use **Save as .rsk…** for a separate version. Reopen it with **Open**.
 
 ReShiki 0.12.0 saves drawings in a newer format, even when they use no new feature. ReShiki 0.11.0 and earlier cannot open them. ReShiki 0.11.0 asks you to update. If you share files with people on 0.11.0, keep a copy saved by 0.11.0.
 
-The file contains readable JSON text. Existing `.reshiki` and `.moruno` drawings also open normally; **Save** keeps their current filenames. Use **Save as** to save a copy with the shorter `.rsk` extension.
+The file contains readable JSON text. Existing `.reshiki` and `.moruno` drawings also open normally; **Save** keeps their current filenames. Use **Save as .rsk…** to save a copy with the shorter `.rsk` extension.
 
 To add MOL, RXN, CDXML, CDX, SMILES or picture files to the current drawing instead, drop them on the drawing or use **Import → Choose file…**. On Windows you can also insert `.emf` pictures; see [Insert EMF pictures](/guide/windows/#insert-emf-pictures). Dropping a `.rsk` file opens it in a tab.
 
@@ -22,7 +22,7 @@ If ReShiki offers recovery drafts after an interrupted session, choose **Restore
 
 Open **Export → Figure**, choose **SVG**, **SVG for Office**, **PDF** or **PNG** (on Windows also **EMF for Office**), then click its export button, for example **Export SVG…**. Expand **Structure & exchange** for molecular formats and CDXML, or **Pages & printing** for page setup and printing. **Editable document** saves the complete `.rsk` original.
 
-PNG uses up to 1200 dpi and automatically lowers resolution for large drawings while preserving physical size. The saved-file status reports the actual pixel dimensions and DPI. If chemistry analysis fails, figure export preserves the visible drawing and shows a review notice instead of blocking Save. [Figure export details and limits](/developer/figure-export/).
+PNG files use 1200 dpi unless you choose 150, 300 or 600 dpi in **Settings → Copy & export** or the **Resolution** menu, and copied PNGs use 300 dpi. Large drawings get a lower resolution automatically, at the same physical size. The saved-file status reports the actual pixel dimensions and DPI. If chemistry analysis fails, figure export preserves the visible drawing and shows a review notice instead of blocking Save. [Figure export details and limits](/developer/figure-export/).
 
 File exports use the full drawing. **Copy image** uses the current selection when objects are selected.
 
@@ -45,7 +45,7 @@ SVG/PNG/PDF retain partial ring curves, free atom labels and front-bond emphasis
 Anonymous dummy/attachment markers are editor handles and are omitted from figures and Office image copies. Explicit text labels remain visible.
 
 <Screenshot
-  src="/manual/export.png"
+  src="/manual/export.webp"
   alt="The Export panel with SVG for Office chosen in the Figure format menu, above the Structure & exchange, Pages & printing and Editable document sections."
 />
 

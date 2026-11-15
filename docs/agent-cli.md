@@ -57,6 +57,10 @@ has every help text as the program prints it.
 | `-`             | Standard input. Needs `--from`.                                   |
 | `--smiles TEXT` | SMILES text. Cannot be combined with `--from`.                    |
 
+`INPUT` must be a regular file. A named pipe, a folder or a device fails with
+`not a regular file; use - to read standard input`, because a pipe with no
+writer would keep the command waiting. Pipe such input to `-` instead.
+
 The input extension picks the format, ignoring case:
 
 | Extension                                                                 | Format                             |
@@ -79,8 +83,21 @@ output, including when `--from auto` is used. Open crystal files in the
 desktop or browser editor instead.
 
 `--from FORMAT` sets the format instead: `auto`, `smiles`, `mol`, `rxn`,
-`rsmi`, `inchi`, `cdxml`, `cdx` or `reshiki`. `auto` tells SMILES, MOL, RXN,
-reaction SMILES, InChI and CDXML apart.
+`rsmi`, `inchi`, `cdxml`, `cdx`, `reshiki`, `rsk` or `name`. `auto` tells
+SMILES, MOL, RXN, reaction SMILES, InChI and CDXML apart. `rsk` is another
+name for `reshiki`, the one the Python and JavaScript packages use.
+
+`--from name` reads a chemical name, such as `caffeine` or
+`2-methylpropan-1-ol`, with the app's offline
+[Chemical names](chemical-naming-rust.md) parser. Pass the name on standard
+input or in a file:
+
+```sh
+echo caffeine | reshiki --cli convert - --from name --to smiles
+```
+
+`auto` never reads text as a name. A name the parser cannot read fails with
+`reshiki: error[failed]: …` and exit 1.
 
 An input is at most 16,777,216 bytes (16 MiB), or 16,777,218 bytes for CDX.
 A ReShiki drawing with large embedded pictures can open in the app and still
@@ -95,8 +112,8 @@ be too large here. Files are read with your own permissions: the
   OUTPUT picks the format (below). Another extension, or none, is a usage
   error: pass `--to`.
 - Without `-o`, or with `-o -`, the file goes to standard output and needs
-  `--to`. PDF and PNG are never written to a terminal: redirect the output or
-  use `-o`.
+  `--to`. PDF, PNG and CDX are never written to a terminal: redirect the
+  output or use `-o`.
 - An existing OUTPUT is kept and the command fails, with
   `reshiki: error: OUTPUT exists; pass --force to replace`. `--force` replaces
   it.
@@ -109,41 +126,44 @@ be too large here. Files are read with your own permissions: the
 | `.pdf`            | `pdf`    |
 | `.png`            | `png`    |
 | `.cdxml`          | `cdxml`  |
+| `.cdx`            | `cdx`    |
 | `.mol`            | `mol`    |
+| `.rxn`            | `rxn`    |
 | `.smi`, `.smiles` | `smiles` |
+| `.rsmi`           | `rsmi`   |
 | `.inchi`          | `inchi`  |
 
-`render` writes only `png` or `svg`. The command line cannot write `.rsk`
-drawings, RXN, reaction SMILES, CDX or EMF. To save an `.rsk` file, use the
-MCP server's `file_save` or the app.
+`rxn` and `rsmi` (reaction SMILES) need a drawing with a reaction. `render`
+writes only `png` or `svg`. The command line cannot write `.rsk` drawings or
+EMF. To save an `.rsk` file, use the MCP server's `file_save` or the app.
 
 ## Options
 
-| Option                  | Commands                       | Meaning                                                                                                  |
-| ----------------------- | ------------------------------ | -------------------------------------------------------------------------------------------------------- |
-| `--smiles TEXT`         | convert, render, analyze, name | Read SMILES text instead of a file or standard input                                                     |
-| `--from FORMAT`         | convert, render, analyze, name | Set the input format                                                                                     |
-| `--to FORMAT`           | convert, render, compose       | Set the output format: `svg`, `pdf`, `png`, `cdxml`, `mol`, `smiles`, `inchi`; `png` or `svg` for render |
-| `-o OUTPUT`             | convert, render, compose       | Write to OUTPUT, or to standard output with `-`                                                          |
-| `--pages`               | convert, compose               | Export every publication page as one PDF; PDF output only                                                |
-| `--svg-text MODE`       | convert, render, compose       | SVG text as `outline` (default) or `live` `<text>` elements; other formats ignore it                     |
-| `--width N`             | render                         | The widest the PNG may be, in pixels: 1 to 8192, default 1600                                            |
-| `--height N`            | render                         | The tallest the PNG may be, in pixels: 1 to 8192, default 1000                                           |
-| `--force`               | convert, render, compose       | Replace OUTPUT if it exists                                                                              |
-| `--receipt`             | convert, compose               | Print one receipt JSON line after writing OUTPUT; needs `-o OUTPUT`                                      |
-| `-o FOLDER`             | skill                          | The existing folder that receives the skill folder                                                       |
-| `--name NAME`           | skill                          | The skill's name and folder name; default `reshiki`                                                      |
-| `--executable PATH`     | skill                          | The absolute path of the executable the skill runs; default this executable                              |
-| `--force`               | skill                          | Replace the generated files of an existing skill folder                                                  |
-| `--receipt`             | skill                          | Print one receipt JSON line after writing the skill                                                      |
-| `--isotope-style STYLE` | name                           | Isotope notation: `iupac` (default), as in (2H3)methanol, or `boughton`, as in methanol-d3               |
-| `--json`                | name                           | Print the name and its status as one JSON line                                                           |
-| `--locants`             | name                           | Print JSON with parent locants in input atom order                                                       |
-| `--json`                | help                           | Print the command catalog as one JSON line                                                               |
+| Option                  | Commands                       | Meaning                                                                                    |
+| ----------------------- | ------------------------------ | ------------------------------------------------------------------------------------------ |
+| `--smiles TEXT`         | convert, render, analyze, name | Read SMILES text instead of a file or standard input                                       |
+| `--from FORMAT`         | convert, render, analyze, name | Set the input format                                                                       |
+| `--to FORMAT`           | convert, render, compose       | Set the output format; `png` or `svg` for render                                           |
+| `-o OUTPUT`             | convert, render, compose       | Write to OUTPUT, or to standard output with `-`                                            |
+| `--pages`               | convert, compose               | Export every publication page as one PDF; PDF output only                                  |
+| `--svg-text MODE`       | convert, render, compose       | SVG text as `outline` (default) or `live` `<text>` elements; other formats ignore it       |
+| `--width N`             | render                         | The widest the PNG may be, in pixels: 1 to 8192, default 1600                              |
+| `--height N`            | render                         | The tallest the PNG may be, in pixels: 1 to 8192, default 1000                             |
+| `--force`               | convert, render, compose       | Replace OUTPUT if it exists                                                                |
+| `--receipt`             | convert, compose               | Print one receipt JSON line after writing OUTPUT; needs `-o OUTPUT`                        |
+| `-o FOLDER`             | skill                          | The existing folder that receives the skill folder                                         |
+| `--name NAME`           | skill                          | The skill's name and folder name; default `reshiki`                                        |
+| `--executable PATH`     | skill                          | The absolute path of the executable the skill runs; default this executable                |
+| `--force`               | skill                          | Replace the generated files of an existing skill folder                                    |
+| `--receipt`             | skill                          | Print one receipt JSON line after writing the skill                                        |
+| `--isotope-style STYLE` | name                           | Isotope notation: `iupac` (default), as in (2H3)methanol, or `boughton`, as in methanol-d3 |
+| `--json`                | name                           | Print the name and its status as one JSON line                                             |
+| `--locants`             | name                           | Print JSON with parent locants in input atom order                                         |
+| `--json`                | help                           | Print the command catalog as one JSON line                                                 |
 
 A rendered PNG has at most 16,000,000 pixels. A `--width` or `--height` that
 is not a whole number is a usage error. A number outside 1 to 8192 fails, as
-in `reshiki: error: max_width must be from 1 to 8192 pixels`.
+in `reshiki: error[invalid_arguments]: max_width must be from 1 to 8192 pixels`.
 
 ## convert
 
@@ -181,7 +201,7 @@ several lines:
 ```json
 {
   "api": {
-    "operation_api": 1,
+    "operation_api": 2,
     "stability": "experimental"
   },
   "experimental": true,
@@ -238,7 +258,8 @@ the arrangement of the figure. To write one:
    it, and the [generated reference](agent-reference.md#proposal) shows it.
    Every object lists all of its properties: give `[]`, `""` or `null` for the
    parts you do not use. `replace_ids` must be empty, and every structure is
-   SMILES; chemical names are not looked up. Labels and `conditions` are drawn
+   SMILES. For a compound you know only by name, get its SMILES with
+   `convert - --from name --to smiles`. Labels and `conditions` are drawn
    as typed, so write formulas with Unicode subscripts: `H₂SO₄`, not `H2SO4`.
 3. Look at the layout:
 
@@ -268,7 +289,7 @@ the arrangement of the figure. To write one:
    ```json
    {
      "api": {
-       "operation_api": 1,
+       "operation_api": 2,
        "stability": "experimental"
      },
      "experimental": true,
@@ -297,7 +318,7 @@ to 9 decimal places to remove floating-point noise. This is
 ```json
 {
   "api": {
-    "operation_api": 1,
+    "operation_api": 2,
     "stability": "experimental"
   },
   "experimental": true,
@@ -324,9 +345,9 @@ to 9 decimal places to remove floating-point noise. This is
   },
   "versions": {
     "app": "0.15.0",
-    "document": 37,
+    "document": 38,
     "engine_protocol": 1,
-    "operation_api": 1
+    "operation_api": 2
   },
   "warnings": []
 }
@@ -367,10 +388,13 @@ This is `name --smiles 'CC(=NN)C' --json`, shown on several lines:
 ```json
 {
   "api": {
-    "operation_api": 1,
+    "operation_api": 2,
     "stability": "experimental"
   },
   "experimental": true,
+  "validation": {
+    "status": "valid"
+  },
   "value": {
     "aliases": [],
     "alternatives": [],
@@ -382,16 +406,17 @@ This is `name --smiles 'CC(=NN)C' --json`, shown on several lines:
   },
   "versions": {
     "app": "0.15.0",
-    "document": 37,
+    "document": 38,
     "engine_protocol": 1,
-    "operation_api": 1
+    "operation_api": 2
   },
   "warnings": []
 }
 ```
 
-`warnings` and `versions` are those of the import, as in the
-[results](agent-api.md#results) of the MCP tools. `value` has these fields:
+`warnings`, `validation` and `versions` are those of the import, as in the
+[results](agent-api.md#results) of the MCP tools. `value` is what the MCP
+`name` tool returns, with these fields:
 
 | Field          | Meaning                                                                                                    |
 | -------------- | ---------------------------------------------------------------------------------------------------------- |
@@ -412,9 +437,10 @@ reshiki --cli info
 `reshiki --cli help info` prints the [full help](agent-reference.md#reshiki---cli-info).
 
 Prints ReShiki's versions, the limits it enforces and the formats as one JSON
-line. `cli` lists the formats the command line reads and writes. `grants` and
-`files` describe the file tools of the MCP server; the command line uses
-neither.
+line: the [result](agent-api.md#results) of the MCP `info` tool, with the
+limits and formats under `value`. `cli`, beside `value`, lists the formats the
+command line reads and writes. `grants` and `files` describe the file tools of
+the MCP server; the command line uses neither.
 
 `reshiki --version` (or `reshiki --cli --version`) prints only the
 application version, such as `reshiki 0.15.0`, and exits without opening a
@@ -426,73 +452,116 @@ window.
 ```json
 {
   "api": {
-    "operation_api": 1,
+    "operation_api": 2,
     "stability": "experimental"
   },
-  "budgets": {
-    "concurrency": 2,
-    "export_png_pixels": 16000000,
-    "history_depth": 20,
-    "idempotency_receipts": 32,
-    "idle_ttl_seconds": 3600,
-    "max_cdx_base64": 22369624,
-    "max_documents": 16,
-    "max_idempotency_key_bytes": 128,
-    "max_ids": 5000,
-    "max_inspect_objects": 5000,
-    "max_objects": 100000,
-    "max_output_bytes": 16777216,
-    "max_request_bytes": 25165824,
-    "max_session_picture_bytes": 134217728,
-    "max_session_weight": 2000000,
-    "max_text_bytes": 16777216,
-    "op_deadline_seconds": 120,
-    "queue": 8,
-    "render": {
-      "default_height": 1000,
-      "default_width": 1600,
-      "max_pixels": 16000000,
-      "max_side": 8192,
-      "min_side": 1
-    }
-  },
   "cli": {
-    "input_formats": ["auto", "smiles", "mol", "rxn", "rsmi", "inchi", "cdxml", "cdx", "reshiki"],
-    "output_formats": ["svg", "pdf", "png", "cdxml", "mol", "smiles", "inchi"]
-  },
-  "experimental": true,
-  "files": {
-    "read": [
-      "rsk",
-      "reshiki",
-      "moruno",
+    "input_formats": [
+      "auto",
+      "smiles",
       "mol",
       "rxn",
       "rsmi",
+      "inchi",
       "cdxml",
       "cdx",
-      "smi",
-      "smiles",
-      "inchi"
+      "reshiki",
+      "rsk",
+      "name"
     ],
-    "write": ["rsk", "mol", "cdxml", "smi", "smiles", "inchi", "svg", "pdf", "png"]
+    "output_formats": ["svg", "pdf", "png", "cdxml", "cdx", "mol", "rxn", "smiles", "rsmi", "inchi"]
   },
-  "formats": {
-    "export": ["svg", "pdf", "png", "cdxml", "mol", "smiles", "inchi"],
-    "import": ["auto", "smiles", "mol", "rxn", "rsmi", "inchi", "cdxml", "cdx", "reshiki"]
+  "experimental": true,
+  "validation": {
+    "status": "valid"
   },
-  "grants": {
-    "read": [],
-    "write": []
+  "value": {
+    "budgets": {
+      "concurrency": 2,
+      "export_png_pixels": 16000000,
+      "history_depth": 20,
+      "idempotency_receipts": 32,
+      "idle_ttl_seconds": 3600,
+      "max_cdx_base64": 22369624,
+      "max_documents": 16,
+      "max_idempotency_key_bytes": 128,
+      "max_ids": 5000,
+      "max_inspect_objects": 5000,
+      "max_objects": 100000,
+      "max_output_bytes": 16777216,
+      "max_request_bytes": 25165824,
+      "max_session_picture_bytes": 134217728,
+      "max_session_weight": 2000000,
+      "max_text_bytes": 16777216,
+      "op_deadline_seconds": 120,
+      "queue": 8,
+      "render": {
+        "default_height": 1000,
+        "default_width": 1600,
+        "max_pixels": 16000000,
+        "max_side": 8192,
+        "min_side": 1
+      }
+    },
+    "files": {
+      "read": [
+        "rsk",
+        "reshiki",
+        "moruno",
+        "mol",
+        "rxn",
+        "rsmi",
+        "cdxml",
+        "cdx",
+        "smi",
+        "smiles",
+        "inchi"
+      ],
+      "write": [
+        "rsk",
+        "mol",
+        "rxn",
+        "rsmi",
+        "cdxml",
+        "cdx",
+        "smi",
+        "smiles",
+        "inchi",
+        "svg",
+        "pdf",
+        "png"
+      ]
+    },
+    "formats": {
+      "export": ["svg", "pdf", "png", "cdxml", "cdx", "mol", "rxn", "smiles", "rsmi", "inchi"],
+      "import": [
+        "auto",
+        "smiles",
+        "mol",
+        "rxn",
+        "rsmi",
+        "inchi",
+        "cdxml",
+        "cdx",
+        "reshiki",
+        "rsk",
+        "name"
+      ]
+    },
+    "grants": {
+      "read": [],
+      "write": []
+    },
+    "operation_api": 2,
+    "stability": "experimental"
   },
-  "operation_api": 1,
-  "stability": "experimental",
   "versions": {
     "app": "0.15.0",
-    "document": 37,
+    "document": 38,
     "engine_protocol": 1,
-    "operation_api": 1
-  }
+    "operation_api": 2
+  },
+  "warnings": []
 }
 ```
 
@@ -561,7 +630,7 @@ several lines:
 ```json
 {
   "api": {
-    "operation_api": 1,
+    "operation_api": 2,
     "stability": "experimental"
   },
   "experimental": true,
@@ -609,11 +678,12 @@ empty. Every JSON line has `"experimental": true` and an `api` object with
 
 Messages go to standard error, one per line:
 
-| Prefix               | Meaning                                                                                                         |
-| -------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `reshiki: warning: ` | A warning. The command still succeeds.                                                                          |
-| `reshiki: error: `   | The operation failed, or the input or output could not be read or written. Exit 1.                              |
-| `reshiki: `          | A usage error (exit 2), or standard output could not be written (`reshiki: could not write output: …`, exit 1). |
+| Prefix                   | Meaning                                                                                                                                            |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `reshiki: warning: `     | A warning. The command still succeeds.                                                                                                             |
+| `reshiki: error[code]: ` | The operation failed. `code` is the operation's [error code](agent-api.md#error-codes), such as `failed`, `invalid_arguments` or `budget`. Exit 1. |
+| `reshiki: error: `       | The input or output could not be read or written. Exit 1.                                                                                          |
+| `reshiki: `              | A usage error (exit 2), or standard output could not be written (`reshiki: could not write output: …`, exit 1).                                    |
 
 ## Exit status
 

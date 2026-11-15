@@ -42,7 +42,7 @@ fn elapsed(stages: &mut Vec<(&'static str, f64)>, name: &'static str, started: I
 
 #[tokio::test]
 #[ignore = "manual before/after import profiling; use --release and --nocapture"]
-async fn profile_polyalanine_insert_stages() -> anyhow::Result<()> {
+async fn manual_profile_polyalanine_insert_stages() -> anyhow::Result<()> {
     for (name, unit) in [
         ("alanine200", "NC(C)C(=O)"),
         ("stereo-alanine200", "N[C@@H](C)C(=O)"),

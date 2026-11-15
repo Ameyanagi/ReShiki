@@ -741,7 +741,7 @@ fn failed_recovery_clear_does_not_start_update_handoff() {
 
 #[test]
 #[ignore = "release-mode recovery benchmark"]
-fn recovery_workloads() {
+fn manual_recovery_workloads() {
     use std::{hint::black_box, time::Instant};
     fn measure(name: &str, mut work: impl FnMut()) {
         for _ in 0..3 {

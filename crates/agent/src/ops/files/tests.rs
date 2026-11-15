@@ -329,6 +329,10 @@ fn file_save_decodes_the_format_from_the_extension() {
     for (path, format, expected) in [
         ("/x/a.rsk", json!(null), SaveFormat::Reshiki),
         ("/x/a.rsk", json!("reshiki"), SaveFormat::Reshiki),
+        ("/x/a.rsk", json!("rsk"), SaveFormat::Reshiki),
+        ("/x/a.cdx", json!(null), SaveFormat::Cdx),
+        ("/x/a.rxn", json!("rxn"), SaveFormat::Rxn),
+        ("/x/a.rsmi", json!(null), SaveFormat::Rsmi),
         ("/x/a.PNG", json!(null), SaveFormat::Png),
         ("/x/a.svg", json!("svg"), SaveFormat::Svg),
         ("/x/a.smi", json!("smiles"), SaveFormat::Smiles),
@@ -353,27 +357,23 @@ fn file_save_decodes_the_format_from_the_extension() {
         mismatch.message,
         "format svg does not match the .png extension, which saves as png"
     );
-    for path in [
-        "/x/a.exe",
-        "/x/a.rxn",
-        "/x/a.cdx",
-        "/x/a.reshiki",
-        "/x/a.emf",
-    ] {
+    for path in ["/x/a.exe", "/x/a.reshiki", "/x/a.emf"] {
         let error = decoded(path, json!(null), Value::Null).unwrap_err();
         assert_eq!(error.kind, ErrorKind::Access, "{path}");
         assert!(
             error.message.starts_with("extension_not_allowed: ")
-                && error
-                    .message
-                    .ends_with("(rsk, mol, cdxml, smi, smiles, inchi, svg, pdf, png)"),
+                && error.message.ends_with(
+                    "(rsk, mol, rxn, rsmi, cdxml, cdx, smi, smiles, inchi, svg, pdf, png)"
+                ),
             "{}",
             error.message
         );
     }
     for format in SAVE_FORMATS {
         let parsed: SaveFormat = serde_json::from_value(json!(format)).unwrap();
-        assert_eq!(parsed.name(), *format);
+        // rsk is another name for reshiki.
+        let expected = if *format == "rsk" { "reshiki" } else { format };
+        assert_eq!(parsed.name(), expected);
     }
 }
 
@@ -740,7 +740,7 @@ async fn a_file_over_max_output_bytes_is_refused_and_nothing_is_touched() {
         ..Budgets::default()
     };
     let host = HeadlessHost::new("9.8.7", budgets).with_grants(Arc::new(both(dir.path())));
-    let empty = ok(&host, "document_new", json!({})).await["document"].clone();
+    let empty = ok(&host, "document_new", json!({})).await["value"]["document"].clone();
     let document = ethanol(&host).await;
     for (document, name, overwrite) in [
         (&empty, "new.rsk", false),
@@ -800,16 +800,16 @@ async fn info_lists_the_grants_and_the_file_extensions() {
     fs::create_dir(&write).unwrap();
     let files = json!({
         "read": ["rsk", "reshiki", "moruno", "mol", "rxn", "rsmi", "cdxml", "cdx", "smi", "smiles", "inchi"],
-        "write": ["rsk", "mol", "cdxml", "smi", "smiles", "inchi", "svg", "pdf", "png"],
+        "write": ["rsk", "mol", "rxn", "rsmi", "cdxml", "cdx", "smi", "smiles", "inchi", "svg", "pdf", "png"],
     });
     let granted = host(Grants::open(slice::from_ref(&read), slice::from_ref(&write)).unwrap());
     let info = ok(&granted, "info", json!({})).await;
     assert_eq!(
-        info["grants"],
+        info["value"]["grants"],
         json!({"read": [text(&read)], "write": [text(&write)]})
     );
-    assert_eq!(info["files"], files);
+    assert_eq!(info["value"]["files"], files);
     let none = ok(&host(Grants::none()), "info", json!({})).await;
-    assert_eq!(none["grants"], json!({"read": [], "write": []}));
-    assert_eq!(none["files"], files);
+    assert_eq!(none["value"]["grants"], json!({"read": [], "write": []}));
+    assert_eq!(none["value"]["files"], files);
 }

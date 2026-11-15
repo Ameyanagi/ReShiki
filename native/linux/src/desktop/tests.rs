@@ -282,3 +282,117 @@ fn silent_peer_is_bounded_and_does_not_prevent_the_next_connection() {
     );
     assert!(next.join().is_ok());
 }
+
+/// S17: without `XDG_RUNTIME_DIR` the endpoint used a predictable name in
+/// `/tmp`, which any user could create first. It now stays in folders only
+/// this user can write.
+#[test]
+fn the_endpoint_folder_is_never_a_shared_temporary_folder() {
+    let fixture = Fixture::new();
+    let (uid, root) = (fixture.endpoint.uid, &fixture.path);
+    let run_user = root.join("run");
+    let home = root.join("home");
+    let folder = |runtime: Option<&Path>, cache: Option<&Path>| {
+        let (runtime, cache) = (runtime.map(Path::to_owned), cache.map(Path::to_owned));
+        base(
+            uid,
+            |name| match name {
+                "XDG_RUNTIME_DIR" => runtime.clone().map(OsString::from),
+                "XDG_CACHE_HOME" => cache.clone().map(OsString::from),
+                "HOME" => Some(home.clone().into()),
+                _ => None,
+            },
+            &run_user,
+        )
+    };
+    let mode = |path: &Path, mode| {
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode)).unwrap();
+    };
+    // No runtime folder at all: the user's cache folder, made when missing.
+    assert_eq!(folder(None, None).unwrap(), home.join(".cache"));
+    assert!(home.join(".cache").is_dir());
+    let cache = root.join("cache");
+    assert_eq!(folder(None, Some(&cache)).unwrap(), cache);
+    assert_eq!(
+        folder(None, Some(Path::new("relative"))).unwrap(),
+        home.join(".cache")
+    );
+    // systemd's folder counts only when it is the user's own, mode 0700.
+    let runtime = run_user.join(uid.to_string());
+    std::fs::create_dir_all(&runtime).unwrap();
+    mode(&runtime, 0o755);
+    assert_eq!(folder(None, None).unwrap(), home.join(".cache"));
+    mode(&runtime, 0o700);
+    assert_eq!(folder(None, None).unwrap(), runtime);
+    // XDG_RUNTIME_DIR comes first, and an unsafe one is an error, not a
+    // reason to look elsewhere.
+    let named = root.join("named");
+    std::fs::create_dir(&named).unwrap();
+    mode(&named, 0o700);
+    assert_eq!(folder(Some(&named), None).unwrap(), named);
+    mode(&named, 0o755);
+    assert!(folder(Some(&named), None).is_err());
+    assert!(folder(Some(&root.join("missing")), None).is_err());
+    // Nothing to go by: an error, never /tmp.
+    assert!(base(uid, |_| None, &root.join("no-run")).is_err());
+}
+
+/// S17: a cache folder that already exists is used only when it is the
+/// user's own and no one else can write to it. `XDG_CACHE_HOME=/tmp`, or a
+/// link into such a folder, would put the endpoint's predictable name where
+/// another user can create it first.
+#[test]
+fn a_cache_folder_others_can_write_to_is_not_used() {
+    let fixture = Fixture::new();
+    let (uid, root) = (fixture.endpoint.uid, &fixture.path);
+    let home = root.join("home");
+    let folder = |uid: u32, cache: &Path| {
+        let cache = cache.to_owned();
+        base(
+            uid,
+            |name| match name {
+                "XDG_CACHE_HOME" => Some(cache.clone().into()),
+                "HOME" => Some(home.clone().into()),
+                _ => None,
+            },
+            &root.join("no-run"),
+        )
+    };
+    let mode = |path: &Path, mode| {
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode)).unwrap();
+    };
+    let shared = root.join("shared");
+    std::fs::create_dir(&shared).unwrap();
+    // As /tmp, then writable by a group, then by anyone without the sticky bit.
+    for bits in [0o1777, 0o770, 0o777] {
+        mode(&shared, bits);
+        assert_eq!(
+            folder(uid, &shared).unwrap(),
+            home.join(".cache"),
+            "{bits:o}"
+        );
+    }
+    // A link into the shared folder is that folder.
+    let link = root.join("link");
+    symlink(&shared, &link).unwrap();
+    assert_eq!(folder(uid, &link).unwrap(), home.join(".cache"));
+    // A folder of another user.
+    let private = root.join("private");
+    std::fs::create_dir(&private).unwrap();
+    mode(&private, 0o755);
+    assert!(folder(uid + 1, &private).is_err());
+    // The user's own folder is used, through a link too.
+    assert_eq!(folder(uid, &private).unwrap(), private);
+    std::fs::remove_file(&link).unwrap();
+    symlink(&private, &link).unwrap();
+    assert_eq!(folder(uid, &link).unwrap(), private);
+    // No private folder at all: an error.
+    mode(&home.join(".cache"), 0o777);
+    assert!(folder(uid, &shared).is_err());
+    // The endpoint is made in the folder that was checked.
+    mode(&home.join(".cache"), 0o700);
+    let endpoint = folder(uid, &shared).unwrap().join("reshiki-desktop-test");
+    private_directory(&endpoint, uid).unwrap();
+    assert!(home.join(".cache/reshiki-desktop-test").is_dir());
+    assert_eq!(std::fs::read_dir(&shared).unwrap().count(), 0);
+}

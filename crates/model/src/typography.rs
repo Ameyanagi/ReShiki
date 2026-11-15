@@ -334,7 +334,7 @@ impl TextFormat {
         }
         Ok(())
     }
-    fn pack(&mut self, text: &str, styles: Vec<TextStyle>) {
+    pub(crate) fn pack(&mut self, text: &str, styles: Vec<TextStyle>) {
         self.spans.clear();
         for ((start, c), style) in text.char_indices().zip(styles) {
             if style == self.style {

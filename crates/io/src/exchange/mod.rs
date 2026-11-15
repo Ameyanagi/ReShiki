@@ -47,6 +47,8 @@ const OBJECTS: &[(u16, &str)] = &[
     (0x8017, "bracketedgroup"),
     (0x8018, "bracketattachment"),
     (0x8019, "crossingbond"),
+    // ChemDraw's linked property text, checked against ChemDraw 26 files.
+    (0x8020, "chemicalproperty"),
     // ChemDraw stores arrows as 0x8021, despite the published SDK listing
     // 0x8027. Keep the former ReShiki code as a read-only compatibility alias;
     // the encoder selects the first entry for a name.

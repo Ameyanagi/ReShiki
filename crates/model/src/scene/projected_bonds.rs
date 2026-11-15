@@ -52,10 +52,10 @@ pub(crate) struct FaceIndex<'d> {
     ring_centers: RefCell<HashMap<(u64, u64), Option<Point>>>,
 }
 
-fn adjacency(doc: &Document) -> BTreeMap<u64, Vec<u64>> {
+fn adjacency(graph: &super::graph::Graph<'_>, doc: &Document) -> BTreeMap<u64, Vec<u64>> {
     let mut neighbors: BTreeMap<u64, Vec<u64>> = BTreeMap::new();
     for b in &doc.bonds {
-        if !matches!(b.order, 1 | 2 | 4 | 7) || !doc.bond_visible(b.a, b.b) {
+        if !matches!(b.order, 1 | 2 | 4 | 7) || !graph.bond_visible(b.a, b.b) {
             continue;
         }
         neighbors.entry(b.a).or_default().push(b.b);
@@ -71,7 +71,7 @@ fn adjacency(doc: &Document) -> BTreeMap<u64, Vec<u64>> {
 /// Unmemoized single query over fresh adjacency; tests only.
 #[cfg(test)]
 fn paths(doc: &Document, bond: &Bond) -> Vec<Vec<u64>> {
-    paths_in(&adjacency(doc), bond)
+    paths_in(&adjacency(&super::graph::Graph::new(doc), doc), bond)
 }
 
 /// Enumerate shortest alternate paths with sorted neighbors. The canonical
@@ -191,7 +191,11 @@ impl<'d> FaceIndex<'d> {
     }
 
     fn paths(&self, bond: &Bond) -> Vec<Vec<u64>> {
-        paths_in(self.neighbors.get_or_init(|| adjacency(self.doc)), bond)
+        paths_in(
+            self.neighbors
+                .get_or_init(|| adjacency(self.graph(), self.doc)),
+            bond,
+        )
     }
 
     fn face(&self, bond: &Bond) -> Option<Rc<Face>> {

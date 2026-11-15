@@ -45,8 +45,9 @@ Generated from ReShiki's command help, tool catalog and schemas.\n\n\
     text.push_str(
         "\n## Proposal\n\n\
 `reshiki --cli schema proposal` prints this schema. The `compose` tool publishes a shorter form: \
-without `explanation` and `replace_ids`, which it fills in, and with repeated parts stated once \
-under `$defs`. `compose` reads both forms.\n\n\
+without `explanation` and `replace_ids`, which it fills in, with repeated parts stated once \
+under `$defs`, and with `sketch` as a plain object whose fields the `schema` tool returns \
+(name `sketch`). `compose` reads both forms.\n\n\
 <details>\n<summary>Proposal JSON Schema</summary>\n\n",
     );
     fence(&mut text, "json", &format!("{:#}", reshiki_agent::schema()));
@@ -79,7 +80,7 @@ pub(in crate::cli) fn budget_section(text: &mut String) {
     budget_rows(text, "", &budgets_json(&Budgets::default()));
 }
 
-/// The operation codes and the reasons prefixed to file-error messages.
+/// The operation codes and the reasons of file errors.
 pub(in crate::cli) fn error_sections(text: &mut String) {
     text.push_str("\n## Error codes\n\n| Code | Meaning |\n| --- | --- |\n");
     for kind in ErrorKind::ALL {
@@ -87,7 +88,8 @@ pub(in crate::cli) fn error_sections(text: &mut String) {
     }
     text.push_str(
         "\n## File-error reasons\n\n\
-A file error's message starts with one of these reasons, followed by a colon.\n\n\
+A file error carries one of these as `error.reason`; its message also starts with the reason \
+and a colon.\n\n\
 | Reason | Error code | Meaning |\n| --- | --- | --- |\n",
     );
     for reason in AccessError::REASONS {
@@ -140,9 +142,9 @@ pub(in crate::cli) fn tool_section(text: &mut String, tool: &Value, heading: &st
         parameters(text, schema);
     }
     if let Some((_, shape)) = RESULTS.iter().find(|(tool, _)| *tool == name) {
-        // RESULTS entries start with their top-level `{keys}`.
+        // RESULTS entries start with the `{keys}` of the envelope's value.
         let (keys, prose) = shape.split_once("} ").unwrap_or((shape, ""));
-        text.push_str(&format!("Result: `{keys}}}`. {prose}\n\n"));
+        text.push_str(&format!("Result `value`: `{keys}}}`. {prose}\n\n"));
     }
 }
 

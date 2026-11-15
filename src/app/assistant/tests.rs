@@ -872,3 +872,135 @@ fn failed_refresh_clears_old_account_and_each_setup_failure_allows_drawing_and_r
         assert_eq!(app.assistant.connection, Connection::Cancelled);
     }
 }
+
+/// S19: a proposal names the objects it replaces, and text in an opened
+/// drawing can shape that choice. Accept all edits applies a replacement
+/// only inside the user's selection; any other waits for Apply.
+#[test]
+fn accept_all_reviews_a_replacement_outside_the_selection() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    app.assistant.preferences.auto_apply = true;
+    let kept = app
+        .tab
+        .doc
+        .add_atom("N", reshiki::document::Point::default());
+    let chosen = app
+        .tab
+        .doc
+        .add_atom("S", reshiki::document::Point::new(200., 0.));
+    let elements = |app: &App| -> Vec<String> {
+        let mut elements: Vec<_> = app
+            .tab
+            .doc
+            .atoms
+            .iter()
+            .map(|a| a.element.clone())
+            .collect();
+        elements.sort();
+        elements
+    };
+    let done_in = |app: &mut App, replace_ids: Vec<u64>, replace: Vec<u64>| {
+        let mut fragment = Document::default();
+        fragment.add_atom("O", reshiki::document::Point::default());
+        let _ = app.assistant_action(Action::Done {
+            serial: app.assistant.serial,
+            epoch: app.tab.file_epoch,
+            revision: app.tab.revision,
+            replace,
+            result: Box::new(Ok(assistant::review::Outcome {
+                proposal: Proposal {
+                    replace_ids,
+                    ..Default::default()
+                },
+                document: fragment,
+                review: assistant::review::Report {
+                    verified: true,
+                    ..Default::default()
+                },
+            })),
+        });
+    };
+    let done = |app: &mut App, replace_ids| done_in(app, replace_ids, vec![]);
+    app.tab.selected = vec![chosen];
+    done(&mut app, vec![kept]);
+    assert!(app.assistant.draft.is_some());
+    assert_eq!(elements(&app), ["N", "S"]);
+    assert_eq!(
+        app.assistant.status,
+        "Ready for review · It replaces objects outside the selection"
+    );
+    // Choosing Accept all edits again does not apply it either.
+    let _ = app.assistant_action(Action::AutoApply(true));
+    assert!(app.assistant.draft.is_some());
+    assert_eq!(elements(&app), ["N", "S"]);
+    let _ = app.assistant_action(Action::Apply);
+    assert!(app.assistant.draft.is_none());
+    assert_eq!(elements(&app), ["O", "S"]);
+    // A replacement inside the selection is applied at once.
+    app.tab.selected = vec![chosen];
+    done(&mut app, vec![chosen]);
+    assert!(app.assistant.draft.is_none());
+    assert_eq!(elements(&app), ["O", "O"]);
+    // A proposal that names nothing replaces what was selected when the
+    // request was sent. With the selection cleared since, that waits too.
+    let sent: Vec<u64> = app.tab.doc.atoms.iter().map(|a| a.id).collect();
+    app.tab.selected = vec![];
+    done_in(&mut app, vec![], sent.clone());
+    assert!(app.assistant.draft.is_some());
+    assert_eq!(elements(&app), ["O", "O"]);
+    assert_eq!(
+        app.assistant.status,
+        "Ready for review · It replaces objects outside the selection"
+    );
+    // With the selection kept, it is applied at once.
+    app.tab.selected = sent.clone();
+    done_in(&mut app, vec![], sent);
+    assert!(app.assistant.draft.is_none());
+    assert_eq!(elements(&app), ["O"]);
+    // An Apply that waits for a text edit checks the selection again when
+    // the edit ends: deselecting during the edit leaves the draft for review.
+    let target = app.tab.doc.atoms[0].id;
+    let _ = app.inline_action(super::super::inline_text::Action::Begin(
+        None,
+        reshiki::document::Point::new(400., 0.),
+    ));
+    app.tab.selected = vec![target];
+    done(&mut app, vec![target]);
+    assert!(app.assistant.waiting_for_canvas_edit);
+    app.tab.selected = vec![];
+    assert!(app.finish_inline(false));
+    let _ = app.assistant_action(Action::Poll);
+    assert!(!app.assistant.waiting_for_canvas_edit);
+    assert!(app.assistant.draft.is_some());
+    assert_eq!(elements(&app), ["O"]);
+    assert_eq!(
+        app.assistant.status,
+        "Ready for review · It replaces objects outside the selection"
+    );
+    // Apply still applies it.
+    let _ = app.assistant_action(Action::Apply);
+    assert!(app.assistant.draft.is_none());
+    // Choosing Accept all edits for a waiting draft during a text edit
+    // checks the selection the same way when the edit ends.
+    let _ = app.assistant_action(Action::AutoApply(false));
+    let target = app.tab.doc.atoms[0].id;
+    let _ = app.inline_action(super::super::inline_text::Action::Begin(
+        None,
+        reshiki::document::Point::new(400., 0.),
+    ));
+    app.tab.selected = vec![target];
+    done(&mut app, vec![target]);
+    assert!(!app.assistant.waiting_for_canvas_edit);
+    let _ = app.assistant_action(Action::AutoApply(true));
+    assert!(app.assistant.waiting_for_canvas_edit);
+    app.tab.selected = vec![];
+    assert!(app.finish_inline(false));
+    let _ = app.assistant_action(Action::Poll);
+    assert!(app.assistant.draft.is_some());
+    assert_eq!(elements(&app), ["O"]);
+    assert_eq!(
+        app.assistant.status,
+        "Ready for review · It replaces objects outside the selection"
+    );
+}

@@ -4,14 +4,9 @@ use crate::canvas::pick::{ARROW_TARGET_PICK_PX, PICK_RADIUS_PX};
 use reshiki::arrow_anchors;
 
 // The status bar shows the first line; its tooltip shows the whole text.
-const NO_TARGET: &str = concat!(
-    "No target here · Click an atom, bond or lone pair\n",
-    "Choose an atom, a visible bond or a positioned lone pair. Option/Alt-click ",
-    "or turn off Attach ends to atoms and bonds for a free arrow."
-);
 const SOURCE_SET: &str = concat!(
     "Arrow start set · Click the destination\n",
-    "Click a destination atom, bond or lone pair · Escape cancels"
+    "Click a destination atom, bond or lone pair · Esc cancels"
 );
 const ATTACHED: &str = concat!(
     "Arrow attached · Drag a square to aim an end\n",
@@ -38,7 +33,10 @@ impl App {
             self.tab.camera.world_len(ARROW_TARGET_PICK_PX),
         ) else {
             self.error = true;
-            self.status = NO_TARGET.into();
+            self.status = format!(
+                "No target here · Click an atom, bond or lone pair\nChoose an atom, a visible bond or a positioned lone pair. {}-click or turn off Attach ends to atoms and bonds for a free arrow.",
+                crate::platform::alt_key()
+            );
             return;
         };
         let Some(source) = self.tab.arrows.source().cloned() else {

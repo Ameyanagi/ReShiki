@@ -121,8 +121,14 @@ async fn delayed_editor_real_pointer_focus_keyboard_and_ime() {
         assert!(app.tab.atom_text.as_ref().unwrap().present_after.is_some());
     }
     // Keep gesture time deterministic despite real GPU frame costs. Both
-    // clicks themselves go through the actual canvas and popup widgets.
-    app.text_click = Some((iced::time::Instant::now(), target));
+    // clicks themselves go through the actual canvas and popup widgets. The
+    // second click reads the clock after up to three rendered frames, which
+    // can take longer than DOUBLE_CLICK_INTERVAL (Tiny Skia on Windows CI).
+    // A first click stamped later still counts: `duration_since` saturates.
+    app.text_click = Some((
+        iced::time::Instant::now() + std::time::Duration::from_secs(60),
+        target,
+    ));
     ui.click(&mut app, point);
     assert!(
         app.tab.atom_text.is_none(),

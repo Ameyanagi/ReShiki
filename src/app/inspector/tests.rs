@@ -72,7 +72,7 @@ async fn lazy_crystal_properties_keep_scope_and_ordinary_analysis() {
     .unwrap();
     let panel_text = |app: &App, renderer: &mut iced::Renderer| {
         let mut ui = iced_runtime::UserInterface::build(
-            app.molecular_section(),
+            app.molecular_section(app.opened_section()),
             iced::Size::new(300., 800.),
             iced_runtime::user_interface::Cache::new(),
             renderer,
@@ -294,7 +294,7 @@ fn ring_controls_reject_large_selections_without_dropping_nonchemical_members() 
 
 #[test]
 #[ignore = "release-mode inspector benchmark"]
-fn inspector_workloads() {
+fn manual_inspector_workloads() {
     use std::{hint::black_box, time::Instant};
     fn measure(name: &str, mut work: impl FnMut()) {
         for _ in 0..3 {
@@ -852,6 +852,72 @@ fn whole_molecules_open_properties_and_partial_selections_keep_their_section() {
     assert_eq!(app.opened_section(), Some(Section::Atoms));
     app.tab.selected = first.iter().copied().chain([second[0]]).collect();
     assert_eq!(app.opened_section(), Some(Section::Bonds));
+}
+
+#[test]
+fn a_view_finds_the_opened_section_once() {
+    let (mut app, _) = App::new();
+    let ring = reshiki::editing::ring(
+        &mut app.tab.doc,
+        reshiki::document::Point::default(),
+        6,
+        false,
+        42.,
+    );
+    for selected in [vec![], ring.clone(), vec![ring[0], ring[1]]] {
+        app.tab.selected = selected;
+        OPENED_SECTIONS.set(0);
+        drop(app.view());
+        assert_eq!(OPENED_SECTIONS.get(), 1, "{:?}", app.tab.selected);
+    }
+}
+
+#[test]
+fn attachment_composition_is_counted_once_per_drawing_and_selection() {
+    use reshiki::document::Point;
+    let (mut app, _) = App::new();
+    let ring = reshiki::editing::ring(&mut app.tab.doc, Point::default(), 6, false, 42.);
+    let other = reshiki::editing::ring(&mut app.tab.doc, Point::new(300., 0.), 5, false, 42.);
+    let point = reshiki::attachments::add(
+        &mut app.tab.doc,
+        &ring,
+        reshiki::attachments::Kind::MultiCenter,
+    )
+    .unwrap();
+    let counted = |app: &App| {
+        drop(app.view());
+        let cache = app.tab.inspector_ui.composition.borrow();
+        (cache.calculations, cache.shown.clone().map(|shown| shown.2))
+    };
+    assert_eq!(counted(&app), (1, Some(11)));
+    assert_eq!(
+        counted(&app),
+        (1, Some(11)),
+        "an unchanged view counts again"
+    );
+    app.tab.selected = ring.iter().copied().chain([point]).collect();
+    assert_eq!(counted(&app), (2, Some(6)));
+    assert_eq!(counted(&app), (2, Some(6)));
+    // A selected object that is no atom is part of the scope too.
+    let arrow = app.tab.doc.next_id();
+    app.tab.doc.arrows.push(reshiki::document::Arrow::new(
+        arrow,
+        Point::new(0., 200.),
+        Point::new(80., 200.),
+        Default::default(),
+        Default::default(),
+    ));
+    app.tab.selected.push(arrow);
+    assert_eq!(counted(&app), (3, Some(6)));
+    app.tab.selected.clear();
+    let before = app.tab.doc.clone();
+    app.tab.doc.atoms.retain(|atom| atom.id != other[0]);
+    app.tab
+        .doc
+        .bonds
+        .retain(|bond| bond.a != other[0] && bond.b != other[0]);
+    app.changed(before);
+    assert_eq!(counted(&app), (4, Some(10)), "an edit is counted");
 }
 
 #[test]

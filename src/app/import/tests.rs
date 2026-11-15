@@ -124,9 +124,14 @@ async fn vector_drop_restores_the_drawing_and_inserts_it() -> Result<(), String>
     let drawing = drawing.current();
     let envelope = reshiki::payload::encode(&drawing)?;
     for format in ["svg", "pdf"] {
-        let contents =
-            reshiki::export::clipboard_figure_with_drawing(&drawing, format, Some(&envelope))?
-                .bytes;
+        let contents = reshiki::export::clipboard_figure_with_drawing(
+            &drawing,
+            format,
+            reshiki::export::Background::Transparent,
+            reshiki::style::DEFAULT.png_dpi,
+            Some(&envelope),
+        )?
+        .bytes;
         let mut app = ready();
         let before = app.tab.doc.clone();
         let ticket = app.import_ticket();
@@ -173,6 +178,8 @@ async fn vector_drop_requires_a_readable_drawing() -> Result<(), String> {
             let contents = reshiki::export::clipboard_figure_with_drawing(
                 &Document::default(),
                 format,
+                reshiki::export::Background::Transparent,
+                reshiki::style::DEFAULT.png_dpi,
                 envelope,
             )?
             .bytes;
@@ -769,6 +776,44 @@ fn browser_drags_outline_the_canvas_until_the_files_leave() {
     assert!(app.imports.hovered.is_empty());
 }
 
+/// S9: opening a named pipe with no writer waits forever, so opening a
+/// drawing and inserting files both refuse it by its file type.
+#[cfg(unix)]
+#[tokio::test]
+async fn a_named_pipe_is_refused_without_blocking() {
+    let folder = tempfile::tempdir().unwrap();
+    let pipe = folder.path().join("pipe.mol");
+    assert!(
+        std::process::Command::new("mkfifo")
+            .arg(&pipe)
+            .status()
+            .unwrap()
+            .success()
+    );
+    let reads = async {
+        let opened = super::super::files::read(pipe.clone()).await.unwrap().1;
+        let inserted = super::super::files::read_paths(vec![pipe.clone()], limit).await;
+        (opened.unwrap_err(), inserted.err().unwrap())
+    };
+    let Ok((opened, inserted)) =
+        tokio::time::timeout(std::time::Duration::from_secs(5), reads).await
+    else {
+        // A writer that closes ends each blocked read, so the test fails
+        // instead of hanging.
+        for _ in 0..2 {
+            let writer = std::fs::OpenOptions::new()
+                .read(true)
+                .write(true)
+                .open(&pipe);
+            tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+            drop(writer);
+        }
+        panic!("reading a named pipe must not block");
+    };
+    assert_eq!(opened, "not a regular file");
+    assert_eq!(inserted, "Could not read pipe.mol: not a regular file");
+}
+
 #[tokio::test]
 async fn oversized_pictures_are_read_only_past_their_limit() -> Result<(), String> {
     let folder = tempfile::tempdir().map_err(|e| e.to_string())?;
@@ -787,6 +832,42 @@ async fn oversized_pictures_are_read_only_past_their_limit() -> Result<(), Strin
         .await
         .unwrap_err();
         assert!(error.contains("exceeds 16 MB"), "{error}");
+    }
+    Ok(())
+}
+
+/// S9: a structure file over the parsers' 16 MB limit is read one byte past
+/// it and refused by its size, by Insert and by Open. A crystal file has no
+/// such limit.
+#[tokio::test]
+async fn oversized_structure_files_are_read_only_past_their_limit() -> Result<(), String> {
+    let folder = tempfile::tempdir().map_err(|e| e.to_string())?;
+    let max = reshiki::exchange::LIMIT;
+    for extension in ["mol", "rxn", "cdxml", "cdx", "smi"] {
+        let huge = folder.path().join(format!("huge.{extension}"));
+        std::fs::write(&huge, vec![b' '; max + 4096]).map_err(|e| e.to_string())?;
+        let files = super::super::files::read_paths(vec![huge.clone()], limit).await?;
+        assert_eq!(files[0].contents.len(), max + 1, "{extension}");
+        let error = load(
+            LocalEngine::default(),
+            files,
+            Default::default(),
+            Default::default(),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(
+            error,
+            format!("Could not import huge.{extension}: File exceeds 16 MB")
+        );
+        let (_, opened) = super::super::files::read(huge).await.unwrap();
+        assert_eq!(opened.unwrap_err(), "File exceeds 16 MB", "{extension}");
+    }
+    assert_eq!(limit(Path::new("cell.cif")), u64::MAX);
+    assert_eq!(limit(Path::new("drawing.rsk")), u64::MAX);
+    assert_eq!(open_limit(Path::new("huge.mol")), max as u64);
+    for name in ["cell.cif", "drawing.rsk", "picture.png", "drawing.svg"] {
+        assert_eq!(open_limit(Path::new(name)), u64::MAX, "{name}");
     }
     Ok(())
 }

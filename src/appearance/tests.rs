@@ -2,6 +2,10 @@ use super::*;
 
 /// Exercise the real widget event handlers without creating a GPU renderer or
 /// waiting for the caret timeout in wall-clock time.
+///
+/// iced implements the `()` renderer only in debug builds, so the caret tests
+/// are left out of a release test build.
+#[cfg(debug_assertions)]
 fn assert_idle_caret_stops_requesting_redraws(
     widget: &mut dyn widget::Widget<(), Theme, ()>,
     id: widget::Id,
@@ -57,6 +61,7 @@ fn assert_idle_caret_stops_requesting_redraws(
     );
 }
 
+#[cfg(debug_assertions)]
 #[test]
 fn text_input_caret_stops_requesting_redraws_after_idle() {
     let id = widget::Id::new("idle-caret-text-input");
@@ -68,6 +73,7 @@ fn text_input_caret_stops_requesting_redraws_after_idle() {
     assert_idle_caret_stops_requesting_redraws(input.as_widget_mut(), id);
 }
 
+#[cfg(debug_assertions)]
 #[test]
 fn text_editor_caret_stops_requesting_redraws_after_idle() {
     let id = widget::Id::new("idle-caret-text-editor");

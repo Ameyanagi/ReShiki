@@ -1,6 +1,6 @@
 """Run the agent API P1 acceptance gates that a development machine can check.
 
-docs/agent-api-p1-validation.md defines gates G1-G8 and records their evidence.
+docs/changes/agent-api-p1-validation.md defines gates G1-G8 and records their evidence.
 With --local this runs the locally automatable subset in order: the G3-G7 cargo
 and uv commands, then the G8 audit, diff and grep checks. It prints a pass/fail
 table and every command line, and exits 1 if any check fails. A test command
@@ -21,7 +21,7 @@ from pathlib import Path
 from check_agent_dependencies import BASELINE_COMMIT
 
 ROOT = Path(__file__).resolve().parents[1]
-RECORD = "docs/agent-api-p1-validation.md"
+RECORD = "docs/changes/agent-api-p1-validation.md"
 OUTPUT_TAIL = 40
 
 # ops-1's byte pins of the Codex tool JSON and the Proposal and critique schemas.
@@ -289,7 +289,7 @@ def git(*arguments: str) -> tuple[str, ...]:
 def local_checks(base: str = BASELINE_COMMIT) -> list[Check]:
     """Every locally automatable gate check, in gate order."""
     agent = ("-p", "reshiki-agent")
-    binary = ("--no-default-features", "-p", "reshiki", "--test")
+    binary = ("--no-default-features", "-p", "reshiki", "--test", "it")
     stress = "ops::headless::tests::cancelled_queued_calls_end_cancelled_while_the_rest_complete"
     audit = ("uv", "run", "--no-project", "python", "scripts/check_agent_dependencies.py")
     notices = ("tests.test_agent_dependencies", "tests.test_release", "tests.test_license_notices")
@@ -321,10 +321,10 @@ def local_checks(base: str = BASELINE_COMMIT) -> list[Check]:
         Check(
             "G4",
             "safety-5 runtime invariants and heap ceiling",
-            cargo_test(*binary, "agent_api_runtime"),
+            cargo_test(*binary, "agent_api_runtime::"),
             cargo_tests,
         ),
-        Check("G5", "malformed corpus", cargo_test(*binary, "agent_api_malformed"), cargo_tests),
+        Check("G5", "malformed corpus", cargo_test(*binary, "agent_api_malformed::"), cargo_tests),
         Check(
             "G6, G8",
             "dependency audit (licenses, network, serde_json)",
@@ -340,7 +340,7 @@ def local_checks(base: str = BASELINE_COMMIT) -> list[Check]:
             ("uv", "run", "--no-project", "python", "-c", LICENSE_CHECK),
             succeeds_with("Consolidated notices:"),
         ),
-        Check("G7", "experimental labels", cargo_test(*binary, "agent_api_labels"), cargo_tests),
+        Check("G7", "experimental labels", cargo_test(*binary, "agent_api_labels::"), cargo_tests),
         Check("G7", "filesystem fence", unittest("tests.test_agent_fs_fence"), unittest_tests),
         Check(
             "G7",
@@ -349,7 +349,7 @@ def local_checks(base: str = BASELINE_COMMIT) -> list[Check]:
             succeeds_with("local documentation links"),
         ),
         Check(
-            "G8", "ops-1 Codex byte pins", cargo_test(*binary, "assistant_contract"), cargo_tests
+            "G8", "ops-1 Codex byte pins", cargo_test(*binary, "assistant_contract::"), cargo_tests
         ),
         Check(
             "G8",

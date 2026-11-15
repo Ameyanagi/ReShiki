@@ -970,6 +970,41 @@ fn aromatic_drag_carries_the_same_xyz_as_the_live_preview() -> Result<(), String
 }
 
 #[test]
+fn r_group_drag_previews_the_label_it_places() -> Result<(), String> {
+    use reshiki::atom_text::{Mode, apply};
+    let mut doc = Document::default();
+    let atom = doc.add_atom("C", World::default());
+    let mut canvas = chain_canvas(&doc, ChainMode::Straight);
+    canvas.tool = Tool::Atom;
+    canvas.element = "*";
+    canvas.atom_label = Some("R");
+    let bounds = Rectangle::new(Point::ORIGIN, iced::Size::new(400., 300.));
+    let (start, end) = (Point::new(200., 150.), Point::new(255., 178.));
+    let mut state = State::default();
+    for event in [
+        mouse::Event::CursorMoved { position: start },
+        mouse::Event::ButtonPressed(mouse::Button::Left),
+        mouse::Event::CursorMoved { position: end },
+    ] {
+        canvas.update(
+            &mut state,
+            &Event::Mouse(event),
+            bounds,
+            mouse::Cursor::Available(end),
+        );
+    }
+    let Edit::Bond(_, b, Some(_), None) = pointer_gesture(&canvas, start, end) else {
+        return Err("Atom drag must create a bond edit".into());
+    };
+    let (placed, id) = reshiki::editing::add_bonded_atom(&doc, atom, b, None, "*")?;
+    assert_eq!(
+        canvas.bonded_atom_preview_document(&state, bounds),
+        apply(&placed, id, "R", Mode::Text)?
+    );
+    Ok(())
+}
+
+#[test]
 fn atom_click_and_drag_use_distinct_edits_and_bond_constraints() -> Result<(), String> {
     let mut doc = Document::default();
     let atom = doc.add_atom("C", World::default());
@@ -1099,6 +1134,7 @@ pub(super) fn chain_canvas(doc: &Document, mode: ChainMode) -> MoleculeCanvas<'_
         morph: None,
         model_generation: None,
         element: "C",
+        atom_label: None,
         joining: None,
         hidden_annotation: None,
         doc,

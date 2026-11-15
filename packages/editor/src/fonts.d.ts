@@ -17,8 +17,13 @@ export interface FontPage {
   fetch?: typeof fetch;
 }
 
-/** The bytes of a font URL, or the bytes given. */
-export function fontBytes(font: FontSource, fetchFont?: typeof fetch): Promise<Uint8Array>;
+/** The bytes of a font URL, or the bytes given. `redirect` is fetch's own
+ * option, "follow" by default. */
+export function fontBytes(
+  font: FontSource,
+  fetchFont?: typeof fetch,
+  redirect?: MountOptions["fontRedirect"],
+): Promise<Uint8Array>;
 
 /** The best system font for `language` (Japanese by default), its regular
  * and bold faces, when the page already has Local Font Access permission;
@@ -38,6 +43,6 @@ export function cjkFonts(
  * language's fallback when the editor first needs one (undefined for none). */
 export function loadFonts(
   wasm: { addFont(bytes: Uint8Array): number },
-  options?: Pick<MountOptions, "fonts" | "cjkFont" | "onError">,
+  options?: Pick<MountOptions, "fonts" | "cjkFont" | "fontRedirect" | "onError">,
   page?: FontPage,
 ): Promise<((language?: CjkLanguage) => Promise<void>) | undefined>;

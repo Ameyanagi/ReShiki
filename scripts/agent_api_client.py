@@ -32,6 +32,9 @@ TOOLS = (
     "file_save",
     "compose",
     "apply",
+    "convert",
+    "name",
+    "schema",
 )
 CLIENT_INFO = {"name": "reshiki-package-check", "version": "1.0.0"}
 

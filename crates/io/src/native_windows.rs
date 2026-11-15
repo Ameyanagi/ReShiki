@@ -182,10 +182,14 @@ pub fn print_snapshot(doc: &Document) -> Result<Vec<u8>, String> {
     Ok(bytes)
 }
 
-pub fn office_metafile(doc: &Document) -> Result<Vec<u8>, String> {
+pub fn office_metafile(
+    doc: &Document,
+    background: crate::export::Background,
+) -> Result<Vec<u8>, String> {
     doc.validate()?;
-    let tree = crate::export::parse_svg(scene::svg(doc))?;
-    metafile(&tree, doc)
+    let (doc, paper) = background.apply(doc);
+    let tree = crate::export::parse_svg(scene::svg_on(&doc, paper))?;
+    metafile(&tree, &doc)
 }
 
 /// Use the figure renderer's resolved geometry, fonts, background and bounds.

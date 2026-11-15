@@ -180,7 +180,7 @@ fn correlations(doc: &Document) -> [f32; 2] {
 
 #[tokio::test]
 #[ignore = "Opt-in GPU evidence: RESHIKI_QA_MODEL_FACE_INPUTS and RESHIKI_QA_MODEL_FACE_OUTPUT"]
-async fn model_face_frames_and_hints_renderer_evidence() {
+async fn manual_model_face_frames_and_hints_renderer_evidence() {
     let inputs =
         std::path::PathBuf::from(std::env::var_os("RESHIKI_QA_MODEL_FACE_INPUTS").unwrap());
     let output =

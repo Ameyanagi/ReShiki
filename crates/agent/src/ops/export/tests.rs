@@ -60,8 +60,13 @@ async fn export_ok(host: &HeadlessHost, handle: &DocHandle, format: &str) -> Too
 
 /// Ethanol imported from SMILES, as clients start.
 async fn ethanol(host: &HeadlessHost) -> DocHandle {
+    imported(host, "smiles", "CCO").await
+}
+
+/// `text` imported as `format`.
+async fn imported(host: &HeadlessHost, format: &str, text: &str) -> DocHandle {
     let imported = host
-        .call(call("import", json!({"format": "smiles", "text": "CCO"})))
+        .call(call("import", json!({"format": format, "text": text})))
         .await
         .unwrap();
     assert!(!imported.is_error, "{:?}", imported.value);
@@ -99,7 +104,7 @@ fn formats_are_exactly_the_published_export_formats() {
         let format: Format = serde_json::from_value(json!(name)).unwrap();
         assert_eq!(format.name(), *name);
     }
-    for excluded in ["emf", "cdx", "rxn", "rsmi", "reshiki", "PNG"] {
+    for excluded in ["emf", "reshiki", "rsk", "name", "PNG"] {
         assert!(serde_json::from_value::<Format>(json!(excluded)).is_err());
     }
 }
@@ -119,10 +124,7 @@ fn pages_is_valid_only_with_pdf() {
         } else {
             assert_eq!(
                 pages,
-                Err(OpError::new(
-                    ErrorKind::InvalidArguments,
-                    "pages is valid only with format pdf"
-                )),
+                Err(OpError::invalid("pages is valid only with format pdf").param("pages")),
                 "{name}"
             );
         }
@@ -301,9 +303,16 @@ async fn non_svg_exports_ignore_the_svg_text_mode() {
 async fn every_format_is_non_empty_with_a_correct_receipt() {
     let host = HeadlessHost::new("9.8.7", Budgets::default());
     let handle = ethanol(&host).await;
+    let reaction = imported(&host, "rsmi", "CCO>>CC=O").await;
     for name in EXPORT_FORMATS {
         let format: Format = serde_json::from_value(json!(name)).unwrap();
-        let result = export_ok(&host, &handle, name).await;
+        // The reaction formats need a reaction to write.
+        let handle = if matches!(*name, "rxn" | "rsmi") {
+            &reaction
+        } else {
+            &handle
+        };
+        let result = export_ok(&host, handle, name).await;
         let [file] = result.files.as_slice() else {
             panic!("{name}: one file")
         };
@@ -330,6 +339,10 @@ async fn every_format_is_non_empty_with_a_correct_receipt() {
                     "svg" => assert!(text.starts_with("<svg"), "{text}"),
                     "pdf" => assert!(file.bytes.starts_with(b"%PDF-")),
                     "cdxml" => assert!(text.contains("<CDXML"), "{text}"),
+                    // The binary ChemDraw file, not the engine's base64.
+                    "cdx" => assert!(file.bytes.starts_with(b"VjCD0100")),
+                    "rxn" => assert!(text.starts_with("$RXN"), "{text}"),
+                    "rsmi" => assert_eq!(text.trim(), "CCO>>CC=O"),
                     "mol" => assert!(text.contains("M  END"), "{text}"),
                     "smiles" => assert_eq!(text.trim(), "CCO"),
                     "inchi" => assert!(text.starts_with("InChI=1S/C2H6O/"), "{text}"),
@@ -356,6 +369,8 @@ async fn figures_are_the_publication_export() {
             },
             false,
             false,
+            crate::export::Background::Canvas,
+            crate::style::DEFAULT.png_dpi,
             Budgets::default().export_png_pixels,
         )
         .await
@@ -471,4 +486,29 @@ async fn exporting_never_changes_the_document() {
         .unwrap();
     assert_eq!(after.revision, before.revision);
     assert!(Arc::ptr_eq(&after.doc, &before.doc));
+}
+
+/// S13: InChI has no identifier for a wildcard atom (or for a drawing over
+/// its atom limit). The export says so instead of returning an empty file.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn an_empty_inchi_is_an_error_not_an_empty_file() {
+    let host = HeadlessHost::new("9.8.7", Budgets::default());
+    let imported = host
+        .call(call("import", json!({"format": "smiles", "text": "*C"})))
+        .await
+        .unwrap();
+    assert!(!imported.is_error, "{:?}", imported.value);
+    let handle = DocHandle::new(imported.value["value"]["document"].as_str().unwrap()).unwrap();
+    let result = export_call(&host, &handle, "inchi", Value::Null).await;
+    assert_eq!(
+        error(&result),
+        ("failed", "InChI has no identifier for this drawing")
+    );
+    assert!(result.files.is_empty());
+    // The other chemistry formats still export it.
+    assert!(
+        !export_ok(&host, &handle, "smiles").await.files[0]
+            .bytes
+            .is_empty()
+    );
 }
