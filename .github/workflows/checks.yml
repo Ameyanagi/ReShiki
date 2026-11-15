@@ -318,7 +318,7 @@ jobs:
         with:
           arch: ${{ matrix.platform.msvc_arch }}
       - name: Build the Rust helper and test executable
-        run: uv run --no-project python scripts/build_inchi_helper.py --target ${{ matrix.platform.target }}
+        run: uv run --no-project python scripts/build_inchi_helper.py
       - name: Select the helper for runtime integration tests
         run: uv run --no-project python -c "import os,pathlib; p=pathlib.Path('artifacts/inchi-helper/reshiki-inchi-helper'+('.exe' if os.name=='nt' else '')).resolve(); open(os.environ['GITHUB_ENV'],'a').write('RESHIKI_INCHI_HELPER='+str(p)+'\n')"
       - name: Check Rust heap and byte protocol boundaries
@@ -494,7 +494,7 @@ jobs:
       - name: Check all optional reference tests compile cleanly
         run: cargo clippy --workspace --all-targets --locked --features rdkit-reference -- -D warnings
       - name: Build the Rust helper and test executable
-        run: uv run --no-project python scripts/build_inchi_helper.py --target ${{ matrix.target }}
+        run: uv run --no-project python scripts/build_inchi_helper.py
       - name: Select the helper for runtime integration tests
         run: uv run --no-project python -c "import os,pathlib; p=pathlib.Path('artifacts/inchi-helper/reshiki-inchi-helper'+('.exe' if os.name=='nt' else '')).resolve(); open(os.environ['GITHUB_ENV'],'a').write('RESHIKI_INCHI_HELPER='+str(p)+'\n')"
       - name: Install fixture reader dependencies
@@ -686,7 +686,7 @@ jobs:
         with:
           arch: ${{ matrix.platform.msvc_arch }}
       - name: Build the Rust helper and test executable
-        run: uv run --no-project python scripts/build_inchi_helper.py --target ${{ matrix.platform.target }}
+        run: uv run --no-project python scripts/build_inchi_helper.py
       - name: Select the helper for runtime integration tests
         run: uv run --no-project python -c "import os,pathlib; p=pathlib.Path('artifacts/inchi-helper/reshiki-inchi-helper'+('.exe' if os.name=='nt' else '')).resolve(); open(os.environ['GITHUB_ENV'],'a').write('RESHIKI_INCHI_HELPER='+str(p)+'\n')"
       - name: Install the optional reference dependencies

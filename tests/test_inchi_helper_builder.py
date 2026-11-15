@@ -196,11 +196,18 @@ class RustBuildTests(unittest.TestCase):
                 BUILDER.main()
             self.assertEqual((output / "reshiki-inchi-helper").read_bytes(), b"fresh")
 
-    def test_host_build_names_the_host_when_the_environment_sets_another_target(self):
-        # CARGO_BUILD_TARGET would otherwise make Cargo build that other target.
+    def test_host_build_names_the_host_when_requested_or_the_environment_sets_a_target(self):
+        # Explicit --target also overrides an unseen Cargo config target.
         host = "aarch64-apple-darwin"
-        for arguments in ([], ["--target", host]):
-            with self.subTest(arguments=arguments), tempfile.TemporaryDirectory() as temporary:
+        for arguments, cargo_target in (
+            ([], "x86_64-apple-darwin"),
+            (["--target", host], "x86_64-apple-darwin"),
+            (["--target", host], None),
+        ):
+            with (
+                self.subTest(arguments=arguments, cargo_target=cargo_target),
+                tempfile.TemporaryDirectory() as temporary,
+            ):
                 output = Path(temporary).resolve()
                 built = output / "target" / host / "debug/reshiki-inchi-helper"
                 starts = []
@@ -223,13 +230,14 @@ class RustBuildTests(unittest.TestCase):
                 environment = {
                     "CARGO": "test-cargo",
                     "RUSTC": "test-rustc",
-                    "CARGO_BUILD_TARGET": "x86_64-apple-darwin",
                 }
+                if cargo_target:
+                    environment["CARGO_BUILD_TARGET"] = cargo_target
                 with (
                     patch.object(
                         sys, "argv", ["build_inchi_helper.py", "--output", temporary, *arguments]
                     ),
-                    patch.dict(os.environ, environment),
+                    patch.dict(os.environ, environment, clear=True),
                     patch.object(BUILDER, "verify_executable", return_value=host),
                     patch.object(BUILDER.subprocess, "run", side_effect=run),
                     patch("builtins.print"),
@@ -258,9 +266,9 @@ class RustBuildTests(unittest.TestCase):
                         self.assertEqual(Path(command[command.index("-o") + 1]), stub)
                         stub.write_bytes(b"target test executable")
                     elif command[:2] == ["test-cargo", "build"]:
-                        # A host build shares target/debug with `cargo build --bin reshiki`.
+                        # Only an implicit host build shares target/debug with the app.
                         folder = output
-                        if target == host:
+                        if requested is None:
                             self.assertNotIn("--target", command)
                         else:
                             self.assertEqual(command[command.index("--target") + 1], target)
@@ -316,9 +324,9 @@ class RustBuildTests(unittest.TestCase):
                         self.assertEqual(
                             command[command.index("--bin") + 1], "reshiki-inchi-helper"
                         )
-                        self.assertEqual("--target" in command, target != host)
+                        self.assertEqual(command[command.index("--target") + 1], target)
                         name = "reshiki-inchi-helper" + (".exe" if "windows" in target else "")
-                        folder = output if target == host else output / target
+                        folder = output / target
                         binary = folder / "release" / name
                         binary.parent.mkdir(parents=True)
                         binary.write_bytes(b"test executable")

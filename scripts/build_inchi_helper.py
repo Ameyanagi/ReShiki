@@ -128,10 +128,10 @@ def main():
         str(args.jobs),
     ]
     # A host build without --target shares target/debug with `cargo build --bin
-    # reshiki`; with it, Cargo compiles the same crates again under target/<triple>.
-    # CARGO_BUILD_TARGET would send that build to another target, so name the host.
+    # reshiki`. A requested target always reaches Cargo, so a Cargo config cannot
+    # replace it; CARGO_BUILD_TARGET would replace the host, so name it.
     cross = target != host
-    if cross or os.environ.get("CARGO_BUILD_TARGET"):
+    if args.target or os.environ.get("CARGO_BUILD_TARGET"):
         command += ["--target", target]
     if args.production:
         command.append("--release")
