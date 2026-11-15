@@ -119,7 +119,7 @@ fn convert_usage_errors_exit_2() {
     assert_usage(&dir, &["convert", "eth.mol"]);
     let stdin = assert_usage(&dir, &["convert", "-"]);
     assert!(stdin.contains("needs --from"), "{stdin}");
-    for output in ["x.rsk", "x.emf", "x.cdx"] {
+    for output in ["x.rsk", "x.emf", "x.xyz"] {
         let stderr = assert_usage(&dir, &["convert", "eth.mol", "-o", output]);
         assert!(stderr.contains("unsupported output format"), "{stderr}");
     }
@@ -338,7 +338,7 @@ fn render_usage_and_size_errors() {
     assert_eq!(output.status.code(), Some(1), "{stderr}");
     assert!(output.stdout.is_empty());
     assert!(
-        stderr.starts_with("reshiki: error: 8192 × 8192 is 67108864 pixels;"),
+        stderr.starts_with("reshiki: error[budget]: 8192 × 8192 is 67108864 pixels;"),
         "{stderr}"
     );
     assert!(files(&dir).is_empty(), "no file is written");
@@ -400,7 +400,7 @@ fn compose_rejects_an_invalid_proposal_as_the_assistant_does() {
     assert!(output.stdout.is_empty());
     assert_eq!(
         text(&output.stderr),
-        format!("reshiki: error: {expected}\n")
+        format!("reshiki: error[invalid_arguments]: {expected}\n")
     );
     fs::write(dir.path().join("p.json"), b"{").expect("p.json");
     let output = cli(dir.path(), &["compose", "p.json", "-o", "s.svg"]);
@@ -459,4 +459,130 @@ fn a_drawing_with_a_3d_model_still_converts_and_analyzes() {
     let stderr = text(&output.stderr);
     assert_eq!(output.status.code(), Some(0), "{stderr}");
     assert!(!stderr.contains("needs review"), "{stderr}");
+}
+
+/// One input, the same answers on every surface: the fixture is also checked
+/// by crates/python/tests/test_parity.py and packages/editor/test/
+/// parity.test.ts, and rewritten with scripts/agent_parity_fixture.py.
+#[test]
+fn the_cross_surface_parity_fixture_holds_for_the_cli() {
+    let fixture: serde_json::Value =
+        serde_json::from_str(include_str!("fixtures/agent-api/parity.json")).expect("the fixture");
+    let dir = tempfile::tempdir().expect("working folder");
+    let ok = |args: &[&str], input: &str| {
+        let output = headless::run_cli(dir.path(), args, input.as_bytes(), CONVERT);
+        assert_eq!(
+            output.status.code(),
+            Some(0),
+            "{args:?}: {}",
+            text(&output.stderr)
+        );
+        text(&output.stdout)
+    };
+    let molecule = fixture["molecule"]["smiles"].as_str().expect("SMILES");
+    for (format, expected) in fixture["molecule"]["outputs"].as_object().expect("outputs") {
+        assert_eq!(
+            ok(&["convert", "--smiles", molecule, "--to", format], ""),
+            expected.as_str().expect("text"),
+            "{format}"
+        );
+    }
+    let analyzed: serde_json::Value =
+        serde_json::from_str(&ok(&["analyze", "--smiles", molecule], "")).expect("one JSON line");
+    for (name, expected) in fixture["molecule"]["properties"]
+        .as_object()
+        .expect("properties")
+    {
+        assert_eq!(analyzed["value"]["analysis"][name], *expected, "{name}");
+    }
+    let reaction = fixture["reaction"]["rsmi"]
+        .as_str()
+        .expect("reaction SMILES");
+    assert_eq!(
+        ok(
+            &["convert", "-", "--from", "rsmi", "--to", "rsmi"],
+            reaction
+        ),
+        fixture["reaction"]["outputs"]["rsmi"]
+    );
+    let rxn = ok(&["convert", "-", "--from", "rsmi", "--to", "rxn"], reaction);
+    assert!(rxn.starts_with("$RXN"), "{rxn}");
+    // SVG text is outlined unless live text is asked for, as on every surface.
+    let outlined = ok(&["convert", "--smiles", molecule, "--to", "svg"], "");
+    assert!(outlined.contains("<path") && !outlined.contains("<text"));
+    let live = ok(
+        &[
+            "convert",
+            "--smiles",
+            molecule,
+            "--to",
+            "svg",
+            "--svg-text",
+            "live",
+        ],
+        "",
+    );
+    assert!(live.contains("<text"));
+}
+
+#[test]
+fn chemical_names_are_read_offline_and_cdx_is_written() {
+    let dir = tempfile::tempdir().expect("working folder");
+    let named = headless::run_cli(
+        dir.path(),
+        &["convert", "-", "--from", "name", "--to", "smiles"],
+        b"acetylsalicylic acid\n",
+        CONVERT,
+    );
+    assert_eq!(named.status.code(), Some(0), "{}", text(&named.stderr));
+    assert_eq!(text(&named.stdout), "CC(=O)Oc1ccccc1C(=O)O");
+    // cdx is written as the binary file and reads back.
+    let cdx = to_file(
+        dir.path(),
+        &["convert", "--smiles", "CCO", "-o", "ethanol.cdx"],
+        "ethanol.cdx",
+    );
+    assert!(cdx.starts_with(b"VjCD0100"));
+    let back = cli(dir.path(), &["convert", "ethanol.cdx", "--to", "smiles"]);
+    assert_eq!(text(&back.stdout), "CCO", "{}", text(&back.stderr));
+}
+
+/// An operation error names its code; an input error has none.
+#[test]
+fn operation_errors_name_their_code() {
+    let dir = tempfile::tempdir().expect("working folder");
+    let unreadable = cli(dir.path(), &["convert", "--smiles", "C(", "--to", "mol"]);
+    assert_eq!(unreadable.status.code(), Some(1));
+    assert_eq!(
+        text(&unreadable.stderr),
+        "reshiki: error[failed]: Invalid SMILES at byte 2\n"
+    );
+    let unknown = headless::run_cli(
+        dir.path(),
+        &["convert", "-", "--from", "name", "--to", "smiles"],
+        b"notachemicalname",
+        CONVERT,
+    );
+    assert_eq!(unknown.status.code(), Some(1));
+    assert!(
+        text(&unknown.stderr).starts_with("reshiki: error[failed]: "),
+        "{}",
+        text(&unknown.stderr)
+    );
+    let size = cli(
+        dir.path(),
+        &[
+            "render", "--smiles", "CCO", "--to", "png", "--width", "9000", "-o", "big.png",
+        ],
+    );
+    assert_eq!(
+        text(&size.stderr),
+        "reshiki: error[invalid_arguments]: max_width must be from 1 to 8192 pixels\n"
+    );
+    let missing = cli(dir.path(), &["convert", "missing.mol", "--to", "svg"]);
+    assert!(
+        text(&missing.stderr).starts_with("reshiki: error: cannot read missing.mol"),
+        "{}",
+        text(&missing.stderr)
+    );
 }

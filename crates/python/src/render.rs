@@ -22,7 +22,7 @@ impl<'a> Options<'a> {
         let outline_svg = match svg_text {
             "outline" => true,
             "live" => false,
-            _ => return Err("text must be 'outline' or 'live'".into()),
+            _ => return Err("svg_text must be 'outline' or 'live'".into()),
         };
         if width == Some(0) || height == Some(0) {
             return Err("Image dimensions must be positive".into());

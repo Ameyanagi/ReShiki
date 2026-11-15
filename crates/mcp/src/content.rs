@@ -28,10 +28,11 @@ use std::io::{self, Write};
 mod tests;
 
 /// File formats sent as text resources when their bytes are UTF-8.
-const TEXT_MIMES: [&str; 5] = [
+const TEXT_MIMES: [&str; 6] = [
     "image/svg+xml",
     "chemical/x-cdxml",
     "chemical/x-mdl-molfile",
+    "chemical/x-mdl-rxnfile",
     "chemical/x-daylight-smiles",
     "chemical/x-inchi",
 ];

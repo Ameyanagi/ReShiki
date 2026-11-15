@@ -1,5 +1,6 @@
 //! Operation errors and their stable wire codes.
 use crate::{access::AccessError, transaction::Rejection};
+use serde_json::{Value, json};
 use std::fmt;
 
 /// Why an operation failed.
@@ -85,7 +86,9 @@ impl ErrorKind {
             Self::Budget => "The call would exceed a budget.",
             Self::Timeout => "The call passed its deadline before it committed any change.",
             Self::Rejected => "Validation or the document's edit policy refused the change.",
-            Self::Unsupported => "Reserved; no current tool returns it.",
+            Self::Unsupported => {
+                "The host cannot do this, such as chemical naming in a host without it."
+            }
             Self::Access => {
                 "The file is outside the granted folders, has an extension the tool does not \
                  accept, or the operating system denied access."
@@ -98,6 +101,13 @@ impl ErrorKind {
         }
     }
 
+    /// Whether the same call can succeed when sent again unchanged: only
+    /// [`ErrorKind::Busy`] and [`ErrorKind::Timeout`]. A stale call needs a
+    /// new base revision first.
+    pub fn retryable(self) -> bool {
+        matches!(self, Self::Busy | Self::Timeout)
+    }
+
     /// True only for [`ErrorKind::UnknownTool`].
     pub fn is_protocol_error(self) -> bool {
         matches!(self, Self::UnknownTool)
@@ -105,10 +115,21 @@ impl ErrorKind {
 }
 
 /// An operation error with a bounded, client-facing message.
+///
+/// On the wire it is `{code, message, retryable}` plus `reason`, `param` and
+/// `current_revision` when they are known, so a client never has to read
+/// them out of the message.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OpError {
     pub kind: ErrorKind,
     pub message: String,
+    /// The specific reason under the code. File errors carry their
+    /// [`AccessError::code`], such as `path_not_granted` or `file_exists`.
+    pub reason: Option<&'static str>,
+    /// The argument at fault, when one argument is.
+    pub param: Option<&'static str>,
+    /// The document's revision, for [`ErrorKind::Stale`].
+    pub current_revision: Option<u64>,
 }
 
 impl OpError {
@@ -125,7 +146,48 @@ impl OpError {
                 .chars()
                 .take(Self::MAX_MESSAGE_CHARS)
                 .collect(),
+            reason: None,
+            param: None,
+            current_revision: None,
         }
+    }
+
+    /// Names the argument at fault.
+    pub fn param(self, param: &'static str) -> Self {
+        Self {
+            param: Some(param),
+            ..self
+        }
+    }
+
+    /// Reports the revision the document is at now, for a stale call.
+    pub fn at_revision(self, current_revision: u64) -> Self {
+        Self {
+            current_revision: Some(current_revision),
+            ..self
+        }
+    }
+
+    /// The wire form: `{code, message, retryable}`, then `reason`, `param`
+    /// and `current_revision` (a decimal string) when set.
+    pub fn json(&self) -> Value {
+        let mut error = json!({
+            "code": self.kind.code(),
+            "message": self.message,
+            "retryable": self.kind.retryable(),
+        });
+        if let Some(fields) = error.as_object_mut() {
+            if let Some(reason) = self.reason {
+                fields.insert("reason".to_owned(), reason.into());
+            }
+            if let Some(param) = self.param {
+                fields.insert("param".to_owned(), param.into());
+            }
+            if let Some(revision) = self.current_revision {
+                fields.insert("current_revision".to_owned(), revision.to_string().into());
+            }
+        }
+        error
     }
 
     /// A failed operation with a bounded, client-facing message.
@@ -156,9 +218,9 @@ impl From<Rejection> for OpError {
 /// Appended to `path_not_granted`: only the user can grant a folder.
 const GRANT_HINT: &str = ". Folders are granted by the user when the server starts, with --allow-read and --allow-write or in agent-access.json in ReShiki's data folder; info lists them.";
 
-/// The message is `"{access code}: {message}"`, so clients and tests can
-/// read the specific reason under the operation code; `path_not_granted`
-/// adds how folders are granted. When that would be cut at
+/// The access code is the error's `reason`. The message is still
+/// `"{access code}: {message}"`, so it reads the same in a terminal;
+/// `path_not_granted` adds how folders are granted. When that would be cut at
 /// [`OpError::MAX_MESSAGE_CHARS`], the echoed path and lists are
 /// [`shortened`] instead, so the reason and the hint stay whole.
 ///
@@ -187,12 +249,20 @@ impl From<AccessError> for OpError {
             AccessError::PathNotGranted { .. } => GRANT_HINT,
             _ => "",
         };
+        let reason = Some(error.code());
+        let param = Some("path");
         let message = |error: &AccessError| format!("{}: {error}{hint}", error.code());
         let full = message(&error);
-        if full.chars().count() <= Self::MAX_MESSAGE_CHARS {
-            return Self::new(kind, full);
+        let message = if full.chars().count() <= Self::MAX_MESSAGE_CHARS {
+            full
+        } else {
+            message(&shortened(error))
+        };
+        Self {
+            reason,
+            param,
+            ..Self::new(kind, message)
         }
-        Self::new(kind, message(&shortened(error)))
     }
 }
 

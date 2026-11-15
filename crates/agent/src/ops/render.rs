@@ -16,7 +16,9 @@ use super::{
     },
 };
 use crate::{
-    canvas_tools, editing,
+    canvas_tools,
+    document::Document,
+    editing,
     envelope::Versions,
     scene,
     tool_spec::{Hints, ToolSpec},
@@ -58,7 +60,7 @@ fn schema() -> Value {
 }
 
 /// The default [`RenderBudget`](super::budget::RenderBudget) side limits.
-fn side_schema() -> Value {
+pub(crate) fn side_schema() -> Value {
     json!({
         "type": "integer",
         "minimum": RenderBudget::DEFAULT.min_side,
@@ -122,19 +124,34 @@ pub(crate) fn decode(args: Value, budgets: &Budgets) -> Result<Render, OpError> 
     if let Some(ids) = &ids {
         ids::check_count(ids, budgets)?;
     }
+    let (width, height) = size(max_width, max_height, budgets)?;
+    Ok(Render {
+        document,
+        format,
+        width,
+        height,
+        ids,
+        svg_text: svg_text.unwrap_or_default(),
+    })
+}
+
+/// The preview size for the given limits, checked as [`decode`] describes.
+pub(crate) fn size(
+    max_width: Option<u32>,
+    max_height: Option<u32>,
+    budgets: &Budgets,
+) -> Result<(u32, u32), OpError> {
     let render = &budgets.render;
-    let side = |name: &str, value: Option<u32>, default: u32| {
+    let side = |name: &'static str, value: Option<u32>, default: u32| {
         let value = value.unwrap_or(default);
         if (render.min_side..=render.max_side).contains(&value) {
             Ok(value)
         } else {
-            Err(OpError::new(
-                ErrorKind::InvalidArguments,
-                format!(
-                    "{name} must be from {} to {} pixels",
-                    render.min_side, render.max_side
-                ),
+            Err(OpError::invalid(format!(
+                "{name} must be from {} to {} pixels",
+                render.min_side, render.max_side
             ))
+            .param(name))
         }
     };
     let width = side("max_width", max_width, render.default_width)?;
@@ -149,14 +166,7 @@ pub(crate) fn decode(args: Value, budgets: &Budgets) -> Result<Render, OpError> 
             ),
         ));
     }
-    Ok(Render {
-        document,
-        format,
-        width,
-        height,
-        ids,
-        svg_text: svg_text.unwrap_or_default(),
-    })
+    Ok((width, height))
 }
 
 /// The envelope value of a render. `width` and `height` are the PNG's pixel
@@ -185,13 +195,57 @@ fn png_size(png: &[u8]) -> Option<(u32, u32)> {
     Some((word(16)?, word(20)?))
 }
 
+/// A preview's bytes and, for a PNG, its pixel width and height.
+pub(crate) struct Preview {
+    pub(crate) bytes: Vec<u8>,
+    pub(crate) size: Option<(u32, u32)>,
+}
+
+/// The preview of `doc`: png is
+/// [`canvas_tools::image_within`] at the decoded size; svg is
+/// [`scene::svg`], outlined by default. Either must fit
+/// [`Budgets::max_output_bytes`].
+pub(crate) fn preview(
+    doc: &Document,
+    format: Format,
+    width: u32,
+    height: u32,
+    svg_text: SvgText,
+    budgets: &Budgets,
+) -> Result<Preview, OpError> {
+    let (bytes, size, name) = match format {
+        Format::Png => {
+            let png = canvas_tools::image_within(doc, width, height).map_err(OpError::failed)?;
+            let size = png_size(&png).ok_or_else(|| OpError::failed("internal error"))?;
+            (png, Some(size), "png")
+        }
+        Format::Svg => {
+            let svg = scene::svg(doc);
+            let bytes = match svg_text {
+                SvgText::Outline => crate::export::outlined_svg(svg).map_err(OpError::failed)?,
+                SvgText::Live => svg.into_bytes(),
+            };
+            (bytes, None, "svg")
+        }
+    };
+    if bytes.len() > budgets.max_output_bytes {
+        return Err(OpError::new(
+            ErrorKind::Budget,
+            format!(
+                "The {name} preview is {} bytes; max_output_bytes allows at most {}. {SHRINK}",
+                bytes.len(),
+                budgets.max_output_bytes
+            ),
+        ));
+    }
+    Ok(Preview { bytes, size })
+}
+
 /// Renders the document with read access.
 ///
 /// A selection is checked with [`ids::resolve`] and cut out with
-/// [`editing::selection`]. png is [`canvas_tools::image_within`] at the
-/// decoded size and comes back as an image; svg is [`scene::svg`], outlined
-/// by default, and comes back as the file `drawing.svg`. Either must fit
-/// [`Budgets::max_output_bytes`].
+/// [`editing::selection`]. png comes back as an image and svg as the file
+/// `drawing.svg`, both made by [`preview`].
 ///
 /// The successful result contract is in [`super::catalog::RESULTS`].
 pub(crate) async fn render(
@@ -220,34 +274,7 @@ pub(crate) async fn render(
             )),
         };
         let doc = part.as_ref().unwrap_or(&snapshot.doc);
-        let (bytes, size, name) = match format {
-            Format::Png => {
-                let png =
-                    canvas_tools::image_within(doc, width, height).map_err(OpError::failed)?;
-                let size = png_size(&png).ok_or_else(|| OpError::failed("internal error"))?;
-                (png, Some(size), "png")
-            }
-            Format::Svg => {
-                let svg = scene::svg(doc);
-                let bytes = match svg_text {
-                    SvgText::Outline => {
-                        crate::export::outlined_svg(svg).map_err(OpError::failed)?
-                    }
-                    SvgText::Live => svg.into_bytes(),
-                };
-                (bytes, None, "svg")
-            }
-        };
-        if bytes.len() > budgets.max_output_bytes {
-            return Err(OpError::new(
-                ErrorKind::Budget,
-                format!(
-                    "The {name} preview is {} bytes; max_output_bytes allows at most {}. {SHRINK}",
-                    bytes.len(),
-                    budgets.max_output_bytes
-                ),
-            ));
-        }
+        let Preview { bytes, size } = preview(doc, format, width, height, svg_text, &budgets)?;
         let result = ToolResult::valid(
             Rendered {
                 width: size.map(|(width, _)| width),

@@ -6,51 +6,35 @@
 use reshiki_io::{
     engine::LocalEngine,
     export,
-    formats::{self, EXPORT_PNG_PIXELS, write},
+    formats::{self, EXPORT_PNG_PIXELS, SvgText},
+    preview,
 };
 use reshiki_model::{document::Document, scene};
 use wasm_bindgen::prelude::*;
 
-/// A preview is never drawn larger than three times the drawing's size.
-const MAX_UPSCALE: f32 = 3.;
 /// The largest preview side, as the MCP `render` tool allows.
 const MAX_SIDE: u32 = 8192;
 
-/// The editor's SVG preview of a drawing, with a transparent surround.
-fn preview_svg(doc: &Document) -> String {
-    scene::svg(doc)
+/// The editor's SVG preview of a drawing, with a transparent surround and
+/// text outlined unless live text is asked for, as the `render` tool draws it.
+fn preview_svg(doc: &Document, svg_text: SvgText) -> Result<String, Error> {
+    let svg = scene::svg(doc);
+    match svg_text {
+        SvgText::Live => Ok(svg),
+        SvgText::Outline => text(export::outlined_svg(svg).map_err(failed)?),
+    }
 }
 
 /// The editor's PNG preview on white, scaled up to three times and down to fit
-/// within `max_width` × `max_height` pixels and the export pixel budget, as the
-/// `render` tool draws it.
-fn preview_png(doc: &Document, max_width: u32, max_height: u32) -> Result<Vec<u8>, String> {
+/// within `max_width` × `max_height` pixels and the export pixel budget:
+/// [`preview::png`], the code the `render` tool draws with.
+fn preview_png(doc: &Document, max_width: u32, max_height: u32) -> Result<Vec<u8>, Error> {
     if !(1..=MAX_SIDE).contains(&max_width) || !(1..=MAX_SIDE).contains(&max_height) {
-        return Err(format!("Preview sides must be 1 to {MAX_SIDE} pixels"));
+        return Err(invalid(format!(
+            "Preview sides must be 1 to {MAX_SIDE} pixels"
+        )));
     }
-    let tree = export::parse_svg(scene::svg(doc))?;
-    let size = tree.size();
-    // Within the export pixel budget too, as the desktop render path is.
-    let budget = (EXPORT_PNG_PIXELS as f32 / (size.width() * size.height())).sqrt();
-    let scale = (max_width as f32 / size.width())
-        .min(max_height as f32 / size.height())
-        .min(MAX_UPSCALE)
-        .min(budget);
-    let width = (tree.size().width() * scale)
-        .ceil()
-        .clamp(1., max_width as f32) as u32;
-    let height = (tree.size().height() * scale)
-        .ceil()
-        .clamp(1., max_height as f32) as u32;
-    let mut pixels =
-        resvg::tiny_skia::Pixmap::new(width, height).ok_or("Could not create canvas image")?;
-    pixels.fill(resvg::tiny_skia::Color::WHITE);
-    resvg::render(
-        &tree,
-        resvg::tiny_skia::Transform::from_scale(scale, scale),
-        &mut pixels.as_mut(),
-    );
-    pixels.encode_png().map_err(|e| e.to_string())
+    preview::png(doc, max_width, max_height, EXPORT_PNG_PIXELS).map_err(failed)
 }
 
 #[wasm_bindgen]
@@ -65,12 +49,51 @@ fn start() {
     std::panic::set_hook(Box::new(|info| error(&info.to_string())));
 }
 
-fn text(bytes: Vec<u8>) -> Result<String, String> {
-    String::from_utf8(bytes).map_err(|e| e.to_string())
+/// A JavaScript `Error` whose `code` is the operation error code the MCP
+/// tools and the CLI report for the same failure: `invalid_arguments` for an
+/// unknown format or option, `failed` for everything else.
+type Error = JsValue;
+
+fn coded(code: &str, message: String) -> Error {
+    let error = js_sys::Error::new(&message);
+    // Setting a property on a new Error cannot fail.
+    let _ = js_sys::Reflect::set(&error, &"code".into(), &code.into());
+    error.into()
 }
 
-fn js(error: String) -> JsError {
-    JsError::new(&error)
+fn failed(message: String) -> Error {
+    coded("failed", message)
+}
+
+fn invalid(message: String) -> Error {
+    coded("invalid_arguments", message)
+}
+
+fn text(bytes: Vec<u8>) -> Result<String, Error> {
+    String::from_utf8(bytes).map_err(|e| failed(e.to_string()))
+}
+
+/// `format` when [`formats::read`] accepts it.
+fn input(format: &str) -> Result<&str, Error> {
+    if formats::INPUT.contains(&format) {
+        Ok(format)
+    } else {
+        Err(invalid(format!("Unknown input format {format}")))
+    }
+}
+
+/// The SVG text mode: `outline` (also when not given) or `live`.
+fn svg_text(mode: Option<String>) -> Result<SvgText, Error> {
+    match mode {
+        None => Ok(SvgText::Outline),
+        Some(mode) => SvgText::named(&mode)
+            .ok_or_else(|| invalid("svgText must be \"outline\" or \"live\"".to_owned())),
+    }
+}
+
+/// Reads `data` as `format`.
+async fn document(data: Vec<u8>, format: &str) -> Result<Document, Error> {
+    formats::read(data, input(format)?).await.map_err(failed)
 }
 
 /// A native drawing and the warnings reported while importing it.
@@ -82,29 +105,44 @@ pub struct ReadResult {
 
 /// Read `data` as `format`, keeping the native drawing and import warnings.
 #[wasm_bindgen(js_name = read)]
-pub async fn read(data: Vec<u8>, format: String) -> Result<ReadResult, JsError> {
-    let (doc, warnings) = formats::read_with_warnings(data, &format, &LocalEngine::default())
-        .await
-        .map_err(js)?;
-    let drawing = text(doc.file_json().map_err(js)?).map_err(js)?;
+pub async fn read(data: Vec<u8>, format: String) -> Result<ReadResult, Error> {
+    let (doc, warnings) =
+        formats::read_with_warnings(data, input(&format)?, &LocalEngine::default())
+            .await
+            .map_err(failed)?;
+    let drawing = text(doc.file_json().map_err(failed)?)?;
     Ok(ReadResult { drawing, warnings })
 }
 
 /// Convert `data` read as `from` into the format `to`. The formats are those of
-/// [`reshiki_io::formats`].
+/// [`reshiki_io::formats`]; `svg_text` is `outline` (the default) or `live`.
 #[wasm_bindgen]
-pub async fn convert(data: Vec<u8>, from: String, to: String) -> Result<Vec<u8>, JsError> {
-    write(formats::read(data, &from).await.map_err(js)?, &to)
+pub async fn convert(
+    data: Vec<u8>,
+    from: String,
+    to: String,
+    svg_text_mode: Option<String>,
+) -> Result<Vec<u8>, Error> {
+    let mode = svg_text(svg_text_mode)?;
+    if !formats::OUTPUT.contains(&to.as_str()) {
+        return Err(invalid(format!("Unknown output format {to}")));
+    }
+    let doc = document(data, &from).await?;
+    formats::write_with(doc, &to, &LocalEngine::default(), mode)
         .await
-        .map_err(js)
+        .map_err(failed)
 }
 
-/// The editor's SVG preview of `data` read as `format`.
+/// The editor's SVG preview of `data` read as `format`; `svg_text` is
+/// `outline` (the default) or `live`.
 #[wasm_bindgen(js_name = renderSvg)]
-pub async fn render_svg(data: Vec<u8>, format: String) -> Result<String, JsError> {
-    Ok(preview_svg(
-        &formats::read(data, &format).await.map_err(js)?,
-    ))
+pub async fn render_svg(
+    data: Vec<u8>,
+    format: String,
+    svg_text_mode: Option<String>,
+) -> Result<String, Error> {
+    let mode = svg_text(svg_text_mode)?;
+    preview_svg(&document(data, &format).await?, mode)
 }
 
 /// The editor's PNG preview of `data` read as `format`, within
@@ -115,31 +153,31 @@ pub async fn render_png(
     format: String,
     max_width: Option<u32>,
     max_height: Option<u32>,
-) -> Result<Vec<u8>, JsError> {
-    let doc = formats::read(data, &format).await.map_err(js)?;
-    preview_png(&doc, max_width.unwrap_or(1600), max_height.unwrap_or(1000)).map_err(js)
+) -> Result<Vec<u8>, Error> {
+    let doc = document(data, &format).await?;
+    preview_png(&doc, max_width.unwrap_or(1600), max_height.unwrap_or(1000))
 }
 
 /// The SMILES of `data` read as `format`.
 #[wasm_bindgen]
-pub async fn smiles(data: Vec<u8>, format: String) -> Result<String, JsError> {
-    let doc = formats::read(data, &format).await.map_err(js)?;
-    text(write(doc, "smiles").await.map_err(js)?).map_err(js)
+pub async fn smiles(data: Vec<u8>, format: String) -> Result<String, Error> {
+    let doc = document(data, &format).await?;
+    text(formats::write(doc, "smiles").await.map_err(failed)?)
 }
 
 /// The standard InChI of `data` read as `format`.
 #[wasm_bindgen]
-pub async fn inchi(data: Vec<u8>, format: String) -> Result<String, JsError> {
-    let doc = formats::read(data, &format).await.map_err(js)?;
-    text(write(doc, "inchi").await.map_err(js)?).map_err(js)
+pub async fn inchi(data: Vec<u8>, format: String) -> Result<String, Error> {
+    let doc = document(data, &format).await?;
+    text(formats::write(doc, "inchi").await.map_err(failed)?)
 }
 
 /// Add a TrueType or OpenType font (or collection) for figures and previews.
 /// Text whose own font lacks a glyph, such as Japanese, falls back to it.
 /// Returns how many faces it holds.
 #[wasm_bindgen(js_name = addFont)]
-pub fn add_font(bytes: Vec<u8>) -> Result<usize, JsError> {
-    reshiki_model::style::add_font(bytes).map_err(js)
+pub fn add_font(bytes: Vec<u8>) -> Result<usize, Error> {
+    reshiki_model::style::add_font(bytes).map_err(failed)
 }
 
 /// The ReShiki release version, shared with the application and npm package.

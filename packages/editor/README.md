@@ -368,8 +368,8 @@ await init(new URL("/assets/reshiki_web_bg.wasm", location.href));
 | Function                                           | Result                                                                        |
 | -------------------------------------------------- | ----------------------------------------------------------------------------- |
 | `read(data, format)`                               | `{ drawing, warnings }`: the native drawing (`rsk`) and the import warnings.  |
-| `convert(data, from, to)`                          | The structure or drawing in another format.                                   |
-| `renderSvg(data, format)`                          | The editor's SVG preview, with a transparent surround.                        |
+| `convert(data, from, to, { svgText })`             | The structure or drawing in another format.                                   |
+| `renderSvg(data, format, { svgText })`             | The editor's SVG preview, with a transparent surround.                        |
 | `renderPng(data, format, { maxWidth, maxHeight })` | The editor's PNG preview on white, scaled to fit (1600 × 1000 by default).    |
 | `smiles(data, format)`                             | The canonical SMILES.                                                         |
 | `inchi(data, format)`                              | The standard InChI.                                                           |
@@ -384,8 +384,28 @@ await init(new URL("/assets/reshiki_web_bg.wasm", location.href));
 - Output formats: `rsk`, `mol`, `smiles`, `inchi`, `cdxml`, `rxn`, `rsmi` and
   `svg` (strings), and `cdx`, `png` and `pdf` (bytes). `svg`, `png` and `pdf`
   are figures as the desktop's Export makes them.
+- `reshiki` is accepted wherever `rsk` is: it is the name the MCP tools and
+  `reshiki --cli` use for the same format.
 
-Failures reject with an `Error` that carries the app's message.
+SVG from `convert` and `renderSvg` draws text as outlines, so it looks the
+same in every viewer. Pass `{ svgText: "live" }` to keep `<text>` elements,
+which a viewer without the drawing's font draws with a substitute. This is the
+`svg_text` option of the MCP tools, the command line and the Python package,
+with the same default.
+
+Failures reject with an `Error` that carries the app's message and a `code`,
+the [error code](https://reshiki.com/developer/agent-api/#error-codes) the MCP
+tools and the command line report for the same failure:
+`invalid_arguments` for a format or option that is not accepted, and `failed`
+when the structure cannot be read, drawn or written.
+
+```js
+try {
+  await convert("C(", "smiles", "mol");
+} catch (error) {
+  console.log(error.code, error.message); // failed Invalid SMILES at byte 2
+}
+```
 
 Some inputs import with a change or an assumption, such as a SMILES bond of any
 order (`~`), which is drawn as a single bond. The app shows
@@ -407,8 +427,9 @@ const mol = await convert(drawing, "rsk", "mol");
   The tests check this when `RESHIKI_CLI` names a native `reshiki` binary.
 - Labels are measured and drawn with the bundled Liberation Sans, which has
   Arial's metrics. Coordinates near labels can differ from the desktop's by
-  under one drawing unit. SVG text names Arial, so a browser draws it with the
-  viewer's Arial or a substitute.
+  under one drawing unit. Outlined SVG text is drawn with Liberation Sans
+  glyphs; live SVG text names Arial, so a browser draws it with the viewer's
+  Arial or a substitute.
 - Everything runs on the calling thread. Large drawings block the page until
   they finish, and InChI and 3D work have no time limit in the browser. Run the
   module in a Web Worker to keep a page responsive.

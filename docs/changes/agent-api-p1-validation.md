@@ -126,7 +126,7 @@ TODO (owner): fill in this table from your own client checks.
 | System and ReShiki build (SHA)                      | Pending     | Pending               | Pending                 | Pending   |
 | Snippet used (guide section)                        | Claude Code | Claude Desktop        | Claude Desktop          | Codex     |
 | Revision observed, and where                        | Pending     | Pending               | Pending                 | Pending   |
-| All 13 tools listed                                 | Pending     | Pending               | Pending                 | Pending   |
+| All 16 tools listed                                 | Pending     | Pending               | Pending                 | Pending   |
 | Rendered image visible in the client                | Pending     | Pending               | Pending                 | Pending   |
 | Render cancelled from the client UI, no reply       | Pending     | Pending               | Pending                 | Pending   |
 | File written in the granted folder only             | Pending     | Pending               | Pending                 | Pending   |

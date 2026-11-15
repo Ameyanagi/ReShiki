@@ -19,7 +19,8 @@ pub(crate) fn check_count(ids: &[ObjectId], budgets: &Budgets) -> Result<(), OpE
                 ids.len(),
                 budgets.max_ids
             ),
-        ));
+        )
+        .param("ids"));
     }
     Ok(())
 }
@@ -36,7 +37,8 @@ pub(crate) fn resolve(doc: &Document, ids: &[ObjectId]) -> Result<Vec<u64>, OpEr
         return Err(OpError::new(
             ErrorKind::UnknownObject,
             format!("Object {missing} is not in the drawing"),
-        ));
+        )
+        .param("ids"));
     }
     Ok(ids.iter().map(|id| id.0).collect())
 }

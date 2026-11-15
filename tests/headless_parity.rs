@@ -468,7 +468,7 @@ fn a_page_pdf_needs_publication_pages() {
     assert!(output.stdout.is_empty(), "{}", text(&output.stdout));
     assert_eq!(
         text(&output.stderr),
-        "reshiki: error: Set up publication pages before exporting a page PDF.\n"
+        "reshiki: error[failed]: Set up publication pages before exporting a page PDF.\n"
     );
     assert!(!dir.path().join("pages.pdf").exists());
 }

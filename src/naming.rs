@@ -28,6 +28,10 @@ mod catalog;
 pub use catalog::VERSION as ALIAS_CATALOG_VERSION;
 pub use catalog::{Alias, AliasSource, aliases_for_smiles};
 
+#[cfg(not(target_arch = "wasm32"))]
+mod agent;
+#[cfg(not(target_arch = "wasm32"))]
+pub use agent::{AgentNaming, named};
 // The parsers run in bounded worker processes on the desktop, and in a
 // dedicated Web Worker with its own bounded memory in the browser.
 #[cfg(not(target_arch = "wasm32"))]

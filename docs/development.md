@@ -108,6 +108,20 @@ cargo test --locked -p reshiki-model
 cargo test --locked -p reshiki --test theme_reference
 ```
 
+The agent goldens under `tests/fixtures/agent-contract/` and
+`tests/fixtures/agent-skill/` change only with an intentional contract change;
+the README in each folder says how to regenerate them. The MCP transcripts
+under `tests/fixtures/mcp/` and `crates/mcp/tests/transcripts/` are edited by
+hand to the new expected lines. `tests/fixtures/agent-api/parity.json` holds
+one molecule and one reaction with the answers the command line
+(`tests/cli.rs`), the Python package (`crates/python/tests/test_parity.py`) and
+the JavaScript package (`packages/editor/test/parity.test.ts`) must all give.
+Rewrite it from a built binary:
+
+```sh
+uv run --locked python scripts/agent_parity_fixture.py target/debug/reshiki
+```
+
 A single-package build resolves features for that package alone, so the first
 run may compile some dependencies again. `reshiki-metafile` is not a default
 member, so plain `cargo test` skips it. See [crates and layering](architecture.md#crates-and-layering)

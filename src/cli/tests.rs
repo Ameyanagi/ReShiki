@@ -147,11 +147,14 @@ async fn info_prints_one_json_object_line() {
     let info: serde_json::Value = serde_json::from_str(line).unwrap();
     assert_eq!(info["versions"]["document"], crate::document::VERSION);
     assert_eq!(info["versions"]["app"], crate::updates::CURRENT_VERSION);
+    // The info tool's envelope, with the command line's formats beside it.
+    assert_eq!(info["validation"], json!({"status": "valid"}));
+    assert_eq!(info["warnings"], json!([]));
     assert_eq!(
-        info["operation_api"],
+        info["value"]["operation_api"],
         crate::envelope::OPERATION_API_VERSION
     );
-    assert_eq!(info["formats"]["import"], json!(IMPORT_FORMATS));
+    assert_eq!(info["value"]["formats"]["import"], json!(IMPORT_FORMATS));
     assert_eq!(info["cli"]["input_formats"], json!(IMPORT_FORMATS));
     assert_eq!(info["cli"]["output_formats"], json!(EXPORT_FORMATS));
     assert_eq!(info["api"]["stability"], "experimental");
@@ -1544,9 +1547,7 @@ async fn usage_errors_exit_2_before_any_work() {
         (&["convert", "a.mol", "--to", "xyz"], unsupported("xyz")),
         (&["convert", "a.mol", "-o", "b.rsk"], unsupported("rsk")),
         (&["convert", "a.mol", "-o", "b.emf"], unsupported("emf")),
-        (&["convert", "a.mol", "-o", "b.cdx"], unsupported("cdx")),
-        (&["convert", "a.mol", "-o", "b.rxn"], unsupported("rxn")),
-        (&["convert", "a.mol", "--to", "rsmi"], unsupported("rsmi")),
+        (&["convert", "a.mol", "--to", "name"], unsupported("name")),
         (
             &["convert", "a.mol", "--to", "svg", "--pages"],
             "--pages is valid only with pdf output".into(),
@@ -1857,7 +1858,10 @@ async fn compose_input_errors_exit_1() {
         let (code, out, err) = call_os(compose(&path)).await;
         assert_eq!(code, FAILURE, "{err}");
         assert!(out.is_empty());
-        assert_eq!(err, format!("reshiki: error: {message}\n"));
+        assert_eq!(
+            err,
+            format!("reshiki: error[invalid_arguments]: {message}\n")
+        );
     }
     let (code, _, err) = call_os(compose(&dir.path().join("missing.json"))).await;
     assert_eq!(code, FAILURE, "{err}");
@@ -1872,7 +1876,7 @@ async fn stereochemistry_limit_reaches_stderr_with_the_shared_message() {
     assert!(out.is_empty(), "{out}");
     assert_eq!(
         err,
-        "reshiki: error: This structure has too much stereochemistry to process · Try a shorter chain or a fragment\n"
+        "reshiki: error[failed]: This structure has too much stereochemistry to process · Try a shorter chain or a fragment\n"
     );
 }
 
