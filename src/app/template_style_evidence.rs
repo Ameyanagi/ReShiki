@@ -65,7 +65,7 @@ fn snapshot(directory: &Path, case: &str, phase: &str, app: &App) -> anyhow::Res
 
 #[test]
 #[ignore = "Set RESHIKI_TEMPLATE_STYLE_EVIDENCE_DIR and run identically on baseline and candidate"]
-fn capture_template_style_renderer_evidence() -> anyhow::Result<()> {
+fn manual_capture_template_style_renderer_evidence() -> anyhow::Result<()> {
     let directory = std::env::var_os("RESHIKI_TEMPLATE_STYLE_EVIDENCE_DIR")
         .map(std::path::PathBuf::from)
         .ok_or_else(|| anyhow::anyhow!("Set RESHIKI_TEMPLATE_STYLE_EVIDENCE_DIR"))?;

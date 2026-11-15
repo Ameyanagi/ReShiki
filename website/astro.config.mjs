@@ -293,6 +293,7 @@ export default defineConfig({
           items: [
             { label: "Build and test", slug: "developer/development" },
             { label: "Architecture", slug: "developer/architecture" },
+            { label: "Module index", slug: "developer/modules" },
             { label: "Windows development", slug: "developer/windows" },
             { label: "Release and signing", slug: "developer/releasing" },
             { label: "SignPath setup", slug: "developer/signpath-setup" },

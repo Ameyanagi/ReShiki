@@ -59,7 +59,7 @@ fn render(
 
 #[tokio::test]
 #[ignore = "Opt-in formatted-caption bond PNG evidence; set RESHIKI_BOND_TEXT_PNG_DIR"]
-async fn bond_from_formatted_text_native_canvas_evidence() {
+async fn manual_bond_from_formatted_text_native_canvas_evidence() {
     let directory = std::path::PathBuf::from(
         std::env::var_os("RESHIKI_BOND_TEXT_PNG_DIR")
             .expect("Set RESHIKI_BOND_TEXT_PNG_DIR to the PNG artifact directory"),

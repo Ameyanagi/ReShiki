@@ -508,7 +508,7 @@ async fn drawing_polish_renderer_structure_input() {
 
 #[tokio::test]
 #[ignore = "Prepare the real import → cleanup fixture for rotation-overlay QA"]
-async fn prepare_rotation_polish_fixture() -> Result<(), String> {
+async fn manual_prepare_rotation_polish_fixture() -> Result<(), String> {
     use reshiki::engine::ChemistryEngine;
     let engine = LocalEngine::default();
     let imported = engine

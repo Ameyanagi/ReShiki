@@ -329,7 +329,7 @@ fn check_icon_pixels(
 
 #[tokio::test]
 #[ignore = "Icon baseline/candidate pixels; requires a headless renderer and artifact directory"]
-async fn icon_glyphs_match_captured_baseline() {
+async fn manual_icon_glyphs_match_captured_baseline() {
     let dir = std::path::PathBuf::from(
         std::env::var("RESHIKI_CANVAS_PIXELS")
             .expect("Set RESHIKI_CANVAS_PIXELS to the baseline artifact directory"),

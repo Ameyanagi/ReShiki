@@ -4,8 +4,7 @@
 //! Every run has an empty data folder, a temporary working folder and a
 //! watchdog, and inherits RESHIKI_INCHI_HELPER as CI sets it
 //! (.github/workflows/checks.yml).
-#[path = "common/headless.rs"]
-mod headless;
+use crate::headless;
 
 use reshiki::assistant::Proposal;
 use std::{fs, path::Path, process::Output, time::Duration};

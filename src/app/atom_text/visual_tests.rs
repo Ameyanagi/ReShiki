@@ -192,7 +192,7 @@ fn begin(app: &mut App, id: u64, input: &str) {
 
 #[tokio::test]
 #[ignore = "Opt-in application renderer, actual menu/pointer dispatch and matched evidence"]
-async fn atom_label_editor_layout_and_interaction_evidence() {
+async fn manual_atom_label_editor_layout_and_interaction_evidence() {
     let directory = std::env::var_os("RESHIKI_ATOM_LABEL_QA_DIR")
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|| std::env::temp_dir().join("reshiki-atom-label-qa"));

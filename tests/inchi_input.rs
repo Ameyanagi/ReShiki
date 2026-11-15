@@ -1,5 +1,4 @@
-#[path = "common/fixture.rs"]
-mod fixture;
+use crate::fixture;
 
 use reshiki::chemistry::{
     RDKIT_VERSION,

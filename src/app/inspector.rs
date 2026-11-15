@@ -2403,6 +2403,3 @@ mod tests;
 
 #[cfg(test)]
 mod feedback_tests;
-
-#[cfg(test)]
-mod feedback_visual_tests;

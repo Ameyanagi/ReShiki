@@ -991,7 +991,7 @@ pub(in crate::app::workspace) fn needs_naming(name: &str) -> bool {
 
 #[tokio::test]
 #[ignore = "Opt-in phase-4 model panel captures; set RESHIKI_MODEL_POLISH_QA_DIR"]
-async fn models3d_polish_layout_snapshots() {
+async fn manual_models3d_polish_layout_snapshots() {
     let mut renderer = <iced::Renderer as Headless>::new(
         iced::Font::with_name(reshiki::style::ui_font_family()),
         iced::Pixels(16.),

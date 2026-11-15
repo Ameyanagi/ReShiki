@@ -294,7 +294,7 @@ fn ring_controls_reject_large_selections_without_dropping_nonchemical_members() 
 
 #[test]
 #[ignore = "release-mode inspector benchmark"]
-fn inspector_workloads() {
+fn manual_inspector_workloads() {
     use std::{hint::black_box, time::Instant};
     fn measure(name: &str, mut work: impl FnMut()) {
         for _ in 0..3 {

@@ -20,7 +20,7 @@ fn measure(name: &str, mut operation: impl FnMut()) {
 
 #[test]
 #[ignore = "release-mode filesystem and parsing benchmark"]
-fn file_library_workloads() {
+fn manual_file_library_workloads() {
     let drawing: Document = serde_json::from_str(include_str!(
         "../../../assets/examples/shortcut-examples.rsk"
     ))

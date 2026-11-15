@@ -43,7 +43,7 @@ fn measure(name: &str, count: usize, mut run: impl FnMut(usize)) {
 
 #[tokio::test]
 #[ignore = "Canvas grid profiling; requires a headless renderer"]
-async fn dense_grid_cache() {
+async fn manual_dense_grid_cache() {
     let backend = std::env::var("RESHIKI_PERF_RENDERER").ok();
     let renderer = <Renderer as Headless>::new(
         iced::Font::with_name(reshiki::style::ui_font_family()),
@@ -83,7 +83,7 @@ async fn dense_grid_cache() {
 
 #[tokio::test]
 #[ignore = "Release-mode canvas workload profiling; requires a headless renderer"]
-async fn loaded_canvas_workloads() {
+async fn manual_loaded_canvas_workloads() {
     let backend = std::env::var("RESHIKI_PERF_RENDERER").ok();
     let renderer = <Renderer as Headless>::new(
         iced::Font::with_name(reshiki::style::ui_font_family()),
@@ -190,7 +190,7 @@ async fn loaded_canvas_workloads() {
 /// in view and with the whole drawing off-screen.
 #[tokio::test]
 #[ignore = "Release-mode idle redraw profiling; requires a headless renderer"]
-async fn idle_redraw_workloads() {
+async fn manual_idle_redraw_workloads() {
     let renderer = <Renderer as Headless>::new(
         iced::Font::with_name(reshiki::style::ui_font_family()),
         iced::Pixels(16.),
