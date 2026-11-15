@@ -158,15 +158,17 @@ pub struct Model {
     pub starred: HashSet<String>,
     pub log: Vec<Logged>,
     faults: Vec<Fault>,
-    /// `(method, path, repo, file, bytes)`: someone else's push that lands
-    /// just before the next such request.
-    pub races: Vec<(
-        &'static str,
-        String,
-        &'static str,
-        &'static str,
-        Option<Vec<u8>>,
-    )>,
+    pub races: Vec<Race>,
+}
+
+/// Someone else's push to `file` that lands just before the next
+/// `method path`.
+pub struct Race {
+    pub method: &'static str,
+    pub path: &'static str,
+    pub repo: &'static str,
+    pub file: &'static str,
+    pub bytes: Option<Vec<u8>>,
 }
 
 impl Model {
@@ -323,13 +325,12 @@ fn respond(model: &mut Model, base: &str, request: Logged) -> Reply {
             body: fault.body.into(),
         };
     }
-    if let Some(at) = model
-        .races
-        .iter()
-        .position(|race| race.0 == method && race.1 == path)
-    {
-        let (.., repo, file, bytes) = model.races.remove(at);
-        model.repo(repo).remote_commit(file, bytes.as_deref());
+    let race = |race: &Race| race.method == method && race.path == path;
+    if let Some(at) = model.races.iter().position(race) {
+        let race = model.races.remove(at);
+        model
+            .repo(race.repo)
+            .remote_commit(race.file, race.bytes.as_deref());
     }
     let parts: Vec<String> = path.split('/').skip(1).map(decode).collect();
     let parts: Vec<&str> = parts.iter().map(String::as_str).collect();

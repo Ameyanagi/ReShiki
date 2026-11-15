@@ -127,14 +127,15 @@ async fn a_drawing_downloads_with_its_blob_and_commit() {
     assert_eq!(got.blob, crate::github::mock::sha(&got.bytes));
     assert_eq!(Some(got.commit), mock.model().repo("lab-notes").head());
     // The file's own bytes are asked for, not base64 in JSON.
-    let model = mock.model();
-    let blob = model
-        .log
-        .iter()
-        .find(|one| one.path.contains("/git/blobs/"))
-        .unwrap();
-    assert_eq!(blob.headers["accept"], "application/vnd.github.raw+json");
-    drop(model);
+    let accept = {
+        let model = mock.model();
+        let blob = model
+            .log
+            .iter()
+            .find(|one| one.path.contains("/git/blobs/"));
+        blob.unwrap().headers["accept"].clone()
+    };
+    assert_eq!(accept, "application/vnd.github.raw+json");
     let gone = api::download(&client, &repo, "main", "scheme/gone.rsk").await;
     assert_eq!(gone, Err(Error::NotFound));
 }

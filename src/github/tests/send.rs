@@ -2,7 +2,7 @@ use crate::github::{
     Error, Repo, RepoKey,
     api::Download,
     client::{Client, FILE_LIMIT},
-    mock::{self, LOGIN, Mock},
+    mock::{self, LOGIN, Mock, Race},
     send::{self, Choice, Outgoing, SendOutcome, default_message},
     workcopy::{self, FileState, RepoState},
 };
@@ -290,13 +290,13 @@ async fn a_send_whose_reply_was_lost_is_not_sent_twice() {
 async fn a_head_that_moves_during_the_send_is_tried_again() {
     let (mock, client) = notes(&[("a.rsk", b"old a"), ("b.rsk", b"old b")]).await;
     // Someone pushes b.rsk just before our branch update arrives.
-    mock.model().races.push((
-        "PATCH",
-        REFS.into(),
-        "notes",
-        "b.rsk",
-        Some(b"their b".to_vec()),
-    ));
+    mock.model().races.push(Race {
+        method: "PATCH",
+        path: REFS,
+        repo: "notes",
+        file: "b.rsk",
+        bytes: Some(b"their b".to_vec()),
+    });
     let files = [
         out("a.rsk", b"my a", Some(b"old a")),
         out("b.rsk", b"my b", Some(b"old b")),
