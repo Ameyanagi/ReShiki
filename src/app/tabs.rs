@@ -651,6 +651,7 @@ impl App {
         if let Some(index) = untouched.filter(|_| !self.tab.reusable()) {
             self.select_tab(index);
         }
+        #[cfg(not(target_arch = "wasm32"))]
         let tabs = self.strip().count();
         self.target_tab();
         #[cfg(not(target_arch = "wasm32"))]

@@ -275,6 +275,10 @@ pub(super) enum Placement {
     Center,
     Top,
     /// Centered, and only as tall as its content.
+    #[cfg_attr(
+        target_arch = "wasm32",
+        expect(dead_code, reason = "Only the GitHub dialogs fit their content")
+    )]
     Fit,
 }
 

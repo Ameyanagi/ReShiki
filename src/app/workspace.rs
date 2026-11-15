@@ -3098,6 +3098,10 @@ const SEGMENT_MARGIN: f32 = 10.;
 const SEGMENT_GAP: f32 = 2.;
 /// The History clock after the text tabs of a GitHub drawing: its 14 px glyph
 /// and padding. Beside it the tab labels are 11 px.
+#[cfg_attr(
+    target_arch = "wasm32",
+    expect(dead_code, reason = "The browser editor has no GitHub drawings")
+)]
 const HISTORY_SEGMENT: f32 = 18.;
 /// A tab segment's share of the strip: its label's width plus the same
 /// padding for every segment.

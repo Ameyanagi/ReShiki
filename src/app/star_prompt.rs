@@ -617,6 +617,7 @@ impl App {
 }
 
 /// The status after a one-click star.
+#[cfg(not(target_arch = "wasm32"))]
 pub(super) fn starred(login: Option<&str>) -> String {
     match login {
         Some(login) => format!("Starred ReShiki on GitHub as @{login}. Thank you!"),
