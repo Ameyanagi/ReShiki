@@ -92,6 +92,8 @@ impl App {
         self.appearance.two_decimal_weight = enabled;
         // Mol. Wt. captions in every tab change at once, in one Undo step each.
         // During a preview or a text draft they change with the next edit.
+        // Syncing a selected caption's text box leaves the inspector as shown.
+        let inspector = (self.inspector_open, self.inspector_tab);
         self.each_tab(|app| {
             let tab = &app.tab;
             if !tab.busy
@@ -107,6 +109,7 @@ impl App {
                 app.sync_typography();
             }
         });
+        (self.inspector_open, self.inspector_tab) = inspector;
         if let Err(error) = self.appearance.save() {
             self.status = format!("Could not save molecular weight display preference: {error}");
             self.error = true;

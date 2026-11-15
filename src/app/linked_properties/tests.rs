@@ -84,10 +84,16 @@ fn weight_captions_in_other_tabs_follow_the_setting() {
     let atoms = ethanol(&mut app);
     app.appearance.two_decimal_weight = true;
     let _ = app.update(Message::ToggleProperty(atoms, Property::Weight));
+    app.tab.selected = vec![app.tab.doc.property_captions[0].annotation];
+    app.sync_typography();
     app.add_tab();
+    app.inspector_open = false;
     app.view_action(TwoDecimalWeight(false));
+    // The selected caption's text box follows; the front tab's inspector stays shut.
+    assert!(!app.inspector_open);
     app.select_tab(0);
     assert_eq!(caption(&app), Some("Mol. Wt.: 46.069"));
+    assert_eq!(app.tab.caption, "Mol. Wt.: 46.069");
     let _ = app.update(Message::Undo);
     assert_eq!(caption(&app), Some("Mol. Wt.: 46.07"));
 }
