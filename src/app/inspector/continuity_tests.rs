@@ -489,7 +489,7 @@ async fn rendered_panel_keeps_whole_mass_and_counts_only_the_whole_drawing() {
     settle(&mut app, false).await;
     let panel_text = |app: &App, renderer: &mut iced::Renderer| {
         let mut ui = iced_runtime::UserInterface::build(
-            app.molecular_section(),
+            app.molecular_section(app.opened_section()),
             iced::Size::new(300., 800.),
             iced_runtime::user_interface::Cache::new(),
             renderer,

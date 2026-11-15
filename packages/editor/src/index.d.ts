@@ -1,14 +1,34 @@
-/** Formats a structure or drawing can be read from. `rsk` is a native
- * ReShiki drawing, `cdx` the binary ChemDraw file, `rsmi` reaction SMILES;
- * `auto` tells the text formats apart. */
+/** Formats a structure or drawing can be read from. `rsk` (also `reshiki`,
+ * the name the MCP tools and the CLI use) is a native ReShiki drawing, `cdx`
+ * the binary ChemDraw file, `rsmi` reaction SMILES; `auto` tells the text
+ * formats apart. */
 export type InputFormat =
-  "rsk" | "mol" | "smiles" | "inchi" | "cdxml" | "cdx" | "rxn" | "rsmi" | "auto";
+  "rsk" | "reshiki" | "mol" | "smiles" | "inchi" | "cdxml" | "cdx" | "rxn" | "rsmi" | "auto";
 
 /** Outputs returned as bytes. */
 export type BinaryFormat = "png" | "pdf" | "cdx";
 /** Outputs returned as text. */
-export type TextFormat = "rsk" | "svg" | "mol" | "smiles" | "inchi" | "cdxml" | "rxn" | "rsmi";
+export type TextFormat =
+  "rsk" | "reshiki" | "svg" | "mol" | "smiles" | "inchi" | "cdxml" | "rxn" | "rsmi";
 export type OutputFormat = BinaryFormat | TextFormat;
+
+/** The `code` of every Error these functions reject with, as the MCP tools
+ * and the CLI report the same failure: `invalid_arguments` for a format or
+ * option that is not accepted, `failed` when the structure cannot be read,
+ * drawn or written. */
+export type ErrorCode = "invalid_arguments" | "failed";
+
+/** What every function here rejects with. */
+export interface ReShikiError extends Error {
+  code: ErrorCode;
+}
+
+export interface SvgOptions {
+  /** `outline` (the default) turns SVG text into paths, for the same
+   * appearance in every viewer; `live` keeps text elements. The MCP tools,
+   * the CLI and Python name this option `svg_text`. Other formats ignore it. */
+  svgText?: "outline" | "live";
+}
 
 /** Text is read as UTF-8; `cdx` input must be bytes. */
 export type Input = string | Uint8Array;
@@ -35,21 +55,35 @@ export function init(
 ): Promise<void>;
 
 /** Read a drawing or structure, returning its native drawing and any import
- * warnings. Rejects with an Error carrying the app's message when unreadable. */
+ * warnings. Rejects with a ReShikiError carrying the app's message when
+ * unreadable. */
 export function read(data: Input, format: InputFormat): Promise<ReadResult>;
 
 /** Convert between formats. svg, png and pdf are figures as the desktop's
- * Export makes them. Rejects with an Error carrying the app's message. */
-export function convert(data: Input, from: InputFormat, to: BinaryFormat): Promise<Uint8Array>;
-export function convert(data: Input, from: InputFormat, to: TextFormat): Promise<string>;
+ * Export makes them; SVG text is outlined unless `svgText` is `live`.
+ * Rejects with a ReShikiError carrying the app's message. */
+export function convert(
+  data: Input,
+  from: InputFormat,
+  to: BinaryFormat,
+  options?: SvgOptions,
+): Promise<Uint8Array>;
+export function convert(
+  data: Input,
+  from: InputFormat,
+  to: TextFormat,
+  options?: SvgOptions,
+): Promise<string>;
 export function convert(
   data: Input,
   from: InputFormat,
   to: OutputFormat,
+  options?: SvgOptions,
 ): Promise<string | Uint8Array>;
 
-/** The editor's SVG preview, with a transparent surround. */
-export function renderSvg(data: Input, format: InputFormat): Promise<string>;
+/** The editor's SVG preview, with a transparent surround; text is outlined
+ * unless `svgText` is `live`. */
+export function renderSvg(data: Input, format: InputFormat, options?: SvgOptions): Promise<string>;
 
 /** The editor's PNG preview on white, scaled up to 3x and down to fit. */
 export function renderPng(

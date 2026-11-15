@@ -1,6 +1,6 @@
 # Bond tools and exchange
 
-Added 2026-09-20. The bond palette and contextual menu now offer **17 presets**. Single, double and triple bonds have direct toolbar buttons. Other styles open from the separate bond palette. Select a bond to change its preset, RGB color and double-line position in Properties. The drawing canvas, SVG, PDF and PNG use the same geometry.
+The bond palette and contextual menu offer **17 presets**. Single, double and triple bonds have direct toolbar buttons. Other styles open from the separate bond palette. Select a bond to change its preset, RGB color and double-line position in Properties. The drawing canvas, SVG, PDF and PNG use the same geometry.
 
 | Preset                                            | Meaning in ReShiki                                                             |
 | ------------------------------------------------- | ------------------------------------------------------------------------------ |
@@ -39,7 +39,7 @@ Export marks such a metal with ChemDraw's no-stereocentre flag (`AS="N"`). On im
 
 ### Checking and redrawing stereochemistry
 
-**Check drawing** reports stereobonds with no effect or a probably reversed narrow end, ambiguous wedge geometry, conflicting wedges, and undefined stereocentres or stereogenic double bonds. The notices select the affected atoms and bonds; clicking a notice in **Stereochemistry** selects that item again. **Reverse** fixes the probably reversed bonds in one Undo step. Explicitly unknown stereochemistry, such as a wavy bond, is excluded from the undefined count.
+**Check drawing** reports stereobonds with no effect or a probably reversed narrow end, ambiguous wedge geometry, conflicting wedges, and undefined stereocentres or stereogenic double bonds. The notices select the affected atoms and bonds. Until the drawing changes, the **Check drawing** button shows how many there are, also after you switch tabs and back. Clicking it opens the list, which scrolls when it is long. Click a notice there or in **Stereochemistry** to select that item again; its atoms blink on the canvas, and the view moves to them if they are off screen. **Check again** in the list runs the check again. **Reverse** fixes the probably reversed bonds in one Undo step. Explicitly unknown stereochemistry, such as a wavy bond, is excluded from the undefined count.
 
 Enable **IUPAC style notes in Check drawing** in Stereochemistry for optional advice about bonds between stereocentres, mixed hash styles, alternate-only depictions, wavy bonds beside alkenes, re-entrant ring atoms and T-shaped geometry. This preference starts off and does not alter how bonds are interpreted.
 

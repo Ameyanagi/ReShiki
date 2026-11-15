@@ -441,6 +441,23 @@ impl Context {
         result
     }
 
+    /// Awaits `future` between two checkpoints and drops it as soon as the
+    /// call is cancelled, for work that stops when its future is dropped.
+    pub async fn cancellable<T>(&self, future: impl Future<Output = T>) -> Result<T, OpError> {
+        self.checkpoint()?;
+        let mut future = pin!(future);
+        let mut cancel = pin!(self.token.cancelled());
+        let value = poll_fn(|cx| {
+            if cancel.as_mut().poll(cx).is_ready() {
+                return Poll::Ready(None);
+            }
+            future.as_mut().poll(cx).map(Some)
+        })
+        .await;
+        self.checkpoint()?;
+        value.ok_or_else(cancelled)
+    }
+
     /// Runs the operation's effect `f` on the blocking pool after a final
     /// checkpoint. The operation is committed from then on: there is no
     /// checkpoint after `f`, and every later checkpoint passes. A panic in

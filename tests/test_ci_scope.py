@@ -89,11 +89,22 @@ class CheckScopeTests(unittest.TestCase):
         full, reduced = matrices(True), matrices(False)
         for job, rows in full.items():
             with self.subTest(job=job):
-                self.assertTrue(any(row["os"].startswith("macos") for row in rows))
+                # The macOS lint job runs the Python checks, so `python` has no macOS row.
+                self.assertEqual(
+                    any(row["os"].startswith("macos") for row in rows), job != "python"
+                )
                 self.assertEqual(
                     reduced[job], [row for row in rows if not row["os"].startswith("macos")]
                 )
                 self.assertTrue(reduced[job])
+
+    def test_macos_lint_job_replaces_the_macos_python_and_arm64_geometry_jobs(self):
+        full = matrices(True)
+        # One macOS runner fewer per job: `rust-lint-goldens` runs these on macos-15.
+        self.assertIn("macos-15", [row["os"] for row in full["rust"]])
+        self.assertNotIn("aarch64-apple-darwin", [row["target"] for row in full["geometry"]])
+        self.assertIn("x86_64-apple-darwin", [row["target"] for row in full["geometry"]])
+        self.assertEqual(len(full["geometry"]), 5)
 
 
 if __name__ == "__main__":

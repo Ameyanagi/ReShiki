@@ -22,7 +22,7 @@ Copy a chemical drawing, click the assistant prompt and press **Cmd/Ctrl+V**, or
 Pasting attaches the image and shows its thumbnail. Add instructions, then choose **Send** to let the AI agent draw the molecular structures. You can also send just the image. The assistant compares its drawing with your source before offering an editable preview. **＋ → Remove attached image** clears the source; **New conversation** also clears it. Text-only paste works normally.
 
 <Screenshot
-  src="/manual/assistant-image-paste.png"
+  src="/manual/assistant-image-paste.webp"
   alt="The compact assistant shows an attached ferrocene image beside the prompt, GPT-6 Astra, and an enabled Send button. Pasting leaves the drawing unchanged."
 />
 
@@ -46,7 +46,7 @@ A five-minute inactivity timeout renews with relevant progress; each model turn 
 **Preparing your scheme…**, an elapsed timer, and **Stop** appear immediately. The activity card then shows a composition outline, completed structure counts, an editable draft preview, and the quality-check stage. During a quiet model response, the timer remains visible; the app does not invent a completion percentage.
 
 <Screenshot
-  src="/manual/assistant-progress.png"
+  src="/manual/assistant-progress.webp"
   alt="The assistant activity card shows generation progress, an elapsed timer, and Stop while the drawing remains available."
 />
 
@@ -76,7 +76,7 @@ Ask for compact long chains when they would overwhelm the figure. The underlying
 Use **Overview** to see the composition, or select a reaction or molecule to inspect it more closely. Draft controls let you move parts and adjust arrow lengths. Editing an intermediate draft stops generation so the assistant cannot replace your adjustments.
 
 <Screenshot
-  src="/manual/assistant-review.png"
+  src="/manual/assistant-review.webp"
   alt="A completed assistant draft with its visual-review result, editable preview controls, and Apply and Discard."
 />
 
@@ -91,8 +91,10 @@ Corrections are bounded. If review fails or problems remain, the preview keeps t
 | **Review edits**     | Inspect the draft, then **Apply** or **Discard** it.                                            |
 | **Accept all edits** | Apply automatically only after the exact final draft passes review with no unresolved findings. |
 
+A draft that replaces objects outside your selection always waits for **Apply**, in either mode.
+
 <Screenshot
-  src="/manual/assistant-modes.png"
+  src="/manual/assistant-modes.webp"
   alt="Review edits and Accept all edits are available beside the composer."
 />
 
@@ -101,7 +103,7 @@ Use **Review → Replace selection** to replace the selected part. Changes made 
 Ask for a follow-up, such as “Move the conditions above the arrow,” or use **Improve** on a draft, selection, or existing drawing. The assistant reviews the rendered result and proposes editable layout changes.
 
 <Screenshot
-  src="/manual/assistant-auto.png"
+  src="/manual/assistant-auto.webp"
   alt="A reviewed assistant scheme applied to the canvas remains editable and can be undone."
 />
 
@@ -110,12 +112,12 @@ Ask for a follow-up, such as “Move the conditions above the arrow,” or use *
 The assistant defaults to **GPT-6 Astra** when it is available in your Codex account. If it is unavailable, ReShiki uses your account’s default model. Choosing a model explicitly saves that choice. Open the effort menu to choose reasoning effort and service tier. Defaults are **Low** and **Standard**.
 
 <Screenshot
-  src="/manual/assistant-model.png"
+  src="/manual/assistant-model.webp"
   alt="The model selector offers the models available to the connected account."
 />
 
 <Screenshot
-  src="/manual/assistant-effort.png"
+  src="/manual/assistant-effort.webp"
   alt="Reasoning effort and service tier are separate choices."
 />
 
@@ -125,7 +127,7 @@ Select ring atoms and choose the left **3D tilt** tool. Drag vertically for X or
 
 **Add centroid** creates a selectable ring-centre anchor with an editor-only marker that follows the selected atoms. A dashed contact can connect that anchor to a metal. **Dummy atom (\*)** places an explicit wildcard attachment point; it is not a carbon atom. Native ReShiki files preserve centroids and projection depth. Figures preserve their appearance. Molecular export of centroid diagrams is blocked because these drawing contacts do not encode validated multicentre chemical bonds.
 
-Typed **multi-center** and **variable attachment** points are available separately; they retain all-target or alternative-target meaning through supported exchange. A legacy drawing centroid is never silently promoted to either type. See [attachment comparison](/developer/chemdraw-attachment-comparison/). The assistant can use these operations while reconstructing an image, keeping flat drawings flat unless perspective is visible or requested. Such diagrams always require manual review before applying.
+Typed **multi-center** and **variable attachment** points are available separately; they retain all-target or alternative-target meaning through supported exchange. A legacy drawing centroid is never silently promoted to either type. See [attachment comparison](https://github.com/Ameyanagi/ReShiki/blob/main/docs/changes/chemdraw-attachment-comparison.md). The assistant can use these operations while reconstructing an image, keeping flat drawings flat unless perspective is visible or requested. Such diagrams always require manual review before applying.
 
 Native/figure output retains front-bond emphasis. CDXML/CDX rejects that emphasis until it can be preserved without being interpreted as stereochemistry; turn off **Front bonds** for supported editable export.
 

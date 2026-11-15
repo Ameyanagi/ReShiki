@@ -72,7 +72,7 @@ one Undo step.
 You can also select the donor and the metal, or whole ligands with the metal,
 and press **Ctrl+J** (**⌘J** on macOS). In keyboard
 drawing, mark the donor with **[**, move to the metal, then choose
-**Coordinate }** or press **}** (Shift+] on a US keyboard). See
+**Coordinate** or press **}** (Shift+] on a US keyboard). See
 [keyboard drawing](3d-keyboard-drawing.md).
 
 Each contact you add, or each Join, is one Undo step, and adding a contact that
@@ -174,6 +174,6 @@ Direction and donor-valence semantics follow the
 [RDKit Book](https://github.com/rdkit/rdkit/blob/master/Docs/Book/RDKit_Book.rst).
 Revvity also documents unified coordination/dative behavior in its
 [official release notes](https://revvitysignals.com/whats-new/all?sort_order=ASC).
-The [desktop validation](coordination-desktop-validation.md) and the
+The [desktop validation](changes/coordination-desktop-validation.md) and the
 [selected-pair shortcut record](changes/coordination-join-shortcut.md) describe
 the checks for this feature.

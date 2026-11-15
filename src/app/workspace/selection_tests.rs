@@ -121,14 +121,58 @@ fn short_rows_fold_commands_then_arrange_then_summary_then_name() {
 }
 
 #[test]
+fn keyboard_commands_need_a_target_atom_and_a_mark() {
+    use reshiki::keyboard_drawing::Target;
+    let (mut app, _) = App::new();
+    app.tab.doc = reshiki::rings::Preset::Regular.document(42., false);
+    let ids: Vec<_> = app.tab.doc.atoms.iter().map(|atom| atom.id).collect();
+    assert!(app.keyboard_drawing_active());
+    let shown = |app: &App| -> Vec<(&'static str, bool, Option<String>)> {
+        app.context_commands()
+            .iter()
+            .filter(|c| matches!(c.message, Message::KeyboardDrawing(_)))
+            .map(|c| (c.label, c.enabled, c.keycap()))
+            .collect()
+    };
+    let center = app.tab.camera.center;
+    app.tab
+        .keyboard_drawing
+        .set_target(Target::Blank(center), &app.tab.doc);
+    assert_eq!(shown(&app), []);
+    app.tab
+        .keyboard_drawing
+        .set_target(Target::Atom(ids[0]), &app.tab.doc);
+    assert_eq!(shown(&app), [("Mark", true, Some("[".into()))]);
+    app.tab.keyboard_drawing.mark(ids[0]);
+    let same = [
+        ("Mark", true, Some("[".into())),
+        ("Connect", false, Some("]".into())),
+        ("Coordinate", false, Some("}".into())),
+    ];
+    assert_eq!(shown(&app), same);
+    app.tab
+        .keyboard_drawing
+        .set_target(Target::Atom(ids[2]), &app.tab.doc);
+    let other: Vec<_> = shown(&app)
+        .into_iter()
+        .map(|(_, enabled, _)| enabled)
+        .collect();
+    assert_eq!(other, [true, true, true]);
+    // They lead the row, so they are the last to fold into ⋯.
+    app.tab.selected = vec![ids[2]];
+    assert!(matches!(
+        app.context_commands()[0].message,
+        Message::KeyboardDrawing(super::super::keyboard_drawing::Action::Mark)
+    ));
+}
+
+#[test]
 fn row_commands_leave_clipboard_to_menus_and_shortcuts() {
     let (mut app, _) = App::new();
     app.tab.doc = reshiki::rings::Preset::Regular.document(42., false);
+    // Keyboard drawing has no target atom or mark yet: nothing to mark or connect.
     let labels: Vec<_> = app.context_commands().iter().map(|c| c.label).collect();
-    assert_eq!(
-        labels,
-        ["Mark [", "Connect ]", "Coordinate }", "3D optimize…"]
-    );
+    assert_eq!(labels, ["3D optimize…"]);
     assert!(app.context_commands().iter().all(|command| !matches!(
         command.message,
         Message::Copy(_) | Message::CopyImage | Message::CopyAs(_) | Message::Paste
@@ -138,7 +182,8 @@ fn row_commands_leave_clipboard_to_menus_and_shortcuts() {
     ));
     assert!(!app.keyboard_drawing_active());
     let labels: Vec<_> = app.context_commands().iter().map(|c| c.label).collect();
-    assert_eq!(labels, ["3D optimize…", "Keyboard drawing"]);
+    assert_eq!(labels, ["Keyboard drawing", "3D optimize…"]);
+    // Selection commands first, global ones last, so these fold first.
     app.tab.selected = app.tab.doc.all_ids();
     let labels: Vec<_> = app.context_commands().iter().map(|c| c.label).collect();
     assert_eq!(
@@ -149,8 +194,8 @@ fn row_commands_leave_clipboard_to_menus_and_shortcuts() {
             "Move & attach…",
             "Coordinate in place…",
             "Group",
-            "3D optimize…",
-            "Keyboard drawing"
+            "Keyboard drawing",
+            "3D optimize…"
         ]
     );
     let _ = app.update(Message::Group);
@@ -164,8 +209,8 @@ fn row_commands_leave_clipboard_to_menus_and_shortcuts() {
             "Coordinate in place…",
             "Group",
             "Ungroup",
-            "3D optimize…",
-            "Keyboard drawing"
+            "Keyboard drawing",
+            "3D optimize…"
         ]
     );
     assert!(

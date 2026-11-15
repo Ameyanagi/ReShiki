@@ -416,7 +416,7 @@ fn isolated_hydrogen_halides_read_hydrogen_first_and_respect_overrides() {
         let id = doc.add_atom(element, Point::default());
         doc.atom_mut(id).unwrap().label_h = 1;
         assert_eq!(
-            appendage_position(doc.atom(id).unwrap(), &doc),
+            appendage_position(doc.atom(id).unwrap(), &doc, None),
             HydrogenPosition::Left
         );
         let mut text: Vec<_> = crate::scene::primitives(&doc)
@@ -434,20 +434,20 @@ fn isolated_hydrogen_halides_read_hydrogen_first_and_respect_overrides() {
 
         doc.atom_mut(id).unwrap().display.hydrogen_position = HydrogenPosition::Right;
         assert_eq!(
-            appendage_position(doc.atom(id).unwrap(), &doc),
+            appendage_position(doc.atom(id).unwrap(), &doc, None),
             HydrogenPosition::Right
         );
         doc.atom_mut(id).unwrap().display.hydrogen_position = HydrogenPosition::Auto;
         doc.atom_mut(id).unwrap().label_h = 2;
         assert_eq!(
-            appendage_position(doc.atom(id).unwrap(), &doc),
+            appendage_position(doc.atom(id).unwrap(), &doc, None),
             HydrogenPosition::Right
         );
         doc.atom_mut(id).unwrap().label_h = 1;
         let carbon = doc.add_atom("C", Point::new(-42., 0.));
         doc.add_bond(id, carbon, 1, "plain");
         assert_eq!(
-            appendage_position(doc.atom(id).unwrap(), &doc),
+            appendage_position(doc.atom(id).unwrap(), &doc, None),
             HydrogenPosition::Right
         );
     }

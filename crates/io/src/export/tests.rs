@@ -296,6 +296,107 @@ fn raster_budget_rejects_invalid_and_extreme_sizes_without_allocating() {
 }
 
 #[test]
+fn png_sides_are_capped_whatever_the_pixel_count() {
+    // One long line: 2.6 million pixels at 72 dpi, but 43,688 of them wide.
+    assert_eq!(
+        png_dimensions(58_250., 80., RasterBudget::FILE)
+            .err()
+            .as_deref(),
+        Some("Drawing is too large for a PNG even at 72 dpi; use SVG or PDF.")
+    );
+    // The widest PNG, and one that steps down a resolution to stay within it.
+    assert_eq!(
+        png_dimensions(43_689., 80., RasterBudget::FILE),
+        Ok((FILE_SIDE, 60, 72))
+    );
+    assert_eq!(
+        png_dimensions(3_000., 80., RasterBudget::FILE),
+        Ok((18_750, 500, 600))
+    );
+}
+
+#[test]
+fn an_oversized_png_is_refused_before_the_scene_is_written() {
+    use crate::document::Point;
+    let written = || SCENES.with(std::cell::Cell::get);
+    let mut atoms = Document::default();
+    atoms.add_atom("C", Point::default());
+    atoms.add_atom("N", Point::new(200_000., 200_000.));
+    // One line of text, far shorter than a text box holds, beside an atom.
+    let mut text = Document::default();
+    text.add_atom("C", Point::default());
+    text.annotations.push(crate::document::Annotation {
+        id: text.next_id(),
+        position: Point::default(),
+        text: "x".repeat(10_000),
+        format: Default::default(),
+    });
+    let mut text_alone = text.clone();
+    text_alone.atoms.clear();
+    let mut graphic = Document::default();
+    graphic.graphics.push(crate::graphics::Graphic::dragged(
+        1,
+        crate::graphics::GraphicKind::Rectangle,
+        Point::default(),
+        Point::new(200_000., 200_000.),
+        Default::default(),
+        Default::default(),
+        false,
+    ));
+    for doc in [&atoms, &text, &text_alone, &graphic] {
+        doc.validate().unwrap();
+        let before = written();
+        for result in [
+            figure(doc, "png"),
+            figure_with_budget(doc, "png", 1_000),
+            clipboard_figure(doc, "png"),
+        ] {
+            let error = result.err().unwrap();
+            assert!(error.starts_with("Drawing is too large for a"), "{error}");
+        }
+        assert_eq!(written(), before);
+    }
+    // Vector formats have no pixel budget.
+    let before = written();
+    assert!(figure(&atoms, "svg").is_ok());
+    assert_eq!(written(), before + 1);
+}
+
+#[test]
+fn outlined_svg_is_never_smaller_than_its_floor() {
+    let doc = Document::from_json(include_bytes!(
+        "../../../../assets/examples/shortcut-examples.rsk"
+    ))
+    .unwrap();
+    let tree = parse_svg(scene::svg_with_background(&doc)).unwrap();
+    let (floor, outlined) = (
+        outlined_floor(tree.root()),
+        office_svg(&tree).unwrap().len(),
+    );
+    // Close enough to refuse a figure of twice the limit.
+    assert!(
+        outlined / 2 < floor && floor <= outlined,
+        "{floor} {outlined}"
+    );
+    let limit = |max_bytes| {
+        render_drawing(
+            &doc,
+            "svg-office",
+            false,
+            RasterBudget::FILE,
+            max_bytes,
+            None,
+        )
+        .map(|figure| figure.bytes.len())
+    };
+    assert_eq!(limit(floor - 1), Err(OVER_BYTES.into()));
+    // A limit the floor fits is left to the caller, which has the exact size.
+    assert_eq!(limit(floor), Ok(outlined));
+    // Live text is the scene as written: there is nothing to save.
+    assert!(render_drawing(&doc, "svg", false, RasterBudget::FILE, 1, None).is_ok());
+}
+
+#[test]
 fn windows_clipboard_resolution_fits_dib_office_and_native_picture_limits() {
     let budget = RasterBudget::clipboard(true);
     assert_eq!(png_dimensions(100., 100., budget), Ok((1250, 1250, 1200)));
@@ -545,6 +646,27 @@ fn clipboard_png_keeps_the_fixed_preferred_resolution() {
         detail.ends_with(&format!("at {} dpi", crate::style::DEFAULT.png_dpi)),
         "{detail}"
     );
+}
+
+#[test]
+fn png_fits_sizes_a_scene_to_the_pixel_as_the_parsed_svg_does() {
+    use crate::document::Point;
+    // At 1200 dpi this is 10,822 x 7,392 pixels, just under 80 million. Scaling
+    // in another order than the SVG parser rounds the width up to 10,823.
+    let (lo, hi) = (Point::new(0., 0.), Point::new(1893.8502, 1293.43));
+    let budget = RasterBudget::clipboard(false);
+    let points = crate::style::DEFAULT.points_per_world();
+    let tree = parse_svg(format!(
+        "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 1 1\" width=\"{}pt\" height=\"{}pt\"/>",
+        hi.x * points,
+        hi.y * points
+    ))
+    .unwrap();
+    assert_eq!(
+        png_dimensions(tree.size().width(), tree.size().height(), budget),
+        Ok((10_822, 7_392, crate::style::DEFAULT.png_dpi))
+    );
+    assert_eq!(png_fits((lo, hi), budget), Ok(()));
 }
 
 #[test]

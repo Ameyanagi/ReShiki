@@ -177,14 +177,12 @@ impl App {
             RowCommand {
                 label: "Join",
                 menu: "Join selected atoms or bonds",
-                hint: JOIN_COMMAND_HINT,
                 message: Message::Shortcut(shortcuts::Action::Join),
                 enabled: active && atoms && self.tab.selected.len() >= 2,
             },
             RowCommand {
                 label: "Merge atoms",
                 menu: "Merge selected atoms",
-                hint: "Merge three or more atoms into the first selected atom; surrounding atoms stay in place",
                 message: Message::Shortcut(shortcuts::Action::MergeAtoms),
                 enabled: active && atoms && self.tab.selected.len() >= 3,
             },
@@ -204,14 +202,12 @@ impl App {
             RowCommand {
                 label: "Move & attach…",
                 menu: "Move & attach…",
-                hint: "Join the selection to another structure at an atom or bond",
                 message: Message::Join(Action::Begin),
                 enabled: atoms,
             },
             RowCommand {
                 label: "Coordinate in place…",
                 menu: "Coordinate in place…",
-                hint: "Pick a donor (N, O, S or P), then a metal; atoms and hydrogens stay in place",
                 message: Message::Join(Action::BeginCoordination),
                 enabled: atoms,
             },

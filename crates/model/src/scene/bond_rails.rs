@@ -71,7 +71,7 @@ pub(crate) fn bond_rails(faces: &FaceIndex<'_>, bond: &Bond) -> Vec<BondRail> {
                                 };
                                 if !neighbor.is_covalent()
                                     || next == other
-                                    || !faces.doc().bond_visible(id, next)
+                                    || !faces.graph().bond_visible(id, next)
                                 {
                                     return None;
                                 }

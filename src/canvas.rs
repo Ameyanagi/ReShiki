@@ -108,6 +108,8 @@ use grid::grid_dots;
 #[cfg(test)]
 use hit::{bond_target, bond_target_with, hit_selection, region_selection};
 #[cfg(test)]
+pub(crate) use previews::PREVIEWS_BUILT;
+#[cfg(test)]
 use previews::PreviewState;
 #[cfg(test)]
 use render::draw_primitives;
@@ -745,6 +747,7 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
             state.geometry.take();
             state.text.take();
         }
+        let _frame = cache::Frame::begin(&state.scene, self.doc);
         let paper = self.guides.paper(bounds);
         let offset = Vector::new(paper.x - bounds.x, paper.y - bounds.y);
         let mut frame = layered::Frame::clipped(

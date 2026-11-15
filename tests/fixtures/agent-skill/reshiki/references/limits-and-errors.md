@@ -43,14 +43,14 @@ Default operation budgets, as reported by `info`.
 | `budget` | The call would exceed a budget. |
 | `timeout` | The call passed its deadline before it committed any change. |
 | `rejected` | Validation or the document's edit policy refused the change. |
-| `unsupported` | Reserved; no current tool returns it. |
+| `unsupported` | The host cannot do this, such as chemical naming in a host without it. |
 | `access_denied` | The file is outside the granted folders, has an extension the tool does not accept, or the operating system denied access. |
 | `failed` | The operation failed, for example on unreadable chemistry, a missing or existing file, an I/O error or an internal error. |
 | `cancelled` | The caller cancelled the request; no response is sent. |
 
 ## File-error reasons
 
-A file error's message starts with one of these reasons, followed by a colon.
+A file error carries one of these as `error.reason`; its message also starts with the reason and a colon.
 
 | Reason | Error code | Meaning |
 | --- | --- | --- |
@@ -76,10 +76,10 @@ Extensions accepted by `file_open` and `file_save`; a dash means unsupported.
 | `.reshiki` | `reshiki` | — |
 | `.moruno` | `reshiki` | — |
 | `.mol` | `mol` | `mol` |
-| `.rxn` | `rxn` | — |
-| `.rsmi` | `rsmi` | — |
+| `.rxn` | `rxn` | `rxn` |
+| `.rsmi` | `rsmi` | `rsmi` |
 | `.cdxml` | `cdxml` | `cdxml` |
-| `.cdx` | `cdx` | — |
+| `.cdx` | `cdx` | `cdx` |
 | `.smi` | `smiles` | `smiles` |
 | `.smiles` | `smiles` | `smiles` |
 | `.inchi` | `inchi` | `inchi` |

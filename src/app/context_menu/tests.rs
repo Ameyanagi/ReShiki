@@ -1079,25 +1079,25 @@ fn row_menus_toggle_and_explain_unavailable_arrange_commands() -> Result<(), Str
     assert!(run_item(&mut app, Page::Arrange, "Align needs 2 objects").is_err());
     assert_eq!(
         labels(&app, Page::More(2)),
-        ["Coordinate marked donor to active metal }", "3D optimize…"],
-        "⋯ takes commands from the end: the global mode folds first"
+        ["Group", "3D optimize…"],
+        "Default keyboard drawing folds the global commands first"
     );
     assert_eq!(
         labels(&app, Page::More(4)),
         [
-            "Mark atom [",
-            "Connect to marked atom ]",
-            "Coordinate marked donor to active metal }",
+            "Move & attach…",
+            "Coordinate in place…",
+            "Group",
             "3D optimize…"
         ],
-        "Keyboard commands fold before the selection commands, in row order"
+        "⋯ keeps the folded commands in row order"
     );
     let _ = app.update(Message::KeyboardDrawing(
         super::super::keyboard_drawing::Action::Leave,
     ));
     assert_eq!(
         labels(&app, Page::More(2)),
-        ["3D optimize…", "Keyboard drawing (F8)"],
+        ["Keyboard drawing", "3D optimize…"],
         "⋯ lists the folded commands in row order"
     );
     let _ = app.update(Message::ContextMenu(Action::Open(Page::Arrange, 300.)));

@@ -223,13 +223,15 @@ async fn race(host: &Arc<HeadlessHost>, first: Value, second: Value) -> [ToolRes
     results.try_into().unwrap()
 }
 
-/// A read of the store in the stage before the effect.
+/// A read of the store in the stage before the effect, or the commit.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Read {
     Receipt,
     /// The insert's source snapshot.
     Source,
     StepTarget,
+    /// The effect itself.
+    Commit,
 }
 
 /// A [`SessionStore`] that runs `hook` after each [`Read`].
@@ -278,12 +280,23 @@ impl Documents for Hooked {
         receipt
     }
 
+    fn fits(
+        &self,
+        who: &Principal,
+        handle: &DocHandle,
+        before: &Document,
+        doc: &Document,
+    ) -> Result<(), OpError> {
+        self.inner.fits(who, handle, before, doc)
+    }
+
     fn commit(
         &self,
         who: &Principal,
         handle: &DocHandle,
         change: Change,
     ) -> Result<Arc<ToolResult>, OpError> {
+        (self.hook)(Read::Commit);
         self.inner.commit(who, handle, change)
     }
 
@@ -972,4 +985,67 @@ async fn a_replacement_that_changes_nothing_fits_a_full_session() {
     // An edit that records a step still needs room for its undo frame.
     let (code, _) = apply_err(&host, delete(&document, &[1], 0, None)).await;
     assert_eq!(code, "budget");
+}
+
+/// S11: an edit over a budget is refused in the stage before the effect,
+/// ahead of reconciliation and the label precompute, not at the commit.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn an_edit_over_a_budget_is_refused_before_the_commit() {
+    for budgets in [
+        // The source's five objects are all a drawing may hold.
+        Budgets {
+            max_objects: 5,
+            ..Budgets::default()
+        },
+        // The target weighs 4 and the source 6, which leaves no room for
+        // the edited drawing's 9.
+        Budgets {
+            max_session_weight: 14,
+            ..Budgets::default()
+        },
+        // Room for the edited drawing, but not for the undo frame of 4 that
+        // the edit also keeps: 6 + 9 + 4 = 19.
+        Budgets {
+            max_session_weight: 16,
+            ..Budgets::default()
+        },
+        Budgets {
+            max_session_weight: 18,
+            ..Budgets::default()
+        },
+    ] {
+        let host = HeadlessHost::new("9.8.7", budgets);
+        let document = create(&host, chain(&["C", "C"], 0.));
+        let source = create(&host, chain(&["C", "C", "C"], 5.));
+        let committed = Arc::new(AtomicBool::new(false));
+        let applying = spawn_hooked(
+            &host,
+            request(),
+            insert(&document, &source, None, Some(0), None),
+            {
+                let committed = committed.clone();
+                move |at| {
+                    if at == Read::Commit {
+                        committed.store(true, Ordering::Relaxed);
+                    }
+                }
+            },
+        );
+        let error = bounded(applying).await.unwrap().unwrap_err();
+        assert_eq!(error.kind, ErrorKind::Budget);
+        assert!(!committed.load(Ordering::Relaxed), "{}", error.message);
+        assert_eq!(revision(&host, &document), 0);
+    }
+    // With room for all three, the edit is applied.
+    let host = HeadlessHost::new(
+        "9.8.7",
+        Budgets {
+            max_session_weight: 19,
+            ..Budgets::default()
+        },
+    );
+    let document = create(&host, chain(&["C", "C"], 0.));
+    let source = create(&host, chain(&["C", "C", "C"], 5.));
+    apply_ok(&host, insert(&document, &source, None, Some(0), None)).await;
+    assert_eq!(revision(&host, &document), 1);
 }

@@ -400,6 +400,73 @@ fn history_caps_estimated_bytes_but_keeps_the_minimum_steps() {
     assert_eq!(history.undo_frames().len(), History::MIN_STEPS);
 }
 #[test]
+fn history_releases_its_oldest_frames_down_to_the_steps_to_keep() {
+    let mut doc = Document::default();
+    doc.add_atom("C", Point::default());
+    let mut history = History::default();
+    for _ in 0..30 {
+        let before = doc.clone();
+        doc.atoms[0].position.x += 1.;
+        assert!(history.commit(before, &doc));
+    }
+    let frame = frame_bytes(&doc);
+    assert_eq!(history.bytes(), 30 * frame);
+    assert_eq!(history.release(0, 5), 0);
+    assert_eq!(history.release(frame + 1, 5), 2 * frame);
+    assert_eq!(history.undo_frames().len(), 28);
+    assert_eq!(history.release(usize::MAX, 5), 23 * frame);
+    assert_eq!(history.undo_frames().len(), 5);
+    assert_eq!(history.release(1, 5), 0);
+    // The newest step is the one that remains to undo.
+    assert!(history.undo(&mut doc));
+    assert_eq!(doc.atoms[0].position.x, 29.);
+}
+#[test]
+fn history_counts_redo_frames_and_releases_the_furthest_after_the_undo_frames() {
+    let mut doc = Document::default();
+    doc.add_atom("C", Point::default());
+    let mut history = History::default();
+    for _ in 0..10 {
+        let before = doc.clone();
+        doc.atoms[0].position.x += 1.;
+        assert!(history.commit(before, &doc));
+    }
+    let frame = frame_bytes(&doc);
+    for _ in 0..6 {
+        assert!(history.undo(&mut doc));
+    }
+    // Undoing moves frames to the redo side. They still count.
+    assert_eq!(history.bytes(), 10 * frame);
+    assert_eq!(
+        (history.undo_frames().len(), history.redo_frames().len()),
+        (4, 6)
+    );
+    assert_eq!(history.release(usize::MAX, 3), 7 * frame);
+    assert_eq!(
+        (history.undo_frames().len(), history.redo_frames().len()),
+        (0, 3)
+    );
+    // The nearest redo steps remain.
+    assert!(!history.undo(&mut doc));
+    while history.redo(&mut doc) {}
+    assert_eq!(doc.atoms[0].position.x, 7.);
+
+    // The limit of one history counts them as well.
+    history.max_bytes = 25 * frame;
+    for _ in 0..30 {
+        let before = doc.clone();
+        doc.atoms[0].position.x += 1.;
+        assert!(history.commit(before, &doc));
+    }
+    for _ in 0..25 {
+        assert!(history.undo(&mut doc));
+    }
+    history.max_bytes = 22 * frame;
+    assert!(history.redo(&mut doc));
+    assert_eq!(history.frames(), 22);
+    assert_eq!(history.redo_frames().len(), 22);
+}
+#[test]
 fn history_frames_count_arrow_node_buffers() {
     let mut doc = Document::default();
     doc.arrows.push(crate::document::Arrow::new(
@@ -582,4 +649,40 @@ fn custom_crossing_clearance_raises_the_saved_version() {
     let reopened = Document::from_native_file(&doc.file_json().unwrap()).unwrap();
     assert_eq!(reopened.version, crate::document::MULTI_NODE_ARROWS);
     assert_eq!(reopened.drawing_style.crossing_clearance_pt, 0.4);
+}
+
+#[test]
+fn annotation_text_is_capped_per_text_box_and_per_drawing() {
+    let mut doc = Document::default();
+    let add = |doc: &mut Document, bytes: usize| {
+        let id = doc.next_id();
+        doc.annotations.push(Annotation {
+            id,
+            position: Point::default(),
+            text: "x".repeat(bytes),
+            format: Default::default(),
+        });
+    };
+    add(&mut doc, MAX_ANNOTATION_TEXT);
+    assert_eq!(doc.validate(), Ok(()));
+    doc.annotations[0].text.push('x');
+    assert_eq!(
+        doc.validate().unwrap_err(),
+        "A text box can hold at most 64 KB of text"
+    );
+    let json = serde_json::to_vec(&doc).unwrap();
+    assert_eq!(
+        Document::from_json(&json).unwrap_err(),
+        "A text box can hold at most 64 KB of text"
+    );
+    doc.annotations[0].text.pop();
+    for _ in 1..MAX_DRAWING_TEXT / MAX_ANNOTATION_TEXT {
+        add(&mut doc, MAX_ANNOTATION_TEXT);
+    }
+    assert_eq!(doc.validate(), Ok(()));
+    add(&mut doc, 1);
+    assert_eq!(
+        doc.validate().unwrap_err(),
+        "A drawing can hold at most 1 MB of text"
+    );
 }

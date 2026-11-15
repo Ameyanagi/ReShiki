@@ -1,6 +1,6 @@
 //! SVG serialization of the scene primitives.
 
-use super::{Document, Primitive, STYLE, bounds, primitives};
+use super::{Document, Primitive, STYLE, bounds};
 
 fn escape(s: &str) -> String {
     s.replace('&', "&amp;")
@@ -9,8 +9,7 @@ fn escape(s: &str) -> String {
         .replace('"', "&quot;")
 }
 
-pub(super) fn render_svg(doc: &Document, background: bool) -> String {
-    let drawing = primitives(doc);
+pub(super) fn render_svg(doc: &Document, drawing: Vec<Primitive>, background: bool) -> String {
     let (lo, hi) = bounds(&drawing);
     let mut s = format!(
         "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"{} {} {} {}\" width=\"{}pt\" height=\"{}pt\">\n",

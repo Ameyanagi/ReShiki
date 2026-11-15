@@ -10,8 +10,8 @@
 //! - A name outside the catalog is -32602 `Unknown tool: <name>`, and so is
 //!   an [`ErrorKind::UnknownTool`] from the host.
 //! - Every result, and every other host error, is a `CallToolResult`; tool
-//!   failures carry `isError: true` and `{error: {code, message},
-//!   versions}`.
+//!   failures carry `isError: true` and `{error: {code, message,
+//!   retryable, ...}, versions}`.
 //! - [`ErrorKind::Cancelled`] is -32603 `Cancelled`, which the writer drops
 //!   because the client cancelled that request.
 //! - A host call that panics is -32603 `Internal error`.
@@ -89,21 +89,25 @@ pub const EOF_GRACE: Duration = Duration::from_secs(6);
 pub const NAME: &str = "reshiki";
 /// The server's title in `serverInfo`.
 pub const TITLE: &str = "ReShiki (experimental)";
-/// The workflow between the safety rule and the SMILES sentence.
+/// The workflow between the safety rule and the naming sentence.
 const WORKFLOW: &str = "Call info first: it reports limits, formats and the folders you may read \
-    and write. document_new, import, compose and file_open each create a document and return its \
-    handle. Use render to look at a PNG preview, analyze for properties, inspect for object IDs. \
-    apply edits in one undo step: pass the target document's latest revision as base_revision; \
-    after stale, inspect again and retry with a new idempotency_key. export returns a file inline; \
-    file_save writes only into a granted folder and never overwrites unless overwrite is true. \
-    Close documents you no longer need with document_close. Object IDs and revisions are decimal \
-    strings.";
+    and write. Every result is {value, warnings, validation, versions}; an error is {error: \
+    {code, message, retryable, ...}, versions}. For one picture or file of a structure, convert \
+    does it in one call and keeps no document. document_new, import, compose and file_open each \
+    create a document and return its handle. Use render to look at a PNG preview, analyze for \
+    properties, inspect for object IDs. apply edits in one undo step: pass the target document's \
+    latest revision as base_revision; after stale, inspect again and reconsider the edit before \
+    you retry with a new idempotency_key; error.current_revision only says which revision the \
+    document has now. export returns a file inline; file_save writes only into a granted folder \
+    and never overwrites unless overwrite is true. Close documents you no longer need with \
+    document_close. Object IDs and revisions are decimal strings.";
 /// The last sentence of the `instructions`.
-const SMILES_ONLY: &str = "Provide SMILES; chemical names are not resolved.";
+const NAMES: &str = "Chemical names work offline: import with format name reads one, and name \
+    writes the systematic name of a drawing. Prefer them to writing SMILES from memory.";
 
 /// The `instructions` sent to clients: the experimental [`NOTICE`], then
 /// [`DATA_NOT_INSTRUCTIONS`], the workflow, the folders granted at startup
-/// and the SMILES sentence.
+/// and the naming sentence.
 pub fn instructions(grants: &GrantSummary) -> String {
     // Debug formatting quotes each folder and escapes control characters.
     let folders = |folders: &[String]| match folders {
@@ -123,7 +127,7 @@ pub fn instructions(grants: &GrantSummary) -> String {
             folders(&grants.write)
         )
     };
-    format!("{NOTICE} {DATA_NOT_INSTRUCTIONS} {WORKFLOW} {granted} {SMILES_ONLY}")
+    format!("{NOTICE} {DATA_NOT_INSTRUCTIONS} {WORKFLOW} {granted} {NAMES}")
 }
 
 /// The longest tool name echoed in an error, in characters.

@@ -298,6 +298,11 @@ pub const RADICAL_ELECTRONS: u32 = 37;
 /// | 37 | Three or four radical electrons on an atom. |
 pub const VERSION: u32 = 37;
 
+/// Bytes of text in one annotation. Layout time grows faster than the text.
+pub const MAX_ANNOTATION_TEXT: usize = 64 * 1024;
+/// Bytes of annotation text in one drawing.
+pub const MAX_DRAWING_TEXT: usize = 1024 * 1024;
+
 fn newer_version(version: u64) -> String {
     format!(
         "This drawing was made with a newer version of ReShiki (document version {version}). Update ReShiki to open it."
@@ -415,6 +420,7 @@ impl Document {
         {
             return Err(newer_version(version));
         }
+        crate::pictures::check_stored(bytes)?;
         let mut doc: Self = serde_json::from_slice(bytes).map_err(|e| e.to_string())?;
         doc.validate()?;
         doc.migrate();
@@ -679,6 +685,47 @@ impl Document {
         crate::arrow_anchors::transformed(self, ids, |v| v);
         crate::arrow_labels::translated(self, ids);
     }
+    /// [`Self::translate`] for disjoint units that each move by their own
+    /// offset, in one pass over the drawing instead of one pass per unit.
+    pub(crate) fn translate_units(&mut self, units: &[(Vec<u64>, f32, f32)]) {
+        let collapsed = crate::abbreviations::Membership::new(self);
+        let mut unit = std::collections::HashMap::new();
+        let mut expanded = std::collections::HashSet::new();
+        for (index, (ids, ..)) in units.iter().enumerate() {
+            for id in ids {
+                unit.insert(*id, index);
+                // Any selected member pulls in the whole abbreviation, once.
+                for group in collapsed.of(*id) {
+                    if expanded.insert((index, std::ptr::from_ref(*group))) {
+                        unit.extend(group.members.iter().map(|member| (*member, index)));
+                    }
+                }
+            }
+        }
+        let offset = |id: u64, p: Point| match unit.get(&id).and_then(|i| units.get(*i)) {
+            Some((_, dx, dy)) => p.offset(*dx, *dy),
+            None => p,
+        };
+        for graphic in &mut self.graphics {
+            graphic.origin = offset(graphic.id, graphic.origin);
+        }
+        for a in &mut self.atoms {
+            a.position = offset(a.id, a.position);
+        }
+        for a in &mut self.annotations {
+            a.position = offset(a.id, a.position);
+        }
+        for a in &mut self.arrows {
+            // Mapping an arrow writes out its implied bend, so leave the
+            // arrows outside every unit alone.
+            if let Some((_, dx, dy)) = unit.get(&a.id).and_then(|i| units.get(*i)) {
+                a.map_points(|p| p.offset(*dx, *dy));
+            }
+        }
+        crate::projection::sync_centroids(self);
+        crate::arrow_anchors::transformed_units(self, |id| unit.get(&id).copied(), |v| v);
+        crate::arrow_labels::translated_units(self, |id| unit.get(&id).copied());
+    }
     /// Every object ID, in [`Document::object_ids`] order.
     pub fn all_ids(&self) -> Vec<u64> {
         self.object_ids().collect()
@@ -782,6 +829,17 @@ impl Document {
                 "Distance-derived bonds need document version {DISTANCE_BONDS} or later"
             ));
         }
+        // First, so that nothing lays out text beyond these limits.
+        let mut text = 0_usize;
+        for annotation in &self.annotations {
+            if annotation.text.len() > MAX_ANNOTATION_TEXT {
+                return Err("A text box can hold at most 64 KB of text".into());
+            }
+            text += annotation.text.len();
+        }
+        if text > MAX_DRAWING_TEXT {
+            return Err("A drawing can hold at most 1 MB of text".into());
+        }
         crate::projection::validate(self)?;
         crate::depth_appearance::validate(self)?;
         crate::ring_fills::validate(self)?;
@@ -798,8 +856,10 @@ impl Document {
             picture_bytes = picture_bytes.saturating_add(picture.stored_bytes());
             picture_pixels = picture_pixels
                 .saturating_add(u64::from(picture.width()) * u64::from(picture.height()));
-            if picture_bytes > 64 * 1024 * 1024 || picture_pixels > 64_000_000 {
-                return Err("Drawing pictures exceed 64 MB or 64 million pixels".into());
+            if picture_bytes > crate::pictures::DRAWING_BYTES
+                || picture_pixels > crate::pictures::DRAWING_PIXELS
+            {
+                return Err(crate::pictures::OVER_DRAWING_BUDGET.into());
             }
         }
         if self.version > VERSION {
@@ -947,8 +1007,9 @@ pub struct History {
     undo: VecDeque<Document>,
     redo: VecDeque<Document>,
     limit: usize,
-    /// Estimated undo bytes ([`frame_bytes`]) above which the oldest frames
-    /// are dropped, down to [`History::MIN_STEPS`].
+    /// Estimated bytes of all frames ([`frame_bytes`]) above which the oldest
+    /// undo frames, then the furthest redo frames, are dropped, down to
+    /// [`History::MIN_STEPS`].
     max_bytes: usize,
 }
 /// The editor keeps 100 undo frames, fewer on large drawings: about 128 MB of
@@ -1071,17 +1132,36 @@ impl History {
         if self.undo.len() > self.limit {
             let _ = self.undo.pop_front();
         }
-        if self.max_bytes != usize::MAX {
-            let mut total: usize = self.undo.iter().map(frame_bytes).sum();
-            while total > self.max_bytes && self.undo.len() > Self::MIN_STEPS {
-                total -= self.undo.pop_front().as_ref().map_or(0, frame_bytes);
-            }
-        }
+        self.cap();
         true
+    }
+    /// Keeps this history within its own byte limit.
+    fn cap(&mut self) {
+        if self.max_bytes != usize::MAX {
+            let over = self.bytes().saturating_sub(self.max_bytes);
+            self.release(over, Self::MIN_STEPS);
+        }
+    }
+    /// Estimated bytes of the undo and redo frames, as the byte limit counts
+    /// them.
+    pub fn bytes(&self) -> usize {
+        self.undo.iter().chain(&self.redo).map(frame_bytes).sum()
+    }
+    /// Drops frames until at least `bytes` estimated bytes are released or
+    /// `keep` frames remain: the oldest undo steps first, then the redo steps
+    /// furthest ahead. Returns the bytes released.
+    pub fn release(&mut self, bytes: usize, keep: usize) -> usize {
+        let mut released = 0;
+        while released < bytes && self.frames() > keep {
+            let frame = self.undo.pop_front().or_else(|| self.redo.pop_front());
+            released += frame.as_ref().map_or(0, frame_bytes);
+        }
+        released
     }
     pub fn undo(&mut self, doc: &mut Document) -> bool {
         if let Some(prev) = self.undo.pop_back() {
             self.redo.push_back(std::mem::replace(doc, prev));
+            self.cap();
             true
         } else {
             false
@@ -1090,6 +1170,7 @@ impl History {
     pub fn redo(&mut self, doc: &mut Document) -> bool {
         if let Some(next) = self.redo.pop_back() {
             self.undo.push_back(std::mem::replace(doc, next));
+            self.cap();
             true
         } else {
             false

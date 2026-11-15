@@ -92,7 +92,7 @@ fn discover_lists_and_info_carry_the_labels_and_hints() {
     session.send(headless::modern_call(3, "info", json!({})));
     let info = session.recv_for(Some(&json!(3)), LINE_TIMEOUT);
     assert_eq!(
-        info["result"]["structuredContent"]["stability"], STABILITY,
+        info["result"]["structuredContent"]["value"]["stability"], STABILITY,
         "{info}"
     );
     finish(session);
@@ -162,7 +162,7 @@ fn cli_help_opens_with_the_notice() {
 fn cli_json_is_marked_experimental() {
     let info = json_line(&cli(&["info"]));
     assert_eq!(info["experimental"], true, "{info}");
-    assert_eq!(info["stability"], STABILITY, "{info}");
+    assert_eq!(info["value"]["stability"], STABILITY, "{info}");
     for args in [&["tools"][..], &["help", "--json"][..]] {
         let discovered = json_line(&cli(args));
         assert_eq!(discovered["experimental"], true, "{discovered}");

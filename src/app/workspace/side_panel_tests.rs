@@ -295,9 +295,9 @@ async fn a_narrow_context_row_keeps_selection_commands_ahead_of_global_modes() -
     let labels: Vec<_> = commands.iter().map(|c| c.label).collect();
     assert_eq!(
         labels[labels.len() - 2..],
-        ["3D optimize…", "Keyboard drawing"]
+        ["Keyboard drawing", "3D optimize…"]
     );
-    let hints: Vec<_> = commands.iter().map(|c| c.hint).collect();
+    let names: Vec<_> = commands.iter().map(|c| c.menu).collect();
     let mut partly_folded = 0;
     for width in (360..=1200).step_by(40) {
         let size = iced::Size::new(width as f32, 46.);
@@ -312,18 +312,18 @@ async fn a_narrow_context_row_keeps_selection_commands_ahead_of_global_modes() -
         let nodes = &collect.snapshot().nodes;
         let shown: Vec<_> = nodes
             .iter()
-            .filter(|node| hints.contains(&node.name.as_str()))
+            .filter(|node| names.contains(&node.name.as_str()))
             .map(|node| node.name.as_str())
             .collect();
         eprintln!("{width} px: {shown:?}");
-        assert_eq!(shown, hints[..shown.len()], "{width} px");
+        assert_eq!(shown, names[..shown.len()], "{width} px");
         let more = nodes.iter().find(|node| node.id == "context-overflow");
-        assert_eq!(more.is_some(), shown.len() < hints.len(), "{width} px");
+        assert_eq!(more.is_some(), shown.len() < names.len(), "{width} px");
         if let Some(more) = more
             && !shown.is_empty()
         {
             partly_folded += 1;
-            assert!(more.name.contains("Keyboard drawing (F8)"), "{}", more.name);
+            assert!(more.name.contains("3D optimize…"), "{}", more.name);
             assert!(!more.name.contains("Join"), "{width} px: {}", more.name);
         }
     }

@@ -1045,11 +1045,6 @@ impl App {
         let mut footer = column![].spacing(1);
         let mut items = Vec::new();
         let mut submenus = Vec::new();
-        let keyboard_commands = if matches!(page, Page::More(_)) {
-            self.context_commands()
-        } else {
-            Vec::new()
-        };
         if matches!(page, Page::Main) && !self.tab.selected.is_empty() {
             entries = entries.push(
                 container(
@@ -1080,28 +1075,14 @@ impl App {
                     enabled,
                 } => {
                     let destructive = matches!(&action, Action::Run(message) if matches!(message.as_ref(), Message::Delete));
-                    let keyboard_hint = match &action {
-                        Action::Run(message) => super::workspace::keyboard_control_id(message)
-                            .and_then(|id| {
-                                keyboard_commands.iter().find(|command| {
-                                    super::workspace::keyboard_control_id(&command.message)
-                                        == Some(id)
-                                })
-                            })
-                            .map(|command| command.hint),
-                        _ => None,
-                    };
-                    let accessible_name = keyboard_hint.unwrap_or(label);
-                    let hint = if matches!(&action, Action::Run(message) if matches!(
+                    let hint = matches!(&action, Action::Run(message) if matches!(
                         message.as_ref(),
                         Message::Graphics(super::graphics::Action::Cleanup(
                             super::graphics::Cleanup::Symmetrise { .. }
                         ))
-                    )) {
-                        Some(super::graphics::SYMMETRISE_HINT)
-                    } else {
-                        keyboard_hint
-                    };
+                    ))
+                    .then_some(super::graphics::SYMMETRISE_HINT);
+                    let name = label;
                     let label = text(label).size(12).width(Length::Fill);
                     let label = if destructive {
                         label.style(crate::appearance::text_color(Color::from_rgb8(167, 59, 51)))
@@ -1131,7 +1112,7 @@ impl App {
                     }
                     let pointer = !menu.keyboard;
                     let id = item_id(page, index, &action);
-                    let item = reshiki::accessibility::button(id, accessible_name, content)
+                    let item = reshiki::accessibility::button(id, name, content)
                         .padding([6, 10])
                         .width(Length::Fill)
                         .style(move |theme: &iced::Theme, status| {

@@ -9,8 +9,8 @@ use super::{
     result::ToolResult,
     store::{Documents, Snapshot},
     wire::{
-        DocHandle, ObjectId, Principal, Revision, described, handle_schema, ids_schema, nullable,
-        versions_json,
+        Bounds, DocHandle, ObjectId, Principal, Revision, described, handle_schema, ids_schema,
+        nullable,
     },
 };
 use crate::{
@@ -75,12 +75,6 @@ pub(crate) fn decode(args: Value, budgets: &Budgets) -> Result<Inspect, OpError>
 
 fn object_ids(ids: &[u64]) -> Vec<ObjectId> {
     ids.iter().copied().map(ObjectId).collect()
-}
-
-#[derive(Debug, Serialize)]
-struct Bounds {
-    min: Point,
-    max: Point,
 }
 
 /// Every object in the inspected part, listed or not.
@@ -184,7 +178,7 @@ struct GroupJson {
     integral: bool,
 }
 
-/// The inspect result without `versions`.
+/// The envelope value of an inspect.
 #[derive(Debug, Serialize)]
 struct Summary<'a> {
     document: &'a DocHandle,
@@ -392,7 +386,7 @@ fn summary<'a>(
     })
 }
 
-/// `summary` as a JSON object, without `versions`.
+/// `summary` as a JSON object.
 fn summary_json(
     snapshot: &Snapshot,
     ids: Option<&[ObjectId]>,
@@ -408,7 +402,7 @@ fn summary_json(
 
 /// Summarizes the document with read access.
 ///
-/// The successful flat result contract is in [`super::catalog::RESULTS`].
+/// The successful result contract is in [`super::catalog::RESULTS`].
 pub(crate) async fn inspect(
     ctx: Context,
     store: Arc<dyn Documents>,
@@ -419,9 +413,9 @@ pub(crate) async fn inspect(
 ) -> Result<ToolResult, OpError> {
     ctx.blocking(move || {
         let snapshot = store.snapshot(&who, &inspect.document, Access::Read)?;
-        let mut value = summary_json(&snapshot, inspect.ids.as_deref(), &budgets)?;
-        value.insert("versions".to_owned(), versions_json(&versions));
-        let size = serde_json::to_vec(&value)
+        let value = summary_json(&snapshot, inspect.ids.as_deref(), &budgets)?;
+        let result = ToolResult::valid(value, Vec::new(), versions);
+        let size = serde_json::to_vec(&result.value)
             .map_err(|error| OpError::new(ErrorKind::Failed, error.to_string()))?
             .len();
         if size > budgets.max_output_bytes {
@@ -433,7 +427,7 @@ pub(crate) async fn inspect(
                 ),
             ));
         }
-        Ok(ToolResult::plain(value))
+        Ok(result)
     })
     .await
 }

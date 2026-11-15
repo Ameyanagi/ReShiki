@@ -138,7 +138,9 @@ impl MoleculeCanvas<'_> {
             .map(|context| context.marker_ids())
             .unwrap_or_default();
         let cached_camera = (self.hidden_annotation.is_none()
-            && (translation.is_some() || *preview == *self.doc))
+            && (translation.is_some()
+                || matches!(&preview, Cow::Borrowed(doc) if std::ptr::eq(*doc, self.doc))
+                || *preview == *self.doc))
             .then(|| {
                 let delta = translation.unwrap_or_default();
                 Camera {
