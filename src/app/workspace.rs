@@ -1735,8 +1735,9 @@ impl App {
                 )
                 .push(
                     row![
-                        command("Save", action(A::SaveDetails)).style(crate::appearance::primary),
-                        command("Cancel", action(A::CancelDetails))
+                        panel_action("Save", action(A::SaveDetails))
+                            .style(crate::appearance::primary),
+                        panel_action("Cancel", action(A::CancelDetails))
                     ]
                     .spacing(6),
                 );
@@ -1747,7 +1748,7 @@ impl App {
             body = self.active_template_details(body, t);
         }
         if state.undo.is_some() {
-            body = body.push(command("Undo library change", action(A::Restore)));
+            body = body.push(panel_action("Undo library change", action(A::Restore)));
         }
         if !state.active && !state.editing {
             body = self.template_library_browser(body);
@@ -1777,7 +1778,8 @@ impl App {
                             .size(11)
                             .style(muted_text)
                             .width(Length::Fill),
-                        command("Search all", action(A::SearchAll)),
+                        command("Search all", action(A::SearchAll))
+                            .style(crate::appearance::secondary),
                     ]
                     .spacing(3)
                     .align_y(Alignment::Center),
@@ -1817,9 +1819,9 @@ impl App {
             );
             body = body.push(
                 row![
-                    command("Import…", action(A::Import)),
-                    command("Export…", action(A::Export)),
-                    command("Reload", action(A::Reload))
+                    panel_action("Import…", action(A::Import)),
+                    panel_action("Export…", action(A::Export)),
+                    panel_action("Reload", action(A::Reload))
                 ]
                 .spacing(3),
             );
@@ -1870,13 +1872,15 @@ impl App {
                         .size(11)
                         .width(Length::Fill),
                     command("Auto", action(A::Anchor(reshiki::templates::Anchor::Auto)))
+                        .style(crate::appearance::secondary)
                 ]
                 .align_y(Alignment::Center),
             )
             .push(
                 row![
-                    command("Place", Message::InsertTemplate(self.template_index)),
-                    command(
+                    panel_action("Place", Message::InsertTemplate(self.template_index))
+                        .style(crate::appearance::primary),
+                    panel_action(
                         if state.library.favorite(&t.id) {
                             "★ Saved"
                         } else {
@@ -1910,19 +1914,17 @@ impl App {
             body = body
                 .push(
                     row![
-                        command("Edit", action(A::EditDetails)),
-                        command("Remember anchor", action(A::RememberAnchor))
+                        panel_action("Edit", action(A::EditDetails)),
+                        panel_action("Remember anchor", action(A::RememberAnchor))
                     ]
                     .spacing(5),
                 )
                 .push(
-                    button(text("Replace from selection").size(11))
-                        .padding(6)
-                        .on_press_maybe(
-                            (!self.tab.selected.is_empty()).then(|| action(A::Replace)),
-                        ),
+                    panel_action("Replace from selection", action(A::Replace)).on_press_maybe(
+                        (!self.tab.selected.is_empty()).then(|| action(A::Replace)),
+                    ),
                 )
-                .push(command("Remove template", action(A::Remove)));
+                .push(panel_action("Remove template", action(A::Remove)));
         }
         body
     }
@@ -2053,7 +2055,7 @@ impl App {
         // Disabled commands say what they need.
         let item = |label, message: Message, enabled: bool, hint, reason| {
             hover_hint(
-                command(label, message.clone()).on_press_maybe(enabled.then_some(message)),
+                panel_action(label, message.clone()).on_press_maybe(enabled.then_some(message)),
                 if enabled { hint } else { reason },
                 tooltip::Position::Top,
             )
@@ -2296,11 +2298,14 @@ impl App {
                         .size(12)
                         .padding(7),
                     command("Number", Message::Labels(A::Number))
+                        .style(crate::appearance::secondary)
                         .on_press_maybe((!ids.is_empty()).then_some(Message::Labels(A::Number))),
-                    command("IUPAC locants", Message::Labels(A::IupacLocants)).on_press_maybe(
-                        (!self.tab.selected.is_empty() && !self.tab.labels.locants_running())
-                            .then_some(Message::Labels(A::IupacLocants))
-                    )
+                    command("IUPAC locants", Message::Labels(A::IupacLocants))
+                        .style(crate::appearance::secondary)
+                        .on_press_maybe(
+                            (!self.tab.selected.is_empty() && !self.tab.labels.locants_running())
+                                .then_some(Message::Labels(A::IupacLocants))
+                        )
                 ]
                 .spacing(5),
                 text("Sequence follows atom creation/import order.")
@@ -2311,7 +2316,7 @@ impl App {
                     .text_size(12)
                     .on_toggle(|value| Message::Labels(A::RingAtomsOnly(value))),
                 self.locant_numbering_controls(),
-                command("Clear numbers", Message::Labels(A::ClearNumbers)),
+                panel_action("Clear numbers", Message::Labels(A::ClearNumbers)),
             ]
             .spacing(9),
         );
@@ -2324,6 +2329,7 @@ impl App {
                         .size(12)
                         .padding(7),
                     command("Set", Message::Labels(A::ApplyText))
+                        .style(crate::appearance::secondary)
                 ]
                 .spacing(5),
             );
@@ -2342,8 +2348,8 @@ impl App {
             return column![
                 text(format!("Replace {count} existing atom numbers?")).size(12),
                 row![
-                    command("Replace", Message::Labels(A::ReplaceLocants)),
-                    command("Cancel", Message::Labels(A::CancelLocants)),
+                    panel_action("Replace", Message::Labels(A::ReplaceLocants)),
+                    panel_action("Cancel", Message::Labels(A::CancelLocants)),
                 ]
                 .spacing(5),
             ]
@@ -2355,7 +2361,8 @@ impl App {
                 text("Generating parent locants…")
                     .size(11)
                     .style(muted_text),
-                command("Cancel", Message::Labels(A::CancelLocants)),
+                command("Cancel", Message::Labels(A::CancelLocants))
+                    .style(crate::appearance::secondary),
             ]
             .spacing(5)
             .align_y(Alignment::Center)
@@ -2461,7 +2468,7 @@ impl App {
         }
         body = body
             .push(
-                command("Check drawing", Message::Analyze)
+                panel_action("Check drawing", Message::Analyze)
                     .on_press_maybe((!self.tab.busy).then_some(Message::Analyze)),
             )
             .push(
@@ -2492,7 +2499,7 @@ impl App {
             .iter()
             .any(|note| note.kind == reshiki::chemistry::stereo_lint::Kind::Reversed)
         {
-            body = body.push(command("Reverse", Message::Stereo(Action::Reverse)));
+            body = body.push(panel_action("Reverse", Message::Stereo(Action::Reverse)));
         }
         if self
             .tab
@@ -2500,7 +2507,7 @@ impl App {
             .iter()
             .any(|note| note.kind != reshiki::chemistry::stereo_lint::Kind::Undefined)
         {
-            body = body.push(command(
+            body = body.push(panel_action(
                 "Redraw stereo bonds",
                 Message::Stereo(Action::Redraw),
             ));
@@ -2524,23 +2531,24 @@ impl App {
                         .padding(7),
                     text("pt").size(11),
                     command("Apply", Message::Labels(A::ApplySize))
+                        .style(crate::appearance::secondary)
                 ]
                 .spacing(5)
                 .align_y(Alignment::Center),
             )
-            .push(command(
+            .push(panel_action(
                 "Use current toolbar text style",
                 Message::Labels(A::ToolbarStyle),
             ))
-            .push(command(
+            .push(panel_action(
                 "Position numbers & stereo labels",
                 Message::Labels(A::PositionIndicators),
             ))
-            .push(command(
+            .push(panel_action(
                 "Restore automatic positions",
                 Message::Labels(A::ResetPositions),
             ))
-            .push(command(
+            .push(panel_action(
                 "Use drawing label defaults",
                 Message::Labels(A::ResetOverrides),
             ))
@@ -3201,6 +3209,16 @@ pub(super) fn accessible_unit_field<'a>(
     ]
     .width(Length::Fill)
     .into()
+}
+
+/// A panel action: a full-width secondary button, so it reads as a control
+/// rather than a label. Two side by side share the row.
+pub(super) fn panel_action(label: &str, message: Message) -> button::Button<'_, Message> {
+    button(text(label).size(12).width(Length::Fill).center())
+        .padding([6, 8])
+        .width(Length::Fill)
+        .on_press(message)
+        .style(crate::appearance::secondary)
 }
 
 pub(super) fn command(label: &str, message: Message) -> button::Button<'_, Message> {

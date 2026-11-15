@@ -1,5 +1,5 @@
 //! Selection-focused properties and task-based export controls.
-use super::workspace::{control, hover_hint, keyed_command, muted_text};
+use super::workspace::{control, hover_hint, keyed_command, muted_text, panel_action};
 use super::{App, InspectorTab, Message};
 use crate::canvas::Tool;
 use iced::widget::{button, checkbox, column, container, row, text, tooltip};
@@ -405,16 +405,6 @@ const GENERIC_PROPERTIES: &str =
 fn deferred_generic_properties(error: &str) -> Option<&'static str> {
     (error.strip_prefix("Invalid drawing: ") == Some(reshiki::generic::NOTICE))
         .then_some(GENERIC_PROPERTIES)
-}
-
-/// A panel action: a full-width secondary button, so it reads as a control
-/// rather than a label. Two side by side share the row.
-fn command(label: &str, message: Message) -> button::Button<'_, Message> {
-    button(text(label).size(12).width(Length::Fill).center())
-        .padding([6, 8])
-        .width(Length::Fill)
-        .on_press(message)
-        .style(crate::appearance::secondary)
 }
 
 pub(super) fn card<'a>(body: impl Into<Element<'a, Message>>) -> Element<'a, Message> {
@@ -1133,16 +1123,16 @@ impl App {
             false,
             || {
                 let chemistry = column![
-                    command("Normalize depiction", Message::NormalizeDepiction),
-                    command(
+                    panel_action("Normalize depiction", Message::NormalizeDepiction),
+                    panel_action(
                         "Reaction roles…",
                         Message::Reaction(super::reactions::Action::Open)
                     ),
-                    command(
+                    panel_action(
                         "Atom labels & numbering…",
                         Message::Inspector(InspectorTab::Labels)
                     ),
-                    command(
+                    panel_action(
                         "Chemical abbreviations…",
                         Message::Inspector(InspectorTab::Abbreviations)
                     ),
@@ -1181,7 +1171,7 @@ impl App {
                     ))
                     .size(12)
                     .style(muted_text),
-                    command(
+                    panel_action(
                         "Edit drawing style…",
                         Message::DrawingStyle(super::document_styles::Action::Open)
                     ),
@@ -1388,9 +1378,9 @@ impl App {
                 }))
                 .push(
                     row![
-                        command("Copy SMILES", Message::CopySmiles)
+                        panel_action("Copy SMILES", Message::CopySmiles)
                             .on_press_maybe((!a.smiles.is_empty()).then_some(Message::CopySmiles)),
-                        elemental.map(|_| command("Copy analysis", Message::CopyAnalysis)),
+                        elemental.map(|_| panel_action("Copy analysis", Message::CopyAnalysis)),
                     ]
                     .spacing(6),
                 );
@@ -1436,7 +1426,7 @@ impl App {
                 .width(Length::Fill)
                 .on_press(Message::Nmr(super::nmr::Action::Open))
                 .style(crate::appearance::secondary),
-                command(
+                panel_action(
                     if key.is_some() {
                         "Recalculate selection"
                     } else {
@@ -1541,7 +1531,7 @@ impl App {
         let attachment = centroid && atoms == self.tab.selected.len();
         let item = |label, message: Message, enabled: bool, hint: &'static str, reason| {
             hover_hint(
-                command(label, message.clone())
+                panel_action(label, message.clone())
                     .on_press_maybe(enabled.then_some(message))
                     .width(Length::Fill),
                 if enabled { hint } else { reason },
@@ -1560,7 +1550,7 @@ impl App {
                     "Select at least two atoms",
                 ),
                 hover_hint(
-                    command("Dummy atom (*)", Message::Element("*".into())).width(Length::Fill),
+                    panel_action("Dummy atom (*)", Message::Element("*".into())).width(Length::Fill),
                     "Draw * wildcard atoms with the Atom tool",
                     tooltip::Position::Top,
                 ),
@@ -1639,11 +1629,11 @@ impl App {
                     false,
                     column![
                         row![
-                            command("In front", Message::BondDepth(true)).width(Length::Fill),
-                            command("Behind", Message::BondDepth(false)).width(Length::Fill)
+                            panel_action("In front", Message::BondDepth(true)).width(Length::Fill),
+                            panel_action("Behind", Message::BondDepth(false)).width(Length::Fill)
                         ]
                         .spacing(6),
-                        command(
+                        panel_action(
                             if bonds.iter().all(|b| b.is_projected_dative()) {
                                 "Reverse projection tip"
                             } else {
@@ -1739,7 +1729,7 @@ impl App {
         .spacing(7);
         if gaps {
             body = body.push(hover_hint(
-                command(
+                panel_action(
                     "Renumber groups",
                     Message::InspectorAction(Action::RenumberStereoGroups),
                 )
@@ -1802,7 +1792,7 @@ impl App {
                         .on_submit(Message::ApplyBondColor)
                         .size(12)
                         .padding(7),
-                    command("Apply", Message::ApplyBondColor),
+                    panel_action("Apply", Message::ApplyBondColor),
                 ]
                 .spacing(6),
             );
@@ -1810,14 +1800,14 @@ impl App {
             controls = controls.push(
                 row![
                     hover_hint(
-                        command("Aromatic circle", Message::AromaticDisplay)
+                        panel_action("Aromatic circle", Message::AromaticDisplay)
                             .on_press_maybe((!self.tab.busy).then_some(Message::AromaticDisplay))
                             .width(Length::Fill),
                         "Toggle the aromatic circle",
                         tooltip::Position::Top,
                     ),
                     hover_hint(
-                        command("Inner ring curve", Message::InspectorAction(Action::RingArc))
+                        panel_action("Inner ring curve", Message::InspectorAction(Action::RingArc))
                             .width(Length::Fill),
                         "Toggle the inner ring curve · Select consecutive ring atoms for a partial curve, or the whole ring for a circle. Bond orders stay unchanged.",
                         tooltip::Position::Top,
@@ -1863,8 +1853,8 @@ impl App {
         let mut controls = column![
             row![
                 text("Charge").size(12).width(Length::Fill),
-                command("−", Message::Charge(-1)),
-                command("+", Message::Charge(1))
+                panel_action("−", Message::Charge(-1)),
+                panel_action("+", Message::Charge(1))
             ]
             .spacing(6)
             .align_y(Alignment::Center),
@@ -1875,7 +1865,7 @@ impl App {
                     .on_submit(Message::ApplyIsotope)
                     .size(12)
                     .padding(7),
-                command("Set", Message::ApplyIsotope)
+                panel_action("Set", Message::ApplyIsotope)
             ]
             .spacing(6),
         ]
@@ -1952,13 +1942,13 @@ impl App {
                         })
                         .size(11)
                         .width(Length::Fill),
-                        command("Rotate", Message::RotateMark(a.id, index)),
-                        command("Remove", Message::RemoveMark(a.id, index))
+                        panel_action("Rotate", Message::RotateMark(a.id, index)),
+                        panel_action("Remove", Message::RemoveMark(a.id, index))
                     ]
                     .spacing(4),
                 );
             }
-            controls = controls.push(command(
+            controls = controls.push(panel_action(
                 if self.tool == Tool::EditPoints {
                     "Finish positioning marks"
                 } else {
@@ -1978,17 +1968,17 @@ impl App {
         let groups = self.tab.doc.outer_selected_groups(&self.tab.selected);
         let mut grouping = column![
             row![
-                command("Group", Message::Group)
+                panel_action("Group", Message::Group)
                     .on_press_maybe(self.can_group().then_some(Message::Group))
                     .width(Length::Fill),
-                command("Ungroup", Message::Ungroup)
+                panel_action("Ungroup", Message::Ungroup)
                     .on_press_maybe((!groups.is_empty()).then_some(Message::Ungroup))
                     .width(Length::Fill)
             ]
             .spacing(6),
             row![
-                command("Invert selection", Message::InvertSelection),
-                command("Bracket ion", Message::BracketIon),
+                panel_action("Invert selection", Message::InvertSelection),
+                panel_action("Bracket ion", Message::BracketIon),
             ]
             .spacing(6),
             crate::appearance::pick_list(
@@ -2239,7 +2229,7 @@ impl App {
                     .padding(10)
                     .width(Length::Fill)
                     .on_press_maybe((!self.tab.busy).then_some(Message::Export(chemical.code()))),
-                    command(
+                    panel_action(
                         "Reaction roles & export…",
                         Message::Reaction(super::reactions::Action::Open)
                     ),
@@ -2248,14 +2238,14 @@ impl App {
             ),
         ]
         .spacing(10);
-        let mut pages = column![command(
+        let mut pages = column![panel_action(
             "Page setup…",
             Message::Pages(super::pages::Action::Show)
         )]
         .spacing(6);
         if self.tab.doc.page_layout.is_some() {
             pages = pages.push(
-                command(
+                panel_action(
                     "PDF · all pages",
                     Message::Pages(super::pages::Action::Export),
                 )
@@ -2281,7 +2271,7 @@ impl App {
             );
             if !self.tab.selected.is_empty() {
                 pages = pages.push(
-                    command(
+                    panel_action(
                         "Print selection…",
                         Message::Printing(super::printing::Action::Start(
                             reshiki::printing::Scope::Selection,
@@ -2306,7 +2296,7 @@ impl App {
             "Editable document",
             ".rsk · retains the complete drawing",
             true,
-            command("Save native document…", Message::SaveAs).width(Length::Fill),
+            panel_action("Save native document…", Message::SaveAs).width(Length::Fill),
         ))
         .into()
     }
