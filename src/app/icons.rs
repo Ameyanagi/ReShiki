@@ -34,6 +34,12 @@ pub(super) enum Icon {
     Keyboard,
     More,
     Lock(bool),
+    /// A cloud with an arrow up: GitHub.
+    #[cfg_attr(
+        target_arch = "wasm32",
+        expect(dead_code, reason = "The browser editor has no GitHub sign-in")
+    )]
+    Cloud,
     ModelStyle(reshiki::models3d::Style),
 }
 pub(super) struct Glyph(pub Icon, pub bool);
@@ -104,6 +110,7 @@ impl Glyph {
             Icon::Inspector => commands::inspector(f, ink),
             Icon::More => chrome::more(f, ink),
             Icon::Lock(locked) => chrome::lock(f, ink, locked),
+            Icon::Cloud => commands::cloud(f, ink),
             Icon::ModelStyle(style) => chrome::model_style(f, ink, style),
         }
     }

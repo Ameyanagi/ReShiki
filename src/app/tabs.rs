@@ -324,6 +324,11 @@ impl App {
 
     /// Closes the front tab without asking and removes its draft.
     pub(super) fn close_active_tab(&mut self) -> Task<Message> {
+        // A drawing saved here but not on GitHub asks Send or Later first.
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(ask) = self.github_before_close(self.tab.id) {
+            return ask;
+        }
         let closed = self.remove_active();
         self.retire(closed)
     }
@@ -414,6 +419,10 @@ impl App {
                         .get(index)
                         .is_some_and(|tab| tab.edited)
                 {
+                    #[cfg(not(target_arch = "wasm32"))]
+                    if let Some(ask) = self.github_before_close(id) {
+                        return ask;
+                    }
                     // A saved tab behind the front one closes where it is.
                     let closed = self.tabs.background.remove(index);
                     if index < self.tabs.active {
@@ -446,6 +455,10 @@ impl App {
             .strip()
             .position(|tab| !discarded.contains(&tab.id) && self.edited(tab));
         let Some(index) = unsaved else {
+            #[cfg(not(target_arch = "wasm32"))]
+            if let Some(ask) = self.github_before_quit(window, &discarded) {
+                return ask;
+            }
             return self.close_after_recovery(window);
         };
         self.select_tab(index);

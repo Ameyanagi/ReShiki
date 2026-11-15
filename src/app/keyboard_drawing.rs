@@ -144,6 +144,7 @@ impl App {
         self.help_open
             || self.commands.open
             || self.updates.open
+            || self.github_dialog()
             || self.assistant.viewed_image.is_some()
             || self.tab.atom_text.is_some()
             || self.tab.inline_text.is_some()

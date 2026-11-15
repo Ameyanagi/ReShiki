@@ -452,7 +452,7 @@ impl App {
             }),
             row![
                 reshiki::accessibility::button("updates-notes", "Open release notes", "Release notes ↗").on_press(msg(Action::Download)).style(button::text),
-                reshiki::accessibility::button("updates-star", "Star ReShiki on GitHub", "Star ReShiki on GitHub ↗")
+                reshiki::accessibility::button("updates-star", "Star ReShiki on GitHub", self.star_link())
                     .on_press(Message::Star(super::star_prompt::Action::Star { toast: false }))
                     .style(button::text),
             ],

@@ -11,7 +11,16 @@ use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
 pub(super) const REPOSITORY: &str = "https://github.com/Ameyanagi/ReShiki";
+#[cfg(not(target_arch = "wasm32"))]
+const OWNER: &str = "Ameyanagi";
+#[cfg(not(target_arch = "wasm32"))]
+const NAME: &str = "ReShiki";
 const THANKS: &str = "Opened GitHub in your browser. Thank you!";
+#[cfg(not(target_arch = "wasm32"))]
+const STARRED: &str = "Starred on GitHub. Thank you!";
+/// Use after the first GitHub sign-in before the card asks once more.
+#[cfg(not(target_arch = "wasm32"))]
+const AFTER_SIGN_IN: Duration = Duration::from_secs(5 * 60);
 /// Exports and copies before the first ask.
 const USES: u32 = 5;
 const IDLE: Duration = Duration::from_secs(30);
@@ -34,12 +43,26 @@ pub(super) enum Answer {
     Done,
 }
 
+/// The one extra ask after the first GitHub sign-in, apart from the two
+/// asks after use.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub(super) enum SignedInAsk {
+    #[default]
+    NotYet,
+    /// Signed in: ask after a few minutes of use.
+    Due,
+    Asked,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(super) struct Record {
     pub first_launch_day: NaiveDate,
     /// Successful exports and copies, counted up to [`USES`].
     pub uses: u32,
     pub state: Answer,
+    #[serde(default)]
+    pub signed_in_ask: SignedInAsk,
 }
 
 impl Record {
@@ -51,6 +74,7 @@ impl Record {
             first_launch_day: today,
             uses: 0,
             state: Answer::Asking,
+            signed_in_ask: SignedInAsk::NotYet,
         }
     }
     /// The saved record, or a new one from today. `None`, for a file this
@@ -167,6 +191,13 @@ pub enum Action {
     /// Not now or ×.
     Dismiss,
     Opened(Result<(), String>),
+    /// Whether GitHub says the user starred ReShiki; `None` when it could
+    /// not tell.
+    #[cfg(not(target_arch = "wasm32"))]
+    IsStarred(Option<bool>),
+    /// The one-click star through GitHub, from the toast or not.
+    #[cfg(not(target_arch = "wasm32"))]
+    Starred(Result<(), String>),
 }
 
 pub(super) struct State {
@@ -178,6 +209,11 @@ pub(super) struct State {
     focused: bool,
     /// A mouse button held down, as in a drag.
     pressed: bool,
+    /// Signed in to GitHub since, while the sign-in ask is due.
+    signed_in: Option<Instant>,
+    /// Asking GitHub whether the user starred ReShiki.
+    #[cfg(not(target_arch = "wasm32"))]
+    checking: bool,
 }
 
 impl State {
@@ -200,18 +236,23 @@ impl State {
             last_input: Instant::now(),
             focused: true,
             pressed: false,
+            signed_in: None,
+            #[cfg(not(target_arch = "wasm32"))]
+            checking: false,
         }
     }
 
     /// Whether this run may still ask, perhaps after more uses or on a later day.
     fn waiting(&self) -> bool {
-        self.record
-            .as_ref()
-            .is_some_and(|record| match &record.state {
-                Answer::Asking => true,
-                Answer::Asked { version, .. } => feature_release(version, CURRENT_VERSION),
-                Answer::Starred | Answer::Done => false,
-            })
+        self.signed_in.is_some()
+            || self
+                .record
+                .as_ref()
+                .is_some_and(|record| match &record.state {
+                    Answer::Asking => true,
+                    Answer::Asked { version, .. } => feature_release(version, CURRENT_VERSION),
+                    Answer::Starred | Answer::Done => false,
+                })
     }
 
     /// A successful export or copy.
@@ -274,11 +315,12 @@ impl App {
         if !self.star.waiting() {
             return Subscription::none();
         }
-        if self
-            .star
-            .record
-            .as_ref()
-            .is_some_and(|record| record.uses >= USES)
+        if self.star.signed_in.is_some()
+            || self
+                .star
+                .record
+                .as_ref()
+                .is_some_and(|record| record.uses >= USES)
         {
             Subscription::batch([
                 iced::event::listen_with(|event, _, _| input(event, true)),
@@ -314,26 +356,74 @@ impl App {
                 }
             }
             Action::Checked { focused } => {
-                let today = today();
-                // The ask is saved before it shows, so that quitting without
-                // an answer still counts, and a folder that cannot keep the
-                // answer is never asked.
-                if !focused
-                    && self.star_ready()
-                    && self
-                        .star
-                        .change(|record| record.ask(today, CURRENT_VERSION))
-                {
-                    self.star.open = true;
-                    return self.accessibility_refresh();
+                if focused || !self.star_ready() {
+                    return Task::none();
+                }
+                // Signed in: never ask someone who already starred.
+                #[cfg(not(target_arch = "wasm32"))]
+                if let Some(client) = self.github.client() {
+                    if !std::mem::replace(&mut self.star.checking, true) {
+                        return Task::perform(
+                            async move { reshiki::github::api::starred(&client, OWNER, NAME).await },
+                            |result| Message::Star(Action::IsStarred(result.ok())),
+                        );
+                    }
+                    return Task::none();
+                }
+                return self.star_show();
+            }
+            #[cfg(not(target_arch = "wasm32"))]
+            Action::IsStarred(starred) => {
+                self.star.checking = false;
+                if starred == Some(true) {
+                    self.star.signed_in = None;
+                    self.star.change(|record| {
+                        record.state = Answer::Starred;
+                        true
+                    });
+                } else if self.star_ready() {
+                    return self.star_show();
                 }
             }
+            #[cfg(not(target_arch = "wasm32"))]
+            Action::Starred(result) => match result {
+                Ok(()) => {
+                    self.github.starred = true;
+                    self.status = STARRED.into();
+                    self.error = false;
+                }
+                // As when signed out: the repository page in the browser.
+                Err(_) => {
+                    return Task::perform(
+                        reshiki::updates::open_url(REPOSITORY.into()),
+                        |result| Message::Star(Action::Opened(result)),
+                    );
+                }
+            },
             Action::Star { toast } => {
                 self.star.open = false;
+                self.star.signed_in = None;
                 self.star.change(|record| {
                     record.state = Answer::Starred;
                     true
                 });
+                // Signed in: one click stars it, with no browser.
+                #[cfg(not(target_arch = "wasm32"))]
+                if let Some(client) = self.github.client() {
+                    let star = Task::perform(
+                        async move {
+                            reshiki::github::api::star(&client, OWNER, NAME)
+                                .await
+                                .map_err(|error| error.to_string())
+                        },
+                        |result| Message::Star(Action::Starred(result)),
+                    );
+                    return if toast {
+                        Task::batch([star, super::focus_drawing(), self.accessibility_refresh()])
+                    } else {
+                        star
+                    };
+                }
                 let open = Task::perform(reshiki::updates::open_url(REPOSITORY.into()), |result| {
                     Message::Star(Action::Opened(result))
                 });
@@ -364,7 +454,87 @@ impl App {
             focused: self.star.focused,
             busy: self.star_busy(),
         };
-        should_ask(self.star.record.as_ref(), &moment)
+        should_ask(self.star.record.as_ref(), &moment) || self.star_sign_in_due(&moment)
+    }
+
+    /// The ask a few minutes after the first GitHub sign-in: once, even
+    /// after Not now, never after a star.
+    fn star_sign_in_due(&self, moment: &Moment<'_>) -> bool {
+        #[cfg(not(target_arch = "wasm32"))]
+        return self
+            .star
+            .signed_in
+            .is_some_and(|since| since.elapsed() >= AFTER_SIGN_IN)
+            && self.star.record.as_ref().is_some_and(|record| {
+                record.signed_in_ask == SignedInAsk::Due && record.state != Answer::Starred
+            })
+            && moment.focused
+            && !moment.busy
+            && moment.idle >= IDLE;
+        #[cfg(target_arch = "wasm32")]
+        {
+            let _ = moment;
+            false
+        }
+    }
+
+    /// Shows the card, saving the ask first, so that quitting without an
+    /// answer still counts and a folder that cannot keep the answer is never
+    /// asked. The asks after use come first; the sign-in ask counts apart.
+    fn star_show(&mut self) -> Task<Message> {
+        let today = today();
+        let asked = self
+            .star
+            .change(|record| record.ask(today, CURRENT_VERSION))
+            || self.star.signed_in.is_some()
+                && self.star.change(|record| {
+                    let due = record.signed_in_ask == SignedInAsk::Due;
+                    record.signed_in_ask = SignedInAsk::Asked;
+                    due
+                });
+        if !asked {
+            return Task::none();
+        }
+        self.star.signed_in = None;
+        self.star.open = true;
+        self.accessibility_refresh()
+    }
+
+    /// After the first GitHub sign-in on this computer, the card may ask once
+    /// more; see [`Self::star_sign_in_due`].
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(super) fn star_github_signed_in(&mut self) {
+        self.star.change(|record| {
+            let first = record.signed_in_ask == SignedInAsk::NotYet;
+            if first {
+                record.signed_in_ask = SignedInAsk::Due;
+            }
+            first
+        });
+        self.star_github_ready();
+    }
+
+    /// Signed in, now or at launch: start the few minutes before the
+    /// sign-in ask, if it is still due.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(super) fn star_github_ready(&mut self) {
+        let due = self.star.record.as_ref().is_some_and(|record| {
+            record.signed_in_ask == SignedInAsk::Due && record.state != Answer::Starred
+        });
+        if due && self.star.signed_in.is_none() {
+            self.star.signed_in = Some(Instant::now());
+        }
+    }
+
+    /// The Star link in About: no browser opens when signed in.
+    pub(super) fn star_link(&self) -> &'static str {
+        #[cfg(not(target_arch = "wasm32"))]
+        if self.github.starred {
+            return "★ Starred";
+        } else if self.github.client().is_some() {
+            return "Star ReShiki on GitHub";
+        }
+        "Star ReShiki on GitHub ↗"
     }
 
     /// Anything the toast must not interrupt, besides a focused field.
@@ -375,6 +545,7 @@ impl App {
             || self.pending.is_some()
             || self.recovery_manager.open()
             || self.updates.open
+            || self.github_dialog()
             || self.help_open
             || self.commands.open
             || self.view_open

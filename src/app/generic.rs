@@ -91,6 +91,7 @@ impl App {
             || self.recovery_manager.open()
             || self.updates.open
             || self.updates.restarting
+            || self.github_dialog()
             || self.exit.frozen()
     }
 

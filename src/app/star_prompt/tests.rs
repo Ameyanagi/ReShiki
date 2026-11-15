@@ -16,6 +16,7 @@ fn asking(first_launch_day: NaiveDate) -> Record {
         first_launch_day,
         uses: USES,
         state: Answer::Asking,
+        signed_in_ask: SignedInAsk::NotYet,
     }
 }
 
@@ -162,7 +163,12 @@ fn record_round_trips_and_leaves_a_newer_file_alone() {
     );
     assert_eq!(
         std::fs::read_to_string(&path).unwrap(),
-        r#"{"first_launch_day":"2026-11-15","uses":0,"state":"asking"}"#
+        r#"{"first_launch_day":"2026-11-15","uses":0,"state":"asking","signed_in_ask":"not_yet"}"#
+    );
+    // A record from before GitHub sign-in reads as never signed in.
+    assert_eq!(
+        Record::parse(br#"{"first_launch_day":"2026-11-15","uses":0,"state":"asking"}"#),
+        Some(new.clone())
     );
     // A later launch keeps the first day.
     assert_eq!(Record::load(&path, day("2026-12-01")), Some(new.clone()));
@@ -553,6 +559,70 @@ fn the_second_ask_or_a_star_ends_the_asks() {
         assert_eq!(app.status, "Could not open the browser");
         assert!(app.error);
     }
+}
+
+#[test]
+#[cfg(not(target_arch = "wasm32"))]
+fn the_first_github_sign_in_asks_once_more_even_after_not_now() {
+    let first = day("2026-01-01");
+    let dismissed = Record {
+        state: Answer::Asked {
+            version: CURRENT_VERSION.into(),
+            day: today(),
+        },
+        ..asking(first)
+    };
+    let (mut app, _dir) = app_with(dismissed);
+    app.star_github_signed_in();
+    assert_eq!(saved_record(&app).unwrap().signed_in_ask, SignedInAsk::Due);
+    assert!(!tick(&mut app), "not in the first few minutes");
+    app.star.signed_in = Some(Instant::now().checked_sub(AFTER_SIGN_IN).unwrap());
+    assert!(tick(&mut app));
+    let record = saved_record(&app).unwrap();
+    assert_eq!(record.signed_in_ask, SignedInAsk::Asked);
+    assert!(
+        matches!(record.state, Answer::Asked { .. }),
+        "the two asks after use stay"
+    );
+
+    // Signing in again never asks again.
+    let _ = app.update(Message::Star(Action::Dismiss));
+    app.star_github_signed_in();
+    assert!(app.star.signed_in.is_none());
+    assert!(!tick(&mut app));
+}
+
+#[test]
+#[cfg(not(target_arch = "wasm32"))]
+fn someone_who_starred_on_github_is_never_asked() {
+    let (mut app, _dir) = app_with(asking(day("2026-01-01")));
+    app.star_github_signed_in();
+    let _ = app.update(Message::Star(Action::IsStarred(Some(true))));
+    assert!(!app.star.open);
+    assert_eq!(saved_record(&app).unwrap().state, Answer::Starred);
+    assert!(app.star.signed_in.is_none());
+    assert!(!tick(&mut app));
+
+    // GitHub could not tell: the card shows as it would signed out.
+    let (mut app, _dir) = app_with(asking(day("2026-01-01")));
+    idle(&mut app);
+    let _ = app.update(Message::Star(Action::IsStarred(None)));
+    assert!(app.star.open);
+}
+
+#[test]
+#[cfg(not(target_arch = "wasm32"))]
+fn a_one_click_star_thanks_and_a_failed_one_opens_the_page() {
+    let (mut app, _dir) = app_with(asking(day("2026-01-01")));
+    assert_eq!(app.star_link(), "Star ReShiki on GitHub ↗");
+    let _ = app.update(Message::Star(Action::Starred(Ok(()))));
+    assert_eq!(app.status, STARRED);
+    assert_eq!(app.star_link(), "★ Starred");
+    let _ = app.update(Message::Star(Action::Starred(Err(
+        "No access on GitHub.".into()
+    ))));
+    let _ = app.update(Message::Star(Action::Opened(Ok(()))));
+    assert_eq!(app.status, THANKS);
 }
 
 /// The real view: event dispatch, focus and 2× pictures.

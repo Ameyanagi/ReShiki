@@ -1286,6 +1286,41 @@ fn files() -> Vec<Command> {
             Message::Export(format.code()),
         ));
     }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        use crate::app::github::{Action, Mode, picker};
+        let github = |action| Message::GitHub(action);
+        list.extend([
+            send(
+                "Open from GitHub…",
+                File,
+                "Open a drawing from a GitHub repository",
+                "github repository download clone",
+                github(Action::Picker(picker::Action::Show(Mode::Open))),
+            ),
+            send(
+                "Send to GitHub",
+                File,
+                "One commit of every changed drawing in the repository",
+                "github upload push commit sync",
+                github(Action::ShowSend),
+            ),
+            send(
+                "Versions",
+                File,
+                "Saves on this computer and commits on GitHub",
+                "github history revisions",
+                github(Action::ShowVersions),
+            ),
+            send(
+                "GitHub account…",
+                File,
+                "Sign in to GitHub or sign out",
+                "github sign in login",
+                github(Action::ShowAccount),
+            ),
+        ]);
+    }
     list
 }
 

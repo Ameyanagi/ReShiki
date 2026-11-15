@@ -17,7 +17,7 @@ use std::path::PathBuf;
 
 /// Names a tab for the lifetime of the window; results of work started in a
 /// tab carry it, so they can never land in another tab.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct TabId(pub(super) u64);
 
 pub(super) struct DocumentTab {

@@ -42,6 +42,8 @@ impl App {
             | Message::DownloadName(_) => {}
             #[cfg(any(windows, target_os = "linux"))]
             Message::Desktop(_) => {}
+            #[cfg(not(target_arch = "wasm32"))]
+            Message::GitHub(_) => {}
             #[cfg(target_arch = "wasm32")]
             Message::Host(_) | Message::SaveDownload(_) => {}
             Message::KeyboardDrawing(action) => return Some(self.keyboard_drawing_action(action)),

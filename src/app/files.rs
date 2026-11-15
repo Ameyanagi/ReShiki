@@ -645,6 +645,8 @@ impl super::App {
                 return task;
             }
             Ok(Prepared::Native(doc)) => {
+                #[cfg(not(target_arch = "wasm32"))]
+                self.github_opened(&path);
                 if self.open_target(Some(&path)) {
                     self.show_opened(*doc, Some(path));
                 }

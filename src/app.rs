@@ -50,6 +50,8 @@ pub(crate) use macos_files::install_document_events;
 mod desktop;
 mod gates;
 mod generic;
+#[cfg(not(target_arch = "wasm32"))]
+mod github;
 mod graphics;
 mod help;
 mod history;
@@ -156,6 +158,12 @@ pub enum InspectorTab {
     Import,
     Names,
     Export,
+    /// A GitHub drawing's saves and commits.
+    #[cfg_attr(
+        target_arch = "wasm32",
+        expect(dead_code, reason = "The browser editor has no GitHub sign-in")
+    )]
+    Versions,
 }
 
 #[derive(Debug, Clone)]
@@ -172,6 +180,8 @@ pub enum Message {
     Nmr(nmr::Action),
     Updates(updates::Action),
     Star(star_prompt::Action),
+    #[cfg(not(target_arch = "wasm32"))]
+    GitHub(github::Action),
     Reaction(reactions::Action),
     Mapping(reaction_mapping::Action),
     Generic(generic::Action),
@@ -422,6 +432,8 @@ pub struct App {
     style_menu: Option<color_popover::Menu>,
     updates: updates::State,
     star: star_prompt::State,
+    #[cfg(not(target_arch = "wasm32"))]
+    github: github::State,
     theme_library: theme_files::State,
     palette: Option<palettes::Family>,
     toolbar: palettes::Memory,
@@ -533,6 +545,8 @@ impl App {
             tabs: tabs::State::new(recovery_root),
             updates: updates::State::new(),
             star: star_prompt::State::load(),
+            #[cfg(not(target_arch = "wasm32"))]
+            github: github::State::new(),
             theme_library: theme_files::State::load(),
             palette: None,
             toolbar: palettes::Memory::default(),
@@ -601,6 +615,8 @@ impl App {
         #[cfg(any(windows, target_os = "linux"))]
         let task = task.chain(Task::done(Message::Desktop(desktop::Action::Ready)));
         let update_check = app.update_action(updates::Action::Check(false));
+        #[cfg(not(target_arch = "wasm32"))]
+        let update_check = Task::batch([update_check, app.github_start()]);
         app.sync_keyboard_drawing();
         (app, Task::batch([task, update_check]))
     }
@@ -966,6 +982,12 @@ impl App {
         if let Message::Star(action) = message {
             return self.star_action(action);
         }
+        // GitHub's messages change no drawing directly; see github.rs.
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Message::GitHub(action) = message {
+            let task = self.github_action(action);
+            return Task::batch([task, self.github_follow()]);
+        }
         // A touch can confirm its mouse press and move/release together. Each
         // edit still passes through the same focus and preview gates as a mouse.
         let message =
@@ -1009,6 +1031,9 @@ impl App {
                 ),
             ]);
         }
+        // Versions follows the drawing in front.
+        #[cfg(not(target_arch = "wasm32"))]
+        let task = Task::batch([task, self.github_follow()]);
         task
     }
     fn handle(&mut self, message: Message) -> Task<Message> {
@@ -1291,7 +1316,12 @@ impl App {
             || (self.tab.optimization.is_some()
                 && self.inspector_open
                 && self.inspector_tab == InspectorTab::Properties);
+        #[cfg(not(target_arch = "wasm32"))]
+        let github = self.github.dialog_open();
+        #[cfg(target_arch = "wasm32")]
+        let github = false;
         let dialog = self.prompt.is_some()
+            || github
             || self.recovery_manager.open()
             || self.updates.open
             || self.assistant.viewed_image.is_some()
@@ -1306,13 +1336,24 @@ impl App {
             file_shortcuts::wrap(
                 // The command palette sits above the floating NMR panel so its
                 // modal also keeps that panel from taking clicks.
-                self.with_prompt(self.with_recovery_manager(self.with_updates(
-                    self.with_assistant_image(self.with_commands(self.with_nmr(
-                        self.with_atom_text(self.with_help(self.with_palette(self.workspace()))),
+                self.with_prompt(self.with_github_dialog(self.with_recovery_manager(
+                    self.with_updates(self.with_assistant_image(self.with_commands(
+                        self.with_nmr(
+                            self.with_atom_text(
+                                self.with_help(self.with_palette(self.workspace())),
+                            ),
+                        ),
                     ))),
                 ))),
                 if self.prompt.is_some() {
                     Some(prompt::modal_key)
+                } else if github {
+                    #[cfg(not(target_arch = "wasm32"))]
+                    {
+                        Some(github::modal_key)
+                    }
+                    #[cfg(target_arch = "wasm32")]
+                    None
                 } else if self.recovery_manager.open() {
                     Some(recovery_manager::modal_key)
                 } else if self.help_open {
@@ -1333,6 +1374,23 @@ impl App {
             ),
             traverse,
         )
+    }
+}
+
+impl App {
+    /// Whether a GitHub dialog owns input.
+    fn github_dialog(&self) -> bool {
+        #[cfg(not(target_arch = "wasm32"))]
+        return self.github.dialog_open();
+        #[cfg(target_arch = "wasm32")]
+        false
+    }
+    /// The GitHub dialog, on the desktop.
+    fn with_github_dialog<'a>(&'a self, content: Element<'a, Message>) -> Element<'a, Message> {
+        #[cfg(not(target_arch = "wasm32"))]
+        return self.with_github(content);
+        #[cfg(target_arch = "wasm32")]
+        content
     }
 }
 
