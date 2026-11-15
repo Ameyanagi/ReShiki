@@ -27,11 +27,24 @@ Closing a drawing whose saves are not on GitHub asks **Send to GitHub** or
 **Later**. Later keeps the saves on this computer; the status bar shows them
 the next time you open the drawing.
 
+If a drawing changed on GitHub since you opened it, Send leaves it out and
+shows **GitHub’s** and **Yours** side by side. What differs is highlighted:
+atoms, bonds, text and graphics. Choose one:
+
+- **Keep GitHub’s**: your drawing becomes GitHub's. Undo brings yours back,
+  and yours stays in Versions.
+- **Keep mine**: yours goes to GitHub over theirs. Theirs stays in the
+  repository's history.
+- **Keep both**: yours is saved beside it as `<name> (2).rsk` and sent.
+
+Escape decides later. The status bar shows **1 conflict** with **Review**.
+
 **GitHub → Versions** lists the saves on this computer since the last send
 (**On this Mac**, or **On this computer** on Windows and Linux) and the commits
 on GitHub that changed the drawing (**On GitHub**). Select one, then choose
-**Open** to see it in a new tab or **Restore** to make it the drawing again.
-Restore is one undo step and makes a new save.
+**Compare with current** to see it beside the drawing now, **Open** to see it
+in a new tab or **Restore** to make it the drawing again. Restore is one undo
+step and makes a new save.
 
 The same commands are in the command palette: **Open from GitHub…**,
 **Send to GitHub**, **Versions** and **GitHub account…**.
@@ -41,9 +54,8 @@ The same commands are in the command palette: **Open from GitHub…**,
 - Desktop only. The browser editor has no GitHub sign-in yet.
 - ReShiki uses each repository's default branch, and only `.rsk` drawings and
   their `.svg` previews.
-- A drawing that changed on GitHub since you opened it is left out of the
-  commit and shown as **1 conflict**. Nothing is overwritten. Comparing the two
-  versions and choosing one comes in the next step of this feature.
+- A change to the drawing's style or settings is not highlighted. The compare
+  says **Style or settings changed** instead.
 - Send sends the saved files. It saves the drawing in front first; drawings in
   other tabs are sent as last saved.
 - On Linux without a keyring, the sign-in lasts until ReShiki quits:
@@ -62,6 +74,11 @@ The same commands are in the command palette: **Open from GitHub…**,
 - Send reads the repository by id, builds one tree on the branch head and
   moves the branch only forward. If the head moved, it retries against the new
   head.
+- The compare matches atoms, text, arrows and graphics by id (ids survive
+  saving) and bonds by their two atoms, and compares each as saved. A bond
+  whose atom moved counts as changed. Everything else in the file is compared
+  as a whole for **Style or settings changed**. Changes are boxes drawn under
+  the drawings, so a highlight colour shows as it is.
 - The picker lists one folder at a time. Its tiles render the drawing itself,
   the way an opened file renders; no preview file from the repository is
   parsed.

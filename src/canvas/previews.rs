@@ -366,6 +366,49 @@ impl canvas::Program<crate::app::Message> for DrawingPreview<'_> {
     }
 }
 
+/// One side of a compare: `doc` fitted into `frame`, which both sides share
+/// so they line up, with each of `marks` (what differs) shaded under it.
+#[cfg(not(target_arch = "wasm32"))]
+pub struct ComparePreview<'a> {
+    pub doc: &'a Document,
+    pub marks: &'a [(World, World)],
+    pub frame: (World, World),
+}
+#[cfg(not(target_arch = "wasm32"))]
+impl canvas::Program<crate::app::Message> for ComparePreview<'_> {
+    type State = ();
+    fn draw(
+        &self,
+        _: &(),
+        renderer: &Renderer,
+        _theme: &Theme,
+        bounds: Rectangle,
+        _: mouse::Cursor,
+    ) -> Vec<Geometry> {
+        let mut frame =
+            layered::Frame::new(renderer, bounds.size()).with_canvas(self.doc.canvas_theme);
+        frame.fill_rectangle(Point::ORIGIN, bounds.size(), Color::WHITE);
+        let (lo, hi) = self.frame;
+        let camera = Camera {
+            center: World::new((lo.x + hi.x) / 2., (lo.y + hi.y) / 2.),
+            zoom: ((bounds.width - 24.) / (hi.x - lo.x).max(1.))
+                .min((bounds.height - 24.) / (hi.y - lo.y).max(1.))
+                .clamp(0.001, 1.4),
+        };
+        for (lo, hi) in self.marks {
+            let (a, b) = (camera.screen(*lo, bounds), camera.screen(*hi, bounds));
+            let corner = Point::new(a.x.min(b.x), a.y.min(b.y));
+            let size = iced::Size::new((b.x - a.x).abs(), (b.y - a.y).abs());
+            frame.fill(
+                &Path::rounded_rectangle(corner, size, 4.0.into()),
+                Color::from_rgba8(245, 166, 35, 0.35),
+            );
+        }
+        draw_document_with_minimum_stroke(&mut frame, self.doc, camera, bounds, 0.6);
+        frame.finish()
+    }
+}
+
 /// Palette strokes remain legible even when a large structure is fitted into a tile.
 pub struct PalettePreview(pub Document);
 impl canvas::Program<crate::app::Message> for PalettePreview {

@@ -107,6 +107,8 @@ pub use tool::Tool;
 use grid::grid_dots;
 #[cfg(test)]
 use hit::{bond_target, bond_target_with, hit_selection, region_selection};
+#[cfg(not(target_arch = "wasm32"))]
+pub use previews::ComparePreview;
 #[cfg(test)]
 use previews::PreviewState;
 #[cfg(test)]

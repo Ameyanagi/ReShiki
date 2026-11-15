@@ -18,6 +18,8 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 mod account;
+mod compare;
+mod conflict;
 pub(super) mod picker;
 #[cfg(test)]
 mod tests;
@@ -55,6 +57,9 @@ pub(super) enum Dialog {
     Account,
     Picker(Box<picker::Picker>),
     Send(SendDraft),
+    Conflict(Box<conflict::Review>),
+    /// A version, under its label, and the drawing now.
+    Compare(Box<compare::Compare>, String),
 }
 
 #[derive(Debug)]
@@ -93,6 +98,10 @@ pub(super) struct State {
     unsent: HashMap<RepoKey, Vec<String>>,
     sending: HashSet<RepoKey>,
     failed: HashMap<RepoKey, String>,
+    /// What the last send of each repository found changed on GitHub.
+    conflicts: HashMap<RepoKey, Vec<send::Conflict>>,
+    /// A choice waiting for its drawing to be saved.
+    resolving: Option<(RepoKey, send::Choice)>,
     /// A Send waiting for the drawing in front to be saved, with its message.
     after_save: Option<(RepoKey, String)>,
     closing: Option<Closing>,
@@ -130,6 +139,8 @@ impl State {
             unsent: HashMap::new(),
             sending: HashSet::new(),
             failed: HashMap::new(),
+            conflicts: HashMap::new(),
+            resolving: None,
             after_save: None,
             closing: None,
             later: HashSet::new(),
@@ -193,6 +204,9 @@ pub enum Action {
     Persisted(RepoKey, Result<(), String>),
     /// Send (`true`) or Later, asked on closing.
     CloseAnswer(bool),
+    /// The conflict dialog for the drawing in front's repository.
+    Review,
+    Resolve(send::Choice),
     ShowVersions,
     Versions(versions::Action),
 }
@@ -284,6 +298,7 @@ impl App {
     /// Closes the dialog; the picker's late results drop with it.
     fn github_close_dialog(&mut self) -> Task<Message> {
         self.github.dialog = None;
+        self.github.resolving = None;
         Task::batch([focus_drawing(), self.accessibility_refresh()])
     }
 
@@ -551,7 +566,7 @@ impl App {
                     self.github.after_save = Some((draft.key, message));
                     return Task::batch([close, self.save_drawing(false)]);
                 }
-                return Task::batch([close, self.github_send(draft.key, message)]);
+                return Task::batch([close, self.github_send(draft.key, message, None)]);
             }
             Action::Sent(key, sent_at, result) => return self.github_sent(key, sent_at, result),
             Action::Recorded(key, result) => {
@@ -571,6 +586,12 @@ impl App {
                 return self.versions_reload_local();
             }
             Action::CloseAnswer(send) => return self.github_close_answer(send),
+            Action::Review => {
+                if let Some((key, _)) = self.github.locate(self.tab.path.as_deref()) {
+                    return self.github_review(key, 0);
+                }
+            }
+            Action::Resolve(choice) => return self.github_resolve(choice),
             Action::ShowVersions => {
                 self.github.menu = false;
                 if self.github.locate(self.tab.path.as_deref()).is_none() {
@@ -658,8 +679,10 @@ impl App {
     pub(super) fn github_saved(&mut self, saved: Option<PathBuf>) -> Task<Message> {
         let waiting = self.github.after_save.take();
         let Some(path) = saved else {
+            self.github.resolving = None;
             return Task::none();
         };
+        let resolve = self.github_resolve_saved(&path);
         let Some((key, repo_path)) = self.github.locate(Some(&path)) else {
             return Task::none();
         };
@@ -684,15 +707,21 @@ impl App {
         self.github_refresh(&key);
         let send = match waiting {
             Some((waiting, message)) if waiting == key && !self.dirty() => {
-                self.github_send(key, message)
+                self.github_send(key, message, None)
             }
             _ => Task::none(),
         };
-        Task::batch([record, send])
+        Task::batch([record, send, resolve])
     }
 
-    /// One commit of every unsent drawing of `key`, read from its saved file.
-    fn github_send(&mut self, key: RepoKey, message: String) -> Task<Message> {
+    /// One commit of every unsent drawing of `key` (or of those in `only`),
+    /// read from its saved file.
+    fn github_send(
+        &mut self,
+        key: RepoKey,
+        message: String,
+        only: Option<Vec<String>>,
+    ) -> Task<Message> {
         let Some(client) = self.github.client() else {
             self.github.dialog = Some(Dialog::Account);
             return self.accessibility_refresh();
@@ -711,13 +740,16 @@ impl App {
             {
                 let key = key.clone();
                 async move {
-                    let outgoing = {
+                    let mut outgoing = {
                         let (root, key, state) = (root.clone(), key.clone(), state.clone());
                         reshiki::task::spawn_blocking(move || send::outgoing(&root, &key, &state))
                             .await
                             .map_err(|error| gh::Error::Rejected(error.to_string()))?
                             .map_err(gh::Error::Rejected)?
                     };
+                    if let Some(only) = only {
+                        outgoing.retain(|file| only.contains(&file.repo_path));
+                    }
                     send::send(&client, state.repo_id, &message, &outgoing).await
                 }
             },
@@ -741,6 +773,9 @@ impl App {
                 };
                 send::apply(state, &outcome);
                 let state = state.clone();
+                self.github
+                    .conflicts
+                    .insert(key.clone(), outcome.conflicts.clone());
                 self.github.seq += 1;
                 let seq = self.github.seq;
                 tasks.push(perform(
@@ -773,6 +808,16 @@ impl App {
             }
         }
         tasks.push(self.github_close_after_send(&key));
+        // GitHub's and yours, side by side, at once.
+        if self.github.dialog.is_none()
+            && self
+                .github
+                .conflicts
+                .get(&key)
+                .is_some_and(|found| !found.is_empty())
+        {
+            tasks.push(self.github_review(key, 0));
+        }
         Task::batch(tasks)
     }
 
@@ -879,7 +924,7 @@ impl App {
     fn github_send_unsent(&mut self, key: RepoKey) -> Task<Message> {
         self.github_refresh(&key);
         let files = self.github.unsent.get(&key).cloned().unwrap_or_default();
-        let task = self.github_send(key.clone(), send::default_message(&files));
+        let task = self.github_send(key.clone(), send::default_message(&files), None);
         if !self.github.sending.contains(&key) {
             // Not signed in, or nothing to send: the close waits for the user.
             self.github.closing = None;
@@ -1038,15 +1083,22 @@ impl App {
         if state.sending.contains(&key) {
             items = items.push(chip("github-chip", "Sending…".into(), None, false));
         } else if conflicts > 0 {
-            items = items.push(chip(
-                "github-chip",
-                match conflicts {
-                    1 => "1 conflict".into(),
-                    n => format!("{n} conflicts"),
-                },
-                Some(Action::ShowVersions),
-                false,
-            ));
+            items = items
+                .push(chip(
+                    "github-chip",
+                    match conflicts {
+                        1 => "1 conflict".into(),
+                        n => format!("{n} conflicts"),
+                    },
+                    Some(Action::ShowVersions),
+                    false,
+                ))
+                .push(chip(
+                    "github-review",
+                    "Review".into(),
+                    Some(Action::Review),
+                    true,
+                ));
         } else if state.failed.contains_key(&key) {
             items = items
                 .push(chip(
@@ -1115,6 +1167,18 @@ impl App {
                 super::help::Placement::Center,
             ),
             Dialog::Send(draft) => (send_view(draft), 420., 340., super::help::Placement::Center),
+            Dialog::Conflict(review) => (
+                conflict::view(review),
+                960.,
+                600.,
+                super::help::Placement::Center,
+            ),
+            Dialog::Compare(compare, label) => (
+                compare.dialog(self.tab.name(), label),
+                960.,
+                600.,
+                super::help::Placement::Center,
+            ),
         };
         let height = match dialog {
             Dialog::Picker(_) => height,

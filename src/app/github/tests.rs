@@ -404,3 +404,276 @@ fn restoring_a_version_is_one_undo_step_and_a_new_save() {
     assert!(app.tab.path.is_none());
     assert!(app.tab.name().starts_with("ring · "));
 }
+
+/// `ring.rsk` saved here as "mine" while GitHub got "theirs" (or deleted it),
+/// then sent: the send leaves it out as a conflict.
+fn conflicted(app: &mut App, path: &Path, theirs: Option<Vec<u8>>) -> Vec<u8> {
+    let mine = save_here(app, path);
+    let outcome = SendOutcome {
+        repo: repo(),
+        commit: sha('f'),
+        sent: Vec::new(),
+        conflicts: vec![send::Conflict {
+            repo_path: "ring.rsk".into(),
+            commit: sha('f'),
+            blob: theirs.as_ref().map(|_| sha('a')),
+            theirs,
+            mine: mine.clone(),
+            names: vec!["ring.rsk".into(), "ring.svg".into()],
+        }],
+    };
+    app.github.sending.insert(repo().key);
+    github(
+        app,
+        Action::Sent(repo().key, workcopy::now_id(), Ok(outcome)),
+    );
+    mine
+}
+
+fn review(app: &App) -> &conflict::Review {
+    match &app.github.dialog {
+        Some(Dialog::Conflict(review)) => review,
+        other => panic!("no conflict dialog: {other:?}"),
+    }
+}
+
+fn file_state(app: &App, path: &str) -> Option<FileState> {
+    app.github.states[&repo().key].files.get(path).cloned()
+}
+
+fn outgoing(app: &App, dir: &Path) -> Vec<(String, Option<String>)> {
+    let state = &app.github.states[&repo().key];
+    send::outgoing(dir, &repo().key, state)
+        .unwrap()
+        .into_iter()
+        .map(|file| (file.repo_path, file.base_blob))
+        .collect()
+}
+
+#[test]
+fn a_conflict_shows_githubs_and_yours_with_the_changes_marked() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_in(dir.path());
+    conflicted(&mut app, &path, Some(drawing(30.)));
+    let review = review(&app);
+    assert_eq!(
+        (review.name.as_str(), review.copy.as_str()),
+        ("ring.rsk", "ring (2).rsk")
+    );
+    assert_eq!((review.done, review.total), (0, 1));
+    let compare = &review.compare;
+    assert!(compare.left.is_ok());
+    assert!(!compare.marks[0].is_empty() && !compare.marks[1].is_empty());
+
+    // Escape decides later: nothing changes, and Review stays.
+    let before = std::fs::read(&path).unwrap();
+    let _ = app.update(Message::Escape);
+    assert!(app.github.dialog.is_none());
+    assert_eq!(std::fs::read(&path).unwrap(), before);
+    assert!(file_state(&app, "ring.rsk").unwrap().conflict.is_some());
+    github(&mut app, Action::Review);
+    assert!(matches!(app.github.dialog, Some(Dialog::Conflict(_))));
+}
+
+#[test]
+fn keep_mine_sends_yours_over_githubs() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_in(dir.path());
+    let mine = conflicted(&mut app, &path, Some(drawing(30.)));
+    app.github.sending.clear();
+    github(&mut app, Action::Resolve(send::Choice::KeepMine));
+    assert!(app.github.dialog.is_none());
+    // Files: yours stays.
+    assert_eq!(std::fs::read(&path).unwrap(), mine);
+    // State: built on GitHub's version, still to send.
+    let file = file_state(&app, "ring.rsk").unwrap();
+    assert_eq!((file.base_commit, file.conflict), (sha('f'), None));
+    assert_eq!(
+        outgoing(&app, dir.path()),
+        [("ring.rsk".into(), Some(sha('a')))]
+    );
+    assert!(!app.dirty());
+    // Send: started again at once.
+    assert!(app.github.sending.contains(&repo().key));
+}
+
+#[test]
+fn keep_githubs_shows_it_as_one_undo_step_and_keeps_yours_in_versions() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_in(dir.path());
+    let mine = conflicted(&mut app, &path, Some(drawing(30.)));
+    app.github.sending.clear();
+    let yours = app.tab.doc.clone();
+    github(&mut app, Action::Resolve(send::Choice::KeepTheirs));
+    assert!(app.github.dialog.is_none());
+    // Files: GitHub's is here; yours is the newest version.
+    assert_eq!(std::fs::read(&path).unwrap(), drawing(30.));
+    let saves = workcopy::snapshots(dir.path(), &repo().key, "ring.rsk").unwrap();
+    assert_eq!(std::fs::read(&saves.last().unwrap().path).unwrap(), mine);
+    // State: nothing left to send, so nothing is sent.
+    let file = file_state(&app, "ring.rsk").unwrap();
+    assert_eq!(file.base_hash, workcopy::hash(&drawing(30.)));
+    assert_eq!(file.conflict, None);
+    assert!(outgoing(&app, dir.path()).is_empty());
+    assert!(app.github.sending.is_empty());
+    // The tab shows GitHub's, saved, and Undo brings yours back.
+    let theirs = Document::from_native_file(&drawing(30.)).unwrap();
+    assert!(super::super::same_drawing(&app.tab.doc, &theirs));
+    assert!(!app.dirty());
+    let _ = app.update(Message::Undo);
+    assert!(super::super::same_drawing(&app.tab.doc, &yours));
+}
+
+#[test]
+fn keep_both_saves_yours_beside_githubs_and_sends_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_in(dir.path());
+    let mine = conflicted(&mut app, &path, Some(drawing(30.)));
+    app.github.sending.clear();
+    github(&mut app, Action::Resolve(send::Choice::KeepBoth));
+    assert!(app.github.dialog.is_none());
+    // Files: GitHub's under the name, yours beside it.
+    let copy = workcopy::working_path(dir.path(), &repo().key, "ring (2).rsk");
+    assert_eq!(std::fs::read(&path).unwrap(), drawing(30.));
+    assert_eq!(std::fs::read(&copy).unwrap(), mine);
+    // State: the copy is new on GitHub; the original is GitHub's.
+    assert_eq!(file_state(&app, "ring (2).rsk"), Some(FileState::default()));
+    assert_eq!(file_state(&app, "ring.rsk").unwrap().conflict, None);
+    assert_eq!(outgoing(&app, dir.path()), [("ring (2).rsk".into(), None)]);
+    // The tab still shows yours, now as the copy.
+    assert_eq!(app.tab.path.as_deref(), Some(copy.as_path()));
+    assert!(!app.dirty());
+    assert!(app.github.sending.contains(&repo().key));
+}
+
+#[test]
+fn keep_githubs_deletion_leaves_yours_open_unsaved() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_in(dir.path());
+    conflicted(&mut app, &path, None);
+    assert_eq!(
+        review(&app).compare.left.as_ref().err().map(String::as_str),
+        Some("Deleted on GitHub")
+    );
+    github(&mut app, Action::Resolve(send::Choice::KeepTheirs));
+    assert!(!path.exists());
+    assert_eq!(file_state(&app, "ring.rsk"), None);
+    assert_eq!(app.tab.path, None);
+    assert_eq!(app.tab.name(), "ring.rsk");
+    assert!(app.dirty(), "an unsaved drawing");
+}
+
+#[test]
+fn unsaved_edits_are_saved_first_and_are_what_is_kept() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_in(dir.path());
+    conflicted(&mut app, &path, Some(drawing(30.)));
+    app.tab.doc.atoms[0].position.x += 20.;
+    github(&mut app, Action::Resolve(send::Choice::KeepBoth));
+    assert!(app.file_io.saving, "saves first");
+    assert!(matches!(app.github.dialog, Some(Dialog::Conflict(_))));
+    // The save lands, as `Saved` delivers it.
+    app.file_io.saving = false;
+    let edited = app.tab.doc.file_json().unwrap();
+    std::fs::write(&path, &edited).unwrap();
+    app.tab.mark_saved(app.tab.doc.clone());
+    let _ = app.github_saved(Some(path.clone()));
+    let copy = workcopy::working_path(dir.path(), &repo().key, "ring (2).rsk");
+    assert_eq!(std::fs::read(&copy).unwrap(), edited);
+    assert_eq!(std::fs::read(&path).unwrap(), drawing(30.));
+}
+
+#[test]
+fn several_conflicts_are_shown_one_after_another() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_in(dir.path());
+    let other = workcopy::working_path(dir.path(), &repo().key, "b.rsk");
+    std::fs::write(&other, drawing(60.)).unwrap();
+    let mine = save_here(&mut app, &path);
+    let conflict = |repo_path: &str, mine: Vec<u8>| send::Conflict {
+        repo_path: repo_path.into(),
+        commit: sha('f'),
+        blob: Some(sha('a')),
+        theirs: Some(drawing(30.)),
+        mine,
+        names: Vec::new(),
+    };
+    app.github
+        .states
+        .get_mut(&repo().key)
+        .unwrap()
+        .files
+        .insert(
+            "b.rsk".into(),
+            FileState {
+                base_commit: sha('c'),
+                base_blob: Some(sha('b')),
+                base_hash: String::new(),
+                conflict: None,
+            },
+        );
+    let outcome = SendOutcome {
+        repo: repo(),
+        commit: sha('f'),
+        sent: Vec::new(),
+        conflicts: vec![conflict("b.rsk", drawing(60.)), conflict("ring.rsk", mine)],
+    };
+    github(
+        &mut app,
+        Action::Sent(repo().key, workcopy::now_id(), Ok(outcome)),
+    );
+    assert_eq!(review(&app).name, "b.rsk");
+    assert_eq!((review(&app).done, review(&app).total), (0, 2));
+    github(&mut app, Action::Resolve(send::Choice::KeepTheirs));
+    assert_eq!(review(&app).name, "ring.rsk");
+    assert_eq!((review(&app).done, review(&app).total), (1, 2));
+    assert!(
+        app.github.sending.is_empty(),
+        "sends once every conflict is settled"
+    );
+    github(&mut app, Action::Resolve(send::Choice::KeepMine));
+    assert!(app.github.dialog.is_none());
+    assert!(app.github.sending.contains(&repo().key));
+}
+
+#[test]
+fn review_after_a_restart_asks_github_again() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_in(dir.path());
+    conflicted(&mut app, &path, Some(drawing(30.)));
+    let _ = app.update(Message::Escape);
+    app.github.conflicts.clear();
+    app.github.sending.clear();
+    github(&mut app, Action::Review);
+    assert!(app.github.sending.contains(&repo().key));
+}
+
+#[test]
+fn a_version_compares_with_the_drawing_now() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _path) = app_in(dir.path());
+    github(&mut app, Action::ShowVersions);
+    let generation = app.github.versions.generation;
+    let old = Arc::new(Document::from_native_file(&drawing(30.)).unwrap());
+    let id = "1763200000000".to_owned();
+    github(
+        &mut app,
+        Action::Versions(versions::Action::LocalLoaded(
+            generation,
+            Ok(vec![(id.clone(), old.clone())]),
+        )),
+    );
+    github(
+        &mut app,
+        Action::Versions(versions::Action::Select(versions::Pick::Local(id))),
+    );
+    github(&mut app, Action::Versions(versions::Action::Compare));
+    let Some(Dialog::Compare(compare, _)) = &app.github.dialog else {
+        panic!("no compare");
+    };
+    assert_eq!(compare.left.as_ref().ok(), Some(&*old));
+    assert_eq!(compare.right, app.tab.doc);
+    assert!(!compare.marks[1].is_empty());
+    let _ = app.update(Message::Escape);
+    assert!(app.github.dialog.is_none());
+}

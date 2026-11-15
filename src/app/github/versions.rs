@@ -52,6 +52,8 @@ pub enum Action {
     Doc(u64, String, Result<Arc<Document>, bool>),
     LoadMore,
     Select(Pick),
+    /// The version beside the drawing now, with what differs marked.
+    Compare,
     Open,
     Restore,
 }
@@ -238,6 +240,15 @@ impl App {
                 );
             }
             Action::Select(pick) => self.github.versions.selected = Some(pick),
+            Action::Compare => {
+                let Some((label, doc)) = self.versions_picked() else {
+                    return Task::none();
+                };
+                let compare =
+                    super::compare::Compare::new(Ok((*doc).clone()), self.tab.doc.clone());
+                self.github.dialog = Some(super::Dialog::Compare(Box::new(compare), label));
+                return self.accessibility_refresh();
+            }
             Action::Open => {
                 let Some((label, doc)) = self.versions_picked() else {
                     return Task::none();
@@ -447,6 +458,14 @@ fn version_row<'a>(
         item = item.push(
             row![
                 reshiki::accessibility::button(
+                    "github-version-compare",
+                    "Compare with current",
+                    text("Compare with current").size(12)
+                )
+                .padding([5, 10])
+                .style(crate::appearance::secondary)
+                .on_press(msg(Action::Compare)),
+                reshiki::accessibility::button(
                     "github-version-open",
                     "Open",
                     text("Open").size(12)
@@ -463,7 +482,8 @@ fn version_row<'a>(
                 .style(crate::appearance::primary)
                 .on_press(msg(Action::Restore)),
             ]
-            .spacing(6),
+            .spacing(6)
+            .wrap(),
         );
     }
     item.into()

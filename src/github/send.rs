@@ -246,6 +246,34 @@ pub async fn record(
     Ok(())
 }
 
+/// Where `KeepBoth` keeps mine: `a (2).rsk`, or the first `a (n).rsk` whose
+/// drawing and preview names are free here and on GitHub.
+pub fn copy_path(root: &Path, key: &RepoKey, state: &RepoState, conflict: &Conflict) -> String {
+    let stem = conflict
+        .repo_path
+        .strip_suffix(".rsk")
+        .unwrap_or(&conflict.repo_path);
+    let folder = stem
+        .rsplit_once('/')
+        .map_or(0, |(folder, _)| folder.len() + 1);
+    let free = |copy: &String| {
+        [copy.clone(), svg_path(copy)].iter().all(|name| {
+            let (_, file) = name.split_at(folder);
+            !conflict.names.iter().any(|taken| taken == file)
+                && !state.files.contains_key(name)
+                && !workcopy::working_path(root, key, name).exists()
+        })
+    };
+    let mut n = 2;
+    loop {
+        let copy = format!("{stem} ({n}).rsk");
+        if free(&copy) {
+            return copy;
+        }
+        n += 1;
+    }
+}
+
 /// Settle a conflict on this computer; the caller then sends again. "Mine" is
 /// the drawing as saved now, not as it was when the conflict was found.
 /// Returns the path of the copy that `KeepBoth` made. Blocking.
@@ -275,23 +303,7 @@ pub fn resolve(
     }
     let mine = std::fs::read(&path).map_err(|error| error.to_string())?;
     let copy = if choice == Choice::KeepBoth {
-        let stem = conflict
-            .repo_path
-            .strip_suffix(".rsk")
-            .unwrap_or(&conflict.repo_path);
-        let folder = stem
-            .rsplit_once('/')
-            .map_or(0, |(folder, _)| folder.len() + 1);
-        let free = |copy: &String| {
-            [copy.clone(), svg_path(copy)].iter().all(|name| {
-                let (_, file) = name.split_at(folder);
-                !conflict.names.iter().any(|taken| taken == file)
-                    && !state.files.contains_key(name)
-                    && !workcopy::working_path(root, key, name).exists()
-            })
-        };
-        let copy = (2..).map(|n| format!("{stem} ({n}).rsk")).find(free);
-        let copy = copy.ok_or("No free name")?;
+        let copy = copy_path(root, key, state, conflict);
         storage::write_saved(&workcopy::working_path(root, key, &copy), &mine)?;
         state.files.insert(copy.clone(), FileState::default());
         Some(copy)
