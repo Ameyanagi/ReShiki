@@ -6,8 +6,9 @@ issues: []
 - The interface uses the platform's own sans-serif: Helvetica Neue on macOS,
   Segoe UI on Windows and Noto Sans on Linux. A label ending in "…", such as
   **Predict NMR…**, no longer reads as "Predict NMR···". Japanese and other CJK
-  text in the interface comes from the system's CJK font; on a Japanese system,
-  kanji keep their Japanese forms. Drawing labels keep their own fonts.
+  text in the interface comes from the system's CJK font, in the glyph forms of
+  the first CJK language or region among the preferred languages, so English
+  (Japan) keeps Japanese kanji forms. Drawing labels keep their own fonts.
 - Before any command has run, the command palette opens on a **Start here**
   group: **Import structure or name**, **Benzene**, **Open…**,
   **Clean up structure**, **Molecular formula and properties**,
@@ -25,3 +26,5 @@ issues: []
   lists, and the light/dark canvas button. Tabs say whether they are selected or
   edited. With a journal preset or color theme list focused, **↑** and **↓**
   choose the previous or next option.
+- **Tab** reaches the **Font** box: type to search, **↑** and **↓** move through
+  the list, and **Enter** picks the font and returns focus to the drawing.
