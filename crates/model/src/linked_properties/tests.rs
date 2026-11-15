@@ -305,3 +305,105 @@ fn merging_atoms_updates_the_caption() {
     assert_eq!(merged.property_captions[0].atoms.len(), 1);
     assert_eq!(text(&merged), "Formula: CH4");
 }
+
+#[test]
+fn merging_into_another_atom_keeps_the_caption() {
+    let mut doc = Document::default();
+    let a = doc.add_atom("C", Point::new(0., 0.));
+    let b = doc.add_atom("C", Point::new(40., 0.));
+    let c = doc.add_atom("C", Point::new(80., 0.));
+    toggle(
+        &mut doc,
+        &[b],
+        Property::Formula,
+        TextFormat::default(),
+        true,
+    )
+    .unwrap();
+    let (merged, survivors) = crate::joining::merge_atoms(&doc, &[a, b, c]).unwrap();
+    assert_ne!(survivors, [b]);
+    assert_eq!(merged.property_captions[0].atoms, survivors);
+    assert_eq!(text(&merged), "Formula: CH4");
+}
+
+#[test]
+fn a_split_molecule_keeps_its_caption_on_the_largest_piece() {
+    let mut doc = Document::default();
+    let atoms = phenol(&mut doc, 0.);
+    let methyl = doc.add_atom("C", Point::new(-60., 0.));
+    doc.add_bond(atoms[3], methyl, 1, "plain");
+    let mut whole = atoms.clone();
+    whole.push(methyl);
+    toggle(
+        &mut doc,
+        &whole,
+        Property::Formula,
+        TextFormat::default(),
+        true,
+    )
+    .unwrap();
+    let mut history = History::default();
+    edit(&mut doc, &mut history, |doc| {
+        doc.bonds.retain(|b| b.b != methyl);
+    });
+    assert_eq!(doc.property_captions.len(), 1);
+    assert_eq!(doc.property_captions[0].atoms, atoms);
+    assert_eq!(text(&doc), "Formula: C6H6O");
+    assert!(shown(&doc, &atoms, Property::Formula));
+    // The other piece gets its own caption; the first one stays.
+    toggle(
+        &mut doc,
+        &[methyl],
+        Property::Weight,
+        TextFormat::default(),
+        true,
+    )
+    .unwrap();
+    assert_eq!(doc.property_captions.len(), 2);
+    assert!(shown(&doc, &atoms, Property::Formula));
+    assert!(shown(&doc, &[methyl], Property::Weight));
+}
+
+#[test]
+fn toggle_takes_one_molecule() {
+    let mut doc = Document::default();
+    let first = phenol(&mut doc, 0.);
+    let second = phenol(&mut doc, 200.);
+    let both: Vec<_> = first.iter().chain(&second).copied().collect();
+    assert!(
+        toggle(
+            &mut doc,
+            &both,
+            Property::Weight,
+            TextFormat::default(),
+            true
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn styling_part_of_the_caption_keeps_it() {
+    let (mut doc, _) = shown_doc(&[Property::Weight], true);
+    let mut history = History::default();
+    let number = "Mol. Wt.: ".len().."Mol. Wt.: 94.11".len();
+    edit(&mut doc, &mut history, |doc| {
+        let caption = &mut doc.annotations[0];
+        let text = caption.text.clone();
+        caption.format.apply(
+            &text,
+            Some(number.clone()),
+            &crate::typography::StyleChange::Bold(true),
+        );
+    });
+    assert_eq!(doc.property_captions.len(), 1);
+    let caption = &doc.annotations[0];
+    assert!(caption.format.at(number.start).bold);
+    assert!(!caption.format.at(0).bold);
+}
+
+#[test]
+fn analysis_without_values_uses_its_caption_label() {
+    let (text, _) = write(None, &[Property::Analysis], true);
+    assert_eq!(text, "Anal. Calcd: –");
+}

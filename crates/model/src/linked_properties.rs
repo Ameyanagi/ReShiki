@@ -31,7 +31,8 @@ impl Property {
         Self::Tpsa,
         Self::Analysis,
     ];
-    /// The menu name; the caption line uses the same words.
+    /// The menu name. Caption lines use the same words, except elemental
+    /// analysis, which reads "Anal. Calcd for …".
     pub fn name(self) -> &'static str {
         match self {
             Self::Formula => "Formula",
@@ -72,11 +73,15 @@ pub struct PropertyCaption {
     pub text: String,
 }
 
+fn covers(link: &PropertyCaption, atoms: &[u64]) -> bool {
+    link.atoms.len() == atoms.len() && atoms.iter().all(|id| link.atoms.contains(id))
+}
+
 /// The caption shown for exactly this molecule.
 pub fn caption<'a>(doc: &'a Document, atoms: &[u64]) -> Option<&'a PropertyCaption> {
-    doc.property_captions.iter().find(|link| {
-        link.atoms.len() == atoms.len() && atoms.iter().all(|id| link.atoms.contains(id))
-    })
+    doc.property_captions
+        .iter()
+        .find(|link| covers(link, atoms))
 }
 
 /// Whether `property` is shown for this molecule.
@@ -142,7 +147,11 @@ fn write(
             text.push('\n');
         }
         let Some(v) = values else {
-            text.push_str(&format!("{}: –", property.name()));
+            let label = match property {
+                Property::Analysis => "Anal. Calcd",
+                _ => property.name(),
+            };
+            text.push_str(&format!("{label}: –"));
             continue;
         };
         match property {
@@ -181,25 +190,28 @@ fn write(
 }
 
 /// Rewrite the caption from its molecule, keeping its style and center.
+/// Unchanged text also keeps the style of any part of it.
 fn refresh(doc: &Document, link: &mut PropertyCaption, caption: &mut Annotation) {
     let (text, formulas) = write(
         values(doc, &link.atoms).as_ref(),
         &link.properties,
         link.two_decimal_weight,
     );
-    let center = caption.position.x + caption.size().0 / 2.;
-    let mut style = caption.format.style.clone();
-    style.formula = true;
-    caption.format.spans = formulas
-        .into_iter()
-        .map(|r| TextSpan {
-            start: r.start,
-            end: r.end,
-            style: style.clone(),
-        })
-        .collect();
-    caption.text = text.clone();
-    caption.position.x = center - caption.size().0 / 2.;
+    if text != caption.text {
+        let center = caption.position.x + caption.size().0 / 2.;
+        let mut style = caption.format.style.clone();
+        style.formula = true;
+        caption.format.spans = formulas
+            .into_iter()
+            .map(|r| TextSpan {
+                start: r.start,
+                end: r.end,
+                style: style.clone(),
+            })
+            .collect();
+        caption.text = text.clone();
+        caption.position.x = center - caption.size().0 / 2.;
+    }
     link.text = text;
 }
 
@@ -210,8 +222,8 @@ fn anchor(doc: &Document, atoms: &[u64]) -> Option<Point> {
 }
 
 /// Show or hide one property of the molecule made of `atoms`, which must be
-/// whole connected components. The first property adds the caption below the
-/// molecule; hiding the last removes it.
+/// one whole connected component. The first property adds the caption below
+/// the molecule. Hiding the last removes it.
 pub fn toggle(
     doc: &mut Document,
     atoms: &[u64],
@@ -219,18 +231,17 @@ pub fn toggle(
     mut format: TextFormat,
     two_decimal_weight: bool,
 ) -> Result<(), String> {
-    let whole: HashSet<_> = atoms
-        .iter()
-        .flat_map(|id| crate::molecule_names::component(doc, *id))
-        .collect();
-    if atoms.is_empty() || whole.len() != atoms.len() || atoms.iter().any(|id| !whole.contains(id))
+    let whole = atoms
+        .first()
+        .map_or(vec![], |id| crate::molecule_names::component(doc, *id));
+    if whole.is_empty() || whole.len() != atoms.len() || atoms.iter().any(|id| !whole.contains(id))
     {
         return Err("Select one whole molecule to show its properties".into());
     }
     let index = doc
         .property_captions
         .iter()
-        .position(|link| link.atoms.iter().any(|id| whole.contains(id)));
+        .position(|link| covers(link, &whole));
     let mut link = match index {
         Some(index) => doc.property_captions.remove(index),
         None => {
@@ -272,12 +283,7 @@ pub fn toggle(
         doc.delete(&[link.annotation]);
         return Ok(());
     }
-    link.atoms = doc
-        .atoms
-        .iter()
-        .map(|a| a.id)
-        .filter(|id| whole.contains(id))
-        .collect();
+    link.atoms = whole;
     link.two_decimal_weight = two_decimal_weight;
     let mut caption = doc
         .annotations
@@ -295,8 +301,9 @@ pub fn toggle(
 }
 
 /// Called in the same transaction as the edit: each linked caption follows its
-/// molecule's atoms and position. Edited text unlinks; a deleted molecule
-/// removes its caption; a molecule joined to another keeps the first caption.
+/// molecule's atoms and position. Edited text unlinks it. A deleted molecule
+/// removes its caption. Molecules joined together keep the first caption, and
+/// a split molecule keeps its caption on the largest piece.
 pub fn reconcile(doc: &mut Document, before: &Document) {
     let links = std::mem::take(&mut doc.property_captions);
     let mut claimed = HashSet::new();
@@ -312,10 +319,15 @@ pub fn reconcile(doc: &mut Document, before: &Document) {
         if caption.text != link.text {
             continue;
         }
-        let mut whole = HashSet::new();
+        let mut seen = HashSet::new();
+        let mut whole = vec![];
         for id in &link.atoms {
-            if !whole.contains(id) {
-                whole.extend(crate::molecule_names::component(doc, *id));
+            if seen.insert(*id) {
+                let piece = crate::molecule_names::component(doc, *id);
+                seen.extend(piece.iter().copied());
+                if piece.len() > whole.len() {
+                    whole = piece;
+                }
             }
         }
         if whole.is_empty() || whole.iter().any(|id| claimed.contains(id)) {
@@ -335,12 +347,7 @@ pub fn reconcile(doc: &mut Document, before: &Document) {
                     .any(|a| a.id == link.annotation && a.position == caption.position)
             })
             .and_then(|old| anchor(before, &old.atoms));
-        link.atoms = doc
-            .atoms
-            .iter()
-            .map(|a| a.id)
-            .filter(|id| whole.contains(id))
-            .collect();
+        link.atoms = whole;
         refresh(doc, &mut link, &mut caption);
         if let Some((from, to)) = shift.zip(anchor(doc, &link.atoms)) {
             caption.position = caption.position.offset(to.x - from.x, to.y - from.y);
