@@ -17,8 +17,7 @@ issues: []
   out, so the partitions do not wait for them.
 - On Windows, CI runs every ignored test of the application whose name does
   not start with `manual_` or end in `_child`, and the accessibility tests of
-  the root library: about 145 renderer checks, where 13 hand-written steps ran
-  about 70. A `_child` test runs only when its parent test starts it. Benchmarks, baseline comparisons and capture tools are now
+  the root library: all 145 renderer checks, where 12 hand-written steps ran 69. A `_child` test runs only when its parent test starts it. Benchmarks, baseline comparisons and capture tools are now
   named `manual_…`, so their commands change, for example
   `manual_views_match_captured_baseline` and `manual_editing_workloads`. See
   [Opt-in renderer tests](development.md#opt-in-renderer-tests).
