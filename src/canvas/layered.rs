@@ -13,6 +13,9 @@ use std::rc::Rc;
 pub(super) type RetainedGeometry =
     <canvas::Geometry as iced::advanced::graphics::cache::Cached>::Cache;
 
+/// Layers drawn shifted by a pan since their geometry was retained.
+pub type Shifts = Vec<(std::ops::Range<usize>, Vector)>;
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(super) struct FrameKey {
     clip: [u32; 4],
@@ -54,15 +57,22 @@ impl<M, P: Program<M>> Program<M> for Shared<P> {
 pub struct LayeredCanvas<P: Program<M>, M> {
     program: Rc<P>,
     inner: canvas::Canvas<Shared<P>, M>,
+    shifts: Option<fn(&P::State) -> Shifts>,
 }
 pub fn canvas<P: Program<M>, M>(program: P) -> LayeredCanvas<P, M> {
     let program = Rc::new(program);
     LayeredCanvas {
         inner: canvas::Canvas::new(Shared(program.clone())),
         program,
+        shifts: None,
     }
 }
 impl<P: Program<M>, M> LayeredCanvas<P, M> {
+    /// Read the [`Shifts`] of the layers the program just drew from its state.
+    pub fn shifted(mut self, shifts: fn(&P::State) -> Shifts) -> Self {
+        self.shifts = Some(shifts);
+        self
+    }
     pub fn width(mut self, width: impl Into<Length>) -> Self {
         self.inner = self.inner.width(width);
         self
@@ -141,9 +151,16 @@ impl<P: Program<M>, M> Widget<M, Theme, Renderer> for LayeredCanvas<P, M> {
         };
         let state = tree.state.downcast_ref::<P::State>();
         let layers = self.program.draw(state, renderer, theme, bounds, cursor);
+        let shifts = self.shifts.map(|shifts| shifts(state)).unwrap_or_default();
         renderer.with_translation(Vector::new(bounds.x, bounds.y), |renderer| {
-            for geometry in layers {
-                renderer.with_layer(clip, |renderer| renderer.draw_geometry(geometry));
+            for (i, geometry) in layers.into_iter().enumerate() {
+                let shift = shifts
+                    .iter()
+                    .find(|(layers, _)| layers.contains(&i))
+                    .map_or(Vector::ZERO, |(_, shift)| *shift);
+                renderer.with_layer(clip, |renderer| {
+                    renderer.with_translation(shift, |renderer| renderer.draw_geometry(geometry));
+                });
             }
         });
     }
@@ -161,6 +178,7 @@ pub struct Frame<'a> {
     offset: Vector,
     current: canvas::Frame,
     layers: Vec<canvas::Geometry>,
+    shifts: Shifts,
     dark: bool,
     pub(super) text_cache: Option<&'a std::cell::RefCell<super::text_cache::TextCache>>,
 }
@@ -177,6 +195,7 @@ impl<'a> Frame<'a> {
             offset,
             current,
             layers: vec![],
+            shifts: vec![],
             dark: false,
             text_cache: None,
         }
@@ -208,12 +227,20 @@ impl<'a> Frame<'a> {
             dark: self.dark,
         }
     }
-    /// A separate layer with the same clipping, coordinates, colors and fonts.
-    pub(super) fn layer(&self) -> Self {
+    /// A separate layer with the same coordinates, colors and fonts, clipped
+    /// `margin` beyond this frame's edges. Draw it as if the frame were that
+    /// much larger on every side.
+    pub(super) fn layer(&self, margin: Vector) -> Self {
+        let clip = Rectangle {
+            x: self.clip.x - margin.x,
+            y: self.clip.y - margin.y,
+            width: self.clip.width + 2. * margin.x,
+            height: self.clip.height + 2. * margin.y,
+        };
         Self {
             dark: self.dark,
             text_cache: self.text_cache,
-            ..Self::clipped(self.renderer, self.clip, self.offset)
+            ..Self::clipped(self.renderer, clip, self.offset - margin)
         }
     }
     fn display_style(&self, style: canvas::Style) -> canvas::Style {
@@ -257,15 +284,25 @@ impl<'a> Frame<'a> {
                 draw(frame);
             }));
     }
-    /// Append a complete retained layer sequence, preserving picture ordering.
-    pub(super) fn retained(&mut self, geometry: &[RetainedGeometry]) {
+    /// Append a complete retained layer sequence, preserving picture ordering,
+    /// drawn `shift` from where it was retained.
+    pub(super) fn retained(&mut self, geometry: &[RetainedGeometry], shift: Vector) {
         use iced::advanced::graphics::cache::Cached;
         self.split();
+        let start = self.layers.len();
         self.layers.extend(geometry.iter().map(Cached::load));
+        if shift != Vector::ZERO {
+            self.shifts.push((start..self.layers.len(), shift));
+        }
     }
-    pub fn finish(mut self) -> Vec<canvas::Geometry> {
+    pub fn finish(self) -> Vec<canvas::Geometry> {
+        self.finish_shifted().0
+    }
+    /// The layers and how far to shift each retained one; [`Self::finish`]
+    /// suits frames without retained geometry.
+    pub(super) fn finish_shifted(mut self) -> (Vec<canvas::Geometry>, Shifts) {
         self.split();
-        self.layers
+        (self.layers, self.shifts)
     }
 }
 impl std::ops::Deref for Frame<'_> {
