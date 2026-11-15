@@ -197,27 +197,49 @@ pub fn focus_border(theme: &Theme, inner: Color) -> Color {
     )
 }
 
-/// The locale that sets Han characters in the interface in Japanese forms.
-/// cosmic-text matches only the exact locale "ja", so under "ja-JP" kanji
-/// in a file name or caption fell back to PingFang SC, in Chinese forms.
-pub fn han_locale(system: &str) -> Option<&'static str> {
-    (system.split(['-', '_']).next() == Some("ja")).then_some("ja")
+/// The font fallback locale for Han characters in the interface: the forms of
+/// the first preferred language that names a CJK language, script or region.
+/// In order: a ja or ko language, Hans, HK or MO, Hant or TW, a zh language,
+/// and last a CN, JP or KR region. cosmic-text matches only "ja", "ko",
+/// "zh-HK" and "zh-TW" (anything else gets Simplified Chinese forms) and
+/// reads only the first preferred language, so under "ja-JP", or "en-JP" then
+/// "ja-JP", kanji fell back to PingFang SC.
+pub fn han_locale(preferred: impl IntoIterator<Item = impl AsRef<str>>) -> Option<&'static str> {
+    const SUBTAGS: [(&str, &str); 11] = [
+        ("ja", "ja"),
+        ("ko", "ko"),
+        ("Hans", "zh-CN"),
+        ("HK", "zh-HK"),
+        ("MO", "zh-HK"),
+        ("Hant", "zh-TW"),
+        ("TW", "zh-TW"),
+        ("zh", "zh-CN"),
+        ("CN", "zh-CN"),
+        ("JP", "ja"),
+        ("KR", "ko"),
+    ];
+    preferred.into_iter().find_map(|locale| {
+        let locale = locale.as_ref();
+        (SUBTAGS.iter())
+            .find(|(tag, _)| locale.split('-').any(|subtag| subtag == *tag))
+            .map(|(_, han)| *han)
+    })
 }
 
-/// Gives the interface's font fallback a Japanese system locale's Han forms.
-/// Call before any text is shaped.
+/// Gives the interface's font fallback the Han forms of the user's preferred
+/// languages. Call before any text is shaped.
 pub fn prepare_han_fallback() {
     use iced::advanced::graphics::text::{
         cosmic_text::{FontSystem, fontdb::Database},
         font_system,
     };
+    let Some(locale) = han_locale(sys_locale::get_locales()) else {
+        return;
+    };
     let mut fonts = font_system()
         .write()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     let fonts = fonts.raw();
-    let Some(locale) = han_locale(fonts.locale()) else {
-        return;
-    };
     let system = std::mem::replace(
         fonts,
         FontSystem::new_with_locale_and_db(locale.into(), Database::new()),

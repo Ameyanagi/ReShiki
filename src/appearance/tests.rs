@@ -350,11 +350,34 @@ async fn escape_closes_an_open_pick_list() {
     assert_eq!([batch, closed].concat(), [Msg::Close]);
 }
 
+/// Han forms follow the first preferred language that names a CJK language,
+/// script or region; macOS lists an English interface in Japan as "en-JP".
+#[test]
+fn han_locale_follows_the_first_cjk_preferred_language_or_region() {
+    for (preferred, locale) in [
+        (&["en-JP", "ja-JP"][..], Some("ja")),
+        (&["ja-JP"], Some("ja")),
+        (&["en-US", "ja-JP"], Some("ja")),
+        (&["en-US"], None),
+        (&["zh-Hans-CN", "ja-JP"], Some("zh-CN")),
+        (&["zh-Hant-TW"], Some("zh-TW")),
+        (&["zh-Hant-HK"], Some("zh-HK")),
+        (&["ko-KR"], Some("ko")),
+        (&["ko-JP"], Some("ko")),
+        (&["zh-Hans-HK"], Some("zh-CN")),
+        (&["en-CN", "ja-JP"], Some("zh-CN")),
+        (&["yue-Hant"], Some("zh-TW")),
+        (&["zh-JP"], Some("zh-CN")),
+    ] {
+        assert_eq!(han_locale(preferred), locale, "{preferred:?}");
+    }
+}
+
 /// Han-only interface text, such as a file name, falls back from the Latin
-/// interface font by locale; a Japanese system sets it in Japanese forms.
+/// interface font by locale; only the exact locale "ja" gets Japanese forms.
 #[cfg(target_os = "macos")]
 #[test]
-fn japanese_locales_set_han_only_interface_text_in_japanese_forms() {
+fn japanese_han_locale_sets_han_only_interface_text_in_japanese_forms() {
     use iced::advanced::graphics::text::{
         cosmic_text::{Attrs, Buffer, Family, FontSystem, Metrics, Shaping},
         font_system,
@@ -372,18 +395,12 @@ fn japanese_locales_set_han_only_interface_text_in_japanese_forms() {
             .map(|(name, _)| name.clone())
             .collect::<Vec<_>>()
     };
+    let japanese = "Hiragino Sans".to_owned();
     assert_eq!(family, "Helvetica Neue");
     // Without the locale fix: cosmic-text 0.15 matches only "ja".
-    assert!(face("ja-JP").contains(&"PingFang SC".to_owned()));
-    for system in ["ja-JP", "ja_JP", "ja"] {
-        let locale = han_locale(system).unwrap();
-        assert!(
-            face(locale).contains(&"Hiragino Sans".to_owned()),
-            "{system}: {:?}",
-            face(locale)
-        );
+    for system in ["en-JP", "ja-JP"] {
+        assert!(!face(system).contains(&japanese), "{system}");
     }
-    for system in ["en-US", "zh-CN", "jav"] {
-        assert_eq!(han_locale(system), None, "{system}");
-    }
+    let locale = han_locale(["en-JP", "ja-JP"]).unwrap();
+    assert!(face(locale).contains(&japanese), "{:?}", face(locale));
 }
