@@ -491,3 +491,45 @@ fn findings_survive_a_tab_switch_until_their_drawing_changes() {
     app.changed(before);
     assert!(app.tab.stereo_notes.is_empty());
 }
+
+#[test]
+fn the_pulse_runs_out_under_a_preview_and_leaves_popovers_and_status_alone() {
+    let mut app = fixture_app(drawing("plain", false));
+    checked(&mut app, vec![], true);
+    app.tab.busy = false;
+    let pulse = |app: &mut App| {
+        let _ = app.update(Message::Stereo(Action::Select(0)));
+        assert!(app.tab.pulse.is_some());
+    };
+    let expire = |app: &mut App| {
+        if let Some((_, start)) = &mut app.tab.pulse {
+            *start -= std::time::Duration::from_secs(2);
+        }
+        assert!(
+            app.pulse_atoms().is_none(),
+            "The highlight stops at its end"
+        );
+        let _ = app.update(Message::Stereo(Action::Pulse));
+        assert!(app.tab.pulse.is_none());
+    };
+    // A style popover opened during the pulse stays open through its ticks.
+    pulse(&mut app);
+    let _ = app.update(Message::StyleMenu(crate::app::color_popover::Action::Color));
+    assert!(app.style_menu.is_some());
+    let _ = app.update(Message::Stereo(Action::Pulse));
+    assert!(app.style_menu.is_some());
+    expire(&mut app);
+    assert!(app.style_menu.is_some());
+    let _ = app.update(Message::Escape);
+    // A 3D preview started during the pulse keeps its status, and the pulse ends.
+    pulse(&mut app);
+    let _ = app.update(Message::Optimization(
+        crate::app::optimization::Action::Begin,
+    ));
+    assert!(app.tab.optimization.is_some(), "{}", app.status);
+    let status = app.status.clone();
+    let _ = app.update(Message::Stereo(Action::Pulse));
+    assert_eq!(app.status, status);
+    expire(&mut app);
+    assert_eq!(app.status, status);
+}

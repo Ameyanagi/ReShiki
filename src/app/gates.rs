@@ -72,6 +72,10 @@ impl App {
     }
 
     fn early_results_gate(&mut self, message: Message) -> Gate {
+        if let Message::Stereo(action @ super::stereo::Action::Pulse) = message {
+            self.stereo_action(action);
+            return Break(Task::none());
+        }
         if let Message::Generic(generic::Action::Expanded { source, epoch, .. }) = &message
             && self.generic_expansion_blocked()
         {
@@ -258,7 +262,6 @@ impl App {
             message,
             Message::Canvas(Edit::Hover(_) | Edit::PointerHover(_))
                 | Message::Tick
-                | Message::Stereo(super::stereo::Action::Pulse)
                 | Message::InspectorScroll(_)
                 | Message::EngineDone { .. }
                 | Message::EngineFinished { .. }

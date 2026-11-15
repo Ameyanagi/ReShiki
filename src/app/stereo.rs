@@ -8,7 +8,8 @@ pub enum Action {
     Select(usize),
     /// Open or close the list of findings under Check drawing.
     Results(bool),
-    /// Advance or end the pulse.
+    /// Advance or end the pulse. Background work: the gates hand it over
+    /// before any preview, popover or menu sees it.
     Pulse,
     Reverse,
     Redraw,
@@ -81,8 +82,9 @@ impl App {
     /// The atoms of the pulsing finding while they are lit.
     pub(super) fn pulse_atoms(&self) -> Option<&[u64]> {
         let (atoms, start) = self.tab.pulse.as_ref()?;
-        let blink = start.elapsed().as_millis() / BLINK.as_millis();
-        blink.is_multiple_of(2).then_some(atoms.as_slice())
+        let elapsed = start.elapsed();
+        let blink = elapsed.as_millis() / BLINK.as_millis();
+        (elapsed < PULSE && blink.is_multiple_of(2)).then_some(atoms.as_slice())
     }
 
     /// Redraws the pulse while it runs.
