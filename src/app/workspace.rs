@@ -2368,8 +2368,8 @@ impl App {
                     .label("Show stereodescriptors\n(R/S, E/Z…)")
                     .text_size(12)
                     .on_toggle(|v| Message::Labels(A::Stereo(v))),
-                "R/S: stereocentre; swaps in the mirror image.\n\
-                     r/s: pseudoasymmetric centre; unchanged in the mirror image.\n\
+                "R/S: stereocenter; swaps in the mirror image.\n\
+                     r/s: pseudoasymmetric center; unchanged in the mirror image.\n\
                      E/Z: double bond; unchanged in the mirror image.\n\
                      M/P: axial or planar chirality (Ra/Sa when chosen).\n\
                      seqCis/seqTrans: enantiomorphic double bond; swaps in the mirror image.",
@@ -2383,7 +2383,7 @@ impl App {
                 "abs: configuration exactly as drawn.\n\
                      and1: racemic; the drawn form and its mirror image, 1:1.\n\
                      or1: one of the two forms, not known which.\n\
-                     Centres with the same label flip together. Set groups in the inspector's Stereo groups section.",
+                     Centers with the same label flip together. Set groups in the inspector's Stereo groups section.",
                 tooltip::Position::Left,
             ))
             .push(

@@ -128,7 +128,7 @@ fn undefined_note_selects_double_bond_endpoints_and_atom_centres() {
         .find(|note| note.kind == Kind::Undefined)
         .unwrap();
     assert_eq!(note.atoms, vec![1]);
-    assert!(app.status.contains("1 undefined stereocentre"));
+    assert!(app.status.contains("1 undefined stereocenter"));
     assert_eq!(app.tab.selected, vec![1]);
     // Selection includes both ends, even when a notice has no atom entries.
     app.tab.stereo_notes = vec![Note {
