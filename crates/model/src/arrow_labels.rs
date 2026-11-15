@@ -115,22 +115,42 @@ pub fn gap_geometry(doc: &Document, annotation: u64) -> Option<GapGeometry> {
 /// Explicit movement of text changes its gap. Moving its arrow, formatting the
 /// text or transforming the scheme keeps the saved clearance instead.
 pub fn translated(doc: &mut Document, ids: &[u64]) {
+    translated_units(doc, |id| ids.contains(&id).then_some(0));
+}
+
+/// [`translated`] for several disjoint selections that each moved by their
+/// own offset: `selection` names the one an object belongs to. Text that moved
+/// with its arrow keeps its link as it is.
+pub(crate) fn translated_units(doc: &mut Document, selection: impl Fn(u64) -> Option<usize>) {
     if doc.arrow_labels.is_empty() {
         return;
     }
     let labels = std::mem::take(&mut doc.arrow_labels);
     let mut kept = Vec::with_capacity(labels.len());
     let mut dragged = Vec::new();
+    // First match by ID, as a scan would find it; built for the first drag.
+    let mut index = None;
     for mut label in labels {
-        if !ids.contains(&label.annotation) || ids.contains(&label.arrow) {
+        let moved = selection(label.annotation);
+        if moved.is_none() || moved == selection(label.arrow) {
             kept.push(label);
             continue;
         }
-        let Some((arrow, text)) = doc
-            .arrows
-            .iter()
-            .find(|a| a.id == label.arrow)
-            .zip(doc.annotations.iter().find(|a| a.id == label.annotation))
+        let (arrows, texts) = index.get_or_insert_with(|| {
+            let mut arrows = HashMap::new();
+            for arrow in &doc.arrows {
+                arrows.entry(arrow.id).or_insert(arrow);
+            }
+            let mut texts = HashMap::new();
+            for text in &doc.annotations {
+                texts.entry(text.id).or_insert(text);
+            }
+            (arrows, texts)
+        });
+        let Some((arrow, text)) = arrows
+            .get(&label.arrow)
+            .copied()
+            .zip(texts.get(&label.annotation).copied())
         else {
             continue;
         };
@@ -154,12 +174,15 @@ pub fn translated(doc: &mut Document, ids: &[u64]) {
         if (value - label.gap.unwrap_or_else(|| spacing(doc).gap)).abs() > 1e-4 {
             label.gap = Some(value);
         }
-        dragged.push(label);
+        dragged.push((moved, label));
     }
+    // One selection after another, as separate moves would leave them.
+    dragged.sort_by_key(|(moved, _)| *moved);
     let mut sides: HashSet<_> = kept.iter().map(|l| (l.arrow, l.side)).collect();
     kept.extend(
         dragged
             .into_iter()
+            .map(|(_, label)| label)
             .filter(|l| sides.insert((l.arrow, l.side))),
     );
     doc.arrow_labels = kept;

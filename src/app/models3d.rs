@@ -228,26 +228,28 @@ impl App {
     /// The selected molecule and the index of its model, if it has one.
     pub(super) fn selected_model(&self) -> Option<(Vec<u64>, Option<usize>)> {
         let atoms = models3d::selected_molecule(&self.tab.doc, &self.tab.selected)?;
+        let members: std::collections::HashSet<_> = atoms.iter().copied().collect();
         let index = self
             .tab
             .doc
             .models
             .iter()
             .position(|model| {
-                let linked = model.linked_ids(&self.tab.doc);
-                linked.len() == atoms.len() && atoms.iter().all(|id| linked.contains(id))
+                // Its links hold every atom of an equal molecule, so the
+                // first one rules out the other models without a scan.
+                atoms.first().is_some_and(|id| model.contains(*id)) && {
+                    let linked = model.linked_ids(&self.tab.doc);
+                    linked.len() == atoms.len() && linked.iter().all(|id| members.contains(id))
+                }
             })
             .or_else(|| {
                 // A newly attached atom can select its one existing model without
                 // becoming a source link until Update. Joined views need an
                 // explicit selection of one model's links.
-                let mut matching = self
-                    .tab
-                    .doc
-                    .models
-                    .iter()
-                    .enumerate()
-                    .filter(|(_, model)| atoms.iter().any(|id| model.contains(*id)));
+                let mut matching =
+                    self.tab.doc.models.iter().enumerate().filter(|(_, model)| {
+                        model.linked_atoms.iter().any(|id| members.contains(id))
+                    });
                 let (index, _) = matching.next()?;
                 matching.next().is_none().then_some(index)
             });

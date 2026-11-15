@@ -421,7 +421,7 @@ impl App {
         };
         self.select_tool(tool);
         self.tab.numeric_transforms.reference.drag_epoch = Some(self.tab.file_epoch);
-        self.status = tool.hint().into();
+        self.status = tool.hint();
         self.error = false;
     }
     pub(super) fn reference_transform_panel(&self) -> Element<'_, Message> {

@@ -201,7 +201,8 @@ impl MoleculeCanvas<'_> {
                     *ring_selection = Some(ids);
                     *template_notice = Some((
                         format!(
-                            "{preset} · Drag rotates in 15° steps · Option/Alt rotates freely and connects from an atom · Esc cancels"
+                            "{preset} · Drag rotates in 15° steps · {} rotates freely and connects from an atom · Esc cancels",
+                            crate::platform::alt_key()
                         ),
                         true,
                     ));

@@ -7,7 +7,10 @@ digits, and arrow navigation. **v** draws a three-member ring, and **l** enters
 Cl at an atom or empty hotspot. Choose Select/Lasso with the tool buttons;
 **Escape** cancels the current operation or returns to Select. **F8** switches
 the current tab between hotspot drawing and classic contextual controls.
-Commands that do not fit in the context row are in its **⋯** menu.
+With an atom as the target, the context row shows **Mark** with its key **[**;
+once an atom is marked, it also shows **Connect** (**]**) and **Coordinate**
+(**}**). Commands that do not fit in the context row are in its **⋯** menu,
+starting with the last ones.
 
 ## Show a molecule as a 3D model
 
@@ -369,7 +372,7 @@ Enter edits an existing selected abbreviation or contracts a multi-atom
 selection. With hotspot drawing on, the active atom takes priority over the
 selection.
 
-For a coordination contact, mark a donor N/O/S/P with **[**, navigate to a transition metal and use **Coordinate }** or **}**. This adds a directed dative contact without moving atoms; **]** keeps its ordinary covalent checks. See [coordination contacts](fragment-joining.md#coordination-contacts-in-place) for scope and projection styling.
+For a coordination contact, mark a donor N/O/S/P with **[**, navigate to a transition metal and use **Coordinate** or press **}**. This adds a directed dative contact without moving atoms; **]** keeps its ordinary covalent checks. See [coordination contacts](fragment-joining.md#coordination-contacts-in-place) for scope and projection styling.
 
 To close an open chain, navigate to one endpoint and press **[**, then navigate
 to the other endpoint and press **]**. This adds a single bond and clears the

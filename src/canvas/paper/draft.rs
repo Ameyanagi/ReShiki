@@ -123,7 +123,10 @@ impl MoleculeCanvas<'_> {
                                         .doc
                                         .atom(id)
                                         .map_or("atom", |atom| atom.element.as_str());
-                                    format!("Orbital · Node snapped to {label} · Option/Alt frees")
+                                    format!(
+                                        "Orbital · Node snapped to {label} · {} frees",
+                                        crate::platform::alt_key()
+                                    )
                                 },
                             ),
                             true,
@@ -184,7 +187,10 @@ impl MoleculeCanvas<'_> {
                     if free {
                         format!("Free · {degrees}° · {turn}")
                     } else {
-                        format!("Orbit · {degrees}° · {turn} · Option/Alt or Shift frees")
+                        format!(
+                            "Orbit · {degrees}° · {turn} · {} or Shift frees",
+                            crate::platform::alt_key()
+                        )
                     },
                     true,
                 ));

@@ -21,6 +21,9 @@ pub(crate) enum Resolve {
 /// the optional dative projection copy shared by drawing, occlusion and picking.
 pub(crate) struct BondInputs<'d> {
     doc: Cow<'d, Document>,
+    /// `doc` with bonds ending at two-attachment abbreviation labels, when
+    /// that differs.
+    drawn: Option<std::rc::Rc<Document>>,
     labels: AtomLabels,
     projection: Option<Document>,
 }
@@ -28,16 +31,16 @@ pub(crate) struct BondInputs<'d> {
 impl<'d> BondInputs<'d> {
     pub(crate) fn prepare(doc: &'d Document, opacity: &Paint, resolve: Resolve) -> Self {
         let doc = Self::resolve(doc, resolve);
-        let doc = match doc.abbreviation_render_copy() {
-            Cow::Owned(drawn) => Cow::Owned(drawn),
-            Cow::Borrowed(_) => doc,
+        let drawn = match doc.abbreviation_render_copy() {
+            crate::abbreviations::Drawn::Remapped(drawn) => Some(drawn),
+            crate::abbreviations::Drawn::Unchanged(_) => None,
         };
-        Self::new(doc, opacity)
+        Self::new(doc, drawn, opacity)
     }
 
     /// The caller already prepared abbreviation geometry for this operation.
     pub(crate) fn from_drawn(doc: &'d Document, opacity: &Paint, resolve: Resolve) -> Self {
-        Self::new(Self::resolve(doc, resolve), opacity)
+        Self::new(Self::resolve(doc, resolve), None, opacity)
     }
 
     fn resolve(doc: &'d Document, resolve: Resolve) -> Cow<'d, Document> {
@@ -56,27 +59,29 @@ impl<'d> BondInputs<'d> {
         }
     }
 
-    fn new(doc: Cow<'d, Document>, opacity: &Paint) -> Self {
+    fn new(doc: Cow<'d, Document>, drawn: Option<std::rc::Rc<Document>>, opacity: &Paint) -> Self {
+        let chemical = drawn.as_deref().unwrap_or(&doc);
         // Reversing a dative graph changes donor hydrogen counts. Labels must
         // use the resolved chemical document, before projection normalization.
-        let labels = collect_atom_labels(&doc, opacity);
-        let projection = match projection_render_copy(&doc) {
+        let labels = collect_atom_labels(chemical, opacity);
+        let projection = match projection_render_copy(chemical) {
             Cow::Owned(doc) => Some(doc),
             Cow::Borrowed(_) => None,
         };
         Self {
             doc,
+            drawn,
             labels,
             projection,
         }
     }
 
     pub(crate) fn doc(&self) -> &Document {
-        &self.doc
+        self.drawn.as_deref().unwrap_or(&self.doc)
     }
 
     pub(crate) fn bond_doc(&self) -> &Document {
-        self.projection.as_ref().unwrap_or(&self.doc)
+        self.projection.as_ref().unwrap_or(self.doc())
     }
 
     pub(crate) fn labels(&self) -> &AtomLabels {
@@ -104,6 +109,10 @@ impl<'a> BondPass<'a> {
             joins,
             faces,
         }
+    }
+
+    pub(crate) fn graph(&self) -> &super::graph::Graph<'a> {
+        self.faces.graph()
     }
 
     pub(super) fn scene<'s>(

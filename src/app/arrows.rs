@@ -7,10 +7,6 @@ use reshiki::graphics::LinePattern;
 /// The arrow card's one line of gesture help; the full text is in the guide.
 const GESTURE_HINT: &str = "Drag the diamond to bend, the squares to aim each end";
 const ATTACH_LABEL: &str = "Attach ends to atoms and bonds";
-const ATTACH_HINT: &str = concat!(
-    "Two clicks: a source, then a destination atom, bond or lone pair · ",
-    "Option/Alt-click or turn this off for a free arrow"
-);
 
 #[derive(Debug, Clone, Copy)]
 pub enum Field {
@@ -485,7 +481,10 @@ impl App {
                     .on_toggle(|value| Message::ArrowAction(Action::AttachTargets(value)))
                     .size(14)
                     .text_size(12),
-                ATTACH_HINT,
+                format!(
+                    "Two clicks: a source, then a destination atom, bond or lone pair · {}-click or turn this off for a free arrow",
+                    crate::platform::alt_key()
+                ),
                 tooltip::Position::Top,
             ));
         }

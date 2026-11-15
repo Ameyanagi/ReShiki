@@ -859,7 +859,14 @@ pub(super) fn commits_draft(message: &Message) -> bool {
                     | super::cleanup::Action::ToFischer,
             )
             | Message::Analyze
-            | Message::Stereo(_)
+            | Message::Stereo(
+                super::stereo::Action::Select(_)
+                    | super::stereo::Action::Results(_)
+                    | super::stereo::Action::Reverse
+                    | super::stereo::Action::Redraw
+                    | super::stereo::Action::Invert
+                    | super::stereo::Action::IupacStyleNotes(_),
+            )
             | Message::Import
             | Message::InsertInput
             | Message::Example(_)

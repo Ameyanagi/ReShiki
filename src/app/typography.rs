@@ -247,6 +247,7 @@ impl App {
         {
             return Some(self.current_text_style().color);
         }
+        let selected: std::collections::HashSet<_> = self.tab.selected.iter().copied().collect();
         let mut colors = Vec::new();
         if self.tab.color_scope != ColorScope::Bonds {
             // Mixed captions already establish a mixed selection. Check them
@@ -256,7 +257,7 @@ impl App {
                 .doc
                 .annotations
                 .iter()
-                .filter(|a| self.tab.selected.contains(&a.id))
+                .filter(|a| selected.contains(&a.id))
                 .flat_map(|a| {
                     a.text
                         .is_empty()
@@ -278,9 +279,7 @@ impl App {
                     .doc
                     .atoms
                     .iter()
-                    .filter(|a| {
-                        self.tab.selected.contains(&a.id) && self.tab.doc.atom_visible(a.id)
-                    })
+                    .filter(|a| selected.contains(&a.id) && self.tab.doc.atom_visible(a.id))
                     .map(|a| self.atom_paint(a)),
             );
         }
@@ -291,8 +290,8 @@ impl App {
                     .bonds
                     .iter()
                     .filter(|b| {
-                        self.tab.selected.contains(&b.a)
-                            && self.tab.selected.contains(&b.b)
+                        selected.contains(&b.a)
+                            && selected.contains(&b.b)
                             && self.tab.doc.bond_visible(b.a, b.b)
                     })
                     .map(|b| b.color),

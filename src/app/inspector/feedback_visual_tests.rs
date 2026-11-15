@@ -308,16 +308,10 @@ async fn feedback_layout_and_visual_evidence() {
     );
     if !baseline {
         assert!(contains(&texts, "Repeat: OMe"));
-        assert!(
-            texts
-                .0
-                .iter()
-                .any(|(text, _)| text.contains(if crate::platform::mac() {
-                    "Option-click"
-                } else {
-                    "Alt-click"
-                }) && text.contains("Double-click"))
-        );
+        assert!(texts.0.iter().any(|(text, _)| {
+            text.contains(&format!("{}-click", crate::platform::alt_key()))
+                && text.contains("Double-click")
+        }));
     }
     let remembered = repeated.last_label.clone();
     let _ = repeated.update(Message::Escape);
