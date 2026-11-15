@@ -217,8 +217,11 @@ impl App {
         let send = if unsent.is_empty() {
             Task::none()
         } else {
-            self.github.kept = Some((key.clone(), self.status.clone()));
-            self.github_send(key, send::default_message(&unsent), None)
+            let send = self.github_send(key.clone(), send::default_message(&unsent), None);
+            if self.github.sending.contains(&key) {
+                self.github.kept.insert(key, self.status.clone());
+            }
+            send
         };
         Task::batch([persist, close, send])
     }

@@ -103,8 +103,8 @@ pub(super) struct State {
     conflicts: HashMap<RepoKey, Vec<send::Conflict>>,
     /// A choice waiting for its drawing to be saved.
     resolving: Option<(RepoKey, send::Choice)>,
-    /// What the last choice kept, until the send after it ends.
-    kept: Option<(RepoKey, String)>,
+    /// What the last choice kept, until the send it started ends.
+    kept: HashMap<RepoKey, String>,
     /// A Send waiting for the open drawings of its repository to be saved:
     /// its message, and the tabs still to save.
     after_save: Option<(RepoKey, String, Vec<TabId>)>,
@@ -145,7 +145,7 @@ impl State {
             failed: HashMap::new(),
             conflicts: HashMap::new(),
             resolving: None,
-            kept: None,
+            kept: HashMap::new(),
             after_save: None,
             closing: None,
             later: HashSet::new(),
@@ -853,11 +853,7 @@ impl App {
     ) -> Task<Message> {
         self.github.sending.remove(&key);
         // What a conflict choice kept, said before the send that followed it.
-        let kept = self
-            .github
-            .kept
-            .take_if(|(at, _)| *at == key)
-            .map(|(_, kept)| kept);
+        let kept = self.github.kept.remove(&key);
         let mut tasks = Vec::new();
         match result {
             Ok(outcome) => {

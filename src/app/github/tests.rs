@@ -557,6 +557,18 @@ fn keep_mine_sends_yours_over_githubs() {
     assert_eq!(app.status, "Kept yours · sent");
 }
 
+#[test]
+fn a_choice_whose_send_never_starts_keeps_no_outcome_for_later() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_in(dir.path());
+    conflicted(&mut app, &path, Some(drawing(30.)));
+    app.github.sending.clear();
+    app.github.account = Account::SignedOut(None);
+    github(&mut app, Action::Resolve(send::Choice::KeepMine));
+    assert!(matches!(app.github.dialog, Some(Dialog::Account)));
+    assert!(app.github.kept.is_empty());
+}
+
 /// GitHub took `repo_path`, with nothing in conflict.
 fn sent(app: &mut App, repo_path: &str) {
     let outcome = SendOutcome {
