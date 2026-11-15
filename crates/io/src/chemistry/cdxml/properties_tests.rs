@@ -60,28 +60,61 @@ fn chemdraw_text_whose_link_is_off_stays_plain() {
 }
 
 #[test]
-fn chemdraw_salt_properties_keep_one_link_per_atom() {
+fn chemdraw_text_over_a_salt_stays_plain_with_a_notice() {
     let salt = include_str!("../../../../../tests/fixtures/chemdraw-properties/salt-props.cdxml");
-    let d = import(salt);
-    assert_eq!(d.property_captions.len(), 1);
-    assert_eq!(d.property_captions[0].atoms.len(), 8);
-    assert_eq!(caption(&d), "Formula: C6H5NaO\nMol. Wt.: 116.09");
-    let binary = include_bytes!("../../../../../tests/fixtures/chemdraw-properties/salt-props.cdx");
-    assert_eq!(
-        import(&crate::exchange::from_cdx(binary).unwrap()).property_captions,
-        d.property_captions
+    let imported = import_cdxml(salt).unwrap();
+    // ChemDraw's caption covers both ions. ReShiki links one molecule, so the
+    // text keeps ChemDraw's values instead of changing to one ion's.
+    assert!(imported.document.property_captions.is_empty());
+    assert!(
+        imported
+            .document
+            .annotations
+            .iter()
+            .any(|a| a.text.ends_with("Molecular weight: 116.09"))
     );
-    // A second link over the phenoxide alone stays as plain text.
+    assert_eq!(imported.notices.len(), 1, "{:?}", imported.notices);
+    // A second caption over the phenoxide alone links to it.
     let d = import(include_str!(
         "../../../../../tests/fixtures/chemdraw-properties/salt-props-onefrag.cdxml"
     ));
     assert_eq!(d.property_captions.len(), 1);
+    assert_eq!(d.property_captions[0].atoms.len(), 7);
     assert_eq!(d.annotations.len(), 2);
-    assert!(
-        d.annotations
-            .iter()
-            .any(|a| a.text == "Molecular weight: 93.11")
+    assert!(caption(&d).starts_with("Mol. Wt.: 93."));
+}
+
+#[test]
+fn chemdraw_captions_on_parts_of_one_molecule_keep_the_second_as_text() {
+    // The file's own caption is switched off, so only the two below link.
+    let source =
+        include_str!("../../../../../tests/fixtures/chemdraw-properties/phenol-props.cdxml")
+            .replace(
+                r#"ChemicalPropertyIsActive="yes""#,
+                r#"ChemicalPropertyIsActive="no""#,
+            );
+    let end = source.find("</page>").unwrap();
+    let atoms: Vec<_> = source
+        .split("<n\n id=\"")
+        .skip(1)
+        .filter_map(|rest| rest.split('"').next())
+        .collect();
+    assert!(atoms.len() >= 2, "{source}");
+    let xml = format!(
+        r#"{}<t id="9001" p="0 0"><s size="10">Formula: C</s></t><chemicalproperty id="9002" ChemicalPropertyDisplayID="9001" ChemicalPropertyIsActive="yes" ChemicalPropertyType="2" BasisObjects="{}"/><t id="9003" p="0 40"><s size="10">Formula: O</s></t><chemicalproperty id="9004" ChemicalPropertyDisplayID="9003" ChemicalPropertyIsActive="yes" ChemicalPropertyType="2" BasisObjects="{}"/>{}"#,
+        &source[..end],
+        atoms[0],
+        atoms[1],
+        &source[end..]
     );
+    let imported = import_cdxml(&xml).unwrap();
+    let d = &imported.document;
+    // ChemDraw scoped each to a selection. The first takes the whole molecule,
+    // and the second keeps its text.
+    assert_eq!(d.property_captions.len(), 1);
+    assert_eq!(caption(d), "Formula: C6H6O");
+    assert!(d.annotations.iter().any(|a| a.text == "Formula: O"));
+    assert_eq!(imported.notices.len(), 1);
 }
 
 fn phenol() -> (Document, Vec<u64>) {

@@ -2,8 +2,8 @@
 use super::*;
 use crate::linked_properties::{Property, PropertyCaption};
 
-/// Live links whose property types ReShiki shows. An inactive link, an
-/// unknown type or a basis shared with an earlier link leaves plain text.
+/// Live links whose property types ReShiki shows. An inactive link or an
+/// unknown type leaves plain text. Import keeps one link per molecule.
 pub(super) fn read(
     nodes: &[Node<'_, '_>],
     order: &[usize],
@@ -17,7 +17,6 @@ pub(super) fn read(
         .enumerate()
         .filter_map(|(i, n)| n.attribute("id").map(|id| (id, i)))
         .collect();
-    let mut claimed = HashSet::new();
     let mut links = Vec::new();
     for link in nodes
         .iter()
@@ -69,11 +68,9 @@ pub(super) fn read(
                 )?);
             }
         }
-        if properties.is_empty() || atoms.is_empty() || atoms.iter().any(|id| claimed.contains(id))
-        {
+        if properties.is_empty() || atoms.is_empty() {
             continue;
         }
-        claimed.extend(atoms.iter().copied());
         links.push(PropertyCaption {
             annotation: caption,
             atoms: atoms.into_iter().collect(),
