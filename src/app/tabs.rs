@@ -648,37 +648,40 @@ impl App {
             .style(close_style)
             .on_press(Message::Tabs(Action::Close(Some(tab.id))))
         };
-        let slot: Element<'a, Message> = if active {
-            close().into()
-        } else {
-            Space::new().width(CLOSE).into()
+        // Close sits inside the tab button, whose press then focuses only
+        // Close. The button keeps its place in the widget tree when the tab
+        // comes to the front, so keyboard focus stays on it.
+        let with_slot = |slot: Element<'a, Message>| {
+            container(
+                row![container(label).width(Length::Fill), slot]
+                    .spacing(SPACING)
+                    .height(Length::Fill)
+                    .align_y(Alignment::Center),
+            )
+            .padding([0., TAB_PADDING])
         };
-        let label = row![container(label).width(Length::Fill), slot]
-            .spacing(SPACING)
-            .height(Length::Fill)
-            .align_y(Alignment::Center);
-        let base = reshiki::accessibility::button(
-            format!("document-tab-{}", tab.id.0),
-            self.tab_label(tab),
-            label,
-        )
-        .width(width)
-        .height(TAB_HEIGHT)
-        .padding([0., TAB_PADDING])
-        .style(tab_style(active))
-        .on_press(Message::Tabs(Action::Select(tab.id)));
-        // The × of a tab behind the front one shows while the pointer is on it.
-        let body: Element<'a, Message> = if active {
-            base.into()
+        let content: Element<'a, Message> = if active {
+            with_slot(close().into()).into()
         } else {
+            // The × of a tab behind the front one shows while the pointer is on it.
             hover(
-                base,
+                with_slot(Space::new().width(CLOSE).into()),
                 container(close())
                     .padding([0., TAB_PADDING])
                     .align_right(Length::Fill)
                     .center_y(Length::Fill),
             )
         };
+        let body = reshiki::accessibility::button(
+            format!("document-tab-{}", tab.id.0),
+            self.tab_label(tab),
+            content,
+        )
+        .width(width)
+        .height(TAB_HEIGHT)
+        .padding(0)
+        .style(tab_style(active))
+        .on_press(Message::Tabs(Action::Select(tab.id)));
         let mut hint = match &tab.path {
             Some(path) => path.display().to_string(),
             None => format!("{} · Not saved to a file", tab.name()),

@@ -1,7 +1,11 @@
 use super::{LiveAction, Node, Role};
 use iced::advanced::{
     Clipboard, Layout, Shell, Widget, layout, mouse, overlay, renderer,
-    widget::{Id, Operation, Tree, operation::Focusable, tree},
+    widget::{
+        Id, Operation, Tree,
+        operation::{self, Focusable, focusable},
+        tree,
+    },
 };
 use iced::widget::button as iced_button;
 use iced::{
@@ -237,14 +241,12 @@ impl<Message: Clone + 'static> Widget<Message, Theme, Renderer> for Button<'_, M
         if self.action.is_none() {
             state.unfocus();
         }
-        match event {
+        let pressed = matches!(
+            event,
             Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left))
-            | Event::Touch(touch::Event::FingerPressed { .. }) => {
-                state.focused = self.action.is_some()
-                    && cursor.is_over(layout.bounds())
-                    && cursor.is_over(*viewport);
-                state.space_down = false;
-            }
+                | Event::Touch(touch::Event::FingerPressed { .. })
+        );
+        match event {
             // Keep logical focus like Iced text inputs, but never activate a
             // held Space after the user switches applications.
             Event::Window(window::Event::Unfocused) => state.space_down = false,
@@ -287,13 +289,37 @@ impl<Message: Clone + 'static> Widget<Message, Theme, Renderer> for Button<'_, M
             }
             _ => {}
         }
-        if was_focused != state.focused {
-            shell.request_redraw();
-        }
         if let Some(child) = tree.children.first_mut() {
             self.inner.update(
                 child, event, layout, cursor, renderer, clipboard, shell, viewport,
             );
+            if pressed {
+                // A press on a control inside this one, such as a tab's
+                // Close, focuses only that control.
+                state.focused = self.action.is_some()
+                    && cursor.is_over(layout.bounds())
+                    && cursor.is_over(*viewport)
+                    && {
+                        let mut count = focusable::count();
+                        self.inner.operate(
+                            child,
+                            layout,
+                            renderer,
+                            &mut operation::black_box(&mut count),
+                        );
+                        !matches!(
+                            count.finish(),
+                            operation::Outcome::Some(focusable::Count {
+                                focused: Some(_),
+                                ..
+                            })
+                        )
+                    };
+                state.space_down = false;
+            }
+        }
+        if was_focused != state.focused {
+            shell.request_redraw();
         }
     }
     fn draw(

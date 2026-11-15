@@ -339,6 +339,132 @@ async fn tabs_style_buttons_and_canvas_theme_are_named_controls() {
     );
 }
 
+impl Ui {
+    fn bounds(&mut self, app: &App, id: &str) -> Rectangle {
+        (self.semantics(app).nodes.into_iter())
+            .find(|node| node.id == id)
+            .unwrap_or_else(|| panic!("{id} is in the accessibility tree"))
+            .bounds
+    }
+
+    /// Focus a control as a native Focus request does.
+    async fn focus_control(&mut self, app: &mut App, id: &str) {
+        let task = iced::advanced::widget::operate(reshiki::accessibility::FocusControl::new(
+            id.to_owned(),
+        ))
+        .discard();
+        self.run_task(app, task).await;
+    }
+
+    /// The focused controls, after checking the native tree accepts them.
+    fn focused(&mut self, app: &App) -> Vec<String> {
+        let snapshot = self.semantics(app);
+        reshiki::accessibility::tree::NativeTree::default()
+            .update(&snapshot, "ReShiki", self.viewport, 1.)
+            .expect("the native tree converts");
+        (snapshot.nodes.into_iter())
+            .filter(|node| node.focused)
+            .map(|node| node.id)
+            .collect()
+    }
+
+    /// Press at `from`, move to `to`, release there; messages and tasks run.
+    async fn drag(&mut self, app: &mut App, from: iced::Point, to: iced::Point) -> Vec<Message> {
+        let mut all = Vec::new();
+        for (event, at) in [
+            (mouse::Event::CursorMoved { position: from }, from),
+            (mouse::Event::ButtonPressed(mouse::Button::Left), from),
+            (mouse::Event::CursorMoved { position: to }, to),
+            (mouse::Event::ButtonReleased(mouse::Button::Left), to),
+        ] {
+            let (_, messages) = self.event(app, Event::Mouse(event), mouse::Cursor::Available(at));
+            for message in messages {
+                all.push(message.clone());
+                let task = app.update(message);
+                self.run_task(app, task).await;
+            }
+        }
+        all
+    }
+}
+
+#[tokio::test]
+#[ignore = "Opt-in renderer input check"]
+async fn a_tab_and_its_close_button_never_hold_focus_together() {
+    let mut ui = Ui::new().await;
+    let (mut app, _) = App::new();
+    let behind = app.tab.id.0;
+    app.add_tab();
+    let front = app.tab.id.0;
+    let away = iced::Point::new(640., 500.);
+    for id in [front, behind] {
+        let (tab, close) = (
+            format!("document-tab-{id}"),
+            format!("document-tab-close-{id}"),
+        );
+        // Focus the tab itself first, so a stale focus would show: click
+        // the front tab, and reach the tab behind from the keyboard.
+        if id == front {
+            let label = ui.bounds(&app, &tab);
+            let label = iced::Point::new(label.x + 12., label.center_y());
+            let selected = ui.drag(&mut app, label, label).await;
+            assert!(
+                matches!(
+                    selected.as_slice(),
+                    [Message::Tabs(super::tabs::Action::Select(_))]
+                ),
+                "{selected:?}"
+            );
+        } else {
+            ui.focus_control(&mut app, &tab).await;
+        }
+        assert_eq!(ui.focused(&app), vec![tab.clone()]);
+        // Press ×, drag off it and release: nothing closes, only × has focus.
+        let x = ui.bounds(&app, &close).center();
+        let dragged = ui.drag(&mut app, x, away).await;
+        assert!(
+            !dragged.iter().any(|m| matches!(m, Message::Tabs(_))),
+            "{id}: {dragged:?}"
+        );
+        assert_eq!(ui.focused(&app), vec![close], "{id}");
+        assert_eq!(app.tabs.background.len(), 1);
+        assert_eq!(app.tab.id.0, front);
+    }
+}
+
+#[tokio::test]
+#[ignore = "Opt-in renderer input check"]
+async fn tab_focus_survives_bringing_the_tab_to_the_front() {
+    let mut ui = Ui::new().await;
+    let (mut app, _) = App::new();
+    let behind = app.tab.id.0;
+    app.add_tab();
+    let tab = format!("document-tab-{behind}");
+    ui.focus_control(&mut app, &tab).await;
+    assert_eq!(ui.focused(&app), vec![tab.clone()]);
+    ui.key(
+        &mut app,
+        Key::Named(Named::Enter),
+        Code::Enter,
+        Modifiers::empty(),
+        None,
+    )
+    .await;
+    assert_eq!(app.tab.id.0, behind, "Enter brings the tab to the front");
+    assert_eq!(ui.focused(&app), vec![tab]);
+    let (status, _) = ui.event(
+        &app,
+        press(Key::Named(Named::Tab), Code::Tab, Modifiers::empty(), None),
+        mouse::Cursor::Unavailable,
+    );
+    assert_eq!(status, iced::event::Status::Captured);
+    assert_eq!(
+        ui.focused(&app),
+        vec![format!("document-tab-close-{behind}")],
+        "Tab continues from the tab, not from the window's first control"
+    );
+}
+
 #[tokio::test]
 #[ignore = "Opt-in renderer input check"]
 async fn tool_palette_pointer_gestures_and_keyboard_activation_have_one_owner() {
