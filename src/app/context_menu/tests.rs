@@ -906,7 +906,7 @@ fn chemical_names_entry_selects_the_clicked_molecule_and_opens_its_inspector() -
     assert!(app.context_menu.is_none());
     assert_eq!(app.inspector_tab, InspectorTab::Names);
     assert!(app.inspector_open);
-    assert_eq!(app.inspector_width(), 300.);
+    assert_eq!(app.inspector_width(), 320.);
     let mut selected = app.tab.selected.clone();
     selected.sort_unstable();
     first.sort_unstable();

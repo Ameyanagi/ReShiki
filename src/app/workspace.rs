@@ -1576,19 +1576,12 @@ impl App {
         options
     }
 
+    /// One width for every tab, so the tab strip never moves under the pointer.
     pub(super) fn inspector_width(&self) -> f32 {
-        if !self.inspector_open {
-            return 0.;
-        }
-        match self.inspector_tab {
-            InspectorTab::Assistant => 380.,
-            InspectorTab::DrawingStyle | InspectorTab::Reactions => 320.,
-            InspectorTab::Properties
-            | InspectorTab::Predict
-            | InspectorTab::Import
-            | InspectorTab::Names
-            | InspectorTab::Export => 300.,
-            _ => 256.,
+        if self.inspector_open {
+            INSPECTOR_WIDTH
+        } else {
+            0.
         }
     }
 
@@ -1648,35 +1641,32 @@ impl App {
         if self.inspector_tab == InspectorTab::Assistant {
             return self.inspector_frame(self.assistant_panel());
         }
-        let mut tabs = row![];
-        for (label, tab) in [
-            ("Properties", InspectorTab::Properties),
-            ("Predict", InspectorTab::Predict),
-            ("Templates", InspectorTab::Templates),
-            ("Import", InspectorTab::Import),
-            ("Export", InspectorTab::Export),
-        ] {
+        let mut tabs = row![].spacing(SEGMENT_GAP);
+        for (label, tab) in INSPECTOR_TABS {
+            let selected = self.inspector_tab == tab
+                || (tab == InspectorTab::Properties
+                    && matches!(
+                        self.inspector_tab,
+                        InspectorTab::Reactions
+                            | InspectorTab::Labels
+                            | InspectorTab::Abbreviations
+                            | InspectorTab::Pages
+                            | InspectorTab::DrawingStyle
+                    ));
             tabs = tabs.push(
-                // Compact labels keep all five tabs inside the 256 px panels
-                // (about 238 px of tabs in 244 px); 11 px labels would need
-                // about 297 px, more than even the 300 px panels offer.
-                button(text(label).size(10))
-                    .padding([7, 3])
-                    .style(control(
-                        self.inspector_tab == tab
-                            || (tab == InspectorTab::Properties
-                                && matches!(
-                                    self.inspector_tab,
-                                    InspectorTab::Reactions
-                                        | InspectorTab::Labels
-                                        | InspectorTab::Abbreviations
-                                        | InspectorTab::Pages
-                                        | InspectorTab::DrawingStyle
-                                )),
-                    ))
-                    .on_press(Message::Inspector(tab)),
+                reshiki::accessibility::button(
+                    format!("inspector-tab-{tab:?}"),
+                    format!("{label} tab"),
+                    text(label).size(12).width(Length::Fill).center(),
+                )
+                .checked(selected)
+                .width(Length::FillPortion(segment_portion(label)))
+                .padding([5, 0])
+                .style(segment(selected))
+                .on_press(Message::Inspector(tab)),
             );
         }
+        let tabs = container(tabs).padding(SEGMENT_GAP).style(segment_track);
         let body = match self.inspector_tab {
             InspectorTab::Reactions => self.reactions_panel(),
             InspectorTab::Assistant => self.assistant_panel(),
@@ -1694,7 +1684,7 @@ impl App {
             InspectorTab::Export => self.export_panel(),
         };
         let mut content = column![
-            container(tabs).padding([8, 6]),
+            container(tabs).padding([10., SEGMENT_MARGIN]),
             scrollable(container(body).padding([8, 16]))
                 .id("inspector-content")
                 .on_scroll(|viewport| Message::InspectorScroll(viewport.absolute_offset().y))
@@ -2895,6 +2885,23 @@ impl App {
 }
 
 const PALETTE_WIDTH: f32 = 104.;
+const INSPECTOR_WIDTH: f32 = 320.;
+/// The inspector's tab strip: a segmented control. Equal segments cannot fit
+/// "Properties" at 12 px, so each grows with its label.
+const INSPECTOR_TABS: [(&str, InspectorTab); 5] = [
+    ("Properties", InspectorTab::Properties),
+    ("Predict", InspectorTab::Predict),
+    ("Templates", InspectorTab::Templates),
+    ("Import", InspectorTab::Import),
+    ("Export", InspectorTab::Export),
+];
+const SEGMENT_MARGIN: f32 = 10.;
+const SEGMENT_GAP: f32 = 2.;
+/// A tab segment's share of the strip: its label's width plus the same
+/// padding for every segment.
+fn segment_portion(label: &str) -> u16 {
+    text_width(label, 12.).round() as u16 + 8
+}
 /// Tool buttons and the gap between their rows: a 34 px pitch.
 const TOOL_BUTTON: f32 = 32.;
 const TOOL_GAP: f32 = 2.;
@@ -3455,6 +3462,66 @@ pub(super) fn control(active: bool) -> impl Fn(&Theme, button::Status) -> button
                 ..Default::default()
             },
         )
+    }
+}
+/// The sunken track behind the inspector's tab segments.
+fn segment_track(theme: &Theme) -> container::Style {
+    let dark = crate::appearance::is_dark(theme);
+    container::Style {
+        background: Some(
+            if dark {
+                Color::from_rgb8(17, 20, 25)
+            } else {
+                Color::from_rgb8(234, 237, 241)
+            }
+            .into(),
+        ),
+        border: Border {
+            radius: 8.0.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+/// A tab segment: the selected one is a raised surface on the track.
+fn segment(selected: bool) -> impl Fn(&Theme, button::Status) -> button::Style {
+    move |theme, status| {
+        let dark = crate::appearance::is_dark(theme);
+        let hovered = matches!(status, button::Status::Hovered | button::Status::Pressed);
+        let rgb = |light: [u8; 3], night: [u8; 3]| {
+            let [r, g, b] = if dark { night } else { light };
+            Color::from_rgb8(r, g, b)
+        };
+        let background = if selected {
+            Some(rgb([255, 255, 255], [44, 51, 59]))
+        } else if hovered {
+            Some(rgb([222, 227, 233], [32, 37, 44]))
+        } else {
+            None
+        };
+        button::Style {
+            background: background.map(Into::into),
+            text_color: if selected {
+                theme.palette().text
+            } else {
+                crate::appearance::muted(theme)
+            },
+            border: Border {
+                color: if selected {
+                    rgb([214, 220, 227], [60, 70, 80])
+                } else {
+                    Color::TRANSPARENT
+                },
+                width: 1.,
+                radius: 6.0.into(),
+            },
+            shadow: crate::appearance::surface_shadow(iced::Shadow {
+                color: Color::from_rgba(0., 0., 0., if selected { 0.08 } else { 0. }),
+                offset: iced::Vector::new(0., 1.),
+                blur_radius: 2.,
+            }),
+            ..Default::default()
+        }
     }
 }
 /// The panel color fading in toward the bottom of the scrolled tools.
