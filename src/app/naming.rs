@@ -641,11 +641,10 @@ impl App {
             Action::WriteUnknownStereo(enabled) => {
                 self.appearance.write_unknown_stereo = enabled;
                 self.tab.naming.structure = None;
-                if let Err(error) = self.appearance.save() {
-                    self.status =
-                        format!("Could not save unknown configuration preference: {error}");
-                    self.error = true;
-                }
+                self.save_preference(
+                    super::settings_page::Section::Names,
+                    "unknown configuration",
+                );
             }
             Action::Generate => {
                 if self.tab.naming.pending.is_some() {

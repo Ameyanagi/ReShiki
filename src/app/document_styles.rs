@@ -558,10 +558,7 @@ impl App {
                     return Task::none();
                 }
                 self.appearance.drawing_style_unit = unit;
-                if let Err(error) = self.appearance.save() {
-                    self.status = format!("Could not save dimension unit preference: {error}");
-                    self.error = true;
-                }
+                self.save_preference(super::settings_page::Section::Drawing, "dimension unit");
             }
             Action::CommitField(field) => {
                 let Some(editor) = &mut self.tab.styles.editor else {

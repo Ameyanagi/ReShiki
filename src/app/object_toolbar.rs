@@ -138,10 +138,7 @@ impl App {
         match action {
             Action::Visible(visible) => {
                 self.appearance.arrange_controls = visible;
-                if let Err(error) = self.appearance.save() {
-                    self.status = format!("Could not save arrange controls preference: {error}");
-                    self.error = true;
-                }
+                self.save_preference(super::settings_page::Section::Drawing, "arrange controls");
             }
             Action::Layer(front) => self.layer_objects(front, true, true),
         }

@@ -201,6 +201,25 @@ fn failed_update_and_assistant_saves_show_in_their_sections() {
     assert_eq!(app.section_error(Section::Assistant), None);
 }
 
+/// A failed save of the other preferences shows in the section of the
+/// setting, whichever control changed it, until a save works.
+#[test]
+fn failed_preference_saves_show_in_their_section_until_a_save_works() {
+    let mut app = app();
+    app.preference_saved(Section::CopyExport, "background", Err("disk full".into()));
+    let shown = "Could not save the background preference: disk full";
+    assert_eq!(app.section_error(Section::CopyExport), Some(shown));
+    assert_eq!(app.status, shown);
+    assert_eq!(app.section_error(Section::Drawing), None);
+    // The Updates section keeps its own failure.
+    assert_eq!(app.section_error(Section::Updates), None);
+    // A control shared with the workspace saves the same file.
+    let _ = app.update(Message::View(
+        super::super::view_settings::Action::SmartGuides(false),
+    ));
+    assert_eq!(app.section_error(Section::CopyExport), None);
+}
+
 #[test]
 fn copies_use_the_copy_default_unless_one_copy_picks_a_background() {
     let mut app = app();
@@ -272,7 +291,7 @@ fn close_ups_render_once_per_drawing_revision() {
     let _ = app.update(Message::Settings(Action::Query(String::new())));
     let second = key(&app);
     assert_eq!(app.settings.rendering, Some(second));
-    // A result for an older revision does not end the newer job.
+    // A result for an older revision is dropped, and does not end the newer job.
     let stale = Preview::render(&app.tab.doc);
     let _ = app.update(Message::Settings(Action::Preview(first, stale)));
     assert_eq!(app.settings.rendering, Some(second));
@@ -285,6 +304,16 @@ fn close_ups_render_once_per_drawing_revision() {
     };
     assert_eq!(*shown, second);
     assert!(!preview.sample);
+    // The older job finishing last neither replaces the close-ups nor starts
+    // another render.
+    let late = Preview::render(&Document::default());
+    let _ = app.update(Message::Settings(Action::Preview(first, late)));
+    let Some((shown, Ok(preview))) = &app.settings.preview else {
+        panic!("close-ups are kept");
+    };
+    assert_eq!(*shown, second);
+    assert!(!preview.sample);
+    assert_eq!(app.settings.rendering, None);
     // Labels from the chemistry engine change the drawing without a revision.
     app.tab.label_generation += 1;
     let _ = app.update(Message::Settings(Action::Query(String::new())));

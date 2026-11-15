@@ -207,6 +207,8 @@ pub(super) struct State {
     pub(super) preview: Option<(PreviewKey, Result<Preview, String>)>,
     /// The drawing whose close-ups are being rendered.
     rendering: Option<PreviewKey>,
+    /// The last failed save of a preference, and the section it shows in.
+    save_error: Option<(Section, String)>,
 }
 
 /// Command+, (Ctrl+, on Windows and Linux).
@@ -252,20 +254,20 @@ impl App {
             Action::Query(query) => settings.query = query,
             Action::NewCanvas(theme) => {
                 self.appearance.canvas_theme = theme;
-                self.save_preference("canvas");
+                self.save_preference(Section::Appearance, "canvas");
             }
             Action::DrawingUnit(unit) => {
                 self.appearance.drawing_style_unit = unit;
-                self.save_preference("dimension unit");
+                self.save_preference(Section::Drawing, "dimension unit");
                 self.sync_drawing_style_unit();
             }
             Action::CopyBackground(background) => {
                 self.appearance.copy_background = background;
-                self.save_preference("background");
+                self.save_preference(Section::CopyExport, "background");
             }
             Action::ExportBackground(background) => {
                 self.appearance.export_background = background;
-                self.save_preference("background");
+                self.save_preference(Section::CopyExport, "background");
             }
             Action::Custom(rgb) => self.use_custom_background(rgb),
             Action::AddColor => {
@@ -291,18 +293,19 @@ impl App {
             }
             Action::CopyDpi(dpi) => {
                 self.appearance.copy_dpi = dpi;
-                self.save_preference("PNG resolution");
+                self.save_preference(Section::CopyExport, "PNG resolution");
             }
             Action::ExportDpi(dpi) => {
                 self.appearance.export_dpi = dpi;
                 self.tab.inspector_ui.close_menu();
-                self.save_preference("PNG resolution");
+                self.save_preference(Section::CopyExport, "PNG resolution");
             }
             Action::Preview(key, preview) => {
+                // Only the newest render counts: an older one may finish last.
                 if settings.rendering == Some(key) {
                     settings.rendering = None;
+                    settings.preview = Some((key, preview));
                 }
-                settings.preview = Some((key, preview));
             }
         }
         Task::none()
@@ -352,7 +355,7 @@ impl App {
     fn use_custom_background(&mut self, rgb: [u8; 3]) {
         self.appearance.custom_background = rgb;
         self.appearance.copy_background = Background::Custom;
-        self.save_preference("background");
+        self.save_preference(Section::CopyExport, "background");
     }
 
     /// A failed save of the section's preferences, which save on their own.
@@ -363,13 +366,27 @@ impl App {
             Section::Assistant => self.assistant_choices().save_error,
             _ => None,
         }
+        .or(self
+            .settings
+            .save_error
+            .as_ref()
+            .filter(|(failed, _)| *failed == section)
+            .map(|(_, error)| error.as_str()))
     }
 
-    fn save_preference(&mut self, name: &str) {
-        if let Err(error) = self.appearance.save() {
+    /// Saves the preferences. A failure shows in the status bar and in
+    /// `section` of Settings until a save works.
+    pub(super) fn save_preference(&mut self, section: Section, name: &str) {
+        let saved = self.appearance.save();
+        self.preference_saved(section, name, saved);
+    }
+
+    fn preference_saved(&mut self, section: Section, name: &str, saved: Result<(), String>) {
+        self.settings.save_error = saved.err().map(|error| {
             self.status = format!("Could not save the {name} preference: {error}");
             self.error = true;
-        }
+            (section, self.status.clone())
+        });
     }
 
     pub(super) fn with_settings<'a>(&'a self, base: Element<'a, Message>) -> Element<'a, Message> {
