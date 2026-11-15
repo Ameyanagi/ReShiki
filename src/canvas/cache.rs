@@ -23,6 +23,8 @@ pub(super) struct SceneCache {
     nmr: NmrCache,
     foreground_orbital: Option<bool>,
     ring_interiors: Option<Rc<reshiki::editing::RingInteriors>>,
+    /// Keyed by the objects a preview redraws itself.
+    remainder: Option<(Vec<u64>, Option<Rc<super::paper::Remainder>>)>,
 }
 
 #[derive(Default)]
@@ -89,6 +91,7 @@ impl SceneCache {
             self.nmr.entry = None;
             self.foreground_orbital = None;
             self.ring_interiors = None;
+            self.remainder = None;
         }
     }
 
@@ -181,16 +184,38 @@ impl SceneCache {
             .markers
             .get_or_insert_with(|| Rc::new(super::markers::Markers::new(doc, ids)))
             .clone();
+        (markers, self.scene(doc))
+    }
+
+    fn scene(&mut self, doc: &Document) -> Rc<[Primitive]> {
         let opacity = &mut self.opacity;
-        let scene = self
-            .scene
+        self.scene
             .get_or_insert_with(|| {
                 let flat = reshiki::models3d::drawn(doc);
                 let paint = opacity.get_or_insert_with(|| Rc::new(Paint::new(&flat)));
                 scene::primitives_with_opacity(doc, &flat, paint).into()
             })
-            .clone();
-        (markers, scene)
+            .clone()
+    }
+
+    /// The drawing without the sorted `excluded` objects, which a preview
+    /// redraws itself; `None` when they cannot be drawn apart.
+    pub fn remainder(
+        &mut self,
+        doc: &Document,
+        excluded: &[u64],
+    ) -> Option<Rc<super::paper::Remainder>> {
+        use super::paper::Remainder;
+        self.document(doc);
+        if !matches!(&self.remainder, Some((key, _)) if key == excluded) {
+            let scene = if excluded.is_empty() {
+                Some(self.scene(doc))
+            } else {
+                Remainder::scene_without(doc, excluded)
+            };
+            self.remainder = Some((excluded.to_vec(), scene.map(|s| Rc::new(Remainder::new(s)))));
+        }
+        self.remainder.as_ref().and_then(|(_, part)| part.clone())
     }
 
     pub fn nmr_assignments(

@@ -2,6 +2,8 @@
 
 mod bond_text;
 mod draft;
+mod fragment;
+pub(super) use fragment::Remainder;
 mod geometry;
 pub(super) use geometry::SceneGeometryCache;
 #[cfg(test)]
@@ -13,6 +15,8 @@ mod overlays;
 mod review_tests;
 pub(super) use overlays::OrbitGuideCache;
 mod placement;
+#[cfg(test)]
+mod preview_tests;
 
 use super::render::{draw_document, draw_primitives};
 use super::smart_guides::Guide;
@@ -137,7 +141,40 @@ impl MoleculeCanvas<'_> {
         models3d::begin(&preview);
         let mut rotation_ink = Vec::new();
         let rotating = matches!(&state.gesture, Some(super::Gesture::Transform(drag)) if matches!(drag.handle, super::Handle::Rotate));
-        if let Some(camera) = cached_camera {
+        let fragment = (cached_camera.is_none() && !rotating)
+            .then(|| {
+                fragment::Fragment::new(
+                    &mut state.scene.borrow_mut(),
+                    self.doc,
+                    &preview,
+                    self.camera,
+                )
+            })
+            .flatten();
+        if let Some(fragment) = fragment {
+            if !self.reviewing_pair {
+                markers::Markers::new(&preview, selected).draw_with_nmr(
+                    frame,
+                    self.camera,
+                    bounds,
+                    true,
+                    &nmr_ids,
+                );
+            }
+            // Its markers are empty: the preview's markers lie below both parts.
+            state.fragment.borrow_mut().draw(
+                frame,
+                (
+                    fragment.remainder.markers.clone(),
+                    fragment.remainder.scene.clone(),
+                ),
+                self.camera,
+                bounds,
+                &[],
+                self.reviewing_pair,
+            );
+            draw_primitives(frame, &fragment.scene, self.camera, bounds, 0.);
+        } else if let Some(camera) = cached_camera {
             let (markers, scene) = state.scene.borrow_mut().render(self.doc, selected);
             if rotating {
                 rotation_ink = reshiki::scene::label_ink_boxes(&scene);

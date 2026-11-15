@@ -126,11 +126,9 @@ pub fn selection(doc: &Document, ids: &[u64]) -> Document {
 /// The part of `doc` that generic expansion copies: the selected components
 /// with every caption, arrow link, group, scope and reaction they reference; a
 /// selection that would cut one of these is an error rather than a repair, and
-/// the caller has already charged the work and validated `doc`.
-pub(crate) fn preserved_expansion_selection(
-    doc: &Document,
-    selected: &[u64],
-) -> Result<Document, String> {
+/// the caller has already charged the work and validated `doc`. Canvas
+/// previews use it to redraw only the components they change.
+pub fn preserved_expansion_selection(doc: &Document, selected: &[u64]) -> Result<Document, String> {
     let chosen = crate::generic::selection(doc, selected);
     let chosen = crate::attachments::selection(doc, &chosen);
     let mut ids: HashSet<_> = doc

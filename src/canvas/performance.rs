@@ -293,7 +293,7 @@ async fn preview_workloads() {
                 text: None,
             });
             measure(&name("bond_drag"), iterations, |i| {
-                state.cursor = Some(start + Vector::new(20. + (i % 8) as f32, 30.));
+                state.cursor = Some(start + Vector::new(30. + (i % 8) as f32, -10.));
                 draw(&canvas, &state);
             });
             canvas.tool = Tool::Select;

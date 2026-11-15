@@ -369,6 +369,8 @@ impl Camera {
 pub struct State {
     scene: std::cell::RefCell<cache::SceneCache>,
     geometry: std::cell::RefCell<paper::SceneGeometryCache>,
+    /// What a preview keeps of the drawing, retained apart from `geometry`.
+    fragment: std::cell::RefCell<paper::SceneGeometryCache>,
     grid: std::cell::RefCell<GridCache>,
     text: std::cell::RefCell<text_cache::TextCache>,
     /// The runtime font count the caches were laid out with.
@@ -740,6 +742,7 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
         if state.fonts.replace(fonts) != fonts {
             state.scene.take();
             state.geometry.take();
+            state.fragment.take();
             state.text.take();
         }
         let paper = self.guides.paper(bounds);
