@@ -33,17 +33,19 @@ compares it byte for byte and lints the catalog against the MCP tool rules of
 revisions 2026-07-28 and 2025-11-25: valid, unique names that differ from the
 in-app canvas tools; a root `"type": "object"` without `$schema`; explicit
 hints; the keyword allowlist and pattern table below; and strict objects
-(`additionalProperties: false`, every property required) everywhere. The
-checks run with each `$ref` replaced by its `$defs` entry, as a client
-resolves it.
+(`additionalProperties: false`, every property required) everywhere except
+compose's sketch placeholder. The checks run with each `$ref` replaced by its
+`$defs` entry, as a client resolves it.
 
 compose publishes the Proposal schema in a shorter form, derived from the
 pinned `proposal-schema.json`: without `explanation` and `replace_ids`, which
-the decoder fills in, with the molecule list, point and color subschemas
-stated once under `$defs`, and without three sentences of the sketch
-description that repeat other text. contract.rs checks that the resolved form
-equals the pinned schema with exactly those differences, and that the whole
-catalog stays within 25,000 characters.
+the decoder fills in, with the molecule list stated once under `$defs`, and
+with the sketch object as a plain object whose description points to the
+`schema` tool. That tool returns the sketch object's schema exactly as the
+pinned schema states it. contract.rs checks that compose's schema, with the
+placeholder swapped for the `schema` tool's result, equals the pinned schema
+with exactly those differences, and that the whole catalog stays within
+19,500 characters.
 
 Regenerate it only for an intentional contract change, such as a tool, title,
 description, schema or hint that is meant to change, and in the same PR as that
@@ -87,7 +89,12 @@ adds an entry there and a cases file here.
   `ops-files-cases.json` (file_open and file_save),
   `ops-compose-cases.json` and `ops-apply-cases.json`: each operation tool's
   inputSchema against `reshiki_agent::ops::catalog::decode_check`, the decoder
-  the tool host runs, on `{"tool": name, "arguments": {...}}` values.
+  the tool host runs, on `{"tool": name, "arguments": {...}}` values. The
+  compose contract uses compose's schema with the sketch placeholder swapped
+  for the `schema` tool's result, so the sketch rules stay covered. `convert`,
+  `name` and `schema` have no cases file: `convert` decodes its input with
+  import's decoder, and their own rules are unit-tested in
+  crates/agent/src/ops/convert/tests.rs.
 
 ## Classification vocabulary
 

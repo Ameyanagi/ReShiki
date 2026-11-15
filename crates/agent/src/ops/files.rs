@@ -55,7 +55,7 @@ pub const FILE_OPEN: ToolSpec = ToolSpec {
 pub const FILE_SAVE: ToolSpec = ToolSpec {
     name: "file_save",
     title: Some("Save file"),
-    description: "Save a session document as a file: a native ReShiki drawing (reshiki, .rsk), svg, pdf or png figures, or cdxml, mol, smiles or inchi chemistry, made exactly as export makes them. Every file is at most max_output_bytes. Returns a receipt {path, format, byte_len, replaced, detail}.",
+    description: "Save a session document as a file: a native ReShiki drawing (reshiki or rsk, .rsk), svg, pdf or png figures, or cdxml, cdx, mol, rxn, smiles, rsmi or inchi chemistry, made exactly as export makes them. Every file is at most max_output_bytes. Returns a receipt {path, format, byte_len, replaced, detail}.",
     input_schema: save_schema,
     hints: Some(Hints {
         read_only: false,
@@ -67,7 +67,7 @@ pub const FILE_SAVE: ToolSpec = ToolSpec {
 
 /// The `format` values file_save accepts besides `null`.
 const SAVE_FORMATS: &[&str] = &[
-    "reshiki", "svg", "pdf", "png", "cdxml", "mol", "smiles", "inchi",
+    "reshiki", "rsk", "svg", "pdf", "png", "cdxml", "cdx", "mol", "rxn", "smiles", "rsmi", "inchi",
 ];
 
 fn path_schema() -> Value {
@@ -79,7 +79,7 @@ fn open_schema() -> Value {
         "type": "object",
         "properties": {
             "path": described(path_schema(), "An absolute path inside a folder the user granted for reading when the server started; info lists the granted folders and the extensions files open from."),
-            "format": {"type": "string", "enum": IMPORT_FORMATS, "description": "auto follows the extension (.rsk, .reshiki and .moruno drawings; .mol, .rxn, .rsmi, .cdxml, .cdx, .smi, .smiles and .inchi structures); any other format must be the extension's own."},
+            "format": {"type": "string", "enum": IMPORT_FORMATS, "description": "auto follows the extension (.rsk, .reshiki and .moruno drawings; .mol, .rxn, .rsmi, .cdxml, .cdx, .smi, .smiles and .inchi structures); any other format must be the extension's own. name is not a file format."},
         },
         "required": ["path", "format"],
         "additionalProperties": false,
@@ -133,25 +133,32 @@ const OPEN_FORMATS: [import::Format; 8] = [
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
 enum SaveFormat {
+    #[serde(alias = "rsk")]
     Reshiki,
     Svg,
     Pdf,
     Png,
     Cdxml,
+    Cdx,
     Mol,
+    Rxn,
     Smiles,
+    Rsmi,
     Inchi,
 }
 
 impl SaveFormat {
-    const ALL: [Self; 8] = [
+    const ALL: [Self; 11] = [
         Self::Reshiki,
         Self::Svg,
         Self::Pdf,
         Self::Png,
         Self::Cdxml,
+        Self::Cdx,
         Self::Mol,
+        Self::Rxn,
         Self::Smiles,
+        Self::Rsmi,
         Self::Inchi,
     ];
 
@@ -170,8 +177,11 @@ impl SaveFormat {
             Self::Pdf => export::Format::Pdf,
             Self::Png => export::Format::Png,
             Self::Cdxml => export::Format::Cdxml,
+            Self::Cdx => export::Format::Cdx,
             Self::Mol => export::Format::Mol,
+            Self::Rxn => export::Format::Rxn,
             Self::Smiles => export::Format::Smiles,
+            Self::Rsmi => export::Format::Rsmi,
             Self::Inchi => export::Format::Inchi,
         })
     }
@@ -205,10 +215,14 @@ pub(crate) struct Save {
 
 fn check_length(path: &str) -> Result<(), OpError> {
     if path.len() > MAX_PATH_BYTES {
-        return Err(OpError::invalid(format!(
-            "path_invalid: the path is {} bytes; at most {MAX_PATH_BYTES} are allowed",
-            path.len()
-        )));
+        return Err(OpError {
+            reason: Some("path_invalid"),
+            ..OpError::invalid(format!(
+                "path_invalid: the path is {} bytes; at most {MAX_PATH_BYTES} are allowed",
+                path.len()
+            ))
+            .param("path")
+        });
     }
     Ok(())
 }
@@ -231,7 +245,8 @@ fn resolve(
         Some(requested) if requested != format => Err(OpError::invalid(format!(
             "format {requested} does not match the .{} extension, which {verb} as {format}",
             row.ext
-        ))),
+        ))
+        .param("format")),
         _ => Ok(format),
     }
 }
@@ -270,7 +285,7 @@ pub(crate) fn decode_save(args: Value) -> Result<Save, OpError> {
         .ok_or_else(|| OpError::invalid(format!("format {name} cannot be saved")))?;
     let pages = pages.unwrap_or(false);
     if pages && format != SaveFormat::Pdf {
-        return Err(OpError::invalid("pages is valid only with format pdf"));
+        return Err(OpError::invalid("pages is valid only with format pdf").param("pages"));
     }
     Ok(Save {
         document,
@@ -317,7 +332,17 @@ pub(crate) async fn file_open(
         .await?;
     let import = Import { format, text };
     let source = Source { path, bytes };
-    import_document(ctx, store, engine, who, versions, import, Some(source)).await
+    import_document(
+        ctx,
+        store,
+        engine,
+        None,
+        who,
+        versions,
+        import,
+        Some(source),
+    )
+    .await
 }
 
 /// The receipt of a saved file.

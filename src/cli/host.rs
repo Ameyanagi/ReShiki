@@ -28,8 +28,9 @@ use std::{
 pub(crate) enum CliError {
     /// A usage error: exit 2, as `reshiki: {message}`.
     Usage(String),
-    /// A tool execution error: exit 1, as `reshiki: error: {message}`.
-    Tool(String),
+    /// A tool execution error: exit 1, as `reshiki: error[{code}]: {message}`
+    /// with the operation's error code.
+    Tool { code: String, message: String },
     /// An input, file or internal error: exit 1, as
     /// `reshiki: error: {message}`.
     Failed(String),
@@ -49,7 +50,8 @@ impl Session {
     pub(crate) fn new() -> Self {
         let budgets = Budgets::default();
         Self {
-            host: HeadlessHost::new(crate::updates::CURRENT_VERSION, budgets.clone()),
+            host: HeadlessHost::new(crate::updates::CURRENT_VERSION, budgets.clone())
+                .with_naming(Arc::new(crate::naming::AgentNaming)),
             budgets,
             principal: Principal::local(),
             next: 0,
@@ -84,13 +86,19 @@ impl Session {
             .map_err(|error| CliError::Failed(format!("internal error: {}", error.message)))?;
         warn(&result.value, err);
         if result.is_error {
-            let message = result
-                .value
-                .get("error")
-                .and_then(|error| error.get("message"))
-                .and_then(Value::as_str)
-                .unwrap_or("the operation failed");
-            return Err(CliError::Tool(message.to_owned()));
+            let field = |name: &str, default: &str| {
+                result
+                    .value
+                    .get("error")
+                    .and_then(|error| error.get(name))
+                    .and_then(Value::as_str)
+                    .unwrap_or(default)
+                    .to_owned()
+            };
+            return Err(CliError::Tool {
+                code: field("code", "failed"),
+                message: field("message", "the operation failed"),
+            });
         }
         Ok(result)
     }

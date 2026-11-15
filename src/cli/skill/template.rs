@@ -242,7 +242,8 @@ fn workflow(text: &mut String) {
 1. Describe the drawing as a Proposal (next section). One structure needs only its SMILES.\n\
 2. Lay it out. MCP: `compose` returns the new document with its `review_issues` and the layout \
 `changes` it made. CLI: `--cli compose proposal.json -o preview-1.png`, or `render` a structure \
-file or `--smiles`.\n\
+file or `--smiles`. For one picture or file of one structure, MCP `convert` reads the text and \
+returns it in one call, keeping no document.\n\
 3. Look at the image. MCP: `render` with format png returns it to you. CLI: open the PNG you \
 wrote. Check that each structure is the one asked for, that labels, conditions and arrows read \
 correctly, and that nothing overlaps or is cut off.\n\
@@ -269,16 +270,23 @@ complete example: the esterification of acetic acid with ethanol.\n\n\
 - Put structures on their own in `molecules`, and reactants, products, `conditions` and the \
 `arrow` in `reactions`. Use `sketch`, one diagram with explicit coordinates, only for drawings \
 that SMILES layout cannot preserve, such as coordination complexes; `molecules` and `reactions` \
-stay empty then.\n\
+stay empty then. MCP: `compose` does not list the sketch fields; call `schema` with name \
+`sketch` for them before the first sketch.\n\
 - `replace_ids` must be empty: `compose` always creates a new document.\n\
-- Write valid SMILES yourself: ReShiki does not look up chemical names. `label` is the caption \
-drawn under a structure; leave it empty for none.\n\
+- Structures are SMILES. For a compound you know only by name, let ReShiki parse the name \
+offline instead of writing its SMILES from memory. MCP: `import` with format `name`; the \
+result's analysis has the SMILES. CLI: {name}. `label` is the caption drawn under a structure; \
+leave it empty for none.\n\
 - `label` and `conditions` are drawn as typed: write formulas with Unicode subscripts and \
 superscripts, such as `H₂SO₄` or `Pd(PPh₃)₄`, never `H2SO4`.\n\
 - `composition` sets the arrangement, the columns and the figure width in points.\n\
 - Follow the schema's `description` texts: they are the layout rules ReShiki's own assistant \
 follows.\n\n",
         schema = code(&format!("{} --cli schema proposal", exe.posix)),
+        name = code(&format!(
+            "echo caffeine | {} --cli convert - --from name --to smiles",
+            exe.posix
+        )),
     ));
 }
 
@@ -298,7 +306,8 @@ fn errors(text: &mut String, exe: &Executable) {
         .unwrap_or_default();
     text.push_str(&format!(
         "\n- {stdout} Every JSON line except the raw schema carries `\"experimental\": true`.\n\
-- Errors go to stderr as `{ERROR_PREFIX}MESSAGE`, usage errors as `{USAGE_PREFIX}MESSAGE` and \
+- Errors go to stderr as `{ERROR_PREFIX}MESSAGE`, or `reshiki: error[CODE]: MESSAGE` when an \
+operation failed, with its error code; usage errors as `{USAGE_PREFIX}MESSAGE` and \
 warnings as `{WARNING_PREFIX}MESSAGE`. A warning, such as an export's PNG size, does not mean the \
 command failed.\n\
 - After exit {USAGE}, fix the command line: {help} shows each command's options. After exit \
@@ -306,8 +315,10 @@ command failed.\n\
 - After exit {RESOURCE_EXIT}, try a smaller input. `{HEAP_VARIABLE}` sets the ceiling in MiB, \
 {min} to {max} (default {DEFAULT_HEAP_MIB}); raise it only when the user agrees.\n\
 - An existing output file is kept and the command fails, unless `--force` is given.\n\
-- MCP tool errors carry a code. [{LIMITS_REFERENCE}]({LIMITS_REFERENCE}) lists the error codes, \
-the file-error reasons and every limit.\n\n",
+- MCP tool errors are `{{error: {{code, message, retryable}}}}`; a file error adds its reason, \
+a bad argument its name and a stale edit the current revision. \
+[{LIMITS_REFERENCE}]({LIMITS_REFERENCE}) lists the error codes, the file-error reasons and \
+every limit.\n\n",
         help = code(&format!("{} --cli help COMMAND", exe.posix)),
         min = HEAP_MIB.start(),
         max = HEAP_MIB.end(),

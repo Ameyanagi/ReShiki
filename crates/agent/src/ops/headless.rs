@@ -3,13 +3,16 @@ use super::{
     analyze, apply,
     budget::Budgets,
     catalog::{self, Op},
-    compose, documents,
+    compose, convert, documents,
     error::{ErrorKind, OpError},
     exec::{Context, Executor},
     export, files,
     host::{Call, ToolHost},
-    import, inspect, render,
+    import, inspect,
+    naming::{self, Hook, Naming},
+    render,
     result::ToolResult,
+    schema,
     session::SessionStore,
     store::Documents,
     wire::{Principal, RequestId},
@@ -26,6 +29,7 @@ pub struct HeadlessHost {
     budgets: Budgets,
     versions: Versions,
     grants: Arc<Grants>,
+    naming: Hook,
 }
 
 impl HeadlessHost {
@@ -40,6 +44,16 @@ impl HeadlessHost {
             budgets,
             versions: Versions::current(app_version),
             grants: Arc::new(Grants::none()),
+            naming: None,
+        }
+    }
+
+    /// The name parser and generator behind import's `name` format and the
+    /// name tool. Without them both answer `unsupported`.
+    pub fn with_naming(self, naming: Arc<dyn Naming>) -> Self {
+        Self {
+            naming: Some(naming),
+            ..self
         }
     }
 
@@ -72,6 +86,7 @@ async fn run(
     versions: Versions,
     budgets: Budgets,
     grants: Arc<Grants>,
+    naming: Hook,
 ) -> Result<ToolResult, OpError> {
     match op {
         // The other tools check through `blocking` or `effect`.
@@ -81,7 +96,7 @@ async fn run(
         Op::DocumentNew => documents::document_new(ctx, store, who, versions).await,
         Op::DocumentList => documents::document_list(ctx, store, who, versions).await,
         Op::DocumentClose(args) => documents::document_close(ctx, store, who, versions, args).await,
-        Op::Import(args) => import::import(ctx, store, engine, who, versions, args).await,
+        Op::Import(args) => import::import(ctx, store, engine, naming, who, versions, args).await,
         Op::Inspect(args) => inspect::inspect(ctx, store, who, versions, budgets, args).await,
         Op::Analyze(args) => analyze::analyze(ctx, store, engine, who, versions, args).await,
         Op::Render(args) => render::render(ctx, store, who, versions, budgets, args).await,
@@ -96,6 +111,9 @@ async fn run(
             compose::compose(ctx, store, engine, who, versions, budgets, *args).await
         }
         Op::Apply(args) => apply::apply(ctx, store, who, versions, args).await,
+        Op::Convert(args) => convert::convert(ctx, engine, naming, versions, budgets, args).await,
+        Op::Name(args) => naming::name(ctx, store, naming, who, versions, args).await,
+        Op::Schema(args) => ctx.checkpoint().map(|()| schema::run(&args, &versions)),
     }
 }
 
@@ -131,10 +149,13 @@ impl ToolHost for HeadlessHost {
         let versions = self.versions.clone();
         let budgets = self.budgets.clone();
         let grants = Arc::clone(&self.grants);
+        let naming = self.naming.clone();
         let outcome = self
             .exec
             .run(principal, request, progress, move |ctx| {
-                run(op, ctx, who, store, engine, versions, budgets, grants)
+                run(
+                    op, ctx, who, store, engine, versions, budgets, grants, naming,
+                )
             })
             .await;
         match outcome {

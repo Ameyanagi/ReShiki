@@ -124,31 +124,35 @@ def main():
         "--locked",
         "--bin",
         "reshiki-inchi-helper",
-        "--target",
-        target,
         "--jobs",
         str(args.jobs),
     ]
+    # A host build without --target shares target/debug with `cargo build --bin
+    # reshiki`. A requested target always reaches Cargo, so a Cargo config cannot
+    # replace it; CARGO_BUILD_TARGET would replace the host, so name it.
+    cross = target != host
+    if args.target or os.environ.get("CARGO_BUILD_TARGET"):
+        command += ["--target", target]
     if args.production:
         command.append("--release")
-    subprocess.run(command, cwd=root, check=True)
-    metadata = json.loads(
-        subprocess.run(
-            [cargo, "metadata", "--no-deps", "--format-version", "1", "--locked"],
-            cwd=root,
-            check=True,
-            capture_output=True,
-            text=True,
-        ).stdout
+    # Cargo reports where the executable went. A target set in the environment
+    # or in a Cargo config moves it even when --target is left out.
+    messages = subprocess.run(
+        [*command, "--message-format=json-render-diagnostics"],
+        cwd=root,
+        check=True,
+        stdout=subprocess.PIPE,
+        text=True,
+    ).stdout
+    built = next(
+        message["executable"]
+        for message in map(json.loads, messages.splitlines())
+        if message["reason"] == "compiler-artifact"
+        and message["target"]["name"] == "reshiki-inchi-helper"
+        and message["executable"]
     )
     suffix = ".exe" if "windows" in target else ""
     name = "reshiki-inchi-helper" + suffix
-    built = (
-        Path(metadata["target_directory"])
-        / target
-        / ("release" if args.production else "debug")
-        / name
-    )
     executable = output / name
     shutil.copy2(built, executable)
     verify_executable(executable, target)
@@ -168,7 +172,7 @@ def main():
         )
         # Warm native test executables before fault tests copy/link them. A
         # cross-target executable can only be checked on its destination host.
-        if target == host:
+        if not cross:
             subprocess.run([str(stub)], input=b"", capture_output=True, timeout=60, check=True)
     record = dict(
         inchi_version=INCHI_VERSION,
