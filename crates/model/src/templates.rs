@@ -933,6 +933,7 @@ impl Attachment<'_> {
             bonds,
             annotations: _,
             molecule_names,
+            property_captions,
             // Their anchors follow in `remap_for_join` below.
             arrows: _,
             arrow_labels: _,
@@ -1008,6 +1009,11 @@ impl Attachment<'_> {
             }
         }
         molecule_names.retain(|name| !name.atoms.is_empty());
+        // The surviving atoms keep the link; the commit spans the joined molecule.
+        for link in property_captions.iter_mut() {
+            link.atoms.retain(|id| !mapping.contains_key(id));
+        }
+        property_captions.retain(|link| !link.atoms.is_empty());
         for scope in depth_appearance.iter_mut() {
             scope.retain_members(|id| !host_keeps(&painted, id));
         }

@@ -254,13 +254,16 @@ pub const MULTI_NODE_ARROWS: u32 = 35;
 pub const STEREO_GROUPS: u32 = 36;
 /// Atoms with three or four radical (nonbonding) electrons.
 pub const RADICAL_ELECTRONS: u32 = 37;
+/// Property captions linked to their molecules.
+pub const PROPERTY_CAPTIONS: u32 = 38;
 
 /// The newest document format this build reads. Native output uses version 30
 /// unless a custom reaction-label gap requires version 31, ORTEP settings
 /// require version 32, model polish requires version 33 or two-sided groups
 /// require version 34, arrows with interior nodes or a custom crossing
-/// clearance require version 35, stereo groups require version 36, or atoms
-/// with three or four radical electrons require version 37.
+/// clearance require version 35, stereo groups require version 36, atoms
+/// with three or four radical electrons require version 37, or linked
+/// property captions require version 38.
 /// Optional atom-label settings, including steroid α/β display, retain this
 /// version; older readers may ignore those presentation preferences.
 ///
@@ -296,7 +299,8 @@ pub const RADICAL_ELECTRONS: u32 = 37;
 /// | 35 | Arrows with interior nodes (#761); also used for a custom crossing clearance (#1111). |
 /// | 36 | Enhanced stereo groups (#766). |
 /// | 37 | Three or four radical electrons on an atom. |
-pub const VERSION: u32 = 37;
+/// | 38 | Property captions linked to their molecules (#1175). |
+pub const VERSION: u32 = 38;
 
 /// Bytes of text in one annotation. Layout time grows faster than the text.
 pub const MAX_ANNOTATION_TEXT: usize = 64 * 1024;
@@ -351,6 +355,9 @@ pub struct Document {
     /// cannot preserve its molecule association.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub molecule_names: Vec<crate::molecule_names::MoleculeName>,
+    /// Optional native links; older readers keep the caption as plain text.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub property_captions: Vec<crate::linked_properties::PropertyCaption>,
     #[serde(default)]
     pub arrows: Vec<Arrow>,
     /// Text owned by an arrow; older readers keep the text but not the link.
@@ -391,6 +398,7 @@ impl Default for Document {
             bonds: vec![],
             annotations: vec![],
             molecule_names: vec![],
+            property_captions: vec![],
             arrows: vec![],
             arrow_labels: vec![],
             graphics: vec![],
@@ -469,7 +477,9 @@ impl Document {
     }
     /// Use the newest feature floor needed by the drawing's saved fields.
     pub fn file_version(&self) -> u32 {
-        if self.atoms.iter().any(|a| a.radical_electrons > 2) {
+        if !self.property_captions.is_empty() {
+            PROPERTY_CAPTIONS
+        } else if self.atoms.iter().any(|a| a.radical_electrons > 2) {
             RADICAL_ELECTRONS
         } else if self.atoms.iter().any(|a| a.stereo_group.is_some()) {
             STEREO_GROUPS
@@ -646,6 +656,7 @@ impl Document {
             .retain(|b| !ids.contains(&b.a) && !ids.contains(&b.b));
         self.annotations.retain(|a| !ids.contains(&a.id));
         crate::molecule_names::prune(self);
+        crate::linked_properties::prune(self);
         crate::models3d::prune(self);
         self.arrows.retain(|a| !ids.contains(&a.id));
         self.graphics.retain(|a| !ids.contains(&a.id));
@@ -718,6 +729,7 @@ impl Document {
             bonds,
             annotations,
             molecule_names,
+            property_captions,
             arrows,
             arrow_labels,
             graphics,
@@ -739,6 +751,7 @@ impl Document {
         ring_fills.clear();
         depth_appearance.clear();
         molecule_names.clear();
+        property_captions.clear();
         *generic = Generic::default();
     }
     /// Whether the document contains any drawing content.
@@ -759,6 +772,7 @@ impl Document {
             bonds,
             annotations,
             molecule_names,
+            property_captions,
             arrows,
             arrow_labels,
             graphics,
@@ -780,6 +794,7 @@ impl Document {
             || !ring_fills.is_empty()
             || !depth_appearance.is_empty()
             || !molecule_names.is_empty()
+            || !property_captions.is_empty()
             || !generic.is_empty()
     }
     pub fn validate(&self) -> Result<(), String> {
@@ -944,6 +959,7 @@ impl Document {
             a.format.validate(&a.text)?;
         }
         crate::molecule_names::validate(self)?;
+        crate::linked_properties::validate(self)?;
         crate::arrow_labels::validate(self)?;
         for graphic in &self.graphics {
             graphic.validate()?;
@@ -992,6 +1008,7 @@ fn frame_bytes(doc: &Document) -> usize {
         + doc.arrows.len()
         + doc.arrow_labels.len()
         + doc.molecule_names.len()
+        + doc.property_captions.len()
         + doc.graphics.len()
         + doc.groups.len()
         + doc.reactions.len()
@@ -1023,6 +1040,7 @@ fn frame_bytes(doc: &Document) -> usize {
         + bytes(&doc.arrows[..])
         + bytes(&doc.arrow_labels[..])
         + bytes(&doc.molecule_names[..])
+        + bytes(&doc.property_captions[..])
         + bytes(&doc.graphics[..])
         + bytes(&doc.groups[..])
         + bytes(&doc.reactions[..])

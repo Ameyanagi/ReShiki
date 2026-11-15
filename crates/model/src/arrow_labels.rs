@@ -309,7 +309,12 @@ pub fn prune(doc: &mut Document) {
         .map(|a| a.id)
         .collect();
     let texts: HashSet<_> = doc.annotations.iter().map(|a| a.id).collect();
-    let captions: HashSet<_> = doc.molecule_names.iter().map(|n| n.annotation).collect();
+    let captions: HashSet<_> = doc
+        .molecule_names
+        .iter()
+        .map(|n| n.annotation)
+        .chain(doc.property_captions.iter().map(|l| l.annotation))
+        .collect();
     doc.arrow_labels.retain(|l| {
         arrows.contains(&l.arrow)
             && texts.contains(&l.annotation)
@@ -349,7 +354,12 @@ pub fn reconcile(doc: &mut Document, before: &Document) {
     // preview. Other edits preserve the saved side and clearance.
     // 2. Newly dropped or typed text.
     let attached: HashSet<_> = doc.arrow_labels.iter().map(|l| l.annotation).collect();
-    let captions: HashSet<_> = doc.molecule_names.iter().map(|n| n.annotation).collect();
+    let captions: HashSet<_> = doc
+        .molecule_names
+        .iter()
+        .map(|n| n.annotation)
+        .chain(doc.property_captions.iter().map(|l| l.annotation))
+        .collect();
     let candidates: Vec<u64> = doc
         .annotations
         .iter()

@@ -102,6 +102,9 @@ pub fn selection(doc: &Document, ids: &[u64]) -> Document {
     part.molecule_names.retain(|name| {
         ids.contains(&name.annotation) && name.atoms.iter().all(|id| ids.contains(id))
     });
+    part.property_captions.retain(|link| {
+        ids.contains(&link.annotation) && link.atoms.iter().all(|id| ids.contains(id))
+    });
     part.reactions
         .retain(|r| r.ids().iter().all(|id| ids.contains(id)));
     part.groups
@@ -215,6 +218,8 @@ pub(crate) fn preserved_expansion_selection(
     part.reactions
         .retain(|r| r.ids().iter().all(|id| ids.contains(id)));
     part.molecule_names
+        .retain(|n| ids.contains(&n.annotation) && n.atoms.iter().all(|id| ids.contains(id)));
+    part.property_captions
         .retain(|n| ids.contains(&n.annotation) && n.atoms.iter().all(|id| ids.contains(id)));
     part.arrow_labels
         .retain(|l| ids.contains(&l.arrow) && ids.contains(&l.annotation));
@@ -500,6 +505,7 @@ pub(crate) fn remap_ids(doc: &mut Document, mapping: &HashMap<u64, u64>) -> Opti
         bonds,
         annotations,
         molecule_names,
+        property_captions,
         arrows,
         arrow_labels,
         graphics,
@@ -531,6 +537,10 @@ pub(crate) fn remap_ids(doc: &mut Document, mapping: &HashMap<u64, u64>) -> Opti
     for name in molecule_names {
         map(&mut name.annotation)?;
         name.atoms.iter_mut().try_for_each(map)?;
+    }
+    for link in property_captions {
+        map(&mut link.annotation)?;
+        link.atoms.iter_mut().try_for_each(map)?;
     }
     for a in arrows {
         map(&mut a.id)?;
@@ -569,6 +579,7 @@ pub(crate) fn extend_append_part(doc: &mut Document, part: Document) {
     doc.bonds.extend(part.bonds);
     doc.annotations.extend(part.annotations);
     doc.molecule_names.extend(part.molecule_names);
+    doc.property_captions.extend(part.property_captions);
     doc.arrows.extend(part.arrows);
     doc.arrow_labels.extend(part.arrow_labels);
     if doc.arrow_labels.iter().any(|label| label.gap.is_some()) {
