@@ -2,7 +2,11 @@
 use super::*;
 use reshiki::{
     atom_labels::refresh::Refresh,
-    chemistry::{self, depict, document as molecular, smiles},
+    chemistry::{
+        self, depict, document as molecular,
+        inchi::{generator, kernel, key},
+        smiles,
+    },
     engine::native_response,
     scene,
 };
@@ -78,9 +82,38 @@ async fn profile_polyalanine_insert_stages() -> anyhow::Result<()> {
         let document = drawing.finish(labels)?;
         document.validate().map_err(anyhow::Error::msg)?;
         elapsed(&mut stages, "drawing_and_labels", started);
+        let molecule = Arc::new(molecule);
         let started = Instant::now();
-        let _analysis = native_response::analyze_prepared(Arc::new(molecule), false, None).await?;
+        let _analysis = native_response::analyze_prepared(molecule.clone(), false, None).await?;
         elapsed(&mut stages, "analysis", started);
+        // The analysis step by step, with InChI in this process.
+        let started = Instant::now();
+        molecular::validate_molecule(&molecule)?;
+        elapsed(&mut stages, "analysis_validate", started);
+        let started = Instant::now();
+        smiles::write::write(&molecule.state, Default::default())?;
+        elapsed(&mut stages, "analysis_smiles", started);
+        let started = Instant::now();
+        let input =
+            kernel::Molecule::prepare(&molecule.state, Some(molecule.positions.as_slice()))?;
+        elapsed(&mut stages, "analysis_inchi_input", started);
+        let started = Instant::now();
+        let inchi = generator::generate_in_process(&input)?.inchi;
+        elapsed(&mut stages, "analysis_inchi", started);
+        let started = Instant::now();
+        key::from_inchi(&inchi)?;
+        elapsed(&mut stages, "analysis_inchikey", started);
+        let graph = &molecule.state.graph;
+        let started = Instant::now();
+        let ring_atoms = chemistry::rings::perceive(graph, Default::default())?.atoms;
+        elapsed(&mut stages, "analysis_rings", started);
+        let started = Instant::now();
+        chemistry::descriptors::calculate(graph, &ring_atoms).map_err(anyhow::Error::msg)?;
+        elapsed(&mut stages, "analysis_descriptors", started);
+        let started = Instant::now();
+        let facts = graph.atom_facts().map_err(anyhow::Error::msg)?;
+        chemistry::properties(&facts).map_err(anyhow::Error::msg)?;
+        elapsed(&mut stages, "analysis_properties", started);
         let (mut app, _) = App::new();
         app.tab.doc = Document::default();
         app.viewport = iced::Size::new(1040., 680.);
