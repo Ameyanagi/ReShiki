@@ -5,35 +5,31 @@ use super::{ACCOUNT, FAILED, SERVICE};
 
 const ATTRIBUTES: [(&str, &str); 2] = [("service", SERVICE), ("account", ACCOUNT)];
 
+fn failed(_: oo7::Error) -> String {
+    FAILED.into()
+}
+
 /// A dismissed unlock prompt fails here, like a missing keyring.
-async fn keyring() -> oo7::Result<oo7::Keyring> {
-    let keyring = oo7::Keyring::new().await?;
-    keyring.unlock().await?;
+async fn keyring() -> Result<oo7::Keyring, String> {
+    let keyring = oo7::Keyring::new().await.map_err(failed)?;
+    keyring.unlock().await.map_err(failed)?;
     Ok(keyring)
 }
 
-async fn stored() -> oo7::Result<Option<Vec<u8>>> {
-    match keyring().await?.search_items(&ATTRIBUTES).await?.first() {
-        Some(item) => Ok(Some(item.secret().await?.to_vec())),
+pub async fn read() -> Result<Option<Vec<u8>>, String> {
+    let items = keyring().await?.search_items(&ATTRIBUTES).await;
+    match items.map_err(failed)?.first() {
+        Some(item) => Ok(Some(item.secret().await.map_err(failed)?.to_vec())),
         None => Ok(None),
     }
 }
 
-pub async fn read() -> Result<Option<Vec<u8>>, String> {
-    stored().await.map_err(|_| FAILED.into())
-}
-
 pub async fn write(bytes: Vec<u8>) -> Result<(), String> {
-    let write = async {
-        keyring()
-            .await?
-            .create_item("ReShiki GitHub sign-in", &ATTRIBUTES, bytes, true)
-            .await
-    };
-    write.await.map_err(|_| FAILED.into())
+    let keyring = keyring().await?;
+    let created = keyring.create_item("ReShiki GitHub sign-in", &ATTRIBUTES, bytes, true);
+    created.await.map_err(failed)
 }
 
 pub async fn delete() -> Result<(), String> {
-    let delete = async { keyring().await?.delete(&ATTRIBUTES).await };
-    delete.await.map_err(|_| FAILED.into())
+    keyring().await?.delete(&ATTRIBUTES).await.map_err(failed)
 }
