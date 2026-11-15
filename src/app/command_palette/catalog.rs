@@ -1103,7 +1103,7 @@ fn files() -> Vec<Command> {
         )
         .alias(&["w", "write"]),
         send(
-            "Save as…",
+            super::super::files::SAVE_AS,
             File,
             "Save a copy under a new name",
             "file write",

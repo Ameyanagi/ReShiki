@@ -534,7 +534,7 @@ pub(crate) fn entries() -> Vec<Entry> {
         ),
         entry(
             format!("{} / {}", label(Message::Save), label(Message::SaveAs)),
-            "Save / save as",
+            "Save / save as .rsk",
             "Save the drawing, or save a copy under a new name",
             Anywhere,
             &["file", "write", "store"],

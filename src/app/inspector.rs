@@ -2257,7 +2257,7 @@ impl App {
             "Editable document",
             ".rsk · retains the complete drawing",
             true,
-            command("Save as .rsk…", Message::SaveAs).width(Length::Fill),
+            command(super::files::SAVE_AS, Message::SaveAs).width(Length::Fill),
         ))
         .into()
     }

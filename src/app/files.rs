@@ -4,13 +4,14 @@ use iced::Task;
 use reshiki::engine::Request;
 use std::path::PathBuf;
 
+/// The name of Save As in Export, the toolbar and the palette.
+pub(super) const SAVE_AS: &str = "Save as .rsk…";
 #[cfg(not(target_arch = "wasm32"))]
 const SAVE: &str = "Save";
 #[cfg(not(target_arch = "wasm32"))]
 const DONT_SAVE: &str = "Don’t Save";
 #[cfg(not(target_arch = "wasm32"))]
-const ADDIN_SAVE_STATUS: &str =
-    "Saving recovery draft and waiting for Microsoft 365 to confirm the drawing update…";
+const ADDIN_SAVE_STATUS: &str = "Saving draft · Waiting for Microsoft 365 to confirm…";
 #[cfg(not(target_arch = "wasm32"))]
 const OFFICE_SESSION_ENDED: &str =
     "The Office edit session has ended; save this drawing to another file";
@@ -546,9 +547,9 @@ impl super::App {
                         .as_ref()
                         .is_some_and(|binding| binding.host == Host::LibreOffice)
                     {
-                        "Drawing saved for LibreOffice. Return to the document to check the update."
+                        "Saved for LibreOffice · Check the update in the document"
                     } else {
-                        "Drawing updated in Office. Save the Office document to keep it."
+                        "Drawing updated in Office · Save the Office document"
                     }
                     .into()
                 } else {

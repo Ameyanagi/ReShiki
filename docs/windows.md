@@ -74,7 +74,7 @@ The Office file contains the drawing; it does not depend on an external
 the editor, and the portable version registers its current location when you
 copy. After moving a portable installation, copy once from its new location.
 If Office closes or rejects an update, ReShiki reports the error and retains
-a local copy. Use **Save as** to keep a separate editable original.
+a local copy. Use **Save as .rsk…** to keep a separate editable original.
 
 Use **Copy Image** for a static figure or for applications that only accept
 pictures. Its SVG outlines text so Office cannot shift atom labels. Existing

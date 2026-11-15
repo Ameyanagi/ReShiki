@@ -457,7 +457,7 @@ impl App {
             ),
             icon_button(
                 Icon::SaveAs,
-                keyed("Save as", &Message::SaveAs),
+                keyed(super::files::SAVE_AS, &Message::SaveAs),
                 Some(Message::SaveAs),
                 false
             ),

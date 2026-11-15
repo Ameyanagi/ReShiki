@@ -2427,3 +2427,24 @@ fn chemical_name_format_command_requires_selected_text_boxes_and_undoes_once() {
     assert_eq!(app.tab.doc, before);
     assert!(!app.tab.history.can_undo());
 }
+
+/// Export and the toolbar label Save As with `files::SAVE_AS`; the palette
+/// and Help use the same name.
+#[test]
+fn save_as_has_one_name_on_every_surface() {
+    let names: Vec<_> = catalog::build(&app())
+        .into_iter()
+        .filter(|command| matches!(&command.run, catalog::Run::Send(m) if matches!(m[..], [Message::SaveAs])))
+        .map(|command| command.name)
+        .collect();
+    assert_eq!(names, [super::super::files::SAVE_AS]);
+    let help = super::super::help::registry::entries();
+    let save = help
+        .iter()
+        .find(|entry| entry.description.contains("under a new name"))
+        .unwrap();
+    assert!(
+        save.name
+            .ends_with(&super::super::files::SAVE_AS.to_lowercase().replace('…', ""))
+    );
+}
