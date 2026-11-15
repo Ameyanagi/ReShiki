@@ -135,27 +135,27 @@ EMF. To save an `.rsk` file, use the MCP server's `file_save` or the app.
 
 ## Options
 
-| Option                  | Commands                       | Meaning                                                                                                                        |
-| ----------------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
-| `--smiles TEXT`         | convert, render, analyze, name | Read SMILES text instead of a file or standard input                                                                           |
-| `--from FORMAT`         | convert, render, analyze, name | Set the input format                                                                                                           |
-| `--to FORMAT`           | convert, render, compose       | Set the output format: `svg`, `pdf`, `png`, `cdxml`, `cdx`, `mol`, `rxn`, `smiles`, `rsmi`, `inchi`; `png` or `svg` for render |
-| `-o OUTPUT`             | convert, render, compose       | Write to OUTPUT, or to standard output with `-`                                                                                |
-| `--pages`               | convert, compose               | Export every publication page as one PDF; PDF output only                                                                      |
-| `--svg-text MODE`       | convert, render, compose       | SVG text as `outline` (default) or `live` `<text>` elements; other formats ignore it                                           |
-| `--width N`             | render                         | The widest the PNG may be, in pixels: 1 to 8192, default 1600                                                                  |
-| `--height N`            | render                         | The tallest the PNG may be, in pixels: 1 to 8192, default 1000                                                                 |
-| `--force`               | convert, render, compose       | Replace OUTPUT if it exists                                                                                                    |
-| `--receipt`             | convert, compose               | Print one receipt JSON line after writing OUTPUT; needs `-o OUTPUT`                                                            |
-| `-o FOLDER`             | skill                          | The existing folder that receives the skill folder                                                                             |
-| `--name NAME`           | skill                          | The skill's name and folder name; default `reshiki`                                                                            |
-| `--executable PATH`     | skill                          | The absolute path of the executable the skill runs; default this executable                                                    |
-| `--force`               | skill                          | Replace the generated files of an existing skill folder                                                                        |
-| `--receipt`             | skill                          | Print one receipt JSON line after writing the skill                                                                            |
-| `--isotope-style STYLE` | name                           | Isotope notation: `iupac` (default), as in (2H3)methanol, or `boughton`, as in methanol-d3                                     |
-| `--json`                | name                           | Print the name and its status as one JSON line                                                                                 |
-| `--locants`             | name                           | Print JSON with parent locants in input atom order                                                                             |
-| `--json`                | help                           | Print the command catalog as one JSON line                                                                                     |
+| Option                  | Commands                       | Meaning                                                                                    |
+| ----------------------- | ------------------------------ | ------------------------------------------------------------------------------------------ |
+| `--smiles TEXT`         | convert, render, analyze, name | Read SMILES text instead of a file or standard input                                       |
+| `--from FORMAT`         | convert, render, analyze, name | Set the input format                                                                       |
+| `--to FORMAT`           | convert, render, compose       | Set the output format; `png` or `svg` for render                                           |
+| `-o OUTPUT`             | convert, render, compose       | Write to OUTPUT, or to standard output with `-`                                            |
+| `--pages`               | convert, compose               | Export every publication page as one PDF; PDF output only                                  |
+| `--svg-text MODE`       | convert, render, compose       | SVG text as `outline` (default) or `live` `<text>` elements; other formats ignore it       |
+| `--width N`             | render                         | The widest the PNG may be, in pixels: 1 to 8192, default 1600                              |
+| `--height N`            | render                         | The tallest the PNG may be, in pixels: 1 to 8192, default 1000                             |
+| `--force`               | convert, render, compose       | Replace OUTPUT if it exists                                                                |
+| `--receipt`             | convert, compose               | Print one receipt JSON line after writing OUTPUT; needs `-o OUTPUT`                        |
+| `-o FOLDER`             | skill                          | The existing folder that receives the skill folder                                         |
+| `--name NAME`           | skill                          | The skill's name and folder name; default `reshiki`                                        |
+| `--executable PATH`     | skill                          | The absolute path of the executable the skill runs; default this executable                |
+| `--force`               | skill                          | Replace the generated files of an existing skill folder                                    |
+| `--receipt`             | skill                          | Print one receipt JSON line after writing the skill                                        |
+| `--isotope-style STYLE` | name                           | Isotope notation: `iupac` (default), as in (2H3)methanol, or `boughton`, as in methanol-d3 |
+| `--json`                | name                           | Print the name and its status as one JSON line                                             |
+| `--locants`             | name                           | Print JSON with parent locants in input atom order                                         |
+| `--json`                | help                           | Print the command catalog as one JSON line                                                 |
 
 A rendered PNG has at most 16,000,000 pixels. A `--width` or `--height` that
 is not a whole number is a usage error. A number outside 1 to 8192 fails, as
