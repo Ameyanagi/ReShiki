@@ -314,6 +314,7 @@ fn a_drawing_changed_on_github_is_recorded_as_a_conflict() {
     assert_eq!(app.github_conflicts(&repo().key), 1);
     assert_eq!(unsent(&app), ["ring.rsk"], "nothing is overwritten");
     assert!(app.error);
+    assert_eq!(app.status, "Not sent · “ring.rsk” changed on GitHub");
 }
 
 #[test]
@@ -550,8 +551,24 @@ fn keep_mine_sends_yours_over_githubs() {
         [("ring.rsk".into(), Some(sha('a')))]
     );
     assert!(!app.dirty());
-    // Send: started again at once.
+    // Send: started again at once, and its end still says what was kept.
     assert!(app.github.sending.contains(&repo().key));
+    sent(&mut app, "ring.rsk");
+    assert_eq!(app.status, "Kept yours · sent");
+}
+
+/// GitHub took `repo_path`, with nothing in conflict.
+fn sent(app: &mut App, repo_path: &str) {
+    let outcome = SendOutcome {
+        repo: repo(),
+        commit: sha('9'),
+        sent: vec![(repo_path.into(), sha('8'), "hash".into())],
+        conflicts: Vec::new(),
+    };
+    github(
+        app,
+        Action::Sent(repo().key, workcopy::now_id(), Ok(outcome)),
+    );
 }
 
 #[test]
@@ -601,6 +618,8 @@ fn keep_both_saves_yours_beside_githubs_and_sends_it() {
     assert_eq!(app.tab.path.as_deref(), Some(copy.as_path()));
     assert!(!app.dirty());
     assert!(app.github.sending.contains(&repo().key));
+    sent(&mut app, "ring (2).rsk");
+    assert_eq!(app.status, "Kept both · yours is “ring (2).rsk” · sent");
 }
 
 #[test]

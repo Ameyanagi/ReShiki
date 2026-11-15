@@ -103,6 +103,8 @@ pub(super) struct State {
     conflicts: HashMap<RepoKey, Vec<send::Conflict>>,
     /// A choice waiting for its drawing to be saved.
     resolving: Option<(RepoKey, send::Choice)>,
+    /// What the last choice kept, until the send after it ends.
+    kept: Option<(RepoKey, String)>,
     /// A Send waiting for the open drawings of its repository to be saved:
     /// its message, and the tabs still to save.
     after_save: Option<(RepoKey, String, Vec<TabId>)>,
@@ -143,6 +145,7 @@ impl State {
             failed: HashMap::new(),
             conflicts: HashMap::new(),
             resolving: None,
+            kept: None,
             after_save: None,
             closing: None,
             later: HashSet::new(),
@@ -849,9 +852,28 @@ impl App {
         result: Result<send::SendOutcome, gh::Error>,
     ) -> Task<Message> {
         self.github.sending.remove(&key);
+        // What a conflict choice kept, said before the send that followed it.
+        let kept = self
+            .github
+            .kept
+            .take_if(|(at, _)| *at == key)
+            .map(|(_, kept)| kept);
         let mut tasks = Vec::new();
         match result {
             Ok(outcome) => {
+                // Every drawing changed on GitHub: nothing was sent.
+                let not_sent = match outcome.conflicts.as_slice() {
+                    [] => None,
+                    _ if !outcome.sent.is_empty() => None,
+                    [one] => Some(format!(
+                        "Not sent · “{}” changed on GitHub",
+                        conflict::file_name(&one.repo_path)
+                    )),
+                    all => Some(format!(
+                        "Not sent · {} drawings changed on GitHub",
+                        all.len()
+                    )),
+                };
                 let (Some(root), Some(state)) = (self.github.root.clone(), self.github_state(&key))
                 else {
                     return Task::none();
@@ -889,10 +911,14 @@ impl App {
                 }
                 let conflicts = self.github_conflicts(&key);
                 self.error = conflicts > 0;
-                self.status = match conflicts {
-                    0 => "Sent to GitHub".into(),
-                    1 => "Sent · 1 drawing changed on GitHub and was left out".into(),
-                    n => format!("Sent · {n} drawings changed on GitHub and were left out"),
+                self.status = match (not_sent, conflicts, kept) {
+                    (Some(not_sent), ..) => not_sent,
+                    (None, 0, Some(kept)) => format!("{kept} · sent"),
+                    (None, 0, None) => "Sent to GitHub".into(),
+                    (None, 1, _) => "Sent · 1 drawing changed on GitHub and was left out".into(),
+                    (None, n, _) => {
+                        format!("Sent · {n} drawings changed on GitHub and were left out")
+                    }
                 };
             }
             Err(error) => {

@@ -28,7 +28,7 @@ pub(in crate::app) struct Review {
     pub(super) compare: Compare,
 }
 
-fn file_name(repo_path: &str) -> String {
+pub(super) fn file_name(repo_path: &str) -> String {
     repo_path.rsplit('/').next().unwrap_or(repo_path).to_owned()
 }
 
@@ -217,6 +217,7 @@ impl App {
         let send = if unsent.is_empty() {
             Task::none()
         } else {
+            self.github.kept = Some((key.clone(), self.status.clone()));
             self.github_send(key, send::default_message(&unsent), None)
         };
         Task::batch([persist, close, send])
