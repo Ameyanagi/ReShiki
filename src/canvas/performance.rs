@@ -186,6 +186,154 @@ async fn loaded_canvas_workloads() {
     }
 }
 
+/// Previews over the gallery at 1×, 4× and 16×: hovering a ring or template,
+/// drawing a bond, moving part of a molecule, and panning. "Onscreen" keeps
+/// the gallery in view; "offscreen" moves the camera away from all of it.
+#[tokio::test]
+#[ignore = "Release-mode canvas preview profiling; requires a headless renderer"]
+async fn preview_workloads() {
+    let backend = std::env::var("RESHIKI_PERF_RENDERER").ok();
+    let renderer = <Renderer as Headless>::new(
+        iced::Font::with_name(reshiki::style::ui_font_family()),
+        iced::Pixels(16.),
+        backend.as_deref(),
+    )
+    .await
+    .expect("Headless renderer");
+    println!("Renderer: {}", renderer.name());
+    let original: Document =
+        serde_json::from_str(include_str!("../../assets/examples/shortcut-examples.rsk")).unwrap();
+    let iterations = std::env::var("RESHIKI_PERF_ITERATIONS")
+        .ok()
+        .and_then(|n| n.parse::<usize>().ok())
+        .unwrap_or(20)
+        .max(1);
+    let template = reshiki::templates::LIBRARY
+        .iter()
+        .find(|t| t.name == "Cyclohexane")
+        .unwrap();
+    let bounds = Rectangle::with_size(iced::Size::new(1066., 570.));
+    let length = original.drawing_style.bond_length_world;
+    println!("PERF,workload,iterations,median_ms,p95_ms,mean_ms");
+    for copies in [1, 4, 16] {
+        let mut doc = original.clone();
+        let (lo, hi) = original.bounds();
+        for copy in 1..copies {
+            reshiki::editing::append(
+                &mut doc,
+                &original,
+                World::new((hi.x - lo.x + 100.) * copy as f32, 0.),
+            );
+        }
+        // The lowest end carbon of the first copy: bonds start there, and it
+        // moves with its neighbor.
+        let degree = |id| doc.bonds.iter().filter(|b| b.a == id || b.b == id).count();
+        let end = doc
+            .atoms
+            .iter()
+            .filter(|a| a.element == "C" && degree(a.id) == 1)
+            .max_by(|a, b| a.position.y.total_cmp(&b.position.y))
+            .unwrap();
+        let (end, end_position) = (end.id, end.position);
+        let neighbor = doc
+            .bonds
+            .iter()
+            .find_map(|b| match (b.a == end, b.b == end) {
+                (true, _) => Some(b.b),
+                (_, true) => Some(b.a),
+                _ => None,
+            })
+            .unwrap();
+        // Empty paper below the gallery, with the gallery in the top half.
+        let free = World::new(end_position.x, hi.y + 4. * length);
+        let onscreen = Camera {
+            center: World::new(end_position.x, hi.y),
+            zoom: 0.5,
+        };
+        let offscreen = Camera {
+            center: World::new(-100_000., -100_000.),
+            zoom: 0.5,
+        };
+        for (view, camera) in [("onscreen", onscreen), ("offscreen", offscreen)] {
+            let name = |workload: &str| format!("g{copies}x_{view}_{workload}");
+            let mut canvas = tests::chain_canvas(&doc, ChainMode::Straight);
+            canvas.camera = camera;
+            let hover = camera.screen(free, bounds);
+            let start = camera.screen(end_position, bounds);
+            let mut state = State {
+                cursor: Some(hover),
+                ..Default::default()
+            };
+            let draw = |canvas: &MoleculeCanvas<'_>, state: &State| {
+                let cursor = mouse::Cursor::Available(state.cursor.unwrap());
+                black_box(canvas.draw(state, &renderer, &Theme::Light, bounds, cursor));
+            };
+            measure(&name("idle"), iterations, |_| draw(&canvas, &state));
+            canvas.tool = Tool::RingPreset(reshiki::rings::Preset::Benzene);
+            measure(&name("ring_preset_hover"), iterations, |i| {
+                state.cursor = Some(hover + Vector::new((i % 8) as f32, 0.));
+                draw(&canvas, &state);
+            });
+            state.cursor = Some(hover);
+            measure(&name("ring_preset_hover_still"), iterations, |_| {
+                draw(&canvas, &state)
+            });
+            canvas.tool = Tool::Template;
+            canvas.template = Some((template, reshiki::templates::Anchor::Auto));
+            measure(&name("template_hover"), iterations, |i| {
+                state.cursor = Some(hover + Vector::new((i % 8) as f32, 0.));
+                draw(&canvas, &state);
+            });
+            canvas.template = None;
+            canvas.tool = Tool::Bond(1);
+            state.gesture = Some(Gesture::Draw {
+                start: end_position,
+                pressed: end_position,
+                id: Some(end),
+                text: None,
+            });
+            measure(&name("bond_drag"), iterations, |i| {
+                state.cursor = Some(start + Vector::new(20. + (i % 8) as f32, 30.));
+                draw(&canvas, &state);
+            });
+            canvas.tool = Tool::Select;
+            let moving = [end, neighbor];
+            canvas.selected = &moving;
+            state.gesture = Some(Gesture::Move {
+                start: end_position,
+                ids: moving.to_vec(),
+                clicked: moving.to_vec(),
+            });
+            measure(&name("partial_move"), iterations, |i| {
+                state.cursor = Some(start + Vector::new(10. + (i % 8) as f32, 5.));
+                draw(&canvas, &state);
+            });
+        }
+        let (lo, hi) = doc.bounds();
+        let fit = (bounds.width / (hi.x - lo.x)).min(bounds.height / (hi.y - lo.y)) * 0.9;
+        let center = World::new((lo.x + hi.x) / 2., (lo.y + hi.y) / 2.);
+        for (view, zoom) in [("fit", fit), ("half", 0.5)] {
+            let mut canvas = tests::chain_canvas(&doc, ChainMode::Straight);
+            canvas.tool = Tool::Select;
+            let state = State::default();
+            measure(&format!("g{copies}x_{view}_pan"), iterations, |i| {
+                canvas.camera = Camera {
+                    center: center.offset((i % 16) as f32 / zoom, 0.),
+                    zoom,
+                };
+                black_box(canvas.draw(
+                    &state,
+                    &renderer,
+                    &Theme::Light,
+                    bounds,
+                    mouse::Cursor::Unavailable,
+                ));
+            });
+        }
+        assert_eq!(doc.atoms.len(), original.atoms.len() * copies);
+    }
+}
+
 /// Read back rendered pixels: cache reuse must not change a drawing, and a
 /// rigid drag preview must agree with committing that translation.
 #[tokio::test]
