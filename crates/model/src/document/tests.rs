@@ -410,7 +410,7 @@ fn history_releases_its_oldest_frames_down_to_the_steps_to_keep() {
         assert!(history.commit(before, &doc));
     }
     let frame = frame_bytes(&doc);
-    assert_eq!(history.undo_bytes(), 30 * frame);
+    assert_eq!(history.bytes(), 30 * frame);
     assert_eq!(history.release(0, 5), 0);
     assert_eq!(history.release(frame + 1, 5), 2 * frame);
     assert_eq!(history.undo_frames().len(), 28);
@@ -420,6 +420,51 @@ fn history_releases_its_oldest_frames_down_to_the_steps_to_keep() {
     // The newest step is the one that remains to undo.
     assert!(history.undo(&mut doc));
     assert_eq!(doc.atoms[0].position.x, 29.);
+}
+#[test]
+fn history_counts_redo_frames_and_releases_the_furthest_after_the_undo_frames() {
+    let mut doc = Document::default();
+    doc.add_atom("C", Point::default());
+    let mut history = History::default();
+    for _ in 0..10 {
+        let before = doc.clone();
+        doc.atoms[0].position.x += 1.;
+        assert!(history.commit(before, &doc));
+    }
+    let frame = frame_bytes(&doc);
+    for _ in 0..6 {
+        assert!(history.undo(&mut doc));
+    }
+    // Undoing moves frames to the redo side. They still count.
+    assert_eq!(history.bytes(), 10 * frame);
+    assert_eq!(
+        (history.undo_frames().len(), history.redo_frames().len()),
+        (4, 6)
+    );
+    assert_eq!(history.release(usize::MAX, 3), 7 * frame);
+    assert_eq!(
+        (history.undo_frames().len(), history.redo_frames().len()),
+        (0, 3)
+    );
+    // The nearest redo steps remain.
+    assert!(!history.undo(&mut doc));
+    while history.redo(&mut doc) {}
+    assert_eq!(doc.atoms[0].position.x, 7.);
+
+    // The limit of one history counts them as well.
+    history.max_bytes = 25 * frame;
+    for _ in 0..30 {
+        let before = doc.clone();
+        doc.atoms[0].position.x += 1.;
+        assert!(history.commit(before, &doc));
+    }
+    for _ in 0..25 {
+        assert!(history.undo(&mut doc));
+    }
+    history.max_bytes = 22 * frame;
+    assert!(history.redo(&mut doc));
+    assert_eq!(history.frames(), 22);
+    assert_eq!(history.redo_frames().len(), 22);
 }
 #[test]
 fn history_frames_count_arrow_node_buffers() {

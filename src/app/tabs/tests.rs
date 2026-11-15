@@ -1003,15 +1003,10 @@ fn tabs_share_one_undo_budget_and_the_ones_behind_give_way_first() {
             .map(|tab| tab.history.undo_frames().len())
             .collect::<Vec<_>>()
     };
-    let bytes = |app: &App| -> usize { app.strip().map(|tab| tab.history.undo_bytes()).sum() };
+    let bytes = |app: &App| -> usize { app.strip().map(|tab| tab.history.bytes()).sum() };
     assert_eq!(frames(&app), [30, 40, 30], "the real budget is far away");
     let total = bytes(&app);
     app.trim_histories(total);
-    assert_eq!(frames(&app), [30, 40, 30]);
-    // A result for a tab behind the front trims nothing: the front tab
-    // would count as one behind.
-    let behind = app.tabs.background[0].id;
-    app.in_tab(behind, |app| app.trim_histories(0));
     assert_eq!(frames(&app), [30, 40, 30]);
     // The largest history behind the front loses its oldest step first.
     app.trim_histories(total - 1);
@@ -1036,4 +1031,71 @@ fn tabs_share_one_undo_budget_and_the_ones_behind_give_way_first() {
     let atoms = app.tab.doc.atoms.len();
     let _ = app.update(Message::Undo);
     assert_eq!(app.tab.doc.atoms.len(), atoms - 1);
+}
+
+/// Undo plus redo frames of each tab, in strip order.
+fn history_frames(app: &App) -> Vec<usize> {
+    app.strip().map(|tab| tab.history.frames()).collect()
+}
+
+#[test]
+fn an_edit_in_a_tab_behind_the_front_trims_once_the_front_tab_is_back() {
+    use reshiki::document::History;
+    let mut app = ready();
+    for _ in 0..30 {
+        edit(&mut app, "C");
+    }
+    let behind = app.tab.id;
+    app.add_tab();
+    app.tab.busy = false;
+    for _ in 0..30 {
+        edit(&mut app, "C");
+    }
+    // The tab behind stands in front while it takes the edit, so the trim
+    // waits: the tab really in front would give way as one behind.
+    app.in_tab(behind, |app| {
+        edit(app, "N");
+        app.trim_histories(0);
+        assert_eq!(app.tab.history.frames(), 31);
+        assert_eq!(app.tabs.background[0].history.frames(), 30);
+    });
+    assert_eq!(history_frames(&app), [BACKGROUND_STEPS, History::MIN_STEPS]);
+    assert_eq!(app.strip().next().unwrap().doc.atoms.len(), 31);
+}
+
+#[test]
+fn undone_steps_still_count_toward_the_budget_of_all_tabs() {
+    let mut app = ready();
+    for _ in 0..30 {
+        edit(&mut app, "C");
+    }
+    let bytes = |app: &App| -> usize { app.strip().map(|tab| tab.history.bytes()).sum() };
+    let edited = bytes(&app);
+    for _ in 0..30 {
+        let _ = app.update(Message::Undo);
+    }
+    // 30 frames wait on the redo side, as large as before or smaller.
+    assert_eq!(history_frames(&app), [30]);
+    assert!(bytes(&app) > edited / 2);
+    app.add_tab();
+    app.tab.busy = false;
+    for _ in 0..30 {
+        edit(&mut app, "C");
+    }
+    let total = bytes(&app);
+    app.trim_histories(total - 1);
+    // The first tab has only redo steps. It gives up the one furthest ahead.
+    assert_eq!(history_frames(&app), [29, 30]);
+    app.trim_histories(0);
+    assert_eq!(
+        history_frames(&app),
+        [BACKGROUND_STEPS, reshiki::document::History::MIN_STEPS]
+    );
+    // The redo steps that remain are the nearest ones.
+    app.select_tab(0);
+    for _ in 0..BACKGROUND_STEPS {
+        let _ = app.update(Message::Redo);
+    }
+    assert_eq!(app.tab.doc.atoms.len(), BACKGROUND_STEPS);
+    assert!(!app.tab.history.can_redo());
 }

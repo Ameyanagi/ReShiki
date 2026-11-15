@@ -947,8 +947,9 @@ pub struct History {
     undo: VecDeque<Document>,
     redo: VecDeque<Document>,
     limit: usize,
-    /// Estimated undo bytes ([`frame_bytes`]) above which the oldest frames
-    /// are dropped, down to [`History::MIN_STEPS`].
+    /// Estimated bytes of all frames ([`frame_bytes`]) above which the oldest
+    /// undo frames, then the furthest redo frames, are dropped, down to
+    /// [`History::MIN_STEPS`].
     max_bytes: usize,
 }
 /// The editor keeps 100 undo frames, fewer on large drawings: about 128 MB of
@@ -1071,28 +1072,36 @@ impl History {
         if self.undo.len() > self.limit {
             let _ = self.undo.pop_front();
         }
-        if self.max_bytes != usize::MAX {
-            let over = self.undo_bytes().saturating_sub(self.max_bytes);
-            self.release(over, Self::MIN_STEPS);
-        }
+        self.cap();
         true
     }
-    /// Estimated bytes of the undo frames, as the byte limit counts them.
-    pub fn undo_bytes(&self) -> usize {
-        self.undo.iter().map(frame_bytes).sum()
+    /// Keeps this history within its own byte limit.
+    fn cap(&mut self) {
+        if self.max_bytes != usize::MAX {
+            let over = self.bytes().saturating_sub(self.max_bytes);
+            self.release(over, Self::MIN_STEPS);
+        }
     }
-    /// Drops the oldest undo frames until at least `bytes` estimated bytes
-    /// are released or `keep` frames remain. Returns the bytes released.
+    /// Estimated bytes of the undo and redo frames, as the byte limit counts
+    /// them.
+    pub fn bytes(&self) -> usize {
+        self.undo.iter().chain(&self.redo).map(frame_bytes).sum()
+    }
+    /// Drops frames until at least `bytes` estimated bytes are released or
+    /// `keep` frames remain: the oldest undo steps first, then the redo steps
+    /// furthest ahead. Returns the bytes released.
     pub fn release(&mut self, bytes: usize, keep: usize) -> usize {
         let mut released = 0;
-        while released < bytes && self.undo.len() > keep {
-            released += self.undo.pop_front().as_ref().map_or(0, frame_bytes);
+        while released < bytes && self.frames() > keep {
+            let frame = self.undo.pop_front().or_else(|| self.redo.pop_front());
+            released += frame.as_ref().map_or(0, frame_bytes);
         }
         released
     }
     pub fn undo(&mut self, doc: &mut Document) -> bool {
         if let Some(prev) = self.undo.pop_back() {
             self.redo.push_back(std::mem::replace(doc, prev));
+            self.cap();
             true
         } else {
             false
@@ -1101,6 +1110,7 @@ impl History {
     pub fn redo(&mut self, doc: &mut Document) -> bool {
         if let Some(next) = self.redo.pop_back() {
             self.undo.push_back(std::mem::replace(doc, next));
+            self.cap();
             true
         } else {
             false

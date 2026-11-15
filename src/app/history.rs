@@ -14,6 +14,7 @@ impl App {
             self.tab.history.redo(&mut self.tab.doc)
         };
         if changed {
+            self.trim_histories(super::tabs::HISTORY_BYTES);
             self.tab.stereo_notes.clear();
             self.tab
                 .nmr
