@@ -1037,7 +1037,6 @@ fn a_renamed_repository_keeps_its_folder_here() {
     assert!(!workcopy::working_path(dir.path(), &renamed.key, "ring.rsk").exists());
 
     // Versions asks GitHub under the names it has now.
-    app.github.states.get_mut(&repo().key).unwrap().repo = "lab2".into();
     app.show_opened(
         Document::from_native_file(&std::fs::read(&path).unwrap()).unwrap(),
         Some(path.clone()),

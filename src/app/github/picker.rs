@@ -591,11 +591,14 @@ impl App {
             .map(|file| file.base_hash.clone());
         let unsent = std::fs::read(&path).is_ok_and(|bytes| base != Some(workcopy::hash(&bytes)));
         if open || unsent {
+            // A renamed repository: Versions asks GitHub under its names now.
+            self.github_tracked(&key, &repo);
+            let persist = self.github_persist(&key);
             let close = self.github_close_dialog();
             if unsent && !open {
                 self.status = "Opened your unsent version".into();
             }
-            return Task::batch([close, crate::app::files::open_paths(vec![path])]);
+            return Task::batch([persist, close, crate::app::files::open_paths(vec![path])]);
         }
         let generation = self.github_request();
         let Some(picker) = self.picker() else {
