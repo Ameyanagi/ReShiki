@@ -457,7 +457,7 @@ pub(super) const STATES: [(&str, Setup); 20] = [
 
 #[tokio::test]
 #[ignore = "Opt-in GPU snapshots of key UI states; set RESHIKI_UI_QA_DIR"]
-async fn ui_layout_snapshots() {
+async fn manual_ui_layout_snapshots() {
     let mut renderer = <iced::Renderer as Headless>::new(
         iced::Font::with_name(reshiki::style::ui_font_family()),
         iced::Pixels(16.),

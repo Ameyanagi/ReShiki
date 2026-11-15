@@ -223,14 +223,14 @@ The other naming tests do start helper processes; run them as CI does, with `RES
 
 Tests that need a real renderer or a baseline folder are marked `#[ignore]`. Run them with `-- --ignored`, or with `-- --include-ignored` to run the ordinary tests too. Add `--test-threads=1` for renderer pixel tests. On macOS the only headless renderer is WGPU on Metal; Tiny Skia is built only on Windows.
 
-| Variable                | Used by                                                            | Meaning                                                                                                                                                                                                                                                |
-| ----------------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `RESHIKI_DATA_DIR`      | View parity, UI snapshots and other app-level renderer tests       | The app's data folder: `App::new` reads recovery drafts and the template library from it. Point it at a new, empty folder before each run, so your own data cannot change the result.                                                                  |
-| `RESHIKI_UI_QA_DIR`     | `ui_layout_snapshots`                                              | Folder for PNG snapshots of key UI states at 1280 and 1040 px. Without it, the test writes to `reshiki-ui-qa` in the temporary folder.                                                                                                                 |
-| `RESHIKI_VIEW_PARITY`   | `views_match_captured_baseline`, `entries_match_captured_baseline` | Baseline folder for view and right-click menu parity. `RESHIKI_VIEW_PARITY_CAPTURE=1` writes the baseline; otherwise the test compares. `RESHIKI_VIEW_PARITY_ONLY` limits a capture to a case-name prefix during development; compare mode refuses it. |
-| `RESHIKI_CANVAS_PIXELS` | Canvas, paper-layer, text-placement and icon pixel baselines       | Baseline folder. `RESHIKI_CANVAS_CAPTURE_BASELINE=1` writes the baseline; otherwise the test compares.                                                                                                                                                 |
-| `RESHIKI_PERF_RENDERER` | Pixel, view-parity and canvas performance tests                    | Headless backend: `wgpu`, or `tiny-skia` on Windows. Without it, the default backend runs.                                                                                                                                                             |
-| `RESHIKI_MODEL_PARITY`  | `reshiki-model` captured-baseline tests                            | Baseline folder for model output. `RESHIKI_MODEL_CAPTURE_BASELINE=1` writes it.                                                                                                                                                                        |
+| Variable                | Used by                                                                          | Meaning                                                                                                                                                                                                                                                |
+| ----------------------- | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `RESHIKI_DATA_DIR`      | View parity, UI snapshots and other app-level renderer tests                     | The app's data folder: `App::new` reads recovery drafts and the template library from it. Point it at a new, empty folder before each run, so your own data cannot change the result.                                                                  |
+| `RESHIKI_UI_QA_DIR`     | `manual_ui_layout_snapshots`                                                     | Folder for PNG snapshots of key UI states at 1280 and 1040 px. Without it, the test writes to `reshiki-ui-qa` in the temporary folder.                                                                                                                 |
+| `RESHIKI_VIEW_PARITY`   | `manual_views_match_captured_baseline`, `manual_entries_match_captured_baseline` | Baseline folder for view and right-click menu parity. `RESHIKI_VIEW_PARITY_CAPTURE=1` writes the baseline; otherwise the test compares. `RESHIKI_VIEW_PARITY_ONLY` limits a capture to a case-name prefix during development; compare mode refuses it. |
+| `RESHIKI_CANVAS_PIXELS` | Canvas, paper-layer, text-placement and icon pixel baselines                     | Baseline folder. `RESHIKI_CANVAS_CAPTURE_BASELINE=1` writes the baseline; otherwise the test compares.                                                                                                                                                 |
+| `RESHIKI_PERF_RENDERER` | Pixel, view-parity and canvas performance tests                                  | Headless backend: `wgpu`, or `tiny-skia` on Windows. Without it, the default backend runs.                                                                                                                                                             |
+| `RESHIKI_MODEL_PARITY`  | `reshiki-model` captured-baseline tests                                          | Baseline folder for model output. `RESHIKI_MODEL_CAPTURE_BASELINE=1` writes it.                                                                                                                                                                        |
 
 Capture a baseline on the parent commit, then compare on your change:
 
@@ -238,12 +238,19 @@ Capture a baseline on the parent commit, then compare on your change:
 export RESHIKI_DATA_DIR="$PWD/artifacts/test-data"
 rm -rf "$RESHIKI_DATA_DIR" && mkdir -p "$RESHIKI_DATA_DIR"
 RESHIKI_VIEW_PARITY="$PWD/artifacts/view-parity" RESHIKI_VIEW_PARITY_CAPTURE=1 \
-  cargo test --locked --bin reshiki views_match_captured_baseline -- --ignored --nocapture
+  cargo test --locked --bin reshiki manual_views_match_captured_baseline -- --ignored --nocapture
 ```
 
 For the comparison, empty `RESHIKI_DATA_DIR` again and run the same command without `RESHIKI_VIEW_PARITY_CAPTURE`. Set `RESHIKI_NAMING_HELPER` and `RESHIKI_INCHI_HELPER` the same way for both runs: with the naming helper set, view parity also registers the cases that need chemical names.
 
-On Windows, CI runs every ignored `app::naming::` test, the `app::nmr::` and `canvas::nmr::` tests with `--include-ignored --test-threads=1`, and a few named focus and menu tests (`.github/workflows/checks.yml`). A new naming renderer test therefore runs there without a workflow change.
+On Windows, CI runs every ignored test of the application binary whose name does not start with `manual_`, so a new renderer test runs there without a workflow change:
+
+```sh
+cargo nextest run --locked --no-default-features --profile ci --run-ignored ignored-only --test-threads 2 \
+  -E 'binary_id(reshiki::bin/reshiki) & not test(/(^|::)manual_[^:]+$/)'
+```
+
+Start a test's name with `manual_` when it is a tool and not a check: a benchmark or profile, a baseline comparison, or a capture that needs its own folder or variables. Nothing in CI runs a `manual_` test, so keep its assertions few.
 
 ## Optional RDKit reference tests
 

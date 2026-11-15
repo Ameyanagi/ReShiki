@@ -346,74 +346,21 @@ jobs:
         # cargo tree resolves all six release triples from one host.
         if: runner.os == 'macOS'
         run: uv run --no-project python scripts/check_agent_dependencies.py
-      - name: Test rendered numeric-field focus on Windows
+      - name: Test with the real renderer on Windows
         if: runner.os == 'Windows'
-        # The Windows renderer includes Tiny Skia when WGPU is unavailable.
-        # This checks widget layout/input; it is not native desktop acceptance.
-        run: cargo test --locked --no-default-features --bin reshiki app::numeric_transforms::focus::tests::handle_shortcut_focuses_selects_and_reveals_the_field_in_both_window_sizes -- --exact --ignored
-      - name: Capture rendered Help QA on Windows
-        if: runner.os == 'Windows'
-        # Real Windows font/key rendering, including the TinySkia fallback.
-        # Native desktop input acceptance is recorded separately.
+        # Every ignored test of the application runs here unless its name starts
+        # with manual_ (docs/development.md, "Opt-in renderer tests"). The Windows
+        # renderer includes Tiny Skia when WGPU is unavailable. These check
+        # widget layout, input and accessibility; native desktop acceptance is
+        # recorded separately.
         env:
+          RESHIKI_DATA_DIR: ${{ runner.temp }}/reshiki-renderer-tests
+          # help_renderer_evidence keeps its captures for review.
           RESHIKI_HELP_QA_DIR: artifacts/qa-help-polish
-          RESHIKI_DATA_DIR: ${{ runner.temp }}/reshiki-help-polish
-        run: cargo test --locked --no-default-features --bin reshiki app::help::tests::help_renderer_evidence -- --exact --ignored
-      - name: Test rendered cascading menus on Windows
-        if: runner.os == 'Windows'
-        # The headless renderer falls back to TinySkia on Windows. These
-        # exercise widget input and layout, not native OS acceptance.
-        run: "cargo test --locked --no-default-features --bin reshiki app::context_menu::cascade_tests:: -- --ignored"
-      - name: Test rendered Updates modal keyboard input on Windows
-        if: runner.os == 'Windows'
-        # The Windows renderer includes Tiny Skia when WGPU is unavailable.
-        # This checks widget layout/input; it is not native desktop acceptance.
-        run: cargo test --locked --no-default-features --bin reshiki app::shortcut_focus_tests::updates_ -- --ignored
-      - name: Test that closing review panels returns keyboard focus to the drawing on Windows
-        if: runner.os == 'Windows'
-        run: cargo test --locked --no-default-features --bin reshiki app::shortcut_focus_tests::review_close -- --ignored
-      - name: Test rendered tool flyout input ownership on Windows
-        if: runner.os == 'Windows'
-        # Exercise the actual application widgets, including the Tiny Skia fallback.
-        # Native desktop timing and accessibility acceptance remain separate.
-        run: cargo test --locked --no-default-features --bin reshiki app::shortcut_focus_tests::tool_palette_pointer_gestures_and_keyboard_activation_have_one_owner -- --exact --ignored
-      - name: Test rendered shortcut and command palette focus on Windows
-        if: runner.os == 'Windows'
-        # Exercise actual widget input and accessibility, including the Tiny Skia fallback.
-        # Native desktop timing and accessibility acceptance remain separate.
-        run: |
-          cargo test --locked --no-default-features --bin reshiki app::shortcut_focus_tests::context_row_rotation_field_applies_a_typed_angle -- --exact --ignored
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          cargo test --locked --no-default-features --bin reshiki app::shortcut_focus_tests::join_chord_stays_in_real_fields_and_coordinates_selected_en_after_blur -- --exact --ignored
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          cargo test --locked --no-default-features --bin reshiki app::shortcut_focus_tests::command_palette_rows_are_named_buttons -- --exact --ignored
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          cargo test --locked --no-default-features --bin reshiki app::shortcut_focus_tests::command_palette_unavailable_row_click_keeps_typing_in_the_search_field -- --exact --ignored
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Test rendered drop-down Escape on Windows
-        if: runner.os == 'Windows'
-        # Escape closes the status-bar journal and theme lists (#336).
-        run: cargo test --locked --no-default-features --bin reshiki appearance::tests::escape_closes_an_open_pick_list -- --exact --ignored
-      - name: Test rendered figure export labels on Windows
-        if: runner.os == 'Windows'
-        # Keep the renderer-dependent AX check explicit; ordinary menu state
-        # regressions run on all hosts without requiring a graphics adapter.
-        run: cargo test --locked --no-default-features --bin reshiki app::inspector::tests::figure_export_buttons_publish_readable_labels -- --exact --ignored
-      - name: Test rendered new drawing inspector scroll on Windows
-        if: runner.os == 'Windows'
-        run: cargo test --locked --no-default-features --bin reshiki app::workspace::inspector_motion_qa::a_new_drawing_shows_selected_properties_from_the_top -- --exact --ignored
-      - name: Test rendered hybrid NMR controls on Windows
-        if: runner.os == 'Windows'
-        # Actual shared widgets, plot/atom linkage, docking camera and owned
-        # drag/resize input. Native desktop acceptance is recorded separately.
-        run: |
-          cargo test --locked --no-default-features --bin reshiki app::nmr:: -- --include-ignored --test-threads=1
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          cargo test --locked --no-default-features --bin reshiki canvas::nmr:: -- --include-ignored --test-threads=1
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Test rendered local naming accessibility and scrolled insertion on Windows
-        if: runner.os == 'Windows'
-        run: "cargo test --locked --no-default-features --bin reshiki app::naming:: -- --ignored"
+        run: >-
+          cargo nextest run --locked --no-default-features --profile ci
+          --run-ignored ignored-only --test-threads 2
+          -E 'binary_id(reshiki::bin/reshiki) & not test(/(^|::)manual_[^:]+$/)'
       - name: Test the shared naming corpus in one libtest process
         # Preserve the shared LazyLock baseline.
         run: "cargo test --locked --no-default-features -p reshiki --lib naming::s2n_harness::"

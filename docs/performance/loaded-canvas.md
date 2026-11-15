@@ -15,7 +15,7 @@ count. Run benchmarks separately from tests, builds, and sampling profilers.
 
 ```sh
 cargo test --release --locked --bin reshiki \
-  canvas::performance::loaded_canvas_workloads -- --ignored --exact --nocapture
+  canvas::performance::manual_loaded_canvas_workloads -- --ignored --exact --nocapture
 cargo run --release --locked --example canvas_performance
 ```
 
