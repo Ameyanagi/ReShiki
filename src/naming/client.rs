@@ -86,7 +86,7 @@ fn run_child(command: &mut Command, request: &[u8], cancel: &Cancel) -> Result<V
     let mut exited = None;
     loop {
         if cancel.stopped() {
-            return Err(Error::Cancelled("Local name parsing was cancelled".into()));
+            return Err(Error::Cancelled("Local name parsing was canceled".into()));
         }
         if started.elapsed() > DEADLINE {
             return Err(Error::Worker(

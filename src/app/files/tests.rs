@@ -379,7 +379,7 @@ fn microsoft_365_save_waits_for_receipt_and_failure_cancels_close_without_cleari
     let _ = app.update(Message::Tabs(crate::app::tabs::Action::Close(None)));
     let task = app.update(Message::Save);
     assert!(task.units() > 0 && app.file_io.saving);
-    assert!(app.status.contains("waiting for Microsoft 365"));
+    assert!(app.status.contains("Waiting for Microsoft 365"));
     assert!(app.dirty());
     let _ = app.update(Message::Saved(
         app.tab.file_epoch,

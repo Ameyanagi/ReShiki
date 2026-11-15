@@ -133,14 +133,17 @@ impl canvas::Program<Message> for ToolButton {
                 );
             }
         }
-        frame.translate(Vector::new(6., 6.));
+        // Center the 24 px glyph; the flyout corner sits 3 px inside.
+        let inset = Vector::new(bounds.width - 24., bounds.height - 24.) * 0.5;
+        frame.translate(inset);
         Glyph(self.icon, true).paint(&mut frame);
-        frame.translate(Vector::new(-6., -6.));
+        frame.translate(-inset);
         if palettes::family(self.tool).is_some() {
+            let (right, bottom) = (bounds.width - 3., bounds.height - 3.);
             let triangle = Path::new(|p| {
-                p.move_to(Point::new(29., 33.));
-                p.line_to(Point::new(33., 29.));
-                p.line_to(Point::new(33., 33.));
+                p.move_to(Point::new(right - 4., bottom));
+                p.line_to(Point::new(right, bottom - 4.));
+                p.line_to(Point::new(right, bottom));
                 p.close();
             });
             frame.fill(&triangle, Color::from_rgb8(51, 62, 72));

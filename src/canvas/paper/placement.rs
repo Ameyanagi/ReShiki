@@ -201,7 +201,7 @@ impl MoleculeCanvas<'_> {
                     *ring_selection = Some(ids);
                     *template_notice = Some((
                         format!(
-                            "{preset} · Drag rotates in 15° steps · {} rotates freely and connects from an atom · Escape cancels",
+                            "{preset} · Drag rotates in 15° steps · {} rotates freely and connects from an atom · Esc cancels",
                             crate::platform::alt_key()
                         ),
                         true,
@@ -274,11 +274,10 @@ impl MoleculeCanvas<'_> {
                 Some(Ok((document, ids))) => {
                     *template_notice = Some((
                         if self.joining.is_some() {
-                            "Move & attach preview · Click or release to join · Escape cancels"
-                                .into()
+                            "Move & attach preview · Click or release to join · Esc cancels".into()
                         } else {
                             format!(
-                                "Preview · {} new objects ({} atoms) · Shift/Ctrl drag snaps 15° · Escape cancels",
+                                "Preview · {} new objects ({} atoms) · Shift/Ctrl drag snaps 15° · Esc cancels",
                                 document
                                     .all_ids()
                                     .len()
@@ -454,6 +453,20 @@ impl MoleculeCanvas<'_> {
                 } else {
                     reshiki::editing::add_bonded_atom(self.doc, *id, end, target, self.element)
                 };
+                // As on release: a new endpoint takes the tool's label, an
+                // existing one keeps its own.
+                let result = result.and_then(|(drawing, added)| {
+                    let drawing = match self.atom_label.filter(|_| target.is_none()) {
+                        Some(label) => reshiki::atom_text::apply(
+                            &drawing,
+                            added,
+                            label,
+                            reshiki::atom_text::Mode::Text,
+                        )?,
+                        None => drawing,
+                    };
+                    Ok((drawing, added))
+                });
                 if let Ok((drawing, added)) = result {
                     *preview = Cow::Owned(drawing);
                     *ring_selection = Some(vec![*id, added]);

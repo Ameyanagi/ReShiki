@@ -6,7 +6,7 @@ use reshiki::arrow_anchors;
 // The status bar shows the first line; its tooltip shows the whole text.
 const SOURCE_SET: &str = concat!(
     "Arrow start set · Click the destination\n",
-    "Click a destination atom, bond or lone pair · Escape cancels"
+    "Click a destination atom, bond or lone pair · Esc cancels"
 );
 const ATTACHED: &str = concat!(
     "Arrow attached · Drag a square to aim an end\n",

@@ -559,13 +559,13 @@ async fn review_close_returns_focus_failed_structure_insert_keeps_editor() {
 }
 
 /// Settings opens on Command+, with its search field focused and keeps every
-/// key; Escape, Command+, and Done each return them to the drawing, also when
+/// key; Esc, Command+, and Done each return them to the drawing, also when
 /// a field had focus before Settings opened.
 #[tokio::test]
 #[ignore = "Opt-in renderer input check"]
 async fn settings_close_returns_focus_to_the_drawing() {
     let mut ui = Ui::new().await;
-    for closing in ["Escape", "Command+,", "Done"] {
+    for closing in ["Esc", "Command+,", "Done"] {
         let mut app = drawing_app();
         let drawing = app.tab.doc.clone();
         let selected = app.tab.selected.clone();
@@ -603,7 +603,7 @@ async fn settings_close_returns_focus_to_the_drawing() {
         assert_eq!(ui.input_value(&app, "settings-search"), "gu");
         assert_eq!(app.tab.doc, drawing, "keys stay in Settings");
         match closing {
-            "Escape" => {
+            "Esc" => {
                 ui.key(
                     &mut app,
                     Key::Named(Named::Escape),
@@ -681,7 +681,7 @@ async fn review_close_returns_focus_check_findings() {
         kind: Kind::Undefined,
         atoms: vec![first],
         bonds: vec![],
-        message: "1 undefined stereocentre (C1)".into(),
+        message: "1 undefined stereocenter (C1)".into(),
     }];
     click_running_tasks(&mut ui, &mut app, "header-check").await;
     assert!(app.check_results, "The counted button opens the findings");

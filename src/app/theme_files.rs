@@ -258,9 +258,7 @@ impl App {
                 if self.error {
                     return false;
                 }
-                self.status = format!(
-                    "{name} theme · Light and dark palettes loaded · Undo restores previous colors"
-                );
+                self.status = format!("{name} theme · Light and dark palettes loaded");
                 !self.error
             }
             Err(e) => {
@@ -278,9 +276,7 @@ impl App {
         theme.apply(&mut self.tab.doc);
         self.changed(before);
         self.sync_color_input();
-        self.status = format!(
-            "{theme} colors · Journal dimensions unchanged · Undo restores previous colors"
-        );
+        self.status = format!("{theme} colors · Journal dimensions unchanged");
     }
     pub(super) fn set_canvas_theme(&mut self, theme: CanvasTheme) {
         if !self.finish_inline(true) {
@@ -291,8 +287,7 @@ impl App {
             self.tab.doc.canvas_theme = theme;
             self.changed(before);
             self.sync_color_input();
-            self.status =
-                format!("{theme} canvas · Copies retain ink colors on a transparent background");
+            self.status = format!("{theme} canvas · Copies: ink colors, transparent background");
         }
         // An explicit choice also sets the starting canvas for future drawings.
         // Opening a file and Undo/Redo never pass through this preference update.

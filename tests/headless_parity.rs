@@ -8,8 +8,7 @@
 //! of tests/assistant.rs. Every child has an empty data folder and a
 //! watchdog, and inherits RESHIKI_INCHI_HELPER as CI sets it
 //! (.github/workflows/checks.yml).
-#[path = "common/headless.rs"]
-mod headless;
+use crate::headless;
 
 use base64::{Engine, engine::general_purpose::STANDARD};
 use headless::{McpSession, StderrMode};

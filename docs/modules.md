@@ -1,0 +1,823 @@
+# Module index
+
+<!-- Generated: python3 scripts/module_index.py -->
+
+Every Rust module file of the workspace with the first sentence of its `//!` comment.
+A file without that comment has no description yet. [Architecture](architecture.md)
+explains how the crates and modules fit together.
+
+## reshiki
+
+- `src/accessibility/button.rs`
+- `src/accessibility/editor.rs`: Native semantics attached to an app-owned, editable Iced text editor.
+- `src/accessibility/image.rs`: A picture that screen readers name.
+- `src/accessibility/inert.rs`: A drawn modal background keeps its state but receives no input or operations.
+- `src/accessibility/mod.rs`: Semantics and keyboard behavior attached to the controls that are drawn.
+- `src/accessibility/operations.rs`
+- `src/accessibility/scope.rs`
+- `src/accessibility/text_input.rs`
+- `src/accessibility/tree.rs`: Convert live widget snapshots into the native tree and validate requests.
+- `src/app.rs`
+- `src/app/abbreviations.rs`
+- `src/app/accessibility.rs`: Window lifecycle and a bounded, generation-checked native action queue.
+- `src/app/arcs.rs`
+- `src/app/arrow_labels.rs`: Contextual controls for attached reaction-condition clearances.
+- `src/app/arrows.rs`
+- `src/app/arrows/attachments.rs`: Two target clicks are one document edit; the source is tab-local UI state.
+- `src/app/assistant.rs`: The assistant
+- `src/app/assistant/attachments.rs`: Image attachments
+- `src/app/assistant/connection.rs`: Connecting to Codex and loading the account and model catalog, guarded by the request serial.
+- `src/app/assistant/drafts.rs`: Reviewing drafts
+- `src/app/assistant/image_viewer.rs`: The full-window viewer for an attached or sent image.
+- `src/app/assistant/menus.rs`: The composer's popup menus
+- `src/app/assistant/poll.rs`: The activity timer
+- `src/app/assistant/preferences.rs`: Composer menus and the model, reasoning, service-tier and auto-apply preferences.
+- `src/app/assistant/previews.rs`: Draft preview canvases and the panel-target move and arrow-length controls.
+- `src/app/assistant/request.rs`: The request lifecycle
+- `src/app/assistant/setup.rs`: Optional Assistant setup and a local, known-reference image exercise.
+- `src/app/assistant/view.rs`: The assistant panel
+- `src/app/assistant_browser.rs`: The assistant drives the Codex app-server, a desktop process.
+- `src/app/atom_edits.rs`: Element, charge, isotope, radical and mark edits to selected atoms.
+- `src/app/atom_labels.rs`
+- `src/app/atom_text.rs`
+- `src/app/atom_text/placement.rs`: Measure the canvas and popup in the same layout pass before placing the editor.
+- `src/app/atom_text/presentation.rs`: Keep the focused editor mounted during a possible double-click, without painting it or intercepting the second pointer click on the canvas.
+- `src/app/atom_text/qa_ui.rs`: Exercise the real widget tree, focus, pointer delivery and rendered frames.
+- `src/app/atom_text/qa_visuals.rs`: Matched images from the complete application renderer and actual properties.
+- `src/app/autosave.rs`: Ordered recovery operations.
+- `src/app/bond_edits.rs`: Bond drawing settings and edits to selected bonds.
+- `src/app/canvas_edit.rs`: Canvas edits
+- `src/app/canvas_edit/click.rs`: Clicks on the canvas, by tool.
+- `src/app/canvas_edit/placement.rs`: Drawing gestures that place new structure.
+- `src/app/cleanup.rs`
+- `src/app/clipboard.rs`
+- `src/app/clipboard/latency_qa.rs`: Opt-in phase measurements; native recordings establish presented-frame timing.
+- `src/app/color_popover.rs`: Style bar menus
+- `src/app/command_palette.rs`: The command palette
+- `src/app/command_palette/catalog.rs`: The palette's commands
+- `src/app/context_menu.rs`: Commands for the object under a secondary click, or the current selection.
+- `src/app/context_menu/cascade.rs`: Cascading context panels share one event boundary and use laid-out rows as anchors.
+- `src/app/depth_appearance.rs`
+- `src/app/desktop.rs`: UI-side ownership acknowledgement; the transport cannot accept a request merely because it queued bytes.
+- `src/app/dispatch.rs`: The message dispatch table
+- `src/app/document_styles.rs`
+- `src/app/document_tab.rs`: Per-document state.
+- `src/app/drawing_panel_capture.rs`: Opt-in real-renderer evidence for the drawing-panel state transitions.
+- `src/app/drawing_polish_qa.rs`: Focused native-renderer and interaction evidence for drawing polish.
+- `src/app/engine_jobs.rs`: Chemistry engine jobs
+- `src/app/event_slot.rs`: Native event receivers are installed before their subscription takes ownership.
+- `src/app/figure_export.rs`: Figure export preserves drawable content independently of molecular validation.
+- `src/app/file_shortcuts.rs`
+- `src/app/files.rs`
+- `src/app/files/performance.rs`
+- `src/app/gates.rs`: Modal gates that run before message dispatch.
+- `src/app/generic.rs`: Finite expansion creates a new drawing; the source and its history stay intact.
+- `src/app/graphics.rs`
+- `src/app/graphics/heads.rs`
+- `src/app/graphics/path.rs`: Contextual pen authoring and node edits.
+- `src/app/graphics/path_cleanup.rs`: Selection-wide path commands share one document transaction with curved arrows.
+- `src/app/help.rs`: Help
+- `src/app/help/examples.rs`: Before/after drawings for Help, made by running the shortcut's own edit on a small fixture, so the preview cannot drift from the behavior.
+- `src/app/help/registry.rs`: The one list of shortcuts that Help searches and shows.
+- `src/app/help/search.rs`: Fuzzy ranking over the shortcut registry and the command palette.
+- `src/app/history.rs`: Undo and redo of drawing history.
+- `src/app/host.rs`: Requests from the page that hosts the browser editor; see web.rs.
+- `src/app/hover_qa.rs`: Opt-in real-widget evidence for the exact large-gallery pointer report.
+- `src/app/icons.rs`
+- `src/app/icons/arrows.rs`
+- `src/app/icons/bonds.rs`
+- `src/app/icons/chrome.rs`
+- `src/app/icons/commands.rs`
+- `src/app/icons/rings.rs`
+- `src/app/icons/tools.rs`
+- `src/app/import.rs`: The Import tab, and structure or picture files chosen or dropped on the window.
+- `src/app/inline_text.rs`: In-place caption drafts.
+- `src/app/inspector.rs`: Selection-focused properties and task-based export controls.
+- `src/app/joining.rs`
+- `src/app/keyboard_drawing.rs`: Application routing for the pointer-independent drawing hotspot.
+- `src/app/label_refresh.rs`: A single label calculation in flight, with exact snapshot identity checks.
+- `src/app/macos_files.rs`: Finder and Dock requests to open drawings, which open as tabs.
+- `src/app/models3d.rs`: Show a selected molecule as its 2D drawing, a 3D model or both (#386).
+- `src/app/molecule_shortcuts.rs`: Molecule shortcuts and edit context.
+- `src/app/naming.rs`: Per-document local name parsing, editable previews and rule-based name generation.
+- `src/app/naming/aliases.rs`: Source-labelled aliases share the Import dock and normal linked captions.
+- `src/app/naming/import_dock.rs`: Chemical names share the ordinary Import dock.
+- `src/app/naming/locants.rs`: Parent-locant insertion and transient name-to-atom feedback.
+- `src/app/naming/molecule_label.rs`: Direct molecule-context naming, using the same bounded local worker and native identity gate as the Chemical names inspector.
+- `src/app/naming/online.rs`: Per-query consent for the optional online name lookup.
+- `src/app/naming/preview.rs`: A molecule canvas embedded in a scrollable inspector.
+- `src/app/naming/test_support.rs`: Fixtures shared by the naming tests.
+- `src/app/nmr.rs`: Atom-linked offline NMR results; detached work and chemical identity gates.
+- `src/app/nmr/palette.rs`: A nonmodal palette owns pointer input within its bounds, including empty areas and scroll events.
+- `src/app/nmr/panel.rs`: The floating panel's height follows its rendered rows, including wrapping.
+- `src/app/nmr/plot.rs`: Chemical-shift sticks with atom-linked labels.
+- `src/app/nmr/presentation.rs`: Text and owner IDs derived once from an accepted, immutable report.
+- `src/app/nmr/state.rs`: Per-document palette placement, docking, labels and prediction work.
+- `src/app/nmr/style.rs`: NMR surface and control appearance, built on the shared floating surface.
+- `src/app/nmr/test_support.rs`
+- `src/app/nmr/view.rs`: NMR palette and docked report builders, and accessible descriptions.
+- `src/app/nmr/worker.rs`: Detached prediction work with process-wide admission and an outer timeout.
+- `src/app/numeric_transforms.rs`: Explicit, atomic numeric edits using the same geometry as selection handles.
+- `src/app/numeric_transforms/focus.rs`: Reveal and focus a numeric field even when its inspector was scrolled away.
+- `src/app/numeric_transforms/hint.rs`: A field's hover hint yields to editing without replacing its widget tree.
+- `src/app/numeric_transforms/reference.rs`: Reference-edge operations use their own small draft, leaving the existing relative numeric fields and shortcuts unchanged.
+- `src/app/object_toolbar.rs`: Align, distribute, order, flip and rotate at the right end of the Select context row.
+- `src/app/office.rs`: An Office save target belongs to its document tab, not to the whole window.
+- `src/app/optimization.rs`: Detached, single-flight 3D optimization sessions.
+- `src/app/pages.rs`
+- `src/app/palettes.rs`: Compact visual flyouts for toolbar families.
+- `src/app/performance.rs`: Opt-in, release-mode timings of editing work on the event-loop thread.
+- `src/app/performance/hover.rs`: Hover profiling through the application update and the real widget renderer.
+- `src/app/performance/redraw.rs`: Redraw and memory workloads
+- `src/app/pictures.rs`: Asynchronous picture replacement and selection-aware size controls.
+- `src/app/popover.rs`: A menu or panel anchored to a toolbar button, drawn over the surrounding rows so that nothing moves.
+- `src/app/printing.rs`
+- `src/app/prompt.rs`: Questions the app asks in its own dialog
+- `src/app/reaction_mapping.rs`: The reaction inspector edits chemical map numbers and reviews detached fits.
+- `src/app/reactions.rs`
+- `src/app/recovery_capture.rs`: Opt-in real-renderer recovery fixtures, also runnable on the unmodified base.
+- `src/app/recovery_manager.rs`: Review abandoned drawings before restoring or discarding them.
+- `src/app/recovery_manager/view.rs`
+- `src/app/results.rs`: One exhaustive table of async completions, their owners and modal admissions.
+- `src/app/ring_edits.rs`: Ring tool settings and the selected ring's aromaticity.
+- `src/app/selection_edits.rs`: Selection, grouping, framing and arrangement commands.
+- `src/app/settings_page.rs`: Settings
+- `src/app/shortcut_examples.rs`: An editable, unbound copy of the bundled reference in a document tab.
+- `src/app/shortcuts.rs`
+- `src/app/star_prompt.rs`: The "Enjoying ReShiki?" toast, which asks once for a GitHub star after real use, and again at most once after a later feature release.
+- `src/app/startup.rs`
+- `src/app/stereo.rs`: Advisory drawing checks and explicit, undoable stereobond fixes.
+- `src/app/tabs.rs`: Document tabs
+- `src/app/template_library.rs`
+- `src/app/template_style_evidence.rs`: Opt-in renderer snapshots through the real editor dispatch, usable on baseline too.
+- `src/app/theme_files.rs`: Theme picker and portable library, independent of journal drawing styles.
+- `src/app/theme_generator.rs`: A draft-only theme workbench
+- `src/app/tool_button.rs`: Direct selection with a delayed flyout and an explicit corner target.
+- `src/app/typography.rs`
+- `src/app/updates.rs`
+- `src/app/view_settings.rs`: Window, camera and view-aid preferences.
+- `src/app/wayland_qa.rs`: Observation only
+- `src/app/windows_libreoffice_save.rs`: A LibreOffice watcher briefly opens the edit file while checking for saves.
+- `src/app/workspace.rs`
+- `src/app/workspace/inspector_motion_qa.rs`: Matched captures from the actual widget tree and renderer; opt-in only.
+- `src/app/workspace/layout_snapshots.rs`: Opt-in headless snapshots of key UI states at the default and minimum window sizes.
+- `src/app/workspace/layout_snapshots/context_status.rs`: Snapshots of the context row in keyboard drawing, the Check drawing findings and the status bar at the minimum and default window sizes.
+- `src/app/workspace/layout_snapshots/features.rs`: Snapshot scenes for the UI surfaces added after the maintainability refactor (40c8d82a)
+- `src/app/workspace/layout_snapshots/property_continuity.rs`: Matched real renderer fixtures for molecular Properties continuity.
+- `src/app/workspace/model_controls_qa.rs`: Opt-in real-renderer captures at the issue's 1600 × 1000 logical pixels.
+- `src/app/workspace/model_face_qa.rs`: Matched real-renderer and pointer evidence for model faces, frames and hints.
+- `src/app/workspace/selection_canvas_qa.rs`: Opt-in renderer/input regression, also used for matched visual evidence.
+- `src/appearance.rs`: Interface preferences and defaults for new drawings.
+- `src/assistant/codex.rs`: Small JSONL app-server client using the user's existing Codex sign-in.
+- `src/assistant/codex/connection.rs`: Setup failures are classified at their source, never by matching provider text.
+- `src/assistant/mod.rs`: Reviewed, editable drawing proposals.
+- `src/assistant/settings.rs`: Catalog-driven assistant choices with an application default and explicit overrides.
+- `src/branding.rs`: The Reaction Cycle mark shared by the desktop app and release packages.
+- `src/canvas.rs`: The molecule canvas
+- `src/canvas/cache.rs`: Canvas-local derived data, invalidated by document contents rather than edit hooks.
+- `src/canvas/dashes.rs`
+- `src/canvas/drawing_polish_qa.rs`: Matched held-gesture captures through the actual canvas program and renderer.
+- `src/canvas/grid.rs`: The paper's dot grid and its retained geometry.
+- `src/canvas/guides.rs`: Canvas-only measuring aids; coordinates share the drawing/export scale.
+- `src/canvas/hit.rs`: Hit testing
+- `src/canvas/input.rs`: Pointer and keyboard events on the molecule canvas.
+- `src/canvas/input/motion.rs`: Cursor motion
+- `src/canvas/input/press.rs`: Mouse presses on the paper
+- `src/canvas/input/release.rs`: Pointer releases
+- `src/canvas/input/touch.rs`: Touch ownership and gestures, using the ordinary mouse paths for editing.
+- `src/canvas/layered.rs`: Retain the canvas program's geometry order across vector and raster layers.
+- `src/canvas/markers.rs`: Selection decorations in world coordinates, retained with the current scene.
+- `src/canvas/models3d.rs`: 3D models on the paper (#386)
+- `src/canvas/models3d/tiles.rs`: 3D model images on the canvas (#386).
+- `src/canvas/movement.rs`: A shared constraint for the drag preview and the committed movement.
+- `src/canvas/nmr.rs`: Session-only NMR assignments.
+- `src/canvas/optimization.rs`: Pointer interaction for a detached optimization preview.
+- `src/canvas/overlay.rs`: Shared colors for editor overlays.
+- `src/canvas/pages.rs`
+- `src/canvas/paper.rs`: The drawing paper, layer by layer
+- `src/canvas/paper/bond_text.rs`: Preview a caption bond against the ink that remains visible during the drag.
+- `src/canvas/paper/draft.rs`: Previews of drags that edit the draft document directly (tilts, pointer edits, transforms and moves) or select a region.
+- `src/canvas/paper/geometry.rs`: Retain the paper's static selection markers and tessellated scene together.
+- `src/canvas/paper/overlays.rs`: Editing aids drawn over the document
+- `src/canvas/paper/placement.rs`: Previews that place new structure onto the draft, stroking the conflict when a placement fails.
+- `src/canvas/pen.rs`: One shared plan for pen previews and completed segments.
+- `src/canvas/performance.rs`: Opt-in release-mode measurements of the actual canvas Program path.
+- `src/canvas/pick.rs`: Zoom-independent pointer tolerances in screen pixels, converted to world units with `Camera::world_len`.
+- `src/canvas/previews.rs`: Thumbnail, inspector, palette and proposal canvas programs; they render through the same scene path as the paper.
+- `src/canvas/render.rs`: Tessellates scene primitives into a layered frame; shared by the paper and every preview program.
+- `src/canvas/selection.rs`
+- `src/canvas/smart_guides.rs`: Smart guides
+- `src/canvas/snapping.rs`: Where a pointer gesture lands (move deltas under bond constraints and smart guides, arrow ends, ring/template anchors, chain plans), shared by event handling and the drag preview so a preview equals the committed edit.
+- `src/canvas/text_cache.rs`: Bounded, position-independent text outlines.
+- `src/canvas/text_cache/glyphs.rs`: Share hinted glyphs between captions without changing Iced's shaping or size.
+- `src/canvas/text_cache/glyphs/variable.rs`
+- `src/canvas/tilt.rs`: Screen-space tilt gestures share the same projection as the inspector tilt fields.
+- `src/canvas/tool.rs`: Drawing tools and their usage hints.
+- `src/cli.rs`: `reshiki --cli`
+- `src/cli/analyze.rs`: `reshiki --cli analyze`
+- `src/cli/args.rs`: Token parsing for the grammar in `commands::COMMANDS`, described by `reshiki --cli help`.
+- `src/cli/commands.rs`: The command grammar and help text for `reshiki --cli`.
+- `src/cli/compose.rs`: `reshiki --cli compose`
+- `src/cli/convert.rs`: `reshiki --cli convert`
+- `src/cli/host.rs`: The in-process `HeadlessHost` a CLI command runs on, called through `ToolHost::call` like `reshiki --mcp` calls it.
+- `src/cli/io.rs`: The CLI's file and standard-input access
+- `src/cli/mcp_usage.rs`: Shared MCP help and heap limits for headless entry points.
+- `src/cli/name.rs`: `reshiki --cli name`
+- `src/cli/reference.rs`: Deterministic agent documentation from the live CLI and operation contracts.
+- `src/cli/render.rs`: `reshiki --cli render`
+- `src/cli/skill.rs`: The Agent Skill folder `reshiki --cli skill` writes
+- `src/cli/skill/references.rs`: Skill references rendered from live command help, operation contracts and MCP setup options.
+- `src/cli/skill/template.rs`: SKILL.md, the only hand-written part of a generated skill
+- `src/clipboard.rs`: Explicit native Copy/Paste with editable and image representations.
+- `src/clipboard/browser.rs`: The browser's clipboard.
+- `src/clipboard/copy_as.rs`: Format-specific copy.
+- `src/clipboard/copy_as/chemdoodle.rs`: Bounded reaction handoff using the published ChemDoodle JSON format
+- `src/clipboard/libreoffice.rs`: The optional LibreOffice extension exchanges only ReShiki's native data.
+- `src/clipboard/linux.rs`: Wayland uses the focused GUI owner; X11 retains its persistent worker.
+- `src/clipboard/name.rs`: Chemical names retain their source text alongside rich text typography.
+- `src/clipboard/priority.rs`: Shared paste order.
+- `src/desktop.rs`: Windows/Linux desktop handoff and long-lived Office launcher proxies.
+- `src/desktop/admission.rs`: The UI's one-shot answer to a desktop request; the listener waits on it.
+- `src/desktop/client.rs`: The launcher side
+- `src/desktop/launch.rs`: Launch classification
+- `src/desktop/protocol.rs`: A bounded typed protocol.
+- `src/desktop/server.rs`: The elected host
+- `src/hotkeys.rs`: Transactional chemistry edits shared by contextual drawing shortcuts.
+- `src/hotkeys/ligands.rs`: Contextual pi-ligand construction uses real ring atoms and typed attachments.
+- `src/kept_fonts.rs`: The fonts the browser editor kept from earlier visits, by SHA-256, in the order they are added as fallbacks once text needs them.
+- `src/keyboard_drawing.rs`: A keyboard drawing hotspot, independent of pointer hover and selection.
+- `src/launch.rs`: Headless entry points selected by the first command-line token.
+- `src/launch/mcp.rs`: MCP request parsing, grants, stdio serving and bounded shutdown.
+- `src/lib.rs`
+- `src/libreoffice.rs`: Bounded subprocess protocol for the optional LibreOffice UNO extension.
+- `src/main.rs`
+- `src/metafile.rs`: Import EMF through a disposable native playback process on Windows.
+- `src/naming.rs`: Local deterministic name/structure conversion with native identity checks.
+- `src/naming/agent.rs`: Local naming for the agent's operation tools
+- `src/naming/browser.rs`: The browser sends the desktop worker's requests, as the `naming` job, to the editor's Web Worker (`packages/editor/src/worker.js`).
+- `src/naming/catalog.rs`: A finite offline alias index; never a replacement for nomenclature rules.
+- `src/naming/client.rs`: Shared scheduling and supervision for bounded native naming workers.
+- `src/naming/local.rs`: Native Rust OPSIN adapter, isolated in the bounded same-executable worker.
+- `src/naming/online.rs`: Optional PubChem database lookup.
+- `src/naming/reverse.rs`
+- `src/naming/s2n_harness.rs`: Test-only measurements; Phase 2 changes only `namer` below.
+- `src/naming/s2n_harness/generator.rs`: Reproducible graph-first inputs, independent of naming implementation rules.
+- `src/naming/s2n_harness/metamorphic.rs`: Metamorphic relations
+- `src/naming/s2n_harness/worker_snapshot.rs`: Frozen worker wire responses for the naming-engine move.
+- `src/naming/symbols.rs`: Expand only complete, recognised biochemical symbol notation before OPSIN.
+- `src/naming/symbols/glycan.rs`: IUPAC 2-Carb-38 extended and condensed oligosaccharide symbols.
+- `src/naming/symbols/peptide.rs`: Complete peptide-symbol sequences become ordinary OPSIN amino-acid names.
+- `src/naming/worker.rs`: One bounded native naming request, before GUI/runtime startup.
+- `src/native_process.rs`: Mechanical pipe operations; native worker policies remain in their callers.
+- `src/office_addin.rs`: The optional Microsoft 365 task pane acknowledges the exact native save only after Office reads back the intended embedded object.
+- `src/platform.rs`: The keyboard conventions of the system the editor runs on.
+- `src/printing.rs`: Snapshot-based printing.
+- `src/rendering.rs`: Prefer Windows' native DX12 backend before considering software rendering.
+- `src/session.rs`: GUI-free startup arguments and host edit-session ownership.
+- `src/updates.rs`: Channel-aware release checks and verified, staged stable updates.
+- `src/updates/browser.rs`: Release checks and links in the browser, where the host page ships updates.
+- `src/updates/install.rs`: Download only official stable artifacts; stage before touching the running app.
+- `src/updates/install_browser.rs`: The browser build has no installer; the host page serves new releases.
+- `src/web.rs`: The editor in the browser.
+- `src/web/ime.rs`: Typing with an input method in the browser editor
+- `src/web/storage.rs`: Application data in the browser (see `reshiki::storage::browser`)
+- `src/window_fit.rs`: Windows work-area sizing; UI scale stays under Iced's DPI handling.
+- `src/workers.rs`: Worker modes
+
+## reshiki-agent
+
+- `crates/agent/src/access.rs`: Capability-based filesystem grants
+- `crates/agent/src/access/config.rs`: `agent-access.json`
+- `crates/agent/src/access/extensions.rs`: The file formats the agent's file tools read and write, by extension
+- `crates/agent/src/access/narrow.rs`: Narrowing a grant set to the folders one client may use.
+- `crates/agent/src/access/path.rs`: Lexical intake of requested paths.
+- `crates/agent/src/access/protected.rs`: Folders that can never be granted, and the startup entry point that combines every grant source.
+- `crates/agent/src/access/read.rs`: Bounded reads of regular files inside read roots.
+- `crates/agent/src/access/root.rs`: Granted roots
+- `crates/agent/src/access/write.rs`: Atomic writes inside write roots
+- `crates/agent/src/branching.rs`: Radial reaction branches share a molecular graph and retain independent products.
+- `crates/agent/src/canvas_tools.rs`: Bounded canvas tools.
+- `crates/agent/src/composition.rs`
+- `crates/agent/src/envelope.rs`: Result envelopes and version numbers of the operation API.
+- `crates/agent/src/layout.rs`: Scheme layout measures rendered labels, coefficients and disconnected fragments.
+- `crates/agent/src/lib.rs`: GUI-free agent layer
+- `crates/agent/src/ops.rs`: Experimental operation API (OPERATION_API_VERSION 2).
+- `crates/agent/src/ops/analyze.rs`: The `analyze` tool
+- `crates/agent/src/ops/apply.rs`: The `apply` tool
+- `crates/agent/src/ops/budget.rs`: Resource budgets for the operation API and the document cost helpers they are measured with.
+- `crates/agent/src/ops/catalog.rs`: The operation tool catalog and the argument decoder for each tool.
+- `crates/agent/src/ops/compose.rs`: The `compose` tool
+- `crates/agent/src/ops/convert.rs`: The `convert` tool
+- `crates/agent/src/ops/documents.rs`: The server and session-document tools
+- `crates/agent/src/ops/error.rs`: Operation errors and their stable wire codes.
+- `crates/agent/src/ops/exec.rs`: The bounded executor
+- `crates/agent/src/ops/export.rs`: The `export` tool
+- `crates/agent/src/ops/files.rs`: The `file_open` and `file_save` tools
+- `crates/agent/src/ops/headless.rs`: The tool host for a process without the app
+- `crates/agent/src/ops/host.rs`: The transport-facing side of the operation API.
+- `crates/agent/src/ops/ids.rs`: Object IDs from a request
+- `crates/agent/src/ops/import.rs`: The `import` tool
+- `crates/agent/src/ops/inspect.rs`: The `inspect` tool
+- `crates/agent/src/ops/naming.rs`: Chemical naming for the operation tools.
+- `crates/agent/src/ops/policy.rs`: Who may read or edit which document.
+- `crates/agent/src/ops/progress.rs`: Progress reports from a running operation to the transport.
+- `crates/agent/src/ops/render.rs`: The `render` tool
+- `crates/agent/src/ops/result.rs`: The protocol-neutral result of a tool call.
+- `crates/agent/src/ops/schema.rs`: The `schema` tool
+- `crates/agent/src/ops/session.rs`: Session documents
+- `crates/agent/src/ops/store.rs`: The documents store
+- `crates/agent/src/ops/wire.rs`: Wire types and JSON Schema helpers for the operation API.
+- `crates/agent/src/progress.rs`: Composition progress, independent of the chat transport that displays it.
+- `crates/agent/src/review.rs`
+- `crates/agent/src/review/ligands.rs`: Bounded presentation edits for independently attached Cp/Cp\* ligands.
+- `crates/agent/src/sketch.rs`: Bounded vector reconstruction for source diagrams that SMILES cannot lay out.
+- `crates/agent/src/sketch/ligand.rs`: Build known haptic ligands from chemistry first, then project their geometry.
+- `crates/agent/src/stability.rs`: The agent API's experimental labels, shared by `reshiki --mcp` and `reshiki --cli` so every surface states the same status.
+- `crates/agent/src/tool_spec.rs`: Protocol-neutral tool definitions.
+
+## reshiki-chemistry
+
+- `crates/chemistry/src/aromaticity.rs`: RDKit's default aromaticity model on a graph and its symmetric SSSR rings.
+- `crates/chemistry/src/atomic_data.rs`
+- `crates/chemistry/src/classes.rs`: A small, overlapping structural class catalog for prepared molecules.
+- `crates/chemistry/src/cx.rs`: Shared CX extension syntax and annotation events, adapted from CXSmilesOps.cpp.
+- `crates/chemistry/src/cx/number.rs`: Validate the lexical_cast\<double> coordinate spellings used by CX readers.
+- `crates/chemistry/src/depict.rs`: Detached, bounded two-dimensional depiction using the pinned native order.
+- `crates/chemistry/src/depict/arithmetic.rs`: Arithmetic contractions observed in the pinned native wheel.
+- `crates/chemistry/src/depict/attachment.rs`: Ordered neighbor setup and direct non-ring attachment from RDKit 2026.03.6 EmbeddedFrag.cpp and DepictUtils.cpp/.h.
+- `crates/chemistry/src/depict/collision.rs`: Deterministic collision correction from RDKit 2026.03.6 EmbeddedFrag.cpp, DepictUtils.cpp and Matrices.cpp.
+- `crates/chemistry/src/depict/collision/repair.rs`
+- `crates/chemistry/src/depict/compute.rs`: RDKit 2026.03.6 RDDepictor.cpp compute2DCoords orchestration.
+- `crates/chemistry/src/depict/expansion.rs`: Detached native initial-coordinate construction and fragment expansion.
+- `crates/chemistry/src/depict/expansion/initial.rs`
+- `crates/chemistry/src/depict/expansion/merging.rs`
+- `crates/chemistry/src/depict/expansion/traversal.rs`
+- `crates/chemistry/src/depict/finalize.rs`: Final deterministic depiction stages from RDKit 2026.03.6 RDDepictor.cpp and EmbeddedFrag.cpp/.h.
+- `crates/chemistry/src/depict/geometry.rs`: Coordinate arithmetic adapted from RDKit 2026.03.6 DepictUtils.cpp, EmbeddedFrag.cpp and Geometry/Transform2D.cpp.
+- `crates/chemistry/src/depict/ranks.rs`: Literal depiction rank properties.
+- `crates/chemistry/src/depict/rings.rs`: Ordered ring selection and the no-template native ring constructor.
+- `crates/chemistry/src/depict/rings/embed.rs`: Ring construction shared by the ordinary and template-seeded constructors.
+- `crates/chemistry/src/depict/seeds.rs`: Initial coordination, coordinate-map and cis/trans fragments adapted from RDKit 2026.03.6 RDDepictor.cpp, EmbeddedFrag.cpp and NontetrahedralStereo.cpp.
+- `crates/chemistry/src/depict/seeds/coordinates.rs`
+- `crates/chemistry/src/depict/seeds/coordination.rs`: Native coordination lookup tables and RDDepictor initial point selection.
+- `crates/chemistry/src/depict/templates.rs`: Default RDKit ring templates and bounded native-order matching.
+- `crates/chemistry/src/depict/templates/catalog.rs`
+- `crates/chemistry/src/depict/templates/matching.rs`
+- `crates/chemistry/src/descriptors.rs`: Local molecular descriptors from a sanitized graph and its ring membership.
+- `crates/chemistry/src/descriptors/matcher.rs`: Matching order follows RDKit's unsorted VF2 query traversal
+- `crates/chemistry/src/descriptors/tpsa.rs`: Adapted from RDKit MolSurf.cpp getTPSAAtomContribs (2026.09.1).
+- `crates/chemistry/src/electronic.rs`: Conjugation and hybridization passes from RDKit ConjugHybrid.cpp (2026.09.1).
+- `crates/chemistry/src/graph.rs`: Bounded chemical graph, explicit valence, implicit H and radical assignment.
+- `crates/chemistry/src/hydrogens.rs`: Import hydrogen removal adapted from RDKit AddHs.cpp and RWMol.cpp.
+- `crates/chemistry/src/inchi.rs`: InChI strings and checked molecular input preparation.
+- `crates/chemistry/src/inchi/generator.rs`: InChI generation and import through an isolated, versioned Rust helper.
+- `crates/chemistry/src/inchi/generator/transport.rs`
+- `crates/chemistry/src/inchi/helper.rs`: Relaunch the current application in worker mode.
+- `crates/chemistry/src/inchi/input.rs`: Owned input for the InChI 1.07.3 generator; no kernel or FFI is called here.
+- `crates/chemistry/src/inchi/kernel.rs`: Toolkit adapter for the pure Rust `cosmolkit-inchi` dependency.
+- `crates/chemistry/src/inchi/kernel/allene.rs`
+- `crates/chemistry/src/inchi/key.rs`: InChIKey generation adapted from InChI 1.07.3 `ikey_dll.c`, `ikey_base26.c` and `util.c::extract_inchi_substring`.
+- `crates/chemistry/src/inchi/output.rs`: Native InChI output records and detached reconstruction stages.
+- `crates/chemistry/src/inchi/output/assembly.rs`
+- `crates/chemistry/src/inchi/output/cleanup.rs`: InChI-specific native cleanup, before RDKit's general sanitizer.
+- `crates/chemistry/src/inchi/output/cleanup/matching.rs`
+- `crates/chemistry/src/inchi/output/finish.rs`
+- `crates/chemistry/src/inchi/validation.rs`: Structural checks for serialized molecules, without chemical preparation.
+- `crates/chemistry/src/inchi/wire.rs`: Shared, bounded, versioned process protocol.
+- `crates/chemistry/src/inchi/worker.rs`: One bounded, cancellable InChI operation using the pure Rust Cargo dependency.
+- `crates/chemistry/src/isotopes.rs`: Mass-number entry and nuclide hints for atom editing.
+- `crates/chemistry/src/kekulize.rs`: Bounded Kekulé bond assignment from RDKit Kekulize.cpp (2026.03.6).
+- `crates/chemistry/src/kekulize/search.rs`: Iterative search and dummy-atom backtracking from RDKit Kekulize.cpp.
+- `crates/chemistry/src/lib.rs`: Molecular preparation, drawing reconstruction and properties in safe Rust.
+- `crates/chemistry/src/native_order.rs`: Checked copies of the pinned platform's C++ comparison-sort policies.
+- `crates/chemistry/src/native_order/apple_sort.rs`: Adapted from libc++ __algorithm/sort.h (LLVM Project).
+- `crates/chemistry/src/native_order/linux_sort.rs`: Preserve equal-priority traversal order in the pinned Linux reference.
+- `crates/chemistry/src/native_order/sort_common.rs`: Checked storage operations shared by the reference sorting policies.
+- `crates/chemistry/src/native_order/windows_sort.rs`: Adapted from Microsoft's STL algorithm header, MSVC 14.43.
+- `crates/chemistry/src/nmr.rs`: Versioned, native HOSE-style spherical environments and observed-shift lookup.
+- `crates/chemistry/src/normalize.rs`: Functional-group normalization before the strict property cache.
+- `crates/chemistry/src/normalize/metals.rs`: Organometallic normalization from RDKit MolOps.cpp (2026.03.6).
+- `crates/chemistry/src/ranking.rs`: Canonical partition ranking adapted from RDKit new_canon.cpp/.h.
+- `crates/chemistry/src/ranking/compare.rs`: Atom, bond, and stereochemical comparisons from RDKit new_canon.cpp/.h.
+- `crates/chemistry/src/ranking/partition.rs`: Partition refinement and Hanoi merge sort from RDKit new_canon.h and RDGeneral/hanoiSort.h, Copyright (C) 2014-2025 Greg Landrum/contributors.
+- `crates/chemistry/src/ranking/symmetry.rs`: Ring-neighborhood invariants from RDKit new_canon.cpp.
+- `crates/chemistry/src/rings.rs`: Figueras symmetric SSSR perception from RDKit FindRings.cpp (2026.03.6), with normalized traversal and legacy result ordering from 2026.09.1.
+- `crates/chemistry/src/rings/search.rs`: Iterative searches adapted from RDKit FindRings.cpp (2026.03.6).
+- `crates/chemistry/src/sanitize.rs`: Default graph sanitization order from RDKit MolOps.cpp (2026.09.1).
+- `crates/chemistry/src/smarts.rs`: Bounded SMARTS syntax validation for imported substance-group queries.
+- `crates/chemistry/src/smiles.rs`: SMILES graph construction adapted from RDKit smiles.ll/smiles.yy, SmilesParseOps.cpp and Canon.cpp (2026.03.6).
+- `crates/chemistry/src/smiles/atom.rs`
+- `crates/chemistry/src/smiles/chirality.rs`: Coordination permutation tables adapted from RDKit NontetrahedralStereo.cpp.
+- `crates/chemistry/src/smiles/prepare.rs`
+- `crates/chemistry/src/smiles/read.rs`: Default SMILES import annotations adapted from SmilesParse.cpp and CXSmilesOps.cpp, Copyright (C) 2001-2022 Greg Landrum and contributors.
+- `crates/chemistry/src/smiles/read/retained_properties.rs`
+- `crates/chemistry/src/smiles/stereo.rs`: Traversal-dependent stereochemistry from RDKit Canon.cpp.
+- `crates/chemistry/src/smiles/stereo/atoms.rs`
+- `crates/chemistry/src/smiles/stereo/bonds.rs`
+- `crates/chemistry/src/smiles/symbols.rs`: Atom and bond text from RDKit SmilesWrite.cpp (2026.03.6).
+- `crates/chemistry/src/smiles/traversal.rs`: Ranked depth-first traversal from RDKit Canon.cpp and SmilesWrite.cpp.
+- `crates/chemistry/src/smiles/write.rs`: Plain molecular SMILES from RDKit SmilesWrite.cpp (2026.03.6).
+- `crates/chemistry/src/smiles/write/cx.rs`: Enhanced stereo annotations in the atom order of a completed SMILES write.
+- `crates/chemistry/src/smiles/write/fragments.rs`: Fragment copying and atom/bond ordering from RDKit MolOps.cpp.
+- `crates/chemistry/src/stereo.rs`: Stereo cleanup from RDKit Chirality.cpp, MolOps.cpp and Atropisomers.cpp.
+- `crates/chemistry/src/stereo/allene.rs`: Three-atom allene axes.
+- `crates/chemistry/src/stereo/cip.rs`: Full CIP molecular preparation adapted from RDKit CIPMol.cpp/Mancude.cpp.
+- `crates/chemistry/src/stereo/cip/configuration.rs`: CIP configurations adapted from RDKit configs/{Configuration,Tetrahedral, Sp2Bond,AtropisomerBond}.{h,cpp}, Copyright (C) 2020 Schrödinger, LLC.
+- `crates/chemistry/src/stereo/cip/configuration/bond.rs`
+- `crates/chemistry/src/stereo/cip/configuration/extended_tetrahedral.rs`: Extended-tetrahedral labeling adapted from SiMolecule centres config/ExtendedTetrahedral.java, revision d4b2ca46228bdf8814ff0c1f00465be4085af8c9.
+- `crates/chemistry/src/stereo/cip/configuration/parity.rs`
+- `crates/chemistry/src/stereo/cip/configuration/tetrahedral.rs`
+- `crates/chemistry/src/stereo/cip/digraph.rs`: CIP expansion adapted from RDKit Digraph.cpp, Node.cpp and Edge.cpp.
+- `crates/chemistry/src/stereo/cip/digraph/visits.rs`: Persistent visit maps share unchanged branches instead of copying an entire molecule-sized vector for every CIP node.
+- `crates/chemistry/src/stereo/cip/label.rs`: Atomic full CIP labeling adapted from RDKit CIPLabeler.cpp (2026.09.1).
+- `crates/chemistry/src/stereo/cip/mancude.rs`: Resonance-averaged duplicate atomic numbers for mancude rings and ring systems.
+- `crates/chemistry/src/stereo/cip/rules.rs`: CIP sequence comparison and stable insertion sorting, adapted from RDKit SequenceRule.cpp, Sort.cpp, Rules.h and the individual sequence rules.
+- `crates/chemistry/src/stereo/cip/rules/machine.rs`: Explicit continuations for native recursive comparison and insertion sort.
+- `crates/chemistry/src/stereo/cip/rules/pairing.rs`: Descriptor-pair comparison adapted from RDKit Rule4b.cpp, Rule5New.cpp and Pairlist.h.
+- `crates/chemistry/src/stereo/cip/rules/scalar.rs`
+- `crates/chemistry/src/stereo/cumulene.rs`: Odd cumulene chains with distinguishable ligands at both ends.
+- `crates/chemistry/src/stereo/drawing.rs`: Wedge perception from RDKit Chirality.cpp (2026.03.6).
+- `crates/chemistry/src/stereo/drawing/allene.rs`
+- `crates/chemistry/src/stereo/drawing/atrop.rs`: Atropisomer detection adapted from RDKit Atropisomers.cpp (2026.09.1, #9190).
+- `crates/chemistry/src/stereo/drawing/bonds.rs`: Double-bond direction propagation from RDKit Chirality.cpp (2026.03.6).
+- `crates/chemistry/src/stereo/drawing/spatial.rs`: 3D atom perception adapted from RDKit Chirality.cpp (2026.03.6).
+- `crates/chemistry/src/stereo/drawing/wedging.rs`: Bond wedging adapted from RDKit WedgeBonds.cpp (2026.09.1).
+- `crates/chemistry/src/stereo/drawing/wedging/allene.rs`
+- `crates/chemistry/src/stereo/drawing/wedging/atrop.rs`: Atropisomer wedging from RDKit Atropisomers.cpp (2026.03.6).
+- `crates/chemistry/src/stereo/drawing/wedging/generated.rs`: Presentation preferences for newly generated molecular drawings.
+- `crates/chemistry/src/stereo/drawing/wedging/generated/atrop.rs`: Retry generated wedges only when the reference drawing loses stereo.
+- `crates/chemistry/src/stereo/drawing/wedging/molfile.rs`: MOL bond stereo adapted from RDKit Chirality.cpp and FindStereo.cpp.
+- `crates/chemistry/src/stereo/perception.rs`: Legacy stereo perception adapted from RDKit Chirality.cpp (2026.09.1, #9190).
+- `crates/chemistry/src/stereo/perception/atoms.rs`
+- `crates/chemistry/src/stereo/perception/bonds.rs`
+- `crates/chemistry/src/stereo/perception/cycles.rs`: Ring stereo relationships from Chirality.cpp and bridgehead queries from QueryOps.cpp, Copyright (C) 2003-2024 Greg Landrum and RDKit contributors.
+- `crates/chemistry/src/stereo/priority.rs`: Legacy CIP atom priorities from RDKit Chirality.cpp (2026.03.6).
+- `crates/chemistry/src/windows_trigonometry.rs`: Windows x64 CRT's non-FMA rotation arithmetic, used by the reference worker under Windows ARM emulation.
+
+## reshiki-depict-math
+
+- `crates/depict-math/src/lib.rs`: Keep the paired trigonometric call in one optimized code-generation unit.
+
+## reshiki-io
+
+- `crates/io/src/chemistry/cdxml.rs`: Bounded molecular CDXML reader for the pinned ChemDraw-enabled RDKit reader.
+- `crates/io/src/chemistry/cdxml/abbreviations.rs`: Explicit chemical abbreviation expansion, ported from reference/engine/abbreviations_exchange.py::flatten.
+- `crates/io/src/chemistry/cdxml/arrows.rs`: Native-precision arrows from reference/engine/arrows_exchange.py::read_arrow.
+- `crates/io/src/chemistry/cdxml/association.rs`: Shared bounded association of source nodes with prepared, scaled atoms.
+- `crates/io/src/chemistry/cdxml/attachments.rs`: ChemDraw NodeType 10/11
+- `crates/io/src/chemistry/cdxml/bonds.rs`: Restore drawing bond appearance using the original coordinate association.
+- `crates/io/src/chemistry/cdxml/generic.rs`: Typed generic data is detached before the concrete molecular parser runs.
+- `crates/io/src/chemistry/cdxml/graphics.rs`: Read native-precision vector graphics and deferred pictures without editing XML.
+- `crates/io/src/chemistry/cdxml/graphics/integer.rs`: Bounded decimal layers retain Python integers until the document boundary.
+- `crates/io/src/chemistry/cdxml/graphics/picture.rs`
+- `crates/io/src/chemistry/cdxml/graphics/shapes.rs`
+- `crates/io/src/chemistry/cdxml/groups.rs`: Logical groups from reference/engine/groups_exchange.py::read_groups.
+- `crates/io/src/chemistry/cdxml/labels.rs`: Detached label/indicator patches from reference/engine/labels_exchange.py::read_labels.
+- `crates/io/src/chemistry/cdxml/marks.rs`: Detached patches from reference/engine/marks_exchange.py::read_marks.
+- `crates/io/src/chemistry/cdxml/normalize.rs`: Chemistry-only copy from reference/engine/bonds_exchange.py::chemistry_xml.
+- `crates/io/src/chemistry/cdxml/numeric.rs`: Pinned native scalar parsing and diagnostic quoting shared by CDXML readers.
+- `crates/io/src/chemistry/cdxml/parse.rs`
+- `crates/io/src/chemistry/cdxml/preparation.rs`: Chemical prefix of reference/engine/worker.py::import_cdxml, through legacy stereo.
+- `crates/io/src/chemistry/cdxml/presentation.rs`: Native-precision drawing styles and rich text from bounded, read-only XML.
+- `crates/io/src/chemistry/cdxml/presentation/style.rs`
+- `crates/io/src/chemistry/cdxml/presentation/text.rs`
+- `crates/io/src/chemistry/cdxml/read_abbreviations.rs`: Stable drawing IDs from reference/engine/abbreviations_exchange.py::read.
+- `crates/io/src/chemistry/cdxml/scene.rs`: Detached original CDXML scene assembly and checked drawing reconstruction.
+- `crates/io/src/chemistry/cdxml/scene/circles.rs`: Original aromatic.circle/removal arithmetic, retaining CPython 3.12 sums.
+- `crates/io/src/chemistry/cdxml/scene/ellipses.rs`: Recognize native closed ellipses owned by projected aromatic rings.
+- `crates/io/src/chemistry/cdxml/scene/finish.rs`
+- `crates/io/src/chemistry/cdxml/scene/ring_fills.rs`: Native ChemDraw bond-owned areas and legacy ReShiki-owned polygons.
+- `crates/io/src/chemistry/cdxml/schemes.rs`: Validate external reaction references without inventing native reaction roles.
+- `crates/io/src/chemistry/cdxml/stereo.rs`
+- `crates/io/src/chemistry/cdxml/tree.rs`: Private detached XML tree.
+- `crates/io/src/chemistry/cdxml/variables.rs`: Drawing-only labels on unspecified atoms; query chemistry remains unsupported.
+- `crates/io/src/chemistry/cdxml/xml_guard.rs`: One linear scan of the XML bytes before any parser runs.
+- `crates/io/src/chemistry/cleanup.rs`: Selection-preserving cleanup, detached from the two-dimensional solver.
+- `crates/io/src/chemistry/cleanup/numeric.rs`: CPython 3.12.12 builtin_sum (Python/bltinmodule.c).
+- `crates/io/src/chemistry/cleanup/warnings.rs`: Translate only recognized native chemistry exceptions at the selected-scope warning boundary.
+- `crates/io/src/chemistry/layout_refinement.rs`: ReShiki readability refinements after native depiction.
+- `crates/io/src/chemistry/mod.rs`: The reshiki-chemistry core and reshiki-model adapters, plus this crate's adapters.
+- `crates/io/src/chemistry/molfile.rs`: MOL writing adapted from RDKit MolFileWriter.cpp (2026.03.6).
+- `crates/io/src/chemistry/molfile/generic.rs`: V3000 generic records retain finite choices and explicit repeat boundaries.
+- `crates/io/src/chemistry/molfile/import.rs`: Drawing import policy, separate from the lossless MOL parser snapshot.
+- `crates/io/src/chemistry/molfile/read.rs`: MOL parsing adapted from RDKit MolFileParser.cpp (2026.03.6).
+- `crates/io/src/chemistry/molfile/read/groups.rs`: Substance groups adapted from RDKit MolSGroupParsing.cpp/MolFileParser.cpp.
+- `crates/io/src/chemistry/molfile/read/groups/v2000.rs`
+- `crates/io/src/chemistry/molfile/read/groups/v3000.rs`
+- `crates/io/src/chemistry/molfile/read/reaction.rs`: RXN framing adapted from RDKit MDLParser.cpp (2026.09.1).
+- `crates/io/src/chemistry/molfile/read/v2000.rs`
+- `crates/io/src/chemistry/molfile/read/v3000.rs`
+- `crates/io/src/chemistry/molfile/superatoms.rs`: Collapsed drawing groups use CTfile superatoms without changing chemistry.
+- `crates/io/src/chemistry/reaction.rs`: RXN and reaction SMILES interchange with explicit participant roles.
+- `crates/io/src/chemistry/reaction/drawing.rs`: Assemble imported participants without changing their chemistry or conformers.
+- `crates/io/src/chemistry/reaction/layout.rs`: Stage reaction participants, laying out only those without input coordinates.
+- `crates/io/src/chemistry/reaction/smiles.rs`: Reaction framing adapted from RDKit DaylightParser.cpp (2026.03.6).
+- `crates/io/src/cleanup.rs`: Cleanup request options; these are session state, not document formatting.
+- `crates/io/src/compatibility.rs`: Read earlier installations and share file-import compatibility rules.
+- `crates/io/src/coordination_geometry.rs`: Recognize depiction-only wedge/hash bonds at coordination-frame metals.
+- `crates/io/src/crystal.rs`: Crystal and periodic structures (#417)
+- `crates/io/src/crystal/build.rs`: From atoms and a lattice to a drawing
+- `crates/io/src/crystal/cif.rs`: CIF
+- `crates/io/src/crystal/elements.rs`: Element symbols as crystal files write them, and covalent radii for perceiving bonds.
+- `crates/io/src/crystal/pdb.rs`: PDB
+- `crates/io/src/crystal/poscar.rs`: VASP 5 POSCAR and CONTCAR
+- `crates/io/src/crystal/xyz.rs`: Plain XYZ (a molecule without a cell) and extended XYZ, whose comment line gives the cell as `Lattice="ax ay az bx by bz cx cy cz"` and the columns as `Properties=species:S:1:pos:R:3:…`.
+- `crates/io/src/document_styles.rs`: Transactional document formatting, independent of chemistry and the interface.
+- `crates/io/src/engine.rs`
+- `crates/io/src/engine/export_notices.rs`: Ordered export loss notices for each native response route.
+- `crates/io/src/engine/native_aromatic.rs`: Finish a selected aromatic display edit without changing the source snapshot.
+- `crates/io/src/engine/native_cleanup.rs`: Atomic cleanup using the detached Rust layout and drawing pipeline.
+- `crates/io/src/engine/native_fischer.rs`: Atomic conversion between explicitly marked Fischer crosses and ordinary stereochemical drawings.
+- `crates/io/src/engine/native_import.rs`: Finish molecular, drawing and reaction imports without a Python worker.
+- `crates/io/src/engine/native_import/chain_layout.rs`: Application policy for crowded molecules with a long, simple backbone.
+- `crates/io/src/engine/native_import/chain_layout/clearance.rs`
+- `crates/io/src/engine/native_import/chain_layout/clearance/rings.rs`
+- `crates/io/src/engine/native_import/template_retry.rs`: Retry crowded bridged systems with native templates and bridge adjustments.
+- `crates/io/src/engine/native_import/template_retry/bridges.rs`: Optional small deformations of a nonaromatic bridge between two ring junctions.
+- `crates/io/src/engine/native_response.rs`: Complete immutable, already prepared Analyze and molecular export requests.
+- `crates/io/src/engine/reference.rs`: Optional development bridge to the pinned RDKit reference.
+- `crates/io/src/engine/reference/colors.rs`: Translate current color tags at the optional historical worker boundary.
+- `crates/io/src/engine/reference/reaction.rs`: Reaction parsing, chemical preparation and canvas assembly stay in Rust.
+- `crates/io/src/exchange/charsets.rs`: Exact legacy codepage tables, generated from Python's standard codecs.
+- `crates/io/src/exchange/decode.rs`
+- `crates/io/src/exchange/drawing.rs`: Editable document serialization.
+- `crates/io/src/exchange/drawing/clipboard.rs`: Explicitly lossy presentation conversion for an external clipboard copy.
+- `crates/io/src/exchange/drawing/generic.rs`: ChemDraw generic properties are attached to their actual atom and bracket IDs.
+- `crates/io/src/exchange/drawing/groups.rs`
+- `crates/io/src/exchange/drawing/labels.rs`
+- `crates/io/src/exchange/drawing/ligands.rs`: Hidden-charge and aromatic-ligand presentation using native CDX symbols.
+- `crates/io/src/exchange/drawing/objects.rs`
+- `crates/io/src/exchange/drawing/partial_charges.rs`
+- `crates/io/src/exchange/drawing/tree.rs`
+- `crates/io/src/exchange/encode.rs`
+- `crates/io/src/exchange/mod.rs`: Bounded CDX/CDXML serialization.
+- `crates/io/src/exchange/schema.rs`
+- `crates/io/src/exchange/values.rs`
+- `crates/io/src/export.rs`
+- `crates/io/src/formats.rs`: Drawings read from and written to named formats, as the CLI and the MCP tools exchange them.
+- `crates/io/src/geometry.rs`: Detached molecular geometry, stable drawing identities and isolated solving.
+- `crates/io/src/geometry/client.rs`: One immutable native request per disposable process.
+- `crates/io/src/geometry/view.rs`: Proper rigid view transforms.
+- `crates/io/src/geometry/wire.rs`: Byte-bounded, versioned frames; native memory layouts never cross the pipe.
+- `crates/io/src/geometry/worker.rs`: Framed self-executable worker.
+- `crates/io/src/lib.rs`
+- `crates/io/src/native_windows.rs`: Windows print geometry is passed to the isolated Rust platform crate.
+- `crates/io/src/nmr.rs`: Complete drawing graph adapter and separately licensed offline NMR index.
+- `crates/io/src/nmr/dataset.rs`: Reproducible measured-only nmrshiftdb2 SDF transformation.
+- `crates/io/src/payload.rs`: Editable drawing snapshots carried by ordinary PNG, SVG, and PDF figures.
+- `crates/io/src/preview.rs`: The editor's PNG preview of a drawing, shared by the assistant's canvas tools, the MCP `render` and `convert` tools, the CLI and the browser library, so every surface draws the same pixels.
+- `crates/io/src/recovery.rs`
+- `crates/io/src/task.rs`: Blocking chemistry and rendering work off the async executor.
+- `crates/io/src/template_library.rs`: User-authored templates and portable collections.
+
+## reshiki-mcp
+
+- `crates/mcp/src/content.rs`: Maps an operation `ToolResult` to an MCP `CallToolResult`.
+- `crates/mcp/src/framing.rs`: Bounded line framing
+- `crates/mcp/src/framing/head.rs`: Classifies one line from its JSON-RPC head.
+- `crates/mcp/src/framing/tracker.rs`: Admission and cancellation for the requests a connection has in flight.
+- `crates/mcp/src/lib.rs`: Experimental MCP transport for ReShiki's agent API.
+- `crates/mcp/src/log.rs`: The bounded, non-blocking stderr log.
+- `crates/mcp/src/panic.rs`: A content-free panic hook for the MCP server process.
+- `crates/mcp/src/server.rs`: The MCP protocol over the bounded framing
+- `crates/mcp/src/tools.rs`: The tool catalog a `ToolHost` serves, as MCP `Tool` definitions.
+- `crates/mcp/src/transport.rs`: rmcp's `Transport` over one framed connection.
+
+## reshiki-metafile
+
+- `crates/metafile/src/lib.rs`: Validate EMF framing before retaining or passing a picture to native playback.
+
+## reshiki-model
+
+- `crates/model/src/abbreviations.rs`: Collapsed labels are a view of real atoms, never a replacement for chemistry.
+- `crates/model/src/aromatic.rs`: Aromatic bond order is retained in the graph; circles follow its closed rings.
+- `crates/model/src/arrow_anchors.rs`: Optional drawing links for mechanism arrows.
+- `crates/model/src/arrow_labels.rs`: Condition text attached above or below a straight reaction arrow.
+- `crates/model/src/arrows.rs`: Editable reaction and electron-flow arrows.
+- `crates/model/src/arrows/nodes.rs`
+- `crates/model/src/atom_labels.rs`: Atom-label appearance and owned number/stereochemistry indicators.
+- `crates/model/src/atom_labels/dl_descriptors.rs`: Conventional D/L names supplement CIP labels only for recognized structures.
+- `crates/model/src/atom_labels/hints.rs`
+- `crates/model/src/atom_labels/hydrogen_isotopes.rs`
+- `crates/model/src/atom_labels/refresh.rs`: Derived drawing labels without identifiers, descriptors or a helper process.
+- `crates/model/src/atom_labels/steroid.rs`: Gonane topology and OPSIN's steroid alpha/beta reference order.
+- `crates/model/src/atom_labels/test_support.rs`
+- `crates/model/src/atom_text.rs`: Text at an atom endpoint
+- `crates/model/src/atom_text/from_text.rs`: Convert an ordinary caption into a complete atom-entry candidate.
+- `crates/model/src/atom_text/hydride.rs`: Explicit atom labels are chemical input, independent of valence checking.
+- `crates/model/src/atom_text/stereo.rs`: Relabelling a ligand does not rotate the unchanged tetrahedral atom beside it.
+- `crates/model/src/attachments.rs`: Semantic attachment nodes.
+- `crates/model/src/bond_joins.rs`: Shared, bounded corners for normal, bold and tapered bond outlines.
+- `crates/model/src/bonds.rs`: Bond appearance is independent of chemical order and absolute stereochemistry.
+- `crates/model/src/canvas_theme.rs`: Document page colors, independent of journal dimensions and application chrome.
+- `crates/model/src/canvas_theme/jmol.rs`: Numerical element colors published by Jmol.
+- `crates/model/src/canvas_theme/vesta.rs`: VESTA element colours (K.
+- `crates/model/src/chains.rs`: Carbon-chain geometry shared by the live preview and committed drawing.
+- `crates/model/src/chemistry/abbreviations.rs`: Abbreviation validation and fixed-preset detection without changing chemistry.
+- `crates/model/src/chemistry/abbreviations/catalog.rs`: The abbreviation catalog
+- `crates/model/src/chemistry/abbreviations/define.rs`: Turn a drawn fragment into a catalog entry for the user's own groups.
+- `crates/model/src/chemistry/abbreviations/matcher.rs`: Iterative unsorted VF2 traversal for the connected, fixed preset queries.
+- `crates/model/src/chemistry/abbreviations/replacement.rs`: Replace a selected endpoint using the catalog template geometry, which is ReShiki's own depiction of the group SMILES.
+- `crates/model/src/chemistry/abbreviations/residues.rs`: Two-sided amino-acid residues.
+- `crates/model/src/chemistry/document.rs`: Prepare the molecular graph from an editable drawing without changing it.
+- `crates/model/src/chemistry/document/aromatic.rs`: Selected aromatic rings can change presentation without changing chemistry.
+- `crates/model/src/chemistry/document/output.rs`: Convert verified chemistry back to an editable drawing.
+- `crates/model/src/chemistry/document/output/fusion_hydrogens.rs`: Clear generated fusion H labels before assigning their stereobonds.
+- `crates/model/src/chemistry/mod.rs`: The reshiki-chemistry core plus the document and abbreviation adapters.
+- `crates/model/src/chemistry/stereo_lint.rs`: Advisory checks for stereochemical drawing conventions.
+- `crates/model/src/color_contrast.rs`: Perceptual palette generation, followed by contrast checks on final sRGB bytes.
+- `crates/model/src/common_groups.rs`: Additional complete groups, built from the established endpoint replacement.
+- `crates/model/src/crossings.rs`: Drawing depth at crossings; never changes chemical connectivity.
+- `crates/model/src/crossings/depth.rs`: Resolve crossings at their actual XYZ intersection, with explicit layers taking precedence over automatic depth.
+- `crates/model/src/crossings/ring_strokes.rs`: Crossing clearance for cubic aromatic circles and partial ring curves.
+- `crates/model/src/depiction.rs`: Opt-in nitrogen charge separation using the same cleanup as analysis.
+- `crates/model/src/depth_appearance.rs`: Persistent paint for an editable projection, independent of chemical styles.
+- `crates/model/src/document.rs`
+- `crates/model/src/editing.rs`
+- `crates/model/src/editing/reference.rs`: Exact drawing orientation and single-bond stretching.
+- `crates/model/src/editing/rotation.rs`: Reference sites that follow rotation, unlike axis-aligned drawing bounds.
+- `crates/model/src/erasing.rs`: Erase the geometry crossed by a pointer stroke, including between motion events.
+- `crates/model/src/fischer.rs`: Explicit Fischer projections
+- `crates/model/src/generic.rs`: Finite generic definitions are drawing data until deliberately materialized.
+- `crates/model/src/generic/authoring.rs`
+- `crates/model/src/generic/budget.rs`: Expansion work allowance, drawing-size accounting and the prepaid presentation, ink and clearance cost model.
+- `crates/model/src/generic/certify.rs`: Certify preserved drawing data and exact assembly translations.
+- `crates/model/src/generic/clearance.rs`: Conservative separating-axis clearance certificates.
+- `crates/model/src/generic/definitions.rs`
+- `crates/model/src/generic/depiction.rs`: Coordinate-only depiction of generated link and repeat components.
+- `crates/model/src/generic/drawing_test_support.rs`: Shared drawing fixtures and ink assertions for generic module tests.
+- `crates/model/src/generic/errors.rs`: Shared refusal text.
+- `crates/model/src/generic/expansion.rs`: Bounded finite enumeration and typed chemistry/drawing completion.
+- `crates/model/src/generic/geometry.rs`: Shared checked drawing indices and finite bounds geometry.
+- `crates/model/src/generic/graph.rs`: Checked, ordered atom adjacency for finite generic drawing operations.
+- `crates/model/src/generic/guards.rs`
+- `crates/model/src/generic/ink.rs`: Measure saved and refreshed drawing ink and normalize detached arrows.
+- `crates/model/src/generic/limits.rs`: Shared bounds for generic definitions, import and expansion.
+- `crates/model/src/generic/materialize.rs`: Concrete fragment insertion and generic-site materializers.
+- `crates/model/src/generic/prepared.rs`: Prepaid worker input and sealed, measured expansion transport.
+- `crates/model/src/generic/probe.rs`: Test-only stage counters; entering a stage is a no-op in production builds.
+- `crates/model/src/generic/references.rs`: Guard inherited drawing references against changed components.
+- `crates/model/src/generic/selection.rs`: Molecular scope and native dependencies for explicit expansion commands.
+- `crates/model/src/generic/symmetry.rs`: Exact, bounded chemical equivalence for completed generic products.
+- `crates/model/src/generic/test_support.rs`
+- `crates/model/src/generic/variable.rs`: Bounded variable-substituent placement and ink clearance.
+- `crates/model/src/graphics.rs`: Editable vector graphics in drawing coordinates.
+- `crates/model/src/graphics/arc.rs`: Elliptical arcs in an affine frame, shared by the editor and all exporters.
+- `crates/model/src/graphics/heads.rs`
+- `crates/model/src/graphics/path.rs`: Connected path nodes and their editable Bézier constraints.
+- `crates/model/src/graphics/path/smooth.rs`
+- `crates/model/src/graphics/path/symmetry.rs`: Reflection fitting for a connected path, including its Bézier controls.
+- `crates/model/src/graphics/superscript.rs`
+- `crates/model/src/grouping.rs`: Persistent, nested logical groups, represented as laminar sets of object IDs.
+- `crates/model/src/haworth.rs`: Haworth drawing geometry and chemically defined carbohydrate templates.
+- `crates/model/src/haworth/interchange.rs`: Recognize the tested five/six-member Haworth convention at file boundaries.
+- `crates/model/src/highlights.rs`: Persistent atom and bond paint, independent of molecular ink and selection.
+- `crates/model/src/ionic.rs`: Explicitly replace selected metal–heteroatom lines with separated ions.
+- `crates/model/src/joining.rs`: Move existing fragments through the same geometry used by template attachment.
+- `crates/model/src/joining/atom_merge.rs`: Join three or more selected atoms without moving the surrounding fragments.
+- `crates/model/src/joining/coordination.rs`: In-place donor-to-metal contacts preserve both endpoint atoms.
+- `crates/model/src/joining/plan.rs`: Route classification shared by Join admission and shortcut execution.
+- `crates/model/src/lib.rs`
+- `crates/model/src/ligands.rs`: Defined haptic abbreviations
+- `crates/model/src/models3d.rs`: 3D models of structures (#386)
+- `crates/model/src/models3d/cell_occlusion.rs`: Cell ink visible past the model's space-filling balls.
+- `crates/model/src/models3d/contact.rs`: Where overlapping 3D-model balls meet.
+- `crates/model/src/models3d/crystal.rs`: Crystal and periodic structures (#417)
+- `crates/model/src/models3d/ellipsoids.rs`: ORTEP displacement ellipsoids in Cartesian ångström and their exact silhouettes.
+- `crates/model/src/models3d/polish.rs`: Persistent generated chemistry, separate from the live source drawing.
+- `crates/model/src/molecule_names.rs`: Native associations for locally verified chemical-name captions.
+- `crates/model/src/molecule_names/axis_markers.rs`: Private naming identity for CIP-labelled biaryl axes.
+- `crates/model/src/molecule_names/identity.rs`: Canonical molecular identity, independent of document selection and captions.
+- `crates/model/src/molecule_names/identity_parity.rs`: Keep the app's chemistry copy and the standalone kernel identity in agreement.
+- `crates/model/src/molecule_names/ir.rs`: Direct preparation of naming IR, preserving its atom and bond identities.
+- `crates/model/src/pages.rs`: Physical publication pages, independent of viewport zoom and molecular scale.
+- `crates/model/src/palette.rs`: Theme palettes
+- `crates/model/src/pictures.rs`: Self-contained pictures with a portable PNG preview.
+- `crates/model/src/pictures/exchange.rs`: Raster normalization for editable exchange, independent of Python/Pillow.
+- `crates/model/src/pictures/exchange/tiff.rs`: Preserve TIFF sample interpretation that the generic image adapter omits.
+- `crates/model/src/polygon.rs`: Closed-polygon helpers shared by scene ink, rear opacity and label clearance.
+- `crates/model/src/projection.rs`: Editable orthographic projections and nonchemical ring-centre anchors.
+- `crates/model/src/projection/growth.rs`: Bond growth in a Cp/aromatic ring's retained plane.
+- `crates/model/src/projection/vector.rs`: f32 3D vector helpers over retained XYZ (position x/y plus depth).
+- `crates/model/src/reaction_mapping.rs`: Chemical atom correspondence, independent of printed custom atom numbers.
+- `crates/model/src/reaction_mapping/search.rs`: Bounded maximum-cardinality graph matching.
+- `crates/model/src/reactions.rs`: Explicit reaction membership, independent of where a scheme is drawn.
+- `crates/model/src/reactions/hints.rs`: Informational checks of arrow meaning; neither chemistry nor drawing is edited.
+- `crates/model/src/rear_opacity.rs`: Transparency for view-occluded cage/atom/bond ink, independent of RGB.
+- `crates/model/src/rear_opacity/clip.rs`: Clipping and tessellation for rear-opacity paint in drawing coordinates.
+- `crates/model/src/rear_opacity/ink.rs`: Resolve alpha-affected ink once
+- `crates/model/src/rear_opacity/visibility.rs`: View visibility for conservative closed cages and real projected ink.
+- `crates/model/src/rear_opacity/visibility/budget.rs`
+- `crates/model/src/rear_opacity/visibility/cage.rs`
+- `crates/model/src/rear_opacity/visibility/occluder_ink.rs`
+- `crates/model/src/rear_opacity/visibility/rims.rs`
+- `crates/model/src/rear_opacity/visibility/triangle.rs`
+- `crates/model/src/rear_opacity/visibility/vector.rs`
+- `crates/model/src/ring_arcs.rs`: Ring-relative delocalization strokes.
+- `crates/model/src/ring_fills.rs`: Ring interior paint follows chemical atom identities, never a detached shape.
+- `crates/model/src/rings.rs`: Molecular ring drawings.
+- `crates/model/src/scene.rs`
+- `crates/model/src/scene/attachment_ink.rs`: New mechanism-arrow targets use the same opacity/crossing/rail clipping as the bond scene.
+- `crates/model/src/scene/bond_pass.rs`: Bond preparation has two stages
+- `crates/model/src/scene/bond_rails.rs`: Screen-space offsets and per-end setbacks shared by every rail consumer.
+- `crates/model/src/scene/charge_placement.rs`: Placement of automatic charges around label ink and incident bonds.
+- `crates/model/src/scene/depth_field.rs`: Depth interpolation for scene ink and view-occlusion geometry.
+- `crates/model/src/scene/graph.rs`: Atom and bond lookups by atom ID, built once per scene stage instead of scanning the whole drawing for every atom or bond.
+- `crates/model/src/scene/group_labels.rs`: Decisions made when a chemical label is placed, using its actual glyph ink.
+- `crates/model/src/scene/occlusion.rs`: Vector ink sources for chemical depth occlusion.
+- `crates/model/src/scene/performance.rs`: Opt-in release-mode measurements of how model queries grow with the drawing.
+- `crates/model/src/scene/projected_bonds.rs`: Secondary rails in a retained ring face, projected without rescaling XY.
+- `crates/model/src/scene/svg.rs`: SVG serialization of the scene primitives.
+- `crates/model/src/scientific.rs`: Chemical marks and orbital diagrams.
+- `crates/model/src/scientific/label_halo.rs`: Find the atom labels an orbital's complete lobes run into.
+- `crates/model/src/scientific/mark_placement.rs`: Click placement and the orbit of a dragged mark.
+- `crates/model/src/selection_region.rs`: Freeform selection shared by lasso and rectangular selection.
+- `crates/model/src/stereo_groups.rs`: Enhanced stereochemistry groups (#766)
+- `crates/model/src/stereochemistry.rs`: Atomic edits of an explicitly defined tetrahedral configuration.
+- `crates/model/src/storage.rs`: Files the app writes for itself and for the user.
+- `crates/model/src/style.rs`: Default ACS structure settings, shared with the exchange worker.
+- `crates/model/src/style/font.rs`
+- `crates/model/src/style/units.rs`: Drawing-style input units.
+- `crates/model/src/templates.rs`: Built-in molecules and attachment geometry, shared by preview and placement.
+- `crates/model/src/templates/aromatic.rs`: Bounded aromatic fusion planning.
+- `crates/model/src/templates/coordination.rs`: Depiction-only coordination frames; projected wedges do not assign R/S.
+- `crates/model/src/templates/nucleosides.rs`: β-D-ribofuranosyl nucleobases, using the carbohydrate projection builder.
+- `crates/model/src/templates/porphine.rs`: Own equal-length geometry for the chemically defined 21H,23H free base.
+- `crates/model/src/templates/steroids.rs`: Own regular-ring geometry in steroid orientation 2a (IUPAC 3S-1.4).
+- `crates/model/src/theme_files.rs`: Portable canvas palettes; typography and bond dimensions belong to style files.
+- `crates/model/src/theme_generator.rs`: Reference-based theme recipes.
+- `crates/model/src/transaction.rs`: GUI-free edit finalization shared by the app and future API hosts.
+- `crates/model/src/typography.rs`: Editable rich text, independent of the UI and chemistry engine.
+- `crates/model/src/typography/name_markup.rs`: Presentation-only typography for chemical names.
+
+## reshiki-process-heap
+
+- `crates/process-heap/src/allocation_metrics.rs`: Optional development measurements of requested Rust allocation sizes.
+- `crates/process-heap/src/lib.rs`: Budget every live Rust allocation made after the request has been parsed.
+- `crates/process-heap/src/policy.rs`: Operational budgets, independent of chemistry and structural admission rules.
+- `crates/process-heap/src/policy/platform.rs`: Conservative memory headroom probes.
+
+## reshiki-python
+
+- `crates/python/src/drawing.rs`
+- `crates/python/src/lib.rs`: Thin Python bindings over the same headless import, export and analysis API used by the browser.
+- `crates/python/src/render.rs`
+- `crates/python/src/styles.rs`
+
+## reshiki-web
+
+- `crates/web/src/lib.rs`: Headless ReShiki for the browser
+
+## reshiki-web-worker
+
+- `crates/web-worker/src/lib.rs`: The browser editor's Web Worker for heavy jobs, as a WebAssembly module of its own that `packages/editor/src/worker.js` runs.
+
+## reshiki-geometry
+
+- `native/geometry/src/cage.rs`: Conservative admission of closed sp2 carbon cages and their geometry.
+- `native/geometry/src/lib.rs`: Geometry-only Rust solver.
+- `native/geometry/src/solver.rs`: Bounded adapter to the Rust COSMolKit molecular mechanics implementation.
+- `native/geometry/src/solver/relaxed.rs`: Opt-in preparation and disclosures for approximate coordination geometry.
+
+## reshiki-linux
+
+- `native/linux/src/desktop.rs`: User/session-scoped local desktop IPC, with OS file locks and peer UID checks.
+- `native/linux/src/gui.rs`: A safe command bridge to the clipboard instance Iced already owns.
+- `native/linux/src/lib.rs`: Bounded Linux clipboard transport on the GUI's actual display backend.
+- `native/linux/src/protocol.rs`
+- `native/linux/src/wayland_qa.rs`: Test-only cancellation of an actual GUI-owner request.
+- `native/linux/src/x11.rs`
+
+## reshiki-macos
+
+- `native/macos/src/accessibility.rs`: Owner-thread AccessKit lifecycle.
+- `native/macos/src/clipboard.rs`: Explicit, bounded access to one pasteboard item.
+- `native/macos/src/lib.rs`: macOS document-open events, isolated from the safe editor and chemistry code.
+- `native/macos/src/printing.rs`: Snapshot printing through AppKit/PDFKit, on the worker's main thread.
+- `native/macos/src/workers.rs`: Standard-I/O entry points used by the application's isolated worker modes.
+
+## reshiki-process
+
+- `native/process/src/lib.rs`: Safe, naming-specific child limits.
+- `native/process/src/unix.rs`
+- `native/process/src/windows.rs`: Windows 10+ creation-time job membership; no spawn/assign interval.
+
+## reshiki-windows
+
+- `native/windows/src/accessibility.rs`: Owner-thread AccessKit lifecycle.
+- `native/windows/src/clipboard.rs`
+- `native/windows/src/desktop.rs`: Local, authenticated desktop IPC.
+- `native/windows/src/lib.rs`: Safe entry points for the editor.
+- `native/windows/src/metafile_worker.rs`: Native file playback is isolated from the editor and bounded by a Windows job, including allocations GDI+ makes outside the Rust global allocator.
+- `native/windows/src/ole.rs`: Out-of-process OLE embedding.
+- `native/windows/src/ole/embedded.rs`: Read embedded ChemDraw's root CONTENTS stream without activating its server.
+- `native/windows/src/ole/object.rs`
+- `native/windows/src/ole/storage.rs`
+- `native/windows/src/printing.rs`
+- `native/windows/src/recovery.rs`: Recovery copies must be recycled, never silently permanently deleted.
+- `native/windows/src/stdio.rs`: Keeps this process's standard handles out of the processes it starts.
+- `native/windows/src/window.rs`: Physical monitor/window measurements.
+
+## reshiki-font-export-probe
+
+- `tools/font-export-probe/src/main.rs`: Hermetic backend reproduction for issue #103, independent of the app build.

@@ -109,17 +109,18 @@ class CommandTests(unittest.TestCase):
 
     def test_binary_tests_use_the_ci_feature_set(self):
         tests = {
-            "agent_api_runtime",
-            "agent_api_malformed",
-            "agent_api_labels",
-            "assistant_contract",
+            "agent_api_runtime::",
+            "agent_api_malformed::",
+            "agent_api_labels::",
+            "assistant_contract::",
         }
         commands = [c.command for c in gates.local_checks() if c.command[-1] in tests]
         self.assertEqual({command[-1] for command in commands}, tests)
         for command in commands:
             self.assertEqual(
                 command[:-1],
-                ("cargo", "test", "--locked", "--no-default-features", "-p", "reshiki", "--test"),
+                ("cargo", "test", "--locked", "--no-default-features", "-p", "reshiki")
+                + ("--test", "it"),
             )
 
     def test_the_base_reaches_every_diff_check(self):
@@ -251,7 +252,7 @@ class RunTests(unittest.TestCase):
             self.assertIn(source, pending)
 
     def test_a_failing_check_fails_the_run_and_shows_its_output(self):
-        code, out, _ = run_main("--local", failing=("agent_api_malformed",))
+        code, out, _ = run_main("--local", failing=("agent_api_malformed::",))
         self.assertEqual(code, 1)
         lines = out.splitlines()
         rows = [line.split() for line in lines if "FAIL" in line]

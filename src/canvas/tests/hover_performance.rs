@@ -18,7 +18,7 @@ fn measure(name: &str, mut work: impl FnMut()) {
 
 #[test]
 #[ignore = "Release-mode exact-gallery retained-hover component profiling"]
-fn retained_hover_components() {
+fn manual_retained_hover_components() {
     let path = std::env::var("RESHIKI_PERF_HOVER_DRAWING").expect("exact gallery fixture path");
     let doc = Document::from_json(&std::fs::read(path).unwrap()).unwrap();
     let center = World::new(-8631.204, -5557.835);

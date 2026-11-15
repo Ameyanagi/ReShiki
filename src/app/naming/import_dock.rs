@@ -143,14 +143,11 @@ impl App {
         self.tab.naming.notice =
             (!notes.is_empty()).then(|| Notice::new(NoticeKind::Info, notes.join(" · ")));
         self.status = if multicomponent {
-            format!(
-                "Inserted {} as separate components · Undo removes it",
-                preview.record.title
-            )
+            format!("Inserted {} as separate components", preview.record.title)
         } else if omit_caption {
-            "Inserted edited structure · Original name omitted · Undo removes it".into()
+            "Inserted edited structure · Original name omitted".into()
         } else {
-            format!("Inserted {} · Undo removes it", preview.record.title)
+            format!("Inserted {}", preview.record.title)
         };
     }
 

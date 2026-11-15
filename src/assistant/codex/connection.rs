@@ -23,7 +23,7 @@ impl std::fmt::Display for ConnectionError {
             Self::AccountFailed => "Codex could not read the saved sign-in. Check `codex login status` in a terminal, sign in again if needed, then retry.",
             Self::ModelsFailed => "Codex could not load its model catalog. Check your internet connection and Codex account access, then retry.",
             Self::NoModels => "Codex returned no selectable models. Check your account access, update Codex if needed, then retry.",
-            Self::Cancelled => "Connection check cancelled. You can keep drawing and retry when ready.",
+            Self::Cancelled => "Connection check canceled. You can keep drawing and retry when ready.",
         })
     }
 }

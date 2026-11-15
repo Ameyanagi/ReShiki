@@ -594,19 +594,19 @@ impl App {
                 match pending {
                     Some(Pending::Generate(_)) => {
                         self.tab.naming.structure_error =
-                            Some("Local name generation was cancelled".into());
+                            Some("Local name generation was canceled".into());
                     }
                     Some(Pending::Caption(_)) => {
-                        self.status = "Local name generation was cancelled".into();
+                        self.status = "Local name generation was canceled".into();
                         self.error = true;
                     }
                     _ => {
                         self.tab.naming.notice = Some(Notice::new(
                             NoticeKind::Retry,
                             if matches!(pending, Some(Pending::Online(_))) {
-                                "Online lookup was cancelled"
+                                "Online lookup was canceled"
                             } else {
-                                "Local name parsing was cancelled"
+                                "Local name parsing was canceled"
                             },
                         ));
                     }
@@ -862,10 +862,9 @@ impl App {
         self.commit_structure_insert(before, selected);
         self.tool = Tool::Select;
         self.status = if multicomponent {
-            "Inserted editable name result as separate components · Undo removes the insertion"
-                .into()
+            "Name result inserted as separate components".into()
         } else {
-            "Inserted editable name result · Undo removes the insertion".into()
+            "Name result inserted".into()
         };
         self.error = false;
     }
@@ -939,7 +938,7 @@ impl App {
         let state = &self.tab.naming;
         let idle = state.pending.is_none();
         let mut name = column![
-            section("NAME → STRUCTURE"),
+            section("Name → structure"),
             text_input(
                 "naming.name",
                 "Chemical name",
@@ -991,7 +990,7 @@ impl App {
             name = name.push(self.naming_preview(preview));
         }
         let structure = column![
-            section("STRUCTURE → NAME"),
+            section("Structure → name"),
             text(STRUCTURE_HINT).size(11).style(muted_text),
             accessible_checkbox(
                 "naming.write-unknown-stereo",

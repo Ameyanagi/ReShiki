@@ -376,7 +376,7 @@ impl App {
         editor.references.retain(|r| r.id != reference.id);
         editor.references.push(reference);
         editor.load_theme(theme, Selection::Draft);
-        self.status = "Imported for preview · Save to add it to your library and drawing".into();
+        self.status = "Imported for preview · Save to add it to the library".into();
         self.error = false;
     }
     pub(super) fn theme_generator_action(&mut self, event: Action) -> Task<Message> {
@@ -467,8 +467,7 @@ impl App {
                         editor.references.retain(|r| r.id != id);
                     }
                     let _ = self.theme_generator_action(Action::Select(Selection::New));
-                    self.status =
-                        "Theme removed from library · Existing drawings keep their colors".into();
+                    self.status = "Theme removed · Drawings keep their colors".into();
                     self.error = false;
                 }
             }
@@ -543,9 +542,7 @@ impl App {
                         );
                         editor.original = original;
                     }
-                    self.status =
-                        "Theme saved and applied · Undo in the drawing restores previous colors"
-                            .into();
+                    self.status = "Theme saved and applied".into();
                     self.error = false;
                 }
             }

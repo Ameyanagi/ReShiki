@@ -48,7 +48,7 @@ fn settle(app: &mut App, renderer: &mut iced::Renderer, tree: &mut Tree, size: S
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[ignore = "Release-mode exact-gallery copy preparation and acknowledgment phase profile"]
-async fn gallery_pdf_copy_phase_profile() {
+async fn manual_gallery_pdf_copy_phase_profile() {
     let path = std::env::var_os("RESHIKI_COPY_FEEDBACK_QA_FIXTURE").expect("Fixture required");
     let source = Document::from_json(&std::fs::read(path).unwrap()).unwrap();
     assert_eq!(source.atoms.len(), 7728);

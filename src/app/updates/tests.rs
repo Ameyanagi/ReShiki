@@ -362,7 +362,7 @@ fn nightly_downloads_cannot_enter_the_stable_installer() {
 
 #[tokio::test]
 #[ignore = "Opt-in application renderer evidence; does not open desktop windows"]
-async fn update_channels_headless_snapshot() {
+async fn manual_update_channels_headless_snapshot() {
     use iced::advanced::{layout, mouse, renderer::Headless, widget::Tree};
     let (mut app, _) = App::new();
     app.updates.open = true;

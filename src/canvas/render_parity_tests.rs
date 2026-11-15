@@ -346,7 +346,7 @@ async fn mechanism_attachment_92_native_renderer_uses_resolved_curve_and_clear_s
 
 #[tokio::test]
 #[ignore = "Baseline/candidate pixel comparison; requires a headless renderer and artifact directory"]
-async fn renderer_matches_captured_baseline() {
+async fn manual_renderer_matches_captured_baseline() {
     let directory = std::path::PathBuf::from(
         std::env::var("RESHIKI_CANVAS_PIXELS")
             .expect("Set RESHIKI_CANVAS_PIXELS to the baseline artifact directory"),
@@ -509,7 +509,7 @@ async fn renderer_matches_captured_baseline() {
 
 #[tokio::test]
 #[ignore = "Text-placement baseline/candidate pixels; requires a renderer and artifact directory"]
-async fn text_placement_matches_captured_baseline() {
+async fn manual_text_placement_matches_captured_baseline() {
     let directory = std::path::PathBuf::from(
         std::env::var("RESHIKI_CANVAS_PIXELS")
             .expect("Set RESHIKI_CANVAS_PIXELS to the baseline artifact directory"),
@@ -778,7 +778,7 @@ async fn retained_paper_scene_matches_live_layers_and_invalidates_draw_inputs() 
 
 #[tokio::test]
 #[ignore = "Paper layer baseline/candidate pixels; requires a headless renderer and artifact directory"]
-async fn paper_layers_match_captured_baseline() {
+async fn manual_paper_layers_match_captured_baseline() {
     let directory = std::path::PathBuf::from(
         std::env::var("RESHIKI_CANVAS_PIXELS")
             .expect("Set RESHIKI_CANVAS_PIXELS to the baseline artifact directory"),

@@ -852,7 +852,7 @@ fn open(app: &mut App, section: Section) {
 /// light and dark interface. Set RESHIKI_UI_QA_SCALE=2 for 2× images.
 #[tokio::test]
 #[ignore = "Opt-in GPU snapshots; set RESHIKI_UI_QA_DIR and RESHIKI_DATA_DIR"]
-async fn settings_snapshots() {
+async fn manual_settings_snapshots() {
     use iced::advanced::{renderer::Headless, widget::Tree};
     type Setup = fn(&mut App);
     let states: [(&str, Setup); 24] = [

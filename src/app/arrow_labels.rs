@@ -135,7 +135,7 @@ impl App {
         .on_input(|v| Message::ArrowLabelGap(Action::Input(v)))
         .on_submit(Message::ArrowLabelGap(Action::Apply));
         let controls = column![
-            text("ARROW LABEL SPACING").size(10).style(muted_text),
+            super::workspace::section("Arrow label spacing"),
             row![
                 text(format!("Arrow gap ({unit})"))
                     .size(11)
