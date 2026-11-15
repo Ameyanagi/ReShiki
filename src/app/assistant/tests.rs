@@ -981,4 +981,26 @@ fn accept_all_reviews_a_replacement_outside_the_selection() {
     // Apply still applies it.
     let _ = app.assistant_action(Action::Apply);
     assert!(app.assistant.draft.is_none());
+    // Choosing Accept all edits for a waiting draft during a text edit
+    // checks the selection the same way when the edit ends.
+    let _ = app.assistant_action(Action::AutoApply(false));
+    let target = app.tab.doc.atoms[0].id;
+    let _ = app.inline_action(super::super::inline_text::Action::Begin(
+        None,
+        reshiki::document::Point::new(400., 0.),
+    ));
+    app.tab.selected = vec![target];
+    done(&mut app, vec![target]);
+    assert!(!app.assistant.waiting_for_canvas_edit);
+    let _ = app.assistant_action(Action::AutoApply(true));
+    assert!(app.assistant.waiting_for_canvas_edit);
+    app.tab.selected = vec![];
+    assert!(app.finish_inline(false));
+    let _ = app.assistant_action(Action::Poll);
+    assert!(app.assistant.draft.is_some());
+    assert_eq!(elements(&app), ["O"]);
+    assert_eq!(
+        app.assistant.status,
+        "Ready for review · It replaces objects outside your selection"
+    );
 }

@@ -17,7 +17,9 @@ impl App {
             && self.assistant_can_auto_apply()
             && !self.assistant.busy
         {
-            return self.assistant_action(Action::Apply);
+            let task = self.assistant_action(Action::Apply);
+            self.assistant.waiting_apply_is_automatic = self.assistant.waiting_for_canvas_edit;
+            return task;
         }
         Task::none()
     }
