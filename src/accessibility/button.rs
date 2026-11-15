@@ -310,24 +310,38 @@ impl<Message: Clone + 'static> Widget<Message, Theme, Renderer> for Button<'_, M
             self.inner
                 .draw(child, renderer, theme, style, layout, cursor, viewport);
         }
+        // Outside the control, so focus never reads as the active style's
+        // fill and border: a 1 px surface gap, then a 2 px accent ring.
+        let ring = layout.bounds().expand(3.);
         if tree.state.downcast_ref::<State>().focused
             && self.action.is_some()
-            && let Some(clip) = layout.bounds().intersection(viewport)
+            && let Some(clip) = ring.intersection(viewport)
         {
             use iced::advanced::Renderer as _;
+            let palette = theme.extended_palette();
             renderer.with_layer(clip, |renderer| {
-                renderer.fill_quad(
-                    renderer::Quad {
-                        bounds: layout.bounds(),
-                        border: Border {
-                            color: theme.extended_palette().primary.strong.color,
-                            width: 2.,
-                            radius: 4.into(),
+                for (bounds, width, radius, color) in [
+                    (ring, 2., 8., palette.primary.strong.color),
+                    (
+                        layout.bounds().expand(1.),
+                        1.,
+                        6.,
+                        palette.background.base.color,
+                    ),
+                ] {
+                    renderer.fill_quad(
+                        renderer::Quad {
+                            bounds,
+                            border: Border {
+                                color,
+                                width,
+                                radius: radius.into(),
+                            },
+                            ..renderer::Quad::default()
                         },
-                        ..renderer::Quad::default()
-                    },
-                    Color::TRANSPARENT,
-                );
+                        Color::TRANSPARENT,
+                    );
+                }
             });
         }
     }

@@ -227,8 +227,12 @@ async fn keyboard_and_native_actions_use_the_live_control_and_real_focus_state()
             })
             .collect();
         assert!(changed.len() > 20);
+        // The ring sits around the control, not on its own border.
+        assert!(changed.iter().any(|point| !bounds.contains(*point)));
         assert!(
-            changed.iter().all(|point| bounds.contains(*point)),
+            changed
+                .iter()
+                .all(|point| bounds.expand(3.).contains(*point)),
             "focus ring must not alter other controls"
         );
         assert_eq!(
