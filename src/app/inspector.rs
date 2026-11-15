@@ -998,12 +998,13 @@ impl App {
         if let Tool::RingPreset(preset) = self.tool {
             use reshiki::rings::Preset;
             let details = format!(
-                "{} Alt/Option on an atom connects the ring with a new bond. Each placement is one Undo step. {}",
+                "{} {} on an atom connects the ring with a new bond. Each placement is one Undo step. {}",
                 if preset == Preset::Benzene {
                     "Click an aromatic carbon to attach a phenyl group, or a bond to fuse. Terminal carbons become part of the ring. Drag to choose the direction."
                 } else {
                     "Click to place. Drag to rotate or choose an attachment side. Click an atom to share it, or a bond to fuse."
                 },
+                crate::platform::alt_key(),
                 match preset {
                     Preset::Benzene | Preset::Cyclopentadiene =>
                         "Hold Shift to move the double bonds.",
@@ -1973,7 +1974,10 @@ impl App {
                     .size(14)
                     .text_size(12)
                     .on_toggle(Message::IntegralGroup),
-                "Integral groups stay whole with Option/Alt-click. Ungroup releases them.",
+                format!(
+                    "Integral groups stay whole with {}-click. Ungroup releases them.",
+                    crate::platform::alt_key()
+                ),
                 tooltip::Position::Top,
             ));
         }

@@ -627,10 +627,7 @@ impl App {
                 &super::palettes::Action::Ring(self.ring_size, false),
             )
         };
-        let chain = format!(
-            "Straight chain · {} · Drag a regular zigzag toward the pointer",
-            keys(Modifiers::SHIFT, "X")
-        );
+        let chain = format!("Straight chain · {}", keys(Modifiers::SHIFT, "X"));
         let atom = format!(
             "Atom label · {}",
             super::palettes::element_hint(&self.element)
@@ -684,7 +681,7 @@ impl App {
             (Tool::Chain(reshiki::chains::ChainMode::Straight), &chain),
             (
                 Tool::Chain(reshiki::chains::ChainMode::Snaking),
-                "Snaking chain · Steer while dragging · Retrace to shorten",
+                "Snaking chain",
             ),
             (Tool::Arrow, arrow.as_str()),
             (Tool::Text, "Text label · t"),
@@ -1130,7 +1127,7 @@ impl App {
                         .on_press(Message::Inspector(InspectorTab::Properties))
                         .padding([7, 9])
                         .style(control(false)),
-                        "Open the 3D preview controls in the right Properties panel",
+                        "Open 3D preview controls in Properties",
                         tooltip::Position::Bottom,
                     ),
                 ]
@@ -1633,7 +1630,10 @@ impl App {
             options.push(
                 hover_hint(
                     self.bond_constraints(),
-                    "Bonded movement follows Length / Angles · Option/Alt: free movement",
+                    format!(
+                        "Bonded movement follows Length / Angles · {}: free movement",
+                        crate::platform::alt_key()
+                    ),
                     tooltip::Position::Bottom,
                 )
                 .into(),
@@ -2670,7 +2670,10 @@ impl App {
                         .on_toggle(|on| Message::View(super::view_settings::Action::SmartGuides(on)))
                         .size(14)
                         .text_size(12),
-                    "Snap dragged objects to other objects' edges, centers and equal gaps · Hold Option/Alt to move freely",
+                    format!(
+                        "Snap dragged objects to other objects' edges, centers and equal gaps · Hold {} to move freely",
+                        crate::platform::alt_key()
+                    ),
                     tooltip::Position::Top,
                 ),
                 hover_hint(
