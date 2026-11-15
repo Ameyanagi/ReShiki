@@ -652,13 +652,21 @@ fn the_sign_in_ask_waits_again_after_the_card_after_use() {
 #[cfg(not(target_arch = "wasm32"))]
 fn a_one_click_star_thanks_and_a_failed_one_opens_the_page() {
     let (mut app, _dir) = app_with(asking(day("2026-01-01")));
+    assert_eq!(app.star_link(), ("★ Star on GitHub ↗".to_owned(), None));
+    app.github.account = crate::app::github::Account::SignedIn {
+        login: "octo".into(),
+        remembered: true,
+    };
     assert_eq!(
         app.star_link(),
-        ("Star ReShiki on GitHub", "Star ReShiki on GitHub ↗")
+        (
+            "★ Star on GitHub".to_owned(),
+            Some("Stars ReShiki on GitHub as @octo".to_owned())
+        )
     );
     let _ = app.update(Message::Star(Action::Starred(Ok(()))));
-    assert_eq!(app.status, STARRED);
-    assert_eq!(app.star_link(), ("Starred", "★ Starred"));
+    assert_eq!(app.status, "Starred ReShiki on GitHub as @octo. Thank you!");
+    assert_eq!(app.star_link(), ("★ Starred on GitHub".to_owned(), None));
     let _ = app.update(Message::Star(Action::Starred(Err(
         "No access on GitHub.".into()
     ))));

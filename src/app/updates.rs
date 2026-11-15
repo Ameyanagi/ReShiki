@@ -454,9 +454,17 @@ impl App {
             }),
             row![
                 reshiki::accessibility::button("updates-notes", "Open release notes", "Release notes ↗").on_press(msg(Action::Download)).style(button::text),
-                reshiki::accessibility::button("updates-star", self.star_link().0, self.star_link().1)
-                    .on_press(Message::Star(super::star_prompt::Action::Star { toast: false }))
-                    .style(button::text),
+                {
+                    // Its accessible name is what it shows; signed in, the tooltip says whose star it is.
+                    let (label, tip) = self.star_link();
+                    let link = reshiki::accessibility::button("updates-star", label.clone(), text(label))
+                        .on_press(Message::Star(super::star_prompt::Action::Star { toast: false }))
+                        .style(button::text);
+                    match tip {
+                        Some(tip) => Element::from(super::workspace::hover_hint(link, tip, iced::widget::tooltip::Position::Top)),
+                        None => link.into(),
+                    }
+                },
             ],
             text(if state.channel == Channel::Nightly { "Checks once a day. Nightlies are installed manually. Downloads prefer installers when available; Release notes also links portable archives." } else { "Checks once a day. Stable updates are verified before installation. Your saved tabs reopen after restarting." })
                 .size(12)

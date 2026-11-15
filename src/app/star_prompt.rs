@@ -17,7 +17,6 @@ const OWNER: &str = "Ameyanagi";
 const NAME: &str = "ReShiki";
 const THANKS: &str = "Opened GitHub in your browser. Thank you!";
 #[cfg(not(target_arch = "wasm32"))]
-const STARRED: &str = "Starred on GitHub. Thank you!";
 /// Use after the first GitHub sign-in before the card asks once more.
 #[cfg(not(target_arch = "wasm32"))]
 const AFTER_SIGN_IN: Duration = Duration::from_secs(5 * 60);
@@ -394,7 +393,7 @@ impl App {
             Action::Starred(result) => match result {
                 Ok(()) => {
                     self.github.starred = true;
-                    self.status = STARRED.into();
+                    self.status = starred(self.star_login().as_deref());
                     self.error = false;
                     // About's link is named as it now shows.
                     return self.accessibility_refresh();
@@ -538,17 +537,29 @@ impl App {
         }
     }
 
-    /// The Star link in About, after its accessible name: no browser opens
-    /// when signed in.
-    pub(super) fn star_link(&self) -> (&'static str, &'static str) {
-        const STAR: &str = "Star ReShiki on GitHub";
+    /// The signed-in GitHub account, which a star is made with.
+    fn star_login(&self) -> Option<String> {
+        #[cfg(not(target_arch = "wasm32"))]
+        return self.github.login().map(str::to_owned);
+        #[cfg(target_arch = "wasm32")]
+        None
+    }
+
+    /// The Star link in About, which is also its accessible name, and its
+    /// tooltip: signed in, one click stars it with that account and no
+    /// browser opens.
+    pub(super) fn star_link(&self) -> (String, Option<String>) {
         #[cfg(not(target_arch = "wasm32"))]
         if self.github.starred {
-            return ("Starred", "★ Starred");
-        } else if self.github.client().is_some() {
-            return (STAR, STAR);
+            return ("★ Starred on GitHub".into(), None);
         }
-        (STAR, "Star ReShiki on GitHub ↗")
+        match self.star_login() {
+            Some(login) => (
+                "★ Star on GitHub".into(),
+                Some(format!("Stars ReShiki on GitHub as @{login}")),
+            ),
+            None => ("★ Star on GitHub ↗".into(), None),
+        }
     }
 
     /// Anything the toast must not interrupt, besides a focused field.
@@ -593,7 +604,7 @@ impl App {
     ) -> Element<'a, Message> {
         // Hidden while a GitHub dialog or popover is open; it comes back after.
         let toast = (self.star.open && !self.github_dialog()).then(|| {
-            container(opaque(toast()))
+            container(opaque(toast(self.star_login())))
                 .align_right(Length::Fill)
                 .align_bottom(Length::Fill)
                 .padding(18)
@@ -605,8 +616,18 @@ impl App {
     }
 }
 
-fn toast<'a>() -> Element<'a, Message> {
-    let button = |id, label: &'static str, content: Element<'a, Message>, action| {
+/// The status after a one-click star.
+pub(super) fn starred(login: Option<&str>) -> String {
+    match login {
+        Some(login) => format!("Starred ReShiki on GitHub as @{login}. Thank you!"),
+        None => "Starred ReShiki on GitHub. Thank you!".into(),
+    }
+}
+
+/// The card says plainly what Star does: signed in, it stars with that
+/// account; signed out, it opens GitHub in the browser.
+fn toast<'a>(login: Option<String>) -> Element<'a, Message> {
+    let button = |id, label: String, content: Element<'a, Message>, action| {
         reshiki::accessibility::button(id, label, content)
             .on_press(Message::Star(action))
             .padding([7, 12])
@@ -628,7 +649,18 @@ fn toast<'a>() -> Element<'a, Message> {
         weight: iced::font::Weight::Bold,
         ..iced::Font::with_name(reshiki::style::ui_font_family())
     });
-    let body = text("A star helps other chemists find it.")
+    // Signed in, a click stars with that account; signed out, a browser opens.
+    let (label, note) = match &login {
+        Some(login) => (
+            "Star on GitHub".to_owned(),
+            format!("Stars ReShiki on GitHub as @{login}."),
+        ),
+        None => (
+            "Star on GitHub ↗".to_owned(),
+            "Opens GitHub in your browser.".to_owned(),
+        ),
+    };
+    let body = text("A star on GitHub helps other chemists find it.")
         .size(13)
         .style(muted_text);
     let close = reshiki::accessibility::button("star-close", "Close", text("×").size(16))
@@ -638,15 +670,15 @@ fn toast<'a>() -> Element<'a, Message> {
     let actions = row![
         button(
             "star-not-now",
-            "Not now",
+            "Not now".into(),
             text("Not now").size(12).into(),
             Action::Dismiss
         )
         .style(crate::appearance::secondary),
         button(
             "star-github",
-            "Star ReShiki on GitHub",
-            row![star(14., true), text("Star").size(12)]
+            label.clone(),
+            row![star(14., true), text(label).size(12)]
                 .spacing(6)
                 .align_y(Alignment::Center)
                 .into(),
@@ -655,6 +687,11 @@ fn toast<'a>() -> Element<'a, Message> {
         .style(crate::appearance::primary),
     ]
     .spacing(8);
+    let actions = column![
+        container(actions).align_right(Length::Fill),
+        container(text(note).size(11).style(muted_text)).align_right(Length::Fill),
+    ]
+    .spacing(6);
     container(
         column![
             row![
@@ -663,7 +700,7 @@ fn toast<'a>() -> Element<'a, Message> {
                 close
             ]
             .spacing(12),
-            container(actions).align_right(Length::Fill),
+            actions,
         ]
         .spacing(12),
     )

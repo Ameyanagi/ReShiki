@@ -184,7 +184,7 @@ impl State {
         }
     }
 
-    fn login(&self) -> Option<&str> {
+    pub(super) fn login(&self) -> Option<&str> {
         match &self.account {
             Account::SignedIn { login, .. } | Account::NeedsInstall { login } => Some(login),
             _ => None,

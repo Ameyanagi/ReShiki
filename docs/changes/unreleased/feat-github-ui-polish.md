@@ -19,3 +19,6 @@ issues: []
   painted in ReShiki's highlight. **Keep both** also opens GitHub's version.
   **Versions** is now **History**, a clock tab in the inspector that groups
   saves and commits by day.
+- The star card and About say what Star does: signed in, **★ Star on GitHub**
+  stars ReShiki with your account (**Stars ReShiki on GitHub as @you.**);
+  signed out, **★ Star on GitHub ↗** opens GitHub in your browser.
