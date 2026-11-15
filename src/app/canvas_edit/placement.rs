@@ -339,13 +339,20 @@ impl App {
             return;
         }
         let element = if self.tool == Tool::Atom {
-            self.element.as_str()
+            self.atom_tool_element()
         } else {
             "C"
         };
         match reshiki::projection::growth::place(&self.tab.doc, start, end, element, preset) {
             Ok((doc, id)) => {
                 self.tab.doc = doc;
+                if self.tool == Tool::Atom
+                    && self.element == crate::app::palettes::R_GROUP
+                    && !self.label_r_group(id)
+                {
+                    self.tab.doc = before;
+                    return;
+                }
                 self.tab.selected = vec![id];
             }
             Err(error) => {
@@ -377,10 +384,16 @@ impl App {
         if self.tool == Tool::Atom {
             let result = a
                 .ok_or_else(|| "Start the drag on an existing atom".to_string())
-                .and_then(|id| editing::add_bonded_atom(&self.tab.doc, id, end, b, &self.element));
+                .and_then(|id| {
+                    editing::add_bonded_atom(&self.tab.doc, id, end, b, self.atom_tool_element())
+                });
             match result {
                 Ok((doc, id)) => {
                     self.tab.doc = doc;
+                    if self.element == crate::app::palettes::R_GROUP && !self.label_r_group(id) {
+                        self.tab.doc = before;
+                        return;
+                    }
                     self.tab.selected = vec![id];
                 }
                 Err(error) => {

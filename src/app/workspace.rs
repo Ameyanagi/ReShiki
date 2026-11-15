@@ -290,7 +290,7 @@ impl App {
             keyboard_marker: self.tab.keyboard_drawing.shown(),
             morph: self.model_morph(),
             model_generation: self.model_generation(),
-            element: &self.element,
+            element: self.atom_tool_element(),
             joining: self.tab.joining.as_ref().map(|s| (&s.prepared, s.anchor)),
             hidden_annotation: self.inline_label_id(),
             bond_drawing: self.tab.bond_drawing,
@@ -596,13 +596,13 @@ impl App {
                     "Lasso select · l"
                 },
             ),
-            (Tool::Tilt, "3D tilt"),
             (Tool::Erase, "Eraser"),
-            (Tool::Atom, atom.as_str()),
+            (Tool::Tilt, "3D tilt"),
             (Tool::Bond(1), single.as_str()),
             (Tool::Bond(2), double.as_str()),
             (Tool::Bond(3), triple.as_str()),
             (self.toolbar.bond, other_bonds.as_str()),
+            (Tool::Atom, atom.as_str()),
             (self.toolbar.ring, ring.as_str()),
             (Tool::Chain(reshiki::chains::ChainMode::Straight), &chain),
             (
@@ -611,49 +611,64 @@ impl App {
             ),
             (Tool::Arrow, arrow.as_str()),
             (Tool::Text, "Text label · t"),
+            (Tool::Graphic(G::Line), "Graphic line"),
+            (Tool::Graphic(G::Arc), "Arc"),
+            (Tool::Graphic(G::Curve), "Bézier curve"),
+            (Tool::Graphic(G::Path), "Pen path"),
             (
                 Tool::Graphic(self.toolbar.rectangle.kind),
                 rectangle.as_str(),
             ),
             (Tool::Graphic(self.toolbar.ellipse.kind), ellipse.as_str()),
             (Tool::Graphic(self.toolbar.bracket.kind), brackets.as_str()),
-            (Tool::Graphic(G::Line), "Graphic line"),
-            (Tool::Graphic(G::Curve), "Bézier curve"),
-            (Tool::Graphic(G::Path), "Pen path"),
-            (Tool::Graphic(G::Arc), "Arc"),
             (self.toolbar.symbol, symbols.as_str()),
             (self.toolbar.orbital, orbitals.as_str()),
         ];
-        let mut palette = column![section("TOOLS")]
-            .spacing(6)
-            .align_x(Alignment::Center);
+        let mut grid = column![].spacing(TOOL_GAP);
         for pair in tools.chunks(2) {
             let mut line = row![].spacing(4);
             for (tool, hint) in pair {
                 line = line.push(self.tool_palette_button(*tool, hint));
             }
-            palette = palette.push(line);
+            grid = grid.push(line);
         }
-        palette = palette.push(Space::new().height(10)).push(section("ATOMS"));
-        for pair in PALETTE_ELEMENTS.chunks(3) {
-            let mut line = row![].spacing(2);
-            for &symbol in pair {
-                line = line.push(self.element_palette_button(symbol));
-            }
-            palette = palette.push(line);
+        // Only the tools scroll. The bottom padding lets the last row clear
+        // the fade once scrolled to the end.
+        let tools = scrollable(
+            container(grid)
+                .center_x(Length::Fill)
+                .padding(iced::Padding::ZERO.bottom(PALETTE_FADE)),
+        )
+        .height(Length::Fill)
+        .direction(scrollable::Direction::Vertical(
+            scrollable::Scrollbar::new().width(6).scroller_width(6),
+        ));
+        let fade = column![
+            Space::new().height(Length::Fill),
+            row![
+                container(Space::new())
+                    .width(Length::Fill)
+                    .height(PALETTE_FADE)
+                    .style(palette_fade),
+                // Keep the scrollbar clear of the fade.
+                Space::new().width(8),
+            ],
+        ];
+        let mut atoms = column![section("ATOMS")].spacing(ATOM_GAP);
+        for line in PALETTE_ELEMENTS {
+            atoms = atoms.push(
+                row(line
+                    .iter()
+                    .map(|&symbol| self.element_palette_button(symbol).into()))
+                .spacing(ATOM_GAP),
+            );
         }
         let palette = column![
-            scrollable(palette)
-                .height(Length::Fill)
-                .direction(scrollable::Direction::Vertical(
-                    scrollable::Scrollbar::new()
-                        .width(3)
-                        .scroller_width(3)
-                        .spacing(3)
-                )),
+            iced::widget::stack![tools, fade].height(Length::Fill),
+            atoms.width(3. * ATOM_BUTTON + 2. * ATOM_GAP),
             self.help_palette_button()
         ]
-        .spacing(8)
+        .spacing(10)
         .align_x(Alignment::Center);
         container(palette)
             .width(PALETTE_WIDTH)
@@ -680,12 +695,12 @@ impl App {
             active: self.tool == tool,
             opens_on_click: family == Some(super::palettes::Family::Bonds),
         })
-        .width(36)
-        .height(36);
+        .width(TOOL_BUTTON)
+        .height(TOOL_BUTTON);
         let item = reshiki::accessibility::button(format!("tool-{tool:?}"), hint.to_owned(), item)
             .padding(0)
-            .width(36)
-            .height(36)
+            .width(TOOL_BUTTON)
+            .height(TOOL_BUTTON)
             .checked(self.tool == tool)
             .style(|_, _| iced::widget::button::Style::default())
             .on_press(if family == Some(super::palettes::Family::Bonds) {
@@ -705,10 +720,13 @@ impl App {
             reshiki::accessibility::button(
                 format!("element-{symbol}"),
                 super::palettes::element_hint(symbol),
-                text(symbol).size(13).center(),
+                // The asterisk sits high and small at the label size.
+                text(symbol)
+                    .size(if symbol == "*" { 18 } else { 13 })
+                    .center(),
             )
             .checked(self.tool == Tool::Atom && self.element == symbol)
-            .width(28)
+            .width(Length::Fill)
             .height(30)
             .on_press(Message::Element(symbol.into()))
             .style(element_control(
@@ -2850,9 +2868,21 @@ impl App {
 }
 
 const PALETTE_WIDTH: f32 = 104.;
-/// The ATOMS buttons, two per line: H first, then the common organic
-/// elements, as in Ketcher's atom toolbar.
-const PALETTE_ELEMENTS: [&str; 11] = ["H", "C", "N", "O", "S", "P", "F", "Cl", "Br", "Fe", "*"];
+/// Tool buttons and the gap between their rows: a 34 px pitch.
+const TOOL_BUTTON: f32 = 32.;
+const TOOL_GAP: f32 = 2.;
+/// The scrolled tools fade out this far above the atoms.
+const PALETTE_FADE: f32 = 16.;
+const ATOM_BUTTON: f32 = 28.;
+const ATOM_GAP: f32 = 2.;
+/// The ATOMS buttons by line: H first, then the common organic elements, as
+/// in Ketcher's atom toolbar; the dummy atom and R group get their own line.
+const PALETTE_ELEMENTS: [&[&str]; 4] = [
+    &["H", "C", "N"],
+    &["O", "S", "P"],
+    &["F", "Cl", "Br"],
+    &["*", super::palettes::R_GROUP],
+];
 const CONTEXT_PADDING: f32 = 14.;
 pub(super) const CONTEXT_GAP: f32 = 10.;
 const DIVIDER: f32 = 11.;
@@ -3400,6 +3430,21 @@ pub(super) fn control(active: bool) -> impl Fn(&Theme, button::Status) -> button
         )
     }
 }
+/// The panel color fading in toward the bottom of the scrolled tools.
+fn palette_fade(theme: &Theme) -> container::Style {
+    let Some(iced::Background::Color(color)) = panel(theme).background else {
+        return container::Style::default();
+    };
+    container::Style {
+        background: Some(
+            iced::gradient::Linear::new(0.)
+                .add_stop(0., color)
+                .add_stop(1., Color { a: 0., ..color })
+                .into(),
+        ),
+        ..Default::default()
+    }
+}
 pub(super) fn panel(theme: &Theme) -> container::Style {
     crate::appearance::container(
         theme,
@@ -3455,3 +3500,5 @@ mod inspector_motion_qa;
 mod inspector_motion_tests;
 #[cfg(test)]
 mod selection_tests;
+#[cfg(test)]
+mod side_panel_tests;

@@ -65,11 +65,11 @@ fn bonded_movement_membership_preserves_expanded_selection_and_tracks_edits() {
 
 #[test]
 fn the_atoms_palette_offers_h_first_and_each_button_picks_its_element() {
-    assert_eq!(PALETTE_ELEMENTS[..2], ["H", "C"]);
+    assert_eq!(PALETTE_ELEMENTS[0][..2], ["H", "C"]);
     assert_eq!(super::super::palettes::element_hint("H"), "H · h");
     let (mut app, _) = App::new();
-    for symbol in PALETTE_ELEMENTS {
-        assert!(symbol == "*" || reshiki::editing::ELEMENTS.contains(&symbol));
+    for &symbol in PALETTE_ELEMENTS.concat().iter() {
+        assert!(matches!(symbol, "*" | "R") || reshiki::editing::ELEMENTS.contains(&symbol));
         let _ = app.update(Message::Element(symbol.into()));
         assert_eq!((app.tool, app.element.as_str()), (Tool::Atom, symbol));
     }
