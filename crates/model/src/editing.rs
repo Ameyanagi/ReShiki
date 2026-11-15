@@ -1031,6 +1031,7 @@ pub fn arrange(doc: &mut Document, ids: &[u64], action: Arrange) {
         .sum();
     let gap = (hi - lo - size) / (groups.len() - 1) as f32;
     let mut target = lo;
+    let mut moves = Vec::with_capacity(groups.len());
     for (group, (min, max)) in groups {
         let delta = if distribute {
             target - coordinate(min)
@@ -1041,13 +1042,14 @@ pub fn arrange(doc: &mut Document, ids: &[u64], action: Arrange) {
         } else {
             (lo + hi - coordinate(min) - coordinate(max)) / 2.0
         };
-        doc.translate(
-            &group,
-            if horizontal { delta } else { 0.0 },
-            if horizontal { 0.0 } else { delta },
-        );
+        moves.push(if horizontal {
+            (group, delta, 0.0)
+        } else {
+            (group, 0.0, delta)
+        });
         target += coordinate(max) - coordinate(min) + gap;
     }
+    doc.translate_units(&moves);
 }
 
 pub fn nearest_bond(doc: &Document, p: Point, r: f32) -> Option<usize> {

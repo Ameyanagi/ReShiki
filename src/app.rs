@@ -439,6 +439,8 @@ pub struct App {
     grid: bool,
     guides: canvas::guides::Guides,
     view_open: bool,
+    /// The list of Check drawing findings is open.
+    check_results: bool,
     appearance: crate::appearance::Settings,
     engine: LocalEngine,
     figure_exporting: bool,
@@ -557,6 +559,7 @@ impl App {
             grid: false,
             guides: Default::default(),
             view_open: false,
+            check_results: false,
             appearance,
             engine: LocalEngine::default(),
             figure_exporting: false,
@@ -658,6 +661,7 @@ impl App {
             self.star_subscription(),
             self.properties_subscription(),
             self.engine_subscription(),
+            self.pulse_subscription(),
             #[cfg(target_arch = "wasm32")]
             self.naming_subscription(),
             if self.assistant.needs_poll() {
@@ -826,6 +830,7 @@ impl App {
         let committed = reconciled.commit(&mut self.tab.doc, &mut self.tab.history, continuing);
         self.label_layout_settled();
         if committed.recorded {
+            self.trim_histories(tabs::HISTORY_BYTES);
             self.drawing_revised(committed.chemistry_changed);
             self.status = if unit_cell_removed {
                 CELL_REMOVED_NOTICE

@@ -517,3 +517,92 @@ fn contract_label_warnings_explain_bz_and_suggest_bn_for_benzyl() {
     let (doc, members) = contract_fragment("NC(=O)c1ccccc1");
     assert!(doc.contract_label_warnings(&members, "Bz", "").is_empty());
 }
+
+/// The per-pass index answers what the per-query scans do, for every atom
+/// pair and with a two-sided group.
+#[test]
+fn membership_matches_document_visibility() {
+    let mut doc = shortcut_examples();
+    let group = doc
+        .abbreviations
+        .iter_mut()
+        .find(|group| group.members.len() > 1)
+        .unwrap();
+    group.exit = group.members.iter().copied().find(|id| *id != group.anchor);
+    let membership = Membership::new(&doc);
+    let ids: Vec<_> = doc.atoms.iter().map(|a| a.id).chain([u64::MAX]).collect();
+    for &a in &ids {
+        assert_eq!(membership.atom_visible(a), doc.atom_visible(a), "{a}");
+        for &b in &ids {
+            assert_eq!(
+                membership.bond_visible(a, b),
+                doc.bond_visible(a, b),
+                "{a}-{b}"
+            );
+        }
+    }
+}
+
+/// Everything a pointer move asks of an unchanged drawing shares one render
+/// copy. An edit takes one more, and the shared copy never goes stale.
+#[test]
+fn queries_on_an_unchanged_drawing_share_one_render_copy() {
+    let (mut doc, [left, anchor, middle, exit, right]) = bridge();
+    doc.contract(&[anchor, middle, exit], "Ala", "Back")
+        .unwrap();
+    let ids = doc.all_ids();
+    let frame = |doc: &Document| {
+        let point = Point::new(60., 0.);
+        (
+            crate::scene::atom_label_hit(doc, point, 4.),
+            crate::scene::abbreviation_label_hit(doc, point, 4.),
+            crate::editing::nearest_bond(doc, point, 6.),
+            crate::atom_labels::indicators(doc).len(),
+            crate::scene::selection_bounds(doc, &ids),
+            crate::scene::participant_label_ink_boxes(doc, &ids),
+            crate::scene::attachment_ink::AttachmentInk::new(doc)
+                .drawn()
+                .bonds
+                .clone(),
+        )
+    };
+    let before = render_copy_count();
+    let first = frame(&doc);
+    assert_eq!(render_copy_count() - before, 1);
+    for _ in 0..3 {
+        assert_eq!(frame(&doc), first);
+    }
+    assert_eq!(render_copy_count() - before, 1, "an unchanged drawing");
+    // An equal document elsewhere in memory is the same drawing.
+    assert_eq!(frame(&doc.clone()), first);
+    assert_eq!(render_copy_count() - before, 1, "an equal drawing");
+
+    // Each kind of edit is seen: a moved atom, a changed bond, a restyle.
+    let mut moved = doc.clone();
+    moved.atom_mut(right).unwrap().position.y += 30.;
+    let mut rebonded = doc.clone();
+    rebonded.bonds[0].order = 2;
+    let mut restyled = doc.clone();
+    restyled.drawing_style.bond_length_world *= 1.5;
+    for (edits, edited) in [&moved, &rebonded, &restyled].into_iter().enumerate() {
+        let drawn = edited.abbreviation_render_copy();
+        assert_eq!(render_copy_count() - before, edits + 2);
+        let mut expected = edited.clone();
+        for bond in &mut expected.bonds {
+            (bond.a, bond.b) = (
+                edited.abbreviation_endpoint(bond.a, bond.b),
+                edited.abbreviation_endpoint(bond.b, bond.a),
+            );
+        }
+        assert_eq!(*drawn, expected);
+        assert_ne!(*drawn, *edited);
+        frame(edited);
+        assert_eq!(render_copy_count() - before, edits + 2);
+    }
+    // A copy still held by a caller stays valid after the cache moves on.
+    let held = doc.abbreviation_render_copy();
+    let other = restyled.abbreviation_render_copy();
+    assert_eq!(held.drawing_style, doc.drawing_style);
+    assert_eq!(other.drawing_style, restyled.drawing_style);
+    assert!(held.bond_between(left, anchor).is_some());
+}
