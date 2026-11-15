@@ -482,3 +482,16 @@ pub async fn star(client: &Client, owner: &str, repo: &str) -> Result<(), Error>
         .await?;
     Ok(())
 }
+
+/// Whether the signed-in user starred `owner/repo`.
+pub async fn starred(client: &Client, owner: &str, repo: &str) -> Result<bool, Error> {
+    let path = format!("/user/starred/{}/{}", encoded(owner), encoded(repo));
+    match client
+        .send(Method::GET, &path, None, Accept::Json, JSON_LIMIT)
+        .await
+    {
+        Ok(_) => Ok(true),
+        Err(Error::NotFound) => Ok(false),
+        Err(error) => Err(error),
+    }
+}

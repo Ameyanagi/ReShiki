@@ -460,6 +460,17 @@ fn api(
             }
             reply(201, repo.json())
         }
+        ("GET", ["user", "starred", owner, repo]) => {
+            if model.starred.contains(&format!("{owner}/{repo}")) {
+                Reply {
+                    status: 204,
+                    headers: vec![],
+                    body: vec![],
+                }
+            } else {
+                missing()
+            }
+        }
         ("PUT", ["user", "starred", owner, repo]) => {
             model.starred.insert(format!("{owner}/{repo}"));
             Reply {

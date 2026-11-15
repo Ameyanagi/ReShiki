@@ -251,6 +251,27 @@ async fn a_star_is_one_put() {
 }
 
 #[tokio::test]
+async fn a_star_check_reads_204_as_starred_and_404_as_not() {
+    let mock = Mock::start(0).await;
+    let client = mock.client();
+    assert_eq!(
+        api::starred(&client, "Ameyanagi", "ReShiki").await,
+        Ok(false)
+    );
+    api::star(&client, "Ameyanagi", "ReShiki").await.unwrap();
+    assert_eq!(
+        api::starred(&client, "Ameyanagi", "ReShiki").await,
+        Ok(true)
+    );
+    mock.model()
+        .fail_next("GET", "/api/user/starred/Ameyanagi/ReShiki", 500);
+    assert_eq!(
+        api::starred(&client, "Ameyanagi", "ReShiki").await,
+        Err(Error::Offline)
+    );
+}
+
+#[tokio::test]
 async fn an_object_name_that_is_not_hex_is_refused() {
     let mock = Mock::start(0).await;
     mock.model().seed_demo();

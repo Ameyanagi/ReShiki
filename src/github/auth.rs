@@ -72,7 +72,8 @@ pub async fn request_code(client_id: &str, ends: &Endpoints) -> Result<DeviceCod
     parse_code(&bytes, ends)
 }
 
-pub(super) fn parse_code(bytes: &[u8], ends: &Endpoints) -> Result<DeviceCode, Error> {
+/// Reads GitHub's reply to a device code request.
+pub fn parse_code(bytes: &[u8], ends: &Endpoints) -> Result<DeviceCode, Error> {
     #[derive(Deserialize)]
     struct Reply {
         device_code: String,
