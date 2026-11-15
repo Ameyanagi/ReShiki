@@ -363,7 +363,8 @@ pub async fn copy(
         pictures,
     )
     .await?;
-    let operation = if cfg!(windows) && !image_only {
+    // Office's embedded object is the drawing, so it follows the switch too.
+    let operation = if cfg!(windows) && !image_only && pictures.editable {
         "write_embedded"
     } else {
         "write"
@@ -431,7 +432,10 @@ async fn prepare_copy_with_limit(
     // Marked like a saved file, so pasting it never migrates its colors again.
     let doc = doc.current();
     let mut representations = Vec::new();
-    if !image_only {
+    // The browser keeps ReShiki's drawing in the HTML picture other apps
+    // paste, so it leaves it out with the pictures' drawing.
+    let native = !browser || pictures.editable;
+    if !image_only && native {
         representations.push(Representation::new(
             NATIVE,
             &serde_json::to_vec(&doc).map_err(|e| e.to_string())?,
@@ -518,7 +522,7 @@ async fn prepare_copy_with_limit(
         let fits = envelope.len() <= embed_limit;
         let drawing = (pictures.editable && fits).then_some(envelope.as_slice());
         Ok::<_, String>((
-            copy_images_with_drawing(&doc, image_only, browser, pictures, drawing, fits),
+            copy_images_with_drawing(&doc, image_only, browser, pictures, drawing, fits && native),
             pictures.editable && !fits,
         ))
     })
@@ -644,7 +648,7 @@ fn copy_images_with_drawing(
     })
     .collect();
     #[cfg(windows)]
-    if !image_only && !browser {
+    if !image_only && !browser && pictures.editable {
         images.push((
             "Office preview",
             crate::native_windows::office_metafile(doc, pictures.background)

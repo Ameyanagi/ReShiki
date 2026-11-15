@@ -218,8 +218,9 @@ async fn oversized_picture_payload_is_omitted_from_all_formats_with_one_notice()
 }
 
 /// With the editable drawing off, Copy and Copy image put no drawing in their
-/// pictures, but ReShiki's own clipboard data still carries it. The pictures
-/// take the chosen background, and the PNG the chosen resolution.
+/// pictures, but ReShiki's own clipboard data still carries it on the desktop.
+/// The browser's only place for it is the HTML picture, so it has none. The
+/// pictures take the chosen background, and the PNG the chosen resolution.
 #[tokio::test]
 async fn pictures_follow_the_editable_drawing_switch_and_background() {
     let mut source = Document::default();
@@ -269,6 +270,13 @@ async fn pictures_follow_the_editable_drawing_switch_and_background() {
             }
             assert_eq!(count, if browser { 2 } else { 3 });
             let native = representations.iter().find(|item| item.kind == NATIVE);
+            if browser {
+                assert!(native.is_none());
+                for (_, data) in browser::web_items(&representations).unwrap() {
+                    assert!(!String::from_utf8_lossy(&data).contains("data-reshiki"));
+                }
+                continue;
+            }
             assert_eq!(
                 Document::from_json(&native.unwrap().bytes().unwrap())
                     .unwrap()

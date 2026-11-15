@@ -338,8 +338,9 @@ pub async fn prepare_as(
             let notice = (pictures.editable && !fits)
                 .then_some("Picture copied without the editable drawing (too large)");
             // When the picture leaves the drawing out, ReShiki's own data
-            // still pastes it back, within the same limit.
-            let native = (!pictures.editable && fits)
+            // still pastes it back, within the same limit. A browser would
+            // put it in the HTML picture other apps paste, so it has none.
+            let native = (!pictures.editable && fits && !cfg!(target_arch = "wasm32"))
                 .then(|| serde_json::to_vec(&payload::visible(&doc)))
                 .transpose()
                 .map_err(|e| e.to_string())?;

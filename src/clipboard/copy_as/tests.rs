@@ -36,7 +36,7 @@ async fn copy_as_pictures_follow_the_editable_drawing_switch_and_background() {
 }
 
 /// With the editable drawing off, the picture leaves it out, but ReShiki's own
-/// clipboard data still pastes the drawing back, on the desktop and in a browser.
+/// clipboard data still pastes the drawing back on the desktop.
 #[tokio::test]
 async fn copy_as_pictures_paste_back_into_reshiki_without_the_editable_drawing() {
     let engine = LocalEngine::in_process();
@@ -66,18 +66,6 @@ async fn copy_as_pictures_paste_back_into_reshiki_without_the_editable_drawing()
         .await
         .unwrap();
         assert_eq!(pasted.atoms.len(), 2, "{format:?} pastes as a drawing");
-        if format == CopyFormat::Pdf {
-            continue;
-        }
-        let web: Vec<_> = super::super::browser::web_items(&copy.representations)
-            .unwrap()
-            .into_iter()
-            .map(|(mime, data)| (mime.to_owned(), data))
-            .collect();
-        let native = super::super::browser::pick(&[super::super::NATIVE.into()], &web)
-            .unwrap_or_else(|| panic!("{format:?} carries the drawing in a browser"));
-        let restored = Document::from_json(&native.bytes().unwrap()).unwrap();
-        assert_eq!(restored.atoms.len(), 2, "{format:?}");
     }
 }
 
