@@ -233,6 +233,7 @@ impl Prepared {
         // left out goes with it, such as its name caption (#409).
         part.annotations.clear();
         part.molecule_names.clear();
+        part.property_captions.clear();
         part.arrows.clear();
         part.arrow_labels.clear();
         part.graphics.clear();

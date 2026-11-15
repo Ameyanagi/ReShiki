@@ -35,6 +35,8 @@ pub(super) enum Icon {
     Settings,
     More,
     Lock(bool),
+    /// Shown under the molecule when inked; light when not.
+    Pin,
     ModelStyle(reshiki::models3d::Style),
 }
 pub(super) struct Glyph(pub Icon, pub bool);
@@ -106,6 +108,7 @@ impl Glyph {
             Icon::Inspector => commands::inspector(f, ink),
             Icon::More => chrome::more(f, ink),
             Icon::Lock(locked) => chrome::lock(f, ink, locked),
+            Icon::Pin => chrome::pin(f, ink),
             Icon::ModelStyle(style) => chrome::model_style(f, ink, style),
         }
     }

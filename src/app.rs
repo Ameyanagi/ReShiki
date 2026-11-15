@@ -62,6 +62,7 @@ mod inspector;
 mod joining;
 mod keyboard_drawing;
 mod label_refresh;
+mod linked_properties;
 mod molecule_shortcuts;
 mod naming;
 mod nmr;
@@ -235,6 +236,8 @@ pub enum Message {
     CaptionAction(iced::widget::text_editor::Action),
     TextStyle(reshiki::typography::StyleChange),
     FormatChemicalName,
+    /// Show or hide one property line under a whole molecule.
+    ToggleProperty(Vec<u64>, reshiki::linked_properties::Property),
     FontSize(String),
     ApplyFontSize,
     ColorScope(typography::ColorScope),
@@ -740,6 +743,10 @@ impl App {
         self.changed_continuing(before, false);
     }
     fn changed_continuing(&mut self, before: Document, continuing: bool) {
+        // Mol. Wt. captions follow View → 2-decimal MW with every edit.
+        for link in &mut self.tab.doc.property_captions {
+            link.two_decimal_weight = self.appearance.two_decimal_weight;
+        }
         if self.settles_unchanged(&before) {
             return;
         }
@@ -1389,6 +1396,7 @@ fn same_drawing(a: &Document, b: &Document) -> bool {
         && a.bonds.iter().zip(&b.bonds).all(|(a, b)| same_bond(a, b))
         && a.annotations == b.annotations
         && a.molecule_names == b.molecule_names
+        && a.property_captions == b.property_captions
         && a.arrows == b.arrows
         && a.arrow_labels == b.arrow_labels
         && a.graphics == b.graphics

@@ -123,9 +123,14 @@ pub struct MoleculeName {
     pub text: String,
 }
 
-/// Whether this annotation is still associated with a molecule name.
+/// Whether this annotation is still linked to a molecule, as its name or its
+/// properties.
 pub fn is_caption(doc: &Document, id: u64) -> bool {
     doc.molecule_names.iter().any(|name| name.annotation == id)
+        || doc
+            .property_captions
+            .iter()
+            .any(|link| link.annotation == id)
 }
 
 /// A chemical connected component, independent of drawing groups and captions.
@@ -211,9 +216,18 @@ pub fn label<'a>(doc: &'a Document, atoms: &[u64]) -> Option<&'a MoleculeName> {
 /// keeps ordinary editable text, without a dangling chemical association.
 pub fn include_annotations(doc: &Document, ids: &[u64]) -> Vec<u64> {
     let mut selected: HashSet<_> = ids.iter().copied().collect();
-    for name in &doc.molecule_names {
-        if name.atoms.iter().all(|id| selected.contains(id)) {
-            selected.insert(name.annotation);
+    let links = doc
+        .molecule_names
+        .iter()
+        .map(|name| (name.annotation, &name.atoms))
+        .chain(
+            doc.property_captions
+                .iter()
+                .map(|l| (l.annotation, &l.atoms)),
+        );
+    for (annotation, atoms) in links {
+        if atoms.iter().all(|id| selected.contains(id)) {
+            selected.insert(annotation);
         }
     }
     doc.all_ids()

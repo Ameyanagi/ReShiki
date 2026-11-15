@@ -96,6 +96,7 @@ explains how the crates and modules fit together.
 - `src/app/joining.rs`
 - `src/app/keyboard_drawing.rs`: Application routing for the pointer-independent drawing hotspot.
 - `src/app/label_refresh.rs`: A single label calculation in flight, with exact snapshot identity checks.
+- `src/app/linked_properties.rs`: Property captions shown from the Properties panel pins and the right-click "Show properties" menu.
 - `src/app/macos_files.rs`: Finder and Dock requests to open drawings, which open as tabs.
 - `src/app/models3d.rs`: Show a selected molecule as its 2D drawing, a 3D model or both (#386).
 - `src/app/molecule_shortcuts.rs`: Molecule shortcuts and edit context.
@@ -486,6 +487,7 @@ explains how the crates and modules fit together.
 - `crates/io/src/chemistry/cdxml/scene/circles.rs`: Original aromatic.circle/removal arithmetic, retaining CPython 3.12 sums.
 - `crates/io/src/chemistry/cdxml/scene/ellipses.rs`: Recognize native closed ellipses owned by projected aromatic rings.
 - `crates/io/src/chemistry/cdxml/scene/finish.rs`
+- `crates/io/src/chemistry/cdxml/scene/properties.rs`: ChemDraw linked property text (`chemicalproperty`) read as property links.
 - `crates/io/src/chemistry/cdxml/scene/ring_fills.rs`: Native ChemDraw bond-owned areas and legacy ReShiki-owned polygons.
 - `crates/io/src/chemistry/cdxml/schemes.rs`: Validate external reaction references without inventing native reaction roles.
 - `crates/io/src/chemistry/cdxml/stereo.rs`
@@ -679,6 +681,7 @@ explains how the crates and modules fit together.
 - `crates/model/src/joining/plan.rs`: Route classification shared by Join admission and shortcut execution.
 - `crates/model/src/lib.rs`
 - `crates/model/src/ligands.rs`: Defined haptic abbreviations
+- `crates/model/src/linked_properties.rs`: Property captions linked to a molecule
 - `crates/model/src/models3d.rs`: 3D models of structures (#386)
 - `crates/model/src/models3d/cell_occlusion.rs`: Cell ink visible past the model's space-filling balls.
 - `crates/model/src/models3d/contact.rs`: Where overlapping 3D-model balls meet.

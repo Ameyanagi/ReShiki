@@ -178,6 +178,23 @@ pub(super) fn lock(f: &mut Frame<'_>, ink: Color, locked: bool) {
     f.stroke(&shackle, Stroke::default().with_width(1.4).with_color(ink));
 }
 
+/// A push pin in the lock's 20 × 20 box: head, collar and needle.
+pub(super) fn pin(f: &mut Frame<'_>, ink: Color) {
+    super::polygon(
+        f,
+        ink,
+        &[
+            (7., 2.),
+            (13., 2.),
+            (12., 8.),
+            (15., 11.),
+            (5., 11.),
+            (8., 8.),
+        ],
+    );
+    line(f, ink, &[(10., 11.), (10., 18.)]);
+}
+
 /// The prototype's 3D-model style pictograms, scaled from 30 × 22 to 24 × 24.
 pub(super) fn model_style(f: &mut Frame<'_>, ink: Color, style: reshiki::models3d::Style) {
     use reshiki::models3d::Style;

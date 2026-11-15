@@ -52,6 +52,17 @@ Select an object to see its controls in **Properties**. **Molecular properties**
 
 Select artwork to change its style in **Properties**. Pictures can be resized, rotated, replaced, or sent behind the drawing. Group a picture and caption to move them together.
 
+### Show properties under a molecule
+
+1. Right-click a molecule and choose **Show properties**. **Mol. Wt.** appears centered below the molecule.
+2. Choose more rows in the **Show properties** list, or click the pin beside a row in **Molecular properties**. A tick or an inked pin marks the rows shown. Choose a shown row again to hide it.
+
+The caption has one line per property, in the panel's order: `Formula: C6H6O`, `Mol. Wt.: 94.11`, `Exact Mass: 94.0419`, `cLogP: 1.39`, `TPSA: 20.23` and `Anal. Calcd for C6H6O: C, 76.57; H, 6.43`. **Mol. Wt.** follows **View → 2-decimal MW**.
+
+The lines update with every edit to the molecule, in the same Undo step. A salt's counter-ion is a separate molecule. Changing the caption's font, size or color keeps it up to date. Editing its text makes it ordinary text. Deleting the molecule deletes its caption.
+
+CDXML and CDX files keep the caption as ChemDraw linked property text, so ChemDraw updates it too. A caption with **cLogP** or **TPSA** is saved as plain text. ChemDraw files with linked property text open with the link. Text that covers more than one molecule, such as both ions of a salt, opens as plain text. Other formats save the text.
+
 ### Draw a pen path
 
 1. Choose **Pen path** in the tools palette and drag the first segment.

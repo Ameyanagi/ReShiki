@@ -290,6 +290,7 @@ fn atom_menu_groups_editing_naming_connecting_and_clipboard_commands() -> Result
             "—",
             "Show chemical name",
             "Chemical names…",
+            "Show properties",
             "Select molecule",
             "—",
             "Join selected atoms or bonds",
@@ -1497,6 +1498,91 @@ fn chemical_name_format_menu_targets_annotations_and_uses_document_history() {
     let _ = app.update(Message::Undo);
     assert_eq!(app.tab.doc, before);
     assert!(!app.tab.history.can_undo());
+}
+
+#[test]
+fn show_properties_menu_ticks_shown_rows_and_starts_with_weight() -> Result<(), String> {
+    use reshiki::linked_properties::{Property, shown};
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    app.tab.doc = reshiki::document::Document::from_json(include_bytes!(
+        "../../../tests/fixtures/chemical-naming-rust/ethanol-rust-native.rsk"
+    ))?;
+    let ethanol: Vec<_> = app.tab.doc.atoms.iter().map(|atom| atom.id).collect();
+    // A counter-ion is its own molecule.
+    app.tab.doc.add_atom("Na", World::new(200., 0.));
+    app.edit(Edit::ContextMenu {
+        position: Point::new(30., 40.),
+        selected: vec![ethanol[0]],
+        hit: vec![ethanol[0]],
+    });
+    assert_eq!(
+        labels(&app, Page::Properties),
+        [
+            "Formula",
+            "Mol. Wt.",
+            "Exact Mass",
+            "cLogP",
+            "TPSA",
+            "Elemental analysis"
+        ]
+    );
+    let index = app
+        .context_entries(Page::Main)
+        .iter()
+        .position(|entry| {
+            matches!(
+                entry,
+                Entry::Item {
+                    label: "Show properties",
+                    ..
+                }
+            )
+        })
+        .ok_or("Missing Show properties")?;
+    // ArrowRight only opens the list.
+    let _ = app.context_action(Action::FocusedKey(0, index, Named::ArrowRight));
+    assert!(app.tab.doc.property_captions.is_empty());
+    // Clicking the row itself shows Mol. Wt. and opens the list.
+    let _ = app.context_action(Action::Activate(0, index));
+    assert!(shown(&app.tab.doc, &ethanol, Property::Weight));
+    assert_eq!(app.tab.doc.property_captions[0].atoms, ethanol);
+    assert!(
+        app.context_menu
+            .as_ref()
+            .is_some_and(|menu| menu.children.len() == 1)
+    );
+    let ticks: Vec<_> = app
+        .context_entries(Page::Properties)
+        .iter()
+        .filter_map(|entry| match entry {
+            Entry::Item { action, .. } => app.ticked(action),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(ticks, [false, true, false, false, false, false]);
+    run_item(&mut app, Page::Properties, "Formula")?;
+    assert!(app.context_menu.is_none());
+    assert!(shown(&app.tab.doc, &ethanol, Property::Formula));
+    let _ = app.update(Message::Undo);
+    assert!(!shown(&app.tab.doc, &ethanol, Property::Formula));
+    assert!(shown(&app.tab.doc, &ethanol, Property::Weight));
+    // Enter on the row does what a click does.
+    let _ = app.update(Message::Undo);
+    assert!(app.tab.doc.property_captions.is_empty());
+    app.edit(Edit::ContextMenu {
+        position: Point::new(30., 40.),
+        selected: vec![ethanol[0]],
+        hit: vec![ethanol[0]],
+    });
+    let _ = app.context_action(Action::FocusedKey(0, index, Named::Enter));
+    assert!(shown(&app.tab.doc, &ethanol, Property::Weight));
+    assert!(
+        app.context_menu
+            .as_ref()
+            .is_some_and(|menu| menu.children.len() == 1)
+    );
+    Ok(())
 }
 
 #[test]

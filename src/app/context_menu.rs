@@ -26,6 +26,8 @@ pub enum Page {
     Tilt,
     /// Show the selected molecule as 2D, 3D or both.
     Model,
+    /// Property lines under the clicked molecule, ticked when shown.
+    Properties,
     Attachments,
     CopyAs,
     /// Copy image on a background for this copy only.
@@ -44,6 +46,8 @@ mod tests;
 #[cfg(test)]
 mod view_parity_tests;
 const SHORTCUT_GAP: f32 = 12.;
+/// The tick column of rows that show whether they are on.
+const TICK_WIDTH: f32 = 16.;
 /// The tick and swatch before a background row's label.
 const SWATCH_WIDTH: f32 = 32.;
 const SCROLLBAR_WIDTH: f32 = 10.;
@@ -228,6 +232,7 @@ impl App {
                 Hint("Labels stay upright"),
             ],
             Page::Model => self.model_entries(),
+            Page::Properties => self.property_entries(),
             Page::Align => self.align_entries(atoms, multiple),
             Page::Bonds => self.bond_entries(bonds),
             Page::AlignObjects => self.arrange_entries(&[&Command::HORIZONTAL, &Command::VERTICAL]),
@@ -401,6 +406,9 @@ impl App {
                 true,
             ));
         }
+        if self.context_property_target().is_some() {
+            entries.push(Entry::page("Show properties", Page::Properties));
+        }
         let connected: Vec<_> = reshiki::editing::groups(&self.tab.doc, &self.tab.doc.all_ids())
             .into_iter()
             .filter(|ids| {
@@ -419,6 +427,49 @@ impl App {
             ));
         }
         entries
+    }
+
+    fn context_property_target(&self) -> Option<Vec<u64>> {
+        let hit = self
+            .context_menu
+            .as_ref()
+            .and_then(|menu| menu.hit.as_deref());
+        self.property_target(hit.unwrap_or(&[]))
+    }
+
+    /// Choosing "Show properties" itself, by click, Enter or Space, shows
+    /// Mol. Wt. when the molecule has no caption yet.
+    fn show_default_property(&mut self, page: Page) {
+        if page == Page::Properties
+            && let Some(target) = self.context_property_target()
+            && reshiki::linked_properties::caption(&self.tab.doc, &target).is_none()
+        {
+            self.toggle_property(&target, reshiki::linked_properties::Property::Weight);
+        }
+    }
+
+    /// One row per property, in the Properties panel's order.
+    fn property_entries(&self) -> Vec<Entry> {
+        let Some(target) = self.context_property_target() else {
+            return vec![];
+        };
+        reshiki::linked_properties::Property::ALL
+            .into_iter()
+            .map(|p| Entry::command(p.name(), Message::ToggleProperty(target.clone(), p), true))
+            .collect()
+    }
+
+    /// Whether a property row is ticked; `None` for other rows.
+    fn ticked(&self, action: &Action) -> Option<bool> {
+        match action {
+            Action::Run(message) => match message.as_ref() {
+                Message::ToggleProperty(atoms, property) => Some(
+                    reshiki::linked_properties::shown(&self.tab.doc, atoms, *property),
+                ),
+                _ => None,
+            },
+            _ => None,
+        }
     }
 
     /// The Structure section's 2D / 3D / Both, with 2D in either layout; the
@@ -947,7 +998,8 @@ impl App {
                     ..
                 }) = entry
                 {
-                    if matches!(action, Action::Page(_)) {
+                    if let Action::Page(page) = action {
+                        self.show_default_property(page);
                         self.context_hover(level, index, true);
                     } else {
                         return self.context_action(action);
@@ -1094,8 +1146,12 @@ impl App {
                         ..
                     }) = entries.get(index)
                     {
+                        let child = *child;
+                        if key != Named::ArrowRight {
+                            self.show_default_property(child);
+                        }
                         let first = self
-                            .context_entries(*child)
+                            .context_entries(child)
                             .iter()
                             .position(|entry| matches!(entry, Entry::Item { enabled: true, .. }));
                         self.context_hover(level, index, true);
@@ -1149,6 +1205,9 @@ impl App {
                             }
                             _ => 0.,
                         }
+                        + self
+                            .ticked(action)
+                            .map_or(0., |_| TICK_WIDTH + SHORTCUT_GAP)
                         + if matches!(action, Action::Page(_)) {
                             24.
                         } else {
@@ -1236,6 +1295,14 @@ impl App {
                     let mut content = row![]
                         .spacing(SHORTCUT_GAP)
                         .align_y(iced::Alignment::Center);
+                    let ticked = self.ticked(&action);
+                    if let Some(ticked) = ticked {
+                        content = content.push(
+                            text(if ticked { "✓" } else { "" })
+                                .size(12)
+                                .width(TICK_WIDTH),
+                        );
+                    }
                     if let Some((paper, default)) = swatch {
                         content = content.push(
                             row![
@@ -1307,8 +1374,8 @@ impl App {
                         .on_press_maybe(
                             enabled.then_some(Message::ContextMenu(Action::Activate(level, index))),
                         );
-                    let item = match check {
-                        Some((on, _)) => item.checked(on),
+                    let item = match check.map(|(on, _)| on).or(ticked) {
+                        Some(on) => item.checked(on),
                         None => item,
                     };
                     items.push(index);
