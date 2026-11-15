@@ -101,12 +101,20 @@ the naming worker at a time and stops any test that runs for 15 minutes.
 
 To test one library layer, select its crate. Integration tests, binaries and
 examples belong to the root `reshiki` package, so qualify them with
-`-p reshiki`:
+`-p reshiki`. The files under `tests/` are modules of one test binary, `it`, so
+that the application library links once and not once per file. Select one
+file's tests by its module name:
 
 ```sh
 cargo test --locked -p reshiki-model
-cargo test --locked -p reshiki --test theme_reference
+cargo test --locked -p reshiki --test it theme_reference::
 ```
+
+A new file under `tests/` needs a `mod` line in `tests/it.rs`; a test there
+fails while one is missing. Three files stay separate targets in `Cargo.toml`:
+`metafile_worker` has its own `main`, `picture_memory` its own global
+allocator, and `release.yml` builds `agent_api_windows_pipes` alone in the
+release profile.
 
 The agent goldens under `tests/fixtures/agent-contract/` and
 `tests/fixtures/agent-skill/` change only with an intentional contract change;

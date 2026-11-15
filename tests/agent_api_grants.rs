@@ -7,8 +7,7 @@
 //! and LOCALAPPDATA folders through `Command::env`, so neither the
 //! developer's configuration nor their home folder take part, and runs under
 //! a 60 s watchdog.
-#[path = "common/headless.rs"]
-mod headless;
+use crate::headless;
 
 use headless::{McpSession, StderrMode};
 use serde_json::{Value, json};

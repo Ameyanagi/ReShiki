@@ -20,8 +20,7 @@
 //! within 10 s, with every stdout line one JSON-RPC 2.0 object, no
 //! `panicked at` on stderr and nothing created, removed or changed outside
 //! `<tree>/out`.
-#[path = "common/headless.rs"]
-mod headless;
+use crate::headless;
 
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use headless::{McpSession, StderrMode};
