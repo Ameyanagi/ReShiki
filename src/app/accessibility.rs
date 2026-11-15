@@ -76,6 +76,7 @@ struct Context {
         bool,
         bool,
         bool,
+        bool,
     ),
 }
 
@@ -193,6 +194,10 @@ impl App {
             .inline_text
             .as_ref()
             .map(|draft| draft.session.clone());
+        #[cfg(not(target_arch = "wasm32"))]
+        let github_menu = self.github.menu;
+        #[cfg(target_arch = "wasm32")]
+        let github_menu = false;
         let surface = (
             self.inspector_tab,
             self.tool,
@@ -205,6 +210,7 @@ impl App {
             self.context_menu.is_some(),
             self.imports.menu || self.imports.examples_menu,
             self.style_menu.is_some() || self.tab.inspector_ui.menu_open(),
+            github_menu,
         );
         let keyboard_target = self.keyboard_drawing_active().then(|| {
             format!(

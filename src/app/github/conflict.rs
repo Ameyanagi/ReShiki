@@ -40,7 +40,7 @@ impl App {
     pub(super) fn github_review(&mut self, key: RepoKey, done: usize) -> Task<Message> {
         if let Some(review) = self.conflict_review(&key, done) {
             self.github.dialog = Some(Dialog::Conflict(Box::new(review)));
-            return self.accessibility_refresh();
+            return Task::none();
         }
         self.github_refresh(&key);
         let unsent = self.github.unsent.get(&key).cloned().unwrap_or_default();

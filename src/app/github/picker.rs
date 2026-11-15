@@ -182,11 +182,7 @@ impl App {
                     picker.listed(&self.github.repos);
                 }
                 self.github.dialog = Some(Dialog::Picker(Box::new(picker)));
-                return Task::batch([
-                    self.github_list(),
-                    iced::widget::operation::focus(SEARCH),
-                    self.accessibility_refresh(),
-                ]);
+                return Task::batch([self.github_list(), iced::widget::operation::focus(SEARCH)]);
             }
             Action::Search(search) => {
                 if let Some(picker) = self.picker() {

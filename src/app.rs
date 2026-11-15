@@ -986,7 +986,7 @@ impl App {
         #[cfg(not(target_arch = "wasm32"))]
         if let Message::GitHub(action) = message {
             let task = self.github_action(action);
-            return Task::batch([task, self.github_follow()]);
+            return Task::batch([task, self.github_follow(), self.accessibility_refresh()]);
         }
         // A touch can confirm its mouse press and move/release together. Each
         // edit still passes through the same focus and preview gates as a mouse.

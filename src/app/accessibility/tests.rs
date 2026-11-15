@@ -210,6 +210,16 @@ fn queued_native_command_cannot_move_to_a_new_selection() {
     assert_eq!(app.tab.id, before);
 }
 
+#[test]
+#[cfg(not(target_arch = "wasm32"))]
+fn the_github_menu_reaches_native_controls_when_it_opens() {
+    let (mut app, _) = App::new();
+    let _ = app.accessibility_refresh();
+    let version = app.accessibility.context_version;
+    let _ = app.update(Message::GitHub(super::super::github::Action::Menu(true)));
+    assert_ne!(version, app.accessibility.context_version);
+}
+
 fn recovery_app() -> App {
     let (mut app, _) = App::new();
     app.recovered.push(reshiki::recovery::Candidate {

@@ -257,7 +257,7 @@ impl App {
                 let compare =
                     super::compare::Compare::new(Ok((*doc).clone()), self.tab.doc.clone());
                 self.github.dialog = Some(super::Dialog::Compare(Box::new(compare), label));
-                return self.accessibility_refresh();
+                return Task::none();
             }
             Action::Open => {
                 let Some((label, doc)) = self.versions_picked() else {

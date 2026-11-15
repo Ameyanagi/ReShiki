@@ -307,7 +307,7 @@ impl App {
     fn github_close_dialog(&mut self) -> Task<Message> {
         self.github.dialog = None;
         self.github.resolving = None;
-        Task::batch([focus_drawing(), self.accessibility_refresh()])
+        focus_drawing()
     }
 
     pub(super) fn github_action(&mut self, action: Action) -> Task<Message> {
@@ -323,7 +323,7 @@ impl App {
                 } else {
                     Task::none()
                 };
-                return Task::batch([list, self.account_focus(), self.accessibility_refresh()]);
+                return Task::batch([list, self.account_focus()]);
             }
             Action::Close => {
                 // Closing the sign-in dialog while waiting cancels the sign-in.
@@ -571,10 +571,7 @@ impl App {
                     files,
                     message,
                 }));
-                return Task::batch([
-                    iced::widget::operation::focus(SEND_MESSAGE),
-                    self.accessibility_refresh(),
-                ]);
+                return iced::widget::operation::focus(SEND_MESSAGE);
             }
             Action::SendMessage(message) => {
                 if let Some(Dialog::Send(draft)) = &mut self.github.dialog {
@@ -812,7 +809,7 @@ impl App {
     ) -> Task<Message> {
         let Some(client) = self.github.client() else {
             self.github.dialog = Some(Dialog::Account);
-            return self.accessibility_refresh();
+            return Task::none();
         };
         let (Some(root), Some(state)) =
             (self.github.root.clone(), self.github_state(&key).cloned())
