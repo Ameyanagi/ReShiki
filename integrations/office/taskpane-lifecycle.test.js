@@ -77,6 +77,7 @@ async function pane(t) {
     document: {
       getElementById: (id) => nodes.get(id),
       querySelectorAll: () => ["paste", "file", "edit", "copy"].map((id) => nodes.get(id)),
+      querySelector: () => ({ content: "test-nonce" }),
       createElement: node,
     },
     setTimeout: (callback, delay) => {

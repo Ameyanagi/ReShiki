@@ -104,6 +104,8 @@ impl App {
             Action::Show(open) => {
                 if !self.updates.restarting {
                     self.updates.open = open;
+                    // Help > About replaces Help.
+                    self.help_open &= !open;
                 }
             }
             Action::Poll => {
@@ -448,7 +450,12 @@ impl App {
                 text_color: theme.palette().text,
                 ..Default::default()
             }),
-            reshiki::accessibility::button("updates-notes", "Open release notes", "Release notes ↗").on_press(msg(Action::Download)).style(button::text),
+            row![
+                reshiki::accessibility::button("updates-notes", "Open release notes", "Release notes ↗").on_press(msg(Action::Download)).style(button::text),
+                reshiki::accessibility::button("updates-star", "Star ReShiki on GitHub", "Star ReShiki on GitHub ↗")
+                    .on_press(Message::Star(super::star_prompt::Action::Star { toast: false }))
+                    .style(button::text),
+            ],
             text(if state.channel == Channel::Nightly { "Checks once a day. Nightlies are installed manually. Downloads prefer installers when available; Release notes also links portable archives." } else { "Checks once a day. Stable updates are verified before installation. Your saved tabs reopen after restarting." })
                 .size(12)
                 .style(super::workspace::muted_text),

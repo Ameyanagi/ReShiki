@@ -2,7 +2,13 @@
 // Generates configuration/manifests only. It never trusts a certificate, writes
 // Office's sideload directories, changes a registry, or starts an Office app.
 import { readFile, writeFile, mkdir, stat, lstat, link, unlink } from "node:fs/promises";
-import { X509Certificate, createPrivateKey, createPublicKey, randomUUID } from "node:crypto";
+import {
+  X509Certificate,
+  createPrivateKey,
+  createPublicKey,
+  randomBytes,
+  randomUUID,
+} from "node:crypto";
 import path from "node:path";
 import os from "node:os";
 import { fileURLToPath } from "node:url";
@@ -30,9 +36,12 @@ export const HOSTS = [
     id: "59b424f2-7de1-4c81-aa8b-f9273f0d06b4",
   },
 ];
-export function manifest(host, port = 43127) {
+// The launch key in the task pane address is what lets the companion tell
+// Office, which reads this account's manifest, from any other local process.
+export function manifest(host, launchKey, port = 43127) {
   if (!Number.isInteger(port) || port < 1024 || port > 65535)
     throw new Error("Invalid localhost port");
+  if (!/^[0-9a-f]{64}$/.test(launchKey)) throw new Error("Invalid launch key");
   const origin = `https://localhost:${port}`;
   return `<?xml version="1.0" encoding="UTF-8"?>
 <OfficeApp xmlns="http://schemas.microsoft.com/office/appforoffice/1.1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="TaskPaneApp">
@@ -43,7 +52,7 @@ export function manifest(host, port = 43127) {
   <AppDomains><AppDomain>${origin}</AppDomain></AppDomains>
   <Hosts><Host Name="${host.host}"/></Hosts>
   <Requirements><Sets DefaultMinVersion="1.1"><Set Name="${host.api}" MinVersion="${host.version}"/></Sets></Requirements>
-  <DefaultSettings><SourceLocation DefaultValue="${origin}/taskpane.html"/></DefaultSettings>
+  <DefaultSettings><SourceLocation DefaultValue="${origin}/taskpane.html?launch=${launchKey}"/></DefaultSettings>
   <Permissions>ReadWriteDocument</Permissions>
 </OfficeApp>
 `;
@@ -94,9 +103,17 @@ export async function setup({ executable, cert, key, directory, port = 43127 }) 
       .equals(createPublicKey(privateKey).export({ type: "spki", format: "der" }))
   )
     throw new Error("Certificate and private key do not match");
-  const rendered = HOSTS.map((host) => [host.name, manifest(host, port)]);
   await mkdir(path.join(directory, "manifests"), { recursive: true, mode: 0o700 });
   await mkdir(path.join(directory, "recovery"), { recursive: true, mode: 0o700 });
+  // A rerun keeps the first run's key, so its manifests still match.
+  const launchKeyFile = path.join(directory, "launch.key");
+  try {
+    await writeFile(launchKeyFile, randomBytes(32).toString("hex"), { flag: "wx", mode: 0o600 });
+  } catch (error) {
+    if (error.code !== "EEXIST") throw error;
+  }
+  const launchKey = (await readFile(launchKeyFile, "utf8")).trim();
+  const rendered = HOSTS.map((host) => [host.name, manifest(host, launchKey, port)]);
   // The config is the installation's completion marker. Publish it only once
   // all three complete manifests are available; matching partial output is safe
   // to reuse and conflicting existing files are never replaced.
@@ -105,7 +122,14 @@ export async function setup({ executable, cert, key, directory, port = 43127 }) 
   await publish(
     path.join(directory, "config.json"),
     JSON.stringify(
-      { executable, cert, key, recoveryDir: path.join(directory, "recovery"), port },
+      {
+        executable,
+        cert,
+        key,
+        launchKey: launchKeyFile,
+        recoveryDir: path.join(directory, "recovery"),
+        port,
+      },
       null,
       2,
     ) + "\n",

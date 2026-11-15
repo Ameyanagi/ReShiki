@@ -1,7 +1,5 @@
 # Selection resize and rotation handles
 
-Updated 2026-10-18.
-
 With Select active, selected structures have a teal bounding box with four square corner handles and a circular rotation handle above the box. Double-click an atom to select its connected molecule, or use Cmd/Ctrl+A to select all objects and activate Select. A lone selected atom keeps its circle without a transform box.
 
 Drag a corner to resize proportionally about the opposite corner. Crossing the opposite corner clamps to a small positive scale instead of reflecting the molecule. Drag the circular handle to rotate freely about the selection center; hold Shift to snap to 15° increments. Alt/Option does not change the drag, which is already free. While dragging, a readout beside the pointer shows the angle being applied (positive is clockwise, as in the numeric Rotate field) and the step keys: Shift for 15° steps, Alt/Option+Left/Right to rotate by 1°, and Alt/Option+Up/Down by 15°. Plain arrow keys still move the selection. The rotation box follows the live preview and returns to an axis-aligned bound on release. Escape or window focus loss cancels the drag. Completed drags create one Undo step, and clicking a handle without moving creates none.

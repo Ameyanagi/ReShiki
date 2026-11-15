@@ -335,7 +335,14 @@ fn child_has_exited(pid: u32) -> bool {
                     .and_then(|(_, tail)| tail.split_whitespace().next())
                     == Some("Z")
             }
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => true,
+            // The worker can exit between opening and reading its stat file,
+            // which Linux reports as ESRCH rather than NotFound.
+            Err(error)
+                if error.kind() == std::io::ErrorKind::NotFound
+                    || error.raw_os_error() == Some(libc::ESRCH) =>
+            {
+                true
+            }
             Err(error) => panic!("Could not independently observe worker lifetime: {error}"),
         }
     }

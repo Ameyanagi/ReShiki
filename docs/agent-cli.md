@@ -57,6 +57,10 @@ has every help text as the program prints it.
 | `-`             | Standard input. Needs `--from`.                                   |
 | `--smiles TEXT` | SMILES text. Cannot be combined with `--from`.                    |
 
+`INPUT` must be a regular file. A named pipe, a folder or a device fails with
+`not a regular file; use - to read standard input`, because a pipe with no
+writer would keep the command waiting. Pipe such input to `-` instead.
+
 The input extension picks the format, ignoring case:
 
 | Extension                                                                 | Format                             |

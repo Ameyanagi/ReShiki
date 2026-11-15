@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import http from "node:http";
 import https from "node:https";
 import { execFileSync } from "node:child_process";
-import { mkdtemp, readFile, writeFile, rm, mkdir, readdir } from "node:fs/promises";
+import { mkdtemp, readFile, writeFile, rm, mkdir, readdir, stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
@@ -26,6 +26,7 @@ const targetFor = (revision) => ({
   revision,
   contentControlId: 12,
 });
+const LAUNCH_KEY = "5".repeat(64);
 const deferred = () => {
   let resolve;
   const promise = new Promise((r) => {
@@ -633,7 +634,7 @@ test("HTTP API rejects hostile Host, missing/null/wrong Origin, token and conten
   const port = server.address().port,
     origin = `http://localhost:${port}`,
     host = `localhost:${port}`;
-  handler = makeHandler({ origin, sessions: f.sessions, worker, token });
+  handler = makeHandler({ origin, sessions: f.sessions, worker, token, launchKey: LAUNCH_KEY });
   const request = (method, route, headers, body) =>
     new Promise((resolve, reject) => {
       const req = http.request(
@@ -714,6 +715,7 @@ test("Office launch metadata loads only task-pane HTML and cannot relax API or r
     origin,
     sessions: f.sessions,
     token,
+    launchKey: LAUNCH_KEY,
     worker: () => {
       workerCalls++;
       throw new Error("Launch metadata must never run a worker");
@@ -753,18 +755,23 @@ test("Office launch metadata loads only task-pane HTML and cannot relax API or r
       req.end(method === "POST" ? JSON.stringify({ clientId: f.clientId }) : undefined);
     });
   const html = await readFile(new URL("./taskpane.html", import.meta.url), "utf8");
+  // The served page differs from the file only by its bootstrap nonce.
+  const withoutNonce = (body) => body.replace(/content="[0-9a-f]{64}"/, 'content=""');
   // First URL is the actual Word for Mac request that previously returned 403.
   // Microsoft also documents the Win32 pattern in OfficeDev's debugger README.
+  // Office appends its metadata to the manifest's address, which has the key.
+  const launch = `?launch=${LAUNCH_KEY}`;
   const queries = [
-    "?_host_Info=Word$Mac$16.01$en-US$$$$0",
-    "?_host_Info=Excel%24Win32%2416.01%24en-US%24%24%24%240",
-    "?_host_info=PowerPoint$Mac$16.01$ja-JP$$$$0",
+    launch + "&_host_Info=Word$Mac$16.01$en-US$$$$0",
+    launch + "&_host_Info=Excel%24Win32%2416.01%24en-US%24%24%24%240",
+    launch + "&_host_info=PowerPoint$Mac$16.01$ja-JP$$$$0",
   ];
   for (const resource of ["/", "/taskpane.html"]) {
-    for (const query of ["", ...queries]) {
+    for (const query of [launch, ...queries]) {
       const response = await request(resource + query);
       assert.equal(response.status, 200, resource + query);
-      assert.equal(response.body, html);
+      assert.notEqual(response.body, html);
+      assert.equal(withoutNonce(response.body), html);
       assert.match(response.headers["content-type"], /^text\/html/);
       assert.equal(response.headers["cache-control"], "no-store");
       assert.ok(!response.body.includes(token));
@@ -773,26 +780,31 @@ test("Office launch metadata loads only task-pane HTML and cannot relax API or r
   // The opaque value never enters HTML, session identity, native arguments or
   // authorization. Even HTML-shaped text is inert and receives identical bytes.
   const opaque = await request(
-    "/taskpane.html?_host_Info=" + encodeURIComponent("<script>evil()</script>&host=Word"),
+    `/taskpane.html${launch}&_host_Info=` + encodeURIComponent("<script>evil()</script>&host=Word"),
   );
   assert.equal(opaque.status, 200);
-  assert.equal(opaque.body, html);
+  assert.equal(withoutNonce(opaque.body), html);
   for (const query of [
     "?unknown=1",
     queries[0] + "&redirect=https://evil.test",
     queries[0] + "&_host_Info=Excel",
     queries[0] + "&_host_info=Excel",
     queries[0] + "&",
-    "?_host_Info=",
-    "?_HOST_INFO=Word",
-    "?%5Fhost_Info=Word",
-    "?_host_Info=" + "a".repeat(2048),
-    "?_host_Info=%",
-    "?_host_Info=%GG",
-    "?_host_Info=%E0%A4%A",
-    "?_host_Info=%00",
-    "?_host_Info=%0A",
-    "?_host_Info=%7F",
+    // The address Office used before the manifests carried a launch key.
+    "?_host_Info=Word$Mac$16.01$en-US$$$$0",
+    "?_host_Info=Word&launch=" + LAUNCH_KEY,
+    "?launch=" + LAUNCH_KEY.slice(1),
+    "?LAUNCH=" + LAUNCH_KEY,
+    launch + "&_host_Info=",
+    launch + "&_HOST_INFO=Word",
+    launch + "&%5Fhost_Info=Word",
+    launch + "&_host_Info=" + "a".repeat(2048),
+    launch + "&_host_Info=%",
+    launch + "&_host_Info=%GG",
+    launch + "&_host_Info=%E0%A4%A",
+    launch + "&_host_Info=%00",
+    launch + "&_host_Info=%0A",
+    launch + "&_host_Info=%7F",
   ]) {
     const response = await request("/taskpane.html" + query);
     assert.equal(response.status, 403, query);
@@ -833,6 +845,107 @@ test("Office launch metadata loads only task-pane HTML and cannot relax API or r
   assert.equal(f.sessions.sessions.size, 0);
 });
 
+test("the task pane token needs the one-time nonce of a served page", async (t) => {
+  const f = await fixture(t),
+    token = "private-taskpane-token";
+  let handler;
+  const server = http.createServer((req, res) => handler(req, res));
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  t.after(
+    () =>
+      new Promise((resolve) => {
+        server.closeAllConnections();
+        server.close(resolve);
+      }),
+  );
+  const port = server.address().port,
+    host = `localhost:${port}`;
+  let workerCalls = 0;
+  handler = makeHandler({
+    origin: `http://${host}`,
+    sessions: f.sessions,
+    token,
+    launchKey: LAUNCH_KEY,
+    worker: async () => {
+      workerCalls++;
+      throw new Error("Bootstrap must never run a worker");
+    },
+  });
+  const get = (route, headers = {}) =>
+    new Promise((resolve, reject) => {
+      const req = http.request(
+        { hostname: "127.0.0.1", port, path: route, headers: { Host: host, ...headers } },
+        (res) => {
+          const chunks = [];
+          res.on("data", (chunk) => chunks.push(chunk));
+          res.on("end", () =>
+            resolve({ status: res.statusCode, body: Buffer.concat(chunks).toString("utf8") }),
+          );
+        },
+      );
+      req.on("error", reject);
+      req.end();
+    });
+  const bootstrap = (nonce) => get("/bootstrap.json", { "X-ReShiki-Bootstrap": nonce });
+  const page = async () =>
+    /<meta name="reshiki-bootstrap" content="([0-9a-f]{64})" \/>/.exec(
+      (await get(`/taskpane.html?launch=${LAUNCH_KEY}`)).body,
+    )[1];
+  // Any local process can connect, but it has no manifest: it gets no page,
+  // so no nonce, so no token, and its requests with a made-up Origin fail.
+  for (const route of [
+    "/",
+    "/taskpane.html",
+    "/taskpane.html?_host_Info=Word$Mac$16.01$en-US$$$$0",
+    `/taskpane.html?launch=${"0".repeat(64)}`,
+  ]) {
+    const anonymous = await get(route);
+    assert.equal(anonymous.status, 403, route);
+    assert.ok(!/content="[0-9a-f]{64}"/.test(anonymous.body));
+    const nonce = /content="([^"]*)"/.exec(anonymous.body)?.[1] ?? "";
+    const refused = await bootstrap(nonce);
+    assert.equal(refused.status, 403, route);
+    assert.ok(!refused.body.includes(token));
+    const read = await new Promise((resolve, reject) => {
+      const req = http.request(
+        {
+          hostname: "127.0.0.1",
+          port,
+          path: "/api/clipboard/read",
+          method: "POST",
+          headers: {
+            Host: host,
+            Origin: `http://${host}`,
+            "X-ReShiki-Token": JSON.parse(refused.body).token ?? "",
+            "Content-Type": "application/json",
+          },
+        },
+        (res) => resolve(res.resume().statusCode),
+      );
+      req.on("error", reject);
+      req.end(JSON.stringify({ clientId: f.clientId }));
+    });
+    assert.equal(read, 403, route);
+  }
+  assert.equal(workerCalls, 0);
+  // A local process that only knows the header, as before, gets no token.
+  for (const guess of ["1", "", "0".repeat(64)]) {
+    const refused = await bootstrap(guess);
+    assert.equal(refused.status, 403, guess);
+    assert.ok(!refused.body.includes(token));
+  }
+  const [first, second] = [await page(), await page()];
+  assert.notEqual(first, second);
+  assert.deepEqual(JSON.parse((await bootstrap(first)).body), { token });
+  // Each page's nonce is good for one token.
+  assert.equal((await bootstrap(first)).status, 403);
+  assert.equal((await bootstrap(second)).status, 200);
+  // Only the 32 newest pages can still ask.
+  const oldest = await page();
+  for (let pages = 0; pages < 32; pages++) await page();
+  assert.equal((await bootstrap(oldest)).status, 403);
+});
+
 test("worker rejects unknown modes, impossible input sizes, launch failures and timeout", async (t) => {
   assert.throws(() => runWorker("/not-used", "--arbitrary-command"), /Unsupported/);
   assert.throws(
@@ -855,13 +968,14 @@ test("worker rejects unknown modes, impossible input sizes, launch failures and 
 
 test("manifests declare only the relevant stable host requirement and local HTTPS", () => {
   for (const host of HOSTS) {
-    const xml = manifest(host);
+    const xml = manifest(host, LAUNCH_KEY);
     assert.ok(xml.includes(`Host Name="${host.host}"`));
     assert.ok(xml.includes(`Set Name="${host.api}" MinVersion="${host.version}"`));
-    assert.ok(xml.includes("https://localhost:43127/taskpane.html"));
+    assert.ok(xml.includes(`"https://localhost:43127/taskpane.html?launch=${LAUNCH_KEY}"`));
     assert.ok(xml.includes("<Permissions>ReadWriteDocument</Permissions>"));
   }
-  assert.throws(() => manifest(HOSTS[0], 0), /port/);
+  assert.throws(() => manifest(HOSTS[0], LAUNCH_KEY, 0), /port/);
+  assert.throws(() => manifest(HOSTS[0], "guess"), /launch key/);
 });
 
 test("setup publishes complete outputs, reuses matching partial runs and refuses conflicting files", async (t) => {
@@ -934,7 +1048,12 @@ test("setup publishes complete outputs, reuses matching partial runs and refuses
   assert.equal(await readFile(conflicting, "utf8"), "existing unrelated manifest");
   await assert.rejects(readFile(path.join(directory, "config.json")), /ENOENT/);
   const completedWord = await readFile(path.join(directory, "manifests", "word.xml"), "utf8");
-  assert.equal(completedWord, manifest(HOSTS[0], port));
+  // The key is made once and kept private; a retry reuses it.
+  const launchKey = await readFile(path.join(directory, "launch.key"), "utf8");
+  assert.match(launchKey, /^[0-9a-f]{64}$/);
+  if (process.platform !== "win32")
+    assert.equal((await stat(path.join(directory, "launch.key"))).mode & 0o777, 0o600);
+  assert.equal(completedWord, manifest(HOSTS[0], launchKey, port));
   await rm(conflicting);
   // A retry reuses the first complete manifest and finishes the installation.
   await setup(options);
@@ -944,6 +1063,9 @@ test("setup publishes complete outputs, reuses matching partial runs and refuses
   await rm(path.join(directory, "manifests", "powerpoint.xml"));
   await setup(options);
   const config = JSON.parse(await readFile(path.join(directory, "config.json")));
+  assert.equal(await readFile(config.launchKey, "utf8"), launchKey);
+  // A config from before the launch key starts nothing.
+  await assert.rejects(start({ ...config, launchKey: undefined }), /no launch key/);
   const running = await start(config);
   t.after(
     () =>
@@ -953,33 +1075,43 @@ test("setup publishes complete outputs, reuses matching partial runs and refuses
       }),
   );
   assert.equal(running.server.address().address, "127.0.0.1");
-  const result = await new Promise((resolve, reject) => {
-    const req = https.request(
-      {
-        hostname: "127.0.0.1",
-        servername: "localhost",
-        port,
-        path: "/bootstrap.json",
-        ca: execFileSync("openssl", ["x509", "-in", cert, "-outform", "PEM"]),
-        headers: {
-          Host: `localhost:${port}`,
-          "X-ReShiki-Bootstrap": "1",
-          "Sec-Fetch-Site": "same-origin",
+  const ca = execFileSync("openssl", ["x509", "-in", cert, "-outform", "PEM"]);
+  const get = (route, headers = {}) =>
+    new Promise((resolve, reject) => {
+      const req = https.request(
+        {
+          hostname: "127.0.0.1",
+          servername: "localhost",
+          port,
+          path: route,
+          ca,
+          headers: { Host: `localhost:${port}`, ...headers },
         },
-      },
-      (res) => {
-        const chunks = [];
-        res.on("data", (chunk) => chunks.push(chunk));
-        res.on("end", () =>
-          resolve({ status: res.statusCode, data: JSON.parse(Buffer.concat(chunks)) }),
-        );
-      },
-    );
-    req.on("error", reject);
-    req.end();
+        (res) => {
+          const chunks = [];
+          res.on("data", (chunk) => chunks.push(chunk));
+          res.on("end", () =>
+            resolve({ status: res.statusCode, body: Buffer.concat(chunks).toString("utf8") }),
+          );
+        },
+      );
+      req.on("error", reject);
+      req.end();
+    });
+  assert.equal((await get("/taskpane.html")).status, 403);
+  // As the task pane does: load the manifest's page, then ask with its nonce.
+  const [, source] = /<SourceLocation DefaultValue="https:\/\/localhost:\d+([^"]+)"/.exec(
+    completedWord,
+  );
+  const [, nonce] = /name="reshiki-bootstrap" content="([0-9a-f]{64})"/.exec(
+    (await get(source)).body,
+  );
+  const result = await get("/bootstrap.json", {
+    "X-ReShiki-Bootstrap": nonce,
+    "Sec-Fetch-Site": "same-origin",
   });
   assert.equal(result.status, 200);
-  assert.match(result.data.token, /^[0-9a-f]{64}$/);
+  assert.match(JSON.parse(result.body).token, /^[0-9a-f]{64}$/);
   for (const host of HOSTS)
     assert.ok(
       (await readFile(path.join(directory, "manifests", `${host.name}.xml`), "utf8")).includes(

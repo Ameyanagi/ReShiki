@@ -244,7 +244,7 @@ impl App {
                 self.assistant.record("Codex", proposal.explanation.clone());
                 if !fragment.all_ids().is_empty() {
                     self.assistant.preview = None;
-                    let can_auto_apply = review.can_auto_apply();
+                    let checked = review.can_auto_apply();
                     self.assistant.draft = Some(Draft {
                         proposal,
                         fragment,
@@ -254,11 +254,18 @@ impl App {
                         replace,
                     });
                     self.assistant.status = "Ready for review · Nothing has been applied".into();
-                    if self.assistant.preferences.auto_apply
-                        && can_auto_apply
-                        && !self.assistant.requires_apply
-                    {
-                        return self.assistant_action(Action::Apply);
+                    if self.assistant.preferences.auto_apply && !self.assistant.requires_apply {
+                        if self.assistant_can_auto_apply() {
+                            let task = self.assistant_action(Action::Apply);
+                            self.assistant.waiting_apply_is_automatic =
+                                self.assistant.waiting_for_canvas_edit;
+                            return task;
+                        }
+                        if checked {
+                            self.assistant.status =
+                                "Ready for review · It replaces objects outside your selection"
+                                    .into();
+                        }
                     }
                 } else {
                     self.assistant.draft = None;

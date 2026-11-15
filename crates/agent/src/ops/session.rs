@@ -455,6 +455,24 @@ impl Documents for SessionStore {
         })
     }
 
+    fn fits(
+        &self,
+        who: &Principal,
+        handle: &DocHandle,
+        before: &Document,
+        doc: &Document,
+    ) -> Result<(), OpError> {
+        // An edit that changes nothing records no step and keeps every
+        // budget, as in `decide`.
+        if before == doc {
+            return Ok(());
+        }
+        let mut store = self.store();
+        store.resolve(who, handle, Access::Edit)?;
+        let entry = store.entries.get(handle).ok_or_else(unknown)?;
+        self.preflight(&store, who, handle, entry, doc, before)
+    }
+
     fn receipt(
         &self,
         who: &Principal,

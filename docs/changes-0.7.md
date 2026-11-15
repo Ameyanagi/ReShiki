@@ -2,7 +2,7 @@
 
 **Chemical drawing, reinvented.**
 
-Version 0.7.0 improves molecular editing, coordination drawings, image-assisted reconstruction and desktop updates. The [illustrated change log](changes-pr17.md) includes all 37 feature updates, screenshots and a hands-on checklist from [PR #17](https://github.com/Ameyanagi/ReShiki/pull/17).
+Version 0.7.0 improves molecular editing, coordination drawings, image-assisted reconstruction and desktop updates. The [illustrated change log](changes/changes-pr17.md) includes all 37 feature updates, screenshots and a hands-on checklist from [PR #17](https://github.com/Ameyanagi/ReShiki/pull/17).
 
 ## Draw and edit with consistent geometry
 
@@ -49,4 +49,4 @@ Keep the `.rsk` original for all editing features. SVG, PNG and PDF retain the n
 - **Above** places a single nickname above its anchor; general multiline formula-token stacking is not implemented. Legacy drawing centroids remain nonchemical anchors.
 - Chat history is retained during the current conversation, not across app restarts. The illustrated reconstruction fixture remains a visual regression with nitrogen-valence and caption-charge assignments requiring review.
 
-See [drawing validation](drawing-tools-validation.md), [ChemDraw comparison](chemdraw-attachment-comparison.md) and [release validation](release-0.7-validation.md) for the evidence and remaining limits.
+See [drawing validation](changes/drawing-tools-validation.md), [ChemDraw comparison](changes/chemdraw-attachment-comparison.md) and [release validation](changes/release-0.7-validation.md) for the evidence and remaining limits.
