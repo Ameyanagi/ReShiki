@@ -718,6 +718,47 @@ enum Fold {
     Stuck,
 }
 
+/// Whether each eligible source has an atom that `counts` within `limit`.
+fn near(
+    layout: &[Point3],
+    cell: f64,
+    limit: f64,
+    from: &dyn Fn(usize) -> bool,
+    counts: &dyn Fn(usize, usize) -> bool,
+) -> Vec<bool> {
+    let key = |point: &Point3| {
+        (
+            (point.x / cell).floor() as i64,
+            (point.y / cell).floor() as i64,
+        )
+    };
+    let mut cells = HashMap::<_, Vec<_>>::new();
+    for (index, point) in layout.iter().enumerate() {
+        cells.entry(key(point)).or_default().push((index, point));
+    }
+    layout
+        .iter()
+        .enumerate()
+        .map(|(index, point)| {
+            if !from(index) {
+                return false;
+            }
+            let (x, y) = key(point);
+            (-1..=1).any(|dx| {
+                (-1..=1).any(|dy| {
+                    cells
+                        .get(&(x.saturating_add(dx), y.saturating_add(dy)))
+                        .is_some_and(|others| {
+                            others.iter().any(|&(other, q)| {
+                                counts(index, other) && (point.x - q.x).hypot(point.y - q.y) < limit
+                            })
+                        })
+                })
+            })
+        })
+        .collect()
+}
+
 /// The solver can fold a group of moved atoms onto fixed atoms: it closes a
 /// ring on the wrong side of the two fixed atoms that hold it (#1181). Reflect
 /// such a group across those two atoms.
@@ -731,41 +772,13 @@ fn unfold(
         return Ok(Fold::Clear);
     }
     let (on, close) = (0.1 * bond_length, 0.5 * bond_length);
-    let cell = |point: &Point3| {
-        (
-            (point.x / close).floor() as i64,
-            (point.y / close).floor() as i64,
-        )
-    };
-    // Whether an atom that `counts` lies within `limit` of each atom.
-    let near = |layout: &[Point3], limit: f64, counts: &dyn Fn(usize, usize) -> bool| {
-        let mut cells = HashMap::<_, Vec<_>>::new();
-        for (index, point) in layout.iter().enumerate() {
-            cells.entry(cell(point)).or_default().push((index, point));
-        }
-        layout
-            .iter()
-            .enumerate()
-            .map(|(index, point)| {
-                let (x, y) = cell(point);
-                (-1..=1).any(|dx| {
-                    (-1..=1).any(|dy| {
-                        cells
-                            .get(&(x.saturating_add(dx), y.saturating_add(dy)))
-                            .is_some_and(|others| {
-                                others.iter().any(|&(other, q)| {
-                                    counts(index, other)
-                                        && (point.x - q.x).hypot(point.y - q.y) < limit
-                                })
-                            })
-                    })
-                })
-            })
-            .collect::<Vec<_>>()
-    };
-    let mut pending: Vec<_> = near(layout, on, &|index, other| {
-        !fixed.contains_key(&index) && fixed.contains_key(&other)
-    })
+    let mut pending: Vec<_> = near(
+        layout,
+        close,
+        on,
+        &|index| !fixed.contains_key(&index),
+        &|_, other| fixed.contains_key(&other),
+    )
     .iter()
     .enumerate()
     .filter_map(|(index, &folded)| folded.then_some(index))
@@ -825,16 +838,17 @@ fn unfold(
     }
     // A reflected atom must stay clear of every atom outside its own group:
     // the fixed atoms, the moved atoms that stayed and the other groups.
-    let outside = |index: usize, other: usize| {
-        groups.get(index) != Some(&0) && groups.get(index) != groups.get(other)
-    };
-    Ok(if near(layout, on, &outside).contains(&true) {
-        Fold::Stuck
-    } else if near(layout, close, &outside).contains(&true) {
-        Fold::Crowded
-    } else {
-        Fold::Clear
-    })
+    let reflected = |index: usize| groups.get(index) != Some(&0);
+    let outside = |index: usize, other: usize| groups.get(index) != groups.get(other);
+    Ok(
+        if near(layout, close, on, &reflected, &outside).contains(&true) {
+            Fold::Stuck
+        } else if near(layout, close, close, &reflected, &outside).contains(&true) {
+            Fold::Crowded
+        } else {
+            Fold::Clear
+        },
+    )
 }
 
 fn rewedge(molecule: &Molecule, base: &Document, work: &mut usize) -> Result<Vec<String>> {

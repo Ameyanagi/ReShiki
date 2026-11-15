@@ -925,6 +925,34 @@ fn unfold_accepts_huge_coordinates() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Stacked ineligible atoms must not make proximity searches quadratic.
+#[test]
+fn near_skips_ineligible_sources() -> anyhow::Result<()> {
+    let layout = vec![
+        Point3 {
+            x: 0.,
+            y: 0.,
+            z: 0.,
+        };
+        2_000
+    ];
+    let calls = std::cell::Cell::new(0);
+    let counts = |_, other| {
+        calls.set(calls.get() + 1);
+        other == layout.len() - 1
+    };
+    let flags = near(&layout, 0.5, 0.1, &|_| false, &counts);
+    assert_eq!(calls.get(), 0);
+    assert_eq!(flags, vec![false; layout.len()]);
+
+    let flags = near(&layout, 0.5, 0.1, &|index| index == 0, &counts);
+    assert!(calls.get() <= layout.len());
+    let mut expected = vec![false; layout.len()];
+    expected[0] = true;
+    assert_eq!(flags, expected);
+    Ok(())
+}
+
 /// Issue #1121: the solver's layout can be the mirror image of the drawing.
 #[test]
 fn cleanup_with_keep_orientation_keeps_the_handedness_of_the_drawing() -> anyhow::Result<()> {
