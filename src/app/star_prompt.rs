@@ -536,19 +536,25 @@ impl App {
         }
     }
 
-    /// The Star link in About: no browser opens when signed in.
-    pub(super) fn star_link(&self) -> &'static str {
+    /// The Star link in About, after its accessible name: no browser opens
+    /// when signed in.
+    pub(super) fn star_link(&self) -> (&'static str, &'static str) {
+        const STAR: &str = "Star ReShiki on GitHub";
         #[cfg(not(target_arch = "wasm32"))]
         if self.github.starred {
-            return "★ Starred";
+            return ("Starred", "★ Starred");
         } else if self.github.client().is_some() {
-            return "Star ReShiki on GitHub";
+            return (STAR, STAR);
         }
-        "Star ReShiki on GitHub ↗"
+        (STAR, "Star ReShiki on GitHub ↗")
     }
 
     /// Anything the toast must not interrupt, besides a focused field.
     fn star_busy(&self) -> bool {
+        #[cfg(not(target_arch = "wasm32"))]
+        if self.github.menu {
+            return true;
+        }
         self.star.pressed
             || self.tab.office.is_some()
             || self.prompt.is_some()

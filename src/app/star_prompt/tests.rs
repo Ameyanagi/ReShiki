@@ -510,8 +510,14 @@ fn focus_and_held_input_are_followed_before_the_count_is_reached() {
 #[test]
 fn menus_and_panels_keep_the_toast_away() {
     type Open = fn(&mut App);
-    let cases: [(&str, Open); 5] = [
+    let cases: &[(&str, Open)] = &[
         ("Tabs ▾ menu", |app| app.tabs.menu = true),
+        #[cfg(not(target_arch = "wasm32"))]
+        ("GitHub menu", |app| app.github.menu = true),
+        #[cfg(not(target_arch = "wasm32"))]
+        ("GitHub account", |app| {
+            app.github.dialog = Some(crate::app::github::Dialog::Account);
+        }),
         ("Assistant menu", |app| {
             app.assistant.menu = Some(crate::app::assistant::Menu::Models);
         }),
@@ -519,7 +525,7 @@ fn menus_and_panels_keep_the_toast_away() {
         ("Insert menu", |app| app.imports.menu = true),
         ("Updates", |app| app.updates.open = true),
     ];
-    for (name, open) in cases {
+    for &(name, open) in cases {
         let (mut app, _dir) = app_with(asking(today() - Days::new(1)));
         assert!(!app.star_busy());
         open(&mut app);
@@ -646,10 +652,13 @@ fn the_sign_in_ask_waits_again_after_the_card_after_use() {
 #[cfg(not(target_arch = "wasm32"))]
 fn a_one_click_star_thanks_and_a_failed_one_opens_the_page() {
     let (mut app, _dir) = app_with(asking(day("2026-01-01")));
-    assert_eq!(app.star_link(), "Star ReShiki on GitHub ↗");
+    assert_eq!(
+        app.star_link(),
+        ("Star ReShiki on GitHub", "Star ReShiki on GitHub ↗")
+    );
     let _ = app.update(Message::Star(Action::Starred(Ok(()))));
     assert_eq!(app.status, STARRED);
-    assert_eq!(app.star_link(), "★ Starred");
+    assert_eq!(app.star_link(), ("Starred", "★ Starred"));
     let _ = app.update(Message::Star(Action::Starred(Err(
         "No access on GitHub.".into()
     ))));
