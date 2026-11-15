@@ -33,8 +33,8 @@ issues: []
   pictures carry no drawing, and on Windows **Copy** pastes into Office as a
   picture. Pasting between ReShiki windows still keeps the drawing, except in
   the browser editor. **Editable drawing** in **Copy image on** changes it for
-  one copy, and **Include editable drawing** on the **Export** tab for that
-  tab's exports, with **Restore default** to go back.
+  one copy. **Include editable drawing** on the **Export** tab changes it for
+  that tab's exports. **Restore default** beside it goes back to the default.
 - Each **Settings** section has **Restore defaults**, which puts only that
   section back as ReShiki ships it. Your saved colors stay.
 - A PNG's editable drawing now sits after the image data. PNG files from older
