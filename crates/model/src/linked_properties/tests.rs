@@ -460,3 +460,43 @@ fn moving_a_molecule_does_not_recalculate_it() {
     assert_eq!(CALCULATIONS.with(|c| c.get()), 1);
     assert_eq!(text(&doc), "Mol. Wt.: 93.13");
 }
+
+#[test]
+fn a_caption_merged_onto_another_atom_shows_its_values() {
+    let mut doc = Document::default();
+    let a = doc.add_atom("C", Point::new(0., 0.));
+    let b = doc.add_atom("O", Point::new(40., 0.));
+    let c = doc.add_atom("N", Point::new(80., 0.));
+    toggle(
+        &mut doc,
+        &[b],
+        Property::Formula,
+        TextFormat::default(),
+        true,
+    )
+    .unwrap();
+    let (merged, survivors) = crate::joining::merge_atoms(&doc, &[a, b, c]).unwrap();
+    assert_eq!(merged.property_captions[0].atoms, survivors);
+    assert_ne!(text(&merged), "Formula: H2O");
+}
+
+#[test]
+fn an_attachment_to_the_molecule_recalculates_it() {
+    let mut doc = Document::default();
+    let a = doc.add_atom("C", Point::new(0., 0.));
+    let b = doc.add_atom("C", Point::new(40., 0.));
+    doc.add_bond(a, b, 1, "plain");
+    toggle(
+        &mut doc,
+        &[a, b],
+        Property::Formula,
+        TextFormat::default(),
+        true,
+    )
+    .unwrap();
+    let mut history = History::default();
+    edit(&mut doc, &mut history, |doc| {
+        crate::attachments::add(doc, &[a, b], crate::attachments::Kind::MultiCenter).unwrap();
+    });
+    assert_eq!(text(&doc), "Formula: –");
+}

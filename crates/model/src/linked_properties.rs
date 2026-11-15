@@ -340,13 +340,14 @@ pub fn toggle(
     Ok(())
 }
 
-/// The molecule's atoms, wherever they are drawn, and its bonds.
+/// The molecule's atoms, wherever they are drawn, its bonds and any
+/// attachment to it.
 fn chemistry(doc: &Document, atoms: &[u64]) -> (Vec<Atom>, Vec<Bond>) {
     let atoms: HashSet<_> = atoms.iter().collect();
     (
         doc.atoms
             .iter()
-            .filter(|a| atoms.contains(&a.id))
+            .filter(|a| atoms.contains(&a.id) || a.centroid.iter().any(|id| atoms.contains(id)))
             .map(|a| Atom {
                 position: Point::default(),
                 ..a.clone()
@@ -410,7 +411,8 @@ pub fn reconcile(doc: &mut Document, before: &Document) {
             })
             .and_then(|old| anchor(before, &old.atoms));
         let unchanged = previous.is_some_and(|old| {
-            old.properties == link.properties
+            covers(old, &whole)
+                && old.properties == link.properties
                 && old.two_decimal_weight == link.two_decimal_weight
                 && before.drawing_style == doc.drawing_style
                 && before.generic == doc.generic
