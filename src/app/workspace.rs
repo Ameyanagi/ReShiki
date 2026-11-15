@@ -2652,10 +2652,21 @@ impl App {
     fn status_bar_at(&self, width: f32) -> Element<'_, Message> {
         let summary = self.status.lines().next().unwrap_or(&self.status);
         let error = self.error;
+        // A GitHub question, such as a drawing changed there, is amber.
+        #[cfg(not(target_arch = "wasm32"))]
+        let amber = self.github.amber.as_deref() == Some(self.status.as_str());
+        #[cfg(target_arch = "wasm32")]
+        let amber = false;
         let style = move |theme: &Theme| iced::widget::text::Style {
             color: Some(if error {
                 crate::appearance::readable(
                     crate::appearance::themed(theme, Color::from_rgb8(168, 52, 47)),
+                    &[theme.palette().background],
+                    reshiki::color_contrast::TEXT_TARGET,
+                )
+            } else if amber {
+                crate::appearance::readable(
+                    theme.palette().warning,
                     &[theme.palette().background],
                     reshiki::color_contrast::TEXT_TARGET,
                 )
@@ -2729,21 +2740,15 @@ impl App {
                     .style(control(true)),
             );
         }
-        if !self.tab.autosave_status.is_empty() {
-            let failed = self.tab.autosave_status.starts_with("Recovery save failed");
+        // Only a failed recovery save shows a dot: the tab's dot already
+        // says what is unsaved.
+        if self.tab.autosave_status.starts_with("Recovery save failed") {
             status = status.push(hover_hint(
                 container(
                     container(Space::new().width(7).height(7)).style(move |theme| {
                         container::Style {
                             background: Some(
-                                crate::appearance::themed(
-                                    theme,
-                                    if failed {
-                                        Color::from_rgb8(168, 52, 47)
-                                    } else {
-                                        Color::from_rgb8(86, 160, 132)
-                                    },
-                                )
+                                crate::appearance::themed(theme, Color::from_rgb8(168, 52, 47))
                                 .into(),
                             ),
                             border: Border {

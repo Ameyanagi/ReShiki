@@ -416,18 +416,20 @@ impl App {
                 text("Channel").size(13),
                 reshiki::accessibility::button("updates-stable", "Stable update channel", "Stable").checked(state.channel == Channel::Stable)
                     .on_press_maybe((!state.saving && !state.installing && !state.restarting).then_some(msg(Action::Channel(Channel::Stable))))
-                    .style(if state.channel == Channel::Stable { button::primary } else { button::secondary }),
+                    .style(if state.channel == Channel::Stable { crate::appearance::primary } else { crate::appearance::outline }),
                 reshiki::accessibility::button("updates-nightly", "Nightly update channel", "Nightly").checked(state.channel == Channel::Nightly)
                     .on_press_maybe((!state.saving && !state.installing && !state.restarting).then_some(msg(Action::Channel(Channel::Nightly))))
-                    .style(if state.channel == Channel::Nightly { button::primary } else { button::secondary }),
+                    .style(if state.channel == Channel::Nightly { crate::appearance::primary } else { crate::appearance::outline }),
             ].spacing(8).align_y(Alignment::Center),
             text(status).size(15),
             row![
                 reshiki::accessibility::button("updates-check", "Check for updates", "Check for updates")
                     .padding([9, 12])
+                    .style(crate::appearance::primary)
                     .on_press_maybe((!state.checking && !state.installing && !state.restarting).then_some(msg(Action::Check(true)))),
                 reshiki::accessibility::button("updates-install", "Download or install update", if state.channel == Channel::Nightly { "Download nightly ↗" } else if state.installing { "Downloading…" } else { "Update and restart" })
                     .padding([9, 12])
+                    .style(crate::appearance::primary)
                     .on_press_maybe((state.available() && !state.installing && !state.restarting).then_some(msg(if state.channel == Channel::Nightly { Action::Portable } else { Action::Install })))
             ]
             .spacing(10),

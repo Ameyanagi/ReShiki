@@ -401,9 +401,27 @@ pub fn editor_style(
     }
 }
 
+/// The mint button. On the dark theme its label is dark ink, which reads
+/// better on mint than white; disabled, it fades with the button.
 pub fn primary(theme: &Theme, status: iced::widget::button::Status) -> iced::widget::button::Style {
     let mut style = iced::widget::button::primary(theme, status);
     style.border.radius = 6.0.into();
+    if is_dark(theme) {
+        style.text_color = Color {
+            a: style.text_color.a,
+            ..Color::from_rgb8(14, 42, 32)
+        };
+    }
+    style
+}
+/// A button with only a border, for choices beside a filled one and for
+/// actions that are easy to undo.
+pub fn outline(theme: &Theme, status: iced::widget::button::Status) -> iced::widget::button::Style {
+    use iced::widget::button;
+    let mut style = secondary(theme, status);
+    if !matches!(status, button::Status::Hovered | button::Status::Pressed) {
+        style.background = None;
+    }
     style
 }
 pub fn secondary(

@@ -515,8 +515,8 @@ fn menus_and_panels_keep_the_toast_away() {
         #[cfg(not(target_arch = "wasm32"))]
         ("GitHub menu", |app| app.github.menu = true),
         #[cfg(not(target_arch = "wasm32"))]
-        ("GitHub account", |app| {
-            app.github.dialog = Some(crate::app::github::Dialog::Account);
+        ("GitHub sign-in", |app| {
+            app.github.dialog = Some(crate::app::github::Dialog::SignIn);
         }),
         ("Assistant menu", |app| {
             app.assistant.menu = Some(crate::app::assistant::Menu::Models);

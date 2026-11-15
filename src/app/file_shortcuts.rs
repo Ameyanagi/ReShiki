@@ -23,6 +23,7 @@ pub type ModalKeys = fn(&keyboard::Key, keyboard::Modifiers) -> Option<Message>;
 pub fn wrap(
     content: Element<'_, Message>,
     modal: Option<ModalKeys>,
+    leftover: Option<ModalKeys>,
     image_open: bool,
     updates_open: bool,
     atom_text_open: bool,
@@ -31,6 +32,7 @@ pub fn wrap(
     Element::new(FileShortcuts {
         content,
         modal,
+        leftover,
         image_open,
         updates_open,
         atom_text_open,
@@ -41,6 +43,8 @@ pub fn wrap(
 struct FileShortcuts<'a> {
     content: Element<'a, Message>,
     modal: Option<ModalKeys>,
+    /// Keys of the modal dialog that none of its widgets took.
+    leftover: Option<ModalKeys>,
     image_open: bool,
     updates_open: bool,
     atom_text_open: bool,
@@ -178,6 +182,11 @@ impl Widget<Message, Theme, Renderer> for FileShortcuts<'_> {
                     shell,
                     viewport,
                 );
+                if !shell.is_event_captured()
+                    && let Some(message) = self.leftover.and_then(|keys| keys(key, *modifiers))
+                {
+                    shell.publish(message);
+                }
             }
             shell.capture_event();
             return;

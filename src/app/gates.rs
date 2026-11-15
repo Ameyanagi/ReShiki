@@ -335,6 +335,13 @@ impl App {
         {
             return Break(self.theme_generator_action(theme_generator::Action::Back));
         }
+        #[cfg(not(target_arch = "wasm32"))]
+        if matches!(message, Message::Escape)
+            && self.inspector_open
+            && self.inspector_tab == InspectorTab::Versions
+        {
+            return Break(self.github_action(super::github::Action::CloseVersions));
+        }
         if matches!(message, Message::Escape)
             && self.inspector_tab == InspectorTab::DrawingStyle
             && self.tab.styles.editor.is_some()

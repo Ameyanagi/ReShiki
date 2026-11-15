@@ -1,10 +1,10 @@
 //! Versions: the saves on this computer since the last send, and the commits
-//! on GitHub that touched the drawing. Open shows one in a new tab; Restore
-//! makes it the drawing again, as one undoable edit and a new save.
+//! on GitHub that touched the drawing, by day. Open shows one in a new tab;
+//! Restore makes it the drawing again, as one undoable edit and a new save.
 use super::{Action as GitHubAction, perform};
-use crate::app::{App, Message, workspace::muted_text};
-use chrono::{DateTime, Local};
-use iced::widget::{column, container, row, text};
+use crate::app::{App, InspectorTab, Message, workspace::muted_text};
+use chrono::{DateTime, Local, NaiveDate};
+use iced::widget::{Space, column, container, row, text};
 use iced::{Alignment, Element, Length, Task};
 use reshiki::document::Document;
 use reshiki::github::{self as gh, RepoKey, api, workcopy};
@@ -26,6 +26,8 @@ pub(super) struct Versions {
     more: bool,
     selected: Option<Pick>,
     error: Option<String>,
+    /// The inspector tab Versions replaced; `None`: the inspector was closed.
+    pub(super) back: Option<InspectorTab>,
 }
 
 #[derive(Debug, Clone)]
@@ -64,25 +66,82 @@ fn msg(action: Action) -> Message {
     Message::GitHub(GitHubAction::Versions(action))
 }
 
-/// `Today 14:02`, or `Nov 3 14:02` on another day.
-fn when(time: DateTime<Local>) -> String {
-    if time.date_naive() == Local::now().date_naive() {
-        time.format("Today %H:%M").to_string()
+/// `Today`, `Yesterday` or `12 Nov`.
+pub(super) fn day(date: NaiveDate) -> String {
+    let today = Local::now().date_naive();
+    if date == today {
+        "Today".into()
+    } else if today.pred_opt() == Some(date) {
+        "Yesterday".into()
     } else {
-        time.format("%b %-d %H:%M").to_string()
+        date.format("%-d %b").to_string()
     }
 }
 
-fn local_time(id: &str) -> String {
+fn remote_date(date: &str) -> Option<DateTime<Local>> {
+    DateTime::parse_from_rfc3339(date)
+        .ok()
+        .map(|time| time.with_timezone(&Local))
+}
+
+fn local(id: &str) -> Option<DateTime<Local>> {
     id.parse::<i64>()
         .ok()
         .and_then(DateTime::from_timestamp_millis)
-        .map_or_else(String::new, |time| when(time.with_timezone(&Local)))
+        .map(|time| time.with_timezone(&Local))
 }
 
-fn remote_time(date: &str) -> String {
-    DateTime::parse_from_rfc3339(date)
-        .map_or_else(|_| date.to_owned(), |time| when(time.with_timezone(&Local)))
+/// A commit's time: `14:02` today, else `12 Nov 14:02`.
+pub(super) fn clock(date: &str) -> String {
+    remote_date(date).map_or_else(
+        || date.to_owned(),
+        |time| match day(time.date_naive()).as_str() {
+            "Today" => time.format("%H:%M").to_string(),
+            other => format!("{other} {}", time.format("%H:%M")),
+        },
+    )
+}
+
+/// `Today 23:02`, or `12 Nov` on an older day, for a picker tile.
+pub(super) fn tile_time(time: DateTime<Local>) -> String {
+    match day(time.date_naive()).as_str() {
+        older @ ("Today" | "Yesterday") => format!("{older} {}", time.format("%H:%M")),
+        older => older.to_owned(),
+    }
+}
+
+/// `Saved 18:33`; seconds only when another save shares the minute.
+pub(super) fn saved(id: &str, ids: &[&str]) -> String {
+    let Some(time) = local(id) else {
+        return "Saved".into();
+    };
+    let minute = |time: DateTime<Local>| time.format("%Y%m%d%H%M").to_string();
+    let shared = ids
+        .iter()
+        .filter(|other| local(other).is_some_and(|other| minute(other) == minute(time)))
+        .count()
+        > 1;
+    let at = time.format(if shared { "%H:%M:%S" } else { "%H:%M" });
+    match day(time.date_naive()).as_str() {
+        "Today" => format!("Saved {at}"),
+        other => format!("Saved {other} {at}"),
+    }
+}
+
+/// A message ReShiki wrote, such as `Update ring.rsk`: shown grey.
+pub(super) fn default_message(message: &str) -> bool {
+    message
+        .strip_prefix("Update ")
+        .is_some_and(|rest| rest.ends_with(".rsk") || rest.ends_with(" more"))
+}
+
+/// `Add an ethyl group · @alice · 23:02`.
+fn commit_label(version: &api::RemoteVersion) -> String {
+    let who = version
+        .login
+        .as_ref()
+        .map_or_else(|| version.author.clone(), |login| format!("@{login}"));
+    format!("{} · {who} · {}", version.message, clock(&version.date))
 }
 
 fn parse(bytes: Vec<u8>) -> Option<Arc<Document>> {
@@ -94,6 +153,7 @@ impl App {
         self.github.versions = Versions {
             target: target.clone(),
             generation: self.github.versions.generation + 1,
+            back: self.github.versions.back,
             ..Versions::default()
         };
         let Some((key, repo_path)) = target else {
@@ -278,6 +338,10 @@ impl App {
                 let Some((label, doc)) = self.versions_picked() else {
                     return Task::none();
                 };
+                // From the Compare dialog: it closes.
+                if matches!(self.github.dialog, Some(super::Dialog::Compare(..))) {
+                    self.github.dialog = None;
+                }
                 let front = self.github.locate(self.tab.path.as_deref());
                 if front != self.github.versions.target {
                     return Task::none();
@@ -316,38 +380,46 @@ impl App {
     fn versions_picked(&self) -> Option<(String, Arc<Document>)> {
         let versions = &self.github.versions;
         match versions.selected.as_ref()? {
-            Pick::Local(id) => versions
-                .local
-                .iter()
-                .flatten()
-                .find(|(save, _)| save == id)
-                .map(|(save, doc)| (local_time(save), doc.clone())),
+            Pick::Local(id) => {
+                let saves = versions.local.as_ref()?;
+                let ids: Vec<&str> = saves.iter().map(|(save, _)| save.as_str()).collect();
+                saves
+                    .iter()
+                    .find(|(save, _)| save == id)
+                    .map(|(save, doc)| (saved(save, &ids), doc.clone()))
+            }
             Pick::Remote(commit) => versions
                 .remote
                 .iter()
                 .flatten()
                 .find(|remote| &remote.version.commit == commit)
-                .and_then(|remote| Some((remote_time(&remote.version.date), remote.doc.clone()?))),
+                .and_then(|remote| Some((commit_label(&remote.version), remote.doc.clone()?))),
         }
     }
 
     pub(in crate::app) fn versions_panel(&self) -> Element<'_, Message> {
         let versions = &self.github.versions;
+        let header = row![
+            text("Versions").size(15),
+            Space::new().width(Length::Fill),
+            reshiki::accessibility::button("github-versions-close", "Close Versions", text("×").size(16))
+                .padding([0, 6])
+                .style(crate::app::workspace::control(false))
+                .on_press(Message::GitHub(GitHubAction::CloseVersions)),
+        ]
+        .align_y(Alignment::Center);
         let front = self.github.locate(self.tab.path.as_deref());
         if front.is_none() {
-            return container(text("Not a GitHub drawing.").size(12).style(muted_text))
-                .padding(16)
-                .into();
+            return container(
+                column![header, text("Not a GitHub drawing.").size(12).style(muted_text)]
+                    .spacing(12),
+            )
+            .padding([12, 14])
+            .into();
         }
         let selected = versions.selected.as_ref();
-        let mut body = column![crate::app::workspace::section(
-            if cfg!(target_os = "macos") {
-                "ON THIS MAC"
-            } else {
-                "ON THIS COMPUTER"
-            }
-        )]
-        .spacing(8);
+        let group = |label: &'static str| text(label).size(12).style(muted_text);
+        let mut body = column![header, group("This computer")].spacing(6);
         match &versions.local {
             None => body = body.push(text("Reading…").size(12).style(muted_text)),
             Some(saves) if saves.is_empty() => {
@@ -358,18 +430,20 @@ impl App {
                 );
             }
             Some(saves) => {
+                let ids: Vec<&str> = saves.iter().map(|(save, _)| save.as_str()).collect();
                 for (id, doc) in saves {
                     body = body.push(version_row(
                         Pick::Local(id.clone()),
                         selected,
                         Some(doc),
-                        vec![local_time(id)],
+                        saved(id, &ids),
+                        None,
                         false,
                     ));
                 }
             }
         }
-        body = body.push(crate::app::workspace::section("ON GITHUB"));
+        body = body.push(Space::new().height(6)).push(group("GitHub"));
         match &versions.remote {
             None => body = body.push(text("Listing…").size(12).style(muted_text)),
             Some(remote) if remote.is_empty() && self.github.client().is_none() => {
@@ -383,20 +457,31 @@ impl App {
                 body = body.push(text("Not on GitHub yet.").size(12).style(muted_text));
             }
             Some(remote) => {
+                let mut shown_day = None;
                 for found in remote {
                     let version = &found.version;
+                    let time = remote_date(&version.date);
+                    let today = time.map(|time| day(time.date_naive()));
+                    if today != shown_day {
+                        if let Some(today) = &today {
+                            body = body.push(
+                                container(text(today.clone()).size(11).style(muted_text))
+                                    .padding([2, 4]),
+                            );
+                        }
+                        shown_day = today;
+                    }
                     let who = version
                         .login
                         .as_ref()
                         .map_or_else(|| version.author.clone(), |login| format!("@{login}"));
+                    let at = time.map_or_else(String::new, |time| time.format("%H:%M").to_string());
                     body = body.push(version_row(
                         Pick::Remote(version.commit.clone()),
                         selected,
                         found.doc.as_ref(),
-                        vec![
-                            version.message.clone(),
-                            format!("{who} · {}", remote_time(&version.date)),
-                        ],
+                        version.message.clone(),
+                        Some((format!("{who} · {at}"), default_message(&version.message))),
                         found.deleted,
                     ));
                 }
@@ -423,37 +508,46 @@ impl App {
     }
 }
 
-/// One version: its drawing, its time and, for a commit, the message and author.
+/// One version: its drawing, its message or save time and, for a commit,
+/// who made it and when. The selected one has its actions on one line.
 fn version_row<'a>(
     pick: Pick,
     selected: Option<&Pick>,
     doc: Option<&'a Arc<Document>>,
-    lines: Vec<String>,
+    title: String,
+    // The author line, and whether the title is a message ReShiki wrote.
+    commit: Option<(String, bool)>,
     deleted: bool,
 ) -> Element<'a, Message> {
     let selected = selected == Some(&pick);
     let thumb: Element<'a, Message> = match doc {
         Some(doc) => crate::canvas::layered::canvas(crate::canvas::DrawingPreview(doc))
-            .width(120)
-            .height(80)
+            .width(64)
+            .height(42)
             .into(),
         None => container(
             text(if deleted { "Deleted" } else { "" })
-                .size(11)
+                .size(10)
                 .style(muted_text),
         )
-        .center_x(120)
-        .center_y(80)
+        .center_x(64)
+        .center_y(42)
         .into(),
     };
-    let label = lines.first().cloned().unwrap_or_default();
-    let mut details = column![].spacing(2);
-    for (at, line) in lines.into_iter().enumerate() {
-        details = details.push(if at == 0 {
-            text(line).size(12)
-        } else {
-            text(line).size(11).style(muted_text)
-        });
+    let grey = commit.as_ref().is_some_and(|(_, grey)| *grey);
+    let mut details = column![
+        text(title.clone())
+            .size(12)
+            .wrapping(text::Wrapping::None)
+            .style(move |theme: &iced::Theme| text::Style {
+                color: grey.then(|| crate::appearance::muted(theme)),
+            })
+    ]
+    .spacing(2);
+    let mut spoken = title;
+    if let Some((by, _)) = commit {
+        spoken = format!("{spoken}, {by}");
+        details = details.push(text(by).size(11).style(muted_text));
     }
     let id = match &pick {
         Pick::Local(id) => format!("github-version-local-{id}"),
@@ -462,8 +556,10 @@ fn version_row<'a>(
     let mut item = column![
         reshiki::accessibility::button(
             id,
-            label,
-            row![thumb, details].spacing(8).align_y(Alignment::Center),
+            spoken,
+            row![thumb, container(details).clip(true)]
+                .spacing(8)
+                .align_y(Alignment::Center),
         )
         .width(Length::Fill)
         .padding(4)
@@ -472,35 +568,19 @@ fn version_row<'a>(
     ]
     .spacing(4);
     if selected && !deleted {
+        let action = |id: &'static str, label: &'static str, action: Action| {
+            reshiki::accessibility::button(id, label, text(label).size(12))
+                .padding([4, 10])
+                .style(crate::appearance::outline)
+                .on_press(msg(action))
+        };
         item = item.push(
             row![
-                reshiki::accessibility::button(
-                    "github-version-compare",
-                    "Compare with current",
-                    text("Compare with current").size(12)
-                )
-                .padding([5, 10])
-                .style(crate::appearance::secondary)
-                .on_press(msg(Action::Compare)),
-                reshiki::accessibility::button(
-                    "github-version-open",
-                    "Open",
-                    text("Open").size(12)
-                )
-                .padding([5, 10])
-                .style(crate::appearance::secondary)
-                .on_press(msg(Action::Open)),
-                reshiki::accessibility::button(
-                    "github-version-restore",
-                    "Restore",
-                    text("Restore").size(12)
-                )
-                .padding([5, 10])
-                .style(crate::appearance::primary)
-                .on_press(msg(Action::Restore)),
+                action("github-version-compare", "Compare", Action::Compare),
+                action("github-version-open", "Open", Action::Open),
+                action("github-version-restore", "Restore", Action::Restore),
             ]
-            .spacing(6)
-            .wrap(),
+            .spacing(6),
         );
     }
     item.into()

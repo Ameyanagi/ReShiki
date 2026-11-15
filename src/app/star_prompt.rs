@@ -1,4 +1,4 @@
-//! The "Enjoying ReShiki?" toast, which asks once for a GitHub star after real
+//! The "Like ReShiki?" toast, which asks once for a GitHub star after real
 //! use, and again at most once after a later feature release. Its record is
 //! `star-prompt.json` in the data folder; nothing is sent anywhere.
 use super::{App, Message, workspace::muted_text};
@@ -571,6 +571,7 @@ impl App {
             || self.context_menu.is_some()
             || self.style_menu.is_some()
             || self.tabs.menu
+            || self.tabs.color_menu.is_some()
             || self.assistant.menu.is_some()
             || self.assistant.viewed_image.is_some()
             || self.theme_library.editor.is_some()
@@ -622,12 +623,12 @@ fn toast<'a>() -> Element<'a, Message> {
             },
         )
     });
-    let title = text("Enjoying ReShiki?").size(14).font(iced::Font {
+    let title = text("Like ReShiki?").size(14).font(iced::Font {
         weight: iced::font::Weight::Bold,
         ..iced::Font::with_name(reshiki::style::ui_font_family())
     });
     let body = text(
-        "A star on GitHub helps other chemists find it. ReShiki is free and built in the open.",
+        "A star helps other chemists find it.",
     )
     .size(13)
     .style(muted_text);
@@ -645,8 +646,8 @@ fn toast<'a>() -> Element<'a, Message> {
         .style(crate::appearance::secondary),
         button(
             "star-github",
-            "Star on GitHub",
-            row![star(14., true), text("Star on GitHub").size(12)]
+            "Star ReShiki on GitHub",
+            row![star(14., true), text("Star").size(12)]
                 .spacing(6)
                 .align_y(Alignment::Center)
                 .into(),

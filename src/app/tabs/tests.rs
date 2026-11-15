@@ -976,11 +976,16 @@ fn unsaved_counts_every_tab_and_the_title_marks_the_front() {
 #[test]
 fn window_titles_mark_unsaved_changes() {
     assert_eq!(
-        crate::app::window_title("Caffeine.rsk", false),
+        crate::app::window_title("Caffeine.rsk", None, false),
         "Caffeine.rsk — ReShiki"
     );
     assert_eq!(
-        crate::app::window_title("Caffeine.rsk", true),
+        crate::app::window_title("Caffeine.rsk", None, true),
         "Caffeine.rsk • — ReShiki"
+    );
+    // A GitHub drawing names its repository.
+    assert_eq!(
+        crate::app::window_title("ring.rsk", Some("lab-notes".into()), false),
+        "ring.rsk — lab-notes — ReShiki"
     );
 }

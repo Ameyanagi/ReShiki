@@ -31,6 +31,9 @@ pub struct Commit {
     pub tree: String,
     pub parent: Option<String>,
     pub message: String,
+    /// The GitHub account that made it, and when.
+    pub author: String,
+    pub at: String,
 }
 
 #[derive(Default)]
@@ -68,6 +71,8 @@ impl Repo {
                 tree,
                 parent,
                 message,
+                author: LOGIN.into(),
+                at: chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
             },
         );
         name
@@ -353,7 +358,15 @@ fn respond(model: &mut Model, base: &str, request: Logged) -> Reply {
                 .as_str()
                 .map(|text| text.as_bytes().to_vec());
             let repo = model.repo(body["repo"].as_str().unwrap());
-            repo.remote_commit(body["path"].as_str().unwrap(), bytes.as_deref());
+            let commit = repo.remote_commit(body["path"].as_str().unwrap(), bytes.as_deref());
+            // Optionally someone else's, with their own message.
+            let made = repo.commits.get_mut(&commit).unwrap();
+            if let Some(author) = body["author"].as_str() {
+                made.author = author.into();
+            }
+            if let Some(message) = body["message"].as_str() {
+                made.message = message.into();
+            }
             reply(200, json!({}))
         }
         (_, ["api", rest @ ..]) if signed_in => api(model, &method, rest, &query, &body),
@@ -600,20 +613,23 @@ fn repo_api(
                 let before = repo.commits[commit].parent.as_ref().and_then(blob_at);
                 before != blob_at(commit)
             };
+            // `sha` may name a branch, as GitHub allows.
+            let head = repo.refs.get(&query["sha"]).unwrap_or(&query["sha"]).clone();
             let items: Vec<Value> = repo
-                .history(&query["sha"])
+                .history(&head)
                 .iter()
                 .filter(|commit| touched(commit))
                 .skip((page - 1) * size)
                 .take(size)
                 .map(|commit| {
+                    let made = &repo.commits[commit];
                     json!({
                         "sha": commit,
                         "commit": {
-                            "message": repo.commits[commit].message,
-                            "author": { "name": "Octo Test", "date": "2026-11-15T14:02:00Z" },
+                            "message": made.message,
+                            "author": { "name": made.author, "date": made.at },
                         },
-                        "author": { "login": LOGIN },
+                        "author": { "login": made.author },
                     })
                 })
                 .collect();
@@ -732,6 +748,20 @@ async fn serve_github_mock() {
         std::env::var("RESHIKI_GITHUB_MOCK_PORT").map_or(47123, |port| port.parse().unwrap());
     let mock = Mock::start(port).await;
     mock.model().seed_demo();
+    // More repositories, for their colors and the picker's order.
+    {
+        let mut model = mock.model();
+        let ring = include_bytes!("../../website/public/examples/benzofuran.rsk");
+        model
+            .add_repo("reaction-notes")
+            .remote_commit("ring-opening.rsk", Some(ring));
+        model.add_repo("spectra");
+        let lab = model.repo("lab-notes");
+        let commit = lab.remote_commit("scheme/furan.rsk", Some(ring));
+        let made = lab.commits.get_mut(&commit).unwrap();
+        made.author = "alice".into();
+        made.message = "Start the furan route".into();
+    }
     mock.model().approve_after = Some(2);
     println!("Mock GitHub at {}", mock.base);
     std::future::pending::<()>().await;

@@ -671,10 +671,13 @@ impl super::App {
             }
             Ok(Prepared::Native(doc)) => {
                 #[cfg(not(target_arch = "wasm32"))]
-                self.github_opened(&path);
+                let kept = self.github_opened(&path);
+                #[cfg(target_arch = "wasm32")]
+                let kept = iced::Task::none();
                 if self.open_target(Some(&path)) {
                     self.show_opened(*doc, Some(path));
                 }
+                return kept;
             }
             Ok(Prepared::Picture(doc, warning)) => {
                 self.open_target(None);

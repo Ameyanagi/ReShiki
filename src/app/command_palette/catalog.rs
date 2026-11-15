@@ -368,6 +368,21 @@ pub(crate) fn build(app: &App) -> Vec<Command> {
     list.extend(edits());
     list.extend(analysis());
     list.extend(files());
+    // GitHub rows only where they apply now, such as Send for unsent drawings.
+    #[cfg(not(target_arch = "wasm32"))]
+    list.extend(app.github_palette().into_iter().map(|(name, detail, action)| {
+        let command = Command::new(
+            name,
+            Category::File,
+            detail,
+            "github repository send push commit sync history",
+            Run::Send(action.iter().cloned().map(Message::GitHub).collect()),
+        );
+        match action {
+            Some(_) => command,
+            None => command.need(Need::Blocked("Everything is on GitHub")),
+        }
+    }));
     list.extend(view(app));
     list.extend(tools());
     if cfg!(target_arch = "wasm32") {
@@ -1285,41 +1300,6 @@ fn files() -> Vec<Command> {
             "file chemical",
             Message::Export(format.code()),
         ));
-    }
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        use crate::app::github::{Action, Mode, picker};
-        let github = |action| Message::GitHub(action);
-        list.extend([
-            send(
-                "Open from GitHub…",
-                File,
-                "Open a drawing from a GitHub repository",
-                "github repository download clone",
-                github(Action::Picker(picker::Action::Show(Mode::Open))),
-            ),
-            send(
-                "Send to GitHub",
-                File,
-                "One commit of every changed drawing in the repository",
-                "github upload push commit sync",
-                github(Action::ShowSend),
-            ),
-            send(
-                "Versions",
-                File,
-                "Saves on this computer and commits on GitHub",
-                "github history revisions",
-                github(Action::ShowVersions),
-            ),
-            send(
-                "GitHub account…",
-                File,
-                "Sign in to GitHub or sign out",
-                "github sign in login",
-                github(Action::ShowAccount),
-            ),
-        ]);
     }
     list
 }
