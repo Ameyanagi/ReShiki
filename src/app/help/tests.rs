@@ -360,6 +360,48 @@ fn keyboard_navigation_moves_within_results_and_never_runs_commands() {
 }
 
 #[test]
+fn enter_runs_rows_that_name_a_palette_command() {
+    let (mut app, _) = App::new();
+    app.tab.doc = reshiki::rings::Preset::Benzene.document(42., false);
+    let _ = app.update(Message::ToggleHelp);
+    let index = |name: &str| entries().iter().position(|e| e.name == name).unwrap();
+    for name in [
+        "Select all",
+        "Copy",
+        "Paste",
+        "Delete",
+        "Fit drawing",
+        "Lasso tool",
+    ] {
+        assert!(app.help.command(index(name)).is_some(), "{name} runs");
+    }
+    for name in ["Wedge", "Undo / redo", "Shortcut finder"] {
+        assert!(
+            app.help.command(index(name)).is_none(),
+            "{name} is reference"
+        );
+    }
+
+    // A reference row and a command that cannot run now leave Help open.
+    let before = app.tab.doc.clone();
+    for name in ["Wedge", "Delete"] {
+        let _ = app.update(Message::Help(Action::Run(index(name))));
+        assert!(app.help_open, "{name}");
+        assert_eq!(app.tab.doc, before);
+    }
+
+    // Enter in the search runs the selected row through the palette.
+    let _ = app.update(Message::Help(Action::Query("select all".into())));
+    assert_eq!(
+        app.help.selected(app.help_contextual()).unwrap().name,
+        "Select all"
+    );
+    let _ = app.update(Message::Help(Action::Run(index("Select all"))));
+    assert!(!app.help_open);
+    assert!(!app.tab.selected.is_empty());
+}
+
+#[test]
 fn canvas_tool_keys_say_when_keyboard_drawing_takes_them() {
     // Keyboard drawing is on by default, and at an empty hotspot these keys
     // start a drawing instead of choosing a tool, so their rows must say so.
