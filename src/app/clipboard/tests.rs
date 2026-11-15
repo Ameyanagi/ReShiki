@@ -885,3 +885,57 @@ fn foreign_paste_follows_the_drawings_label_settings_in_one_undo_step() {
     );
     assert_eq!(overrides(&app), [Some(false), Some(false)]);
 }
+
+#[test]
+fn a_wide_paste_lands_beside_the_drawing_and_a_small_one_near_the_view_centre() {
+    let scheme = || {
+        let mut part = Document::default();
+        let a = part.add_atom("N", Point::new(-150., 0.));
+        let b = part.add_atom("C", Point::new(150., 0.));
+        part.add_bond(a, b, 1, "plain");
+        part
+    };
+    let (mut app, _) = App::new();
+    app.tab.doc = scheme();
+    let before = app.tab.doc.clone();
+    let x = |app: &App, id: u64| app.tab.doc.atom(id).unwrap().position.x;
+
+    // Select all, copy, paste: a copy as wide as the drawing.
+    app.clipboard_read(
+        app.tab.file_epoch,
+        app.tab.revision,
+        Ok(PasteOutcome::native(scheme())),
+    );
+    assert_eq!(app.tab.selected.len(), 2);
+    let left = app
+        .tab
+        .selected
+        .iter()
+        .map(|id| x(&app, *id))
+        .fold(f32::MAX, f32::min);
+    assert!(
+        left >= 150. + before.drawing_style.bond_length_world,
+        "The copy starts {left} wide of the original's right edge at 150"
+    );
+    assert!(
+        app.tab
+            .selected
+            .iter()
+            .all(|id| app.tab.doc.atom(*id).unwrap().position.y == 0.),
+        "and sits in the view's row"
+    );
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before, "One Undo step");
+
+    // A fragment keeps the small offset from the view's centre.
+    let mut atom = Document::default();
+    atom.add_atom("O", Point::default());
+    let center = app.tab.camera.center;
+    app.clipboard_read(
+        app.tab.file_epoch,
+        app.tab.revision,
+        Ok(PasteOutcome::native(atom)),
+    );
+    let pasted = app.tab.doc.atom(app.tab.selected[0]).unwrap().position;
+    assert_eq!(pasted, center.offset(24., 24.));
+}
