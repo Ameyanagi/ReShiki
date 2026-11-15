@@ -494,6 +494,13 @@ impl App {
     fn github_tracked(&mut self, key: &RepoKey, repo: &Repo) -> &mut RepoState {
         // Read from disk first, if kept there.
         self.github_state(key);
+        // Versions asks GitHub again, under these names.
+        let versions = &mut self.github.versions;
+        if versions.target.as_ref().is_some_and(|(at, _)| at == key)
+            && versions.named.as_ref() != Some(&repo.key)
+        {
+            versions.target = None;
+        }
         let state = self
             .github
             .states

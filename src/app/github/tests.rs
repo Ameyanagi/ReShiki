@@ -1020,6 +1020,9 @@ fn a_renamed_repository_keeps_its_folder_here() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, path) = app_in(dir.path());
     save_here(&mut app, &path);
+    // Versions listed under the old names, then hidden.
+    github(&mut app, Action::ShowVersions);
+    app.inspector_open = false;
     close_front(&mut app);
     let renamed = Repo {
         key: RepoKey {
