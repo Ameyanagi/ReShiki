@@ -801,19 +801,28 @@ jobs:
         if: steps.auth.outputs.mode != 'none' && steps.token.outputs.valid != 'false'
         env:
           MODE: ${{ steps.auth.outputs.mode }}
-          NPM_TOKEN: ${{ steps.auth.outputs.mode == 'token' && secrets.NPM_TOKEN || '' }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           set -euo pipefail
           # validate has checked that a tag matches this version.
           version=$(awk -F '"' '/^version = / { print $2; exit }' Cargo.toml)
-          if [[ $MODE == token ]]; then
-            export NPM_CONFIG_USERCONFIG=$RUNNER_TEMP/.npmrc
-          fi
+          printf '//registry.npmjs.org/:_authToken=${NPM_TOKEN}\n' > "$RUNNER_TEMP/.npmrc"
           for package in headless editor; do
             cd "$GITHUB_WORKSPACE/packages/$package"
             bun pm pkg set version="$version"
             name=$(bun pm pkg get name | tr -d '"')
-            echo "npm $(npm --version), publishing $name@$version with $MODE"
+            # Trusted publishing cannot create a package, so NPM_TOKEN, when set,
+            # publishes the first version of a package npm does not have yet.
+            credential=$MODE
+            if [[ $MODE == oidc && -n $NPM_TOKEN && -z $(npm view "$name" name 2> /dev/null || true) ]]; then
+              credential=token
+            fi
+            if [[ $credential == token ]]; then
+              export NPM_CONFIG_USERCONFIG=$RUNNER_TEMP/.npmrc
+            else
+              unset NPM_CONFIG_USERCONFIG
+            fi
+            echo "npm $(npm --version), publishing $name@$version with $credential"
             if [[ $(npm view "$name@$version" version 2> /dev/null || true) == "$version" ]]; then
               echo "::notice::$name@$version is already on npm."
               continue
@@ -834,7 +843,7 @@ jobs:
             if (( status != 0 )); then
               # Refused credentials skip this package; any other failure fails the job.
               if grep -qE 'E401|E403|E404|ENEEDAUTH|EOTP' "$RUNNER_TEMP/publish.log"; then
-                echo "::notice::npm refused the $MODE credential (see docs/releasing.md), so $name@$version was not published."
+                echo "::notice::npm refused the $credential credential (see docs/releasing.md), so $name@$version was not published."
                 continue
               fi
               exit "$status"
