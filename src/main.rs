@@ -197,6 +197,7 @@ fn run(
     window: iced::window::Settings,
     antialiasing: bool,
 ) -> iced::Result {
+    appearance::prepare_han_fallback();
     // The inline editor can shape a new font before the drawing reaches the
     // canvas. Install variable-weight aliases before either creates text buffers.
     canvas::prepare_fonts();

@@ -349,3 +349,41 @@ async fn escape_closes_an_open_pick_list() {
     let (_, closed) = send(&[redraw()], pointer);
     assert_eq!([batch, closed].concat(), [Msg::Close]);
 }
+
+/// Han-only interface text, such as a file name, falls back from the Latin
+/// interface font by locale; a Japanese system sets it in Japanese forms.
+#[cfg(target_os = "macos")]
+#[test]
+fn japanese_locales_set_han_only_interface_text_in_japanese_forms() {
+    use iced::advanced::graphics::text::{
+        cosmic_text::{Attrs, Buffer, Family, FontSystem, Metrics, Shaping},
+        font_system,
+    };
+    let db = (font_system().write().unwrap().raw().db()).clone();
+    let family = reshiki::style::ui_font_family();
+    let face = |locale: &str| {
+        let mut fonts = FontSystem::new_with_locale_and_db(locale.into(), db.clone());
+        let mut buffer = Buffer::new(&mut fonts, Metrics::new(14., 18.));
+        let attrs = Attrs::new().family(Family::Name(family));
+        buffer.set_text(&mut fonts, "化学", &attrs, Shaping::Advanced, None);
+        buffer.shape_until_scroll(&mut fonts, false);
+        let id = buffer.layout_runs().next().unwrap().glyphs[0].font_id;
+        (fonts.db().face(id).unwrap().families.iter())
+            .map(|(name, _)| name.clone())
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(family, "Helvetica Neue");
+    // Without the locale fix: cosmic-text 0.15 matches only "ja".
+    assert!(face("ja-JP").contains(&"PingFang SC".to_owned()));
+    for system in ["ja-JP", "ja_JP", "ja"] {
+        let locale = han_locale(system).unwrap();
+        assert!(
+            face(locale).contains(&"Hiragino Sans".to_owned()),
+            "{system}: {:?}",
+            face(locale)
+        );
+    }
+    for system in ["en-US", "zh-CN", "jav"] {
+        assert_eq!(han_locale(system), None, "{system}");
+    }
+}

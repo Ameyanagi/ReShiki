@@ -197,6 +197,34 @@ pub fn focus_border(theme: &Theme, inner: Color) -> Color {
     )
 }
 
+/// The locale that sets Han characters in the interface in Japanese forms.
+/// cosmic-text matches only the exact locale "ja", so under "ja-JP" kanji
+/// in a file name or caption fell back to PingFang SC, in Chinese forms.
+pub fn han_locale(system: &str) -> Option<&'static str> {
+    (system.split(['-', '_']).next() == Some("ja")).then_some("ja")
+}
+
+/// Gives the interface's font fallback a Japanese system locale's Han forms.
+/// Call before any text is shaped.
+pub fn prepare_han_fallback() {
+    use iced::advanced::graphics::text::{
+        cosmic_text::{FontSystem, fontdb::Database},
+        font_system,
+    };
+    let mut fonts = font_system()
+        .write()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let fonts = fonts.raw();
+    let Some(locale) = han_locale(fonts.locale()) else {
+        return;
+    };
+    let system = std::mem::replace(
+        fonts,
+        FontSystem::new_with_locale_and_db(locale.into(), Database::new()),
+    );
+    *fonts = FontSystem::new_with_locale_and_db(locale.into(), system.into_locale_and_db().1);
+}
+
 /// Shared dropdown styling for toolbar controls and inspector fields.
 pub fn pick_list<'a, T, L, V, Message>(
     options: L,
