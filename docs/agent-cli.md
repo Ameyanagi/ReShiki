@@ -324,7 +324,7 @@ to 9 decimal places to remove floating-point noise. This is
   },
   "versions": {
     "app": "0.15.0",
-    "document": 37,
+    "document": 38,
     "engine_protocol": 1,
     "operation_api": 1
   },
@@ -382,7 +382,7 @@ This is `name --smiles 'CC(=NN)C' --json`, shown on several lines:
   },
   "versions": {
     "app": "0.15.0",
-    "document": 37,
+    "document": 38,
     "engine_protocol": 1,
     "operation_api": 1
   },
@@ -489,7 +489,7 @@ window.
   "stability": "experimental",
   "versions": {
     "app": "0.15.0",
-    "document": 37,
+    "document": 38,
     "engine_protocol": 1,
     "operation_api": 1
   }
