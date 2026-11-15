@@ -170,8 +170,19 @@ fn binding(message: &Message) -> Option<(Modifiers, &'static str)> {
             },
         ),
         Message::Delete => (Modifiers::empty(), "Delete"),
-        Message::KeyboardDrawing(super::keyboard_drawing::Action::Toggle) => {
-            (Modifiers::empty(), "F8")
+        Message::KeyboardDrawing(action) => {
+            use super::keyboard_drawing::Action;
+            (
+                Modifiers::empty(),
+                match action {
+                    Action::Toggle => "F8",
+                    // Keys of the keyboard drawing mode, through `keyboard_context_key`.
+                    Action::Mark => "[",
+                    Action::Connect => "]",
+                    Action::Coordinate => "}",
+                    _ => return None,
+                },
+            )
         }
         Message::Shortcut(Action::SelectRing(size)) => (
             Modifiers::SHIFT,

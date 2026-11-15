@@ -669,3 +669,105 @@ async fn settings_covers_a_floating_nmr_panel() {
         );
     }
 }
+
+#[tokio::test]
+#[ignore = "Opt-in renderer input check"]
+async fn review_close_returns_focus_check_findings() {
+    use reshiki::chemistry::stereo_lint::{Kind, Note};
+    let mut ui = Ui::new().await;
+    let mut app = drawing_app();
+    let first = app.tab.doc.atoms[0].id;
+    app.tab.stereo_notes = vec![Note {
+        kind: Kind::Undefined,
+        atoms: vec![first],
+        bonds: vec![],
+        message: "1 undefined stereocentre (C1)".into(),
+    }];
+    click_running_tasks(&mut ui, &mut app, "header-check").await;
+    assert!(app.check_results, "The counted button opens the findings");
+    click_running_tasks(&mut ui, &mut app, "check-finding-0").await;
+    assert!(app.check_results, "Choosing a finding keeps the list open");
+    assert_eq!(app.tab.selected, vec![first]);
+    close(&mut ui, &mut app, false).await;
+    assert!(!app.check_results);
+    assert_eq!(app.tab.selected, vec![first]);
+    assert_canvas_delete(&mut ui, &mut app).await;
+}
+
+/// A list taller than the window scrolls under its header, and its fixes
+/// stay in reach at the minimum window size.
+#[tokio::test]
+#[ignore = "Opt-in renderer input check"]
+async fn check_findings_scroll_to_the_last_one_at_the_minimum_window_size() {
+    use reshiki::chemistry::stereo_lint::{Kind, Note};
+    let mut ui = Ui::new().await;
+    ui.viewport = Rectangle::with_size(Size::new(1040., 680.));
+    let mut app = drawing_app();
+    let [first, .., last] = app
+        .tab
+        .doc
+        .atoms
+        .iter()
+        .map(|atom| atom.id)
+        .collect::<Vec<_>>()[..]
+    else {
+        unreachable!()
+    };
+    app.tab.stereo_notes = (0..20)
+        .map(|index| Note {
+            kind: Kind::Reversed,
+            atoms: vec![if index == 19 { last } else { first }],
+            bonds: vec![],
+            message: format!("Wedge {index} points the wrong way; its narrow end belongs at C1"),
+        })
+        .collect();
+    click_running_tasks(&mut ui, &mut app, "header-check").await;
+    assert!(app.check_results);
+    let node = |ui: &mut Ui, app: &App, id: &str| {
+        ui.semantics(app)
+            .nodes
+            .into_iter()
+            .find(|node| node.id == id)
+            .unwrap_or_else(|| panic!("{id}"))
+    };
+    // Wholly visible, allowing for rounding in the clip.
+    let shown = |node: &reshiki::accessibility::Node| {
+        node.visible_bounds.is_some_and(|visible| {
+            (visible.width - node.bounds.width).abs() < 0.5
+                && (visible.height - node.bounds.height).abs() < 0.5
+        })
+    };
+    for fix in ["check-reverse", "check-redraw", "check-again"] {
+        assert!(shown(&node(&mut ui, &app, fix)), "{fix} is in reach");
+    }
+    assert!(!shown(&node(&mut ui, &app, "check-finding-19")));
+    let over = node(&mut ui, &app, "check-finding-0").bounds.center();
+    for _ in 0..40 {
+        if shown(&node(&mut ui, &app, "check-finding-19")) {
+            break;
+        }
+        let wheel = mouse::Event::WheelScrolled {
+            delta: mouse::ScrollDelta::Lines { x: 0., y: -1. },
+        };
+        let _ = ui.event(&app, Event::Mouse(wheel), mouse::Cursor::Available(over));
+    }
+    assert!(shown(&node(&mut ui, &app, "check-finding-19")));
+    click_running_tasks(&mut ui, &mut app, "check-finding-19").await;
+    assert!(app.check_results);
+    assert_eq!(app.tab.selected, vec![last]);
+    let redraw = node(&mut ui, &app, "check-redraw").bounds.center();
+    let mut sent = vec![];
+    for event in [
+        mouse::Event::CursorMoved { position: redraw },
+        mouse::Event::ButtonPressed(mouse::Button::Left),
+        mouse::Event::ButtonReleased(mouse::Button::Left),
+    ] {
+        let (_, messages) = ui.event(&app, Event::Mouse(event), mouse::Cursor::Available(redraw));
+        sent.extend(messages);
+    }
+    assert!(
+        sent.iter()
+            .any(|message| matches!(message, Message::Stereo(crate::app::stereo::Action::Redraw))),
+        "{sent:?}"
+    );
+}

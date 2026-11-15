@@ -64,6 +64,12 @@ pub(crate) fn windows() -> bool {
     os() == Os::Windows
 }
 
+/// The Alt key as hints name it, as `shortcuts::keys` does: ⌥ on a Mac and
+/// Alt elsewhere.
+pub(crate) fn alt_key() -> &'static str {
+    if mac() { "⌥" } else { "Alt" }
+}
+
 /// The modifier the Control key reports: the logo key in a browser on a Mac,
 /// where it swaps places with ⌘.
 pub(crate) fn control_modifier() -> Modifiers {

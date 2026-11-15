@@ -109,16 +109,23 @@ async fn long_status_keeps_its_full_message_cue_outside_the_clipped_text() {
                         &mut bounds,
                     );
                     let message = bounds.message.unwrap();
-                    if status == "Ready" {
-                        assert!(bounds.details.is_none());
-                    } else {
-                        let details = bounds.details.expect("visible full-message cue");
+                    // One row at every width: the cue appears exactly when the
+                    // message does not fit beside the controls.
+                    let fits = !status.contains('\n')
+                        && super::text_width(status, 11.) <= message.width + 0.5;
+                    assert_eq!(
+                        bounds.details.is_none(),
+                        fits,
+                        "{width} {recovery} {update} {status}: {message:?}"
+                    );
+                    if let Some(details) = bounds.details {
                         assert!(details.x >= message.x + message.width);
                         assert!(details.width > 0. && details.x + details.width <= width);
                         assert!(
                             details.y >= 0. && details.y + details.height <= node.size().height
                         );
                     }
+                    assert_eq!(node.size().height, 44., "One footer row at {width}");
                     assert_eq!(
                         *footer_height.get_or_insert(node.size().height),
                         node.size().height,

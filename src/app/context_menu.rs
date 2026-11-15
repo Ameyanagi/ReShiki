@@ -35,7 +35,7 @@ pub enum Page {
     Distribute,
     Order,
     Arrange,
-    /// The first n context row commands, folded into ⋯.
+    /// The last n context row commands, folded into ⋯.
     More(usize),
 }
 
@@ -240,12 +240,15 @@ impl App {
                 self.arrange_entries(&[&Command::TRANSFORM]),
             ]
             .join(&Separator),
-            Page::More(folded) => self
-                .context_commands()
-                .into_iter()
-                .take(folded)
-                .map(|c| command(c.menu, c.message, c.enabled))
-                .collect(),
+            Page::More(folded) => {
+                let commands = self.context_commands();
+                let shown = commands.len().saturating_sub(folded);
+                commands
+                    .into_iter()
+                    .skip(shown)
+                    .map(|c| command(c.menu, c.message, c.enabled))
+                    .collect()
+            }
             Page::Attachments => vec![
                 Hint("Attach to selected atoms"),
                 command(
@@ -1171,11 +1174,6 @@ impl App {
         let mut footer = column![].spacing(1);
         let mut items = Vec::new();
         let mut submenus = Vec::new();
-        let keyboard_commands = if matches!(page, Page::More(_)) {
-            self.context_commands()
-        } else {
-            Vec::new()
-        };
         if matches!(page, Page::Main) && !self.tab.selected.is_empty() {
             entries = entries.push(
                 container(
@@ -1207,41 +1205,26 @@ impl App {
                     swatch,
                 } => {
                     let destructive = matches!(&action, Action::Run(message) if matches!(message.as_ref(), Message::Delete));
-                    let keyboard_hint = match &action {
-                        Action::Run(message) => super::workspace::keyboard_control_id(message)
-                            .and_then(|id| {
-                                keyboard_commands.iter().find(|command| {
-                                    super::workspace::keyboard_control_id(&command.message)
-                                        == Some(id)
-                                })
-                            })
-                            .map(|command| command.hint),
-                        _ => None,
-                    };
                     let label = shown(label, swatch);
                     // Copy image on's check row: on, and whether that is the default.
                     let check = matches!(action, Action::Editable).then(|| {
                         let on = self.copy_editable();
                         (on, on == self.appearance.export_editable_drawing)
                     });
-                    let accessible_name = match (keyboard_hint, swatch) {
-                        (Some(hint), _) => hint.to_owned(),
-                        (None, Some((_, true))) => format!("{label} (default)"),
+                    let accessible_name = match swatch {
+                        Some((_, true)) => format!("{label} (default)"),
                         _ if check.is_some_and(|(_, default)| !default) => {
                             format!("{label} {NOT_DEFAULT}")
                         }
-                        (None, _) => label.to_string(),
+                        _ => label.to_string(),
                     };
-                    let hint = if matches!(&action, Action::Run(message) if matches!(
+                    let hint = matches!(&action, Action::Run(message) if matches!(
                         message.as_ref(),
                         Message::Graphics(super::graphics::Action::Cleanup(
                             super::graphics::Cleanup::Symmetrise { .. }
                         ))
-                    )) {
-                        Some(super::graphics::SYMMETRISE_HINT)
-                    } else {
-                        keyboard_hint
-                    };
+                    ))
+                    .then_some(super::graphics::SYMMETRISE_HINT);
                     let label = text(label).size(12).width(Length::Fill);
                     let label = if destructive {
                         label.style(crate::appearance::text_color(Color::from_rgb8(167, 59, 51)))

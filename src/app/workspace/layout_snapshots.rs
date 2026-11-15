@@ -8,6 +8,7 @@ use reshiki::document::{Arrow, Document, Point as World};
 use reshiki::graphics::{Graphic, GraphicKind};
 use std::path::Path;
 
+mod context_status;
 pub(super) mod features;
 mod property_continuity;
 

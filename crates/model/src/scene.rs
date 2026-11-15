@@ -498,24 +498,29 @@ fn label_runs(
     isotopes: &HydrogenIsotopeLabels,
     shown: impl FnOnce() -> bool,
 ) -> Vec<Primitive> {
-    if !doc.atom_visible(a.id) || crate::attachments::hidden(a, doc) {
+    if !isotopes.atom_visible(a.id) || crate::attachments::hidden(a, doc) {
         return vec![];
     }
     let internal_group = doc.abbreviation(a.id).filter(|group| {
         group.exit.is_none()
             && group.alignment.is_auto()
             && crate::atom_labels::condensed_label(&group.label).is_some()
-            && doc
-                .bonds
-                .iter()
-                .filter(|bond| {
-                    (bond.a == a.id || bond.b == a.id) && doc.bond_visible(bond.a, bond.b)
-                })
-                .count()
-                > 1
+            && match isotopes.graph() {
+                Some(graph) => graph
+                    .bonds(a.id)
+                    .filter(|(_, bond)| graph.bond_visible(bond.a, bond.b))
+                    .count(),
+                None => doc
+                    .bonds
+                    .iter()
+                    .filter(|bond| {
+                        (bond.a == a.id || bond.b == a.id) && doc.bond_visible(bond.a, bond.b)
+                    })
+                    .count(),
+            } > 1
     });
     if let Some(group) = doc.abbreviation(a.id).filter(|_| internal_group.is_none()) {
-        return abbreviation_label_runs(a, doc, group);
+        return abbreviation_label_runs(a, doc, isotopes.graph(), group);
     }
     let show_element = internal_group.is_some() || shown();
     if !show_element && a.charge == 0 {
@@ -585,11 +590,11 @@ fn label_runs(
         .as_ref()
         .map_or_else(|| text_width(label, size), |layout| layout.width);
     let attached = (free_text && condensed.is_none())
-        .then(|| crate::atom_labels::attachment_range(a, doc, label))
+        .then(|| crate::atom_labels::attachment_range(a, doc, isotopes.graph(), label))
         .flatten();
     // A generic label meets its single horizontal bond with its near edge.
     let generic_side = (internal_group.is_none() && condensed.is_none())
-        .then(|| crate::atom_labels::generic_label_side(a, doc))
+        .then(|| crate::atom_labels::generic_label_side(a, doc, isotopes.graph()))
         .flatten()
         .or_else(|| {
             (free_text
@@ -598,7 +603,9 @@ fn label_runs(
                 && attached.is_none()
                 && crate::abbreviations::atom_anchor(label, false).is_none()
                 && crate::abbreviations::atom_anchor(label, true).is_none())
-            .then(|| crate::atom_labels::short_bond_label_side(a, doc, element_width))
+            .then(|| {
+                crate::atom_labels::short_bond_label_side(a, doc, isotopes.graph(), element_width)
+            })
             .flatten()
         });
     let centered = match generic_side {
@@ -664,7 +671,7 @@ fn label_runs(
         let layout = scripts
             .as_ref()
             .map(|scripts| free_label_layout(source, scripts, core.len()..source.len(), &style));
-        push_condensed_suffix(a, doc, frame, &mut cursor, suffix, layout);
+        push_condensed_suffix(a, doc, isotopes.graph(), frame, &mut cursor, suffix, layout);
     }
     if internal_group.is_some() {
         return cursor.runs;
@@ -794,13 +801,14 @@ fn free_label_layout(
 fn abbreviation_label_runs(
     a: &Atom,
     doc: &Document,
+    graph: Option<&graph::Graph<'_>>,
     group: &crate::abbreviations::Abbreviation,
 ) -> Vec<Primitive> {
     let style = crate::typography::TextStyle {
         formula: true,
         ..group.text_style(doc)
     };
-    let content = group.text(doc);
+    let content = group.text_in(doc, graph);
     let size = STYLE.world(style.size_pt);
     // A hyphen inside a name (2-Py, Indol-1-yl) is a separator, not a charge.
     let spans = content
@@ -822,7 +830,7 @@ fn abbreviation_label_runs(
         ..Default::default()
     };
     let layout = crate::typography::layout(content, &format);
-    let range = crate::abbreviations::anchor_range(content, group.faces_left(doc));
+    let range = crate::abbreviations::anchor_range(content, group.faces_left_in(doc, graph));
     let before =
         crate::typography::layout(content.get(..range.start).unwrap_or_default(), &format).width;
     let through =
@@ -900,6 +908,7 @@ struct LabelCursor {
 fn push_condensed_suffix(
     a: &Atom,
     doc: &Document,
+    graph: Option<&graph::Graph<'_>>,
     frame: LabelFrame<'_>,
     cursor: &mut LabelCursor,
     suffix: &str,
@@ -936,7 +945,7 @@ fn push_condensed_suffix(
             style: run.style,
         })
         .collect();
-    let side = crate::atom_labels::appendage_position(a, doc);
+    let side = crate::atom_labels::appendage_position(a, doc, graph);
     place_appendage(
         &cursor.runs,
         &mut parts,
@@ -982,7 +991,7 @@ fn push_hydrogens(
         let h_width = frame.text_width("H", size);
         let width = h_width + frame.text_width(&count, small);
         use crate::atom_labels::HydrogenPosition as H;
-        let mut position = crate::atom_labels::appendage_position(a, doc);
+        let mut position = crate::atom_labels::appendage_position(a, doc, isotopes.graph());
         let mut parts = vec![frame.text(Point::default(), "H".into(), size)];
         if !count.is_empty() {
             parts.push(frame.text(Point::new(h_width, size * 0.40), count, small));
@@ -1017,11 +1026,12 @@ fn push_hydrogens(
             let bonds = unrelated_bonds(a, doc);
             let mut reserved = labels;
             reserved.extend(nearby_mark_ink(a, doc, size).unwrap_or_default());
-            if let Some((side, placed)) = crate::atom_labels::appendage_alternatives(a, doc)
-                .into_iter()
-                .filter(|side| *side != position)
-                .map(|side| (side, place(side)))
-                .find(|(_, placed)| clear_of(placed, &reserved, &bonds, size))
+            if let Some((side, placed)) =
+                crate::atom_labels::appendage_alternatives(a, doc, isotopes.graph())
+                    .into_iter()
+                    .filter(|side| *side != position)
+                    .map(|side| (side, place(side)))
+                    .find(|(_, placed)| clear_of(placed, &reserved, &bonds, size))
             {
                 position = side;
                 parts = placed;
@@ -1071,17 +1081,21 @@ fn nearby_label_ink(
     size: f32,
 ) -> Option<Vec<(Point, Point)>> {
     measuring(|| {
-        doc.atoms
-            .iter()
+        let others = match isotopes.graph() {
+            Some(graph) => graph.near(a.position, size * 5.),
+            None => doc.atoms.iter().collect(),
+        };
+        others
+            .into_iter()
             .filter(|other| other.id != a.id && nearby(a, other, size))
-            .filter(|other| doc.atom_visible(other.id))
+            .filter(|other| isotopes.atom_visible(other.id))
             .flat_map(|other| {
                 label_ink_boxes(&label_runs(
                     other,
                     doc,
                     ChargeLayout::Automatic,
                     isotopes,
-                    || visible(other, doc),
+                    || isotopes.shown(other),
                 ))
             })
             .collect()
@@ -1472,14 +1486,11 @@ fn selections_bounds_in_axes(
             }
         }
     }
-    let isotopes = HydrogenIsotopeLabels::new(doc);
-    // One bond index for every atom's label, not a scan of the bonds each.
     let graph = graph::Graph::new(doc);
-    for atom in doc
-        .atoms
-        .iter()
-        .filter(|a| owners.contains_key(&a.id) && doc.atom_drawn(a.id))
-    {
+    let isotopes = HydrogenIsotopeLabels::indexed(doc, &graph);
+    for atom in doc.atoms.iter().filter(|a| {
+        owners.contains_key(&a.id) && graph.atom_visible(a.id) && !crate::models3d::hides(doc, a.id)
+    }) {
         grow(atom.id, &mut std::iter::once(atom.position));
         for part in crate::scientific::document_mark_parts(atom, doc) {
             grow(
@@ -1940,7 +1951,7 @@ fn chain_double_side(faces: &FaceIndex<'_>, bond: &Bond, a: Point, b: Point) -> 
             };
             neighbor.is_covalent()
                 && next != other
-                && faces.doc().bond_visible(id, next)
+                && faces.graph().bond_visible(id, next)
                 && faces.atom(next).is_some_and(|atom| atom.element != "H")
         });
         if !substituted {
@@ -1970,7 +1981,7 @@ fn chain_double_side(faces: &FaceIndex<'_>, bond: &Bond, a: Point, b: Point) -> 
             } else {
                 neighbor.a
             };
-            if !neighbor.is_covalent() || next == other || !faces.doc().bond_visible(id, next) {
+            if !neighbor.is_covalent() || next == other || !faces.graph().bond_visible(id, next) {
                 continue;
             }
             let Some(atom) = faces.atom(next) else {
@@ -2175,7 +2186,7 @@ pub fn primitives_with_opacity(
         .bonds
         .iter()
         .enumerate()
-        .filter(|(_, b)| doc.bond_visible(b.a, b.b))
+        .filter(|(_, b)| pass.graph().bond_visible(b.a, b.b))
     {
         push_bond(scene, &mut out, &mut joined, bond_index, b, None);
     }
@@ -2450,7 +2461,7 @@ struct AtomLabels {
 }
 fn collect_atom_labels(doc: &Document, opacity: &crate::rear_opacity::Paint) -> AtomLabels {
     let graph = graph::Graph::new(doc);
-    let isotopes = HydrogenIsotopeLabels::new(doc);
+    let isotopes = HydrogenIsotopeLabels::indexed(doc, &graph);
     let labels: std::collections::HashMap<_, _> = doc
         .atoms
         .iter()
@@ -3476,6 +3487,8 @@ mod hydrogen_isotope_tests;
 mod label_attachment_tests;
 #[cfg(test)]
 mod label_parity_tests;
+#[cfg(test)]
+pub(crate) mod performance;
 #[cfg(test)]
 mod primitives_parity_tests;
 #[cfg(test)]

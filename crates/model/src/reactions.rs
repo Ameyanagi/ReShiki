@@ -157,6 +157,27 @@ pub fn includes_text(doc: &Document, id: u64) -> bool {
         .any(|reaction| reaction.annotations.contains(&id))
 }
 
+/// What holds a molecule together: bonds of nonzero order and the targets of
+/// attachment points.
+fn links(doc: &Document) -> impl Iterator<Item = (u64, u64)> + '_ {
+    doc.bonds
+        .iter()
+        .filter(|b| b.order != 0)
+        .map(|b| (b.a, b.b))
+        .chain(
+            doc.atoms
+                .iter()
+                .filter(|a| a.attachment.is_some())
+                .flat_map(|a| a.centroid.iter().map(move |id| (a.id, *id))),
+        )
+}
+
+/// Whether every molecule that `selected` touches is selected whole. These
+/// are the molecules [`molecules`] returns, without building them.
+pub fn whole_molecules(doc: &Document, selected: &HashSet<u64>) -> bool {
+    !links(doc).any(|(a, b)| selected.contains(&a) != selected.contains(&b))
+}
+
 /// Includes complete connected molecules, including atoms hidden by abbreviations.
 pub fn molecules(doc: &Document, selected: &[u64]) -> Vec<Vec<u64>> {
     if selected.is_empty() {
@@ -169,18 +190,7 @@ pub fn molecules(doc: &Document, selected: &[u64]) -> Vec<Vec<u64>> {
         .filter(|id| atoms.contains(id))
         .collect();
     let mut adjacent = HashMap::<u64, Vec<u64>>::new();
-    for (a, b) in doc
-        .bonds
-        .iter()
-        .filter(|b| b.order != 0)
-        .map(|b| (b.a, b.b))
-        .chain(
-            doc.atoms
-                .iter()
-                .filter(|a| a.attachment.is_some())
-                .flat_map(|a| a.centroid.iter().map(move |id| (a.id, *id))),
-        )
-    {
+    for (a, b) in links(doc) {
         adjacent.entry(a).or_default().push(b);
         adjacent.entry(b).or_default().push(a);
     }
@@ -198,7 +208,9 @@ pub fn molecules(doc: &Document, selected: &[u64]) -> Vec<Vec<u64>> {
                 }
             }
         }
-        remaining.retain(|id| !component.contains(id));
+        for id in &component {
+            remaining.remove(id);
+        }
         let mut ids: Vec<_> = component.into_iter().collect();
         ids.sort_unstable();
         result.push(ids);

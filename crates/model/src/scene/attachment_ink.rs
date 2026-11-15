@@ -2,11 +2,11 @@
 //! the bond scene. Persistent links deliberately do not use this hit-test gate.
 use super::*;
 use crate::polygon::signed_area;
-use std::{borrow::Cow, cell::OnceCell, rc::Rc};
+use std::{cell::OnceCell, rc::Rc};
 
 pub(crate) struct AttachmentInk<'a> {
     doc: &'a Document,
-    drawn: Cow<'a, Document>,
+    drawn: crate::abbreviations::Drawn<'a>,
     active: bool,
     opacity: OnceCell<Rc<crate::rear_opacity::Paint>>,
     bonds: OnceCell<Vec<Vec<Primitive>>>,
