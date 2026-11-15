@@ -130,6 +130,30 @@ pub(super) fn label_align(
     }
 }
 
+/// Eight teeth around a hub, for Settings.
+pub(super) fn gear(f: &mut Frame<'_>, ink: Color) {
+    let stroke = Stroke::default().with_width(1.5).with_color(ink);
+    let outline = Path::new(|p| {
+        for tooth in 0..8 {
+            let middle = tooth as f32 * std::f32::consts::FRAC_PI_4;
+            for (offset, radius) in [(-0.27, 7.6), (-0.15, 10.2), (0.15, 10.2), (0.27, 7.6)] {
+                let at = Point::new(
+                    12. + radius * (middle + offset).cos(),
+                    12. + radius * (middle + offset).sin(),
+                );
+                if tooth == 0 && offset < -0.2 {
+                    p.move_to(at);
+                } else {
+                    p.line_to(at);
+                }
+            }
+        }
+        p.close();
+    });
+    f.stroke(&outline, stroke);
+    f.stroke(&Path::circle(Point::new(12., 12.), 3.2), stroke);
+}
+
 pub(super) fn more(f: &mut Frame<'_>, ink: Color) {
     for x in [5., 12., 19.] {
         f.fill(&Path::circle(Point::new(x, 12.), 1.8), ink);
@@ -152,6 +176,23 @@ pub(super) fn lock(f: &mut Frame<'_>, ink: Color, locked: bool) {
         p.line_to(Point::new(13., if locked { 10. } else { 6. }));
     });
     f.stroke(&shackle, Stroke::default().with_width(1.4).with_color(ink));
+}
+
+/// A push pin in the lock's 20 × 20 box: head, collar and needle.
+pub(super) fn pin(f: &mut Frame<'_>, ink: Color) {
+    super::polygon(
+        f,
+        ink,
+        &[
+            (7., 2.),
+            (13., 2.),
+            (12., 8.),
+            (15., 11.),
+            (5., 11.),
+            (8., 8.),
+        ],
+    );
+    line(f, ink, &[(10., 11.), (10., 18.)]);
 }
 
 /// The prototype's 3D-model style pictograms, scaled from 30 × 22 to 24 × 24.

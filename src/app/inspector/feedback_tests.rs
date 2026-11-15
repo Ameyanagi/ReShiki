@@ -42,7 +42,7 @@ async fn generic_choices_defer_properties_but_an_ordinary_selection_still_calcul
         Some(GENERIC_PROPERTIES)
     );
     assert!(app.property_analysis().is_none());
-    // The Molecular properties Check structure button takes this same path.
+    // The Molecular properties Recalculate button takes this same path.
     assert_eq!(
         deferred_generic_properties(&refresh(&mut app).await.unwrap_err()),
         Some(GENERIC_PROPERTIES)

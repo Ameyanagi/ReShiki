@@ -124,9 +124,14 @@ async fn vector_drop_restores_the_drawing_and_inserts_it() -> Result<(), String>
     let drawing = drawing.current();
     let envelope = reshiki::payload::encode(&drawing)?;
     for format in ["svg", "pdf"] {
-        let contents =
-            reshiki::export::clipboard_figure_with_drawing(&drawing, format, Some(&envelope))?
-                .bytes;
+        let contents = reshiki::export::clipboard_figure_with_drawing(
+            &drawing,
+            format,
+            reshiki::export::Background::Transparent,
+            reshiki::style::DEFAULT.png_dpi,
+            Some(&envelope),
+        )?
+        .bytes;
         let mut app = ready();
         let before = app.tab.doc.clone();
         let ticket = app.import_ticket();
@@ -173,6 +178,8 @@ async fn vector_drop_requires_a_readable_drawing() -> Result<(), String> {
             let contents = reshiki::export::clipboard_figure_with_drawing(
                 &Document::default(),
                 format,
+                reshiki::export::Background::Transparent,
+                reshiki::style::DEFAULT.png_dpi,
                 envelope,
             )?
             .bytes;

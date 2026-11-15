@@ -8,7 +8,7 @@ use reshiki::document::Point;
 use reshiki::generic::{Limits, PreparedExpansion, RepeatPattern, RepeatUnit};
 
 pub(super) const EXPANSION_DISCARDED: &str =
-    "Generic expansion was discarded because another edit was open; expand again";
+    "Expansion discarded · Another edit was open · Expand again";
 
 pub(super) const EXPAND: &str = "Expand generic structures";
 const EXPAND_HINT: &str = "Opens all concrete structures together in one new tab";
@@ -20,7 +20,7 @@ const CLEAR_HINT: &str = "Removes the definition; the bracket stays";
 const NOTHING_TO_CLEAR: &str = "This bracket has no repeating unit";
 const REPEAT_HINT: &str = "Use n for an indefinite polymer.";
 const OFFSET_HINT: &str = "Moves the label from its automatic place; positive Y is down.";
-const POSITION_HINT: &str = "Drag the label's handle · Escape finishes";
+const POSITION_HINT: &str = "Drag the label's handle · Esc finishes";
 const AUTOMATIC_HINT: &str = "The label follows the bracket's lower-right corner";
 const AUTOMATIC_ALREADY: &str = "The label is already in its automatic place";
 /// The Repeats field and the Pattern list share one column.
@@ -127,7 +127,7 @@ impl App {
                         self.changed(before);
                         self.error = false;
                         self.status =
-                            "Repeating unit defined from enclosed atoms and crossing bonds".into();
+                            "Repeating unit defined · Enclosed atoms and crossing bonds".into();
                     }
                     Err(error) => return self.generic_failed(error),
                 }

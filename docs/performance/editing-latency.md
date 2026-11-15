@@ -60,7 +60,7 @@ those operations synchronous while reducing their cost:
 
 ```sh
 cargo test --release --locked --bin reshiki \
-  app::performance::editing_workloads -- --ignored --exact --nocapture
+  app::performance::manual_editing_workloads -- --ignored --exact --nocapture
 ```
 
 Use `RESHIKI_INCHI_HELPER` pointing at the packaged helper for the full-analysis

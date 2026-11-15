@@ -1156,7 +1156,7 @@ async fn keyboard_bar_publishes_native_actions_and_fits_compact_canvas() {
 
     let mut saw_folded_mark = false;
     let mut saw_folded_connect = false;
-    for width in [636., 884.] {
+    for width in [400., 636., 884.] {
         let mut ui = BarUi::new(width).await;
         for state in [
             "blank",
@@ -1236,37 +1236,29 @@ async fn keyboard_bar_publishes_native_actions_and_fits_compact_canvas() {
                 );
             }
             let commands = app.context_commands();
-            for (id, enabled) in [
-                ("keyboard-mark", matches!(target, Target::Atom(_))),
+            // Mark needs a target atom; Connect a mark, and a different target atom to run.
+            for (id, shown, enabled) in [
+                (
+                    "keyboard-mark",
+                    matches!(target, Target::Atom(_)),
+                    matches!(target, Target::Atom(_)),
+                ),
                 (
                     "keyboard-connect",
+                    marked.is_some(),
                     matches!(target, Target::Atom(atom) if marked.is_some_and(|other| other != atom)),
                 ),
             ] {
-                let command = commands
-                    .iter()
-                    .find(|command| {
-                        super::super::workspace::keyboard_control_id(&command.message) == Some(id)
-                    })
-                    .unwrap();
+                let command = commands.iter().find(|command| {
+                    super::super::workspace::keyboard_control_id(&command.message) == Some(id)
+                });
+                assert_eq!(command.is_some(), shown, "{state}: {id}");
+                let Some(command) = command else {
+                    assert!(ui.snapshot(&app).nodes.iter().all(|node| node.id != id));
+                    continue;
+                };
                 assert_eq!(command.enabled, enabled, "{state}: {id}");
-                if !enabled {
-                    let explanation = if id == "keyboard-mark" {
-                        "Choose an atom"
-                    } else if marked.is_none() {
-                        "Mark an atom"
-                    } else if !matches!(target, Target::Atom(_)) {
-                        "Choose an atom"
-                    } else {
-                        "Choose a different atom"
-                    };
-                    assert!(
-                        command.hint.contains(explanation),
-                        "{state}: {}",
-                        command.hint
-                    );
-                }
-                let (folded, _) = ui.control(&mut app, id, enabled, Some(command.hint));
+                let (folded, _) = ui.control(&mut app, id, enabled, Some(command.menu));
                 if id == "keyboard-mark" {
                     saw_folded_mark |= folded;
                 } else {
@@ -1389,7 +1381,7 @@ fn repeated_marked_coordination_reports_duplicate_without_another_history_frame(
     let original = app.tab.doc.clone();
     let history = app.tab.history.undo_frames().len();
     for status in [
-        "Marked donor → metal contact added · Undo removes it",
+        "Marked donor → metal contact added",
         "This marked donor is already coordinated to that metal",
     ] {
         let before = app.tab.doc.clone();

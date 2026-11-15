@@ -8,6 +8,7 @@ use reshiki::document::{Arrow, Document, Point as World};
 use reshiki::graphics::{Graphic, GraphicKind};
 use std::path::Path;
 
+mod context_status;
 pub(super) mod features;
 mod property_continuity;
 
@@ -86,11 +87,16 @@ pub(in crate::app) fn pass(
             mouse::Cursor::Unavailable,
         );
     }
-    let (width, height) = (size.width as u32, size.height as u32);
+    // RESHIKI_UI_QA_SCALE sets the pixel density, such as 2 for Retina screenshots.
+    let scale = std::env::var("RESHIKI_UI_QA_SCALE")
+        .ok()
+        .and_then(|scale| scale.parse::<f32>().ok())
+        .unwrap_or(1.);
+    let (width, height) = ((size.width * scale) as u32, (size.height * scale) as u32);
     let pixels = Headless::screenshot(
         renderer,
         Size::new(width, height),
-        1.,
+        scale,
         theme.palette().background,
     );
     image::save_buffer(output, &pixels, width, height, image::ColorType::Rgba8).unwrap();
@@ -411,7 +417,7 @@ fn smart_guides(renderer: &mut iced::Renderer, size: Size, output: &Path) {
 
 pub(super) type Setup = fn(&mut App);
 
-pub(super) const STATES: [(&str, Setup); 20] = [
+pub(super) const STATES: [(&str, Setup); 27] = [
     ("default", |_| {}),
     ("molecule", molecule),
     ("copy-as", |app| {
@@ -453,11 +459,38 @@ pub(super) const STATES: [(&str, Setup); 20] = [
         atom(app);
         assistant(app);
     }),
+    ("templates", |app| {
+        let _ = app.update(Message::Inspector(InspectorTab::Templates));
+    }),
+    ("templates-active", |app| {
+        let _ = app.update(Message::Inspector(InspectorTab::Templates));
+        let _ = app.update(Message::InsertTemplate(0));
+    }),
+    ("labels", |app| {
+        molecule(app);
+        let _ = app.update(Message::Inspector(InspectorTab::Labels));
+    }),
+    ("abbreviations", |app| {
+        molecule(app);
+        let _ = app.update(Message::Inspector(InspectorTab::Abbreviations));
+    }),
+    ("export", |app| {
+        molecule(app);
+        let _ = app.update(Message::Inspector(InspectorTab::Export));
+    }),
+    ("view-options", |app| {
+        let _ = app.update(Message::View(crate::app::view_settings::Action::Toggle));
+    }),
+    // A chemistry error with a selection: the error sits under the summary.
+    ("molecule-error", |app| {
+        molecule(app);
+        app.tab.chemistry_notice = Some("Atom 1 exceeds its allowed valence".into());
+    }),
 ];
 
 #[tokio::test]
 #[ignore = "Opt-in GPU snapshots of key UI states; set RESHIKI_UI_QA_DIR"]
-async fn ui_layout_snapshots() {
+async fn manual_ui_layout_snapshots() {
     let mut renderer = <iced::Renderer as Headless>::new(
         iced::Font::with_name(reshiki::style::ui_font_family()),
         iced::Pixels(16.),

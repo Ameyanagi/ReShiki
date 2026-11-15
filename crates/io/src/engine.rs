@@ -199,6 +199,20 @@ pub struct Analysis {
     pub inchi: String,
     pub inchikey: String,
 }
+impl Analysis {
+    /// The analysis with mass, exact_mass, logp and tpsa rounded to 9
+    /// decimal places, which removes floating-point noise. Every surface
+    /// that reports properties (MCP, CLI, Python) reports these.
+    pub fn rounded(mut self) -> Self {
+        // Adding 0.0 normalizes negative zero after rounding.
+        let round = |value: f64| (value * 1e9).round() / 1e9 + 0.0;
+        self.mass = round(self.mass);
+        self.exact_mass = round(self.exact_mass);
+        self.logp = round(self.logp);
+        self.tpsa = round(self.tpsa);
+        self
+    }
+}
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Response {
     pub document: Option<Document>,

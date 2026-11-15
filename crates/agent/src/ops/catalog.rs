@@ -4,13 +4,16 @@ use super::{
     apply::{self, Apply},
     budget::Budgets,
     compose::{self, Compose},
+    convert::{self, Convert},
     documents::{self, Close},
     error::{ErrorKind, OpError},
     export::{self, Export},
     files::{self, Open, Save},
     import::{self, Import},
     inspect::{self, Inspect},
+    naming::{self, Name},
     render::{self, Render},
+    schema::{self, Schema},
 };
 use crate::tool_spec::ToolSpec;
 use serde::de::DeserializeOwned;
@@ -31,29 +34,32 @@ pub const SPECS: &[ToolSpec] = &[
     files::FILE_SAVE,
     compose::COMPOSE,
     apply::APPLY,
+    convert::CONVERT,
+    naming::NAME,
+    schema::SCHEMA,
 ];
 
 /// What every entry of [`RESULTS`] shares, stated once.
 pub const RESULT_CONVENTIONS: &str = concat!(
-    "Every successful result has versions: {app, operation_api, engine_protocol, document}. ",
-    "info, document_new, document_list, document_close and inspect return flat results. ",
-    "The other tools return the envelope {value, warnings, validation, versions}: warnings ",
-    "is an ordered [{message}] list and validation is {status: \"valid\"}. Object IDs and ",
-    "revisions are decimal strings.",
+    "Every successful result is the envelope {value, warnings, validation, versions}: ",
+    "warnings is an ordered [{message}] list, validation is {status: \"valid\"} and versions ",
+    "is {app, operation_api, engine_protocol, document}. Each tool's value is described ",
+    "below. Object IDs and revisions are decimal strings.",
 );
 
 /// Successful result contracts, keyed by the names in [`SPECS`], with
 /// [`RESULT_CONVENTIONS`] applying to all of them. Each description starts
-/// with the exact top-level `{keys}`, which the contract tests compare with
-/// real successful results; the prose after it describes nested values and
-/// attached content. It is documentation, not a result schema, and is never
-/// sent as part of the tool catalog. Tool execution errors and rejected
-/// envelopes are documented by [`super::result::ToolResult`].
+/// with the exact `{keys}` of the envelope's `value`, which the contract
+/// tests compare with real successful results; the prose after it describes
+/// nested values and attached content. It is documentation, not a result
+/// schema, and is never sent as part of the tool catalog. Tool execution
+/// errors and rejected envelopes are documented by
+/// [`super::result::ToolResult`].
 pub const RESULTS: &[(&str, &str)] = &[
     (
         "info",
         concat!(
-            "{operation_api, stability, versions, budgets, formats, grants, files} ",
+            "{operation_api, stability, budgets, formats, grants, files} ",
             "operation_api is the operation API version; stability is \"experimental\". ",
             "budgets lists the enforced limits, with the render limits nested under render. ",
             "formats is {import, export}. grants is {read, write}, the granted folders as the ",
@@ -63,36 +69,35 @@ pub const RESULTS: &[(&str, &str)] = &[
     ),
     (
         "document_new",
-        "{document, revision, versions} The new empty session document's opaque handle and its revision.",
+        "{document, revision} The new empty session document's opaque handle and its revision.",
     ),
     (
         "document_list",
         concat!(
-            "{documents, versions} documents is [{document, revision, objects}] in creation ",
+            "{documents} documents is [{document, revision, objects}] in creation ",
             "order: each live session document's handle, revision and object count.",
         ),
     ),
     (
         "document_close",
-        "{document, closed, versions} The closed session document's handle and closed: true.",
+        "{document, closed} The closed session document's handle and closed: true.",
     ),
     (
         "import",
         concat!(
-            "{value, warnings, validation, versions} value is {document, revision, counts, ",
-            "analysis}: the new session document's handle and revision; counts is {atoms, ",
-            "bonds, arrows, annotations, graphics}. analysis is {smiles, formula, ",
-            "display_formula, mass, exact_mass, logp, tpsa, donors, acceptors, rings, ",
-            "unpaired_electrons, inchi, inchikey}, or null when the engine returned none. mass, exact_mass, logp and ",
-            "tpsa are rounded to 9 decimal places to remove floating-point noise. The engine's ",
-            "warnings become the warnings.",
+            "{document, revision, counts, analysis} The new session document's handle and ",
+            "revision; counts is {atoms, bonds, arrows, annotations, graphics}. analysis is ",
+            "{smiles, formula, display_formula, mass, exact_mass, logp, tpsa, donors, acceptors, ",
+            "rings, unpaired_electrons, inchi, inchikey}, or null when the engine returned none. ",
+            "mass, exact_mass, logp and tpsa are rounded to 9 decimal places to remove ",
+            "floating-point noise. The engine's warnings become the warnings.",
         ),
     ),
     (
         "inspect",
         concat!(
             "{document, revision, bounds, expanded_ids, counts, truncated, atoms, bonds, ",
-            "annotations, arrows, graphics, abbreviations, reactions, groups, note, versions} ",
+            "annotations, arrows, graphics, abbreviations, reactions, groups, note} ",
             "bounds is {min, max}, the drawing's corners in world units. expanded_ids lists the ",
             "IDs after selection expansion, or null for the whole drawing. counts covers every ",
             "atom, bond, annotation, arrow, graphic, abbreviation, reaction and group in the ",
@@ -107,7 +112,7 @@ pub const RESULTS: &[(&str, &str)] = &[
     (
         "analyze",
         concat!(
-            "{value, warnings, validation, versions} value is {analysis, analyzed_atoms}. ",
+            "{analysis, analyzed_atoms} ",
             "analysis is {smiles, formula, display_formula, mass, exact_mass, logp, tpsa, ",
             "donors, acceptors, rings, unpaired_electrons, inchi, inchikey}; analyzed_atoms lists the analyzed ",
             "atom IDs in document order. mass, exact_mass, logp and tpsa are rounded to 9 ",
@@ -121,7 +126,7 @@ pub const RESULTS: &[(&str, &str)] = &[
     (
         "render",
         concat!(
-            "{value, warnings, validation, versions} value is {width, height, byte_len}. width ",
+            "{width, height, byte_len} width ",
             "and height are the PNG's pixel dimensions, or null for SVG; byte_len is the ",
             "attached content's size in bytes, at most max_output_bytes. PNG is attached as an ",
             "image with MIME type image/png; SVG as the file drawing.svg with MIME type ",
@@ -131,8 +136,8 @@ pub const RESULTS: &[(&str, &str)] = &[
     (
         "export",
         concat!(
-            "{value, warnings, validation, versions} value is {receipt: {format, byte_len, ",
-            "detail}}. The attached file is drawing.{format} with the format's MIME type, at ",
+            "{receipt} receipt is {format, byte_len, ",
+            "detail}. The attached file is drawing.{format} with the format's MIME type, at ",
             "most max_output_bytes. detail is the PNG size, or null for other formats. For png ",
             "the first warning is the PNG size. svg, pdf and png add a notice only when it ",
             "applies: the drawing was preserved for review, or arrow attachment links were left ",
@@ -142,8 +147,8 @@ pub const RESULTS: &[(&str, &str)] = &[
     (
         "file_open",
         concat!(
-            "{value, warnings, validation, versions} value is import's {document, revision, ",
-            "counts, analysis} plus source: {path, bytes}, the requested path and the opened ",
+            "{document, revision, counts, analysis, source} import's value plus source: ",
+            "{path, bytes}, the requested path and the opened ",
             "file's size. counts is {atoms, bonds, arrows, annotations, graphics}; analysis is ",
             "{smiles, formula, display_formula, mass, exact_mass, logp, tpsa, donors, ",
             "acceptors, rings, unpaired_electrons, inchi, inchikey}, or null when the engine returned none. mass, ",
@@ -154,8 +159,8 @@ pub const RESULTS: &[(&str, &str)] = &[
     (
         "file_save",
         concat!(
-            "{value, warnings, validation, versions} value is {receipt: {path, format, ",
-            "byte_len, replaced, detail}}. path names the saved file; replaced reports whether ",
+            "{receipt} receipt is {path, format, ",
+            "byte_len, replaced, detail}. path names the saved file; replaced reports whether ",
             "an existing file was replaced. byte_len is at most max_output_bytes; detail is the ",
             "PNG size, or null for other formats. The producer's warnings come first, then the ",
             "write's.",
@@ -164,10 +169,11 @@ pub const RESULTS: &[(&str, &str)] = &[
     (
         "compose",
         concat!(
-            "{value, warnings, validation, versions} value is {document, revision, atoms, ",
-            "bonds, arrows, bounds, review_issues, changes}: the new session document's handle ",
-            "and revision; atoms, bonds and arrows are counts. bounds is [min, max], the ",
-            "drawing's corners in world units, or null. review_issues lists quality-review ",
+            "{document, revision, atoms, bonds, arrows, bounds, review_issues, changes} The ",
+            "new session document's handle ",
+            "and revision; atoms, bonds and arrows are counts. bounds is {min, max}, the ",
+            "drawing's corners in world units as inspect reports them, or null. review_issues ",
+            "lists quality-review ",
             "messages; changes lists the layout adjustments made. A sketch adds the review note ",
             "as a warning. A layout error is failed with its message.",
         ),
@@ -175,12 +181,41 @@ pub const RESULTS: &[(&str, &str)] = &[
     (
         "apply",
         concat!(
-            "{value, warnings, validation, versions} value is {effect: \"applied\", document, ",
-            "revision, recorded, inserted, id_remap, deleted}: the edited document's handle and ",
+            "{effect, document, revision, recorded, inserted, id_remap, deleted} effect is ",
+            "\"applied\"; document and revision are the edited document's handle and ",
             "revision. recorded is false when nothing changed. inserted and deleted list object ",
             "IDs, which may overlap because deleted IDs can be reused; both are empty for undo ",
             "and redo. id_remap is [{source, inserted}], mapping source IDs to inserted IDs. The ",
             "label refresh's notice becomes a warning.",
+        ),
+    ),
+    (
+        "convert",
+        concat!(
+            "{receipt, width, height, analysis} receipt is {format, byte_len, detail}, as ",
+            "export's; a preview's format is png. width and height are the preview's pixel ",
+            "dimensions, or null for a file. analysis is import's, or null. The preview is ",
+            "attached as an image with MIME type image/png; a file as drawing.{format} with the ",
+            "format's MIME type. Either is at most max_output_bytes. The import's warnings come ",
+            "first, then the export's. No session document is created.",
+        ),
+    ),
+    (
+        "name",
+        concat!(
+            "{name, status, preferred, reason, detail, aliases, alternatives} name is the ",
+            "generated systematic name. status is preferred, not_preferred or unverified, and ",
+            "preferred repeats it as a boolean; reason names the rule family behind any other ",
+            "status, or null; detail explains the status in one sentence. aliases lists curated ",
+            "common names; alternatives is [{name, status, reason}], other valid names. A host ",
+            "without naming fails with unsupported.",
+        ),
+    ),
+    (
+        "schema",
+        concat!(
+            "{name, schema} name repeats the request; schema is the JSON Schema (2020-12) of ",
+            "that input, with its rules in the description.",
         ),
     ),
 ];
@@ -225,6 +260,9 @@ pub(crate) enum Op {
     FileSave(Save),
     Compose(Box<Compose>),
     Apply(Apply),
+    Convert(Convert),
+    Name(Name),
+    Schema(Schema),
 }
 
 /// Decodes `args` for `tool`, with every input budget check, before any work
@@ -244,6 +282,9 @@ pub(crate) fn decode(tool: &str, args: Value, budgets: &Budgets) -> Option<Resul
         "file_save" => files::decode_save(args).map(Op::FileSave),
         "compose" => compose::decode(args).map(|compose| Op::Compose(Box::new(compose))),
         "apply" => apply::decode(args, budgets).map(Op::Apply),
+        "convert" => convert::decode(args, budgets).map(Op::Convert),
+        "name" => naming::decode(args).map(Op::Name),
+        "schema" => schema::decode(args).map(Op::Schema),
         _ => return None,
     })
 }

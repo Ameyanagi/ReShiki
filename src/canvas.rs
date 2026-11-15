@@ -110,6 +110,8 @@ use hit::{bond_target, bond_target_with, hit_selection, region_selection};
 #[cfg(not(target_arch = "wasm32"))]
 pub use previews::ComparePreview;
 #[cfg(test)]
+pub(crate) use previews::PREVIEWS_BUILT;
+#[cfg(test)]
 use previews::PreviewState;
 #[cfg(test)]
 use render::draw_primitives;
@@ -618,6 +620,8 @@ pub struct MoleculeCanvas<'a> {
     pub chain_drawing: ChainDrawing,
     pub doc: &'a Document,
     pub element: &'a str,
+    /// The label the Atom tool gives each new atom: `R` on an R group's `*`.
+    pub atom_label: Option<&'a str>,
     pub selected: &'a [u64],
     pub(crate) reviewing_pair: bool,
     pub tool: Tool,
@@ -666,6 +670,7 @@ impl<'a> MoleculeCanvas<'a> {
             chain_drawing: styles.chain_drawing,
             doc,
             element: "C",
+            atom_label: None,
             selected,
             reviewing_pair: false,
             tool: Tool::Select,
@@ -744,6 +749,7 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
             state.geometry.take();
             state.text.take();
         }
+        let _frame = cache::Frame::begin(&state.scene, self.doc);
         let paper = self.guides.paper(bounds);
         let offset = Vector::new(paper.x - bounds.x, paper.y - bounds.y);
         let mut frame = layered::Frame::clipped(

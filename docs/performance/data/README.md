@@ -62,11 +62,11 @@ rows and an isolated `RESHIKI_DATA_DIR` for application preferences/recovery.
 
 ```sh
 cargo test --release --locked --bin reshiki \
-  canvas::performance::loaded_canvas_workloads -- --ignored --exact --nocapture
+  canvas::performance::manual_loaded_canvas_workloads -- --ignored --exact --nocapture
 cargo test --release --locked --bin reshiki \
-  app::performance::editing_workloads -- --ignored --exact --nocapture
+  app::performance::manual_editing_workloads -- --ignored --exact --nocapture
 cargo test --release --locked --bin reshiki \
-  app::inspector::tests::inspector_workloads -- --ignored --exact --nocapture
+  app::inspector::tests::manual_inspector_workloads -- --ignored --exact --nocapture
 ```
 
 On Windows add `--target x86_64-pc-windows-msvc` and set
@@ -76,8 +76,8 @@ passes that selector directly to `Headless::new` and prints the actual renderer;
 
 The stable recovery test is
 `app::performance::historical_recovery_workloads`; the updated recovery test is
-`app::autosave::tests::recovery_workloads`. File/library measurements use
-`app::files::performance::file_library_workloads` on the updated build only.
+`app::autosave::tests::manual_recovery_workloads`. File/library measurements use
+`app::files::performance::manual_file_library_workloads` on the updated build only.
 There is no historical file/library benchmark to compare against.
 
 `collect.py`, run from the repository root, assembles completed local logs under

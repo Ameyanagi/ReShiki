@@ -120,6 +120,22 @@ jobs:
       contents: read
       packages: write
     uses: ./.github/workflows/ci-images.yml
+  # A fixture or baseline update is hard to review in the file diff, so the
+  # job summary lists the rows each changed fixture gains and loses.
+  fixtures:
+    name: Changed fixture rows
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - *actions_runtime
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: List the changed fixture rows in the job summary
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: python3 scripts/baseline_summary.py "$BASE"
   web:
     runs-on: ubuntu-22.04
     steps:
@@ -132,6 +148,8 @@ jobs:
       - run: bun run lint:js
       - run: bun run format:check
       - run: bun scripts/check_docs_tree.mjs
+      - name: Check app text
+        run: python3 scripts/copy_lint.py
   office-addin:
     name: Office add-in JavaScript regressions
     runs-on: ubuntu-24.04
@@ -174,9 +192,6 @@ jobs:
       - run: uv run --locked ruff check reference scripts tests
       - run: uv run --locked ruff format --check reference scripts tests
       - run: uv run --locked ty check
-      - name: Install Rust for native macOS clipboard and printing checks
-        if: runner.os == 'macOS'
-        run: rustup toolchain install 1.99.1 --profile minimal && rustup default 1.99.1
       - run: uv run --locked python -m unittest discover -s tests -p 'test_*.py'
       - run: uv run --locked python -m unittest discover -s reference -p 'test_*.py'
       - run: uv run --locked python scripts/check_reference_dependencies.py
@@ -253,17 +268,190 @@ jobs:
       - *actions_runtime
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: rustup toolchain install 1.99.1 --profile minimal && rustup default 1.99.1
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
-        with:
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-          shared-key: linux-x11
       - name: Run native clipboard regressions serially on a private display
         run: |
           # Tests briefly release their last connection; keep the X server ready.
           xvfb-run -a -s '-screen 0 1024x768x24 -nolisten tcp -noreset' cargo test -p reshiki-linux --lib --locked --no-default-features x11::tests:: -- --ignored --test-threads=1
+  # Each platform compiles the workspace tests once. This job archives them for
+  # the two `rust` partitions and ends there, so they start as soon as it uploads.
+  rust-build:
+    name: rust build (${{ matrix.os }}, ${{ matrix.target }}, ${{ matrix.python }})
+    needs: [scope, images]
+    if: needs.scope.outputs.native == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.scope.outputs.matrix).rust }}
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+      packages: read
+    # Linux runs in the CI image; an empty string runs the other rows on the host.
+    container: ${{ matrix.os == 'ubuntu-24.04' && needs.images.outputs.noble || '' }}
+    # Container steps otherwise default to sh; keep each runner's own default shell.
+    defaults:
+      run:
+        shell: ${{ startsWith(matrix.os, 'windows') && 'pwsh' || 'bash -e {0}' }}
+    env:
+      UV_PYTHON: ${{ matrix.python }}
+      RESHIKI_REQUIRE_INCHI_HELPER: "1"
+      # Naming integration must launch this exact source's executable, not a test harness.
+      RESHIKI_NAMING_HELPER: ${{ github.workspace }}/target/debug/reshiki${{ endsWith(matrix.target, '-pc-windows-msvc') && '.exe' || '' }}
+      # Windows symlink escape tests fail instead of skipping without the privilege.
+      RESHIKI_REQUIRE_LINK_TESTS: "1"
+    steps:
+      - *actions_runtime
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: rustup toolchain install 1.99.1 --profile minimal
+      - run: rustup default 1.99.1
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          shared-key: rust
+          # rust-extra warms and saves this cache.
+          save-if: false
+      - uses: taiki-e/install-action@5488ac5a951645ce95062214902ac4b6bc1a1037 # v2.87.32
+        with:
+          tool: cargo-nextest@0.9.150
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          version: "0.13.5"
+          python-version: ${{ matrix.python }}
+      - name: Select the native Windows compiler
+        if: runner.os == 'Windows'
+        uses: ./.github/actions/setup-msvc
+        with:
+          arch: ${{ matrix.msvc_arch }}
+      - name: Build the Rust helper and test executable
+        run: uv run --no-project python scripts/build_inchi_helper.py
+      - name: Select the helper for runtime integration tests
+        run: uv run --no-project python -c "import os,pathlib; p=pathlib.Path('artifacts/inchi-helper/reshiki-inchi-helper'+('.exe' if os.name=='nt' else '')).resolve(); open(os.environ['GITHUB_ENV'],'a').write('RESHIKI_INCHI_HELPER='+str(p)+'\n')"
+      - name: Build the exact application for local naming worker tests
+        run: cargo build --locked --no-default-features --bin reshiki
+      - name: Build the workspace tests once for both partitions
+        # The archive also holds target/debug/reshiki, which the tests start.
+        run: cargo nextest archive --workspace --locked --no-default-features --archive-file nextest-archive.tar.zst
+      - name: Pack the helpers with their executable bits
+        run: tar -cf inchi-helper.tar artifacts/inchi-helper
+      - name: Hand the built tests to the partitions
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: nextest-archive-${{ matrix.target }}
+          path: |
+            nextest-archive.tar.zst
+            inchi-helper.tar
+          if-no-files-found: error
+          # Both files are already packed.
+          compression-level: 0
+          retention-days: 1
+          # A re-run of this job replaces the archive of the earlier attempt.
+          overwrite: true
+  # The tests that nextest does not run in the partitions: ignored renderer
+  # tests, one-process and custom harnesses, doc tests and the fixture checks.
+  # It compiles what it needs itself, so it runs beside rust-build and the
+  # partitions and none of them waits for another.
+  rust-extra:
+    name: rust extra (${{ matrix.os }}, ${{ matrix.target }}, ${{ matrix.python }})
+    needs: [scope, images]
+    if: needs.scope.outputs.native == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.scope.outputs.matrix).rust }}
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+      packages: read
+    # Linux runs in the CI image; an empty string runs the other rows on the host.
+    container: ${{ matrix.os == 'ubuntu-24.04' && needs.images.outputs.noble || '' }}
+    # Container steps otherwise default to sh; keep each runner's own default shell.
+    defaults:
+      run:
+        shell: ${{ startsWith(matrix.os, 'windows') && 'pwsh' || 'bash -e {0}' }}
+    env:
+      UV_PYTHON: ${{ matrix.python }}
+      RESHIKI_REQUIRE_INCHI_HELPER: "1"
+      # Naming integration must launch this exact source's executable, not a test harness.
+      RESHIKI_NAMING_HELPER: ${{ github.workspace }}/target/debug/reshiki${{ endsWith(matrix.target, '-pc-windows-msvc') && '.exe' || '' }}
+      # Windows symlink escape tests fail instead of skipping without the privilege.
+      RESHIKI_REQUIRE_LINK_TESTS: "1"
+    steps:
+      - *actions_runtime
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: rustup toolchain install 1.99.1 --profile minimal --component clippy
+      - run: rustup default 1.99.1
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          shared-key: rust
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - uses: taiki-e/install-action@5488ac5a951645ce95062214902ac4b6bc1a1037 # v2.87.32
+        if: runner.os == 'Windows'
+        with:
+          tool: cargo-nextest@0.9.150
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          version: "0.13.5"
+          python-version: ${{ matrix.python }}
+      - name: Select the native Windows compiler
+        if: runner.os == 'Windows'
+        uses: ./.github/actions/setup-msvc
+        with:
+          arch: ${{ matrix.msvc_arch }}
+      - name: Build the Rust helper and test executable
+        run: uv run --no-project python scripts/build_inchi_helper.py
+      - name: Select the helper for runtime integration tests
+        run: uv run --no-project python -c "import os,pathlib; p=pathlib.Path('artifacts/inchi-helper/reshiki-inchi-helper'+('.exe' if os.name=='nt' else '')).resolve(); open(os.environ['GITHUB_ENV'],'a').write('RESHIKI_INCHI_HELPER='+str(p)+'\n')"
+      - name: Build the exact application for local naming worker tests
+        run: cargo build --locked --no-default-features --bin reshiki
+      - name: Check Rust heap and byte protocol boundaries
+        run: uv run --no-project --with certifi==2026.10.23 python -m unittest tests.test_inchi_helper_protocol tests.test_inchi_helper_builder tests.test_inchi_distribution
+      - name: Audit agent API dependencies for every release target
+        # cargo tree resolves all six release triples from one host.
+        if: runner.os == 'macOS'
+        run: uv run --no-project python scripts/check_agent_dependencies.py
+      - name: Test with the real renderer on Windows
+        if: runner.os == 'Windows'
+        # Every ignored test of the application binary runs here unless its name
+        # starts with manual_ or ends in _child, and so do the root library's
+        # accessibility tests (docs/development.md, "Opt-in renderer tests").
+        # The Windows renderer includes Tiny Skia when WGPU is unavailable. These
+        # check widget layout, input and accessibility; native desktop acceptance
+        # is recorded separately.
+        env:
+          RESHIKI_DATA_DIR: ${{ runner.temp }}/reshiki-renderer-tests
+          # help_renderer_evidence keeps its captures for review.
+          RESHIKI_HELP_QA_DIR: artifacts/qa-help-polish
+        run: >-
+          cargo nextest run --locked --no-default-features --lib --bin reshiki --profile ci
+          --run-ignored ignored-only --test-threads 2
+          -E '(binary_id(reshiki::bin/reshiki) & not test(/(^|::)manual_[^:]+$/) & not test(/_child$/))
+          | (package(reshiki) & kind(lib) & test(/^accessibility::tests::/))'
+      - name: Test the shared naming corpus in one libtest process
+        # Preserve the shared LazyLock baseline.
+        run: "cargo test --locked --no-default-features -p reshiki --lib naming::s2n_harness::"
+      - name: Test the custom metafile worker harness
+        run: cargo test --locked --no-default-features --test metafile_worker
+      - name: Test the custom native print harness
+        # Cargo also runs this target's no-op main on non-macOS hosts.
+        run: cargo test --locked --no-default-features -p reshiki-macos --test native_print
+      - name: Test workspace documentation
+        run: cargo test --workspace --locked --no-default-features --doc
+      - name: Test the isolated font export probe
+        run: cargo test --locked --manifest-path tools/font-export-probe/Cargo.toml -j 2
+      - name: Test public SciFinder fixtures on a one-megabyte stack
+        run: cargo test --locked --no-default-features --example scifinder_handoff_qa tests::public_fixture_checks_fit_one_megabyte_stack -- --exact
+      - name: Verify public SciFinder handoff fixtures
+        run: cargo run --locked --no-default-features --example scifinder_handoff_qa -- "${{ runner.temp }}/reshiki-scifinder-handoff"
+      - name: Warm the shared Rust cache
+        if: github.ref == 'refs/heads/main'
+        # Include lint and golden configurations for all three lanes' PR cache reads.
+        # Keep the job's shell: Git Bash's /usr/bin/link shadows MSVC link.exe on Windows.
+        run: >-
+          cargo clippy --workspace --all-targets --locked --no-default-features &&
+          cargo clippy --workspace --all-targets --locked --features rdkit-reference &&
+          cargo test --locked --features rdkit-reference --no-run --test inchi_reader --test depict_geometry --test depict_rings --test depict_attachment --test depict_seeds --test depict_templates --test depict_collision --test depict_expansion --test depict_finalize --test native_aromatic
   rust:
     name: rust (${{ matrix.platform.os }}, ${{ matrix.platform.target }}, ${{ matrix.platform.python }}, ${{ matrix.partition }}/2)
-    needs: [scope, images]
+    needs: [scope, images, rust-build]
     if: needs.scope.outputs.native == 'true'
     strategy:
       fail-fast: false
@@ -281,7 +469,6 @@ jobs:
       run:
         shell: ${{ startsWith(matrix.platform.os, 'windows') && 'pwsh' || 'bash -e {0}' }}
     env:
-      UV_PYTHON: ${{ matrix.platform.python }}
       RESHIKI_REQUIRE_INCHI_HELPER: "1"
       # Naming integration must launch this exact source's executable, not a test harness.
       RESHIKI_NAMING_HELPER: ${{ github.workspace }}/target/debug/reshiki${{ endsWith(matrix.platform.target, '-pc-windows-msvc') && '.exe' || '' }}
@@ -290,151 +477,40 @@ jobs:
     steps:
       - *actions_runtime
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - run: rustup toolchain install 1.99.1 --profile minimal --component clippy
-      - run: rustup default 1.99.1
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
-        with:
-          shared-key: rust
-          save-if: ${{ github.ref == 'refs/heads/main' && matrix.partition == 1 }}
       - uses: taiki-e/install-action@5488ac5a951645ce95062214902ac4b6bc1a1037 # v2.87.32
         with:
           tool: cargo-nextest@0.9.150
-      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+      - name: Fetch the tests that rust-build compiled
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          version: "0.13.5"
-          python-version: ${{ matrix.platform.python }}
-      - name: Select the native Windows compiler
-        if: runner.os == 'Windows'
-        uses: ./.github/actions/setup-msvc
-        with:
-          arch: ${{ matrix.platform.msvc_arch }}
-      - name: Build the Rust helper and test executable
-        run: uv run --no-project python scripts/build_inchi_helper.py --target ${{ matrix.platform.target }}
+          name: nextest-archive-${{ matrix.platform.target }}
+      - name: Unpack the helpers
+        run: tar -xf inchi-helper.tar
       - name: Select the helper for runtime integration tests
-        run: uv run --no-project python -c "import os,pathlib; p=pathlib.Path('artifacts/inchi-helper/reshiki-inchi-helper'+('.exe' if os.name=='nt' else '')).resolve(); open(os.environ['GITHUB_ENV'],'a').write('RESHIKI_INCHI_HELPER='+str(p)+'\n')"
-      - name: Check Rust heap and byte protocol boundaries
-        if: matrix.partition == 1
-        run: uv run --no-project --with certifi==2026.10.23 python -m unittest tests.test_inchi_helper_protocol tests.test_inchi_helper_builder tests.test_inchi_distribution
-      - name: Build the exact application for local naming worker tests
-        run: cargo build --locked --no-default-features --bin reshiki
-      - name: Audit agent API dependencies for every release target
-        # cargo tree resolves all six release triples from one host.
-        if: runner.os == 'macOS' && matrix.partition == 1
-        run: uv run --no-project python scripts/check_agent_dependencies.py
-      - name: Test rendered numeric-field focus on Windows
-        if: runner.os == 'Windows' && matrix.partition == 1
-        # The Windows renderer includes Tiny Skia when WGPU is unavailable.
-        # This checks widget layout/input; it is not native desktop acceptance.
-        run: cargo test --locked --no-default-features --bin reshiki app::numeric_transforms::focus::tests::handle_shortcut_focuses_selects_and_reveals_the_field_in_both_window_sizes -- --exact --ignored
-      - name: Capture rendered Help QA on Windows
-        if: runner.os == 'Windows' && matrix.partition == 1
-        # Real Windows font/key rendering, including the TinySkia fallback.
-        # Native desktop input acceptance is recorded separately.
-        env:
-          RESHIKI_HELP_QA_DIR: artifacts/qa-help-polish
-          RESHIKI_DATA_DIR: ${{ runner.temp }}/reshiki-help-polish
-        run: cargo test --locked --no-default-features --bin reshiki app::help::tests::help_renderer_evidence -- --exact --ignored
-      - name: Retain Windows Help renderer evidence
-        if: runner.os == 'Windows' && matrix.partition == 1
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
-        with:
-          name: qa-help-polish-${{ matrix.platform.target }}
-          path: artifacts/qa-help-polish
-          if-no-files-found: error
-      - name: Test rendered cascading menus on Windows
-        if: runner.os == 'Windows' && matrix.partition == 1
-        # The headless renderer falls back to TinySkia on Windows. These
-        # exercise widget input and layout, not native OS acceptance.
-        run: "cargo test --locked --no-default-features --bin reshiki app::context_menu::cascade_tests:: -- --ignored"
-      - name: Test rendered Updates modal keyboard input on Windows
-        if: runner.os == 'Windows' && matrix.partition == 1
-        # The Windows renderer includes Tiny Skia when WGPU is unavailable.
-        # This checks widget layout/input; it is not native desktop acceptance.
-        run: cargo test --locked --no-default-features --bin reshiki app::shortcut_focus_tests::updates_ -- --ignored
-      - name: Test that closing review panels returns keyboard focus to the drawing on Windows
-        if: runner.os == 'Windows' && matrix.partition == 1
-        run: cargo test --locked --no-default-features --bin reshiki app::shortcut_focus_tests::review_close -- --ignored
-      - name: Test rendered tool flyout input ownership on Windows
-        if: runner.os == 'Windows' && matrix.partition == 1
-        # Exercise the actual application widgets, including the Tiny Skia fallback.
-        # Native desktop timing and accessibility acceptance remain separate.
-        run: cargo test --locked --no-default-features --bin reshiki app::shortcut_focus_tests::tool_palette_pointer_gestures_and_keyboard_activation_have_one_owner -- --exact --ignored
-      - name: Test rendered shortcut and command palette focus on Windows
-        if: runner.os == 'Windows' && matrix.partition == 1
-        # Exercise actual widget input and accessibility, including the Tiny Skia fallback.
-        # Native desktop timing and accessibility acceptance remain separate.
+        shell: pwsh
         run: |
-          cargo test --locked --no-default-features --bin reshiki app::shortcut_focus_tests::context_row_rotation_field_applies_a_typed_angle -- --exact --ignored
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          cargo test --locked --no-default-features --bin reshiki app::shortcut_focus_tests::join_chord_stays_in_real_fields_and_coordinates_selected_en_after_blur -- --exact --ignored
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          cargo test --locked --no-default-features --bin reshiki app::shortcut_focus_tests::command_palette_rows_are_named_buttons -- --exact --ignored
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          cargo test --locked --no-default-features --bin reshiki app::shortcut_focus_tests::command_palette_unavailable_row_click_keeps_typing_in_the_search_field -- --exact --ignored
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Test rendered drop-down Escape on Windows
-        if: runner.os == 'Windows' && matrix.partition == 1
-        # Escape closes the status-bar journal and theme lists (#336).
-        run: cargo test --locked --no-default-features --bin reshiki appearance::tests::escape_closes_an_open_pick_list -- --exact --ignored
-      - name: Test rendered figure export labels on Windows
-        if: runner.os == 'Windows' && matrix.partition == 1
-        # Keep the renderer-dependent AX check explicit; ordinary menu state
-        # regressions run on all hosts without requiring a graphics adapter.
-        run: cargo test --locked --no-default-features --bin reshiki app::inspector::tests::figure_export_buttons_publish_readable_labels -- --exact --ignored
-      - name: Test rendered new drawing inspector scroll on Windows
-        if: runner.os == 'Windows' && matrix.partition == 1
-        run: cargo test --locked --no-default-features --bin reshiki app::workspace::inspector_motion_qa::a_new_drawing_shows_selected_properties_from_the_top -- --exact --ignored
-      - name: Test rendered hybrid NMR controls on Windows
-        if: runner.os == 'Windows' && matrix.partition == 1
-        # Actual shared widgets, plot/atom linkage, docking camera and owned
-        # drag/resize input. Native desktop acceptance is recorded separately.
-        run: |
-          cargo test --locked --no-default-features --bin reshiki app::nmr:: -- --include-ignored --test-threads=1
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          cargo test --locked --no-default-features --bin reshiki canvas::nmr:: -- --include-ignored --test-threads=1
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Test rendered local naming accessibility and scrolled insertion on Windows
-        if: runner.os == 'Windows' && matrix.partition == 1
-        run: "cargo test --locked --no-default-features --bin reshiki app::naming:: -- --ignored"
+          $helper = (Resolve-Path "artifacts/inchi-helper/reshiki-inchi-helper$($IsWindows ? '.exe' : '')").Path
+          "RESHIKI_INCHI_HELPER=$helper" >> $env:GITHUB_ENV
       # Required workspace tests include independent expected-name rules, exact
       # native OPSIN reconstruction and cancellation/resource/missing-helper cases.
       - name: Test the native workspace partition
+        # Runs the archive without Cargo. --extract-to puts target/debug where
+        # the build had it, so paths compiled into the tests still resolve.
         # Binary exclusions also prevent executing custom harnesses during listing.
         run: >-
-          cargo nextest run --workspace --locked --no-default-features --profile ci
+          cargo-nextest nextest run --archive-file nextest-archive.tar.zst
+          --extract-to . --workspace-remap . --profile ci
           --partition hash:${{ matrix.partition }}/2
           -E 'not binary_id(reshiki::metafile_worker) & not binary_id(reshiki-macos::native_print) & not (package(reshiki) & kind(lib) & test(/^naming::s2n_harness::/))'
-      - name: Test the shared naming corpus in one libtest process
-        # Preserve the shared LazyLock baseline; balance against partition 1's extras.
-        if: matrix.partition == 2
-        run: "cargo test --locked --no-default-features -p reshiki --lib naming::s2n_harness::"
-      - name: Test the custom metafile worker harness
-        if: matrix.partition == 1
-        run: cargo test --locked --no-default-features --test metafile_worker
-      - name: Test the custom native print harness
-        # Cargo also runs this target's no-op main on non-macOS hosts.
-        if: matrix.partition == 1
-        run: cargo test --locked --no-default-features -p reshiki-macos --test native_print
-      - name: Test workspace documentation
-        if: matrix.partition == 1
-        run: cargo test --workspace --locked --no-default-features --doc
-      - name: Test the isolated font export probe
-        if: matrix.partition == 1
-        run: cargo test --locked --manifest-path tools/font-export-probe/Cargo.toml -j 2
-      - name: Test public SciFinder fixtures on a one-megabyte stack
-        if: matrix.partition == 1
-        run: cargo test --locked --no-default-features --example scifinder_handoff_qa tests::public_fixture_checks_fit_one_megabyte_stack -- --exact
-      - name: Verify public SciFinder handoff fixtures
-        if: matrix.partition == 1
-        run: cargo run --locked --no-default-features --example scifinder_handoff_qa -- "${{ runner.temp }}/reshiki-scifinder-handoff"
-      - name: Warm the shared Rust cache
-        if: github.ref == 'refs/heads/main' && matrix.partition == 1
-        # Include lint and golden configurations for all three lanes' PR cache reads.
-        # Keep the job's shell: Git Bash's /usr/bin/link shadows MSVC link.exe on Windows.
-        run: >-
-          cargo clippy --workspace --all-targets --locked --no-default-features &&
-          cargo clippy --workspace --all-targets --locked --features rdkit-reference &&
-          cargo test --locked --features rdkit-reference --no-run --test inchi_reader --test depict_geometry --test depict_rings --test depict_attachment --test depict_seeds --test depict_templates --test depict_collision --test depict_expansion --test depict_finalize --test native_aromatic
+      - name: Keep the JUnit report of the workspace partition
+        if: ${{ always() && steps.actions_runtime_guard.outcome == 'success' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: nextest-junit-${{ matrix.platform.target }}-${{ matrix.partition }}
+          path: target/nextest/ci/junit.xml
+          # An earlier step failed, so nextest wrote no report.
+          if-no-files-found: ignore
+          retention-days: 7
   # Lint and golden replay share one job per platform to spare macOS runners.
   rust-lint-goldens:
     name: rust lint+goldens (${{ matrix.os }}, ${{ matrix.target }})
@@ -483,7 +559,7 @@ jobs:
       - name: Check all optional reference tests compile cleanly
         run: cargo clippy --workspace --all-targets --locked --features rdkit-reference -- -D warnings
       - name: Build the Rust helper and test executable
-        run: uv run --no-project python scripts/build_inchi_helper.py --target ${{ matrix.target }}
+        run: uv run --no-project python scripts/build_inchi_helper.py
       - name: Select the helper for runtime integration tests
         run: uv run --no-project python -c "import os,pathlib; p=pathlib.Path('artifacts/inchi-helper/reshiki-inchi-helper'+('.exe' if os.name=='nt' else '')).resolve(); open(os.environ['GITHUB_ENV'],'a').write('RESHIKI_INCHI_HELPER='+str(p)+'\n')"
       - name: Install fixture reader dependencies
@@ -497,9 +573,32 @@ jobs:
       - name: Build the release test executable for the performance harnesses
         if: runner.os == 'Linux'
         run: cargo test --release --locked --no-default-features --bin reshiki --no-run
+      # macOS runners are the scarcest, so the macOS Python checks and the arm64
+      # geometry tests run here and not as jobs of their own. Keep the two steps
+      # below the same as the python and geometry jobs.
+      - name: Check and test Python on macOS
+        if: runner.os == 'macOS'
+        run: |
+          uv run --locked ruff check reference scripts tests
+          uv run --locked ruff format --check reference scripts tests
+          uv run --locked ty check
+          uv run --locked python -m unittest discover -s tests -p 'test_*.py'
+          uv run --locked python -m unittest discover -s reference -p 'test_*.py'
+          uv run --locked python scripts/check_reference_dependencies.py
+      - name: Test the geometry, heap and process crates for the packaged macOS target
+        if: runner.os == 'macOS' && needs.scope.outputs.geometry == 'true'
+        env:
+          MACOSX_DEPLOYMENT_TARGET: "14.0"
+        run: |
+          cargo test --release --locked -p reshiki-process-heap --no-default-features --target ${{ matrix.target }}
+          cargo test --release --locked -p reshiki-process-heap --no-default-features --features allocation-metrics --test global_allocator_unwind --target ${{ matrix.target }}
+          cargo test --locked -p reshiki-geometry --features cosmolkit/op-contracts-strict --target ${{ matrix.target }}
+          cargo test --locked -p reshiki-model --lib --target ${{ matrix.target }} chemistry::abbreviations::
+          cargo check --locked -p reshiki-process --all-targets --target ${{ matrix.target }}
+          cargo test --locked -p reshiki-process --target ${{ matrix.target }}
   rust-result:
     name: Rust checks
-    needs: [scope, rust, rust-lint-goldens]
+    needs: [scope, rust-build, rust, rust-extra, rust-lint-goldens]
     if: always()
     runs-on: ubuntu-22.04
     steps:
@@ -509,11 +608,13 @@ jobs:
         env:
           SCOPE_RESULT: ${{ needs.scope.result }}
           NATIVE: ${{ needs.scope.outputs.native }}
+          RUST_BUILD_RESULT: ${{ needs.rust-build.result }}
           RUST_RESULT: ${{ needs.rust.result }}
+          RUST_EXTRA_RESULT: ${{ needs.rust-extra.result }}
           LINT_GOLDENS_RESULT: ${{ needs.rust-lint-goldens.result }}
         run: |
           [[ "$SCOPE_RESULT" == success ]] || exit 1
-          for result in "$RUST_RESULT" "$LINT_GOLDENS_RESULT"; do
+          for result in "$RUST_BUILD_RESULT" "$RUST_RESULT" "$RUST_EXTRA_RESULT" "$LINT_GOLDENS_RESULT"; do
             case "$result" in
               success) ;;
               skipped) [[ "$NATIVE" != true ]] || exit 1 ;;
@@ -574,9 +675,13 @@ jobs:
       - run: rustup toolchain install 1.99.1 --profile minimal --target ${{ matrix.target }}
       - run: rustup default 1.99.1
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        # One cache, not one per target (2.5 GB of the 10 GB repository limit):
+        # Windows x64 gains most from it on pull requests (about 3.5 minutes);
+        # the other targets build cold in 4 to 8 minutes, off the critical path.
+        if: matrix.target == 'x86_64-pc-windows-msvc'
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
-          shared-key: geometry-${{ matrix.target }}
+          shared-key: geometry
       - name: Select the native Windows compiler
         if: runner.os == 'Windows'
         uses: ./.github/actions/setup-msvc
@@ -653,7 +758,7 @@ jobs:
         with:
           arch: ${{ matrix.platform.msvc_arch }}
       - name: Build the Rust helper and test executable
-        run: uv run --no-project python scripts/build_inchi_helper.py --target ${{ matrix.platform.target }}
+        run: uv run --no-project python scripts/build_inchi_helper.py
       - name: Select the helper for runtime integration tests
         run: uv run --no-project python -c "import os,pathlib; p=pathlib.Path('artifacts/inchi-helper/reshiki-inchi-helper'+('.exe' if os.name=='nt' else '')).resolve(); open(os.environ['GITHUB_ENV'],'a').write('RESHIKI_INCHI_HELPER='+str(p)+'\n')"
       - name: Install the optional reference dependencies

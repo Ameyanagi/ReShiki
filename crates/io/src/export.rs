@@ -1,4 +1,48 @@
-use crate::{document::Document, scene};
+use crate::{canvas_theme::CanvasTheme, document::Document, scene};
+use std::borrow::Cow;
+
+/// The paper behind a copied or exported picture.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Background {
+    /// No paper. The ink keeps the canvas's colors.
+    Transparent,
+    /// The drawing's own canvas color.
+    Canvas,
+    /// This color. Black and white ink swap to stay readable on it.
+    Color([u8; 3]),
+}
+
+impl Background {
+    /// The drawing as painted on this background, and the paper color.
+    /// A color background takes the canvas, light or dark, whose ink reads
+    /// better on it. Only Ink follows it: palette, element and custom colors
+    /// keep how the drawing's own canvas shows them. 3D models keep the
+    /// drawing's theme and take its colors for the new canvas.
+    pub fn apply(self, doc: &Document) -> (Cow<'_, Document>, Option<[u8; 3]>) {
+        use crate::color_contrast::contrast;
+        match self {
+            Self::Transparent => (Cow::Borrowed(doc), None),
+            Self::Canvas => (Cow::Borrowed(doc), Some(doc.canvas_theme.background())),
+            Self::Color(paper) => {
+                let canvas = if contrast([0; 3], paper) >= contrast([255; 3], paper) {
+                    CanvasTheme::Light
+                } else {
+                    CanvasTheme::Dark
+                };
+                let doc = if doc.canvas_theme == canvas {
+                    Cow::Borrowed(doc)
+                } else {
+                    let mut flipped = crate::canvas_theme::resolved_document(doc).into_owned();
+                    flipped.canvas_theme = canvas;
+                    flipped.color_theme = doc.color_theme;
+                    flipped.custom_theme.clone_from(&doc.custom_theme);
+                    Cow::Owned(flipped)
+                };
+                (doc, Some(paper))
+            }
+        }
+    }
+}
 
 pub fn parse_svg(svg: String) -> Result<resvg::usvg::Tree, String> {
     parse_svg_with_fontdb(&svg, crate::style::fontdb())
@@ -111,28 +155,46 @@ pub struct Publication {
 
 /// Prepare a figure snapshot and render it off the async executor, as the
 /// app's figure export does. `pages` exports every publication page as a PDF;
-/// otherwise PNG exports stay within `max_pixels` (at most [`FILE_PIXELS`]).
+/// otherwise PNG exports use `dpi`, or a lower resolution to stay within
+/// `max_pixels` (at most [`FILE_PIXELS`]).
 /// `editable` includes the prepared drawing in supported figures when it fits the limit.
+#[allow(clippy::too_many_arguments)]
 pub async fn publication(
     engine: &crate::engine::LocalEngine,
     doc: Document,
     format: &'static str,
     pages: bool,
     editable: bool,
+    background: Background,
+    dpi: u32,
     max_pixels: u64,
 ) -> Result<Publication, String> {
-    publication_within(engine, doc, format, pages, editable, max_pixels, usize::MAX).await
+    publication_within(
+        engine,
+        doc,
+        format,
+        pages,
+        editable,
+        background,
+        dpi,
+        max_pixels,
+        usize::MAX,
+    )
+    .await
 }
 
 /// [`publication`] for a caller that accepts at most `max_bytes`: an
 /// `svg-office` figure certain to be larger fails early with [`OVER_BYTES`].
 /// The caller still checks the size of the figure it gets.
+#[allow(clippy::too_many_arguments)]
 pub async fn publication_within(
     engine: &crate::engine::LocalEngine,
     doc: Document,
     format: &'static str,
     pages: bool,
     editable: bool,
+    background: Background,
+    dpi: u32,
     max_pixels: u64,
     max_bytes: usize,
 ) -> Result<Publication, String> {
@@ -141,7 +203,7 @@ pub async fn publication_within(
         doc.validate()?;
         // Atoms too far apart for a PNG are a cheap sign that the figure will
         // not fit. Measuring its scene now saves the chemistry check.
-        let budget = RasterBudget::file(max_pixels);
+        let budget = RasterBudget::file(dpi, max_pixels);
         let atoms = || doc.atoms.iter().map(|atom| atom.position);
         let lo = atoms().reduce(|lo, at| Point::new(lo.x.min(at.x), lo.y.min(at.y)));
         let hi = atoms().reduce(|hi, at| Point::new(hi.x.max(at.x), hi.y.max(at.y)));
@@ -178,7 +240,7 @@ pub async fn publication_within(
             (None, None)
         };
         let figure = if pages {
-            pages_pdf(&doc).map(|bytes| Figure {
+            pages_pdf(&doc, background).map(|bytes| Figure {
                 bytes,
                 detail: None,
             })
@@ -189,7 +251,8 @@ pub async fn publication_within(
                     &doc,
                     format,
                     false,
-                    RasterBudget::file(max_pixels),
+                    background,
+                    RasterBudget::file(dpi, max_pixels),
                     max_bytes,
                     drawing.as_deref(),
                 ),
@@ -221,23 +284,40 @@ pub fn drawing(doc: &Document, format: &str) -> Result<Vec<u8>, String> {
 pub fn figure(doc: &Document, format: &str) -> Result<Figure, String> {
     with_attachment_notice(
         doc,
-        render_drawing(doc, format, false, RasterBudget::FILE, usize::MAX, None),
+        render_drawing(
+            doc,
+            format,
+            false,
+            Background::Canvas,
+            RasterBudget::file(crate::style::DEFAULT.png_dpi, FILE_PIXELS),
+            usize::MAX,
+            None,
+        ),
     )
 }
 
 /// [`figure`] with PNG resolution chosen to fit `max_pixels`, capped at
 /// [`FILE_PIXELS`].
 pub fn figure_with_budget(doc: &Document, format: &str, max_pixels: u64) -> Result<Figure, String> {
+    figure_with_budget_and_drawing(
+        doc,
+        format,
+        Background::Canvas,
+        RasterBudget::file(crate::style::DEFAULT.png_dpi, max_pixels),
+        None,
+    )
+}
+
+fn figure_with_budget_and_drawing(
+    doc: &Document,
+    format: &str,
+    background: Background,
+    budget: RasterBudget,
+    drawing: Option<&[u8]>,
+) -> Result<Figure, String> {
     with_attachment_notice(
         doc,
-        render_drawing(
-            doc,
-            format,
-            false,
-            RasterBudget::file(max_pixels),
-            usize::MAX,
-            None,
-        ),
+        render_drawing(doc, format, false, background, budget, usize::MAX, drawing),
     )
 }
 
@@ -253,26 +333,50 @@ pub fn clipboard_drawing(doc: &Document, format: &str) -> Result<Vec<u8>, String
 /// Preserve format details (including bounded PNG dimensions/DPI) in an
 /// explicit format-copy receipt as well as in file-export receipts.
 pub fn clipboard_figure(doc: &Document, format: &str) -> Result<Figure, String> {
-    clipboard_figure_with_drawing(doc, format, None)
+    clipboard_figure_with_drawing(
+        doc,
+        format,
+        Background::Transparent,
+        crate::style::DEFAULT.png_dpi,
+        None,
+    )
 }
 
 /// Render a clipboard figure, optionally carrying an already prepared drawing.
+/// PNG uses `dpi`; on Windows a lower one when the picture would not fit the
+/// clipboard.
 pub fn clipboard_figure_with_drawing(
     doc: &Document,
     format: &str,
+    background: Background,
+    dpi: u32,
     drawing: Option<&[u8]>,
 ) -> Result<Figure, String> {
     with_attachment_notice(
         doc,
-        render_drawing(doc, format, true, RasterBudget::FILE, usize::MAX, drawing),
+        render_drawing(
+            doc,
+            format,
+            true,
+            background,
+            RasterBudget::clipboard(cfg!(windows), dpi),
+            usize::MAX,
+            drawing,
+        ),
     )
 }
 
+/// Office's preview of an embedded drawing, rebuilt after it is edited, on
+/// the copy background and resolution set at the time of the rebuild.
 #[cfg(windows)]
-pub fn office_preview(doc: &Document) -> Result<reshiki_windows::OfficePreview, String> {
+pub fn office_preview(
+    doc: &Document,
+    background: Background,
+    dpi: u32,
+) -> Result<reshiki_windows::OfficePreview, String> {
     Ok(reshiki_windows::OfficePreview {
-        png: clipboard_png(doc)?,
-        metafile: crate::native_windows::office_metafile(doc)?,
+        png: clipboard_figure_with_drawing(doc, "png", background, dpi, None)?.bytes,
+        metafile: crate::native_windows::office_metafile(doc, background)?,
     })
 }
 
@@ -294,30 +398,32 @@ fn with_attachment_notice(
 /// The refusal of a figure that is certain to be larger than `max_bytes`.
 pub const OVER_BYTES: &str = "The figure is larger than the output limit";
 
-/// `file_budget` bounds file PNGs; clipboard PNGs use the clipboard budget.
-/// An SVG with outlined text that cannot fit `max_bytes` is refused before it
-/// is written; the caller still checks the size of the figure it gets.
+/// `budget` sets the PNG resolution and its limits. An SVG with outlined text
+/// that cannot fit `max_bytes` is refused before it is written; the caller
+/// still checks the size of the figure it gets.
 fn render_drawing(
     doc: &Document,
     format: &str,
+    #[cfg_attr(
+        not(windows),
+        expect(unused_variables, reason = "only EMF tells them apart")
+    )]
     clipboard: bool,
-    file_budget: RasterBudget,
+    background: Background,
+    budget: RasterBudget,
     max_bytes: usize,
     drawing: Option<&[u8]>,
 ) -> Result<Figure, String> {
     doc.validate()?;
-    let budget = if clipboard {
-        RasterBudget::clipboard(cfg!(windows))
-    } else {
-        file_budget
-    };
+    let (doc, paper) = background.apply(doc);
+    let doc = doc.as_ref();
     let primitives = scene::primitives(doc);
     if format == "png" {
         png_fits(scene::bounds(&primitives), budget)?;
     }
     #[cfg(test)]
     SCENES.with(|scenes| scenes.set(scenes.get() + 1));
-    let svg = scene::svg_of(doc, primitives, !clipboard);
+    let svg = scene::svg_of(doc, primitives, paper);
     if format == "svg" {
         let mut bytes = svg.into_bytes();
         if let Some(drawing) = drawing {
@@ -357,18 +463,7 @@ fn render_drawing(
         "png" => {
             let (width, height, dpi) =
                 png_dimensions(tree.size().width(), tree.size().height(), budget)?;
-            let scale = dpi as f32 / 96.0;
-            let mut pixmap =
-                resvg::tiny_skia::Pixmap::new(width, height).ok_or("Could not allocate image")?;
-            if !clipboard {
-                let [r, g, b] = doc.canvas_theme.background();
-                pixmap.fill(resvg::tiny_skia::Color::from_rgba8(r, g, b, 255));
-            }
-            resvg::render(
-                &tree,
-                resvg::tiny_skia::Transform::from_scale(scale, scale),
-                &mut pixmap.as_mut(),
-            );
+            let pixmap = raster(&tree, paper, dpi as f32, (width, height), (0., 0.))?;
             let mut bytes = Vec::new();
             {
                 let mut encoder = png::Encoder::new(&mut bytes, width, height);
@@ -380,19 +475,8 @@ fn render_drawing(
                     unit: png::Unit::Meter,
                 }));
                 let mut writer = encoder.write_header().map_err(|e| e.to_string())?;
-                // tiny-skia stores premultiplied colors; PNG requires straight
-                // alpha or antialiased colored edges acquire dark fringes.
-                for index in 0..pixmap.pixels().len() {
-                    if let Some(pixel) = pixmap.pixels().get(index).copied()
-                        && let Some(bytes) = pixmap.data_mut().get_mut(index * 4..index * 4 + 4)
-                    {
-                        let color = pixel.demultiply();
-                        let rgba = [color.red(), color.green(), color.blue(), color.alpha()];
-                        bytes.copy_from_slice(&rgba);
-                    }
-                }
                 writer
-                    .write_image_data(&pixmap.take())
+                    .write_image_data(&straight_alpha(pixmap))
                     .map_err(|e| e.to_string())?;
             }
             Ok(Figure {
@@ -408,6 +492,142 @@ fn render_drawing(
         figure.bytes = crate::payload::embed(format, figure.bytes, drawing)?;
     }
     Ok(figure)
+}
+
+/// The PNG export's pixels at `dpi`: `size` pixels from pixel `origin` of
+/// the whole picture.
+fn raster(
+    tree: &resvg::usvg::Tree,
+    paper: Option<[u8; 3]>,
+    dpi: f32,
+    size: (u32, u32),
+    origin: (f32, f32),
+) -> Result<resvg::tiny_skia::Pixmap, String> {
+    let scale = dpi / 96.0;
+    let mut pixmap =
+        resvg::tiny_skia::Pixmap::new(size.0, size.1).ok_or("Could not allocate image")?;
+    if let Some([r, g, b]) = paper {
+        pixmap.fill(resvg::tiny_skia::Color::from_rgba8(r, g, b, 255));
+    }
+    resvg::render(
+        tree,
+        resvg::tiny_skia::Transform::from_translate(-origin.0, -origin.1).pre_scale(scale, scale),
+        &mut pixmap.as_mut(),
+    );
+    Ok(pixmap)
+}
+
+/// The pixmap's RGBA bytes with straight alpha.
+fn straight_alpha(mut pixmap: resvg::tiny_skia::Pixmap) -> Vec<u8> {
+    // tiny-skia stores premultiplied colors; PNG requires straight
+    // alpha or antialiased colored edges acquire dark fringes.
+    for index in 0..pixmap.pixels().len() {
+        if let Some(pixel) = pixmap.pixels().get(index).copied()
+            && let Some(bytes) = pixmap.data_mut().get_mut(index * 4..index * 4 + 4)
+        {
+            let color = pixel.demultiply();
+            let rgba = [color.red(), color.green(), color.blue(), color.alpha()];
+            bytes.copy_from_slice(&rgba);
+        }
+    }
+    pixmap.take()
+}
+
+/// Close-ups of a drawing's PNG export at several resolutions.
+pub struct CloseUps {
+    /// The whole picture's size in CSS pixels, 96 to the inch.
+    pub size: (f32, f32),
+    /// For each resolution: the close-up's side in pixels and its RGBA pixels.
+    pub pixels: Vec<(u32, Vec<u8>)>,
+}
+
+/// The PNG export of `doc` at each of `dpis`, cut to a square `side` points
+/// across around `focus`, a point of the drawing: the same pixels at each
+/// setting as the exported file has there.
+pub fn png_close_ups(
+    doc: &Document,
+    background: Background,
+    focus: crate::document::Point,
+    side: f32,
+    dpis: &[u32],
+) -> Result<CloseUps, String> {
+    doc.validate()?;
+    let (doc, paper) = background.apply(doc);
+    let doc = doc.as_ref();
+    let tree = parse_svg(scene::svg_on(doc, paper))?;
+    let (lo, _) = scene::bounds(&scene::primitives(doc));
+    // Inches per drawing unit.
+    let scale = crate::style::DEFAULT.points_per_world() / 72.;
+    let side = side / 72.;
+    let corner = (
+        (focus.x - lo.x) * scale - side / 2.,
+        (focus.y - lo.y) * scale - side / 2.,
+    );
+    let pixels = dpis
+        .iter()
+        .map(|&dpi| {
+            let dpi_f = dpi as f32;
+            let pixels = (side * dpi_f).round() as u32;
+            // Whole pixels, so the close-up shows the file's own pixels.
+            let origin = ((corner.0 * dpi_f).round(), (corner.1 * dpi_f).round());
+            let pixmap = raster(&tree, paper, dpi_f, (pixels, pixels), origin)?;
+            Ok((pixels, straight_alpha(pixmap)))
+        })
+        .collect::<Result<_, String>>()?;
+    Ok(CloseUps {
+        size: (tree.size().width(), tree.size().height()),
+        pixels,
+    })
+}
+
+/// A whole PNG export, fitted to a box.
+pub struct Fitted {
+    /// The whole picture's size in CSS pixels, 96 to the inch.
+    pub size: (f32, f32),
+    /// Its width and height in pixels, within the box.
+    pub pixels: (u32, u32),
+    pub rgba: Vec<u8>,
+}
+
+/// The whole PNG export of `doc` on `background`, scaled to fit `fit`
+/// pixels, but at no more than `dpi`.
+pub fn png_preview(
+    doc: &Document,
+    background: Background,
+    fit: (u32, u32),
+    dpi: Option<u32>,
+) -> Result<Fitted, String> {
+    doc.validate()?;
+    let (doc, paper) = background.apply(doc);
+    let tree = parse_svg(scene::svg_on(doc.as_ref(), paper))?;
+    let (width, height) = (tree.size().width(), tree.size().height());
+    let fitted = 96. * (fit.0 as f32 / width).min(fit.1 as f32 / height);
+    let dpi = dpi.map_or(fitted, |dpi| fitted.min(dpi as f32));
+    let side = |css: f32, fit: u32| ((css * dpi / 96.).ceil() as u32).clamp(1, fit);
+    let size = (side(width, fit.0), side(height, fit.1));
+    let pixmap = raster(&tree, paper, dpi, size, (0., 0.))?;
+    Ok(Fitted {
+        size: (width, height),
+        pixels: size,
+        rgba: straight_alpha(pixmap),
+    })
+}
+
+/// An exported PNG file's width, height and resolution at `dpi`, for a
+/// picture `size` CSS pixels across. A large one is written at a lower
+/// resolution.
+pub fn png_file_size(size: (f32, f32), dpi: u32) -> Result<(u32, u32, u32), String> {
+    png_dimensions(size.0, size.1, RasterBudget::file(dpi, FILE_PIXELS))
+}
+
+/// A PNG export's width and height in pixels at `dpi`, for a picture
+/// `size` CSS pixels across.
+fn png_pixels(size: (f32, f32), dpi: u32) -> (u32, u32) {
+    let scale = dpi as f32 / 96.;
+    (
+        (size.0 * scale).ceil() as u32,
+        (size.1 * scale).ceil() as u32,
+    )
 }
 
 /// Embed the SVG as a unit-square XObject scaled to its physical point size.
@@ -476,30 +696,29 @@ pub const FILE_SIDE: u32 = 32_767;
 
 #[derive(Clone, Copy)]
 struct RasterBudget {
+    /// The resolution to use when the picture fits.
+    dpi: u32,
+    /// Whether a lower resolution may be used instead.
     adaptive: bool,
     pixels: u64,
     side: u32,
 }
 impl RasterBudget {
-    const FILE: Self = Self::file(FILE_PIXELS);
-
-    const fn file(pixels: u64) -> Self {
+    fn file(dpi: u32, pixels: u64) -> Self {
         Self {
+            dpi,
             adaptive: true,
-            pixels: if pixels < FILE_PIXELS {
-                pixels
-            } else {
-                FILE_PIXELS
-            },
+            pixels: pixels.min(FILE_PIXELS),
             side: FILE_SIDE,
         }
     }
 
-    fn clipboard(windows: bool) -> Self {
+    fn clipboard(windows: bool, dpi: u32) -> Self {
         if windows {
             // RGBA Office previews and CF_DIB must fit the native 64 MiB
             // limit. Picture-only paste uses the same pixel budget.
             Self {
+                dpi,
                 adaptive: true,
                 pixels: crate::pictures::MAX_PIXELS,
                 side: 8192,
@@ -507,7 +726,7 @@ impl RasterBudget {
         } else {
             Self {
                 adaptive: false,
-                ..Self::FILE
+                ..Self::file(dpi, FILE_PIXELS)
             }
         }
     }
@@ -576,36 +795,37 @@ fn png_dimensions(
     if !width.is_finite() || !height.is_finite() || width <= 0. || height <= 0. {
         return Err("Invalid PNG dimensions".into());
     }
-    let preferred = crate::style::DEFAULT.png_dpi;
-    for dpi in [preferred, 600, 300, 150, 96, 72] {
-        if !budget.adaptive && dpi != preferred {
-            break;
-        }
-        let scale = dpi as f32 / 96.;
-        let w = (width * scale).ceil() as u32;
-        let h = (height * scale).ceil() as u32;
+    let lower = [600, 300, 150, 96, 72]
+        .into_iter()
+        .filter(|&dpi| budget.adaptive && dpi < budget.dpi);
+    for dpi in std::iter::once(budget.dpi).chain(lower) {
+        let (w, h) = png_pixels((width, height), dpi);
         if w <= budget.side && h <= budget.side && u64::from(w) * u64::from(h) <= budget.pixels {
             return Ok((w, h, dpi));
         }
     }
     Err(if budget.adaptive {
-        "Drawing is too large for a PNG even at 72 dpi; use SVG or PDF."
+        "Drawing is too large for a PNG even at 72 dpi; use SVG or PDF.".into()
     } else {
-        "Drawing is too large for a 1200 dpi PNG; use SVG or PDF."
-    }
-    .into())
+        format!(
+            "Drawing is too large for a {} dpi PNG; use SVG or PDF.",
+            budget.dpi
+        )
+    })
 }
 /// Export all physical sheets without scaling the drawing. Page gaps and margin
 /// guides belong to the editor only; marks beyond a sheet edge are clipped.
-pub fn pages_pdf(doc: &Document) -> Result<Vec<u8>, String> {
+pub fn pages_pdf(doc: &Document, background: Background) -> Result<Vec<u8>, String> {
     use pdf_writer::{Content, Finish, Name, Pdf, Rect, Ref};
     use std::collections::HashMap;
     doc.validate()?;
+    let (doc, paper) = background.apply(doc);
+    let doc = doc.as_ref();
     let layout = doc
         .page_layout
         .as_ref()
         .ok_or("Set up publication pages before exporting a page PDF.")?;
-    let svg = scene::svg_with_background(doc);
+    let svg = scene::svg_on(doc, paper);
     let tree = parse_svg(svg)?;
     let (chunk, root) = svg2pdf::to_chunk(&tree, svg2pdf::ConversionOptions::default())
         .map_err(|e| e.to_string())?;
@@ -640,11 +860,13 @@ pub fn pages_pdf(doc: &Document) -> Result<Vec<u8>, String> {
         page.resources().x_objects().pair(name, root);
         page.finish();
         let mut content = Content::new();
-        let [r, g, b] = doc.canvas_theme.background().map(|c| f32::from(c) / 255.);
-        content
-            .set_fill_rgb(r, g, b)
-            .rect(0., 0., layout.width_pt, layout.height_pt)
-            .fill_nonzero();
+        if let Some(paper) = paper {
+            let [r, g, b] = paper.map(|c| f32::from(c) / 255.);
+            content
+                .set_fill_rgb(r, g, b)
+                .rect(0., 0., layout.width_pt, layout.height_pt)
+                .fill_nonzero();
+        }
         content
             .save_state()
             .rect(0., 0., layout.width_pt, layout.height_pt)

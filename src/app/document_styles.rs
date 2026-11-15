@@ -441,9 +441,7 @@ impl App {
                             self.inspector_tab = InspectorTab::Properties;
                         }
                         if !self.error {
-                            self.status = format!(
-                                "{preset} applied · Undo restores the previous style and layout"
-                            );
+                            self.status = format!("{preset} applied");
                         }
                     }
                     Err(error) => {
@@ -540,7 +538,7 @@ impl App {
                         if !self.error {
                             self.tab.styles.editor = None;
                             self.inspector_tab = InspectorTab::Properties;
-                            self.status = "Drawing style applied · Undo restores the previous style and layout".into();
+                            self.status = "Drawing style applied".into();
                         }
                     }
                     Err(error) => {
@@ -558,10 +556,7 @@ impl App {
                     return Task::none();
                 }
                 self.appearance.drawing_style_unit = unit;
-                if let Err(error) = self.appearance.save() {
-                    self.status = format!("Could not save dimension unit preference: {error}");
-                    self.error = true;
-                }
+                self.save_preference(super::settings_page::Section::Drawing, "dimension unit");
             }
             Action::CommitField(field) => {
                 let Some(editor) = &mut self.tab.styles.editor else {
@@ -967,7 +962,7 @@ impl App {
                     .style(super::workspace::muted_text),
             )
             .push(super::workspace::horizontal_line())
-            .push(text("Four-substituent stereocentres").size(12))
+            .push(text("Four-substituent stereocenters").size(12))
             .push(
                 crate::appearance::pick_list(
                     [WedgeChoice::One, WedgeChoice::Pair],
@@ -986,7 +981,7 @@ impl App {
             )
             .push(
                 checkbox(editor.ring_fusion_hydrogens)
-                    .label("Show H at ring-fusion stereocentres")
+                    .label("Show H at ring-fusion stereocenters")
                     .on_toggle(move |v| action(Action::RingFusionHydrogens(v)))
                     .text_size(12),
             )

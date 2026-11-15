@@ -43,7 +43,7 @@ impl App {
                 self.status = if outcome.completed {
                     "Print operation completed"
                 } else {
-                    "Print cancelled or not completed"
+                    "Print canceled or not completed"
                 }
                 .into();
             }

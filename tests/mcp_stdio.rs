@@ -3,8 +3,7 @@
 //! Every session runs under a 60 s watchdog, with an empty data folder.
 //! Stdout must carry only JSON-RPC 2.0 objects, one per line, and stderr
 //! never carries client content.
-#[path = "common/headless.rs"]
-mod headless;
+use crate::headless;
 
 use headless::{McpSession, StderrMode};
 use reshiki::cli::MCP_USAGE;
@@ -196,7 +195,7 @@ fn info(session: &mut McpSession, id: i64) -> Value {
     }));
     let reply = session.recv_for(Some(&json!(id)), LINE_TIMEOUT);
     assert_eq!(reply["result"]["isError"], false, "{reply}");
-    reply["result"]["structuredContent"].clone()
+    reply["result"]["structuredContent"]["value"].clone()
 }
 
 /// A folder that cannot be granted exits 2 with one stderr line, before
@@ -459,7 +458,7 @@ fn the_rmcp_client_interoperates() {
                 .expect("tools/call info");
             assert_eq!(info.is_error, Some(false));
             let structured = info.structured_content.expect("structuredContent");
-            assert_eq!(structured["operation_api"], 1, "{structured}");
+            assert_eq!(structured["value"]["operation_api"], 2, "{structured}");
             drop(client);
             child.wait().await.expect("wait for reshiki --mcp")
         };

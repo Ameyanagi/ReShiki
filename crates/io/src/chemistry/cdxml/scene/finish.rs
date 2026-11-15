@@ -143,6 +143,7 @@ impl CdxmlScene {
         .with_singlets(&self.singlets)?;
         let labels = drawing.labels()?;
         let mut molecule = self.molecule.clone();
+        let linked = self.base.property_captions.len();
         let mut document = drawing.finish_with(labels, |document| self.restore(document))?;
         let restored = planar && crate::haworth::interchange::restore(&mut document);
         let mut notices: Vec<_> = chemistry::drop_added_axis_wedges(&mut document, &molecule)
@@ -156,6 +157,11 @@ impl CdxmlScene {
             .any(|group| !group.bonds.is_empty())
         {
             notices.push(chemistry::STEREO_GROUP_BONDS_NOTICE.into());
+        }
+        if document.property_captions.len() < linked {
+            notices.push(
+                "Property text that covers several molecules, or a second caption on one molecule, opens as plain text".into(),
+            );
         }
         if restored {
             molecule = chemistry::document::prepare(&document)?;
@@ -320,6 +326,34 @@ impl CdxmlScene {
             .collect::<Result<_>>()?;
         document.groups = self.base.groups;
         document.ring_fills = self.base.ring_fills;
+        // ChemDraw links property text to a selection. ReShiki links one whole
+        // molecule, so text over several molecules, or a second caption on
+        // one, stays plain text with its ChemDraw values.
+        let mut claimed = HashSet::new();
+        let links: Vec<_> = self
+            .base
+            .property_captions
+            .into_iter()
+            .filter(|link| {
+                let whole = link
+                    .atoms
+                    .first()
+                    .map_or(vec![], |id| crate::molecule_names::component(document, *id));
+                link.atoms.iter().all(|id| whole.contains(id))
+                    && whole.first().is_some_and(|first| claimed.insert(*first))
+            })
+            .collect();
+        // Imported links show ReShiki's own lines at once, as after an edit.
+        document.property_captions = links;
+        for link in &mut document.property_captions {
+            if let Some(caption) = document
+                .annotations
+                .iter()
+                .find(|a| a.id == link.annotation)
+            {
+                link.text = caption.text.clone();
+            }
+        }
         document.abbreviations = self.base.abbreviations;
         if document
             .abbreviations
@@ -347,6 +381,8 @@ impl CdxmlScene {
             atom.attachment = Some(attachment.kind);
             atom.centroid = attachment.members;
         }
+        // After generic labels, so a generic structure shows no values.
+        crate::linked_properties::reconcile(document, &Default::default());
         Ok(())
     }
 }

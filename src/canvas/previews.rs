@@ -8,38 +8,43 @@ use iced::{Color, Event, Point, Rectangle, Renderer, Theme, mouse};
 /// Noninteractive thumbnail rendered from the same molecule and scene as placement.
 pub struct TemplateThumbnail<'a>(pub &'a Document);
 impl<Message> canvas::Program<Message> for TemplateThumbnail<'_> {
-    type State = ();
+    type State = PreviewState;
     fn draw(
         &self,
-        _: &(),
+        state: &PreviewState,
         renderer: &Renderer,
         _theme: &Theme,
         bounds: Rectangle,
         _: mouse::Cursor,
     ) -> Vec<Geometry> {
-        let mut frame =
-            layered::Frame::new(renderer, bounds.size()).with_canvas(self.0.canvas_theme);
-        frame.fill_rectangle(Point::ORIGIN, bounds.size(), Color::WHITE);
-        let (lo, hi) = reshiki::scene::selection_bounds(self.0, &self.0.all_ids())
-            .unwrap_or_else(|| self.0.bounds());
-        let camera = Camera {
-            center: World::new((lo.x + hi.x) * 0.5, (lo.y + hi.y) * 0.5),
-            zoom: ((bounds.width - (bounds.width * 0.16).min(24.0)) / (hi.x - lo.x).max(60.0))
-                .min((bounds.height - (bounds.height * 0.14).min(20.0)) / (hi.y - lo.y).max(50.0))
-                .min(0.85),
-        };
-        draw_document(&mut frame, self.0, camera, bounds);
-        frame.finish()
+        state.draw(self.0, bounds.size(), || {
+            let mut frame =
+                layered::Frame::new(renderer, bounds.size()).with_canvas(self.0.canvas_theme);
+            frame.fill_rectangle(Point::ORIGIN, bounds.size(), Color::WHITE);
+            let (lo, hi) = reshiki::scene::selection_bounds(self.0, &self.0.all_ids())
+                .unwrap_or_else(|| self.0.bounds());
+            let camera = Camera {
+                center: World::new((lo.x + hi.x) * 0.5, (lo.y + hi.y) * 0.5),
+                zoom: ((bounds.width - (bounds.width * 0.16).min(24.0)) / (hi.x - lo.x).max(60.0))
+                    .min(
+                        (bounds.height - (bounds.height * 0.14).min(20.0))
+                            / (hi.y - lo.y).max(50.0),
+                    )
+                    .min(0.85),
+            };
+            draw_document(&mut frame, self.0, camera, bounds);
+            frame.finish()
+        })
     }
 }
 
 /// Owns a temporary diagram for a tool inspector preview.
 pub struct DrawingThumbnail(pub Document);
 impl<Message> canvas::Program<Message> for DrawingThumbnail {
-    type State = ();
+    type State = PreviewState;
     fn draw(
         &self,
-        state: &(),
+        state: &PreviewState,
         renderer: &Renderer,
         theme: &Theme,
         bounds: Rectangle,
@@ -312,14 +317,56 @@ impl canvas::Program<crate::app::Message> for ScientificPreview {
     }
 }
 
-/// Shared, read-only preview for palettes and reviewed drawing proposals.
+/// The geometry of a read-only preview, kept until its drawing, its size or
+/// the loaded fonts change. Without it every frame builds the preview again.
 #[derive(Default)]
 pub struct PreviewState(std::cell::RefCell<Option<PreviewCache>>);
 struct PreviewCache {
     document: Document,
     size: iced::Size,
+    fonts: usize,
     geometry: Vec<<Geometry as iced::advanced::graphics::cache::Cached>::Cache>,
 }
+impl PreviewState {
+    fn draw(
+        &self,
+        document: &Document,
+        size: iced::Size,
+        build: impl FnOnce() -> Vec<Geometry>,
+    ) -> Vec<Geometry> {
+        use iced::advanced::graphics::cache::Cached;
+        let fonts = reshiki::style::font_generation();
+        let mut cache = self.0.borrow_mut();
+        if let Some(cached) = cache.as_ref()
+            && cached.size == size
+            && cached.fonts == fonts
+            && &cached.document == document
+        {
+            return cached.geometry.iter().map(Cached::load).collect();
+        }
+        #[cfg(test)]
+        PREVIEWS_BUILT.with(|built| built.set(built.get() + 1));
+        let geometry: Vec<_> = build()
+            .into_iter()
+            .map(|g| g.cache(iced::advanced::graphics::cache::Group::unique(), None))
+            .collect();
+        let result = geometry.iter().map(Cached::load).collect();
+        *cache = Some(PreviewCache {
+            document: document.clone(),
+            size,
+            fonts,
+            geometry,
+        });
+        result
+    }
+}
+#[cfg(test)]
+thread_local! {
+    /// Previews built rather than served from their cache.
+    pub(crate) static PREVIEWS_BUILT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Shared, read-only preview for palettes and reviewed drawing proposals.
 pub struct DrawingPreview<'a>(pub &'a Document);
 impl canvas::Program<crate::app::Message> for DrawingPreview<'_> {
     type State = PreviewState;
@@ -331,38 +378,21 @@ impl canvas::Program<crate::app::Message> for DrawingPreview<'_> {
         bounds: Rectangle,
         _: mouse::Cursor,
     ) -> Vec<Geometry> {
-        use iced::advanced::graphics::cache::Cached;
-        let mut cache = state.0.borrow_mut();
-        if let Some(cached) = cache.as_ref()
-            && cached.size == bounds.size()
-            && &cached.document == self.0
-        {
-            return cached.geometry.iter().map(Cached::load).collect();
-        }
-        let mut frame =
-            layered::Frame::new(renderer, bounds.size()).with_canvas(self.0.canvas_theme);
-        frame.fill_rectangle(Point::ORIGIN, bounds.size(), Color::WHITE);
-        let (lo, hi) =
-            reshiki::scene::selection_bounds(self.0, &self.0.all_ids()).unwrap_or_default();
-        let camera = Camera {
-            center: World::new((lo.x + hi.x) / 2., (lo.y + hi.y) / 2.),
-            zoom: ((bounds.width - 24.) / (hi.x - lo.x).max(1.))
-                .min((bounds.height - 24.) / (hi.y - lo.y).max(1.))
-                .clamp(0.001, 1.4),
-        };
-        draw_document_with_minimum_stroke(&mut frame, self.0, camera, bounds, 0.6);
-        let geometry: Vec<_> = frame
-            .finish()
-            .into_iter()
-            .map(|g| g.cache(iced::advanced::graphics::cache::Group::unique(), None))
-            .collect();
-        let result = geometry.iter().map(Cached::load).collect();
-        *cache = Some(PreviewCache {
-            document: self.0.clone(),
-            size: bounds.size(),
-            geometry,
-        });
-        result
+        state.draw(self.0, bounds.size(), || {
+            let mut frame =
+                layered::Frame::new(renderer, bounds.size()).with_canvas(self.0.canvas_theme);
+            frame.fill_rectangle(Point::ORIGIN, bounds.size(), Color::WHITE);
+            let (lo, hi) =
+                reshiki::scene::selection_bounds(self.0, &self.0.all_ids()).unwrap_or_default();
+            let camera = Camera {
+                center: World::new((lo.x + hi.x) / 2., (lo.y + hi.y) / 2.),
+                zoom: ((bounds.width - 24.) / (hi.x - lo.x).max(1.))
+                    .min((bounds.height - 24.) / (hi.y - lo.y).max(1.))
+                    .clamp(0.001, 1.4),
+            };
+            draw_document_with_minimum_stroke(&mut frame, self.0, camera, bounds, 0.6);
+            frame.finish()
+        })
     }
 }
 

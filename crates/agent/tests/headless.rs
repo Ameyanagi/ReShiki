@@ -47,7 +47,7 @@ fn assert_envelope(tool: &str, result: &ToolResult) {
     assert!(value.is_object(), "{tool}");
     assert_eq!(
         value["versions"],
-        json!({"app": "9.8.7", "operation_api": 1, "engine_protocol": 1, "document": reshiki_model::document::VERSION}),
+        json!({"app": "9.8.7", "operation_api": 2, "engine_protocol": 1, "document": reshiki_model::document::VERSION}),
         "{tool}"
     );
 }
@@ -127,7 +127,7 @@ fn reaction() -> Value {
 async fn a_session_goes_from_import_through_compose_and_apply_to_close() {
     let host = host();
     let info = ok(&host, "info", json!({})).await;
-    assert_eq!(info.value["operation_api"], 1);
+    assert_eq!(info.value["value"]["operation_api"], 2);
 
     let imported = ok(&host, "import", json!({"format": "smiles", "text": "CCO"})).await;
     assert_eq!(imported.value["validation"], json!({"status": "valid"}));
@@ -173,15 +173,15 @@ async fn a_session_goes_from_import_through_compose_and_apply_to_close() {
     assert_eq!(ids_of(&value["id_remap"], "source").len(), inserted.len());
 
     let inspected = ok(&host, "inspect", json!({"document": document, "ids": null})).await;
-    assert_eq!(inspected.value["revision"], "1");
+    assert_eq!(inspected.value["value"]["revision"], "1");
     let mut listed = HashSet::new();
     for kind in ["atoms", "annotations", "arrows", "graphics"] {
-        listed.extend(ids_of(&inspected.value[kind], "id"));
+        listed.extend(ids_of(&inspected.value["value"][kind], "id"));
     }
     for id in &inserted {
         assert!(listed.contains(id), "inserted {id} is not listed");
     }
-    assert_eq!(inspected.value["truncated"], false);
+    assert_eq!(inspected.value["value"]["truncated"], false);
 
     let rendered = ok(
         &host,
@@ -238,15 +238,15 @@ async fn a_session_goes_from_import_through_compose_and_apply_to_close() {
     assert_eq!(undone.value["value"]["revision"], "2");
     assert_eq!(undone.value["value"]["recorded"], true);
     let restored = ok(&host, "inspect", json!({"document": document, "ids": null})).await;
-    assert_eq!(restored.value["counts"]["atoms"], atoms);
-    assert_eq!(restored.value["counts"]["arrows"], 0);
+    assert_eq!(restored.value["value"]["counts"]["atoms"], atoms);
+    assert_eq!(restored.value["value"]["counts"]["arrows"], 0);
 
     for open in [&document, &source] {
         let closed = ok(&host, "document_close", json!({"document": open})).await;
-        assert_eq!(closed.value["closed"], true);
+        assert_eq!(closed.value["value"]["closed"], true);
     }
     let listed = ok(&host, "document_list", json!({})).await;
-    assert_eq!(listed.value["documents"], json!([]));
+    assert_eq!(listed.value["value"]["documents"], json!([]));
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -260,7 +260,10 @@ async fn errors_are_a_protocol_error_or_coded_tool_errors() {
     assert_eq!(error.kind.code(), "unknown_tool");
 
     let created = ok(&host, "document_new", json!({})).await;
-    let document = created.value["document"].as_str().unwrap().to_owned();
+    let document = created.value["value"]["document"]
+        .as_str()
+        .unwrap()
+        .to_owned();
     for (tool, arguments) in [
         ("info", json!([])),
         ("inspect", json!({"ids": null})),
@@ -303,7 +306,18 @@ async fn errors_are_a_protocol_error_or_coded_tool_errors() {
         "base_revision": "1",
         "idempotency_key": null,
     });
-    assert_eq!(error_code(&host, "apply", stale).await, "stale");
+    // A stale call says which revision the document has, without reading the message.
+    let result = host.call(call("apply", stale)).await.unwrap();
+    assert_eq!(
+        result.value["error"],
+        json!({
+            "code": "stale",
+            "message": "base_revision 1 is not the current revision 0; inspect the document and retry with a new idempotency_key",
+            "retryable": false,
+            "param": "base_revision",
+            "current_revision": "0",
+        })
+    );
 
     let too_many: Vec<String> = (1..=5_001).map(|id| id.to_string()).collect();
     for (tool, arguments) in [
@@ -331,7 +345,7 @@ async fn a_17_mib_import_is_refused_as_over_budget() {
     let message = result.value["error"]["message"].as_str().unwrap();
     assert!(message.contains("max_text_bytes"), "{message}");
     let listed = ok(&host, "document_list", json!({})).await;
-    assert_eq!(listed.value["documents"], json!([]));
+    assert_eq!(listed.value["value"]["documents"], json!([]));
 }
 
 // The test builds its folders with std::fs and tempfile, outside every grant.
@@ -346,11 +360,11 @@ async fn files_open_and_save_only_inside_granted_folders() {
     let info = ok(&host, "info", json!({})).await;
     let spelled = folder.to_str().unwrap();
     assert_eq!(
-        info.value["grants"],
+        info.value["value"]["grants"],
         json!({"read": [spelled], "write": [spelled]})
     );
     assert!(
-        info.value["files"]["write"]
+        info.value["value"]["files"]["write"]
             .as_array()
             .unwrap()
             .contains(&json!("rsk"))
@@ -384,7 +398,19 @@ async fn files_open_and_save_only_inside_granted_folders() {
     );
     assert_ne!(handle(&opened), document);
 
-    assert_eq!(error_code(&host, "file_save", save(false)).await, "failed");
+    // A file error's reason is a member, not only the start of the message.
+    let kept = host.call(call("file_save", save(false))).await.unwrap();
+    let error = &kept.value["error"];
+    assert_eq!(error["code"], "failed");
+    assert_eq!(error["reason"], "file_exists");
+    assert_eq!(error["param"], "path");
+    assert_eq!(error["retryable"], false);
+    assert!(
+        error["message"]
+            .as_str()
+            .unwrap()
+            .starts_with("file_exists: ")
+    );
     let replaced = ok(&host, "file_save", save(true)).await;
     assert_eq!(replaced.value["value"]["receipt"]["replaced"], true);
 

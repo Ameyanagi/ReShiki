@@ -16,16 +16,16 @@ ReShiki can run without its window as an [MCP](https://modelcontextprotocol.io/)
 
 ## What an agent can do
 
-- Import SMILES, MOL, RXN, reaction SMILES, InChI, CDXML or CDX, or open a file from a folder you granted.
+- Import SMILES, MOL, RXN, reaction SMILES, InChI, CDXML, CDX or a chemical name, or open a file from a folder you granted.
 - Report the formula, mass, logP, TPSA, InChI, InChIKey and other properties.
 - Render a preview it can look at.
 - Lay out molecules and reaction schemes from SMILES, as ReShiki’s assistant does, then insert or delete structures and undo or redo.
-- Export SVG, PDF, PNG, CDXML, MOL, SMILES or InChI, or save `.rsk` drawings and those formats into a folder you granted.
+- Export SVG, PDF, PNG, CDXML, CDX, MOL, RXN, SMILES, reaction SMILES or InChI, or save `.rsk` drawings and those formats into a folder you granted.
+- Name a structure, or read a chemical name, offline with the app's [Chemical names](/guide/names/).
 
 Limits in this version:
 
 - The agent composes at the SMILES level: molecules, reactions and whole schemes. It does not edit individual atoms, bonds or styles.
-- The app can import chemical names, but the agent API cannot yet; the agent must supply SMILES.
 - It cannot see or change drawings open in the ReShiki app. Its drawings live in the server until it saves them; open a saved `.rsk` file in ReShiki to keep editing.
 - It reads and writes files only in folders you grant.
 

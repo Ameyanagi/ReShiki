@@ -693,7 +693,7 @@ async fn exact_numeric_transforms_keep_tetrahedral_and_double_bond_identity() {
 
 #[tokio::test]
 #[ignore = "Manual GPU input and layout check; writes actual renderer evidence"]
-async fn numeric_panel_layout_input_and_renderer_evidence() {
+async fn manual_numeric_panel_layout_input_and_renderer_evidence() {
     use iced::advanced::{layout, mouse, renderer::Headless, widget::Tree};
     use iced::keyboard::{self, Key, key};
     let directory = std::env::temp_dir().join("reshiki-numeric-transforms-qa");
@@ -898,7 +898,7 @@ async fn numeric_panel_layout_input_and_renderer_evidence() {
 
 #[test]
 #[ignore = "Manual explicit-Apply latency check on a 1000-atom document"]
-fn numeric_size_apply_latency() {
+fn manual_numeric_size_apply_latency() {
     let mut doc = Document::default();
     for index in 0..1000 {
         let id = doc.add_atom(

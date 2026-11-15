@@ -66,6 +66,8 @@ Chemical naming comes from the external [nazuchem repository](https://github.com
 
 ## Modules
 
+The table lists the modules to know first. The [module index](modules.md) lists every module file with a one-line description; it is generated from each file's `//!` comment.
+
 | File                                                        | Responsibility                                                                 |
 | ----------------------------------------------------------- | ------------------------------------------------------------------------------ |
 | `crates/model/src/document.rs`                              | Atoms, bonds, text, arrows, stable object IDs, validation, undo/redo snapshots |
@@ -148,7 +150,7 @@ The camera never changes stored coordinates or export size, and history and
 camera are session state.
 
 Native documents are JSON. Each drawing is saved at the lowest format version
-that holds its features, and this build reads versions 1–37; a drawing from a
+that holds its features, and this build reads versions 1–38; a drawing from a
 newer ReShiki reports the version it needs instead of a parse error. New
 presentation fields raise the version so older editors reject documents they
 cannot keep. [Document format versions](#document-format-versions) lists what
@@ -163,8 +165,8 @@ Enhanced stereo groups are identified by `(kind, number)` across the whole drawi
 
 `VERSION` in `crates/model/src/document.rs` is the newest format this build
 reads. Its doc comment holds the table below; update both together.
-`Document::file_version` selects version 37 when an atom has three or four
-radical electrons, version 36 when an atom has an enhanced stereo
+`Document::file_version` selects version 38 when a property caption is linked
+to a molecule, version 37 when an atom has three or four radical electrons, version 36 when an atom has an enhanced stereo
 group, version 35 when an arrow has interior nodes or the drawing has a custom
 crossing clearance,
 version 34 when a collapsed group has two attachment atoms, version 33 when a model retains linked-conformer source state,
@@ -214,6 +216,7 @@ whose model was already discarded cannot recover that missing source context.
 | 35      | Arrows with interior nodes (#761); also used for a custom crossing clearance (#1111). |
 | 36      | Enhanced stereo groups (#766).                                                        |
 | 37      | Three or four radical electrons on an atom.                                           |
+| 38      | Property captions linked to their molecules (#1175).                                  |
 
 ## Chemistry requests
 

@@ -47,6 +47,7 @@ pub mod highlights;
 pub mod ionic;
 pub mod joining;
 pub mod ligands;
+pub mod linked_properties;
 pub mod models3d;
 pub mod molecule_names;
 pub mod pages;

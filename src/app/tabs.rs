@@ -54,6 +54,8 @@ pub(super) struct State {
     pub(super) deferred_results: Vec<(TabId, Message)>,
     /// Temporary background routing never changes the visible drawing context.
     pub(super) temporary_depth: usize,
+    /// The budget of a [`App::trim_histories`] asked for during that routing.
+    pending_trim: Option<usize>,
 }
 
 impl State {
@@ -65,9 +67,18 @@ impl State {
     }
 }
 
+/// Estimated bytes of undo and redo history that all tabs keep together. One
+/// tab alone keeps at most half of it (`History::default`).
+pub(super) const HISTORY_BYTES: usize = 256 << 20;
+/// Undo and redo steps a tab behind the front keeps however large its
+/// drawing. The tab in front keeps `History::MIN_STEPS`.
+pub(super) const BACKGROUND_STEPS: usize = 5;
+
 const TAB_HEIGHT: f32 = 30.;
 const TAB_PADDING: f32 = 8.;
-const TAB_MIN: f32 = 88.;
+/// Three tabs of this width still fit the header of the smallest window
+/// beside the GitHub button.
+const TAB_MIN: f32 = 84.;
 /// The narrowest the tab in front gets when it alone shows.
 const TAB_FLOOR: f32 = 64.;
 const TAB_MAX: f32 = 200.;
@@ -204,6 +215,35 @@ impl App {
         self.tabs.epochs
     }
 
+    /// Keeps the undo and redo history of all tabs within `budget` estimated
+    /// bytes. A tab gives up its oldest undo steps first, then its redo steps
+    /// furthest ahead. The tabs behind give way first, the largest history
+    /// first, down to [`BACKGROUND_STEPS`]. The tab in front is last and
+    /// keeps `History::MIN_STEPS`. A change routed to a tab behind the front
+    /// trims once the tab in front is back in its place.
+    pub(super) fn trim_histories(&mut self, budget: usize) {
+        if self.tabs.temporary_depth != 0 {
+            self.tabs.pending_trim = Some(budget);
+            return;
+        }
+        let mut histories: Vec<_> = self
+            .tabs
+            .background
+            .iter_mut()
+            .map(|tab| (&mut tab.history, BACKGROUND_STEPS))
+            .collect();
+        histories.sort_by_cached_key(|(history, _)| std::cmp::Reverse(history.bytes()));
+        histories.push((&mut self.tab.history, super::History::MIN_STEPS));
+        let total: usize = histories.iter().map(|(history, _)| history.bytes()).sum();
+        let mut over = total.saturating_sub(budget);
+        for (history, keep) in histories {
+            if over == 0 {
+                break;
+            }
+            over = over.saturating_sub(history.release(over, keep));
+        }
+    }
+
     /// A new empty tab with its own draft file, not yet in the strip.
     fn fresh_tab(&mut self) -> DocumentTab {
         let recovery = self
@@ -287,7 +327,9 @@ impl App {
     }
 
     fn leave_tab(&mut self) {
-        self.tab.stereo_notes.clear();
+        // Check drawing findings stay with their tab until its drawing changes.
+        self.tab.pulse = None;
+        self.check_results = false;
         self.clear_bond_text_hint();
         self.tab.arrows.cancel_source();
         self.cancel_reference_stretch();
@@ -378,6 +420,11 @@ impl App {
         self.tab.edited = self.tab.dirty();
         swap(self);
         self.tabs.temporary_depth = previous_depth;
+        if previous_depth == 0
+            && let Some(budget) = self.tabs.pending_trim.take()
+        {
+            self.trim_histories(budget);
+        }
         Some(result)
     }
 

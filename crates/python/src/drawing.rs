@@ -41,6 +41,15 @@ pub fn format_name(format: &str) -> String {
     .into()
 }
 
+/// Whether [`read`] reads `format`, under any of its names.
+pub fn is_input_format(format: &str) -> bool {
+    let format = format_name(format);
+    matches!(
+        format.as_str(),
+        "auto" | "smiles" | "mol" | "sdf" | "rxn" | "rsmi" | "inchi" | "cdxml" | "cdx" | "rsk"
+    ) || reshiki_io::crystal::is_crystal_format(&format)
+}
+
 fn detect(data: &[u8]) -> Result<&'static str, String> {
     if data.starts_with(b"VjCD") {
         return Ok("cdx");
@@ -152,7 +161,8 @@ pub async fn properties(data: &[u8]) -> Result<String, String> {
         .request(Request::molecule("analyze", document))
         .await?
         .analysis
-        .ok_or("Analysis returned no molecular properties")?;
+        .ok_or("Analysis returned no molecular properties")?
+        .rounded();
     serde_json::to_string(&analysis).map_err(|error| error.to_string())
 }
 

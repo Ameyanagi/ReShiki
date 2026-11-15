@@ -274,7 +274,7 @@ fn export_pdf_gradient_evidence() {
         paged.page_layout = Some(Default::default());
         std::fs::write(
             root.join(format!("{name}-pages.pdf")),
-            export::pages_pdf(&paged).unwrap(),
+            export::pages_pdf(&paged, export::Background::Canvas).unwrap(),
         )
         .unwrap();
     }

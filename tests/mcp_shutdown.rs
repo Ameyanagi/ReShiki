@@ -4,8 +4,7 @@
 //! Every session runs under a 60 s watchdog with an empty data folder. Pipe
 //! buffers differ between systems, so every bound allows for a full OS
 //! pipe, and the requests that must fill one carry the whole tool catalog.
-#[path = "common/headless.rs"]
-mod headless;
+use crate::headless;
 
 use headless::{McpSession, StderrMode, compose_32, modern_call, modern_list};
 use reshiki_agent::ops::budget::Budgets;

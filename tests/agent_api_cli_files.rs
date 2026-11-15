@@ -5,8 +5,7 @@
 //! Every run has an empty data folder, a temporary working folder and a
 //! watchdog, and inherits RESHIKI_INCHI_HELPER as CI sets it
 //! (.github/workflows/checks.yml).
-#[path = "common/headless.rs"]
-mod headless;
+use crate::headless;
 
 use std::{
     collections::BTreeSet,
@@ -49,7 +48,9 @@ fn assert_failed(output: &Output) -> String {
     let stderr = text(&output.stderr);
     assert_eq!(output.status.code(), Some(1), "{stderr}");
     assert!(output.stdout.is_empty(), "{}", text(&output.stdout));
-    assert!(stderr.starts_with("reshiki: error: "), "{stderr}");
+    // An operation error is `reshiki: error[code]: `, an input or output
+    // error `reshiki: error: `.
+    assert!(stderr.starts_with("reshiki: error"), "{stderr}");
     stderr
 }
 

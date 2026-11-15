@@ -216,7 +216,7 @@ pub(super) struct State {
     preview: Option<Preview>,
     smiles: String,
     acknowledged: bool,
-    structure: Option<(Ticket, Record)>,
+    pub(super) structure: Option<(Ticket, Record)>,
     /// The atoms Generate named, and their parent locants once named.
     structure_atoms: Vec<u64>,
     structure_locants: HashMap<u64, String>,
@@ -594,19 +594,19 @@ impl App {
                 match pending {
                     Some(Pending::Generate(_)) => {
                         self.tab.naming.structure_error =
-                            Some("Local name generation was cancelled".into());
+                            Some("Local name generation was canceled".into());
                     }
                     Some(Pending::Caption(_)) => {
-                        self.status = "Local name generation was cancelled".into();
+                        self.status = "Local name generation was canceled".into();
                         self.error = true;
                     }
                     _ => {
                         self.tab.naming.notice = Some(Notice::new(
                             NoticeKind::Retry,
                             if matches!(pending, Some(Pending::Online(_))) {
-                                "Online lookup was cancelled"
+                                "Online lookup was canceled"
                             } else {
-                                "Local name parsing was cancelled"
+                                "Local name parsing was canceled"
                             },
                         ));
                     }
@@ -641,11 +641,10 @@ impl App {
             Action::WriteUnknownStereo(enabled) => {
                 self.appearance.write_unknown_stereo = enabled;
                 self.tab.naming.structure = None;
-                if let Err(error) = self.appearance.save() {
-                    self.status =
-                        format!("Could not save unknown configuration preference: {error}");
-                    self.error = true;
-                }
+                self.save_preference(
+                    super::settings_page::Section::Names,
+                    "unknown configuration",
+                );
             }
             Action::Generate => {
                 if self.tab.naming.pending.is_some() {
@@ -809,6 +808,12 @@ impl App {
             && self.tab.optimization.is_none()
     }
 
+    /// No naming request is running. A running one keeps the preferences it
+    /// started with, so they wait for it.
+    pub(super) fn naming_idle(&self) -> bool {
+        self.tab.naming.pending.is_none()
+    }
+
     pub(super) fn naming_can_show_molecule(&self) -> bool {
         self.naming_can_edit() && self.tab.naming.pending.is_none()
     }
@@ -857,10 +862,9 @@ impl App {
         self.commit_structure_insert(before, selected);
         self.tool = Tool::Select;
         self.status = if multicomponent {
-            "Inserted editable name result as separate components · Undo removes the insertion"
-                .into()
+            "Name result inserted as separate components".into()
         } else {
-            "Inserted editable name result · Undo removes the insertion".into()
+            "Name result inserted".into()
         };
         self.error = false;
     }
@@ -934,7 +938,7 @@ impl App {
         let state = &self.tab.naming;
         let idle = state.pending.is_none();
         let mut name = column![
-            section("NAME → STRUCTURE"),
+            section("Name → structure"),
             text_input(
                 "naming.name",
                 "Chemical name",
@@ -986,7 +990,7 @@ impl App {
             name = name.push(self.naming_preview(preview));
         }
         let structure = column![
-            section("STRUCTURE → NAME"),
+            section("Structure → name"),
             text(STRUCTURE_HINT).size(11).style(muted_text),
             accessible_checkbox(
                 "naming.write-unknown-stereo",

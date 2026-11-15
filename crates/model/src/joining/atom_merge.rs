@@ -193,6 +193,12 @@ fn merge_atoms_with_position(
     }
     crate::ring_fills::validate(&result)
         .map_err(|_| "Joining would collapse or duplicate a painted ring. Clear its fill first.")?;
+    for link in &mut result.property_captions {
+        for id in &mut link.atoms {
+            *id = mapped(*id);
+        }
+        dedup(&mut link.atoms);
+    }
     for scope in &mut result.depth_appearance {
         for id in &mut scope.atoms {
             *id = mapped(*id);
@@ -217,6 +223,7 @@ fn merge_atoms_with_position(
     crate::arrow_anchors::remap_for_join(&mut result, &doc.atoms, &endpoint_mapping);
     crate::atom_labels::clear_computed(&mut result);
     crate::molecule_names::reconcile(&mut result, doc);
+    crate::linked_properties::reconcile(&mut result, doc);
     crate::models3d::reconcile(&mut result, doc);
     result.validate()?;
     Ok((result, vec![survivor]))
