@@ -387,8 +387,9 @@ fn regular_ring_rejects_one_colliding_vertex_including_explicit_methane() {
         reject_unchanged(&doc, point, 6, direction);
     }
     // Empty-space placement must reject collisions too, even with snapping off.
+    // The upright hexagon has a vertex below its center.
     let mut doc = Document::default();
-    doc.add_atom("C", Point::new(42., 0.));
+    doc.add_atom("C", Point::new(0., 42.));
     let before = doc.clone();
     assert!(editing::ring_oriented(&mut doc, Point::default(), 6, false, 0., None).is_err());
     assert_eq!(doc, before);

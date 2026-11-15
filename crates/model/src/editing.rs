@@ -1481,7 +1481,7 @@ fn aromatic_hexagon(
 ) -> Result<(Document, Vec<u64>), RingRejection> {
     let drawing = crate::rings::Drawing {
         preset: crate::rings::Preset::Benzene,
-        length: crate::style::DEFAULT.bond_length_world,
+        length: doc.drawing_style.bond_length_world,
         alternate: false,
         connect: false,
     };
@@ -1626,7 +1626,7 @@ fn attached_ring_vertices(
         .map(|a| a.position)
         .unwrap_or(p);
     let length = if neighbors.is_empty() {
-        crate::style::DEFAULT.bond_length_world
+        doc.drawing_style.bond_length_world
     } else {
         neighbors.iter().map(|p| p.distance(anchor)).sum::<f32>() / neighbors.len() as f32
     };
@@ -1656,8 +1656,13 @@ fn attached_ring_vertices(
     } else {
         p
     };
+    // Like ChemDraw's ring tools, a free ring keeps one side vertical: even
+    // rings stand upright (a hexagon has a vertex at the top), odd rings
+    // point right.
     let phase = if atom.is_some() {
         angle + std::f32::consts::PI
+    } else if n % 2 == 0 {
+        std::f32::consts::PI / n as f32
     } else {
         0.0
     };
