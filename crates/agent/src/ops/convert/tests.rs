@@ -292,6 +292,93 @@ async fn names_need_the_hosts_naming_hook() {
     );
 }
 
+/// A naming hook whose calls never end. It reports each start and each drop.
+struct Stuck(tokio::sync::mpsc::UnboundedSender<&'static str>);
+
+struct Dropped(tokio::sync::mpsc::UnboundedSender<&'static str>);
+
+impl Drop for Dropped {
+    fn drop(&mut self) {
+        let _ = self.0.send("dropped");
+    }
+}
+
+impl Stuck {
+    fn call<T: 'static>(&self) -> NamingFuture<T> {
+        let events = self.0.clone();
+        Box::pin(async move {
+            let _ = events.send("started");
+            let _dropped = Dropped(events);
+            std::future::pending().await
+        })
+    }
+}
+
+impl Naming for Stuck {
+    fn resolve(&self, _: String) -> NamingFuture<Resolved> {
+        self.call()
+    }
+
+    fn verify(&self, _: &str, _: &crate::document::Document) -> Result<(), String> {
+        Ok(())
+    }
+
+    fn generate(&self, _: crate::document::Document) -> NamingFuture<(Named, Vec<String>)> {
+        self.call()
+    }
+}
+
+/// Dropping a naming call stops its worker, so a cancel drops it at once.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_cancelled_call_drops_its_naming_work() {
+    let (events, mut seen) = tokio::sync::mpsc::unbounded_channel();
+    let host = Arc::new(host().with_naming(Arc::new(Stuck(events))));
+    let created = ok(&host, "document_new", json!({})).await;
+    let document = created.value["value"]["document"].clone();
+    let name = json!({"format": "name", "text": "ethanol"});
+    for (tool, arguments) in [("import", name), ("name", json!({"document": document}))] {
+        let request = call(tool, arguments);
+        let id = request.request.clone();
+        let running = tokio::spawn({
+            let host = host.clone();
+            async move { host.call(request).await }
+        });
+        assert_eq!(seen.recv().await, Some("started"), "{tool}");
+        host.cancel(&Principal::local(), &id);
+        let ended = tokio::time::timeout(std::time::Duration::from_secs(5), running).await;
+        let error = ended.expect(tool).unwrap().unwrap_err();
+        assert_eq!(error.kind, ErrorKind::Cancelled, "{tool}");
+        assert_eq!(seen.recv().await, Some("dropped"), "{tool}");
+    }
+}
+
+/// Convert stores nothing, and still keeps to the object limit import has.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_drawing_over_the_object_limit_is_not_converted() {
+    let host = HeadlessHost::new(
+        "9.8.7",
+        Budgets {
+            max_objects: 2,
+            ..Budgets::default()
+        },
+    );
+    let import = json!({"format": "smiles", "text": "CCO"});
+    let calls = [
+        ("import", import),
+        ("convert", arguments("CCO", "preview")),
+        ("convert", arguments("CCO", "smiles")),
+    ];
+    for (tool, arguments) in calls {
+        let to = arguments["to"].clone();
+        let result = host.call(call(tool, arguments)).await.unwrap();
+        assert_eq!(result.value["error"]["code"], "budget", "{tool} {to}");
+        assert_eq!(
+            result.value["error"]["message"], "The drawing has 5 objects; the limit is 2",
+            "{tool} {to}"
+        );
+    }
+}
+
 /// `rsk` and `reshiki` both name a native drawing.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn rsk_is_another_name_for_reshiki() {
