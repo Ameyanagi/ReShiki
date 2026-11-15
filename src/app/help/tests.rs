@@ -359,8 +359,10 @@ fn keyboard_navigation_moves_within_results_and_never_runs_commands() {
     assert!(app.help_open && app.help.query.is_empty());
 }
 
+/// Enter itself is driven through the real widgets in
+/// shortcut_focus_tests::help_runs_a_clicked_row_with_enter.
 #[test]
-fn enter_runs_rows_that_name_a_palette_command() {
+fn rows_that_name_a_palette_command_run_it() {
     let (mut app, _) = App::new();
     app.tab.doc = reshiki::rings::Preset::Benzene.document(42., false);
     let _ = app.update(Message::ToggleHelp);
@@ -389,16 +391,56 @@ fn enter_runs_rows_that_name_a_palette_command() {
         assert!(app.help_open, "{name}");
         assert_eq!(app.tab.doc, before);
     }
-
-    // Enter in the search runs the selected row through the palette.
-    let _ = app.update(Message::Help(Action::Query("select all".into())));
-    assert_eq!(
-        app.help.selected(app.help_contextual()).unwrap().name,
-        "Select all"
-    );
     let _ = app.update(Message::Help(Action::Run(index("Select all"))));
     assert!(!app.help_open);
     assert!(!app.tab.selected.is_empty());
+}
+
+/// Help runs a command through the same gates as the palette: a caption
+/// being typed is applied first, and a command that cannot run keeps it.
+#[test]
+fn help_and_the_palette_treat_a_caption_draft_alike() {
+    use crate::app::{command_palette, inline_text};
+    use iced::widget::text_editor::{Action as Input, Edit};
+    let drafting = || {
+        let (mut app, _) = App::new();
+        app.tab.busy = false;
+        let _ = app.update(Message::InlineText(inline_text::Action::Begin(
+            None,
+            reshiki::document::Point::default(),
+        )));
+        let _ = app.update(Message::CaptionAction(Input::Edit(Edit::Paste(
+            std::sync::Arc::new("Caption".into()),
+        ))));
+        assert!(app.tab.inline_text.is_some());
+        app
+    };
+    let boc = entries().iter().position(|e| e.name == "Boc").unwrap();
+    let delete = entries().iter().position(|e| e.name == "Delete").unwrap();
+
+    // Delete needs a selection: both keep the draft.
+    let mut help = drafting();
+    let _ = help.update(Message::ToggleHelp);
+    let _ = help.update(Message::Help(Action::Run(delete)));
+    assert!(help.help_open);
+    assert!(help.tab.inline_text.is_some());
+    assert_eq!(help.tab.caption, "Caption");
+
+    let mut palette = drafting();
+    let _ = palette.update(Message::Commands(command_palette::Action::Open));
+    let _ = palette.update(Message::Commands(command_palette::Action::Query(
+        "boc".into(),
+    )));
+    assert_eq!(palette.commands.current().unwrap().name, "Boc");
+    let _ = palette.update(Message::Commands(command_palette::Action::Submit));
+    let _ = help.update(Message::Help(Action::Run(boc)));
+    assert!(!help.help_open);
+    for app in [&help, &palette] {
+        assert!(app.tab.inline_text.is_none(), "the caption was applied");
+        assert_eq!(app.tab.doc.annotations.len(), 1);
+    }
+    assert_eq!(help.tab.doc, palette.tab.doc);
+    assert_eq!(help.tool, palette.tool);
 }
 
 #[test]

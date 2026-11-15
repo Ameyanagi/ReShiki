@@ -467,6 +467,89 @@ async fn tab_focus_survives_bringing_the_tab_to_the_front() {
 
 #[tokio::test]
 #[ignore = "Opt-in renderer input check"]
+async fn help_runs_a_clicked_row_with_enter() {
+    let mut ui = Ui::new().await;
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    app.tab.doc = reshiki::rings::Preset::Benzene.document(42., false);
+    let task = app.update(Message::ToggleHelp);
+    ui.run_task(&mut app, task).await;
+    let task = app.update(Message::Help(super::help::Action::Query(
+        "select all".into(),
+    )));
+    ui.run_task(&mut app, task).await;
+    let index = (super::help::entries().iter())
+        .position(|entry| entry.name == "Select all")
+        .unwrap();
+    let row = ui.bounds(&app, &format!("help-row-{index}")).center();
+    ui.drag(&mut app, row, row).await;
+    assert!(app.help_open);
+    assert!(ui.input(&app, "help-search").1, "the search keeps focus");
+    ui.key(
+        &mut app,
+        Key::Named(Named::Enter),
+        Code::Enter,
+        Modifiers::empty(),
+        None,
+    )
+    .await;
+    assert!(!app.help_open, "Enter runs the clicked row");
+    assert!(!app.tab.selected.is_empty(), "Select all ran");
+}
+
+#[tokio::test]
+#[ignore = "Opt-in renderer input check"]
+async fn help_run_never_runs_a_row_selected_after_it_started() {
+    use super::help::{Action, entries};
+    let mut ui = Ui::new().await;
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    app.tab.doc = reshiki::rings::Preset::Benzene.document(42., false);
+    let task = app.update(Message::ToggleHelp);
+    ui.run_task(&mut app, task).await;
+    let index = |name: &str| entries().iter().position(|e| e.name == name).unwrap();
+    let (first, second) = (index("Select all"), index("Fit drawing"));
+    let _ = app.update(Message::Help(Action::Select(first)));
+    let run = ui.bounds(&app, &format!("help-run-{first}")).center();
+
+    // Pointer: press Run, select another row, release on its Run.
+    let (_, pressed) = ui.event(
+        &app,
+        Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+        mouse::Cursor::Available(run),
+    );
+    assert!(pressed.is_empty());
+    let _ = app.update(Message::Help(Action::Select(second)));
+    assert!(ui.bounds(&app, &format!("help-run-{second}")).contains(run));
+    let (_, released) = ui.event(
+        &app,
+        Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
+        mouse::Cursor::Available(run),
+    );
+    assert!(released.is_empty(), "{released:?}");
+
+    // Native: an activation queued for the first row finds no control.
+    let mut activate =
+        reshiki::accessibility::Activate::<Message>::new(format!("help-run-{first}"));
+    ui.inspect(
+        &app,
+        &mut iced::advanced::widget::operation::black_box(&mut activate),
+    );
+    assert!(activate.message().is_none());
+    let mut activate =
+        reshiki::accessibility::Activate::<Message>::new(format!("help-run-{second}"));
+    ui.inspect(
+        &app,
+        &mut iced::advanced::widget::operation::black_box(&mut activate),
+    );
+    assert!(matches!(
+        activate.message(),
+        Some(Message::Help(Action::Run(i))) if *i == second
+    ));
+}
+
+#[tokio::test]
+#[ignore = "Opt-in renderer input check"]
 async fn tool_palette_pointer_gestures_and_keyboard_activation_have_one_owner() {
     use super::palettes;
     use crate::canvas::Tool;

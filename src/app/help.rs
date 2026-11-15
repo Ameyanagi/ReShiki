@@ -153,15 +153,15 @@ impl App {
                 if index < entries().len() {
                     self.help.selected = Some(index);
                 }
-                Task::none()
+                // A clicked row takes focus; typing and Enter stay in the search.
+                iced::widget::operation::focus(SEARCH)
             }
             Action::Run(index) => {
+                // The update gates refuse a command that cannot run now,
+                // before they commit a caption draft, as for the palette.
                 let Some(command) = self.help.command(index).cloned() else {
                     return Task::none();
                 };
-                if self.command_unavailable(&command).is_some() {
-                    return Task::none();
-                }
                 self.help_open = false;
                 self.run_command(command)
             }
@@ -220,7 +220,11 @@ impl App {
         )
         .style(crate::appearance::input_style)
         .on_input(|query| Message::Help(Action::Query(query)))
-        .on_submit_maybe(current.map(|i| Message::Help(Action::Run(i))))
+        .on_submit_maybe(
+            current
+                .filter(|_| command.is_some())
+                .map(|i| Message::Help(Action::Run(i))),
+        )
         .size(14)
         .padding(8);
         let mut list = column![].spacing(2);
@@ -238,8 +242,10 @@ impl App {
         // The selected row's command runs from the preview too, or says why
         // it cannot.
         let run = current.filter(|_| command.is_some()).map(|index| {
+            // One identity per row, so a press or a queued native activation
+            // never runs a row selected after it started.
             let button = reshiki::accessibility::button(
-                "help-run",
+                format!("help-run-{index}"),
                 format!("Run {}", selected.map_or("", |entry| entry.name)),
                 row![text("Run").size(13), enter_chord()]
                     .spacing(8)

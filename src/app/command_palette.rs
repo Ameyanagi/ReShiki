@@ -307,14 +307,21 @@ impl App {
         self.need_unavailable(command.need, &self.command_target())
     }
 
-    /// Refuse before the modal gates commit or cancel a live editing draft.
-    pub(super) fn command_action_unavailable(&self, action: &Action) -> bool {
-        let command = match action {
-            Action::Run(index) => self.commands.items.get(*index),
-            Action::Submit => self.commands.current(),
+    /// Whether this message runs a palette command, from the palette or
+    /// from Help, that cannot run now. The update gates refuse it before
+    /// they commit or cancel a live editing draft.
+    pub(super) fn runs_unavailable_command(&self, message: &Message) -> bool {
+        let command = match message {
+            Message::Commands(Action::Run(index)) if self.commands.open => {
+                self.commands.items.get(*index)
+            }
+            Message::Commands(Action::Submit) if self.commands.open => self.commands.current(),
+            Message::Help(super::help::Action::Run(index)) if self.help_open => {
+                self.help.command(*index)
+            }
             _ => None,
         };
-        self.commands.open && command.is_some_and(|c| self.command_unavailable(c).is_some())
+        command.is_some_and(|c| self.command_unavailable(c).is_some())
     }
 
     fn need_unavailable(&self, need: Need, target: &Target) -> Option<&'static str> {
