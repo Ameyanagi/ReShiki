@@ -340,6 +340,8 @@ jobs:
           # Both files are already packed.
           compression-level: 0
           retention-days: 1
+          # A re-run of this job replaces the archive of the earlier attempt.
+          overwrite: true
       - name: Check Rust heap and byte protocol boundaries
         run: uv run --no-project --with certifi==2026.10.23 python -m unittest tests.test_inchi_helper_protocol tests.test_inchi_helper_builder tests.test_inchi_distribution
       - name: Audit agent API dependencies for every release target
