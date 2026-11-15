@@ -810,8 +810,11 @@ async fn a_save_for_send_lands_in_its_tab_after_switching_tabs() {
     assert!(app.github.failed.contains_key(&repo().key), "and sent");
 }
 
-#[tokio::test]
-async fn a_canceled_sign_in_is_never_kept() {
+/// The app keeps a sign-in only once it accepts it; storing it is
+/// `Client::remember`, tested with the in-memory store in the library. These
+/// app tests never run a task that could reach this computer's real store.
+#[test]
+fn a_canceled_sign_in_is_never_kept() {
     let (mut app, _) = App::new();
     app.github.client_id = Some("test".into());
     app.github.ends = nowhere();
@@ -840,27 +843,25 @@ async fn a_canceled_sign_in_is_never_kept() {
         if cancel {
             let _ = app.update(Message::Escape);
         }
-        let signed_in = app.update(Message::GitHub(Action::SignedIn(
-            generation,
-            Ok(account.clone()),
-        )));
-        run(&mut app, signed_in).await;
-        let kept = credentials::load().await.unwrap();
+        let remember = app.github_action(Action::SignedIn(generation, Ok(account.clone())));
+        // Not run: it would write to the real credential store.
+        let remembers = iced_runtime::task::into_stream(remember).is_some();
         if cancel {
             assert!(matches!(app.github.account, Account::SignedOut(None)));
-            assert_eq!(kept, None);
+            assert!(!remembers, "nothing is kept");
         } else {
+            assert!(matches!(app.github.account, Account::SignedIn { .. }));
+            assert!(remembers);
+            github(&mut app, Action::Remembered(generation, false));
             assert!(matches!(
                 app.github.account,
                 Account::SignedIn {
-                    remembered: true,
+                    remembered: false,
                     ..
                 }
             ));
-            assert_eq!(kept.map(|tokens| tokens.login).as_deref(), Some("octo"));
         }
     }
-    credentials::delete().await.unwrap();
 }
 
 /// Closes the tab in front without the GitHub question.
@@ -1100,4 +1101,18 @@ fn closing_again_waits_for_the_send_it_started() {
     assert!(app.github.sending.contains(&repo().key));
     let _ = app.update(Message::Close(window));
     assert!(!app.exit.frozen(), "still sending");
+}
+
+#[tokio::test]
+async fn a_send_waiting_for_a_closed_tabs_save_goes_on() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_in(dir.path());
+    save_here(&mut app, &path);
+    app.github.after_save = Some((repo().key, "Update ring.rsk".into(), Vec::new()));
+    app.file_io.saving = true;
+    let closed = Message::Saved(0, Box::new(Document::default()), Ok(None));
+    let task = app.update(Message::Tab(TabId(u64::MAX), Box::new(closed)));
+    run(&mut app, task).await;
+    assert!(app.github.after_save.is_none());
+    assert!(app.github.failed.contains_key(&repo().key), "sent");
 }

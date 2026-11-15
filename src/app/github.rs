@@ -720,6 +720,7 @@ impl App {
 
     /// Saves the next drawing the Send waits for, in its own tab as Cmd+S
     /// does; once all are saved, sends. A save already writing calls back.
+    /// Each drawing is saved once, so one that stays edited cannot loop.
     fn github_save_next(&mut self) -> Task<Message> {
         let Some((_, _, tabs)) = &self.github.after_save else {
             return Task::none();
@@ -732,7 +733,21 @@ impl App {
             .copied()
             .find(|id| self.strip().any(|tab| tab.id == *id && self.edited(tab)));
         if let Some(id) = next {
-            let save = self.in_tab(id, |app| app.save_drawing(false));
+            if let Some((_, _, tabs)) = &mut self.github.after_save {
+                tabs.retain(|tab| *tab != id);
+            }
+            let save = self.in_tab(id, |app| {
+                if app.finish_inline(true) {
+                    app.save_drawing(false)
+                } else {
+                    Task::none()
+                }
+            });
+            if !self.file_io.saving {
+                // Not started, as for a text draft that cannot apply: the
+                // tab says why, and the Send waits for the user.
+                self.github.after_save = None;
+            }
             return super::tagged(save.unwrap_or_else(Task::none), id);
         }
         let Some((key, message, _)) = self.github.after_save.take() else {
@@ -749,15 +764,10 @@ impl App {
         saved: bool,
         written: Option<(PathBuf, reshiki::document::Document)>,
     ) -> Task<Message> {
-        let id = self.tab.id;
         if !saved {
             // A save failed or was canceled: what waited for it waits for the user.
             self.github.after_save = None;
             self.github.resolving = None;
-        } else if let Some((_, _, tabs)) = &mut self.github.after_save
-            && !self.tab.dirty()
-        {
-            tabs.retain(|tab| *tab != id);
         }
         let next = match self.github.after_save {
             Some(_) => Task::done(Message::GitHub(Action::SaveNext)),

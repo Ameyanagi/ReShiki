@@ -626,10 +626,15 @@ fn the_sign_in_ask_waits_again_after_the_card_after_use() {
         "the ask after use"
     );
     assert_eq!(record.signed_in_ask, SignedInAsk::Due, "still due");
+    // A card left open never uses up the sign-in ask beneath it.
+    let restarted = app.star.signed_in.expect("still asks in this run");
+    app.star.signed_in = Some(restarted.checked_sub(AFTER_SIGN_IN).unwrap());
+    let _ = tick(&mut app);
+    assert_eq!(saved_record(&app).unwrap().signed_in_ask, SignedInAsk::Due);
+    app.star.signed_in = Some(restarted);
     let _ = app.update(Message::Star(Action::Dismiss));
     assert!(!tick(&mut app), "not right after that card");
-    let since = app.star.signed_in.expect("still asks in this run");
-    app.star.signed_in = Some(since.checked_sub(AFTER_SIGN_IN).unwrap());
+    app.star.signed_in = Some(restarted.checked_sub(AFTER_SIGN_IN).unwrap());
     assert!(tick(&mut app));
     assert_eq!(
         saved_record(&app).unwrap().signed_in_ask,

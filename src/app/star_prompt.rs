@@ -487,6 +487,9 @@ impl App {
     /// answer still counts and a folder that cannot keep the answer is never
     /// asked. The asks after use come first; the sign-in ask counts apart.
     fn star_show(&mut self) -> Task<Message> {
+        if self.star.open {
+            return Task::none();
+        }
         let today = today();
         let used = self
             .star

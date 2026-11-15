@@ -647,6 +647,8 @@ impl App {
         });
         let refusal = if !workcopy::valid_repo_path(&repo_path) || stem.is_empty() {
             Some(CANT_OPEN)
+        } else if self.file_io.saving {
+            Some("Wait for the save to finish")
         } else if taken || collides {
             Some(NAME_TAKEN)
         } else {

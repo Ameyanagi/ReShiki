@@ -478,6 +478,10 @@ impl App {
                         self.status = format!("Could not save a closed drawing: {error}");
                         self.error = true;
                     }
+                    // A Send waiting for the save slot goes on.
+                    #[cfg(not(target_arch = "wasm32"))]
+                    return Task::done(Message::GitHub(super::github::Action::SaveNext));
+                    #[cfg(target_arch = "wasm32")]
                     Task::none()
                 }
                 Message::EngineDone {
