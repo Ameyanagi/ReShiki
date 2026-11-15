@@ -243,6 +243,7 @@ export default defineConfig({
             { label: "Journal drawing presets", slug: "developer/journal-drawing-presets" },
             { label: "Color palettes", slug: "guide/color-palettes" },
             { label: "Save and share", slug: "guide/sharing" },
+            { label: "Keep drawings on GitHub", slug: "developer/github" },
             { label: "Acknowledging ReShiki", slug: "guide/acknowledgments" },
           ],
         },

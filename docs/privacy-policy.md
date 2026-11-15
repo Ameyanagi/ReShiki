@@ -32,9 +32,35 @@ editor, or from the command line. **Star on GitHub** opens the project page in
 your browser. Without a star, ReShiki asks again at most once: in a later
 feature release such as 0.16.0, at least 90 days later. This holds whether you
 choose **Not now** or quit with the card still open. The count and your answer
-stay in `star-prompt.json` in ReShiki's data folder. Nothing is sent anywhere.
+stay in `star-prompt.json` in ReShiki's data folder. Signed out, nothing is sent
+anywhere. Signed in to GitHub, ReShiki first asks GitHub whether you starred it
+and never asks if you did; it also asks once more a few minutes after your
+first sign-in, even after **Not now**; and **Star on GitHub** stars it directly.
 **ReShiki → Check for updates**, also opened by **Help → About ReShiki**, always
 has a **Star ReShiki on GitHub ↗** link, which counts as a star too.
+
+## GitHub sign-in and Send
+
+GitHub is contacted only after you choose **Sign in with GitHub**, open or send
+a drawing, open **Versions**, or choose a star. Nothing is sent in the
+background.
+
+- **On GitHub:** ReShiki reads the repositories you allowed ReShiki to use, the
+  folders you open and the drawings you open or list in **Versions**. **Send**
+  writes the drawings you send, an SVG preview of each, and your commit message.
+  **New private repository…** creates a private repository. A star click stars
+  ReShiki's repository; when signed in, ReShiki also asks GitHub once whether
+  you starred it before showing the star card.
+- **On this computer:** the sign-in tokens stay in the system credential store
+  (Keychain, Credential Manager or Secret Service), never in settings, logs or
+  recovery drafts. Drawings opened from GitHub, what GitHub had for each, and
+  your saves since the last send stay in the `github` folder of ReShiki's data
+  folder. **Sign out** forgets the tokens; your drawings and saves stay.
+- Nothing else: no drawings, names or usage go anywhere else.
+
+GitHub handles these requests under its
+[privacy statement](https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement).
+See [Keep drawings on GitHub](github.md).
 
 ## Update checks
 
