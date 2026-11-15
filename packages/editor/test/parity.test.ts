@@ -3,14 +3,13 @@
 // and also checked by tests/cli.rs and crates/python/tests/test_parity.py.
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
-import { convert, init, inchi, renderSvg, smiles } from "../src/index.js";
+import { convert, inchi, renderSvg, smiles } from "../src/index.js";
+import "./wasm.ts";
 
 const fixture = JSON.parse(
   readFileSync(new URL("../../../tests/fixtures/agent-api/parity.json", import.meta.url), "utf8"),
 );
 const molecule = fixture.molecule.smiles as string;
-
-await init(readFileSync(new URL("../dist/wasm/reshiki_web_bg.wasm", import.meta.url)));
 
 describe("cross-surface parity", () => {
   test("the molecule converts as the command line converts it", async () => {

@@ -6,7 +6,6 @@ import { readFileSync } from "node:fs";
 import {
   addFont,
   convert,
-  init,
   inchi,
   read,
   renderPng,
@@ -14,6 +13,7 @@ import {
   smiles,
   version,
 } from "../src/index.js";
+import "./wasm.ts";
 
 const CAFFEINE = "CN1C=NC2=C1C(=O)N(C(=O)N2C)C";
 // Rings, stereo centres, a double-bond geometry, charges and a salt.
@@ -26,10 +26,6 @@ const STRUCTURES = [
   "CC(C)CCC[C@@H](C)[C@H]1CC[C@H]2[C@@H]3CC=C4C[C@@H](O)CC[C@]4(C)[C@H]3CC[C@]12C",
 ];
 const PNG = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
-
-// A failed load is not cached: init succeeds after it.
-await expect(init(new Uint8Array([0]))).rejects.toThrow();
-await init(readFileSync(new URL("../dist/wasm/reshiki_web_bg.wasm", import.meta.url)));
 
 describe("headless library", () => {
   test("read returns any-bond warnings and a usable native drawing", async () => {
