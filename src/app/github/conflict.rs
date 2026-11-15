@@ -96,7 +96,13 @@ impl App {
             .position(|tab| tab.path.as_ref() == Some(&path));
         if let Some(index) = tab {
             self.select_tab(index);
-            if self.dirty() {
+            // A text draft is part of what the drawing shows.
+            if !self.finish_inline(true) {
+                return Task::none();
+            }
+            // A save still writing would land over what is kept: wait for it.
+            let writing = self.file_io.saving && self.file_io.saving_tab == Some(self.tab.id);
+            if self.dirty() || writing {
                 self.github.resolving = Some((key, choice));
                 return self.save_drawing(false);
             }

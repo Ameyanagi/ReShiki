@@ -584,6 +584,23 @@ fn unsaved_edits_are_saved_first_and_are_what_is_kept() {
 }
 
 #[test]
+fn a_save_still_writing_is_waited_for() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_in(dir.path());
+    let mine = conflicted(&mut app, &path, Some(drawing(30.)));
+    app.file_io.saving = true;
+    app.file_io.saving_tab = Some(app.tab.id);
+    github(&mut app, Action::Resolve(send::Choice::KeepBoth));
+    let copy = workcopy::working_path(dir.path(), &repo().key, "ring (2).rsk");
+    assert!(!copy.exists(), "nothing is kept before the save lands");
+    assert_eq!(std::fs::read(&path).unwrap(), mine);
+    app.file_io.saving = false;
+    let _ = app.github_saved(Some(path.clone()));
+    assert_eq!(std::fs::read(&copy).unwrap(), mine);
+    assert_eq!(std::fs::read(&path).unwrap(), drawing(30.));
+}
+
+#[test]
 fn several_conflicts_are_shown_one_after_another() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, path) = app_in(dir.path());

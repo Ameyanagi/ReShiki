@@ -560,6 +560,9 @@ impl App {
                     message => message.to_owned(),
                 };
                 let close = self.github_close_dialog();
+                if !self.finish_inline(true) {
+                    return close;
+                }
                 // Send what the drawing in front shows: save it first, as Cmd+S does.
                 let front = self.github.locate(self.tab.path.as_deref());
                 if self.dirty() && front.is_some_and(|(key, _)| key == draft.key) {
