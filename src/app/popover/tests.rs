@@ -203,8 +203,26 @@ async fn chemical_export_choices_fit_without_shrinking_and_keep_keyboard_actions
         for section in [Section::ExportFigure, Section::ExportChemical] {
             let _ = app.update(Message::InspectorAction(Action::Section(section, true)));
         }
+        // The Figure section and its preview push the format control below the
+        // panel. Scroll it to where its menu fits below only in the regular
+        // window.
+        let start = find(&ui.snapshot(&app), "export-chemical-format").bounds.y;
+        let (_, messages) = ui.event_at(
+            &app,
+            Event::Mouse(mouse::Event::WheelScrolled {
+                delta: mouse::ScrollDelta::Pixels {
+                    x: 0.,
+                    y: 560. - start,
+                },
+            }),
+            mouse::Cursor::Available(iced::Point::new(size.width - 160., 400.)),
+        );
+        apply(&mut app, messages);
         ui.focus(&app, "export-chemical-format");
-        let anchor = find(&ui.snapshot(&app), "export-chemical-format").bounds;
+        let snapshot = ui.snapshot(&app);
+        let anchor = find(&snapshot, "export-chemical-format");
+        fully_visible(anchor, size);
+        let anchor = anchor.bounds;
         let messages = ui.key(&app, Named::Enter);
         assert!(matches!(
             messages.as_slice(),
