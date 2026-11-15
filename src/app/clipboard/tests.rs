@@ -897,8 +897,10 @@ fn a_wide_paste_lands_beside_the_drawing_and_a_small_one_near_the_view_centre() 
     };
     let (mut app, _) = App::new();
     app.tab.doc = scheme();
+    // As in a drawing that was edited: the amine shows its hydrogens.
+    reshiki::atom_labels::refresh::refresh_edited(&Document::default(), &mut app.tab.doc);
     let before = app.tab.doc.clone();
-    let x = |app: &App, id: u64| app.tab.doc.atom(id).unwrap().position.x;
+    assert_eq!(before.atoms[0].label_h, 2);
 
     // Select all, copy, paste: a copy as wide as the drawing.
     app.clipboard_read(
@@ -907,15 +909,13 @@ fn a_wide_paste_lands_beside_the_drawing_and_a_small_one_near_the_view_centre() 
         Ok(PasteOutcome::native(scheme())),
     );
     assert_eq!(app.tab.selected.len(), 2);
-    let left = app
-        .tab
-        .selected
-        .iter()
-        .map(|id| x(&app, *id))
-        .fold(f32::MAX, f32::min);
+    // The gap between the visible edges, labels included, is one bond length.
+    let (_, original) = reshiki::scene::selection_bounds(&before, &before.all_ids()).unwrap();
+    let (copy, _) = reshiki::scene::selection_bounds(&app.tab.doc, &app.tab.selected).unwrap();
+    let gap = copy.x - original.x;
     assert!(
-        left >= 150. + before.drawing_style.bond_length_world,
-        "The copy starts {left} wide of the original's right edge at 150"
+        (gap - before.drawing_style.bond_length_world).abs() < 1e-3,
+        "The copy starts {gap} right of the original, not one bond length"
     );
     assert!(
         app.tab

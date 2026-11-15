@@ -598,21 +598,32 @@ impl App {
         let before = self.tab.doc.clone();
         let center = editing::center(part, &part.all_ids());
         let view = self.guides.paper(iced::Rectangle::with_size(self.viewport));
-        let beside = self.tab.doc.page_layout.is_none()
-            && !before.all_ids().is_empty()
-            && reshiki::scene::selection_bounds(part, &part.all_ids())
+        let edges = reshiki::scene::selection_bounds;
+        let wide = self.tab.doc.page_layout.is_none()
+            && edges(part, &part.all_ids())
                 .is_some_and(|(lo, hi)| (hi.x - lo.x) * self.tab.camera.zoom > view.width / 4.);
-        let offset = if beside {
-            Point::new(
-                before.bounds().1.x + before.drawing_style.bond_length_world - part.bounds().0.x,
-                self.tab.camera.center.y - center.y,
-            )
-        } else {
-            Point::new(
-                self.tab.camera.center.x - center.x + 24.,
-                self.tab.camera.center.y - center.y + 24.,
-            )
-        };
+        let mut offset = Point::new(
+            self.tab.camera.center.x - center.x + 24.,
+            self.tab.camera.center.y - center.y + 24.,
+        );
+        // A wide part is measured on its own in this drawing's settings, with
+        // the hydrogens it will be drawn with, so that the visible edges end
+        // one bond length apart. `Document::bounds` would pad them for framing.
+        let mut beside = false;
+        if wide && let Some((_, drawing)) = edges(&before, &before.all_ids()) {
+            let mut blank = before.clone();
+            blank.clear_content();
+            let mut alone = blank.clone();
+            let ids = editing::append(&mut alone, part, Point::default());
+            reshiki::atom_labels::refresh::refresh_edited(&blank, &mut alone);
+            if let Some((lo, _)) = edges(&alone, &ids) {
+                offset = Point::new(
+                    drawing.x + before.drawing_style.bond_length_world - lo.x,
+                    self.tab.camera.center.y - center.y,
+                );
+                beside = true;
+            }
+        }
         let selected = editing::append(&mut self.tab.doc, part, offset);
         if selected.is_empty() || self.tab.doc.validate().is_err() {
             self.tab.doc = before;
