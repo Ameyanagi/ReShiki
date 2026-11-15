@@ -452,7 +452,7 @@ impl App {
                 self.appearance = restored(section, &self.appearance);
                 match section {
                     Section::Drawing => self.sync_drawing_style_unit(),
-                    Section::CopyExport => self.tab.inspector_ui.export_editable = None,
+                    Section::CopyExport => self.export_tab_editable = None,
                     Section::Names => {
                         self.tab.naming.structure = None;
                         self.tab.stereo_notes.clear();

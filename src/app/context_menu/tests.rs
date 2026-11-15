@@ -1509,20 +1509,18 @@ fn copy_image_on_editable_drawing_changes_one_copy_and_keeps_the_default() {
         app.context_menu = Some(State::new(Point::ORIGIN, Page::Main));
         let _ = app.context_action(Action::Page(Page::CopyImageOn));
     };
-    let editable_row = |app: &App| {
+    let row = |app: &App, find: fn(&Action) -> bool| {
         app.context_entries(Page::CopyImageOn)
             .iter()
-            .position(|entry| {
-                matches!(
-                    entry,
-                    Entry::Item {
-                        action: Action::Editable,
-                        ..
-                    }
-                )
-            })
-            .expect("Editable drawing row")
+            .position(|entry| matches!(entry, Entry::Item { action, .. } if find(action)))
+            .expect("row")
     };
+    let editable = |action: &Action| matches!(action, Action::Editable);
+    let background = |action: &Action| match action {
+        Action::Run(message) => matches!(**message, Message::CopyImageOn(..)),
+        _ => false,
+    };
+    // What each background row copies with: the same pictures dispatch uses.
     let copies = |app: &App| {
         app.context_entries(Page::CopyImageOn)
             .into_iter()
@@ -1531,7 +1529,9 @@ fn copy_image_on_editable_drawing_changes_one_copy_and_keeps_the_default() {
                     action: Action::Run(message),
                     ..
                 } => match *message {
-                    Message::CopyImageOn(_, editable) => Some(editable),
+                    Message::CopyImageOn(paper, editable) => {
+                        Some(app.copy_pictures(Some((paper, editable))).editable)
+                    }
                     _ => None,
                 },
                 _ => None,
@@ -1541,22 +1541,19 @@ fn copy_image_on_editable_drawing_changes_one_copy_and_keeps_the_default() {
     open(&mut app);
     assert!(!app.copy_editable(), "starts at the default");
     assert_eq!(copies(&app), [false; 4]);
-    let row = editable_row(&app);
-    let _ = app.context_action(Action::Activate(1, row));
+    let _ = app.context_action(Action::Activate(1, row(&app, editable)));
     assert!(app.context_menu.is_some(), "the menu stays open");
     assert!(app.copy_editable());
     assert_eq!(copies(&app), [true; 4], "every background copies with it");
     assert!(!app.appearance.export_editable_drawing, "the default stays");
     // Picking a background copies once and closes the menu.
-    let _ = app.context_action(Action::Run(Box::new(Message::CopyImageOn(
-        Paper::Transparent,
-        true,
-    ))));
+    let _ = app.context_action(Action::Activate(1, row(&app, background)));
     assert!(app.context_menu.is_none());
+    assert!(app.clipboard_working(), "the copy started");
     assert!(!app.appearance.export_editable_drawing);
     assert!(
         !app.copy_pictures(None).editable,
-        "plain Copy follows the default"
+        "Copy, Copy image and Copy as follow the default"
     );
     open(&mut app);
     assert!(

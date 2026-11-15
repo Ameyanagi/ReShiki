@@ -277,6 +277,9 @@ pub enum Message {
     Open,
     Save,
     Export(&'static str),
+    /// Export the figure from the Export tab, with or without the editable
+    /// drawing.
+    ExportFigure(&'static str, bool),
     CopySmiles,
     CopyAnalysis,
     CopyChemicalText,
@@ -468,6 +471,9 @@ pub struct App {
     exit: autosave::Exit,
     inspector_open: bool,
     inspector_tab: InspectorTab,
+    /// The Export tab's Include editable drawing choice; `None` follows the
+    /// Settings default.
+    export_tab_editable: Option<bool>,
     help_open: bool,
     settings: settings_page::State,
     help: help::State,
@@ -584,6 +590,7 @@ impl App {
             exit: autosave::Exit::default(),
             inspector_open: true,
             inspector_tab: InspectorTab::Properties,
+            export_tab_editable: None,
             help_open: false,
             settings: settings_page::State::default(),
             help: help::State::default(),

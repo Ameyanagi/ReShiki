@@ -37,7 +37,7 @@ impl App {
             Action::ExportEditableDrawing(enabled) => {
                 self.appearance.export_editable_drawing = enabled;
                 // The Export tab follows the new default.
-                self.tab.inspector_ui.export_editable = None;
+                self.export_tab_editable = None;
                 self.save_preference(super::settings_page::Section::CopyExport, "export");
             }
             Action::ExportSvgLiveText(enabled) => {

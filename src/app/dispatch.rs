@@ -231,6 +231,9 @@ impl App {
             Message::Save => return Some(self.save_drawing(false)),
             Message::SaveAs => return Some(self.save_drawing(true)),
             Message::Export(format) => return Some(self.export_drawing(format)),
+            Message::ExportFigure(format, editable) => {
+                return Some(self.export_figure(format, false, editable));
+            }
             Message::FigureExported(result) => self.figure_exported(result),
             message @ (Message::EngineDone { .. }
             | Message::EngineFinished { .. }

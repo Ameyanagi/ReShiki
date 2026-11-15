@@ -923,7 +923,7 @@ impl super::App {
     pub(super) fn export_drawing(&mut self, format: &'static str) -> Task<Message> {
         if ["svg", "svg-office", "pdf", "png"].contains(&format) || cfg!(windows) && format == "emf"
         {
-            return self.export_figure(format, false, self.export_editable());
+            return self.export_figure(format, false, self.appearance.export_editable_drawing);
         }
         let mut request = Request::molecule("export", self.tab.doc.clone());
         request.format = Some(format.into());

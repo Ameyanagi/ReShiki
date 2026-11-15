@@ -304,9 +304,6 @@ pub(super) struct State {
     pub(super) figure: FigureFormat,
     figure_menu: bool,
     resolution_menu: bool,
-    /// The Export tab's Include editable drawing choice; `None` follows the
-    /// Settings default.
-    pub(super) export_editable: Option<bool>,
     chemical: ChemicalFormat,
     chemical_menu: bool,
     pending: Option<PropertyKey>,
@@ -391,7 +388,6 @@ impl State {
                 self.close_menu();
                 self.resolution_menu = open;
             }
-            Action::ExportEditable(editable) => self.export_editable = editable,
             Action::Chemical(format) => {
                 self.chemical = format;
                 self.chemical_menu = false;
@@ -408,7 +404,8 @@ impl State {
             | Action::RingArc
             | Action::StereoGroup(_)
             | Action::RenumberStereoGroups
-            | Action::DepthBonds => {}
+            | Action::DepthBonds
+            | Action::ExportEditable(_) => {}
         }
     }
 }
@@ -804,6 +801,10 @@ impl App {
                         self.tab.inspector_ui.properties = Some((key, *result));
                     }
                 }
+                Task::none()
+            }
+            Action::ExportEditable(editable) => {
+                self.export_tab_editable = editable;
                 Task::none()
             }
             other => {
@@ -2198,20 +2199,17 @@ impl App {
         .into()
     }
 
-    /// Whether exports include the editable drawing: the Export tab's choice
-    /// while it shows, otherwise the Settings default.
+    /// The Export tab's Include editable drawing: its own choice, or the
+    /// Settings default.
     pub(super) fn export_editable(&self) -> bool {
-        let shown = self.inspector_open && self.inspector_tab == InspectorTab::Export;
-        self.tab
-            .inspector_ui
-            .export_editable
-            .filter(|_| shown)
+        self.export_tab_editable
             .unwrap_or(self.appearance.export_editable_drawing)
     }
 
     pub(super) fn export_panel(&self) -> Element<'_, Message> {
         let figure = self.tab.inspector_ui.figure;
         let chemical = self.tab.inspector_ui.chemical;
+        let editable = self.export_editable();
         let settings_link = reshiki::accessibility::button(
             "export-background-settings",
             "Open Settings at Copy & export",
@@ -2273,7 +2271,7 @@ impl App {
             .width(Length::Fill)
             .on_press_maybe(
                 (!self.tab.busy && !self.figure_exporting)
-                    .then_some(Message::Export(figure.code()))
+                    .then_some(Message::ExportFigure(figure.code(), editable))
             ),
         ]
         .spacing(9);
@@ -2300,7 +2298,6 @@ impl App {
             FigureFormat::Png | FigureFormat::Svg | FigureFormat::SvgOffice | FigureFormat::Pdf
         ) {
             let default = self.appearance.export_editable_drawing;
-            let editable = self.export_editable();
             figures = figures.push(
                 column![
                     row![
@@ -2452,7 +2449,7 @@ impl App {
     }
     pub(super) fn toggle_inspector(&mut self) -> Task<Message> {
         self.inspector_open = !self.inspector_open;
-        self.tab.inspector_ui.export_editable = None;
+        self.export_tab_editable = None;
         if self.inspector_open && self.inspector_tab == InspectorTab::Assistant {
             return self.assistant_action(super::assistant::Action::Open);
         }
@@ -2491,7 +2488,7 @@ impl App {
             };
         }
         // The Export tab starts at the default each time it opens.
-        self.tab.inspector_ui.export_editable = None;
+        self.export_tab_editable = None;
         self.inspector_tab = tab;
         self.inspector_open = true;
         if tab == InspectorTab::Import {

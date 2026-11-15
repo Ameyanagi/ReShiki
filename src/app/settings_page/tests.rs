@@ -516,13 +516,20 @@ fn the_export_tab_overrides_the_editable_drawing_default_for_its_exports() {
     assert!(app.export_editable());
     let _ = app.update(Message::Inspector(InspectorTab::Export));
     assert!(app.export_editable());
-    // A new default resets the tab's choice.
+    // A new default resets the tab's choice, in every drawing.
     let _ = app.update(Message::InspectorAction(Inspector::ExportEditable(Some(
         true,
     ))));
+    let before = app.tab.doc.clone();
+    app.tab.doc.add_atom("C", Default::default());
+    app.changed(before);
+    let _ = app.update(Message::New);
     let _ = app.update(Message::View(
         super::super::view_settings::Action::ExportEditableDrawing(false),
     ));
+    let _ = app.update(Message::Tabs(super::super::tabs::Action::Cycle(true)));
+    assert_eq!(app.tabs.background.len(), 1);
+    assert_eq!(app.inspector_tab, InspectorTab::Export);
     assert!(!app.export_editable());
 }
 
@@ -549,7 +556,7 @@ fn restore_defaults_resets_only_its_section_and_keeps_saved_colors() {
     a.background_colors = vec![[30, 42, 68]];
     a.custom_background = [30, 42, 68];
     a.smart_guides = false;
-    app.tab.inspector_ui.export_editable = Some(true);
+    app.export_tab_editable = Some(true);
     assert!(!app.at_defaults(Section::CopyExport));
     let _ = app.update(Message::Settings(Action::Restore(Section::CopyExport)));
     let (a, d) = (&app.appearance, crate::appearance::Settings::default());
@@ -575,13 +582,38 @@ fn restore_defaults_resets_only_its_section_and_keeps_saved_colors() {
     assert_eq!(a.background_colors, [[30, 42, 68]], "saved colors stay");
     assert_eq!(a.custom_background, [30, 42, 68]);
     assert!(!a.smart_guides, "other sections stay");
-    assert_eq!(app.tab.inspector_ui.export_editable, None);
+    assert_eq!(app.export_tab_editable, None);
     assert_eq!(app.status, "Copy & export restored to defaults");
     assert!(app.at_defaults(Section::CopyExport));
     assert!(!app.at_defaults(Section::Drawing));
     let _ = app.update(Message::Settings(Action::Restore(Section::Drawing)));
     assert!(app.appearance.smart_guides);
     assert!(app.at_defaults(Section::Drawing));
+}
+
+/// Restore defaults in Assistant and Updates puts back their own preferences.
+#[test]
+fn restore_defaults_resets_the_assistant_and_update_preferences() {
+    use super::super::{assistant::Action as Assistant, updates::Action as Updates};
+    use reshiki::updates::{Channel, Preferences};
+    let mut app = app();
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let _ = app.update(Message::Assistant(Assistant::Model(Some("gpt".into()))));
+        let _ = app.update(Message::Assistant(Assistant::AutoApply(true)));
+        assert!(!app.at_defaults(Section::Assistant));
+        let _ = app.update(Message::Settings(Action::Restore(Section::Assistant)));
+        let choices = app.assistant_choices();
+        assert_eq!((choices.model, choices.auto_apply), (None, false));
+        assert!(app.at_defaults(Section::Assistant));
+    }
+    let _ = app.update(Message::Updates(Updates::Channel(Channel::Nightly)));
+    let _ = app.update(Message::Updates(Updates::Automatic(false)));
+    let _ = app.update(Message::Updates(Updates::Saved(Ok(()))));
+    assert!(!app.at_defaults(Section::Updates));
+    let _ = app.update(Message::Settings(Action::Restore(Section::Updates)));
+    assert_eq!(app.update_preferences(), Preferences::default());
+    assert!(app.at_defaults(Section::Updates));
 }
 
 /// The real view's texts and accessible controls, popovers included.
@@ -749,6 +781,25 @@ async fn restore_buttons_and_the_not_default_hint_show_only_when_they_differ() {
         false,
     ))));
     assert!(node(&app, &mut renderer, "export-editable-restore").is_some());
+    // The Export button carries the tab's choice; other exports send
+    // Message::Export, which follows the default.
+    {
+        let mut ui = iced_runtime::UserInterface::build(
+            app.view(),
+            iced::Size::new(1280., 820.),
+            iced_runtime::user_interface::Cache::new(),
+            &mut renderer,
+        );
+        let mut activate = reshiki::accessibility::Activate::<Message>::new("export-figure");
+        ui.operate(
+            &renderer,
+            &mut iced::advanced::widget::operation::black_box(&mut activate),
+        );
+        assert!(matches!(
+            activate.message(),
+            Some(Message::ExportFigure("pdf", false))
+        ));
+    }
 
     app.context_menu = Some(context_menu::State::new(
         iced::Point::new(36., 24.),

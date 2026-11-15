@@ -806,6 +806,7 @@ fn completion(message: &Message) -> Option<Completion> {
         | Message::Open
         | Message::Save
         | Message::Export(..)
+        | Message::ExportFigure(..)
         | Message::CopySmiles
         | Message::CopyAnalysis
         | Message::CopyChemicalText
