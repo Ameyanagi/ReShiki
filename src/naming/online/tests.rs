@@ -177,7 +177,7 @@ mod network {
 
     fn transport() -> Transport {
         Transport(
-            reqwest::Client::builder()
+            crate::http::client()
                 .no_proxy()
                 .redirect(reqwest::redirect::Policy::none())
                 .build()

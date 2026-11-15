@@ -63,7 +63,7 @@ fn expected_digest(manifest: &str, name: &str) -> Result<String, String> {
     }
 }
 fn client() -> Result<reqwest::Client, String> {
-    reqwest::Client::builder()
+    crate::http::client()
         .https_only(true)
         .user_agent(concat!("ReShiki/", env!("CARGO_PKG_VERSION")))
         .connect_timeout(Duration::from_secs(15))
