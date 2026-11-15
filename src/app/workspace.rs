@@ -2555,90 +2555,117 @@ impl App {
             .into()
     }
 
+    /// Interface, canvas aids, data display and actions, set apart by wider
+    /// gaps. On a narrow window whole groups wrap to a second line rather than
+    /// run off the edge.
     fn view_options(&self) -> Element<'_, Message> {
+        let group = |items: Vec<Element<'static, Message>>| -> Element<'static, Message> {
+            iced::widget::Row::with_children(items)
+                .spacing(10)
+                .align_y(Alignment::Center)
+                .into()
+        };
+        let interface = group(vec![
+            text("View").size(12).style(muted_text).into(),
+            text("Interface").size(12).style(muted_text).into(),
+            crate::appearance::pick_list(
+                crate::appearance::Mode::ALL,
+                Some(self.appearance.mode),
+                Message::Appearance,
+            )
+            .text_size(12)
+            .padding(5)
+            .width(132)
+            .into(),
+        ]);
+        let canvas = group(vec![
+            checkbox(self.grid)
+                .label("Grid")
+                .on_toggle(|_| Message::View(super::view_settings::Action::Grid))
+                .size(14)
+                .text_size(12)
+                .into(),
+            checkbox(self.guides.rulers)
+                .label("Rulers")
+                .on_toggle(|on| Message::View(super::view_settings::Action::Rulers(on)))
+                .size(14)
+                .text_size(12)
+                .into(),
+            checkbox(self.guides.crosshair)
+                .label("Crosshair")
+                .on_toggle(|on| Message::View(super::view_settings::Action::Crosshair(on)))
+                .size(14)
+                .text_size(12)
+                .into(),
+            text("Units").size(12).style(muted_text).into(),
+            crate::appearance::pick_list(
+                crate::canvas::guides::Unit::ALL,
+                Some(self.guides.unit),
+                |unit| Message::View(super::view_settings::Action::RulerUnit(unit)),
+            )
+            .text_size(12)
+            .padding(5)
+            .width(68)
+            .into(),
+            hover_hint(
+                checkbox(self.appearance.smart_guides)
+                    .label("Smart guides")
+                    .on_toggle(|on| Message::View(super::view_settings::Action::SmartGuides(on)))
+                    .size(14)
+                    .text_size(12),
+                "Snap dragged objects to other objects' edges, centers and equal gaps · Hold Option/Alt to move freely",
+                tooltip::Position::Top,
+            )
+            .into(),
+            hover_hint(
+                checkbox(self.appearance.arrange_controls)
+                    .label("Arrange controls")
+                    .on_toggle(|visible| {
+                        Message::ObjectToolbar(super::object_toolbar::Action::Visible(visible))
+                    })
+                    .size(14)
+                    .text_size(12),
+                "Align, distribute, order, flip and rotate at the right end of the Select row",
+                tooltip::Position::Top,
+            )
+            .into(),
+        ]);
+        let data = group(vec![
+            hover_hint(
+                checkbox(self.appearance.two_decimal_weight)
+                    .label("2-decimal MW")
+                    .on_toggle(|on| {
+                        Message::View(super::view_settings::Action::TwoDecimalWeight(on))
+                    })
+                    .size(14)
+                    .text_size(12),
+                "Show molecular weight with 2 decimal places instead of 3; exact mass keeps 5 decimal places",
+                tooltip::Position::Top,
+            )
+            .into(),
+            hover_hint(
+                checkbox(self.appearance.name_typography)
+                    .label("Chemical name typography")
+                    .on_toggle(|on| Message::View(super::view_settings::Action::NameTypography(on)))
+                    .size(14)
+                    .text_size(12),
+                "Italic descriptors, primes and superscripts in name captions",
+                tooltip::Position::Top,
+            )
+            .into(),
+        ]);
+        let actions = group(vec![
+            command("Page setup…", Message::Pages(super::pages::Action::Show)).into(),
+            command("Done", Message::View(super::view_settings::Action::Toggle)).into(),
+        ]);
         container(
-            row![
-                text("View").size(12).style(muted_text),
-                text("Interface").size(12).style(muted_text),
-                crate::appearance::pick_list(
-                    crate::appearance::Mode::ALL,
-                    Some(self.appearance.mode),
-                    Message::Appearance
-                )
-                .text_size(12)
-                .padding(5)
-                .width(132),
-                hover_hint(
-                    checkbox(self.appearance.arrange_controls)
-                        .label("Arrange controls")
-                        .on_toggle(|visible| Message::ObjectToolbar(
-                            super::object_toolbar::Action::Visible(visible)
-                        ))
-                        .size(14)
-                        .text_size(12),
-                    "Align, distribute, order, flip and rotate at the right end of the Select row",
-                    tooltip::Position::Top,
-                ),
-                checkbox(self.grid)
-                    .label("Grid")
-                    .on_toggle(|_| Message::View(super::view_settings::Action::Grid))
-                    .size(14)
-                    .text_size(12),
-                hover_hint(
-                    checkbox(self.appearance.smart_guides)
-                        .label("Smart guides")
-                        .on_toggle(|on| Message::View(super::view_settings::Action::SmartGuides(on)))
-                        .size(14)
-                        .text_size(12),
-                    "Snap dragged objects to other objects' edges, centers and equal gaps · Hold Option/Alt to move freely",
-                    tooltip::Position::Top,
-                ),
-                hover_hint(
-                    checkbox(self.appearance.two_decimal_weight)
-                        .label("2-decimal MW")
-                        .on_toggle(|on| Message::View(super::view_settings::Action::TwoDecimalWeight(on)))
-                        .size(14)
-                        .text_size(12),
-                    "Show molecular weight with 2 decimal places instead of 3; exact mass keeps 5 decimal places",
-                    tooltip::Position::Top,
-                ),
-                hover_hint(
-                    checkbox(self.appearance.name_typography)
-                        .label("Chemical name typography")
-                        .on_toggle(|on| Message::View(super::view_settings::Action::NameTypography(on)))
-                        .size(14)
-                        .text_size(12),
-                    "Italic descriptors, primes and superscripts in name captions",
-                    tooltip::Position::Top,
-                ),
-                checkbox(self.guides.rulers)
-                    .label("Rulers")
-                    .on_toggle(|on| Message::View(super::view_settings::Action::Rulers(on)))
-                    .size(14)
-                    .text_size(12),
-                checkbox(self.guides.crosshair)
-                    .label("Crosshair")
-                    .on_toggle(|on| Message::View(super::view_settings::Action::Crosshair(on)))
-                    .size(14)
-                    .text_size(12),
-                divider(),
-                text("Units").size(12).style(muted_text),
-                crate::appearance::pick_list(
-                    crate::canvas::guides::Unit::ALL,
-                    Some(self.guides.unit),
-                    |unit| Message::View(super::view_settings::Action::RulerUnit(unit))
-                )
-                .text_size(12)
-                .padding(5)
-                .width(68),
-                command("Page setup…", Message::Pages(super::pages::Action::Show)),
-                Space::new().width(Length::Fill),
-                command("Done", Message::View(super::view_settings::Action::Toggle)),
-            ]
-            .spacing(10)
-            .align_y(Alignment::Center),
+            row![interface, canvas, data, actions]
+                .spacing(24)
+                .wrap()
+                .vertical_spacing(4),
         )
         .padding([7, 14])
+        .width(Length::Fill)
         .style(panel)
         .into()
     }
