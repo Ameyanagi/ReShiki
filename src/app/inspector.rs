@@ -2183,7 +2183,7 @@ impl App {
             .is_some_and(|p| p.sample)
             .then_some("A sample structure, as the drawing is empty.");
         column![
-            container(self.picture(true)).center_x(Length::Fill),
+            container(self.picture("export-picture", true)).center_x(Length::Fill),
             size.map(|size| text(size).size(11).style(muted_text)),
             sample.map(|sample| text(sample).size(11).style(muted_text)),
         ]

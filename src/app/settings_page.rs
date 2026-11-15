@@ -100,73 +100,52 @@ pub enum Action {
     PickColor([u8; 3]),
     CopyDpi(Dpi),
     ExportDpi(Dpi),
-    /// The PNG close-ups of a drawing at a revision.
+    /// The copied and exported pictures of a drawing.
     Preview(PreviewKey, Result<Preview, String>),
+    /// The PNG close-ups of a drawing at each of [`Dpi::ALL`].
+    CloseUps(Drawing, Result<Vec<image::Handle>, String>),
 }
 
 /// A drawing at a revision: its tab, file epoch, revision and label
-/// generation, and the [`Pictures`] made of it. Labels from the chemistry
-/// engine change the drawing without a new revision.
-pub type PreviewKey = ((super::document_tab::TabId, u64, u64, u64), Pictures);
+/// generation. Labels from the chemistry engine change the drawing without
+/// a new revision.
+pub type Drawing = (super::document_tab::TabId, u64, u64, u64);
+
+/// A drawing and the [`Pictures`] made of it.
+pub type PreviewKey = (Drawing, Pictures);
 
 /// The backgrounds of the copied and the exported picture, and the PNG
 /// resolution the exported one shows, while the Export tab is on PNG.
 pub type Pictures = [(Paper, Option<u32>); 2];
 
-/// The drawing as PNG at each of [`Dpi::ALL`], and as copied and exported,
-/// for Settings and the Export tab.
+/// The drawing as copied and exported, for Settings and the Export tab.
 #[derive(Debug, Clone)]
 pub struct Preview {
     /// The whole picture in CSS pixels, 96 to the inch.
     pub(super) size: (f32, f32),
-    /// A close-up at each resolution.
-    tiles: Vec<image::Handle>,
     /// The whole picture as copied and as exported, fitted to [`PICTURE`].
     pictures: [image::Handle; 2],
-    /// Whether the close-ups show a sample structure, as the drawing is empty.
+    /// Whether the pictures show a sample structure, as the drawing is empty.
     pub(super) sample: bool,
 }
 
 impl Preview {
     /// Renders the PNG export of `doc`, or of a sample structure when it is
-    /// empty: close-ups around its first atom that is not carbon, and the
-    /// whole `pictures`. Twice the box's pixels stay sharp on Retina screens.
+    /// empty, on each of `pictures`. Twice the box's pixels stay sharp on
+    /// Retina screens.
     fn render(doc: &Document, pictures: Pictures) -> Result<Self, String> {
-        let sample = doc.all_ids().is_empty();
-        let doc = if sample { &sample_structure() } else { doc };
-        let focus = match doc
-            .atoms
-            .iter()
-            .find(|atom| atom.element != "C")
-            .or(doc.atoms.first())
-        {
-            Some(atom) => atom.position,
-            None => {
-                let (lo, hi) = reshiki::scene::bounds(&reshiki::scene::primitives(doc));
-                reshiki::document::Point::new((lo.x + hi.x) / 2., (lo.y + hi.y) / 2.)
-            }
-        };
-        let close_ups = reshiki::export::png_close_ups(
-            doc,
-            Paper::Canvas,
-            focus,
-            CLOSE_UP_POINTS,
-            &Dpi::ALL.map(Dpi::get),
-        )?;
+        let sample = doc.all_ids().is_empty().then(|| sample_structure(doc));
         let fit = ((PICTURE.0 * 2.) as u32, (PICTURE.1 * 2.) as u32);
         let [copy, export] = pictures.map(|(paper, dpi)| {
-            let (width, height, rgba) = reshiki::export::png_preview(doc, paper, fit, dpi)?;
-            Ok::<_, String>(image::Handle::from_rgba(width, height, rgba))
+            reshiki::export::png_preview(sample.as_ref().unwrap_or(doc), paper, fit, dpi)
         });
+        let (copy, export) = (copy?, export?);
+        let handle =
+            |p: reshiki::export::Fitted| image::Handle::from_rgba(p.pixels.0, p.pixels.1, p.rgba);
         Ok(Self {
-            size: close_ups.size,
-            tiles: close_ups
-                .pixels
-                .into_iter()
-                .map(|(side, rgba)| image::Handle::from_rgba(side, side, rgba))
-                .collect(),
-            pictures: [copy?, export?],
-            sample,
+            size: export.size,
+            pictures: [handle(copy), handle(export)],
+            sample: sample.is_some(),
         })
     }
 
@@ -186,17 +165,93 @@ impl Preview {
         format!("{:.1} × {:.1} cm", cm(self.size.0), cm(self.size.1))
     }
 
-    /// "<W> × <H> px" at `dpi`.
+    /// "<W> × <H> px" of the file exported at `dpi`, and the resolution it
+    /// is written at when it is too large for `dpi`.
     pub(super) fn pixels(&self, dpi: Dpi) -> String {
-        let (width, height) = reshiki::export::png_pixels(self.size, dpi.get());
-        format!("{width} × {height} px")
+        match reshiki::export::png_file_size(self.size, dpi.get()) {
+            Ok((width, height, written)) if written == dpi.get() => {
+                format!("{width} × {height} px")
+            }
+            Ok((width, height, written)) => format!("{width} × {height} px at {written} dpi"),
+            Err(_) => "Too large for PNG".into(),
+        }
     }
 }
 
-/// Acetic acid, for close-ups of an empty drawing.
-fn sample_structure() -> Document {
+/// The PNG export of `doc`, or of a sample structure when it is empty, at
+/// each of [`Dpi::ALL`], cut to a square around its first atom that is not
+/// carbon.
+fn close_ups(doc: &Document) -> Result<Vec<image::Handle>, String> {
+    let sample = doc.all_ids().is_empty().then(|| sample_structure(doc));
+    let doc = sample.as_ref().unwrap_or(doc);
+    let focus = match doc
+        .atoms
+        .iter()
+        .find(|atom| atom.element != "C")
+        .or(doc.atoms.first())
+    {
+        Some(atom) => atom.position,
+        None => {
+            let (lo, hi) = reshiki::scene::bounds(&reshiki::scene::primitives(doc));
+            reshiki::document::Point::new((lo.x + hi.x) / 2., (lo.y + hi.y) / 2.)
+        }
+    };
+    let close_ups = reshiki::export::png_close_ups(
+        doc,
+        Paper::Canvas,
+        focus,
+        CLOSE_UP_POINTS,
+        &Dpi::ALL.map(Dpi::get),
+    )?;
+    Ok(close_ups
+        .pixels
+        .into_iter()
+        .map(|(side, rgba)| image::Handle::from_rgba(side, side, rgba))
+        .collect())
+}
+
+/// Renders `doc` off the UI thread for `key` while it is `shown`, unless
+/// `key` is being rendered or is the latest result.
+fn render_once<K: Copy + PartialEq + Send + 'static, T: Send + 'static>(
+    rendering: &mut Option<K>,
+    latest: Option<&K>,
+    key: K,
+    shown: bool,
+    doc: &Document,
+    render: impl FnOnce(&Document) -> Result<T, String> + Send + 'static,
+    done: fn(K, Result<T, String>) -> Action,
+) -> Task<Message> {
+    if latest == Some(&key) {
+        // Back to the latest result: a render still running is stale.
+        *rendering = None;
+        return Task::none();
+    }
+    if !shown || *rendering == Some(key) {
+        return Task::none();
+    }
+    *rendering = Some(key);
+    let doc = doc.clone();
+    Task::perform(
+        async move {
+            reshiki::task::spawn_blocking(move || render(&doc))
+                .await
+                .map_err(|error| error.to_string())?
+        },
+        move |result| Message::Settings(done(key, result)),
+    )
+}
+
+/// Acetic acid on the canvas and in the style of `like`, for previews of an
+/// empty drawing.
+fn sample_structure(like: &Document) -> Document {
     use reshiki::document::Point;
-    let mut doc = Document::default();
+    let mut doc = Document {
+        canvas_theme: like.canvas_theme,
+        color_theme: like.color_theme,
+        custom_theme: like.custom_theme.clone(),
+        drawing_style: like.drawing_style.clone(),
+        ..Document::default()
+    };
     let methyl = doc.add_atom("C", Point::new(-36.37, 21.));
     let carbonyl = doc.add_atom("C", Point::new(0., 0.));
     let oxo = doc.add_atom("O", Point::new(0., -42.));
@@ -219,10 +274,14 @@ pub(super) struct State {
     /// While the color picker is open: the typed color, and whether it could
     /// not be read.
     color: Option<(String, bool)>,
-    /// The latest close-ups and pictures, and the drawing they show.
+    /// The latest pictures, and the drawing they show.
     pub(super) preview: Option<(PreviewKey, Result<Preview, String>)>,
-    /// The drawing whose close-ups and pictures are being rendered.
+    /// The drawing whose pictures are being rendered.
     rendering: Option<PreviewKey>,
+    /// The latest close-ups, and the drawing they show.
+    close_ups: Option<(Drawing, Result<Vec<image::Handle>, String>)>,
+    /// The drawing whose close-ups are being rendered.
+    rendering_close_ups: Option<Drawing>,
     /// The last failed save of a preference, and the section it shows in.
     save_error: Option<(Section, String)>,
 }
@@ -316,11 +375,17 @@ impl App {
                 self.tab.inspector_ui.close_menu();
                 self.save_preference(Section::CopyExport, "PNG resolution");
             }
+            // Only the newest render counts: an older one may finish last.
             Action::Preview(key, preview) => {
-                // Only the newest render counts: an older one may finish last.
                 if settings.rendering == Some(key) {
                     settings.rendering = None;
                     settings.preview = Some((key, preview));
+                }
+            }
+            Action::CloseUps(key, tiles) => {
+                if settings.rendering_close_ups == Some(key) {
+                    settings.rendering_close_ups = None;
+                    settings.close_ups = Some((key, tiles));
                 }
             }
         }
@@ -346,33 +411,33 @@ impl App {
         )
     }
 
-    /// Renders the front drawing's close-ups and pictures off the UI thread,
-    /// once per revision and choice, while Settings or the Export tab shows
-    /// them.
+    /// Renders the front drawing's pictures off the UI thread, once per
+    /// revision and choice, while Settings or the Export tab shows them, and
+    /// its close-ups once per revision, while Settings shows them.
     pub(super) fn render_png_preview(&mut self) -> Task<Message> {
-        let shown = self.settings.open
-            || (self.inspector_open && self.inspector_tab == super::InspectorTab::Export);
         let key = self.preview_key();
-        let settings = &mut self.settings;
-        if !shown
-            || settings.rendering == Some(key)
-            || settings
-                .preview
-                .as_ref()
-                .is_some_and(|(shown, _)| *shown == key)
-        {
-            return Task::none();
-        }
-        settings.rendering = Some(key);
-        let doc = self.tab.doc.clone();
-        Task::perform(
-            async move {
-                reshiki::task::spawn_blocking(move || Preview::render(&doc, key.1))
-                    .await
-                    .map_err(|error| error.to_string())?
-            },
-            move |preview| Message::Settings(Action::Preview(key, preview)),
-        )
+        let export_tab = self.inspector_open && self.inspector_tab == super::InspectorTab::Export;
+        let (doc, settings) = (&self.tab.doc, &mut self.settings);
+        Task::batch([
+            render_once(
+                &mut settings.rendering,
+                settings.preview.as_ref().map(|(key, _)| key),
+                key,
+                settings.open || export_tab,
+                doc,
+                move |doc| Preview::render(doc, key.1),
+                Action::Preview,
+            ),
+            render_once(
+                &mut settings.rendering_close_ups,
+                settings.close_ups.as_ref().map(|(key, _)| key),
+                key.0,
+                settings.open,
+                doc,
+                close_ups,
+                Action::CloseUps,
+            ),
+        ])
     }
 
     /// Keep `rgb` first among the saved colors, and copy pictures on it.
@@ -654,11 +719,8 @@ impl App {
                         Item::wide(
                             "Preview",
                             "This drawing, as each one writes it.",
-                            row![
-                                self.captioned_picture(false, "Copied pictures"),
-                                self.captioned_picture(true, "Exported files"),
-                            ]
-                            .spacing(16),
+                            row![self.captioned_picture(false), self.captioned_picture(true)]
+                                .spacing(16),
                         ),
                         Item::wide(
                             "Your colors",
@@ -839,15 +901,23 @@ impl App {
     }
 
     /// The copied or exported picture with its name and background.
-    fn captioned_picture(&self, exported: bool, name: &str) -> Element<'_, Message> {
+    fn captioned_picture(&self, exported: bool) -> Element<'_, Message> {
         let a = &self.appearance;
-        let background = if exported {
-            a.export_background
+        let (id, name, background) = if exported {
+            (
+                "settings-export-picture",
+                "Exported files",
+                a.export_background,
+            )
         } else {
-            a.copy_background
+            (
+                "settings-copy-picture",
+                "Copied pictures",
+                a.copy_background,
+            )
         };
         column![
-            self.picture(exported),
+            self.picture(id, exported),
             text(format!("{name} · {}", background.label()))
                 .size(12)
                 .style(muted_text),
@@ -857,9 +927,9 @@ impl App {
     }
 
     /// The whole copied or exported picture, fitted to a tile, on a
-    /// checkerboard where it is transparent. Just a preview of the exported
-    /// picture: it does nothing when clicked.
-    pub(super) fn picture(&self, exported: bool) -> Element<'_, Message> {
+    /// checkerboard where it is transparent. Just a preview: it does nothing
+    /// when clicked, and takes no focus.
+    pub(super) fn picture(&self, id: &str, exported: bool) -> Element<'_, Message> {
         let content: Element<'_, Message> = match &self.settings.preview {
             Some(((_, [(copy_paper, _), (export_paper, _)]), Ok(preview))) => {
                 let [copy, export] = &preview.pictures;
@@ -881,7 +951,7 @@ impl App {
             Some((_, Err(error))) => text(error.clone()).size(11).style(text::danger).into(),
             None => Space::new().into(),
         };
-        container(content)
+        let tile = container(content)
             .center_x(PICTURE.0 + 2.)
             .center_y(PICTURE.1 + 2.)
             // A grey tile, so white and black paper show their edges.
@@ -898,8 +968,13 @@ impl App {
                         ..Default::default()
                     },
                 )
-            })
-            .into()
+            });
+        let name = if exported {
+            "Preview of the exported picture"
+        } else {
+            "Preview of the copied picture"
+        };
+        reshiki::accessibility::image(id, name, tile)
     }
 
     /// A close-up of the drawing at each resolution, tagged where Copy and
@@ -907,9 +982,10 @@ impl App {
     fn dpi_strip(&self) -> Element<'_, Message> {
         let a = &self.appearance;
         let preview = self.settings.preview.as_ref().map(|(_, preview)| preview);
-        let tiles = preview
-            .and_then(|p| p.as_ref().ok())
-            .map(|p| p.tiles.as_slice())
+        let close_ups = self.settings.close_ups.as_ref().map(|(_, tiles)| tiles);
+        let tiles = close_ups
+            .and_then(|tiles| tiles.as_ref().ok())
+            .map(Vec::as_slice)
             .unwrap_or_default();
         let mut strip = row![].spacing(12);
         for (index, dpi) in Dpi::ALL.into_iter().enumerate() {
@@ -970,16 +1046,16 @@ impl App {
                 .spacing(4),
             );
         }
-        let note = match preview {
-            Some(Ok(preview)) if preview.sample => Some(
-                text("A sample structure, as the drawing is empty.")
-                    .size(11)
-                    .style(muted_text),
-            ),
-            Some(Err(error)) => Some(
+        let note = match (preview, close_ups) {
+            (_, Some(Err(error))) => Some(
                 text(format!("Close-ups unavailable: {error}"))
                     .size(11)
                     .style(text::danger),
+            ),
+            (Some(Ok(preview)), _) if preview.sample => Some(
+                text("A sample structure, as the drawing is empty.")
+                    .size(11)
+                    .style(muted_text),
             ),
             _ => None,
         };

@@ -1551,16 +1551,20 @@ fn exports_share_the_measuring_font_database() {
 fn previews_fit_the_box_on_the_chosen_background_and_show_the_png_pixels() {
     let doc = dark_ink_drawing();
     // On white the dark canvas's white ink turns black, as in the export.
-    let (width, height, pixels) =
-        png_preview(&doc, Background::Color([255; 3]), (400, 400), None).unwrap();
+    let Fitted {
+        size,
+        pixels: (width, height),
+        rgba: pixels,
+    } = png_preview(&doc, Background::Color([255; 3]), (400, 400), None).unwrap();
     assert!(width == 400 || height == 400, "{width} × {height}");
     assert!(width <= 400 && height <= 400);
+    assert!(size.0 > 0. && size.1 > 0.);
     let pixels: Vec<[u8; 4]> = pixels.as_chunks::<4>().0.to_vec();
     assert_eq!(pixels.len(), (width * height) as usize);
     assert_eq!(pixels[0], [255; 4]);
     assert!(pixels.contains(&[0, 0, 0, 255]), "dark ink");
-    let (_, _, clear) = png_preview(&doc, Background::Transparent, (400, 400), None).unwrap();
-    assert_eq!(clear[..4], [0; 4]);
+    let clear = png_preview(&doc, Background::Transparent, (400, 400), None).unwrap();
+    assert_eq!(clear.rgba[..4], [0; 4]);
     // A PNG at a resolution below the box shows the file's own pixels.
     let file = figure_with_budget_and_drawing(
         &doc,
@@ -1570,11 +1574,40 @@ fn previews_fit_the_box_on_the_chosen_background_and_show_the_png_pixels() {
         None,
     )
     .unwrap();
-    let (width, height, pixels) =
-        png_preview(&doc, Background::Canvas, (4000, 4000), Some(150)).unwrap();
+    let Fitted {
+        pixels: (width, height),
+        rgba: pixels,
+        ..
+    } = png_preview(&doc, Background::Canvas, (4000, 4000), Some(150)).unwrap();
     let reader = png::Decoder::new(std::io::Cursor::new(&file.bytes))
         .read_info()
         .unwrap();
     assert_eq!((width, height), (reader.info().width, reader.info().height));
     assert_eq!(pixels.as_chunks::<4>().0.to_vec(), rgba(&file.bytes));
+    // A PNG larger than the tile is scaled down to fit it, ink and all.
+    assert!(width > 48 && height > 28, "{width} × {height}");
+    let Fitted {
+        pixels: (width, height),
+        rgba: pixels,
+        ..
+    } = png_preview(&doc, Background::Color([255; 3]), (48, 28), Some(150)).unwrap();
+    assert!((width == 48 && height <= 28) || (height == 28 && width <= 48));
+    assert!(
+        pixels
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .any(|p| p[..3].iter().all(|&c| c < 96))
+    );
+}
+
+/// A large drawing is written at a lower resolution, and its label says so.
+#[test]
+fn file_sizes_follow_the_adaptive_budget() {
+    // 30 × 15 cm.
+    let size = (30. / 2.54 * 96., 15. / 2.54 * 96.);
+    assert_eq!(png_file_size(size, 300).unwrap().2, 300);
+    let (width, height, dpi) = png_file_size(size, 1200).unwrap();
+    assert_eq!(dpi, 600);
+    assert_eq!((width, height), png_pixels(size, 600));
 }

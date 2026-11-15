@@ -1088,7 +1088,9 @@ impl App {
             return ControlFlow::Break(self.accessibility_action(action));
         }
         let message = match message {
-            Message::Settings(action @ settings_page::Action::Preview(..)) => {
+            Message::Settings(
+                action @ (settings_page::Action::Preview(..) | settings_page::Action::CloseUps(..)),
+            ) => {
                 return ControlFlow::Break(self.settings_action(action));
             }
             message => message,

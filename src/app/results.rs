@@ -281,7 +281,7 @@ fn completion(message: &Message) -> Option<Completion> {
         Message::Settings(action) => {
             use super::settings_page::Action;
             match action {
-                Action::Preview(..) => Some(Completion::PngPreview),
+                Action::Preview(..) | Action::CloseUps(..) => Some(Completion::PngPreview),
                 Action::Open(..)
                 | Action::Close
                 | Action::Section(..)

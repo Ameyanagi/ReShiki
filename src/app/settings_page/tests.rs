@@ -262,27 +262,41 @@ fn png_resolution_rows_and_the_export_tab_change_the_preferences() {
     assert!(!app.error, "{}", app.status);
 }
 
-/// Close-ups and pictures render once per drawing revision and choice, and
-/// only while Settings or the Export tab shows them.
+/// Pictures render once per drawing and choice while Settings or the Export
+/// tab shows them; close-ups once per drawing, only while Settings does.
 #[test]
 fn close_ups_render_once_per_drawing_revision() {
     let mut app = app();
     let key = App::preview_key;
+    let pictures = |app: &mut App, key: PreviewKey, doc: &Document| {
+        let preview = Preview::render(doc, key.1);
+        let _ = app.update(Message::Settings(Action::Preview(key, preview)));
+    };
+    let deliver_tiles = |app: &mut App, doc: &Document| {
+        let key = app.preview_key().0;
+        let _ = app.update(Message::Settings(Action::CloseUps(key, close_ups(doc))));
+    };
     let _ = app.update(Message::Settings(Action::Query(String::new())));
     assert_eq!(app.settings.rendering, None, "hidden: nothing renders");
+    assert_eq!(app.settings.rendering_close_ups, None);
     let _ = app.update(Message::Settings(Action::Open(Some(Section::CopyExport))));
     let first = key(&app);
     assert_eq!(app.settings.rendering, Some(first));
-    let preview = Preview::render(&app.tab.doc, first.1);
-    let _ = app.update(Message::Settings(Action::Preview(first, preview)));
+    assert_eq!(app.settings.rendering_close_ups, Some(first.0));
+    let doc = app.tab.doc.clone();
+    pictures(&mut app, first, &doc);
+    deliver_tiles(&mut app, &doc);
     assert_eq!(app.settings.rendering, None);
+    assert_eq!(app.settings.rendering_close_ups, None);
     let Some((shown, Ok(preview))) = &app.settings.preview else {
-        panic!("close-ups are kept");
+        panic!("pictures are kept");
     };
     assert_eq!(*shown, first);
     assert!(preview.sample, "an empty drawing shows the sample");
-    assert_eq!(preview.tiles.len(), 4);
-    assert_eq!(preview.pictures.len(), 2);
+    let Some((_, Ok(tiles))) = &app.settings.close_ups else {
+        panic!("close-ups are kept");
+    };
+    assert_eq!(tiles.len(), 4);
     // The same revision does not render again.
     let _ = app.update(Message::Settings(Action::Query("dpi".into())));
     assert_eq!(app.settings.rendering, None);
@@ -295,60 +309,93 @@ fn close_ups_render_once_per_drawing_revision() {
     let second = key(&app);
     assert_eq!(app.settings.rendering, Some(second));
     // A result for an older revision is dropped, and does not end the newer job.
-    let stale = Preview::render(&app.tab.doc, first.1);
-    let _ = app.update(Message::Settings(Action::Preview(first, stale)));
+    pictures(&mut app, first, &doc);
     assert_eq!(app.settings.rendering, Some(second));
-    let _ = app.update(Message::Settings(Action::Preview(
-        second,
-        Preview::render(&app.tab.doc, second.1),
-    )));
+    let doc = app.tab.doc.clone();
+    pictures(&mut app, second, &doc);
     let Some((shown, Ok(preview))) = &app.settings.preview else {
-        panic!("close-ups are kept");
+        panic!("pictures are kept");
     };
     assert_eq!(*shown, second);
     assert!(!preview.sample);
-    // The older job finishing last neither replaces the close-ups nor starts
+    // The older job finishing last neither replaces the pictures nor starts
     // another render.
-    let late = Preview::render(&Document::default(), first.1);
-    let _ = app.update(Message::Settings(Action::Preview(first, late)));
+    pictures(&mut app, first, &Document::default());
     let Some((shown, Ok(preview))) = &app.settings.preview else {
-        panic!("close-ups are kept");
+        panic!("pictures are kept");
     };
     assert_eq!(*shown, second);
     assert!(!preview.sample);
     assert_eq!(app.settings.rendering, None);
+    deliver_tiles(&mut app, &doc);
     // Labels from the chemistry engine change the drawing without a revision.
     app.tab.label_generation += 1;
     let _ = app.update(Message::Settings(Action::Query(String::new())));
     let third = key(&app);
     assert_eq!(app.settings.rendering, Some(third));
-    let _ = app.update(Message::Settings(Action::Preview(
-        third,
-        Preview::render(&app.tab.doc, third.1),
-    )));
-    // Another background renders the pictures again.
+    assert_eq!(app.settings.rendering_close_ups, Some(third.0));
+    pictures(&mut app, third, &doc);
+    deliver_tiles(&mut app, &doc);
+    // Another background renders the pictures again, not the close-ups.
     let _ = app.update(Message::Settings(Action::CopyBackground(Background::White)));
-    let fourth = key(&app);
-    assert_eq!(fourth.0, third.0);
-    assert_eq!(fourth.1[0], (Paper::Color([255; 3]), None));
-    assert_eq!(app.settings.rendering, Some(fourth));
+    let white = key(&app);
+    assert_eq!(white.0, third.0);
+    assert_eq!(white.1[0], (Paper::Color([255; 3]), None));
+    assert_eq!(app.settings.rendering, Some(white));
+    assert_eq!(app.settings.rendering_close_ups, None);
+    pictures(&mut app, white, &doc);
+    // White, then Black, then White again before Black renders: the late
+    // Black picture does not replace the White one.
+    let _ = app.update(Message::Settings(Action::CopyBackground(Background::Black)));
+    let black = key(&app);
+    assert_eq!(app.settings.rendering, Some(black));
+    let _ = app.update(Message::Settings(Action::CopyBackground(Background::White)));
+    assert_eq!(app.settings.rendering, None);
+    pictures(&mut app, black, &doc);
+    assert_eq!(
+        app.settings.preview.as_ref().map(|(key, _)| *key),
+        Some(white)
+    );
+    // Black again renders anew.
+    let _ = app.update(Message::Settings(Action::CopyBackground(Background::Black)));
+    assert_eq!(app.settings.rendering, Some(black));
+    // Results arrive while a dialog takes the keys, and end their render.
+    app.tab.revision += 1;
+    let _ = app.update(Message::Settings(Action::Query(String::new())));
+    let fifth = key(&app);
+    assert_eq!(app.settings.rendering_close_ups, Some(fifth.0));
+    app.updates.open = true;
+    pictures(&mut app, fifth, &doc);
+    deliver_tiles(&mut app, &doc);
+    assert_eq!(app.settings.rendering, None);
+    assert_eq!(app.settings.rendering_close_ups, None);
+    assert_eq!(
+        app.settings.close_ups.as_ref().map(|(key, _)| *key),
+        Some(fifth.0)
+    );
+    app.updates.open = false;
 
     // The Export tab shows the exported picture in every format, and on PNG
-    // at its resolution.
+    // at its resolution. It has no close-ups.
     let _ = app.update(Message::Settings(Action::Close));
     app.tab.revision += 1;
     let _ = app.update(Message::Inspector(super::super::InspectorTab::Export));
     assert_eq!(app.settings.rendering, Some(key(&app)));
+    assert_eq!(app.settings.rendering_close_ups, None);
     assert_eq!(key(&app).1[1], (Paper::Canvas, None));
     let _ = app.update(Message::InspectorAction(
         super::super::inspector::Action::Figure(super::super::inspector::FigureFormat::Png),
     ));
     assert_eq!(key(&app).1[1], (Paper::Canvas, Some(1200)));
     assert_eq!(app.settings.rendering, Some(key(&app)));
+    let _ = app.update(Message::InspectorAction(
+        super::super::inspector::Action::ResolutionMenu(true),
+    ));
+    assert_eq!(app.settings.rendering_close_ups, None);
 }
 
 /// The pictures are the exporter's, on each background: transparent shows
-/// through, a color fills the picture.
+/// through, a color fills the picture, and the drawing is drawn on both.
 #[test]
 fn pictures_show_the_drawing_on_each_background() {
     let doc = reshiki::rings::Preset::Benzene.document(42., false);
@@ -360,7 +407,7 @@ fn pictures_show_the_drawing_on_each_background() {
         ],
     )
     .unwrap();
-    let corner = |index: usize| match &preview.pictures[index] {
+    let pixels = |index: usize| match &preview.pictures[index] {
         image::Handle::Rgba {
             width,
             height,
@@ -368,12 +415,39 @@ fn pictures_show_the_drawing_on_each_background() {
             ..
         } => {
             assert!(*width <= 480 && *height <= 280);
-            pixels[..4].to_vec()
+            pixels.as_chunks::<4>().0.to_vec()
         }
         _ => panic!("pictures are pixels"),
     };
-    assert_eq!(corner(0), [0; 4]);
-    assert_eq!(corner(1), [30, 42, 68, 255]);
+    let (clear, navy) = (pixels(0), pixels(1));
+    assert_eq!(clear[0], [0; 4]);
+    assert!(
+        clear
+            .iter()
+            .any(|p| p[3] == 255 && p[..3].iter().all(|&c| c < 64)),
+        "black ink"
+    );
+    assert_eq!(navy[0], [30, 42, 68, 255]);
+    assert!(
+        navy.iter().any(|p| p[..3].iter().all(|&c| c > 192)),
+        "white ink"
+    );
+}
+
+/// An empty drawing shows a sample on its own canvas.
+#[test]
+fn the_sample_keeps_the_drawings_canvas() {
+    let doc = Document {
+        canvas_theme: CanvasTheme::Dark,
+        ..Document::default()
+    };
+    let preview = Preview::render(&doc, [(Paper::Canvas, None); 2]).unwrap();
+    assert!(preview.sample);
+    let image::Handle::Rgba { pixels, .. } = &preview.pictures[1] else {
+        panic!("pictures are pixels");
+    };
+    let [r, g, b] = CanvasTheme::Dark.background();
+    assert_eq!(pixels[..4], [r, g, b, 255]);
 }
 
 #[test]
@@ -382,10 +456,8 @@ fn close_ups_show_the_same_square_at_every_resolution_and_describe_the_whole_dra
     let carbon = doc.add_atom("C", reshiki::document::Point::default());
     let oxygen = doc.add_atom("O", reshiki::document::Point::new(42., 0.));
     doc.add_bond(carbon, oxygen, 1, "plain");
-    let preview = Preview::render(&doc, [(Paper::Canvas, None); 2]).unwrap();
-    assert!(!preview.sample);
-    let sides: Vec<_> = preview
-        .tiles
+    let sides: Vec<_> = close_ups(&doc)
+        .unwrap()
         .iter()
         .map(|tile| match tile {
             image::Handle::Rgba { width, height, .. } => {
@@ -396,7 +468,9 @@ fn close_ups_show_the_same_square_at_every_resolution_and_describe_the_whole_dra
         })
         .collect();
     assert_eq!(sides, [25, 50, 100, 200]);
-    let (width, height) = reshiki::export::png_pixels(preview.size, 1200);
+    let preview = Preview::render(&doc, [(Paper::Canvas, None); 2]).unwrap();
+    assert!(!preview.sample);
+    let (width, height, _) = reshiki::export::png_file_size(preview.size, 1200).unwrap();
     let cm = |css: f32| css / 96. * 2.54;
     assert_eq!(
         preview.describe(Dpi::ALL[3]),
@@ -406,13 +480,13 @@ fn close_ups_show_the_same_square_at_every_resolution_and_describe_the_whole_dra
             cm(preview.size.1)
         )
     );
-    assert!(
-        Preview::render(&sample_structure(), [(Paper::Canvas, None); 2])
-            .unwrap()
-            .size
-            .0
-            > 0.
-    );
+    // A 30 × 15 cm scheme is written at 600 dpi, as its label says.
+    let wide = Preview {
+        size: (30. / 2.54 * 96., 15. / 2.54 * 96.),
+        ..preview
+    };
+    assert_eq!(wide.pixels(Dpi::ALL[3]), "7087 × 3544 px at 600 dpi");
+    assert_eq!(close_ups(&Document::default()).unwrap().len(), 4);
 }
 
 /// The real view's texts and accessible controls, popovers included.
@@ -492,6 +566,56 @@ async fn settings_rows_show_failures_wait_for_naming_and_reach_the_picker() {
     }
 }
 
+/// Screen readers hear what each picture tile shows; it takes no focus.
+#[tokio::test]
+#[ignore = "Opt-in real App widget tree check"]
+async fn picture_tiles_are_named_for_screen_readers() {
+    use iced::advanced::renderer::Headless;
+    use reshiki::accessibility::Role;
+    let mut renderer =
+        <iced::Renderer as Headless>::new(iced::Font::default(), iced::Pixels(16.), None)
+            .await
+            .unwrap();
+    let named = |app: &App, renderer: &mut iced::Renderer| {
+        rendered(app, renderer)
+            .1
+            .into_iter()
+            .filter(|node| node.role == Role::Image)
+            .map(|node| (node.id, node.name, node.enabled))
+            .collect::<Vec<_>>()
+    };
+    let mut app = app();
+    evidence_app(&mut app);
+    open(&mut app, Section::CopyExport);
+    show_close_ups(&mut app);
+    assert_eq!(
+        named(&app, &mut renderer),
+        [
+            (
+                "settings-copy-picture".into(),
+                "Preview of the copied picture".into(),
+                true
+            ),
+            (
+                "settings-export-picture".into(),
+                "Preview of the exported picture".into(),
+                true
+            ),
+        ]
+    );
+    let _ = app.update(Message::Settings(Action::Close));
+    let _ = app.update(Message::Inspector(crate::app::InspectorTab::Export));
+    show_close_ups(&mut app);
+    assert_eq!(
+        named(&app, &mut renderer),
+        [(
+            "export-picture".into(),
+            "Preview of the exported picture".into(),
+            true
+        )]
+    );
+}
+
 /// A selected benzene ring, with two saved colors and a navy Custom.
 fn evidence_app(app: &mut App) {
     app.tab.doc = reshiki::rings::Preset::Benzene.document(42., false);
@@ -503,11 +627,13 @@ fn evidence_app(app: &mut App) {
     app.appearance.custom_background = [30, 42, 68];
 }
 
-/// Delivers the close-ups of the drawing as it is now.
+/// Delivers the pictures and close-ups of the drawing as it is now.
 fn show_close_ups(app: &mut App) {
     let key = app.preview_key();
     let preview = Preview::render(&app.tab.doc, key.1);
+    let tiles = close_ups(&app.tab.doc);
     let _ = app.update(Message::Settings(Action::Preview(key, preview)));
+    let _ = app.update(Message::Settings(Action::CloseUps(key.0, tiles)));
 }
 
 fn open(app: &mut App, section: Section) {

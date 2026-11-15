@@ -580,14 +580,23 @@ pub fn png_close_ups(
     })
 }
 
+/// A whole PNG export, fitted to a box.
+pub struct Fitted {
+    /// The whole picture's size in CSS pixels, 96 to the inch.
+    pub size: (f32, f32),
+    /// Its width and height in pixels, within the box.
+    pub pixels: (u32, u32),
+    pub rgba: Vec<u8>,
+}
+
 /// The whole PNG export of `doc` on `background`, scaled to fit `fit`
-/// pixels, but at no more than `dpi`: its width, height and RGBA pixels.
+/// pixels, but at no more than `dpi`.
 pub fn png_preview(
     doc: &Document,
     background: Background,
     fit: (u32, u32),
     dpi: Option<u32>,
-) -> Result<(u32, u32, Vec<u8>), String> {
+) -> Result<Fitted, String> {
     doc.validate()?;
     let (doc, paper) = background.apply(doc);
     let tree = parse_svg(scene::svg_on(doc.as_ref(), paper))?;
@@ -597,12 +606,23 @@ pub fn png_preview(
     let side = |css: f32, fit: u32| ((css * dpi / 96.).ceil() as u32).clamp(1, fit);
     let size = (side(width, fit.0), side(height, fit.1));
     let pixmap = raster(&tree, paper, dpi, size, (0., 0.))?;
-    Ok((size.0, size.1, straight_alpha(pixmap)))
+    Ok(Fitted {
+        size: (width, height),
+        pixels: size,
+        rgba: straight_alpha(pixmap),
+    })
+}
+
+/// An exported PNG file's width, height and resolution at `dpi`, for a
+/// picture `size` CSS pixels across. A large one is written at a lower
+/// resolution.
+pub fn png_file_size(size: (f32, f32), dpi: u32) -> Result<(u32, u32, u32), String> {
+    png_dimensions(size.0, size.1, RasterBudget::file(dpi, FILE_PIXELS))
 }
 
 /// A PNG export's width and height in pixels at `dpi`, for a picture
 /// `size` CSS pixels across.
-pub fn png_pixels(size: (f32, f32), dpi: u32) -> (u32, u32) {
+fn png_pixels(size: (f32, f32), dpi: u32) -> (u32, u32) {
     let scale = dpi as f32 / 96.;
     (
         (size.0 * scale).ceil() as u32,
