@@ -419,6 +419,8 @@ class ReleaseTests(unittest.TestCase):
             "${{ startsWith(matrix.artifact, 'macos') && 'symbols' || 'none' }}",
             "CARGO_PROFILE_DIST_SPLIT_DEBUGINFO: "
             "${{ startsWith(matrix.artifact, 'linux') && 'off' || 'packed' }}",
+            # A fat-LTO link needs more memory than the macOS arm64 runner has.
+            "CARGO_PROFILE_DIST_LTO: ${{ startsWith(matrix.artifact, 'macos') && 'thin' || 'fat' }}",
         ):
             self.assertEqual(workflow.count(setting), 1, setting)
         for path in (

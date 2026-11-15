@@ -245,6 +245,9 @@ jobs:
       # stripped build, and build_release.py splits Linux symbols into reshiki.debug.
       CARGO_PROFILE_DIST_STRIP: ${{ startsWith(matrix.artifact, 'macos') && 'symbols' || 'none' }}
       CARGO_PROFILE_DIST_SPLIT_DEBUGINFO: ${{ startsWith(matrix.artifact, 'linux') && 'off' || 'packed' }}
+      # On macOS arm64 the fat-LTO link peaks at 8.3 GB and a thin-LTO link at
+      # 7.2 GB; the arm64 runner has 7 GB, so macOS builds use thin LTO.
+      CARGO_PROFILE_DIST_LTO: ${{ startsWith(matrix.artifact, 'macos') && 'thin' || 'fat' }}
     steps:
       - *actions_runtime
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
