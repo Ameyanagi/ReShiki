@@ -986,11 +986,13 @@ fn row_and_menu_share_the_attach_and_coordinate_commands() {
             ("Coordinate in place…", "Coordinate in place…", true)
         ]
     );
+    let source = app.tab.selected[0];
+    app.tab.keyboard_drawing.mark(source);
     let row_labels: Vec<_> = app.context_commands().iter().map(|c| c.label).collect();
     assert!(row_labels.contains(&"Coordinate in place…"));
     assert!(
-        row_labels.contains(&"Coordinate }"),
-        "Keyboard drawing keeps its own command"
+        row_labels.contains(&"Coordinate"),
+        "Keyboard drawing keeps its own command once an atom is marked"
     );
     app.tab.selected.clear();
     assert!(app.selected_attach_commands().iter().all(|c| !c.enabled));
