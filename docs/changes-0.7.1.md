@@ -1,6 +1,6 @@
 # ReShiki 0.7.1: assistant and aromatic drawing fixes
 
-Version 0.7.1 improves image reconstruction of metal complexes and keeps aromatic rings intact when their bond appearance changes. The screenshots below were captured from the running macOS optimized preview using Computer Use before the version bump, so the preview's status bar still reads 0.7.0. See the [release validation record](release-0.7.1-validation.md) for build and publication status.
+Version 0.7.1 improves image reconstruction of metal complexes and keeps aromatic rings intact when their bond appearance changes. The screenshots below were captured from the running macOS optimized preview using Computer Use before the version bump, so the preview's status bar still reads 0.7.0. See the [release validation record](changes/release-0.7.1-validation.md) for build and publication status.
 
 New to the assistant? Follow [Set up Codex for the assistant](assistant-setup.md) for installation, sign-in, and an explanation of which parts run locally and which use the model service.
 
@@ -32,7 +32,7 @@ Changing an aromatic ring edge to a solid, hashed, hollow, bold, or other line s
 
 [![A selected solid wedge in Properties while both tilted Cp-star rings retain their aromatic ellipses](images/assistant-updates/aromatic-wedge.png)](images/assistant-updates/aromatic-wedge.png)
 
-The selected ring edge reports **Solid wedge** in Properties, and both ellipses remain visible. This is a drawing appearance control; it does not establish stereochemistry or validate the complex. See the [before/after regression](drawing-tools-validation.md#aromatic-wedge-follow-up-2026-09-24) and [bond tools](bond-tools.md).
+The selected ring edge reports **Solid wedge** in Properties, and both ellipses remain visible. This is a drawing appearance control; it does not establish stereochemistry or validate the complex. See the [before/after regression](changes/drawing-tools-validation.md#aromatic-wedge-follow-up-2026-09-24) and [bond tools](bond-tools.md).
 
 ## Hide a charge symbol without deleting the charge
 

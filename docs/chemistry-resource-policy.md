@@ -7,7 +7,7 @@ the current executable; it is a proxy, not a prediction of molecular solve time.
 The probe runs once per process, targets 10 ms, and has a fixed iteration bound.
 Memory observations refresh at most once per second.
 
-The [desktop validation record](adaptive-chemistry-limits-validation.md) includes
+The [desktop validation record](changes/adaptive-chemistry-limits-validation.md) includes
 matched former-512-atom rejection/3D-preview captures, the large fused-ring
 import failure/success comparison, original fixtures and independent saved-file
 chemical checks.

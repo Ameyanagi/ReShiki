@@ -136,7 +136,7 @@ regression coverage in [PR #328](https://github.com/Ameyanagi/ReShiki/pull/328).
 
 Released in 0.13.0: @Ameyanagi — consistent Direct3D 12 Windows
 startup and graphics diagnostics in [PR #327](https://github.com/Ameyanagi/ReShiki/pull/327).
-The [security investigation](release-0.12.0-windows-security.md) records the
+The [security investigation](changes/release-0.12.0-windows-security.md) records the
 startup comparison and unresolved installer antivirus detections.
 
 Released in 0.12.0: @Ameyanagi — bounded Windows OLE clipboard acquisition and native
@@ -204,7 +204,7 @@ released in 0.12.0; original review in [PR #277](https://github.com/Ameyanagi/Re
 [#250](https://github.com/Ameyanagi/ReShiki/issues/250),
 [#90](https://github.com/Ameyanagi/ReShiki/issues/90) and
 [#249](https://github.com/Ameyanagi/ReShiki/issues/249).
-[Visual review](drawing-tool-defaults-review.md).
+[Visual review](changes/drawing-tool-defaults-review.md).
 
 Offline atom-linked HOSE NMR prediction, compact palette that preserves drawing space, measured-data provenance and native desktop validation (released in 0.12.0): @Ameyanagi in [PR #272](https://github.com/Ameyanagi/ReShiki/pull/272).
 
@@ -214,7 +214,7 @@ Local Rust chemical naming and editor integration (released in 0.12.0): @Ameyana
 
 Local Rust editor naming and molecule-name captions (released in 0.12.0): @Ameyanagi in [PR #292](https://github.com/Ameyanagi/ReShiki/pull/292) and [PR #293](https://github.com/Ameyanagi/ReShiki/pull/293); [Import dock and caption review](changes/molecule-name-label.md). The upstream-derived OPSIN parser retains its separate MIT license and attribution in [PR #291](https://github.com/Ameyanagi/ReShiki/pull/291).
 
-Visible reaction atom maps, reviewed mapping and rigid alignment (released in 0.12.0): @Ameyanagi in [PR #294](https://github.com/Ameyanagi/ReShiki/pull/294); [review and native evidence](reaction-atom-mapping-validation.md).
+Visible reaction atom maps, reviewed mapping and rigid alignment (released in 0.12.0): @Ameyanagi in [PR #294](https://github.com/Ameyanagi/ReShiki/pull/294); [review and native evidence](changes/reaction-atom-mapping-validation.md).
 
 Retained `(+)-lactic acid` in the local naming dock (released in 0.12.0): @Ameyanagi; [bounded retained-name correction and native evidence](changes/retained-plus-lactic-acid.md). This complete retained name resolves to the explicit S structure; it does not introduce a general optical-rotation-to-configuration rule.
 
@@ -260,13 +260,13 @@ Coordination attachment, in-place chelate closure and endpoint-independent dativ
 projection (released in 0.12.0; [PR #283](https://github.com/Ameyanagi/ReShiki/pull/283)):
 @Ameyanagi, addressing
 [#246](https://github.com/Ameyanagi/ReShiki/issues/246). See the
-[desktop validation record](coordination-desktop-validation.md).
+[desktop validation record](changes/coordination-desktop-validation.md).
 
 Adaptive calculation budgets and ordered fused-ring aromaticity enumeration
 (released in 0.12.0; [PR #279](https://github.com/Ameyanagi/ReShiki/pull/279)):
 @Ameyanagi, addressing [#245](https://github.com/Ameyanagi/ReShiki/issues/245)
 and [#248](https://github.com/Ameyanagi/ReShiki/issues/248). See the
-[desktop validation record](adaptive-chemistry-limits-validation.md).
+[desktop validation record](changes/adaptive-chemistry-limits-validation.md).
 
 Assistant setup and the original guided ethanol image exercise: @Ameyanagi,
 project creator and maintainer; merged for 0.12.0 in

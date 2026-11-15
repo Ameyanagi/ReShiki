@@ -38,7 +38,7 @@ retain contributor credits and links to their validation evidence.
   and larger fullerenes such as C70 have not been validated here. This
   limitation describes 0.11.0. This is fixed in ReShiki 0.12.0
   ([PR #271](https://github.com/Ameyanagi/ReShiki/pull/271)); see the
-  [matched evidence](projected-double-bonds-review.md).
+  [matched evidence](changes/projected-double-bonds-review.md).
 - **Receiving chemical text:** the verified ordinary-Copy reaction route is
   ReShiki Cmd+C → ChemDoodle Open text field Cmd+V → Load on macOS. The tested
   direct canvas paste did not import the selection. CAS Draw's tested molecule
@@ -296,7 +296,7 @@ Validation wording corrections: [PR #143](https://github.com/Ameyanagi/ReShiki/p
   scan results with artifact hashes, matched scan events and unchanged
   protection settings. Final development binaries passed; release-package and
   additional antivirus qualification remain open.
-  [Evidence protocol](windows-security-evidence.md)
+  [Evidence protocol](changes/windows-security-evidence.md)
   · [Issue #62](https://github.com/Ameyanagi/ReShiki/issues/62)
   · [PR #117](https://github.com/Ameyanagi/ReShiki/pull/117) · @Ameyanagi.
 
@@ -322,5 +322,5 @@ Validation wording corrections: [PR #143](https://github.com/Ameyanagi/ReShiki/p
 
 - **0.11.0 release validation:** document the tagged source, six-platform
   release checks, public-download checksums and macOS signing and native-worker
-  verification. [Validation record](release-0.11.0-validation.md)
+  verification. [Validation record](changes/release-0.11.0-validation.md)
   · [PR #187](https://github.com/Ameyanagi/ReShiki/pull/187) · @Ameyanagi.

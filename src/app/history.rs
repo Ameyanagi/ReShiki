@@ -15,7 +15,6 @@ impl App {
         };
         if changed {
             self.trim_histories(super::tabs::HISTORY_BYTES);
-            self.tab.stereo_notes.clear();
             self.tab
                 .nmr
                 .invalidate_if_changed(&self.tab.doc, self.tab.file_epoch);
@@ -23,20 +22,14 @@ impl App {
                 .keyboard_drawing
                 .restore(redo, &self.tab.doc, self.tab.file_epoch);
             self.tab.recent_molecules.restore(redo, self.tab.file_epoch);
-            self.tab.revision = self.tab.revision.wrapping_add(1);
-            if chemistry_changed(&before, &self.tab.doc) {
-                self.tab.analysis = None;
-                self.tab.chemistry_notice = None;
+            let chemistry_changed = chemistry_changed(&before, &self.tab.doc);
+            self.drawing_revised(chemistry_changed);
+            if chemistry_changed {
                 reshiki::atom_labels::clear_computed(&mut self.tab.doc);
-                self.tab.labels_dirty = true;
             } else {
                 // Same chemistry, same labels: a snapshot taken before the
                 // labels landed gets them, and the layout they need.
                 reshiki::atom_labels::copy_computed(&mut self.tab.doc, &before);
-                let (epoch, revision) = (self.tab.file_epoch, self.tab.revision);
-                self.tab
-                    .inspector_ui
-                    .advance_revision(epoch, revision.wrapping_sub(1), revision);
                 self.settle_label_layout();
             }
             let ids: HashSet<_> = self.tab.doc.object_ids().collect();
@@ -84,7 +77,9 @@ impl App {
                 }
             }
             self.status = "History restored".into();
-            self.error = false;
         }
     }
 }
+
+#[cfg(test)]
+mod tests;
