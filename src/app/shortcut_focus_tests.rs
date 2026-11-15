@@ -423,6 +423,78 @@ async fn style_lists_choose_options_by_keyboard_and_by_name() {
     assert_eq!(ui.focused(&app), vec!["color-theme".to_owned()]);
 }
 
+/// Tab reaches the font list's search field, which keeps typing and ↑ ↓
+/// for the open list; choosing a font leaves no control focused.
+#[tokio::test]
+#[ignore = "Opt-in renderer input check"]
+async fn tab_reaches_the_font_search_field_and_arrows_move_its_list() {
+    let mut ui = Ui::new().await;
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    ui.focus_control(&mut app, "text-style-size").await;
+    ui.key(
+        &mut app,
+        Key::Named(Named::Tab),
+        Code::Tab,
+        Modifiers::SHIFT,
+        None,
+    )
+    .await;
+    assert_eq!(ui.focused(&app), vec!["text-style-font".to_owned()]);
+
+    ui.key(
+        &mut app,
+        Key::Character("a".into()),
+        Code::KeyA,
+        Modifiers::empty(),
+        Some("a"),
+    )
+    .await;
+    assert_eq!(ui.input_value(&app, "text-style-font"), "a");
+    ui.key(
+        &mut app,
+        Key::Named(Named::Backspace),
+        Code::Backspace,
+        Modifiers::empty(),
+        None,
+    )
+    .await;
+
+    // ↓ moves the open list's highlight; Enter chooses the highlighted font.
+    let (status, messages) = ui.event(
+        &app,
+        press(
+            Key::Named(Named::ArrowDown),
+            Code::ArrowDown,
+            Modifiers::empty(),
+            None,
+        ),
+        mouse::Cursor::Unavailable,
+    );
+    assert_eq!(status, iced::event::Status::Captured);
+    assert!(messages.is_empty(), "{messages:?}");
+    let (_, messages) = ui.event(
+        &app,
+        press(
+            Key::Named(Named::Enter),
+            Code::Enter,
+            Modifiers::empty(),
+            None,
+        ),
+        mouse::Cursor::Unavailable,
+    );
+    let second = reshiki::style::font_families()[1];
+    assert!(
+        matches!(
+            messages.as_slice(),
+            [Message::TextStyle(reshiki::typography::StyleChange::Family(f))] if f == second
+        ),
+        "{messages:?}"
+    );
+    apply(&mut app, messages);
+    ui.assert_unfocused(&app);
+}
+
 impl Ui {
     fn bounds(&mut self, app: &App, id: &str) -> Rectangle {
         (self.semantics(app).nodes.into_iter())

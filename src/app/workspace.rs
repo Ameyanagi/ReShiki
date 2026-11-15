@@ -159,6 +159,7 @@ impl App {
                     Some(&style.family),
                     |family| Message::TextStyle(StyleChange::Family(family))
                 )
+                .id("text-style-font")
                 .width(152)
                 .input_style(crate::appearance::input_style)
                 .menu_style(crate::appearance::dropdown_menu)
