@@ -489,7 +489,7 @@ fn office_preview_rebuild_keeps_the_copy_background() {
     .unwrap();
     let pixels = rgba(&white.png);
     assert_eq!(pixels[0], [255; 4]);
-    assert!(pixels.iter().any(|p| *p == [0, 0, 0, 255]), "dark ink");
+    assert!(pixels.contains(&[0, 0, 0, 255]), "dark ink");
     let transparent =
         office_preview(&doc, Background::Transparent, crate::style::DEFAULT.png_dpi).unwrap();
     assert_eq!(rgba(&transparent.png)[0], [0; 4]);
