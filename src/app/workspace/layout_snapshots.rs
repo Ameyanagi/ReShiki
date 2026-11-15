@@ -411,7 +411,7 @@ fn smart_guides(renderer: &mut iced::Renderer, size: Size, output: &Path) {
 
 pub(super) type Setup = fn(&mut App);
 
-pub(super) const STATES: [(&str, Setup); 24] = [
+pub(super) const STATES: [(&str, Setup); 27] = [
     ("default", |_| {}),
     ("molecule", molecule),
     ("copy-as", |app| {
@@ -455,6 +455,18 @@ pub(super) const STATES: [(&str, Setup); 24] = [
     }),
     ("templates", |app| {
         let _ = app.update(Message::Inspector(InspectorTab::Templates));
+    }),
+    ("templates-active", |app| {
+        let _ = app.update(Message::Inspector(InspectorTab::Templates));
+        let _ = app.update(Message::InsertTemplate(0));
+    }),
+    ("labels", |app| {
+        molecule(app);
+        let _ = app.update(Message::Inspector(InspectorTab::Labels));
+    }),
+    ("abbreviations", |app| {
+        molecule(app);
+        let _ = app.update(Message::Inspector(InspectorTab::Abbreviations));
     }),
     ("export", |app| {
         molecule(app);
