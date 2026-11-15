@@ -271,7 +271,7 @@ jobs:
           # Tests briefly release their last connection; keep the X server ready.
           xvfb-run -a -s '-screen 0 1024x768x24 -nolisten tcp -noreset' cargo test -p reshiki-linux --lib --locked --no-default-features x11::tests:: -- --ignored --test-threads=1
   # Each platform compiles the workspace tests once. This job archives them for
-  # the two `rust` partitions, then runs the tests that nextest does not.
+  # the two `rust` partitions and ends there, so they start as soon as it uploads.
   rust-build:
     name: rust build (${{ matrix.os }}, ${{ matrix.target }}, ${{ matrix.python }})
     needs: [scope, images]
@@ -300,12 +300,13 @@ jobs:
     steps:
       - *actions_runtime
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - run: rustup toolchain install 1.99.1 --profile minimal --component clippy
+      - run: rustup toolchain install 1.99.1 --profile minimal
       - run: rustup default 1.99.1
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           shared-key: rust
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          # rust-extra warms and saves this cache.
+          save-if: false
       - uses: taiki-e/install-action@5488ac5a951645ce95062214902ac4b6bc1a1037 # v2.87.32
         with:
           tool: cargo-nextest@0.9.150
@@ -342,6 +343,63 @@ jobs:
           retention-days: 1
           # A re-run of this job replaces the archive of the earlier attempt.
           overwrite: true
+  # The tests that nextest does not run in the partitions: ignored renderer
+  # tests, one-process and custom harnesses, doc tests and the fixture checks.
+  # It compiles what it needs itself, so it runs beside rust-build and the
+  # partitions and none of them waits for another.
+  rust-extra:
+    name: rust extra (${{ matrix.os }}, ${{ matrix.target }}, ${{ matrix.python }})
+    needs: [scope, images]
+    if: needs.scope.outputs.native == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.scope.outputs.matrix).rust }}
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+      packages: read
+    # Linux runs in the CI image; an empty string runs the other rows on the host.
+    container: ${{ matrix.os == 'ubuntu-24.04' && needs.images.outputs.noble || '' }}
+    # Container steps otherwise default to sh; keep each runner's own default shell.
+    defaults:
+      run:
+        shell: ${{ startsWith(matrix.os, 'windows') && 'pwsh' || 'bash -e {0}' }}
+    env:
+      UV_PYTHON: ${{ matrix.python }}
+      RESHIKI_REQUIRE_INCHI_HELPER: "1"
+      # Naming integration must launch this exact source's executable, not a test harness.
+      RESHIKI_NAMING_HELPER: ${{ github.workspace }}/target/debug/reshiki${{ endsWith(matrix.target, '-pc-windows-msvc') && '.exe' || '' }}
+      # Windows symlink escape tests fail instead of skipping without the privilege.
+      RESHIKI_REQUIRE_LINK_TESTS: "1"
+    steps:
+      - *actions_runtime
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: rustup toolchain install 1.99.1 --profile minimal --component clippy
+      - run: rustup default 1.99.1
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          shared-key: rust
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - uses: taiki-e/install-action@5488ac5a951645ce95062214902ac4b6bc1a1037 # v2.87.32
+        if: runner.os == 'Windows'
+        with:
+          tool: cargo-nextest@0.9.150
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          version: "0.13.5"
+          python-version: ${{ matrix.python }}
+      - name: Select the native Windows compiler
+        if: runner.os == 'Windows'
+        uses: ./.github/actions/setup-msvc
+        with:
+          arch: ${{ matrix.msvc_arch }}
+      - name: Build the Rust helper and test executable
+        run: uv run --no-project python scripts/build_inchi_helper.py
+      - name: Select the helper for runtime integration tests
+        run: uv run --no-project python -c "import os,pathlib; p=pathlib.Path('artifacts/inchi-helper/reshiki-inchi-helper'+('.exe' if os.name=='nt' else '')).resolve(); open(os.environ['GITHUB_ENV'],'a').write('RESHIKI_INCHI_HELPER='+str(p)+'\n')"
+      - name: Build the exact application for local naming worker tests
+        run: cargo build --locked --no-default-features --bin reshiki
       - name: Check Rust heap and byte protocol boundaries
         run: uv run --no-project --with certifi==2026.10.23 python -m unittest tests.test_inchi_helper_protocol tests.test_inchi_helper_builder tests.test_inchi_distribution
       - name: Audit agent API dependencies for every release target
@@ -350,19 +408,21 @@ jobs:
         run: uv run --no-project python scripts/check_agent_dependencies.py
       - name: Test with the real renderer on Windows
         if: runner.os == 'Windows'
-        # Every ignored test of the application runs here unless its name starts
-        # with manual_ (docs/development.md, "Opt-in renderer tests"). The Windows
-        # renderer includes Tiny Skia when WGPU is unavailable. These check
-        # widget layout, input and accessibility; native desktop acceptance is
-        # recorded separately.
+        # Every ignored test of the application binary runs here unless its name
+        # starts with manual_ or ends in _child, and so do the root library's
+        # accessibility tests (docs/development.md, "Opt-in renderer tests").
+        # The Windows renderer includes Tiny Skia when WGPU is unavailable. These
+        # check widget layout, input and accessibility; native desktop acceptance
+        # is recorded separately.
         env:
           RESHIKI_DATA_DIR: ${{ runner.temp }}/reshiki-renderer-tests
           # help_renderer_evidence keeps its captures for review.
           RESHIKI_HELP_QA_DIR: artifacts/qa-help-polish
         run: >-
-          cargo nextest run --locked --no-default-features --profile ci
+          cargo nextest run --locked --no-default-features --lib --bin reshiki --profile ci
           --run-ignored ignored-only --test-threads 2
-          -E 'binary_id(reshiki::bin/reshiki) & not test(/(^|::)manual_[^:]+$/)'
+          -E '(binary_id(reshiki::bin/reshiki) & not test(/(^|::)manual_[^:]+$/) & not test(/_child$/))
+          | (package(reshiki) & kind(lib) & test(/^accessibility::tests::/))'
       - name: Test the shared naming corpus in one libtest process
         # Preserve the shared LazyLock baseline.
         run: "cargo test --locked --no-default-features -p reshiki --lib naming::s2n_harness::"
@@ -536,7 +596,7 @@ jobs:
           cargo test --locked -p reshiki-process --target ${{ matrix.target }}
   rust-result:
     name: Rust checks
-    needs: [scope, rust-build, rust, rust-lint-goldens]
+    needs: [scope, rust-build, rust, rust-extra, rust-lint-goldens]
     if: always()
     runs-on: ubuntu-22.04
     steps:
@@ -548,10 +608,11 @@ jobs:
           NATIVE: ${{ needs.scope.outputs.native }}
           RUST_BUILD_RESULT: ${{ needs.rust-build.result }}
           RUST_RESULT: ${{ needs.rust.result }}
+          RUST_EXTRA_RESULT: ${{ needs.rust-extra.result }}
           LINT_GOLDENS_RESULT: ${{ needs.rust-lint-goldens.result }}
         run: |
           [[ "$SCOPE_RESULT" == success ]] || exit 1
-          for result in "$RUST_BUILD_RESULT" "$RUST_RESULT" "$LINT_GOLDENS_RESULT"; do
+          for result in "$RUST_BUILD_RESULT" "$RUST_RESULT" "$RUST_EXTRA_RESULT" "$LINT_GOLDENS_RESULT"; do
             case "$result" in
               success) ;;
               skipped) [[ "$NATIVE" != true ]] || exit 1 ;;

@@ -243,14 +243,16 @@ RESHIKI_VIEW_PARITY="$PWD/artifacts/view-parity" RESHIKI_VIEW_PARITY_CAPTURE=1 \
 
 For the comparison, empty `RESHIKI_DATA_DIR` again and run the same command without `RESHIKI_VIEW_PARITY_CAPTURE`. Set `RESHIKI_NAMING_HELPER` and `RESHIKI_INCHI_HELPER` the same way for both runs: with the naming helper set, view parity also registers the cases that need chemical names.
 
-On Windows, CI runs every ignored test of the application binary whose name does not start with `manual_`, so a new renderer test runs there without a workflow change:
+On Windows, CI runs every ignored test of the application binary whose name does not start with `manual_` or end in `_child`, and the accessibility tests of the root library. A new renderer test in the application runs there without a workflow change:
 
 ```sh
-cargo nextest run --locked --no-default-features --profile ci --run-ignored ignored-only --test-threads 2 \
-  -E 'binary_id(reshiki::bin/reshiki) & not test(/(^|::)manual_[^:]+$/)'
+cargo nextest run --locked --no-default-features --lib --bin reshiki --profile ci --run-ignored ignored-only --test-threads 2 \
+  -E '(binary_id(reshiki::bin/reshiki) & not test(/(^|::)manual_[^:]+$/) & not test(/_child$/)) | (package(reshiki) & kind(lib) & test(/^accessibility::tests::/))'
 ```
 
 Start a test's name with `manual_` when it is a tool and not a check: a benchmark or profile, a baseline comparison, or a capture that needs its own folder or variables. Nothing in CI runs a `manual_` test, so keep its assertions few.
+
+End a test's name with `_child` when another test starts it in a new process and sets its environment, as `define_group_child` is started. CI runs it only through that parent test.
 
 ## Optional RDKit reference tests
 
@@ -305,7 +307,7 @@ Pull requests run native tests and saved InChI, depiction, and aromatic-response
 
 On a pull request, the summary of the **Changed fixture rows** job lists the rows that each changed file under a `tests/fixtures/` folder gains and loses (`scripts/baseline_summary.py`). Read it when you review a fixture or baseline update. To print the same list locally, run `python3 scripts/baseline_summary.py "$(git merge-base origin/main HEAD)"`.
 
-CI runs the workspace tests with [cargo-nextest](https://nexte.st/) 0.9.150; [Run the checks](#run-the-checks) gives the same commands. On each platform the **rust build** job compiles the tests once and passes them on as a `cargo nextest archive` file. Two **rust** partition jobs run that file without compiling, while the build job runs the tests that nextest leaves out. Each partition uploads its JUnit report as a `nextest-junit-*` artifact.
+CI runs the workspace tests with [cargo-nextest](https://nexte.st/) 0.9.150; [Run the checks](#run-the-checks) gives the same commands. On each platform the **rust build** job compiles the tests once and passes them on as a `cargo nextest archive` file. Two **rust** partition jobs run that file without compiling. The **rust extra** job runs beside them and covers the tests that nextest leaves out: the Windows renderer tests, the naming corpus, the custom harnesses and the doc tests. **Rust checks** passes only when all of these jobs pass. Each partition uploads its JUnit report as a `nextest-junit-*` artifact.
 
 The **Browser build (wasm32)** job checks the browser build on the same pull requests: Clippy with `-D warnings` for the editor and the headless library (`reshiki-web`) for `wasm32-unknown-unknown`, with the crates and target `scripts/build_wasm.sh` builds, then `bun test` in `packages/editor` against a debug build of the headless library. It skips with the native checks for documentation-only changes, and only release tags build the optimised bundle. The `web` job lints `packages/editor` with oxlint on every pull request. To run the same checks locally:
 
