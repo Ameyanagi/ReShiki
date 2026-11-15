@@ -149,3 +149,23 @@ fn captions_without_a_chemdraw_type_export_as_plain_text() {
     assert!(back.property_captions.is_empty());
     assert_eq!(back.annotations[0].text, "cLogP: 1.39");
 }
+
+#[test]
+fn a_generic_structure_shows_no_values_on_import() {
+    let source = include_str!("../../../../../tests/fixtures/generic-structures/link-chain.cdxml");
+    let end = source.find("</page>").unwrap();
+    let fragment = source
+        .split("<fragment")
+        .nth(1)
+        .and_then(|rest| rest.split("id=\"").nth(1))
+        .and_then(|rest| rest.split('"').next())
+        .unwrap();
+    let xml = format!(
+        r#"{}<t id="9001" p="0 0"><s size="10">Formula: C3H8</s></t><chemicalproperty id="9002" ChemicalPropertyDisplayID="9001" ChemicalPropertyIsActive="yes" ChemicalPropertyType="2" BasisObjects="{fragment}"/>{}"#,
+        &source[..end],
+        &source[end..]
+    );
+    let d = import(&xml);
+    assert_eq!(d.property_captions.len(), 1);
+    assert_eq!(caption(&d), "Formula: –");
+}

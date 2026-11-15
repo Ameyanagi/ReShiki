@@ -331,8 +331,6 @@ impl CdxmlScene {
                 link.text = caption.text.clone();
             }
         }
-        let imported = document.clone();
-        crate::linked_properties::reconcile(document, &imported);
         document.abbreviations = self.base.abbreviations;
         if document
             .abbreviations
@@ -360,6 +358,9 @@ impl CdxmlScene {
             atom.attachment = Some(attachment.kind);
             atom.centroid = attachment.members;
         }
+        // After generic labels, so a generic structure shows no values.
+        let imported = document.clone();
+        crate::linked_properties::reconcile(document, &imported);
         Ok(())
     }
 }
