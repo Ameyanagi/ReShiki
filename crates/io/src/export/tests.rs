@@ -558,6 +558,72 @@ fn picture_backgrounds_keep_palette_and_element_colors() {
     }
 }
 
+/// A 3D model keeps the drawing's theme, a user theme too, when a color
+/// background flips the canvas: its balls match the same drawing on that canvas.
+#[test]
+fn picture_backgrounds_keep_the_theme_of_3d_models() {
+    use crate::{
+        canvas_theme::{CanvasTheme, ColorTheme},
+        models3d::{Display, ForceField, Model3d, Placed, set_display},
+    };
+    let mut doc = Document {
+        canvas_theme: CanvasTheme::Dark,
+        color_theme: ColorTheme::Jmol,
+        ..Default::default()
+    };
+    let c = doc.add_atom("C", crate::document::Point::new(0., 0.));
+    let o = doc.add_atom("O", crate::document::Point::new(30., 0.));
+    doc.add_bond(c, o, 2, "plain");
+    let atoms = [(c, [-0.6, 0., -0.2]), (o, [0.6, 0., 0.2])]
+        .map(|(id, xyz)| Placed { id, xyz })
+        .to_vec();
+    doc.models
+        .push(Model3d::new(&doc, atoms, vec![], ForceField::Mmff94s));
+    crate::models3d::require_version(&mut doc);
+    assert!(set_display(&mut doc, 0, Display::ThreeD));
+    crate::palette::set_hues(&mut doc, crate::palette::Hues::default());
+    assert!(doc.custom_theme.is_some());
+    let gradients = |doc: &Document, background| {
+        let svg = String::from_utf8(
+            figure_with_budget_and_drawing(
+                doc,
+                "svg",
+                background,
+                RasterBudget::file(1200, FILE_PIXELS),
+                None,
+            )
+            .unwrap()
+            .bytes,
+        )
+        .unwrap();
+        svg.split("<radialGradient")
+            .skip(1)
+            .map(|g| {
+                g.split_once('>')
+                    .unwrap()
+                    .1
+                    .split("</radialGradient")
+                    .next()
+                    .unwrap()
+                    .to_owned()
+            })
+            .collect::<Vec<_>>()
+    };
+    let white = gradients(&doc, Background::Color([255; 3]));
+    assert!(!white.is_empty());
+    let light = Document {
+        canvas_theme: CanvasTheme::Light,
+        ..doc.clone()
+    };
+    assert_eq!(white, gradients(&light, Background::Canvas));
+    let publication = Document {
+        color_theme: ColorTheme::Publication,
+        custom_theme: None,
+        ..light
+    };
+    assert_ne!(white, gradients(&publication, Background::Canvas));
+}
+
 #[test]
 fn picture_backgrounds_reach_svg_paper_and_ink() {
     let doc = dark_ink_drawing();

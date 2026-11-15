@@ -16,7 +16,8 @@ impl Background {
     /// The drawing as painted on this background, and the paper color.
     /// A color background takes the canvas, light or dark, whose ink reads
     /// better on it. Only Ink follows it: palette, element and custom colors
-    /// keep how the drawing's own canvas shows them.
+    /// keep how the drawing's own canvas shows them. 3D models keep the
+    /// drawing's theme and take its colors for the new canvas.
     pub fn apply(self, doc: &Document) -> (Cow<'_, Document>, Option<[u8; 3]>) {
         use crate::color_contrast::contrast;
         match self {
@@ -31,9 +32,11 @@ impl Background {
                 let doc = if doc.canvas_theme == canvas {
                     Cow::Borrowed(doc)
                 } else {
-                    let mut doc = crate::canvas_theme::resolved_document(doc).into_owned();
-                    doc.canvas_theme = canvas;
-                    Cow::Owned(doc)
+                    let mut flipped = crate::canvas_theme::resolved_document(doc).into_owned();
+                    flipped.canvas_theme = canvas;
+                    flipped.color_theme = doc.color_theme;
+                    flipped.custom_theme.clone_from(&doc.custom_theme);
+                    Cow::Owned(flipped)
                 };
                 (doc, Some(paper))
             }
@@ -312,7 +315,7 @@ pub fn clipboard_figure_with_drawing(
 }
 
 /// Office's preview of an embedded drawing, rebuilt after it is edited, on
-/// the same background as the first Copy.
+/// the copy background and resolution set at the time of the rebuild.
 #[cfg(windows)]
 pub fn office_preview(
     doc: &Document,
