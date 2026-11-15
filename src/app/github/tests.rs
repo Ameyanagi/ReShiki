@@ -1230,7 +1230,7 @@ fn palette_rows_appear_only_when_they_apply() {
     let (mut app, path) = app_in(dir.path());
     let rows = names(&app);
     assert!(rows.contains(&("Nothing to send".into(), false)));
-    assert!(rows.contains(&("Versions".into(), true)));
+    assert!(rows.contains(&("History".into(), true)));
     assert!(rows.contains(&("Copy GitHub link".into(), true)));
     assert!(rows.contains(&("Sign out of GitHub".into(), true)));
     assert!(!rows.iter().any(|(name, _)| name == "Review changes on GitHub"));
@@ -1252,7 +1252,7 @@ fn palette_rows_appear_only_when_they_apply() {
     app.add_tab();
     let rows = names(&app);
     assert!(rows.contains(&("Send to GitHub…".into(), true)));
-    assert!(!rows.iter().any(|(name, _)| name == "Versions"));
+    assert!(!rows.iter().any(|(name, _)| name == "History"));
     app.github.account = Account::SignedOut(None);
     assert!(names(&app).contains(&("Sign in to GitHub…".into(), true)));
 }
@@ -1470,4 +1470,23 @@ fn send_on_closing_while_signed_out_signs_in_then_sends() {
     // Canceling the sign-in leaves the close behind; the next close asks again.
     let _ = app.update(Message::Escape);
     assert!(app.github.closing.is_none());
+}
+
+#[test]
+fn an_exact_github_word_ranks_its_rows_first_in_the_palette() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_in(dir.path());
+    save_here(&mut app, &path);
+    let first = |app: &mut App, query: &str| {
+        let _ = app.update(Message::Commands(crate::app::command_palette::Action::Open));
+        let _ = app.update(Message::Commands(crate::app::command_palette::Action::Query(
+            query.into(),
+        )));
+        let name = app.commands.ranked().first().map(|command| command.name.clone());
+        let _ = app.update(Message::Escape);
+        name
+    };
+    assert_eq!(first(&mut app, "history").as_deref(), Some("History"));
+    assert_eq!(first(&mut app, "versions").as_deref(), Some("History"));
+    assert_eq!(first(&mut app, "send").as_deref(), Some("Send 1 drawing"));
 }

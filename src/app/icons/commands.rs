@@ -220,3 +220,9 @@ pub(super) fn cloud(f: &mut Frame<'_>, ink: Color) {
     line(f, ink, &[(12., 20.), (12., 12.)]);
     line(f, ink, &[(9., 15.), (12., 12.), (15., 15.)]);
 }
+
+pub(super) fn history(f: &mut Frame<'_>, ink: Color) {
+    let face = Path::circle(Point::new(12., 12.), 8.5);
+    f.stroke(&face, Stroke::default().with_width(1.6).with_color(ink));
+    line(f, ink, &[(12., 7.), (12., 12.), (15.5, 14.)]);
+}

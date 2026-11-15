@@ -270,8 +270,6 @@ pub enum Action {
     /// The choice, once the save it waited for has landed.
     Settle(RepoKey, send::Choice),
     ShowVersions,
-    /// Back to the inspector tab Versions replaced.
-    CloseVersions,
     Versions(versions::Action),
     /// A hue chosen for the repository in a tab's menu.
     Color(RepoKey, usize),
@@ -792,26 +790,8 @@ impl App {
                 if self.github.locate(self.tab.path.as_deref()).is_none() {
                     return Task::none();
                 }
-                if self.inspector_tab != InspectorTab::Versions || !self.inspector_open {
-                    self.github.versions.back = (self.inspector_open
-                        && self.inspector_tab != InspectorTab::Versions)
-                        .then_some(self.inspector_tab);
-                }
                 let task = self.show_inspector_tab(InspectorTab::Versions);
                 return Task::batch([task.unwrap_or_else(Task::none), self.github_follow()]);
-            }
-            Action::CloseVersions => {
-                match self.github.versions.back.take() {
-                    Some(tab) => {
-                        let task = self.show_inspector_tab(tab);
-                        return Task::batch([task.unwrap_or_else(Task::none), focus_drawing()]);
-                    }
-                    None => {
-                        self.inspector_tab = InspectorTab::Properties;
-                        self.inspector_open = false;
-                    }
-                }
-                return focus_drawing();
             }
             Action::Versions(action) => return self.versions_action(action),
             Action::Color(key, hue) => {
@@ -1483,7 +1463,7 @@ impl App {
                     Some(Action::Review),
                 ));
             }
-            rows.push(("Versions".into(), name.clone(), Some(Action::ShowVersions)));
+            rows.push(("History".into(), name.clone(), Some(Action::ShowVersions)));
             // A drawing GitHub has never had has no link yet.
             if self.github_chip_state(&key) != Chip::New {
                 rows.push(("Copy GitHub link".into(), name.clone(), Some(Action::CopyLink)));
@@ -1511,28 +1491,51 @@ impl App {
     pub(super) fn github_button(&self) -> Element<'_, Message> {
         let state = &self.github;
         let unsent = self.github_anything_unsent();
+        let mut hint = match state.login() {
+            Some(login) => format!("GitHub · Signed in as @{login}"),
+            None => "GitHub · Not signed in".to_owned(),
+        };
+        if unsent {
+            hint.push_str(" · Not everything is sent");
+        }
         let anchor = super::workspace::icon_button(
             super::icons::Icon::Cloud,
-            if unsent {
-                "GitHub · Not everything is sent"
-            } else {
-                "GitHub"
-            },
+            hint,
             Some(Message::GitHub(Action::Menu(!state.menu))),
             state.menu,
         );
-        let anchor: Element<'_, Message> = if unsent {
-            iced::widget::stack![
-                anchor,
-                container(identity::dot(|theme: &Theme| theme.palette().primary))
-                    .padding([6, 5])
-                    .align_right(36)
-                    .align_top(36),
-            ]
-            .into()
-        } else {
-            anchor
-        };
+        // Signed in: a disc with the account's initial; unsent: a dot.
+        let account = state.login().map(|login| {
+            let initial = login.chars().next().unwrap_or('?').to_uppercase().to_string();
+            container(
+                container(text(initial).size(7.5).style(|theme: &Theme| text::Style {
+                    color: Some(theme.palette().background),
+                }))
+                .center(11)
+                .style(|theme: &Theme| container::Style {
+                    background: Some(theme.palette().text.into()),
+                    border: Border {
+                        radius: 5.5.into(),
+                        width: 1.,
+                        color: theme.palette().background,
+                    },
+                    ..container::Style::default()
+                }),
+            )
+            .padding([4, 3])
+            .align_right(36)
+            .align_bottom(36)
+        });
+        let dot = unsent.then(|| {
+            container(identity::dot(|theme: &Theme| theme.palette().primary))
+                .padding([6, 5])
+                .align_right(36)
+                .align_top(36)
+        });
+        let anchor: Element<'_, Message> = iced::widget::Stack::with_children([anchor])
+            .extend(account.map(Element::from))
+            .extend(dot.map(Element::from))
+            .into();
         let popup = state.menu.then(|| {
             let configured = state.configured();
             let item = |id: &'static str, label: String, action: Option<Action>| {
@@ -1558,7 +1561,7 @@ impl App {
             if configured && state.locate(self.tab.path.as_deref()).is_some() {
                 items = items.push(item(
                     "github-versions",
-                    "Versions".into(),
+                    "History".into(),
                     Some(Action::ShowVersions),
                 ));
             }
@@ -1600,9 +1603,14 @@ impl App {
     /// repository's dot and name, then what is left to do. The Send popover
     /// opens above it.
     pub(super) fn github_chip(&self) -> Option<Element<'_, Message>> {
-        let (key, _) = self.github.locate(self.tab.path.as_deref())?;
+        let (key, repo_path) = self.github.locate(self.tab.path.as_deref())?;
         let state = &self.github;
-        let name = self.github_label(&key);
+        let folder = repo_path.rsplit_once('/').map(|(folder, _)| folder.to_owned());
+        // `lab-notes / scheme`, with a long folder shortened in the middle.
+        let name = match &folder {
+            Some(folder) => format!("{} / {}", self.github_label(&key), middle(folder)),
+            None => self.github_label(&key),
+        };
         let hue = state.hue(&key);
         let muted = |line: String| text(line).size(12).style(super::workspace::muted_text);
         let action = |id: &'static str, label: &'static str, action: Action| {
@@ -1610,12 +1618,24 @@ impl App {
                 .on_press(Message::GitHub(action))
                 .padding([4, 9])
         };
-        let mut content = row![
-            identity::dot(move |theme: &Theme| identity::color(theme, hue)),
-            text(name.clone()).size(12),
-        ]
-        .spacing(6)
-        .align_y(Alignment::Center);
+        // The name opens the picker in the drawing's folder.
+        let place = reshiki::accessibility::button(
+            "github-chip-place",
+            format!("{name}, open from GitHub here"),
+            row![
+                identity::dot(move |theme: &Theme| identity::color(theme, hue)),
+                text(name.clone()).size(12),
+            ]
+            .spacing(6)
+            .align_y(Alignment::Center),
+        )
+        .padding([4, 8])
+        .style(super::workspace::control(false))
+        .on_press(Message::GitHub(Action::Picker(picker::Action::ShowIn(
+            state.named(&key),
+            folder.unwrap_or_default(),
+        ))));
+        let mut content = row![].spacing(6).align_y(Alignment::Center);
         let state_now = self.github_chip_state(&key);
         let (suffix, after, said) = match state_now {
             Chip::Sending => (Some("· Sending…".to_owned()), None, "sending".to_owned()),
@@ -1650,12 +1670,19 @@ impl App {
                 color: Some(theme.palette().success),
             }));
         }
-        let spoken = format!("{name}, {said}");
-        let chip = reshiki::accessibility::button("github-chip", spoken, content)
-            .padding([4, 8])
-            .style(super::workspace::control(false))
-            .on_press(Message::GitHub(Action::ShowVersions));
-        let chip = row![chip].push(after).spacing(4).align_y(Alignment::Center);
+        // The state opens History; Send and Review have their own buttons.
+        let spoken = format!("{said}, history");
+        let shown = suffix_shown(state_now);
+        let chip = row![place]
+            .push(shown.then(|| {
+                reshiki::accessibility::button("github-chip", spoken, content)
+                    .padding([4, 6])
+                    .style(super::workspace::control(false))
+                    .on_press(Message::GitHub(Action::ShowVersions))
+            }))
+            .push(after)
+            .spacing(2)
+            .align_y(Alignment::Center);
         let popup = match &state.dialog {
             Some(Dialog::Send(draft)) => Some(self.send_view(draft)),
             _ => None,
@@ -1889,6 +1916,21 @@ impl App {
             .padding(12)
             .style(super::color_popover::surface)
             .into()
+    }
+}
+
+/// Whether the chip has a state part to click; Review stands alone.
+fn suffix_shown(chip: Chip) -> bool {
+    chip != Chip::Review
+}
+
+/// `a/b/c/d` → `a/…/d` when it is long.
+fn middle(folder: &str) -> String {
+    match (folder.split_once('/'), folder.rsplit_once('/')) {
+        (Some((first, _)), Some((_, last))) if folder.chars().count() > 24 => {
+            format!("{first}/…/{last}")
+        }
+        _ => folder.to_owned(),
     }
 }
 

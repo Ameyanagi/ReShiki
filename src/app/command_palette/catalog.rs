@@ -371,11 +371,21 @@ pub(crate) fn build(app: &App) -> Vec<Command> {
     // GitHub rows only where they apply now, such as Send for unsent drawings.
     #[cfg(not(target_arch = "wasm32"))]
     list.extend(app.github_palette().into_iter().map(|(name, detail, action)| {
+        use crate::app::github::Action;
+        // Words an exact query ranks first; see `github_word`.
+        let words = match &action {
+            Some(Action::ShowVersions) => "github repo history versions saves commits",
+            Some(Action::ShowSend) => "github repo send push commit",
+            Some(Action::Review) => "github repo review conflict",
+            Some(Action::CopyLink | Action::OpenOnGitHub) => "github repo link url",
+            Some(Action::SignIn | Action::SignOut) => "github repo account login",
+            _ => "github repo repository",
+        };
         let command = Command::new(
             name,
             Category::File,
             detail,
-            "github repository send push commit sync history",
+            words,
             Run::Send(action.iter().cloned().map(Message::GitHub).collect()),
         );
         match action {
@@ -392,6 +402,22 @@ pub(crate) fn build(app: &App) -> Vec<Command> {
         });
     }
     list
+}
+
+/// Whether `query` is a whole word of a GitHub row's name or words, such as
+/// `history`, `versions`, `send` or `repo`: that row ranks first.
+pub(crate) fn github_word(command: &Command, query: &str) -> bool {
+    #[cfg(not(target_arch = "wasm32"))]
+    let github = matches!(&command.run, Run::Send(messages)
+        if messages.iter().any(|message| matches!(message, Message::GitHub(_))));
+    #[cfg(target_arch = "wasm32")]
+    let github = false;
+    github
+        && command
+            .name
+            .split(|c: char| !c.is_alphanumeric())
+            .chain(command.synonyms.split_whitespace())
+            .any(|word| word.eq_ignore_ascii_case(query))
 }
 
 /// Commands the browser build cannot run: the assistant needs a local Codex

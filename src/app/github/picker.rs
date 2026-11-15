@@ -50,6 +50,9 @@ pub(in crate::app) struct Picker {
     pub(super) signed_out: bool,
     /// The only or last used repository was chosen once on opening.
     chosen: bool,
+    /// Folders still to open on the way to where the picker was asked to
+    /// show, outermost first.
+    goto: Vec<String>,
     /// The highlighted repository in the filtered list.
     highlighted: usize,
     pub(super) repo: Option<Repo>,
@@ -88,6 +91,7 @@ impl Picker {
             repos: None,
             signed_out: false,
             chosen: false,
+            goto: Vec::new(),
             highlighted: 0,
             repo: None,
             root: None,
@@ -184,6 +188,8 @@ fn shown(entries: Vec<Entry>) -> Vec<Entry> {
 #[derive(Debug, Clone)]
 pub enum Action {
     Show(Mode),
+    /// Open from GitHub, in this repository's folder (`""` is the top).
+    ShowIn(RepoKey, String),
     Search(String),
     Move(isize),
     PickRepo(RepoKey),
@@ -302,6 +308,21 @@ impl App {
                 };
                 return Task::batch([self.github_list(), focus, self.picker_choose()]);
             }
+            Action::ShowIn(key, folder) => {
+                let shown = self.picker_action(Action::Show(Mode::Open));
+                let known = self.github.repos.iter().any(|repo| repo.key == key);
+                let Some(picker) = self.picker().filter(|picker| !picker.signed_out && known)
+                else {
+                    return shown;
+                };
+                picker.chosen = true;
+                picker.goto = folder
+                    .split('/')
+                    .filter(|name| !name.is_empty())
+                    .map(str::to_owned)
+                    .collect();
+                return Task::batch([shown, self.picker_action(Action::PickRepo(key))]);
+            }
             Action::SignIn => {
                 let mode = self.picker().map_or(Mode::Open, |picker| picker.mode);
                 return self.github_sign_in(Some(GitHubAction::Picker(Action::Show(mode))));
@@ -396,6 +417,15 @@ impl App {
                             .map(|entry| (entry.name.clone(), picker.repo_path(&entry.name)))
                             .collect();
                         picker.waiting = paths.len();
+                        // On the way to a folder asked for: open the next one.
+                        if !picker.goto.is_empty() {
+                            let next = picker.goto.remove(0);
+                            if entries.iter().any(|entry| entry.folder && entry.name == next) {
+                                picker.entries = Some(entries);
+                                return self.picker_action(Action::Folder(next));
+                            }
+                            picker.goto.clear();
+                        }
                         picker.entries = Some(entries);
                         picker.sort();
                         let changed = self.picker_changed(generation, paths);

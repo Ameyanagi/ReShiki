@@ -20,8 +20,9 @@ so drawings show on GitHub.
    or **Open**. Backspace goes up a folder; the parents in **lab-notes /
    scheme** go back too. Drawings show who changed them last and when, newest
    first.
-4. Edit and save as usual. The status bar chip shows the repository and what
-   is left: **● lab-notes · 1 unsent** with **Send**.
+4. Edit and save as usual. The status bar chip shows the repository, the
+   folder and what is left: **● lab-notes / scheme · 1 unsent** with **Send**.
+   Click the name to open the picker in that folder.
 5. Choose **Send**. A small box above the chip says what goes where, such as
    **ring.rsk → lab-notes**, with the message selected: type over it or keep
    it, then press Enter. ReShiki first saves every open drawing of that
@@ -59,17 +60,21 @@ with ReShiki's highlight on both. Choose:
 
 **Later** (or Escape) decides later; the chip shows **Review** in amber.
 
-**GitHub → Versions** lists the saves on this computer since the last send
-(**This computer**) and the commits on GitHub that changed the drawing
-(**GitHub**), by day. Select one, then choose **Compare** to see it beside the
-drawing now, **Open** to see it in a new tab or **Restore** to make it the
-drawing again. Restore is one undo step and makes a new save. × or Escape
-closes Versions.
+**History**, the clock tab after **Export** in the inspector (or **GitHub →
+History**, or the chip's state), lists the saves on this computer since the
+last send (**This computer**) and the commits on GitHub that changed the
+drawing (**GitHub**), by day. It shows only for drawings on GitHub. Select
+one, then choose **Compare** to see it beside the drawing now, **Open** to see
+it in a new tab or **Restore** to make it the drawing again. Restore is one
+undo step and makes a new save.
 
-The GitHub menu ends with your account: **@you**, **Add repositories… ↗** and
-**Sign out**. The command palette offers the GitHub commands that apply to
-the drawing in front, such as **Send 1 drawing**, **Versions**, **Copy GitHub
-link** and **Open on GitHub ↗**.
+The GitHub button shows your initial while you are signed in; its tooltip
+says **Signed in as @you** or **Not signed in**. Its menu ends with your
+account: **@you**, **Add repositories… ↗** and **Sign out**. The command
+palette offers the GitHub commands that apply to the drawing in front, such as
+**Send 1 drawing**, **History**, **Copy GitHub link** and **Open on GitHub ↗**;
+typing a whole word such as `send`, `history`, `versions` or `repo` puts them
+first.
 
 ## Limits
 

@@ -485,6 +485,9 @@ impl App {
                     if alias {
                         return Some((10_000, i, 2));
                     }
+                    if catalog::github_word(command, query) {
+                        return Some((9_000, i, 2));
+                    }
                     let keyword = query.chars().count() >= 2
                         && !query.eq_ignore_ascii_case("template")
                         && match &command.run {

@@ -2,7 +2,7 @@
 //! on GitHub that touched the drawing, by day. Open shows one in a new tab;
 //! Restore makes it the drawing again, as one undoable edit and a new save.
 use super::{Action as GitHubAction, perform};
-use crate::app::{App, InspectorTab, Message, workspace::muted_text};
+use crate::app::{App, Message, workspace::muted_text};
 use chrono::{DateTime, Local, NaiveDate};
 use iced::widget::{Space, column, container, row, text};
 use iced::{Alignment, Element, Length, Task};
@@ -26,8 +26,6 @@ pub(super) struct Versions {
     more: bool,
     selected: Option<Pick>,
     error: Option<String>,
-    /// The inspector tab Versions replaced; `None`: the inspector was closed.
-    pub(super) back: Option<InspectorTab>,
 }
 
 #[derive(Debug, Clone)]
@@ -153,7 +151,6 @@ impl App {
         self.github.versions = Versions {
             target: target.clone(),
             generation: self.github.versions.generation + 1,
-            back: self.github.versions.back,
             ..Versions::default()
         };
         let Some((key, repo_path)) = target else {
@@ -399,27 +396,13 @@ impl App {
 
     pub(in crate::app) fn versions_panel(&self) -> Element<'_, Message> {
         let versions = &self.github.versions;
-        let header = row![
-            text("Versions").size(15),
-            Space::new().width(Length::Fill),
-            reshiki::accessibility::button("github-versions-close", "Close Versions", text("×").size(16))
-                .padding([0, 6])
-                .style(crate::app::workspace::control(false))
-                .on_press(Message::GitHub(GitHubAction::CloseVersions)),
-        ]
-        .align_y(Alignment::Center);
         let front = self.github.locate(self.tab.path.as_deref());
         if front.is_none() {
-            return container(
-                column![header, text("Not a GitHub drawing.").size(12).style(muted_text)]
-                    .spacing(12),
-            )
-            .padding([12, 14])
-            .into();
+            return text("Not a GitHub drawing.").size(12).style(muted_text).into();
         }
         let selected = versions.selected.as_ref();
         let group = |label: &'static str| text(label).size(12).style(muted_text);
-        let mut body = column![header, group("This computer")].spacing(6);
+        let mut body = column![group("This computer")].spacing(6);
         match &versions.local {
             None => body = body.push(text("Reading…").size(12).style(muted_text)),
             Some(saves) if saves.is_empty() => {
@@ -502,9 +485,7 @@ impl App {
         if let Some(error) = &versions.error {
             body = body.push(text(error.as_str()).size(11).style(muted_text));
         }
-        iced::widget::scrollable(container(body).padding([12, 14]))
-            .height(Length::Fill)
-            .into()
+        body.into()
     }
 }
 

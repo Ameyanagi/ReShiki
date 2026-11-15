@@ -1642,10 +1642,6 @@ impl App {
         if self.inspector_tab == InspectorTab::Assistant {
             return self.inspector_frame(self.assistant_panel());
         }
-        #[cfg(not(target_arch = "wasm32"))]
-        if self.inspector_tab == InspectorTab::Versions {
-            return self.inspector_frame(self.versions_panel());
-        }
         let mut tabs = row![];
         for (label, tab) in [
             ("Properties", InspectorTab::Properties),
@@ -1659,7 +1655,7 @@ impl App {
                 // (about 238 px of tabs in 244 px); 11 px labels would need
                 // about 297 px, more than even the 300 px panels offer.
                 button(text(label).size(10))
-                    .padding([7, 3])
+                    .padding([7, 2])
                     .style(control(
                         self.inspector_tab == tab
                             || (tab == InspectorTab::Properties
@@ -1674,6 +1670,25 @@ impl App {
                     ))
                     .on_press(Message::Inspector(tab)),
             );
+        }
+        // A GitHub drawing's History, as a clock after the five text tabs.
+        #[cfg(not(target_arch = "wasm32"))]
+        if self.github.locate(self.tab.path.as_deref()).is_some() {
+            tabs = tabs.push(hover_hint(
+                reshiki::accessibility::button(
+                    "inspector-history",
+                    "History",
+                    iced::widget::canvas(Glyph(Icon::History, true))
+                        .width(14)
+                        .height(14),
+                )
+                .checked(self.inspector_tab == InspectorTab::Versions)
+                .padding([6, 2])
+                .style(control(self.inspector_tab == InspectorTab::Versions))
+                .on_press(Message::GitHub(super::github::Action::ShowVersions)),
+                "History",
+                tooltip::Position::Bottom,
+            ));
         }
         let body = match self.inspector_tab {
             InspectorTab::Reactions => self.reactions_panel(),
@@ -1690,11 +1705,14 @@ impl App {
             InspectorTab::Import => self.import_panel(),
             InspectorTab::Names => self.naming_panel(),
             InspectorTab::Export => self.export_panel(),
-            // Shown above on the desktop; the browser has no GitHub drawings.
+            #[cfg(not(target_arch = "wasm32"))]
+            InspectorTab::Versions => self.versions_panel(),
+            // The browser has no GitHub drawings.
+            #[cfg(target_arch = "wasm32")]
             InspectorTab::Versions => Space::new().into(),
         };
         let mut content = column![
-            container(tabs).padding([8, 6]),
+            container(tabs).padding([8, 4]),
             scrollable(container(body).padding([8, 16]))
                 .id("inspector-content")
                 .on_scroll(|viewport| Message::InspectorScroll(viewport.absolute_offset().y))
