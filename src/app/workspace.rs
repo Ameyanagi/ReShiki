@@ -486,7 +486,21 @@ impl App {
             ]
             .padding(iced::Padding::ZERO.left(8).bottom(4))
             .align_y(Alignment::Center);
-            container(self.stereo_note_lines(column![header].spacing(2), "check"))
+            // The findings scroll under the header and above their fixes,
+            // which stay in reach at the minimum window size.
+            let findings = scrollable(self.stereo_findings(column![].spacing(2), "check"))
+                .direction(scrollable::Direction::Vertical(
+                    scrollable::Scrollbar::new()
+                        .width(3)
+                        .scroller_width(3)
+                        .spacing(3),
+                ));
+            let mut list =
+                column![header, container(findings).max_height(FINDINGS_HEIGHT)].spacing(2);
+            if let Some(fixes) = self.stereo_fixes("check") {
+                list = list.push(fixes);
+            }
+            container(list)
                 .width(320)
                 .padding(8)
                 .style(super::color_popover::surface)
@@ -2551,11 +2565,21 @@ impl App {
     /// ids of the findings list apart from the panel's.
     pub(super) fn stereo_note_lines<'a>(
         &'a self,
+        body: iced::widget::Column<'a, Message>,
+        ids: &str,
+    ) -> iced::widget::Column<'a, Message> {
+        let body = self.stereo_findings(body, ids);
+        match self.stereo_fixes(ids) {
+            Some(fixes) => body.push(fixes),
+            None => body,
+        }
+    }
+
+    fn stereo_findings<'a>(
+        &'a self,
         mut body: iced::widget::Column<'a, Message>,
         ids: &str,
     ) -> iced::widget::Column<'a, Message> {
-        use super::stereo::Action;
-        use reshiki::chemistry::stereo_lint::Kind;
         for (index, note) in self.tab.stereo_notes.iter().enumerate() {
             body = body.push(
                 reshiki::accessibility::button(
@@ -2565,16 +2589,23 @@ impl App {
                         .spacing(8)
                         .align_y(Alignment::Center),
                 )
-                .on_press(Message::Stereo(Action::Select(index)))
+                .on_press(Message::Stereo(super::stereo::Action::Select(index)))
                 .width(Length::Fill)
                 .padding([6, 8])
                 .style(control(false)),
             );
         }
+        body
+    }
+
+    /// Reverse and Redraw stereo bonds, when a finding has stereo bonds to fix.
+    fn stereo_fixes<'a>(&self, ids: &str) -> Option<Element<'a, Message>> {
+        use super::stereo::Action;
+        use reshiki::chemistry::stereo_lint::Kind;
         let notes = &self.tab.stereo_notes;
         // Undefined stereocentres have no stereo bonds to fix.
         if !notes.iter().any(|note| note.kind != Kind::Undefined) {
-            return body;
+            return None;
         }
         let mut actions = row![].spacing(6);
         if notes.iter().any(|note| note.kind == Kind::Reversed) {
@@ -2593,7 +2624,7 @@ impl App {
             .on_press(Message::Stereo(Action::Redraw))
             .style(crate::appearance::secondary),
         );
-        body.push(container(actions).padding([4, 0]))
+        Some(container(actions).padding([4, 0]).into())
     }
 
     fn atom_label_indicator_section<'a>(
@@ -2940,6 +2971,9 @@ impl App {
 }
 
 const PALETTE_WIDTH: f32 = 104.;
+/// The tallest the Check drawing findings grow before they scroll; with the
+/// header and fixes it fits under the button in the minimum 680 pt window.
+const FINDINGS_HEIGHT: f32 = 360.;
 /// The ATOMS buttons, two per line: H first, then the common organic
 /// elements, as in Ketcher's atom toolbar.
 const PALETTE_ELEMENTS: [&str; 11] = ["H", "C", "N", "O", "S", "P", "F", "Cl", "Br", "Fe", "*"];

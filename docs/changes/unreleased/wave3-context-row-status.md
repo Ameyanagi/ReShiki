@@ -13,7 +13,9 @@ issues: []
 - Context row tooltips show the command name and its shortcut, such as
   "Join selected atoms or bonds · Ctrl+J". Screen readers read the same name.
 - **Check drawing** findings stay as a count on the Check drawing button until
-  the drawing changes. Click the button to open the list. Clicking a finding
+  the drawing changes, also when you switch tabs and back. Before, switching
+  tabs cleared them. Click the button to open the list. A long list scrolls,
+  and **Reverse** and **Redraw stereo bonds** stay below it. Clicking a finding
   selects its atoms, blinks them on the canvas and moves the view to them if
   needed. See [stereo checks](bond-tools.md).
 - The status bar stays on one row at every window width. A long message

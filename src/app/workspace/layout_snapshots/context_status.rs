@@ -55,12 +55,21 @@ fn finding_pulse(app: &mut App) {
     let _ = app.update(Message::Stereo(crate::app::stereo::Action::Select(1)));
 }
 
+/// More findings than fit: the list scrolls between its header and fixes.
+fn findings_many(app: &mut App) {
+    findings(app);
+    let note = app.tab.stereo_notes[0].clone();
+    app.tab.stereo_notes = vec![note; 16];
+    let _ = app.update(Message::Stereo(crate::app::stereo::Action::Results(true)));
+}
+
 const SCENES: &[(&str, Setup)] = &[
     ("keyboard-blank", keyboard_blank),
     ("keyboard-marked", keyboard_marked),
     ("check-findings", findings),
     ("check-findings-open", findings_open),
     ("check-finding-pulse", finding_pulse),
+    ("check-findings-many", findings_many),
 ];
 
 #[tokio::test]
