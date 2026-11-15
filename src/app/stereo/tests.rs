@@ -358,6 +358,19 @@ fn style_preference_is_opt_in_and_invalidates_cached_notices() {
 }
 
 #[test]
+fn style_preference_invalidates_cached_notices_in_every_tab() {
+    use crate::app::tabs::Action as Tabs;
+    let mut app = fixture_app(drawing("plain", false));
+    checked(&mut app, vec![], true);
+    assert!(!app.tab.stereo_notes.is_empty());
+    let first = app.tab.id;
+    let _ = app.update(Message::New);
+    app.stereo_action(Action::IupacStyleNotes(true));
+    let _ = app.update(Message::Tabs(Tabs::Select(first)));
+    assert!(app.tab.stereo_notes.is_empty());
+}
+
+#[test]
 fn invert_configuration_here_restores_haworth_fischer_and_wedges_in_one_undo() {
     let haworth = reshiki::haworth::sugar_document(
         reshiki::haworth::Sugar::Glucose,

@@ -146,7 +146,11 @@ impl App {
             Action::Invert => self.invert_configuration(),
             Action::IupacStyleNotes(enabled) => {
                 self.appearance.iupac_style_notes = enabled;
+                // The preference is global, so no tab keeps findings from the old one.
                 self.tab.stereo_notes.clear();
+                for tab in &mut self.tabs.background {
+                    tab.stereo_notes.clear();
+                }
                 self.status = format!(
                     "IUPAC style notes {} · Check drawing to update notices",
                     if enabled { "on" } else { "off" }
