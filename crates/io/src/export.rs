@@ -152,8 +152,10 @@ pub struct Publication {
 
 /// Prepare a figure snapshot and render it off the async executor, as the
 /// app's figure export does. `pages` exports every publication page as a PDF;
-/// otherwise PNG exports stay within `max_pixels` (at most [`FILE_PIXELS`]).
+/// otherwise PNG exports use `dpi`, or a lower resolution to stay within
+/// `max_pixels` (at most [`FILE_PIXELS`]).
 /// `editable` includes the prepared drawing in supported figures when it fits the limit.
+#[allow(clippy::too_many_arguments)]
 pub async fn publication(
     engine: &crate::engine::LocalEngine,
     doc: Document,
@@ -161,6 +163,7 @@ pub async fn publication(
     pages: bool,
     editable: bool,
     background: Background,
+    dpi: u32,
     max_pixels: u64,
 ) -> Result<Publication, String> {
     let (doc, notice) = figure_document(engine, doc).await?;
@@ -194,7 +197,13 @@ pub async fn publication(
                 detail: None,
             })
         } else {
-            figure_with_budget_and_drawing(&doc, format, background, max_pixels, drawing.as_deref())
+            figure_with_budget_and_drawing(
+                &doc,
+                format,
+                background,
+                RasterBudget::file(dpi, max_pixels),
+                drawing.as_deref(),
+            )
         }?;
         Ok::<_, String>((figure, detail))
     })
@@ -227,7 +236,7 @@ pub fn figure(doc: &Document, format: &str) -> Result<Figure, String> {
             format,
             false,
             Background::Canvas,
-            RasterBudget::FILE,
+            RasterBudget::file(crate::style::DEFAULT.png_dpi, FILE_PIXELS),
             None,
         ),
     )
@@ -236,30 +245,25 @@ pub fn figure(doc: &Document, format: &str) -> Result<Figure, String> {
 /// [`figure`] with PNG resolution chosen to fit `max_pixels`, capped at
 /// [`FILE_PIXELS`].
 pub fn figure_with_budget(doc: &Document, format: &str, max_pixels: u64) -> Result<Figure, String> {
-    figure_with_budget_and_drawing(doc, format, Background::Canvas, max_pixels, None)
+    figure_with_budget_and_drawing(
+        doc,
+        format,
+        Background::Canvas,
+        RasterBudget::file(crate::style::DEFAULT.png_dpi, max_pixels),
+        None,
+    )
 }
 
 fn figure_with_budget_and_drawing(
     doc: &Document,
     format: &str,
     background: Background,
-    max_pixels: u64,
+    budget: RasterBudget,
     drawing: Option<&[u8]>,
 ) -> Result<Figure, String> {
     with_attachment_notice(
         doc,
-        render_drawing(
-            doc,
-            format,
-            false,
-            background,
-            RasterBudget {
-                adaptive: true,
-                pixels: max_pixels.min(FILE_PIXELS),
-                side: u32::MAX,
-            },
-            drawing,
-        ),
+        render_drawing(doc, format, false, background, budget, drawing),
     )
 }
 
@@ -275,19 +279,35 @@ pub fn clipboard_drawing(doc: &Document, format: &str) -> Result<Vec<u8>, String
 /// Preserve format details (including bounded PNG dimensions/DPI) in an
 /// explicit format-copy receipt as well as in file-export receipts.
 pub fn clipboard_figure(doc: &Document, format: &str) -> Result<Figure, String> {
-    clipboard_figure_with_drawing(doc, format, Background::Transparent, None)
+    clipboard_figure_with_drawing(
+        doc,
+        format,
+        Background::Transparent,
+        crate::style::DEFAULT.png_dpi,
+        None,
+    )
 }
 
 /// Render a clipboard figure, optionally carrying an already prepared drawing.
+/// PNG uses `dpi`; on Windows a lower one when the picture would not fit the
+/// clipboard.
 pub fn clipboard_figure_with_drawing(
     doc: &Document,
     format: &str,
     background: Background,
+    dpi: u32,
     drawing: Option<&[u8]>,
 ) -> Result<Figure, String> {
     with_attachment_notice(
         doc,
-        render_drawing(doc, format, true, background, RasterBudget::FILE, drawing),
+        render_drawing(
+            doc,
+            format,
+            true,
+            background,
+            RasterBudget::clipboard(cfg!(windows), dpi),
+            drawing,
+        ),
     )
 }
 
@@ -297,9 +317,10 @@ pub fn clipboard_figure_with_drawing(
 pub fn office_preview(
     doc: &Document,
     background: Background,
+    dpi: u32,
 ) -> Result<reshiki_windows::OfficePreview, String> {
     Ok(reshiki_windows::OfficePreview {
-        png: clipboard_figure_with_drawing(doc, "png", background, None)?.bytes,
+        png: clipboard_figure_with_drawing(doc, "png", background, dpi, None)?.bytes,
         metafile: crate::native_windows::office_metafile(doc, background)?,
     })
 }
@@ -319,13 +340,17 @@ fn with_attachment_notice(
     Ok(figure)
 }
 
-/// `file_budget` bounds file PNGs; clipboard PNGs use the clipboard budget.
+/// `budget` sets the PNG resolution and its limits.
 fn render_drawing(
     doc: &Document,
     format: &str,
+    #[cfg_attr(
+        not(windows),
+        expect(unused_variables, reason = "only EMF tells them apart")
+    )]
     clipboard: bool,
     background: Background,
-    file_budget: RasterBudget,
+    budget: RasterBudget,
     drawing: Option<&[u8]>,
 ) -> Result<Figure, String> {
     doc.validate()?;
@@ -363,24 +388,9 @@ fn render_drawing(
             detail: None,
         }),
         "png" => {
-            let budget = if clipboard {
-                RasterBudget::clipboard(cfg!(windows))
-            } else {
-                file_budget
-            };
             let (width, height, dpi) =
                 png_dimensions(tree.size().width(), tree.size().height(), budget)?;
-            let scale = dpi as f32 / 96.0;
-            let mut pixmap =
-                resvg::tiny_skia::Pixmap::new(width, height).ok_or("Could not allocate image")?;
-            if let Some([r, g, b]) = paper {
-                pixmap.fill(resvg::tiny_skia::Color::from_rgba8(r, g, b, 255));
-            }
-            resvg::render(
-                &tree,
-                resvg::tiny_skia::Transform::from_scale(scale, scale),
-                &mut pixmap.as_mut(),
-            );
+            let pixmap = raster(&tree, paper, dpi, (width, height), (0., 0.))?;
             let mut bytes = Vec::new();
             {
                 let mut encoder = png::Encoder::new(&mut bytes, width, height);
@@ -392,19 +402,8 @@ fn render_drawing(
                     unit: png::Unit::Meter,
                 }));
                 let mut writer = encoder.write_header().map_err(|e| e.to_string())?;
-                // tiny-skia stores premultiplied colors; PNG requires straight
-                // alpha or antialiased colored edges acquire dark fringes.
-                for index in 0..pixmap.pixels().len() {
-                    if let Some(pixel) = pixmap.pixels().get(index).copied()
-                        && let Some(bytes) = pixmap.data_mut().get_mut(index * 4..index * 4 + 4)
-                    {
-                        let color = pixel.demultiply();
-                        let rgba = [color.red(), color.green(), color.blue(), color.alpha()];
-                        bytes.copy_from_slice(&rgba);
-                    }
-                }
                 writer
-                    .write_image_data(&pixmap.take())
+                    .write_image_data(&straight_alpha(pixmap))
                     .map_err(|e| e.to_string())?;
             }
             Ok(Figure {
@@ -420,6 +419,102 @@ fn render_drawing(
         figure.bytes = crate::payload::embed(format, figure.bytes, drawing)?;
     }
     Ok(figure)
+}
+
+/// The PNG export's pixels at `dpi`: `size` pixels from pixel `origin` of
+/// the whole picture.
+fn raster(
+    tree: &resvg::usvg::Tree,
+    paper: Option<[u8; 3]>,
+    dpi: u32,
+    size: (u32, u32),
+    origin: (f32, f32),
+) -> Result<resvg::tiny_skia::Pixmap, String> {
+    let scale = dpi as f32 / 96.0;
+    let mut pixmap =
+        resvg::tiny_skia::Pixmap::new(size.0, size.1).ok_or("Could not allocate image")?;
+    if let Some([r, g, b]) = paper {
+        pixmap.fill(resvg::tiny_skia::Color::from_rgba8(r, g, b, 255));
+    }
+    resvg::render(
+        tree,
+        resvg::tiny_skia::Transform::from_translate(-origin.0, -origin.1).pre_scale(scale, scale),
+        &mut pixmap.as_mut(),
+    );
+    Ok(pixmap)
+}
+
+/// The pixmap's RGBA bytes with straight alpha.
+fn straight_alpha(mut pixmap: resvg::tiny_skia::Pixmap) -> Vec<u8> {
+    // tiny-skia stores premultiplied colors; PNG requires straight
+    // alpha or antialiased colored edges acquire dark fringes.
+    for index in 0..pixmap.pixels().len() {
+        if let Some(pixel) = pixmap.pixels().get(index).copied()
+            && let Some(bytes) = pixmap.data_mut().get_mut(index * 4..index * 4 + 4)
+        {
+            let color = pixel.demultiply();
+            let rgba = [color.red(), color.green(), color.blue(), color.alpha()];
+            bytes.copy_from_slice(&rgba);
+        }
+    }
+    pixmap.take()
+}
+
+/// Close-ups of a drawing's PNG export at several resolutions.
+pub struct CloseUps {
+    /// The whole picture's size in CSS pixels, 96 to the inch.
+    pub size: (f32, f32),
+    /// For each resolution: the close-up's side in pixels and its RGBA pixels.
+    pub pixels: Vec<(u32, Vec<u8>)>,
+}
+
+/// The PNG export of `doc` at each of `dpis`, cut to a square `side` points
+/// across around `focus`, a point of the drawing: the same pixels at each
+/// setting as the exported file has there.
+pub fn png_close_ups(
+    doc: &Document,
+    background: Background,
+    focus: crate::document::Point,
+    side: f32,
+    dpis: &[u32],
+) -> Result<CloseUps, String> {
+    doc.validate()?;
+    let (doc, paper) = background.apply(doc);
+    let doc = doc.as_ref();
+    let tree = parse_svg(scene::svg_on(doc, paper))?;
+    let (lo, _) = scene::bounds(&scene::primitives(doc));
+    // Inches per drawing unit.
+    let scale = crate::style::DEFAULT.points_per_world() / 72.;
+    let side = side / 72.;
+    let corner = (
+        (focus.x - lo.x) * scale - side / 2.,
+        (focus.y - lo.y) * scale - side / 2.,
+    );
+    let pixels = dpis
+        .iter()
+        .map(|&dpi| {
+            let dpi_f = dpi as f32;
+            let pixels = (side * dpi_f).round() as u32;
+            // Whole pixels, so the close-up shows the file's own pixels.
+            let origin = ((corner.0 * dpi_f).round(), (corner.1 * dpi_f).round());
+            let pixmap = raster(&tree, paper, dpi, (pixels, pixels), origin)?;
+            Ok((pixels, straight_alpha(pixmap)))
+        })
+        .collect::<Result<_, String>>()?;
+    Ok(CloseUps {
+        size: (tree.size().width(), tree.size().height()),
+        pixels,
+    })
+}
+
+/// A PNG export's width and height in pixels at `dpi`, for a picture
+/// `size` CSS pixels across.
+pub fn png_pixels(size: (f32, f32), dpi: u32) -> (u32, u32) {
+    let scale = dpi as f32 / 96.;
+    (
+        (size.0 * scale).ceil() as u32,
+        (size.1 * scale).ceil() as u32,
+    )
 }
 
 /// Embed the SVG as a unit-square XObject scaled to its physical point size.
@@ -485,22 +580,29 @@ pub const FILE_PIXELS: u64 = 80_000_000;
 
 #[derive(Clone, Copy)]
 struct RasterBudget {
+    /// The resolution to use when the picture fits.
+    dpi: u32,
+    /// Whether a lower resolution may be used instead.
     adaptive: bool,
     pixels: u64,
     side: u32,
 }
 impl RasterBudget {
-    const FILE: Self = Self {
-        adaptive: true,
-        pixels: FILE_PIXELS,
-        side: u32::MAX,
-    };
+    fn file(dpi: u32, pixels: u64) -> Self {
+        Self {
+            dpi,
+            adaptive: true,
+            pixels: pixels.min(FILE_PIXELS),
+            side: u32::MAX,
+        }
+    }
 
-    fn clipboard(windows: bool) -> Self {
+    fn clipboard(windows: bool, dpi: u32) -> Self {
         if windows {
             // RGBA Office previews and CF_DIB must fit the native 64 MiB
             // limit. Picture-only paste uses the same pixel budget.
             Self {
+                dpi,
                 adaptive: true,
                 pixels: crate::pictures::MAX_PIXELS,
                 side: 8192,
@@ -508,7 +610,7 @@ impl RasterBudget {
         } else {
             Self {
                 adaptive: false,
-                ..Self::FILE
+                ..Self::file(dpi, FILE_PIXELS)
             }
         }
     }
@@ -524,24 +626,23 @@ fn png_dimensions(
     if !width.is_finite() || !height.is_finite() || width <= 0. || height <= 0. {
         return Err("Invalid PNG dimensions".into());
     }
-    let preferred = crate::style::DEFAULT.png_dpi;
-    for dpi in [preferred, 600, 300, 150, 96, 72] {
-        if !budget.adaptive && dpi != preferred {
-            break;
-        }
-        let scale = dpi as f32 / 96.;
-        let w = (width * scale).ceil() as u32;
-        let h = (height * scale).ceil() as u32;
+    let lower = [600, 300, 150, 96, 72]
+        .into_iter()
+        .filter(|&dpi| budget.adaptive && dpi < budget.dpi);
+    for dpi in std::iter::once(budget.dpi).chain(lower) {
+        let (w, h) = png_pixels((width, height), dpi);
         if w <= budget.side && h <= budget.side && u64::from(w) * u64::from(h) <= budget.pixels {
             return Ok((w, h, dpi));
         }
     }
     Err(if budget.adaptive {
-        "Drawing is too large for a PNG even at 72 dpi; use SVG or PDF."
+        "Drawing is too large for a PNG even at 72 dpi; use SVG or PDF.".into()
     } else {
-        "Drawing is too large for a 1200 dpi PNG; use SVG or PDF."
-    }
-    .into())
+        format!(
+            "Drawing is too large for a {} dpi PNG; use SVG or PDF.",
+            budget.dpi
+        )
+    })
 }
 /// Export all physical sheets without scaling the drawing. Page gaps and margin
 /// guides belong to the editor only; marks beyond a sheet edge are clipped.

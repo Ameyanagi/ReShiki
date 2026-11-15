@@ -334,8 +334,7 @@ pub async fn prepare_as(
             let envelope = payload::encode(&doc)?;
             let fits = envelope.len() <= payload::EMBED_LIMIT;
             let drawing = (pictures.editable && fits).then_some(envelope.as_slice());
-            let figure =
-                super::clipboard_figure(&doc, format.code(), pictures.background, drawing)?;
+            let figure = super::clipboard_figure(&doc, format.code(), pictures, drawing)?;
             let notice = (pictures.editable && !fits)
                 .then_some("Picture copied without the editable drawing (too large)");
             // When the picture leaves the drawing out, ReShiki's own data

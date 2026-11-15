@@ -128,6 +128,7 @@ async fn vector_drop_restores_the_drawing_and_inserts_it() -> Result<(), String>
             &drawing,
             format,
             reshiki::export::Background::Transparent,
+            reshiki::style::DEFAULT.png_dpi,
             Some(&envelope),
         )?
         .bytes;
@@ -178,6 +179,7 @@ async fn vector_drop_requires_a_readable_drawing() -> Result<(), String> {
                 &Document::default(),
                 format,
                 reshiki::export::Background::Transparent,
+                reshiki::style::DEFAULT.png_dpi,
                 envelope,
             )?
             .bytes;

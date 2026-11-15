@@ -213,6 +213,118 @@ fn copies_use_the_copy_default_unless_one_copy_picks_a_background() {
     let once = app.copy_pictures(Some(Paper::Canvas));
     assert_eq!(once.background, Paper::Canvas);
     assert_eq!(app.appearance.copy_background, Background::Custom);
+    assert_eq!(pictures.dpi, 300);
+    let _ = app.update(Message::Settings(Action::CopyDpi(Dpi::ALL[0])));
+    assert_eq!(app.copy_pictures(None).dpi, 150);
+}
+
+#[test]
+fn png_resolution_rows_and_the_export_tab_change_the_preferences() {
+    let mut app = app();
+    let _ = app.update(Message::Settings(Action::CopyDpi(Dpi::ALL[2])));
+    assert_eq!(app.appearance.copy_dpi.get(), 600);
+    assert_eq!(app.appearance.export_dpi.get(), 1200, "only copies");
+    let _ = app.update(Message::InspectorAction(
+        super::super::inspector::Action::ResolutionMenu(true),
+    ));
+    assert!(app.tab.inspector_ui.menu_open());
+    let _ = app.update(Message::Settings(Action::ExportDpi(Dpi::ALL[1])));
+    assert_eq!(app.appearance.export_dpi.get(), 300);
+    assert_eq!(app.appearance.copy_dpi.get(), 600);
+    assert!(
+        !app.tab.inspector_ui.menu_open(),
+        "a choice closes the menu"
+    );
+    assert!(!app.error, "{}", app.status);
+}
+
+/// Close-ups render once per drawing revision, and only while Settings or
+/// the Export tab's PNG resolution shows them.
+#[test]
+fn close_ups_render_once_per_drawing_revision() {
+    let mut app = app();
+    let key = |app: &App| (app.tab.id, app.tab.file_epoch, app.tab.revision);
+    let _ = app.update(Message::Settings(Action::Query(String::new())));
+    assert_eq!(app.settings.rendering, None, "hidden: nothing renders");
+    let _ = app.update(Message::Settings(Action::Open(Some(Section::CopyExport))));
+    let first = key(&app);
+    assert_eq!(app.settings.rendering, Some(first));
+    let preview = Preview::render(&app.tab.doc);
+    let _ = app.update(Message::Settings(Action::Preview(first, preview)));
+    assert_eq!(app.settings.rendering, None);
+    let Some((shown, Ok(preview))) = &app.settings.preview else {
+        panic!("close-ups are kept");
+    };
+    assert_eq!(*shown, first);
+    assert!(preview.sample, "an empty drawing shows the sample");
+    assert_eq!(preview.tiles.len(), 4);
+    // The same revision does not render again.
+    let _ = app.update(Message::Settings(Action::Query("dpi".into())));
+    assert_eq!(app.settings.rendering, None);
+
+    app.tab
+        .doc
+        .add_atom("N", reshiki::document::Point::default());
+    app.tab.revision += 1;
+    let _ = app.update(Message::Settings(Action::Query(String::new())));
+    let second = key(&app);
+    assert_eq!(app.settings.rendering, Some(second));
+    // A result for an older revision does not end the newer job.
+    let stale = Preview::render(&app.tab.doc);
+    let _ = app.update(Message::Settings(Action::Preview(first, stale)));
+    assert_eq!(app.settings.rendering, Some(second));
+    let _ = app.update(Message::Settings(Action::Preview(
+        second,
+        Preview::render(&app.tab.doc),
+    )));
+    let Some((shown, Ok(preview))) = &app.settings.preview else {
+        panic!("close-ups are kept");
+    };
+    assert_eq!(*shown, second);
+    assert!(!preview.sample);
+
+    // The Export tab's PNG resolution also needs the drawing's size.
+    let _ = app.update(Message::Settings(Action::Close));
+    app.tab.revision += 1;
+    let _ = app.update(Message::Inspector(super::super::InspectorTab::Export));
+    assert_eq!(app.settings.rendering, None, "only for PNG");
+    let _ = app.update(Message::InspectorAction(
+        super::super::inspector::Action::Figure(super::super::inspector::FigureFormat::Png),
+    ));
+    assert_eq!(app.settings.rendering, Some(key(&app)));
+}
+
+#[test]
+fn close_ups_show_the_same_square_at_every_resolution_and_describe_the_whole_drawing() {
+    let mut doc = Document::default();
+    let carbon = doc.add_atom("C", reshiki::document::Point::default());
+    let oxygen = doc.add_atom("O", reshiki::document::Point::new(42., 0.));
+    doc.add_bond(carbon, oxygen, 1, "plain");
+    let preview = Preview::render(&doc).unwrap();
+    assert!(!preview.sample);
+    let sides: Vec<_> = preview
+        .tiles
+        .iter()
+        .map(|tile| match tile {
+            image::Handle::Rgba { width, height, .. } => {
+                assert_eq!(width, height);
+                *width
+            }
+            _ => panic!("close-ups are pixels"),
+        })
+        .collect();
+    assert_eq!(sides, [25, 50, 100, 200]);
+    let (width, height) = reshiki::export::png_pixels(preview.size, 1200);
+    let cm = |css: f32| css / 96. * 2.54;
+    assert_eq!(
+        preview.describe(Dpi::ALL[3]),
+        format!(
+            "1200 dpi · {:.1} × {:.1} cm · {width} × {height} px",
+            cm(preview.size.0),
+            cm(preview.size.1)
+        )
+    );
+    assert!(Preview::render(&sample_structure()).unwrap().size.0 > 0.);
 }
 
 /// The real view's texts and accessible controls, popovers included.
@@ -303,6 +415,13 @@ fn evidence_app(app: &mut App) {
     app.appearance.custom_background = [30, 42, 68];
 }
 
+/// Delivers the close-ups of the drawing as it is now.
+fn show_close_ups(app: &mut App) {
+    let key = (app.tab.id, app.tab.file_epoch, app.tab.revision);
+    let preview = Preview::render(&app.tab.doc);
+    let _ = app.update(Message::Settings(Action::Preview(key, preview)));
+}
+
 fn open(app: &mut App, section: Section) {
     let _ = app.update(Message::Settings(Action::Open(Some(section))));
 }
@@ -314,7 +433,7 @@ fn open(app: &mut App, section: Section) {
 async fn settings_snapshots() {
     use iced::advanced::{renderer::Headless, widget::Tree};
     type Setup = fn(&mut App);
-    let states: [(&str, Setup); 13] = [
+    let states: [(&str, Setup); 16] = [
         ("toolbar", |_| {}),
         ("settings-appearance", |app| open(app, Section::Appearance)),
         ("settings-drawing", |app| open(app, Section::Drawing)),
@@ -341,6 +460,29 @@ async fn settings_snapshots() {
         }),
         ("export-tab", |app| {
             let _ = app.update(Message::Inspector(crate::app::InspectorTab::Export));
+        }),
+        ("settings-png-resolution", |app| {
+            app.appearance.copy_dpi = Dpi::ALL[0];
+            open(app, Section::CopyExport);
+            let _ = app.update(Message::Settings(Action::Query("resolution".into())));
+            show_close_ups(app);
+        }),
+        ("settings-png-resolution-empty", |app| {
+            app.tab.doc = Document::default();
+            app.tab.revision += 1;
+            open(app, Section::CopyExport);
+            let _ = app.update(Message::Settings(Action::Query("resolution".into())));
+            show_close_ups(app);
+        }),
+        ("export-tab-png", |app| {
+            let _ = app.update(Message::Inspector(crate::app::InspectorTab::Export));
+            let _ = app.update(Message::InspectorAction(
+                crate::app::inspector::Action::Figure(crate::app::inspector::FigureFormat::Png),
+            ));
+            show_close_ups(app);
+            let _ = app.update(Message::InspectorAction(
+                crate::app::inspector::Action::ResolutionMenu(true),
+            ));
         }),
         ("export-tab-black", |app| {
             app.appearance.export_background = Background::Black;

@@ -99,6 +99,7 @@ async fn publication_matches_sequence() -> anyhow::Result<()> {
             pages,
             false,
             export::Background::Canvas,
+            reshiki::style::DEFAULT.png_dpi,
             export::FILE_PIXELS,
         )
         .await
@@ -130,6 +131,7 @@ async fn editable_option_embeds_vector_drawings_but_never_pages() -> anyhow::Res
                 pages,
                 editable,
                 export::Background::Canvas,
+                reshiki::style::DEFAULT.png_dpi,
                 export::FILE_PIXELS,
             )
             .await

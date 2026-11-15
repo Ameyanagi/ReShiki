@@ -142,19 +142,22 @@ struct Packet {
     generation: Option<String>,
 }
 
-/// How copied PNG, SVG and PDF pictures look, and whether they carry the
-/// editable drawing. ReShiki's own clipboard data always keeps the drawing.
+/// How copied PNG, SVG and PDF pictures look, the PNG's resolution, and
+/// whether they carry the editable drawing. ReShiki's own clipboard data
+/// always keeps the drawing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Pictures {
     pub background: export::Background,
+    pub dpi: u32,
     pub editable: bool,
 }
 impl Default for Pictures {
-    /// Transparent pictures with the editable drawing, as Copy made them before
-    /// these preferences.
+    /// Transparent 1200 dpi pictures with the editable drawing, as Copy made
+    /// them before these preferences.
     fn default() -> Self {
         Self {
             background: export::Background::Transparent,
+            dpi: crate::style::DEFAULT.png_dpi,
             editable: true,
         }
     }
@@ -515,14 +518,7 @@ async fn prepare_copy_with_limit(
         let fits = envelope.len() <= embed_limit;
         let drawing = (pictures.editable && fits).then_some(envelope.as_slice());
         Ok::<_, String>((
-            copy_images_with_drawing(
-                &doc,
-                image_only,
-                browser,
-                pictures.background,
-                drawing,
-                fits,
-            ),
+            copy_images_with_drawing(&doc, image_only, browser, pictures, drawing, fits),
             pictures.editable && !fits,
         ))
     })
@@ -556,7 +552,7 @@ async fn prepare_copy_with_limit(
                         .filter(|d| d.unit == png::Unit::Meter)
                         .map(|d| (f64::from(d.xppu) * 0.0254).round() as u32);
                     if let Some(dpi) = dpi
-                        && dpi < crate::style::DEFAULT.png_dpi
+                        && dpi < pictures.dpi
                     {
                         outcome.notices.push(format!(
                             "Raster preview uses {dpi} dpi to fit the clipboard; vector formats retain full quality"
@@ -603,7 +599,7 @@ async fn prepare_copy_with_limit(
 fn clipboard_figure(
     doc: &Document,
     format: &str,
-    background: export::Background,
+    pictures: Pictures,
     drawing: Option<&[u8]>,
 ) -> Result<export::Figure, String> {
     let format = if format == "svg" {
@@ -611,7 +607,7 @@ fn clipboard_figure(
     } else {
         format
     };
-    export::clipboard_figure_with_drawing(doc, format, background, drawing)
+    export::clipboard_figure_with_drawing(doc, format, pictures.background, pictures.dpi, drawing)
 }
 
 #[cfg(test)]
@@ -620,14 +616,7 @@ fn copy_images(
     image_only: bool,
     browser: bool,
 ) -> Vec<(&'static str, Result<Representation, String>)> {
-    copy_images_with_drawing(
-        doc,
-        image_only,
-        browser,
-        export::Background::Transparent,
-        None,
-        false,
-    )
+    copy_images_with_drawing(doc, image_only, browser, Pictures::default(), None, false)
 }
 
 /// `native` adds ReShiki's own drawing to Copy image, for pasting into ReShiki.
@@ -635,7 +624,7 @@ fn copy_images_with_drawing(
     doc: &Document,
     image_only: bool,
     browser: bool,
-    background: export::Background,
+    pictures: Pictures,
     drawing: Option<&[u8]>,
     native: bool,
 ) -> Vec<(&'static str, Result<Representation, String>)> {
@@ -647,7 +636,7 @@ fn copy_images_with_drawing(
     .into_iter()
     .filter(|(_, format)| !browser || *format != "pdf")
     .map(|(kind, format)| {
-        let image = clipboard_figure(doc, format, background, drawing);
+        let image = clipboard_figure(doc, format, pictures, drawing);
         (
             format,
             image.map(|figure| Representation::new(kind, &figure.bytes)),
@@ -658,7 +647,7 @@ fn copy_images_with_drawing(
     if !image_only && !browser {
         images.push((
             "Office preview",
-            crate::native_windows::office_metafile(doc, background)
+            crate::native_windows::office_metafile(doc, pictures.background)
                 .map(|bytes| Representation::new("dev.reshiki.office-metafile", &bytes)),
         ));
     }

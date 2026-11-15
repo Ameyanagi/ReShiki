@@ -219,15 +219,17 @@ async fn oversized_picture_payload_is_omitted_from_all_formats_with_one_notice()
 
 /// With the editable drawing off, Copy and Copy image put no drawing in their
 /// pictures, but ReShiki's own clipboard data still carries it. The pictures
-/// take the chosen background.
+/// take the chosen background, and the PNG the chosen resolution.
 #[tokio::test]
 async fn pictures_follow_the_editable_drawing_switch_and_background() {
     let mut source = Document::default();
     source.add_atom("O", Default::default());
     let pictures = Pictures {
         background: export::Background::Color([255; 3]),
+        dpi: 300,
         editable: false,
     };
+
     for browser in [false, true] {
         for image_only in [false, true] {
             let (outcome, representations) = prepare_copy_with_limit(
@@ -255,10 +257,14 @@ async fn pictures_follow_the_editable_drawing_switch_and_background() {
                     count += 1;
                 }
                 if picture.kind == "public.png" {
-                    let raster = image::load_from_memory(&picture.bytes().unwrap())
-                        .unwrap()
-                        .into_rgba8();
+                    let bytes = picture.bytes().unwrap();
+                    let raster = image::load_from_memory(&bytes).unwrap().into_rgba8();
                     assert_eq!(raster.get_pixel(0, 0).0, [255, 255, 255, 255]);
+                    let reader = png::Decoder::new(std::io::Cursor::new(&bytes))
+                        .read_info()
+                        .unwrap();
+                    let dims = reader.info().pixel_dims.unwrap();
+                    assert_eq!(dims.xppu, (300. / 0.0254_f64).round() as u32);
                 }
             }
             assert_eq!(count, if browser { 2 } else { 3 });
@@ -280,14 +286,9 @@ async fn vector_only_paste_restores_the_drawing_and_paste_picture_refuses_it() {
     source.add_atom("O", Default::default());
     let envelope = payload::encode(&source).unwrap();
     for (format, kind) in [("pdf", "com.adobe.pdf"), ("svg", "public.svg-image")] {
-        let bytes = clipboard_figure(
-            &source,
-            format,
-            export::Background::Transparent,
-            Some(&envelope),
-        )
-        .unwrap()
-        .bytes;
+        let bytes = clipboard_figure(&source, format, Pictures::default(), Some(&envelope))
+            .unwrap()
+            .bytes;
         let item = Representation::new(kind, &bytes);
         let restored = paste_packet_with_warnings(
             LocalEngine::in_process(),
@@ -334,10 +335,9 @@ async fn an_office_copy_back_restores_the_drawing_from_its_vector_picture() {
     let office_png = export::clipboard_png(&source).unwrap();
     for (format, kind) in [("pdf", "com.adobe.pdf"), ("svg", "public.svg-image")] {
         for drawing in [Some(envelope.as_slice()), None] {
-            let vector =
-                clipboard_figure(&source, format, export::Background::Transparent, drawing)
-                    .unwrap()
-                    .bytes;
+            let vector = clipboard_figure(&source, format, Pictures::default(), drawing)
+                .unwrap()
+                .bytes;
             let pasted = paste_packet_with_warnings(
                 LocalEngine::in_process(),
                 Packet {
@@ -363,7 +363,7 @@ async fn vector_paste_distinguishes_unreadable_drawings_from_plain_pictures() {
     source.add_atom("O", Default::default());
     for (format, kind) in [("pdf", "com.adobe.pdf"), ("svg", "public.svg-image")] {
         for drawing in [None, Some(b"invalid".as_slice())] {
-            let bytes = clipboard_figure(&source, format, export::Background::Transparent, drawing)
+            let bytes = clipboard_figure(&source, format, Pictures::default(), drawing)
                 .unwrap()
                 .bytes;
             let error = import_representation(
@@ -1342,7 +1342,7 @@ async fn copy_image_retains_the_drawing_and_raster_paste_keeps_the_picture() {
         &doc,
         true,
         false,
-        export::Background::Transparent,
+        Pictures::default(),
         Some(&envelope),
         true,
     );

@@ -27,6 +27,7 @@ async fn editable_png_contains_the_prepared_drawing_and_preserves_pixels() -> an
         false,
         false,
         Background::Canvas,
+        crate::style::DEFAULT.png_dpi,
         export::FILE_PIXELS,
     )
     .await
@@ -40,6 +41,7 @@ async fn editable_png_contains_the_prepared_drawing_and_preserves_pixels() -> an
         false,
         true,
         Background::Canvas,
+        crate::style::DEFAULT.png_dpi,
         export::FILE_PIXELS,
     )
     .await
@@ -99,6 +101,7 @@ async fn editable_png_preserves_custom_colors_from_older_dark_snapshots() {
             false,
             true,
             Background::Canvas,
+            crate::style::DEFAULT.png_dpi,
             FILE_PIXELS,
         )
         .await
@@ -155,6 +158,7 @@ async fn editable_figure_export_skips_a_drawing_over_the_embed_limit() {
             false,
             true,
             Background::Canvas,
+            crate::style::DEFAULT.png_dpi,
             FILE_PIXELS,
         )
         .await
@@ -293,27 +297,27 @@ fn raster_budget_rejects_invalid_and_extreme_sizes_without_allocating() {
         (10., f32::INFINITY),
         (f32::MAX, f32::MAX),
     ] {
-        assert!(png_dimensions(width, height, RasterBudget::FILE).is_err());
+        assert!(png_dimensions(width, height, RasterBudget::file(1200, FILE_PIXELS)).is_err());
     }
     assert_eq!(
-        png_dimensions(100., 100., RasterBudget::FILE),
+        png_dimensions(100., 100., RasterBudget::file(1200, FILE_PIXELS)),
         Ok((1250, 1250, 1200))
     );
     assert_eq!(
-        png_dimensions(800., 800., RasterBudget::FILE),
+        png_dimensions(800., 800., RasterBudget::file(1200, FILE_PIXELS)),
         Ok((5000, 5000, 600))
     );
-    assert!(png_dimensions(800., 800., RasterBudget::clipboard(false)).is_err());
+    assert!(png_dimensions(800., 800., RasterBudget::clipboard(false, 1200)).is_err());
 }
 
 #[test]
 fn windows_clipboard_resolution_fits_dib_office_and_native_picture_limits() {
-    let budget = RasterBudget::clipboard(true);
+    let budget = RasterBudget::clipboard(true, 1200);
     assert_eq!(png_dimensions(100., 100., budget), Ok((1250, 1250, 1200)));
     // The old fixed 1200 DPI raster passes the export budget (50M pixels),
     // but its 24-bit DIB alone is 150 MB. The Office RGBA preview is larger.
     assert_eq!(
-        png_dimensions(800., 400., RasterBudget::clipboard(false)),
+        png_dimensions(800., 400., RasterBudget::clipboard(false, 1200)),
         Ok((10000, 5000, 1200))
     );
     assert_eq!(png_dimensions(800., 400., budget), Ok((5000, 2500, 600)));
@@ -434,9 +438,21 @@ fn picture_backgrounds_paint_the_png_and_swap_black_and_white_ink() {
     for (background, corner, ink) in cases {
         for clipboard in [true, false] {
             let bytes = if clipboard {
-                clipboard_figure_with_drawing(&doc, "png", background, None)
+                clipboard_figure_with_drawing(
+                    &doc,
+                    "png",
+                    background,
+                    crate::style::DEFAULT.png_dpi,
+                    None,
+                )
             } else {
-                figure_with_budget_and_drawing(&doc, "png", background, FILE_PIXELS, None)
+                figure_with_budget_and_drawing(
+                    &doc,
+                    "png",
+                    background,
+                    RasterBudget::file(1200, FILE_PIXELS),
+                    None,
+                )
             }
             .unwrap()
             .bytes;
@@ -465,11 +481,17 @@ fn picture_backgrounds_paint_the_png_and_swap_black_and_white_ink() {
 #[test]
 fn office_preview_rebuild_keeps_the_copy_background() {
     let doc = dark_ink_drawing();
-    let white = office_preview(&doc, Background::Color([255; 3])).unwrap();
+    let white = office_preview(
+        &doc,
+        Background::Color([255; 3]),
+        crate::style::DEFAULT.png_dpi,
+    )
+    .unwrap();
     let pixels = rgba(&white.png);
     assert_eq!(pixels[0], [255; 4]);
     assert!(pixels.iter().any(|p| *p == [0, 0, 0, 255]), "dark ink");
-    let transparent = office_preview(&doc, Background::Transparent).unwrap();
+    let transparent =
+        office_preview(&doc, Background::Transparent, crate::style::DEFAULT.png_dpi).unwrap();
     assert_eq!(rgba(&transparent.png)[0], [0; 4]);
     assert_ne!(white.metafile, transparent.metafile);
 }
@@ -507,9 +529,21 @@ fn picture_backgrounds_keep_palette_and_element_colors() {
         for clipboard in [true, false] {
             let background = Background::Color(paper);
             let bytes = if clipboard {
-                clipboard_figure_with_drawing(&doc, "png", background, None)
+                clipboard_figure_with_drawing(
+                    &doc,
+                    "png",
+                    background,
+                    crate::style::DEFAULT.png_dpi,
+                    None,
+                )
             } else {
-                figure_with_budget_and_drawing(&doc, "png", background, FILE_PIXELS, None)
+                figure_with_budget_and_drawing(
+                    &doc,
+                    "png",
+                    background,
+                    RasterBudget::file(1200, FILE_PIXELS),
+                    None,
+                )
             }
             .unwrap()
             .bytes;
@@ -529,9 +563,15 @@ fn picture_backgrounds_reach_svg_paper_and_ink() {
     let doc = dark_ink_drawing();
     let svg = |background| {
         String::from_utf8(
-            figure_with_budget_and_drawing(&doc, "svg", background, FILE_PIXELS, None)
-                .unwrap()
-                .bytes,
+            figure_with_budget_and_drawing(
+                &doc,
+                "svg",
+                background,
+                RasterBudget::file(1200, FILE_PIXELS),
+                None,
+            )
+            .unwrap()
+            .bytes,
         )
         .unwrap()
     };
@@ -726,6 +766,160 @@ fn clipboard_png_keeps_the_fixed_preferred_resolution() {
         detail.ends_with(&format!("at {} dpi", crate::style::DEFAULT.png_dpi)),
         "{detail}"
     );
+}
+
+/// The resolution and physical size a PNG's pHYs chunk records.
+fn png_physical(png: &[u8]) -> (u32, f64, f64) {
+    let reader = png::Decoder::new(std::io::Cursor::new(png))
+        .read_info()
+        .unwrap();
+    let info = reader.info();
+    let dims = info.pixel_dims.unwrap();
+    assert_eq!(dims.unit, png::Unit::Meter);
+    assert_eq!(dims.xppu, dims.yppu);
+    let per_inch = f64::from(dims.xppu) * 0.0254;
+    (
+        per_inch.round() as u32,
+        f64::from(info.width) / per_inch,
+        f64::from(info.height) / per_inch,
+    )
+}
+
+#[tokio::test]
+async fn file_png_uses_the_chosen_resolution_at_the_same_physical_size() {
+    let [(_, doc), _] = parity_fixtures();
+    let engine = crate::engine::LocalEngine::in_process();
+    let mut sizes = Vec::new();
+    for dpi in [150, 300, 600, 1200] {
+        let png = publication(
+            &engine,
+            doc.clone(),
+            "png",
+            false,
+            false,
+            Background::Canvas,
+            dpi,
+            FILE_PIXELS,
+        )
+        .await
+        .unwrap();
+        let (recorded, width, height) = png_physical(&png.bytes);
+        assert_eq!(recorded, dpi);
+        assert!(
+            png.details[0].ends_with(&format!("at {dpi} dpi")),
+            "{:?}",
+            png.details
+        );
+        sizes.push((dpi, width, height));
+    }
+    let (_, width, height) = sizes[3];
+    for (dpi, w, h) in sizes {
+        // Whole pixels round the size up by less than one pixel.
+        let pixel = 1. / f64::from(dpi);
+        assert!(
+            (w - width).abs() <= pixel && (h - height).abs() <= pixel,
+            "{dpi} dpi"
+        );
+    }
+    let at = |dpi| {
+        let size = parse_svg(scene::svg_with_background(&doc)).unwrap().size();
+        png_pixels((size.width(), size.height()), dpi)
+    };
+    let (w300, _) = at(300);
+    let (w1200, _) = at(1200);
+    assert!(
+        w1200 >= 4 * w300 - 4 && w1200 <= 4 * w300,
+        "{w300} and {w1200}"
+    );
+}
+
+#[test]
+fn a_lower_chosen_resolution_steps_down_from_itself_and_errors_name_it() {
+    // 4000 × 4000 CSS pixels: 125 million pixels at 300 dpi, 39 million at 150.
+    assert_eq!(
+        png_dimensions(4000., 4000., RasterBudget::file(300, FILE_PIXELS)),
+        Ok((6250, 6250, 150))
+    );
+    for dpi in [300, 600, 1200] {
+        assert_eq!(
+            png_dimensions(4000., 4000., RasterBudget::clipboard(false, dpi)),
+            Err(format!(
+                "Drawing is too large for a {dpi} dpi PNG; use SVG or PDF."
+            ))
+        );
+    }
+    // A drawing that fits keeps the chosen resolution, never a higher one.
+    assert_eq!(
+        png_dimensions(96., 48., RasterBudget::file(150, FILE_PIXELS)),
+        Ok((150, 75, 150))
+    );
+    assert_eq!(
+        png_dimensions(96., 48., RasterBudget::clipboard(true, 300)),
+        Ok((300, 150, 300))
+    );
+}
+
+#[test]
+fn close_ups_are_the_exported_pixels_at_each_resolution() {
+    let [(_, doc), _] = parity_fixtures();
+    let (lo, hi) = scene::bounds(&scene::primitives(&doc));
+    let middle = |a: &crate::document::Atom| {
+        (a.position.x - (lo.x + hi.x) / 2.).hypot(a.position.y - (lo.y + hi.y) / 2.)
+    };
+    let focus = doc
+        .atoms
+        .iter()
+        .min_by(|a, b| middle(a).total_cmp(&middle(b)))
+        .unwrap()
+        .position;
+    let dpis = [150, 300, 600, 1200];
+    let close_ups = png_close_ups(&doc, Background::Canvas, focus, 12., &dpis).unwrap();
+    let tree = parse_svg(scene::svg_with_background(&doc)).unwrap();
+    assert_eq!(close_ups.size, (tree.size().width(), tree.size().height()));
+    let sides: Vec<_> = close_ups.pixels.iter().map(|(side, _)| *side).collect();
+    // 12 points is 1/6 inch.
+    assert_eq!(sides, [25, 50, 100, 200]);
+    for ((side, pixels), dpi) in close_ups.pixels.iter().zip(dpis) {
+        assert_eq!(pixels.len(), (side * side * 4) as usize);
+        // The close-up is a piece of the file export at the same resolution.
+        let file = figure_with_budget_and_drawing(
+            &doc,
+            "png",
+            Background::Canvas,
+            RasterBudget::file(dpi, FILE_PIXELS),
+            None,
+        )
+        .unwrap();
+        let reader = png::Decoder::new(std::io::Cursor::new(&file.bytes))
+            .read_info()
+            .unwrap();
+        let width = reader.info().width as usize;
+        let whole = rgba(&file.bytes);
+        let close: Vec<[u8; 4]> = pixels.as_chunks::<4>().0.to_vec();
+        let side = *side as usize;
+        // The close-up's corner, 6 points up and left of the focus.
+        let inch = |v: f32| v * crate::style::DEFAULT.points_per_world() / 72.;
+        let corner = |at: f32, lo: f32| ((inch(at - lo) - 6. / 72.) * dpi as f32).round() as usize;
+        let (x, y) = (corner(focus.x, lo.x), corner(focus.y, lo.y));
+        for row in 0..side {
+            let start = (y + row) * width + x;
+            for (a, b) in whole[start..start + side]
+                .iter()
+                .zip(&close[row * side..(row + 1) * side])
+            {
+                // Antialiasing may differ by one coverage step (16 of 255)
+                // where the picture starts at a different pixel.
+                assert!(
+                    a.iter().zip(b).all(|(a, b)| a.abs_diff(*b) <= 16),
+                    "{dpi} dpi close-up differs from the export: {a:?} and {b:?}"
+                );
+            }
+        }
+        assert!(
+            close.iter().any(|p| p != &close[0]),
+            "{dpi} dpi close-up shows ink"
+        );
+    }
 }
 
 #[test]
@@ -964,10 +1158,15 @@ fn editable_pdf_has_catalog_xmp_without_compression_and_valid_cross_references()
 
     let doc = vector_payload_document();
     let envelope = crate::payload::encode(&doc).unwrap();
-    let bytes =
-        clipboard_figure_with_drawing(&doc, "pdf", Background::Transparent, Some(&envelope))
-            .unwrap()
-            .bytes;
+    let bytes = clipboard_figure_with_drawing(
+        &doc,
+        "pdf",
+        Background::Transparent,
+        crate::style::DEFAULT.png_dpi,
+        Some(&envelope),
+    )
+    .unwrap()
+    .bytes;
     let catalog = pdf_text_object(&bytes, 1);
     let metadata_id = catalog
         .split_once("/Metadata ")
@@ -1021,6 +1220,7 @@ async fn publication_vectors_include_the_prepared_drawing_only_when_enabled() {
             false,
             false,
             Background::Canvas,
+            crate::style::DEFAULT.png_dpi,
             FILE_PIXELS,
         )
         .await
@@ -1032,6 +1232,7 @@ async fn publication_vectors_include_the_prepared_drawing_only_when_enabled() {
             false,
             true,
             Background::Canvas,
+            crate::style::DEFAULT.png_dpi,
             FILE_PIXELS,
         )
         .await
@@ -1083,6 +1284,7 @@ async fn publication_vectors_include_the_prepared_drawing_only_when_enabled() {
         true,
         false,
         Background::Canvas,
+        crate::style::DEFAULT.png_dpi,
         FILE_PIXELS,
     )
     .await
@@ -1094,6 +1296,7 @@ async fn publication_vectors_include_the_prepared_drawing_only_when_enabled() {
         true,
         true,
         Background::Canvas,
+        crate::style::DEFAULT.png_dpi,
         FILE_PIXELS,
     )
     .await

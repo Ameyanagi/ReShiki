@@ -54,6 +54,13 @@ fn receipts_outside_the_matrix_preserve_predicates_and_wrapper_routing() {
             Message::Accessibility(accessibility::Action::Published(0, Err("failure".into()))),
             [false; 5],
         ),
+        (
+            Message::Settings(crate::app::settings_page::Action::Preview(
+                (crate::app::document_tab::TabId(0), 0, 0),
+                Err("failure".into()),
+            )),
+            [false; 5],
+        ),
     ];
     #[cfg(any(windows, target_os = "linux"))]
     cases.extend([

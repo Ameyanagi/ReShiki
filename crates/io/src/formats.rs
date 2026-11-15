@@ -87,6 +87,7 @@ pub async fn write_with_engine(
             false,
             false,
             export::Background::Canvas,
+            crate::style::DEFAULT.png_dpi,
             EXPORT_PNG_PIXELS,
         )
         .await

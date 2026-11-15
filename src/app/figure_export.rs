@@ -152,6 +152,7 @@ impl App {
             .appearance
             .export_background
             .paper(self.appearance.custom_background);
+        let dpi = self.appearance.export_dpi.get();
         Task::perform(
             async move {
                 let p = reshiki::export::publication(
@@ -161,6 +162,7 @@ impl App {
                     pages,
                     editable,
                     background,
+                    dpi,
                     reshiki::export::FILE_PIXELS,
                 )
                 .await?;

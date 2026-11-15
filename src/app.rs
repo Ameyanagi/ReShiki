@@ -978,6 +978,7 @@ impl App {
         let mut task = self.handle(message);
         self.sync_drawing_panel_context();
         self.settle_deferred_label_layout();
+        task = Task::batch([task, self.render_png_preview()]);
         // Any message may change the drawing, some (previews, background
         // labels) without a new revision, so the next view compares afresh.
         self.tab.forget_unsaved();
@@ -1064,6 +1065,12 @@ impl App {
         if let Message::Accessibility(action) = message {
             return ControlFlow::Break(self.accessibility_action(action));
         }
+        let message = match message {
+            Message::Settings(action @ settings_page::Action::Preview(..)) => {
+                return ControlFlow::Break(self.settings_action(action));
+            }
+            message => message,
+        };
         if let Message::CopyFrame(action) = message {
             return ControlFlow::Break(self.copy_frame(action));
         }

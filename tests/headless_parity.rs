@@ -378,6 +378,7 @@ fn native_figures_match_the_library() {
                 false,
                 false,
                 export::Background::Canvas,
+                reshiki::style::DEFAULT.png_dpi,
                 budget,
             ))
             .expect("a publication figure");
@@ -429,6 +430,7 @@ fn figure_warnings_come_in_ops_order() {
             false,
             false,
             export::Background::Canvas,
+            reshiki::style::DEFAULT.png_dpi,
             Budgets::default().export_png_pixels,
         ))
         .expect("a publication figure");

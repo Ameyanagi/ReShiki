@@ -5,11 +5,14 @@ use super::{
     help::{Placement, modal},
     workspace::{accessible_checkbox, control, horizontal_line, muted_text},
 };
-use crate::appearance::Background;
+use crate::appearance::{Background, Dpi};
 use iced::keyboard::{Key, Modifiers, key::Named};
-use iced::widget::{Space, canvas, column, container, row, scrollable, stack, text, tooltip};
+use iced::widget::{
+    Space, canvas, column, container, image, row, scrollable, stack, text, tooltip,
+};
 use iced::{Alignment, Border, Color, Element, Length, Point, Rectangle, Renderer, Size, Task};
 use reshiki::canvas_theme::CanvasTheme;
+use reshiki::document::Document;
 use reshiki::export::Background as Paper;
 use reshiki::style::units::Unit;
 
@@ -18,6 +21,10 @@ const COLOR: &str = "settings-color";
 const PANE: &str = "settings-pane";
 /// Saved background colors, newest first.
 const SAVED_COLORS: usize = 8;
+/// The side of a PNG close-up, in points of the printed picture.
+const CLOSE_UP_POINTS: f32 = 12.;
+/// The side of a close-up on screen, the same at every resolution.
+const CLOSE_UP_SIZE: f32 = 120.;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum Section {
@@ -89,6 +96,101 @@ pub enum Action {
     SaveColor,
     /// Save this color from the picker's palette.
     PickColor([u8; 3]),
+    CopyDpi(Dpi),
+    ExportDpi(Dpi),
+    /// The PNG close-ups of a drawing at a revision.
+    Preview(PreviewKey, Result<Preview, String>),
+}
+
+/// A drawing at a revision: its tab, file epoch and revision.
+pub type PreviewKey = (super::document_tab::TabId, u64, u64);
+
+/// The drawing as PNG at each of [`Dpi::ALL`], for Settings and the Export tab.
+#[derive(Debug, Clone)]
+pub struct Preview {
+    /// The whole picture in CSS pixels, 96 to the inch.
+    pub(super) size: (f32, f32),
+    /// A close-up at each resolution.
+    tiles: Vec<image::Handle>,
+    /// Whether the close-ups show a sample structure, as the drawing is empty.
+    sample: bool,
+}
+
+impl Preview {
+    /// Renders the PNG export of `doc`, or of a sample structure when it is
+    /// empty, around its first atom that is not carbon.
+    fn render(doc: &Document) -> Result<Self, String> {
+        let sample = doc.all_ids().is_empty();
+        let doc = if sample { &sample_structure() } else { doc };
+        let focus = match doc
+            .atoms
+            .iter()
+            .find(|atom| atom.element != "C")
+            .or(doc.atoms.first())
+        {
+            Some(atom) => atom.position,
+            None => {
+                let (lo, hi) = reshiki::scene::bounds(&reshiki::scene::primitives(doc));
+                reshiki::document::Point::new((lo.x + hi.x) / 2., (lo.y + hi.y) / 2.)
+            }
+        };
+        let close_ups = reshiki::export::png_close_ups(
+            doc,
+            Paper::Canvas,
+            focus,
+            CLOSE_UP_POINTS,
+            &Dpi::ALL.map(Dpi::get),
+        )?;
+        Ok(Self {
+            size: close_ups.size,
+            tiles: close_ups
+                .pixels
+                .into_iter()
+                .map(|(side, rgba)| image::Handle::from_rgba(side, side, rgba))
+                .collect(),
+            sample,
+        })
+    }
+
+    /// "<dpi> dpi · <w> × <h> cm · <W> × <H> px" for the whole picture.
+    pub(super) fn describe(&self, dpi: Dpi) -> String {
+        format!(
+            "{} dpi · {} · {}",
+            dpi.get(),
+            self.centimeters(),
+            self.pixels(dpi)
+        )
+    }
+
+    /// "<w> × <h> cm", the same at every resolution.
+    pub(super) fn centimeters(&self) -> String {
+        let cm = |css: f32| css / 96. * 2.54;
+        format!("{:.1} × {:.1} cm", cm(self.size.0), cm(self.size.1))
+    }
+
+    /// "<W> × <H> px" at `dpi`.
+    pub(super) fn pixels(&self, dpi: Dpi) -> String {
+        let (width, height) = reshiki::export::png_pixels(self.size, dpi.get());
+        format!("{width} × {height} px")
+    }
+}
+
+/// Acetic acid, for close-ups of an empty drawing.
+fn sample_structure() -> Document {
+    use reshiki::document::Point;
+    let mut doc = Document::default();
+    let methyl = doc.add_atom("C", Point::new(-36.37, 21.));
+    let carbonyl = doc.add_atom("C", Point::new(0., 0.));
+    let oxo = doc.add_atom("O", Point::new(0., -42.));
+    let hydroxyl = doc.add_atom("O", Point::new(36.37, 21.));
+    doc.add_bond(methyl, carbonyl, 1, "plain");
+    doc.add_bond(carbonyl, oxo, 2, "plain");
+    doc.add_bond(carbonyl, hydroxyl, 1, "plain");
+    // The hydrogens that the chemistry engine would count.
+    for (atom, hydrogens) in doc.atoms.iter_mut().zip([3, 0, 0, 1]) {
+        atom.label_h = hydrogens;
+    }
+    doc
 }
 
 #[derive(Default)]
@@ -99,6 +201,10 @@ pub(super) struct State {
     /// While the color picker is open: the typed color, and whether it could
     /// not be read.
     color: Option<(String, bool)>,
+    /// The latest PNG close-ups, and the drawing they show.
+    pub(super) preview: Option<(PreviewKey, Result<Preview, String>)>,
+    /// The drawing whose close-ups are being rendered.
+    rendering: Option<PreviewKey>,
 }
 
 /// Command+, (Ctrl+, on Windows and Linux).
@@ -179,8 +285,53 @@ impl App {
                 settings.color = None;
                 self.save_background_color(rgb);
             }
+            Action::CopyDpi(dpi) => {
+                self.appearance.copy_dpi = dpi;
+                self.save_preference("PNG resolution");
+            }
+            Action::ExportDpi(dpi) => {
+                self.appearance.export_dpi = dpi;
+                self.tab.inspector_ui.close_menu();
+                self.save_preference("PNG resolution");
+            }
+            Action::Preview(key, preview) => {
+                if settings.rendering == Some(key) {
+                    settings.rendering = None;
+                }
+                settings.preview = Some((key, preview));
+            }
         }
         Task::none()
+    }
+
+    /// Renders the front drawing's PNG close-ups off the UI thread, once per
+    /// revision, while Settings or the Export tab's PNG resolution shows them.
+    pub(super) fn render_png_preview(&mut self) -> Task<Message> {
+        let shown = self.settings.open
+            || (self.inspector_open
+                && self.inspector_tab == super::InspectorTab::Export
+                && self.tab.inspector_ui.figure == super::inspector::FigureFormat::Png);
+        let key = (self.tab.id, self.tab.file_epoch, self.tab.revision);
+        let settings = &mut self.settings;
+        if !shown
+            || settings.rendering == Some(key)
+            || settings
+                .preview
+                .as_ref()
+                .is_some_and(|(shown, _)| *shown == key)
+        {
+            return Task::none();
+        }
+        settings.rendering = Some(key);
+        let doc = self.tab.doc.clone();
+        Task::perform(
+            async move {
+                reshiki::task::spawn_blocking(move || Preview::render(&doc))
+                    .await
+                    .map_err(|error| error.to_string())?
+            },
+            move |preview| Message::Settings(Action::Preview(key, preview)),
+        )
     }
 
     /// Keep `rgb` first among the saved colors, and copy pictures on it.
@@ -453,6 +604,26 @@ impl App {
                     ],
                 ),
                 (
+                    Some("PNG resolution"),
+                    vec![
+                        Item::choice(
+                            "Copied pictures",
+                            "Lower is smaller and pastes faster into slides and chats.",
+                            dpi_choices("settings-copy-dpi", a.copy_dpi, Action::CopyDpi),
+                        ),
+                        Item::choice(
+                            "Exported files",
+                            "1200 dpi suits journal line art. The size in centimeters stays the same at every setting.",
+                            dpi_choices("settings-export-dpi", a.export_dpi, Action::ExportDpi),
+                        ),
+                        Item::wide(
+                            "Close-ups",
+                            "This drawing at each resolution, shown at the same size. The whole drawing's pixel size is underneath.",
+                            self.dpi_strip(),
+                        ),
+                    ],
+                ),
+                (
                     Some("Inside the file"),
                     vec![
                         Item::check(
@@ -601,6 +772,90 @@ impl App {
                 super::popover::popover(add, picker, close.clone()).on_escape(close),
             ))
             .into()
+    }
+
+    /// A close-up of the drawing at each resolution, tagged where Copy and
+    /// Export use it.
+    fn dpi_strip(&self) -> Element<'_, Message> {
+        let a = &self.appearance;
+        let preview = self.settings.preview.as_ref().map(|(_, preview)| preview);
+        let tiles = preview
+            .and_then(|p| p.as_ref().ok())
+            .map(|p| p.tiles.as_slice())
+            .unwrap_or_default();
+        let mut strip = row![].spacing(12);
+        for (index, dpi) in Dpi::ALL.into_iter().enumerate() {
+            let used = [(dpi == a.copy_dpi, "Copy"), (dpi == a.export_dpi, "Export")];
+            let chosen = used.iter().any(|(used, _)| *used);
+            let picture: Element<'_, Message> = match tiles.get(index) {
+                Some(tile) => image(tile.clone())
+                    .width(CLOSE_UP_SIZE)
+                    .height(CLOSE_UP_SIZE)
+                    .filter_method(image::FilterMethod::Nearest)
+                    .into(),
+                None => Space::new()
+                    .width(CLOSE_UP_SIZE)
+                    .height(CLOSE_UP_SIZE)
+                    .into(),
+            };
+            let mut label = row![text(format!("{} dpi", dpi.get())).size(12)]
+                .spacing(6)
+                .align_y(Alignment::Center);
+            for (_, tag) in used.into_iter().filter(|(used, _)| *used) {
+                label = label.push(container(text(tag).size(10)).padding([0, 6]).style(
+                    |theme: &iced::Theme| container::Style {
+                        text_color: Some(theme.palette().primary),
+                        background: Some(theme.palette().primary.scale_alpha(0.14).into()),
+                        border: Border {
+                            radius: 8.into(),
+                            ..Default::default()
+                        },
+                        ..Default::default()
+                    },
+                ));
+            }
+            let pixels = preview
+                .and_then(|p| p.as_ref().ok())
+                .map(|preview| text(preview.pixels(dpi)).size(11).style(muted_text));
+            strip = strip.push(
+                column![
+                    container(picture)
+                        .padding(2)
+                        .style(move |theme: &iced::Theme| container::Style {
+                            border: Border {
+                                color: if chosen {
+                                    theme.palette().primary
+                                } else {
+                                    crate::appearance::themed(
+                                        theme,
+                                        Color::from_rgb8(224, 228, 233),
+                                    )
+                                },
+                                width: if chosen { 2. } else { 1. },
+                                radius: 6.into(),
+                            },
+                            ..Default::default()
+                        }),
+                    label,
+                    pixels,
+                ]
+                .spacing(4),
+            );
+        }
+        let note = match preview {
+            Some(Ok(preview)) if preview.sample => Some(
+                text("A sample structure, as the drawing is empty.")
+                    .size(11)
+                    .style(muted_text),
+            ),
+            Some(Err(error)) => Some(
+                text(format!("Close-ups unavailable: {error}"))
+                    .size(11)
+                    .style(text::danger),
+            ),
+            _ => None,
+        };
+        column![strip, note].spacing(6).into()
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -899,6 +1154,19 @@ fn choices<'a, T: Clone + PartialEq + 'a>(
         );
     }
     segmented(strip)
+}
+
+/// The PNG resolution presets, as in a segmented choice.
+fn dpi_choices<'a>(id: &str, selected: Dpi, action: fn(Dpi) -> Action) -> Element<'a, Message> {
+    let options = Dpi::ALL.map(|dpi| {
+        let label = if dpi.get() == 1200 {
+            "1200 dpi".to_owned()
+        } else {
+            dpi.get().to_string()
+        };
+        (dpi, label)
+    });
+    choices(id, &options, selected, |dpi| Message::Settings(action(dpi)))
 }
 
 /// The five backgrounds with their swatches. `tiles` shows swatches alone in

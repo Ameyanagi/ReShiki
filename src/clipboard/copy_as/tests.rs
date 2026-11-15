@@ -19,6 +19,7 @@ async fn copy_as_pictures_follow_the_editable_drawing_switch_and_background() {
         for editable in [false, true] {
             let pictures = super::super::Pictures {
                 background: export::Background::Color([0; 3]),
+                dpi: 1200,
                 editable,
             };
             let copy = prepare_as(engine.clone(), molecule(), format, pictures)
@@ -41,6 +42,7 @@ async fn copy_as_pictures_paste_back_into_reshiki_without_the_editable_drawing()
     let engine = LocalEngine::in_process();
     let pictures = super::super::Pictures {
         background: export::Background::Transparent,
+        dpi: 1200,
         editable: false,
     };
     for format in [CopyFormat::Png, CopyFormat::Svg, CopyFormat::Pdf] {

@@ -389,6 +389,7 @@ impl App {
     ) -> reshiki::clipboard::Pictures {
         reshiki::clipboard::Pictures {
             background: background.unwrap_or_else(|| self.appearance.copy_paper()),
+            dpi: self.appearance.copy_dpi.get(),
             editable: self.appearance.export_editable_drawing,
         }
     }

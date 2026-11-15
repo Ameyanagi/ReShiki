@@ -103,6 +103,7 @@ async fn vector_payloads_open_as_untitled_drawings() -> Result<(), String> {
             &drawing,
             format,
             reshiki::export::Background::Transparent,
+            reshiki::style::DEFAULT.png_dpi,
             Some(&envelope),
         )?
         .bytes;
@@ -142,6 +143,7 @@ fn vector_open_keeps_the_refusal_without_a_payload_and_explains_damage() -> Resu
             &Document::default(),
             format,
             reshiki::export::Background::Transparent,
+            reshiki::style::DEFAULT.png_dpi,
             Some(b"invalid payload"),
         )?
         .bytes;

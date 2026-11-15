@@ -74,6 +74,8 @@ enum Completion {
     Accessibility,
     /// Recovery(Finished), delivered before tab routing and modal gates.
     Recovery,
+    /// Settings(Preview), delivered before tab routing and modal gates.
+    PngPreview,
     /// Desktop(Ready | Finished | Office).
     #[cfg(any(windows, target_os = "linux"))]
     Desktop,
@@ -113,7 +115,8 @@ impl Completion {
             | Self::OfficePrepared
             | Self::Updates
             | Self::Accessibility
-            | Self::Recovery => Owner::App,
+            | Self::Recovery
+            | Self::PngPreview => Owner::App,
             #[cfg(any(windows, target_os = "linux"))]
             Self::Desktop => Owner::App,
             #[cfg(target_os = "macos")]
@@ -225,7 +228,10 @@ fn admission(completion: Completion) -> Admission {
         // is open (generic_expansion_blocked), so no modal gate sees them.
         Completion::Templates | Completion::Generic => NOWHERE,
         // Handled in App::update or update_front before any gate.
-        Completion::OfficePrepared | Completion::Accessibility | Completion::Recovery => NOWHERE,
+        Completion::OfficePrepared
+        | Completion::Accessibility
+        | Completion::Recovery
+        | Completion::PngPreview => NOWHERE,
         #[cfg(any(windows, target_os = "linux"))]
         Completion::Desktop => NOWHERE,
         #[cfg(target_os = "macos")]
@@ -272,6 +278,28 @@ fn completion(message: &Message) -> Option<Completion> {
             #[cfg(not(target_arch = "wasm32"))]
             super::recovery_manager::Action::OpenFolder => None,
         },
+        Message::Settings(action) => {
+            use super::settings_page::Action;
+            match action {
+                Action::Preview(..) => Some(Completion::PngPreview),
+                Action::Open(..)
+                | Action::Close
+                | Action::Section(..)
+                | Action::Query(..)
+                | Action::NewCanvas(..)
+                | Action::DrawingUnit(..)
+                | Action::CopyBackground(..)
+                | Action::ExportBackground(..)
+                | Action::Custom(..)
+                | Action::AddColor
+                | Action::CloseColor
+                | Action::ColorInput(..)
+                | Action::SaveColor
+                | Action::PickColor(..)
+                | Action::CopyDpi(..)
+                | Action::ExportDpi(..) => None,
+            }
+        }
         Message::Accessibility(action) => {
             use super::accessibility::Action;
             match action {
@@ -294,6 +322,7 @@ fn completion(message: &Message) -> Option<Completion> {
                 | Action::ModelControls(_)
                 | Action::Figure(..)
                 | Action::FigureMenu(..)
+                | Action::ResolutionMenu(..)
                 | Action::Chemical(..)
                 | Action::ChemicalMenu(..)
                 | Action::RefreshProperties
@@ -724,7 +753,6 @@ fn completion(message: &Message) -> Option<Completion> {
         | Message::InsertInput
         | Message::ToggleHelp
         | Message::Help(..)
-        | Message::Settings(..)
         | Message::Commands(..)
         | Message::OpenShortcutExamples
         | Message::Viewport(..)

@@ -143,7 +143,7 @@ impl FigureFormat {
             }
             Self::SvgOffice => "Physical-size picture for Microsoft Office. Text becomes outlines.",
             Self::Png => {
-                "Up to 1200 dpi. Large drawings use a lower resolution; physical size is preserved."
+                "Pixels at the resolution below. Large drawings use a lower one; the size in centimeters stays the same."
             }
             #[cfg(windows)]
             Self::Emf => {
@@ -208,6 +208,8 @@ pub enum Action {
     Figure(FigureFormat),
     /// Open or close the figure format menu.
     FigureMenu(bool),
+    /// Open or close the PNG resolution menu.
+    ResolutionMenu(bool),
     Chemical(ChemicalFormat),
     ChemicalMenu(bool),
     RefreshProperties,
@@ -296,8 +298,9 @@ pub(super) struct State {
     expected_viewport: Option<iced::Size>,
     expanded: HashMap<Section, bool>,
     model_controls: bool,
-    figure: FigureFormat,
+    pub(super) figure: FigureFormat,
     figure_menu: bool,
+    resolution_menu: bool,
     chemical: ChemicalFormat,
     chemical_menu: bool,
     pending: Option<PropertyKey>,
@@ -348,10 +351,11 @@ impl State {
     }
 
     pub(super) fn menu_open(&self) -> bool {
-        self.figure_menu || self.chemical_menu
+        self.figure_menu || self.resolution_menu || self.chemical_menu
     }
     pub(super) fn close_menu(&mut self) {
         self.figure_menu = false;
+        self.resolution_menu = false;
         self.chemical_menu = false;
     }
     #[cfg(test)]
@@ -374,16 +378,20 @@ impl State {
                 self.figure_menu = false;
             }
             Action::FigureMenu(open) => {
+                self.close_menu();
                 self.figure_menu = open;
-                self.chemical_menu = false;
+            }
+            Action::ResolutionMenu(open) => {
+                self.close_menu();
+                self.resolution_menu = open;
             }
             Action::Chemical(format) => {
                 self.chemical = format;
                 self.chemical_menu = false;
             }
             Action::ChemicalMenu(open) => {
+                self.close_menu();
                 self.chemical_menu = open;
-                self.figure_menu = false;
             }
             Action::RefreshProperties
             | Action::RefreshPropertiesFor(..)
@@ -1155,11 +1163,12 @@ impl App {
                 false,
                 column![
                     text(format!(
-                        "{} {} pt\nBonds {} pt · Lines {} pt\nPNG up to 1200 dpi",
+                        "{} {} pt\nBonds {} pt · Lines {} pt\nPNG files at {} dpi",
                         self.tab.doc.drawing_style.font_family,
                         self.tab.doc.drawing_style.font_size_pt,
                         self.tab.doc.drawing_style.bond_length_pt,
-                        self.tab.doc.drawing_style.line_width_pt
+                        self.tab.doc.drawing_style.line_width_pt,
+                        self.appearance.export_dpi.get()
                     ))
                     .size(12)
                     .style(muted_text),
@@ -2034,6 +2043,86 @@ impl App {
         )
     }
 
+    /// The PNG resolution of exported files, with the drawing's size at each.
+    fn resolution_menu(&self) -> Element<'_, Message> {
+        use crate::appearance::Dpi;
+        let open = self.tab.inspector_ui.resolution_menu;
+        let preview = self
+            .settings
+            .preview
+            .as_ref()
+            .and_then(|(_, preview)| preview.as_ref().ok());
+        let label =
+            |dpi: Dpi| preview.map_or_else(|| format!("{} dpi", dpi.get()), |p| p.describe(dpi));
+        let chosen = self.appearance.export_dpi;
+        // The size in centimeters goes under the resolution: the whole line
+        // does not fit the panel.
+        let anchor = reshiki::accessibility::button(
+            "export-resolution",
+            format!("PNG resolution: {}", label(chosen)),
+            row![
+                column![
+                    text(format!("{} dpi", chosen.get())).size(12),
+                    preview.map(|p| {
+                        text(format!("{} · {}", p.centimeters(), p.pixels(chosen)))
+                            .size(11)
+                            .style(muted_text)
+                    }),
+                ]
+                .spacing(2)
+                .width(Length::Fill),
+                super::workspace::caret(9.)
+            ]
+            .align_y(Alignment::Center),
+        )
+        .padding(8)
+        .width(Length::Fill)
+        .style(crate::appearance::secondary)
+        .expanded(open)
+        .on_press(Message::InspectorAction(Action::ResolutionMenu(!open)));
+        let popup = open.then(|| {
+            let items = Dpi::ALL.into_iter().map(|dpi| {
+                reshiki::accessibility::button(
+                    format!("export-resolution-{}", dpi.get()),
+                    label(dpi),
+                    row![
+                        text(format!("{} dpi", dpi.get()))
+                            .size(12)
+                            .width(Length::Fill),
+                        preview.map(|p| text(p.pixels(dpi)).size(11).style(muted_text)),
+                    ]
+                    .align_y(Alignment::Center),
+                )
+                .checked(dpi == chosen)
+                .width(Length::Fill)
+                .padding([6, 10])
+                .style(super::workspace::control(dpi == chosen))
+                .on_press(Message::Settings(super::settings_page::Action::ExportDpi(
+                    dpi,
+                )))
+                .into()
+            });
+            container(column(items))
+                .width(Length::Fill)
+                .padding(5)
+                .style(super::color_popover::surface)
+                .into()
+        });
+        column![
+            text("Resolution").size(12),
+            Element::new(
+                super::popover::popover(
+                    anchor,
+                    popup,
+                    Message::InspectorAction(Action::ResolutionMenu(false)),
+                )
+                .fit_anchor(),
+            ),
+        ]
+        .spacing(6)
+        .into()
+    }
+
     fn chemical_menu(&self, chemical: ChemicalFormat) -> Element<'_, Message> {
         let open = self.tab.inspector_ui.chemical_menu;
         let anchor = super::popover::choice_anchor(
@@ -2098,6 +2187,7 @@ impl App {
         let mut figures = column![
             self.figure_menu(figure),
             text(figure.description()).size(12).style(muted_text),
+            (figure == FigureFormat::Png).then(|| self.resolution_menu()),
             column![
                 text(format!(
                     "Background · {}",
