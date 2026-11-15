@@ -297,7 +297,8 @@ fn completion(message: &Message) -> Option<Completion> {
                 | Action::SaveColor
                 | Action::PickColor(..)
                 | Action::CopyDpi(..)
-                | Action::ExportDpi(..) => None,
+                | Action::ExportDpi(..)
+                | Action::Restore(..) => None,
             }
         }
         Message::Accessibility(action) => {
@@ -323,6 +324,7 @@ fn completion(message: &Message) -> Option<Completion> {
                 | Action::Figure(..)
                 | Action::FigureMenu(..)
                 | Action::ResolutionMenu(..)
+                | Action::ExportEditable(..)
                 | Action::Chemical(..)
                 | Action::ChemicalMenu(..)
                 | Action::RefreshProperties
@@ -809,7 +811,7 @@ fn completion(message: &Message) -> Option<Completion> {
         | Message::CopyChemicalText
         | Message::Copy(..)
         | Message::CopyImage
-        | Message::CopyImageOn(_)
+        | Message::CopyImageOn(..)
         | Message::CopyAs(..)
         | Message::Paste
         | Message::PastePicture

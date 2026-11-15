@@ -210,6 +210,9 @@ pub enum Action {
     FigureMenu(bool),
     /// Open or close the PNG resolution menu.
     ResolutionMenu(bool),
+    /// Include the editable drawing in exports from the Export tab; `None`
+    /// follows the Settings default.
+    ExportEditable(Option<bool>),
     Chemical(ChemicalFormat),
     ChemicalMenu(bool),
     RefreshProperties,
@@ -301,6 +304,9 @@ pub(super) struct State {
     pub(super) figure: FigureFormat,
     figure_menu: bool,
     resolution_menu: bool,
+    /// The Export tab's Include editable drawing choice; `None` follows the
+    /// Settings default.
+    pub(super) export_editable: Option<bool>,
     chemical: ChemicalFormat,
     chemical_menu: bool,
     pending: Option<PropertyKey>,
@@ -385,6 +391,7 @@ impl State {
                 self.close_menu();
                 self.resolution_menu = open;
             }
+            Action::ExportEditable(editable) => self.export_editable = editable,
             Action::Chemical(format) => {
                 self.chemical = format;
                 self.chemical_menu = false;
@@ -2191,6 +2198,17 @@ impl App {
         .into()
     }
 
+    /// Whether exports include the editable drawing: the Export tab's choice
+    /// while it shows, otherwise the Settings default.
+    pub(super) fn export_editable(&self) -> bool {
+        let shown = self.inspector_open && self.inspector_tab == InspectorTab::Export;
+        self.tab
+            .inspector_ui
+            .export_editable
+            .filter(|_| shown)
+            .unwrap_or(self.appearance.export_editable_drawing)
+    }
+
     pub(super) fn export_panel(&self) -> Element<'_, Message> {
         let figure = self.tab.inspector_ui.figure;
         let chemical = self.tab.inspector_ui.chemical;
@@ -2281,17 +2299,30 @@ impl App {
             figure,
             FigureFormat::Png | FigureFormat::Svg | FigureFormat::SvgOffice | FigureFormat::Pdf
         ) {
+            let default = self.appearance.export_editable_drawing;
+            let editable = self.export_editable();
             figures = figures.push(
                 column![
-                    checkbox(self.appearance.export_editable_drawing)
-                        .label("Include editable drawing")
-                        .on_toggle(|enabled| Message::View(
-                            super::view_settings::Action::ExportEditableDrawing(enabled)
-                        ))
-                        .text_size(12),
-                    text(
-                        "ReShiki can reopen the file as this drawing. Anyone with the file can too. Also applies to Copy."
-                    )
+                    row![
+                        checkbox(editable)
+                            .label("Include editable drawing")
+                            .on_toggle(|enabled| Message::InspectorAction(Action::ExportEditable(
+                                Some(enabled)
+                            )))
+                            .text_size(12)
+                            .width(Length::Fill),
+                        (editable != default).then(|| super::settings_page::text_button(
+                            "export-editable-restore",
+                            "Restore the default for Include editable drawing",
+                            "Restore default",
+                            Some(Message::InspectorAction(Action::ExportEditable(None))),
+                        )),
+                    ]
+                    .align_y(Alignment::Center),
+                    text(format!(
+                        "Default: {} · Settings → Copy & export",
+                        if default { "on" } else { "off" }
+                    ))
                     .size(11)
                     .style(muted_text),
                 ]
@@ -2421,6 +2452,7 @@ impl App {
     }
     pub(super) fn toggle_inspector(&mut self) -> Task<Message> {
         self.inspector_open = !self.inspector_open;
+        self.tab.inspector_ui.export_editable = None;
         if self.inspector_open && self.inspector_tab == InspectorTab::Assistant {
             return self.assistant_action(super::assistant::Action::Open);
         }
@@ -2458,6 +2490,8 @@ impl App {
                 String::new()
             };
         }
+        // The Export tab starts at the default each time it opens.
+        self.tab.inspector_ui.export_editable = None;
         self.inspector_tab = tab;
         self.inspector_open = true;
         if tab == InspectorTab::Import {

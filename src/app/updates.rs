@@ -277,12 +277,27 @@ impl App {
     fn save_update_preferences(&mut self) -> Task<Message> {
         self.updates.saving = true;
         Task::perform(
-            updates::save_preferences(Preferences {
-                automatic: self.updates.automatic,
-                channel: self.updates.channel,
-            }),
+            updates::save_preferences(self.update_preferences()),
             |result| Message::Updates(Action::Saved(result)),
         )
+    }
+
+    pub(super) fn update_preferences(&self) -> Preferences {
+        Preferences {
+            automatic: self.updates.automatic,
+            channel: self.updates.channel,
+        }
+    }
+
+    /// Automatic checks on the Stable channel, as at first launch.
+    pub(super) fn restore_update_defaults(&mut self) -> Task<Message> {
+        let defaults = Preferences::default();
+        self.updates.automatic = defaults.automatic;
+        if self.updates.channel == defaults.channel {
+            self.save_update_preferences()
+        } else {
+            self.update_action(Action::Channel(defaults.channel))
+        }
     }
 
     fn update_restart_blocker(&self) -> Option<&'static str> {

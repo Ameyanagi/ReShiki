@@ -234,8 +234,10 @@ fn copies_use_the_copy_default_unless_one_copy_picks_a_background() {
     let pictures = app.copy_pictures(None);
     assert_eq!(pictures.background, Paper::Color([30, 42, 68]));
     assert!(!pictures.editable);
-    let once = app.copy_pictures(Some(Paper::Canvas));
+    let once = app.copy_pictures(Some((Paper::Canvas, true)));
     assert_eq!(once.background, Paper::Canvas);
+    assert!(once.editable, "one copy can include the editable drawing");
+    assert!(!app.appearance.export_editable_drawing);
     assert_eq!(app.appearance.copy_background, Background::Custom);
     assert_eq!(pictures.dpi, 300);
     let _ = app.update(Message::Settings(Action::CopyDpi(Dpi::ALL[0])));
@@ -489,6 +491,99 @@ fn close_ups_show_the_same_square_at_every_resolution_and_describe_the_whole_dra
     assert_eq!(close_ups(&Document::default()).unwrap().len(), 4);
 }
 
+/// The Export tab's Include editable drawing starts at the default each time
+/// the tab opens or the default changes, and changes only its own exports.
+#[test]
+fn the_export_tab_overrides_the_editable_drawing_default_for_its_exports() {
+    use crate::app::{InspectorTab, inspector::Action as Inspector};
+    let mut app = app();
+    assert!(app.appearance.export_editable_drawing);
+    let _ = app.update(Message::Inspector(InspectorTab::Export));
+    assert!(app.export_editable());
+    let _ = app.update(Message::InspectorAction(Inspector::ExportEditable(Some(
+        false,
+    ))));
+    assert!(!app.export_editable());
+    assert!(app.appearance.export_editable_drawing, "the default stays");
+    // Restore default.
+    let _ = app.update(Message::InspectorAction(Inspector::ExportEditable(None)));
+    assert!(app.export_editable());
+    // Other exports, and the tab opened again, follow the default.
+    let _ = app.update(Message::InspectorAction(Inspector::ExportEditable(Some(
+        false,
+    ))));
+    let _ = app.update(Message::Inspector(InspectorTab::Properties));
+    assert!(app.export_editable());
+    let _ = app.update(Message::Inspector(InspectorTab::Export));
+    assert!(app.export_editable());
+    // A new default resets the tab's choice.
+    let _ = app.update(Message::InspectorAction(Inspector::ExportEditable(Some(
+        true,
+    ))));
+    let _ = app.update(Message::View(
+        super::super::view_settings::Action::ExportEditableDrawing(false),
+    ));
+    assert!(!app.export_editable());
+}
+
+/// Restore defaults puts back only its own section's preferences, keeps the
+/// saved colors, and has nothing to do at the defaults.
+#[test]
+fn restore_defaults_resets_only_its_section_and_keeps_saved_colors() {
+    let mut app = app();
+    for section in [
+        Section::Appearance,
+        Section::Drawing,
+        Section::CopyExport,
+        Section::Names,
+    ] {
+        assert!(app.at_defaults(section), "{section:?}");
+    }
+    let a = &mut app.appearance;
+    a.copy_background = Background::White;
+    a.export_background = Background::Black;
+    a.export_editable_drawing = false;
+    a.export_svg_live_text = true;
+    a.copy_dpi = Dpi::ALL[0];
+    a.export_dpi = Dpi::ALL[1];
+    a.background_colors = vec![[30, 42, 68]];
+    a.custom_background = [30, 42, 68];
+    a.smart_guides = false;
+    app.tab.inspector_ui.export_editable = Some(true);
+    assert!(!app.at_defaults(Section::CopyExport));
+    let _ = app.update(Message::Settings(Action::Restore(Section::CopyExport)));
+    let (a, d) = (&app.appearance, crate::appearance::Settings::default());
+    assert_eq!(
+        (
+            a.copy_background,
+            a.export_background,
+            a.export_editable_drawing,
+            a.export_svg_live_text,
+            a.copy_dpi,
+            a.export_dpi,
+        ),
+        (
+            Background::Transparent,
+            Background::Canvas,
+            true,
+            false,
+            d.copy_dpi,
+            d.export_dpi,
+        )
+    );
+    assert_eq!((a.copy_dpi.get(), a.export_dpi.get()), (300, 1200));
+    assert_eq!(a.background_colors, [[30, 42, 68]], "saved colors stay");
+    assert_eq!(a.custom_background, [30, 42, 68]);
+    assert!(!a.smart_guides, "other sections stay");
+    assert_eq!(app.tab.inspector_ui.export_editable, None);
+    assert_eq!(app.status, "Copy & export restored to defaults");
+    assert!(app.at_defaults(Section::CopyExport));
+    assert!(!app.at_defaults(Section::Drawing));
+    let _ = app.update(Message::Settings(Action::Restore(Section::Drawing)));
+    assert!(app.appearance.smart_guides);
+    assert!(app.at_defaults(Section::Drawing));
+}
+
 /// The real view's texts and accessible controls, popovers included.
 fn rendered(
     app: &App,
@@ -616,6 +711,68 @@ async fn picture_tiles_are_named_for_screen_readers() {
     );
 }
 
+/// Restore defaults is disabled at the defaults; the Export tab offers
+/// Restore default only while it differs; Copy image on names a choice that
+/// is not the default.
+#[tokio::test]
+#[ignore = "Opt-in real App widget tree check"]
+async fn restore_buttons_and_the_not_default_hint_show_only_when_they_differ() {
+    use crate::app::{InspectorTab, context_menu, inspector::Action as Inspector};
+    use iced::advanced::renderer::Headless;
+    let mut renderer =
+        <iced::Renderer as Headless>::new(iced::Font::default(), iced::Pixels(16.), None)
+            .await
+            .unwrap();
+    let node = |app: &App, renderer: &mut iced::Renderer, id: &str| {
+        rendered(app, renderer)
+            .1
+            .into_iter()
+            .find(|node| node.id == id)
+    };
+    let mut app = app();
+    open(&mut app, Section::CopyExport);
+    let restore = "settings-restore-copyexport";
+    assert!(!node(&app, &mut renderer, restore).unwrap().enabled);
+    let _ = app.update(Message::Settings(Action::CopyDpi(Dpi::ALL[0])));
+    assert!(node(&app, &mut renderer, restore).unwrap().enabled);
+    let _ = app.update(Message::Settings(Action::Close));
+
+    let _ = app.update(Message::Inspector(InspectorTab::Export));
+    let (texts, _) = rendered(&app, &mut renderer);
+    assert!(
+        texts
+            .iter()
+            .any(|t| t == "Default: on · Settings → Copy & export")
+    );
+    assert!(node(&app, &mut renderer, "export-editable-restore").is_none());
+    let _ = app.update(Message::InspectorAction(Inspector::ExportEditable(Some(
+        false,
+    ))));
+    assert!(node(&app, &mut renderer, "export-editable-restore").is_some());
+
+    app.context_menu = Some(context_menu::State::new(
+        iced::Point::new(36., 24.),
+        context_menu::Page::Main,
+    ));
+    let _ = app.context_action(context_menu::Action::Page(context_menu::Page::CopyImageOn));
+    let editable = |app: &App, renderer: &mut iced::Renderer| {
+        rendered(app, renderer)
+            .1
+            .into_iter()
+            .find(|node| node.name.starts_with("Editable drawing"))
+            .map(|node| (node.name, node.checked))
+    };
+    assert_eq!(
+        editable(&app, &mut renderer),
+        Some(("Editable drawing".into(), Some(true)))
+    );
+    let _ = app.context_action(context_menu::Action::Editable);
+    assert_eq!(
+        editable(&app, &mut renderer),
+        Some(("Editable drawing (not default)".into(), Some(false)))
+    );
+}
+
 /// A selected benzene ring, with two saved colors and a navy Custom.
 fn evidence_app(app: &mut App) {
     app.tab.doc = reshiki::rings::Preset::Benzene.document(42., false);
@@ -647,7 +804,7 @@ fn open(app: &mut App, section: Section) {
 async fn settings_snapshots() {
     use iced::advanced::{renderer::Headless, widget::Tree};
     type Setup = fn(&mut App);
-    let states: [(&str, Setup); 21] = [
+    let states: [(&str, Setup); 24] = [
         ("toolbar", |_| {}),
         ("settings-appearance", |app| open(app, Section::Appearance)),
         ("settings-drawing", |app| open(app, Section::Drawing)),
@@ -738,6 +895,28 @@ async fn settings_snapshots() {
             let _ = app.context_action(crate::app::context_menu::Action::Page(
                 crate::app::context_menu::Page::CopyImageOn,
             ));
+        }),
+        ("copy-image-on-not-default", |app| {
+            app.context_menu = Some(crate::app::context_menu::State::new(
+                iced::Point::new(36., 24.),
+                crate::app::context_menu::Page::Main,
+            ));
+            let _ = app.context_action(crate::app::context_menu::Action::Page(
+                crate::app::context_menu::Page::CopyImageOn,
+            ));
+            let _ = app.context_action(crate::app::context_menu::Action::Editable);
+        }),
+        ("export-tab-editable-override", |app| {
+            let _ = app.update(Message::Inspector(crate::app::InspectorTab::Export));
+            let _ = app.update(Message::InspectorAction(
+                crate::app::inspector::Action::ExportEditable(Some(false)),
+            ));
+            show_close_ups(app);
+        }),
+        ("settings-copy-export-changed", |app| {
+            app.appearance.copy_dpi = Dpi::ALL[0];
+            open(app, Section::CopyExport);
+            show_close_ups(app);
         }),
     ];
     let mut renderer = <iced::Renderer as Headless>::new(

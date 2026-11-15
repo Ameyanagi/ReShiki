@@ -84,6 +84,8 @@ pub enum Action {
     FocusedKey(usize, usize, Named),
     Run(Box<Message>),
     Properties(bool),
+    /// Flip the Editable drawing choice of Copy image on; the menu stays open.
+    Editable,
 }
 pub(super) struct State {
     pub position: Point,
@@ -93,6 +95,8 @@ pub(super) struct State {
     children: Vec<Child>,
     focused: Option<(usize, usize)>,
     keyboard: bool,
+    /// Copy image on's Editable drawing choice; `None` follows the default.
+    editable: Option<bool>,
 }
 #[derive(Clone, Copy)]
 struct Child {
@@ -108,6 +112,7 @@ impl State {
             children: vec![],
             focused: None,
             keyboard: false,
+            editable: None,
         }
     }
 
@@ -132,6 +137,10 @@ enum Entry {
     Separator,
     Hint(&'static str),
 }
+/// Copy image on's check row.
+const EDITABLE: &str = "Editable drawing";
+/// Beside the check row while it differs from the Settings default.
+const NOT_DEFAULT: &str = "(not default)";
 /// The label of a saved color's row, which shows the color's code instead.
 const SAVED_COLOR: &str = "Saved color";
 /// The text a row shows: its label, or a saved color's code.
@@ -619,8 +628,17 @@ impl App {
         reshiki::clipboard::available().then(|| Entry::page("Copy image on", Page::CopyImageOn))
     }
 
+    /// Whether this Copy image on includes the editable drawing.
+    fn copy_editable(&self) -> bool {
+        self.context_menu
+            .as_ref()
+            .and_then(|menu| menu.editable)
+            .unwrap_or(self.appearance.export_editable_drawing)
+    }
+
     /// The backgrounds and saved colors for one Copy image; a tick marks the
-    /// Copy default. The last row opens Settings to change that default.
+    /// Copy default. Then whether it includes the editable drawing, and a row
+    /// that opens Settings to change the defaults.
     fn copy_image_on_entries(&self) -> Vec<Entry> {
         use crate::appearance::Background;
         let appearance = &self.appearance;
@@ -628,9 +646,10 @@ impl App {
             .copy_background
             .paper(appearance.custom_background);
         let enabled = !self.clipboard_working();
+        let editable = self.copy_editable();
         let item = |label: &'static str, paper: Paper| Entry::Item {
             label,
-            action: Action::Run(Box::new(Message::CopyImageOn(paper))),
+            action: Action::Run(Box::new(Message::CopyImageOn(paper, editable))),
             enabled,
             swatch: Some((paper, paper == default)),
         };
@@ -658,6 +677,12 @@ impl App {
             );
         }
         entries.push(Entry::Separator);
+        entries.push(Entry::Item {
+            label: EDITABLE,
+            action: Action::Editable,
+            enabled,
+            swatch: None,
+        });
         entries.push(Entry::command(
             "Change the default…",
             Message::Settings(super::settings_page::Action::Open(Some(
@@ -942,6 +967,12 @@ impl App {
                 self.context_menu = None;
                 return self.update(*message);
             }
+            Action::Editable => {
+                let editable = !self.copy_editable();
+                if let Some(menu) = &mut self.context_menu {
+                    menu.editable = Some(editable);
+                }
+            }
             Action::Properties(molecular) => {
                 self.context_menu = None;
                 if molecular {
@@ -1104,10 +1135,14 @@ impl App {
                     ..
                 } => Some(
                     text_width(&shown(label, *swatch), 12.)
-                        + if swatch.is_some() {
-                            SWATCH_WIDTH + SHORTCUT_GAP + text_width("Default", 11.)
-                        } else {
-                            0.
+                        + match (swatch, action) {
+                            (Some(_), _) => {
+                                SWATCH_WIDTH + SHORTCUT_GAP + text_width("Default", 11.)
+                            }
+                            (None, Action::Editable) => {
+                                SWATCH_WIDTH + SHORTCUT_GAP + text_width(NOT_DEFAULT, 11.)
+                            }
+                            _ => 0.,
                         }
                         + if matches!(action, Action::Page(_)) {
                             24.
@@ -1184,9 +1219,17 @@ impl App {
                         _ => None,
                     };
                     let label = shown(label, swatch);
+                    // Copy image on's check row: on, and whether that is the default.
+                    let check = matches!(action, Action::Editable).then(|| {
+                        let on = self.copy_editable();
+                        (on, on == self.appearance.export_editable_drawing)
+                    });
                     let accessible_name = match (keyboard_hint, swatch) {
                         (Some(hint), _) => hint.to_owned(),
                         (None, Some((_, true))) => format!("{label} (default)"),
+                        _ if check.is_some_and(|(_, default)| !default) => {
+                            format!("{label} {NOT_DEFAULT}")
+                        }
                         (None, _) => label.to_string(),
                     };
                     let hint = if matches!(&action, Action::Run(message) if matches!(
@@ -1218,10 +1261,21 @@ impl App {
                             .align_y(iced::Alignment::Center),
                         );
                     }
+                    if let Some((on, _)) = check {
+                        content = content
+                            .push(text(if on { "✓" } else { "" }).size(12).width(SWATCH_WIDTH));
+                    }
                     content = content.push(label);
                     if swatch.is_some_and(|(_, default)| default) {
                         content = content
                             .push(text("Default").size(11).style(super::workspace::muted_text));
+                    }
+                    if check.is_some_and(|(_, default)| !default) {
+                        content = content.push(
+                            text(NOT_DEFAULT)
+                                .size(11)
+                                .style(super::workspace::muted_text),
+                        );
                     }
                     if matches!(action, Action::Page(_)) {
                         content = content.push(text("›").size(16));
@@ -1268,6 +1322,10 @@ impl App {
                         .on_press_maybe(
                             enabled.then_some(Message::ContextMenu(Action::Activate(level, index))),
                         );
+                    let item = match check {
+                        Some((on, _)) => item.checked(on),
+                        None => item,
+                    };
                     items.push(index);
                     let item: Element<'_, Message> = if let Some(hint) = hint {
                         super::workspace::hover_hint(

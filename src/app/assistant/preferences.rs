@@ -32,6 +32,19 @@ impl App {
         }
     }
 
+    /// Whether the model, reasoning and Accept all edits are the defaults.
+    pub(in crate::app) fn assistant_at_defaults(&self) -> bool {
+        let p = &self.assistant.preferences;
+        p.model.is_none() && p.efforts.is_empty() && !p.auto_apply
+    }
+
+    /// The default model and reasoning, without Accept all edits.
+    pub(in crate::app) fn restore_assistant_defaults(&mut self) {
+        let _ = self.assistant_auto_apply(false);
+        self.assistant_set_model(None);
+        self.assistant.preferences.efforts.clear();
+    }
+
     pub(super) fn assistant_auto_apply(&mut self, value: bool) -> Task<Message> {
         if !value {
             self.assistant.waiting_for_canvas_edit = false;

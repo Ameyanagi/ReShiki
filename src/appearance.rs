@@ -91,7 +91,7 @@ impl From<Dpi> for u32 {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
     pub mode: Mode,

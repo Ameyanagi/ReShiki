@@ -10,7 +10,7 @@ pub enum Action {
     SmartGuides(bool),
     TwoDecimalWeight(bool),
     NameTypography(bool),
-    /// Put the drawing inside exported PNG files.
+    /// Put the editable drawing in copied and exported pictures by default.
     ExportEditableDrawing(bool),
     /// Keep text editable in plain SVG exports.
     ExportSvgLiveText(bool),
@@ -36,6 +36,8 @@ impl App {
             }
             Action::ExportEditableDrawing(enabled) => {
                 self.appearance.export_editable_drawing = enabled;
+                // The Export tab follows the new default.
+                self.tab.inspector_ui.export_editable = None;
                 self.save_preference(super::settings_page::Section::CopyExport, "export");
             }
             Action::ExportSvgLiveText(enabled) => {

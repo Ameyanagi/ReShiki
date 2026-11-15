@@ -282,8 +282,9 @@ pub enum Message {
     CopyChemicalText,
     Copy(bool),
     CopyImage,
-    /// Copy image on this background, for this copy only.
-    CopyImageOn(reshiki::export::Background),
+    /// Copy image on this background, with or without the editable drawing,
+    /// for this copy only.
+    CopyImageOn(reshiki::export::Background, bool),
     CopyAs(reshiki::clipboard::CopyFormat),
     CopyFrame(clipboard::FrameAction),
     CopyAsPrepared(

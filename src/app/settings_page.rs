@@ -5,7 +5,7 @@ use super::{
     help::{Placement, modal},
     workspace::{accessible_checkbox, control, horizontal_line, muted_text},
 };
-use crate::appearance::{Background, Dpi};
+use crate::appearance::{Background, Dpi, Settings};
 use iced::keyboard::{Key, Modifiers, key::Named};
 use iced::widget::{
     Space, canvas, column, container, image, row, scrollable, stack, text, tooltip,
@@ -104,6 +104,8 @@ pub enum Action {
     Preview(PreviewKey, Result<Preview, String>),
     /// The PNG close-ups of a drawing at each of [`Dpi::ALL`].
     CloseUps(Drawing, Result<Vec<image::Handle>, String>),
+    /// Put the section's preferences back to the built-in ones.
+    Restore(Section),
 }
 
 /// A drawing at a revision: its tab, file epoch, revision and label
@@ -239,6 +241,40 @@ fn render_once<K: Copy + PartialEq + Send + 'static, T: Send + 'static>(
         },
         move |result| Message::Settings(done(key, result)),
     )
+}
+
+/// `a` with the section's preferences back to the built-in ones. Saved
+/// colors and the Custom color stay.
+fn restored(section: Section, a: &Settings) -> Settings {
+    let d = Settings::default();
+    let mut a = a.clone();
+    match section {
+        Section::Appearance => {
+            a.mode = d.mode;
+            a.canvas_theme = d.canvas_theme;
+        }
+        Section::Drawing => {
+            a.smart_guides = d.smart_guides;
+            a.arrange_controls = d.arrange_controls;
+            a.drawing_style_unit = d.drawing_style_unit;
+        }
+        Section::CopyExport => {
+            a.copy_background = d.copy_background;
+            a.export_background = d.export_background;
+            a.export_editable_drawing = d.export_editable_drawing;
+            a.export_svg_live_text = d.export_svg_live_text;
+            a.copy_dpi = d.copy_dpi;
+            a.export_dpi = d.export_dpi;
+        }
+        Section::Names => {
+            a.name_typography = d.name_typography;
+            a.two_decimal_weight = d.two_decimal_weight;
+            a.iupac_style_notes = d.iupac_style_notes;
+            a.write_unknown_stereo = d.write_unknown_stereo;
+        }
+        Section::Assistant | Section::Updates => {}
+    }
+    a
 }
 
 /// Acetic acid on the canvas and in the style of `like`, for previews of an
@@ -387,6 +423,43 @@ impl App {
                     settings.rendering_close_ups = None;
                     settings.close_ups = Some((key, tiles));
                 }
+            }
+            Action::Restore(section) => return self.restore_defaults(section),
+        }
+        Task::none()
+    }
+
+    /// Whether the section's preferences are the built-in ones.
+    fn at_defaults(&self, section: Section) -> bool {
+        match section {
+            #[cfg(not(target_arch = "wasm32"))]
+            Section::Assistant => self.assistant_at_defaults(),
+            Section::Updates => self.update_preferences() == Default::default(),
+            _ => restored(section, &self.appearance) == self.appearance,
+        }
+    }
+
+    /// Puts the section's preferences back to the built-in ones. Saved colors
+    /// stay. They are preferences, so there is no Undo.
+    fn restore_defaults(&mut self, section: Section) -> Task<Message> {
+        self.status = format!("{} restored to defaults", section.label());
+        self.error = false;
+        match section {
+            #[cfg(not(target_arch = "wasm32"))]
+            Section::Assistant => self.restore_assistant_defaults(),
+            Section::Updates => return self.restore_update_defaults(),
+            _ => {
+                self.appearance = restored(section, &self.appearance);
+                match section {
+                    Section::Drawing => self.sync_drawing_style_unit(),
+                    Section::CopyExport => self.tab.inspector_ui.export_editable = None,
+                    Section::Names => {
+                        self.tab.naming.structure = None;
+                        self.tab.stereo_notes.clear();
+                    }
+                    _ => {}
+                }
+                self.save_preference(section, section.label());
             }
         }
         Task::none()
@@ -554,6 +627,19 @@ impl App {
                     for (title, items) in groups {
                         pane = pane.push(group(title, items));
                     }
+                    // As the rows themselves wait for an update save or a name.
+                    let busy = match section {
+                        Section::Updates => !self.updates.idle(),
+                        Section::Names => !self.naming_idle(),
+                        _ => false,
+                    };
+                    pane = pane.push(text_button(
+                        format!("settings-restore-{section:?}").to_lowercase(),
+                        format!("Restore {} defaults", section.label()),
+                        "Restore defaults",
+                        (!busy && !self.at_defaults(section))
+                            .then_some(Message::Settings(Action::Restore(section))),
+                    ));
                     pane = pane.push(self.section_error(section).map(error));
                 }
             } else if matches > 0 {
@@ -1311,6 +1397,28 @@ fn group<'a>(title: Option<&'static str>, items: Vec<Item<'a>>) -> Element<'a, M
                 },
             )
         })
+        .into()
+}
+
+/// A button that is just its words, muted while it has no `message`.
+pub(super) fn text_button<'a>(
+    id: impl Into<String>,
+    name: impl Into<String>,
+    label: &'a str,
+    message: Option<Message>,
+) -> Element<'a, Message> {
+    use iced::widget::button::{Status, Style};
+    reshiki::accessibility::button(id, name, text(label).size(12))
+        .padding([4, 0])
+        .style(|theme: &iced::Theme, status| Style {
+            text_color: match status {
+                Status::Disabled => theme.palette().text.scale_alpha(0.4),
+                Status::Hovered => theme.palette().text,
+                _ => theme.palette().primary,
+            },
+            ..Default::default()
+        })
+        .on_press_maybe(message)
         .into()
 }
 

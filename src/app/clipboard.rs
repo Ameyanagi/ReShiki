@@ -382,25 +382,29 @@ impl App {
         }
     }
 
-    /// How one copy's pictures look: on `background`, or on the Copy default.
+    /// How one copy's pictures look: on the Copy defaults, or on `once`'s
+    /// background and editable drawing choice.
     pub(super) fn copy_pictures(
         &self,
-        background: Option<reshiki::export::Background>,
+        once: Option<(reshiki::export::Background, bool)>,
     ) -> reshiki::clipboard::Pictures {
+        let a = &self.appearance;
+        let (background, editable) =
+            once.unwrap_or_else(|| (a.copy_paper(), a.export_editable_drawing));
         reshiki::clipboard::Pictures {
-            background: background.unwrap_or_else(|| self.appearance.copy_paper()),
-            dpi: self.appearance.copy_dpi.get(),
-            editable: self.appearance.export_editable_drawing,
+            background,
+            dpi: a.copy_dpi.get(),
+            editable,
         }
     }
 
-    /// Copy, or Copy image when `image_only`; `background` overrides the
-    /// Copy default for this copy only.
+    /// Copy, or Copy image when `image_only`; `once` overrides the Copy
+    /// background and editable drawing defaults for this copy only.
     pub(super) fn copy_native(
         &mut self,
         cut: bool,
         image_only: bool,
-        background: Option<reshiki::export::Background>,
+        once: Option<(reshiki::export::Background, bool)>,
     ) -> Task<Message> {
         if self.clipboard_working() {
             self.status = "A clipboard operation is already in progress".into();
@@ -430,7 +434,7 @@ impl App {
                 self.engine.clone(),
                 snapshot,
                 image_only,
-                self.copy_pictures(background),
+                self.copy_pictures(once),
             ),
             move |result| Message::ClipboardWritten {
                 epoch,

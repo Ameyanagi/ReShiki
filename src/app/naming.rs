@@ -216,7 +216,7 @@ pub(super) struct State {
     preview: Option<Preview>,
     smiles: String,
     acknowledged: bool,
-    structure: Option<(Ticket, Record)>,
+    pub(super) structure: Option<(Ticket, Record)>,
     /// The atoms Generate named, and their parent locants once named.
     structure_atoms: Vec<u64>,
     structure_locants: HashMap<u64, String>,
