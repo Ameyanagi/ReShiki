@@ -284,3 +284,24 @@ fn joining_two_captioned_molecules_keeps_one_caption() {
     assert_eq!(doc.annotations.len(), 1);
     assert_eq!(text(&doc), "Mol. Wt.: 186.21");
 }
+
+#[test]
+fn merging_atoms_updates_the_caption() {
+    let mut doc = Document::default();
+    let a = doc.add_atom("C", Point::new(0., 0.));
+    let b = doc.add_atom("C", Point::new(40., 0.));
+    let c = doc.add_atom("C", Point::new(80., 0.));
+    doc.add_bond(a, b, 1, "plain");
+    doc.add_bond(b, c, 1, "plain");
+    toggle(
+        &mut doc,
+        &[a, b, c],
+        Property::Formula,
+        TextFormat::default(),
+        true,
+    )
+    .unwrap();
+    let (merged, _) = crate::joining::merge_atoms(&doc, &[a, b, c]).unwrap();
+    assert_eq!(merged.property_captions[0].atoms.len(), 1);
+    assert_eq!(text(&merged), "Formula: CH4");
+}

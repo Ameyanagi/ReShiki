@@ -143,13 +143,22 @@ pub(crate) fn preserved_expansion_selection(
     let unsupported = || {
         "Generic expansion requires complete selected components and native dependencies; the source drawing is retained".to_owned()
     };
-    for name in &doc.molecule_names {
-        if ids.contains(&name.annotation) {
-            ids.extend(name.atoms.iter().copied());
+    let links = doc
+        .molecule_names
+        .iter()
+        .map(|n| (n.annotation, &n.atoms))
+        .chain(
+            doc.property_captions
+                .iter()
+                .map(|l| (l.annotation, &l.atoms)),
+        );
+    for (annotation, atoms) in links {
+        if ids.contains(&annotation) {
+            ids.extend(atoms.iter().copied());
         }
-        if name.atoms.iter().all(|id| ids.contains(id)) {
-            ids.insert(name.annotation);
-        } else if name.atoms.iter().any(|id| ids.contains(id)) {
+        if atoms.iter().all(|id| ids.contains(id)) {
+            ids.insert(annotation);
+        } else if atoms.iter().any(|id| ids.contains(id)) {
             return Err(unsupported());
         }
     }

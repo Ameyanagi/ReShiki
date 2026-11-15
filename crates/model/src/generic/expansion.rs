@@ -479,6 +479,11 @@ fn enumerate(
         }
         products = next;
     }
+    // Concrete products show their own property values.
+    for product in &mut products {
+        let source = product.clone();
+        crate::linked_properties::reconcile(product, &source);
+    }
     Ok(products)
 }
 
