@@ -16,13 +16,19 @@ issues: []
   `{code, message, retryable}`, with `reason` for file errors (such as
   `path_not_granted`), `param` for the argument at fault and
   `current_revision` after `stale`, so a client no longer reads them out of
-  the message. On the command line an operation error is
+  the message. After `stale`, inspect the document again before you retry:
+  `current_revision` only says which revision the document has now. On the command line an operation error is
   `reshiki: error[code]: message`; it was `reshiki: error: message`. In Python,
   errors are `reshiki.ReShikiError` (a `ValueError`) with `.code`, and in
-  JavaScript every rejected `Error` has `.code`.
+  JavaScript every rejected `Error` has `.code`. In Python an unknown input
+  format and a constructor given another kind of content, such as a reaction
+  for `Molecule.from_smiles`, are `invalid_arguments`.
 - **Agent tools: chemical names.** `import` reads a chemical name with
   `format: "name"`, and the new `name` tool returns a drawing's systematic
   name with its status, reason, aliases and alternatives. Both work offline.
+  A name's axial configuration is kept, so `(1M)-` and
+  `(1P)-[1,1'-binaphthalene]-2,2'-diol` import as two structures, and the
+  name parser's warnings and those about the named drawing are in `warnings`.
   On the command line: `echo caffeine | reshiki --cli convert - --from name --to smiles`.
   The server's instructions used to tell agents to write SMILES themselves.
 - **Agent tools: `convert`.** One call reads structure text and returns a file
