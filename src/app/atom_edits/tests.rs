@@ -84,7 +84,7 @@ fn isotope_quick_picks_require_expanding_a_selected_abbreviation() {
 
     let _ = app.update(Message::SetIsotope(13));
     assert!(app.error);
-    assert!(app.status.contains("Expand the selected abbreviation"));
+    assert!(app.status.contains("Expand the abbreviation"));
     assert_eq!(app.tab.doc, before);
 }
 

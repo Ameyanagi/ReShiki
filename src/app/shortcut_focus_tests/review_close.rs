@@ -569,7 +569,7 @@ async fn review_close_returns_focus_check_findings() {
         kind: Kind::Undefined,
         atoms: vec![first],
         bonds: vec![],
-        message: "1 undefined stereocentre (C1)".into(),
+        message: "1 undefined stereocenter (C1)".into(),
     }];
     click_running_tasks(&mut ui, &mut app, "header-check").await;
     assert!(app.check_results, "The counted button opens the findings");

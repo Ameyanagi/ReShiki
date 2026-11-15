@@ -1805,7 +1805,7 @@ fn run(case: &Case, size: Size, renderer: &mut Renderer) -> Run {
         features::settle_view(&mut app, renderer, &mut tree, size);
         let driver = features::Driver::new(renderer);
         scene(&mut app, &driver);
-        scroll = driver.scroll();
+        scroll = driver.scroll(&app, size);
     }
     (case.setup)(&mut app);
     // Settle exactly as `snapshot` does; the app is never updated again.
@@ -1818,12 +1818,12 @@ fn run(case: &Case, size: Size, renderer: &mut Renderer) -> Run {
             let _ = app.update(message);
         }
     }
-    // A feature scene's inspector scroll, at the point `features::capture` uses.
+    // A feature scene's scroll, at the point `features::capture` uses.
     let mut script = case.script.to_vec();
-    if let Some(lines) = scroll {
+    if let Some((at, lines)) = scroll {
         script.push(Script::Wheel {
-            x: size.width - app.inspector_width() / 2.,
-            y: size.height / 2.,
+            x: at.x,
+            y: at.y,
             lines,
         });
     }

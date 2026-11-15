@@ -123,7 +123,7 @@ impl App {
             self.desktop_import_finished();
         }
         drop(job);
-        self.status = "Operation cancelled".into();
+        self.status = "Operation canceled".into();
         self.error = false;
     }
 
@@ -206,8 +206,7 @@ impl App {
             );
         }
         if self.tab.revision != revision {
-            self.status =
-                "Operation finished; newer edits were preserved. Run it again to update.".into();
+            self.status = "Finished · Newer edits kept · Run again to update".into();
             return Task::none();
         }
         match kind {
@@ -231,7 +230,7 @@ impl App {
         self.changed(before);
         if !self.error {
             self.tab.analysis = response.analysis;
-            self.status = format!("{name} applied · Undo restores the original drawing");
+            self.status = format!("{name} applied");
             if !response.warnings.is_empty() {
                 self.status.push_str(" · ");
                 self.status.push_str(&response.warnings.join(" · "));
@@ -348,7 +347,7 @@ impl App {
             return Task::none();
         }
         self.tool = Tool::Select;
-        self.status = "Inserted structure · Drag to position · Delete or Undo to remove".into();
+        self.status = "Structure inserted · Drag to position".into();
         if !response.warnings.is_empty() {
             self.status.push_str(" · ");
             self.status.push_str(&response.warnings.join(" · "));
@@ -389,7 +388,7 @@ impl App {
                 "No matching common groups in this selection".into()
             } else {
                 format!(
-                    "{count} abbreviation{} · Full chemistry retained · Expand to edit internal atoms",
+                    "{count} abbreviation{} · Chemistry kept · Expand to edit",
                     if count == 1 { "" } else { "s" }
                 )
             };
@@ -453,7 +452,7 @@ impl App {
         self.status = match kind {
             Job::Clean(_) => "Structure cleaned",
             Job::Analyze => "No chemistry errors found",
-            _ => "Structure imported · Undo restores the previous drawing",
+            _ => "Structure imported",
         }
         .into();
         if !response.warnings.is_empty() {

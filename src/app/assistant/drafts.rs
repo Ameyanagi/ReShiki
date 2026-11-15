@@ -49,7 +49,8 @@ impl App {
         if draft.epoch != self.tab.file_epoch
             || (!draft.replace.is_empty() && draft.revision != self.tab.revision)
         {
-            self.assistant.status = "This proposal targets a drawing or selection that changed. Send a follow-up to refresh it.".into();
+            self.assistant.status =
+                "The drawing changed · Send a follow-up to refresh the draft".into();
             self.assistant.error = true;
             return Task::none();
         }
@@ -78,13 +79,10 @@ impl App {
                     .clamp(0.05, 2.5);
                     self.tab.fit_to_view = false;
                 }
-                self.assistant.record(
-                    "ReShiki",
-                    "Applied to the drawing. Undo restores the previous drawing.".into(),
-                );
-                self.assistant.status = "Applied · Undo is available".into();
-                self.status =
-                    "Assistant drawing applied · Undo restores the previous drawing".into();
+                self.assistant
+                    .record("ReShiki", "Applied to the drawing.".into());
+                self.assistant.status = "Applied".into();
+                self.status = "Assistant drawing applied".into();
             }
             Err(error) => {
                 self.assistant.error = true;

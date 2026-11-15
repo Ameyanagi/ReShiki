@@ -842,8 +842,7 @@ fn engine_insert_keeps_placement_selection_status_and_one_undo() {
     assert_eq!(app.tab.history.undo_frames().count(), 1);
     assert_eq!(app.tab.history.frames(), 1);
     assert!(!app.error);
-    let status =
-        "Inserted structure · Drag to position · Delete or Undo to remove · Source layout retained";
+    let status = "Structure inserted · Drag to position · Source layout retained";
     assert_eq!(app.status, status);
     assert_eq!(app.tool, Tool::Select);
     let _ = app.update(Message::Undo);

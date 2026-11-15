@@ -294,7 +294,9 @@ impl App {
             keyboard_marker: self.tab.keyboard_drawing.shown(),
             morph: self.model_morph(),
             model_generation: self.model_generation(),
-            element: &self.element,
+            element: self.atom_tool_element(),
+            atom_label: (self.element == super::palettes::R_GROUP)
+                .then_some(super::palettes::R_GROUP),
             joining: self.tab.joining.as_ref().map(|s| (&s.prepared, s.anchor)),
             hidden_annotation: self.inline_label_id(),
             bond_drawing: self.tab.bond_drawing,
@@ -479,7 +481,7 @@ impl App {
         };
         let popup = open.then(|| {
             let header = row![
-                section("FINDINGS"),
+                section("Findings"),
                 Space::new().width(Length::Fill),
                 accessible_command("check-again", "Check drawing again", "Check again")
                     .padding([4, 8])
@@ -559,7 +561,7 @@ impl App {
             ),
             icon_button(
                 Icon::SaveAs,
-                keyed("Save as", &Message::SaveAs),
+                keyed(super::files::SAVE_AS, &Message::SaveAs),
                 Some(Message::SaveAs),
                 false
             ),
@@ -618,7 +620,7 @@ impl App {
             ),
             icon_button(
                 Icon::Inspector,
-                "Show or hide inspector",
+                "Show/hide side panel",
                 Some(Message::ToggleInspector),
                 self.inspector_open
             )
@@ -673,7 +675,7 @@ impl App {
             (
                 Tool::Select,
                 if keyboard {
-                    "Select / move · Escape or toolbar"
+                    "Select / move · Esc or toolbar"
                 } else {
                     "Select / move · v"
                 },
@@ -686,13 +688,13 @@ impl App {
                     "Lasso select · l"
                 },
             ),
-            (Tool::Tilt, "3D tilt"),
             (Tool::Erase, "Eraser"),
-            (Tool::Atom, atom.as_str()),
+            (Tool::Tilt, "3D tilt"),
             (Tool::Bond(1), single.as_str()),
             (Tool::Bond(2), double.as_str()),
             (Tool::Bond(3), triple.as_str()),
             (self.toolbar.bond, other_bonds.as_str()),
+            (Tool::Atom, atom.as_str()),
             (self.toolbar.ring, ring.as_str()),
             (Tool::Chain(reshiki::chains::ChainMode::Straight), &chain),
             (
@@ -701,54 +703,76 @@ impl App {
             ),
             (Tool::Arrow, arrow.as_str()),
             (Tool::Text, "Text label · t"),
+            (Tool::Graphic(G::Line), "Graphic line"),
+            (Tool::Graphic(G::Arc), "Arc"),
+            (Tool::Graphic(G::Curve), "Bézier curve"),
+            (Tool::Graphic(G::Path), "Pen path"),
             (
                 Tool::Graphic(self.toolbar.rectangle.kind),
                 rectangle.as_str(),
             ),
             (Tool::Graphic(self.toolbar.ellipse.kind), ellipse.as_str()),
             (Tool::Graphic(self.toolbar.bracket.kind), brackets.as_str()),
-            (Tool::Graphic(G::Line), "Graphic line"),
-            (Tool::Graphic(G::Curve), "Bézier curve"),
-            (Tool::Graphic(G::Path), "Pen path"),
-            (Tool::Graphic(G::Arc), "Arc"),
             (self.toolbar.symbol, symbols.as_str()),
             (self.toolbar.orbital, orbitals.as_str()),
         ];
-        let mut palette = column![section("TOOLS")]
-            .spacing(6)
-            .align_x(Alignment::Center);
+        let mut grid = column![].spacing(TOOL_GAP);
         for pair in tools.chunks(2) {
             let mut line = row![].spacing(4);
             for (tool, hint) in pair {
                 line = line.push(self.tool_palette_button(*tool, hint));
             }
-            palette = palette.push(line);
+            grid = grid.push(line);
         }
-        palette = palette.push(Space::new().height(10)).push(section("ATOMS"));
-        for pair in PALETTE_ELEMENTS.chunks(3) {
-            let mut line = row![].spacing(2);
-            for &symbol in pair {
-                line = line.push(self.element_palette_button(symbol));
-            }
-            palette = palette.push(line);
+        let mut atoms = column![section("Atoms")].spacing(ATOM_GAP);
+        for line in PALETTE_ELEMENTS {
+            atoms = atoms.push(
+                row(line
+                    .iter()
+                    .map(|&symbol| self.element_palette_button(symbol).into()))
+                .spacing(ATOM_GAP),
+            );
         }
+        // Tools and atoms scroll together, so either list can grow. The
+        // area spans the panel's full width to keep its scrollbar right of
+        // the atoms; the bottom padding lets the last row clear the fade.
+        let tools = scrollable(
+            container(
+                column![grid, atoms.width(3. * ATOM_BUTTON + 2. * ATOM_GAP)]
+                    .spacing(10)
+                    .align_x(Alignment::Center),
+            )
+            .center_x(Length::Fill)
+            .padding(iced::Padding::ZERO.bottom(PALETTE_FADE)),
+        )
+        .height(Length::Fill)
+        .direction(scrollable::Direction::Vertical(
+            scrollable::Scrollbar::new()
+                .width(6)
+                .scroller_width(6)
+                .margin(1),
+        ));
+        let fade = column![
+            Space::new().height(Length::Fill),
+            container(
+                container(Space::new())
+                    .width(Length::Fill)
+                    .height(PALETTE_FADE)
+                    .style(palette_fade)
+            )
+            // Keep the scrollbar clear of the fade.
+            .padding([0, 8]),
+        ];
         let palette = column![
-            scrollable(palette)
-                .height(Length::Fill)
-                .direction(scrollable::Direction::Vertical(
-                    scrollable::Scrollbar::new()
-                        .width(3)
-                        .scroller_width(3)
-                        .spacing(3)
-                )),
+            iced::widget::stack![tools, fade].height(Length::Fill),
             self.help_palette_button()
         ]
-        .spacing(8)
+        .spacing(10)
         .align_x(Alignment::Center);
         container(palette)
             .width(PALETTE_WIDTH)
             .height(Length::Fill)
-            .padding([14, 8])
+            .padding([14, 0])
             .style(panel)
             .into()
     }
@@ -770,12 +794,12 @@ impl App {
             active: self.tool == tool,
             opens_on_click: family == Some(super::palettes::Family::Bonds),
         })
-        .width(36)
-        .height(36);
+        .width(TOOL_BUTTON)
+        .height(TOOL_BUTTON);
         let item = reshiki::accessibility::button(format!("tool-{tool:?}"), hint.to_owned(), item)
             .padding(0)
-            .width(36)
-            .height(36)
+            .width(TOOL_BUTTON)
+            .height(TOOL_BUTTON)
             .checked(self.tool == tool)
             .style(|_, _| iced::widget::button::Style::default())
             .on_press(if family == Some(super::palettes::Family::Bonds) {
@@ -795,10 +819,13 @@ impl App {
             reshiki::accessibility::button(
                 format!("element-{symbol}"),
                 super::palettes::element_hint(symbol),
-                text(symbol).size(13).center(),
+                // The asterisk sits high and small at the label size.
+                text(symbol)
+                    .size(if symbol == "*" { 18 } else { 13 })
+                    .center(),
             )
             .checked(self.tool == Tool::Atom && self.element == symbol)
-            .width(28)
+            .width(Length::Fill)
             .height(30)
             .on_press(Message::Element(symbol.into()))
             .style(element_control(
@@ -1658,19 +1685,12 @@ impl App {
         options
     }
 
+    /// One width for every tab, so the tab strip never moves under the pointer.
     pub(super) fn inspector_width(&self) -> f32 {
-        if !self.inspector_open {
-            return 0.;
-        }
-        match self.inspector_tab {
-            InspectorTab::Assistant => 380.,
-            InspectorTab::DrawingStyle | InspectorTab::Reactions => 320.,
-            InspectorTab::Properties
-            | InspectorTab::Predict
-            | InspectorTab::Import
-            | InspectorTab::Names
-            | InspectorTab::Export => 300.,
-            _ => 256.,
+        if self.inspector_open {
+            INSPECTOR_WIDTH
+        } else {
+            0.
         }
     }
 
@@ -1730,35 +1750,32 @@ impl App {
         if self.inspector_tab == InspectorTab::Assistant {
             return self.inspector_frame(self.assistant_panel());
         }
-        let mut tabs = row![];
-        for (label, tab) in [
-            ("Properties", InspectorTab::Properties),
-            ("Predict", InspectorTab::Predict),
-            ("Templates", InspectorTab::Templates),
-            ("Import", InspectorTab::Import),
-            ("Export", InspectorTab::Export),
-        ] {
+        let mut tabs = row![].spacing(SEGMENT_GAP);
+        for (label, tab) in INSPECTOR_TABS {
+            let selected = self.inspector_tab == tab
+                || (tab == InspectorTab::Properties
+                    && matches!(
+                        self.inspector_tab,
+                        InspectorTab::Reactions
+                            | InspectorTab::Labels
+                            | InspectorTab::Abbreviations
+                            | InspectorTab::Pages
+                            | InspectorTab::DrawingStyle
+                    ));
             tabs = tabs.push(
-                // Compact labels keep all five tabs inside the 256 px panels
-                // (about 238 px of tabs in 244 px); 11 px labels would need
-                // about 297 px, more than even the 300 px panels offer.
-                button(text(label).size(10))
-                    .padding([7, 3])
-                    .style(control(
-                        self.inspector_tab == tab
-                            || (tab == InspectorTab::Properties
-                                && matches!(
-                                    self.inspector_tab,
-                                    InspectorTab::Reactions
-                                        | InspectorTab::Labels
-                                        | InspectorTab::Abbreviations
-                                        | InspectorTab::Pages
-                                        | InspectorTab::DrawingStyle
-                                )),
-                    ))
-                    .on_press(Message::Inspector(tab)),
+                reshiki::accessibility::button(
+                    format!("inspector-tab-{tab:?}"),
+                    format!("{label} tab"),
+                    text(label).size(12).width(Length::Fill).center(),
+                )
+                .checked(selected)
+                .width(Length::FillPortion(segment_portion(label)))
+                .padding([5, 0])
+                .style(segment(selected))
+                .on_press(Message::Inspector(tab)),
             );
         }
+        let tabs = container(tabs).padding(SEGMENT_GAP).style(segment_track);
         let body = match self.inspector_tab {
             InspectorTab::Reactions => self.reactions_panel(),
             InspectorTab::Assistant => self.assistant_panel(),
@@ -1776,7 +1793,7 @@ impl App {
             InspectorTab::Export => self.export_panel(),
         };
         let mut content = column![
-            container(tabs).padding([8, 6]),
+            container(tabs).padding([10., SEGMENT_MARGIN]),
             scrollable(container(body).padding([8, 16]))
                 .id("inspector-content")
                 .on_scroll(|viewport| Message::InspectorScroll(viewport.absolute_offset().y))
@@ -1795,7 +1812,7 @@ impl App {
         use super::template_library::Action as A;
         let action = Message::Templates;
         let state = &self.templates;
-        let mut body = column![section("TEMPLATE LIBRARY")].spacing(8);
+        let mut body = column![section("Template library")].spacing(8);
         body = self.template_browse_controls(body);
         if let Some(error) = &state.notice {
             body = body.push(
@@ -1807,9 +1824,9 @@ impl App {
         if state.editing {
             body = body
                 .push(section(if state.draft.is_some() {
-                    "NEW TEMPLATE"
+                    "New template"
                 } else {
-                    "EDIT TEMPLATE"
+                    "Edit template"
                 }))
                 .push(
                     crate::appearance::text_input("Template name", &state.name)
@@ -1825,8 +1842,9 @@ impl App {
                 )
                 .push(
                     row![
-                        command("Save", action(A::SaveDetails)).style(crate::appearance::primary),
-                        command("Cancel", action(A::CancelDetails))
+                        panel_action("Save", action(A::SaveDetails))
+                            .style(crate::appearance::primary),
+                        panel_action("Cancel", action(A::CancelDetails))
                     ]
                     .spacing(6),
                 );
@@ -1837,7 +1855,7 @@ impl App {
             body = self.active_template_details(body, t);
         }
         if state.undo.is_some() {
-            body = body.push(command("Undo library change", action(A::Restore)));
+            body = body.push(panel_action("Undo library change", action(A::Restore)));
         }
         if !state.active && !state.editing {
             body = self.template_library_browser(body);
@@ -1867,7 +1885,8 @@ impl App {
                             .size(11)
                             .style(muted_text)
                             .width(Length::Fill),
-                        command("Search all", action(A::SearchAll)),
+                        command("Search all", action(A::SearchAll))
+                            .style(crate::appearance::secondary),
                     ]
                     .spacing(3)
                     .align_y(Alignment::Center),
@@ -1907,9 +1926,9 @@ impl App {
             );
             body = body.push(
                 row![
-                    command("Import…", action(A::Import)),
-                    command("Export…", action(A::Export)),
-                    command("Reload", action(A::Reload))
+                    panel_action("Import…", action(A::Import)),
+                    panel_action("Export…", action(A::Export)),
+                    panel_action("Reload", action(A::Reload))
                 ]
                 .spacing(3),
             );
@@ -1960,13 +1979,15 @@ impl App {
                         .size(11)
                         .width(Length::Fill),
                     command("Auto", action(A::Anchor(reshiki::templates::Anchor::Auto)))
+                        .style(crate::appearance::secondary)
                 ]
                 .align_y(Alignment::Center),
             )
             .push(
                 row![
-                    command("Place", Message::InsertTemplate(self.template_index)),
-                    command(
+                    panel_action("Place", Message::InsertTemplate(self.template_index))
+                        .style(crate::appearance::primary),
+                    panel_action(
                         if state.library.favorite(&t.id) {
                             "★ Saved"
                         } else {
@@ -1986,7 +2007,7 @@ impl App {
             )
             .push(
                 text(if state.repeat {
-                    "Click again to add another copy. Escape finishes placement."
+                    "Click again to add another copy. Esc finishes placement."
                 } else {
                     "Returns to Select after one placement."
                 })
@@ -2000,19 +2021,17 @@ impl App {
             body = body
                 .push(
                     row![
-                        command("Edit", action(A::EditDetails)),
-                        command("Remember anchor", action(A::RememberAnchor))
+                        panel_action("Edit", action(A::EditDetails)),
+                        panel_action("Remember anchor", action(A::RememberAnchor))
                     ]
                     .spacing(5),
                 )
                 .push(
-                    button(text("Replace from selection").size(11))
-                        .padding(6)
-                        .on_press_maybe(
-                            (!self.tab.selected.is_empty()).then(|| action(A::Replace)),
-                        ),
+                    panel_action("Replace from selection", action(A::Replace)).on_press_maybe(
+                        (!self.tab.selected.is_empty()).then(|| action(A::Replace)),
+                    ),
                 )
-                .push(command("Remove template", action(A::Remove)));
+                .push(panel_action("Remove template", action(A::Remove)));
         }
         body
     }
@@ -2036,9 +2055,7 @@ impl App {
                     entry.0 += 1;
                 }
             }
-            body = body
-                .push(horizontal_line())
-                .push(text("CATEGORIES").size(10).style(muted_text));
+            body = body.push(horizontal_line()).push(section("Categories"));
             for (name, (count, sample)) in categories {
                 let preview: Element<'_, Message> =
                     canvas(crate::canvas::TemplateThumbnail(&sample.document))
@@ -2143,7 +2160,7 @@ impl App {
         // Disabled commands say what they need.
         let item = |label, message: Message, enabled: bool, hint, reason| {
             hover_hint(
-                command(label, message.clone()).on_press_maybe(enabled.then_some(message)),
+                panel_action(label, message.clone()).on_press_maybe(enabled.then_some(message)),
                 if enabled { hint } else { reason },
                 tooltip::Position::Top,
             )
@@ -2186,7 +2203,7 @@ impl App {
             ]
             .spacing(6),
             horizontal_line(),
-            text("COMMON GROUP OR RESIDUE").size(11).style(muted_text),
+            section("Common group or residue"),
             crate::appearance::pick_list(choices, Some(self.abbreviations.preset.clone()), move |s| action(A::Preset(s))).width(Length::Fill).text_size(14),
             item(
                 "Find selected label",
@@ -2212,17 +2229,17 @@ impl App {
             ),
             text(if self.tab.selected.is_empty() { "Searches the whole drawing." } else { "Complete groups in the selection only." }).size(11).style(muted_text),
             horizontal_line(),
-            text("NAME A SELECTED FRAGMENT").size(11).style(muted_text),
+            section("Name a selected fragment"),
             fragment_labels,
             item(
-                "Contract selection",
+                "Abbreviate selection",
                 action(A::Contract),
                 !self.tab.selected.is_empty() && !label.is_empty(),
                 "Select a connected fragment whose outside bonds meet at most two selected atoms. A custom name does not change its chemistry.",
                 if self.tab.selected.is_empty() { "Select a connected fragment first" } else { "Enter a label first" },
             ),
             item(
-                "Define abbreviation from selection",
+                "Save as abbreviation",
                 action(A::Define),
                 !self.tab.selected.is_empty() && !label.is_empty(),
                 "Saves the selected group and its one outside bond to your abbreviations, so typing this label on any endpoint creates it.",
@@ -2340,7 +2357,7 @@ impl App {
         }
         let mut body = column![
             command("‹ Properties", Message::Inspector(InspectorTab::Properties)),
-            section("ATOM LABELS"),
+            section("Atom labels"),
             crate::appearance::pick_list(
                 [Scope::Drawing, Scope::Selection],
                 Some(self.tab.labels.scope),
@@ -2378,7 +2395,7 @@ impl App {
                     .size(11)
                     .style(muted_text),
                 horizontal_line(),
-                section("ATOM NUMBERS"),
+                section("Atom numbers"),
                 row![
                     crate::appearance::text_input("1, atom1, a, α…", &self.tab.labels.seed)
                         .on_input(|s| Message::Labels(A::Seed(s)))
@@ -2386,11 +2403,14 @@ impl App {
                         .size(12)
                         .padding(7),
                     command("Number", Message::Labels(A::Number))
+                        .style(crate::appearance::secondary)
                         .on_press_maybe((!ids.is_empty()).then_some(Message::Labels(A::Number))),
-                    command("IUPAC locants", Message::Labels(A::IupacLocants)).on_press_maybe(
-                        (!self.tab.selected.is_empty() && !self.tab.labels.locants_running())
-                            .then_some(Message::Labels(A::IupacLocants))
-                    )
+                    command("IUPAC locants", Message::Labels(A::IupacLocants))
+                        .style(crate::appearance::secondary)
+                        .on_press_maybe(
+                            (!self.tab.selected.is_empty() && !self.tab.labels.locants_running())
+                                .then_some(Message::Labels(A::IupacLocants))
+                        )
                 ]
                 .spacing(5),
                 text("Sequence follows atom creation/import order.")
@@ -2401,7 +2421,7 @@ impl App {
                     .text_size(12)
                     .on_toggle(|value| Message::Labels(A::RingAtomsOnly(value))),
                 self.locant_numbering_controls(),
-                command("Clear numbers", Message::Labels(A::ClearNumbers)),
+                panel_action("Clear numbers", Message::Labels(A::ClearNumbers)),
             ]
             .spacing(9),
         );
@@ -2414,6 +2434,7 @@ impl App {
                         .size(12)
                         .padding(7),
                     command("Set", Message::Labels(A::ApplyText))
+                        .style(crate::appearance::secondary)
                 ]
                 .spacing(5),
             );
@@ -2432,8 +2453,8 @@ impl App {
             return column![
                 text(format!("Replace {count} existing atom numbers?")).size(12),
                 row![
-                    command("Replace", Message::Labels(A::ReplaceLocants)),
-                    command("Cancel", Message::Labels(A::CancelLocants)),
+                    panel_action("Replace", Message::Labels(A::ReplaceLocants)),
+                    panel_action("Cancel", Message::Labels(A::CancelLocants)),
                 ]
                 .spacing(5),
             ]
@@ -2445,7 +2466,8 @@ impl App {
                 text("Generating parent locants…")
                     .size(11)
                     .style(muted_text),
-                command("Cancel", Message::Labels(A::CancelLocants)),
+                command("Cancel", Message::Labels(A::CancelLocants))
+                    .style(crate::appearance::secondary),
             ]
             .spacing(5)
             .align_y(Alignment::Center)
@@ -2464,14 +2486,14 @@ impl App {
         use reshiki::atom_labels::AxialDescriptors;
         body = body
             .push(horizontal_line())
-            .push(section("STEREOCHEMISTRY"))
+            .push(section("Stereochemistry"))
             .push(hover_hint(
                 checkbox(stereo)
                     .label("Show stereodescriptors\n(R/S, E/Z…)")
                     .text_size(12)
                     .on_toggle(|v| Message::Labels(A::Stereo(v))),
-                "R/S: stereocentre; swaps in the mirror image.\n\
-                     r/s: pseudoasymmetric centre; unchanged in the mirror image.\n\
+                "R/S: stereocenter; swaps in the mirror image.\n\
+                     r/s: pseudoasymmetric center; unchanged in the mirror image.\n\
                      E/Z: double bond; unchanged in the mirror image.\n\
                      M/P: axial or planar chirality (Ra/Sa when chosen).\n\
                      seqCis/seqTrans: enantiomorphic double bond; swaps in the mirror image.",
@@ -2485,7 +2507,7 @@ impl App {
                 "abs: configuration exactly as drawn.\n\
                      and1: racemic; the drawn form and its mirror image, 1:1.\n\
                      or1: one of the two forms, not known which.\n\
-                     Centres with the same label flip together. Set groups in the inspector's Stereo groups section.",
+                     Centers with the same label flip together. Set groups in the inspector's Stereo groups section.",
                 tooltip::Position::Left,
             ))
             .push(
@@ -2502,7 +2524,7 @@ impl App {
             )
             .push(
                 checkbox(self.tab.doc.atom_labels.mark_undefined_stereocentres)
-                    .label("Mark undefined stereocentres")
+                    .label("Mark undefined stereocenters")
                     .text_size(12)
                     .on_toggle_maybe((stereo && self.tab.doc.atom_labels.stereo).then_some(|v| Message::Labels(A::MarkUndefined(v)))),
             )
@@ -2517,7 +2539,7 @@ impl App {
                     .label("Steroid α/β (3β, 5α…)")
                     .text_size(12)
                     .on_toggle_maybe(stereo.then_some(|v| Message::Labels(A::SteroidAlphaBeta(v)))),
-                "α: below the ring plane, β: above it, in standard steroid orientation; other centres keep R/S",
+                "α: below the ring plane, β: above it, in standard steroid orientation; other centers keep R/S",
                 tooltip::Position::Left,
             ))
             .push(
@@ -2551,7 +2573,7 @@ impl App {
         }
         body = body
             .push(
-                command("Check drawing", Message::Analyze)
+                panel_action("Check drawing", Message::Analyze)
                     .on_press_maybe((!self.tab.busy).then_some(Message::Analyze)),
             )
             .push(
@@ -2635,7 +2657,7 @@ impl App {
     ) -> Element<'a, Message> {
         use super::atom_labels::Action as A;
         body.push(horizontal_line())
-            .push(section("INDICATOR APPEARANCE"))
+            .push(section("Indicator appearance"))
             .push(
                 row![
                     crate::appearance::text_input("Size in pt", &self.tab.labels.size)
@@ -2645,116 +2667,144 @@ impl App {
                         .padding(7),
                     text("pt").size(11),
                     command("Apply", Message::Labels(A::ApplySize))
+                        .style(crate::appearance::secondary)
                 ]
                 .spacing(5)
                 .align_y(Alignment::Center),
             )
-            .push(command(
+            .push(panel_action(
                 "Use current toolbar text style",
                 Message::Labels(A::ToolbarStyle),
             ))
-            .push(command(
+            .push(panel_action(
                 "Position numbers & stereo labels",
                 Message::Labels(A::PositionIndicators),
             ))
-            .push(command(
+            .push(panel_action(
                 "Restore automatic positions",
                 Message::Labels(A::ResetPositions),
             ))
-            .push(command(
+            .push(panel_action(
                 "Use drawing label defaults",
                 Message::Labels(A::ResetOverrides),
             ))
             .into()
     }
 
+    /// Interface, canvas aids, data display and actions, set apart by wider
+    /// gaps. On a narrow window whole groups wrap to a second line rather than
+    /// run off the edge.
     fn view_options(&self) -> Element<'_, Message> {
+        let group = |items: Vec<Element<'static, Message>>| -> Element<'static, Message> {
+            iced::widget::Row::with_children(items)
+                .spacing(10)
+                .align_y(Alignment::Center)
+                .into()
+        };
+        let interface = group(vec![
+            text("View").size(12).style(muted_text).into(),
+            text("Interface").size(12).style(muted_text).into(),
+            crate::appearance::pick_list(
+                crate::appearance::Mode::ALL,
+                Some(self.appearance.mode),
+                Message::Appearance,
+            )
+            .text_size(12)
+            .padding(5)
+            .width(132)
+            .into(),
+        ]);
+        let canvas = group(vec![
+            checkbox(self.grid)
+                .label("Grid")
+                .on_toggle(|_| Message::View(super::view_settings::Action::Grid))
+                .size(14)
+                .text_size(12)
+                .into(),
+            checkbox(self.guides.rulers)
+                .label("Rulers")
+                .on_toggle(|on| Message::View(super::view_settings::Action::Rulers(on)))
+                .size(14)
+                .text_size(12)
+                .into(),
+            checkbox(self.guides.crosshair)
+                .label("Crosshair")
+                .on_toggle(|on| Message::View(super::view_settings::Action::Crosshair(on)))
+                .size(14)
+                .text_size(12)
+                .into(),
+            text("Units").size(12).style(muted_text).into(),
+            crate::appearance::pick_list(
+                crate::canvas::guides::Unit::ALL,
+                Some(self.guides.unit),
+                |unit| Message::View(super::view_settings::Action::RulerUnit(unit)),
+            )
+            .text_size(12)
+            .padding(5)
+            .width(68)
+            .into(),
+            hover_hint(
+                checkbox(self.appearance.smart_guides)
+                    .label("Smart guides")
+                    .on_toggle(|on| Message::View(super::view_settings::Action::SmartGuides(on)))
+                    .size(14)
+                    .text_size(12),
+                format!(
+                    "Snap dragged objects to other objects' edges, centers and equal gaps · Hold {} to move freely",
+                    crate::platform::alt_key()
+                ),
+                tooltip::Position::Top,
+            )
+            .into(),
+            hover_hint(
+                checkbox(self.appearance.arrange_controls)
+                    .label("Arrange controls")
+                    .on_toggle(|visible| {
+                        Message::ObjectToolbar(super::object_toolbar::Action::Visible(visible))
+                    })
+                    .size(14)
+                    .text_size(12),
+                "Align, distribute, order, flip and rotate at the right end of the Select row",
+                tooltip::Position::Top,
+            )
+            .into(),
+        ]);
+        let data = group(vec![
+            hover_hint(
+                checkbox(self.appearance.two_decimal_weight)
+                    .label("2-decimal MW")
+                    .on_toggle(|on| {
+                        Message::View(super::view_settings::Action::TwoDecimalWeight(on))
+                    })
+                    .size(14)
+                    .text_size(12),
+                "Show molecular weight with 2 decimal places instead of 3; exact mass keeps 5 decimal places",
+                tooltip::Position::Top,
+            )
+            .into(),
+            hover_hint(
+                checkbox(self.appearance.name_typography)
+                    .label("Chemical name typography")
+                    .on_toggle(|on| Message::View(super::view_settings::Action::NameTypography(on)))
+                    .size(14)
+                    .text_size(12),
+                "Italic descriptors, primes and superscripts in name captions",
+                tooltip::Position::Top,
+            )
+            .into(),
+        ]);
+        let actions = group(vec![
+            command("Page setup…", Message::Pages(super::pages::Action::Show)).into(),
+            command("Done", Message::View(super::view_settings::Action::Toggle)).into(),
+        ]);
         container(
-            row![
-                text("View").size(12).style(muted_text),
-                text("Interface").size(12).style(muted_text),
-                crate::appearance::pick_list(
-                    crate::appearance::Mode::ALL,
-                    Some(self.appearance.mode),
-                    Message::Appearance
-                )
-                .text_size(12)
-                .padding(5)
-                .width(132),
-                hover_hint(
-                    checkbox(self.appearance.arrange_controls)
-                        .label("Arrange controls")
-                        .on_toggle(|visible| Message::ObjectToolbar(
-                            super::object_toolbar::Action::Visible(visible)
-                        ))
-                        .size(14)
-                        .text_size(12),
-                    "Align, distribute, order, flip and rotate at the right end of the Select row",
-                    tooltip::Position::Top,
-                ),
-                checkbox(self.grid)
-                    .label("Grid")
-                    .on_toggle(|_| Message::View(super::view_settings::Action::Grid))
-                    .size(14)
-                    .text_size(12),
-                hover_hint(
-                    checkbox(self.appearance.smart_guides)
-                        .label("Smart guides")
-                        .on_toggle(|on| Message::View(super::view_settings::Action::SmartGuides(on)))
-                        .size(14)
-                        .text_size(12),
-                    format!(
-                        "Snap dragged objects to other objects' edges, centers and equal gaps · Hold {} to move freely",
-                        crate::platform::alt_key()
-                    ),
-                    tooltip::Position::Top,
-                ),
-                hover_hint(
-                    checkbox(self.appearance.two_decimal_weight)
-                        .label("2-decimal MW")
-                        .on_toggle(|on| Message::View(super::view_settings::Action::TwoDecimalWeight(on)))
-                        .size(14)
-                        .text_size(12),
-                    "Show molecular weight with 2 decimal places instead of 3; exact mass keeps 5 decimal places",
-                    tooltip::Position::Top,
-                ),
-                hover_hint(
-                    checkbox(self.appearance.name_typography)
-                        .label("Chemical name typography")
-                        .on_toggle(|on| Message::View(super::view_settings::Action::NameTypography(on)))
-                        .size(14)
-                        .text_size(12),
-                    "Italic descriptors, primes and superscripts in name captions",
-                    tooltip::Position::Top,
-                ),
-                checkbox(self.guides.rulers)
-                    .label("Rulers")
-                    .on_toggle(|on| Message::View(super::view_settings::Action::Rulers(on)))
-                    .size(14)
-                    .text_size(12),
-                checkbox(self.guides.crosshair)
-                    .label("Crosshair")
-                    .on_toggle(|on| Message::View(super::view_settings::Action::Crosshair(on)))
-                    .size(14)
-                    .text_size(12),
-                divider(),
-                text("Units").size(12).style(muted_text),
-                crate::appearance::pick_list(
-                    crate::canvas::guides::Unit::ALL,
-                    Some(self.guides.unit),
-                    |unit| Message::View(super::view_settings::Action::RulerUnit(unit))
-                )
-                .text_size(12)
-                .padding(5)
-                .width(68),
-                command("Page setup…", Message::Pages(super::pages::Action::Show)),
-                Space::new().width(Length::Fill),
-                command("Done", Message::View(super::view_settings::Action::Toggle)),
-            ]
-            .spacing(10)
-            .align_y(Alignment::Center),
+            row![interface, canvas, data, actions]
+                .spacing(24)
+                .wrap()
+                .vertical_spacing(4),
         )
         .padding([7, 14])
+        .width(Length::Fill)
         .style(panel)
         .into()
     }
@@ -2827,7 +2877,7 @@ impl App {
             status = status.push(text(progress).size(11)).push(hover_hint(
                 accessible_command("engine.cancel", "Cancel chemistry operation", "Cancel")
                     .on_press(Message::CancelEngine(key)),
-                "Cancel this operation · Escape",
+                "Cancel this operation · Esc",
                 tooltip::Position::Top,
             ));
         }
@@ -2973,12 +3023,41 @@ impl App {
 }
 
 const PALETTE_WIDTH: f32 = 104.;
+const INSPECTOR_WIDTH: f32 = 320.;
+/// The inspector's tab strip: a segmented control. Equal segments cannot fit
+/// "Properties" at 12 px, so each grows with its label.
+const INSPECTOR_TABS: [(&str, InspectorTab); 5] = [
+    ("Properties", InspectorTab::Properties),
+    ("Predict", InspectorTab::Predict),
+    ("Templates", InspectorTab::Templates),
+    ("Import", InspectorTab::Import),
+    ("Export", InspectorTab::Export),
+];
 /// The tallest the Check drawing findings grow before they scroll; with the
 /// header and fixes it fits under the button in the minimum 680 pt window.
 const FINDINGS_HEIGHT: f32 = 360.;
-/// The ATOMS buttons, two per line: H first, then the common organic
-/// elements, as in Ketcher's atom toolbar.
-const PALETTE_ELEMENTS: [&str; 11] = ["H", "C", "N", "O", "S", "P", "F", "Cl", "Br", "Fe", "*"];
+const SEGMENT_MARGIN: f32 = 10.;
+const SEGMENT_GAP: f32 = 2.;
+/// A tab segment's share of the strip: its label's width plus the same
+/// padding for every segment.
+fn segment_portion(label: &str) -> u16 {
+    text_width(label, 12.).round() as u16 + 8
+}
+/// Tool buttons and the gap between their rows: a 34 px pitch.
+const TOOL_BUTTON: f32 = 32.;
+const TOOL_GAP: f32 = 2.;
+/// The scrolled tools and atoms fade out this far above the Help button.
+const PALETTE_FADE: f32 = 16.;
+const ATOM_BUTTON: f32 = 28.;
+const ATOM_GAP: f32 = 2.;
+/// The ATOMS buttons by line: H first, then the common organic elements, as
+/// in Ketcher's atom toolbar; the dummy atom and R group get their own line.
+const PALETTE_ELEMENTS: [&[&str]; 4] = [
+    &["H", "C", "N"],
+    &["O", "S", "P"],
+    &["F", "Cl", "Br"],
+    &["*", super::palettes::R_GROUP],
+];
 const CONTEXT_PADDING: f32 = 14.;
 pub(super) const CONTEXT_GAP: f32 = 10.;
 const DIVIDER: f32 = 11.;
@@ -3305,6 +3384,16 @@ pub(super) fn accessible_unit_field<'a>(
     .into()
 }
 
+/// A panel action: a full-width secondary button, so it reads as a control
+/// rather than a label. Two side by side share the row.
+pub(super) fn panel_action(label: &str, message: Message) -> button::Button<'_, Message> {
+    button(text(label).size(12).width(Length::Fill).center())
+        .padding([6, 8])
+        .width(Length::Fill)
+        .on_press(message)
+        .style(crate::appearance::secondary)
+}
+
 pub(super) fn command(label: &str, message: Message) -> button::Button<'_, Message> {
     button(text(label).size(12))
         .padding([7, 9])
@@ -3413,8 +3502,9 @@ fn icon_button_at(
     )
     .into()
 }
-pub(super) fn section(label: &str) -> iced::widget::Text<'_> {
-    text(label).size(10).style(muted_text)
+/// A small heading. Callers write it in sentence case; it is drawn in capitals.
+pub(super) fn section<'a>(label: &str) -> iced::widget::Text<'a> {
+    text(label.to_uppercase()).size(10).style(muted_text)
 }
 /// The marker of a Check drawing finding, in the color of its count badge.
 fn finding_dot<'a>() -> Element<'a, Message> {
@@ -3583,6 +3673,81 @@ pub(super) fn control(active: bool) -> impl Fn(&Theme, button::Status) -> button
         )
     }
 }
+/// The sunken track behind the inspector's tab segments.
+fn segment_track(theme: &Theme) -> container::Style {
+    let dark = crate::appearance::is_dark(theme);
+    container::Style {
+        background: Some(
+            if dark {
+                Color::from_rgb8(17, 20, 25)
+            } else {
+                Color::from_rgb8(234, 237, 241)
+            }
+            .into(),
+        ),
+        border: Border {
+            radius: 8.0.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+/// A tab segment: the selected one is a raised surface on the track.
+fn segment(selected: bool) -> impl Fn(&Theme, button::Status) -> button::Style {
+    move |theme, status| {
+        let dark = crate::appearance::is_dark(theme);
+        let hovered = matches!(status, button::Status::Hovered | button::Status::Pressed);
+        let rgb = |light: [u8; 3], night: [u8; 3]| {
+            let [r, g, b] = if dark { night } else { light };
+            Color::from_rgb8(r, g, b)
+        };
+        let background = if selected {
+            Some(rgb([255, 255, 255], [44, 51, 59]))
+        } else if hovered {
+            Some(rgb([222, 227, 233], [32, 37, 44]))
+        } else {
+            None
+        };
+        button::Style {
+            background: background.map(Into::into),
+            text_color: if selected {
+                theme.palette().text
+            } else {
+                crate::appearance::muted(theme)
+            },
+            border: Border {
+                color: if selected {
+                    rgb([214, 220, 227], [60, 70, 80])
+                } else {
+                    Color::TRANSPARENT
+                },
+                width: 1.,
+                radius: 6.0.into(),
+            },
+            shadow: crate::appearance::surface_shadow(iced::Shadow {
+                color: Color::from_rgba(0., 0., 0., if selected { 0.08 } else { 0. }),
+                offset: iced::Vector::new(0., 1.),
+                blur_radius: 2.,
+            }),
+            ..Default::default()
+        }
+    }
+}
+/// The panel color fading in toward the bottom of the scrolled tools.
+fn palette_fade(theme: &Theme) -> container::Style {
+    let Some(iced::Background::Color(color)) = panel(theme).background else {
+        return container::Style::default();
+    };
+    container::Style {
+        background: Some(
+            iced::gradient::Linear::new(0.)
+                .add_stop(0., color)
+                .add_stop(1., Color { a: 0., ..color })
+                .into(),
+        ),
+        ..Default::default()
+    }
+}
 pub(super) fn panel(theme: &Theme) -> container::Style {
     crate::appearance::container(
         theme,
@@ -3638,3 +3803,5 @@ mod inspector_motion_qa;
 mod inspector_motion_tests;
 #[cfg(test)]
 mod selection_tests;
+#[cfg(test)]
+mod side_panel_tests;

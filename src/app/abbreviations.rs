@@ -105,7 +105,8 @@ impl App {
                     && reshiki::chemistry::abbreviations::residue(&self.abbreviations.preset)
                         .is_some()
                 {
-                    self.status = "Residues need two attachments. Use Find selected label to collapse an existing residue.".into();
+                    self.status =
+                        "A residue needs two attachments · Try Find selected label".into();
                     self.error = true;
                     return Task::none();
                 }
@@ -135,7 +136,7 @@ impl App {
                             self.tab.doc = doc;
                             self.changed(before);
                             self.tab.selected = anchor.into_iter().collect();
-                            self.status = "Ligand abbreviated · Real atoms and five-center attachment retained".into();
+                            self.status = "Ligand abbreviated · Atoms and attachment kept".into();
                             self.error = false;
                             self.tool = Tool::Select;
                         }
@@ -171,7 +172,7 @@ impl App {
                 }
                 self.changed(before);
                 self.tool = Tool::Select;
-                self.status = "Fragment abbreviated · All atoms and bonds retained · Expand restores the drawing".into();
+                self.status = "Fragment abbreviated".into();
             }
             Action::Define => match self.define_user_group() {
                 Ok(message) => {

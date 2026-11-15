@@ -1402,7 +1402,7 @@ fn hybrid_docking_preserves_report_and_camera_and_restores_a_hidden_inspector() 
     let _ = app.nmr_action(Action::Dock);
     assert!(app.inspector_open);
     assert_eq!(app.inspector_tab, InspectorTab::Predict);
-    app.set_viewport(Size::new(500., 600.));
+    app.set_viewport(Size::new(480., 600.));
     assert_eq!(app.tab.camera.zoom, camera.zoom);
     assert_eq!(app.tab.camera.center, camera.center);
     assert!(app.tab.fit_to_view);

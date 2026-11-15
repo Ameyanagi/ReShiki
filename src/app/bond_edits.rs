@@ -61,7 +61,7 @@ impl App {
             self.tab.chain_drawing.atoms = Some(count);
             self.error = false;
         } else {
-            self.status = "Enter 1–512 chain atoms, or clear the field for automatic length".into();
+            self.status = "Enter 1–512 chain atoms, or clear for automatic length".into();
             self.error = true;
         }
     }

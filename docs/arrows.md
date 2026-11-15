@@ -73,7 +73,7 @@ arrowheads, kind and style stay the same, and attached ends stay attached when
 the molecules move: only the first and last segments follow them. Like a bend,
 a node releases condition text as ordinary text. A no-reaction mark and the
 shorter shaft of an unequal equilibrium are placed by length along the path. **Smooth** aligns gentle joints and removes redundant nodes;
-**Symmetrise** mirrors the arrow across the perpendicular bisector of its ends.
+**Symmetrize** mirrors the arrow across the perpendicular bisector of its ends.
 **Straighten** removes every node, and **Flip bend** mirrors the nodes too.
 Bent / elbow arrows keep their single corner and do not take nodes.
 
@@ -145,7 +145,7 @@ Equilibrium arrows also set **Reverse length (0.2–1)** and **Shaft separation
 ## Limits
 
 - Arrows do not check electron counts, map atoms or generate mechanisms.
-- **Check structure** adds informational hints for a resonance or equilibrium arrow with one complete molecule at each end: a resonance arrow between structures whose atoms or H differ suggests ⇌ for tautomers, and an equilibrium arrow between structures that differ only in π bonds or charge placement suggests ↔. Abbreviations, partial structures and multi-molecule sides are skipped.
+- **Recalculate** adds informational hints for a resonance or equilibrium arrow with one complete molecule at each end: a resonance arrow between structures whose atoms or H differ suggests ⇌ for tautomers, and an equilibrium arrow between structures that differ only in π bonds or charge placement suggests ↔. Abbreviations, partial structures and multi-molecule sides are skipped.
 - Only `.rsk` files keep the links between an arrow and its targets. Other
   formats keep the arrow's shape.
 - Circular or elliptical arcs, broad hollow arrow bodies and automatic routing

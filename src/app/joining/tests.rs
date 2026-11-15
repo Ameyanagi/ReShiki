@@ -722,7 +722,7 @@ fn repeated_canvas_coordination_reports_duplicate_without_another_history_frame(
     let point = app.tab.doc.atom(co).unwrap().position;
     let history = app.tab.history.undo_frames().len();
     for (status, growth) in [
-        ("Donor → metal contact added in place · Undo removes it", 1),
+        ("Donor → metal contact added in place", 1),
         ("This donor is already coordinated to that metal", 1),
     ] {
         let before = app.tab.doc.clone();
@@ -922,7 +922,7 @@ fn coordination_status_pins_added_and_duplicate_with_and_without_a_mark() {
         (
             Coordination::Added(Document::default()),
             false,
-            "Donor → metal contact added in place · Undo removes it",
+            "Donor → metal contact added in place",
         ),
         (
             Coordination::AlreadyPresent,
@@ -932,7 +932,7 @@ fn coordination_status_pins_added_and_duplicate_with_and_without_a_mark() {
         (
             Coordination::Added(Document::default()),
             true,
-            "Marked donor → metal contact added · Undo removes it",
+            "Marked donor → metal contact added",
         ),
         (
             Coordination::AlreadyPresent,
@@ -957,10 +957,7 @@ fn coordination_panel_names_the_donor_and_uses_one_short_hint() {
         "Pick the donor (N, O, S or P) in the preview, then click a metal on the drawing."
     );
     assert_eq!(texts.instruction, None, "The intro says what a click does");
-    assert_eq!(
-        texts.footer,
-        "Atoms stay in place · Escape cancels · One Undo step per contact"
-    );
+    assert_eq!(texts.footer, "Atoms stay in place · Esc cancels");
     assert_eq!(texts.bar_subtitle, "Pick a donor, then a metal");
     // The mode pick list switches back to Move & attach and its wording.
     let _ = app.update(Message::Join(Action::Mode(Connection::Connect)));

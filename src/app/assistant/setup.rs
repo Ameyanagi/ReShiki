@@ -124,7 +124,7 @@ const READY_DETAIL: &str = concat!(
     "request checks access to the selected model; this connection check does not use an ",
     "inference turn.",
 );
-const CANCELLED_TITLE: &str = "Connection check cancelled";
+const CANCELLED_TITLE: &str = "Connection check canceled";
 const CANCELLED_DETAIL: &str = "You can keep drawing. Test the connection again when ready.";
 const CREDENTIALS: &str = concat!(
     "Use your existing Codex sign-in. Credentials are managed by Codex; ReShiki does not ",
@@ -144,7 +144,7 @@ const EXAMPLE_INSTRUCTIONS: &str = concat!(
     "1. Choose Send to reconstruct the attached image.\n2. Compare the editable draft ",
     "with this known reference: three heavy atoms (C–C–O), two single bonds, neutral, no ",
     "specified stereochemistry.\n3. Inspect or edit the draft, then choose Apply. The ",
-    "exercise always waits for your Apply; Undo can remove it.",
+    "exercise always waits for your Apply.",
 );
 const EXAMPLE_CAUTION: &str = concat!(
     "A completed generation or visual review does not prove chemical identity. Check ",
