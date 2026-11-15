@@ -271,7 +271,9 @@ impl App {
     }
 
     fn leave_tab(&mut self) {
-        self.tab.stereo_notes.clear();
+        // Check drawing findings stay with their tab until its drawing changes.
+        self.tab.pulse = None;
+        self.check_results = false;
         self.clear_bond_text_hint();
         self.tab.arrows.cancel_source();
         self.cancel_reference_stretch();

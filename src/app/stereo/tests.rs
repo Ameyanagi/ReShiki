@@ -212,7 +212,7 @@ fn reverse_fixes_all_reversed_notes_exactly_in_one_undo_step() {
 }
 
 #[test]
-fn notices_clear_after_position_edits_history_file_epoch_and_tab_changes() {
+fn notices_clear_after_position_edits_history_and_file_epoch_but_not_tab_changes() {
     let mut app = fixture_app(drawing("plain", false));
     checked(&mut app, vec![], true);
     assert!(!app.tab.stereo_notes.is_empty());
@@ -227,10 +227,10 @@ fn notices_clear_after_position_edits_history_file_epoch_and_tab_changes() {
     app.tab.stereo_notes = notes.clone();
     app.begin_file_epoch();
     assert!(app.tab.stereo_notes.is_empty());
-    app.tab.stereo_notes = notes;
+    app.tab.stereo_notes = notes.clone();
     app.add_tab();
     app.select_tab(0);
-    assert!(app.tab.stereo_notes.is_empty());
+    assert_eq!(app.tab.stereo_notes, notes);
 }
 
 #[test]
@@ -467,4 +467,27 @@ fn findings_stay_on_the_check_button_until_the_drawing_changes() {
     checked(&mut app, vec![], true);
     assert!(app.tab.stereo_notes.is_empty());
     assert!(!app.check_results);
+}
+
+#[test]
+fn findings_survive_a_tab_switch_until_their_drawing_changes() {
+    use crate::app::tabs::Action as Tabs;
+    let mut app = fixture_app(drawing("plain", false));
+    checked(&mut app, vec![], true);
+    let notes = app.tab.stereo_notes.clone();
+    assert_eq!(notes.len(), 1);
+    let _ = app.update(Message::Stereo(Action::Results(true)));
+    let _ = app.update(Message::Stereo(Action::Select(0)));
+    let first = app.tab.id;
+    let _ = app.update(Message::New);
+    assert!(app.tab.stereo_notes.is_empty() && !app.check_results);
+    let _ = app.update(Message::Tabs(Tabs::Select(first)));
+    // The drawing is unchanged, so its findings stay; the list and the
+    // pulse belonged to the moment the tab was left.
+    assert_eq!(app.tab.stereo_notes, notes);
+    assert!(!app.check_results && app.tab.pulse.is_none());
+    let before = app.tab.doc.clone();
+    app.tab.doc.add_atom("C", Point::new(200., 0.));
+    app.changed(before);
+    assert!(app.tab.stereo_notes.is_empty());
 }
