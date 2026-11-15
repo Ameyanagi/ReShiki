@@ -316,6 +316,29 @@ fn molecule_menu(app: &mut App, _: &Driver<'_>) {
     context_menu(app, iced::Point::new(520., 110.), vec![atom], vec![atom]);
 }
 
+/// The selection menu's Arrange & transform page for a whole reaction.
+fn arrange_menu(app: &mut App, _: &Driver<'_>) {
+    show(
+        app,
+        fixture(include_bytes!(
+            "../../../../tests/fixtures/reaction-mapping/oxidation-before.rsk"
+        )),
+        1.6,
+        30.,
+    );
+    select_all(app);
+    let selected = app.tab.selected.clone();
+    context_menu(
+        app,
+        iced::Point::new(420., 110.),
+        selected.clone(),
+        selected,
+    );
+    let _ = app.context_action(crate::app::context_menu::Action::Page(
+        crate::app::context_menu::Page::Align,
+    ));
+}
+
 /// Show chemical name: a generated name caption linked to its molecule.
 fn molecule_caption(app: &mut App, _: &Driver<'_>) {
     ethyl_acetate(app);
@@ -914,7 +937,7 @@ fn bond_from_text(app: &mut App, _: &Driver<'_>) {
     }));
 }
 
-pub(in crate::app::workspace) const STATES: [(&str, Scene); 44] = [
+pub(in crate::app::workspace) const STATES: [(&str, Scene); 45] = [
     ("nmr-proton", nmr_proton),
     ("nmr-carbon-labels", nmr_carbon_labels),
     ("nmr-label-menu", nmr_label_menu),
@@ -928,6 +951,7 @@ pub(in crate::app::workspace) const STATES: [(&str, Scene); 44] = [
     ("names-generated", names_generated),
     ("molecule-menu", molecule_menu),
     ("molecule-caption", molecule_caption),
+    ("arrange-menu", arrange_menu),
     ("reaction-auto-map", reaction_auto_map),
     ("reaction-maps", reaction_maps),
     ("generic-variable", generic_variable),

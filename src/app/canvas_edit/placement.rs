@@ -216,9 +216,7 @@ impl App {
                         Placed::Coordinated(coordination) => {
                             joining::coordination_status(coordination, false)
                         }
-                        Placed::Joined(_) => {
-                            "Fragments joined · Undo restores their original positions"
-                        }
+                        Placed::Joined(_) => "Fragments joined",
                     };
                     self.tab.doc = outcome.into_document(&state.prepared.original);
                     self.tab.selected = selected;
@@ -376,8 +374,7 @@ impl App {
                 .zip(b)
                 .is_some_and(|(a, b)| reshiki::bonds::hydrogen_endpoints(&self.tab.doc, a, b))
         {
-            self.status =
-                "Drag from a bonded explicit H to an existing N, O, F or S acceptor".into();
+            self.status = "Drag from a bonded H to an N, O, F or S acceptor".into();
             self.error = true;
             return;
         }

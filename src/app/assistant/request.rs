@@ -72,7 +72,8 @@ impl App {
                 if draft.epoch != self.tab.file_epoch
                     || (!draft.replace.is_empty() && draft.revision != self.tab.revision)
                 {
-                    self.assistant.status = "Your drawing changed. Discard this draft, then review the current selection.".into();
+                    self.assistant.status =
+                        "The drawing changed · Discard this draft and try again".into();
                     self.assistant.error = true;
                     return Task::none();
                 }
@@ -263,7 +264,7 @@ impl App {
                         }
                         if checked {
                             self.assistant.status =
-                                "Ready for review · It replaces objects outside your selection"
+                                "Ready for review · It replaces objects outside the selection"
                                     .into();
                         }
                     }

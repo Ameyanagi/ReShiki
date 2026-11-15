@@ -126,7 +126,7 @@ fn undefined_units_aggregate_names_and_exclude_explicit_unknown() {
     let note = notes.iter().find(|n| n.kind == Kind::Undefined).unwrap();
     assert_eq!(note.atoms, units.atoms);
     assert_eq!(note.bonds, units.bonds);
-    assert!(note.message.contains("1 undefined stereocentre (7a)"));
+    assert!(note.message.contains("1 undefined stereocenter (7a)"));
     assert!(
         note.message
             .contains("1 undefined stereogenic double bond (C6=C7)")

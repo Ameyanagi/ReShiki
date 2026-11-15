@@ -286,8 +286,7 @@ impl App {
                 self.tab.pages = State::default();
                 self.inspector_tab = InspectorTab::Export;
                 self.fit();
-                self.status =
-                    "Returned to an unbounded canvas · Undo restores the page layout".into();
+                self.status = "Page layout removed".into();
             }
             Action::Fit(index) => self.fit_pages(index),
             Action::Navigate(index) => self.fit_pages(Some(index)),
@@ -305,8 +304,7 @@ impl App {
                     Ok(()) => {
                         self.changed(before);
                         self.fit_pages(Some(self.tab.pages.active));
-                        self.status =
-                            "Centered on page · Drawing size preserved · Undo is available".into();
+                        self.status = "Centered on page · Drawing size kept".into();
                     }
                     Err(error) => {
                         self.error = true;
@@ -358,7 +356,7 @@ impl App {
                     .spacing(6),
                 )
                 .push(
-                    command("Edit page setup…")
+                    command("Page setup…")
                         .on_press(Message::Pages(Action::Open))
                         .style(button::text),
                 )
@@ -412,7 +410,7 @@ impl App {
                 );
         } else {
             body = body.push(text("Choose a paper size and margins to prepare a publication or a multipage PDF.").size(12))
-                .push(command("Set up pages…").on_press(Message::Pages(Action::Open)));
+                .push(command("Page setup…").on_press(Message::Pages(Action::Open)));
         }
         body.into()
     }

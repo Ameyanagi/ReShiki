@@ -88,7 +88,7 @@ fn property_rows(
         ("Rings", None, a.rings.to_string()),
         (
             "Unpaired electrons",
-            Some("Radical electrons in the analysed structure, from radical marks or atoms with fewer hydrogens than their valence; a singlet's electron pair is not counted".into()),
+            Some("Radical electrons in the analyzed structure, from radical marks or atoms with fewer hydrogens than their valence; a singlet's electron pair is not counted".into()),
             unpaired.to_string(),
         ),
     ]
@@ -701,7 +701,8 @@ impl App {
                     Ok(id) => {
                         self.tab.selected = vec![id];
                         self.changed(before);
-                        self.status = "Attachment point added · Draw a bond from * to the metal or substituent".into();
+                        self.status =
+                            "Attachment point added · Bond * to the metal or substituent".into();
                         self.error = false;
                     }
                     Err(error) => {
@@ -1131,7 +1132,7 @@ impl App {
         if !self.tab.stereo_notes.is_empty() {
             body = body.push(card(
                 container(self.stereo_note_lines(
-                    column![text("STEREOCHEMISTRY").size(11).style(muted_text)].spacing(5),
+                    column![super::workspace::section("Stereochemistry")].spacing(5),
                     "stereo",
                 ))
                 .padding(12),
@@ -1470,7 +1471,7 @@ impl App {
                     if key.is_some() {
                         "Recalculate selection"
                     } else {
-                        "Check structure"
+                        "Recalculate"
                     },
                     Message::InspectorAction(Action::RefreshProperties),
                 )
@@ -1750,8 +1751,8 @@ impl App {
         };
         let mut body = column![
             text(match centres.len() {
-                1 => "Group of the selected stereocentre".into(),
-                n => format!("Group of the {n} selected stereocentres"),
+                1 => "Group of the selected stereocenter".into(),
+                n => format!("Group of the {n} selected stereocenters"),
             })
             .size(11)
             .style(muted_text),
@@ -1866,7 +1867,7 @@ impl App {
             });
             controls = controls.push(
                 checkbox(centered)
-                    .label("Centre charge in ring")
+                    .label("Center charge in ring")
                     .on_toggle(|_| Message::CenterRingCharge)
                     .text_size(12),
             );
@@ -2340,7 +2341,7 @@ impl App {
             "Editable document",
             ".rsk · retains the complete drawing",
             true,
-            panel_action("Save native document…", Message::SaveAs).width(Length::Fill),
+            panel_action(super::files::SAVE_AS, Message::SaveAs).width(Length::Fill),
         ))
         .into()
     }

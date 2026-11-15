@@ -641,7 +641,10 @@ impl App {
                 state.query.clear();
                 state.filter = Filter::Mine;
                 state.collection = "All collections".into();
-                self.status = format!("Imported {count} new template(s)");
+                self.status = format!(
+                    "Imported {count} new {}",
+                    if count == 1 { "template" } else { "templates" }
+                );
                 self.error = false;
             }
         }
@@ -1019,7 +1022,7 @@ impl App {
             self.tool = Tool::Template;
             self.error = false;
             self.status = format!(
-                "{} · {} · Escape cancels",
+                "{} · {} · Esc cancels",
                 template.name, self.templates.connection
             );
         }

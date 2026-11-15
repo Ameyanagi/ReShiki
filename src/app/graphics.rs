@@ -223,9 +223,9 @@ impl App {
             };
         let mut panel = column![
             section(if selected.is_empty() {
-                "DRAWING STYLE"
+                "Drawing style"
             } else {
-                "GRAPHIC STYLE"
+                "Graphic style"
             }),
             text(kind.to_string()).size(14),
             row![

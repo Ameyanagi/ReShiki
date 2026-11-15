@@ -138,7 +138,7 @@ impl App {
             AliasTarget::Import => "import-name",
             AliasTarget::Structure => "naming",
         };
-        let mut content = column![section("CURATED ALIASES · OFFLINE")].spacing(6);
+        let mut content = column![section("Curated aliases · offline")].spacing(6);
         if record.synonyms.is_empty() {
             content = content.push(
                 text("No curated aliases available in the bundled catalog.")
@@ -221,7 +221,7 @@ impl App {
         }
         if let Some((ticket, record)) = &self.tab.naming.structure {
             let current = ticket.is_current(self.tab.revision, self.tab.file_epoch);
-            content = content.push(section("GENERATED SYSTEMATIC NAME · OPENCLATURA"));
+            content = content.push(section("Generated systematic name"));
             if !current {
                 content = content.push(
                     text("Drawing changed · Generate the name again")
@@ -278,7 +278,7 @@ impl App {
                 .wrap(),
             );
             if !record.alternatives.is_empty() {
-                content = content.push(section("OTHER NAMES"));
+                content = content.push(section("Other names"));
                 let family = reshiki::style::font_name(&self.tab.doc.drawing_style.font_family);
                 for (index, alternative) in record.alternatives.iter().enumerate() {
                     content = content.push(

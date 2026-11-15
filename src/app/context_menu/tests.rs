@@ -53,7 +53,7 @@ fn redraw_stereo_bonds_is_available_for_atom_selections_and_dispatches() {
     assert!(labels(&app, Page::Main).contains(&"Redraw stereo bonds"));
     run_item(&mut app, Page::Main, "Redraw stereo bonds").unwrap();
     assert!(!app.error, "{}", app.status);
-    assert_eq!(app.status, "Redrew stereo bonds at 1 stereocentre");
+    assert_eq!(app.status, "Redrew stereo bonds at 1 stereocenter");
     app.tab.selected = vec![other, br];
     assert_eq!(enabled(&app, Page::Main, "Redraw stereo bonds"), Some(true));
     app.tab.busy = true;
@@ -111,7 +111,7 @@ fn path_cleanup_entries_follow_eligible_selection_and_run_through_menu() {
     assert!(!labels(&app, Page::Main).contains(&"Smooth"));
     app.tab.selected = vec![1];
     assert!(labels(&app, Page::Main).contains(&"Smooth"));
-    assert!(labels(&app, Page::Main).contains(&"Symmetrise"));
+    assert!(labels(&app, Page::Main).contains(&"Symmetrize"));
     let before = app.tab.doc.clone();
     run_item(&mut app, Page::Main, "Smooth").unwrap();
     assert_eq!(app.status, "Smoothed 1 object");
@@ -130,9 +130,9 @@ fn path_cleanup_entries_follow_eligible_selection_and_run_through_menu() {
         Default::default(),
     ));
     app.tab.selected = vec![2];
-    assert!(!labels(&app, Page::Main).contains(&"Symmetrise"));
+    assert!(!labels(&app, Page::Main).contains(&"Symmetrize"));
     app.tab.doc.arrows[0].cubic = Some([World::new(20., -20.), World::new(80., -22.)]);
-    assert!(labels(&app, Page::Main).contains(&"Symmetrise"));
+    assert!(labels(&app, Page::Main).contains(&"Symmetrize"));
 }
 
 /// Labels and separators ("—") of a menu page, in order.
@@ -201,14 +201,14 @@ fn centre_ring_charge_menu_requires_a_complete_charged_circle_and_is_undoable() 
     app.tab.busy = false;
     let ids = reshiki::editing::ring(&mut app.tab.doc, World::default(), 5, true, 5.);
     app.tab.selected = ids.clone();
-    assert!(!labels(&app, Page::Bonds).contains(&"Centre charge in ring"));
+    assert!(!labels(&app, Page::Bonds).contains(&"Center charge in ring"));
     app.tab.doc.atom_mut(ids[0]).unwrap().charge = -1;
     assert_eq!(
-        enabled(&app, Page::Bonds, "Centre charge in ring"),
+        enabled(&app, Page::Bonds, "Center charge in ring"),
         Some(true)
     );
     let before = app.tab.doc.clone();
-    run_item(&mut app, Page::Bonds, "Centre charge in ring").unwrap();
+    run_item(&mut app, Page::Bonds, "Center charge in ring").unwrap();
     assert!(!app.error, "{}", app.status);
     assert!(
         app.tab
@@ -222,7 +222,7 @@ fn centre_ring_charge_menu_requires_a_complete_charged_circle_and_is_undoable() 
     assert_eq!(app.tab.doc, before);
     assert!(!app.tab.history.can_undo());
     app.tab.selected.pop();
-    assert!(!labels(&app, Page::Bonds).contains(&"Centre charge in ring"));
+    assert!(!labels(&app, Page::Bonds).contains(&"Center charge in ring"));
 }
 
 #[test]
@@ -297,13 +297,12 @@ fn atom_menu_groups_editing_naming_connecting_and_clipboard_commands() -> Result
             "Arrange & transform",
             "—",
             "Cut",
+            "Copy",
             "Copy as",
             "Paste",
             "Duplicate",
             "—",
             "Properties…",
-            "—",
-            "Copy",
             "—",
             "Delete"
         ]
@@ -1154,10 +1153,10 @@ fn context_commands_follow_the_target_without_modifying_the_drawing() -> Result<
     }
     assert!(!molecule.contains(&"Bond in front"));
     assert!(labels(&app, Page::Bonds).contains(&"Bond in front"));
-    assert!(!labels(&app, Page::Align).contains(&"Align middles"));
+    assert!(!labels(&app, Page::Align).contains(&"Align middle"));
     app.tab.selected.push(arrow);
     assert!(!labels(&app, Page::Main).contains(&"Attachment points"));
-    assert!(labels(&app, Page::Align).contains(&"Align middles"));
+    assert!(labels(&app, Page::Align).contains(&"Align middle"));
     app.tab.selected = vec![arrow];
     let arrow_items = labels(&app, Page::Main);
     assert!(arrow_items.contains(&"Reverse arrow"));
@@ -1166,6 +1165,58 @@ fn context_commands_follow_the_target_without_modifying_the_drawing() -> Result<
     assert_eq!(app.tab.doc, before);
     assert!(!app.tab.history.can_undo());
     Ok(())
+}
+
+/// Align, distribute and flip have one name in the right-click menu, the
+/// context row menus and the command palette.
+#[test]
+fn arrange_commands_have_one_name_on_every_surface() {
+    let (mut app, _) = App::new();
+    app.tab.doc = reshiki::rings::Preset::Regular.document(42., false);
+    let arrow = app.tab.doc.next_id();
+    app.tab.doc.arrows.push(Arrow::new(
+        arrow,
+        World::new(100., 100.),
+        World::new(160., 100.),
+        Default::default(),
+        Default::default(),
+    ));
+    app.tab.selected = app.tab.doc.all_ids();
+    let menu: Vec<_> = app
+        .context_entries(Page::Align)
+        .into_iter()
+        .filter_map(|entry| match entry {
+            Entry::Item {
+                label,
+                action: Action::Run(message),
+                ..
+            } => Some((format!("{message:?}"), label)),
+            _ => None,
+        })
+        .collect();
+    let palette = super::super::command_palette::catalog::build(&app);
+    let commands = [
+        &Command::HORIZONTAL[..],
+        &Command::VERTICAL,
+        &Command::DISTRIBUTE,
+        &Command::TRANSFORM[..2],
+    ];
+    for command in commands.concat() {
+        let message = format!("{:?}", command.message());
+        assert!(
+            menu.contains(&(message.clone(), command.name())),
+            "{message} is {} in the right-click menu",
+            command.name()
+        );
+        assert!(
+            palette.iter().any(|c| {
+                matches!(&c.run, super::super::command_palette::catalog::Run::Send(messages)
+                    if format!("{:?}", messages[0]) == message && c.name == command.name())
+            }),
+            "{message} is {} in the palette",
+            command.name()
+        );
+    }
 }
 
 #[test]

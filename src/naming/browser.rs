@@ -22,8 +22,8 @@ const DEADLINE: Duration = Duration::from_secs(15);
 /// Downloading and compiling the worker's WebAssembly, before the first request.
 const LOAD_DEADLINE: Duration = Duration::from_secs(60);
 const POLL: Duration = Duration::from_millis(25);
-const PARSE_CANCELLED: &str = "Local name parsing was cancelled";
-const GENERATE_CANCELLED: &str = "Local name generation was cancelled";
+const PARSE_CANCELLED: &str = "Local name parsing was canceled";
+const GENERATE_CANCELLED: &str = "Local name generation was canceled";
 
 #[derive(Debug, Clone, Default)]
 pub struct Cancel(Arc<AtomicBool>);

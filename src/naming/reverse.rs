@@ -13,7 +13,7 @@ fn generate_worker(
 ) -> Result<openclatura::Name, Error> {
     if cancel.stopped() {
         return Err(Error::Cancelled(
-            "Local name generation was cancelled".into(),
+            "Local name generation was canceled".into(),
         ));
     }
     let request = generate_request_with_style(smiles, style)?;
@@ -147,7 +147,7 @@ async fn generate_from(
         cancel,
         &SLOTS,
         "Local name generation is unavailable",
-        "Local name generation was cancelled",
+        "Local name generation was canceled",
         "Local naming worker failed",
         move |smiles, cancel| generate_worker(smiles, style, cancel),
     )
@@ -222,7 +222,7 @@ pub(super) fn verify_alternative_identity(
 async fn reconstruct_name(name: &str, cancel: &super::Cancel) -> Result<Record, Error> {
     if cancel.stopped() {
         return Err(Error::Cancelled(
-            "Local name generation was cancelled".into(),
+            "Local name generation was canceled".into(),
         ));
     }
     // Use a separate token: the resolver's drop guard stops its own operation,
@@ -235,7 +235,7 @@ async fn reconstruct_name(name: &str, cancel: &super::Cancel) -> Result<Record, 
             result = super::local::resolve_generated(name, decoder.clone()) => result,
             () = cancel.cancelled() => {
                 decoder.stop();
-                Err(Error::Cancelled("Local name generation was cancelled".into()))
+                Err(Error::Cancelled("Local name generation was canceled".into()))
             },
         }
     }
