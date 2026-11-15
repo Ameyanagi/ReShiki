@@ -60,7 +60,10 @@ fn the_catalog_lists_each_tool_once_with_explicit_hints() {
             "file_open",
             "file_save",
             "compose",
-            "apply"
+            "apply",
+            "convert",
+            "name",
+            "schema"
         ]
     );
     let unique: HashSet<_> = names.iter().collect();
@@ -182,12 +185,12 @@ async fn bad_arguments_are_tool_errors_decoded_before_the_executor() {
 async fn info_reports_versions_budgets_and_formats() {
     let info = host().call(call("info", json!({}))).await.unwrap();
     assert!(!info.is_error);
-    assert_eq!(info.value["operation_api"], OPERATION_API_VERSION);
+    assert_eq!(info.value["value"]["operation_api"], OPERATION_API_VERSION);
     assert_eq!(
         info.value["versions"],
         versions_json(&Versions::current("9.8.7"))
     );
-    let budgets = &info.value["budgets"];
+    let budgets = &info.value["value"]["budgets"];
     assert_eq!(budgets["max_documents"], 16);
     assert_eq!(budgets["max_session_weight"], 2_000_000);
     assert_eq!(budgets["history_depth"], 20);
@@ -196,10 +199,10 @@ async fn info_reports_versions_budgets_and_formats() {
     assert_eq!(budgets["render"]["max_side"], 8192);
     assert_eq!(budgets.as_object().unwrap().len(), 19);
     assert_eq!(
-        info.value["formats"],
+        info.value["value"]["formats"],
         json!({
-            "import": ["auto", "smiles", "mol", "rxn", "rsmi", "inchi", "cdxml", "cdx", "reshiki"],
-            "export": ["svg", "pdf", "png", "cdxml", "mol", "smiles", "inchi"],
+            "import": ["auto", "smiles", "mol", "rxn", "rsmi", "inchi", "cdxml", "cdx", "reshiki", "rsk", "name"],
+            "export": ["svg", "pdf", "png", "cdxml", "cdx", "mol", "rxn", "smiles", "rsmi", "inchi"],
         })
     );
     assert!(info.images.is_empty() && info.files.is_empty());
@@ -212,12 +215,17 @@ async fn documents_are_created_listed_and_closed_by_their_owner() {
     for _ in 0..2 {
         let created = host.call(call("document_new", json!({}))).await.unwrap();
         assert!(!created.is_error);
-        assert_eq!(created.value["revision"], "0");
-        handles.push(created.value["document"].as_str().unwrap().to_owned());
+        assert_eq!(created.value["value"]["revision"], "0");
+        handles.push(
+            created.value["value"]["document"]
+                .as_str()
+                .unwrap()
+                .to_owned(),
+        );
     }
     let list = host.call(call("document_list", json!({}))).await.unwrap();
     assert_eq!(
-        list.value["documents"],
+        list.value["value"]["documents"],
         json!([
             {"document": handles[0], "revision": "0", "objects": 0},
             {"document": handles[1], "revision": "0", "objects": 0},
@@ -228,7 +236,7 @@ async fn documents_are_created_listed_and_closed_by_their_owner() {
         .call(call_as(&other, "document_list", json!({})))
         .await
         .unwrap();
-    assert_eq!(theirs.value["documents"], json!([]));
+    assert_eq!(theirs.value["value"]["documents"], json!([]));
     let foreign = host
         .call(call_as(
             &other,
@@ -247,8 +255,9 @@ async fn documents_are_created_listed_and_closed_by_their_owner() {
     assert_eq!(
         Value::Object(closed.value),
         json!({
-            "document": handles[0],
-            "closed": true,
+            "value": {"document": handles[0], "closed": true},
+            "warnings": [],
+            "validation": {"status": "valid"},
             "versions": versions_json(&Versions::current("9.8.7")),
         })
     );

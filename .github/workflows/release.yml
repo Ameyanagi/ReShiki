@@ -263,11 +263,8 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y binutils libxkbcommon-dev libwayland-dev libx11-dev libxrandr-dev libxi-dev libxcursor-dev libxinerama-dev libgl1-mesa-dev libfontconfig1-dev libudev-dev
       - run: rustup toolchain install 1.99.1 --profile minimal --target ${{ matrix.target }}
       - run: rustup default 1.99.1
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
-        with:
-          # Previous release caches included packaged license sources in target/.
-          prefix-key: v1-release-staging
-          cache-on-failure: true
+      # No build cache: the six nightly release caches (3.7 GB) pushed the
+      # repository over GitHub's 10 GB limit and evicted the pull request caches.
       - name: Select the native Windows compiler
         if: runner.os == 'Windows'
         uses: ./.github/actions/setup-msvc

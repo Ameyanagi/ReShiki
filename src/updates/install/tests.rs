@@ -303,3 +303,204 @@ fn only_supported_stable_assets_can_be_requested() {
         "reshiki-1.2.3-windows-arm64-setup.exe"
     );
 }
+
+/// S14: an update can wait between its checks and the restart. A staged
+/// installer that changed in that time is not started.
+#[tokio::test]
+async fn a_staged_program_that_changed_is_not_installed() {
+    let directory = tempfile::tempdir().unwrap();
+    let stage = directory.path().to_owned();
+    let program = stage.join("payload");
+    std::fs::write(&program, b"verified").unwrap();
+    let prepared = Arc::new(Prepared {
+        directory,
+        target: stage.join("installed"),
+        payload: program.clone(),
+        digest: tree_digest(&program).unwrap(),
+        handed_off: std::sync::atomic::AtomicBool::new(false),
+    });
+    std::fs::write(&program, b"replaced").unwrap();
+    assert_eq!(
+        handoff(Arc::clone(&prepared), vec![]).await.unwrap_err(),
+        CHANGED
+    );
+    // Nothing was started: no installer script, log or acknowledgement.
+    assert_eq!(std::fs::read_dir(&stage).unwrap().count(), 1);
+    std::fs::remove_file(&program).unwrap();
+    assert!(handoff(Arc::clone(&prepared), vec![]).await.is_err());
+    assert_eq!(std::fs::read_dir(&stage).unwrap().count(), 0);
+}
+const CHANGED: &str = "The downloaded update changed after it was checked. Nothing was installed; check for updates again.";
+
+/// S14: the helper installs the whole staged application, so a change to
+/// any part of it stops the installation, with the executable untouched.
+#[cfg(unix)]
+#[tokio::test]
+async fn a_staged_application_that_changed_outside_its_executable_is_not_installed() {
+    let directory = tempfile::tempdir().unwrap();
+    let stage = directory.path().to_owned();
+    let app = stage.join("ReShiki.app");
+    let executable = app.join("Contents/MacOS/reshiki");
+    let plist = app.join("Contents/Info.plist");
+    let resource = app.join("Contents/Resources/helper");
+    for file in [&executable, &plist, &resource] {
+        std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+        std::fs::write(file, b"verified").unwrap();
+    }
+    let link = app.join("Contents/Resources/link");
+    std::os::unix::fs::symlink("helper", &link).unwrap();
+    let digest = tree_digest(&app).unwrap();
+    assert_eq!(tree_digest(&app).unwrap(), digest);
+    let prepared = Arc::new(Prepared {
+        directory,
+        target: stage.join("installed"),
+        payload: app.clone(),
+        digest,
+        handed_off: std::sync::atomic::AtomicBool::new(false),
+    });
+    let refused = async || {
+        assert_eq!(
+            handoff(Arc::clone(&prepared), vec![]).await.unwrap_err(),
+            CHANGED
+        );
+        // Nothing was started: no installer script, log or acknowledgement.
+        assert_eq!(std::fs::read_dir(&stage).unwrap().count(), 1);
+        assert_eq!(std::fs::read(&executable).unwrap(), b"verified");
+    };
+    // A changed file, of the same size.
+    std::fs::write(&plist, b"replaced").unwrap();
+    refused().await;
+    std::fs::write(&plist, b"verified").unwrap();
+    // An added file.
+    let added = app.join("Contents/Frameworks");
+    std::fs::write(&added, b"").unwrap();
+    refused().await;
+    std::fs::remove_file(&added).unwrap();
+    // A removed file.
+    std::fs::remove_file(&resource).unwrap();
+    refused().await;
+    std::fs::write(&resource, b"verified").unwrap();
+    // A link that points somewhere else.
+    std::fs::remove_file(&link).unwrap();
+    std::os::unix::fs::symlink("/bin/sh", &link).unwrap();
+    refused().await;
+    // Bytes that move from one file to the next.
+    std::fs::remove_file(&link).unwrap();
+    std::os::unix::fs::symlink("helper", &link).unwrap();
+    assert_eq!(tree_digest(&app).unwrap(), prepared.digest);
+    std::fs::write(&plist, b"verifiedv").unwrap();
+    std::fs::write(&resource, b"erified").unwrap();
+    refused().await;
+}
+
+/// S15: a link in the update archive could point a later entry outside the
+/// folder it is unpacked into, so any entry but a file or a folder is unsafe.
+/// This reads the listing of the system's own tar: GNU tar or bsdtar.
+#[cfg(unix)]
+#[test]
+fn archive_links_are_unsafe_entries() {
+    let folder = tempfile::tempdir().unwrap();
+    let package = folder.path().join("package");
+    std::fs::create_dir_all(package.join("Licenses")).unwrap();
+    std::fs::write(package.join("reshiki"), b"app").unwrap();
+    std::fs::write(package.join("Licenses/NOTICE"), b"notice").unwrap();
+    let listing = |name: &str| {
+        let archive = folder.path().join(name);
+        let packed = Command::new("tar")
+            .arg("-czf")
+            .arg(&archive)
+            .arg("-C")
+            .arg(folder.path())
+            .arg("package")
+            .status()
+            .unwrap();
+        assert!(packed.success());
+        let listed = Command::new("tar")
+            .arg("-tvzf")
+            .arg(&archive)
+            .output()
+            .unwrap();
+        assert!(listed.status.success());
+        String::from_utf8(listed.stdout).unwrap()
+    };
+    let plain = listing("plain.tar.gz");
+    assert_eq!(plain.lines().count(), 4, "{plain}");
+    assert!(only_files_and_folders(&plain), "{plain}");
+    std::os::unix::fs::symlink("/etc", package.join("escape")).unwrap();
+    let symbolic = listing("symbolic.tar.gz");
+    assert!(!only_files_and_folders(&symbolic), "{symbolic}");
+    std::fs::remove_file(package.join("escape")).unwrap();
+    std::fs::hard_link(package.join("reshiki"), package.join("twin")).unwrap();
+    let hard = listing("hard.tar.gz");
+    assert!(!only_files_and_folders(&hard), "{hard}");
+}
+
+/// S5: a signed Windows build installs only an installer signed by the same
+/// publisher. The reports are as PowerShell prints them on Windows 11.
+#[test]
+fn a_signed_app_needs_an_installer_from_its_publisher() {
+    const PUBLISHER: &str = "CN=ReShiki Publisher, O=ReShiki, C=US";
+    const REFUSED: &str = "The downloaded installer is not signed by the publisher of this ReShiki. Nothing was installed.";
+    const UNCHECKED: &str = "The signature of this ReShiki is not valid, so the installer cannot be checked against it. Nothing was installed; download the installer from the releases page.";
+    let report = |lines: [&str; 4]| lines.join("\r\n") + "\r\n";
+    // Only a build with no signature has no publisher to compare.
+    for installer in [["NotSigned", ""], ["Valid", PUBLISHER]] {
+        assert_eq!(
+            same_publisher(&report(["NotSigned", "", installer[0], installer[1]])),
+            Ok(())
+        );
+    }
+    // A signature that is broken, not trusted or could not be checked is
+    // not an unsigned build, with or without a signer, whatever the
+    // installer's signature is.
+    for status in [
+        "HashMismatch",
+        "NotTrusted",
+        "UnknownError",
+        "NotSupportedFileFormat",
+        "Incompatible",
+        "NotSigned",
+    ] {
+        for publisher in [PUBLISHER, ""] {
+            if (status, publisher) == ("NotSigned", "") {
+                continue;
+            }
+            for installer in [["NotSigned", ""], ["Valid", PUBLISHER]] {
+                assert_eq!(
+                    same_publisher(&report([status, publisher, installer[0], installer[1]])),
+                    Err(UNCHECKED.into()),
+                    "{status} {publisher:?} {installer:?}"
+                );
+            }
+        }
+    }
+    assert_eq!(
+        same_publisher(&report(["Valid", PUBLISHER, "Valid", PUBLISHER])),
+        Ok(())
+    );
+    for installer in [
+        ["NotSigned", ""],
+        ["HashMismatch", PUBLISHER],
+        ["NotTrusted", PUBLISHER],
+        ["Valid", "CN=Someone Else, O=Other, C=US"],
+        ["Valid", ""],
+    ] {
+        assert_eq!(
+            same_publisher(&report(["Valid", PUBLISHER, installer[0], installer[1]])),
+            Err(REFUSED.into()),
+            "{installer:?}"
+        );
+    }
+    assert_eq!(
+        same_publisher(&report(["Valid", "", "Valid", ""])),
+        Err(REFUSED.into())
+    );
+    // PowerShell did not run, or printed something else.
+    for broken in ["", "Valid\r\n", "Valid\r\na\r\nValid\r\na\r\nextra\r\n"] {
+        assert_eq!(
+            same_publisher(broken),
+            Err("The installer's signature could not be checked. Nothing was installed.".into()),
+            "{broken:?}"
+        );
+    }
+}

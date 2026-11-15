@@ -546,11 +546,15 @@ Input, exactly one of:
 
 Options:
   --from FORMAT  The input format: {inputs}.
+                 rsk is another name for reshiki. name reads a chemical
+                 name, parsed offline:
+                 echo caffeine | reshiki --cli convert - --from name --to smiles
   --to FORMAT    The output format: {outputs}.
+                 rsmi is reaction SMILES; rxn and rsmi need a reaction.
                  Without --to, the extension of OUTPUT picks it (.smi is smiles).
   -o OUTPUT      Write the file to OUTPUT. Without -o, or with -o -, the file
-                 goes to stdout and needs --to; pdf and png are never written
-                 to a terminal.
+                 goes to stdout and needs --to; pdf, png and cdx are never
+                 written to a terminal.
   --pages        Export every publication page as one PDF (pdf only).
   --svg-text MODE
                  Draw svg text as outlines (outline, the default), the same
@@ -560,8 +564,8 @@ Options:
                  {{\"receipt\": {{\"format\", \"byte_len\", \"detail\"}}, \"api\": {{…}}}}.
 
 Inputs are at most {text} bytes ({cdx} for cdx), so a ReShiki drawing with
-large embedded pictures that the app opens can be too large here. rsk, rxn,
-rsmi, cdx and emf files cannot be written.
+large embedded pictures that the app opens can be too large here. rsk and
+emf files cannot be written.
 
 {EXPORT_DETAIL_HELP}",
         usage = CONVERT.usage,
@@ -623,8 +627,8 @@ Options:
   --to FORMAT  The output format: {outputs}.
                Without --to, the extension of OUTPUT picks it (.smi is smiles).
   -o OUTPUT    Write the file to OUTPUT. Without -o, or with -o -, the file
-               goes to stdout and needs --to; pdf and png are never written
-               to a terminal.
+               goes to stdout and needs --to; pdf, png and cdx are never
+               written to a terminal.
   --pages      Export every publication page as one PDF (pdf only).
   --svg-text MODE
                Draw svg text as outlines (outline, the default), the same

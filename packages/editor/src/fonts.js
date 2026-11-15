@@ -31,14 +31,16 @@ const SYSTEM_CJK = {
 };
 const REGULAR_OR_BOLD = /^(regular|normal|w3|bold|w6)$/i;
 
-/** The bytes of `font`: a URL to fetch, or the bytes themselves. */
-export async function fontBytes(font, fetchFont = fetch) {
+/** The bytes of `font`: a URL to fetch, or the bytes themselves. `redirect`
+ * is fetch's own option: "error" fails on a URL that redirects, before the
+ * address it redirects to is asked. */
+export async function fontBytes(font, fetchFont = fetch, redirect = "follow") {
   if (typeof font !== "string" && !(font instanceof URL)) {
     return font instanceof ArrayBuffer ? new Uint8Array(font) : font;
   }
   let response;
   try {
-    response = await fetchFont(font);
+    response = await fetchFont(font, { redirect });
   } catch (error) {
     throw new Error(`Could not load the font ${font}: ${error?.message ?? error}`);
   }
@@ -85,7 +87,8 @@ export async function cjkFonts(cjkFont, page = globalThis, language = "ja") {
  * callback the editor calls with a language ("ja", "ko" or "zh") when it
  * first needs that language's fallback, or undefined for none. A `cjkFont`
  * the page chose serves every language and loads once. Failures go to
- * `onError`. */
+ * `onError`. `options.fontRedirect` is how `fonts` and a chosen `cjkFont` are
+ * fetched when they redirect. */
 export async function loadFonts(wasm, options = {}, page = globalThis) {
   const onError = options.onError ?? ((error) => console.error(error));
   const add = (bytes) => {
@@ -97,7 +100,7 @@ export async function loadFonts(wasm, options = {}, page = globalThis) {
   };
   const fetchFont = page.fetch?.bind(page) ?? fetch;
   const loaded = await Promise.allSettled(
-    (options.fonts ?? []).map((font) => fontBytes(font, fetchFont)),
+    (options.fonts ?? []).map((font) => fontBytes(font, fetchFont, options.fontRedirect)),
   );
   for (const result of loaded) {
     if (result.status === "fulfilled") add(result.value);
@@ -115,7 +118,7 @@ export async function loadFonts(wasm, options = {}, page = globalThis) {
     // The page's own fallback serves every language, so it loads once.
     if (chosenLoaded) return [];
     chosenLoaded = true;
-    return [await fontBytes(options.cjkFont, fetchFont)];
+    return [await fontBytes(options.cjkFont, fetchFont, options.fontRedirect)];
   };
   return (language = "ja") => {
     if (requested.has(language)) return Promise.resolve();

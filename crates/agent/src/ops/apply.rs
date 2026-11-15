@@ -292,7 +292,9 @@ fn check_base(base: Option<Revision>, current: Revision) -> Result<(), OpError> 
             format!(
                 "base_revision {base} is not the current revision {current}; inspect the document and retry with a new idempotency_key"
             ),
-        )),
+        )
+        .at_revision(current.0)
+        .param("base_revision")),
         _ => Ok(()),
     }
 }
@@ -495,6 +497,7 @@ fn edit(
         id_remap,
         deleted,
     } = edited;
+    store.fits(who, &document, &snapshot.doc, &doc)?;
     let reconciled = match transaction::reconcile(&mut doc, (*snapshot.doc).clone()) {
         Ok(reconciled) => reconciled,
         Err(rejection) => {

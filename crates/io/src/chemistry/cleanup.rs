@@ -403,6 +403,7 @@ impl Prepared {
         let mut crossed = 0usize;
         let mut wavy = 0usize;
         let mut work = 50_000_000usize;
+        let (mut crowded, mut stuck) = (0usize, 0usize);
         for part in self.parts {
             let mut layout = compute(LayoutRequest {
                 molecule: &part.molecule,
@@ -458,6 +459,14 @@ impl Prepared {
                     y: fixed.y,
                     z: 0.,
                 };
+            }
+            match unfold(&part.molecule, &mut layout, &part.fixed, self.bond_length)? {
+                Fold::Clear => {}
+                Fold::Crowded => crowded += 1,
+                Fold::Stuck => {
+                    stuck += 1;
+                    continue;
+                }
             }
             let mut molecule = part.molecule;
             molecule.set_conformer(wedging::Conformer {
@@ -641,6 +650,16 @@ impl Prepared {
                 "{wavy} double bond(s) use a wavy substituent bond to keep unspecified stereochemistry."
             ));
         }
+        if crowded != 0 {
+            warnings.push(format!(
+                "Selected atoms in {crowded} molecule(s) now lie close to other atoms. Review the drawing, or choose Selected molecules."
+            ));
+        }
+        if stuck != 0 {
+            warnings.push(format!(
+                "Selected atoms in {stuck} molecule(s) kept unchanged: cleaned up, they would lie on other atoms. Choose Selected molecules."
+            ));
+        }
         if self.preserved_attachments != 0 {
             warnings.push(format!(
                 "{} attachment-containing structure(s) kept unchanged. Automatic cleanup of multi-center and variable attachments is not yet supported.",
@@ -689,6 +708,147 @@ impl Prepared {
             analysis_failure,
         })
     }
+}
+
+enum Fold {
+    Clear,
+    /// Reflected atoms ended closer than half a bond to another atom.
+    Crowded,
+    /// A moved atom still lies on another atom.
+    Stuck,
+}
+
+/// Whether each eligible source has an atom that `counts` within `limit`.
+fn near(
+    layout: &[Point3],
+    cell: f64,
+    limit: f64,
+    from: &dyn Fn(usize) -> bool,
+    counts: &dyn Fn(usize, usize) -> bool,
+) -> Vec<bool> {
+    let key = |point: &Point3| {
+        (
+            (point.x / cell).floor() as i64,
+            (point.y / cell).floor() as i64,
+        )
+    };
+    let mut cells = HashMap::<_, Vec<_>>::new();
+    for (index, point) in layout.iter().enumerate() {
+        cells.entry(key(point)).or_default().push((index, point));
+    }
+    layout
+        .iter()
+        .enumerate()
+        .map(|(index, point)| {
+            if !from(index) {
+                return false;
+            }
+            let (x, y) = key(point);
+            (-1..=1).any(|dx| {
+                (-1..=1).any(|dy| {
+                    cells
+                        .get(&(x.saturating_add(dx), y.saturating_add(dy)))
+                        .is_some_and(|others| {
+                            others.iter().any(|&(other, q)| {
+                                counts(index, other) && (point.x - q.x).hypot(point.y - q.y) < limit
+                            })
+                        })
+                })
+            })
+        })
+        .collect()
+}
+
+/// The solver can fold a group of moved atoms onto fixed atoms: it closes a
+/// ring on the wrong side of the two fixed atoms that hold it (#1181). Reflect
+/// such a group across those two atoms.
+fn unfold(
+    molecule: &Molecule,
+    layout: &mut [Point3],
+    fixed: &Coordinates,
+    bond_length: f64,
+) -> Result<Fold> {
+    if fixed.is_empty() {
+        return Ok(Fold::Clear);
+    }
+    let (on, close) = (0.1 * bond_length, 0.5 * bond_length);
+    let mut pending: Vec<_> = near(
+        layout,
+        close,
+        on,
+        &|index| !fixed.contains_key(&index),
+        &|_, other| fixed.contains_key(&other),
+    )
+    .iter()
+    .enumerate()
+    .filter_map(|(index, &folded)| folded.then_some(index))
+    .collect();
+    if pending.is_empty() {
+        return Ok(Fold::Clear);
+    }
+    let mut adjacent = vec![Vec::new(); layout.len()];
+    for bond in &molecule.state.graph.bonds {
+        adjacent.get_mut(bond.a).ok_or(Error::Layout)?.push(bond.b);
+        adjacent.get_mut(bond.b).ok_or(Error::Layout)?.push(bond.a);
+    }
+    // The reflected group of each atom; atoms that stay share group zero.
+    let mut groups = vec![0usize; layout.len()];
+    let mut count = 0;
+    while let Some(start) = pending.pop() {
+        if groups.get(start) != Some(&0) {
+            continue;
+        }
+        count += 1;
+        // The moved atoms bonded together, and the fixed atoms that hold them.
+        let mut group = vec![start];
+        *groups.get_mut(start).ok_or(Error::Layout)? = count;
+        let mut holders = Vec::new();
+        let mut next = 0;
+        while let Some(&index) = group.get(next) {
+            next += 1;
+            for &other in adjacent.get(index).ok_or(Error::Layout)? {
+                if fixed.contains_key(&other) {
+                    if !holders.contains(&other) {
+                        holders.push(other);
+                    }
+                } else if groups.get(other) == Some(&0) {
+                    *groups.get_mut(other).ok_or(Error::Layout)? = count;
+                    group.push(other);
+                }
+            }
+        }
+        let &[a, b] = holders.as_slice() else {
+            return Ok(Fold::Stuck);
+        };
+        let (a, b) = (
+            fixed.get(&a).ok_or(Error::Layout)?,
+            fixed.get(&b).ok_or(Error::Layout)?,
+        );
+        let (dx, dy) = (b.x - a.x, b.y - a.y);
+        let length = dx * dx + dy * dy;
+        if length == 0. {
+            return Ok(Fold::Stuck);
+        }
+        for &index in &group {
+            let point = layout.get_mut(index).ok_or(Error::Layout)?;
+            let along = ((point.x - a.x) * dx + (point.y - a.y) * dy) / length;
+            point.x = 2. * (a.x + along * dx) - point.x;
+            point.y = 2. * (a.y + along * dy) - point.y;
+        }
+    }
+    // A reflected atom must stay clear of every atom outside its own group:
+    // the fixed atoms, the moved atoms that stayed and the other groups.
+    let reflected = |index: usize| groups.get(index) != Some(&0);
+    let outside = |index: usize, other: usize| groups.get(index) != groups.get(other);
+    Ok(
+        if near(layout, close, on, &reflected, &outside).contains(&true) {
+            Fold::Stuck
+        } else if near(layout, close, close, &reflected, &outside).contains(&true) {
+            Fold::Crowded
+        } else {
+            Fold::Clear
+        },
+    )
 }
 
 fn rewedge(molecule: &Molecule, base: &Document, work: &mut usize) -> Result<Vec<String>> {

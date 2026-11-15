@@ -15,6 +15,7 @@
 //! contract harness (`crates/agent/tests/support/json_schema.rs`).
 use super::budget::MAX_IDS;
 use crate::{
+    document::Point,
     engine::Analysis,
     envelope::{Envelope, ExportReceipt, IdRemap, ValidationStatus, Versions, Warning},
     transaction::Rejection,
@@ -280,8 +281,8 @@ pub(crate) fn warnings(messages: Vec<String>) -> Vec<Warning> {
         .collect()
 }
 
-/// Engine [`Analysis`] on the wire, with mass, exact_mass, logp and tpsa
-/// rounded to 9 decimal places to remove floating-point noise.
+/// Engine [`Analysis`] on the wire, [`Analysis::rounded`]: mass, exact_mass,
+/// logp and tpsa rounded to 9 decimal places to remove floating-point noise.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct AnalysisJson {
     pub smiles: String,
@@ -303,8 +304,6 @@ pub struct AnalysisJson {
 
 impl From<Analysis> for AnalysisJson {
     fn from(analysis: Analysis) -> Self {
-        // Adding 0.0 normalizes negative zero after rounding.
-        let round = |value: f64| (value * 1e9).round() / 1e9 + 0.0;
         let Analysis {
             smiles,
             smiles_notice,
@@ -321,16 +320,16 @@ impl From<Analysis> for AnalysisJson {
             unpaired_electrons,
             inchi,
             inchikey,
-        } = analysis;
+        } = analysis.rounded();
         Self {
             smiles,
             smiles_notice,
             formula,
             display_formula,
-            mass: round(mass),
-            exact_mass: round(exact_mass),
-            logp: round(logp),
-            tpsa: round(tpsa),
+            mass,
+            exact_mass,
+            logp,
+            tpsa,
             donors,
             acceptors,
             rings,
@@ -368,14 +367,14 @@ impl From<&IdRemap> for IdRemapJson {
     }
 }
 
-/// Whether SVG output turns text into paths or keeps live text elements.
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum SvgText {
-    #[default]
-    Outline,
-    Live,
+/// A drawing's corners in world units, as `{min, max}`.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+pub struct Bounds {
+    pub min: Point,
+    pub max: Point,
 }
+
+pub use reshiki_io::formats::SvgText;
 
 /// The nullable SVG text mode; `null` uses outlined text.
 pub(crate) fn svg_text_schema() -> Value {

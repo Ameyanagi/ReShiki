@@ -66,6 +66,38 @@ fn finalize(response: &Document) -> Result<Document, String> {
     Ok(doc)
 }
 
+/// Whether SVG output turns text into paths or keeps live text elements.
+/// Every surface names the option `svg_text` (`svgText` in JavaScript) and
+/// outlines by default, for the same appearance in every viewer.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SvgText {
+    #[default]
+    Outline,
+    Live,
+}
+
+impl SvgText {
+    /// `outline` or `live`; `None` for anything else.
+    pub fn named(name: &str) -> Option<Self> {
+        match name {
+            "outline" => Some(Self::Outline),
+            "live" => Some(Self::Live),
+            _ => None,
+        }
+    }
+}
+
+/// The `format` names [`read`] accepts.
+pub const INPUT: &[&str] = &[
+    "auto", "rsk", "reshiki", "mol", "smiles", "inchi", "cdxml", "cdx", "rxn", "rsmi",
+];
+
+/// The `format` names [`write`] accepts.
+pub const OUTPUT: &[&str] = &[
+    "rsk", "reshiki", "svg", "png", "pdf", "mol", "smiles", "inchi", "cdxml", "cdx", "rxn", "rsmi",
+];
+
 /// Write `doc` as `format`: `rsk`, a figure (`svg`, `png` or `pdf`, as the
 /// app's Export makes it) or a chemistry format (`mol`, `smiles`, `inchi`,
 /// `cdxml`, `cdx`, `rxn` or `rsmi`).
@@ -73,13 +105,30 @@ pub async fn write(doc: Document, format: &str) -> Result<Vec<u8>, String> {
     write_with_engine(doc, format, &LocalEngine::default()).await
 }
 
-/// [`write`] with an explicitly configured headless chemistry engine.
+/// [`write`] with an explicitly configured headless chemistry engine. SVG
+/// keeps live text, as the app's plain SVG export does.
 pub async fn write_with_engine(
     doc: Document,
     format: &str,
     engine: &LocalEngine,
 ) -> Result<Vec<u8>, String> {
+    write_with(doc, format, engine, SvgText::Live).await
+}
+
+/// [`write_with_engine`] with the SVG text mode: outlined SVG is the app's
+/// SVG for Office, as the `export` tool makes it.
+pub async fn write_with(
+    doc: Document,
+    format: &str,
+    engine: &LocalEngine,
+    svg_text: SvgText,
+) -> Result<Vec<u8>, String> {
     if let Some(figure) = ["svg", "png", "pdf"].into_iter().find(|f| *f == format) {
+        let figure = if figure == "svg" && svg_text == SvgText::Outline {
+            "svg-office"
+        } else {
+            figure
+        };
         return export::publication(engine, doc, figure, false, false, EXPORT_PNG_PIXELS)
             .await
             .map(|Publication { bytes, .. }| bytes);

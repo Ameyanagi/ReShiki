@@ -96,8 +96,8 @@ cargo nextest run --workspace --locked --no-default-features --profile ci `
 The other commands are the same in both shells.
 
 Without cargo-nextest, `cargo test --workspace --locked` runs the same tests in
-one command. `.config/nextest.toml` runs the tests that start the naming worker
-one at a time.
+one command. `.config/nextest.toml` runs at most two of the tests that start
+the naming worker at a time and stops any test that runs for 15 minutes.
 
 To test one library layer, select its crate. Integration tests, binaries and
 examples belong to the root `reshiki` package, so qualify them with
@@ -106,6 +106,20 @@ examples belong to the root `reshiki` package, so qualify them with
 ```sh
 cargo test --locked -p reshiki-model
 cargo test --locked -p reshiki --test theme_reference
+```
+
+The agent goldens under `tests/fixtures/agent-contract/` and
+`tests/fixtures/agent-skill/` change only with an intentional contract change;
+the README in each folder says how to regenerate them. The MCP transcripts
+under `tests/fixtures/mcp/` and `crates/mcp/tests/transcripts/` are edited by
+hand to the new expected lines. `tests/fixtures/agent-api/parity.json` holds
+one molecule and one reaction with the answers the command line
+(`tests/cli.rs`), the Python package (`crates/python/tests/test_parity.py`) and
+the JavaScript package (`packages/editor/test/parity.test.ts`) must all give.
+Rewrite it from a built binary:
+
+```sh
+uv run --locked python scripts/agent_parity_fixture.py target/debug/reshiki
 ```
 
 A single-package build resolves features for that package alone, so the first
@@ -125,11 +139,11 @@ Run `bun install --frozen-lockfile` to install the web tools and the Lefthook
 hooks; `bun run --bun lefthook install` reinstalls them. Python changes also
 need `uv sync --locked`.
 
-Hooks check staged file types: Oxlint and `bun fmt` for web and configuration
-files, Ruff and ty for Python, and Cargo fmt and Clippy for Rust. Clippy
-type-checks libraries and binaries; CI lints tests and examples too. Hooks do
-not rewrite or restage changes. The repository uses LF line endings, including
-on Windows.
+Pre-commit hooks check staged file types: Oxlint and `bun fmt` for web and
+configuration files, Ruff and ty for Python, and Cargo fmt for Rust. A pre-push
+hook runs Clippy when the push changes Rust or Cargo files. Clippy type-checks
+libraries and binaries; CI lints tests and examples too. Hooks do not rewrite or
+restage changes. The repository uses LF line endings, including on Windows.
 
 ```sh
 bun run lint:js
@@ -274,7 +288,9 @@ Everything that needs or captures from the pinned Python/RDKit reference lives i
 
 Pull requests run native tests and saved InChI, depiction, and aromatic-response fixtures on Linux x64 and Windows x64. The macOS ARM64 legs run only on stacked `merge/*` pull requests, pull requests labelled `full-ci`, `main`, nightly, release and manual runs (`scripts/ci_scope.py`). Documentation-only changes skip native checks. Expected results come from pinned RDKit captures; fixture updates retain their source hashes and platform provenance.
 
-CI runs the workspace tests with [cargo-nextest](https://nexte.st/) 0.9.150, split into two partitions; [Run the checks](#run-the-checks) gives the same commands.
+On a pull request, the summary of the **Changed fixture rows** job lists the rows that each changed file under a `tests/fixtures/` folder gains and loses (`scripts/baseline_summary.py`). Read it when you review a fixture or baseline update. To print the same list locally, run `python3 scripts/baseline_summary.py "$(git merge-base origin/main HEAD)"`.
+
+CI runs the workspace tests with [cargo-nextest](https://nexte.st/) 0.9.150, split into two partitions; [Run the checks](#run-the-checks) gives the same commands. Each job uploads the JUnit report of its partition as a `nextest-junit-*` artifact.
 
 The **Browser build (wasm32)** job checks the browser build on the same pull requests: Clippy with `-D warnings` for the editor and the headless library (`reshiki-web`) for `wasm32-unknown-unknown`, with the crates and target `scripts/build_wasm.sh` builds, then `bun test` in `packages/editor` against a debug build of the headless library. It skips with the native checks for documentation-only changes, and only release tags build the optimised bundle. The `web` job lints `packages/editor` with oxlint on every pull request. To run the same checks locally:
 

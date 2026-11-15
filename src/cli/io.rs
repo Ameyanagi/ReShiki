@@ -23,11 +23,25 @@ pub(crate) fn limit(format: &str, budgets: &Budgets) -> usize {
 
 /// Reads the file at `path`, or standard input for `None`, refusing more
 /// than `limit` bytes.
+///
+/// A `path` that is not a regular file is refused before it is opened:
+/// opening a named pipe with no writer would wait forever. Standard input
+/// may be a pipe.
 pub(crate) fn read_input(path: Option<&Path>, limit: usize) -> Result<Vec<u8>, String> {
     let cap = u64::try_from(limit).unwrap_or(u64::MAX).saturating_add(1);
     let mut bytes = Vec::new();
     let read = match path {
-        Some(path) => File::open(path).and_then(|file| file.take(cap).read_to_end(&mut bytes)),
+        Some(path) => fs::metadata(path)
+            .and_then(|metadata| {
+                if metadata.is_file() {
+                    File::open(path)
+                } else {
+                    Err(io::Error::other(
+                        "not a regular file; use - to read standard input",
+                    ))
+                }
+            })
+            .and_then(|file| file.take(cap).read_to_end(&mut bytes)),
         None => io::stdin().lock().take(cap).read_to_end(&mut bytes),
     };
     read.map_err(|error| match path {
