@@ -8,7 +8,7 @@ use crate::{
 
 pub const TEXT_TOO_LONG: &str =
     "Only a single line of up to 32 characters can become an atom label";
-const MOLECULE_NAME_TEXT: &str = "This text is a molecule name; it stays a caption";
+const MOLECULE_NAME_TEXT: &str = "This text belongs to a molecule; it stays a caption";
 const REACTION_TEXT: &str = "This text belongs to a reaction; it stays a caption";
 
 #[cfg(test)]
