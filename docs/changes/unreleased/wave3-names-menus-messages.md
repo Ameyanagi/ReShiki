@@ -19,4 +19,5 @@ issues: []
 - Status messages state the result, such as "3D projection applied", without
   repeating that Undo brings the drawing back. Long messages are shorter.
 - The app writes US English (**Center charge in ring**, **Symmetrize**,
-  "canceled"), real plurals instead of "(s)", and "Esc" for the Escape key.
+  "canceled", and "undefined stereocenter" in **Check drawing** notices), real
+  plurals instead of "(s)", and "Esc" for the Escape key.
