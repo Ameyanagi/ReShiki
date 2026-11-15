@@ -206,7 +206,7 @@ impl Ui {
             && matches!(
                 &app.context_entries(page)[index],
                 Entry::Item { action: Action::Run(message), .. }
-                    if matches!(message.as_ref(), Message::Copy(false) | Message::Delete)
+                    if matches!(message.as_ref(), Message::Delete)
             );
         let mut find = Find {
             target: cascade::row_id(level, index),
@@ -709,8 +709,14 @@ async fn compact_menu_pins_delete_with_keyboard_and_accessibility_order() {
         );
     }
     ui.key(&mut app, Named::Home);
+    let copy = index(&app, Page::Main, "Copy");
+    let (copy_before, copy_viewport, _) = ui.inspect(&app, 0, copy);
+    assert_eq!(copy_viewport, body, "Copy scrolls with the body");
     let (before, _, _) = ui.inspect(&app, 0, properties);
     let (pinned, _, _) = ui.inspect(&app, 0, delete);
+    // Moving the pointer ends keyboard navigation, which otherwise keeps the
+    // focused row in view.
+    ui.hover(&mut app, body.center());
     ui.event(
         &mut app,
         Event::Mouse(mouse::Event::WheelScrolled {
@@ -720,6 +726,14 @@ async fn compact_menu_pins_delete_with_keyboard_and_accessibility_order() {
     );
     let (after, _, _) = ui.inspect(&app, 0, properties);
     assert!(after.y < before.y, "The body scrolls");
+    assert!(
+        !body.contains(before.center()) && body.contains(after.center()),
+        "The wheel scrolls Properties into view"
+    );
+    assert!(
+        ui.inspect(&app, 0, copy).0.y < copy_before.y,
+        "Copy moves with the body"
+    );
     assert_eq!(
         ui.inspect(&app, 0, delete).0,
         pinned,
