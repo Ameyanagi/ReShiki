@@ -53,10 +53,19 @@ pub(super) fn load(root: &Path) -> Prefs {
         .unwrap_or_default()
 }
 
-pub(super) fn save(root: &Path, prefs: &Prefs) -> Result<(), String> {
+/// Writes may finish out of order, so each carries the caller's rising
+/// `seq`; one older than the last written is dropped.
+pub(super) fn save(root: &Path, prefs: &Prefs, seq: u64) -> Result<(), String> {
+    static WRITTEN: std::sync::Mutex<u64> = std::sync::Mutex::new(0);
+    let mut written = WRITTEN.lock().map_err(|error| error.to_string())?;
+    if *written > seq {
+        return Ok(());
+    }
     std::fs::create_dir_all(root).map_err(|error| error.to_string())?;
     let bytes = serde_json::to_vec_pretty(prefs).map_err(|error| error.to_string())?;
-    reshiki::storage::write_atomic(&prefs_path(root), &bytes)
+    reshiki::storage::write_atomic(&prefs_path(root), &bytes)?;
+    *written = seq;
+    Ok(())
 }
 
 /// FNV-1a: the same on every platform and in every run.
@@ -244,7 +253,10 @@ mod tests {
         prefs.colors.insert(1, 4);
         prefs.last = Some(1);
         let dir = tempfile::tempdir().unwrap();
-        save(dir.path(), &prefs).unwrap();
+        save(dir.path(), &prefs, 2).unwrap();
+        assert_eq!(load(dir.path()), prefs);
+        // An older write that finishes late changes nothing.
+        save(dir.path(), &Prefs::default(), 1).unwrap();
         assert_eq!(load(dir.path()), prefs);
         assert_eq!(hue(&load(dir.path()), 1, &lab), 4);
     }

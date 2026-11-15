@@ -263,8 +263,9 @@ pub enum Action {
     CloseAnswer(bool),
     /// The conflict dialog for the drawing in front's repository.
     Review,
-    /// Who changed the drawing in conflict on GitHub, and when.
-    ReviewMeta(String, Option<api::RemoteVersion>),
+    /// Who changed the drawing in conflict on GitHub, and when: by
+    /// repository, repository path and the conflict's commit.
+    ReviewMeta(RepoKey, String, String, Option<api::RemoteVersion>),
     Resolve(send::Choice),
     /// The choice, once the save it waited for has landed.
     Settle(RepoKey, send::Choice),
@@ -429,13 +430,15 @@ impl App {
     }
 
     /// Writes the repository colors and the last repository.
-    fn github_keep_prefs(&self) -> Task<Message> {
+    fn github_keep_prefs(&mut self) -> Task<Message> {
         let (Some(root), prefs) = (self.github.root.clone(), self.github.prefs.clone()) else {
             return Task::none();
         };
+        self.github.seq += 1;
+        let seq = self.github.seq;
         perform(
             async move {
-                reshiki::task::spawn_blocking(move || identity::save(&root, &prefs))
+                reshiki::task::spawn_blocking(move || identity::save(&root, &prefs, seq))
                     .await
                     .map_err(|error| error.to_string())?
             },
@@ -462,8 +465,14 @@ impl App {
         match action {
             Action::Menu(open) => self.github.menu = open,
             Action::Close => {
-                if matches!(self.github.dialog, Some(Dialog::SignIn)) {
-                    self.github.after_sign_in = None;
+                if matches!(self.github.dialog, Some(Dialog::SignIn))
+                    && let Some(then) = self.github.after_sign_in.take()
+                    && matches!(then, Action::CloseAnswer(_))
+                {
+                    // A close that waited for this sign-in waits no more.
+                    if let Some(Closing::Window(..)) = self.github.closing.take() {
+                        self.cancel_close();
+                    }
                 }
                 // Closing the sign-in dialog while waiting cancels the sign-in.
                 if matches!(
@@ -761,8 +770,16 @@ impl App {
                     return self.github_review(key, 0);
                 }
             }
-            Action::ReviewMeta(repo_path, found) => {
+            Action::ReviewMeta(key, repo_path, commit, found) => {
+                let current = self
+                    .github
+                    .conflicts
+                    .get(&key)
+                    .and_then(|found| found.first())
+                    .is_some_and(|conflict| conflict.commit == commit);
                 if let Some(Dialog::Conflict(review)) = &mut self.github.dialog
+                    && current
+                    && review.key == key
                     && review.repo_path == repo_path
                 {
                     review.theirs = found;
@@ -775,8 +792,10 @@ impl App {
                 if self.github.locate(self.tab.path.as_deref()).is_none() {
                     return Task::none();
                 }
-                if self.inspector_tab != InspectorTab::Versions {
-                    self.github.versions.back = self.inspector_open.then_some(self.inspector_tab);
+                if self.inspector_tab != InspectorTab::Versions || !self.inspector_open {
+                    self.github.versions.back = (self.inspector_open
+                        && self.inspector_tab != InspectorTab::Versions)
+                        .then_some(self.inspector_tab);
                 }
                 let task = self.show_inspector_tab(InspectorTab::Versions);
                 return Task::batch([task.unwrap_or_else(Task::none), self.github_follow()]);
@@ -980,10 +999,11 @@ impl App {
     fn github_link(&self) -> Option<String> {
         let (key, repo_path) = self.github.locate(self.tab.path.as_deref())?;
         let state = self.github.states.get(&key)?;
-        Some(self.github.ends.web(&format!(
+        let path = format!(
             "/{}/{}/blob/{}/{repo_path}",
             state.owner, state.repo, state.branch
-        )))
+        );
+        Some(self.github.ends.web(&api::encoded(&path)))
     }
 
     /// Saves the next drawing the Send waits for, in its own tab as Cmd+S
@@ -1313,6 +1333,10 @@ impl App {
     /// Sends from the saved files, never saving a drawing whose changes the
     /// user just discarded.
     fn github_send_unsent(&mut self, key: RepoKey) -> Task<Message> {
+        // Signed out: sign in first, then answer Send again.
+        if self.github.client().is_none() {
+            return self.github_sign_in(Some(Action::CloseAnswer(true)));
+        }
         self.github_refresh(&key);
         let files = self.github.unsent.get(&key).cloned().unwrap_or_default();
         let task = self.github_send(key.clone(), send::default_message(&files), None);
@@ -1460,8 +1484,11 @@ impl App {
                 ));
             }
             rows.push(("Versions".into(), name.clone(), Some(Action::ShowVersions)));
-            rows.push(("Copy GitHub link".into(), name.clone(), Some(Action::CopyLink)));
-            rows.push(("Open on GitHub ↗".into(), name, Some(Action::OpenOnGitHub)));
+            // A drawing GitHub has never had has no link yet.
+            if self.github_chip_state(&key) != Chip::New {
+                rows.push(("Copy GitHub link".into(), name.clone(), Some(Action::CopyLink)));
+                rows.push(("Open on GitHub ↗".into(), name, Some(Action::OpenOnGitHub)));
+            }
         }
         rows.push(match self.github.login() {
             Some(login) => (
@@ -1739,8 +1766,17 @@ impl App {
             return content;
         };
         let close = Message::GitHub(Action::Close);
+        // The theme editor replaces the workspace and its status bar.
+        let chip_shown = !(self.inspector_tab == InspectorTab::ThemeGenerator
+            && self.theme_library.editor.is_some());
         let (body, width, height, placement): (_, f32, f32, _) = match dialog {
-            Dialog::Send(_) => return content,
+            Dialog::Send(_) if chip_shown => return content,
+            Dialog::Send(draft) => (
+                self.send_view(draft),
+                360.,
+                self.viewport.height,
+                super::help::Placement::Fit,
+            ),
             Dialog::SignIn => (
                 self.account_view(),
                 360.,

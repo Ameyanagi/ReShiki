@@ -34,7 +34,7 @@ fn sha(sha: String) -> Result<String, Error> {
 }
 
 /// Percent-encode a path or query value, keeping `/` between folders.
-fn encoded(text: &str) -> String {
+pub fn encoded(text: &str) -> String {
     let mut out = String::new();
     for byte in text.bytes() {
         if byte.is_ascii_alphanumeric() || b"-._~/".contains(&byte) {

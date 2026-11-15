@@ -39,6 +39,9 @@ pub(in crate::app) struct Picker {
     /// The last request's number, from one count for every picker, so a
     /// late reply drops, even in a picker opened since.
     pub(super) generation: u64,
+    /// The last download or new repository's number, apart from listings,
+    /// so neither drops a listing's late replies.
+    request: u64,
     search: String,
     /// The last used first, then by name; `None` until GitHub lists them.
     /// Kept in this order while the picker is open.
@@ -80,6 +83,7 @@ impl Picker {
         Self {
             mode,
             generation: 0,
+            request: 0,
             search: String::new(),
             repos: None,
             signed_out: false,
@@ -529,7 +533,7 @@ impl App {
             Action::Downloaded(generation, repo, repo_path, result) => {
                 if !self
                     .picker()
-                    .is_some_and(|picker| picker.generation == generation)
+                    .is_some_and(|picker| picker.request == generation)
                 {
                     return Task::none();
                 }
@@ -592,7 +596,7 @@ impl App {
                 picker.busy = true;
                 let generation = self.github_request();
                 if let Some(picker) = self.picker() {
-                    picker.generation = generation;
+                    picker.request = generation;
                 }
                 return perform(
                     async move { api::create_repo(&client, &name).await },
@@ -602,7 +606,7 @@ impl App {
             Action::RepoCreated(generation, result) => {
                 if !self
                     .picker()
-                    .is_some_and(|picker| picker.generation == generation)
+                    .is_some_and(|picker| picker.request == generation)
                 {
                     return Task::none();
                 }
@@ -825,7 +829,7 @@ impl App {
         };
         picker.busy = true;
         picker.error = None;
-        picker.generation = generation;
+        picker.request = generation;
         perform(
             {
                 let (repo, repo_path) = (repo.clone(), repo_path.clone());
@@ -852,6 +856,8 @@ impl App {
         };
         let typed = picker.save_name.trim();
         let stem = typed.strip_suffix(".rsk").unwrap_or(typed).trim().to_owned();
+        // A name, not a path: the folder is the one open in the picker.
+        let stem = if stem.contains(['/', '\\']) { String::new() } else { stem };
         let name = format!("{stem}.rsk");
         let preview = format!("{stem}.svg");
         let taken = picker
@@ -917,6 +923,8 @@ impl App {
             return Task::none();
         };
         let typed = typed.trim();
+        // A name, not a path: the folder is the one open in the picker.
+        let typed = if typed.contains(['/', '\\']) { "" } else { typed };
         if folder {
             if typed.is_empty() || !workcopy::valid_repo_path(&picker.repo_path(typed)) {
                 picker.error = Some(CANT_OPEN.into());
@@ -944,6 +952,7 @@ impl App {
         let key = self.github_folder(&repo);
         let path = workcopy::working_path(&root, &key, &repo_path);
         let collides = path.exists()
+            || path.with_extension("svg").exists()
             || self.github_state(&key).is_some_and(|state| {
                 state.collides(&repo_path) || state.files.contains_key(&repo_path)
             });
@@ -1208,20 +1217,35 @@ impl App {
             .find(|(_, state)| state.repo_id == repo.id)
             .map_or_else(|| repo.key.clone(), |(key, _)| key.clone());
         let unsent = self.github.unsent.get(&folder_key);
-        let unsent_under = |path: &str, folder: bool| {
-            unsent.map_or(0, |unsent| {
-                unsent
+        let conflicted: Vec<&String> = self
+            .github
+            .states
+            .get(&folder_key)
+            .map(|state| {
+                state
+                    .files
                     .iter()
-                    .filter(|other| {
-                        if folder {
-                            other.starts_with(&format!("{path}/"))
-                        } else {
-                            *other == path
-                        }
-                    })
-                    .count()
+                    .filter(|(_, file)| file.conflict.is_some())
+                    .map(|(path, _)| path)
+                    .collect()
             })
+            .unwrap_or_default();
+        let under = |paths: &mut dyn Iterator<Item = &String>, path: &str, folder: bool| {
+            paths
+                .filter(|other| {
+                    if folder {
+                        other.starts_with(&format!("{path}/"))
+                    } else {
+                        *other == path
+                    }
+                })
+                .count()
         };
+        let unsent_under = |path: &str, folder: bool| {
+            unsent.map_or(0, |unsent| under(&mut unsent.iter(), path, folder))
+        };
+        let conflicts_under =
+            |path: &str, folder: bool| under(&mut conflicted.iter().copied(), path, folder);
         let body: Element<'_, Message> = match &picker.entries {
             None => center(text("Listing…").size(12).style(muted_text).into()),
             Some(entries) => {
@@ -1234,6 +1258,7 @@ impl App {
                         let selected = picker.selected == Some(at);
                         let path = picker.repo_path(&entry.name);
                         let unsent = unsent_under(&path, entry.folder);
+                        let conflicts = conflicts_under(&path, entry.folder);
                         let (preview, label, meta): (Element<'_, Message>, &str, Option<String>) =
                             if entry.folder {
                                 (
@@ -1274,7 +1299,9 @@ impl App {
                         if let Some(meta) = &meta {
                             spoken = format!("{spoken}, {meta}");
                         }
-                        if unsent > 0 {
+                        if conflicts > 0 {
+                            spoken = format!("{spoken}, {conflicts} changed on GitHub");
+                        } else if unsent > 0 {
                             spoken = format!("{spoken}, {unsent} unsent");
                         }
                         let mut name = row![
@@ -1285,8 +1312,8 @@ impl App {
                         ]
                         .spacing(4)
                         .align_y(Alignment::Center);
-                        if unsent > 0 {
-                            name = name.push(state_dot(false, 0));
+                        if conflicts > 0 || unsent > 0 {
+                            name = name.push(state_dot(conflicts > 0, 0));
                         }
                         let content = column![
                             container(preview)

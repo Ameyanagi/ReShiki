@@ -1241,6 +1241,13 @@ fn palette_rows_appear_only_when_they_apply() {
     conflicted(&mut app, &path, Some(drawing(30.)));
     assert!(names(&app).contains(&("Review changes on GitHub".into(), true)));
 
+    // The link names the file on the default branch, encoded.
+    let copy = workcopy::working_path(dir.path(), &repo().key, "ring (2).rsk");
+    app.tab.path = Some(copy);
+    assert_eq!(
+        app.github_link().as_deref(),
+        Some("http://127.0.0.1:9/octo/lab/blob/main/ring%20%282%29.rsk")
+    );
     // A drawing on this computer only: Send chooses where; no Versions.
     app.add_tab();
     let rows = names(&app);
@@ -1344,6 +1351,9 @@ fn a_new_drawing_is_an_empty_working_copy_with_nothing_on_github() {
     };
     new(&mut app, "x");
     assert_eq!(picker_error(&app).as_deref(), Some("Name taken"));
+    // A name, never a path into another folder.
+    new(&mut app, "scheme/ring");
+    assert_eq!(picker_error(&app).as_deref(), Some("Can't open this name here"));
     new(&mut app, "route");
     assert!(app.github.dialog.is_none());
     let path = workcopy::working_path(dir.path(), &repo().key, "route.rsk");
@@ -1423,4 +1433,41 @@ fn opening_takes_over_an_untouched_untitled_tab_and_sits_with_its_repository() {
     assert!(app.open_target(Some(&other)));
     assert_eq!(app.strip().count(), 2, "the Untitled tab gave way");
     assert_eq!(app.tabs.active, 1);
+}
+
+#[test]
+fn late_conflict_details_never_reach_another_conflict() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_in(dir.path());
+    conflicted(&mut app, &path, Some(drawing(30.)));
+    let commit = app.github.conflicts[&repo().key][0].commit.clone();
+    let found = api::RemoteVersion {
+        commit: commit.clone(),
+        message: "Swap in a pyridine N".into(),
+        login: Some("alice".into()),
+        author: "Alice".into(),
+        date: "2026-11-16T14:02:00Z".into(),
+    };
+    let meta = |commit: &str| {
+        Action::ReviewMeta(repo().key, "ring.rsk".into(), commit.into(), Some(found.clone()))
+    };
+    github(&mut app, meta("an older commit"));
+    assert!(review(&app).theirs.is_none());
+    github(&mut app, meta(&commit));
+    assert_eq!(review(&app).theirs.as_ref(), Some(&found));
+}
+
+#[test]
+fn send_on_closing_while_signed_out_signs_in_then_sends() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_in(dir.path());
+    save_here(&mut app, &path);
+    app.github.account = Account::SignedOut(None);
+    let _ = app.update(Message::Tabs(tabs::Action::Close(None)));
+    github(&mut app, Action::CloseAnswer(true));
+    assert!(matches!(app.github.dialog, Some(Dialog::SignIn)));
+    assert!(matches!(app.github.after_sign_in, Some(Action::CloseAnswer(true))));
+    // Canceling the sign-in leaves the close behind; the next close asks again.
+    let _ = app.update(Message::Escape);
+    assert!(app.github.closing.is_none());
 }

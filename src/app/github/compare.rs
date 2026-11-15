@@ -165,6 +165,12 @@ pub(super) fn painted(doc: &Document, marks: &Marks) -> Document {
             bond.highlight = Some(DIFF);
         }
     }
+    // A collapsed label's own paint shows instead of its members'.
+    for group in &mut doc.abbreviations {
+        if group.members.iter().any(|id| marks.ids.contains(id)) {
+            group.highlight = Some(DIFF);
+        }
+    }
     doc
 }
 

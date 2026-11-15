@@ -27,6 +27,11 @@ pub fn sha(bytes: &[u8]) -> String {
         .collect()
 }
 
+/// Commits made while the mock runs carry the time they were made.
+fn now() -> String {
+    chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true)
+}
+
 pub struct Commit {
     pub tree: String,
     pub parent: Option<String>,
@@ -72,7 +77,7 @@ impl Repo {
                 parent,
                 message,
                 author: LOGIN.into(),
-                at: chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+                at: "2026-11-15T14:02:00Z".into(),
             },
         );
         name
@@ -361,6 +366,7 @@ fn respond(model: &mut Model, base: &str, request: Logged) -> Reply {
             let commit = repo.remote_commit(body["path"].as_str().unwrap(), bytes.as_deref());
             // Optionally someone else's, with their own message.
             let made = repo.commits.get_mut(&commit).unwrap();
+            made.at = now();
             if let Some(author) = body["author"].as_str() {
                 made.author = author.into();
             }
@@ -576,10 +582,9 @@ fn repo_api(
         }
         ("POST", ["git", "commits"]) => {
             let parent = body["parents"][0].as_str().map(str::to_owned);
-            reply(
-                201,
-                json!({ "sha": repo.put_commit(text("tree"), parent, &text("message")) }),
-            )
+            let commit = repo.put_commit(text("tree"), parent, &text("message"));
+            repo.commits.get_mut(&commit).unwrap().at = now();
+            reply(201, json!({ "sha": commit }))
         }
         ("PATCH", ["git", "refs", "heads", branch]) => {
             let (commit, head) = (text("sha"), repo.refs.get(*branch).cloned());
@@ -623,11 +628,12 @@ fn repo_api(
                 .take(size)
                 .map(|commit| {
                     let made = &repo.commits[commit];
+                    let name = if made.author == LOGIN { "Octo Test" } else { &made.author };
                     json!({
                         "sha": commit,
                         "commit": {
                             "message": made.message,
-                            "author": { "name": made.author, "date": made.at },
+                            "author": { "name": name, "date": made.at },
                         },
                         "author": { "login": made.author },
                     })
@@ -759,6 +765,7 @@ async fn serve_github_mock() {
         let lab = model.repo("lab-notes");
         let commit = lab.remote_commit("scheme/furan.rsk", Some(ring));
         let made = lab.commits.get_mut(&commit).unwrap();
+        made.at = now();
         made.author = "alice".into();
         made.message = "Start the furan route".into();
     }

@@ -123,10 +123,10 @@ impl App {
         ) else {
             return Task::none();
         };
-        let (named, repo_path) = (state.key(), repo_path.to_owned());
+        let (named, repo_path, key) = (state.key(), repo_path.to_owned(), key.clone());
         perform(
             {
-                let repo_path = repo_path.clone();
+                let (repo_path, commit) = (repo_path.clone(), commit.clone());
                 async move {
                     api::file_commits(&client, &named, &repo_path, &commit, 1)
                         .await
@@ -134,7 +134,7 @@ impl App {
                         .and_then(|found| found.into_iter().next())
                 }
             },
-            move |found| Action::ReviewMeta(repo_path, found),
+            move |found| Action::ReviewMeta(key, repo_path, commit, found),
         )
     }
 
