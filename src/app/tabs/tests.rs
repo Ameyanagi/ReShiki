@@ -421,7 +421,7 @@ fn background_engine_results_apply_in_their_own_history() {
     for kind in [
         Job::Insert,
         Job::Import,
-        Job::ImportFile("oxygen.mol".into()),
+        Job::ImportFile("oxygen.cif".into()),
     ] {
         let mut app = ready();
         let before = app.tab.doc.clone();

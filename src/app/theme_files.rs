@@ -283,9 +283,10 @@ impl App {
             return;
         }
         if self.tab.doc.canvas_theme != theme {
-            let before = self.tab.doc.clone();
+            // View state: saved with the file, but neither an Undo step nor
+            // an unsaved change.
             self.tab.doc.canvas_theme = theme;
-            self.changed(before);
+            self.drawing_revised(false);
             self.sync_color_input();
             self.status = format!("{theme} canvas · Copies: ink colors, transparent background");
         }

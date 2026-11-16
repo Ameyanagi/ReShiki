@@ -234,8 +234,10 @@ impl App {
             #[cfg(target_os = "macos")]
             Message::MacFiles(_) => {}
             Message::Opened(file) => return Some(files::open_contents(file)),
-            Message::Save => return Some(self.save_drawing(false)),
-            Message::SaveAs => return Some(self.save_drawing(true)),
+            Message::Save => return Some(self.save_drawing(None)),
+            Message::SaveAs => return Some(self.save_as()),
+            Message::SaveFormat(format) => return Some(self.save_drawing(Some(format))),
+            Message::KeepFormat => return Some(self.keep_format()),
             Message::Export(format) => return Some(self.export_drawing(format)),
             Message::ExportFigure(format, editable) => {
                 return Some(self.export_figure(format, false, editable));

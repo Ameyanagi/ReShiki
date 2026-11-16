@@ -229,6 +229,12 @@ where
         self
     }
 
+    /// Sets the [`widget::Id`] of the [`TextInput`] of the [`ComboBox`].
+    pub fn id(mut self, id: impl Into<widget::Id>) -> Self {
+        self.text_input = self.text_input.id(id);
+        self
+    }
+
     /// Sets the [`Padding`] of the [`ComboBox`].
     pub fn padding(mut self, padding: impl Into<Padding>) -> Self {
         self.padding = padding.into();
@@ -548,6 +554,22 @@ where
 
     fn diff(&self, _tree: &mut widget::Tree) {
         // do nothing so the children don't get cleared
+    }
+
+    fn operate(
+        &mut self,
+        tree: &mut widget::Tree,
+        layout: Layout<'_>,
+        renderer: &Renderer,
+        operation: &mut dyn widget::Operation,
+    ) {
+        Widget::<TextInputEvent, Theme, Renderer>::operate(
+            &mut self.text_input,
+            &mut tree.children[0],
+            layout,
+            renderer,
+            operation,
+        );
     }
 
     fn update(

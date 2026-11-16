@@ -37,3 +37,27 @@ fn centered_chain_double_bonds_round_trip_and_false_is_omitted() {
             .is_none()
     );
 }
+
+/// Japanese fonts center "…" between the lines, so "Export PDF…" read as
+/// "Export PDF···"; the interface font sets it on the baseline.
+#[test]
+fn interface_font_sets_the_ellipsis_on_the_baseline() {
+    use resvg::usvg::fontdb::{Family, Query};
+    let family = ui_font_family();
+    let fonts = fonts();
+    let id = (fonts.db)
+        .query(&Query {
+            families: &[Family::Name(family)],
+            ..Query::default()
+        })
+        .expect("the interface font is installed");
+    let top = (fonts.db)
+        .with_face_data(id, |bytes, index| {
+            let face = font::face(bytes, index, 400)?;
+            let bounds = face.glyph_bounding_box(face.glyph_index('…')?)?;
+            Some(f32::from(bounds.y_max) / f32::from(face.units_per_em()))
+        })
+        .flatten()
+        .expect("the interface font has an ellipsis");
+    assert!(top < 0.2, "{family} draws … {top} em above the baseline");
+}

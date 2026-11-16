@@ -359,6 +359,105 @@ fn keyboard_navigation_moves_within_results_and_never_runs_commands() {
     assert!(app.help_open && app.help.query.is_empty());
 }
 
+/// Enter itself is driven through the real widgets in
+/// shortcut_focus_tests::help_runs_a_clicked_row_with_enter.
+#[test]
+fn rows_that_name_a_palette_command_run_it() {
+    let (mut app, _) = App::new();
+    app.tab.doc = reshiki::rings::Preset::Benzene.document(42., false);
+    let _ = app.update(Message::ToggleHelp);
+    let index = |name: &str| entries().iter().position(|e| e.name == name).unwrap();
+    for name in [
+        "Select all",
+        "Copy",
+        "Paste",
+        "Delete",
+        "Fit drawing",
+        "Lasso tool",
+    ] {
+        assert!(app.help.command(index(name)).is_some(), "{name} runs");
+    }
+    for name in ["Wedge", "Undo / redo", "Shortcut finder"] {
+        assert!(
+            app.help.command(index(name)).is_none(),
+            "{name} is reference"
+        );
+    }
+
+    // A reference row and a command that cannot run now leave Help open.
+    let before = app.tab.doc.clone();
+    for name in ["Wedge", "Delete"] {
+        let _ = app.update(Message::Help(Action::Run(index(name))));
+        assert!(app.help_open, "{name}");
+        assert_eq!(app.tab.doc, before);
+    }
+    let _ = app.update(Message::Help(Action::Run(index("Select all"))));
+    assert!(!app.help_open);
+    assert!(!app.tab.selected.is_empty());
+}
+
+/// The palette has no catalog until it first opens; a command run from
+/// Help before then is still its most recent one.
+#[test]
+fn a_command_run_from_help_first_is_recent_in_the_palette() {
+    let (mut app, _) = App::new();
+    app.tab.doc = reshiki::rings::Preset::Benzene.document(42., false);
+    let _ = app.update(Message::ToggleHelp);
+    let index = entries().iter().position(|e| e.name == "Select all");
+    let _ = app.update(Message::Help(Action::Run(index.unwrap())));
+    assert!(!app.help_open);
+
+    let _ = app.update(Message::Commands(crate::app::command_palette::Action::Open));
+    assert_eq!(app.commands.ranked()[0].name, "Select all");
+}
+
+/// Help runs a command through the same gates as the palette: a caption
+/// being typed is applied first, and a command that cannot run keeps it.
+#[test]
+fn help_and_the_palette_treat_a_caption_draft_alike() {
+    use crate::app::{command_palette, inline_text};
+    use iced::widget::text_editor::{Action as Input, Edit};
+    let drafting = || {
+        let (mut app, _) = App::new();
+        app.tab.busy = false;
+        let _ = app.update(Message::InlineText(inline_text::Action::Begin(
+            None,
+            reshiki::document::Point::default(),
+        )));
+        let _ = app.update(Message::CaptionAction(Input::Edit(Edit::Paste(
+            std::sync::Arc::new("Caption".into()),
+        ))));
+        assert!(app.tab.inline_text.is_some());
+        app
+    };
+    let boc = entries().iter().position(|e| e.name == "Boc").unwrap();
+    let delete = entries().iter().position(|e| e.name == "Delete").unwrap();
+
+    // Delete needs a selection: both keep the draft.
+    let mut help = drafting();
+    let _ = help.update(Message::ToggleHelp);
+    let _ = help.update(Message::Help(Action::Run(delete)));
+    assert!(help.help_open);
+    assert!(help.tab.inline_text.is_some());
+    assert_eq!(help.tab.caption, "Caption");
+
+    let mut palette = drafting();
+    let _ = palette.update(Message::Commands(command_palette::Action::Open));
+    let _ = palette.update(Message::Commands(command_palette::Action::Query(
+        "boc".into(),
+    )));
+    assert_eq!(palette.commands.current().unwrap().name, "Boc");
+    let _ = palette.update(Message::Commands(command_palette::Action::Submit));
+    let _ = help.update(Message::Help(Action::Run(boc)));
+    assert!(!help.help_open);
+    for app in [&help, &palette] {
+        assert!(app.tab.inline_text.is_none(), "the caption was applied");
+        assert_eq!(app.tab.doc.annotations.len(), 1);
+    }
+    assert_eq!(help.tab.doc, palette.tab.doc);
+    assert_eq!(help.tool, palette.tool);
+}
+
 #[test]
 fn canvas_tool_keys_say_when_keyboard_drawing_takes_them() {
     // Keyboard drawing is on by default, and at an empty hotspot these keys
