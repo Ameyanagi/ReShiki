@@ -34,8 +34,10 @@ fn family(icon: Icon) -> &'static str {
         Icon::Export => "export",
         Icon::Inspector => "inspector",
         Icon::Keyboard => "keyboard",
+        Icon::Settings => "settings",
         Icon::More => "more",
         Icon::Lock(_) => "lock",
+        Icon::Pin => "pin",
         Icon::ModelStyle(_) => "model-style",
     }
 }
@@ -83,7 +85,9 @@ fn all_icons() -> Vec<(String, Icon)> {
         Icon::Export,
         Icon::Inspector,
         Icon::Keyboard,
+        Icon::Settings,
         Icon::More,
+        Icon::Pin,
     ]
     .into_iter()
     .map(|icon| (family(icon).to_string(), icon))
@@ -197,6 +201,7 @@ fn expected_counts() -> BTreeMap<&'static str, usize> {
         "inspector",
         "keyboard",
         "more",
+        "pin",
         "tool-select",
         "tool-lasso",
         "tool-tilt",
@@ -221,6 +226,7 @@ fn expected_counts() -> BTreeMap<&'static str, usize> {
         ("label-align", 5),
         ("assistant", 2),
         ("lock", 2),
+        ("settings", 1),
         ("model-style", 5),
         ("ring", 12),
         ("arrow", reshiki::arrows::Preset::ALL.len()),
@@ -249,7 +255,7 @@ fn icon_fixtures_cover_every_variant() {
         *counts.entry(family(*icon)).or_insert(0) += 1;
     }
     assert_eq!(counts, expected_counts());
-    assert_eq!(icons.len(), 138);
+    assert_eq!(icons.len(), 140);
 }
 
 fn render(
@@ -329,7 +335,7 @@ fn check_icon_pixels(
 
 #[tokio::test]
 #[ignore = "Icon baseline/candidate pixels; requires a headless renderer and artifact directory"]
-async fn icon_glyphs_match_captured_baseline() {
+async fn manual_icon_glyphs_match_captured_baseline() {
     let dir = std::path::PathBuf::from(
         std::env::var("RESHIKI_CANVAS_PIXELS")
             .expect("Set RESHIKI_CANVAS_PIXELS to the baseline artifact directory"),

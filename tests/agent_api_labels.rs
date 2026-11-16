@@ -3,8 +3,7 @@
 //!
 //! Every run has an empty data folder and a watchdog, and inherits
 //! RESHIKI_INCHI_HELPER as CI sets it (.github/workflows/checks.yml).
-#[path = "common/headless.rs"]
-mod headless;
+use crate::headless;
 
 use headless::{McpSession, StderrMode};
 use reshiki_agent::{

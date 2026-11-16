@@ -149,7 +149,7 @@ fn build(document: &Document) -> Result<Input, Error> {
     }
     if document.atoms.iter().any(|a| !a.centroid.is_empty()) {
         return Err(invalid(
-            "Ring-centre contacts are drawing anchors, not molecular bonds. Save as ReShiki or export a figure; molecular export requires an explicit chemical graph.",
+            "Ring-center contacts are drawing anchors, not molecular bonds. Save as ReShiki or export a figure; molecular export requires an explicit chemical graph.",
         ));
     }
     if document.atoms.len() > 100_000 || document.bonds.len() > 300_000 {

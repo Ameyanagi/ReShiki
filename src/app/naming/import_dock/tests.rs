@@ -436,7 +436,7 @@ async fn ready_import_selects_the_inserted_objects_and_records_one_undo() -> Res
     assert_eq!(app.tab.history.undo_frames().count(), 1);
     assert_eq!(app.tab.history.frames(), 1);
     assert!(!app.error);
-    assert_eq!(app.status, "Inserted ethanol · Undo removes it");
+    assert_eq!(app.status, "Inserted ethanol");
     assert!(app.tab.naming.notice.is_none());
     assert_eq!(app.tool, Tool::Select);
     let _ = app.update(Message::Undo);
@@ -511,16 +511,16 @@ fn finished_errors_keep_details_and_choose_dock_summaries_from_their_kind() {
     const FAILED: &str = "Could not import this name. See Details.";
     for (error, kind, detail, summary) in [
         (
-            naming::Error::Cancelled("Local name parsing was cancelled".into()),
+            naming::Error::Cancelled("Local name parsing was canceled".into()),
             NoticeKind::Retry,
-            "Local name parsing was cancelled",
-            "Local name parsing was cancelled",
+            "Local name parsing was canceled",
+            "Local name parsing was canceled",
         ),
         (
-            naming::Error::Cancelled("Local name generation was cancelled".into()),
+            naming::Error::Cancelled("Local name generation was canceled".into()),
             NoticeKind::Retry,
-            "Local name generation was cancelled",
-            "Local name generation was cancelled",
+            "Local name generation was canceled",
+            "Local name generation was canceled",
         ),
         (
             naming::Error::Rejected(PARSER_REJECTION.into()),

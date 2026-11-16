@@ -240,10 +240,7 @@ fn invalid_edit_rolls_back_with_edit_cancelled_status() {
     app.changed(before.clone());
     assert_eq!(app.tab.doc, before);
     assert!(app.error);
-    assert_eq!(
-        app.status,
-        "Edit cancelled: Invalid bond endpoints or order"
-    );
+    assert_eq!(app.status, "Edit canceled: Invalid bond endpoints or order");
     assert_eq!(app.tab.revision, revision);
     assert!(!app.tab.history.can_undo());
     assert!(app.tab.cleanup.is_none());
@@ -366,7 +363,7 @@ fn abbreviations_reconcile_before_validation() {
         assert!(!app.error);
         assert_ne!(
             app.status,
-            "Edit cancelled: Only the abbreviation's attachment atom can connect outside it"
+            "Edit canceled: Only the abbreviation's attachment atom can connect outside it"
         );
         assert_eq!(app.status, CHEMISTRY);
         assert_eq!(app.tab.revision, revision + 1);
@@ -410,7 +407,7 @@ fn molecule_groups_reconcile_after_validation() {
         app.tab.doc.atoms.retain(|t| t.id != z);
         assert!(app.tab.doc.groups[0].members.contains(&z));
         app.changed(before.clone());
-        assert_eq!(app.status, "Edit cancelled: Invalid group ID or membership");
+        assert_eq!(app.status, "Edit canceled: Invalid group ID or membership");
         assert!(app.error);
         assert_eq!(app.tab.doc, before);
         assert_eq!(app.tab.doc.groups, groups);
@@ -551,7 +548,7 @@ fn rejected_continuing_frame_restores_previous_frame_not_gesture_start() {
     app.changed_continuing(before, true);
     assert_eq!(app.tab.doc, frame);
     assert!(app.error);
-    assert_eq!(app.status, "Edit cancelled: Non-finite atom position");
+    assert_eq!(app.status, "Edit canceled: Non-finite atom position");
     assert_eq!(app.tab.revision, revision);
 
     app.step_history(false);
@@ -685,7 +682,7 @@ fn observer_history_alignment_survives_cip_only_frames() {
 
     // Clear the selection before each probe: an empty recent context leaves it
     // untouched, so a stale [a1, a2] would otherwise hide a misaligned frame.
-    const SELECTED: &str = "Selected the most recently edited molecule(s)";
+    const SELECTED: &str = "Recently edited molecules selected";
     app.step_history(false);
     assert_eq!(app.tab.keyboard_drawing.target(), Target::Atom(a1));
     app.tab.selected.clear();
@@ -823,10 +820,7 @@ fn an_edit_removing_the_unit_cell_reports_it_and_preserves_analysis_provenance()
     let before = app.tab.doc.clone();
     app.tab.doc.bonds[0].order = 2;
     app.changed(before.clone());
-    assert_eq!(
-        app.status,
-        "Unit cell removed by the edit · Undo restores it"
-    );
+    assert_eq!(app.status, "Unit cell removed by the edit");
     assert!(!app.error);
     assert!(app.tab.doc.models.is_empty());
     assert!(reshiki::models3d::crystal::touches(&app.tab.doc, &[]));

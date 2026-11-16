@@ -129,9 +129,18 @@ pub async fn write_with(
         } else {
             figure
         };
-        return export::publication(engine, doc, figure, false, false, EXPORT_PNG_PIXELS)
-            .await
-            .map(|Publication { bytes, .. }| bytes);
+        return export::publication(
+            engine,
+            doc,
+            figure,
+            false,
+            false,
+            export::Background::Canvas,
+            crate::style::DEFAULT.png_dpi,
+            EXPORT_PNG_PIXELS,
+        )
+        .await
+        .map(|Publication { bytes, .. }| bytes);
     }
     match format {
         "rsk" | "reshiki" => doc.file_json(),

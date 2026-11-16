@@ -1,5 +1,5 @@
 //! Selection-focused properties and task-based export controls.
-use super::workspace::{command, control, hover_hint, keyed_command, muted_text};
+use super::workspace::{control, hover_hint, keyed_command, muted_text, panel_action};
 use super::{App, InspectorTab, Message};
 use crate::canvas::Tool;
 use iced::widget::{button, checkbox, column, container, row, text, tooltip};
@@ -14,6 +14,12 @@ use std::{
     collections::{BTreeSet, HashMap, HashSet},
 };
 
+#[cfg(test)]
+thread_local! {
+    /// How often [`App::opened_section`] ran.
+    static OPENED_SECTIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 #[derive(Default)]
 struct ClassCache {
     key: Option<PropertyKey>,
@@ -21,6 +27,22 @@ struct ClassCache {
     #[cfg(test)]
     calculations: usize,
 }
+
+/// What Molecular properties shows for a drawing with attachment points:
+/// the formula, the mass and the number of defined atoms, if they can be
+/// counted. Without it every view checks and analyzes the drawing again.
+#[derive(Default)]
+struct CompositionCache {
+    /// Revision, file epoch and the whole selection: a selected bracket
+    /// changes the result as much as a selected atom.
+    key: Option<(u64, u64, Vec<u64>)>,
+    shown: Option<(String, f64, usize)>,
+    #[cfg(test)]
+    calculations: usize,
+}
+
+/// The pin beside a property row.
+const PIN: f32 = 20.;
 
 fn molecular_weight(mass: f64, two_decimal_weight: bool) -> String {
     let precision = if two_decimal_weight { 2 } else { 3 };
@@ -69,7 +91,7 @@ fn property_rows(
         ("Rings", None, a.rings.to_string()),
         (
             "Unpaired electrons",
-            Some("Radical electrons in the analysed structure, from radical marks or atoms with fewer hydrogens than their valence; a singlet's electron pair is not counted".into()),
+            Some("Radical electrons in the analyzed structure, from radical marks or atoms with fewer hydrogens than their valence; a singlet's electron pair is not counted".into()),
             unpaired.to_string(),
         ),
     ]
@@ -143,7 +165,7 @@ impl FigureFormat {
             }
             Self::SvgOffice => "Physical-size picture for Microsoft Office. Text becomes outlines.",
             Self::Png => {
-                "Up to 1200 dpi. Large drawings use a lower resolution; physical size is preserved."
+                "Pixels at the resolution below. Large drawings use a lower one. The size in centimeters stays the same."
             }
             #[cfg(windows)]
             Self::Emf => {
@@ -208,6 +230,11 @@ pub enum Action {
     Figure(FigureFormat),
     /// Open or close the figure format menu.
     FigureMenu(bool),
+    /// Open or close the PNG resolution menu.
+    ResolutionMenu(bool),
+    /// Include the editable drawing in exports from the Export tab; `None`
+    /// follows the Settings default.
+    ExportEditable(Option<bool>),
     Chemical(ChemicalFormat),
     ChemicalMenu(bool),
     RefreshProperties,
@@ -296,8 +323,9 @@ pub(super) struct State {
     expected_viewport: Option<iced::Size>,
     expanded: HashMap<Section, bool>,
     model_controls: bool,
-    figure: FigureFormat,
+    pub(super) figure: FigureFormat,
     figure_menu: bool,
+    resolution_menu: bool,
     chemical: ChemicalFormat,
     chemical_menu: bool,
     pending: Option<PropertyKey>,
@@ -305,6 +333,7 @@ pub(super) struct State {
     properties: Option<(PropertyKey, Result<Analysis, String>)>,
     whole_properties: Option<(PropertyKey, Result<Analysis, String>)>,
     classes: RefCell<ClassCache>,
+    composition: RefCell<CompositionCache>,
     arrow_hints: Option<(u64, u64, Vec<reshiki::reactions::ArrowSemanticsHint>)>,
 }
 impl State {
@@ -348,10 +377,11 @@ impl State {
     }
 
     pub(super) fn menu_open(&self) -> bool {
-        self.figure_menu || self.chemical_menu
+        self.figure_menu || self.resolution_menu || self.chemical_menu
     }
     pub(super) fn close_menu(&mut self) {
         self.figure_menu = false;
+        self.resolution_menu = false;
         self.chemical_menu = false;
     }
     #[cfg(test)]
@@ -374,16 +404,20 @@ impl State {
                 self.figure_menu = false;
             }
             Action::FigureMenu(open) => {
+                self.close_menu();
                 self.figure_menu = open;
-                self.chemical_menu = false;
+            }
+            Action::ResolutionMenu(open) => {
+                self.close_menu();
+                self.resolution_menu = open;
             }
             Action::Chemical(format) => {
                 self.chemical = format;
                 self.chemical_menu = false;
             }
             Action::ChemicalMenu(open) => {
+                self.close_menu();
                 self.chemical_menu = open;
-                self.figure_menu = false;
             }
             Action::RefreshProperties
             | Action::RefreshPropertiesFor(..)
@@ -393,7 +427,8 @@ impl State {
             | Action::RingArc
             | Action::StereoGroup(_)
             | Action::RenumberStereoGroups
-            | Action::DepthBonds => {}
+            | Action::DepthBonds
+            | Action::ExportEditable(_) => {}
         }
     }
 }
@@ -681,7 +716,8 @@ impl App {
                     Ok(id) => {
                         self.tab.selected = vec![id];
                         self.changed(before);
-                        self.status = "Attachment point added · Draw a bond from * to the metal or substituent".into();
+                        self.status =
+                            "Attachment point added · Bond * to the metal or substituent".into();
                         self.error = false;
                     }
                     Err(error) => {
@@ -789,6 +825,10 @@ impl App {
                         self.tab.inspector_ui.properties = Some((key, *result));
                     }
                 }
+                Task::none()
+            }
+            Action::ExportEditable(editable) => {
+                self.export_tab_editable = editable;
                 Task::none()
             }
             other => {
@@ -922,7 +962,7 @@ impl App {
         }
         if self.tab.inspector_ui.model_controls && self.selected_visible_model() {
             let mut body = column![
-                command(
+                super::workspace::command(
                     "‹ All properties",
                     Message::InspectorAction(Action::ModelControls(false)),
                 ),
@@ -947,6 +987,7 @@ impl App {
 
     fn ordinary_properties_panel(&self) -> Element<'_, Message> {
         let selected: HashSet<_> = self.tab.selected.iter().copied().collect();
+        let opened = self.opened_section();
         let mut body = column![
             text(if self.tab.selected.is_empty() {
                 if self.tool.selects() {
@@ -962,16 +1003,28 @@ impl App {
             .style(muted_text)
         ]
         .spacing(10);
-        let crystal_first = self.selected_existing_model().is_some_and(|model| {
+        if let Some(error) = self
+            .tab
+            .chemistry_notice
+            .as_deref()
+            .filter(|notice| *notice != reshiki::atom_labels::refresh::GENERIC_NOTICE)
+        {
+            body = body.push(if let Some(notice) = deferred_generic_properties(error) {
+                text(notice).size(12).style(muted_text)
+            } else {
+                text(error)
+                    .size(12)
+                    .style(crate::appearance::text_color(Color::from_rgb8(182, 66, 61)))
+            });
+        }
+        let model = self.selected_existing_model();
+        let crystal_first = model.is_some_and(|model| {
             model.cell.is_some() && model.display == reshiki::models3d::Display::TwoD
         });
         if crystal_first && let Some(section) = self.structure_section() {
             body = body.push(section);
         }
-        if self
-            .selected_existing_model()
-            .is_some_and(|model| model.display == reshiki::models3d::Display::ThreeD)
-        {
+        if model.is_some_and(|model| model.display == reshiki::models3d::Display::ThreeD) {
             body = body.push(
                 super::workspace::accessible_command(
                     "model-controls-open",
@@ -979,31 +1032,40 @@ impl App {
                     "3D model controls…",
                 )
                 .width(Length::Fill)
+                .style(crate::appearance::secondary)
                 .on_press(Message::InspectorAction(Action::ModelControls(true))),
             );
         }
         let color_issues = reshiki::canvas_theme::label_contrast_issues(&self.tab.doc);
         if !color_issues.is_empty() {
-            body = body.push(text(format!(
-                "{} atom label(s) have low contrast against the canvas or a ring fill. Adjust the label or fill color.", color_issues.len()
-            )).size(11).style(muted_text));
+            body = body.push(hover_hint(
+                text(match color_issues.len() {
+                    1 => "1 label has low contrast".into(),
+                    n => format!("{n} labels have low contrast"),
+                })
+                .size(11)
+                .style(muted_text),
+                "Against the canvas or a ring fill · Change the label or fill color",
+                tooltip::Position::Bottom,
+            ));
         }
         let molecular_first = self.tab.selected.is_empty()
             || self.property_key().is_some_and(|key| !key.atoms.is_empty());
         // Keep the active ring tool's placement card visible above the expanded values.
         let ring_tool = matches!(self.tool, Tool::RingPreset(_));
         if molecular_first && !ring_tool {
-            body = body.push(self.molecular_section());
+            body = body.push(self.molecular_section(opened));
         }
         if let Tool::RingPreset(preset) = self.tool {
             use reshiki::rings::Preset;
             let details = format!(
-                "{} Alt/Option on an atom connects the ring with a new bond. Each placement is one Undo step. {}",
+                "{} {} on an atom connects the ring with a new bond. Each placement is one Undo step. {}",
                 if preset == Preset::Benzene {
                     "Click an aromatic carbon to attach a phenyl group, or a bond to fuse. Terminal carbons become part of the ring. Drag to choose the direction."
                 } else {
                     "Click to place. Drag to rotate or choose an attachment side. Click an atom to share it, or a bond to fuse."
                 },
+                crate::platform::alt_key(),
                 match preset {
                     Preset::Benzene | Preset::Cyclopentadiene =>
                         "Hold Shift to move the double bonds.",
@@ -1036,7 +1098,7 @@ impl App {
             ));
         }
         if molecular_first && ring_tool {
-            body = body.push(self.molecular_section());
+            body = body.push(self.molecular_section(opened));
         }
         if matches!(self.tool, Tool::Graphic(_))
             || self
@@ -1077,33 +1139,20 @@ impl App {
             body = body.push(card(container(self.text_panel()).padding(12)));
         }
         if !self.tab.selected.is_empty() {
-            body = body.push(self.selection_panel(&selected));
+            body = body.push(self.selection_panel(&selected, opened));
         }
         // The card replaces the informational notice of a generic drawing.
         if let Some(section) = self.generic_structure_section() {
             body = body.push(section);
         }
-        if let Some(error) = self
-            .tab
-            .chemistry_notice
-            .as_deref()
-            .filter(|notice| *notice != reshiki::atom_labels::refresh::GENERIC_NOTICE)
-        {
-            body = body.push(if let Some(notice) = deferred_generic_properties(error) {
-                text(notice).size(12).style(muted_text)
-            } else {
-                text(error)
-                    .size(12)
-                    .style(crate::appearance::text_color(Color::from_rgb8(182, 66, 61)))
-            });
-        }
         if !molecular_first {
-            body = body.push(self.molecular_section());
+            body = body.push(self.molecular_section(opened));
         }
         if !self.tab.stereo_notes.is_empty() {
             body = body.push(card(
                 container(self.stereo_note_lines(
-                    column![text("STEREOCHEMISTRY").size(11).style(muted_text)].spacing(5),
+                    column![super::workspace::section("Stereochemistry")].spacing(5),
+                    "stereo",
                 ))
                 .padding(12),
             ));
@@ -1115,16 +1164,16 @@ impl App {
             false,
             || {
                 let chemistry = column![
-                    command("Normalize depiction", Message::NormalizeDepiction),
-                    command(
+                    panel_action("Normalize depiction", Message::NormalizeDepiction),
+                    panel_action(
                         "Reaction roles…",
                         Message::Reaction(super::reactions::Action::Open)
                     ),
-                    command(
+                    panel_action(
                         "Atom labels & numbering…",
                         Message::Inspector(InspectorTab::Labels)
                     ),
-                    command(
+                    panel_action(
                         "Chemical abbreviations…",
                         Message::Inspector(InspectorTab::Abbreviations)
                     ),
@@ -1147,7 +1196,7 @@ impl App {
         if let Some(section) = self.rear_opacity_section(self.depth_ids()) {
             body = body.push(section);
         }
-        body.push(
+        body = body.push(
             self.inspector_section(
                 Section::DrawingStyle,
                 "Drawing style",
@@ -1155,33 +1204,86 @@ impl App {
                 false,
                 column![
                     text(format!(
-                        "{} {} pt\nBonds {} pt · Lines {} pt\nPNG up to 1200 dpi",
+                        "{} {} pt\nBonds {} pt · Lines {} pt\nPNG files at {} dpi",
                         self.tab.doc.drawing_style.font_family,
                         self.tab.doc.drawing_style.font_size_pt,
                         self.tab.doc.drawing_style.bond_length_pt,
-                        self.tab.doc.drawing_style.line_width_pt
+                        self.tab.doc.drawing_style.line_width_pt,
+                        self.appearance.export_dpi.get()
                     ))
                     .size(12)
                     .style(muted_text),
-                    command(
+                    panel_action(
                         "Edit drawing style…",
                         Message::DrawingStyle(super::document_styles::Action::Open)
                     ),
                 ]
                 .spacing(8),
             ),
+        );
+        if self.tab.selected.is_empty() {
+            return body.into();
+        }
+        body.push(
+            reshiki::accessibility::button(
+                "selection-delete",
+                "Delete selection",
+                text("Delete selection")
+                    .size(12)
+                    .width(Length::Fill)
+                    .center(),
+            )
+            .padding([6, 8])
+            .width(Length::Fill)
+            .style(|theme, status| iced::widget::button::Style {
+                text_color: crate::appearance::themed(theme, Color::from_rgb8(174, 57, 52)),
+                ..crate::appearance::secondary(theme, status)
+            })
+            .on_press(Message::Delete),
         )
         .into()
     }
 
-    fn molecular_section(&self) -> Element<'_, Message> {
+    fn molecular_section(&self, opened: Option<Section>) -> Element<'_, Message> {
         self.inspector_section_lazy(
             Section::Molecule,
             "Molecular properties",
             self.property_summary(),
-            self.opened_section() == Some(Section::Molecule),
+            opened == Some(Section::Molecule),
             || self.molecular_properties(),
         )
+    }
+
+    /// Show this property under the selected molecule, or hide it.
+    fn property_pin(&self, property: reshiki::linked_properties::Property) -> Element<'_, Message> {
+        use super::icons::{Glyph, Icon};
+        let target = self.property_target(&[]);
+        let available = target.is_some();
+        let shown = target
+            .as_ref()
+            .is_some_and(|atoms| reshiki::linked_properties::shown(&self.tab.doc, atoms, property));
+        hover_hint(
+            reshiki::accessibility::button(
+                format!("property-pin-{property:?}"),
+                format!("Show {} under the molecule", property.name()),
+                iced::widget::canvas(Glyph(Icon::Pin, shown))
+                    .width(PIN)
+                    .height(PIN),
+            )
+            .padding(0)
+            .checked(shown)
+            .style(control(shown))
+            .on_press_maybe(target.map(|atoms| Message::ToggleProperty(atoms, property))),
+            if shown {
+                "Hide from the molecule"
+            } else if available {
+                "Show under the molecule"
+            } else {
+                "Select one molecule to show this under it"
+            },
+            tooltip::Position::Left,
+        )
+        .into()
     }
 
     fn molecular_properties(&self) -> Element<'_, Message> {
@@ -1211,29 +1313,48 @@ impl App {
             return container(body).padding(10).into();
         }
         if reshiki::attachments::present(&self.tab.doc) {
-            let selected = (!self.tab.selected.is_empty())
-                .then(|| reshiki::editing::selection(&self.tab.doc, &self.tab.selected));
-            let doc = selected.as_ref().unwrap_or(&self.tab.doc);
+            let (revision, epoch) = (self.tab.revision, self.tab.file_epoch);
+            let mut cache = self.tab.inspector_ui.composition.borrow_mut();
+            if !cache.key.as_ref().is_some_and(|(cached, file, ids)| {
+                (*cached, *file) == (revision, epoch) && *ids == self.tab.selected
+            }) {
+                let selected = (!self.tab.selected.is_empty())
+                    .then(|| reshiki::editing::selection(&self.tab.doc, &self.tab.selected));
+                let doc = selected.as_ref().unwrap_or(&self.tab.doc);
+                cache.shown = reshiki::attachments::composition(doc)
+                    .ok()
+                    .map(|composition| {
+                        (
+                            composition.display_formula,
+                            composition.mass,
+                            doc.atoms.iter().filter(|a| a.element != "*").count(),
+                        )
+                    });
+                cache.key = Some((revision, epoch, self.tab.selected.clone()));
+                #[cfg(test)]
+                {
+                    cache.calculations += 1;
+                }
+            }
             let mut body = column![
                 text(reshiki::attachments::ANALYSIS_NOTICE)
                     .size(11)
                     .style(muted_text)
             ]
             .spacing(8);
-            if let Ok(composition) = reshiki::attachments::composition(doc) {
+            if let Some((formula, mass, atoms)) = &cache.shown {
                 body = body
                     .push(
                         text(format!(
                             "{} · {}\u{a0}g/\u{2060}mol",
-                            self.shown_formula(&composition.display_formula),
-                            molecular_weight(composition.mass, self.appearance.two_decimal_weight)
+                            self.shown_formula(formula),
+                            molecular_weight(*mass, self.appearance.two_decimal_weight)
                         ))
                         .size(14),
                     )
                     .push(
                         text(format!(
-                            "{} defined atoms · Attachment points excluded",
-                            doc.atoms.iter().filter(|a| a.element != "*").count()
+                            "{atoms} defined atoms · Attachment points excluded"
                         ))
                         .size(11)
                         .style(muted_text),
@@ -1259,11 +1380,12 @@ impl App {
         } else {
             (self.tab.doc.atoms.len(), self.tab.doc.bonds.len())
         };
-        let mut body = column![
+        // A selection's counts are already the panel's summary.
+        let mut body = column![key.is_none().then(|| {
             text(super::workspace::atom_bond_counts(atoms, bonds))
                 .size(11)
                 .style(muted_text)
-        ]
+        })]
         .spacing(8);
         for hint in self.checked_arrow_hints() {
             body = body.push(text(hint.kind.message()).size(11).style(muted_text));
@@ -1281,15 +1403,27 @@ impl App {
                 .any(|b| ids.contains(&b.a) != ids.contains(&b.b))
         {
             body = body.push(
-                text("Selected fragment: implicit hydrogens are recalculated at cut bonds.")
+                text("Implicit H recalculated at cut bonds")
                     .size(11)
                     .style(muted_text),
             );
         }
         if let Some(a) = self.property_analysis() {
+            use reshiki::linked_properties::Property;
             let unpaired = unpaired_electrons(&self.tab.doc, a, key.as_ref().map(|_| &ids));
-            for (label, hint, value) in
-                property_rows(a, self.appearance.two_decimal_weight, unpaired)
+            let rows =
+                std::iter::once(("Formula", None, self.shown_formula(&a.display_formula))).chain(
+                    property_rows(a, self.appearance.two_decimal_weight, unpaired),
+                );
+            let pins = [
+                Some(Property::Formula),
+                Some(Property::Weight),
+                Some(Property::ExactMass),
+                Some(Property::LogP),
+                Some(Property::Tpsa),
+            ];
+            for ((label, hint, value), pin) in
+                rows.zip(pins.into_iter().chain(std::iter::repeat(None)))
             {
                 let label = text(label).size(11).style(muted_text).width(Length::Fill);
                 let label: Element<'_, Message> = if let Some(hint) = hint {
@@ -1297,17 +1431,32 @@ impl App {
                 } else {
                     label.into()
                 };
-                body = body.push(row![label, text(value).size(12)].align_y(Alignment::Center));
+                let mut line = row![label, text(value).size(12)]
+                    .spacing(6)
+                    .align_y(Alignment::Center);
+                if let Some(property) = pin {
+                    line = line.push(self.property_pin(property));
+                }
+                body = body.push(line);
             }
-            if let Some(analysis) = self.elemental_analysis(a) {
+            let elemental = self.elemental_analysis(a);
+            if let Some(analysis) = &elemental {
                 body = body
-                    .push(text("Elemental analysis").size(11).style(muted_text))
+                    .push(
+                        row![
+                            text("Elemental analysis")
+                                .size(11)
+                                .style(muted_text)
+                                .width(Length::Fill),
+                            self.property_pin(Property::Analysis)
+                        ]
+                        .align_y(Alignment::Center),
+                    )
                     .push(
                         text(analysis.replace(", ", ",\u{a0}"))
                             .size(12)
                             .wrapping(text::Wrapping::WordOrGlyph),
-                    )
-                    .push(command("Copy analysis", Message::CopyAnalysis));
+                    );
             }
             let classes = self.property_classes();
             if !classes.is_empty() {
@@ -1348,11 +1497,25 @@ impl App {
                         .wrapping(text::Wrapping::WordOrGlyph)
                 }))
                 .push(
-                    command("Copy SMILES", Message::CopySmiles)
-                        .on_press_maybe((!a.smiles.is_empty()).then_some(Message::CopySmiles)),
+                    row![
+                        panel_action("Copy SMILES", Message::CopySmiles)
+                            .on_press_maybe((!a.smiles.is_empty()).then_some(Message::CopySmiles)),
+                        elemental.map(|_| panel_action("Copy analysis", Message::CopyAnalysis)),
+                    ]
+                    .spacing(6),
                 );
         } else if atoms == 0 {
-            return body.push(text(if key.is_some() { "Select atoms or bonds to calculate their properties. Clear the selection to use the whole drawing." } else { "Draw or import a molecule to calculate its properties." }).size(12).style(muted_text)).into();
+            return body
+                .push(
+                    text(if key.is_some() {
+                        "Clear the selection for the whole drawing"
+                    } else {
+                        "Draw or import a molecule"
+                    })
+                    .size(12)
+                    .style(muted_text),
+                )
+                .into();
         } else if let Some(Err(error)) = self.property_result(&self.property_request_key()) {
             body = body.push(if let Some(notice) = deferred_generic_properties(error) {
                 text(notice).size(12).style(muted_text)
@@ -1372,29 +1535,31 @@ impl App {
                 .style(muted_text),
             );
         }
-        body = body.push(
-            reshiki::accessibility::button(
-                "nmr.open",
-                "Predict NMR shifts for the selected molecule",
-                text("Predict NMR…").size(12),
-            )
-            .padding([7, 9])
-            .on_press(Message::Nmr(super::nmr::Action::Open))
-            .style(control(false)),
-        );
         body.push(
-            command(
-                if key.is_some() {
-                    "Recalculate selection"
-                } else {
-                    "Check structure"
-                },
-                Message::InspectorAction(Action::RefreshProperties),
-            )
-            .on_press_maybe(
-                (!self.tab.busy && self.tab.inspector_ui.pending.is_none())
-                    .then_some(Message::InspectorAction(Action::RefreshProperties)),
-            ),
+            column![
+                reshiki::accessibility::button(
+                    "nmr.open",
+                    "Predict NMR shifts for the selected molecule",
+                    text("Predict NMR…").size(12).width(Length::Fill).center(),
+                )
+                .padding([6, 8])
+                .width(Length::Fill)
+                .on_press(Message::Nmr(super::nmr::Action::Open))
+                .style(crate::appearance::secondary),
+                panel_action(
+                    if key.is_some() {
+                        "Recalculate selection"
+                    } else {
+                        "Recalculate"
+                    },
+                    Message::InspectorAction(Action::RefreshProperties),
+                )
+                .on_press_maybe(
+                    (!self.tab.busy && self.tab.inspector_ui.pending.is_none())
+                        .then_some(Message::InspectorAction(Action::RefreshProperties)),
+                ),
+            ]
+            .spacing(6),
         )
         .into()
     }
@@ -1429,6 +1594,8 @@ impl App {
     /// The one section a selection opens. Sections the user opened or
     /// closed keep that state.
     fn opened_section(&self) -> Option<Section> {
+        #[cfg(test)]
+        OPENED_SECTIONS.with(|count| count.set(count.get() + 1));
         if self.tab.selected.is_empty() {
             return (!self.tab.doc.atoms.is_empty()).then_some(Section::Molecule);
         }
@@ -1446,15 +1613,13 @@ impl App {
             .any(|b| selected.contains(&b.a) && selected.contains(&b.b))
         {
             // Whole molecules, as a double-click or Select all gives, keep their properties open.
-            let whole = reshiki::reactions::molecules(&self.tab.doc, &self.tab.selected)
-                .iter()
-                .flatten()
-                .all(|id| selected.contains(id));
-            return Some(if whole {
-                Section::Molecule
-            } else {
-                Section::Bonds
-            });
+            return Some(
+                if reshiki::reactions::whole_molecules(&self.tab.doc, &selected) {
+                    Section::Molecule
+                } else {
+                    Section::Bonds
+                },
+            );
         }
         let atoms: Vec<_> = self
             .tab
@@ -1486,7 +1651,7 @@ impl App {
         let attachment = centroid && atoms == self.tab.selected.len();
         let item = |label, message: Message, enabled: bool, hint: &'static str, reason| {
             hover_hint(
-                command(label, message.clone())
+                panel_action(label, message.clone())
                     .on_press_maybe(enabled.then_some(message))
                     .width(Length::Fill),
                 if enabled { hint } else { reason },
@@ -1505,7 +1670,7 @@ impl App {
                     "Select at least two atoms",
                 ),
                 hover_hint(
-                    command("Dummy atom (*)", Message::Element("*".into())).width(Length::Fill),
+                    panel_action("Dummy atom (*)", Message::Element("*".into())).width(Length::Fill),
                     "Draw * wildcard atoms with the Atom tool",
                     tooltip::Position::Top,
                 ),
@@ -1540,8 +1705,11 @@ impl App {
         })
     }
 
-    fn selection_panel(&self, selected: &HashSet<u64>) -> Element<'_, Message> {
-        let opened = self.opened_section();
+    fn selection_panel(
+        &self,
+        selected: &HashSet<u64>,
+        opened: Option<Section>,
+    ) -> Element<'_, Message> {
         let atoms: Vec<_> = self
             .tab
             .doc
@@ -1563,17 +1731,17 @@ impl App {
                     "Edit atom label…",
                     Message::AtomText(super::atom_text::Action::Begin(None)),
                 )
-                .width(Length::Fill),
+                .width(Length::Fill)
+                .style(crate::appearance::secondary),
             );
         }
         if let Some(first) = bonds.first() {
-            let controls = self.bond_appearance_controls(first, &atoms, &bonds);
-            body = body.push(self.inspector_section(
+            body = body.push(self.inspector_section_lazy(
                 Section::Bonds,
                 "Bond appearance",
                 "",
                 opened == Some(Section::Bonds),
-                controls,
+                || self.bond_appearance_controls(first, &atoms, &bonds),
             ));
             body = body.push(
                 self.inspector_section(
@@ -1583,11 +1751,11 @@ impl App {
                     false,
                     column![
                         row![
-                            command("In front", Message::BondDepth(true)).width(Length::Fill),
-                            command("Behind", Message::BondDepth(false)).width(Length::Fill)
+                            panel_action("In front", Message::BondDepth(true)).width(Length::Fill),
+                            panel_action("Behind", Message::BondDepth(false)).width(Length::Fill)
                         ]
                         .spacing(6),
-                        command(
+                        panel_action(
                             if bonds.iter().all(|b| b.is_projected_dative()) {
                                 "Reverse projection tip"
                             } else {
@@ -1601,13 +1769,12 @@ impl App {
             );
         }
         if let Some(first) = atoms.first() {
-            let controls = self.atom_detail_controls(first, &atoms);
-            body = body.push(self.inspector_section(
+            body = body.push(self.inspector_section_lazy(
                 Section::Atoms,
                 "Atom details",
                 "Charge, isotope & electron marks",
                 opened == Some(Section::Atoms),
-                controls,
+                || self.atom_detail_controls(first, &atoms),
             ));
         }
         if let Some(section) = self.stereo_group_section(&atoms) {
@@ -1621,17 +1788,7 @@ impl App {
             false,
             || self.grouping_controls(),
         ));
-        body.push(
-            button(
-                text("Delete selection")
-                    .size(12)
-                    .style(crate::appearance::text_color(Color::from_rgb8(174, 57, 52))),
-            )
-            .style(button::text)
-            .padding(7)
-            .on_press(Message::Delete),
-        )
-        .into()
+        body.into()
     }
 
     /// Assign the selected stereocentres to ABS, an AND group or an OR group.
@@ -1673,26 +1830,27 @@ impl App {
         };
         let mut body = column![
             text(match centres.len() {
-                1 => "Group of the selected stereocentre".into(),
-                n => format!("Group of the {n} selected stereocentres"),
+                1 => "Group of the selected stereocenter".into(),
+                n => format!("Group of the {n} selected stereocenters"),
             })
             .size(11)
             .style(muted_text),
-            crate::appearance::pick_list(choices, current, |choice| {
-                Message::InspectorAction(Action::StereoGroup(choice))
-            })
-            .placeholder("Mixed groups")
-            .text_size(12)
-            .padding(7)
-            .width(Length::Fill),
-            text("abs: exactly as drawn. AND: racemic, the drawn form and its mirror image 1:1. OR: one of the two forms, not known which. Centres in the same group flip together.")
-                .size(11)
-                .style(muted_text),
+            hover_hint(
+                crate::appearance::pick_list(choices, current, |choice| {
+                    Message::InspectorAction(Action::StereoGroup(choice))
+                })
+                .placeholder("Mixed groups")
+                .text_size(12)
+                .padding(7)
+                .width(Length::Fill),
+                "abs: exactly as drawn · AND: racemic, 1:1 with the mirror image · OR: one of the two, unknown which · Centers in one group flip together",
+                tooltip::Position::Top,
+            ),
         ]
         .spacing(7);
         if gaps {
             body = body.push(hover_hint(
-                command(
+                panel_action(
                     "Renumber groups",
                     Message::InspectorAction(Action::RenumberStereoGroups),
                 )
@@ -1755,7 +1913,7 @@ impl App {
                         .on_submit(Message::ApplyBondColor)
                         .size(12)
                         .padding(7),
-                    command("Apply", Message::ApplyBondColor),
+                    panel_action("Apply", Message::ApplyBondColor),
                 ]
                 .spacing(6),
             );
@@ -1763,14 +1921,14 @@ impl App {
             controls = controls.push(
                 row![
                     hover_hint(
-                        command("Aromatic circle", Message::AromaticDisplay)
+                        panel_action("Aromatic circle", Message::AromaticDisplay)
                             .on_press_maybe((!self.tab.busy).then_some(Message::AromaticDisplay))
                             .width(Length::Fill),
                         "Toggle the aromatic circle",
                         tooltip::Position::Top,
                     ),
                     hover_hint(
-                        command("Inner ring curve", Message::InspectorAction(Action::RingArc))
+                        panel_action("Inner ring curve", Message::InspectorAction(Action::RingArc))
                             .width(Length::Fill),
                         "Toggle the inner ring curve · Select consecutive ring atoms for a partial curve, or the whole ring for a circle. Bond orders stay unchanged.",
                         tooltip::Position::Top,
@@ -1788,7 +1946,7 @@ impl App {
             });
             controls = controls.push(
                 checkbox(centered)
-                    .label("Centre charge in ring")
+                    .label("Center charge in ring")
                     .on_toggle(|_| Message::CenterRingCharge)
                     .text_size(12),
             );
@@ -1816,8 +1974,8 @@ impl App {
         let mut controls = column![
             row![
                 text("Charge").size(12).width(Length::Fill),
-                command("−", Message::Charge(-1)),
-                command("+", Message::Charge(1))
+                panel_action("−", Message::Charge(-1)),
+                panel_action("+", Message::Charge(1))
             ]
             .spacing(6)
             .align_y(Alignment::Center),
@@ -1828,7 +1986,7 @@ impl App {
                     .on_submit(Message::ApplyIsotope)
                     .size(12)
                     .padding(7),
-                command("Set", Message::ApplyIsotope)
+                panel_action("Set", Message::ApplyIsotope)
             ]
             .spacing(6),
         ]
@@ -1905,13 +2063,13 @@ impl App {
                         })
                         .size(11)
                         .width(Length::Fill),
-                        command("Rotate", Message::RotateMark(a.id, index)),
-                        command("Remove", Message::RemoveMark(a.id, index))
+                        panel_action("Rotate", Message::RotateMark(a.id, index)),
+                        panel_action("Remove", Message::RemoveMark(a.id, index))
                     ]
                     .spacing(4),
                 );
             }
-            controls = controls.push(command(
+            controls = controls.push(panel_action(
                 if self.tool == Tool::EditPoints {
                     "Finish positioning marks"
                 } else {
@@ -1931,16 +2089,19 @@ impl App {
         let groups = self.tab.doc.outer_selected_groups(&self.tab.selected);
         let mut grouping = column![
             row![
-                command("Group", Message::Group)
+                panel_action("Group", Message::Group)
                     .on_press_maybe(self.can_group().then_some(Message::Group))
                     .width(Length::Fill),
-                command("Ungroup", Message::Ungroup)
+                panel_action("Ungroup", Message::Ungroup)
                     .on_press_maybe((!groups.is_empty()).then_some(Message::Ungroup))
                     .width(Length::Fill)
             ]
             .spacing(6),
-            command("Invert selection", Message::InvertSelection),
-            command("Bracket ion", Message::BracketIon),
+            row![
+                panel_action("Invert selection", Message::InvertSelection),
+                panel_action("Bracket ion", Message::BracketIon),
+            ]
+            .spacing(6),
             crate::appearance::pick_list(
                 [
                     reshiki::graphics::GraphicKind::Brackets,
@@ -1972,7 +2133,10 @@ impl App {
                     .size(14)
                     .text_size(12)
                     .on_toggle(Message::IntegralGroup),
-                "Integral groups stay whole with Option/Alt-click. Ungroup releases them.",
+                format!(
+                    "Integral groups stay whole with {}-click. Ungroup releases them.",
+                    crate::platform::alt_key()
+                ),
                 tooltip::Position::Top,
             ));
         }
@@ -2034,6 +2198,86 @@ impl App {
         )
     }
 
+    /// The PNG resolution of exported files, with the drawing's size at each.
+    fn resolution_menu(&self) -> Element<'_, Message> {
+        use crate::appearance::Dpi;
+        let open = self.tab.inspector_ui.resolution_menu;
+        let preview = self
+            .settings
+            .preview
+            .as_ref()
+            .and_then(|(_, preview)| preview.as_ref().ok());
+        let label =
+            |dpi: Dpi| preview.map_or_else(|| format!("{} dpi", dpi.get()), |p| p.describe(dpi));
+        let chosen = self.appearance.export_dpi;
+        // The size in centimeters goes under the resolution: the whole line
+        // does not fit the panel.
+        let anchor = reshiki::accessibility::button(
+            "export-resolution",
+            format!("PNG resolution: {}", label(chosen)),
+            row![
+                column![
+                    text(format!("{} dpi", chosen.get())).size(12),
+                    preview.map(|p| {
+                        text(format!("{} · {}", p.centimeters(), p.pixels(chosen)))
+                            .size(11)
+                            .style(muted_text)
+                    }),
+                ]
+                .spacing(2)
+                .width(Length::Fill),
+                super::workspace::caret(9.)
+            ]
+            .align_y(Alignment::Center),
+        )
+        .padding(8)
+        .width(Length::Fill)
+        .style(crate::appearance::secondary)
+        .expanded(open)
+        .on_press(Message::InspectorAction(Action::ResolutionMenu(!open)));
+        let popup = open.then(|| {
+            let items = Dpi::ALL.into_iter().map(|dpi| {
+                reshiki::accessibility::button(
+                    format!("export-resolution-{}", dpi.get()),
+                    label(dpi),
+                    row![
+                        text(format!("{} dpi", dpi.get()))
+                            .size(12)
+                            .width(Length::Fill),
+                        preview.map(|p| text(p.pixels(dpi)).size(11).style(muted_text)),
+                    ]
+                    .align_y(Alignment::Center),
+                )
+                .checked(dpi == chosen)
+                .width(Length::Fill)
+                .padding([6, 10])
+                .style(super::workspace::control(dpi == chosen))
+                .on_press(Message::Settings(super::settings_page::Action::ExportDpi(
+                    dpi,
+                )))
+                .into()
+            });
+            container(column(items))
+                .width(Length::Fill)
+                .padding(5)
+                .style(super::color_popover::surface)
+                .into()
+        });
+        column![
+            text("Resolution").size(12),
+            Element::new(
+                super::popover::popover(
+                    anchor,
+                    popup,
+                    Message::InspectorAction(Action::ResolutionMenu(false)),
+                )
+                .fit_anchor(),
+            ),
+        ]
+        .spacing(6)
+        .into()
+    }
+
     fn chemical_menu(&self, chemical: ChemicalFormat) -> Element<'_, Message> {
         let open = self.tab.inspector_ui.chemical_menu;
         let anchor = super::popover::choice_anchor(
@@ -2075,12 +2319,91 @@ impl App {
         )
     }
 
+    /// What Export writes: the picture on its background, with its size.
+    fn export_picture(&self, figure: FigureFormat) -> Element<'_, Message> {
+        let preview = self
+            .settings
+            .preview
+            .as_ref()
+            .and_then(|(_, preview)| preview.as_ref().ok());
+        let size = preview.map(|p| match figure {
+            FigureFormat::Png => format!(
+                "{} · {}",
+                p.centimeters(),
+                p.pixels(self.appearance.export_dpi)
+            ),
+            _ => p.centimeters(),
+        });
+        let sample = preview
+            .is_some_and(|p| p.sample)
+            .then_some("A sample structure, as the drawing is empty.");
+        column![
+            container(self.picture("export-picture", true)).center_x(Length::Fill),
+            size.map(|size| text(size).size(11).style(muted_text)),
+            sample.map(|sample| text(sample).size(11).style(muted_text)),
+        ]
+        .spacing(4)
+        .into()
+    }
+
+    /// The Export tab's Include editable drawing: its own choice, or the
+    /// Settings default.
+    pub(super) fn export_editable(&self) -> bool {
+        self.export_tab_editable
+            .unwrap_or(self.appearance.export_editable_drawing)
+    }
+
     pub(super) fn export_panel(&self) -> Element<'_, Message> {
         let figure = self.tab.inspector_ui.figure;
         let chemical = self.tab.inspector_ui.chemical;
+        let editable = self.export_editable();
+        let settings_link = reshiki::accessibility::button(
+            "export-background-settings",
+            "Open Settings at Copy & export",
+            text("Settings → Copy & export").size(11),
+        )
+        .padding(0)
+        .style(|theme: &iced::Theme, status| iced::widget::button::Style {
+            text_color: if status == iced::widget::button::Status::Hovered {
+                theme.palette().text
+            } else {
+                theme.palette().primary
+            },
+            ..Default::default()
+        })
+        .on_press(Message::Settings(super::settings_page::Action::Open(Some(
+            super::settings_page::Section::CopyExport,
+        ))));
         let mut figures = column![
             self.figure_menu(figure),
             text(figure.description()).size(12).style(muted_text),
+            (figure == FigureFormat::Png).then(|| self.resolution_menu()),
+            column![
+                text(format!(
+                    "Background · {}",
+                    self.appearance.export_background.label()
+                ))
+                .size(12),
+                super::settings_page::background_choices(
+                    "export-background",
+                    self.appearance.export_background,
+                    self.appearance.custom_background,
+                    |background| Message::Settings(super::settings_page::Action::ExportBackground(
+                        background
+                    )),
+                    true,
+                ),
+                row![
+                    text("ReShiki remembers this for exported files.")
+                        .size(11)
+                        .style(muted_text),
+                    settings_link,
+                ]
+                .spacing(4)
+                .wrap(),
+            ]
+            .spacing(6),
+            self.export_picture(figure),
             reshiki::accessibility::button(
                 "export-figure",
                 format!("Export {figure} figure"),
@@ -2095,7 +2418,7 @@ impl App {
             .width(Length::Fill)
             .on_press_maybe(
                 (!self.tab.busy && !self.figure_exporting)
-                    .then_some(Message::Export(figure.code()))
+                    .then_some(Message::ExportFigure(figure.code(), editable))
             ),
         ]
         .spacing(9);
@@ -2121,17 +2444,29 @@ impl App {
             figure,
             FigureFormat::Png | FigureFormat::Svg | FigureFormat::SvgOffice | FigureFormat::Pdf
         ) {
+            let default = self.appearance.export_editable_drawing;
             figures = figures.push(
                 column![
-                    checkbox(self.appearance.export_editable_drawing)
-                        .label("Include editable drawing")
-                        .on_toggle(|enabled| Message::View(
-                            super::view_settings::Action::ExportEditableDrawing(enabled)
-                        ))
-                        .text_size(12),
-                    text(
-                        "ReShiki can reopen the file as this drawing. Anyone with the file can too."
-                    )
+                    row![
+                        checkbox(editable)
+                            .label("Include editable drawing")
+                            .on_toggle(|enabled| Message::InspectorAction(Action::ExportEditable(
+                                Some(enabled)
+                            )))
+                            .text_size(12)
+                            .width(Length::Fill),
+                        (editable != default).then(|| super::settings_page::text_button(
+                            "export-editable-restore",
+                            "Restore the default for Include editable drawing",
+                            "Restore default",
+                            Some(Message::InspectorAction(Action::ExportEditable(None))),
+                        )),
+                    ]
+                    .align_y(Alignment::Center),
+                    text(format!(
+                        "Default: {} · Settings → Copy & export",
+                        if default { "on" } else { "off" }
+                    ))
                     .size(11)
                     .style(muted_text),
                 ]
@@ -2189,7 +2524,7 @@ impl App {
                     .padding(10)
                     .width(Length::Fill)
                     .on_press_maybe((!self.tab.busy).then_some(Message::Export(chemical.code()))),
-                    command(
+                    panel_action(
                         "Reaction roles & export…",
                         Message::Reaction(super::reactions::Action::Open)
                     ),
@@ -2198,14 +2533,14 @@ impl App {
             ),
         ]
         .spacing(10);
-        let mut pages = column![command(
+        let mut pages = column![panel_action(
             "Page setup…",
             Message::Pages(super::pages::Action::Show)
         )]
         .spacing(6);
         if self.tab.doc.page_layout.is_some() {
             pages = pages.push(
-                command(
+                panel_action(
                     "PDF · all pages",
                     Message::Pages(super::pages::Action::Export),
                 )
@@ -2226,11 +2561,12 @@ impl App {
                 .on_press_maybe(self.printing.active.is_none().then_some(Message::Printing(
                     super::printing::Action::Start(reshiki::printing::Scope::Document),
                 )))
-                .width(Length::Fill),
+                .width(Length::Fill)
+                .style(crate::appearance::secondary),
             );
             if !self.tab.selected.is_empty() {
                 pages = pages.push(
-                    command(
+                    panel_action(
                         "Print selection…",
                         Message::Printing(super::printing::Action::Start(
                             reshiki::printing::Scope::Selection,
@@ -2255,12 +2591,13 @@ impl App {
             "Editable document",
             ".rsk · retains the complete drawing",
             true,
-            command("Save native document…", Message::SaveAs).width(Length::Fill),
+            panel_action(super::files::SAVE_AS, Message::SaveAs).width(Length::Fill),
         ))
         .into()
     }
     pub(super) fn toggle_inspector(&mut self) -> Task<Message> {
         self.inspector_open = !self.inspector_open;
+        self.export_tab_editable = None;
         if self.inspector_open && self.inspector_tab == InspectorTab::Assistant {
             return self.assistant_action(super::assistant::Action::Open);
         }
@@ -2298,6 +2635,8 @@ impl App {
                 String::new()
             };
         }
+        // The Export tab starts at the default each time it opens.
+        self.export_tab_editable = None;
         self.inspector_tab = tab;
         self.inspector_open = true;
         if tab == InspectorTab::Import {
@@ -2317,6 +2656,3 @@ mod tests;
 
 #[cfg(test)]
 mod feedback_tests;
-
-#[cfg(test)]
-mod feedback_visual_tests;

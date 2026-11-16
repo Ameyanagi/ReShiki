@@ -73,16 +73,16 @@ fn stereo_commands_are_searchable_and_style_notes_toggle_through_the_palette() {
         assert!(app.command_unavailable(top(&app)).is_none());
     }
     run(&mut app, "Redraw stereo bonds");
-    assert_eq!(app.status, "No stereocentres to redraw");
+    assert_eq!(app.status, "No stereocenters to redraw");
 }
 
 #[test]
 fn fischer_and_inversion_commands_are_searchable_and_targeted() {
     let mut app = app();
     for name in [
-        "Convert to Wedge Drawing",
-        "Convert to Fischer Projection",
-        "Invert Configuration Here",
+        "Convert to wedge drawing",
+        "Convert to Fischer projection",
+        "Invert configuration here",
     ] {
         search(&mut app, name);
         let command = &app.commands.items[row(&app, name)];
@@ -98,7 +98,7 @@ fn fischer_and_inversion_commands_are_searchable_and_targeted() {
     app.tab.doc = document;
     app.tab.selected = vec![center];
     let before = app.tab.doc.clone();
-    run(&mut app, "Invert Configuration Here");
+    run(&mut app, "Invert configuration here");
     assert!(!app.error, "{}", app.status);
     assert_eq!(app.tab.history.undo_frames().count(), 1);
     app.step_history(false);
@@ -146,9 +146,15 @@ fn ionic_and_centred_charge_commands_follow_selection_eligibility() {
 
     app.tab.doc = Document::default();
     app.tab.selected = reshiki::editing::ring(&mut app.tab.doc, Point::default(), 7, true, 5.);
-    search(&mut app, "Centre charge in ring");
-    assert!(app.command_unavailable(top(&app)).is_some());
+    search(&mut app, "Center charge in ring");
+    // Unavailable, it ranks below available matches such as Normalize depiction.
+    let center = &app.commands.items[row(&app, "Center charge in ring")];
+    assert!(app.command_unavailable(center).is_some());
     app.tab.doc.atoms[0].charge = 1;
+    let _ = app.update(Message::Commands(Action::Query(
+        "Center charge in ring".into(),
+    )));
+    assert_eq!(top(&app).name, "Center charge in ring");
     assert!(app.command_unavailable(top(&app)).is_none());
     let _ = app.update(Message::Commands(Action::Submit));
     assert!(
@@ -256,8 +262,8 @@ fn steroid_alpha_beta_is_searchable_and_undoable() {
 fn path_cleanup_catalog_has_selection_commands_and_explicit_upright_axis() {
     for (query, name, upright) in [
         ("Smooth", "Smooth", None),
-        ("Symmetrise", "Symmetrise", Some(false)),
-        ("Symmetrise upright", "Symmetrise upright", Some(true)),
+        ("Symmetrize", "Symmetrize", Some(false)),
+        ("Symmetrize upright", "Symmetrize upright", Some(true)),
     ] {
         let mut app = app();
         search(&mut app, query);
@@ -592,8 +598,8 @@ fn blocked_3d_flips_offer_2d_recovery_and_mixed_selections_stay_available() {
     use reshiki::models3d::Display;
 
     for (query, expected) in [
-        ("flip horizontal", "Flip horizontally"),
-        ("flip vertical", "Flip vertically"),
+        ("flip horizontal", "Flip horizontal"),
+        ("flip vertical", "Flip vertical"),
     ] {
         let mut app = app();
         let (doc, molecule, drawn) = crate::canvas::tilt::shown(Display::ThreeD);
@@ -767,8 +773,11 @@ fn keyboard_moves_scroll_only_when_the_highlight_leaves_the_viewport() {
     );
     let _ = app.update(Message::Commands(Action::Move(isize::MIN)));
     assert_eq!(app.commands.scroll_offset, 0.);
-    assert_eq!(row_scroll_offset(0, 0., 31.), 0.);
-    assert_eq!(row_scroll_offset(1, 0., 31.), 27.);
+    let state = &mut app.commands;
+    (state.selected, state.viewport_height) = (0, 31.);
+    assert_eq!(row_scroll_offset(state), 0.);
+    state.selected = 1;
+    assert_eq!(row_scroll_offset(state), 27.);
     let _ = app.update(Message::Commands(Action::Move(PAGE)));
     let _ = app.update(Message::Commands(Action::Query("bond".into())));
     assert_eq!(
@@ -1229,6 +1238,56 @@ fn quit_on_a_dirty_tab_asks_to_save_and_bang_discards() {
     let _ = app.update(Message::Cancel);
     run(&mut app, "q!");
     assert!(app.dirty(), "a save in progress is never discarded");
+}
+
+#[test]
+fn start_here_leads_an_empty_palette_until_a_command_runs() {
+    let mut app = app();
+    open(&mut app);
+    let state = &app.commands;
+    assert_eq!(
+        state.start_here(),
+        START_HERE.len(),
+        "every name is a command"
+    );
+    let mut lead: Vec<_> = (state.ranked().into_iter())
+        .take(START_HERE.len())
+        .map(|command| command.name.as_str())
+        .collect();
+    // Commands that need a molecule follow the ones an empty drawing can run.
+    assert_eq!(lead[..3], ["Import structure or name", "Benzene", "Open…"]);
+    lead.sort_unstable();
+    let mut start = START_HERE;
+    start.sort_unstable();
+    assert_eq!(lead, start);
+
+    // A heading sits above each group; revealing a group's first row shows
+    // its heading too.
+    let state = &mut app.commands;
+    let row = ROW_HEIGHT + ROW_SPACING;
+    let heading = HEADING_HEIGHT + ROW_SPACING;
+    (state.selected, state.scroll_offset, state.viewport_height) = (0, 100., 4. * row);
+    assert_eq!(row_scroll_offset(state), 0.);
+    state.selected = START_HERE.len();
+    state.scroll_offset = 0.;
+    assert_eq!(
+        row_scroll_offset(state),
+        START_HERE.len() as f32 * row + 2. * heading + ROW_HEIGHT - 4. * row,
+        "the row's bottom, below both headings"
+    );
+    state.scroll_offset = 1000.;
+    assert_eq!(
+        row_scroll_offset(state),
+        START_HERE.len() as f32 * row + heading
+    );
+    // A category chip shows plain rows.
+    let _ = app.update(Message::Commands(Action::Filter(Some(Category::File))));
+    assert_eq!(app.commands.start_here(), 0);
+
+    run(&mut app, "zoom in");
+    open(&mut app);
+    assert_eq!(app.commands.start_here(), 0);
+    assert_eq!(top(&app).name, "Zoom in");
 }
 
 #[test]
@@ -2420,4 +2479,25 @@ fn chemical_name_format_command_requires_selected_text_boxes_and_undoes_once() {
     let _ = app.update(Message::Undo);
     assert_eq!(app.tab.doc, before);
     assert!(!app.tab.history.can_undo());
+}
+
+/// Export and the toolbar label Save As with `files::SAVE_AS`; the palette
+/// and Help use the same name.
+#[test]
+fn save_as_has_one_name_on_every_surface() {
+    let names: Vec<_> = catalog::build(&app())
+        .into_iter()
+        .filter(|command| matches!(&command.run, catalog::Run::Send(m) if matches!(m[..], [Message::SaveAs])))
+        .map(|command| command.name)
+        .collect();
+    assert_eq!(names, [super::super::files::SAVE_AS]);
+    let help = super::super::help::registry::entries();
+    let save = help
+        .iter()
+        .find(|entry| entry.description.contains("under a new name"))
+        .unwrap();
+    assert!(
+        save.name
+            .ends_with(&super::super::files::SAVE_AS.to_lowercase().replace('…', ""))
+    );
 }

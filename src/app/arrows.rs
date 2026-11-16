@@ -7,10 +7,6 @@ use reshiki::graphics::LinePattern;
 /// The arrow card's one line of gesture help; the full text is in the guide.
 const GESTURE_HINT: &str = "Drag the diamond to bend, the squares to aim each end";
 const ATTACH_LABEL: &str = "Attach ends to atoms and bonds";
-const ATTACH_HINT: &str = concat!(
-    "Two clicks: a source, then a destination atom, bond or lone pair · ",
-    "Option/Alt-click or turn this off for a free arrow"
-);
 
 #[derive(Debug, Clone, Copy)]
 pub enum Field {
@@ -325,10 +321,10 @@ impl App {
             .count();
         let has_selection = selected_arrows > 0;
         let heading = match (selected_arrows, self.tab.selected.len()) {
-            (0, _) => "ARROW TOOL".into(),
-            (1, 1) => "ARROW PROPERTIES".into(),
-            (1, _) => "ARROW PROPERTIES · 1 arrow".into(),
-            (count, _) => format!("ARROW PROPERTIES · {count} arrows"),
+            (0, _) => "Arrow tool".into(),
+            (1, 1) => "Arrow properties".into(),
+            (1, _) => "Arrow properties · 1 arrow".into(),
+            (count, _) => format!("Arrow properties · {count} arrows"),
         };
         let number = |label: &'static str, field: Field| {
             let value = self
@@ -369,7 +365,7 @@ impl App {
             .align_y(Alignment::Center)
         };
         let mut panel = column![
-            text(heading).size(10).style(muted_text),
+            super::workspace::section(&heading),
             canvas(crate::canvas::ArrowPreview {
                 arrow: self
                     .tab
@@ -485,7 +481,10 @@ impl App {
                     .on_toggle(|value| Message::ArrowAction(Action::AttachTargets(value)))
                     .size(14)
                     .text_size(12),
-                ATTACH_HINT,
+                format!(
+                    "Two clicks: a source, then a destination atom, bond or lone pair · {}-click or turn this off for a free arrow",
+                    crate::platform::alt_key()
+                ),
                 tooltip::Position::Top,
             ));
         }
@@ -527,7 +526,7 @@ impl App {
                 commands = commands.push(
                     row![
                         hover_hint(
-                            accessible_command("arrow.symmetrise", "Symmetrise", "Symmetrise")
+                            accessible_command("arrow.symmetrize", "Symmetrize", "Symmetrize")
                                 .width(Length::Fill)
                                 .on_press(Message::Graphics(super::graphics::Action::Cleanup(
                                     super::graphics::Cleanup::Symmetrise { upright: false },

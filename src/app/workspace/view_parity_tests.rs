@@ -1805,7 +1805,7 @@ fn run(case: &Case, size: Size, renderer: &mut Renderer) -> Run {
         features::settle_view(&mut app, renderer, &mut tree, size);
         let driver = features::Driver::new(renderer);
         scene(&mut app, &driver);
-        scroll = driver.scroll();
+        scroll = driver.scroll(&app, size);
     }
     (case.setup)(&mut app);
     // Settle exactly as `snapshot` does; the app is never updated again.
@@ -1818,12 +1818,12 @@ fn run(case: &Case, size: Size, renderer: &mut Renderer) -> Run {
             let _ = app.update(message);
         }
     }
-    // A feature scene's inspector scroll, at the point `features::capture` uses.
+    // A feature scene's scroll, at the point `features::capture` uses.
     let mut script = case.script.to_vec();
-    if let Some(lines) = scroll {
+    if let Some((at, lines)) = scroll {
         script.push(Script::Wheel {
-            x: size.width - app.inspector_width() / 2.,
-            y: size.height / 2.,
+            x: at.x,
+            y: at.y,
             lines,
         });
     }
@@ -1976,7 +1976,7 @@ fn check_pixels(directory: &Path, file: &str, pixels: &[u8], width: u32, capture
 
 #[tokio::test]
 #[ignore = "Baseline/candidate view parity; requires a headless renderer, RESHIKI_VIEW_PARITY and RESHIKI_DATA_DIR"]
-async fn views_match_captured_baseline() {
+async fn manual_views_match_captured_baseline() {
     let directory = std::path::PathBuf::from(
         std::env::var("RESHIKI_VIEW_PARITY")
             .expect("Set RESHIKI_VIEW_PARITY to the baseline artifact directory"),

@@ -774,6 +774,75 @@ impl Writer<'_> {
         )?;
         Ok(())
     }
+    /// ChemDraw's linked property text: a `chemicalproperty` that names the
+    /// caption and the molecule's fragment (when it holds only this molecule),
+    /// atoms and bonds, so ChemDraw keeps the lines up to date. A caption with
+    /// a property ChemDraw has no checked type for stays plain text.
+    pub(super) fn property_captions(&mut self) -> Result<()> {
+        let doc = self.doc;
+        for link in &doc.property_captions {
+            let Some(types) = link
+                .properties
+                .iter()
+                .map(|p| p.chemdraw().map(|code| code.to_string()))
+                .collect::<Option<Vec<_>>>()
+            else {
+                continue;
+            };
+            let caption = self
+                .objects
+                .iter()
+                .find(|(id, _)| *id == link.annotation)
+                .map(|(_, key)| *key)
+                .ok_or_else(|| invalid("Missing property caption"))?;
+            let atoms = link
+                .atoms
+                .iter()
+                .map(|id| self.atom_node(*id))
+                .collect::<Result<Vec<_>>>()?;
+            let ids = atoms
+                .iter()
+                .map(|key| self.tree.value(*key, "id"))
+                .collect::<Result<std::collections::HashSet<_>>>()?;
+            let mut basis = Vec::new();
+            let fragment = atoms
+                .first()
+                .and_then(|key| self.tree.node(*key).ok()?.parent)
+                .ok_or_else(|| invalid("Missing property fragment"))?;
+            let only_this = self.tree.node(fragment)?.children.iter().all(|key| {
+                self.tree.node(*key).is_ok_and(|n| n.tag != "n")
+                    || self
+                        .tree
+                        .get(*key, "id")
+                        .is_ok_and(|id| id.is_some_and(|id| ids.contains(id)))
+            });
+            if only_this {
+                basis.push(self.tree.value(fragment, "id")?);
+            }
+            for key in &atoms {
+                basis.push(self.tree.value(*key, "id")?);
+            }
+            for key in &self.bond_nodes {
+                if self.tree.get(*key, "B")?.is_some_and(|id| ids.contains(id)) {
+                    basis.push(self.tree.value(*key, "id")?);
+                }
+            }
+            let id = self.id()?;
+            let display = self.tree.value(caption, "id")?;
+            self.tree.add(
+                Some(self.page),
+                "chemicalproperty",
+                [
+                    ("id", id),
+                    ("ChemicalPropertyDisplayID", display),
+                    ("ChemicalPropertyIsActive", "yes".into()),
+                    ("ChemicalPropertyType", types.join(" ")),
+                    ("BasisObjects", basis.join(" ")),
+                ],
+            )?;
+        }
+        Ok(())
+    }
     pub(super) fn annotations(&mut self) -> Result<()> {
         let doc = self.doc;
         for a in &doc.annotations {

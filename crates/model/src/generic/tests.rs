@@ -715,6 +715,31 @@ fn variable_attachment_chooses_one_real_target() {
     }
 }
 #[test]
+fn a_caption_follows_a_variable_attachment() {
+    use crate::linked_properties::{Property, toggle};
+    let mut source = chain(&["C", "C", "C"]);
+    let point =
+        crate::attachments::add(&mut source, &[1, 2, 3], crate::attachments::Kind::Variable)
+            .unwrap();
+    let cl = source.add_atom("Cl", Point::new(42., 42.));
+    source.add_bond(point, cl, 1, "plain");
+    toggle(
+        &mut source,
+        &[point, cl],
+        Property::Formula,
+        Default::default(),
+        true,
+    )
+    .unwrap();
+    let products = expand(&source, Limits::default()).unwrap();
+    assert_eq!(products.len(), 2);
+    for product in products {
+        let link = &product.property_captions[0];
+        assert_eq!(link.atoms.len(), product.atoms.len());
+        assert_eq!(link.text, "Formula: C3H7Cl");
+    }
+}
+#[test]
 fn finite_polymer_keeps_both_end_groups() {
     let mut source = chain(&["O", "C", "C", "N"]);
     set_repeat_unit(

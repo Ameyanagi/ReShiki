@@ -343,9 +343,7 @@ impl App {
                     return Task::none();
                 };
                 if !atom.centroid.is_empty() && self.tab.doc.abbreviation(id).is_none() {
-                    self.status =
-                        "This is a tracked attachment point. Edit the atom bonded to it instead."
-                            .into();
+                    self.status = "Attachment point · Edit the atom bonded to it instead".into();
                     return Task::none();
                 }
                 let group = self.tab.doc.abbreviation(id);
@@ -674,7 +672,7 @@ impl App {
         };
         let mut content = column![
             text(if state.members.is_some() {
-                "Create group label"
+                "Abbreviate selection"
             } else {
                 "Edit atom label"
             })

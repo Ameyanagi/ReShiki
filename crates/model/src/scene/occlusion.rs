@@ -30,7 +30,7 @@ pub(crate) fn occlusion_ink(doc: &Document) -> Vec<OcclusionSource> {
         .bonds
         .iter()
         .enumerate()
-        .filter(|(_, b)| doc.bond_visible(b.a, b.b))
+        .filter(|(_, b)| pass.graph().bond_visible(b.a, b.b))
     {
         let mut parts = vec![];
         let mut joined = Default::default();
@@ -52,7 +52,7 @@ pub(crate) fn occlusion_ink(doc: &Document) -> Vec<OcclusionSource> {
             });
         }
     }
-    for atom in doc.atoms.iter().filter(|a| doc.atom_visible(a.id)) {
+    for atom in doc.atoms.iter().filter(|a| pass.graph().atom_visible(a.id)) {
         let mut parts = vec![];
         for part in pass.labels.runs.get(&atom.id).into_iter().flatten() {
             // Unknown/custom font outlines conservatively do not hide ink.

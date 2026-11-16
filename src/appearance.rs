@@ -30,7 +30,68 @@ impl std::fmt::Display for Mode {
         })
     }
 }
-#[derive(Serialize, Deserialize)]
+/// The background of copied pictures or exported files.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Background {
+    #[default]
+    Transparent,
+    Canvas,
+    White,
+    Black,
+    /// The chosen color of [`Settings::background_colors`].
+    Custom,
+}
+impl Background {
+    /// The exporter's background, with `custom` as the Custom color.
+    pub fn paper(self, custom: [u8; 3]) -> reshiki::export::Background {
+        use reshiki::export::Background as Paper;
+        match self {
+            Self::Transparent => Paper::Transparent,
+            Self::Canvas => Paper::Canvas,
+            Self::White => Paper::Color([255; 3]),
+            Self::Black => Paper::Color([0; 3]),
+            Self::Custom => Paper::Color(custom),
+        }
+    }
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Transparent => "Transparent",
+            Self::Canvas => "Canvas",
+            Self::White => "White",
+            Self::Black => "Black",
+            Self::Custom => "Custom",
+        }
+    }
+}
+
+/// A PNG resolution: one of the presets. A file from a newer build with
+/// another value does not load, like an unknown background.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "u32", into = "u32")]
+pub struct Dpi(u32);
+impl Dpi {
+    pub const ALL: [Self; 4] = [Self(150), Self(300), Self(600), Self(1200)];
+    pub fn get(self) -> u32 {
+        self.0
+    }
+}
+impl TryFrom<u32> for Dpi {
+    type Error = String;
+    fn try_from(dpi: u32) -> Result<Self, String> {
+        Self::ALL
+            .into_iter()
+            .find(|preset| preset.0 == dpi)
+            .ok_or_else(|| format!("{dpi} dpi is not a PNG resolution preset"))
+    }
+}
+impl From<Dpi> for u32 {
+    fn from(dpi: Dpi) -> u32 {
+        dpi.0
+    }
+}
+
+#[derive(Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
     pub mode: Mode,
@@ -55,6 +116,18 @@ pub struct Settings {
     pub export_svg_live_text: bool,
     /// Display/input preference for the five physical Drawing Style fields.
     pub drawing_style_unit: reshiki::style::units::Unit,
+    /// Background of copied pictures (transparent by default).
+    pub copy_background: Background,
+    /// Background of exported files (the canvas by default).
+    pub export_background: Background,
+    /// The color that Custom uses.
+    pub custom_background: [u8; 3],
+    /// Saved colors for Custom, newest first.
+    pub background_colors: Vec<[u8; 3]>,
+    /// PNG resolution of copied pictures (300 dpi by default).
+    pub copy_dpi: Dpi,
+    /// PNG resolution of exported files (1200 dpi by default).
+    pub export_dpi: Dpi,
 }
 impl Default for Settings {
     fn default() -> Self {
@@ -70,6 +143,12 @@ impl Default for Settings {
             export_editable_drawing: true,
             export_svg_live_text: false,
             drawing_style_unit: Default::default(),
+            copy_background: Background::Transparent,
+            export_background: Background::Canvas,
+            custom_background: [244, 239, 230],
+            background_colors: Vec::new(),
+            copy_dpi: Dpi(300),
+            export_dpi: Dpi(1200),
         }
     }
 }
@@ -77,6 +156,10 @@ impl Default for Settings {
 #[cfg(test)]
 mod settings_tests;
 impl Settings {
+    /// The background of copied pictures.
+    pub fn copy_paper(&self) -> reshiki::export::Background {
+        self.copy_background.paper(self.custom_background)
+    }
     fn path() -> Result<std::path::PathBuf, String> {
         let root = std::env::var_os("RESHIKI_DATA_DIR")
             .map(std::path::PathBuf::from)
@@ -195,6 +278,56 @@ pub fn focus_border(theme: &Theme, inner: Color) -> Color {
         ],
         reshiki::color_contrast::OUTLINE_TARGET,
     )
+}
+
+/// The font fallback locale for Han characters in the interface: the forms of
+/// the first preferred language that names a CJK language, script or region.
+/// In order: a ja or ko language, Hans, HK or MO, Hant or TW, a zh language,
+/// and last a CN, JP or KR region. cosmic-text matches only "ja", "ko",
+/// "zh-HK" and "zh-TW" (anything else gets Simplified Chinese forms) and
+/// reads only the first preferred language, so under "ja-JP", or "en-JP" then
+/// "ja-JP", kanji fell back to PingFang SC.
+pub fn han_locale(preferred: impl IntoIterator<Item = impl AsRef<str>>) -> Option<&'static str> {
+    const SUBTAGS: [(&str, &str); 11] = [
+        ("ja", "ja"),
+        ("ko", "ko"),
+        ("Hans", "zh-CN"),
+        ("HK", "zh-HK"),
+        ("MO", "zh-HK"),
+        ("Hant", "zh-TW"),
+        ("TW", "zh-TW"),
+        ("zh", "zh-CN"),
+        ("CN", "zh-CN"),
+        ("JP", "ja"),
+        ("KR", "ko"),
+    ];
+    preferred.into_iter().find_map(|locale| {
+        let locale = locale.as_ref();
+        (SUBTAGS.iter())
+            .find(|(tag, _)| locale.split('-').any(|subtag| subtag == *tag))
+            .map(|(_, han)| *han)
+    })
+}
+
+/// Gives the interface's font fallback the Han forms of the user's preferred
+/// languages. Call before any text is shaped.
+pub fn prepare_han_fallback() {
+    use iced::advanced::graphics::text::{
+        cosmic_text::{FontSystem, fontdb::Database},
+        font_system,
+    };
+    let Some(locale) = han_locale(sys_locale::get_locales()) else {
+        return;
+    };
+    let mut fonts = font_system()
+        .write()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let fonts = fonts.raw();
+    let system = std::mem::replace(
+        fonts,
+        FontSystem::new_with_locale_and_db(locale.into(), Database::new()),
+    );
+    *fonts = FontSystem::new_with_locale_and_db(locale.into(), system.into_locale_and_db().1);
 }
 
 /// Shared dropdown styling for toolbar controls and inspector fields.

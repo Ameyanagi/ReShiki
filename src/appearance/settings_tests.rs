@@ -42,6 +42,7 @@ fn appearance_preferences_survive_file_reload_independently() {
                 export_editable_drawing: true,
                 export_svg_live_text: true,
                 drawing_style_unit: Unit::Millimetres,
+                ..Default::default()
             };
             settings.save_to(&path).unwrap();
             let loaded = Settings::load_from(&path);
@@ -193,6 +194,94 @@ fn unreadable_preferences_are_set_aside_before_a_save_replaces_them() {
     std::fs::remove_file(&path).unwrap();
     loaded.save_to(&path).unwrap();
     assert!(!dir.path().join("appearance.json.bad").exists());
+}
+
+#[test]
+fn picture_backgrounds_default_to_todays_behaviour_and_survive_reload() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("appearance.json");
+    // A file from before the background preferences.
+    std::fs::write(&path, r#"{"mode":"dark","export_editable_drawing":false}"#).unwrap();
+    let mut settings = Settings::load_from(&path);
+    assert_eq!(settings.copy_background, Background::Transparent);
+    assert_eq!(settings.export_background, Background::Canvas);
+    assert!(settings.background_colors.is_empty());
+    assert!(!settings.export_editable_drawing);
+    settings.copy_background = Background::Custom;
+    settings.export_background = Background::Black;
+    settings.custom_background = [30, 42, 68];
+    settings.background_colors = vec![[30, 42, 68], [244, 239, 230]];
+    settings.save_to(&path).unwrap();
+    let loaded = Settings::load_from(&path);
+    assert_eq!(loaded.copy_background, Background::Custom);
+    assert_eq!(loaded.export_background, Background::Black);
+    assert_eq!(loaded.custom_background, [30, 42, 68]);
+    assert_eq!(loaded.background_colors, [[30, 42, 68], [244, 239, 230]]);
+    assert_eq!(loaded.mode, Mode::Dark);
+
+    // A background from a newer build sets the whole file aside first.
+    let newer = br#"{"copy_background":"gradient","smart_guides":false}"#;
+    std::fs::write(&path, newer).unwrap();
+    assert!(Settings::parse(newer).is_none());
+    Settings::load_from(&path).save_to(&path).unwrap();
+    assert_eq!(
+        std::fs::read(dir.path().join("appearance.json.bad")).unwrap(),
+        newer
+    );
+}
+
+#[test]
+fn png_resolutions_default_to_300_for_copies_and_1200_for_files_and_survive_reload() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("appearance.json");
+    // A file from before the resolution preferences.
+    std::fs::write(&path, r#"{"mode":"dark","copy_background":"white"}"#).unwrap();
+    let mut settings = Settings::load_from(&path);
+    assert_eq!(settings.copy_dpi.get(), 300);
+    assert_eq!(settings.export_dpi.get(), 1200);
+    assert_eq!(settings.copy_background, Background::White);
+    for (copy, export) in [(150, 600), (1200, 300)] {
+        settings.copy_dpi = Dpi::try_from(copy).unwrap();
+        settings.export_dpi = Dpi::try_from(export).unwrap();
+        settings.save_to(&path).unwrap();
+        let saved: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        assert_eq!(
+            (saved["copy_dpi"].as_u64(), saved["export_dpi"].as_u64()),
+            (Some(copy.into()), Some(export.into()))
+        );
+        let loaded = Settings::load_from(&path);
+        assert_eq!(
+            (loaded.copy_dpi.get(), loaded.export_dpi.get()),
+            (copy, export)
+        );
+        assert_eq!(loaded.mode, Mode::Dark);
+    }
+    assert_eq!(Dpi::ALL.map(Dpi::get), [150, 300, 600, 1200]);
+
+    // A resolution that is not a preset sets the whole file aside first.
+    let newer = br#"{"export_dpi":2400,"smart_guides":false}"#;
+    assert!(Dpi::try_from(2400).is_err());
+    assert!(Settings::parse(newer).is_none());
+    std::fs::write(&path, newer).unwrap();
+    let loaded = Settings::load_from(&path);
+    assert_eq!(loaded.export_dpi.get(), 1200);
+    loaded.save_to(&path).unwrap();
+    assert_eq!(
+        std::fs::read(dir.path().join("appearance.json.bad")).unwrap(),
+        newer
+    );
+}
+
+#[test]
+fn backgrounds_map_to_the_exporters_paper() {
+    use reshiki::export::Background as Paper;
+    let custom = [30, 42, 68];
+    assert_eq!(Background::Transparent.paper(custom), Paper::Transparent);
+    assert_eq!(Background::Canvas.paper(custom), Paper::Canvas);
+    assert_eq!(Background::White.paper(custom), Paper::Color([255; 3]));
+    assert_eq!(Background::Black.paper(custom), Paper::Color([0; 3]));
+    assert_eq!(Background::Custom.paper(custom), Paper::Color(custom));
 }
 
 #[test]

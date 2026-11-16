@@ -128,7 +128,7 @@ fn undefined_note_selects_double_bond_endpoints_and_atom_centres() {
         .find(|note| note.kind == Kind::Undefined)
         .unwrap();
     assert_eq!(note.atoms, vec![1]);
-    assert!(app.status.contains("1 undefined stereocentre"));
+    assert!(app.status.contains("1 undefined stereocenter"));
     assert_eq!(app.tab.selected, vec![1]);
     // Selection includes both ends, even when a notice has no atom entries.
     app.tab.stereo_notes = vec![Note {
@@ -150,7 +150,7 @@ fn note_card_hides_redraw_for_undefined_only_notices() {
         (vec![Kind::Undefined, Kind::Undefined], 2),
         (vec![Kind::NonWedgeOnly], 2),
         (vec![Kind::Undefined, Kind::NonWedgeOnly], 3),
-        (vec![Kind::Reversed], 3),
+        (vec![Kind::Reversed], 2),
     ] {
         app.tab.stereo_notes = kinds
             .iter()
@@ -161,8 +161,9 @@ fn note_card_hides_redraw_for_undefined_only_notices() {
                 message: "notice".into(),
             })
             .collect();
-        let view: iced::Element<'_, Message> =
-            app.stereo_note_lines(iced::widget::Column::new()).into();
+        let view: iced::Element<'_, Message> = app
+            .stereo_note_lines(iced::widget::Column::new(), "stereo")
+            .into();
         assert_eq!(view.as_widget().children().len(), button_count, "{kinds:?}");
     }
 }
@@ -211,7 +212,7 @@ fn reverse_fixes_all_reversed_notes_exactly_in_one_undo_step() {
 }
 
 #[test]
-fn notices_clear_after_position_edits_history_file_epoch_and_tab_changes() {
+fn notices_clear_after_position_edits_history_and_file_epoch_but_not_tab_changes() {
     let mut app = fixture_app(drawing("plain", false));
     checked(&mut app, vec![], true);
     assert!(!app.tab.stereo_notes.is_empty());
@@ -226,10 +227,10 @@ fn notices_clear_after_position_edits_history_file_epoch_and_tab_changes() {
     app.tab.stereo_notes = notes.clone();
     app.begin_file_epoch();
     assert!(app.tab.stereo_notes.is_empty());
-    app.tab.stereo_notes = notes;
+    app.tab.stereo_notes = notes.clone();
     app.add_tab();
     app.select_tab(0);
-    assert!(app.tab.stereo_notes.is_empty());
+    assert_eq!(app.tab.stereo_notes, notes);
 }
 
 #[test]
@@ -246,7 +247,7 @@ fn redraw_is_undoable_and_reports_processed_centres() {
         .collect();
     app.stereo_action(Action::Redraw);
     assert!(!app.error, "{}", app.status);
-    assert_eq!(app.status, "Redrew stereo bonds at 1 stereocentre");
+    assert_eq!(app.status, "Redrew stereo bonds at 1 stereocenter");
     assert!(
         app.tab
             .doc
@@ -283,7 +284,7 @@ fn redraw_is_undoable_and_reports_processed_centres() {
     assert_eq!(app.tab.doc, original);
     let mut achiral = fixture_app(Document::default());
     achiral.stereo_action(Action::Redraw);
-    assert_eq!(achiral.status, "No stereocentres to redraw");
+    assert_eq!(achiral.status, "No stereocenters to redraw");
 }
 
 #[test]
@@ -357,6 +358,19 @@ fn style_preference_is_opt_in_and_invalidates_cached_notices() {
 }
 
 #[test]
+fn style_preference_invalidates_cached_notices_in_every_tab() {
+    use crate::app::tabs::Action as Tabs;
+    let mut app = fixture_app(drawing("plain", false));
+    checked(&mut app, vec![], true);
+    assert!(!app.tab.stereo_notes.is_empty());
+    let first = app.tab.id;
+    let _ = app.update(Message::New);
+    app.stereo_action(Action::IupacStyleNotes(true));
+    let _ = app.update(Message::Tabs(Tabs::Select(first)));
+    assert!(app.tab.stereo_notes.is_empty());
+}
+
+#[test]
 fn invert_configuration_here_restores_haworth_fischer_and_wedges_in_one_undo() {
     let haworth = reshiki::haworth::sugar_document(
         reshiki::haworth::Sugar::Glucose,
@@ -424,4 +438,111 @@ fn invert_configuration_here_requires_one_defined_atom() {
         assert_eq!(app.tab.doc, original);
         assert!(!app.tab.history.can_undo());
     }
+}
+
+#[test]
+fn findings_stay_on_the_check_button_until_the_drawing_changes() {
+    let mut app = fixture_app(drawing("plain", false));
+    checked(&mut app, vec![], true);
+    assert_eq!(app.tab.stereo_notes.len(), 1);
+    // The button opens the list; Escape or another command closes it.
+    let _ = app.update(Message::Stereo(Action::Results(true)));
+    assert!(app.check_results);
+    let _ = app.update(Message::Escape);
+    assert!(!app.check_results);
+    let _ = app.update(Message::Stereo(Action::Results(true)));
+    let _ = app.update(Message::Fit);
+    assert!(!app.check_results);
+    // A finding selects and pulses its atoms and keeps the list open.
+    let _ = app.update(Message::Stereo(Action::Results(true)));
+    app.tab.selected.clear();
+    let _ = app.update(Message::Stereo(Action::Select(0)));
+    assert!(app.check_results);
+    assert_eq!(app.tab.selected, vec![1]);
+    assert_eq!(app.pulse_atoms(), Some([1].as_slice()));
+    // Pulse ticks keep the list open and end the pulse after its blinks.
+    let _ = app.update(Message::Stereo(Action::Pulse));
+    assert!(app.check_results && app.tab.pulse.is_some());
+    if let Some((_, start)) = &mut app.tab.pulse {
+        *start -= std::time::Duration::from_secs(2);
+    }
+    let _ = app.update(Message::Stereo(Action::Pulse));
+    assert!(app.tab.pulse.is_none() && app.pulse_atoms().is_none());
+    // An edit clears the findings, and the list with them.
+    let before = app.tab.doc.clone();
+    app.tab.doc.add_atom("C", Point::new(200., 0.));
+    app.changed(before);
+    assert!(app.tab.stereo_notes.is_empty());
+    // A clean check closes the list, so later findings do not open it.
+    let mut clean = Document::default();
+    clean.add_atom("C", Point::default());
+    app.tab.doc = clean;
+    checked(&mut app, vec![], true);
+    assert!(app.tab.stereo_notes.is_empty());
+    assert!(!app.check_results);
+}
+
+#[test]
+fn findings_survive_a_tab_switch_until_their_drawing_changes() {
+    use crate::app::tabs::Action as Tabs;
+    let mut app = fixture_app(drawing("plain", false));
+    checked(&mut app, vec![], true);
+    let notes = app.tab.stereo_notes.clone();
+    assert_eq!(notes.len(), 1);
+    let _ = app.update(Message::Stereo(Action::Results(true)));
+    let _ = app.update(Message::Stereo(Action::Select(0)));
+    let first = app.tab.id;
+    let _ = app.update(Message::New);
+    assert!(app.tab.stereo_notes.is_empty() && !app.check_results);
+    let _ = app.update(Message::Tabs(Tabs::Select(first)));
+    // The drawing is unchanged, so its findings stay; the list and the
+    // pulse belonged to the moment the tab was left.
+    assert_eq!(app.tab.stereo_notes, notes);
+    assert!(!app.check_results && app.tab.pulse.is_none());
+    let before = app.tab.doc.clone();
+    app.tab.doc.add_atom("C", Point::new(200., 0.));
+    app.changed(before);
+    assert!(app.tab.stereo_notes.is_empty());
+}
+
+#[test]
+fn the_pulse_runs_out_under_a_preview_and_leaves_popovers_and_status_alone() {
+    let mut app = fixture_app(drawing("plain", false));
+    checked(&mut app, vec![], true);
+    app.tab.busy = false;
+    let pulse = |app: &mut App| {
+        let _ = app.update(Message::Stereo(Action::Select(0)));
+        assert!(app.tab.pulse.is_some());
+    };
+    let expire = |app: &mut App| {
+        if let Some((_, start)) = &mut app.tab.pulse {
+            *start -= std::time::Duration::from_secs(2);
+        }
+        assert!(
+            app.pulse_atoms().is_none(),
+            "The highlight stops at its end"
+        );
+        let _ = app.update(Message::Stereo(Action::Pulse));
+        assert!(app.tab.pulse.is_none());
+    };
+    // A style popover opened during the pulse stays open through its ticks.
+    pulse(&mut app);
+    let _ = app.update(Message::StyleMenu(crate::app::color_popover::Action::Color));
+    assert!(app.style_menu.is_some());
+    let _ = app.update(Message::Stereo(Action::Pulse));
+    assert!(app.style_menu.is_some());
+    expire(&mut app);
+    assert!(app.style_menu.is_some());
+    let _ = app.update(Message::Escape);
+    // A 3D preview started during the pulse keeps its status, and the pulse ends.
+    pulse(&mut app);
+    let _ = app.update(Message::Optimization(
+        crate::app::optimization::Action::Begin,
+    ));
+    assert!(app.tab.optimization.is_some(), "{}", app.status);
+    let status = app.status.clone();
+    let _ = app.update(Message::Stereo(Action::Pulse));
+    assert_eq!(app.status, status);
+    expire(&mut app);
+    assert_eq!(app.status, status);
 }

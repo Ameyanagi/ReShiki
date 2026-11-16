@@ -928,7 +928,7 @@ fn accept_all_reviews_a_replacement_outside_the_selection() {
     assert_eq!(elements(&app), ["N", "S"]);
     assert_eq!(
         app.assistant.status,
-        "Ready for review · It replaces objects outside your selection"
+        "Ready for review · It replaces objects outside the selection"
     );
     // Choosing Accept all edits again does not apply it either.
     let _ = app.assistant_action(Action::AutoApply(true));
@@ -951,7 +951,7 @@ fn accept_all_reviews_a_replacement_outside_the_selection() {
     assert_eq!(elements(&app), ["O", "O"]);
     assert_eq!(
         app.assistant.status,
-        "Ready for review · It replaces objects outside your selection"
+        "Ready for review · It replaces objects outside the selection"
     );
     // With the selection kept, it is applied at once.
     app.tab.selected = sent.clone();
@@ -976,7 +976,7 @@ fn accept_all_reviews_a_replacement_outside_the_selection() {
     assert_eq!(elements(&app), ["O"]);
     assert_eq!(
         app.assistant.status,
-        "Ready for review · It replaces objects outside your selection"
+        "Ready for review · It replaces objects outside the selection"
     );
     // Apply still applies it.
     let _ = app.assistant_action(Action::Apply);
@@ -1001,6 +1001,6 @@ fn accept_all_reviews_a_replacement_outside_the_selection() {
     assert_eq!(elements(&app), ["O"]);
     assert_eq!(
         app.assistant.status,
-        "Ready for review · It replaces objects outside your selection"
+        "Ready for review · It replaces objects outside the selection"
     );
 }

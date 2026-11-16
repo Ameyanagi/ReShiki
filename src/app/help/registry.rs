@@ -5,7 +5,7 @@
 //! changes in one place. Contextual keys come from the same tables the
 //! drawing uses (`reshiki::hotkeys`), and their previews run those edits.
 use super::super::{
-    Message, optimization, printing,
+    Message, optimization, printing, settings_page,
     shortcuts::{self, TabKey, keys, tab_keys},
 };
 use iced::keyboard::Modifiers;
@@ -316,22 +316,22 @@ pub(crate) fn entries() -> Vec<Entry> {
         ),
         entry(
             "Command palette / atom context menu",
-            "Convert to Wedge Drawing",
+            "Convert to wedge drawing",
             "Convert selected Fischer molecules, or all Fischer molecules when nothing is selected, to ordinary wedge drawings in one Undo step",
             Anywhere,
             &["Fischer", "Mills", "projection", "stereochemistry"],
         ),
         entry(
             "Command palette / atom context menu",
-            "Convert to Fischer Projection",
-            "Arrange a selected acyclic molecule with its stereocentres on the longest carbon chain as a Fischer projection",
+            "Convert to Fischer projection",
+            "Arrange a selected acyclic molecule with its stereocenters on the longest carbon chain as a Fischer projection",
             Selection,
             &["Fischer", "wedge", "projection", "carbohydrate"],
         ),
         entry(
             "Command palette / atom context menu",
-            "Invert Configuration Here",
-            "Invert one selected stereocentre, including a Haworth anomer or epimer, in one Undo step",
+            "Invert configuration here",
+            "Invert one selected stereocenter, including a Haworth anomer or epimer, in one Undo step",
             Selection,
             &["configuration", "anomer", "epimer", "alpha", "beta"],
         ),
@@ -426,7 +426,7 @@ pub(crate) fn entries() -> Vec<Entry> {
                 label(Message::Transform(Transform::FlipHorizontal)),
                 label(Message::Transform(Transform::FlipVertical))
             ),
-            "Flip horizontally / vertically",
+            "Flip horizontal / vertical",
             "Mirror the selection",
             Selection,
             &["mirror", "reflect"],
@@ -461,14 +461,14 @@ pub(crate) fn entries() -> Vec<Entry> {
         ),
         entry(
             keys(command | shift, "K"),
-            "Clean up",
+            "Clean up…",
             "Preview a cleaned-up layout for the selection",
             Selection,
             &["tidy", "beautify", "layout"],
         ),
         entry(
             label(Message::Optimization(optimization::Action::Begin)),
-            "3D optimization",
+            "3D optimize…",
             "Generate an optimized 3D conformer and preview it before Apply",
             Selection,
             &["conformer", "mmff", "uff", "geometry"],
@@ -534,7 +534,11 @@ pub(crate) fn entries() -> Vec<Entry> {
         ),
         entry(
             format!("{} / {}", label(Message::Save), label(Message::SaveAs)),
-            "Save / save as",
+            if cfg!(target_arch = "wasm32") {
+                "Save / save as .rsk"
+            } else {
+                "Save / save as"
+            },
             "Save the drawing, or save a copy under a new name",
             Anywhere,
             &["file", "write", "store"],
@@ -591,6 +595,13 @@ pub(crate) fn entries() -> Vec<Entry> {
             "Turn the bond length or angle constraint on or off",
             Anywhere,
             &["constraint", "snap", "geometry"],
+        ),
+        entry(
+            label(Message::Settings(settings_page::Action::Open(None))),
+            "Settings",
+            "Open the app-wide preferences. Esc closes them.",
+            Anywhere,
+            &["preferences", "options", "background"],
         ),
         entry(
             label(Message::Fit),

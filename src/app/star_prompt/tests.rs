@@ -869,7 +869,7 @@ async fn help_about_leads_to_the_star_link() {
 
 #[tokio::test]
 #[ignore = "Opt-in renderer evidence; set RESHIKI_STAR_EVIDENCE_DIR"]
-async fn star_prompt_evidence() {
+async fn manual_star_prompt_evidence() {
     let Some(directory) = std::env::var_os("RESHIKI_STAR_EVIDENCE_DIR") else {
         return;
     };

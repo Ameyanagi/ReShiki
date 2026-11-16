@@ -318,7 +318,7 @@ fn interface_mode_never_changes_canvas_or_exports() {
 }
 
 #[test]
-fn canvas_colors_and_quick_presets_are_independent_undo_steps() {
+fn colors_and_quick_presets_are_independent_undo_steps_and_the_canvas_is_none() {
     use reshiki::canvas_theme::CanvasTheme;
     let (mut app, _) = App::new();
     app.tab.doc = reshiki::rings::Preset::Regular.document(42., false);
@@ -326,7 +326,6 @@ fn canvas_colors_and_quick_presets_are_independent_undo_steps() {
     let _ = app.update(Message::ColorTheme(
         reshiki::canvas_theme::ColorTheme::Presentation,
     ));
-    let colored = app.tab.doc.clone();
     let _ = app.update(Message::CanvasTheme(CanvasTheme::Dark));
     assert_eq!(app.tab.doc.drawing_style, original.drawing_style);
     assert_eq!(app.tab.doc.atoms, original.atoms);
@@ -341,12 +340,12 @@ fn canvas_colors_and_quick_presets_are_independent_undo_steps() {
     );
     let _ = app.update(Message::Undo);
     assert_eq!(app.tab.doc, dark);
+    // The canvas is view state: Undo goes past it to the colors and keeps it.
     let _ = app.update(Message::Undo);
-    assert_eq!(app.tab.doc, colored);
-    let _ = app.update(Message::Undo);
-    assert_eq!(app.tab.doc, original);
-    let _ = app.update(Message::Redo);
-    assert_eq!(app.tab.doc, colored);
+    assert_eq!(app.tab.doc.atoms, original.atoms);
+    assert_eq!(app.tab.doc.color_theme, original.color_theme);
+    assert_eq!(app.tab.doc.canvas_theme, CanvasTheme::Dark);
+    assert!(!app.tab.history.can_undo());
     let _ = app.update(Message::Redo);
     assert_eq!(app.tab.doc, dark);
     let _ = app.update(Message::QuickDrawingStyle(Choice::Details));
@@ -1323,205 +1322,6 @@ async fn drawing_style_fields_keep_focus_through_incomplete_units() {
         assert_eq!(app.tab.doc, before);
         assert!(!app.dirty());
         assert!(!app.tab.history.can_undo());
-    }
-}
-
-#[tokio::test]
-#[ignore = "Manual GPU snapshots without opening or controlling desktop windows"]
-async fn drawing_style_headless_snapshot() {
-    use iced::advanced::{layout, mouse, renderer::Headless, widget::Tree};
-    let (mut app, _) = App::new();
-    app.tab.doc = reshiki::rings::Preset::Regular.document(42., false);
-    app.tab.busy = false;
-    app.status = "Ready".into();
-    let _ = app.update(Message::DrawingStyle(Action::Open));
-    let _ = app.update(Message::DrawingStyle(Action::Preset(Preset::Nature)));
-    let carbon = app.tab.doc.atoms[0].id;
-    let p = app.tab.doc.atoms[0].position;
-    // The first ring atom is the top vertex. Point its carbonyl outward,
-    // leaving 120-degree bond angles instead of crowding a ring edge.
-    let oxygen = app.tab.doc.add_atom("O", p.offset(0., -42.));
-    app.tab.doc.add_bond(carbon, oxygen, 2, "plain");
-    app.tab.doc.atoms[3].element = "N".into();
-    app.tab.doc.atoms[3].label_h = 1;
-    let directory = std::env::temp_dir().join("reshiki-document-style-qa");
-    std::fs::create_dir_all(&directory).unwrap();
-    for (name, width, height, dark, mode) in [
-        (
-            "desktop",
-            1280,
-            820,
-            false,
-            crate::appearance::Mode::MatchCanvas,
-        ),
-        (
-            "compact",
-            1040,
-            680,
-            false,
-            crate::appearance::Mode::MatchCanvas,
-        ),
-        (
-            "dark-desktop",
-            1280,
-            820,
-            true,
-            crate::appearance::Mode::MatchCanvas,
-        ),
-        (
-            "dark-compact",
-            1040,
-            680,
-            true,
-            crate::appearance::Mode::MatchCanvas,
-        ),
-        (
-            "dark-canvas-light-ui",
-            1280,
-            820,
-            true,
-            crate::appearance::Mode::Light,
-        ),
-        (
-            "light-canvas-dark-ui",
-            1280,
-            820,
-            false,
-            crate::appearance::Mode::Dark,
-        ),
-        (
-            "presentation-light",
-            1280,
-            820,
-            false,
-            crate::appearance::Mode::Light,
-        ),
-        (
-            "presentation-dark",
-            1280,
-            820,
-            true,
-            crate::appearance::Mode::Dark,
-        ),
-        (
-            "pastel-light",
-            1280,
-            820,
-            false,
-            crate::appearance::Mode::Dark,
-        ),
-        (
-            "pastel-dark",
-            1280,
-            820,
-            true,
-            crate::appearance::Mode::Light,
-        ),
-        (
-            "selected-compact",
-            1040,
-            680,
-            true,
-            crate::appearance::Mode::MatchCanvas,
-        ),
-    ] {
-        app.tab.doc.canvas_theme = if dark {
-            reshiki::canvas_theme::CanvasTheme::Dark
-        } else {
-            reshiki::canvas_theme::CanvasTheme::Light
-        };
-        app.tab.doc.color_theme = if name.starts_with("presentation") {
-            reshiki::canvas_theme::ColorTheme::Presentation
-        } else if name.starts_with("pastel") {
-            reshiki::canvas_theme::ColorTheme::Pastel
-        } else {
-            reshiki::canvas_theme::ColorTheme::Publication
-        };
-        app.appearance.mode = mode;
-        app.sync_color_input();
-        app.tab.selected = if name == "selected-compact" {
-            app.tab.doc.all_ids()
-        } else {
-            vec![]
-        };
-        app.grid = dark;
-        app.guides.rulers = dark;
-        app.view_open = dark;
-        let mut renderer = <iced::Renderer as Headless>::new(
-            iced::Font::with_name(reshiki::style::ui_font_family()),
-            iced::Pixels(16.),
-            None,
-        )
-        .await
-        .unwrap();
-        let size = iced::Size::new(width as f32, height as f32);
-        let theme = app.theme();
-        let mut view = app.view();
-        let mut tree = Tree::new(view.as_widget());
-        let node =
-            view.as_widget_mut()
-                .layout(&mut tree, &renderer, &layout::Limits::new(size, size));
-        let mut messages = Vec::new();
-        view.as_widget_mut().update(
-            &mut tree,
-            &iced::Event::Window(iced::window::Event::RedrawRequested(
-                std::time::Instant::now(),
-            )),
-            iced::advanced::Layout::new(&node),
-            mouse::Cursor::Unavailable,
-            &renderer,
-            &mut iced::advanced::clipboard::Null,
-            &mut iced::advanced::Shell::new(&mut messages),
-            &iced::Rectangle::with_size(size),
-        );
-        view.as_widget().draw(
-            &tree,
-            &mut renderer,
-            &theme,
-            &iced::advanced::renderer::Style::default(),
-            iced::advanced::Layout::new(&node),
-            mouse::Cursor::Unavailable,
-            &iced::Rectangle::with_size(size),
-        );
-        let pixels = Headless::screenshot(
-            &mut renderer,
-            iced::Size::new(width, height),
-            1.,
-            theme.palette().background,
-        );
-        image::save_buffer(
-            directory.join(format!("{name}.png")),
-            &pixels,
-            width,
-            height,
-            image::ColorType::Rgba8,
-        )
-        .unwrap();
-        let cursor = mouse::Cursor::Available(iced::Point::new(
-            width as f32 - 36.,
-            height as f32 - 73. - if dark { 44. } else { 0. },
-        ));
-        for event in [
-            iced::Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
-            iced::Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
-        ] {
-            view.as_widget_mut().update(
-                &mut tree,
-                &event,
-                iced::advanced::Layout::new(&node),
-                cursor,
-                &renderer,
-                &mut iced::advanced::clipboard::Null,
-                &mut iced::advanced::Shell::new(&mut messages),
-                &iced::Rectangle::with_size(size),
-            );
-        }
-        assert!(
-            messages
-                .iter()
-                .any(|m| matches!(m, Message::DrawingStyle(Action::Apply))),
-            "Save icon stays visible and clickable at {width}×{height}"
-        );
     }
 }
 

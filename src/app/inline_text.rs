@@ -189,7 +189,7 @@ impl App {
         } else {
             self.tab.inline_text = None;
             self.error = false;
-            self.status = "Text edit cancelled".into();
+            self.status = "Text edit canceled".into();
         }
         self.tab.autosaved_revision = None;
         self.tab.autosave.edited_draft();
@@ -247,7 +247,7 @@ impl App {
                 self.tab.fit_to_view = false;
                 self.error = false;
                 self.status = format!(
-                    "Editing text · {} applies · Escape cancels",
+                    "Editing text · {} applies · Esc cancels",
                     super::shortcuts::keys(iced::keyboard::Modifiers::COMMAND, "Enter")
                 );
                 self.sync_style_inputs();
@@ -809,6 +809,7 @@ pub(super) fn commits_draft(message: &Message) -> bool {
             | Message::Commands(
                 super::command_palette::Action::Run(_) | super::command_palette::Action::Submit
             )
+            | Message::Help(super::help::Action::Run(_))
             | Message::Shortcut(
                 super::shortcuts::Action::FixedLength
                     | super::shortcuts::Action::FixedAngles
@@ -828,15 +829,20 @@ pub(super) fn commits_draft(message: &Message) -> bool {
             )
             | Message::Save
             | Message::SaveAs
+            | Message::SaveFormat(_)
+            | Message::KeepFormat
             | Message::Close(_)
             | Message::Export(_)
+            | Message::ExportFigure(..)
             | Message::Copy(_)
             | Message::CopyImage
+            | Message::CopyImageOn(..)
             | Message::CopyAs(_)
             | Message::CopySmiles
             | Message::CopyAnalysis
             | Message::CopyChemicalText
             | Message::FormatChemicalName
+            | Message::ToggleProperty(..)
             | Message::Paste
             | Message::PastePicture
             | Message::Duplicate
@@ -859,7 +865,14 @@ pub(super) fn commits_draft(message: &Message) -> bool {
                     | super::cleanup::Action::ToFischer,
             )
             | Message::Analyze
-            | Message::Stereo(_)
+            | Message::Stereo(
+                super::stereo::Action::Select(_)
+                    | super::stereo::Action::Results(_)
+                    | super::stereo::Action::Reverse
+                    | super::stereo::Action::Redraw
+                    | super::stereo::Action::Invert
+                    | super::stereo::Action::IupacStyleNotes(_),
+            )
             | Message::Import
             | Message::InsertInput
             | Message::Example(_)

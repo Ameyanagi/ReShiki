@@ -15,7 +15,7 @@ count. Run benchmarks separately from tests, builds, and sampling profilers.
 
 ```sh
 cargo test --release --locked --bin reshiki \
-  canvas::performance::loaded_canvas_workloads -- --ignored --exact --nocapture
+  canvas::performance::manual_loaded_canvas_workloads -- --ignored --exact --nocapture
 cargo run --release --locked --example canvas_performance
 ```
 
@@ -25,6 +25,35 @@ GPU presentation, input-to-display latency, or display FPS. The library benchmar
 separately measures document copying, scene generation, selection bounds, and
 translation over 30 measured iterations. Its `--profile` argument repeats scene construction for 30 seconds
 and prints the process ID for a sampling profiler.
+
+The model scaling benchmarks need no renderer. Each row gives the median, 95th
+percentile and mean of the warmed runs, then the time of the very first call
+(`first_ms`):
+
+```sh
+cargo test --release --locked -p reshiki-model \
+  scene::performance -- --ignored --nocapture --test-threads=1
+```
+
+- `model_scaling_workloads` repeats the workload 1, 4 and 16 times side by side
+  (483, 1,932 and 7,728 atoms), then 4 and 16 times stacked one above the
+  other. For each size it reports scene generation, bond-crossing gaps,
+  selection bounds, **Align left** and document copying. With one
+  two-attachment abbreviation added, it reports the drawn copy that an
+  unchanged drawing shares (`render_copy_shared`) and the one an edit takes
+  (`render_copy_fresh`).
+- `column_and_large_group_workloads` covers shapes the gallery lacks, at 256,
+  1,024 and 4,096 objects: columns of ammonia labels, single bonds, condensed
+  `NMe` labels and captioned arrows, and one collapsed group of that many
+  atoms.
+- `imported_polyalanine_scene` builds the scene of the drawing that importing
+  polyalanine-200 from SMILES leaves on the canvas: 1,001 atoms folded into
+  about seven by eight bond lengths, with their hydrogen labels. Run it alone
+  (`scene::performance::imported_polyalanine_scene -- --ignored --exact`) so
+  that `first_ms` is the first scene of a fresh process.
+
+A step whose time grows much faster than the drawing shows up as a 16× row that
+is far more than 16 times its 1× row.
 
 For a rendered correctness check (requires a working headless renderer):
 

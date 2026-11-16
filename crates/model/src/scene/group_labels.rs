@@ -23,8 +23,8 @@ fn clearer_orientation_with_reach(
     forward.alignment = LabelAlignment::Left;
     let mut reverse = group.clone();
     reverse.alignment = LabelAlignment::Right;
-    let forward = abbreviation_label_runs(atom, doc, &forward);
-    let reverse = abbreviation_label_runs(atom, doc, &reverse);
+    let forward = abbreviation_label_runs(atom, doc, None, &forward);
+    let reverse = abbreviation_label_runs(atom, doc, None, &reverse);
     let (lo, hi) = label_ink_boxes(&forward)
         .into_iter()
         .chain(label_ink_boxes(&reverse))

@@ -304,13 +304,12 @@ impl App {
         self.try_replace_document(candidate, selected)?;
         self.sync_numeric_transforms();
         self.error = false;
-        self.status = "Drawing geometry updated · Undo restores the operation".into();
+        self.status = "Drawing geometry updated".into();
         Ok(())
     }
     pub(super) fn reference_transform_action(&mut self, action: Action) {
         if self.tab.drawing_edit_active() {
-            self.status =
-                "Finish the active drawing edit before changing reference geometry".into();
+            self.status = "Finish the current edit before using reference geometry".into();
             self.error = true;
             return;
         }
@@ -422,7 +421,7 @@ impl App {
         };
         self.select_tool(tool);
         self.tab.numeric_transforms.reference.drag_epoch = Some(self.tab.file_epoch);
-        self.status = tool.hint().into();
+        self.status = tool.hint();
         self.error = false;
     }
     pub(super) fn reference_transform_panel(&self) -> Element<'_, Message> {

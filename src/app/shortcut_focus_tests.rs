@@ -52,16 +52,37 @@ impl Ui {
         );
         let mut messages = Vec::new();
         let mut shell = Shell::new(&mut messages);
-        view.as_widget_mut().update(
+        // An open popover sees the event first, as in the app.
+        if let Some(overlay) = view.as_widget_mut().overlay(
             &mut self.tree,
-            &event,
             Layout::new(&node),
-            cursor,
             &self.renderer,
-            &mut iced::advanced::clipboard::Null,
-            &mut shell,
             &self.viewport,
-        );
+            iced::Vector::ZERO,
+        ) {
+            let mut nested = iced::advanced::overlay::Nested::new(overlay);
+            let node = nested.layout(&self.renderer, self.viewport.size());
+            nested.update(
+                &event,
+                Layout::new(&node),
+                cursor,
+                &self.renderer,
+                &mut iced::advanced::clipboard::Null,
+                &mut shell,
+            );
+        }
+        if shell.event_status() == iced::event::Status::Ignored {
+            view.as_widget_mut().update(
+                &mut self.tree,
+                &event,
+                Layout::new(&node),
+                cursor,
+                &self.renderer,
+                &mut iced::advanced::clipboard::Null,
+                &mut shell,
+                &self.viewport,
+            );
+        }
         let status = shell.event_status();
         if status == iced::event::Status::Ignored
             && let Event::Keyboard(keyboard::Event::KeyPressed {
@@ -91,6 +112,18 @@ impl Ui {
             &self.renderer,
             operation,
         );
+        // Open popovers, as the app's accessibility tree sees them.
+        if let Some(overlay) = view.as_widget_mut().overlay(
+            &mut self.tree,
+            Layout::new(&node),
+            &self.renderer,
+            &self.viewport,
+            iced::Vector::ZERO,
+        ) {
+            let mut nested = iced::advanced::overlay::Nested::new(overlay);
+            let node = nested.layout(&self.renderer, self.viewport.size());
+            nested.operate(Layout::new(&node), &self.renderer, operation);
+        }
     }
 
     fn input(&mut self, app: &App, target: &'static str) -> (Rectangle, bool) {
@@ -295,6 +328,491 @@ fn assistant_app() -> App {
         )),
     )));
     app
+}
+
+#[tokio::test]
+#[ignore = "Opt-in renderer input check"]
+async fn tabs_style_buttons_and_canvas_theme_are_named_controls() {
+    use reshiki::accessibility::Role;
+    let mut ui = Ui::new().await;
+    let (mut app, _) = App::new();
+    let first = app.tab.id.0;
+    app.add_tab();
+    app.tab.path = Some("aldol.rsk".into());
+    let second = app.tab.id.0;
+    let snapshot = ui.semantics(&app);
+    assert!(snapshot.duplicate_ids.is_empty());
+    let node = |id: String| {
+        (snapshot.nodes.iter())
+            .find(|node| node.id == id)
+            .unwrap_or_else(|| panic!("{id} is in the accessibility tree"))
+    };
+    assert_eq!(node(format!("document-tab-{first}")).name, "Untitled tab");
+    assert_eq!(
+        node(format!("document-tab-{second}")).name,
+        "aldol.rsk tab, selected"
+    );
+    assert_eq!(
+        node(format!("document-tab-close-{second}")).name,
+        "Close aldol.rsk"
+    );
+    assert_eq!(node("document-tab-new".into()).name, "New tab");
+    let properties = node("inspector-tab-Properties".into());
+    assert_eq!(
+        (properties.name.as_str(), properties.checked),
+        ("Properties tab", Some(true))
+    );
+    let export = node("inspector-tab-Export".into());
+    assert_eq!(
+        (export.name.as_str(), export.checked),
+        ("Export tab", Some(false))
+    );
+    let bold = node("text-style-bold".into());
+    assert_eq!((bold.role, bold.checked), (Role::ToggleButton, Some(false)));
+    assert_eq!(node("text-style-size".into()).role, Role::TextInput);
+    let theme = node("canvas-theme".into());
+    assert_eq!(
+        (theme.name.as_str(), theme.checked),
+        ("Dark canvas", Some(false))
+    );
+    for (id, name) in [
+        ("text-style-font", "Font"),
+        ("journal-preset", "Journal preset"),
+        ("color-theme", "Color theme"),
+    ] {
+        let select = node(id.into());
+        assert_eq!((select.name.as_str(), select.role), (name, Role::ComboBox));
+        assert!(select.value.as_ref().is_some_and(|v| !v.is_empty()), "{id}");
+    }
+}
+
+/// The journal preset and color theme choose options from the keyboard and
+/// by name from assistive technology; the font list by name.
+#[tokio::test]
+#[ignore = "Opt-in renderer input check"]
+async fn style_lists_choose_options_by_keyboard_and_by_name() {
+    use reshiki::document_styles::Preset;
+    let mut ui = Ui::new().await;
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let value = |ui: &mut Ui, app: &App, id: &str| {
+        (ui.semantics(app).nodes.into_iter())
+            .find(|node| node.id == id)
+            .and_then(|node| node.value)
+            .unwrap()
+    };
+    let first = Preset::ALL[0].to_string();
+    let second = Preset::ALL[1].to_string();
+    let message = |ui: &mut Ui, app: &App, id: &str, name: &str| {
+        let mut set = reshiki::accessibility::SetValue::<Message>::new(id, name.into());
+        ui.inspect(
+            app,
+            &mut iced::advanced::widget::operation::black_box(&mut set),
+        );
+        match iced::advanced::widget::Operation::finish(&set) {
+            iced::advanced::widget::operation::Outcome::Some(message) => Some(message),
+            _ => None,
+        }
+    };
+    // By name: an option name chooses it; any other name does nothing.
+    let chosen = message(&mut ui, &app, "journal-preset", &first).expect("a preset");
+    apply(&mut app, vec![chosen]);
+    assert_eq!(value(&mut ui, &app, "journal-preset"), first);
+    assert!(message(&mut ui, &app, "journal-preset", "Manage styles…").is_none());
+    assert!(message(&mut ui, &app, "color-theme", "Manage themes…").is_none());
+    let family = reshiki::style::font_families()[0];
+    assert!(matches!(
+        message(&mut ui, &app, "text-style-font", family),
+        Some(Message::TextStyle(reshiki::typography::StyleChange::Family(f))) if f == family
+    ));
+
+    // Keyboard: ↓ and ↑ choose the next and previous preset.
+    ui.focus_control(&mut app, "journal-preset").await;
+    assert_eq!(ui.focused(&app), vec!["journal-preset".to_owned()]);
+    let (status, messages) = ui.event(
+        &app,
+        press(
+            Key::Named(Named::ArrowDown),
+            Code::ArrowDown,
+            Modifiers::empty(),
+            None,
+        ),
+        mouse::Cursor::Unavailable,
+    );
+    assert_eq!(status, iced::event::Status::Captured);
+    apply(&mut app, messages);
+    assert_eq!(value(&mut ui, &app, "journal-preset"), second);
+    let (_, messages) = ui.event(
+        &app,
+        press(
+            Key::Named(Named::ArrowUp),
+            Code::ArrowUp,
+            Modifiers::empty(),
+            None,
+        ),
+        mouse::Cursor::Unavailable,
+    );
+    apply(&mut app, messages);
+    assert_eq!(value(&mut ui, &app, "journal-preset"), first);
+
+    // A click on the color theme moves focus to it.
+    let theme = ui.bounds(&app, "color-theme").center();
+    ui.drag(&mut app, theme, theme).await;
+    assert_eq!(ui.focused(&app), vec!["color-theme".to_owned()]);
+}
+
+/// Tab reaches the font list's search field, which keeps typing and ↑ ↓
+/// for the open list; choosing a font leaves no control focused.
+#[tokio::test]
+#[ignore = "Opt-in renderer input check"]
+async fn tab_reaches_the_font_search_field_and_arrows_move_its_list() {
+    let mut ui = Ui::new().await;
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    ui.focus_control(&mut app, "text-style-size").await;
+    ui.key(
+        &mut app,
+        Key::Named(Named::Tab),
+        Code::Tab,
+        Modifiers::SHIFT,
+        None,
+    )
+    .await;
+    assert_eq!(ui.focused(&app), vec!["text-style-font".to_owned()]);
+
+    ui.key(
+        &mut app,
+        Key::Character("a".into()),
+        Code::KeyA,
+        Modifiers::empty(),
+        Some("a"),
+    )
+    .await;
+    assert_eq!(ui.input_value(&app, "text-style-font"), "a");
+    ui.key(
+        &mut app,
+        Key::Named(Named::Backspace),
+        Code::Backspace,
+        Modifiers::empty(),
+        None,
+    )
+    .await;
+
+    // ↓ moves the open list's highlight; Enter chooses the highlighted font.
+    let (status, messages) = ui.event(
+        &app,
+        press(
+            Key::Named(Named::ArrowDown),
+            Code::ArrowDown,
+            Modifiers::empty(),
+            None,
+        ),
+        mouse::Cursor::Unavailable,
+    );
+    assert_eq!(status, iced::event::Status::Captured);
+    assert!(messages.is_empty(), "{messages:?}");
+    let (_, messages) = ui.event(
+        &app,
+        press(
+            Key::Named(Named::Enter),
+            Code::Enter,
+            Modifiers::empty(),
+            None,
+        ),
+        mouse::Cursor::Unavailable,
+    );
+    let second = reshiki::style::font_families()[1];
+    assert!(
+        matches!(
+            messages.as_slice(),
+            [Message::TextStyle(reshiki::typography::StyleChange::Family(f))] if f == second
+        ),
+        "{messages:?}"
+    );
+    apply(&mut app, messages);
+    ui.assert_unfocused(&app);
+}
+
+impl Ui {
+    fn bounds(&mut self, app: &App, id: &str) -> Rectangle {
+        (self.semantics(app).nodes.into_iter())
+            .find(|node| node.id == id)
+            .unwrap_or_else(|| panic!("{id} is in the accessibility tree"))
+            .bounds
+    }
+
+    /// Focus a control as a native Focus request does.
+    async fn focus_control(&mut self, app: &mut App, id: &str) {
+        let task = iced::advanced::widget::operate(reshiki::accessibility::FocusControl::new(
+            id.to_owned(),
+        ))
+        .discard();
+        self.run_task(app, task).await;
+    }
+
+    /// The focused controls, after checking the native tree accepts them.
+    fn focused(&mut self, app: &App) -> Vec<String> {
+        let snapshot = self.semantics(app);
+        reshiki::accessibility::tree::NativeTree::default()
+            .update(&snapshot, "ReShiki", self.viewport, 1.)
+            .expect("the native tree converts");
+        (snapshot.nodes.into_iter())
+            .filter(|node| node.focused)
+            .map(|node| node.id)
+            .collect()
+    }
+
+    /// Press at `from`, move to `to`, release there; messages and tasks run.
+    async fn drag(&mut self, app: &mut App, from: iced::Point, to: iced::Point) -> Vec<Message> {
+        let mut all = Vec::new();
+        for (event, at) in [
+            (mouse::Event::CursorMoved { position: from }, from),
+            (mouse::Event::ButtonPressed(mouse::Button::Left), from),
+            (mouse::Event::CursorMoved { position: to }, to),
+            (mouse::Event::ButtonReleased(mouse::Button::Left), to),
+        ] {
+            let (_, messages) = self.event(app, Event::Mouse(event), mouse::Cursor::Available(at));
+            for message in messages {
+                all.push(message.clone());
+                let task = app.update(message);
+                self.run_task(app, task).await;
+            }
+        }
+        all
+    }
+}
+
+#[tokio::test]
+#[ignore = "Opt-in renderer input check"]
+async fn a_tab_and_its_close_button_never_hold_focus_together() {
+    let mut ui = Ui::new().await;
+    let (mut app, _) = App::new();
+    let behind = app.tab.id.0;
+    app.add_tab();
+    let front = app.tab.id.0;
+    let away = iced::Point::new(640., 500.);
+    for id in [front, behind] {
+        let (tab, close) = (
+            format!("document-tab-{id}"),
+            format!("document-tab-close-{id}"),
+        );
+        // Focus the tab itself first, so a stale focus would show: click
+        // the front tab, and reach the tab behind from the keyboard.
+        if id == front {
+            let label = ui.bounds(&app, &tab);
+            let label = iced::Point::new(label.x + 12., label.center_y());
+            let selected = ui.drag(&mut app, label, label).await;
+            assert!(
+                matches!(
+                    selected.as_slice(),
+                    [Message::Tabs(super::tabs::Action::Select(_))]
+                ),
+                "{selected:?}"
+            );
+        } else {
+            ui.focus_control(&mut app, &tab).await;
+        }
+        assert_eq!(ui.focused(&app), vec![tab.clone()]);
+        // Press ×, drag off it and release: nothing closes, only × has focus.
+        let x = ui.bounds(&app, &close).center();
+        let dragged = ui.drag(&mut app, x, away).await;
+        assert!(
+            !dragged.iter().any(|m| matches!(m, Message::Tabs(_))),
+            "{id}: {dragged:?}"
+        );
+        assert_eq!(ui.focused(&app), vec![close], "{id}");
+        assert_eq!(app.tabs.background.len(), 1);
+        assert_eq!(app.tab.id.0, front);
+    }
+}
+
+#[tokio::test]
+#[ignore = "Opt-in renderer input check"]
+async fn tab_focus_survives_bringing_the_tab_to_the_front() {
+    let mut ui = Ui::new().await;
+    let (mut app, _) = App::new();
+    let behind = app.tab.id.0;
+    app.add_tab();
+    let tab = format!("document-tab-{behind}");
+    ui.focus_control(&mut app, &tab).await;
+    assert_eq!(ui.focused(&app), vec![tab.clone()]);
+    ui.key(
+        &mut app,
+        Key::Named(Named::Enter),
+        Code::Enter,
+        Modifiers::empty(),
+        None,
+    )
+    .await;
+    assert_eq!(app.tab.id.0, behind, "Enter brings the tab to the front");
+    assert_eq!(ui.focused(&app), vec![tab]);
+    let (status, _) = ui.event(
+        &app,
+        press(Key::Named(Named::Tab), Code::Tab, Modifiers::empty(), None),
+        mouse::Cursor::Unavailable,
+    );
+    assert_eq!(status, iced::event::Status::Captured);
+    assert_eq!(
+        ui.focused(&app),
+        vec![format!("document-tab-close-{behind}")],
+        "Tab continues from the tab, not from the window's first control"
+    );
+}
+
+#[tokio::test]
+#[ignore = "Opt-in renderer input check"]
+async fn help_runs_a_clicked_row_with_enter() {
+    let mut ui = Ui::new().await;
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    app.tab.doc = reshiki::rings::Preset::Benzene.document(42., false);
+    let task = app.update(Message::ToggleHelp);
+    ui.run_task(&mut app, task).await;
+    let task = app.update(Message::Help(super::help::Action::Query(
+        "select all".into(),
+    )));
+    ui.run_task(&mut app, task).await;
+    let index = (super::help::entries().iter())
+        .position(|entry| entry.name == "Select all")
+        .unwrap();
+    let row = ui.bounds(&app, &format!("help-row-{index}")).center();
+    ui.drag(&mut app, row, row).await;
+    assert!(app.help_open);
+    assert!(ui.input(&app, "help-search").1, "the search keeps focus");
+    ui.key(
+        &mut app,
+        Key::Named(Named::Enter),
+        Code::Enter,
+        Modifiers::empty(),
+        None,
+    )
+    .await;
+    assert!(!app.help_open, "Enter runs the clicked row");
+    assert!(!app.tab.selected.is_empty(), "Select all ran");
+}
+
+/// A control focused before Help opens, such as by a Tab typed ahead of `?`,
+/// keeps its focus behind the dialog so closing Help returns to it, but only
+/// the dialog's focused control shows a ring.
+#[tokio::test]
+#[ignore = "Opt-in renderer input check"]
+async fn help_hides_the_focus_ring_of_the_control_behind_it() {
+    use iced::advanced::{Renderer as _, renderer};
+    fn pixels(ui: &mut Ui, app: &App) -> Vec<u8> {
+        let theme = app.theme();
+        let mut view = app.view();
+        ui.tree.diff(view.as_widget());
+        let size = ui.viewport.size();
+        let node = (view.as_widget_mut()).layout(
+            &mut ui.tree,
+            &ui.renderer,
+            &layout::Limits::new(size, size),
+        );
+        ui.renderer.reset(ui.viewport);
+        view.as_widget().draw(
+            &ui.tree,
+            &mut ui.renderer,
+            &theme,
+            &renderer::Style {
+                text_color: theme.palette().text,
+            },
+            Layout::new(&node),
+            mouse::Cursor::Unavailable,
+            &ui.viewport,
+        );
+        let size = Size::new(size.width as u32, size.height as u32);
+        Headless::screenshot(&mut ui.renderer, size, 1., theme.palette().background)
+    }
+    let mut shots = Vec::new();
+    let mut ring = Rectangle::default();
+    for focused_behind in [false, true] {
+        let mut ui = Ui::new().await;
+        let (mut app, _) = App::new();
+        let tab = Key::Named(Named::Tab);
+        if focused_behind {
+            ui.key(&mut app, tab.clone(), Code::Tab, Modifiers::empty(), None)
+                .await;
+            assert_eq!(ui.focused(&app), ["header-about"]);
+            ring = ui.bounds(&app, "header-about").expand(4.);
+        }
+        let task = app.update(Message::ToggleHelp);
+        ui.run_task(&mut app, task).await;
+        ui.key(&mut app, tab, Code::Tab, Modifiers::empty(), None)
+            .await;
+        assert_eq!(ui.focused(&app), ["help-about"]);
+        shots.push(pixels(&mut ui, &app));
+        if focused_behind {
+            let task = app.update(Message::ToggleHelp);
+            ui.run_task(&mut app, task).await;
+            assert_eq!(ui.focused(&app), ["header-about"], "Help returns focus");
+        }
+    }
+    // RGBA rows of the 1280 px wide window, cropped to the ring's band.
+    let crop = |pixels: &[u8]| {
+        (pixels.chunks(1280 * 4))
+            .skip(ring.y as usize)
+            .take(ring.height as usize)
+            .flat_map(|row| {
+                row.chunks(4)
+                    .skip(ring.x as usize)
+                    .take(ring.width as usize)
+            })
+            .flatten()
+            .copied()
+            .collect::<Vec<_>>()
+    };
+    assert!(crop(&shots[0]) == crop(&shots[1]), "a ring behind Help");
+}
+
+#[tokio::test]
+#[ignore = "Opt-in renderer input check"]
+async fn help_run_never_runs_a_row_selected_after_it_started() {
+    use super::help::{Action, entries};
+    let mut ui = Ui::new().await;
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    app.tab.doc = reshiki::rings::Preset::Benzene.document(42., false);
+    let task = app.update(Message::ToggleHelp);
+    ui.run_task(&mut app, task).await;
+    let index = |name: &str| entries().iter().position(|e| e.name == name).unwrap();
+    let (first, second) = (index("Select all"), index("Fit drawing"));
+    let _ = app.update(Message::Help(Action::Select(first)));
+    let run = ui.bounds(&app, &format!("help-run-{first}")).center();
+
+    // Pointer: press Run, select another row, release on its Run.
+    let (_, pressed) = ui.event(
+        &app,
+        Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+        mouse::Cursor::Available(run),
+    );
+    assert!(pressed.is_empty());
+    let _ = app.update(Message::Help(Action::Select(second)));
+    assert!(ui.bounds(&app, &format!("help-run-{second}")).contains(run));
+    let (_, released) = ui.event(
+        &app,
+        Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
+        mouse::Cursor::Available(run),
+    );
+    assert!(released.is_empty(), "{released:?}");
+
+    // Native: an activation queued for the first row finds no control.
+    let mut activate =
+        reshiki::accessibility::Activate::<Message>::new(format!("help-run-{first}"));
+    ui.inspect(
+        &app,
+        &mut iced::advanced::widget::operation::black_box(&mut activate),
+    );
+    assert!(activate.message().is_none());
+    let mut activate =
+        reshiki::accessibility::Activate::<Message>::new(format!("help-run-{second}"));
+    ui.inspect(
+        &app,
+        &mut iced::advanced::widget::operation::black_box(&mut activate),
+    );
+    assert!(matches!(
+        activate.message(),
+        Some(Message::Help(Action::Run(i))) if *i == second
+    ));
 }
 
 #[tokio::test]

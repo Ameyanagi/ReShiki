@@ -479,6 +479,10 @@ fn enumerate(
         }
         products = next;
     }
+    // Concrete products show their own property values.
+    for product in &mut products {
+        crate::linked_properties::reconcile(product, &Default::default());
+    }
     Ok(products)
 }
 

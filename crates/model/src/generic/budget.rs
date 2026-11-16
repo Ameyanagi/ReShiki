@@ -229,6 +229,7 @@ impl Presentation {
             bonds,
             annotations,
             molecule_names,
+            property_captions,
             arrows,
             arrow_labels,
             graphics,
@@ -342,6 +343,13 @@ impl Presentation {
                 .saturating_add(records::<u64>(name.atoms.len()))
                 .saturating_add(name.smiles.len())
                 .saturating_add(name.text.len());
+        }
+        for link in property_captions {
+            work.charge(1)?;
+            copy = copy
+                .saturating_add(std::mem::size_of_val(link))
+                .saturating_add(records::<u64>(link.atoms.len()))
+                .saturating_add(link.text.len());
         }
         for m in models {
             work.charge(1)?;

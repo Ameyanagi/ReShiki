@@ -51,7 +51,7 @@ Desktop checks on 2026-09-20 used a separate QA window: Select All plus blue col
 
 ## Japanese text
 
-The interface explicitly chooses an installed Japanese sans-serif font (Hiragino Sans on macOS). Drawing styles retain their selected family and JACS/ACS defaults. When a glyph is absent from that font, shared layout resolves a sans-serif fallback and uses its actual advances for positioning and wrapping; canvas, SVG, PDF and PNG receive the same resolved text runs. This avoids half-width measurements for full-width Japanese characters.
+The interface uses the platform's sans-serif: Helvetica Neue on macOS, Segoe UI on Windows and Noto Sans (else DejaVu Sans) on Linux. Japanese and other CJK characters in the interface come from the system's sans-serif CJK font for that script, such as Hiragino Sans on a Japanese Mac. Drawing styles retain their selected family and JACS/ACS defaults. When a glyph is absent from that font, shared layout resolves a sans-serif fallback and uses its actual advances for positioning and wrapping; canvas, SVG, PDF and PNG receive the same resolved text runs. This avoids half-width measurements for full-width Japanese characters.
 
 ## Missing fonts
 

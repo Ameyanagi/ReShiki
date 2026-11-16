@@ -426,7 +426,7 @@ fn an_ordinary_copy_outliving_its_tab_cannot_overtake_a_new_copy_as() {
     app.tab.selected = vec![atom];
     app.tab.saved = app.tab.doc.clone();
     let (id, epoch, revision) = (app.tab.id, app.tab.file_epoch, app.tab.revision);
-    let _task = app.copy_native(false, false);
+    let _task = app.copy_native(false, false, None);
     assert!(app.native_copy_busy);
     let _ = app.close_active_tab();
     app.tab.doc.add_atom("N", Point::default());
@@ -842,8 +842,7 @@ fn engine_insert_keeps_placement_selection_status_and_one_undo() {
     assert_eq!(app.tab.history.undo_frames().count(), 1);
     assert_eq!(app.tab.history.frames(), 1);
     assert!(!app.error);
-    let status =
-        "Inserted structure · Drag to position · Delete or Undo to remove · Source layout retained";
+    let status = "Structure inserted · Drag to position · Source layout retained";
     assert_eq!(app.status, status);
     assert_eq!(app.tool, Tool::Select);
     let _ = app.update(Message::Undo);
@@ -885,4 +884,58 @@ fn foreign_paste_follows_the_drawings_label_settings_in_one_undo_step() {
         Ok(PasteOutcome::native(part())),
     );
     assert_eq!(overrides(&app), [Some(false), Some(false)]);
+}
+
+#[test]
+fn a_wide_paste_lands_beside_the_drawing_and_a_small_one_near_the_view_centre() {
+    let scheme = || {
+        let mut part = Document::default();
+        let a = part.add_atom("N", Point::new(-150., 0.));
+        let b = part.add_atom("C", Point::new(150., 0.));
+        part.add_bond(a, b, 1, "plain");
+        part
+    };
+    let (mut app, _) = App::new();
+    app.tab.doc = scheme();
+    // As in a drawing that was edited: the amine shows its hydrogens.
+    reshiki::atom_labels::refresh::refresh_edited(&Document::default(), &mut app.tab.doc);
+    let before = app.tab.doc.clone();
+    assert_eq!(before.atoms[0].label_h, 2);
+
+    // Select all, copy, paste: a copy as wide as the drawing.
+    app.clipboard_read(
+        app.tab.file_epoch,
+        app.tab.revision,
+        Ok(PasteOutcome::native(scheme())),
+    );
+    assert_eq!(app.tab.selected.len(), 2);
+    // The gap between the visible edges, labels included, is one bond length.
+    let (_, original) = reshiki::scene::selection_bounds(&before, &before.all_ids()).unwrap();
+    let (copy, _) = reshiki::scene::selection_bounds(&app.tab.doc, &app.tab.selected).unwrap();
+    let gap = copy.x - original.x;
+    assert!(
+        (gap - before.drawing_style.bond_length_world).abs() < 1e-3,
+        "The copy starts {gap} right of the original, not one bond length"
+    );
+    assert!(
+        app.tab
+            .selected
+            .iter()
+            .all(|id| app.tab.doc.atom(*id).unwrap().position.y == 0.),
+        "and sits in the view's row"
+    );
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before, "One Undo step");
+
+    // A fragment keeps the small offset from the view's centre.
+    let mut atom = Document::default();
+    atom.add_atom("O", Point::default());
+    let center = app.tab.camera.center;
+    app.clipboard_read(
+        app.tab.file_epoch,
+        app.tab.revision,
+        Ok(PasteOutcome::native(atom)),
+    );
+    let pasted = app.tab.doc.atom(app.tab.selected[0]).unwrap().position;
+    assert_eq!(pasted, center.offset(24., 24.));
 }

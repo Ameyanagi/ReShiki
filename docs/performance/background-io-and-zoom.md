@@ -184,13 +184,13 @@ centroids, cache reuse, malformed targets and independent valence errors.
 
 ```sh
 cargo test --release --locked --bin reshiki \
-  app::autosave::tests::recovery_workloads -- --ignored --exact --nocapture
+  app::autosave::tests::manual_recovery_workloads -- --ignored --exact --nocapture
 cargo test --release --locked --bin reshiki \
-  app::files::performance::file_library_workloads -- --ignored --exact --nocapture
+  app::files::performance::manual_file_library_workloads -- --ignored --exact --nocapture
 cargo test --release --locked --bin reshiki \
-  app::inspector::tests::inspector_workloads -- --ignored --exact --nocapture
+  app::inspector::tests::manual_inspector_workloads -- --ignored --exact --nocapture
 cargo test --release --locked --bin reshiki \
-  canvas::performance::loaded_canvas_workloads -- --ignored --exact --nocapture
+  canvas::performance::manual_loaded_canvas_workloads -- --ignored --exact --nocapture
 ```
 
 Raw benchmark, test and macOS `sample` logs are retained under

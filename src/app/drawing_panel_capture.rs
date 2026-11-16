@@ -24,7 +24,7 @@ fn snapshot(app: &mut App, renderer: &mut iced::Renderer, path: &std::path::Path
 
 #[tokio::test]
 #[ignore = "Capture under isolated RESHIKI_DATA_DIR with RESHIKI_PANEL_QA_DIR set"]
-async fn drawing_panel_state_renderer_evidence() -> anyhow::Result<()> {
+async fn manual_drawing_panel_state_renderer_evidence() -> anyhow::Result<()> {
     let output =
         std::path::PathBuf::from(std::env::var_os("RESHIKI_PANEL_QA_DIR").expect("Capture folder"));
     std::env::var_os("RESHIKI_DATA_DIR").expect("Isolated application data folder");

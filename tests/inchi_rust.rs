@@ -1,7 +1,5 @@
-#[path = "common/fixture.rs"]
-mod fixture;
-#[path = "../reference/support/ring_basis.rs"]
-mod ring_basis;
+use crate::fixture;
+use crate::ring_basis;
 
 use anyhow::Context;
 use reshiki::chemistry::inchi::{kernel, output};

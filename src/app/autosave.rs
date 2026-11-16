@@ -407,7 +407,7 @@ impl App {
     pub(super) fn restore_recovered_selection(&mut self, selected: impl Fn(&Candidate) -> bool) {
         #[cfg(target_arch = "wasm32")]
         if !reshiki::storage::browser::owners_verified() {
-            self.status = "Could not verify open ReShiki pages · The recovery drafts are still available · Try again".into();
+            self.status = "Could not check open ReShiki pages · Drafts kept · Try again".into();
             self.error = true;
             return;
         }
@@ -430,7 +430,7 @@ impl App {
         self.status = match count {
             0 => return,
             1 => "Recovered drawing · Save to keep a new copy".into(),
-            n => format!("Recovered {n} drawings as tabs · Save them to keep new copies"),
+            n => format!("Recovered {n} drawings · Save each to keep a copy"),
         };
         self.error = false;
     }

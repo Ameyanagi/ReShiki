@@ -216,9 +216,7 @@ impl App {
                         Placed::Coordinated(coordination) => {
                             joining::coordination_status(coordination, false)
                         }
-                        Placed::Joined(_) => {
-                            "Fragments joined · Undo restores their original positions"
-                        }
+                        Placed::Joined(_) => "Fragments joined",
                     };
                     self.tab.doc = outcome.into_document(&state.prepared.original);
                     self.tab.selected = selected;
@@ -339,13 +337,20 @@ impl App {
             return;
         }
         let element = if self.tool == Tool::Atom {
-            self.element.as_str()
+            self.atom_tool_element()
         } else {
             "C"
         };
         match reshiki::projection::growth::place(&self.tab.doc, start, end, element, preset) {
             Ok((doc, id)) => {
                 self.tab.doc = doc;
+                if self.tool == Tool::Atom
+                    && self.element == crate::app::palettes::R_GROUP
+                    && !self.label_r_group(id)
+                {
+                    self.tab.doc = before;
+                    return;
+                }
                 self.tab.selected = vec![id];
             }
             Err(error) => {
@@ -369,18 +374,27 @@ impl App {
                 .zip(b)
                 .is_some_and(|(a, b)| reshiki::bonds::hydrogen_endpoints(&self.tab.doc, a, b))
         {
-            self.status =
-                "Drag from a bonded explicit H to an existing N, O, F or S acceptor".into();
+            self.status = "Drag from a bonded H to an N, O, F or S acceptor".into();
             self.error = true;
             return;
         }
         if self.tool == Tool::Atom {
             let result = a
                 .ok_or_else(|| "Start the drag on an existing atom".to_string())
-                .and_then(|id| editing::add_bonded_atom(&self.tab.doc, id, end, b, &self.element));
+                .and_then(|id| {
+                    editing::add_bonded_atom(&self.tab.doc, id, end, b, self.atom_tool_element())
+                });
             match result {
                 Ok((doc, id)) => {
                     self.tab.doc = doc;
+                    // An existing endpoint keeps its element and label.
+                    if b.is_none()
+                        && self.element == crate::app::palettes::R_GROUP
+                        && !self.label_r_group(id)
+                    {
+                        self.tab.doc = before;
+                        return;
+                    }
                     self.tab.selected = vec![id];
                 }
                 Err(error) => {

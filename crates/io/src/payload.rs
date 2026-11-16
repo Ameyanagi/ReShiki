@@ -12,6 +12,8 @@ const MAGIC: &[u8; 4] = b"RSKD";
 const VERSION: u8 = 1;
 const HEADER_LEN: usize = 4 + 1 + 4 + 32;
 const PNG: &[u8; 8] = b"\x89PNG\r\n\x1a\n";
+/// The empty IEND chunk, with its fixed CRC, that ends every PNG.
+const IEND: &[u8; 12] = b"\0\0\0\0IEND\xaeB`\x82";
 const KEYWORD: &[u8] = b"dev.reshiki.drawing";
 /// SVG metadata and the PDF's XMP packet both hold the envelope in exactly
 /// this element, so the reader can find it without parsing either format.
@@ -99,17 +101,20 @@ pub fn decode(bytes: &[u8]) -> Result<Document, String> {
     Document::from_json(&json)
 }
 
-/// Insert an uncompressed PNG iTXt chunk, or SVG metadata right after the root
-/// start tag, without changing the ink.
+/// Insert an uncompressed PNG iTXt chunk just before IEND, after the pixels,
+/// so readers that stop at the image data never load it; or SVG metadata right
+/// after the root start tag. The ink does not change. [`read`] also finds a
+/// chunk right after IHDR, where older versions put it.
 pub fn embed(format: &str, mut bytes: Vec<u8>, envelope: &[u8]) -> Result<Vec<u8>, String> {
     let text = STANDARD.encode(envelope);
     match format {
         "png" => {
             if !bytes.starts_with(PNG)
                 || bytes.get(8..16) != Some(b"\0\0\0\rIHDR")
-                || bytes.len() < 33
+                || bytes.len() < 33 + IEND.len()
+                || !bytes.ends_with(IEND)
             {
-                return Err("Invalid PNG header".into());
+                return Err("Invalid PNG".into());
             }
             let mut data = KEYWORD.to_vec();
             // Keyword terminator, compression flag/method, language and translated key.
@@ -121,7 +126,8 @@ pub fn embed(format: &str, mut bytes: Vec<u8>, envelope: &[u8]) -> Result<Vec<u8
             chunk.extend_from_slice(b"iTXt");
             chunk.extend_from_slice(&data);
             chunk.extend_from_slice(&crc(b"iTXt", &data).to_be_bytes());
-            bytes.splice(33..33, chunk);
+            let end = bytes.len() - IEND.len();
+            bytes.splice(end..end, chunk);
         }
         // ReShiki's own SVG start tags hold no '>' inside attribute values.
         "svg" | "svg-office" => {

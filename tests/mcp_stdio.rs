@@ -3,8 +3,7 @@
 //! Every session runs under a 60 s watchdog, with an empty data folder.
 //! Stdout must carry only JSON-RPC 2.0 objects, one per line, and stderr
 //! never carries client content.
-#[path = "common/headless.rs"]
-mod headless;
+use crate::headless;
 
 use headless::{McpSession, StderrMode};
 use reshiki::cli::MCP_USAGE;

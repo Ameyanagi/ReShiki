@@ -78,7 +78,7 @@ impl<'a> Joins<'a> {
             }
             if eligible(faces, bond) {
                 eligible_bonds.insert((bond.a, bond.b));
-                if doc.bond_visible(bond.a, bond.b) {
+                if faces.graph().bond_visible(bond.a, bond.b) {
                     for id in [bond.a, bond.b] {
                         incident.entry(id).or_default().push((index, bond));
                     }
@@ -367,8 +367,9 @@ impl Joins<'_> {
     pub fn junctions(&self) -> Vec<Junction> {
         let doc = self.doc;
         let mut result = Vec::new();
+        let collapsed = crate::abbreviations::Membership::new(doc);
         for atom in &doc.atoms {
-            if !doc.atom_visible(atom.id)
+            if !collapsed.atom_visible(atom.id)
                 || self.atoms.get(&atom.id).is_none_or(|(_, visible)| *visible)
             {
                 continue;

@@ -121,7 +121,7 @@ fn windows_print_keeps_group_alpha_and_emf_reports_partial_alpha_loss() {
         }),
         "Exposed cage ink must stay opaque; the page background is not sufficient"
     );
-    let error = office_metafile(&doc).unwrap_err();
+    let error = office_metafile(&doc, crate::export::Background::Transparent).unwrap_err();
     assert!(error.contains("partial transparency"));
     assert!(error.contains("SVG"));
 }
@@ -162,7 +162,7 @@ fn windows_print_keeps_exposed_open_chain_opaque_and_emf_accepts_it() {
     );
     assert!(colors.iter().all(|color| color[3] == 255));
 
-    let emf = office_metafile(&doc).unwrap();
+    let emf = office_metafile(&doc, crate::export::Background::Transparent).unwrap();
     assert!(emf.len() >= 88, "Missing EMF header");
     let u32_at = |offset| u32::from_le_bytes(emf[offset..offset + 4].try_into().unwrap());
     assert_eq!(u32_at(0), 1, "Missing EMR_HEADER");

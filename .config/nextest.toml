@@ -11,9 +11,7 @@ native-clipboard = { max-threads = 1 }
 filter = """
 package(reshiki) & (
   (kind(bin) & test(/^app::(atom_labels|clipboard|naming|shortcut_focus_tests::review_close|workspace::(layout_snapshots|view_parity_tests))::/))
-  | test(/^(naming|cli|clipboard)::/)
-  | binary_id(reshiki::cli)
-  | binary_id(reshiki::stated_ez_wedges)
+  | test(/^(naming|cli|clipboard|stated_ez_wedges)::/)
 ) | package(reshiki-process)
 """
 test-group = 'naming-worker'
