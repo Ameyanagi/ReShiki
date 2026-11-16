@@ -404,15 +404,17 @@ impl App {
         let Some(picker) = self.picker() else {
             return Task::none();
         };
-        if picker.chosen || picker.repo.is_some() || picker.signed_out {
+        // Signed out, only a repository asked for by name is chosen, and
+        // only a public one: the others cannot be read.
+        if picker.chosen || picker.repo.is_some() || picker.signed_out && picker.target.is_none() {
             return Task::none();
         }
+        let signed_out = picker.signed_out;
         let repos = picker.repos.as_deref().unwrap_or_default();
         let chosen = match repos {
-            _ if picker.target.is_some() => picker
-                .target
-                .clone()
-                .filter(|key| repos.iter().any(|repo| repo.key == *key)),
+            _ if picker.target.is_some() => picker.target.clone().filter(|key| {
+                (repos.iter()).any(|repo| repo.key == *key && !(signed_out && repo.private))
+            }),
             [only] => Some(only.key.clone()),
             _ => repos
                 .iter()
@@ -894,7 +896,6 @@ impl App {
                 if let Some(picker) = self.picker() {
                     picker.search = text;
                     picker.link = Some(found.clone());
-                    picker.chosen = true;
                 }
                 return Task::batch([show, self.picker_resolve(found)]);
             }
@@ -1039,6 +1040,12 @@ impl App {
 
     /// The repository a link names: listed here already, or asked of GitHub.
     fn picker_resolve(&mut self, found: Link) -> Task<Message> {
+        // The link decides what opens: no repository is chosen for it, and
+        // one asked for earlier is not waited for any more.
+        if let Some(picker) = self.picker() {
+            picker.chosen = true;
+            picker.target = None;
+        }
         let listed = self.picker().and_then(|picker| {
             let mut repos = picker.repos.iter().flatten();
             repos.find(|repo| same(&repo.key, &found.key)).cloned()
@@ -1173,6 +1180,11 @@ impl App {
         };
         picker.signed_out = false;
         picker.repos = None;
+        // A repository asked for that could not be read signed out is chosen
+        // now; a link still opening keeps its own way.
+        if picker.target.is_some() {
+            picker.chosen = false;
+        }
         self.github_list()
     }
 
