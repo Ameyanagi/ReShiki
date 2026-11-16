@@ -229,26 +229,44 @@ pub async fn commit(client: &Client, repo: &RepoKey, reference: &str) -> Result<
     })
 }
 
-/// The folders, drawings (`.rsk`) and previews (`.svg`) of one folder.
+/// The folders, drawings (`.rsk`), other chemistry files and previews
+/// (`.svg`) of one folder.
 pub async fn tree(client: &Client, repo: &RepoKey, tree: &str) -> Result<Vec<Entry>, Error> {
-    #[derive(Deserialize)]
-    struct Reply {
-        tree: Vec<Item>,
-    }
-    #[derive(Deserialize)]
-    struct Item {
-        path: String,
-        r#type: String,
-        sha: String,
-    }
     let path = format!("{}/git/trees/{tree}", base(repo));
-    let reply: Reply = call(client, Method::GET, &path, None).await?;
+    Ok(listing(call(client, Method::GET, &path, None).await?)?.0)
+}
+
+/// What [`tree`] lists, of every folder below `tree` at once, by repository
+/// path; and whether GitHub listed only part of it.
+pub async fn tree_all(
+    client: &Client,
+    repo: &RepoKey,
+    tree: &str,
+) -> Result<(Vec<Entry>, bool), Error> {
+    let path = format!("{}/git/trees/{tree}?recursive=1", base(repo));
+    listing(call(client, Method::GET, &path, None).await?)
+}
+
+#[derive(Deserialize)]
+struct TreeReply {
+    tree: Vec<TreeItem>,
+    #[serde(default)]
+    truncated: bool,
+}
+
+#[derive(Deserialize)]
+struct TreeItem {
+    path: String,
+    r#type: String,
+    sha: String,
+}
+
+fn listing(reply: TreeReply) -> Result<(Vec<Entry>, bool), Error> {
     let mut entries = Vec::new();
     for item in reply.tree {
         let folder = item.r#type == "tree";
         let shown = folder
-            || item.r#type == "blob"
-                && (item.path.ends_with(".rsk") || item.path.ends_with(".svg"));
+            || item.r#type == "blob" && (super::listed(&item.path) || item.path.ends_with(".svg"));
         if shown {
             entries.push(Entry {
                 name: item.path,
@@ -257,7 +275,7 @@ pub async fn tree(client: &Client, repo: &RepoKey, tree: &str) -> Result<Vec<Ent
             });
         }
     }
-    Ok(entries)
+    Ok((entries, reply.truncated))
 }
 
 /// The folders of one commit, each read from GitHub once.

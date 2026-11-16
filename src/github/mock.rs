@@ -54,6 +54,9 @@ pub struct Repo {
     /// Every tree, as the files below it.
     pub trees: HashMap<String, Files>,
     pub blobs: HashMap<String, Vec<u8>>,
+    /// A tree read whole lists only its first half, as GitHub does past
+    /// its limit.
+    pub truncated: bool,
 }
 
 impl Repo {
@@ -228,6 +231,46 @@ impl Model {
         repo.remote_commit("index.rsk", Some(route));
         self.add_repo("notes").owner = "alice".into();
     }
+    /// After [`Model::seed_shared`]: `alice/ligands` gets every other
+    /// chemistry file the picker lists, across folders, and `screening`, a
+    /// folder of 240 MOL files changed one minute apart, the last newest.
+    pub fn seed_formats(&mut self) {
+        let mol = include_str!("../../tests/fixtures/carbonyl-rotation/acetophenone.mol");
+        let repo = self.repo("ligands");
+        let files: [(&str, Vec<u8>); 7] = [
+            ("bipyridines/phen.mol", ring_mol("phen", "N").into()),
+            (
+                "bipyridines/bpy.cdxml",
+                include_bytes!("../../tests/fixtures/aromatic-circle-native.cdxml").into(),
+            ),
+            (
+                "bipyridines/phenol.cdx",
+                include_bytes!("../../tests/fixtures/chemdraw-properties/phenol-props.cdx").into(),
+            ),
+            (
+                "phosphines/dppe.sdf",
+                format!("{mol}$$$$\n{}$$$$\n", ring_mol("benzene", "C")).into(),
+            ),
+            ("phosphines/PPh3.mol", mol.into()),
+            (
+                "reactions/coupling.rxn",
+                include_bytes!("../../tests/fixtures/atropisomer/github7669_1.rxn").into(),
+            ),
+            ("salen.smi", b"Oc1ccccc1C=NCCN=Cc1ccccc1O salen\n".into()),
+        ];
+        for (path, bytes) in files {
+            repo.remote_commit(path, Some(&bytes));
+        }
+        for n in 0..240 {
+            let element = ["C", "N"][n % 2];
+            let mol = ring_mol(&format!("hit-{n:03}"), element);
+            let commit =
+                repo.remote_commit(&format!("screening/hit-{n:03}.mol"), Some(mol.as_bytes()));
+            let made = repo.commits.get_mut(&commit).unwrap();
+            made.at = format!("2026-11-10T{:02}:{:02}:00Z", n / 60, n % 60);
+            made.author = "alice".into();
+        }
+    }
     pub fn repo(&mut self, name: &str) -> &mut Repo {
         self.repos
             .iter_mut()
@@ -298,6 +341,31 @@ impl Model {
         let hit = |one: &&Logged| one.method == method && one.path.starts_with(prefix);
         self.log.iter().filter(hit).count()
     }
+}
+
+/// A six-membered ring in MOL format, `element` (C or N) at one corner: enough for
+/// a file the picker lists to open and show.
+pub fn ring_mol(title: &str, element: &str) -> String {
+    let mut out = format!("{title}\n  ReShiki mock\n\n  6  6  0  0  0  0  0  0  0  0999 V2000\n");
+    for corner in 0..6 {
+        let angle = std::f32::consts::FRAC_PI_3 * corner as f32;
+        let atom = if corner == 0 { element } else { "C" };
+        out.push_str(&format!(
+            "{:10.4}{:10.4}{:10.4} {atom:<3} 0  0  0  0  0  0  0  0  0  0  0  0\n",
+            1.4 * angle.cos(),
+            1.4 * angle.sin(),
+            0.
+        ));
+    }
+    for bond in 0..6 {
+        let order = 1 + bond % 2;
+        out.push_str(&format!(
+            "{:3}{:3}{order:3}  0\n",
+            bond + 1,
+            (bond + 1) % 6 + 1
+        ));
+    }
+    out + "M  END\n"
 }
 
 struct Reply {
@@ -599,29 +667,42 @@ fn repo_api(
             let Some(files) = repo.trees.get(*tree).cloned() else {
                 return missing();
             };
-            // The folder's own entries: files, and one tree per folder below.
+            // The folder's own entries: files, and one tree per folder below;
+            // read whole, every folder below and its files too.
+            let whole = query.get("recursive").is_some_and(|value| value == "1");
             let mut folders: BTreeMap<String, Files> = BTreeMap::new();
             let mut items = Vec::new();
             for (path, blob) in files {
-                match path.split_once('/') {
-                    Some((folder, rest)) => {
-                        folders
-                            .entry(folder.into())
-                            .or_default()
-                            .insert(rest.into(), blob);
-                    }
-                    None => items.push(
+                let parts: Vec<&str> = path.split('/').collect();
+                let shown = if whole {
+                    parts.len() - 1
+                } else {
+                    parts.len().min(2) - 1
+                };
+                for depth in 1..=shown {
+                    let (folder, rest) = (parts[..depth].join("/"), parts[depth..].join("/"));
+                    folders
+                        .entry(folder)
+                        .or_default()
+                        .insert(rest, blob.clone());
+                }
+                if whole || parts.len() == 1 {
+                    items.push(
                         json!({ "path": path, "mode": "100644", "type": "blob", "sha": blob }),
-                    ),
+                    );
                 }
             }
             for (folder, files) in folders {
                 let sha = repo.put_tree(files);
                 items.push(json!({ "path": folder, "mode": "040000", "type": "tree", "sha": sha }));
             }
+            let truncated = whole && repo.truncated;
+            if truncated {
+                items.truncate(items.len() / 2);
+            }
             reply(
                 200,
-                json!({ "sha": tree, "tree": items, "truncated": false }),
+                json!({ "sha": tree, "tree": items, "truncated": truncated }),
             )
         }
         ("GET", ["git", "blobs", blob]) => match repo.blobs.get(*blob) {
@@ -829,8 +910,10 @@ impl Mock {
 /// A code is approved after two polls. `POST /_mock/commit` with
 /// `{"repo", "path", "content"}` makes someone else's change (`content: null`
 /// deletes). `alice/ligands` is someone else's public repository, with a
-/// `draft` branch; `alice/notes` is private. `POST /_mock/limit` with
-/// `{"left": 0}` spends the signed-out limit (`null`: no limit).
+/// `draft` branch, every chemistry file the picker lists and a folder of 240;
+/// `alice/notes` is private. `octo-test/spectra` is too big to list whole.
+/// `POST /_mock/limit` with `{"left": 0}` spends the signed-out limit
+/// (`null`: no limit).
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "Serve the mock for GUI evidence"]
 async fn serve_github_mock() {
@@ -853,6 +936,18 @@ async fn serve_github_mock() {
         made.at = now();
         made.author = "alice".into();
         made.message = "Start the furan route".into();
+        model.seed_formats();
+        // Too big for GitHub to list whole.
+        let spectra = model.repo("spectra");
+        spectra.truncated = true;
+        for path in [
+            "ir/ethanol.mol",
+            "ir/acetone.mol",
+            "nmr/2026/ethanol.mol",
+            "raman/benzene.mol",
+        ] {
+            spectra.remote_commit(path, Some(ring_mol(path, "N").as_bytes()));
+        }
     }
     mock.model().approve_after = Some(2);
     println!("Mock GitHub at {}", mock.base);

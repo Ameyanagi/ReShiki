@@ -9,6 +9,8 @@ use reshiki::github::{
 use std::future::Future;
 use std::sync::Arc;
 
+mod files;
+
 fn repo() -> Repo {
     Repo {
         id: 7,

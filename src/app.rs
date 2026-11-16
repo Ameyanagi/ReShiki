@@ -1408,7 +1408,7 @@ impl App {
                 } else if github {
                     #[cfg(not(target_arch = "wasm32"))]
                     {
-                        Some(github::modal_key)
+                        Some(self.github_keys())
                     }
                     #[cfg(target_arch = "wasm32")]
                     None

@@ -19,7 +19,8 @@ so drawings show on GitHub.
    another on the left; open folders and drawings with a double-click, Enter
    or **Open**. Backspace goes up a folder; the parents in **lab-notes /
    scheme** go back too. Drawings show who changed them last and when (**You**
-   for your own changes), newest first.
+   for your own changes), newest first. With a repository open, the search
+   field filters its files.
 4. Edit and save as usual. The status bar chip shows the repository, the
    folder and what is left: **● lab-notes / scheme · 1 unsent** with **Send**.
    Click the name to open the picker in that folder.
@@ -37,6 +38,37 @@ In the picker, **+ New repository** (the last row) makes a private
 repository, **+ New drawing** makes an empty drawing in the folder open there,
 and **+ New folder** opens a new folder, which reaches GitHub with the first
 drawing sent from it. A new drawing shows **not sent yet** until you send it.
+Neither shows in a repository you may only read.
+
+### Every chemistry file, and Insert
+
+The picker lists the files **File › Open** reads besides drawings: `.mol`,
+`.sdf`, `.cdxml`, `.cdx`, `.rxn` and `.smi`, each with a small label such as
+**MOL**. One opens in a read-only tab, as an old version does; **Save**
+(Cmd+S) is **Save a copy…**, named as a drawing (`aspirin.rsk`), into a
+repository of yours or **This computer…**. The file on GitHub is never
+changed.
+
+**Insert** (or Shift+Enter, or right-click a file and choose **Insert into
+drawing**) puts a file's structures into the drawing in front instead, placed
+as an inserted file is, as one Undo step. An SD file's records land side by
+side.
+
+A folder shows its first 200 files, newest first, and says how many there
+are; the search field finds the others.
+
+### Tiles or Tree
+
+The two buttons at the end of the folder path switch between **Tiles** and
+**Tree**. The picker opens in the view you used last, in every repository.
+The tree lists the whole repository: click a folder or press → and ← to open
+and close it, ↑ and ↓ to move, Enter to open, Shift+Enter to insert. Each row
+shows the name, the format of a file that is not a drawing, and who changed
+it when. The pane on the right shows the selected file's preview, its path,
+and **Read only: Open makes a local copy** when it opens read only. Searching
+keeps the matches in the tree with their folders opened, across the whole
+repository. **+ New drawing** and **+ New folder** are the last rows; they go
+to the selected folder.
 
 ## Other people's repositories
 
@@ -124,7 +156,13 @@ first.
 
 - Desktop only. The browser editor has no GitHub sign-in yet.
 - ReShiki sends to each repository's default branch, and only `.rsk` drawings
-  and their `.svg` previews. Other branches and commits open read only.
+  and their `.svg` previews. Other branches and commits, and other chemistry
+  files, open read only.
+- Newest first is as far as known: only files on screen are asked for their
+  last change, so in a folder of more than 200 the rest follow by name.
+- A repository too big for GitHub to list whole shows part of it in the tree,
+  with **Only part of this repository is listed**; **+ New** rows are then
+  left out. Tiles list each folder in full.
 - A link names a branch by its first folder: `tree/feature/x/...` reads the
   branch `feature`.
 - Only `.webloc` and `.url` files carry a dropped link; a link dragged from a
@@ -155,12 +193,18 @@ first.
   as a whole for **Style or settings changed**. Atoms and bonds that differ
   get the persistent highlight paint in one diff colour, on copies made for
   the compare; text and graphics get a soft fill of that colour behind them.
-- The picker lists one folder at a time. Its tiles render the drawing itself,
-  the way an opened file renders; no preview file from the repository is
-  parsed. Each drawing's last commit and preview are one request each, made
-  only once its tile is on screen. The first screenful shows once all of its
-  dates are known and sorts newest first, once; tiles scrolled to later never
-  move the others.
+- Tiles list one folder at a time, at most 200 matching the search. They
+  render the file itself, the way an opened file renders (an SD file's first
+  record); no preview file from the repository is parsed. Each file's last
+  commit and preview are one request each, made only once its tile is on
+  screen. The first screenful shows once all of its dates are known and sorts
+  newest first, once; tiles scrolled to later never move the others.
+- The tree reads the repository whole with one recursive tree request when
+  the repository opens, kept until it opens again. Only its rows on screen are
+  built; their last commits, and the selected file's preview, are asked for as
+  they come on screen. Its folders and files sort by name.
+- A file other than a drawing is kept like an old version, in `old/<commit>/`,
+  and read the way Insert reads it. Save on its tab is Save a copy.
 - Signed out, requests carry no token and reach public repositories only.
   Opened by link, a repository's id, names, default branch and whether you
   may send to it are kept in `prefs.json` (`shared`); a working copy's
@@ -178,5 +222,6 @@ first.
   `RESHIKI_GITHUB_API=http://127.0.0.1:47123/api`,
   `RESHIKI_GITHUB_WEB=http://127.0.0.1:47123` and a fresh `RESHIKI_DATA_DIR`.
   It also serves `alice/ligands`, someone else's public repository with a
-  `draft` branch, and `alice/notes`, private; `POST /_mock/limit` with
-  `{"left": 0}` spends the signed-out limit.
+  `draft` branch, every other chemistry file and a `screening` folder of 240,
+  and `alice/notes`, private; `octo-test/spectra` is too big to list whole.
+  `POST /_mock/limit` with `{"left": 0}` spends the signed-out limit.

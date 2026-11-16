@@ -1,14 +1,21 @@
-//! The repository picker: repositories on the left, the folders and drawings
-//! of the chosen one on the right, newest first. It opens a drawing from
-//! GitHub, or chooses where a drawing not on GitHub yet is sent. Folders are
-//! listed one at a time as they open, and who changed a drawing and its
-//! preview are asked for only once its tile is on screen, so the size of a
-//! repository does not matter. A github.com link in the search field shows
-//! one row for what it names; repositories opened by link stay listed,
-//! tagged "shared". Signed out, public repositories list and open (names
-//! only); the others known here are greyed.
+//! The repository picker: repositories on the left, the folders, drawings
+//! and other chemistry files of the chosen one on the right, as tiles newest
+//! first or as a tree. It opens a drawing from GitHub, inserts a file's
+//! structures into the drawing in front, or chooses where a drawing not on
+//! GitHub yet is sent. Files other than drawings open read only. Tiles list
+//! one folder at a time as it opens, at most [`SHOWN`]; the tree reads the
+//! whole repository once. Who changed a file and its preview are asked for
+//! only once it is on screen, so the size of a repository does not matter. A
+//! github.com link in the search field shows one row for what it names;
+//! repositories opened by link stay listed, tagged "shared". Signed out,
+//! public repositories list and open (names only); the others known here are
+//! greyed.
 use super::{Action as GitHubAction, Dialog, identity, perform, versions::who};
-use crate::app::{App, Message, workspace::muted_text};
+use crate::app::{
+    App, Message,
+    import::{self, Batch, Ticket},
+    workspace::muted_text,
+};
 use chrono::{DateTime, Local};
 use iced::widget::{Space, button, column, container, row, scrollable, text};
 use iced::{Alignment, Border, Color, Element, Length, Task, Theme};
@@ -19,8 +26,11 @@ use reshiki::github::{
     workcopy::{self, FileState, RepoState},
 };
 use std::collections::{HashMap, HashSet};
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+
+mod tree;
 
 const SEARCH: &str = "github-search";
 const NEW_NAME: &str = "github-new-repo";
@@ -40,6 +50,8 @@ const NAME_TAKEN: &str = "Name taken";
 const CANT_OPEN: &str = "Can't open this name here";
 /// Two clicks on one tile this close together open it.
 const DOUBLE_CLICK: Duration = Duration::from_millis(450);
+/// The most tiles a folder shows; the search finds the others.
+const SHOWN: usize = 200;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Mode {
@@ -88,17 +100,17 @@ pub(in crate::app) struct Picker {
     /// The folder could not be listed, so its names are not known.
     unlisted: bool,
     pub(super) selected: Option<usize>,
-    /// The last click, for a double click.
-    clicked: Option<(usize, Instant)>,
-    thumbs: HashMap<String, Option<Arc<Document>>>,
+    /// The last click, by repository path, for a double click.
+    clicked: Option<(String, Instant)>,
+    pub(super) thumbs: HashMap<String, Option<Arc<Document>>>,
     /// Who last changed each drawing of this repository, and when, by
     /// repository path.
     changed: HashMap<String, (String, DateTime<Local>)>,
     new_repo: Option<String>,
     /// A new drawing (`false`) or folder (`true`) being named here.
-    new_item: Option<(bool, String)>,
+    pub(super) new_item: Option<(bool, String)>,
     /// The name a drawing is sent under, without `.rsk`.
-    save_name: String,
+    pub(super) save_name: String,
     busy: bool,
     pub(super) error: Option<String>,
     /// A link in the search field: one row for what it names.
@@ -121,6 +133,22 @@ pub(in crate::app) struct Picker {
     pub(super) asked: HashSet<String>,
     /// Save a copy: This computer is offered too.
     pub(super) copy: bool,
+    /// The tree, not tiles; Open only.
+    pub(super) tree: bool,
+    /// Every folder and file of the repository by repository path, read once
+    /// when it opens, and whether GitHub listed only part of it; `None` while
+    /// it is read.
+    pub(super) whole: Option<(Vec<Entry>, bool)>,
+    /// The request that opened the repository, for its whole listing.
+    opening: u64,
+    /// The folders open in the tree, by repository path.
+    pub(super) opened: HashSet<String>,
+    /// The tree's selected row, by repository path.
+    pub(super) row: Option<String>,
+    /// The tree's scroll offset and height; `None` before the first scroll.
+    tree_view: Option<(f32, f32)>,
+    /// The file whose menu is open, by repository path.
+    pub(super) file_menu: Option<String>,
 }
 
 impl Picker {
@@ -162,6 +190,13 @@ impl Picker {
             view: None,
             asked: HashSet::new(),
             copy: false,
+            tree: false,
+            whole: None,
+            opening: 0,
+            opened: HashSet::new(),
+            row: None,
+            tree_view: None,
+            file_menu: None,
         }
     }
 
@@ -184,17 +219,33 @@ impl Picker {
         self.repos = Some(repos);
     }
 
-    /// A drawing or folder may be made here: the folder was listed, so its
-    /// names are known, the user may send to the repository, and it is the
-    /// default branch, not an old version.
-    fn can_create(&self) -> bool {
-        !self.unlisted
-            && self.reference.is_none()
-            && self.repo.as_ref().is_some_and(|repo| repo.push)
+    /// A drawing or folder may be made here: the folder (in the tree, the
+    /// whole repository) was listed, so its names are known, the user may
+    /// send to the repository, and it is the default branch, not an old
+    /// version.
+    pub(super) fn can_create(&self) -> bool {
+        let listed = match &self.whole {
+            _ if !self.tree => !self.unlisted,
+            Some((_, truncated)) => !truncated,
+            None => false,
+        };
+        listed && self.reference.is_none() && self.repo.as_ref().is_some_and(|repo| repo.push)
     }
 
+    /// The search, lowercase; a link is no search.
+    fn query(&self) -> String {
+        match self.link {
+            Some(_) => String::new(),
+            None => self.search.trim().to_lowercase(),
+        }
+    }
+
+    /// With a repository open, the search filters its files instead.
     fn shown_repos(&self) -> Vec<&Repo> {
-        let search = self.search.to_lowercase();
+        let search = match self.repo {
+            Some(_) => String::new(),
+            None => self.search.to_lowercase(),
+        };
         self.repos
             .iter()
             .flatten()
@@ -216,10 +267,7 @@ impl Picker {
     }
 
     fn repo_path(&self, name: &str) -> String {
-        match self.folder().as_str() {
-            "" => name.to_owned(),
-            folder => format!("{folder}/{name}"),
-        }
+        join(&self.folder(), name)
     }
 
     /// How many `+ New` tiles come before the entries: none in a folder
@@ -240,7 +288,49 @@ impl Picker {
     /// What is selected, if its tile shows.
     fn selected_entry(&self) -> Option<&Entry> {
         let entry = self.entries.as_ref()?.get(self.selected?)?;
-        self.visible(entry).then_some(entry)
+        (self.visible(entry) && entry.name.to_lowercase().contains(&self.query())).then_some(entry)
+    }
+
+    /// The tiles that show, by entry: those the search matches, at most
+    /// [`SHOWN`]; and how many it matches.
+    pub(super) fn tiles(&self) -> (Vec<usize>, usize) {
+        let query = self.query();
+        let matching: Vec<usize> = (self.entries.iter().flatten().enumerate())
+            .filter(|(_, entry)| self.visible(entry) && entry.name.to_lowercase().contains(&query))
+            .map(|(at, _)| at)
+            .collect();
+        let count = matching.len();
+        (matching.into_iter().take(SHOWN).collect(), count)
+    }
+
+    /// The file selected in either view: its repository path and blob.
+    fn selected_file(&self) -> Option<(String, String)> {
+        if self.tree {
+            let path = self.row.as_ref()?;
+            let (entries, _) = self.whole.as_ref()?;
+            let entry = entries.iter().find(|e| !e.folder && e.name == *path)?;
+            return Some((path.clone(), entry.sha.clone()));
+        }
+        let entry = self.selected_entry().filter(|entry| !entry.folder)?;
+        Some((self.repo_path(&entry.name), entry.sha.clone()))
+    }
+
+    /// Where `+ New` makes a drawing or folder, and the names there: the
+    /// open folder, or in the tree the selected folder or the selected file's.
+    fn place(&self) -> (String, Vec<String>) {
+        let Some((entries, _)) = self.whole.as_ref().filter(|_| self.tree) else {
+            return (self.folder(), self.names.clone());
+        };
+        let folder = match &self.row {
+            Some(path) if entries.iter().any(|e| e.folder && e.name == *path) => path.clone(),
+            Some(path) => parent(path).to_owned(),
+            None => String::new(),
+        };
+        let names = (entries.iter())
+            .filter(|entry| parent(&entry.name) == folder)
+            .map(|entry| last(&entry.name).to_owned())
+            .collect();
+        (folder, names)
     }
 
     /// Folders by name, then drawings newest first. The selection stays on
@@ -261,6 +351,24 @@ impl Picker {
             selected.and_then(|name| entries.iter().position(|entry| entry.name == name));
         self.clicked = None;
         self.entries = Some(entries);
+    }
+}
+
+/// The folder a repository path is in (`""` is the top).
+fn parent(path: &str) -> &str {
+    path.rsplit_once('/').map_or("", |(folder, _)| folder)
+}
+
+/// The last name of a repository path.
+fn last(path: &str) -> &str {
+    path.rsplit('/').next().unwrap_or(path)
+}
+
+/// `name` in `folder`, as a repository path.
+fn join(folder: &str, name: &str) -> String {
+    match folder {
+        "" => name.to_owned(),
+        folder => format!("{folder}/{name}"),
     }
 }
 
@@ -287,11 +395,11 @@ fn on_screen(view: Option<(f32, f32, f32)>, before: usize, len: usize) -> std::o
     first.saturating_sub(before).min(len)..last.saturating_sub(before).min(len)
 }
 
-/// Folders and drawings; previews and other files are left out.
+/// Folders, drawings and other chemistry files; previews are left out.
 fn shown(entries: Vec<Entry>) -> Vec<Entry> {
     entries
         .into_iter()
-        .filter(|entry| entry.folder || entry.name.ends_with(".rsk"))
+        .filter(|entry| entry.folder || gh::listed(&entry.name))
         .collect()
 }
 
@@ -350,6 +458,25 @@ pub enum Action {
     CreateItem,
     /// Signed out: sign in, then show the picker again.
     SignIn,
+    /// Tiles (`false`) or Tree, the view every picker opens in from now on.
+    View(bool),
+    /// The repository read whole, by the request that opened it.
+    Whole(u64, Result<(Vec<Entry>, bool), gh::Error>),
+    /// A tree row clicked, by repository path: a folder opens or closes.
+    Row(String),
+    /// → (`true`) or ← in the tree.
+    Expand(bool),
+    /// The tree scrolled: its offset and height.
+    TreeScrolled(f32, f32),
+    /// Right-click on a file, by repository path; `None` closes its menu.
+    FileMenu(Option<String>),
+    /// Puts the selected file's structures into the drawing in front.
+    Insert,
+    /// The file to insert, by repository path, for the drawing it was
+    /// chosen for.
+    Fetched(Ticket, String, Result<Vec<u8>, gh::Error>),
+    /// Another chemistry file than a drawing, read for its read-only tab.
+    Read(PathBuf, Box<Result<Batch, String>>),
 }
 
 fn msg(action: Action) -> Message {
@@ -452,24 +579,41 @@ impl App {
                     picker.cant_open = None;
                     picker.limited = false;
                     picker.error = None;
+                    picker.file_menu = None;
                 }
+                return self.picker_load();
             }
             Action::Move(step) => {
                 let Some(picker) = self.picker() else {
                     return Task::none();
                 };
-                let step_in = |at: usize, len: usize| {
-                    (at as isize + step).clamp(0, len.saturating_sub(1) as isize) as usize
+                let step_in = |at: Option<usize>, len: usize| {
+                    at.map_or(0, |at| {
+                        (at as isize + step).clamp(0, len.saturating_sub(1) as isize) as usize
+                    })
                 };
-                if picker.repo.is_some() && picker.search.is_empty() {
-                    // Folders come first, so the tiles that show are the first.
-                    let entries = picker.entries.iter().flatten();
-                    let len = entries.filter(|entry| picker.visible(entry)).count();
-                    picker.selected =
-                        (len > 0).then(|| picker.selected.map_or(0, |at| step_in(at, len)));
+                if picker.repo.is_some() && picker.tree {
+                    let rows = picker.rows();
+                    let at = rows
+                        .iter()
+                        .position(|row| Some(&row.entry.name) == picker.row.as_ref());
+                    let row = rows
+                        .get(step_in(at, rows.len()))
+                        .map(|row| row.entry.name.clone());
+                    if row.is_some() {
+                        picker.row = row;
+                    }
+                    let reveal = picker.reveal_row();
+                    return Task::batch([reveal, self.picker_load()]);
+                } else if picker.repo.is_some() {
+                    let (tiles, _) = picker.tiles();
+                    let at = picker
+                        .selected
+                        .and_then(|selected| tiles.iter().position(|at| *at == selected));
+                    picker.selected = tiles.get(step_in(at, tiles.len())).copied();
                 } else {
                     let len = picker.shown_repos().len();
-                    picker.highlighted = step_in(picker.highlighted, len);
+                    picker.highlighted = step_in(Some(picker.highlighted), len);
                 }
             }
             Action::PickRepo(key) => {
@@ -514,6 +658,11 @@ impl App {
                 picker.entries = None;
                 picker.selected = None;
                 picker.error = None;
+                picker.whole = None;
+                picker.opened.clear();
+                picker.row = None;
+                picker.tree_view = None;
+                picker.file_menu = None;
                 return perform(
                     async move {
                         let head = match &reference {
@@ -534,6 +683,16 @@ impl App {
                 );
             }
             Action::Listing(generation, result) => {
+                // The top folder: the repository is read whole too, once.
+                let top = match (&result, self.picker()) {
+                    (Ok((tree, _)), Some(picker))
+                        if picker.generation == generation && picker.root.is_none() =>
+                    {
+                        Some(tree.clone())
+                    }
+                    _ => None,
+                };
+                let whole = top.map_or_else(Task::none, |tree| self.picker_whole(generation, tree));
                 let failed = match &result {
                     Err(error) => Some(self.picker_failed(error)),
                     Ok(_) => None,
@@ -563,12 +722,13 @@ impl App {
                                 let (repo, sha) = (picker.repo.clone(), entry.sha.clone());
                                 picker.trail.push((next, sha.clone()));
                                 picker.entries = Some(entries);
-                                return match (self.github.reader(), repo) {
+                                let next = match (self.github.reader(), repo) {
                                     (Some(client), Some(repo)) => {
                                         self.picker_list(client, repo, sha)
                                     }
                                     _ => Task::none(),
                                 };
+                                return Task::batch([whole, next]);
                             }
                             picker.trail.push((next, String::new()));
                             let rest = std::mem::take(&mut picker.goto);
@@ -578,7 +738,12 @@ impl App {
                             picker.entries = Some(Vec::new());
                             picker.names.clear();
                             picker.waiting = 0;
-                            return Task::none();
+                            return whole;
+                        }
+                        // The tree opens where the tiles are.
+                        let folders = folders(&picker.folder());
+                        for depth in 1..=folders.len() {
+                            picker.opened.insert(folders[..depth].join("/"));
                         }
                         picker.entries = Some(entries);
                         picker.sort();
@@ -588,7 +753,7 @@ impl App {
                         if let Some(picker) = self.picker() {
                             picker.waiting = picker.asked.len();
                         }
-                        return load;
+                        return Task::batch([whole, load]);
                     }
                     Err(_) => {
                         picker.entries = Some(Vec::new());
@@ -638,7 +803,9 @@ impl App {
                 return self.picker_list(client, repo, entry.sha);
             }
             Action::Up => {
-                let depth = self.picker().map_or(0, |picker| picker.trail.len());
+                let depth = (self.picker())
+                    .filter(|picker| !picker.tree)
+                    .map_or(0, |picker| picker.trail.len());
                 if depth > 0 {
                     return self.picker_action(Action::Crumb(depth - 1));
                 }
@@ -675,12 +842,16 @@ impl App {
                 let Some(picker) = self.picker() else {
                     return Task::none();
                 };
+                let Some(name) = picker.entries.iter().flatten().nth(at) else {
+                    return Task::none();
+                };
+                let path = picker.repo_path(&name.name);
                 let now = Instant::now();
-                let double = picker
-                    .clicked
-                    .is_some_and(|(was, when)| was == at && now - when < DOUBLE_CLICK);
+                let double = (picker.clicked.as_ref())
+                    .is_some_and(|(was, when)| *was == path && now - *when < DOUBLE_CLICK);
                 picker.selected = Some(at);
-                picker.clicked = (!double).then_some((at, now));
+                picker.file_menu = None;
+                picker.clicked = (!double).then_some((path, now));
                 if double {
                     return self.picker_action(Action::Open);
                 }
@@ -692,13 +863,20 @@ impl App {
                 if let Some(link) = picker.link.clone() {
                     return self.picker_resolve(link);
                 }
-                if picker.repo.is_none() || !picker.search.is_empty() {
+                if picker.repo.is_none() {
                     let key = picker
                         .shown_repos()
                         .get(picker.highlighted)
                         .map(|repo| repo.key.clone());
                     return key
                         .map_or_else(Task::none, |key| self.picker_action(Action::PickRepo(key)));
+                }
+                if picker.tree {
+                    let folder = (picker.row.clone()).filter(|_| picker.selected_file().is_none());
+                    return match folder {
+                        Some(row) => self.picker_action(Action::Row(row)),
+                        None => self.picker_open(),
+                    };
                 }
                 let selected = picker.selected_entry().cloned();
                 match (selected, picker.mode) {
@@ -716,8 +894,8 @@ impl App {
                 }
             }
             Action::Open => {
-                let folder = self
-                    .picker()
+                let folder = (self.picker())
+                    .filter(|picker| !picker.tree)
                     .and_then(|picker| picker.selected_entry())
                     .filter(|entry| entry.folder)
                     .map(|entry| entry.name.clone());
@@ -761,6 +939,26 @@ impl App {
                     workcopy::checkout(&root, &key, state, &repo_path, &download)
                 };
                 return match written {
+                    // Another chemistry file is read as Insert reads it.
+                    Ok(path) if !repo_path.ends_with(".rsk") => {
+                        let persist = self.github_persist(&key);
+                        let close = self.github_close_dialog();
+                        let file = crate::app::files::Picked {
+                            path: path.clone(),
+                            contents: download.bytes,
+                        };
+                        let theme = Document::default().canvas_theme;
+                        let read = import::load(
+                            self.engine.clone(),
+                            vec![file],
+                            Default::default(),
+                            theme,
+                        );
+                        let read = Task::perform(read, move |result| {
+                            msg(Action::Read(path.clone(), Box::new(result)))
+                        });
+                        Task::batch([persist, close, read])
+                    }
                     Ok(path) => {
                         let persist = self.github_persist(&key);
                         let close = self.github_close_dialog();
@@ -976,8 +1174,198 @@ impl App {
                 let close = self.github_close_dialog();
                 return Task::batch([close, self.save_as()]);
             }
+            Action::View(tree) => {
+                let Some(picker) = self.picker().filter(|picker| picker.mode == Mode::Open) else {
+                    return Task::none();
+                };
+                picker.tree = tree;
+                picker.file_menu = None;
+                // The tile selected is the row selected.
+                if tree && let Some(entry) = picker.selected_entry() {
+                    picker.row = Some(picker.repo_path(&entry.name));
+                }
+                self.github.prefs.tree = tree;
+                return Task::batch([self.github_keep_prefs(), self.picker_load()]);
+            }
+            Action::Whole(opening, result) => {
+                let failed = result.as_ref().err().map(|error| self.picker_failed(error));
+                let Some(picker) = self.picker().filter(|picker| picker.opening == opening) else {
+                    return Task::none();
+                };
+                let (mut entries, truncated) = result.unwrap_or_default();
+                // A listing in part may leave out a folder its files are in.
+                let mut known: HashSet<String> = (entries.iter())
+                    .filter(|entry| entry.folder)
+                    .map(|entry| entry.name.clone())
+                    .collect();
+                for path in entries
+                    .iter()
+                    .map(|entry| entry.name.clone())
+                    .collect::<Vec<_>>()
+                {
+                    let mut folder = parent(&path);
+                    while !folder.is_empty() && known.insert(folder.to_owned()) {
+                        entries.push(Entry {
+                            name: folder.to_owned(),
+                            sha: String::new(),
+                            folder: true,
+                        });
+                        folder = parent(folder);
+                    }
+                }
+                picker.whole = Some((entries, truncated));
+                if let Some(failed) = failed.filter(|_| picker.tree) {
+                    picker.limited = failed.is_none();
+                    picker.error = failed;
+                }
+                return self.picker_load();
+            }
+            Action::Row(path) => {
+                let Some(picker) = self.picker() else {
+                    return Task::none();
+                };
+                let now = Instant::now();
+                let double = (picker.clicked.as_ref())
+                    .is_some_and(|(was, when)| *was == path && now - *when < DOUBLE_CLICK);
+                picker.row = Some(path.clone());
+                picker.file_menu = None;
+                picker.clicked = (!double).then(|| (path.clone(), now));
+                if picker.selected_file().is_none() {
+                    if !picker.opened.remove(&path) {
+                        picker.opened.insert(path);
+                    }
+                } else if double {
+                    return self.picker_open();
+                }
+                return self.picker_load();
+            }
+            Action::Expand(open) => {
+                let Some(picker) = self.picker() else {
+                    return Task::none();
+                };
+                let rows = picker.rows();
+                let Some(at) =
+                    (rows.iter()).position(|row| Some(&row.entry.name) == picker.row.as_ref())
+                else {
+                    return Task::none();
+                };
+                let row = &rows[at];
+                let path = row.entry.name.clone();
+                let child = (rows.get(at + 1))
+                    .filter(|next| next.depth > row.depth)
+                    .map(|next| next.entry.name.clone());
+                match (row.entry.folder, row.open, open) {
+                    (true, false, true) => {
+                        picker.opened.insert(path);
+                    }
+                    (true, true, true) => picker.row = child.or(Some(path)),
+                    (true, true, false) => {
+                        picker.opened.remove(&path);
+                    }
+                    (_, _, false) if !parent(&path).is_empty() => {
+                        picker.row = Some(parent(&path).to_owned());
+                    }
+                    _ => {}
+                }
+                let reveal = picker.reveal_row();
+                return Task::batch([reveal, self.picker_load()]);
+            }
+            Action::TreeScrolled(top, height) => {
+                if let Some(picker) = self.picker() {
+                    picker.tree_view = Some((top, height));
+                }
+                return self.picker_load();
+            }
+            Action::FileMenu(path) => {
+                let Some(picker) = self.picker() else {
+                    return Task::none();
+                };
+                // The file right-clicked is selected too.
+                if let Some(path) = &path {
+                    if picker.tree {
+                        picker.row = Some(path.clone());
+                    } else {
+                        let folder = picker.folder();
+                        picker.selected = (picker.entries.iter().flatten())
+                            .position(|entry| join(&folder, &entry.name) == *path);
+                    }
+                }
+                picker.file_menu = path;
+            }
+            Action::Insert => return self.picker_insert(),
+            Action::Fetched(ticket, path, result) => {
+                return match result {
+                    Ok(contents) => {
+                        let path = PathBuf::from(last(&path));
+                        let file = crate::app::files::Picked { path, contents };
+                        self.insert_read(ticket, vec![file])
+                    }
+                    Err(error) => {
+                        self.status = self.github_failed(&error);
+                        self.error = true;
+                        Task::none()
+                    }
+                };
+            }
+            Action::Read(path, result) => {
+                let mut drawings = match *result {
+                    Ok(batch) => batch.drawings.into_iter(),
+                    Err(error) => {
+                        self.status = error;
+                        self.error = true;
+                        return Task::none();
+                    }
+                };
+                let Some(mut doc) = drawings.next() else {
+                    return Task::none();
+                };
+                // An SD file's other records, beside the first.
+                let bounds = |doc: &Document| reshiki::scene::selection_bounds(doc, &doc.all_ids());
+                for part in drawings {
+                    if let (Some((top, right)), Some((lo, hi))) = (bounds(&doc), bounds(&part)) {
+                        let gap = doc.drawing_style.bond_length_world;
+                        let offset = reshiki::document::Point::new(
+                            right.x + gap - lo.x,
+                            (top.y + right.y - lo.y - hi.y) / 2.,
+                        );
+                        reshiki::editing::append(&mut doc, &part, offset);
+                    }
+                }
+                let kept = self.github_opened(&path);
+                if self.open_target(Some(&path)) {
+                    self.show_opened(doc, Some(path));
+                }
+                return kept;
+            }
         }
         Task::none()
+    }
+
+    /// Puts the selected file's structures into the drawing in front, placed
+    /// as an insert is, as one Undo step. Only Open inserts; Shift+Enter in
+    /// Send sends.
+    fn picker_insert(&mut self) -> Task<Message> {
+        let Some(picker) = self.picker() else {
+            return Task::none();
+        };
+        if picker.mode != Mode::Open {
+            return self.picker_action(Action::Enter);
+        }
+        let (Some(repo), Some((path, sha))) = (picker.repo.clone(), picker.selected_file()) else {
+            return Task::none();
+        };
+        let Some(client) = self.github.reader() else {
+            return Task::none();
+        };
+        let ticket = self.import_ticket();
+        let close = self.github_close_dialog();
+        self.status = "Reading from GitHub…".into();
+        self.error = false;
+        let read = perform(
+            async move { api::blob(&client, &repo.key, &sha).await },
+            move |result| GitHubAction::Picker(Action::Fetched(ticket, path, result)),
+        );
+        Task::batch([close, read])
     }
 
     /// An error from GitHub for the picker; `None`: signed out, the hourly
@@ -1065,7 +1453,7 @@ impl App {
         let reference = found
             .reference
             .filter(|reference| *reference != repo.default_branch && !send);
-        if found.file && found.path.ends_with(".rsk") {
+        if found.file && gh::listed(&found.path) {
             return self.picker_open_path(repo, found.path, reference);
         }
         // A link to another kind of file shows its folder.
@@ -1085,8 +1473,9 @@ impl App {
         self.picker_action(Action::PickRepo(repo.key))
     }
 
-    /// Asks who last changed the drawings whose tiles are on screen, and for
-    /// their previews, once each. Signed out, tiles show names only.
+    /// Asks who last changed the files whose tiles or rows are on screen,
+    /// and for their previews (in the tree, the selected file's), once each.
+    /// Signed out, tiles and rows show names only.
     fn picker_load(&mut self) -> Task<Message> {
         if self.github.client().is_none() {
             return Task::none();
@@ -1094,35 +1483,68 @@ impl App {
         let Some(picker) = self.picker() else {
             return Task::none();
         };
-        let Some(entries) = &picker.entries else {
+        // By repository path, with their blobs.
+        let (shown, previews): (Vec<(String, String)>, Vec<(String, String)>) = if picker.tree {
+            let rows = picker.rows();
+            let range = tree::on_screen(picker.tree_view, rows.len());
+            let shown = rows[range]
+                .iter()
+                .filter(|row| !row.entry.folder)
+                .map(|row| (row.entry.name.clone(), row.entry.sha.clone()))
+                .collect();
+            (shown, picker.selected_file().into_iter().collect())
+        } else {
+            let Some(entries) = &picker.entries else {
+                return Task::none();
+            };
+            let (tiles, _) = picker.tiles();
+            let range = on_screen(picker.view, picker.creating(), tiles.len());
+            let shown: Vec<(String, String)> = tiles[range]
+                .iter()
+                .map(|at| &entries[*at])
+                .filter(|entry| !entry.folder)
+                .map(|entry| (picker.repo_path(&entry.name), entry.sha.clone()))
+                .collect();
+            (shown.clone(), shown)
+        };
+        let paths: Vec<String> = (shown.into_iter())
+            .map(|(path, _)| path)
+            .filter(|path| !picker.asked.contains(path))
+            .collect();
+        let previews: Vec<(String, String)> = (previews.into_iter())
+            .filter(|(_, sha)| !picker.thumbs.contains_key(sha))
+            .collect();
+        picker.asked.extend(paths.iter().cloned());
+        // Asked for once, even before it arrives.
+        for (_, sha) in &previews {
+            picker.thumbs.insert(sha.clone(), None);
+        }
+        let generation = picker.generation;
+        let changed = match paths.is_empty() {
+            true => Task::none(),
+            false => self.picker_changed(generation, paths),
+        };
+        Task::batch([self.picker_thumbs(previews), changed])
+    }
+
+    /// Reads the repository whole, for the tree, once it opens at `tree`.
+    fn picker_whole(&mut self, opening: u64, tree: String) -> Task<Message> {
+        let (Some(client), Some(picker)) = (self.github.reader(), self.picker()) else {
             return Task::none();
         };
-        let range = on_screen(picker.view, picker.creating(), entries.len());
-        let wanted: Vec<Entry> = entries
-            .get(range)
-            .unwrap_or_default()
-            .iter()
-            .filter(|entry| !entry.folder && !picker.asked.contains(&entry.name))
-            .cloned()
-            .collect();
-        if wanted.is_empty() {
+        let Some(repo) = picker.repo.clone() else {
+            return Task::none();
+        };
+        picker.opening = opening;
+        // An empty repository has nothing to list.
+        if tree.is_empty() {
+            picker.whole = Some((Vec::new(), false));
             return Task::none();
         }
-        picker
-            .asked
-            .extend(wanted.iter().map(|entry| entry.name.clone()));
-        let paths = wanted
-            .iter()
-            .map(|entry| picker.repo_path(&entry.name))
-            .collect();
-        let shas = wanted
-            .into_iter()
-            .filter(|entry| !picker.thumbs.contains_key(&entry.sha))
-            .map(|entry| entry.sha)
-            .collect();
-        let generation = picker.generation;
-        let changed = self.picker_changed(generation, paths);
-        Task::batch([self.picker_thumbs(shas), changed])
+        perform(
+            async move { api::tree_all(&client, &repo.key, &tree).await },
+            move |result| GitHubAction::Picker(Action::Whole(opening, result)),
+        )
     }
 
     /// Shows `picker`: the repositories GitHub lists or, signed out, those
@@ -1139,6 +1561,8 @@ impl App {
         } else if !self.github.repos.is_empty() || !self.github.prefs.shared.is_empty() {
             picker.listed(&self.github_picker_repos(), self.github.prefs.last);
         }
+        // Tiles the very first time, then the view used last.
+        picker.tree = picker.mode == Mode::Open && self.github.prefs.tree;
         let focus = match picker.mode {
             Mode::Open => iced::widget::operation::focus(SEARCH),
             Mode::SendTo => iced::widget::operation::focus(SAVE_NAME)
@@ -1226,26 +1650,30 @@ impl App {
         )
     }
 
-    /// Each drawing's tile shows the drawing itself, read like any opened
-    /// file; no preview file from the repository is parsed.
-    fn picker_thumbs(&mut self, shas: Vec<String>) -> Task<Message> {
+    /// Each file's tile or preview shows the file itself, read like any
+    /// opened file (an SD file's first record); no preview file from the
+    /// repository is parsed. By repository path and blob.
+    fn picker_thumbs(&mut self, files: Vec<(String, String)>) -> Task<Message> {
         let (Some(client), Some(repo)) = (
             self.github.client(),
             self.picker().and_then(|picker| picker.repo.clone()),
         ) else {
             return Task::none();
         };
-        Task::batch(shas.into_iter().map(|sha| {
-            let (client, key) = (client.clone(), repo.key.clone());
+        let theme = Document::default().canvas_theme;
+        Task::batch(files.into_iter().map(|(path, sha)| {
+            let (client, key, engine) = (client.clone(), repo.key.clone(), self.engine.clone());
             let blob = sha.clone();
             perform(
                 async move {
-                    let bytes = api::blob(&client, &key, &blob).await.ok()?;
-                    reshiki::task::spawn_blocking(move || Document::from_native_file(&bytes).ok())
-                        .await
-                        .ok()
-                        .flatten()
-                        .map(Arc::new)
+                    let contents = api::blob(&client, &key, &blob).await.ok()?;
+                    let file = crate::app::files::Picked {
+                        path: PathBuf::from(last(&path)),
+                        contents,
+                    };
+                    let read = import::load(engine, vec![file], Default::default(), theme);
+                    let first = read.await.ok()?.drawings.into_iter().next()?;
+                    Some(Arc::new(first))
                 },
                 move |doc| GitHubAction::Picker(Action::Thumb(sha, doc)),
             )
@@ -1291,18 +1719,16 @@ impl App {
         let Some(picker) = self.picker() else {
             return Task::none();
         };
-        let (Some(repo), Some(entry)) = (picker.repo.clone(), picker.selected_entry().cloned())
+        let (Some(repo), Some((repo_path, _))) = (picker.repo.clone(), picker.selected_file())
         else {
             return Task::none();
         };
-        if entry.folder {
-            return Task::none();
-        }
-        let (repo_path, reference) = (picker.repo_path(&entry.name), picker.reference.clone());
+        let reference = picker.reference.clone();
         self.picker_open_path(repo, repo_path, reference)
     }
 
     /// Opens the drawing at `repo_path`; at `reference`, an old version.
+    /// Another chemistry file opens read only, kept as old versions are.
     fn picker_open_path(
         &mut self,
         repo: Repo,
@@ -1316,10 +1742,11 @@ impl App {
             return Task::none();
         };
         let key = self.github_folder(&repo);
+        let drawing = repo_path.ends_with(".rsk");
         let collides = self
             .github_state(&key)
             .is_some_and(|state| state.collides(&repo_path));
-        if !workcopy::valid_repo_path(&repo_path) || collides && reference.is_none() {
+        if !workcopy::valid_repo_path(&repo_path) || collides && reference.is_none() && drawing {
             if let Some(picker) = self.picker() {
                 picker.error = Some(CANT_OPEN.into());
             }
@@ -1335,7 +1762,7 @@ impl App {
             .and_then(|state| state.files.get(&repo_path))
             .map(|file| file.base_hash.clone());
         let unsent = std::fs::read(&path).is_ok_and(|bytes| base != Some(workcopy::hash(&bytes)));
-        if reference.is_none() && (open || unsent) {
+        if reference.is_none() && drawing && (open || unsent) {
             // A renamed repository: Versions asks GitHub under its names now.
             self.github_tracked(&key, &repo);
             let persist = self.github_persist(&key);
@@ -1353,7 +1780,7 @@ impl App {
         picker.error = None;
         picker.request = generation;
         picker.goto.clear();
-        let old = reference.is_some();
+        let old = reference.is_some() || !drawing;
         perform(
             {
                 let (repo, repo_path) = (repo.clone(), repo_path.clone());
@@ -1460,6 +1887,7 @@ impl App {
     /// A new folder opens at once and exists only here until a drawing in it
     /// is sent. A new drawing is an empty working copy with nothing on
     /// GitHub yet, opened in a tab: Cmd+S saves it, Send makes it a new file.
+    /// In the tree, both go to the selected folder (or the selected file's).
     fn picker_create_item(&mut self) -> Task<Message> {
         let Some(root) = self.github.root.clone() else {
             return Task::none();
@@ -1481,13 +1909,27 @@ impl App {
         } else {
             typed
         };
+        let (place, names) = picker.place();
         if folder {
-            if typed.is_empty() || !workcopy::valid_repo_path(&picker.repo_path(typed)) {
+            let path = join(&place, typed);
+            if typed.is_empty() || !workcopy::valid_repo_path(&path) {
                 picker.error = Some(CANT_OPEN.into());
                 return Task::none();
             }
-            if picker.names.iter().any(|name| name == typed) {
+            if names.iter().any(|name| name == typed) {
                 picker.error = Some(NAME_TAKEN.into());
+                return Task::none();
+            }
+            if let Some((entries, _)) = picker.whole.as_mut().filter(|_| picker.tree) {
+                entries.push(Entry {
+                    name: path.clone(),
+                    sha: String::new(),
+                    folder: true,
+                });
+                picker.opened.insert(path.clone());
+                picker.row = Some(path);
+                picker.new_item = None;
+                picker.error = None;
                 return Task::none();
             }
             picker.trail.push((typed.to_owned(), String::new()));
@@ -1507,11 +1949,10 @@ impl App {
             .trim()
             .to_owned();
         let (name, preview) = (format!("{stem}.rsk"), format!("{stem}.svg"));
-        let taken = picker
-            .names
+        let taken = names
             .iter()
             .any(|taken| *taken == name || *taken == preview);
-        let repo_path = picker.repo_path(&name);
+        let repo_path = join(&place, &name);
         let key = self.github_folder(&repo);
         let path = workcopy::working_path(&root, &key, &repo_path);
         let collides = path.exists()
@@ -1607,7 +2048,8 @@ impl App {
             content = content.push(lock());
         }
         let current = picker.repo.as_ref().map(|r| &r.key) == Some(&repo.key);
-        let highlighted = !picker.search.is_empty() && at == picker.highlighted;
+        let highlighted =
+            picker.repo.is_none() && !picker.search.is_empty() && at == picker.highlighted;
         let greyed = picker.signed_out && (repo.private || picker.mode == Mode::SendTo);
         let row = reshiki::accessibility::button(format!("github-repo-{at}"), spoken, content)
             .width(Length::Fill)
@@ -1747,7 +2189,10 @@ impl App {
         }
         footer = footer.push(
             text(match picker.mode {
-                Mode::Open => "Enter Open · Backspace Up · Esc Close",
+                Mode::Open if picker.tree => {
+                    "↑↓ Move · → Open folder · Enter Open · ⇧Enter Insert · Esc Close"
+                }
+                Mode::Open => "Enter Open · ⇧Enter Insert · Backspace Up · Esc Close",
                 Mode::SendTo => "Enter Send · Backspace Up · Esc Close",
             })
             .size(11)
@@ -1776,12 +2221,32 @@ impl App {
             .style(crate::appearance::secondary)
             .on_press(Message::GitHub(GitHubAction::Close)),
         );
+        let file = picker.selected_file();
+        if picker.mode == Mode::Open {
+            footer = footer.push(
+                reshiki::accessibility::button(
+                    "github-picker-insert",
+                    "Insert into drawing",
+                    text("Insert").size(13),
+                )
+                .padding([7, 12])
+                .style(crate::appearance::secondary)
+                .on_press_maybe((!picker.busy && file.is_some()).then(|| msg(Action::Insert))),
+            );
+        }
+        // Another chemistry file, or any file of a read-only repository.
+        let read_only = file.is_some_and(|(path, _)| {
+            !path.ends_with(".rsk") || picker.repo.as_ref().is_some_and(|repo| !repo.push)
+        });
         let (id, label, action, ready) = match picker.mode {
             Mode::Open => (
                 "github-picker-open",
-                "Open",
+                if read_only { "Open read-only" } else { "Open" },
                 Action::Open,
-                picker.selected_entry().is_some(),
+                match picker.tree {
+                    true => picker.row.is_some(),
+                    false => picker.selected_entry().is_some(),
+                },
             ),
             Mode::SendTo => (
                 "github-send-here",
@@ -1912,11 +2377,13 @@ impl App {
                     .into(),
             );
         };
-        // `lab-notes / scheme`: the parents are muted and go back there.
+        // `lab-notes / scheme`: the parents are muted and go back there. The
+        // tree shows the repository alone.
         let mut crumbs = row![].spacing(6).align_y(Alignment::Center);
-        let names = std::iter::once(repo.key.repo.as_str())
-            .chain(picker.trail.iter().map(|(name, _)| name.as_str()));
-        let depth = picker.trail.len();
+        let trail = picker.trail.iter().filter(|_| !picker.tree);
+        let names =
+            std::iter::once(repo.key.repo.as_str()).chain(trail.map(|(name, _)| name.as_str()));
+        let depth = if picker.tree { 0 } else { picker.trail.len() };
         for (at, name) in names.enumerate() {
             if at > 0 {
                 crumbs = crumbs.push(text("/").size(13).style(muted_text));
@@ -1935,6 +2402,19 @@ impl App {
             } else {
                 text(name).size(13).into()
             });
+        }
+        if !repo.push {
+            crumbs = crumbs.push(container(read_only_label()).padding([0, 6]));
+        }
+        crumbs = crumbs.push(Space::new().width(Length::Fill));
+        if picker.mode == Mode::Open {
+            crumbs = crumbs.push(view_switch(picker.tree));
+        }
+        if picker.tree {
+            return column![crumbs, self.picker_tree(picker)]
+                .spacing(10)
+                .width(Length::Fill)
+                .into();
         }
         // Unsent drawings here, for the dots on folders and drawings.
         let folder_key = self
@@ -1976,11 +2456,11 @@ impl App {
         let body: Element<'_, Message> = match &picker.entries {
             None => center(text("Listing…").size(12).style(muted_text).into()),
             Some(entries) => {
-                let tiles = entries
-                    .iter()
-                    .enumerate()
-                    // Drawings show once their last changes are known.
-                    .filter(|(_, entry)| picker.visible(entry))
+                // Drawings show once their last changes are known.
+                let (shown, matching) = picker.tiles();
+                let tiles = shown
+                    .into_iter()
+                    .map(|at| (at, &entries[at]))
                     .map(|(at, entry)| {
                         let selected = picker.selected == Some(at);
                         let path = picker.repo_path(&entry.name);
@@ -2000,15 +2480,7 @@ impl App {
                                     None,
                                 )
                             } else {
-                                let preview = match picker.thumbs.get(&entry.sha) {
-                                    Some(Some(doc)) => crate::canvas::layered::canvas(
-                                        crate::canvas::DrawingPreview(doc),
-                                    )
-                                    .width(Length::Fill)
-                                    .height(Length::Fill)
-                                    .into(),
-                                    _ => Space::new().into(),
-                                };
+                                let preview = thumbnail(picker, &entry.name, &entry.sha);
                                 let meta = picker.changed.get(&path).map(|(who, at)| {
                                     format!("{who} · {}", super::versions::tile_time(*at))
                                 });
@@ -2056,13 +2528,20 @@ impl App {
                                 .wrapping(text::Wrapping::WordOrGlyph)
                         }))
                         .spacing(4);
-                        reshiki::accessibility::button(format!("github-file-{at}"), spoken, content)
-                            .width(128)
-                            .height(TILE_HEIGHT)
-                            .padding(6)
-                            .style(crate::app::workspace::control(selected))
-                            .on_press(msg(Action::Select(at)))
-                            .into()
+                        let tile = reshiki::accessibility::button(
+                            format!("github-file-{at}"),
+                            spoken,
+                            content,
+                        )
+                        .width(128)
+                        .height(TILE_HEIGHT)
+                        .padding(6)
+                        .style(crate::app::workspace::control(selected))
+                        .on_press(msg(Action::Select(at)));
+                        match entry.folder {
+                            true => tile.into(),
+                            false => file_menu(picker, path, tile.into()),
+                        }
                     });
                 let creating: Vec<Element<'_, Message>> = match picker.mode {
                     _ if !picker.can_create() => vec![],
@@ -2075,6 +2554,16 @@ impl App {
                 let mut body = column![tiles].spacing(12);
                 if entries.is_empty() && !picker.unlisted {
                     body = body.push(text("Empty").size(13).style(muted_text));
+                } else if matching == 0 && !picker.query().is_empty() {
+                    body = body.push(text("No match in this folder.").size(13).style(muted_text));
+                } else if matching > SHOWN {
+                    body = body.push(
+                        text(format!(
+                            "Showing {SHOWN} of {matching}. Search to find the others."
+                        ))
+                        .size(11)
+                        .style(muted_text),
+                    );
                 }
                 if picker.signed_out {
                     body = body.push(text(SIGNED_OUT_HINT).size(11).style(muted_text));
@@ -2231,6 +2720,131 @@ fn new_item_tile(picker: &Picker, folder: bool) -> Element<'_, Message> {
     .style(crate::app::workspace::control(false))
     .on_press(msg(Action::NewItem(folder)))
     .into()
+}
+
+/// Tiles and Tree, two icon buttons at the end of the folder path.
+fn view_switch<'a>(tree: bool) -> Element<'a, Message> {
+    let button = |id: &'static str, label: &'static str, icon, on: bool| {
+        reshiki::accessibility::button(
+            id,
+            label,
+            iced::widget::canvas(crate::app::icons::Glyph(icon, on))
+                .width(16)
+                .height(16),
+        )
+        .checked(on)
+        .padding([4, 8])
+        .style(crate::app::workspace::control(on))
+        .on_press(msg(Action::View(id == "github-view-tree")))
+    };
+    container(
+        row![
+            button(
+                "github-view-tiles",
+                "Tiles",
+                crate::app::icons::Icon::Tiles,
+                !tree
+            ),
+            button(
+                "github-view-tree",
+                "Tree",
+                crate::app::icons::Icon::Tree,
+                tree
+            ),
+        ]
+        .spacing(2),
+    )
+    .padding(1)
+    .style(thumb_frame)
+    .into()
+}
+
+/// A file's drawing, once read.
+fn drawing<'a>(picker: &'a Picker, sha: &str) -> Element<'a, Message> {
+    match picker.thumbs.get(sha) {
+        Some(Some(doc)) => crate::canvas::layered::canvas(crate::canvas::DrawingPreview(doc))
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .into(),
+        _ => Space::new().into(),
+    }
+}
+
+/// A file's drawing, with its format's label in the corner when it is not
+/// a drawing.
+fn thumbnail<'a>(picker: &'a Picker, name: &str, sha: &str) -> Element<'a, Message> {
+    match gh::format_label(name) {
+        Some(label) => iced::widget::stack![
+            drawing(picker, sha),
+            container(format_label(label))
+                .align_right(Length::Fill)
+                .align_bottom(Length::Fill)
+                .padding(4),
+        ]
+        .into(),
+        None => drawing(picker, sha),
+    }
+}
+
+/// `MOL`, `SDF`, …: what kind of file a tile or row is.
+fn format_label<'a>(label: &'static str) -> Element<'a, Message> {
+    container(text(label).size(10))
+        .padding([1, 5])
+        .style(|theme: &Theme| {
+            let (ink, paper) = if crate::appearance::is_dark(theme) {
+                (
+                    Color::from_rgb8(224, 200, 140),
+                    Color::from_rgb8(58, 50, 32),
+                )
+            } else {
+                (
+                    Color::from_rgb8(107, 90, 46),
+                    Color::from_rgb8(246, 239, 220),
+                )
+            };
+            container::Style {
+                text_color: Some(ink),
+                background: Some(paper.into()),
+                border: Border {
+                    radius: 4.0.into(),
+                    ..Border::default()
+                },
+                ..container::Style::default()
+            }
+        })
+        .into()
+}
+
+/// Right-click on a file's tile or row: Insert into drawing.
+fn file_menu<'a>(
+    picker: &'a Picker,
+    path: String,
+    content: Element<'a, Message>,
+) -> Element<'a, Message> {
+    let open = picker.file_menu.as_ref() == Some(&path);
+    let menu = open.then(|| {
+        container(
+            reshiki::accessibility::button(
+                "github-insert",
+                "Insert into drawing",
+                text("Insert into drawing").size(12),
+            )
+            .width(Length::Fill)
+            .padding([6, 10])
+            .style(crate::app::workspace::control(false))
+            .on_press(msg(Action::Insert)),
+        )
+        .width(180)
+        .padding(5)
+        .style(crate::app::color_popover::surface)
+        .into()
+    });
+    let area = iced::widget::mouse_area(content).on_right_press(msg(Action::FileMenu(Some(path))));
+    Element::new(crate::app::popover::popover(
+        area,
+        menu,
+        msg(Action::FileMenu(None)),
+    ))
 }
 
 /// An eye and "Read only": the user may not send to the repository.

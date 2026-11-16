@@ -40,6 +40,10 @@ fn family(icon: Icon) -> &'static str {
         Icon::Cloud => "cloud",
         Icon::History => "history",
         Icon::Eye => "eye",
+        Icon::Tiles => "tiles",
+        Icon::Tree => "tree",
+        Icon::File => "file",
+        Icon::Folder => "folder",
         Icon::Pin => "pin",
         Icon::ModelStyle(_) => "model-style",
     }
@@ -93,6 +97,10 @@ fn all_icons() -> Vec<(String, Icon)> {
         Icon::Cloud,
         Icon::History,
         Icon::Eye,
+        Icon::Tiles,
+        Icon::Tree,
+        Icon::File,
+        Icon::Folder,
         Icon::Pin,
     ]
     .into_iter()
@@ -210,6 +218,10 @@ fn expected_counts() -> BTreeMap<&'static str, usize> {
         "cloud",
         "history",
         "eye",
+        "tiles",
+        "tree",
+        "file",
+        "folder",
         "pin",
         "tool-select",
         "tool-lasso",
@@ -264,7 +276,7 @@ fn icon_fixtures_cover_every_variant() {
         *counts.entry(family(*icon)).or_insert(0) += 1;
     }
     assert_eq!(counts, expected_counts());
-    assert_eq!(icons.len(), 143);
+    assert_eq!(icons.len(), 147);
 }
 
 fn render(

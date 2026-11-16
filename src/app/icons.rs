@@ -47,6 +47,29 @@ pub(super) enum Icon {
         expect(dead_code, reason = "The browser editor has no GitHub sign-in")
     )]
     Eye,
+    /// Four squares, a list with branches and a page: the GitHub picker's
+    /// Tiles and Tree views, and a file in its tree.
+    #[cfg_attr(
+        target_arch = "wasm32",
+        expect(dead_code, reason = "The browser editor has no GitHub sign-in")
+    )]
+    Tiles,
+    #[cfg_attr(
+        target_arch = "wasm32",
+        expect(dead_code, reason = "The browser editor has no GitHub sign-in")
+    )]
+    Tree,
+    #[cfg_attr(
+        target_arch = "wasm32",
+        expect(dead_code, reason = "The browser editor has no GitHub sign-in")
+    )]
+    File,
+    /// A filled folder: a folder in the GitHub picker's tree.
+    #[cfg_attr(
+        target_arch = "wasm32",
+        expect(dead_code, reason = "The browser editor has no GitHub sign-in")
+    )]
+    Folder,
     /// A clock: a GitHub drawing's History.
     #[cfg_attr(
         target_arch = "wasm32",
@@ -129,6 +152,10 @@ impl Glyph {
             Icon::Cloud => commands::cloud(f, ink),
             Icon::History => commands::history(f, ink),
             Icon::Eye => chrome::eye(f, ink),
+            Icon::Tiles => chrome::tiles(f, ink),
+            Icon::Tree => chrome::tree(f, ink),
+            Icon::File => chrome::file(f, ink),
+            Icon::Folder => chrome::folder(f),
             Icon::Pin => chrome::pin(f, ink),
             Icon::ModelStyle(style) => chrome::model_style(f, ink, style),
         }
