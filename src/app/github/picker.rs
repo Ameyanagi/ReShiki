@@ -1175,8 +1175,11 @@ impl App {
         };
         picker.signed_out = false;
         picker.repos = None;
-        // A repository asked for that could not be read signed out is chosen now.
-        picker.chosen = false;
+        // A repository asked for that could not be read signed out is chosen
+        // now; a link still opening keeps its own way.
+        if picker.target.is_some() {
+            picker.chosen = false;
+        }
         self.github_list()
     }
 
