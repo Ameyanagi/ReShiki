@@ -124,7 +124,7 @@ impl App {
             let writing = self.file_io.saving && self.file_io.saving_tab == Some(id);
             if self.dirty() || writing {
                 // A tab closing goes first and is the one saved.
-                let save = self.save_drawing(false);
+                let save = self.save_drawing(None);
                 let save = crate::app::tagged(save, self.tab.id);
                 // Unless this drawing's save is under way, the choice can be made again.
                 if self.file_io.saving && self.file_io.saving_tab == Some(id) {

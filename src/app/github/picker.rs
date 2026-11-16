@@ -684,7 +684,7 @@ impl App {
         self.tab.untitled_name = None;
         let message = reshiki::github::send::default_message(&[repo_path]);
         self.github.after_save = Some((key, message, vec![self.tab.id]));
-        let save = crate::app::tagged(self.save_drawing(false), self.tab.id);
+        let save = crate::app::tagged(self.save_drawing(None), self.tab.id);
         Task::batch([persist, close, save])
     }
 
