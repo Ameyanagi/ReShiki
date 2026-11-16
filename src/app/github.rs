@@ -29,11 +29,13 @@ mod account;
 mod compare;
 mod conflict;
 mod identity;
+mod newer;
 pub(super) mod picker;
 #[cfg(test)]
 mod tests;
 mod versions;
 
+use newer::Found;
 pub(super) use picker::Mode;
 
 const OPEN_FROM: &str = "Open from GitHub…";
@@ -42,7 +44,8 @@ pub(super) const OPEN_FROM_ROW: &str = "Open from GitHub: ";
 const SEND_TO: &str = "Send to GitHub…";
 const NOT_SET_UP: &str = "Not set up in this build";
 const SAVE_COPY: &str = "Save a copy…";
-/// Read-only repositories are asked again on window focus, at most this often.
+/// The open drawings' repositories are asked again on window focus, at
+/// most this often.
 const RECHECK: Duration = Duration::from_secs(5 * 60);
 
 #[derive(Debug, Clone)]
@@ -137,9 +140,11 @@ pub(super) struct State {
     prefs: identity::Prefs,
     /// A status that is a question, not an error, shown in amber.
     pub(super) amber: Option<String>,
-    /// When read-only repositories were last asked whether the user may
-    /// send to them now.
+    /// When the open drawings' repositories were last asked about.
     checked: Option<Instant>,
+    /// Open drawings changed on GitHub, waiting for Update: by repository
+    /// folder and repository path.
+    newer: HashMap<(RepoKey, String), Found>,
     /// The read-only chip's menu is open.
     pub(super) chip_menu: bool,
 }
@@ -184,6 +189,7 @@ impl State {
             versions: versions::Versions::default(),
             amber: None,
             checked: None,
+            newer: HashMap::new(),
             chip_menu: false,
         }
     }
@@ -340,11 +346,18 @@ pub enum Action {
     /// From an old version: the drawing as it is now.
     OpenLatest,
     /// The window came to the front: after Choose repositories, the picker
-    /// lists them again; read-only repositories are asked about again.
+    /// lists them again; the open drawings' repositories are asked about
+    /// again.
     Focused,
     /// Whether a read-only repository may be sent to now, asked in the
     /// sign-in of that generation.
     Access(u64, RepoKey, Result<Repo, gh::Error>),
+    /// The open drawings of a repository changed on GitHub, asked in the
+    /// sign-in of that generation.
+    /// With the repository as GitHub names it now.
+    Newer(u64, RepoKey, Result<(Repo, Vec<Found>), gh::Error>),
+    /// GitHub's newer version replaces the drawing in front.
+    Update,
     /// The clipboard's text on Paste in a tab: a link opens, anything else
     /// pastes into that tab.
     Pasted(TabId, Option<String>),
@@ -891,8 +904,11 @@ impl App {
             }
             Action::CloseAnswer(send) => return self.github_close_answer(send),
             Action::Review => {
-                if let Some((key, _)) = self.github.locate(self.tab.path.as_deref()) {
-                    return self.github_review(key, 0);
+                // Nothing of a read-only repository is reviewed: it cannot be sent.
+                let front = self.github.locate(self.tab.path.as_deref());
+                if let Some((key, _)) = front.filter(|(key, _)| !self.github.read_only(key)) {
+                    let promote = self.github_promote();
+                    return Task::batch([promote, self.github_review(key, 0)]);
                 }
             }
             Action::ReviewMeta(key, repo_path, commit, found) => {
@@ -1037,6 +1053,18 @@ impl App {
                     return Task::batch([keep, self.github_persist(&key)]);
                 }
             }
+            Action::Newer(generation, key, Ok((repo, found)))
+                if generation == self.github.generation =>
+            {
+                return self.github_newer_found(key, repo, found);
+            }
+            // A check that failed waits for the next one; an ended sign-in
+            // signs out.
+            Action::Newer(generation, _, Err(error)) if generation == self.github.generation => {
+                self.github_failed(&error);
+            }
+            Action::Newer(..) => {}
+            Action::Update => return self.github_update(),
             Action::Pasted(id, text) => {
                 let web = &self.github.ends.web;
                 if let Some(link) = text.filter(|text| gh::link::parse(text, web).is_some()) {
@@ -1051,32 +1079,36 @@ impl App {
         Task::none()
     }
 
-    /// On window focus, at most every five minutes: the read-only
-    /// repositories of the open drawings are asked whether the user may send
-    /// to them now.
+    /// On window focus, at most every five minutes, while GitHub drawings
+    /// are open: their read-only repositories are asked whether the user may
+    /// send to them now, the others whether someone changed an open drawing.
     pub(super) fn github_recheck(&mut self) -> Task<Message> {
         let Some(client) = self.github.client() else {
             return Task::none();
         };
-        if self.github.checked.is_some_and(|at| at.elapsed() < RECHECK) {
+        let open = self.github_open_repos();
+        if open.is_empty() || self.github.checked.is_some_and(|at| at.elapsed() < RECHECK) {
             return Task::none();
         }
         self.github.checked = Some(Instant::now());
         let generation = self.github.generation;
-        let read_only: Vec<(RepoKey, u64)> = self
-            .github_open_repos()
-            .into_iter()
-            .filter_map(|key| {
-                let state = self.github.states.get(&key)?;
-                state.read_only.then_some((key, state.repo_id))
-            })
-            .collect();
-        Task::batch(read_only.into_iter().map(|(key, id)| {
+        let mut tasks = Vec::new();
+        for key in open {
+            let Some(state) = self.github.states.get(&key) else {
+                continue;
+            };
             let client = client.clone();
-            perform(async move { api::repo(&client, id).await }, move |result| {
-                Action::Access(generation, key, result)
-            })
-        }))
+            if state.read_only {
+                let id = state.repo_id;
+                tasks.push(perform(
+                    async move { api::repo(&client, id).await },
+                    move |result| Action::Access(generation, key, result),
+                ));
+            } else {
+                tasks.push(self.github_check_newer(client, key));
+            }
+        }
+        Task::batch(tasks)
     }
 
     /// Paste with no text field focused: a github.com link on the clipboard
@@ -1803,11 +1835,21 @@ impl App {
         rows.push(self.github_send_row());
         if let Some((key, repo_path)) = self.github.locate(self.tab.path.as_deref()) {
             let name = file_name(&repo_path).to_owned();
-            if self.github_conflicts(&key) > 0 {
+            if !self.github.read_only(&key)
+                && (self.github_conflicts(&key) > 0
+                    || self.github_newer_conflict(self.tab.path.as_deref()))
+            {
                 rows.push((
                     "Review changes on GitHub".into(),
                     name.clone(),
                     Some(Action::Review),
+                ));
+            }
+            if self.github_newer(self.tab.path.as_deref()).is_some() {
+                rows.push((
+                    "Update from GitHub".into(),
+                    name.clone(),
+                    Some(Action::Update),
                 ));
             }
             rows.push(("History".into(), name.clone(), Some(Action::ShowVersions)));
@@ -2099,6 +2141,14 @@ impl App {
                 ),
                 "not sent".to_owned(),
             ),
+            Chip::Newer => (
+                Some("· Newer on GitHub".to_owned()),
+                Some(
+                    action("github-update", "Update", Action::Update)
+                        .style(super::workspace::control(true)),
+                ),
+                "newer on GitHub".to_owned(),
+            ),
             Chip::New | Chip::Unsent(_) => {
                 let said = match state_now {
                     Chip::Unsent(count) => format!("{count} unsent"),
@@ -2241,8 +2291,12 @@ impl App {
             .is_some_and(|file| file.base_blob.is_none());
         if state.sending.contains(key) {
             Chip::Sending
-        } else if self.github_conflicts(key) > 0 {
+        } else if self.github_conflicts(key) > 0
+            || self.github_newer_conflict(self.tab.path.as_deref())
+        {
             Chip::Review
+        } else if self.github_newer(self.tab.path.as_deref()).is_some() {
+            Chip::Newer
         } else if state.failed.contains_key(key) {
             Chip::NotSent
         } else if count == 1 && new {
@@ -2281,12 +2335,20 @@ impl App {
             .len();
         // Nothing is sent from a read-only repository or an old version.
         let read_only = old || other || self.github.read_only(&key);
-        let spoken = match (old, read_only, unsent) {
+        let mut spoken = match (old, read_only, unsent) {
             (true, ..) => format!("{}, old version", self.github_label(&key)),
             (_, true, _) => format!("{}, read only", self.github_label(&key)),
             (_, _, 0) => self.github_label(&key),
             (_, _, n) => format!("{}, {n} unsent", self.github_label(&key)),
         };
+        let mut hint = match old {
+            true => format!("{}/{} · {repo_path} · Old version", named.owner, named.repo),
+            false => format!("{}/{} · {repo_path}", named.owner, named.repo),
+        };
+        if self.github_newer(tab.path.as_deref()).is_some() {
+            spoken.push_str(", newer on GitHub");
+            hint.push_str(" · Newer on GitHub");
+        }
         let link = self.github_link_for(tab.path.as_deref()).is_some();
         let menu = menu.then(|| {
             let mut items = column![].spacing(1);
@@ -2341,10 +2403,7 @@ impl App {
                     ..container::Style::default()
                 })
                 .into(),
-            hint: match old {
-                true => format!("{}/{} · {repo_path} · Old version", named.owner, named.repo),
-                false => format!("{}/{} · {repo_path}", named.owner, named.repo),
-            },
+            hint,
             spoken,
             menu,
         })
@@ -2537,6 +2596,8 @@ pub(super) enum Chip {
     Review,
     /// `· Not sent` and Retry.
     NotSent,
+    /// `· Newer on GitHub` and Update: the drawing in front changed there.
+    Newer,
     /// `· not sent yet` and Send: a drawing GitHub has never had.
     New,
     /// `· 1 unsent` and Send.

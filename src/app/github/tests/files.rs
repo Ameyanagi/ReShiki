@@ -216,7 +216,9 @@ async fn insert_puts_a_files_structures_in_the_drawing_as_one_undo_step() {
         let before = app.tab.doc.clone();
         let _ = picker(&mut app, picker::Action::Insert);
         assert!(app.github.dialog.is_none(), "Insert closes the picker");
-        let fetched = picker::Action::Fetched(app.tab.id, name.into(), Ok(bytes.into_bytes()));
+        let (tab, epoch, revision) = (app.tab.id, app.tab.file_epoch, app.tab.revision);
+        let fetched =
+            picker::Action::Fetched(tab, epoch, revision, name.into(), Ok(bytes.into_bytes()));
         let task = picker(&mut app, fetched);
         run(&mut app, task).await;
         let after = app.tab.doc.clone();
@@ -580,10 +582,12 @@ async fn insert_lands_in_the_drawing_it_was_chosen_for() {
     let (mut app, _) = app_in(dir.path());
     app.tab.busy = false;
     let (chosen, atoms) = (app.tab.id, app.tab.doc.atoms.len());
+    let (epoch, revision) = (app.tab.file_epoch, app.tab.revision);
     // Another tab is in front when the file arrives.
     open_other(&mut app, dir.path());
     let other = app.tab.doc.atoms.len();
-    let fetched = picker::Action::Fetched(chosen, "PPh3.mol".into(), Ok(MOL.into()));
+    let fetched =
+        picker::Action::Fetched(chosen, epoch, revision, "PPh3.mol".into(), Ok(MOL.into()));
     let task = picker(&mut app, fetched);
     run(&mut app, task).await;
     assert_eq!(
@@ -615,4 +619,155 @@ fn tree_keys_leave_a_name_field_its_arrows_and_search_hides_a_selection() {
     let _ = picker(&mut app, picker::Action::Move(1));
     let _ = picker(&mut app, picker::Action::Open);
     assert_eq!(rows(&app), ["sub", "  a.mol"]);
+}
+
+#[tokio::test]
+async fn an_edit_made_while_insert_reads_the_file_cancels_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = app_in(dir.path());
+    files_at(&mut app, &["PPh3.mol"], |_| None);
+    let _ = picker(&mut app, picker::Action::Select(0));
+    let _ = picker(&mut app, picker::Action::Insert);
+    let (tab, epoch, revision) = (app.tab.id, app.tab.file_epoch, app.tab.revision);
+    // The drawing is edited while the file downloads.
+    let before = app.tab.doc.clone();
+    edit(&mut app);
+    app.tab.revision += 1;
+    let edited = app.tab.doc.clone();
+    let fetched = picker::Action::Fetched(tab, epoch, revision, "PPh3.mol".into(), Ok(MOL.into()));
+    let task = picker(&mut app, fetched);
+    run(&mut app, task).await;
+    assert_ne!(edited, before);
+    assert_eq!(
+        app.tab.doc, edited,
+        "nothing inserted into the changed drawing"
+    );
+    assert_eq!(app.status, "Drawing changed during Insert · Insert again");
+}
+
+#[test]
+fn a_folder_opened_while_dates_load_asks_for_its_own() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = app_in(dir.path());
+    app.github.repos = vec![repo()];
+    let _ = picker(&mut app, picker::Action::Show(Mode::Open));
+    let _ = picker(&mut app, picker::Action::PickRepo(repo().key));
+    let generation = picker_generation(&app);
+    let top = vec![entry("sub/"), entry("a.mol")];
+    let _ = picker(
+        &mut app,
+        picker::Action::Listing(generation, Ok((sha('8'), top))),
+    );
+    // `a.mol`'s date has not come yet when the folder opens.
+    assert_eq!(the_picker(&app).waiting, 1);
+    let _ = picker(&mut app, picker::Action::Folder("sub".into()));
+    let generation = picker_generation(&app);
+    let sub = vec![entry("b.mol")];
+    let _ = picker(
+        &mut app,
+        picker::Action::Listing(generation, Ok((sha('6'), sub))),
+    );
+    let asked: Vec<&String> = the_picker(&app).asked.iter().collect();
+    assert_eq!(asked, ["sub/b.mol"]);
+}
+
+#[test]
+fn a_new_folder_in_the_tree_shows_under_its_folder() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = app_in(dir.path());
+    tree_at(&mut app, &["sub/", "sub/a.mol", "z.mol"], false);
+    // `sub` selected from the keyboard, still closed.
+    let _ = picker(&mut app, picker::Action::Move(1));
+    assert_eq!(rows(&app), ["sub", "z.mol"]);
+    let _ = picker(&mut app, picker::Action::NewItem(true));
+    let _ = picker(&mut app, picker::Action::NewItemName("new".into()));
+    let _ = picker(&mut app, picker::Action::CreateItem);
+    assert_eq!(rows(&app), ["sub", "  new", "  a.mol", "z.mol"]);
+    assert_eq!(selected_row(&app).as_deref(), Some("sub/new"));
+    // The file shown with it is asked about.
+    assert!(the_picker(&app).asked.contains("sub/a.mol"));
+}
+
+#[test]
+fn tiles_shown_after_the_tree_sort_newest_first() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = app_in(dir.path());
+    app.github.prefs.tree = true;
+    app.github.repos = vec![repo()];
+    let _ = picker(&mut app, picker::Action::Show(Mode::Open));
+    let _ = picker(&mut app, picker::Action::PickRepo(repo().key));
+    let generation = picker_generation(&app);
+    let top = vec![entry("a.mol"), entry("b.mol")];
+    let _ = picker(
+        &mut app,
+        picker::Action::Listing(generation, Ok((sha('8'), top))),
+    );
+    // The tree asked about no tile; switching asks, then sorts once known.
+    let _ = picker(&mut app, picker::Action::View(false));
+    assert_eq!(the_picker(&app).asked.len(), 2);
+    for (path, date) in [
+        ("a.mol", "2025-01-01T00:00:00Z"),
+        ("b.mol", "2026-01-01T00:00:00Z"),
+    ] {
+        let found = Some(("@alice".to_owned(), date.to_owned()));
+        let _ = picker(
+            &mut app,
+            picker::Action::Changed(generation, path.into(), found),
+        );
+    }
+    assert_eq!(picker_names(&app), ["b.mol", "a.mol"]);
+}
+
+#[test]
+fn records_that_do_not_fit_are_left_out_and_said_so() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = app_in(dir.path());
+    let good = Document::from_native_file(&drawing(42.)).unwrap();
+    // A record this drawing cannot take: two atoms share an id.
+    let mut bad = good.clone();
+    bad.atoms.push(bad.atoms[0].clone());
+    let mut batch = crate::app::import::Batch::default();
+    batch.drawings = vec![good.clone(), good, bad];
+    batch.warnings = vec!["Charge ignored".into()];
+    let path = workcopy::old_path(dir.path(), &repo().key, &sha('c'), "dppe.sdf");
+    let read = picker::Action::Read(path.clone(), Box::new(Ok(batch)));
+    let _ = picker(&mut app, read);
+    assert_eq!(app.tab.path.as_deref(), Some(path.as_path()));
+    assert_eq!(
+        app.status,
+        "Opened 2 of 3 structures · The rest don't fit · Charge ignored"
+    );
+    assert!(!app.error);
+    assert_eq!(app.github.amber.as_deref(), Some(app.status.as_str()));
+}
+
+#[test]
+fn a_wait_for_dates_outlasts_a_trip_to_the_tree() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = app_in(dir.path());
+    app.github.repos = vec![repo()];
+    let _ = picker(&mut app, picker::Action::Show(Mode::Open));
+    let _ = picker(&mut app, picker::Action::PickRepo(repo().key));
+    let generation = picker_generation(&app);
+    let top = vec![entry("a.mol"), entry("b.mol")];
+    let _ = picker(
+        &mut app,
+        picker::Action::Listing(generation, Ok((sha('8'), top))),
+    );
+    assert_eq!(the_picker(&app).waiting, 2);
+    // Tree and back before the dates come.
+    let _ = picker(&mut app, picker::Action::View(true));
+    let _ = picker(&mut app, picker::Action::View(false));
+    assert_eq!(the_picker(&app).waiting, 2);
+    for (path, date) in [
+        ("a.mol", "2025-01-01T00:00:00Z"),
+        ("b.mol", "2026-01-01T00:00:00Z"),
+    ] {
+        let found = Some(("@alice".to_owned(), date.to_owned()));
+        let _ = picker(
+            &mut app,
+            picker::Action::Changed(generation, path.into(), found),
+        );
+    }
+    assert_eq!(picker_names(&app), ["b.mol", "a.mol"]);
 }

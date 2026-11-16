@@ -52,7 +52,9 @@ changed.
 **Insert** (or Shift+Enter, or right-click a file and choose **Insert into
 drawing**) puts a file's structures into the drawing in front instead, placed
 as a paste is (a large one beside what is there), as one Undo step. An SD
-file's records land side by side.
+file's records land side by side. If they do not all fit in one drawing, the
+ones that fit open or are inserted, and the status bar says so in amber, such
+as **Opened 120 of 150 structures · The rest don't fit**.
 
 A folder shows its first 200 files, newest first, and says how many there
 are; the search field finds the others.
@@ -136,6 +138,16 @@ with ReShiki's highlight on both. Choose:
 
 **Later** (or Escape) decides later; the chip shows **Review** in amber.
 
+You also hear of a change before you send. When you come back to the window
+(at most every five minutes), ReShiki asks GitHub about the open drawings. If
+someone changed one there and you have no changes to it here, the chip shows
+**● lab-notes · Newer on GitHub** with **Update**, and the tab's tooltip says
+**Newer on GitHub**. **Update** (or **Update from GitHub** in the command
+palette) shows GitHub's drawing in one undo step; the status bar says who
+changed it, such as **Updated · @alice: Add an ethyl group** (**You** for a
+change you sent from another computer). If you have changed the drawing here,
+the chip shows **Review** instead, with the same choices as above.
+
 **History**, the clock button just after the inspector's tabs (or **GitHub →
 History**, or the chip's state), lists the saves on this computer since the
 last send (**This computer**) and the commits on GitHub that changed the
@@ -184,6 +196,11 @@ first.
   `state.json` (what GitHub had for each drawing) and `versions/` (up to 50
   saves per drawing since its last send). A drawing is unsent when its saved
   file differs from the bytes last synced, so nothing else needs to be stored.
+- On window focus, at most every five minutes and only while GitHub drawings
+  are open, ReShiki asks each open repository's branch head for the open
+  drawings' blobs: the repositories you may send to whether a drawing changed
+  since its base, read-only ones whether you may send to them now. A changed
+  drawing costs one more request for its last commit and one for its bytes.
 - Send reads the repository by id, builds one tree on the branch head and
   moves the branch only forward. If the head moved, it retries against the new
   head.
@@ -225,3 +242,6 @@ first.
   `draft` branch, every other chemistry file and a `screening` folder of 240,
   and `alice/notes`, private; `octo-test/spectra` is too big to list whole.
   `POST /_mock/limit` with `{"left": 0}` spends the signed-out limit.
+  `POST /_mock/commit` with
+  `{"repo", "path", "content", "author": "alice", "message"}` changes a
+  drawing as someone else.

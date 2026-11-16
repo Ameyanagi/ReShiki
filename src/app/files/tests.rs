@@ -581,3 +581,30 @@ async fn an_sd_file_without_a_structure_reports_it_and_opens_nothing() {
     assert_eq!(app.tab.doc, before);
     assert!(app.tabs.background.is_empty());
 }
+
+#[test]
+fn an_sd_file_with_a_record_that_does_not_fit_opens_the_rest_and_says_so() {
+    let (mut app, _) = App::new();
+    app.cancel_engine_job();
+    app.tab.busy = false;
+    let mut good = Document::default();
+    good.add_atom("O", Point::default());
+    // A record the drawing cannot take: two atoms share an id.
+    let mut bad = good.clone();
+    bad.atoms.push(bad.atoms[0].clone());
+    let mut batch = crate::app::import::Batch::default();
+    batch.drawings = vec![good.clone(), good, bad];
+    batch.warnings = vec!["Charge ignored".into()];
+    let records = Prepared::Records(Box::new(batch));
+    let _ = app.update(Message::FilePrepared(Some((
+        "three.sdf".into(),
+        Ok(records),
+    ))));
+    assert_eq!(app.tab.doc.atoms.len(), 2);
+    assert_eq!(
+        app.status,
+        "Opened 2 of 3 structures · The rest don't fit · Charge ignored"
+    );
+    assert!(!app.error);
+    assert_eq!(app.github.amber.as_deref(), Some(app.status.as_str()));
+}

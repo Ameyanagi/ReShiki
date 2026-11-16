@@ -495,8 +495,8 @@ pub enum Action {
     /// Puts the selected file's structures into the drawing in front.
     Insert,
     /// The file to insert, by repository path, for the drawing it was
-    /// chosen for.
-    Fetched(TabId, String, Result<Vec<u8>, gh::Error>),
+    /// chosen for as it was then (file epoch and revision).
+    Fetched(TabId, u64, u64, String, Result<Vec<u8>, gh::Error>),
     /// Its structures, read for that drawing as it was (file epoch and
     /// revision): pasted unless it changed since.
     Inserted(TabId, u64, u64, String, Box<Result<Batch, String>>),
@@ -775,6 +775,8 @@ impl App {
                             picker.waiting = 0;
                             return whole;
                         }
+                        // The folder left may still be waiting for dates.
+                        picker.waiting = 0;
                         // The tree opens where the tiles are.
                         let mut open = String::new();
                         for name in folders(&picker.folder()) {
@@ -1225,8 +1227,20 @@ impl App {
                 if tree && let Some(entry) = picker.selected_entry() {
                     picker.row = Some(picker.repo_path(&entry.name));
                 }
+                // Tiles show in the order the dates known give, and wait for
+                // the dates of the first on screen, as a listing does.
+                if !tree {
+                    picker.sort();
+                }
+                let asked = picker.asked.clone();
                 self.github.prefs.tree = tree;
-                return Task::batch([self.github_keep_prefs(), self.picker_load()]);
+                let (keep, load) = (self.github_keep_prefs(), self.picker_load());
+                // A wait still running goes on.
+                if let Some(picker) = self.picker().filter(|p| !p.tree && p.waiting == 0) {
+                    picker.first = picker.asked.difference(&asked).cloned().collect();
+                    picker.waiting = picker.first.len();
+                }
+                return Task::batch([keep, load]);
             }
             Action::Whole(opening, result) => {
                 let failed = result.as_ref().err().map(|error| self.picker_failed(error));
@@ -1341,7 +1355,7 @@ impl App {
                 return self.picker_load();
             }
             Action::Insert => return self.picker_insert(),
-            Action::Fetched(tab, path, result) => {
+            Action::Fetched(tab, epoch, revision, path, result) => {
                 let contents = match result {
                     Ok(contents) => contents,
                     Err(error) => {
@@ -1358,7 +1372,6 @@ impl App {
                 let read = self.in_tab(tab, |app| {
                     let options = (&app.tab.doc.drawing_style).into();
                     let theme = app.tab.doc.canvas_theme;
-                    let (epoch, revision) = (app.tab.file_epoch, app.tab.revision);
                     Task::perform(
                         import::load(engine, vec![file], options, theme),
                         move |read| {
@@ -1380,16 +1393,14 @@ impl App {
                         return Task::none();
                     }
                 };
-                let Some(doc) = import::side_by_side(drawings) else {
+                let Some((doc, placed, total)) = import::side_by_side(drawings) else {
                     return Task::none();
                 };
                 let kept = self.github_opened(&path);
                 if self.open_target(Some(&path)) {
                     self.show_opened(doc, Some(path));
-                    for warning in warnings {
-                        self.status.push_str(" · ");
-                        self.status.push_str(&warning);
-                    }
+                    let opened = self.status.clone();
+                    self.picker_status(opened, "Opened", (placed, total), warnings);
                 }
                 return kept;
             }
@@ -1417,7 +1428,7 @@ impl App {
                 return;
             }
         };
-        let Some(mut part) = import::side_by_side(batch.drawings) else {
+        let Some((mut part, placed, total)) = import::side_by_side(batch.drawings) else {
             return;
         };
         // Another program's structure follows this drawing's label settings,
@@ -1436,11 +1447,32 @@ impl App {
         self.sync_graphics();
         self.sync_arrows();
         self.sync_bonds();
-        self.status = format!("Inserted {name}");
+        let inserted = format!("Inserted {name}");
+        self.picker_status(inserted, "Inserted", (placed, total), batch.warnings);
+    }
+
+    /// The status after an open or Insert, then the file's import warnings.
+    /// When only some of its structures fit in one drawing, it says how many,
+    /// in amber; the open or Insert keeps what fits.
+    fn picker_status(
+        &mut self,
+        done: String,
+        verb: &str,
+        (placed, total): (usize, usize),
+        warnings: Vec<String>,
+    ) {
+        let left_out = placed < total;
+        self.status = match left_out {
+            true => format!("{verb} {placed} of {total} structures · The rest don't fit"),
+            false => done,
+        };
         self.error = false;
-        for warning in batch.warnings {
+        for warning in warnings {
             self.status.push_str(" · ");
             self.status.push_str(&warning);
+        }
+        if left_out {
+            self.github.amber = Some(self.status.clone());
         }
     }
 
@@ -1456,13 +1488,15 @@ impl App {
         let Some(client) = self.github.reader() else {
             return Task::none();
         };
-        let tab = self.tab.id;
+        // An edit made while the file is read cancels the Insert, as it
+        // cancels a paste.
+        let (tab, epoch, revision) = (self.tab.id, self.tab.file_epoch, self.tab.revision);
         let close = self.github_close_dialog();
         self.status = "Reading from GitHub…".into();
         self.error = false;
         let read = perform(
             async move { api::blob(&client, &repo.key, &sha).await },
-            move |result| GitHubAction::Picker(Action::Fetched(tab, path, result)),
+            move |result| GitHubAction::Picker(Action::Fetched(tab, epoch, revision, path, result)),
         );
         Task::batch([close, read])
     }
@@ -2041,11 +2075,17 @@ impl App {
                     sha: String::new(),
                     folder: true,
                 });
-                picker.opened.insert(path.clone());
+                // Shown, with the folders it is in opened.
+                let mut open = String::new();
+                for name in folders(&path) {
+                    open = join(&open, &name);
+                    picker.opened.insert(open.clone());
+                }
                 picker.row = Some(path);
                 picker.new_item = None;
                 picker.error = None;
-                return Task::none();
+                let reveal = picker.reveal_row();
+                return Task::batch([reveal, self.picker_load()]);
             }
             picker.trail.push((typed.to_owned(), String::new()));
             picker.new_item = None;

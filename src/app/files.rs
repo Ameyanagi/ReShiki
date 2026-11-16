@@ -736,7 +736,7 @@ impl super::App {
             // cannot write an SD file back.
             Ok(Prepared::Records(batch)) => {
                 let name = super::import::name(&path);
-                let Some(doc) = super::import::side_by_side(batch.drawings) else {
+                let Some((doc, placed, total)) = super::import::side_by_side(batch.drawings) else {
                     self.status = format!("Could not open {name}: it has no structure");
                     self.error = true;
                     return Task::none();
@@ -745,9 +745,19 @@ impl super::App {
                 self.show_opened(doc, None);
                 self.tab.untitled_name = Some(name);
                 self.tab.mark_saved(reshiki::document::Document::default());
+                // A record that no longer fits in one drawing is left out, and
+                // the status says so in amber, as an open from GitHub does.
+                if placed < total {
+                    self.status =
+                        format!("Opened {placed} of {total} structures · The rest don't fit");
+                }
                 for warning in batch.warnings {
                     self.status.push_str(" · ");
                     self.status.push_str(&warning);
+                }
+                #[cfg(not(target_arch = "wasm32"))]
+                if placed < total {
+                    self.github.amber = Some(self.status.clone());
                 }
             }
             Ok(Prepared::Import { format, contents }) => {
