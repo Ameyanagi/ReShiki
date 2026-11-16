@@ -601,6 +601,9 @@ fn tree_keys_leave_a_name_field_its_arrows_and_search_hides_a_selection() {
     let keys = app.github_keys();
     assert!(keys(&Key::Named(Named::ArrowLeft), Modifiers::empty()).is_none());
     let _ = picker(&mut app, picker::Action::Row("a.mol".into()));
+    // Clicking a row lets the name go; the arrows are the tree's again.
+    let keys = app.github_keys();
+    assert!(keys(&Key::Named(Named::ArrowLeft), Modifiers::empty()).is_some());
     let _ = picker(&mut app, picker::Action::Search("b".into()));
     assert!(selected_row(&app).is_none());
     // Open on a folder opens it, as Enter does.

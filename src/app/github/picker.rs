@@ -1253,7 +1253,7 @@ impl App {
                     }
                 }
                 picker.whole = Some((entries, truncated));
-                if let Some(failed) = failed.filter(|_| picker.tree) {
+                if let Some(failed) = failed {
                     picker.limited = failed.is_none();
                     picker.error = failed;
                 }
@@ -1268,6 +1268,10 @@ impl App {
                     .is_some_and(|(was, when)| *was == path && now - *when < DOUBLE_CLICK);
                 picker.row = Some(path.clone());
                 picker.file_menu = None;
+                // A name left half typed is let go: the arrows are the tree's.
+                picker.new_item = None;
+                picker.new_repo = None;
+                picker.adding = None;
                 picker.clicked = (!double).then(|| (path.clone(), now));
                 if picker.selected_file().is_none() {
                     if !picker.opened.remove(&path) {
