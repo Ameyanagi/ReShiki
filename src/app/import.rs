@@ -533,7 +533,6 @@ impl App {
                     || self.tab.inline_text.is_some()
                     || self.tab.atom_text.is_some()
                     || self.tab.joining.is_some()
-                    || self.tab.cleanup.is_some()
                 {
                     self.status =
                         "Drawing changed while importing · Import again when ready".into();

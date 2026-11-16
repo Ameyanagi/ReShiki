@@ -461,8 +461,8 @@ pub(crate) fn entries() -> Vec<Entry> {
         ),
         entry(
             keys(command | shift, "K"),
-            "Clean up…",
-            "Preview a cleaned-up layout for the selection",
+            "Clean up",
+            "Redraw the selection, or the whole drawing, with regular geometry",
             Selection,
             &["tidy", "beautify", "layout"],
         ),

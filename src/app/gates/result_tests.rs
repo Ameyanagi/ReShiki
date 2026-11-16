@@ -2,9 +2,9 @@
 //! completion, including the completions that some modals drop today.
 use super::preview_passthrough;
 use crate::app::{
-    App, CleanupPreview, Job, Message, assistant, atom_text, cleanup, clipboard, document_styles,
-    generic, import, inspector, naming, nmr, optimization, printing, reaction_mapping, tabs,
-    template_library, theme_files, updates,
+    App, Job, Message, assistant, atom_text, clipboard, document_styles, generic, import,
+    inspector, naming, nmr, optimization, printing, reaction_mapping, tabs, template_library,
+    theme_files, updates,
 };
 use iced::{Task, futures::StreamExt};
 use reshiki::{
@@ -501,7 +501,6 @@ async fn every_constructible_completion_pins_all_five_admission_predicates() {
 enum Modal {
     None,
     AtomText,
-    Cleanup,
     Optimization,
     Updates,
     Restarting,
@@ -524,22 +523,6 @@ fn open_modal(mut app: App, modal: Modal, directory: &tempfile::TempDir) -> App 
             let id = app.tab.doc.atoms[0].id;
             let _ = app.atom_text_action(atom_text::Action::Begin(Some(id)));
             assert!(app.tab.atom_text.is_some(), "AtomText: the draft is open");
-        }
-        Modal::Cleanup => {
-            app.tab.cleanup = Some(CleanupPreview {
-                job: cleanup::CleanupJob {
-                    options: Default::default(),
-                    selection: vec![],
-                    serial: app.tab.cleanup_serial,
-                    epoch: app.tab.file_epoch,
-                },
-                warnings: vec![],
-                document: app.tab.doc.clone(),
-                analysis: None,
-                revision: app.tab.revision,
-                epoch: app.tab.file_epoch,
-                original: false,
-            });
         }
         Modal::Optimization => {
             // Generic expansion is app-scoped; its source may be behind the preview tab.
@@ -568,51 +551,40 @@ fn open_modal(mut app: App, modal: Modal, directory: &tempfile::TempDir) -> App 
 #[tokio::test]
 async fn pending_completions_pin_continue_handle_drop_and_defer_for_every_modal() {
     use Outcome::{Continue, Deferred, Discarded, Dropped, Handled};
-    // Columns: no modal, atom text, cleanup, 3D optimization, updates, restarting, exit frozen.
+    // Columns: no modal, atom text, 3D optimization, updates, restarting, exit frozen.
     let rows = [
         (
             ResultRow::NmrFinished,
-            [
-                Continue, Continue, Continue, Continue, Continue, Dropped, Deferred,
-            ],
+            [Continue, Continue, Continue, Continue, Dropped, Deferred],
         ),
         (
             ResultRow::NmrExported,
-            [
-                Continue, Continue, Continue, Continue, Continue, Dropped, Deferred,
-            ],
+            [Continue, Continue, Continue, Continue, Dropped, Deferred],
         ),
         (
             ResultRow::Generic,
             [
-                Continue, Discarded, Discarded, Discarded, Discarded, Discarded, Discarded,
+                Continue, Discarded, Discarded, Discarded, Discarded, Discarded,
             ],
         ),
         (
             ResultRow::Naming,
-            [
-                Continue, Continue, Continue, Continue, Continue, Dropped, Deferred,
-            ],
+            [Continue, Continue, Continue, Continue, Dropped, Deferred],
         ),
         (
             ResultRow::Mapping,
-            [
-                Handled, Handled, Handled, Handled, Handled, Handled, Deferred,
-            ],
+            [Handled, Handled, Handled, Handled, Handled, Deferred],
         ),
         (
             ResultRow::Labels,
-            [
-                Handled, Handled, Handled, Handled, Handled, Handled, Deferred,
-            ],
+            [Handled, Handled, Handled, Handled, Handled, Deferred],
         ),
-        (ResultRow::Templates, [Handled; 7]),
+        (ResultRow::Templates, [Handled; 6]),
     ];
     for (row, expected) in rows {
         for (modal, expected) in [
             Modal::None,
             Modal::AtomText,
-            Modal::Cleanup,
             Modal::Optimization,
             Modal::Updates,
             Modal::Restarting,
@@ -677,12 +649,6 @@ async fn pending_completions_pin_continue_handle_drop_and_defer_for_every_modal(
                     assert!(
                         app.tab.atom_text.is_some(),
                         "{context}: atom-text draft survives"
-                    );
-                }
-                Modal::Cleanup => {
-                    assert!(
-                        app.tab.cleanup.is_some(),
-                        "{context}: cleanup preview survives"
                     );
                 }
                 Modal::Optimization => {

@@ -274,8 +274,7 @@ impl App {
             row![
                 action("Apply", Action::Apply)
                     .on_press_maybe(
-                        (current && !state.busy && self.tab.cleanup.is_none())
-                            .then_some(Message::Assistant(Action::Apply))
+                        (current && !state.busy).then_some(Message::Assistant(Action::Apply))
                     )
                     .style(crate::appearance::primary),
                 action("Improve layout", Action::Improve).on_press_maybe(
@@ -491,9 +490,8 @@ impl App {
                     ((state.account.as_ref().is_some_and(|a| a.connected)
                         && (!state.input.text().trim().is_empty()
                             || state.source_image.is_some()))
-                        && !state.reading_image
-                        && self.tab.cleanup.is_none())
-                    .then_some(Message::Assistant(Action::Send)),
+                        && !state.reading_image)
+                        .then_some(Message::Assistant(Action::Send)),
                 )
         };
         let attach = super::super::workspace::hover_hint(

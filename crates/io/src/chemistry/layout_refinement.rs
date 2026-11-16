@@ -108,6 +108,114 @@ pub(crate) fn straighten(state: &State, points: &mut [Point3], pivot: Option<usi
     }
 }
 
+/// Turn each component rigidly about its centroid so its six-membered rings
+/// stand upright, as ChemDraw draws them: vertical sides, a vertex at the
+/// top. The turn is at most 30 degrees. A flat ring is 30 degrees from both
+/// upright turns; that tie goes to the turn leaving more ring-fusion bonds
+/// vertical. Cages, whose rings are not drawn as regular polygons, and
+/// components whose six-membered rings disagree (fluorene's benzo rings)
+/// keep their orientation. Returns whether any component's rings set its
+/// orientation.
+pub(crate) fn upright_rings(state: &State, points: &mut [Point3]) -> bool {
+    let step = PI / 3.;
+    let Some(components) = adjacency(state).and_then(|adjacent| components(&adjacent)) else {
+        return false;
+    };
+    let mut set = false;
+    let sides = |ring: &Vec<usize>| {
+        ring.iter()
+            .zip(ring.iter().cycle().skip(1))
+            .take(ring.len())
+            .map(|(&a, &b)| (a.min(b), a.max(b)))
+            .collect::<Vec<_>>()
+    };
+    let mut seen = HashSet::new();
+    let fused: HashSet<_> = state
+        .rings
+        .atoms
+        .iter()
+        .flat_map(sides)
+        .filter(|side| !seen.insert(*side))
+        .collect();
+    for atoms in components {
+        let members: HashSet<_> = atoms.iter().copied().collect();
+        let rings: Vec<_> = state
+            .rings
+            .atoms
+            .iter()
+            .filter(|ring| ring.first().is_some_and(|a| members.contains(a)))
+            .collect();
+        // Two rings sharing three atoms make a cage.
+        let mut memberships = HashMap::<usize, Vec<usize>>::new();
+        let mut shared = HashMap::<(usize, usize), usize>::new();
+        for (index, ring) in rings.iter().enumerate() {
+            for &atom in *ring {
+                let earlier = memberships.entry(atom).or_default();
+                for &other in earlier.iter() {
+                    *shared.entry((other, index)).or_default() += 1;
+                }
+                earlier.push(index);
+            }
+        }
+        if shared.values().any(|&count| count >= 3) {
+            continue;
+        }
+        let angle = |&(a, b): &(usize, usize)| {
+            let (a, b) = (points.get(a)?, points.get(b)?);
+            Some((b.y - a.y).atan2(b.x - a.x))
+        };
+        let six: Vec<_> = rings
+            .iter()
+            .filter(|ring| ring.len() == 6)
+            .flat_map(|ring| sides(ring))
+            .filter_map(|side| angle(&side))
+            .collect();
+        // Upright sides satisfy cos(6 * angle) == -1.
+        let (c, s) = six.iter().fold((0., 0.), |(c, s), t| {
+            (c + (6. * t).cos(), s + (6. * t).sin())
+        });
+        if six.is_empty() || c.hypot(s) < 0.5 * six.len() as f64 {
+            continue;
+        }
+        set = true;
+        let turn = ((PI - s.atan2(c)) / 6. + step / 2.).rem_euclid(step) - step / 2.;
+        let fusions: Vec<_> = fused
+            .iter()
+            .filter(|(a, _)| members.contains(a))
+            .filter_map(angle)
+            .collect();
+        let vertical = |turn: f64| {
+            fusions
+                .iter()
+                .filter(|t| (*t + turn).cos().abs() < 0.05)
+                .count()
+        };
+        let turn = if (turn.abs() - step / 2.).abs() < 1e-6 {
+            let (left, right) = (step / 2., -step / 2.);
+            if vertical(right) > vertical(left) {
+                right
+            } else {
+                left
+            }
+        } else {
+            turn
+        };
+        if turn.abs() < 1e-9 {
+            continue;
+        }
+        let center = centroid(points, &atoms);
+        let (sin, cos) = turn.sin_cos();
+        for &id in &atoms {
+            if let Some(point) = points.get_mut(id) {
+                let (x, y) = (point.x - center.x, point.y - center.y);
+                point.x = center.x + cos * x - sin * y;
+                point.y = center.y + sin * x + cos * y;
+            }
+        }
+    }
+    set
+}
+
 fn adjacency(state: &State) -> Option<Vec<Vec<usize>>> {
     let mut adjacent = vec![Vec::new(); state.graph.atoms.len()];
     for bond in &state.graph.bonds {

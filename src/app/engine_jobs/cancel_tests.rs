@@ -170,41 +170,39 @@ fn progress_appears_after_one_second_and_escape_respects_modal_priority() {
 }
 
 #[test]
-fn cancel_remains_available_while_rerunning_a_cleanup_preview() {
+fn cleanup_applies_as_one_undo_step_and_cancel_keeps_the_drawing() {
     use super::super::cleanup;
     let mut app = ready();
     let atom = app.tab.doc.add_atom("C", Point::default());
-    app.tab.selected = vec![atom];
     let drawing = app.tab.doc.clone();
+    let _ = app.cleanup_action(cleanup::Action::Begin);
+    let key = app.tab.engine_job.as_ref().unwrap().key;
+    let _ = app.update(Message::CancelEngine(key));
+    assert!(!app.tab.busy);
+    let _ = app.update(finished(key, imported()));
+    assert_eq!(app.tab.doc, drawing, "A canceled cleanup changes nothing");
+    assert!(!app.tab.history.can_undo());
+    let mut cleaned = drawing.clone();
+    cleaned.atom_mut(atom).unwrap().position.x += 10.;
     let _ = app.cleanup_action(cleanup::Action::Begin);
     let key = app.tab.engine_job.as_ref().unwrap().key;
     let _ = app.update(finished(
         key,
         Ok(Response {
-            document: Some(drawing.clone()),
+            document: Some(cleaned.clone()),
             analysis: None,
             output: None,
             engine_version: "test".into(),
-            warnings: vec![],
+            warnings: vec!["Checked".into()],
         }),
     ));
-    assert!(app.tab.cleanup.is_some());
-    let _ = app.update(Message::Cleanup(cleanup::Action::Orientation(
-        reshiki::cleanup::Orientation::Free,
-    )));
-    let rerun = app.tab.engine_job.as_ref().unwrap().key;
-    assert!(app.tab.busy);
-    let _ = app.update(Message::CancelEngine(rerun));
-    assert!(app.tab.engine_job.is_none());
-    assert!(!app.tab.busy);
-    assert!(
-        app.tab.cleanup.is_some(),
-        "The prior preview remains available"
-    );
-    let _ = app.update(finished(rerun, imported()));
-    assert_eq!(app.tab.doc, drawing);
-    assert_eq!(app.tab.cleanup.as_ref().unwrap().document, drawing);
-    assert!(!app.tab.busy);
+    assert_eq!(app.tab.doc, cleaned, "The result applies without a preview");
+    assert!(app.status.starts_with("Cleaned up") && app.status.ends_with("Checked"));
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, drawing, "One Undo restores the original");
+    assert!(!app.tab.history.can_undo());
+    let _ = app.update(Message::Redo);
+    assert_eq!(app.tab.doc, cleaned);
 }
 
 #[test]
@@ -221,7 +219,6 @@ fn completion_is_classified_and_keeps_its_background_tab() {
     for modal in [
         results::Modal::AtomText,
         results::Modal::Preview,
-        results::Modal::Cleanup,
         results::Modal::Optimization,
         results::Modal::UpdatesDialog,
     ] {

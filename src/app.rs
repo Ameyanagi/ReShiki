@@ -3,7 +3,7 @@ use iced::{Color, Element, Subscription, Task, Theme};
 use reshiki::{
     document::{Arrow, Document, History, Point},
     editing::{self, Arrange, Transform},
-    engine::{Analysis, LocalEngine, Request, Response},
+    engine::{LocalEngine, Request, Response},
     graphics::{BracketSides, Graphic, GraphicChange},
     recovery::{Candidate, Recovery},
     transaction::chemistry_changed,
@@ -419,16 +419,6 @@ enum Pending {
     ),
 }
 
-struct CleanupPreview {
-    job: cleanup::CleanupJob,
-    warnings: Vec<String>,
-    document: Document,
-    analysis: Option<Analysis>,
-    revision: u64,
-    epoch: u64,
-    original: bool,
-}
-
 pub struct App {
     accessibility: accessibility::State,
     /// The active document; see `document_tab` for what is per document.
@@ -454,6 +444,10 @@ pub struct App {
     view_open: bool,
     /// The list of Check drawing findings is open.
     check_results: bool,
+    /// The Clean up options menu is open.
+    cleanup_menu: bool,
+    /// What Clean up runs with; its scope applies to a selection.
+    cleanup_options: reshiki::cleanup::Options,
     appearance: crate::appearance::Settings,
     engine: LocalEngine,
     figure_exporting: bool,
@@ -577,6 +571,11 @@ impl App {
             guides: Default::default(),
             view_open: false,
             check_results: false,
+            cleanup_menu: false,
+            cleanup_options: reshiki::cleanup::Options {
+                scope: reshiki::cleanup::Scope::SelectedAtoms,
+                ..Default::default()
+            },
             appearance,
             engine: LocalEngine::default(),
             figure_exporting: false,
@@ -820,7 +819,6 @@ impl App {
         if changed {
             self.tab.arrows.cancel_source();
         }
-        self.tab.cleanup = None;
     }
     fn commit_changed(&mut self, reconciled: reshiki::transaction::Reconciled, continuing: bool) {
         self.tab.recent_molecules.record(
@@ -973,14 +971,7 @@ impl App {
         {
             return session.preview_document();
         }
-        self.tab
-            .cleanup
-            .as_ref()
-            .filter(|p| {
-                !p.original && p.revision == self.tab.revision && p.epoch == self.tab.file_epoch
-            })
-            .map(|p| &p.document)
-            .unwrap_or(&self.tab.doc)
+        &self.tab.doc
     }
     /// The runtime's entry point. A finished export or copy counts
     /// toward the GitHub star prompt here, once, even when its drawing has
@@ -1331,10 +1322,9 @@ impl App {
     }
 
     pub fn view(&self) -> Element<'_, Message> {
-        let preview = self.tab.cleanup.is_some()
-            || (self.tab.optimization.is_some()
-                && self.inspector_open
-                && self.inspector_tab == InspectorTab::Properties);
+        let preview = self.tab.optimization.is_some()
+            && self.inspector_open
+            && self.inspector_tab == InspectorTab::Properties;
         let dialog = self.prompt.is_some()
             || self.recovery_manager.open()
             || self.updates.open
@@ -1344,7 +1334,7 @@ impl App {
             || self.tab.atom_text.is_some()
             || self.palette.is_some();
         // The command palette's Tab cycles its filter, unless a dialog is over it.
-        // A visible cleanup or 3D preview keeps Tab within its own controls.
+        // A visible 3D preview keeps Tab within its own controls.
         let traverse = (!preview || dialog)
             && (!self.commands.open || self.updates.open || self.assistant.viewed_image.is_some());
         reshiki::accessibility::focus_scope_with(

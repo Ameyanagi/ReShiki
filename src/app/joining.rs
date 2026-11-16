@@ -97,7 +97,7 @@ impl App {
     /// Before committing style/text drafts: inspect only actual Join routes.
     /// Pure model guards remain authoritative for direct callers and previews.
     pub(super) fn generic_join_rejection(&self, message: &Message) -> bool {
-        if self.tab.atom_text.is_some() || self.tab.cleanup.is_some() {
+        if self.tab.atom_text.is_some() {
             return false;
         }
         let mut message = message;
@@ -172,7 +172,7 @@ impl App {
                         .any(|group| group.members.contains(id))
             })
         });
-        let active = self.tab.cleanup.is_none() && self.tab.joining.is_none();
+        let active = self.tab.joining.is_none();
         [
             RowCommand {
                 label: "Join",
@@ -260,9 +260,6 @@ impl App {
     pub(super) fn join_action(&mut self, action: Action) -> Task<Message> {
         match action {
             begin @ (Action::Begin | Action::BeginCoordination) => {
-                if self.tab.cleanup.is_some() {
-                    return Task::none();
-                }
                 // Reject before committing an inline draft or cancelling an
                 // existing preparation, either of which can change editor state.
                 if reshiki::joining::source_intersects_generic(&self.tab.doc, &self.tab.selected) {

@@ -73,6 +73,8 @@ struct Part {
     identity: Identity,
     moving: HashSet<u64>,
     fixed: Coordinates,
+    /// The median drawn bond length in layout units: cleanup keeps the size.
+    bond_length: f64,
 }
 
 /// One Compute2DCoords call, before cleanup's rigid orientation. The solver
@@ -93,7 +95,6 @@ pub struct Prepared {
     options: Options,
     parts: Vec<Part>,
     deferred_error: Option<Error>,
-    bond_length: f64,
     preserved_attachments: usize,
     /// Molecules shown only as 3D models, whose hidden drawing stays.
     shown_in_3d: usize,
@@ -327,12 +328,21 @@ pub fn prepare(source: &Document, options: Options, selection: &[u64]) -> Result
             .filter(|(_, (id, _))| !moving.contains(id))
             .map(|(i, (_, p))| (i, NativePoint { x: p.x, y: p.y }))
             .collect();
+        // Keep the drawing's size, as ChemDraw does; RDKit parity redraws at
+        // the style's length. A molecule without bonds uses the style's too.
+        let style = f64::from(source.drawing_style.bond_length_world) / 28.;
+        let bond_length = if molecular::refine() {
+            median_bond(&molecule.state, &molecule.positions).unwrap_or(style)
+        } else {
+            style
+        };
         parts.push(Part {
             base,
             molecule,
             identity,
             moving,
             fixed,
+            bond_length,
         });
     }
     if parts.is_empty() && deferred_error.is_none() && preserved_attachments == 0 {
@@ -347,10 +357,54 @@ pub fn prepare(source: &Document, options: Options, selection: &[u64]) -> Result
         options,
         parts,
         deferred_error,
-        bond_length: f64::from(source.drawing_style.bond_length_world) / 28.,
         preserved_attachments,
         shown_in_3d,
     })
+}
+
+/// RDKit's bond length, the scale of its ring templates. They ignore the
+/// requested length, so a layout with at most one fixed atom is drawn at
+/// this length and scaled about that atom.
+const TEMPLATE_BOND_LENGTH: f64 = 1.5;
+
+impl Part {
+    fn request(&self) -> LayoutRequest<'_> {
+        LayoutRequest {
+            molecule: &self.molecule,
+            fixed: &self.fixed,
+            bond_length: if self.fixed.len() < 2 && molecular::refine() {
+                TEMPLATE_BOND_LENGTH
+            } else {
+                self.bond_length
+            },
+            canonical_orientation: false,
+            use_ring_templates: true,
+            force_rdkit: true,
+        }
+    }
+}
+
+/// The median bond length; a stretched bond does not change it.
+fn median_bond(state: &super::stereo::perception::State, points: &[Point3]) -> Option<f64> {
+    let mut lengths: Vec<_> = state
+        .graph
+        .bonds
+        .iter()
+        .filter_map(|b| {
+            let (a, b) = (points.get(b.a)?, points.get(b.b)?);
+            Some((b.x - a.x).hypot(b.y - a.y))
+        })
+        .filter(|l| *l > 0.)
+        .collect();
+    lengths.sort_by(f64::total_cmp);
+    let half = lengths.len() / 2;
+    let upper = *lengths.get(half)?;
+    let lower = if lengths.len() % 2 == 0 {
+        *lengths.get(half - 1)?
+    } else {
+        upper
+    };
+    Some((lower + upper) / 2.)
 }
 
 impl Prepared {
@@ -358,14 +412,7 @@ impl Prepared {
     /// `finish`, including for an empty iterator: a later error is retained so
     /// earlier components undergo their native-order geometry/stereo checks.
     pub fn requests(&self) -> impl ExactSizeIterator<Item = LayoutRequest<'_>> {
-        self.parts.iter().map(|part| LayoutRequest {
-            molecule: &part.molecule,
-            fixed: &part.fixed,
-            bond_length: self.bond_length,
-            canonical_orientation: false,
-            use_ring_templates: true,
-            force_rdkit: true,
-        })
+        self.parts.iter().map(Part::request)
     }
 
     pub fn finish(self, layouts: Vec<Vec<Point3>>) -> Result<Cleaned> {
@@ -405,20 +452,30 @@ impl Prepared {
         let mut work = 50_000_000usize;
         let (mut crowded, mut stuck) = (0usize, 0usize);
         for part in self.parts {
-            let mut layout = compute(LayoutRequest {
-                molecule: &part.molecule,
-                fixed: &part.fixed,
-                bond_length: self.bond_length,
-                canonical_orientation: false,
-                use_ring_templates: true,
-                force_rdkit: true,
-            })?;
+            let mut layout = compute(part.request())?;
             if layout.len() != part.molecule.ids.len()
                 || layout
                     .iter()
                     .any(|p| !p.x.is_finite() || !p.y.is_finite() || p.z != 0.)
             {
                 return Err(Error::Layout.into());
+            }
+            let refine = molecular::refine();
+            if part.fixed.len() < 2
+                && refine
+                && let Some(median) = median_bond(&part.molecule.state, &layout)
+            {
+                let scale = part.bond_length / median;
+                let pivot = part
+                    .fixed
+                    .keys()
+                    .next()
+                    .and_then(|&index| layout.get(index).copied())
+                    .unwrap_or_default();
+                for point in &mut layout {
+                    point.x = pivot.x + (point.x - pivot.x) * scale;
+                    point.y = pivot.y + (point.y - pivot.y) * scale;
+                }
             }
             super::layout_refinement::exterior_terminals(
                 &part.molecule.state,
@@ -431,12 +488,18 @@ impl Prepared {
                 &part.fixed,
                 self.options.orientation() == Orientation::Keep,
             )?;
-            let refine = molecular::refine();
-            if part.fixed.len() < 2 && refine {
+            let free = part.fixed.is_empty() && refine;
+            // Keep and Free stand six-membered rings upright, like a new
+            // depiction; upright rings set the orientation, so straightening
+            // the rest would only tilt them. IUPAC sets its own rotation.
+            let upright = free
+                && self.options.orientation() != Orientation::Iupac
+                && super::layout_refinement::upright_rings(&part.molecule.state, &mut layout);
+            if part.fixed.len() < 2 && refine && !upright {
                 let pivot = part.fixed.keys().next().copied();
                 super::layout_refinement::straighten(&part.molecule.state, &mut layout, pivot);
             }
-            if part.fixed.is_empty() && refine {
+            if free {
                 match self.options.orientation() {
                     Orientation::Keep => {}
                     Orientation::Free => super::layout_refinement::conventional_orientation(
@@ -460,7 +523,7 @@ impl Prepared {
                     z: 0.,
                 };
             }
-            match unfold(&part.molecule, &mut layout, &part.fixed, self.bond_length)? {
+            match unfold(&part.molecule, &mut layout, &part.fixed, part.bond_length)? {
                 Fold::Clear => {}
                 Fold::Crowded => crowded += 1,
                 Fold::Stuck => {

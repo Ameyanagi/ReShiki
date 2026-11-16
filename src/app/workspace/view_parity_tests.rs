@@ -170,35 +170,6 @@ fn slug(tool: Tool) -> String {
         .join("-")
 }
 
-/// Benzene, selected, under a cleanup preview that moves every atom by (20, 10).
-fn cleanup(app: &mut App) {
-    open(app, benzene());
-    select_all(app);
-    app.tool = Tool::Ring;
-    app.tab.busy = false;
-    let mut document = benzene();
-    for atom in &mut document.atoms {
-        atom.position = atom.position.offset(20., 10.);
-    }
-    app.tab.cleanup = Some(crate::app::CleanupPreview {
-        job: crate::app::cleanup::CleanupJob {
-            options: Default::default(),
-            selection: app.tab.selected.clone(),
-            serial: app.tab.cleanup_serial,
-            epoch: app.tab.file_epoch,
-        },
-        warnings: vec![
-            "Two bonds keep their crossing".into(),
-            "Ring orientation follows the selection".into(),
-        ],
-        document,
-        analysis: None,
-        revision: app.tab.revision,
-        epoch: app.tab.file_epoch,
-        original: false,
-    });
-}
-
 fn first_collection(app: &App) -> String {
     let template = app.templates.library.get(0).expect("A built-in template");
     crate::app::template_library::categories(template)
@@ -389,31 +360,8 @@ fn cases() -> Vec<Case> {
         }),
     ]);
 
-    // The cleanup bar, and the canvas inputs of other sessions.
-    let preview = |name: &str, setup: fn(&mut App)| {
-        case(
-            format!("cleanup-{name}"),
-            move |app: &mut App| {
-                cleanup(app);
-                setup(app);
-            },
-            BOTH,
-            Probe::ContextBar,
-        )
-    };
+    // The canvas inputs of other sessions.
     cases.extend([
-        preview("current", |_| {}),
-        preview("busy", |app| app.tab.busy = true),
-        preview("original", |app| {
-            if let Some(preview) = &mut app.tab.cleanup {
-                preview.original = true;
-            }
-        }),
-        preview("stale", |app| {
-            if let Some(preview) = &mut app.tab.cleanup {
-                preview.revision += 1;
-            }
-        }),
         // Stays in Preparing: the worker task is dropped.
         case(
             "optimization",

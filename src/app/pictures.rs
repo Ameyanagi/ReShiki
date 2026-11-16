@@ -90,7 +90,6 @@ impl App {
         if ticket.revision != self.tab.revision
             || self.tab.inline_text.is_some()
             || self.tab.joining.is_some()
-            || self.tab.cleanup.is_some()
         {
             self.status = "Drawing changed while loading · Replace the picture again".into();
             return;

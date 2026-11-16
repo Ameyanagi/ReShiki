@@ -46,7 +46,6 @@ impl App {
         if !self.tab.labels_dirty
             || self.tab.label_refresh.pending.is_some()
             || self.tab.busy
-            || self.tab.cleanup.is_some()
             || self.tab.erase_stroke
         {
             return Task::none();
@@ -118,7 +117,6 @@ impl App {
         // These keep results for the current revision; their own edit
         // reconciles, and a cancel settles on the next update.
         self.tab.label_refresh.unsettled = tab.joining.is_some()
-            || tab.cleanup.is_some()
             || tab.optimization.is_some()
             || tab.busy
             || tab.erase_stroke

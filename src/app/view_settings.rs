@@ -2,7 +2,7 @@
 use super::App;
 
 /// View-aid commands, nested under `Message::View`.
-/// Every View action passes both previews through `gates::preview_passthrough`, and none commits a draft.
+/// Every View action passes the 3D preview through `gates::preview_passthrough`, and none commits a draft.
 #[derive(Debug, Clone)]
 pub enum Action {
     /// Flips the grid regardless of the checkbox value.

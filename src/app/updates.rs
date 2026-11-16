@@ -315,11 +315,7 @@ impl App {
         } else if self.file_io.saving || self.templates.pending() {
             Some("Wait for the current file or library save before restarting.")
         } else if self.strip().any(|tab| {
-            tab.busy
-                || tab.clipboard_busy
-                || tab.cleanup.is_some()
-                || tab.joining.is_some()
-                || tab.atom_text.is_some()
+            tab.busy || tab.clipboard_busy || tab.joining.is_some() || tab.atom_text.is_some()
         }) {
             Some("Finish the current editing operation before restarting.")
         } else {

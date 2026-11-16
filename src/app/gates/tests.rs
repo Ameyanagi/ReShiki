@@ -1,8 +1,8 @@
 //! Pins how the modal gates and draft predicates treat the cleanup, view-aid and graphic-input messages.
 use super::preview_passthrough;
 use crate::app::{
-    App, CleanupPreview, Message, atom_text, cleanup, color_popover, context_menu, graphics,
-    inline_text, inspector, joining, nmr, tabs, updates, view_settings,
+    App, Message, atom_text, cleanup, color_popover, context_menu, graphics, inline_text,
+    inspector, joining, nmr, tabs, updates, view_settings,
 };
 use crate::canvas::{Edit, Tool, guides::Unit};
 use reshiki::cleanup::Scope;
@@ -118,15 +118,14 @@ fn ordinary_tool_change_closes_transient_menus() {
     assert!(!app.imports.examples_menu);
 }
 
-/// Columns: (message, passes the cleanup-preview gate, preview_passthrough, commits_draft).
-fn cases() -> Vec<(Message, bool, bool, bool)> {
+/// Columns: (message, preview_passthrough, commits_draft).
+fn cases() -> Vec<(Message, bool, bool)> {
     vec![
         (
             Message::Canvas(Edit::Navigate(
                 crate::canvas::Navigation::Pan(iced::Vector::new(42., -18.)),
                 iced::Vector::new(100., -40.),
             )),
-            true,
             true,
             false,
         ),
@@ -136,38 +135,14 @@ fn cases() -> Vec<(Message, bool, bool, bool)> {
                 iced::Vector::new(100., -40.),
             )),
             true,
-            true,
             false,
         ),
-        (Message::Cleanup(cleanup::Action::Begin), false, false, true),
-        (
-            Message::Cleanup(cleanup::Action::ToWedge),
-            false,
-            false,
-            true,
-        ),
-        (
-            Message::Cleanup(cleanup::Action::ToFischer),
-            false,
-            false,
-            true,
-        ),
-        (Message::Cleanup(cleanup::Action::Apply), true, false, false),
-        (
-            Message::Cleanup(cleanup::Action::Cancel),
-            true,
-            false,
-            false,
-        ),
-        (
-            Message::Cleanup(cleanup::Action::Original(true)),
-            true,
-            false,
-            false,
-        ),
+        (Message::Cleanup(cleanup::Action::Begin), false, true),
+        (Message::Cleanup(cleanup::Action::ToWedge), false, true),
+        (Message::Cleanup(cleanup::Action::ToFischer), false, true),
+        (Message::Cleanup(cleanup::Action::Menu(true)), false, false),
         (
             Message::Cleanup(cleanup::Action::Scope(Scope::SelectedMolecules)),
-            true,
             false,
             false,
         ),
@@ -175,69 +150,50 @@ fn cases() -> Vec<(Message, bool, bool, bool)> {
             Message::Cleanup(cleanup::Action::Orientation(
                 reshiki::cleanup::Orientation::Keep,
             )),
-            true,
             false,
             false,
         ),
-        (
-            Message::View(view_settings::Action::Grid),
-            true,
-            true,
-            false,
-        ),
+        (Message::View(view_settings::Action::Grid), true, false),
         (
             Message::View(view_settings::Action::SmartGuides(false)),
-            true,
             true,
             false,
         ),
         (
             Message::View(view_settings::Action::TwoDecimalWeight(true)),
             true,
-            true,
             false,
         ),
         (
             Message::View(view_settings::Action::ExportEditableDrawing(false)),
-            true,
             true,
             false,
         ),
         (
             Message::View(view_settings::Action::ExportSvgLiveText(true)),
             true,
-            true,
             false,
         ),
         (
             Message::View(view_settings::Action::Rulers(true)),
-            true,
             true,
             false,
         ),
         (
             Message::View(view_settings::Action::Crosshair(true)),
             true,
-            true,
             false,
         ),
         (
             Message::View(view_settings::Action::RulerUnit(Unit::Inches)),
             true,
-            true,
             false,
         ),
-        (
-            Message::View(view_settings::Action::Toggle),
-            true,
-            true,
-            false,
-        ),
+        (Message::View(view_settings::Action::Toggle), true, false),
         (
             Message::Graphics(graphics::Action::Style(GraphicChange::Pattern(
                 LinePattern::Dashed,
             ))),
-            false,
             false,
             true,
         ),
@@ -245,11 +201,9 @@ fn cases() -> Vec<(Message, bool, bool, bool)> {
             Message::Graphics(graphics::Action::Width("2".into())),
             false,
             false,
-            false,
         ),
         (
             Message::Graphics(graphics::Action::ApplyWidth),
-            false,
             false,
             false,
         ),
@@ -257,11 +211,9 @@ fn cases() -> Vec<(Message, bool, bool, bool)> {
             Message::Graphics(graphics::Action::Stroke("#117E6C".into())),
             false,
             false,
-            false,
         ),
         (
             Message::Graphics(graphics::Action::ApplyStroke),
-            false,
             false,
             false,
         ),
@@ -269,17 +221,10 @@ fn cases() -> Vec<(Message, bool, bool, bool)> {
             Message::Graphics(graphics::Action::Fill("#DCEFE9".into())),
             false,
             false,
-            false,
         ),
-        (
-            Message::Graphics(graphics::Action::ApplyFill),
-            false,
-            false,
-            false,
-        ),
+        (Message::Graphics(graphics::Action::ApplyFill), false, false),
         (
             Message::Graphics(graphics::Action::Sides(BracketSides::Left)),
-            false,
             false,
             false,
         ),
@@ -289,11 +234,9 @@ fn cases() -> Vec<(Message, bool, bool, bool)> {
             ))),
             false,
             false,
-            false,
         ),
         (
             Message::Graphics(graphics::Action::OrbitalPhase(Phase::Shaded)),
-            false,
             false,
             false,
         ),
@@ -301,40 +244,19 @@ fn cases() -> Vec<(Message, bool, bool, bool)> {
             Message::Graphics(graphics::Action::FlipPhase(true)),
             false,
             false,
-            false,
         ),
         (
             Message::Graphics(graphics::Action::AttachSymbols(false)),
-            false,
             false,
             false,
         ),
     ]
 }
 
-fn previewing() -> App {
-    let (mut app, _) = App::new();
-    app.tab.cleanup = Some(CleanupPreview {
-        job: cleanup::CleanupJob {
-            options: Default::default(),
-            selection: vec![],
-            serial: app.tab.cleanup_serial,
-            epoch: app.tab.file_epoch,
-        },
-        warnings: vec![],
-        document: app.tab.doc.clone(),
-        analysis: None,
-        revision: app.tab.revision,
-        epoch: app.tab.file_epoch,
-        original: false,
-    });
-    app
-}
-
 #[test]
 fn clustered_messages_keep_their_draft_and_background_predicates() {
     let (mut app, _) = App::new();
-    for (message, _, passthrough, commits) in cases() {
+    for (message, passthrough, commits) in cases() {
         let context = format!("{message:?}");
         assert_eq!(preview_passthrough(&message), passthrough, "{context}");
         assert_eq!(inline_text::commits_draft(&message), commits, "{context}");
@@ -347,41 +269,14 @@ fn clustered_messages_keep_their_draft_and_background_predicates() {
         app.tabs.menu = true;
         app.imports.menu = true;
         app.imports.examples_menu = true;
+        app.cleanup_menu = true;
+        let menu = matches!(message, Message::Cleanup(cleanup::Action::Menu(_)));
         app.close_transient_menus(&message);
         assert!(!app.tabs.menu, "{context}");
         assert!(!app.imports.menu, "{context}");
         assert!(!app.imports.examples_menu, "{context}");
+        assert_eq!(app.cleanup_menu, menu, "Choosing an option closes the menu");
     }
-}
-
-#[test]
-fn cleanup_preview_admits_only_its_controls_and_view_aids() {
-    for (message, passes, _, _) in cases() {
-        let context = format!("{message:?}");
-        let mut app = previewing();
-        let status = app.status.clone();
-        assert_eq!(
-            app.cleanup_preview_gate(message).is_continue(),
-            passes,
-            "{context}"
-        );
-        if passes {
-            assert_eq!(app.status, status, "{context}");
-        } else {
-            assert_eq!(
-                app.status, "Cleanup preview · Enter to apply · Esc to cancel",
-                "{context}"
-            );
-        }
-        assert!(app.tab.cleanup.is_some(), "{context}");
-    }
-    let mut app = previewing();
-    assert!(
-        app.cleanup_preview_gate(Message::Tool(Tool::Select))
-            .is_break()
-    );
-    assert!(app.tab.cleanup.is_none());
-    assert_eq!(app.status, "Cleanup canceled · Drawing unchanged");
 }
 
 #[test]
@@ -400,10 +295,5 @@ fn native_pointer_hover_preserves_the_existing_hover_gates_and_transient_menus()
         assert!(app.tabs.menu);
         assert!(app.imports.menu);
         assert!(app.imports.examples_menu);
-        let mut app = previewing();
-        let document = app.tab.doc.clone();
-        let _ = app.update(message);
-        assert!(app.tab.cleanup.is_some());
-        assert_eq!(app.tab.doc, document);
     }
 }

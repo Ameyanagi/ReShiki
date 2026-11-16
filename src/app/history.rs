@@ -5,7 +5,6 @@ use std::collections::HashSet;
 impl App {
     pub(super) fn step_history(&mut self, redo: bool) {
         self.tab.erase_stroke = false;
-        self.tab.cleanup = None;
         let before = self.tab.doc.clone();
         let selected_group = !before.outer_selected_groups(&self.tab.selected).is_empty();
         let changed = if !redo {

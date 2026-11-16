@@ -130,10 +130,8 @@ impl Completion {
 pub(super) enum Modal {
     /// atom_text::background, also used by color_popover::keeps_open.
     AtomText,
-    /// gates::preview_passthrough, shared by the cleanup and 3D previews.
+    /// gates::preview_passthrough, used by the 3D preview.
     Preview,
-    /// cleanup_preview_gate: the shared preview results plus its own.
-    Cleanup,
     /// optimization_gate, the 3D preview.
     Optimization,
     /// updates::background, while the update dialog owns input.
@@ -144,7 +142,6 @@ pub(super) enum Modal {
 struct Admission {
     atom_text: bool,
     preview: bool,
-    cleanup: bool,
     optimization: bool,
     updates_dialog: bool,
 }
@@ -152,7 +149,6 @@ struct Admission {
 const NOWHERE: Admission = Admission {
     atom_text: false,
     preview: false,
-    cleanup: false,
     optimization: false,
     updates_dialog: false,
 };
@@ -171,14 +167,12 @@ fn admission(completion: Completion) -> Admission {
         | Completion::Opened => Admission {
             atom_text: true,
             preview: true,
-            cleanup: true,
             optimization: true,
             updates_dialog: true,
         },
         Completion::Printing | Completion::Imports | Completion::Pictures => Admission {
             atom_text: true,
             preview: false,
-            cleanup: true,
             optimization: true,
             updates_dialog: true,
         },
@@ -186,7 +180,6 @@ fn admission(completion: Completion) -> Admission {
             Admission {
                 atom_text: true,
                 preview: false,
-                cleanup: false,
                 optimization: true,
                 updates_dialog: true,
             }
@@ -199,28 +192,24 @@ fn admission(completion: Completion) -> Admission {
         | Completion::ThemeFile => Admission {
             atom_text: false,
             preview: false,
-            cleanup: false,
             optimization: true,
             updates_dialog: true,
         },
         Completion::Save => Admission {
             atom_text: true,
             preview: true,
-            cleanup: true,
             optimization: true,
             updates_dialog: false,
         },
         Completion::Updates => Admission {
             atom_text: true,
             preview: false,
-            cleanup: false,
             optimization: true,
             updates_dialog: false,
         },
         Completion::Autosave | Completion::FilePrepared => Admission {
             atom_text: false,
             preview: false,
-            cleanup: false,
             optimization: true,
             updates_dialog: false,
         },
@@ -255,7 +244,6 @@ pub(super) fn admitted(modal: Modal, message: &Message) -> bool {
     match modal {
         Modal::AtomText => admission.atom_text,
         Modal::Preview => admission.preview,
-        Modal::Cleanup => admission.cleanup,
         Modal::Optimization => admission.optimization,
         Modal::UpdatesDialog => admission.updates_dialog,
     }

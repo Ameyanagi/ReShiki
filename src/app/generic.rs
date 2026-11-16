@@ -86,7 +86,6 @@ impl App {
     /// These are exactly the states whose later gates drop the expansion result.
     pub(super) fn generic_expansion_blocked(&self) -> bool {
         self.tab.atom_text.is_some()
-            || self.tab.cleanup.is_some()
             || self.tab.optimization.is_some()
             || self.recovery_manager.open()
             || self.updates.open
@@ -269,7 +268,6 @@ impl App {
                             Ok(reconciled) => reconciled,
                             Err(error) => return failed(self, error.message().into()),
                         };
-                        self.tab.cleanup = None;
                         self.tab.erase_stroke = false;
                         self.tab.untitled_name = Some("Generic expansion".into());
                         self.commit_changed(reconciled, false);

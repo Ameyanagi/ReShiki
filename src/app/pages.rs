@@ -173,7 +173,7 @@ impl App {
                     return self.page_action(Action::Open);
                 }
                 self.cancel_join();
-                if self.tab.cleanup.is_some() || !self.finish_inline(true) {
+                if !self.finish_inline(true) {
                     return Task::none();
                 }
                 self.tab.pages.editor = None;
@@ -183,7 +183,7 @@ impl App {
             }
             Action::Open => {
                 self.cancel_join();
-                if self.tab.cleanup.is_some() || !self.finish_inline(true) {
+                if !self.finish_inline(true) {
                     return Task::none();
                 }
                 self.tab.pages.editor = Some(Editor::new(&self.tab.doc, self.tab.file_epoch));

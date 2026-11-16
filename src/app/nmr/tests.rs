@@ -1216,75 +1216,53 @@ fn ethyl_acetate() -> App {
     app
 }
 
-fn open_result_modal(app: &mut App, atom_text: bool) {
-    use crate::app::{CleanupPreview, atom_text, cleanup};
-    if atom_text {
-        let id = app.tab.doc.atoms[0].id;
-        let _ = app.update(Message::AtomText(atom_text::Action::Begin(Some(id))));
-        assert!(app.tab.atom_text.is_some());
-    } else {
-        app.tab.cleanup = Some(CleanupPreview {
-            job: cleanup::CleanupJob {
-                options: Default::default(),
-                selection: vec![],
-                serial: app.tab.cleanup_serial,
-                epoch: app.tab.file_epoch,
-            },
-            warnings: vec![],
-            document: app.tab.doc.clone(),
-            analysis: None,
-            revision: app.tab.revision,
-            epoch: app.tab.file_epoch,
-            original: false,
-        });
-    }
+fn open_atom_text(app: &mut App) {
+    let id = app.tab.doc.atoms[0].id;
+    let _ = app.update(Message::AtomText(crate::app::atom_text::Action::Begin(
+        Some(id),
+    )));
+    assert!(app.tab.atom_text.is_some());
 }
 
 #[test]
-fn update_accepts_prediction_under_atom_text_and_cleanup_without_editing() {
-    for atom_text in [true, false] {
-        let mut app = ethyl_acetate();
-        let before = app.tab.doc.clone();
-        let task = app.update(Message::Nmr(Action::Predict(Nucleus::H1)));
-        assert!(task.units() > 0);
-        let key = app.tab.nmr.job.pending.clone().unwrap();
-        let report = predicted(&before, Nucleus::H1);
-        open_result_modal(&mut app, atom_text);
-        let _ = app.update(Message::Tab(
-            app.tab.id,
-            Box::new(Message::Nmr(Action::Finished(key, Ok(report.clone())))),
-        ));
-        assert!(app.tab.nmr.job.pending.is_none());
-        assert!(Arc::ptr_eq(
-            app.tab.nmr.job.result.as_ref().unwrap(),
-            &report
-        ));
-        assert_eq!(app.tab.atom_text.is_some(), atom_text);
-        assert_eq!(app.tab.cleanup.is_some(), !atom_text);
-        assert_eq!(app.tab.doc, before);
-        assert!(!app.error);
-    }
+fn update_accepts_prediction_under_atom_text_without_editing() {
+    let mut app = ethyl_acetate();
+    let before = app.tab.doc.clone();
+    let task = app.update(Message::Nmr(Action::Predict(Nucleus::H1)));
+    assert!(task.units() > 0);
+    let key = app.tab.nmr.job.pending.clone().unwrap();
+    let report = predicted(&before, Nucleus::H1);
+    open_atom_text(&mut app);
+    let _ = app.update(Message::Tab(
+        app.tab.id,
+        Box::new(Message::Nmr(Action::Finished(key, Ok(report.clone())))),
+    ));
+    assert!(app.tab.nmr.job.pending.is_none());
+    assert!(Arc::ptr_eq(
+        app.tab.nmr.job.result.as_ref().unwrap(),
+        &report
+    ));
+    assert!(app.tab.atom_text.is_some());
+    assert_eq!(app.tab.doc, before);
+    assert!(!app.error);
 }
 
 #[test]
-fn update_reports_nmr_export_under_atom_text_and_cleanup_without_editing() {
-    for atom_text in [true, false] {
-        let mut app = ethyl_acetate();
-        let before = app.tab.doc.clone();
-        open_result_modal(&mut app, atom_text);
-        app.error = true;
-        let _ = app.update(Message::Nmr(Action::Exported(Ok(Some(
-            "Predicted NMR shifts.tsv".into(),
-        )))));
-        assert_eq!(
-            app.status,
-            "Exported predicted NMR shifts to Predicted NMR shifts.tsv"
-        );
-        assert!(!app.error);
-        assert_eq!(app.tab.atom_text.is_some(), atom_text);
-        assert_eq!(app.tab.cleanup.is_some(), !atom_text);
-        assert_eq!(app.tab.doc, before);
-    }
+fn update_reports_nmr_export_under_atom_text_without_editing() {
+    let mut app = ethyl_acetate();
+    let before = app.tab.doc.clone();
+    open_atom_text(&mut app);
+    app.error = true;
+    let _ = app.update(Message::Nmr(Action::Exported(Ok(Some(
+        "Predicted NMR shifts.tsv".into(),
+    )))));
+    assert_eq!(
+        app.status,
+        "Exported predicted NMR shifts to Predicted NMR shifts.tsv"
+    );
+    assert!(!app.error);
+    assert!(app.tab.atom_text.is_some());
+    assert_eq!(app.tab.doc, before);
 }
 
 #[test]
