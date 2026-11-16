@@ -200,16 +200,19 @@ pub async fn send(
 }
 
 /// GitHub's version of each drawing in `files` (its repository path and the
-/// blob it is based on) that changed on `branch` since, with the commit that
-/// last changed it. One deleted on GitHub is left for Send to find. `mine`
-/// is left for the caller.
+/// blob it is based on) that changed on the default branch since, with the
+/// commit that last changed it. One deleted on GitHub is left for Send to
+/// find. `mine` is left for the caller.
 pub async fn newer(
     client: &Client,
-    key: &RepoKey,
-    branch: &str,
+    repo_id: u64,
     files: &[(String, String)],
 ) -> Result<Vec<(Conflict, Option<api::RemoteVersion>)>, Error> {
-    let head = api::head(client, key, branch).await?;
+    // By id, as Send: the repository may have been renamed, or its default
+    // branch changed.
+    let repo = api::repo(client, repo_id).await?;
+    let key = &repo.key;
+    let head = api::head(client, key, &repo.default_branch).await?;
     let mut folders = Folders::new(client, key, head.tree);
     let mut found = Vec::new();
     for (repo_path, base) in files {

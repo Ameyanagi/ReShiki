@@ -49,11 +49,10 @@ impl App {
         if files.is_empty() || self.github_busy(&key) {
             return Task::none();
         }
-        let (named, branch) = (state.key(), state.branch.clone());
-        let generation = self.github.generation;
+        let (id, generation) = (state.repo_id, self.github.generation);
         perform(
             async move {
-                let found = send::newer(&client, &named, &branch, &files).await?;
+                let found = send::newer(&client, id, &files).await?;
                 let base = |path: &str| {
                     let at = files.iter().position(|(at, _)| at == path)?;
                     Some(bases[at].clone())

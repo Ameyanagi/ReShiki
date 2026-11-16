@@ -712,8 +712,7 @@ async fn newer_finds_each_drawing_changed_on_github_and_who_changed_it() {
     let (mock, client) = notes(&[("dir/a.rsk", b"a"), ("b.rsk", b"b")]).await;
     let based = |path: &str, bytes: &[u8]| (path.to_owned(), mock::sha(bytes));
     let files = [based("dir/a.rsk", b"a"), based("b.rsk", b"b")];
-    let key = key();
-    let newer = || send::newer(&client, &key, "main", &files);
+    let newer = || send::newer(&client, 1, &files);
     assert!(newer().await.unwrap().is_empty(), "nothing changed yet");
 
     // @alice changes one between two checks; a deletion is left for Send.
@@ -740,4 +739,14 @@ async fn newer_finds_each_drawing_changed_on_github_and_who_changed_it() {
     assert_eq!(by.message, "Add an ethyl group");
     // Nothing is written.
     assert_eq!(writes(&mock), 0);
+    // Found by id after a rename and a new default branch, as Send does.
+    {
+        let mut model = mock.model();
+        let repo = model.repo("notes");
+        let head = repo.head().unwrap();
+        repo.refs.insert("trunk".into(), head);
+        repo.default_branch = "trunk".into();
+        repo.name = "renamed".into();
+    }
+    assert_eq!(newer().await.unwrap().len(), 1);
 }
