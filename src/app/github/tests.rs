@@ -1091,9 +1091,10 @@ fn close_front(app: &mut App) {
     );
 }
 
-/// The picker on `repo()`, its top folder listed with `names`.
+/// The picker on `repo()` as tiles, its top folder listed with `names`.
 fn picker_at(app: &mut App, mode: Mode, names: &[&str]) {
     app.github.repos = vec![repo()];
+    app.github.prefs.tiles = true;
     github(app, Action::Picker(picker::Action::Show(mode)));
     github(app, Action::Picker(picker::Action::PickRepo(repo().key)));
     let entries = names
@@ -1225,6 +1226,7 @@ fn the_keyboard_selects_only_the_tiles_that_show() {
     let (mut app, _) = app_in(dir.path());
     app.github.repos = vec![repo()];
     let picker = |action| Action::Picker(action);
+    app.github.prefs.tiles = true;
     github(&mut app, picker(picker::Action::Show(Mode::Open)));
     github(&mut app, picker(picker::Action::PickRepo(repo().key)));
     // The drawings wait for their last changes; only the folder shows.
@@ -1470,6 +1472,7 @@ fn a_renamed_repository_keeps_its_folder_here() {
         ..repo()
     };
     app.github.repos = vec![renamed.clone()];
+    app.github.prefs.tiles = true;
     github(&mut app, Action::Picker(picker::Action::Show(Mode::Open)));
     github(
         &mut app,
@@ -2327,6 +2330,7 @@ fn signed_out(dir: &Path) -> App {
 fn signed_out_public_repositories_list_with_names_only() {
     let dir = tempfile::tempdir().unwrap();
     let mut app = signed_out(dir.path());
+    app.github.prefs.tiles = true;
     github(&mut app, Action::Picker(picker::Action::Show(Mode::Open)));
     assert!(the_picker(&app).signed_out);
     github(

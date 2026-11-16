@@ -62,7 +62,8 @@ are; the search field finds the others.
 ### Tiles or Tree
 
 The two buttons at the end of the folder path switch between **Tiles** and
-**Tree**. The picker opens in the view you used last, in every repository.
+**Tree**. The picker opens in the tree the first time, then in the view you
+used last, in every repository.
 The tree lists the whole repository: click a folder or press → and ← to open
 and close it, ↑ and ↓ to move, Enter to open, Shift+Enter to insert. Each row
 shows the name, the format of a file that is not a drawing, and who changed
