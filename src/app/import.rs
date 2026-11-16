@@ -173,7 +173,7 @@ fn kind(path: &Path) -> Kind {
         Kind::Unsupported
     }
 }
-fn name(path: &Path) -> String {
+pub(super) fn name(path: &Path) -> String {
     path.file_name()
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_else(|| path.display().to_string())
@@ -320,6 +320,21 @@ async fn read(
         }
         Kind::Unsupported => Err("Unsupported file type".into()),
     }
+}
+/// An SD file's records, or any file's one drawing, as one drawing: each
+/// beside the one before, centered on the same line.
+pub(super) fn side_by_side(drawings: Vec<Document>) -> Option<Document> {
+    let mut drawings = drawings.into_iter();
+    let mut doc = drawings.next()?;
+    let bounds = |doc: &Document| reshiki::scene::selection_bounds(doc, &doc.all_ids());
+    for part in drawings {
+        if let (Some((top, right)), Some((lo, hi))) = (bounds(&doc), bounds(&part)) {
+            let gap = doc.drawing_style.bond_length_world;
+            let offset = Point::new(right.x + gap - lo.x, (top.y + right.y - lo.y - hi.y) / 2.);
+            reshiki::editing::append(&mut doc, &part, offset);
+        }
+    }
+    Some(doc)
 }
 /// An SD file's records, each a file of its own; any other file as it is.
 pub(super) fn records(file: Picked) -> Vec<Picked> {

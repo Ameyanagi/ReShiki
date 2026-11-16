@@ -321,6 +321,8 @@ pub enum Prepared {
         format: &'static str,
         contents: String,
     },
+    /// An SD file's records, read.
+    Records(Box<super::import::Batch>),
     #[cfg(target_arch = "wasm32")]
     Browser {
         handle: wasm_bindgen::JsValue,
@@ -385,6 +387,8 @@ fn prepare(path: &std::path::Path, contents: Vec<u8>) -> Result<Prepared, String
     } else {
         let format = reshiki::compatibility::file_format(path)
             .or_else(|| matches!(extension.as_str(), "smi" | "smiles").then_some("smiles"))
+            // An SD file is read one record at a time, as Insert reads it.
+            .or_else(|| (extension == "sdf").then_some("sdf"))
             .ok_or_else(|| super::import::unsupported_file(path))?;
         if contents.len() as u64 > super::import::limit(path) {
             return Err("File exceeds 16 MB".into());
@@ -417,6 +421,9 @@ pub(super) async fn read(path: PathBuf) -> Opened {
     Some((path, result))
 }
 
+/// The Open dialog's title, which names what it opens: it has no filter.
+const OPEN_TITLE: &str = "Open a ReShiki, editable PNG/SVG/PDF, MOL, SDF, RXN, CDXML, CDX, SMILES, CIF, PDB, POSCAR or XYZ file";
+
 /// Opens the files the user chooses, each in a tab.
 pub(super) fn open_dialog(
     #[cfg(target_arch = "wasm32")] handles: Vec<(
@@ -427,7 +434,7 @@ pub(super) fn open_dialog(
     // Accept supported extensions without relying on macOS type
     // registration; the worker validates the content.
     Task::future(pick(
-        "Open a ReShiki, editable PNG/SVG/PDF, MOL, RXN, CDXML, CDX, SMILES, CIF, PDB, POSCAR or XYZ file",
+        OPEN_TITLE,
         None,
         false,
         super::import::open_limit,
@@ -459,7 +466,11 @@ pub(super) fn open_picked(
                     #[cfg(target_arch = "wasm32")]
                     let result = match (file.handle, result) {
                         (Some(handle), Ok(prepared))
-                            if !matches!(&prepared, Prepared::Picture(..)) =>
+                            // Neither a picture nor an SD file stays the tab's file.
+                            if !matches!(
+                                &prepared,
+                                Prepared::Picture(..) | Prepared::Import { format: "sdf", .. }
+                            ) =>
                         {
                             let mut duplicate = None;
                             for (id, other) in handles {
@@ -695,6 +706,46 @@ impl super::App {
             Err(error) => {
                 self.status = error;
                 self.error = true;
+            }
+            // Every record of an SD file, read as Insert reads them.
+            Ok(Prepared::Import {
+                format: "sdf",
+                contents,
+            }) => {
+                let file = Picked {
+                    path: path.clone(),
+                    contents: contents.into_bytes(),
+                    #[cfg(target_arch = "wasm32")]
+                    handle: None,
+                };
+                let read = super::import::load(
+                    self.engine.clone(),
+                    vec![file],
+                    Default::default(),
+                    reshiki::document::Document::default().canvas_theme,
+                );
+                return Task::perform(read, move |read| {
+                    let read = read.map(|batch| Prepared::Records(Box::new(batch)));
+                    Message::FilePrepared(Some((path.clone(), read)))
+                });
+            }
+            // Side by side, as an unsaved drawing with the file's name: Save
+            // cannot write an SD file back.
+            Ok(Prepared::Records(batch)) => {
+                let name = super::import::name(&path);
+                let Some(doc) = super::import::side_by_side(batch.drawings) else {
+                    self.status = format!("Could not open {name}: it has no structure");
+                    self.error = true;
+                    return Task::none();
+                };
+                self.open_target(None);
+                self.show_opened(doc, None);
+                self.tab.untitled_name = Some(name);
+                self.tab.mark_saved(reshiki::document::Document::default());
+                for warning in batch.warnings {
+                    self.status.push_str(" · ");
+                    self.status.push_str(&warning);
+                }
             }
             Ok(Prepared::Import { format, contents }) => {
                 // A ChemDraw or MOL file stays the tab's file, as a drawing does.
