@@ -48,10 +48,12 @@ impl App {
         let message = self.overlay_escape_gate(message)?;
         self.close_transient_menus(&message);
         let message = self.panel_routing_gate(message)?;
-        if let Message::Commands(action) = &message
-            && self.command_action_unavailable(action)
-        {
-            return Break(self.commands_action(action.clone()));
+        if self.runs_unavailable_command(&message) {
+            // The palette says why; Help's Run button already does.
+            return Break(match message {
+                Message::Commands(action) => self.commands_action(action),
+                _ => Task::none(),
+            });
         }
         let message = self.joining_gate(message)?;
         let message = self.inline_text_routing_gate(message)?;

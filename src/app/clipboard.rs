@@ -560,24 +560,11 @@ impl App {
             part.atom_labels = self.tab.doc.atom_labels.clone();
             part
         };
-        let center = editing::center(&part, &part.all_ids());
-        let before = self.tab.doc.clone();
-        let selected = editing::append(
-            &mut self.tab.doc,
-            &part,
-            Point::new(
-                self.tab.camera.center.x - center.x + 24.,
-                self.tab.camera.center.y - center.y + 24.,
-            ),
-        );
-        if selected.is_empty() || self.tab.doc.validate().is_err() {
-            self.tab.doc = before;
+        if !self.append_pasted(&part) {
             self.status = "Could not insert the clipboard drawing".into();
             self.error = true;
             return;
         }
-        self.tab.selected = selected;
-        self.changed(before);
         self.tool = Tool::Select;
         self.sync_typography();
         self.sync_graphics();
@@ -599,6 +586,56 @@ impl App {
             self.status.push_str(" · ");
             self.status.push_str(&outcome.warnings.join(" · "));
         }
+    }
+
+    /// Adds a pasted `part`, selects it and records the edit; false when
+    /// nothing could be added. A small part lands just off the view's centre.
+    /// One wider than a quarter of the view would cover what is there, so it
+    /// lands one bond length right of the drawing and is revealed, as an
+    /// inserted structure is. Pages keep the small offset: right of the
+    /// drawing may be off the page.
+    fn append_pasted(&mut self, part: &Document) -> bool {
+        let before = self.tab.doc.clone();
+        let center = editing::center(part, &part.all_ids());
+        let view = self.guides.paper(iced::Rectangle::with_size(self.viewport));
+        let edges = reshiki::scene::selection_bounds;
+        let wide = self.tab.doc.page_layout.is_none()
+            && edges(part, &part.all_ids())
+                .is_some_and(|(lo, hi)| (hi.x - lo.x) * self.tab.camera.zoom > view.width / 4.);
+        let mut offset = Point::new(
+            self.tab.camera.center.x - center.x + 24.,
+            self.tab.camera.center.y - center.y + 24.,
+        );
+        // A wide part is measured on its own in this drawing's settings, with
+        // the hydrogens it will be drawn with, so that the visible edges end
+        // one bond length apart. `Document::bounds` would pad them for framing.
+        let mut beside = false;
+        if wide && let Some((_, drawing)) = edges(&before, &before.all_ids()) {
+            let mut blank = before.clone();
+            blank.clear_content();
+            let mut alone = blank.clone();
+            let ids = editing::append(&mut alone, part, Point::default());
+            reshiki::atom_labels::refresh::refresh_edited(&blank, &mut alone);
+            if let Some((lo, _)) = edges(&alone, &ids) {
+                offset = Point::new(
+                    drawing.x + before.drawing_style.bond_length_world - lo.x,
+                    self.tab.camera.center.y - center.y,
+                );
+                beside = true;
+            }
+        }
+        let selected = editing::append(&mut self.tab.doc, part, offset);
+        if selected.is_empty() || self.tab.doc.validate().is_err() {
+            self.tab.doc = before;
+            return false;
+        }
+        if beside {
+            self.commit_structure_insert(before, selected);
+        } else {
+            self.tab.selected = selected;
+            self.changed(before);
+        }
+        true
     }
 
     pub(super) fn copy_selection(&mut self, cut: bool) -> Task<Message> {
@@ -690,17 +727,7 @@ impl App {
                             part,
                             self.tab.doc.canvas_theme,
                         );
-                        let center = editing::center(&part, &part.all_ids());
-                        let before = self.tab.doc.clone();
-                        self.tab.selected = editing::append(
-                            &mut self.tab.doc,
-                            &part,
-                            Point::new(
-                                self.tab.camera.center.x - center.x + 24.0,
-                                self.tab.camera.center.y - center.y + 24.0,
-                            ),
-                        );
-                        self.changed(before);
+                        self.append_pasted(&part);
                         self.tool = Tool::Select;
                         self.status = "Selection pasted".into();
                     }

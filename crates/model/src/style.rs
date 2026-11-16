@@ -352,6 +352,21 @@ pub fn styled_text_width(text: &str, size: f32, style: &crate::typography::TextS
     text.chars().map(|c| glyph_metrics(c, style).1 * size).sum()
 }
 
+/// The platform's Latin interface font. Japanese fonts center "…" and other
+/// punctuation; CJK text in the interface falls back per script instead.
+const UI_FONTS: &[&str] = &[
+    #[cfg(target_os = "macos")]
+    "Helvetica Neue",
+    #[cfg(windows)]
+    "Segoe UI",
+    #[cfg(not(any(target_os = "macos", windows)))]
+    "Noto Sans",
+    #[cfg(not(any(target_os = "macos", windows)))]
+    "DejaVu Sans",
+];
+
+/// Sans-serif faces for glyphs a label's own font lacks. Explicit Japanese
+/// sans-serif avoids the platform's generic CJK serif fallback.
 const UI_FONT_FALLBACKS: &[&str] = &[
     "Hiragino Sans",
     "Hiragino Kaku Gothic ProN",
@@ -363,11 +378,12 @@ const UI_FONT_FALLBACKS: &[&str] = &[
     "DejaVu Sans",
 ];
 
-/// Explicit Japanese sans-serif avoids the platform's generic CJK serif fallback.
-/// This is an interface preference; chemical labels retain their document style.
+/// The interface font: the platform's Latin sans-serif, else the first
+/// installed fallback. Chemical labels retain their document style.
 pub fn ui_font_family() -> &'static str {
-    UI_FONT_FALLBACKS
+    UI_FONTS
         .iter()
+        .chain(UI_FONT_FALLBACKS)
         .find_map(|name| {
             fonts()
                 .names

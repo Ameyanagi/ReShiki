@@ -39,6 +39,9 @@ pub(super) struct DocumentTab {
     pub(super) file_epoch: u64,
     pub(super) recent_molecules: molecule_shortcuts::Recent,
     pub(super) path: Option<PathBuf>,
+    /// Save keeps a ChemDraw or MOL file's format: the answer to the question
+    /// the first Save asks, or a Save as in that format.
+    pub(super) keep_format: bool,
     /// Browser file identity; imports keep it too, but only native drawings
     /// with a path can save back through it.
     #[cfg(target_arch = "wasm32")]
@@ -175,6 +178,7 @@ impl DocumentTab {
             file_epoch: 0,
             recent_molecules: Default::default(),
             path: None,
+            keep_format: false,
             #[cfg(target_arch = "wasm32")]
             file_handle: None,
             office: None,
@@ -268,6 +272,23 @@ impl DocumentTab {
             .and_then(|p| p.file_name())
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_else(|| self.untitled_name.as_deref().unwrap_or("Untitled").into())
+    }
+
+    /// The name on the tab: a ChemDraw or MOL file shows its format, as in
+    /// "aspirin · MOL".
+    pub(super) fn label(&self) -> String {
+        match self.path.as_deref().and_then(super::files::kept_format) {
+            Some(format) => format!(
+                "{} · {}",
+                self.path
+                    .as_ref()
+                    .and_then(|path| path.file_stem())
+                    .unwrap_or_default()
+                    .to_string_lossy(),
+                format.to_uppercase()
+            ),
+            None => self.name(),
+        }
     }
 
     pub(super) fn dirty(&self) -> bool {
