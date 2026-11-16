@@ -2252,14 +2252,46 @@ fn signed_out_public_repositories_list_with_names_only() {
             folder: false,
         })
         .to_vec();
-    let seq = app.github.seq;
+    let mut entries = entries;
+    entries.push(gh::Entry {
+        name: "esters".into(),
+        sha: sha('6'),
+        folder: true,
+    });
     github(
         &mut app,
         Action::Picker(picker::Action::Listing(generation, Ok((sha('8'), entries)))),
     );
     // Names only: nobody is asked who changed them, nor for previews.
-    assert_eq!(app.github.seq, seq);
-    assert_eq!(picker_names(&app), ["furan.rsk", "index.rsk"]);
+    assert!(the_picker(&app).asked.is_empty());
+    assert_eq!(picker_names(&app), ["esters", "furan.rsk", "index.rsk"]);
+    // Its folders open too.
+    github(
+        &mut app,
+        Action::Picker(picker::Action::Folder("esters".into())),
+    );
+    assert_ne!(picker_generation(&app), generation);
+    assert_eq!(the_picker(&app).trail.len(), 1);
+    // Signed in, the tiles on screen are asked about.
+    app.github.client = Some(Client::new("test".into(), nowhere(), None).unwrap());
+    app.github.account = Account::SignedIn {
+        login: "octo".into(),
+        remembered: true,
+    };
+    let generation = picker_generation(&app);
+    let drawing = gh::Entry {
+        name: "route.rsk".into(),
+        sha: sha('7'),
+        folder: false,
+    };
+    github(
+        &mut app,
+        Action::Picker(picker::Action::Listing(
+            generation,
+            Ok((sha('6'), vec![drawing])),
+        )),
+    );
+    assert_eq!(the_picker(&app).asked.len(), 1);
 }
 
 #[test]
@@ -2360,9 +2392,16 @@ fn access_given_later_ends_read_only_and_changes_count_as_unsent() {
         push: false,
         ..repo()
     };
-    github(&mut app, Action::Access(repo().key, Ok(no_push)));
+    let now = app.github.generation;
+    github(&mut app, Action::Access(now, repo().key, Ok(no_push)));
     assert!(app.github.read_only(&repo().key));
-    github(&mut app, Action::Access(repo().key, Ok(repo())));
+    // A reply asked under an earlier sign-in changes nothing.
+    github(
+        &mut app,
+        Action::Access(now.wrapping_sub(1), repo().key, Ok(repo())),
+    );
+    assert!(app.github.read_only(&repo().key));
+    github(&mut app, Action::Access(now, repo().key, Ok(repo())));
     assert!(!app.github.read_only(&repo().key));
     assert!(app.github_anything_unsent());
     assert_eq!(app.github_send_row().0, "Send 1 drawing");
@@ -2472,6 +2511,23 @@ fn the_palette_lists_known_drawings_and_opens_a_link() {
         action,
         Some(Action::Picker(picker::Action::ShowIn(..)))
     ));
+    // Two that would read the same name their folders and owner.
+    let mut state = app.github.states[&repo().key].clone();
+    state
+        .files
+        .insert("scheme/ring.rsk".into(), FileState::default());
+    run_blocking(workcopy::persist(dir.path(), &repo().key, state, 100)).unwrap();
+    let names: Vec<String> = (app.github_palette().into_iter())
+        .map(|(name, ..)| name)
+        .filter(|name| name.contains("ring"))
+        .collect();
+    assert_eq!(
+        names,
+        [
+            "Open from GitHub: octo/lab/ring",
+            "Open from GitHub: octo/lab/scheme/ring"
+        ]
+    );
     let link = "https://github.com/alice/ligands/blob/main/esters/route.rsk";
     let (name, detail, _) = app.github_link_row(link).unwrap();
     assert_eq!(name, "Open from GitHub: ligands/esters/route");
@@ -2496,6 +2552,24 @@ fn a_link_pasted_or_dropped_on_the_window_opens() {
     .unwrap();
     assert!(app.github_dropped(&[webloc]).is_some());
     assert_eq!(the_picker(&app).search, LIGANDS);
+    // A Windows shortcut names its address after URL=; an icon's comes first.
+    let shortcut = "[InternetShortcut]\nIconFile=https://github.com/x/y\nURL=https://github.com/alice/ligands?a=1&b=2\n";
+    assert_eq!(
+        super::shortcut_url(shortcut).as_deref(),
+        Some("https://github.com/alice/ligands?a=1&b=2")
+    );
+    let xml = "<key>URL</key>\n<string>https://github.com/a/b?x=1&amp;y=2</string>";
+    assert_eq!(
+        super::shortcut_url(xml).as_deref(),
+        Some("https://github.com/a/b?x=1&y=2")
+    );
+    // A binary plist: the one run of text that is the address.
+    let binary =
+        "bplist00\u{d1}\u{1}\u{2}SURL_\u{10}\u{20}https://github.com/alice/ligands\u{8}\u{b}";
+    assert_eq!(
+        super::shortcut_url(binary).as_deref(),
+        Some("https://github.com/alice/ligands")
+    );
     // Any other file is imported as before.
     let other = dir.path().join("ring.mol");
     std::fs::write(&other, "").unwrap();

@@ -338,8 +338,11 @@ pub enum Action {
     ChipMenu(bool),
     /// From an old version: the drawing as it is now.
     OpenLatest,
-    /// Whether a read-only repository may be sent to now.
-    Access(RepoKey, Result<Repo, gh::Error>),
+    /// The window came to the front.
+    Focused,
+    /// Whether a read-only repository may be sent to now, asked in the
+    /// sign-in of that generation.
+    Access(u64, RepoKey, Result<Repo, gh::Error>),
     /// The clipboard's text on Paste: a link opens, anything else pastes.
     Pasted(Option<String>),
     /// A drawing known here, from the command palette.
@@ -419,6 +422,29 @@ fn ask_send(title: String, body: String) -> Task<Message> {
             None => Task::perform(dialog.show(), answer),
         }
     })
+}
+
+/// The address in a link file: a Windows `.url` (`URL=…`), or a macOS
+/// `.webloc`, whose plist is XML or binary (where the address is the one
+/// run of text starting with `http`).
+fn shortcut_url(text: &str) -> Option<String> {
+    if let Some(url) = text
+        .lines()
+        .find_map(|line| line.trim().strip_prefix("URL="))
+    {
+        return Some(url.trim().to_owned());
+    }
+    if let Some((_, rest)) = text.split_once("<key>URL</key>") {
+        let (_, value) = rest.split_once("<string>")?;
+        let (value, _) = value.split_once("</string>")?;
+        return Some(value.trim().replace("&amp;", "&"));
+    }
+    let start = text.find("http")?;
+    let url: String = text[start..]
+        .chars()
+        .take_while(|c| c.is_ascii_graphic() && !"<>\"'".contains(*c))
+        .collect();
+    Some(url)
 }
 
 /// `1 drawing` or `3 drawings`.
@@ -951,12 +977,15 @@ impl App {
                 let url = ends.web(&api::encoded(&path));
                 return self.picker_action(picker::Action::Link(url));
             }
-            Action::Access(key, result) => {
+            Action::Focused => return self.github_recheck(),
+            Action::Access(generation, key, result) => {
                 // Access given since: local changes count as unsent now.
                 if let Ok(repo) = result
+                    && generation == self.github.generation
                     && repo.push
                     && let Some(state) = self.github.states.get_mut(&key)
                     && state.read_only
+                    && state.repo_id == repo.id
                 {
                     state.read_only = false;
                     let shared = self.github.prefs.is_shared(repo.id);
@@ -992,6 +1021,7 @@ impl App {
             return Task::none();
         }
         self.github.checked = Some(Instant::now());
+        let generation = self.github.generation;
         let read_only: Vec<(RepoKey, u64)> = self
             .github_open_repos()
             .into_iter()
@@ -1003,7 +1033,7 @@ impl App {
         Task::batch(read_only.into_iter().map(|(key, id)| {
             let client = client.clone();
             perform(async move { api::repo(&client, id).await }, move |result| {
-                Action::Access(key, result)
+                Action::Access(generation, key, result)
             })
         }))
     }
@@ -1027,12 +1057,7 @@ impl App {
             return None;
         }
         let bytes = std::fs::read(path).ok()?;
-        let text = String::from_utf8_lossy(&bytes);
-        let start = text.find("https://").or_else(|| text.find("http://"))?;
-        let link: String = text[start..]
-            .chars()
-            .take_while(|c| !c.is_whitespace() && !"<\"'\0".contains(*c))
-            .collect();
+        let link = shortcut_url(&String::from_utf8_lossy(&bytes))?;
         gh::link::parse(&link, &self.github.ends.web)?;
         Some(self.picker_action(picker::Action::Link(link)))
     }
@@ -1611,9 +1636,11 @@ impl App {
                     return Task::none();
                 }
                 self.github.closing = None;
+                // Saves in a read-only repository never hold the window open.
                 let left = self.github.states.keys().any(|key| {
-                    self.github.unsent.get(key).is_some_and(|u| !u.is_empty())
-                        || self.github_conflicts(key) > 0
+                    !self.github.read_only(key)
+                        && (self.github.unsent.get(key).is_some_and(|u| !u.is_empty())
+                            || self.github_conflicts(key) > 0)
                 });
                 if left || !self.github.failed.is_empty() {
                     self.cancel_close();
@@ -1761,30 +1788,34 @@ impl App {
             ),
         });
         // Every repository and drawing known here, read from this computer.
-        let known = self.github.root.as_deref().map(workcopy::known);
-        for (folder, state) in known.into_iter().flatten() {
+        // `lab-notes/ring`, or, where two would read the same (the palette
+        // keeps one row per name), `octo-test/lab-notes/scheme/ring`.
+        let stem = |path: &str| path.strip_suffix(".rsk").unwrap_or(path).to_owned();
+        let mut known = Vec::new();
+        let root = self.github.root.as_deref();
+        for (folder, state) in root.map(workcopy::known).into_iter().flatten() {
             let (owner, repo) = (&state.owner, &state.repo);
-            rows.push((
-                format!("{OPEN_FROM_ROW}{repo}"),
-                format!("{owner}/{repo}"),
-                Some(Action::Picker(picker::Action::ShowIn(
-                    state.key(),
-                    String::new(),
-                ))),
-            ));
+            let at = Action::Picker(picker::Action::ShowIn(state.key(), String::new()));
+            let detail = format!("{owner}/{repo}");
+            known.push((repo.clone(), detail.clone(), detail, at));
             for repo_path in state.files.keys() {
-                let root = self.github.root.as_deref().unwrap_or(Path::new(""));
-                let path = workcopy::working_path(root, &folder, repo_path);
-                let name = file_name(repo_path);
-                rows.push((
-                    format!(
-                        "{OPEN_FROM_ROW}{repo}/{}",
-                        name.strip_suffix(".rsk").unwrap_or(name)
-                    ),
+                let path =
+                    workcopy::working_path(root.unwrap_or(Path::new("")), &folder, repo_path);
+                known.push((
+                    format!("{repo}/{}", stem(file_name(repo_path))),
+                    format!("{owner}/{repo}/{}", stem(repo_path)),
                     format!("{owner}/{repo} · {repo_path}"),
-                    Some(Action::OpenKnown(path)),
+                    Action::OpenKnown(path),
                 ));
             }
+        }
+        for (short, long, detail, action) in &known {
+            let twice = known.iter().filter(|(other, ..)| other == short).count() > 1;
+            rows.push((
+                format!("{OPEN_FROM_ROW}{}", if twice { long } else { short }),
+                detail.clone(),
+                Some(action.clone()),
+            ));
         }
         rows
     }

@@ -34,6 +34,8 @@ const SIGNED_OUT_HINT: &str = "Sign in to see who changed each file and a previe
 /// enough to tell which tiles are on screen.
 const TILE: f32 = 136.;
 const TILE_ROW: f32 = 150.;
+/// Every tile is this tall, so rows are [`TILE_ROW`] apart.
+const TILE_HEIGHT: f32 = TILE_ROW - 8.;
 const NAME_TAKEN: &str = "Name taken";
 const CANT_OPEN: &str = "Can't open this name here";
 /// Two clicks on one tile this close together open it.
@@ -113,7 +115,7 @@ pub(in crate::app) struct Picker {
     /// screen; `None` before the first scroll.
     view: Option<(f32, f32, f32)>,
     /// Drawings whose author, time and preview were asked for.
-    asked: HashSet<String>,
+    pub(super) asked: HashSet<String>,
     /// Save a copy: This computer is offered too.
     pub(super) copy: bool,
 }
@@ -535,7 +537,7 @@ impl App {
                                 let (repo, sha) = (picker.repo.clone(), entry.sha.clone());
                                 picker.trail.push((next, sha.clone()));
                                 picker.entries = Some(entries);
-                                return match (self.github.client(), repo) {
+                                return match (self.github.reader(), repo) {
                                     (Some(client), Some(repo)) => {
                                         self.picker_list(client, repo, sha)
                                     }
@@ -589,7 +591,7 @@ impl App {
                 }
             }
             Action::Folder(name) => {
-                let Some(client) = self.github.client() else {
+                let Some(client) = self.github.reader() else {
                     return Task::none();
                 };
                 let Some(picker) = self.picker() else {
@@ -616,7 +618,7 @@ impl App {
                 }
             }
             Action::Crumb(depth) => {
-                let Some(client) = self.github.client() else {
+                let Some(client) = self.github.reader() else {
                     return Task::none();
                 };
                 let Some(picker) = self.picker() else {
@@ -967,10 +969,13 @@ impl App {
         let mut repos: Vec<Repo> = if self.github.client().is_some() {
             self.github.repos.clone()
         } else {
+            // Someone else's repository is listed only while shared, so
+            // Remove from list removes it.
             let known = self.github.root.as_deref().map(workcopy::known);
             known
                 .into_iter()
                 .flatten()
+                .filter(|(_, state)| !state.read_only)
                 .map(|(_, state)| Repo {
                     id: state.repo_id,
                     key: state.key(),
@@ -1005,7 +1010,10 @@ impl App {
         let Some(picker) = self.picker() else {
             return Task::none();
         };
+        // Listings still on their way, and a walk to a folder, end here.
+        picker.generation = generation;
         picker.request = generation;
+        picker.goto.clear();
         picker.busy = true;
         picker.cant_open = None;
         picker.limited = false;
@@ -1056,7 +1064,9 @@ impl App {
             return Task::none();
         };
         let range = on_screen(picker.view, picker.creating(), entries.len());
-        let wanted: Vec<Entry> = entries[range]
+        let wanted: Vec<Entry> = entries
+            .get(range)
+            .unwrap_or_default()
             .iter()
             .filter(|entry| !entry.folder && !picker.asked.contains(&entry.name))
             .cloned()
@@ -1308,6 +1318,7 @@ impl App {
         picker.busy = true;
         picker.error = None;
         picker.request = generation;
+        picker.goto.clear();
         let old = reference.is_some();
         perform(
             {
@@ -2009,6 +2020,7 @@ impl App {
                         .spacing(4);
                         reshiki::accessibility::button(format!("github-file-{at}"), spoken, content)
                             .width(128)
+                            .height(TILE_HEIGHT)
                             .padding(6)
                             .style(crate::app::workspace::control(selected))
                             .on_press(msg(Action::Select(at)))
@@ -2154,6 +2166,7 @@ fn new_item_tile(picker: &Picker, folder: bool) -> Element<'_, Message> {
                 .spacing(4),
             )
             .width(128)
+            .height(TILE_HEIGHT)
             .padding(6)
             .into();
         }
@@ -2177,6 +2190,7 @@ fn new_item_tile(picker: &Picker, folder: bool) -> Element<'_, Message> {
         content,
     )
     .width(128)
+    .height(TILE_HEIGHT)
     .padding(6)
     .style(crate::app::workspace::control(false))
     .on_press(msg(Action::NewItem(folder)))

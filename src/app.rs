@@ -721,6 +721,11 @@ impl App {
                     return Some(Message::ModifiersChanged(modifiers));
                 }
                 if let iced::Event::Window(event) = &event {
+                    // Back in the window: may read-only repositories be sent to now?
+                    #[cfg(not(target_arch = "wasm32"))]
+                    if matches!(event, iced::window::Event::Focused) {
+                        return Some(Message::GitHub(github::Action::Focused));
+                    }
                     return import::drag_event(event);
                 }
                 if status == iced::event::Status::Ignored
