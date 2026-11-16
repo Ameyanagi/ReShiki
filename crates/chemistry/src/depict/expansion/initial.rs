@@ -103,7 +103,9 @@ impl Input<'_> {
                     }
                 }
             }
-            let fragment = if options.use_ring_templates && mapped.len() < 2 {
+            let regular = options.regular_large_rings
+                && matches!(system.as_slice(), &[ring] if at(&self.cache.atoms, ring)?.len() >= 9);
+            let fragment = if options.use_ring_templates && mapped.len() < 2 && !regular {
                 self.templates
                     .embed_with_budget(&system, options.bond_length, &mut work.0)?
                     .fragment

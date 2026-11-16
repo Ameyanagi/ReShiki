@@ -338,7 +338,8 @@ pub enum Action {
     ChipMenu(bool),
     /// From an old version: the drawing as it is now.
     OpenLatest,
-    /// The window came to the front.
+    /// The window came to the front: after Choose repositories, the picker
+    /// lists them again; read-only repositories are asked about again.
     Focused,
     /// Whether a read-only repository may be sent to now, asked in the
     /// sign-in of that generation.
@@ -755,6 +756,9 @@ impl App {
             }
             Action::ChooseRepositories => {
                 self.github.menu = false;
+                if let Some(Dialog::Picker(picker)) = &mut self.github.dialog {
+                    picker.browsing = true;
+                }
                 let slug = config::app_slug().unwrap_or_default();
                 return open_url(ends.web(&format!("/apps/{slug}/installations/new")));
             }
@@ -978,7 +982,10 @@ impl App {
                 let url = ends.web(&api::encoded(&path));
                 return self.picker_action(picker::Action::Link(url));
             }
-            Action::Focused => return self.github_recheck(),
+            Action::Focused => {
+                let listed = self.picker_returned();
+                return Task::batch([listed, self.github_recheck()]);
+            }
             Action::Access(generation, key, result) => {
                 // Access given since: local changes count as unsent now.
                 if let Ok(repo) = result
@@ -2287,6 +2294,13 @@ impl App {
         Some(self.github.named(&key).repo)
     }
 
+    /// Whether the status chip is there to hold the Send popover: the theme
+    /// editor replaces the status bar, and a drawing not on GitHub has no chip.
+    pub(super) fn send_on_chip(&self) -> bool {
+        !(self.inspector_tab == InspectorTab::ThemeGenerator && self.theme_library.editor.is_some())
+            && self.github.locate(self.tab.path.as_deref()).is_some()
+    }
+
     /// The open GitHub dialog over everything else. Send is a popover of the
     /// status chip instead.
     pub(super) fn with_github<'a>(&'a self, content: Element<'a, Message>) -> Element<'a, Message> {
@@ -2294,11 +2308,8 @@ impl App {
             return content;
         };
         let close = Message::GitHub(Action::Close);
-        // The theme editor replaces the workspace and its status bar.
-        let chip_shown = !(self.inspector_tab == InspectorTab::ThemeGenerator
-            && self.theme_library.editor.is_some());
         let (body, width, height, placement): (_, f32, f32, _) = match dialog {
-            Dialog::Send(_) if chip_shown => return content,
+            Dialog::Send(_) if self.send_on_chip() => return content,
             Dialog::Send(draft) => (
                 self.send_view(draft),
                 360.,

@@ -32,6 +32,9 @@ pub struct Options {
     /// Keep regular rings next to a spiro centre when RDKit's collision
     /// shortening would squash them (#1112). ReShiki only; off for parity.
     pub preserve_spiro_rings: bool,
+    /// With ring templates, still draw a lone ring of nine or more atoms as a
+    /// regular polygon. ReShiki only; off for parity.
+    pub regular_large_rings: bool,
 }
 impl Default for Options {
     fn default() -> Self {
@@ -43,6 +46,7 @@ impl Default for Options {
             path_angle_expansion: true,
             path_angle_expansion_extra_trials: true,
             preserve_spiro_rings: false,
+            regular_large_rings: false,
         }
     }
 }
@@ -137,6 +141,7 @@ fn compute_inner(
                 octahedral: options.bond_length,
             },
             use_ring_templates: options.use_ring_templates,
+            regular_large_rings: options.regular_large_rings,
         },
         remaining,
     )?;
