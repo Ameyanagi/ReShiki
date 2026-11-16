@@ -357,11 +357,7 @@ impl App {
                     self.error = true;
                     return Task::none();
                 }
-                if let Err(error) = self.try_replace_document((*doc).clone(), Vec::new()) {
-                    self.status = error;
-                    self.error = true;
-                    return Task::none();
-                }
+                self.replace_with_stored((*doc).clone());
                 let save = crate::app::tagged(self.save_drawing(false), self.tab.id);
                 self.status = format!("Restored {label}");
                 self.error = false;

@@ -348,6 +348,17 @@ pub fn install_expansion(
     Ok(Reconciled { before })
 }
 
+/// Replace the drawing with a stored one, such as a saved version, exactly as
+/// stored. [`reconcile`] repairs an edit by comparing it with the drawing
+/// before it; against the drawing being replaced it would move or unlink
+/// captions the stored drawing had placed. A stored drawing was validated when
+/// it was read.
+pub fn replace(doc: &mut Document, stored: Document) -> Reconciled {
+    Reconciled {
+        before: std::mem::replace(doc, stored),
+    }
+}
+
 impl Reconciled {
     /// The pre-edit snapshot, for observers that mirror [`History`].
     pub fn before(&self) -> &Document {
