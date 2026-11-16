@@ -1402,10 +1402,16 @@ impl App {
 
     /// The panel and the Versions list follow the drawing in front.
     pub(super) fn github_follow(&mut self) -> Task<Message> {
-        if !self.inspector_open || self.inspector_tab != InspectorTab::Versions {
+        if self.inspector_tab != InspectorTab::Versions {
             return Task::none();
         }
         let front = self.github.locate(self.tab.path.as_deref());
+        // Only a GitHub drawing has History.
+        if front.is_none() {
+            self.inspector_tab = InspectorTab::Properties;
+        } else if !self.inspector_open {
+            return Task::none();
+        }
         if front == self.github.versions.target {
             return Task::none();
         }

@@ -417,6 +417,32 @@ fn send_on_a_drawing_not_on_github_chooses_where_it_goes() {
 }
 
 #[test]
+fn history_gives_way_to_properties_on_a_drawing_not_on_github() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = app_in(dir.path());
+    let on_github = app.tab.id;
+    github(&mut app, Action::ShowVersions);
+    assert_eq!(app.inspector_tab, InspectorTab::Versions);
+    // A new drawing on this computer has no History.
+    let _ = app.update(Message::New);
+    let local = app.tab.id;
+    assert_ne!(local, on_github);
+    assert_eq!(app.inspector_tab, InspectorTab::Properties);
+    assert!(app.inspector_open);
+    // Going back keeps what is showing.
+    let _ = app.update(Message::Tabs(tabs::Action::Select(on_github)));
+    assert_eq!(app.tab.id, on_github);
+    assert_eq!(app.inspector_tab, InspectorTab::Properties);
+    // So does switching to the local tab with History showing.
+    github(&mut app, Action::ShowVersions);
+    assert_eq!(app.inspector_tab, InspectorTab::Versions);
+    let _ = app.update(Message::Tabs(tabs::Action::Select(local)));
+    assert_eq!(app.tab.id, local);
+    assert_eq!(app.inspector_tab, InspectorTab::Properties);
+    assert_eq!(app.github.versions.target, None);
+}
+
+#[test]
 fn send_lists_the_unsent_drawings_with_a_message() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, path) = app_in(dir.path());
