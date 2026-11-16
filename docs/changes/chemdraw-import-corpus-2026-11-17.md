@@ -7,10 +7,9 @@ failures found during import, editable export, and reimport. Previously failing
 source drawings remain in the corpus; their original CDXML/CDX bytes are not
 rewritten to make a check pass.
 
-This record separates the original investigation, completed repair runs, and
-verification still in progress. Receipt names containing `final` describe a
-completed run at that point in the work; they do not certify later working-tree
-changes.
+This record separates the original investigation from the completed repair
+runs. Earlier receipts remain intact; the final frozen-source runs are named
+`final-fixed-*` below.
 
 ## Retained inputs and provenance
 
@@ -50,7 +49,11 @@ have CDXML/CDX/CDS companions for visibility, typography, stroke widths, page
 metadata, and modern versus legacy curve heads. Additional
 [text-default fixtures](../../tests/fixtures/chemdraw-text-defaults/README.md)
 retain independently encoded zero-style CDXString inputs for the text encoder
-regression.
+regression. Twenty page-boundary CDXML/CDS pairs retain large labels, wrapping,
+line-height, XYZ, and mixed-dimensional fragment failures with single-page
+controls. Four reference-encoder diagnostic CDS files remain explicit negatives.
+The unused-palette CDXML regression has no binary companion because its unused
+out-of-range channel cannot be represented by normalized binary color channels.
 
 CDS is ChemDraw stationery. A full stationery file can contain artwork, while a
 style-only file need not. The probe's `--drawing-cds` mode imports full stationery
@@ -77,6 +80,9 @@ have separate receipts and expectations.
   apply to atoms without a redundant text child. Explicit node, text, and run
   overrides keep their precedence. Document font family and size remain in the
   drawing style.
+  An unused palette does not trigger validation of a synthetic text style;
+  actual used styles still validate. The unchanged scene reference suite and
+  four focused palette controls cover this boundary.
 - **CDX/CDS text encoding.** Unstyled and partly styled spans resolve their
   Label or Caption defaults before binary serialization. The encoder no longer
   invents plain Arial 10 pt runs. Unicode text uses the supported UTF8Text
@@ -95,7 +101,8 @@ have separate receipts and expectations.
   are imported; original page boundaries, paper settings, and empty pages are
   not retained. Nested pages remain unsupported.
 - **Page spacing and binary coordinates.** Page placement measures resolved
-  paragraph layout, including wrapping and explicit line heights. Native XYZ
+  paragraph layout, including wrapping and explicit line heights, and rendered
+  atom-label extents, including above/below hydrogen placement. Native XYZ
   coordinates use their own exact translation grid, including mixed 2D/3D
   fragments. Binary coordinate decoding preserves every signed 16.16 tick
   through its XML bridge. Independently encoded
@@ -144,12 +151,25 @@ inputs; all six style controls pass. The preceding `fresh-72317` receipt retains
 the group-count and atom-correspondence findings that prompted the oracle
 corrections. No source bytes were changed to resolve those comparisons.
 
-These receipts are completed **intermediate milestones before the final page
-boundary/precision refinement**. Final workspace checks and a probe run against
-that final working tree are still being collected; this record does not claim
-them yet. JSON receipts name the base commit
-`ff0741268714eff0c6791a30026702872e620f9a` and explicitly state that the probe was
-built from the working tree, so the commit alone is not a complete build identity.
+These receipts are intermediate milestones. After the final page, precision,
+and palette repairs, all three seeds were rerun against the frozen importer:
+
+| Final receipt              |    Inputs | Accepted drawings | Expected rejections | Style controls | Successful export/reimports |
+| -------------------------- | --------: | ----------------: | ------------------: | -------------: | --------------------------: |
+| `final-fixed-20261117`     |       340 |               303 |                  31 |              6 |                         909 |
+| `final-fixed-72317`        |       340 |               303 |                  31 |              6 |                         909 |
+| `final-fixed-99173`        |       340 |               303 |                  31 |              6 |                         909 |
+| `final-fixed-supplemental` |        84 |                80 |                   4 |              0 |                         240 |
+| **Total**                  | **1,104** |           **989** |              **97** |         **18** |                   **2,967** |
+
+All final receipts have zero unexpected findings or probe errors. Every accepted
+drawing exports and reimports as CDXML, CDX, and actual CDS. Supplemental
+rejections are the retained reference-encoder line-height diagnostics.
+
+The reports explicitly identify working-tree builds rather than claiming their
+base commit alone identifies the code. The delivery metadata records the tested
+probe SHA-256:
+`9cf254d620b0b1df134198ea9131b27b7c35990524f108e1406db27a946ad73a`.
 
 Focused regression runs cover CDXML and CDX visibility, inherited faces,
 explicit overrides, hidden charge/dummy compatibility, and unchecked drawing
@@ -158,7 +178,24 @@ and Unicode multi-run serialization. The 17 existing scene stage/order checks
 also pass. Python lint, formatting, typing, reference tests, and dependency
 checks pass with targeted reruns after the new integration shard assignments
 and module-index artifact exclusion were fixed. Raw outputs and the detailed
-status history are in `validation/python-summary.json` under the artifact root.
+status history are in `validation/python-summary.json` and
+`validation/python-final-summary.json` under the artifact root. Final Python
+discovery passes 279 tests with 11 documented skips; the corpus runner's 11 tests
+also cover geometry comparison for atomless drawings.
+
+The broad Rust workspace run recorded 5,922 passing tests and five failures in
+four targets. Four were expected CDS extension lists that needed updating; the
+fifth was an arbitrary page-gap threshold, replaced with a check that the actual
+rendered caption bounds do not overlap and 72pt typography remains intact. All
+five pass in focused reruns. The eight drawing/reference targets pass, including
+1,025 independent codec cases; exact coordinate comparisons still detect a
+single changed fixed-point tick. Historical Python codec bytes remain unchanged.
+
+Rust formatting, workspace Clippy with all targets and all features, pre-commit
+and pre-push hooks, JavaScript checks, documentation check/build, and the rebuilt
+application's engine check pass. Raw receipts retain the original failures and
+their successful reruns. GitHub checks are tracked on
+[PR #1214](https://github.com/Ameyanagi/ReShiki/pull/1214).
 
 ## Native application evidence
 
@@ -170,8 +207,14 @@ retained full CDS is drawing stationery readable by the native application.
 Earlier desktop checks showed the two-fragment reaction panel's CDXML with its
 blue arrow and frame, and reproduced the original ReShiki bond-association
 failure. Native ChemDraw also confirmed the binary-arrow correction described
-below. ReShiki **0.15.0** displayed the 60-stamp CDXML in that earlier run. A GUI
-check of the final repaired application build is still pending.
+below. ReShiki **0.15.0** displayed the 60-stamp CDXML in that earlier run.
+
+The rebuilt application opened
+`112-freshmix-seeded-mixed-008.drawing.cds` through its CLI, inferred the binary
+format from the extension, and exported a 40,557-byte CDXML drawing. It emitted
+the expected page-stacking and external-reaction-metadata notices. The isolated
+GUI QA application launched, but the computer-use bridge timed out attaching to
+it; this record does not claim a final GUI inspection.
 
 ## Remaining interchange boundaries
 
@@ -236,6 +279,9 @@ python3 scripts/check_chemdraw_import_corpus.py --manifest artifacts/chemdraw-fr
 
 The runner keeps input results, production exports, reimports, native snapshots,
 and SVG previews separate. Local receipts live under
-`artifacts/chemdraw-import-corpus/`; the earlier bundle there is historical until
-rebuilt from final results. Installed proprietary stationery sources used as
-controls are not redistributed.
+`artifacts/chemdraw-import-corpus/`. The final `chemdraw-fixtures-fixed.zip` and
+`fixed-delivery/index.html` contain sources, exports, previews, provenance,
+failure history, and final run receipts. ZIP CRC, gallery links, source hashes,
+and source regeneration from the extracted layout pass. The original bundle is
+retained separately as historical evidence. Installed proprietary stationery
+sources used as controls are not redistributed.

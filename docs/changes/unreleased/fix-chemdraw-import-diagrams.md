@@ -6,7 +6,8 @@ issues: []
 - ChemDraw diagrams containing several molecules now open correctly when the
   document uses a non-default bond length. Supported pages are arranged
   vertically on one editable canvas, with a notice about page settings that
-  cannot be retained.
+  cannot be retained. Large labels and captions keep their spacing, and editable
+  exports expand the drawing space to fit large figures.
 - Hidden ChemDraw drawing objects stay absent from visible output, with a
   notice when their visibility settings cannot be retained. Atom labels keep
   inherited bold, italic, underline, and color settings without requiring an
