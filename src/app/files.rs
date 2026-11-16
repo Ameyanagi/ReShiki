@@ -385,10 +385,12 @@ fn prepare(path: &std::path::Path, contents: Vec<u8>) -> Result<Prepared, String
             .map_err(|e| format!("Could not open document: {e}"))?;
         Ok(Prepared::Native(Box::new(doc)))
     } else {
-        let format = reshiki::compatibility::file_format(path)
+        // An SD file's records are read next, in `records`. Its extension
+        // comes first, as for Insert: POSCAR is told by its name.
+        let format = (extension == "sdf")
+            .then_some("sdf")
+            .or_else(|| reshiki::compatibility::file_format(path))
             .or_else(|| matches!(extension.as_str(), "smi" | "smiles").then_some("smiles"))
-            // An SD file's records are read next, in `records`.
-            .or_else(|| (extension == "sdf").then_some("sdf"))
             .ok_or_else(|| super::import::unsupported_file(path))?;
         if contents.len() as u64 > super::import::limit(path) {
             return Err("File exceeds 16 MB".into());

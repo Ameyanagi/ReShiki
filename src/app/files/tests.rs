@@ -525,7 +525,8 @@ async fn open_sd_file(app: &mut App, name: &str, contents: String) {
 fn open_names_sd_files_among_what_it_reads() {
     // The dialog has no extension filter; its title lists the formats.
     assert!(OPEN_TITLE.contains(" SDF,"), "{OPEN_TITLE}");
-    for name in ["two.sdf", "two.SDF"] {
+    // A name that starts like a VASP file is still an SD file.
+    for name in ["two.sdf", "two.SDF", "POSCAR_library.sdf"] {
         assert!(
             matches!(
                 prepare(std::path::Path::new(name), b"\n\n\n$$$$\n".to_vec()),
