@@ -896,7 +896,6 @@ impl App {
                 if let Some(picker) = self.picker() {
                     picker.search = text;
                     picker.link = Some(found.clone());
-                    picker.chosen = true;
                 }
                 return Task::batch([show, self.picker_resolve(found)]);
             }
@@ -1041,6 +1040,12 @@ impl App {
 
     /// The repository a link names: listed here already, or asked of GitHub.
     fn picker_resolve(&mut self, found: Link) -> Task<Message> {
+        // The link decides what opens: no repository is chosen for it, and
+        // one asked for earlier is not waited for any more.
+        if let Some(picker) = self.picker() {
+            picker.chosen = true;
+            picker.target = None;
+        }
         let listed = self.picker().and_then(|picker| {
             let mut repos = picker.repos.iter().flatten();
             repos.find(|repo| same(&repo.key, &found.key)).cloned()
