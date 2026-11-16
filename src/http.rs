@@ -1,4 +1,4 @@
-//! HTTPS clients for the update check and online name lookup.
+//! HTTPS clients for the update check, online name lookup and GitHub.
 
 /// Starts a client with TLS through ring.
 ///

@@ -36,7 +36,7 @@ struct Session {
 }
 
 pub(super) fn http(ends: &Endpoints) -> Result<reqwest::Client, Error> {
-    let mut builder = reqwest::Client::builder()
+    let mut builder = crate::http::client()
         .user_agent(concat!("ReShiki/", env!("CARGO_PKG_VERSION")))
         .redirect(reqwest::redirect::Policy::none())
         .connect_timeout(Duration::from_secs(5))

@@ -138,7 +138,7 @@ async fn an_expired_or_refused_code_ends_the_sign_in() {
     assert_eq!(poll("mock-client", &ends, &code).await, Ok(Poll::Denied));
     assert_eq!(poll("mock-client", &ends, &code).await, Ok(Poll::Expired));
     // The page the browser opens approves the code.
-    reqwest::Client::builder()
+    crate::http::client()
         .no_proxy()
         .build()
         .unwrap()
