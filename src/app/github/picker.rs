@@ -1257,7 +1257,8 @@ impl App {
                 let asked = picker.asked.clone();
                 self.github.prefs.tree = tree;
                 let (keep, load) = (self.github_keep_prefs(), self.picker_load());
-                if let Some(picker) = self.picker().filter(|picker| !picker.tree) {
+                // A wait still running goes on.
+                if let Some(picker) = self.picker().filter(|p| !p.tree && p.waiting == 0) {
                     picker.first = picker.asked.difference(&asked).cloned().collect();
                     picker.waiting = picker.first.len();
                 }
@@ -1420,11 +1421,8 @@ impl App {
                 let kept = self.github_opened(&path);
                 if self.open_target(Some(&path)) {
                     self.show_opened(doc, Some(path));
-                    for warning in warnings {
-                        self.status.push_str(" · ");
-                        self.status.push_str(&warning);
-                    }
-                    self.picker_left_out("Opened", placed, total);
+                    let opened = self.status.clone();
+                    self.picker_status(opened, "Opened", (placed, total), warnings);
                 }
                 return kept;
             }
@@ -1471,21 +1469,31 @@ impl App {
         self.sync_graphics();
         self.sync_arrows();
         self.sync_bonds();
-        self.status = format!("Inserted {name}");
+        let inserted = format!("Inserted {name}");
+        self.picker_status(inserted, "Inserted", (placed, total), batch.warnings);
+    }
+
+    /// The status after an open or Insert, then the file's import warnings.
+    /// When only some of its structures fit in one drawing, it says how many,
+    /// in amber; the open or Insert keeps what fits.
+    fn picker_status(
+        &mut self,
+        done: String,
+        verb: &str,
+        (placed, total): (usize, usize),
+        warnings: Vec<String>,
+    ) {
+        let left_out = placed < total;
+        self.status = match left_out {
+            true => format!("{verb} {placed} of {total} structures · The rest don't fit"),
+            false => done,
+        };
         self.error = false;
-        for warning in batch.warnings {
+        for warning in warnings {
             self.status.push_str(" · ");
             self.status.push_str(&warning);
         }
-        self.picker_left_out("Inserted", placed, total);
-    }
-
-    /// Says, in amber, when only `placed` of a file's `total` structures fit
-    /// in one drawing; the open or Insert keeps what fits.
-    fn picker_left_out(&mut self, done: &str, placed: usize, total: usize) {
-        if placed < total {
-            self.status = format!("{done} {placed} of {total} structures · The rest don't fit");
-            self.error = false;
+        if left_out {
             self.github.amber = Some(self.status.clone());
         }
     }

@@ -728,11 +728,46 @@ fn records_that_do_not_fit_are_left_out_and_said_so() {
     bad.atoms.push(bad.atoms[0].clone());
     let mut batch = crate::app::import::Batch::default();
     batch.drawings = vec![good.clone(), good, bad];
+    batch.warnings = vec!["Charge ignored".into()];
     let path = workcopy::old_path(dir.path(), &repo().key, &sha('c'), "dppe.sdf");
     let read = picker::Action::Read(path.clone(), Box::new(Ok(batch)));
     let _ = picker(&mut app, read);
     assert_eq!(app.tab.path.as_deref(), Some(path.as_path()));
-    assert_eq!(app.status, "Opened 2 of 3 structures · The rest don't fit");
+    assert_eq!(
+        app.status,
+        "Opened 2 of 3 structures · The rest don't fit · Charge ignored"
+    );
     assert!(!app.error);
     assert_eq!(app.github.amber.as_deref(), Some(app.status.as_str()));
+}
+
+#[test]
+fn a_wait_for_dates_outlasts_a_trip_to_the_tree() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = app_in(dir.path());
+    app.github.repos = vec![repo()];
+    let _ = picker(&mut app, picker::Action::Show(Mode::Open));
+    let _ = picker(&mut app, picker::Action::PickRepo(repo().key));
+    let generation = picker_generation(&app);
+    let top = vec![entry("a.mol"), entry("b.mol")];
+    let _ = picker(
+        &mut app,
+        picker::Action::Listing(generation, Ok((sha('8'), top))),
+    );
+    assert_eq!(the_picker(&app).waiting, 2);
+    // Tree and back before the dates come.
+    let _ = picker(&mut app, picker::Action::View(true));
+    let _ = picker(&mut app, picker::Action::View(false));
+    assert_eq!(the_picker(&app).waiting, 2);
+    for (path, date) in [
+        ("a.mol", "2025-01-01T00:00:00Z"),
+        ("b.mol", "2026-01-01T00:00:00Z"),
+    ] {
+        let found = Some(("@alice".to_owned(), date.to_owned()));
+        let _ = picker(
+            &mut app,
+            picker::Action::Changed(generation, path.into(), found),
+        );
+    }
+    assert_eq!(picker_names(&app), ["b.mol", "a.mol"]);
 }
