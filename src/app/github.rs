@@ -881,7 +881,9 @@ impl App {
             }
             Action::CloseAnswer(send) => return self.github_close_answer(send),
             Action::Review => {
-                if let Some((key, _)) = self.github.locate(self.tab.path.as_deref()) {
+                // Nothing of a read-only repository is reviewed: it cannot be sent.
+                let front = self.github.locate(self.tab.path.as_deref());
+                if let Some((key, _)) = front.filter(|(key, _)| !self.github.read_only(key)) {
                     let promote = self.github_promote();
                     return Task::batch([promote, self.github_review(key, 0)]);
                 }
@@ -1807,8 +1809,9 @@ impl App {
         rows.push(self.github_send_row());
         if let Some((key, repo_path)) = self.github.locate(self.tab.path.as_deref()) {
             let name = file_name(&repo_path).to_owned();
-            if self.github_conflicts(&key) > 0
-                || self.github_newer_conflict(self.tab.path.as_deref())
+            if !self.github.read_only(&key)
+                && (self.github_conflicts(&key) > 0
+                    || self.github_newer_conflict(self.tab.path.as_deref()))
             {
                 rows.push((
                     "Review changes on GitHub".into(),

@@ -216,6 +216,24 @@ fn with_changes_here_it_becomes_the_conflict_review() {
     app.github.newer.clear();
     found(&mut app, "alice");
     assert!(app.github.newer.is_empty());
+    // With changes here, found before the listing: no Review either.
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_in(dir.path());
+    save_here(&mut app, &path);
+    found(&mut app, "alice");
+    assert!(rows(&app).contains(&"Review changes on GitHub".into()));
+    let generation = app.github.generation;
+    let account = gh::Account {
+        login: "octo".into(),
+        repos: vec![Repo {
+            push: false,
+            ..repo()
+        }],
+    };
+    github(&mut app, Action::Listed(generation, Ok(account)));
+    assert!(!rows(&app).contains(&"Review changes on GitHub".into()));
+    github(&mut app, Action::Review);
+    assert!(app.github.dialog.is_none());
 
     // While the repository sends, the send finds out instead.
     let dir = tempfile::tempdir().unwrap();
