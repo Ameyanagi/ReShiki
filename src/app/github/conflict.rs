@@ -295,13 +295,10 @@ impl App {
             // Yours, saved, under its new name.
             (Choice::KeepBoth, Some(copy), _) => self.tab.path = Some(copy),
             // GitHub's, as one undoable edit, and saved.
-            (_, _, Some(theirs)) => match self.try_replace_document(theirs, Vec::new()) {
-                Ok(()) => self.tab.mark_saved(self.tab.doc.clone()),
-                Err(error) => {
-                    self.status = error;
-                    self.error = true;
-                }
-            },
+            (_, _, Some(theirs)) => {
+                self.replace_with_stored(theirs);
+                self.tab.mark_saved(self.tab.doc.clone());
+            }
             // Nothing here to show: yours stays open as an unsaved drawing.
             (_, _, None) => {
                 self.tab.untitled_name = Some(self.tab.name());

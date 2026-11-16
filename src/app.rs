@@ -820,6 +820,19 @@ impl App {
         self.commit_changed(reconciled, false);
         Ok(())
     }
+    /// Shows a stored drawing, such as a version from GitHub, in place of this
+    /// one as one undoable edit. It comes back exactly as stored: an edit's
+    /// repairs would place its captions against the drawing it replaces.
+    fn replace_with_stored(&mut self, stored: Document) {
+        self.tab.selected.clear();
+        if stored == self.tab.doc {
+            return;
+        }
+        let reconciled = reshiki::transaction::replace(&mut self.tab.doc, stored);
+        self.tab.erase_stroke = false;
+        self.prepare_document_change(true);
+        self.commit_changed(reconciled, false);
+    }
     /// A commit that changes nothing, such as applying an unchanged text
     /// draft, settles a waiting label-layout repair the way closing the
     /// preview that held it back would, instead of recording it as an edit.
