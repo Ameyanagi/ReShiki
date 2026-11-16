@@ -221,8 +221,9 @@ pub(super) fn cloud(f: &mut Frame<'_>, ink: Color) {
     line(f, ink, &[(9., 15.), (12., 12.), (15., 15.)]);
 }
 
+/// Drawn in the 14 px square of the inspector's History button.
 pub(super) fn history(f: &mut Frame<'_>, ink: Color) {
-    let face = Path::circle(Point::new(12., 12.), 8.5);
+    let face = Path::circle(Point::new(7., 7.), 5.6);
     f.stroke(&face, Stroke::default().with_width(1.6).with_color(ink));
-    line(f, ink, &[(12., 7.), (12., 12.), (15.5, 14.)]);
+    line(f, ink, &[(7., 3.8), (7., 7.), (9.4, 8.4)]);
 }

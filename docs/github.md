@@ -60,7 +60,7 @@ with ReShiki's highlight on both. Choose:
 
 **Later** (or Escape) decides later; the chip shows **Review** in amber.
 
-**History**, the clock tab after **Export** in the inspector (or **GitHub →
+**History**, the clock button just after the inspector's tabs (or **GitHub →
 History**, or the chip's state), lists the saves on this computer since the
 last send (**This computer**) and the commits on GitHub that changed the
 drawing (**GitHub**), by day. It shows only for drawings on GitHub. Select

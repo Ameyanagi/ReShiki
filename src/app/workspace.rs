@@ -1766,12 +1766,7 @@ impl App {
         if self.inspector_tab == InspectorTab::Assistant {
             return self.inspector_frame(self.assistant_panel());
         }
-        // A GitHub drawing's History takes a segment; the labels give it room.
-        #[cfg(not(target_arch = "wasm32"))]
-        let history = self.github.locate(self.tab.path.as_deref()).is_some();
-        #[cfg(target_arch = "wasm32")]
-        let history = false;
-        let mut tabs = row![].spacing(SEGMENT_GAP);
+        let mut tabs = row![];
         for (label, tab) in INSPECTOR_TABS {
             let selected = self.inspector_tab == tab
                 || (tab == InspectorTab::Properties
@@ -1787,39 +1782,51 @@ impl App {
                 reshiki::accessibility::button(
                     format!("inspector-tab-{tab:?}"),
                     format!("{label} tab"),
-                    text(label)
-                        .size(if history { 11 } else { 12 })
-                        .width(Length::Fill)
-                        .center(),
+                    text(label).size(12).width(Length::Fill).center(),
                 )
                 .checked(selected)
                 .width(Length::FillPortion(segment_portion(label)))
-                .padding([5, 0])
+                .padding([4, 0])
                 .style(segment(selected))
                 .on_press(Message::Inspector(tab)),
             );
         }
-        // As a clock after the five text tabs.
+        // A GitHub drawing's History: a clock just after the track, next in
+        // focus order.
         #[cfg(not(target_arch = "wasm32"))]
-        if history {
-            let selected = self.inspector_tab == InspectorTab::Versions;
-            tabs = tabs.push(hover_hint(
-                reshiki::accessibility::button(
-                    "inspector-history",
+        let history = self
+            .github
+            .locate(self.tab.path.as_deref())
+            .is_some()
+            .then(|| {
+                let selected = self.inspector_tab == InspectorTab::Versions;
+                hover_hint(
+                    reshiki::accessibility::button(
+                        "inspector-history",
+                        "History",
+                        iced::widget::canvas(Glyph(Icon::History, true))
+                            .width(14)
+                            .height(14),
+                    )
+                    .checked(selected)
+                    .padding((HISTORY_BUTTON - 14.) / 2.)
+                    .style(segment(selected))
+                    .on_press(Message::GitHub(super::github::Action::ShowVersions)),
                     "History",
-                    iced::widget::canvas(Glyph(Icon::History, true))
-                        .width(14)
-                        .height(14),
+                    tooltip::Position::Bottom,
                 )
-                .checked(selected)
-                .padding([6., (HISTORY_SEGMENT - 14.) / 2.])
-                .style(segment(selected))
-                .on_press(Message::GitHub(super::github::Action::ShowVersions)),
-                "History",
-                tooltip::Position::Bottom,
-            ));
-        }
-        let tabs = container(tabs).padding(SEGMENT_GAP).style(segment_track);
+            });
+        #[cfg(target_arch = "wasm32")]
+        let history: Option<Element<'_, Message>> = None;
+        let header = row![
+            container(tabs)
+                .padding(TRACK_INSET)
+                .width(Length::Fill)
+                .style(segment_track),
+            history
+        ]
+        .spacing(HISTORY_GAP)
+        .align_y(iced::Alignment::Center);
         let body = match self.inspector_tab {
             InspectorTab::Reactions => self.reactions_panel(),
             InspectorTab::Assistant => self.assistant_panel(),
@@ -1842,13 +1849,12 @@ impl App {
             InspectorTab::Versions => Space::new().into(),
         };
         let mut content = column![
-            container(tabs).padding([10., SEGMENT_MARGIN]),
+            container(header).padding([6., SEGMENT_MARGIN]),
             scrollable(container(body).padding([8, 16]))
                 .id("inspector-content")
                 .on_scroll(|viewport| Message::InspectorScroll(viewport.absolute_offset().y))
                 .height(Length::Fill)
-        ]
-        .spacing(4);
+        ];
         if self.inspector_tab == InspectorTab::Properties && self.tab.optimization.is_some() {
             content = content.push(container(self.optimization_footer()).padding([10, 16]));
             // The 3D preview is modal: Tab cycles its controls, Cancel and Apply last.
@@ -3094,19 +3100,22 @@ const INSPECTOR_TABS: [(&str, InspectorTab); 5] = [
 /// The tallest the Check drawing findings grow before they scroll; with the
 /// header and fixes it fits under the button in the minimum 680 pt window.
 const FINDINGS_HEIGHT: f32 = 360.;
-const SEGMENT_MARGIN: f32 = 10.;
-const SEGMENT_GAP: f32 = 2.;
-/// The History clock after the text tabs of a GitHub drawing: its 14 px glyph
-/// and padding. Beside it the tab labels are 11 px.
+/// The tab track's distance from the panel's edges, and its rim around the
+/// segments.
+const SEGMENT_MARGIN: f32 = 4.;
+const TRACK_INSET: f32 = 2.;
+/// A GitHub drawing's History clock after the track: a 14 px glyph in a
+/// 20 px button, 4 px from the track.
 #[cfg_attr(
     target_arch = "wasm32",
     expect(dead_code, reason = "The browser editor has no GitHub drawings")
 )]
-const HISTORY_SEGMENT: f32 = 18.;
-/// A tab segment's share of the strip: its label's width plus the same
-/// padding for every segment.
+const HISTORY_BUTTON: f32 = 20.;
+const HISTORY_GAP: f32 = 4.;
+/// A tab segment's share of the track: its label's width plus 3 px on each
+/// side, so every label keeps that margin whenever the labels fit at all.
 fn segment_portion(label: &str) -> u16 {
-    text_width(label, 12.).round() as u16 + 8
+    text_width(label, 12.).ceil() as u16 + 6
 }
 /// Tool buttons and the gap between their rows: a 34 px pitch.
 const TOOL_BUTTON: f32 = 32.;

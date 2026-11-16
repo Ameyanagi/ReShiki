@@ -1588,3 +1588,121 @@ fn the_chip_opens_the_picker_in_the_drawings_folder() {
     assert_eq!(trail, ["drafts", "new"]);
     assert_eq!(picker.entries.as_deref(), Some(&[][..]));
 }
+
+/// A GitHub drawing's History is a clock just after the inspector's tab
+/// track: in the same row, next in focus order, named for assistive
+/// technology, opening History and then shown as selected. A drawing on this
+/// computer has no clock, and its track takes the whole row.
+#[tokio::test]
+#[ignore = "Opt-in real renderer layout check"]
+async fn the_history_clock_follows_the_tab_track_on_github_drawings() -> Result<(), String> {
+    use iced::advanced::renderer::Headless;
+    use iced::advanced::widget::{Id, Operation, operation};
+    use reshiki::accessibility::Node;
+    let mut renderer = <iced::Renderer as Headless>::new(
+        iced::Font::with_name(reshiki::style::ui_font_family()),
+        iced::Pixels(16.),
+        None,
+    )
+    .await
+    .ok_or("No renderer")?;
+    /// The keyboard stops, in Tab order.
+    struct Stops(Vec<Option<Id>>);
+    impl Operation for Stops {
+        fn focusable(
+            &mut self,
+            id: Option<&Id>,
+            _: iced::Rectangle,
+            _: &mut dyn operation::Focusable,
+        ) {
+            self.0.push(id.cloned());
+        }
+        fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
+            operate(self);
+        }
+    }
+    let size = iced::Size::new(1280., 800.);
+    let mut tree = |app: &App, click: Option<iced::Point>| {
+        let mut ui = iced_runtime::UserInterface::build(
+            app.view(),
+            size,
+            iced_runtime::user_interface::Cache::new(),
+            &mut renderer,
+        );
+        let mut messages = Vec::new();
+        if let Some(point) = click {
+            use iced::mouse::{Button, Event};
+            ui.update(
+                &[
+                    iced::Event::Mouse(Event::ButtonPressed(Button::Left)),
+                    iced::Event::Mouse(Event::ButtonReleased(Button::Left)),
+                ],
+                iced::mouse::Cursor::Available(point),
+                &mut renderer,
+                &mut iced::advanced::clipboard::Null,
+                &mut messages,
+            );
+        }
+        let mut collect = reshiki::accessibility::Collect::new(iced::Rectangle::with_size(size));
+        ui.operate(&renderer, &mut operation::black_box(&mut collect));
+        let mut stops = Stops(Vec::new());
+        ui.operate(&renderer, &mut stops);
+        (collect.snapshot().nodes.clone(), messages, stops.0)
+    };
+    // The five tabs and what follows them, in focus order.
+    let header = |nodes: &[Node]| -> Vec<Node> {
+        let first = nodes
+            .iter()
+            .position(|node| node.id == "inspector-tab-Properties")
+            .expect("tab track");
+        nodes[first..first + 6].to_vec()
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = app_in(dir.path());
+    app.inspector_open = true;
+    let (nodes, _, stops) = tree(&app, None);
+    let github = header(&nodes);
+    let (export, clock) = (&github[4], &github[5]);
+    assert_eq!(export.id, "inspector-tab-Export");
+    assert_eq!(clock.id, "inspector-history");
+    assert_eq!(clock.name, "History");
+    assert_eq!(clock.checked, Some(false));
+    assert!(clock.bounds.x >= export.bounds.x + export.bounds.width + 4.);
+    assert!(clock.bounds.x + clock.bounds.width <= size.width);
+    assert!((clock.bounds.center_y() - export.bounds.center_y()).abs() < 1.);
+    for tab in &github[..5] {
+        let label = tab.name.trim_end_matches(" tab");
+        let width = crate::app::workspace::text_width(label, 12.);
+        assert!(width + 6. <= tab.bounds.width, "{label}: {:?}", tab.bounds);
+    }
+    // Tab moves from Export to the clock.
+    let id = |id: &str| Some(Id::from(id.to_owned()));
+    let after = stops
+        .iter()
+        .position(|stop| *stop == id("inspector-tab-Export"))
+        .expect("Export");
+    assert_eq!(stops[after + 1], id("inspector-history"));
+
+    let (_, messages, _) = tree(&app, Some(clock.bounds.center()));
+    assert!(!messages.is_empty());
+    for message in messages {
+        let _ = app.update(message);
+    }
+    assert_eq!(app.inspector_tab, InspectorTab::Versions);
+    let (nodes, ..) = tree(&app, None);
+    let clock = &header(&nodes)[5];
+    assert_eq!(clock.id, "inspector-history");
+    assert_eq!(clock.checked, Some(true));
+
+    app.add_tab();
+    app.inspector_tab = InspectorTab::Properties;
+    let (nodes, ..) = tree(&app, None);
+    assert!(!nodes.iter().any(|node| node.id == "inspector-history"));
+    let local = header(&nodes);
+    assert_ne!(local[5].id, "inspector-history");
+    // The track takes the clock's room.
+    assert!(
+        local[4].bounds.x + local[4].bounds.width > github[4].bounds.x + github[4].bounds.width
+    );
+    Ok(())
+}
