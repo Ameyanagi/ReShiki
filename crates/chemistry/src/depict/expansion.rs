@@ -130,6 +130,10 @@ pub struct Options {
     pub bond_length: f64,
     pub ideal_lengths: seeds::IdealLengths,
     pub use_ring_templates: bool,
+    /// Draw a ring of nine or more atoms that shares no atom with another
+    /// ring as a regular polygon, as ChemDraw does, even where RDKit has a
+    /// folded macrocycle template. ReShiki only; off for parity.
+    pub regular_large_rings: bool,
 }
 impl Default for Options {
     fn default() -> Self {
@@ -141,6 +145,7 @@ impl Default for Options {
                 octahedral: 1.5,
             },
             use_ring_templates: true,
+            regular_large_rings: false,
         }
     }
 }

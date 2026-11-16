@@ -119,6 +119,7 @@ pub(super) fn prepare(request: &Request) -> Result<cleanup::Cleaned, Error> {
                 use_ring_templates: request.use_ring_templates,
                 path_angle_expansion_extra_trials: chemistry::document::refine(),
                 preserve_spiro_rings: chemistry::document::refine(),
+                regular_large_rings: chemistry::document::refine(),
                 ..Default::default()
             },
         )?
