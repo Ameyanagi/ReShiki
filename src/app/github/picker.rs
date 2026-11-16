@@ -45,6 +45,8 @@ pub(in crate::app) struct Picker {
     pub(super) entries: Option<Vec<Entry>>,
     /// Every name in the folder, previews and other files too.
     names: Vec<String>,
+    /// The folder could not be listed, so its names are not known.
+    unlisted: bool,
     selected: Option<usize>,
     thumbs: HashMap<String, Option<Arc<Document>>>,
     new_repo: Option<String>,
@@ -66,6 +68,7 @@ impl Picker {
             trail: Vec::new(),
             entries: None,
             names: Vec::new(),
+            unlisted: false,
             selected: None,
             thumbs: HashMap::new(),
             new_repo: None,
@@ -253,6 +256,7 @@ impl App {
                 let Some(picker) = self.picker().filter(|p| p.generation == generation) else {
                     return Task::none();
                 };
+                picker.unlisted = result.is_err();
                 match result {
                     Ok((tree, entries)) => {
                         if picker.root.is_none() {
@@ -630,8 +634,13 @@ impl App {
         let Some(picker) = self.picker() else {
             return Task::none();
         };
-        // The folder's names are known once it is listed.
-        let (Some(repo), Some(_)) = (picker.repo.clone(), picker.entries.as_ref()) else {
+        // The folder's names are known once it is listed; after a listing
+        // that failed, a save could replace a file already there.
+        let (Some(repo), Some(_), false) = (
+            picker.repo.clone(),
+            picker.entries.as_ref(),
+            picker.unlisted,
+        ) else {
             return Task::none();
         };
         let name = picker.save_name.trim().to_owned();
@@ -813,7 +822,10 @@ impl App {
             .padding([7, 12])
             .style(crate::appearance::primary)
             .on_press_maybe(
-                (!picker.busy && picker.repo.is_some() && picker.entries.is_some())
+                (!picker.busy
+                    && picker.repo.is_some()
+                    && picker.entries.is_some()
+                    && !picker.unlisted)
                     .then(|| msg(Action::SaveHere)),
             ),
         });

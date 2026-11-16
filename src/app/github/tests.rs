@@ -1102,6 +1102,49 @@ fn save_here_never_takes_the_name_of_a_preview_already_there() {
 }
 
 #[test]
+fn save_here_waits_for_a_folder_that_could_not_be_listed() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = app_in(dir.path());
+    app.add_tab();
+    app.github.repos = vec![repo()];
+    let picker = |action| Action::Picker(action);
+    github(&mut app, picker(picker::Action::Show(Mode::SaveHere)));
+    github(&mut app, picker(picker::Action::PickRepo(repo().key)));
+    let failed = picker_generation(&app);
+    github(
+        &mut app,
+        picker(picker::Action::Listing(failed, Err(gh::Error::Offline))),
+    );
+    // GitHub may hold `x.svg`: nothing here knows.
+    github(&mut app, picker(picker::Action::SaveName("x".into())));
+    github(&mut app, picker(picker::Action::SaveHere));
+    assert_eq!(app.tab.path, None);
+    assert_eq!(
+        picker_error(&app),
+        Some(gh::Error::Offline.to_string()),
+        "the listing's error stays"
+    );
+
+    // Listed again, the names are known.
+    github(&mut app, picker(picker::Action::PickRepo(repo().key)));
+    let entry = gh::Entry {
+        name: "x.svg".into(),
+        sha: sha('7'),
+        folder: false,
+    };
+    let listed = picker_generation(&app);
+    github(
+        &mut app,
+        picker(picker::Action::Listing(listed, Ok((sha('8'), vec![entry])))),
+    );
+    github(&mut app, picker(picker::Action::SaveHere));
+    assert_eq!(picker_error(&app).as_deref(), Some("Name taken"));
+    github(&mut app, picker(picker::Action::SaveName("y".into())));
+    github(&mut app, picker(picker::Action::SaveHere));
+    assert!(app.tab.path.is_some());
+}
+
+#[test]
 fn a_working_copy_unlike_its_base_is_never_downloaded_over() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, path) = app_in(dir.path());
