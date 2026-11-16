@@ -18,8 +18,8 @@ so drawings show on GitHub.
 3. The picker opens the only repository, or the one you used last. Pick
    another on the left; open folders and drawings with a double-click, Enter
    or **Open**. Backspace goes up a folder; the parents in **lab-notes /
-   scheme** go back too. Drawings show who changed them last and when, newest
-   first.
+   scheme** go back too. Drawings show who changed them last and when (**You**
+   for your own changes), newest first.
 4. Edit and save as usual. The status bar chip shows the repository, the
    folder and what is left: **● lab-notes / scheme · 1 unsent** with **Send**.
    Click the name to open the picker in that folder.
@@ -37,6 +37,50 @@ In the picker, **+ New repository** (the last row) makes a private
 repository, **+ New drawing** makes an empty drawing in the folder open there,
 and **+ New folder** opens a new folder, which reaches GitHub with the first
 drawing sent from it. A new drawing shows **not sent yet** until you send it.
+
+## Other people's repositories
+
+Paste a github.com link into the picker's search field (**Search or paste a
+GitHub link**). One row shows where it leads, such as **ligands / esters /
+route.rsk**; press Enter to open it. A link to a repository or folder opens it
+in the picker; a link to a drawing opens the drawing in a tab. The same works
+when you paste a link with Cmd+V (Ctrl+V) while no text field has focus, drop
+a `.webloc` or `.url` link file on the window, or type the link into the
+command palette (one row, **Open from GitHub: ligands/esters/route**).
+
+**+ Add public repository…**, the last row of the list, takes `owner/repo` or
+a link. A repository opened by link stays in the list, tagged **shared**,
+until you right-click it and choose **Remove from list**.
+
+Public repositories open signed out too. Signed out, the picker shows names
+only and says **Sign in to see who changed each file and a preview.** GitHub
+allows 60 signed-out requests an hour; past that, the picker says **GitHub's
+limit for signed-out use is reached. Sign in to continue.** with **Sign in…**.
+
+If GitHub will not show a repository, the picker says **Can't open
+owner/repo**: it is private, or the link is wrong. **Copy request for the
+owner** copies a message asking the owner to add ReShiki.
+
+A repository you may not send to is **Read only**: its row shows an eye, its
+tabs an outlined badge, and the chip **● ligands · Read only · 1 change ▾**.
+Edit and save as usual; the saves stay on this computer. The chip's menu has
+**Save a copy…** (choose a repository of yours, or **This computer…**),
+**Copy request for the owner** and **Open on GitHub ↗**. When the owner adds
+ReShiki or gives you access, the label goes away the next time you sign in or
+come back to the window (checked at most every five minutes), and your saves
+count as unsent.
+
+A link to another branch or to a commit opens that version in its own tab,
+apart from the drawing you work on. Its chip says **Old version** with **Open
+latest**. You can edit it; **Save** (Cmd+S) saves a copy, and nothing of it is
+ever sent.
+
+Right-click a GitHub tab and choose **Copy GitHub link** for the drawing's
+address on GitHub. The command palette also lists every drawing and
+repository known on this computer, such as **Open from GitHub: lab-notes/ring**,
+without asking GitHub.
+
+## Send a drawing that is not on GitHub yet
 
 To put a drawing that is not on GitHub yet into a repository, choose
 **GitHub → Send to GitHub…**. Pick a repository and folder, type a **Name**,
@@ -79,8 +123,12 @@ first.
 ## Limits
 
 - Desktop only. The browser editor has no GitHub sign-in yet.
-- ReShiki uses each repository's default branch, and only `.rsk` drawings and
-  their `.svg` previews.
+- ReShiki sends to each repository's default branch, and only `.rsk` drawings
+  and their `.svg` previews. Other branches and commits open read only.
+- A link names a branch by its first folder: `tree/feature/x/...` reads the
+  branch `feature`.
+- Only `.webloc` and `.url` files carry a dropped link; a link dragged from a
+  browser's address bar is not received.
 - A change to the drawing's style or settings is not painted. The compare
   says **Style or settings changed** instead.
 - Send sends saved files. It first saves every open drawing of that
@@ -109,9 +157,17 @@ first.
   the compare; text and graphics get a soft fill of that colour behind them.
 - The picker lists one folder at a time. Its tiles render the drawing itself,
   the way an opened file renders; no preview file from the repository is
-  parsed. Each drawing's last commit is one request; drawings show once all
-  are known, so nothing moves.
-- Repository colors and the repository last used are kept in
+  parsed. Each drawing's last commit and preview are one request each, made
+  only once its tile is on screen. The first screenful shows once all of its
+  dates are known and sorts newest first, once; tiles scrolled to later never
+  move the others.
+- Signed out, requests carry no token and reach public repositories only.
+  Opened by link, a repository's id, names, default branch and whether you
+  may send to it are kept in `prefs.json` (`shared`); a working copy's
+  `state.json` says `read_only` while you may not. Old versions live in
+  `<data>/github/<owner>/<repo>/old/<commit>/`, outside `files/`, so nothing
+  there is ever sent.
+- Repository colors, the repository last used and those opened by link are kept in
   `<data>/github/prefs.json`, by repository id. A new repository gets the hue
   its lowercase `owner/repo` hashes to (FNV-1a), or the next one no other kept
   repository uses.
@@ -121,3 +177,6 @@ first.
   a manual run with `RESHIKI_GITHUB_CLIENT_ID=mock`,
   `RESHIKI_GITHUB_API=http://127.0.0.1:47123/api`,
   `RESHIKI_GITHUB_WEB=http://127.0.0.1:47123` and a fresh `RESHIKI_DATA_DIR`.
+  It also serves `alice/ligands`, someone else's public repository with a
+  `draft` branch, and `alice/notes`, private; `POST /_mock/limit` with
+  `{"left": 0}` spends the signed-out limit.

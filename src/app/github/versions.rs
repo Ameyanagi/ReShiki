@@ -133,12 +133,19 @@ pub(super) fn default_message(message: &str) -> bool {
         .is_some_and(|rest| rest.ends_with(".rsk") || rest.ends_with(" more"))
 }
 
+/// Who made a commit: `You` for the signed-in user, `@alice` for another
+/// account, or the name in the commit.
+pub(super) fn who(login: Option<&str>, author: &str, me: Option<&str>) -> String {
+    match login {
+        Some(login) if Some(login) == me => "You".into(),
+        Some(login) => format!("@{login}"),
+        None => author.to_owned(),
+    }
+}
+
 /// `Add an ethyl group · @alice · 23:02`.
-fn commit_label(version: &api::RemoteVersion) -> String {
-    let who = version
-        .login
-        .as_ref()
-        .map_or_else(|| version.author.clone(), |login| format!("@{login}"));
+fn commit_label(version: &api::RemoteVersion, me: Option<&str>) -> String {
+    let who = who(version.login.as_deref(), &version.author, me);
     format!("{} · {who} · {}", version.message, clock(&version.date))
 }
 
@@ -385,7 +392,10 @@ impl App {
                 .iter()
                 .flatten()
                 .find(|remote| &remote.version.commit == commit)
-                .and_then(|remote| Some((commit_label(&remote.version), remote.doc.clone()?))),
+                .and_then(|remote| {
+                    let label = commit_label(&remote.version, self.github.login());
+                    Some((label, remote.doc.clone()?))
+                }),
         }
     }
 
@@ -452,10 +462,11 @@ impl App {
                         }
                         shown_day = today;
                     }
-                    let who = version
-                        .login
-                        .as_ref()
-                        .map_or_else(|| version.author.clone(), |login| format!("@{login}"));
+                    let who = who(
+                        version.login.as_deref(),
+                        &version.author,
+                        self.github.login(),
+                    );
                     let at = time.map_or_else(String::new, |time| time.format("%H:%M").to_string());
                     body = body.push(version_row(
                         Pick::Remote(version.commit.clone()),

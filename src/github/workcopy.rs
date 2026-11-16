@@ -6,6 +6,8 @@
 //!   state.json
 //!   files/<repo path>          the drawings (a tab's path)
 //!   versions/<key>/<id>.rsk    saves since the last send, newest id last
+//!   old/<commit>/<repo path>   a drawing as it was at a branch or commit,
+//!                              opened by link: never sent
 //! ```
 //! Whether a drawing is unsent is never stored: it is unsent when its file
 //! differs from the bytes last synced, so a crash, an edit made elsewhere and
@@ -35,6 +37,9 @@ pub struct RepoState {
     pub repo: String,
     pub branch: String,
     pub private: bool,
+    /// The user may not send to it: someone else's, or read signed out.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub read_only: bool,
     pub files: BTreeMap<String, FileState>,
 }
 
@@ -73,6 +78,7 @@ impl RepoState {
             repo: repo.key.repo.clone(),
             branch: repo.default_branch.clone(),
             private: repo.private,
+            read_only: !repo.push,
             files: BTreeMap::new(),
         }
     }
@@ -127,6 +133,29 @@ pub fn locate(root: &Path, path: &Path) -> Option<(RepoKey, String)> {
     if parts.next()? != "files" {
         return None;
     }
+    let rest: Option<Vec<&str>> = parts.map(|part| part.to_str()).collect();
+    let repo_path = rest?.join("/");
+    valid_repo_path(&repo_path).then_some((RepoKey { owner, repo }, repo_path))
+}
+
+/// Where the drawing at `repo_path` is kept as it was at `commit`.
+pub fn old_path(root: &Path, key: &RepoKey, commit: &str, repo_path: &str) -> PathBuf {
+    let short: String = commit.chars().take(12).collect();
+    let mut path = repo_dir(root, key).join("old").join(short);
+    path.extend(repo_path.split('/'));
+    path
+}
+
+/// The repository folder and repository path of an old version, or `None`
+/// for any other file.
+pub fn locate_old(root: &Path, path: &Path) -> Option<(RepoKey, String)> {
+    let mut parts = path.strip_prefix(root).ok()?.iter();
+    let owner = parts.next()?.to_str()?.to_owned();
+    let repo = parts.next()?.to_str()?.to_owned();
+    if parts.next()? != "old" {
+        return None;
+    }
+    parts.next()?;
     let rest: Option<Vec<&str>> = parts.map(|part| part.to_str()).collect();
     let repo_path = rest?.join("/");
     valid_repo_path(&repo_path).then_some((RepoKey { owner, repo }, repo_path))
@@ -207,8 +236,8 @@ pub fn folder(root: &Path, repo: &super::Repo) -> RepoKey {
     key
 }
 
-/// Every repository with drawings kept here, as last known.
-pub fn known(root: &Path) -> Vec<RepoState> {
+/// Every repository with drawings kept here, as last known, with its folder.
+pub fn known(root: &Path) -> Vec<(RepoKey, RepoState)> {
     let folders = |dir: &Path| {
         std::fs::read_dir(dir)
             .into_iter()
@@ -220,7 +249,15 @@ pub fn known(root: &Path) -> Vec<RepoState> {
     folders(root)
         .iter()
         .flat_map(|owner| folders(owner))
-        .filter_map(|repo| read_state(&repo.join("state.json")).ok().flatten())
+        .filter_map(|repo| {
+            let state = read_state(&repo.join("state.json")).ok()??;
+            let name = |path: &Path| Some(path.file_name()?.to_str()?.to_owned());
+            let key = RepoKey {
+                owner: name(repo.parent()?)?,
+                repo: name(&repo)?,
+            };
+            Some((key, state))
+        })
         .collect()
 }
 

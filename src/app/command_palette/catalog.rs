@@ -382,6 +382,8 @@ pub(crate) fn build(app: &App) -> Vec<Command> {
                     Some(Action::Review) => "github repo review conflict",
                     Some(Action::CopyLink | Action::OpenOnGitHub) => "github repo link url",
                     Some(Action::SignIn | Action::SignOut) => "github repo account login",
+                    // A known drawing or repository goes by its own name.
+                    Some(Action::OpenKnown(_) | Action::Picker(_)) if github_place(&name) => "",
                     _ => "github repo repository",
                 };
                 let command = Command::new(
@@ -412,8 +414,20 @@ pub(crate) fn build(app: &App) -> Vec<Command> {
     list
 }
 
+/// A row that opens a drawing or repository known here, or a link.
+pub(crate) fn github_place(name: &str) -> bool {
+    #[cfg(not(target_arch = "wasm32"))]
+    return name.starts_with(crate::app::github::OPEN_FROM_ROW);
+    #[cfg(target_arch = "wasm32")]
+    {
+        let _ = name;
+        false
+    }
+}
+
 /// Whether `query` is a whole word of a GitHub row's name or words, such as
-/// `history`, `versions`, `send` or `repo`: that row ranks first.
+/// `history`, `versions`, `send` or `repo`: that row ranks first. Rows of
+/// drawings and repositories known here go by their own names.
 pub(crate) fn github_word(command: &Command, query: &str) -> bool {
     #[cfg(not(target_arch = "wasm32"))]
     let github = matches!(&command.run, Run::Send(messages)
@@ -421,6 +435,7 @@ pub(crate) fn github_word(command: &Command, query: &str) -> bool {
     #[cfg(target_arch = "wasm32")]
     let github = false;
     github
+        && !github_place(&command.name)
         && command
             .name
             .split(|c: char| !c.is_alphanumeric())
@@ -1779,6 +1794,17 @@ fn starts(typed: &[&str], words: &[&str]) -> bool {
 /// "rot 37", "rotate ccw 30", "tilt up 20", "scale 150", "zo 150",
 /// "ch -1", "el Pd", "font 12", "bond len 14", "ri 7", "chain 5".
 pub(crate) fn parameterised(app: &App, query: &str) -> Option<Command> {
+    // A github.com link: one row that opens what it names.
+    #[cfg(not(target_arch = "wasm32"))]
+    if let Some((name, detail, action)) = app.github_link_row(query) {
+        return Some(Command::new(
+            name,
+            Category::File,
+            detail,
+            "",
+            Run::Send(vec![Message::GitHub(action)]),
+        ));
+    }
     if let Some((word, name)) = query.trim().split_once(char::is_whitespace)
         && matches!(word, "w" | "sav" | "saveas" | "e" | "edit")
     {

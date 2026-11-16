@@ -315,3 +315,40 @@ fn saves_made_together_are_all_kept() {
     bytes.sort_unstable();
     assert_eq!(bytes, (0..16).collect::<Vec<u8>>());
 }
+
+#[test]
+fn an_old_version_is_kept_apart_from_the_working_copy() {
+    let root = Path::new("/data/github");
+    let commit = "0123456789abcdef0123";
+    let path = workcopy::old_path(root, &key(), commit, "scheme/route.rsk");
+    assert_eq!(
+        path,
+        root.join("octo-test/lab-notes/old/0123456789ab/scheme/route.rsk")
+    );
+    assert_eq!(
+        workcopy::locate_old(root, &path),
+        Some((key(), "scheme/route.rsk".into()))
+    );
+    // Never taken for the working copy, which is what gets sent.
+    assert_eq!(workcopy::locate(root, &path), None);
+    let working = workcopy::working_path(root, &key(), "scheme/route.rsk");
+    assert_eq!(workcopy::locate_old(root, &working), None);
+}
+
+#[test]
+fn a_read_only_repository_says_so_and_older_states_are_not() {
+    let mut repo = Repo {
+        id: 9,
+        key: key(),
+        private: false,
+        default_branch: "main".into(),
+        push: false,
+    };
+    assert!(RepoState::new(&repo).read_only);
+    repo.push = true;
+    let state = RepoState::new(&repo);
+    // Only a read-only state writes the flag, so older ReShikis read it.
+    let json = serde_json::to_string(&state).unwrap();
+    assert!(!json.contains("read_only"));
+    assert_eq!(serde_json::from_str::<RepoState>(&json).unwrap(), state);
+}

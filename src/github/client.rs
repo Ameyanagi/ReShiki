@@ -1,5 +1,5 @@
-//! Signed-in requests to GitHub's API: headers, limits, token refresh and one
-//! meaning for every status.
+//! Requests to GitHub's API, signed in or, for public repositories, not:
+//! headers, limits, token refresh and one meaning for every status.
 use super::{
     Error, auth,
     config::Endpoints,
@@ -25,6 +25,8 @@ pub struct Client {
     ends: Endpoints,
     client_id: String,
     session: Arc<tokio::sync::Mutex<Session>>,
+    /// Signed out, for public repositories: no token, 60 requests an hour.
+    public: bool,
 }
 
 struct Session {
@@ -78,7 +80,20 @@ impl Client {
                 remembered: true,
                 kept,
             })),
+            public: false,
         })
+    }
+
+    /// A client that never signs in, for public repositories.
+    pub fn public(ends: Endpoints) -> Result<Self, Error> {
+        Ok(Self {
+            public: true,
+            ..Self::new(String::new(), ends, None)?
+        })
+    }
+
+    pub fn is_public(&self) -> bool {
+        self.public
     }
 
     /// Keep the sign-in for the next launch. `false`: the credential store
@@ -113,6 +128,9 @@ impl Client {
     /// The access token to send. Refreshes it when it is about to expire, or
     /// when GitHub refused `refused`; concurrent callers share one refresh.
     async fn access(&self, refused: Option<&str>) -> Result<String, Error> {
+        if self.public {
+            return Ok(String::new());
+        }
         let mut session = self.session.lock().await;
         let tokens = session.tokens.as_ref().ok_or(Error::NotSignedIn)?;
         let expiring = tokens
@@ -167,8 +185,10 @@ impl Client {
                         Accept::Raw => "application/vnd.github.raw+json",
                     },
                 )
-                .header("X-GitHub-Api-Version", "2022-11-28")
-                .bearer_auth(&access);
+                .header("X-GitHub-Api-Version", "2022-11-28");
+            if !self.public {
+                request = request.bearer_auth(&access);
+            }
             if let Some(body) = &body {
                 request = request
                     .header("Content-Type", "application/json")
@@ -178,6 +198,9 @@ impl Client {
             let status = response.status();
             if status.is_success() {
                 return read(response, limit).await;
+            }
+            if status == StatusCode::UNAUTHORIZED && self.public {
+                return Err(Error::NotSignedIn);
             }
             if status == StatusCode::UNAUTHORIZED && !retried {
                 access = self.access(Some(&access)).await?;

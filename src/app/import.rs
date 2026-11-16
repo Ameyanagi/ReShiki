@@ -376,6 +376,11 @@ impl App {
                 if state.dropped.len() >= state.hovered.len() {
                     state.hovered.clear();
                     let paths = std::mem::take(&mut state.dropped);
+                    // A dropped github.com link opens.
+                    #[cfg(not(target_arch = "wasm32"))]
+                    if let Some(task) = self.github_dropped(&paths) {
+                        return task;
+                    }
                     return self.update(Message::Imports(Action::Files(paths)));
                 }
             }

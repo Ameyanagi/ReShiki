@@ -76,7 +76,7 @@ impl Repo {
                 tree,
                 parent,
                 message,
-                author: LOGIN.into(),
+                author: self.owner.clone(),
                 at: "2026-11-15T14:02:00Z".into(),
             },
         );
@@ -126,12 +126,21 @@ impl Repo {
         }
         out
     }
-    fn json(&self) -> Value {
-        json!({
+    /// Signed out, GitHub says nothing of permissions.
+    fn json(&self, signed_in: bool) -> Value {
+        let mut json = json!({
             "id": self.id, "name": self.name, "owner": { "login": self.owner },
             "private": self.private, "default_branch": self.default_branch,
-            "permissions": { "push": self.push },
-        })
+        });
+        if signed_in {
+            json["permissions"] = json!({ "push": self.push });
+        }
+        json
+    }
+    /// Whether the signed-in user (or, signed out, anyone) may read it:
+    /// someone else's private repository is not found.
+    fn visible(&self, signed_in: bool) -> bool {
+        !self.private || signed_in && self.owner == LOGIN
     }
 }
 
@@ -169,6 +178,8 @@ pub struct Model {
     pub log: Vec<Logged>,
     faults: Vec<Fault>,
     pub races: Vec<Race>,
+    /// Signed-out requests left this hour; `None`: no limit.
+    pub signed_out_left: Option<usize>,
 }
 
 /// Someone else's push to `file` that lands just before the next
@@ -194,6 +205,28 @@ impl Model {
             ..Repo::default()
         });
         self.repos.last_mut().unwrap()
+    }
+    /// Someone else's repository, public: the signed-in user reads it but
+    /// may not send to it.
+    pub fn add_public(&mut self, owner: &str, name: &str) -> &mut Repo {
+        let repo = self.add_repo(name);
+        repo.owner = owner.into();
+        repo.private = false;
+        repo.push = false;
+        repo
+    }
+    /// `alice/ligands`, public, with folders, drawings and a `draft` branch
+    /// one commit behind; and `alice/notes`, private.
+    pub fn seed_shared(&mut self) {
+        let ring = include_bytes!("../../website/public/examples/benzofuran.rsk");
+        let route = include_bytes!("../../website/public/examples/esterification.rsk");
+        let repo = self.add_public("alice", "ligands");
+        repo.remote_commit("aromatics/benzofuran.rsk", Some(ring));
+        let draft = repo.remote_commit("esters/esterification.rsk", Some(route));
+        repo.refs.insert("draft".into(), draft);
+        repo.remote_commit("aromatics/furan.rsk", Some(ring));
+        repo.remote_commit("index.rsk", Some(route));
+        self.add_repo("notes").owner = "alice".into();
     }
     pub fn repo(&mut self, name: &str) -> &mut Repo {
         self.repos
@@ -311,8 +344,11 @@ fn respond(model: &mut Model, base: &str, request: Logged) -> Reply {
     let token = request
         .headers
         .get("authorization")
-        .and_then(|v| v.strip_prefix("Bearer "));
-    let signed_in = token.is_some_and(|token| model.access.contains(token));
+        .and_then(|v| v.strip_prefix("Bearer "))
+        .map(str::to_owned);
+    let signed_in = token
+        .as_ref()
+        .is_some_and(|token| model.access.contains(token));
     let body: Value = serde_json::from_slice(&request.body).unwrap_or(Value::Null);
     model.log.push(request);
 
@@ -375,8 +411,31 @@ fn respond(model: &mut Model, base: &str, request: Logged) -> Reply {
             }
             reply(200, json!({}))
         }
-        (_, ["api", rest @ ..]) if signed_in => api(model, &method, rest, &query, &body),
-        (_, ["api", ..]) => reply(401, json!({ "message": "Bad credentials" })),
+        ("POST", ["_mock", "limit"]) => {
+            model.signed_out_left = body["left"].as_u64().map(|left| left as usize);
+            reply(200, json!({}))
+        }
+        (_, ["api", rest @ ..]) if signed_in => api(model, &method, rest, &query, &body, true),
+        (_, ["api", ..]) if token.is_some() => reply(401, json!({ "message": "Bad credentials" })),
+        // Signed out: public repositories only, 60 requests an hour.
+        (_, ["api", ..]) if model.signed_out_left == Some(0) => Reply {
+            status: 403,
+            headers: vec![
+                ("x-ratelimit-remaining", "0".into()),
+                (
+                    "x-ratelimit-reset",
+                    (super::auth::unix_now() + 1800).to_string(),
+                ),
+            ],
+            body: br#"{"message":"API rate limit exceeded"}"#.to_vec(),
+        },
+        ("GET", ["api", "repos" | "repositories", ..]) => {
+            if let Some(left) = &mut model.signed_out_left {
+                *left -= 1;
+            }
+            api(model, &method, &parts[1..], &query, &body, false)
+        }
+        (_, ["api", ..]) => reply(401, json!({ "message": "Requires authentication" })),
         _ => missing(),
     };
     match fault {
@@ -428,6 +487,7 @@ fn api(
     parts: &[&str],
     query: &HashMap<String, String>,
     body: &Value,
+    signed_in: bool,
 ) -> Reply {
     let number =
         |name: &str, default: usize| query.get(name).map_or(default, |n| n.parse().unwrap());
@@ -446,21 +506,23 @@ fn api(
         }
         ("GET", ["user", "installations", "1", "repositories"]) => {
             let (size, page) = (number("per_page", 30), number("page", 1));
-            let repos: Vec<Value> = model
-                .repos
+            // The user's own: someone else's are opened by link.
+            let own: Vec<&Repo> = model.repos.iter().filter(|r| r.owner == LOGIN).collect();
+            let repos: Vec<Value> = own
                 .iter()
                 .skip((page - 1) * size)
                 .take(size)
-                .map(Repo::json)
+                .map(|repo| repo.json(true))
                 .collect();
             reply(
                 200,
-                json!({ "total_count": model.repos.len(), "repositories": repos }),
+                json!({ "total_count": own.len(), "repositories": repos }),
             )
         }
         ("GET", ["repositories", id]) => {
-            match model.repos.iter().find(|repo| repo.id.to_string() == *id) {
-                Some(repo) => reply(200, repo.json()),
+            let found = model.repos.iter().find(|repo| repo.id.to_string() == *id);
+            match found.filter(|repo| repo.visible(signed_in)) {
+                Some(repo) => reply(200, repo.json(signed_in)),
                 None => missing(),
             }
         }
@@ -477,7 +539,7 @@ fn api(
             if body["auto_init"] == true {
                 repo.remote_commit("README.md", Some(b"# new\n"));
             }
-            reply(201, repo.json())
+            reply(201, repo.json(true))
         }
         ("GET", ["user", "starred", owner, repo]) => {
             if model.starred.contains(&format!("{owner}/{repo}")) {
@@ -503,7 +565,8 @@ fn api(
                 .repos
                 .iter_mut()
                 .find(|r| r.owner == *owner && r.name == *name);
-            match found {
+            match found.filter(|repo| repo.visible(signed_in)) {
+                Some(repo) if rest.is_empty() => reply(200, repo.json(signed_in)),
                 Some(repo) => repo_api(repo, method, rest, query, body),
                 None => missing(),
             }
@@ -606,6 +669,17 @@ fn repo_api(
                 .map(|commit| &repo.trees[&commit.tree]);
             match files.and_then(|files| files.get(&path.join("/"))) {
                 Some(blob) => raw(repo.blobs[blob].clone()),
+                None => missing(),
+            }
+        }
+        ("GET", ["commits", reference @ ..]) if !reference.is_empty() => {
+            let reference = reference.join("/");
+            let commit = repo.refs.get(&reference).cloned().unwrap_or(reference);
+            match repo.commits.get(&commit) {
+                Some(made) => reply(
+                    200,
+                    json!({ "sha": commit, "commit": { "tree": { "sha": made.tree } } }),
+                ),
                 None => missing(),
             }
         }
@@ -754,7 +828,9 @@ impl Mock {
 /// RESHIKI_GITHUB_WEB=http://127.0.0.1:47123 RESHIKI_DATA_DIR=<fresh folder>`.
 /// A code is approved after two polls. `POST /_mock/commit` with
 /// `{"repo", "path", "content"}` makes someone else's change (`content: null`
-/// deletes).
+/// deletes). `alice/ligands` is someone else's public repository, with a
+/// `draft` branch; `alice/notes` is private. `POST /_mock/limit` with
+/// `{"left": 0}` spends the signed-out limit (`null`: no limit).
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "Serve the mock for GUI evidence"]
 async fn serve_github_mock() {
@@ -762,6 +838,7 @@ async fn serve_github_mock() {
         std::env::var("RESHIKI_GITHUB_MOCK_PORT").map_or(47123, |port| port.parse().unwrap());
     let mock = Mock::start(port).await;
     mock.model().seed_demo();
+    mock.model().seed_shared();
     // More repositories, for their colors and the picker's order.
     {
         let mut model = mock.model();

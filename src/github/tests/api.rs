@@ -282,3 +282,95 @@ async fn an_object_name_that_is_not_hex_is_refused() {
     let head = api::head(&mock.client(), &key("lab-notes"), "main").await;
     assert!(matches!(head, Err(Error::Rejected(_))));
 }
+
+fn alice(repo: &str) -> RepoKey {
+    RepoKey {
+        owner: "alice".into(),
+        repo: repo.into(),
+    }
+}
+
+#[tokio::test]
+async fn signed_out_a_public_repository_lists_without_a_token() {
+    let mock = Mock::start(0).await;
+    mock.model().seed_shared();
+    let client = crate::github::client::Client::public(mock.ends()).unwrap();
+    let repo = api::repo_named(&client, &alice("ligands")).await.unwrap();
+    // Signed out, nothing may be sent: the repository is read only.
+    assert!(!repo.push && !repo.private);
+    let head = api::head(&client, &repo.key, &repo.default_branch)
+        .await
+        .unwrap();
+    let top = api::tree(&client, &repo.key, &head.tree).await.unwrap();
+    assert_eq!(
+        names(&top),
+        [("index.rsk", false), ("aromatics", true), ("esters", true)]
+    );
+    assert!(
+        mock.model()
+            .log
+            .iter()
+            .all(|one| !one.headers.contains_key("authorization"))
+    );
+    // A private repository is not found, signed out or not its owner's.
+    assert_eq!(
+        api::repo_named(&client, &alice("notes")).await,
+        Err(Error::NotFound)
+    );
+    assert_eq!(
+        api::repo_named(&mock.client(), &alice("notes")).await,
+        Err(Error::NotFound)
+    );
+    // Signed in, someone else's public repository is read only too.
+    let signed_in = api::repo_named(&mock.client(), &alice("ligands"))
+        .await
+        .unwrap();
+    assert!(!signed_in.push);
+    // Calls that need a sign-in say so.
+    assert_eq!(api::user(&client).await, Err(Error::NotSignedIn));
+}
+
+#[tokio::test]
+async fn signed_out_the_hourly_limit_is_a_rate_limit() {
+    let mock = Mock::start(0).await;
+    mock.model().seed_shared();
+    mock.model().signed_out_left = Some(1);
+    let client = crate::github::client::Client::public(mock.ends()).unwrap();
+    assert!(api::repo_named(&client, &alice("ligands")).await.is_ok());
+    let Err(Error::RateLimited(Some(wait))) = api::repo_named(&client, &alice("ligands")).await
+    else {
+        panic!("not rate limited");
+    };
+    assert!(wait.as_secs() > 60);
+    // A signed-in user is not held to it.
+    assert!(
+        api::repo_named(&mock.client(), &alice("ligands"))
+            .await
+            .is_ok()
+    );
+}
+
+#[tokio::test]
+async fn a_branch_or_commit_downloads_the_file_as_it_was_there() {
+    let mock = Mock::start(0).await;
+    mock.model().seed_shared();
+    let draft = mock.model().repo("ligands").refs["draft"].clone();
+    let client = crate::github::client::Client::public(mock.ends()).unwrap();
+    let key = alice("ligands");
+    let by_branch = api::commit(&client, &key, "draft").await.unwrap();
+    assert_eq!(by_branch.commit, draft);
+    assert_eq!(api::commit(&client, &key, &draft).await, Ok(by_branch));
+    let old = api::download_at(&client, &key, "draft", "esters/esterification.rsk")
+        .await
+        .unwrap();
+    assert_eq!(old.commit, draft);
+    // `furan.rsk` came after the branch.
+    assert_eq!(
+        api::download_at(&client, &key, "draft", "aromatics/furan.rsk").await,
+        Err(Error::NotFound)
+    );
+    assert_eq!(
+        api::commit(&client, &key, "no-such-branch").await,
+        Err(Error::NotFound)
+    );
+}
