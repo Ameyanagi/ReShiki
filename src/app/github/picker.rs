@@ -1011,8 +1011,12 @@ impl App {
         let Some(picker) = self.picker() else {
             return Task::none();
         };
-        let (Some(repo), Some((folder, typed))) = (picker.repo.clone(), picker.new_item.clone())
-        else {
+        // Not in a folder whose listing failed: its names are not known.
+        let (Some(repo), Some((folder, typed)), false) = (
+            picker.repo.clone(),
+            picker.new_item.clone(),
+            picker.unlisted,
+        ) else {
             return Task::none();
         };
         let typed = typed.trim();
@@ -1452,6 +1456,8 @@ impl App {
                             .into()
                     });
                 let creating: Vec<Element<'_, Message>> = match picker.mode {
+                    // Nothing is made in a folder that could not be listed.
+                    _ if picker.unlisted => vec![],
                     Mode::Open => vec![new_item_tile(picker, false), new_item_tile(picker, true)],
                     Mode::SendTo => vec![new_item_tile(picker, true)],
                 };
@@ -1459,7 +1465,7 @@ impl App {
                     .spacing(8)
                     .wrap();
                 let mut body = column![tiles].spacing(12);
-                if entries.is_empty() {
+                if entries.is_empty() && !picker.unlisted {
                     body = body.push(text("Empty").size(13).style(muted_text));
                 }
                 scrollable(body).height(Length::Fill).into()

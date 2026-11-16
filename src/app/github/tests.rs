@@ -1194,6 +1194,27 @@ fn save_here_waits_for_a_folder_that_could_not_be_listed() {
 }
 
 #[test]
+fn nothing_is_made_in_a_folder_that_could_not_be_listed() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = app_in(dir.path());
+    app.github.repos = vec![repo()];
+    let picker = |action| Action::Picker(action);
+    github(&mut app, picker(picker::Action::Show(Mode::Open)));
+    github(&mut app, picker(picker::Action::PickRepo(repo().key)));
+    let failed = picker_generation(&app);
+    github(
+        &mut app,
+        picker(picker::Action::Listing(failed, Err(gh::Error::Offline))),
+    );
+    // GitHub may hold `x.rsk` or `x.svg`: nothing here knows.
+    github(&mut app, picker(picker::Action::NewItem(false)));
+    github(&mut app, picker(picker::Action::NewItemName("x".into())));
+    github(&mut app, picker(picker::Action::CreateItem));
+    assert!(matches!(app.github.dialog, Some(Dialog::Picker(_))));
+    assert!(!workcopy::working_path(dir.path(), &repo().key, "x.rsk").exists());
+}
+
+#[test]
 fn a_new_repository_with_a_renamed_ones_name_gets_its_own_folder() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, _) = app_in(dir.path());
