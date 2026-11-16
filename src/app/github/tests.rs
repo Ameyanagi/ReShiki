@@ -2939,3 +2939,78 @@ fn a_private_repository_asked_for_signed_out_opens_once_signed_in() {
         Some(repo().id)
     );
 }
+
+#[test]
+fn a_sign_in_never_cancels_a_link_still_opening() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = signed_out(dir.path());
+    app.github.prefs.shared.clear();
+    github(
+        &mut app,
+        Action::Picker(picker::Action::Link(LIGANDS.into())),
+    );
+    let request = app.github.seq;
+    // Saved credentials load, and GitHub lists one repository first.
+    app.github.client = Some(Client::new("test".into(), nowhere(), None).unwrap());
+    app.github.account = Account::SignedIn {
+        login: "octo".into(),
+        remembered: true,
+    };
+    let _ = app.picker_signed_in();
+    let generation = app.github.generation;
+    let account = gh::Account {
+        login: "octo".into(),
+        repos: vec![repo()],
+    };
+    github(&mut app, Action::Listed(generation, Ok(account)));
+    assert!(the_picker(&app).repo.is_none(), "the link is still opening");
+    let found = gh::link::parse(LIGANDS, "").unwrap();
+    github(
+        &mut app,
+        Action::Picker(picker::Action::Resolved(request, found, Ok(alice()))),
+    );
+    assert_eq!(
+        the_picker(&app).repo.as_ref().map(|r| r.id),
+        Some(alice().id)
+    );
+}
+
+#[test]
+fn a_typed_link_after_a_repository_asked_for_survives_the_sign_in() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = app_in(dir.path());
+    let state = app.github.states[&repo().key].clone();
+    run_blocking(workcopy::persist(dir.path(), &repo().key, state, 9)).unwrap();
+    app.github.account = Account::SignedOut(None);
+    // Signed out: a private repository asked for, then a link typed in.
+    github(
+        &mut app,
+        Action::Picker(picker::Action::ShowIn(repo().key, String::new())),
+    );
+    github(
+        &mut app,
+        Action::Picker(picker::Action::Search(LIGANDS.into())),
+    );
+    github(&mut app, Action::Picker(picker::Action::Enter));
+    let request = app.github.seq;
+    app.github.account = Account::SignedIn {
+        login: "octo".into(),
+        remembered: true,
+    };
+    let _ = app.picker_signed_in();
+    let generation = app.github.generation;
+    let account = gh::Account {
+        login: "octo".into(),
+        repos: vec![repo()],
+    };
+    github(&mut app, Action::Listed(generation, Ok(account)));
+    let found = gh::link::parse(LIGANDS, "").unwrap();
+    github(
+        &mut app,
+        Action::Picker(picker::Action::Resolved(request, found, Ok(alice()))),
+    );
+    assert_eq!(
+        the_picker(&app).repo.as_ref().map(|r| r.id),
+        Some(alice().id)
+    );
+}
