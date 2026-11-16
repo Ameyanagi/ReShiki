@@ -340,6 +340,10 @@ pub enum Message {
     ApplyElement,
     InsertTemplate(usize),
     SaveAs,
+    /// Save as in this format, by its extension.
+    SaveFormat(&'static str),
+    /// Save a ChemDraw or MOL file in its own format, now and from now on.
+    KeepFormat,
     Tick,
     Autosaved(autosave::Key, Result<Option<PathBuf>, String>),
     Restore,
@@ -402,8 +406,9 @@ pub enum Job {
     AromaticDisplay,
     Abbreviate,
     Import,
-    /// The source basename becomes the unsaved drawing's display name.
-    ImportFile(String),
+    /// The source file: a ChemDraw or MOL file stays the tab's file, and any
+    /// other becomes an Untitled drawing with its basename.
+    ImportFile(std::path::PathBuf),
     Insert,
     Analyze,
     Clean(cleanup::CleanupJob),
@@ -950,7 +955,11 @@ impl App {
     /// Save chosen in the save dialog passes the gates of transient editors,
     /// whose Close already reached the dialog.
     fn answers_save_dialog(&self, message: &Message) -> bool {
-        self.pending.is_some() && matches!(message, Message::Save)
+        self.pending.is_some()
+            && matches!(
+                message,
+                Message::Save | Message::SaveFormat(_) | Message::KeepFormat
+            )
     }
     /// Continues the save dialog's action once the tab in front is saved.
     fn perform(&mut self, action: Pending) -> Task<Message> {
@@ -1452,8 +1461,8 @@ fn window_title(name: &str, dirty: bool) -> String {
 
 /// Hydrogen labels are a computed display cache, not unsaved drawing edits.
 fn same_drawing(a: &Document, b: &Document) -> bool {
+    // The canvas brightness is view state: saved with the file, never a change.
     a.version == b.version
-        && a.canvas_theme == b.canvas_theme
         && a.color_theme == b.color_theme
         && a.custom_theme == b.custom_theme
         && a.drawing_style == b.drawing_style

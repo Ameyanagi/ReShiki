@@ -329,6 +329,15 @@ impl App {
         self.tabs.menu = false;
         self.theme_library.editor = None;
         self.assistant.menu = None;
+        // A question about the save format is about the tab it was asked on:
+        // a file opened from Finder meanwhile cancels it, and its close.
+        if matches!(
+            self.prompt,
+            Some(super::prompt::Prompt::KeepFormat(_) | super::prompt::Prompt::SaveAs)
+        ) {
+            self.prompt = None;
+            self.pending = None;
+        }
     }
 
     fn enter_tab(&mut self) {
@@ -643,7 +652,7 @@ impl App {
                 } else {
                     0.
                 };
-                (2. * TAB_PADDING + text_width(&tab.name(), 12.) + dot + SPACING + CLOSE)
+                (2. * TAB_PADDING + text_width(&tab.label(), 12.) + dot + SPACING + CLOSE)
                     .clamp(TAB_MIN, TAB_MAX)
             })
             .collect();
@@ -655,12 +664,16 @@ impl App {
             }
         }
         let new = hover_hint(
-            button(text("+").size(17).center())
-                .width(BUTTON)
-                .height(28)
-                .padding(0)
-                .style(control(false))
-                .on_press(Message::New),
+            reshiki::accessibility::button(
+                "document-tab-new",
+                "New tab",
+                text("+").size(17).center(),
+            )
+            .width(BUTTON)
+            .height(28)
+            .padding(0)
+            .style(control(false))
+            .on_press(Message::New),
             super::workspace::keyed("New tab", &Message::New),
             tooltip::Position::Bottom,
         );
@@ -687,7 +700,7 @@ impl App {
         let room =
             width - 2. * TAB_PADDING - SPACING - CLOSE - if edited { DOT + SPACING } else { 0. };
         let mut label = row![
-            text(elide(&tab.name(), room))
+            text(elide(&tab.label(), room))
                 .size(12)
                 .wrapping(text::Wrapping::None)
         ]
@@ -697,40 +710,51 @@ impl App {
             label = label.push(dot());
         }
         let close = || {
-            button(text("×").size(15).center())
-                .width(CLOSE)
-                .height(CLOSE)
-                .padding(0)
-                .style(close_style)
-                .on_press(Message::Tabs(Action::Close(Some(tab.id))))
+            reshiki::accessibility::button(
+                format!("document-tab-close-{}", tab.id.0),
+                format!("Close {}", tab.name()),
+                text("×").size(15).center(),
+            )
+            .width(CLOSE)
+            .height(CLOSE)
+            .padding(0)
+            .style(close_style)
+            .on_press(Message::Tabs(Action::Close(Some(tab.id))))
         };
-        let slot: Element<'a, Message> = if active {
-            close().into()
-        } else {
-            Space::new().width(CLOSE).into()
-        };
-        let label = row![container(label).width(Length::Fill), slot]
-            .spacing(SPACING)
-            .height(Length::Fill)
-            .align_y(Alignment::Center);
-        let base = button(label)
-            .width(width)
-            .height(TAB_HEIGHT)
+        // Close sits inside the tab button, whose press then focuses only
+        // Close. The button keeps its place in the widget tree when the tab
+        // comes to the front, so keyboard focus stays on it.
+        let with_slot = |slot: Element<'a, Message>| {
+            container(
+                row![container(label).width(Length::Fill), slot]
+                    .spacing(SPACING)
+                    .height(Length::Fill)
+                    .align_y(Alignment::Center),
+            )
             .padding([0., TAB_PADDING])
-            .style(tab_style(active))
-            .on_press(Message::Tabs(Action::Select(tab.id)));
-        // The × of a tab behind the front one shows while the pointer is on it.
-        let body: Element<'a, Message> = if active {
-            base.into()
+        };
+        let content: Element<'a, Message> = if active {
+            with_slot(close().into()).into()
         } else {
+            // The × of a tab behind the front one shows while the pointer is on it.
             hover(
-                base,
+                with_slot(Space::new().width(CLOSE).into()),
                 container(close())
                     .padding([0., TAB_PADDING])
                     .align_right(Length::Fill)
                     .center_y(Length::Fill),
             )
         };
+        let body = reshiki::accessibility::button(
+            format!("document-tab-{}", tab.id.0),
+            self.tab_label(tab),
+            content,
+        )
+        .width(width)
+        .height(TAB_HEIGHT)
+        .padding(0)
+        .style(tab_style(active))
+        .on_press(Message::Tabs(Action::Select(tab.id)));
         let mut hint = match &tab.path {
             Some(path) => path.display().to_string(),
             None => format!("{} · Not saved to a file", tab.name()),
@@ -751,29 +775,58 @@ impl App {
         hover_hint(body, hint, tooltip::Position::Bottom).into()
     }
 
+    /// A tab's accessible name, such as "aldol.rsk tab, edited, selected".
+    fn tab_label(&self, tab: &DocumentTab) -> String {
+        format!(
+            "{} tab{}{}",
+            tab.name(),
+            if self.shown_edited(tab) {
+                ", edited"
+            } else {
+                ""
+            },
+            if tab.id == self.tab.id {
+                ", selected"
+            } else {
+                ""
+            }
+        )
+    }
+
     /// The ▾ button and list of the tabs that do not fit.
     fn hidden_tabs<'a>(&'a self, hidden: &[&'a DocumentTab]) -> Element<'a, Message> {
-        let anchor = button(caret(12.).center())
-            .width(BUTTON)
-            .height(28)
-            .padding(0)
-            .style(control(self.tabs.menu))
-            .on_press(Message::Tabs(Action::Menu(!self.tabs.menu)));
+        let more = match hidden.len() {
+            _ if hidden.iter().any(|tab| tab.id == self.tab.id) => "Tabs".to_owned(),
+            1 => "1 more tab".to_owned(),
+            n => format!("{n} more tabs"),
+        };
+        let anchor =
+            reshiki::accessibility::button("document-tabs-more", more.clone(), caret(12.).center())
+                .width(BUTTON)
+                .height(28)
+                .padding(0)
+                .style(control(self.tabs.menu))
+                .expanded(self.tabs.menu)
+                .on_press(Message::Tabs(Action::Menu(!self.tabs.menu)));
         let popup = self.tabs.menu.then(|| {
             let mut items = column![].spacing(1);
             for tab in hidden {
-                let mut label = row![text(elide(&tab.name(), 170.)).size(12)]
+                let mut label = row![text(elide(&tab.label(), 170.)).size(12)]
                     .spacing(SPACING)
                     .align_y(Alignment::Center);
                 if self.shown_edited(tab) {
                     label = label.push(dot());
                 }
                 items = items.push(
-                    button(label)
-                        .width(Length::Fill)
-                        .padding([6, 10])
-                        .style(control(tab.id == self.tab.id))
-                        .on_press(Message::Tabs(Action::Select(tab.id))),
+                    reshiki::accessibility::button(
+                        format!("document-tab-menu-{}", tab.id.0),
+                        self.tab_label(tab),
+                        label,
+                    )
+                    .width(Length::Fill)
+                    .padding([6, 10])
+                    .style(control(tab.id == self.tab.id))
+                    .on_press(Message::Tabs(Action::Select(tab.id))),
                 );
             }
             container(items)
@@ -785,16 +838,7 @@ impl App {
         let anchor = if self.tabs.menu {
             Element::from(anchor)
         } else {
-            hover_hint(
-                anchor,
-                match hidden.len() {
-                    _ if hidden.iter().any(|tab| tab.id == self.tab.id) => "Tabs".to_owned(),
-                    1 => "1 more tab".to_owned(),
-                    n => format!("{n} more tabs"),
-                },
-                tooltip::Position::Bottom,
-            )
-            .into()
+            hover_hint(anchor, more, tooltip::Position::Bottom).into()
         };
         Element::new(super::popover::popover(
             anchor,

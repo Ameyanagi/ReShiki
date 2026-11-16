@@ -534,7 +534,11 @@ pub(crate) fn entries() -> Vec<Entry> {
         ),
         entry(
             format!("{} / {}", label(Message::Save), label(Message::SaveAs)),
-            "Save / save as .rsk",
+            if cfg!(target_arch = "wasm32") {
+                "Save / save as .rsk"
+            } else {
+                "Save / save as"
+            },
             "Save the drawing, or save a copy under a new name",
             Anywhere,
             &["file", "write", "store"],

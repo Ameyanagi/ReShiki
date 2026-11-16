@@ -4,6 +4,11 @@ use iced::advanced::{
     widget::{Operation, Tree, tree},
 };
 use iced::{Element, Event, Length, Rectangle, Renderer, Size, Theme};
+thread_local! {
+    /// Set while an inert background draws: its focus is kept for when the
+    /// modal closes, but only the modal shows a focus ring.
+    pub(super) static DRAWING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
 pub fn inert<'a, Message: 'a>(content: impl Into<Element<'a, Message>>) -> Element<'a, Message> {
     Element::new(Inert(content.into()))
 }
@@ -45,9 +50,11 @@ impl<Message> Widget<Message, Theme, Renderer> for Inert<'_, Message> {
         cursor: mouse::Cursor,
         viewport: &Rectangle,
     ) {
+        let outer = DRAWING.replace(true);
         self.0
             .as_widget()
             .draw(tree, renderer, theme, style, layout, cursor, viewport);
+        DRAWING.set(outer);
     }
     fn operate(&mut self, _: &mut Tree, _: Layout<'_>, _: &Renderer, _: &mut dyn Operation) {}
     fn update(

@@ -1,7 +1,11 @@
 use super::{LiveAction, Node, Role};
 use iced::advanced::{
     Clipboard, Layout, Shell, Widget, layout, mouse, overlay, renderer,
-    widget::{Id, Operation, Tree, operation::Focusable, tree},
+    widget::{
+        Id, Operation, Tree,
+        operation::{self, Focusable, focusable},
+        tree,
+    },
 };
 use iced::widget::button as iced_button;
 use iced::{
@@ -237,14 +241,12 @@ impl<Message: Clone + 'static> Widget<Message, Theme, Renderer> for Button<'_, M
         if self.action.is_none() {
             state.unfocus();
         }
-        match event {
+        let pressed = matches!(
+            event,
             Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left))
-            | Event::Touch(touch::Event::FingerPressed { .. }) => {
-                state.focused = self.action.is_some()
-                    && cursor.is_over(layout.bounds())
-                    && cursor.is_over(*viewport);
-                state.space_down = false;
-            }
+                | Event::Touch(touch::Event::FingerPressed { .. })
+        );
+        match event {
             // Keep logical focus like Iced text inputs, but never activate a
             // held Space after the user switches applications.
             Event::Window(window::Event::Unfocused) => state.space_down = false,
@@ -287,13 +289,37 @@ impl<Message: Clone + 'static> Widget<Message, Theme, Renderer> for Button<'_, M
             }
             _ => {}
         }
-        if was_focused != state.focused {
-            shell.request_redraw();
-        }
         if let Some(child) = tree.children.first_mut() {
             self.inner.update(
                 child, event, layout, cursor, renderer, clipboard, shell, viewport,
             );
+            if pressed {
+                // A press on a control inside this one, such as a tab's
+                // Close, focuses only that control.
+                state.focused = self.action.is_some()
+                    && cursor.is_over(layout.bounds())
+                    && cursor.is_over(*viewport)
+                    && {
+                        let mut count = focusable::count();
+                        self.inner.operate(
+                            child,
+                            layout,
+                            renderer,
+                            &mut operation::black_box(&mut count),
+                        );
+                        !matches!(
+                            count.finish(),
+                            operation::Outcome::Some(focusable::Count {
+                                focused: Some(_),
+                                ..
+                            })
+                        )
+                    };
+                state.space_down = false;
+            }
+        }
+        if was_focused != state.focused {
+            shell.request_redraw();
         }
     }
     fn draw(
@@ -310,25 +336,8 @@ impl<Message: Clone + 'static> Widget<Message, Theme, Renderer> for Button<'_, M
             self.inner
                 .draw(child, renderer, theme, style, layout, cursor, viewport);
         }
-        if tree.state.downcast_ref::<State>().focused
-            && self.action.is_some()
-            && let Some(clip) = layout.bounds().intersection(viewport)
-        {
-            use iced::advanced::Renderer as _;
-            renderer.with_layer(clip, |renderer| {
-                renderer.fill_quad(
-                    renderer::Quad {
-                        bounds: layout.bounds(),
-                        border: Border {
-                            color: theme.extended_palette().primary.strong.color,
-                            width: 2.,
-                            radius: 4.into(),
-                        },
-                        ..renderer::Quad::default()
-                    },
-                    Color::TRANSPARENT,
-                );
-            });
+        if tree.state.downcast_ref::<State>().focused && self.action.is_some() {
+            focus_ring(renderer, theme, layout.bounds(), viewport);
         }
     }
     fn mouse_interaction(
@@ -368,4 +377,42 @@ impl<'a, Message: Clone + 'static> From<Button<'a, Message>> for Element<'a, Mes
     fn from(button: Button<'a, Message>) -> Self {
         Element::new(button)
     }
+}
+
+/// Outside the control, so focus never reads as the active style's fill and
+/// border: a 1 px surface gap, then a 2 px accent ring.
+pub(super) fn focus_ring(
+    renderer: &mut Renderer,
+    theme: &Theme,
+    bounds: Rectangle,
+    viewport: &Rectangle,
+) {
+    use iced::advanced::Renderer as _;
+    if super::inert::DRAWING.get() {
+        return;
+    }
+    let ring = bounds.expand(3.);
+    let Some(clip) = ring.intersection(viewport) else {
+        return;
+    };
+    let palette = theme.extended_palette();
+    renderer.with_layer(clip, |renderer| {
+        for (bounds, width, radius, color) in [
+            (ring, 2., 8., palette.primary.strong.color),
+            (bounds.expand(1.), 1., 6., palette.background.base.color),
+        ] {
+            renderer.fill_quad(
+                renderer::Quad {
+                    bounds,
+                    border: Border {
+                        color,
+                        width,
+                        radius: radius.into(),
+                    },
+                    ..renderer::Quad::default()
+                },
+                Color::TRANSPARENT,
+            );
+        }
+    });
 }

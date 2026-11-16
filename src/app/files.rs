@@ -4,8 +4,39 @@ use iced::Task;
 use reshiki::engine::Request;
 use std::path::PathBuf;
 
-/// The name of Save As in Export, the toolbar and the palette.
-pub(super) const SAVE_AS: &str = "Save as .rsk…";
+/// The name of Save As in Export, the toolbar and the palette. The browser
+/// saves .rsk only.
+pub(super) const SAVE_AS: &str = if cfg!(target_arch = "wasm32") {
+    "Save as .rsk…"
+} else {
+    "Save as…"
+};
+
+/// The formats Save as offers, by extension, with their names in its list.
+pub(super) const SAVE_FORMATS: [(&str, &str); 4] = [
+    (reshiki::compatibility::NATIVE_EXTENSION, "ReShiki (.rsk)"),
+    ("cdxml", "ChemDraw (.cdxml)"),
+    ("cdx", "ChemDraw (.cdx)"),
+    ("mol", "MOL"),
+];
+
+/// The format of a ChemDraw or MOL file, which Save can write back in place.
+pub(super) fn kept_format(path: &std::path::Path) -> Option<&'static str> {
+    let extension = path.extension()?.to_str()?;
+    SAVE_FORMATS[1..]
+        .iter()
+        .map(|(format, _)| *format)
+        .find(|format| extension.eq_ignore_ascii_case(format))
+}
+
+/// What a format other than .rsk keeps of a drawing.
+pub(super) fn format_keeps(format: &str) -> &'static str {
+    if format == "mol" {
+        "MOL keeps the structure only."
+    } else {
+        "ChemDraw keeps most of the drawing."
+    }
+}
 #[cfg(not(target_arch = "wasm32"))]
 const SAVE: &str = "Save";
 #[cfg(not(target_arch = "wasm32"))]
@@ -583,6 +614,8 @@ impl super::App {
                     self.detach_office();
                 }
                 self.tab.path = Some(path);
+                // A file saved in a format keeps it without asking.
+                self.tab.keep_format = true;
                 self.tab.untitled_name = None;
                 self.status = if self.office_document() {
                     if self
@@ -656,15 +689,15 @@ impl super::App {
                 self.error = true;
             }
             Ok(Prepared::Import { format, contents }) => {
-                self.open_target(None);
-                let name = path
-                    .file_name()
-                    .unwrap_or(path.as_os_str())
-                    .to_string_lossy()
-                    .into_owned();
+                // A ChemDraw or MOL file stays the tab's file, as a drawing does.
+                if !self
+                    .open_target(Some(path.as_path()).filter(|path| kept_format(path).is_some()))
+                {
+                    return Task::none();
+                }
                 let task = self.run(
                     super::Request::import(format, &contents),
-                    super::Job::ImportFile(name),
+                    super::Job::ImportFile(path),
                 );
                 #[cfg(any(windows, target_os = "linux"))]
                 self.desktop_import_started();
@@ -707,6 +740,7 @@ impl super::App {
         self.theme_library.editor = None;
         self.tab.mark_saved(self.tab.doc.clone());
         self.tab.path = path;
+        self.tab.keep_format = false;
         #[cfg(target_arch = "wasm32")]
         {
             self.tab.file_handle = None;
@@ -754,19 +788,47 @@ impl super::App {
         self.error = false;
     }
 
-    pub(super) fn save_drawing(&mut self, save_as: bool) -> Task<Message> {
+    /// Save, or Save as in `format`. The first Save of a ChemDraw or MOL file
+    /// asks whether to keep its format.
+    pub(super) fn save_drawing(&mut self, save_as: Option<&'static str>) -> Task<Message> {
+        self.front_pending();
+        if save_as.is_none()
+            && !self.tab.keep_format
+            && let Some(format) = self.tab.path.as_deref().and_then(kept_format)
+        {
+            self.prompt = Some(super::prompt::Prompt::KeepFormat(format));
+            return Task::none();
+        }
         self.save_drawing_to(
-            save_as,
+            save_as.is_some(),
             None,
+            save_as.unwrap_or(reshiki::compatibility::NATIVE_EXTENSION),
             #[cfg(target_arch = "wasm32")]
             None,
         )
+    }
+
+    /// Save as asks for the format first; the browser saves .rsk only.
+    pub(super) fn save_as(&mut self) -> Task<Message> {
+        if cfg!(target_arch = "wasm32") {
+            return self.save_drawing(Some(reshiki::compatibility::NATIVE_EXTENSION));
+        }
+        self.prompt = Some(super::prompt::Prompt::SaveAs);
+        Task::none()
+    }
+
+    /// Save writes this ChemDraw or MOL file in its own format from now on.
+    pub(super) fn keep_format(&mut self) -> Task<Message> {
+        self.front_pending();
+        self.tab.keep_format = true;
+        self.save_drawing(None)
     }
 
     pub(super) fn save_drawing_named(&mut self, name: String) -> Task<Message> {
         self.save_drawing_to(
             true,
             Some(name),
+            reshiki::compatibility::NATIVE_EXTENSION,
             #[cfg(target_arch = "wasm32")]
             None,
         )
@@ -774,18 +836,21 @@ impl super::App {
 
     #[cfg(target_arch = "wasm32")]
     pub(super) fn save_download(&mut self, name: String) -> Task<Message> {
-        self.save_drawing_to(true, None, Some(name))
+        self.save_drawing_to(
+            true,
+            None,
+            reshiki::compatibility::NATIVE_EXTENSION,
+            Some(name),
+        )
     }
 
     fn save_drawing_to(
         &mut self,
         save_as: bool,
         name: Option<String>,
+        #[cfg_attr(target_arch = "wasm32", expect(unused_variables))] format: &'static str,
         #[cfg(target_arch = "wasm32")] download_name: Option<String>,
     ) -> Task<Message> {
-        if !save_as {
-            self.front_pending();
-        }
         #[cfg(not(target_arch = "wasm32"))]
         let office = self.tab.office.clone();
         #[cfg(not(target_arch = "wasm32"))]
@@ -797,6 +862,21 @@ impl super::App {
             Some(name) => (None, name),
             None => self.drawing_save_target(save_as),
         };
+        // Save as from "caffeine.cdxml", or in another format, renames the suggestion.
+        #[cfg(not(target_arch = "wasm32"))]
+        let suggested_name = if path.is_none()
+            && (format != reshiki::compatibility::NATIVE_EXTENSION
+                || kept_format(std::path::Path::new(&suggested_name)).is_some())
+        {
+            std::path::Path::new(&suggested_name)
+                .with_extension(format)
+                .to_string_lossy()
+                .into_owned()
+        } else {
+            suggested_name
+        };
+        #[cfg(not(target_arch = "wasm32"))]
+        let engine = self.engine.clone();
         if self.file_io.saving {
             // Only this tab's own save can go on with the dialog's action.
             if self.file_io.saving_tab != Some(self.tab.id) {
@@ -872,9 +952,7 @@ impl super::App {
                     let path = if let Some(p) = path {
                         p
                     } else {
-                        let extension = reshiki::compatibility::NATIVE_EXTENSION;
-                        let Some(path) =
-                            save_path("Save drawing", &suggested_name, extension).await
+                        let Some(path) = save_path("Save drawing", &suggested_name, format).await
                         else {
                             return Ok(None);
                         };
@@ -887,8 +965,23 @@ impl super::App {
                         .filter(|binding| binding.same_path(&path))
                         .map_or(path.clone(), |binding| binding.path.clone());
                     let save_path = path.clone();
+                    // A ChemDraw or MOL file is written by the chemistry engine.
+                    let exported = match kept_format(&path) {
+                        Some(format) => Some(
+                            reshiki::formats::write_with_engine(
+                                (*save_snapshot).clone(),
+                                format,
+                                &engine,
+                            )
+                            .await?,
+                        ),
+                        None => None,
+                    };
                     reshiki::task::spawn_blocking(move || {
-                        let bytes = save_snapshot.file_json()?;
+                        let bytes = match exported {
+                            Some(bytes) => bytes,
+                            None => save_snapshot.file_json()?,
+                        };
                         #[cfg(any(windows, target_os = "linux"))]
                         let _target_owner = if office.as_ref().is_some_and(|binding| {
                             binding.lease.is_some() && binding.same_path(&save_path)

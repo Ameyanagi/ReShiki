@@ -122,24 +122,16 @@ fn canvas_preference_follows_explicit_choices_not_document_history_or_opening() 
     let _ = app.update(Message::CanvasTheme(Dark));
     assert_eq!(app.tab.doc.canvas_theme, Dark);
     assert_eq!(app.appearance.canvas_theme, Dark);
-    let _ = app.update(Message::Undo);
-    assert_eq!(app.tab.doc, original);
-    assert_eq!(app.appearance.canvas_theme, Dark);
-    let _ = app.update(Message::Redo);
-    assert_eq!(app.tab.doc.canvas_theme, Dark);
-    let _ = app.update(Message::Undo);
 
-    // New preserves the old tab's Undo/Redo and seeds a clean new one.
+    // A view change leaves the empty drawing untouched: New takes it over.
     let original_tab = app.tab.id;
     let _ = app.update(Message::New);
+    assert_eq!(
+        app.tab.id, original_tab,
+        "An unchanged new drawing is reused"
+    );
     assert_eq!(app.tab.doc.canvas_theme, Dark);
     assert!(!app.dirty());
-    let fresh = app.tab.id;
-    let _ = app.update(Message::New);
-    assert_eq!(app.tab.id, fresh, "An unchanged new drawing is reused");
-    let _ = app.update(Message::Tabs(super::super::tabs::Action::Close(Some(
-        original_tab,
-    ))));
     // Closing the last tab also starts with the remembered brightness.
     let _ = app.update(Message::Tabs(super::super::tabs::Action::Close(None)));
     assert_eq!(app.tab.doc.canvas_theme, Dark);
@@ -171,6 +163,48 @@ fn canvas_preference_follows_explicit_choices_not_document_history_or_opening() 
 }
 
 #[test]
+fn view_changes_are_not_undo_steps_or_unsaved_changes() {
+    use reshiki::canvas_theme::CanvasTheme::{Dark, Light};
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    for message in [
+        Message::CanvasTheme(Dark),
+        Message::Zoom(1.5),
+        Message::View(super::super::view_settings::Action::Grid),
+        Message::View(super::super::view_settings::Action::Rulers(true)),
+        Message::ToggleInspector,
+    ] {
+        let _ = app.update(message);
+        assert!(!app.tab.history.can_undo() && !app.dirty());
+    }
+    assert!(app.tab.reusable(), "The drawing is still an untouched one");
+
+    // Undo and Redo of an edit leave the canvas as it is now.
+    let before = app.tab.doc.clone();
+    app.tab
+        .doc
+        .add_atom("O", reshiki::document::Point::default());
+    app.changed(before);
+    let _ = app.update(Message::CanvasTheme(Light));
+    let _ = app.update(Message::Undo);
+    assert!(app.tab.doc.atoms.is_empty());
+    assert_eq!(app.tab.doc.canvas_theme, Light);
+    assert!(app.tab.history.can_redo(), "A view change keeps Redo");
+    let _ = app.update(Message::CanvasTheme(Dark));
+    let _ = app.update(Message::Redo);
+    assert_eq!(app.tab.doc.atoms.len(), 1);
+    assert_eq!(app.tab.doc.canvas_theme, Dark);
+
+    // The canvas is saved with the file.
+    assert_eq!(
+        reshiki::document::Document::from_native_file(&app.tab.doc.file_json().unwrap())
+            .unwrap()
+            .canvas_theme,
+        Dark
+    );
+}
+
+#[test]
 fn interface_preference_remains_independent_of_remembered_canvas() {
     use crate::appearance::Mode;
     use reshiki::canvas_theme::CanvasTheme::{Dark, Light};
@@ -198,7 +232,6 @@ fn recovering_a_light_draft_preserves_it_without_replacing_dark_preference() {
     let (mut app, _) = App::new();
     app.tab.busy = false;
     let _ = app.update(Message::CanvasTheme(Dark));
-    let _ = app.update(Message::Undo);
     let mut recovered = reshiki::document::Document::default();
     let oxygen = recovered.add_atom("O", reshiki::document::Point::default());
     recovered.atom_mut(oxygen).unwrap().label_h = 2;

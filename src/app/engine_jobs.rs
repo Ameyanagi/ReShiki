@@ -441,10 +441,27 @@ impl App {
             if matches!(kind, Job::Import | Job::ImportFile(_)) {
                 self.fit();
             }
-            if let Job::ImportFile(name) = &kind {
-                self.tab.path = None;
-                self.tab.untitled_name = Some(name.clone());
-                self.tab.mark_saved(Document::default());
+            if let Job::ImportFile(path) = &kind {
+                self.tab.keep_format = false;
+                if !cfg!(target_arch = "wasm32") && super::files::kept_format(path).is_some() {
+                    // A ChemDraw or MOL file opens as itself: unchanged, with
+                    // nothing to undo, and Save can write it back.
+                    self.tab.path = Some(path.clone());
+                    self.tab.untitled_name = None;
+                    self.tab.history = Default::default();
+                    self.tab.mark_saved(self.tab.doc.clone());
+                } else {
+                    // Any other format, and every import in the browser, which
+                    // has no paths, becomes an unsaved drawing with its name.
+                    self.tab.path = None;
+                    self.tab.untitled_name = Some(
+                        path.file_name()
+                            .unwrap_or(path.as_os_str())
+                            .to_string_lossy()
+                            .into_owned(),
+                    );
+                    self.tab.mark_saved(Document::default());
+                }
                 self.begin_file_epoch();
             }
         }
