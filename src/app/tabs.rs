@@ -19,6 +19,18 @@ pub enum Action {
     Close(Option<TabId>),
     /// Open or close the ▾ list of the tabs that do not fit.
     Menu(bool),
+    /// Open (right-click on a GitHub tab) or close a tab's Color menu.
+    ColorMenu(Option<TabId>),
+}
+
+/// A GitHub tab's repository: its badge, the line under it in front, its
+/// tooltip, what assistive technology says, and its Color menu when open.
+pub(super) struct RepoBadge<'a> {
+    pub(super) badge: Element<'a, Message>,
+    pub(super) underline: Element<'a, Message>,
+    pub(super) hint: String,
+    pub(super) spoken: String,
+    pub(super) menu: Option<Element<'a, Message>>,
 }
 
 #[derive(Default)]
@@ -30,6 +42,8 @@ pub(super) struct State {
     next: u64,
     epochs: u64,
     pub(super) menu: bool,
+    /// The tab whose Color menu is open.
+    pub(super) color_menu: Option<TabId>,
     /// Last explicit Molecular header choice, used only to seed fresh drawings.
     pub(super) molecular_expanded: Option<bool>,
     /// Where new tabs keep their recovery drafts.
@@ -71,6 +85,8 @@ const TAB_MAX: f32 = 200.;
 const TAB_GAP: f32 = 2.;
 const CLOSE: f32 = 14.;
 const DOT: f32 = 7.;
+/// A GitHub tab's repository badge.
+const BADGE: f32 = 16.;
 const SPACING: f32 = 6.;
 /// The width of the + and ▾ buttons, which share a place.
 const BUTTON: f32 = 24.;
@@ -174,7 +190,7 @@ impl App {
     }
 
     /// [`Self::edited`] for the tab strip, which asks on every view.
-    fn shown_edited(&self, tab: &DocumentTab) -> bool {
+    pub(super) fn shown_edited(&self, tab: &DocumentTab) -> bool {
         if tab.id == self.tab.id {
             self.tab.shown_dirty()
         } else {
@@ -434,6 +450,7 @@ impl App {
         let count = self.tabs.background.len() + 1;
         match action {
             Action::Menu(open) => self.tabs.menu = open,
+            Action::ColorMenu(tab) => self.tabs.color_menu = tab,
             // The save dialog is about the tab in front.
             _ if self.pending.is_some() => {}
             Action::Select(id) => {
@@ -636,8 +653,34 @@ impl App {
             self.status = format!("{} is already open", self.document_name());
             return false;
         }
+        // An untouched empty Untitled tab, even behind the front one, gives way.
+        let untouched = self
+            .strip()
+            .position(|tab| tab.id != self.tab.id && tab.reusable());
+        if let Some(index) = untouched.filter(|_| !self.tab.reusable()) {
+            self.select_tab(index);
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        let tabs = self.strip().count();
         self.target_tab();
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(path) = path
+            && self.strip().count() > tabs
+        {
+            self.github_place_tab(path);
+        }
         true
+    }
+
+    /// A GitHub tab's repository, on the desktop.
+    fn repo_badge(&self, tab: &DocumentTab) -> Option<RepoBadge<'_>> {
+        #[cfg(not(target_arch = "wasm32"))]
+        return self.github_tab(tab, self.tabs.color_menu == Some(tab.id));
+        #[cfg(target_arch = "wasm32")]
+        {
+            let _ = tab;
+            None
+        }
     }
 
     /// The tabs in the header's file-name area, with + for a new tab and a ▾
@@ -652,7 +695,12 @@ impl App {
                 } else {
                     0.
                 };
-                (2. * TAB_PADDING + text_width(&tab.label(), 12.) + dot + SPACING + CLOSE)
+                let badge = if self.repo_badge(tab).is_some() {
+                    BADGE + SPACING
+                } else {
+                    0.
+                };
+                (2. * TAB_PADDING + text_width(&tab.label(), 12.) + dot + badge + SPACING + CLOSE)
                     .clamp(TAB_MIN, TAB_MAX)
             })
             .collect();
@@ -697,15 +745,33 @@ impl App {
     fn tab_button<'a>(&'a self, tab: &'a DocumentTab, width: f32) -> Element<'a, Message> {
         let active = tab.id == self.tab.id;
         let edited = self.shown_edited(tab);
-        let room =
-            width - 2. * TAB_PADDING - SPACING - CLOSE - if edited { DOT + SPACING } else { 0. };
-        let mut label = row![
-            text(elide(&tab.label(), room))
-                .size(12)
-                .wrapping(text::Wrapping::None)
-        ]
-        .spacing(SPACING)
-        .align_y(Alignment::Center);
+        let repo = self.repo_badge(tab);
+        let badge = if repo.is_some() { BADGE + SPACING } else { 0. };
+        let room = width
+            - 2. * TAB_PADDING
+            - SPACING
+            - CLOSE
+            - badge
+            - if edited { DOT + SPACING } else { 0. };
+        let (badge, underline, hint, spoken, menu) = match repo {
+            Some(repo) => (
+                Some(repo.badge),
+                Some(repo.underline),
+                Some(repo.hint),
+                Some(repo.spoken),
+                repo.menu,
+            ),
+            None => (None, None, None, None, None),
+        };
+        let mut label = row![]
+            .push(badge)
+            .push(
+                text(elide(&tab.label(), room))
+                    .size(12)
+                    .wrapping(text::Wrapping::None),
+            )
+            .spacing(SPACING)
+            .align_y(Alignment::Center);
         if edited {
             label = label.push(dot());
         }
@@ -734,7 +800,18 @@ impl App {
             .padding([0., TAB_PADDING])
         };
         let content: Element<'a, Message> = if active {
-            with_slot(close().into()).into()
+            let content = with_slot(close().into());
+            // The front tab of a repository is underlined in its color.
+            match underline {
+                Some(underline) => iced::widget::stack![
+                    content,
+                    container(underline)
+                        .padding([0., TAB_PADDING])
+                        .align_bottom(TAB_HEIGHT)
+                ]
+                .into(),
+                None => content.into(),
+            }
         } else {
             // The × of a tab behind the front one shows while the pointer is on it.
             hover(
@@ -747,7 +824,7 @@ impl App {
         };
         let body = reshiki::accessibility::button(
             format!("document-tab-{}", tab.id.0),
-            self.tab_label(tab),
+            self.tab_label(tab, spoken.as_deref()),
             content,
         )
         .width(width)
@@ -755,10 +832,10 @@ impl App {
         .padding(0)
         .style(tab_style(active))
         .on_press(Message::Tabs(Action::Select(tab.id)));
-        let mut hint = match &tab.path {
+        let mut hint = hint.unwrap_or_else(|| match &tab.path {
             Some(path) => path.display().to_string(),
             None => format!("{} · Not saved to a file", tab.name()),
-        };
+        });
         if edited {
             hint.push_str(" · Edited");
         }
@@ -772,14 +849,27 @@ impl App {
                     .map_or("Office", |binding| binding.host.label()),
             ));
         }
-        hover_hint(body, hint, tooltip::Position::Bottom).into()
+        let body: Element<'a, Message> = hover_hint(body, hint, tooltip::Position::Bottom).into();
+        if self.repo_badge(tab).is_none() {
+            return body;
+        }
+        // Right-click: the repository's Color.
+        let body = iced::widget::mouse_area(body)
+            .on_right_press(Message::Tabs(Action::ColorMenu(Some(tab.id))));
+        Element::new(super::popover::popover(
+            body,
+            menu,
+            Message::Tabs(Action::ColorMenu(None)),
+        ))
     }
 
-    /// A tab's accessible name, such as "aldol.rsk tab, edited, selected".
-    fn tab_label(&self, tab: &DocumentTab) -> String {
+    /// A tab's accessible name, such as "aldol.rsk tab, edited, selected";
+    /// a GitHub tab names its repository after "tab".
+    fn tab_label(&self, tab: &DocumentTab, repo: Option<&str>) -> String {
         format!(
-            "{} tab{}{}",
+            "{} tab{}{}{}",
             tab.name(),
+            repo.map(|repo| format!(", {repo}")).unwrap_or_default(),
             if self.shown_edited(tab) {
                 ", edited"
             } else {
@@ -820,7 +910,7 @@ impl App {
                 items = items.push(
                     reshiki::accessibility::button(
                         format!("document-tab-menu-{}", tab.id.0),
-                        self.tab_label(tab),
+                        self.tab_label(tab, None),
                         label,
                     )
                     .width(Length::Fill)
@@ -898,11 +988,12 @@ fn tab_style(active: bool) -> impl Fn(&Theme, button::Status) -> button::Style {
                 .into(),
             ),
             text_color: Color::from_rgb8(37, 43, 51),
+            // A tab behind the front one keeps a faint outline, so it reads as a tab.
             border: Border {
                 color: if active {
                     Color::from_rgb8(214, 219, 225)
                 } else {
-                    Color::TRANSPARENT
+                    Color::from_rgb8(228, 232, 236)
                 },
                 width: 1.,
                 radius: 7.0.into(),

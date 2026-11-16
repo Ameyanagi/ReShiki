@@ -331,19 +331,25 @@ async fn a_narrow_context_row_keeps_selection_commands_ahead_of_global_modes() -
     Ok(())
 }
 
-/// Each 12 px tab label fits its segment with room to spare.
+/// Each 12 px tab label fits its segment with 3 px to spare on each side,
+/// also when a GitHub drawing's History clock takes room after the track.
 #[test]
 fn inspector_tab_labels_fit_their_segments() {
-    let strip =
-        INSPECTOR_WIDTH - 2. * SEGMENT_MARGIN - (INSPECTOR_TABS.len() as f32 + 1.) * SEGMENT_GAP;
+    let track = INSPECTOR_WIDTH - 2. * SEGMENT_MARGIN;
     let portions: u16 = INSPECTOR_TABS
         .iter()
         .map(|(label, _)| segment_portion(label))
         .sum();
-    for (label, _) in INSPECTOR_TABS {
-        let segment = strip * f32::from(segment_portion(label)) / f32::from(portions);
-        let width = text_width(label, 12.);
-        eprintln!("{label}: {width:.1} of {segment:.1} px");
-        assert!(width + 6. <= segment, "{label}: {width} px in {segment} px");
+    for track in [track, track - HISTORY_GAP - HISTORY_BUTTON] {
+        let strip = track - 2. * TRACK_INSET;
+        for (label, _) in INSPECTOR_TABS {
+            let segment = strip * f32::from(segment_portion(label)) / f32::from(portions);
+            let width = text_width(label, 12.);
+            eprintln!("{label} in a {track} px track: {width:.1} of {segment:.1} px");
+            assert!(
+                width + 6. <= segment,
+                "{label} in a {track} px track: {width} px in {segment} px"
+            );
+        }
     }
 }

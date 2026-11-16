@@ -6,6 +6,7 @@ use reshiki::github::{
     send::SendOutcome,
     workcopy::{FileState, RepoState},
 };
+use std::future::Future;
 use std::sync::Arc;
 
 fn repo() -> Repo {
@@ -83,7 +84,7 @@ fn app_in(dir: &Path) -> (App, PathBuf) {
         Document::from_native_file(&bytes).unwrap(),
         Some(path.clone()),
     );
-    app.github_opened(&path);
+    let _ = app.github_opened(&path);
     (app, path)
 }
 
@@ -160,8 +161,7 @@ fn without_a_client_id_nothing_signs_in() {
     assert!(!app.github.configured());
     github(&mut app, Action::SignIn);
     assert!(matches!(app.github.account, Account::NotConfigured));
-    github(&mut app, Action::ShowAccount);
-    assert!(matches!(app.github.dialog, Some(Dialog::Account)));
+    assert!(app.github.dialog.is_none());
 }
 
 #[test]
@@ -169,9 +169,10 @@ fn a_sign_in_shows_the_code_and_cancel_drops_late_answers() {
     let (mut app, _) = App::new();
     app.github.account = Account::SignedOut(None);
     app.github.client_id = Some("test".into());
-    github(&mut app, Action::ShowAccount);
+    // Sign in shows the code at once, without an intro.
     github(&mut app, Action::SignIn);
     assert!(matches!(app.github.account, Account::Requesting));
+    assert!(matches!(app.github.dialog, Some(Dialog::SignIn)));
     let generation = app.github.generation;
     let reply = br#"{"device_code":"d","user_code":"WDJB-MJHT","verification_uri":"https://evil.example/x","expires_in":900,"interval":5}"#;
     let code = auth::parse_code(reply, &app.github.ends).unwrap();
@@ -313,8 +314,9 @@ fn a_drawing_changed_on_github_is_recorded_as_a_conflict() {
     );
     assert_eq!(app.github_conflicts(&repo().key), 1);
     assert_eq!(unsent(&app), ["ring.rsk"], "nothing is overwritten");
-    assert!(app.error);
-    assert_eq!(app.status, "Not sent · “ring.rsk” changed on GitHub");
+    assert_eq!(app.status, "Not sent · ring.rsk changed on GitHub");
+    assert!(!app.error, "a question, not an error");
+    assert_eq!(app.github.amber.as_deref(), Some(app.status.as_str()));
 }
 
 #[test]
@@ -389,7 +391,7 @@ fn a_send_that_leaves_a_conflict_does_not_close_the_tab() {
 #[test]
 fn a_dialog_holds_the_keyboard_and_escape_returns_to_the_drawing() {
     let (mut app, _) = App::new();
-    github(&mut app, Action::ShowAccount);
+    app.github.dialog = Some(Dialog::SignIn);
     let tool = app.tool;
     let _ = app.update(Message::Tool(crate::canvas::Tool::Erase));
     assert_eq!(app.tool, tool, "the drawing waits behind the dialog");
@@ -415,6 +417,32 @@ fn send_on_a_drawing_not_on_github_chooses_where_it_goes() {
 }
 
 #[test]
+fn history_gives_way_to_properties_on_a_drawing_not_on_github() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = app_in(dir.path());
+    let on_github = app.tab.id;
+    github(&mut app, Action::ShowVersions);
+    assert_eq!(app.inspector_tab, InspectorTab::Versions);
+    // A new drawing on this computer has no History.
+    let _ = app.update(Message::New);
+    let local = app.tab.id;
+    assert_ne!(local, on_github);
+    assert_eq!(app.inspector_tab, InspectorTab::Properties);
+    assert!(app.inspector_open);
+    // Going back keeps what is showing.
+    let _ = app.update(Message::Tabs(tabs::Action::Select(on_github)));
+    assert_eq!(app.tab.id, on_github);
+    assert_eq!(app.inspector_tab, InspectorTab::Properties);
+    // So does switching to the local tab with History showing.
+    github(&mut app, Action::ShowVersions);
+    assert_eq!(app.inspector_tab, InspectorTab::Versions);
+    let _ = app.update(Message::Tabs(tabs::Action::Select(local)));
+    assert_eq!(app.tab.id, local);
+    assert_eq!(app.inspector_tab, InspectorTab::Properties);
+    assert_eq!(app.github.versions.target, None);
+}
+
+#[test]
 fn send_lists_the_unsent_drawings_with_a_message() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, path) = app_in(dir.path());
@@ -425,6 +453,26 @@ fn send_lists_the_unsent_drawings_with_a_message() {
     };
     assert_eq!(draft.files, ["ring.rsk"]);
     assert_eq!(draft.message, "Update ring.rsk");
+}
+
+#[test]
+fn send_stays_visible_when_a_drawing_not_on_github_comes_to_the_front() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_in(dir.path());
+    save_here(&mut app, &path);
+    github(&mut app, Action::ShowSend);
+    assert!(app.send_on_chip());
+    // A drawing opened from Finder comes to the front past the Send box.
+    let mut finder = Document::default();
+    finder.add_atom("S", reshiki::document::Point::default());
+    let _ = app.update(Message::FilePrepared(Some((
+        dir.path().join("finder.rsk"),
+        Ok(crate::app::files::Prepared::Native(Box::new(finder))),
+    ))));
+    assert!(app.github.locate(app.tab.path.as_deref()).is_none());
+    assert!(matches!(app.github.dialog, Some(Dialog::Send(_))));
+    // No chip holds it now, so it is drawn as a dialog that Esc closes.
+    assert!(!app.send_on_chip());
 }
 
 #[test]
@@ -594,7 +642,23 @@ fn a_conflict_shows_githubs_and_yours_with_the_changes_marked() {
     assert_eq!((review.done, review.total), (0, 1));
     let compare = &review.compare;
     assert!(compare.left.is_ok());
-    assert!(!compare.marks[0].is_empty() && !compare.marks[1].is_empty());
+    // What differs is painted on both copies shown, never on the drawings.
+    for shown in &compare.shown {
+        let shown = shown.as_ref().unwrap();
+        assert!(
+            shown
+                .atoms
+                .iter()
+                .any(|atom| atom.display.highlight.is_some())
+        );
+    }
+    assert!(
+        app.tab
+            .doc
+            .atoms
+            .iter()
+            .all(|atom| atom.display.highlight.is_none())
+    );
 
     // Escape decides later: nothing changes, and Review stays.
     let before = std::fs::read(&path).unwrap();
@@ -638,7 +702,7 @@ fn a_choice_whose_send_never_starts_keeps_no_outcome_for_later() {
     app.github.sending.clear();
     app.github.account = Account::SignedOut(None);
     github(&mut app, Action::Resolve(send::Choice::KeepMine));
-    assert!(matches!(app.github.dialog, Some(Dialog::Account)));
+    assert!(matches!(app.github.dialog, Some(Dialog::SignIn)));
     assert!(app.github.kept.is_empty());
 }
 
@@ -704,7 +768,7 @@ fn keep_both_saves_yours_beside_githubs_and_sends_it() {
     assert!(!app.dirty());
     assert!(app.github.sending.contains(&repo().key));
     sent(&mut app, "ring (2).rsk");
-    assert_eq!(app.status, "Kept both · yours is “ring (2).rsk” · sent");
+    assert_eq!(app.status, "Kept both · yours is ring (2).rsk · sent");
 }
 
 #[test]
@@ -893,7 +957,13 @@ fn a_version_compares_with_the_drawing_now() {
     };
     assert_eq!(compare.left.as_ref().ok(), Some(&*old));
     assert_eq!(compare.right, app.tab.doc);
-    assert!(!compare.marks[1].is_empty());
+    let shown = compare.shown[1].as_ref().unwrap();
+    assert!(
+        shown
+            .atoms
+            .iter()
+            .any(|atom| atom.display.highlight.is_some())
+    );
     let _ = app.update(Message::Escape);
     assert!(app.github.dialog.is_none());
 }
@@ -975,7 +1045,6 @@ fn a_canceled_sign_in_is_never_kept() {
         repos: vec![repo()],
     };
     for cancel in [true, false] {
-        github(&mut app, Action::ShowAccount);
         github(&mut app, Action::SignIn);
         let generation = app.github.generation;
         let code = auth::parse_code(reply, &app.github.ends).unwrap();
@@ -1037,6 +1106,174 @@ fn picker_at(app: &mut App, mode: Mode, names: &[&str]) {
         app,
         Action::Picker(picker::Action::Listing(generation, Ok((sha('8'), entries)))),
     );
+    // No last change is known; the drawings show.
+    for name in names.iter().filter(|name| name.ends_with(".rsk")) {
+        let unknown = picker::Action::Changed(generation, (*name).into(), None);
+        github(app, Action::Picker(unknown));
+    }
+}
+
+/// Lists the folder open in the picker with `folders` and `drawings`.
+fn picker_lists(app: &mut App, folders: &[&str], drawings: &[&str]) -> u64 {
+    let entry = |folder: bool| {
+        move |name: &&str| gh::Entry {
+            name: (*name).into(),
+            sha: sha(if folder { '9' } else { '7' }),
+            folder,
+        }
+    };
+    let entries = (folders.iter().map(entry(true)))
+        .chain(drawings.iter().map(entry(false)))
+        .collect();
+    let generation = picker_generation(app);
+    let listing = picker::Action::Listing(generation, Ok((sha('8'), entries)));
+    github(app, Action::Picker(listing));
+    generation
+}
+
+fn picker_changed(app: &mut App, generation: u64, path: &str, date: Option<&str>) {
+    let found = date.map(|date| ("@octo".to_owned(), date.to_owned()));
+    let changed = picker::Action::Changed(generation, path.into(), found);
+    github(app, Action::Picker(changed));
+}
+
+fn picker_names(app: &App) -> Vec<String> {
+    let Some(Dialog::Picker(picker)) = &app.github.dialog else {
+        panic!("no picker");
+    };
+    let entries = picker.entries.iter().flatten();
+    entries.map(|entry| entry.name.clone()).collect()
+}
+
+fn picker_selected(app: &App) -> Option<usize> {
+    match &app.github.dialog {
+        Some(Dialog::Picker(picker)) => picker.selected,
+        other => panic!("no picker: {other:?}"),
+    }
+}
+
+#[test]
+fn a_drawing_never_shows_what_another_of_its_name_was_last_changed_by() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = app_in(dir.path());
+    let other = Repo {
+        id: 9,
+        key: RepoKey {
+            owner: "octo".into(),
+            repo: "other".into(),
+        },
+        ..repo()
+    };
+    app.github.repos = vec![repo(), other.clone()];
+    let picker = |action| Action::Picker(action);
+    github(&mut app, picker(picker::Action::Show(Mode::Open)));
+    github(&mut app, picker(picker::Action::PickRepo(repo().key)));
+    let top = picker_lists(&mut app, &["sub"], &["ring.rsk"]);
+    picker_changed(&mut app, top, "ring.rsk", Some("2026-03-01T00:00:00Z"));
+
+    // Another `ring.rsk`, in a folder and in another repository, whose
+    // last change GitHub does not tell: it sorts after the one known.
+    github(&mut app, picker(picker::Action::Folder("sub".into())));
+    let sub = picker_lists(&mut app, &[], &["a.rsk", "ring.rsk"]);
+    picker_changed(&mut app, sub, "sub/a.rsk", Some("2025-01-01T00:00:00Z"));
+    picker_changed(&mut app, sub, "sub/ring.rsk", None);
+    assert_eq!(picker_names(&app), ["a.rsk", "ring.rsk"]);
+
+    github(&mut app, picker(picker::Action::PickRepo(other.key)));
+    let top = picker_lists(&mut app, &[], &["a.rsk", "ring.rsk"]);
+    picker_changed(&mut app, top, "a.rsk", Some("2025-01-01T00:00:00Z"));
+    picker_changed(&mut app, top, "ring.rsk", None);
+    assert_eq!(picker_names(&app), ["a.rsk", "ring.rsk"]);
+}
+
+#[test]
+fn a_download_still_running_never_closes_a_new_folder() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = app_in(dir.path());
+    picker_at(&mut app, Mode::Open, &["other.rsk"]);
+    let picker = |action| Action::Picker(action);
+    github(&mut app, picker(picker::Action::Select(0)));
+    github(&mut app, picker(picker::Action::Open));
+    let download = app.github.seq;
+    github(&mut app, picker(picker::Action::NewItem(true)));
+    github(
+        &mut app,
+        picker(picker::Action::NewItemName("fresh".into())),
+    );
+    github(&mut app, picker(picker::Action::CreateItem));
+
+    let late = api::Download {
+        commit: sha('c'),
+        blob: sha('b'),
+        bytes: drawing(42.),
+    };
+    let late = picker::Action::Downloaded(download, repo(), "other.rsk".into(), Ok(late));
+    github(&mut app, picker(late));
+    let Some(Dialog::Picker(picker)) = &app.github.dialog else {
+        panic!("the picker closed");
+    };
+    assert_eq!(picker.trail, [("fresh".to_owned(), String::new())]);
+    assert!(!workcopy::working_path(dir.path(), &repo().key, "other.rsk").exists());
+}
+
+#[test]
+fn the_keyboard_selects_only_the_tiles_that_show() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = app_in(dir.path());
+    app.github.repos = vec![repo()];
+    let picker = |action| Action::Picker(action);
+    github(&mut app, picker(picker::Action::Show(Mode::Open)));
+    github(&mut app, picker(picker::Action::PickRepo(repo().key)));
+    // The drawings wait for their last changes; only the folder shows.
+    let listed = picker_lists(&mut app, &["sub"], &["a.rsk", "b.rsk"]);
+    for _ in 0..3 {
+        github(&mut app, picker(picker::Action::Move(1)));
+    }
+    assert_eq!(picker_selected(&app), Some(0));
+    // A selection on a hidden drawing opens nothing.
+    github(&mut app, picker(picker::Action::Select(1)));
+    let requests = app.github.seq;
+    github(&mut app, picker(picker::Action::Enter));
+    assert_eq!(app.github.seq, requests);
+
+    // The order lands: the selection stays on `a.rsk`, now after `b.rsk`.
+    picker_changed(&mut app, listed, "a.rsk", Some("2025-01-01T00:00:00Z"));
+    picker_changed(&mut app, listed, "b.rsk", Some("2026-01-01T00:00:00Z"));
+    assert_eq!(picker_names(&app), ["sub", "b.rsk", "a.rsk"]);
+    assert_eq!(picker_selected(&app), Some(2));
+    github(&mut app, picker(picker::Action::Move(-1)));
+    assert_eq!(picker_selected(&app), Some(1));
+}
+
+#[test]
+fn a_picker_opened_before_the_saved_sign_in_loads_lists_once_it_does() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = app_in(dir.path());
+    let tokens = Tokens {
+        login: "octo".into(),
+        access: "unused".into(),
+        access_expires_at: None,
+        refresh: None,
+        refresh_expires_at: None,
+    };
+    app.github.client = None;
+    app.github.account = Account::SignedOut(None);
+    let picker = |app: &App| match &app.github.dialog {
+        Some(Dialog::Picker(picker)) => (picker.signed_out, picker.repos.clone()),
+        other => panic!("no picker: {other:?}"),
+    };
+    github(&mut app, Action::Picker(picker::Action::Show(Mode::Open)));
+    assert!(picker(&app).0);
+
+    let generation = app.github.generation;
+    github(&mut app, Action::Loaded(generation, Ok(Some(tokens))));
+    assert_eq!(picker(&app), (false, None), "listing");
+    let account = gh::Account {
+        login: "octo".into(),
+        repos: vec![repo()],
+    };
+    github(&mut app, Action::Listed(generation, Ok(account)));
+    assert_eq!(picker(&app), (false, Some(vec![repo()])));
 }
 
 fn picker_generation(app: &App) -> u64 {
@@ -1087,16 +1324,16 @@ fn a_closed_pickers_late_reply_never_reaches_a_new_one() {
 }
 
 #[test]
-fn save_here_never_takes_the_name_of_a_preview_already_there() {
+fn send_here_never_takes_the_name_of_a_preview_already_there() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, _) = app_in(dir.path());
     app.add_tab();
-    picker_at(&mut app, Mode::SaveHere, &["x.svg"]);
+    picker_at(&mut app, Mode::SendTo, &["x.svg"]);
     github(
         &mut app,
         Action::Picker(picker::Action::SaveName("x".into())),
     );
-    github(&mut app, Action::Picker(picker::Action::SaveHere));
+    github(&mut app, Action::Picker(picker::Action::SendHere));
     assert_eq!(picker_error(&app).as_deref(), Some("Name taken"));
     assert_eq!(app.tab.path, None);
 }
@@ -1108,7 +1345,7 @@ fn save_here_waits_for_a_folder_that_could_not_be_listed() {
     app.add_tab();
     app.github.repos = vec![repo()];
     let picker = |action| Action::Picker(action);
-    github(&mut app, picker(picker::Action::Show(Mode::SaveHere)));
+    github(&mut app, picker(picker::Action::Show(Mode::SendTo)));
     github(&mut app, picker(picker::Action::PickRepo(repo().key)));
     let failed = picker_generation(&app);
     github(
@@ -1117,7 +1354,7 @@ fn save_here_waits_for_a_folder_that_could_not_be_listed() {
     );
     // GitHub may hold `x.svg`: nothing here knows.
     github(&mut app, picker(picker::Action::SaveName("x".into())));
-    github(&mut app, picker(picker::Action::SaveHere));
+    github(&mut app, picker(picker::Action::SendHere));
     assert_eq!(app.tab.path, None);
     assert_eq!(
         picker_error(&app),
@@ -1137,11 +1374,32 @@ fn save_here_waits_for_a_folder_that_could_not_be_listed() {
         &mut app,
         picker(picker::Action::Listing(listed, Ok((sha('8'), vec![entry])))),
     );
-    github(&mut app, picker(picker::Action::SaveHere));
+    github(&mut app, picker(picker::Action::SendHere));
     assert_eq!(picker_error(&app).as_deref(), Some("Name taken"));
     github(&mut app, picker(picker::Action::SaveName("y".into())));
-    github(&mut app, picker(picker::Action::SaveHere));
+    github(&mut app, picker(picker::Action::SendHere));
     assert!(app.tab.path.is_some());
+}
+
+#[test]
+fn nothing_is_made_in_a_folder_that_could_not_be_listed() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = app_in(dir.path());
+    app.github.repos = vec![repo()];
+    let picker = |action| Action::Picker(action);
+    github(&mut app, picker(picker::Action::Show(Mode::Open)));
+    github(&mut app, picker(picker::Action::PickRepo(repo().key)));
+    let failed = picker_generation(&app);
+    github(
+        &mut app,
+        picker(picker::Action::Listing(failed, Err(gh::Error::Offline))),
+    );
+    // GitHub may hold `x.rsk` or `x.svg`: nothing here knows.
+    github(&mut app, picker(picker::Action::NewItem(false)));
+    github(&mut app, picker(picker::Action::NewItemName("x".into())));
+    github(&mut app, picker(picker::Action::CreateItem));
+    assert!(matches!(app.github.dialog, Some(Dialog::Picker(_))));
+    assert!(!workcopy::working_path(dir.path(), &repo().key, "x.rsk").exists());
 }
 
 #[test]
@@ -1156,7 +1414,7 @@ fn a_new_repository_with_a_renamed_ones_name_gets_its_own_folder() {
     app.add_tab();
     app.github.repos = vec![new.clone()];
     let picker = |action| Action::Picker(action);
-    github(&mut app, picker(picker::Action::Show(Mode::SaveHere)));
+    github(&mut app, picker(picker::Action::Show(Mode::SendTo)));
     github(&mut app, picker(picker::Action::PickRepo(new.key.clone())));
     let generation = picker_generation(&app);
     github(
@@ -1164,7 +1422,7 @@ fn a_new_repository_with_a_renamed_ones_name_gets_its_own_folder() {
         picker(picker::Action::Listing(generation, Ok((sha('8'), vec![])))),
     );
     github(&mut app, picker(picker::Action::SaveName("new".into())));
-    github(&mut app, picker(picker::Action::SaveHere));
+    github(&mut app, picker(picker::Action::SendHere));
 
     let path = app.tab.path.clone().expect("saved here");
     assert!(!path.starts_with(&folder), "{path:?}");
@@ -1185,6 +1443,7 @@ fn a_working_copy_unlike_its_base_is_never_downloaded_over() {
     close_front(&mut app);
 
     picker_at(&mut app, Mode::Open, &["ring.rsk"]);
+    github(&mut app, Action::Picker(picker::Action::Select(0)));
     github(&mut app, Action::Picker(picker::Action::Open));
     assert!(app.github.dialog.is_none(), "opened, not downloaded");
     assert_eq!(app.status, "Opened your unsent version");
@@ -1226,6 +1485,8 @@ fn a_renamed_repository_keeps_its_folder_here() {
             Ok((sha('8'), vec![entry])),
         )),
     );
+    picker_changed(&mut app, generation, "ring.rsk", None);
+    github(&mut app, Action::Picker(picker::Action::Select(0)));
     github(&mut app, Action::Picker(picker::Action::Open));
     assert!(app.github.dialog.is_none(), "the unsent drawing opens");
     assert!(!workcopy::working_path(dir.path(), &renamed.key, "ring.rsk").exists());
@@ -1333,4 +1594,562 @@ async fn a_send_waiting_for_a_closed_tabs_save_goes_on() {
     run(&mut app, task).await;
     assert!(app.github.after_save.is_none());
     assert!(app.github.failed.contains_key(&repo().key), "sent");
+}
+
+#[test]
+fn the_chip_says_what_is_left_to_do() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_in(dir.path());
+    let key = repo().key;
+    assert_eq!(app.github_chip_state(&key), Chip::Sent);
+    save_here(&mut app, &path);
+    assert_eq!(app.github_chip_state(&key), Chip::Unsent(1));
+    app.github.sending.insert(key.clone());
+    assert_eq!(app.github_chip_state(&key), Chip::Sending);
+    app.github.sending.clear();
+    app.github.failed.insert(key.clone(), "offline".into());
+    assert_eq!(app.github_chip_state(&key), Chip::NotSent);
+    app.github.failed.clear();
+    conflicted(&mut app, &path, Some(drawing(30.)));
+    app.github.sending.clear();
+    assert_eq!(app.github_chip_state(&key), Chip::Review);
+}
+
+#[test]
+fn palette_rows_appear_only_when_they_apply() {
+    let names = |app: &App| -> Vec<(String, bool)> {
+        app.github_palette()
+            .into_iter()
+            .map(|(name, _, action)| (name, action.is_some()))
+            .collect()
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_in(dir.path());
+    let rows = names(&app);
+    assert!(rows.contains(&("Nothing to send".into(), false)));
+    assert!(rows.contains(&("History".into(), true)));
+    assert!(rows.contains(&("Copy GitHub link".into(), true)));
+    assert!(rows.contains(&("Sign out of GitHub".into(), true)));
+    assert!(
+        !rows
+            .iter()
+            .any(|(name, _)| name == "Review changes on GitHub")
+    );
+
+    save_here(&mut app, &path);
+    let send = app
+        .github_palette()
+        .into_iter()
+        .find(|(name, ..)| name == "Send 1 drawing");
+    assert_eq!(
+        send.map(|(_, detail, _)| detail).as_deref(),
+        Some("ring.rsk → lab")
+    );
+    conflicted(&mut app, &path, Some(drawing(30.)));
+    assert!(names(&app).contains(&("Review changes on GitHub".into(), true)));
+
+    // The link names the file on the default branch, encoded, once GitHub
+    // has it.
+    let copy = workcopy::working_path(dir.path(), &repo().key, "ring (2).rsk");
+    app.tab.path = Some(copy);
+    assert_eq!(app.github_link(), None, "not on GitHub yet");
+    let state = app.github.states.get_mut(&repo().key).unwrap();
+    state.files.insert(
+        "ring (2).rsk".into(),
+        FileState {
+            base_blob: Some(sha('6')),
+            ..FileState::default()
+        },
+    );
+    assert_eq!(
+        app.github_link().as_deref(),
+        Some("http://127.0.0.1:9/octo/lab/blob/main/ring%20%282%29.rsk")
+    );
+    // A drawing on this computer only: Send chooses where; no Versions.
+    app.add_tab();
+    let rows = names(&app);
+    assert!(rows.contains(&("Send to GitHub…".into(), true)));
+    assert!(!rows.iter().any(|(name, _)| name == "History"));
+    app.github.account = Account::SignedOut(None);
+    assert!(names(&app).contains(&("Sign in to GitHub…".into(), true)));
+}
+
+#[test]
+fn repository_colors_are_kept_and_a_chosen_one_wins() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = app_in(dir.path());
+    let key = repo().key;
+    let generation = app.github.generation;
+    let account = gh::Account {
+        login: "octo".into(),
+        repos: vec![repo()],
+    };
+    github(&mut app, Action::Listed(generation, Ok(account)));
+    let first = app.github.prefs.colors[&repo().id];
+    assert_eq!(app.github.hue(&key), first);
+    let other = (first + 2) % identity::HUES;
+    github(&mut app, Action::Color(key.clone(), other));
+    assert_eq!(app.github.hue(&key), other);
+    assert!(app.tabs.color_menu.is_none());
+}
+
+#[test]
+fn the_picker_lists_the_last_used_repository_first_and_opens_it() {
+    let named = |name: &str, id: u64| Repo {
+        id,
+        key: RepoKey {
+            owner: "octo".into(),
+            repo: name.into(),
+        },
+        ..repo()
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = app_in(dir.path());
+    app.github.repos = vec![named("zeta", 1), named("Alpha", 2), named("mid", 3)];
+    app.github.prefs.last = Some(3);
+    github(&mut app, Action::Picker(picker::Action::Show(Mode::Open)));
+    let Some(Dialog::Picker(picker)) = &app.github.dialog else {
+        panic!("no picker");
+    };
+    let order: Vec<&str> = picker
+        .repos
+        .iter()
+        .flatten()
+        .map(|repo| repo.key.repo.as_str())
+        .collect();
+    assert_eq!(order, ["mid", "Alpha", "zeta"]);
+    assert_eq!(picker.repo.as_ref().map(|repo| repo.id), Some(3));
+}
+
+#[test]
+fn signed_out_the_picker_shows_known_repositories_and_signs_in_first() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_in(dir.path());
+    let _ = save_here(&mut app, &path);
+    let state = app.github.states[&repo().key].clone();
+    run_blocking(workcopy::persist(dir.path(), &repo().key, state, 99)).unwrap();
+    app.github.account = Account::SignedOut(None);
+    github(&mut app, Action::Picker(picker::Action::Show(Mode::Open)));
+    let Some(Dialog::Picker(picker)) = &app.github.dialog else {
+        panic!("no picker");
+    };
+    assert!(picker.signed_out);
+    assert_eq!(picker.repos.as_ref().map(Vec::len), Some(1));
+    github(&mut app, Action::Picker(picker::Action::SignIn));
+    assert!(matches!(app.github.dialog, Some(Dialog::SignIn)));
+    // Once GitHub approves, the dialog closes and the picker comes back.
+    let generation = app.github.generation;
+    let account = gh::Account {
+        login: "octo".into(),
+        repos: vec![repo()],
+    };
+    github(&mut app, Action::SignedIn(generation, Ok(account)));
+    assert_eq!(app.status, "Signed in as @octo");
+    assert!(matches!(app.github.dialog, Some(Dialog::Picker(_))));
+}
+
+fn run_blocking<T>(future: impl Future<Output = T>) -> T {
+    tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap()
+        .block_on(future)
+}
+
+#[test]
+fn a_new_drawing_is_an_empty_working_copy_with_nothing_on_github() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = app_in(dir.path());
+    picker_at(&mut app, Mode::Open, &["x.svg"]);
+    let new = |app: &mut App, name: &str| {
+        github(app, Action::Picker(picker::Action::NewItem(false)));
+        github(
+            app,
+            Action::Picker(picker::Action::NewItemName(name.into())),
+        );
+        github(app, Action::Picker(picker::Action::CreateItem));
+    };
+    new(&mut app, "x");
+    assert_eq!(picker_error(&app).as_deref(), Some("Name taken"));
+    // A name, never a path into another folder.
+    new(&mut app, "scheme/ring");
+    assert_eq!(
+        picker_error(&app).as_deref(),
+        Some("Can't open this name here")
+    );
+    new(&mut app, "route");
+    assert!(app.github.dialog.is_none());
+    let path = workcopy::working_path(dir.path(), &repo().key, "route.rsk");
+    assert!(path.exists());
+    assert_eq!(file_state(&app, "route.rsk"), Some(FileState::default()));
+    // It is unsent from the start, as a new file.
+    app.github_refresh(&repo().key);
+    assert!(unsent(&app).contains(&"route.rsk".to_owned()));
+}
+
+#[test]
+fn nothing_is_made_in_a_repository_the_user_may_not_send_to() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = app_in(dir.path());
+    picker_at(&mut app, Mode::Open, &[]);
+    let may_send = |app: &mut App, push: bool| match &mut app.github.dialog {
+        Some(Dialog::Picker(picker)) => picker.repo.as_mut().unwrap().push = push,
+        other => panic!("no picker: {other:?}"),
+    };
+    let name = |app: &mut App, folder: bool| {
+        github(app, Action::Picker(picker::Action::NewItem(folder)));
+        let name = picker::Action::NewItemName("route".into());
+        github(app, Action::Picker(name));
+    };
+    let path = workcopy::working_path(dir.path(), &repo().key, "route.rsk");
+    for folder in [false, true] {
+        // Neither offered ...
+        may_send(&mut app, false);
+        name(&mut app, folder);
+        github(&mut app, Action::Picker(picker::Action::CreateItem));
+        // ... nor made when the permission went while naming it.
+        may_send(&mut app, true);
+        name(&mut app, folder);
+        may_send(&mut app, false);
+        github(&mut app, Action::Picker(picker::Action::CreateItem));
+        let Some(Dialog::Picker(picker)) = &app.github.dialog else {
+            panic!("no picker");
+        };
+        assert!(picker.trail.is_empty());
+        assert!(!path.exists());
+        assert_eq!(file_state(&app, "route.rsk"), None);
+    }
+}
+
+#[test]
+fn back_from_choosing_repositories_the_open_picker_lists_them_again_once() {
+    let lists = |task: Task<Message>| iced_runtime::task::into_stream(task).is_some();
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = app_in(dir.path());
+    github(&mut app, Action::Picker(picker::Action::Show(Mode::Open)));
+    let generation = app.github.generation;
+    let none = gh::Account {
+        login: "octo".into(),
+        repos: Vec::new(),
+    };
+    github(&mut app, Action::Listed(generation, Ok(none)));
+    // The window coming back in front lists nothing by itself.
+    assert!(!lists(app.picker_returned()));
+    github(&mut app, Action::ChooseRepositories);
+    assert!(lists(app.picker_returned()));
+    assert!(!lists(app.picker_returned()));
+    github(&mut app, Action::ChooseRepositories);
+    github(&mut app, Action::Returned);
+    assert!(!lists(app.picker_returned()));
+    // The only repository chosen in the browser is chosen here.
+    let one = gh::Account {
+        login: "octo".into(),
+        repos: vec![repo()],
+    };
+    github(&mut app, Action::Listed(generation, Ok(one)));
+    let Some(Dialog::Picker(picker)) = &app.github.dialog else {
+        panic!("no picker");
+    };
+    assert_eq!(picker.repo, Some(repo()));
+}
+
+#[test]
+fn a_new_folder_opens_at_once_and_is_empty() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = app_in(dir.path());
+    picker_at(&mut app, Mode::Open, &["ring.rsk"]);
+    github(&mut app, Action::Picker(picker::Action::NewItem(true)));
+    github(
+        &mut app,
+        Action::Picker(picker::Action::NewItemName("scheme".into())),
+    );
+    github(&mut app, Action::Picker(picker::Action::CreateItem));
+    let Some(Dialog::Picker(picker)) = &app.github.dialog else {
+        panic!("no picker");
+    };
+    assert_eq!(picker.trail.len(), 1);
+    assert_eq!(picker.entries.as_deref(), Some(&[][..]));
+    // Backspace goes back up.
+    github(&mut app, Action::Picker(picker::Action::Up));
+    let Some(Dialog::Picker(picker)) = &app.github.dialog else {
+        panic!("no picker");
+    };
+    assert!(picker.trail.is_empty());
+}
+
+#[test]
+fn keep_githubs_says_how_to_get_yours_back() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_in(dir.path());
+    conflicted(&mut app, &path, Some(drawing(30.)));
+    app.github.sending.clear();
+    github(&mut app, Action::Resolve(send::Choice::KeepTheirs));
+    let undo = crate::app::shortcuts::label(&Message::Undo).unwrap();
+    assert_eq!(
+        app.status,
+        format!("Kept GitHub’s · {undo} brings yours back")
+    );
+}
+
+#[test]
+fn versions_name_saves_by_minute_and_grey_out_default_messages() {
+    // A whole minute, so the first two share it.
+    let at = |seconds: i64| (1_763_199_960_000 + seconds * 1000).to_string();
+    let (a, b, c) = (at(0), at(20), at(600));
+    let ids = [a.as_str(), b.as_str(), c.as_str()];
+    let minute = |id: &str| versions::saved(id, &ids);
+    // Two saves in one minute show their seconds; another does not.
+    assert_eq!(minute(&a).matches(':').count(), 2);
+    assert_eq!(minute(&c).matches(':').count(), 1);
+    assert!(minute(&c).starts_with("Saved "));
+    assert!(versions::default_message("Update ring.rsk"));
+    assert!(versions::default_message("Update a.rsk and 3 more"));
+    assert!(!versions::default_message("Add an ethyl group"));
+}
+
+#[test]
+fn opening_takes_over_an_untouched_untitled_tab_and_sits_with_its_repository() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = app_in(dir.path());
+    let other = workcopy::working_path(dir.path(), &repo().key, "b.rsk");
+    std::fs::write(&other, drawing(60.)).unwrap();
+    // ring.rsk, then a local drawing with work in it, in front.
+    app.add_tab();
+    app.tab.doc = Document::from_native_file(&drawing(20.)).unwrap();
+    // A new tab of the repository opens after its last tab, not at the end.
+    assert!(app.open_target(Some(&other)));
+    assert_eq!(app.strip().count(), 3);
+    assert_eq!(app.tabs.active, 1);
+
+    // An untouched Untitled tab, even behind the front one, gives way.
+    let (mut app, _) = app_in(dir.path());
+    app.add_tab();
+    app.select_tab(0);
+    assert!(app.open_target(Some(&other)));
+    assert_eq!(app.strip().count(), 2, "the Untitled tab gave way");
+    assert_eq!(app.tabs.active, 1);
+}
+
+#[test]
+fn late_conflict_details_never_reach_another_conflict() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_in(dir.path());
+    conflicted(&mut app, &path, Some(drawing(30.)));
+    let commit = app.github.conflicts[&repo().key][0].commit.clone();
+    let found = api::RemoteVersion {
+        commit: commit.clone(),
+        message: "Swap in a pyridine N".into(),
+        login: Some("alice".into()),
+        author: "Alice".into(),
+        date: "2026-11-16T14:02:00Z".into(),
+    };
+    let meta = |commit: &str| {
+        Action::ReviewMeta(
+            repo().key,
+            "ring.rsk".into(),
+            commit.into(),
+            Some(found.clone()),
+        )
+    };
+    github(&mut app, meta("an older commit"));
+    assert!(review(&app).theirs.is_none());
+    github(&mut app, meta(&commit));
+    assert_eq!(review(&app).theirs.as_ref(), Some(&found));
+}
+
+#[test]
+fn send_on_closing_while_signed_out_signs_in_then_sends() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_in(dir.path());
+    save_here(&mut app, &path);
+    app.github.account = Account::SignedOut(None);
+    let _ = app.update(Message::Tabs(tabs::Action::Close(None)));
+    github(&mut app, Action::CloseAnswer(true));
+    assert!(matches!(app.github.dialog, Some(Dialog::SignIn)));
+    assert!(matches!(
+        app.github.after_sign_in,
+        Some(Action::CloseAnswer(true))
+    ));
+    // Canceling the sign-in leaves the close behind; the next close asks again.
+    let _ = app.update(Message::Escape);
+    assert!(app.github.closing.is_none());
+}
+
+#[test]
+fn an_exact_github_word_ranks_its_rows_first_in_the_palette() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_in(dir.path());
+    save_here(&mut app, &path);
+    let first = |app: &mut App, query: &str| {
+        let _ = app.update(Message::Commands(crate::app::command_palette::Action::Open));
+        let _ = app.update(Message::Commands(
+            crate::app::command_palette::Action::Query(query.into()),
+        ));
+        let name = app
+            .commands
+            .ranked()
+            .first()
+            .map(|command| command.name.clone());
+        let _ = app.update(Message::Escape);
+        name
+    };
+    assert_eq!(first(&mut app, "history").as_deref(), Some("History"));
+    assert_eq!(first(&mut app, "versions").as_deref(), Some("History"));
+    assert_eq!(first(&mut app, "send").as_deref(), Some("Send 1 drawing"));
+}
+
+#[test]
+fn the_chip_opens_the_picker_in_the_drawings_folder() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = app_in(dir.path());
+    app.github.repos = vec![repo()];
+    let walk = |app: &mut App, folder: &str, listed: Vec<gh::Entry>| {
+        github(
+            app,
+            Action::Picker(picker::Action::ShowIn(repo().key, folder.into())),
+        );
+        let generation = picker_generation(app);
+        github(
+            app,
+            Action::Picker(picker::Action::Listing(generation, Ok((sha('8'), listed)))),
+        );
+    };
+    let folder = gh::Entry {
+        name: "scheme".into(),
+        sha: sha('5'),
+        folder: true,
+    };
+    walk(&mut app, "scheme", vec![folder.clone()]);
+    let Some(Dialog::Picker(picker)) = &app.github.dialog else {
+        panic!("no picker");
+    };
+    assert_eq!(picker.trail, [("scheme".to_owned(), sha('5'))]);
+    assert!(picker.entries.is_none(), "listing scheme");
+
+    // A folder GitHub does not have yet opens as a new one.
+    walk(&mut app, "drafts/new", vec![folder]);
+    let Some(Dialog::Picker(picker)) = &app.github.dialog else {
+        panic!("no picker");
+    };
+    let trail: Vec<&str> = picker.trail.iter().map(|(name, _)| name.as_str()).collect();
+    assert_eq!(trail, ["drafts", "new"]);
+    assert_eq!(picker.entries.as_deref(), Some(&[][..]));
+}
+
+/// A GitHub drawing's History is a clock just after the inspector's tab
+/// track: in the same row, next in focus order, named for assistive
+/// technology, opening History and then shown as selected. A drawing on this
+/// computer has no clock, and its track takes the whole row.
+#[tokio::test]
+#[ignore = "Opt-in real renderer layout check"]
+async fn the_history_clock_follows_the_tab_track_on_github_drawings() -> Result<(), String> {
+    use iced::advanced::renderer::Headless;
+    use iced::advanced::widget::{Id, Operation, operation};
+    use reshiki::accessibility::Node;
+    let mut renderer = <iced::Renderer as Headless>::new(
+        iced::Font::with_name(reshiki::style::ui_font_family()),
+        iced::Pixels(16.),
+        None,
+    )
+    .await
+    .ok_or("No renderer")?;
+    /// The keyboard stops, in Tab order.
+    struct Stops(Vec<Option<Id>>);
+    impl Operation for Stops {
+        fn focusable(
+            &mut self,
+            id: Option<&Id>,
+            _: iced::Rectangle,
+            _: &mut dyn operation::Focusable,
+        ) {
+            self.0.push(id.cloned());
+        }
+        fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
+            operate(self);
+        }
+    }
+    let size = iced::Size::new(1280., 800.);
+    let mut tree = |app: &App, click: Option<iced::Point>| {
+        let mut ui = iced_runtime::UserInterface::build(
+            app.view(),
+            size,
+            iced_runtime::user_interface::Cache::new(),
+            &mut renderer,
+        );
+        let mut messages = Vec::new();
+        if let Some(point) = click {
+            use iced::mouse::{Button, Event};
+            ui.update(
+                &[
+                    iced::Event::Mouse(Event::ButtonPressed(Button::Left)),
+                    iced::Event::Mouse(Event::ButtonReleased(Button::Left)),
+                ],
+                iced::mouse::Cursor::Available(point),
+                &mut renderer,
+                &mut iced::advanced::clipboard::Null,
+                &mut messages,
+            );
+        }
+        let mut collect = reshiki::accessibility::Collect::new(iced::Rectangle::with_size(size));
+        ui.operate(&renderer, &mut operation::black_box(&mut collect));
+        let mut stops = Stops(Vec::new());
+        ui.operate(&renderer, &mut stops);
+        (collect.snapshot().nodes.clone(), messages, stops.0)
+    };
+    // The five tabs and what follows them, in focus order.
+    let header = |nodes: &[Node]| -> Vec<Node> {
+        let first = nodes
+            .iter()
+            .position(|node| node.id == "inspector-tab-Properties")
+            .expect("tab track");
+        nodes[first..first + 6].to_vec()
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = app_in(dir.path());
+    app.inspector_open = true;
+    let (nodes, _, stops) = tree(&app, None);
+    let github = header(&nodes);
+    let (export, clock) = (&github[4], &github[5]);
+    assert_eq!(export.id, "inspector-tab-Export");
+    assert_eq!(clock.id, "inspector-history");
+    assert_eq!(clock.name, "History");
+    assert_eq!(clock.checked, Some(false));
+    assert!(clock.bounds.x >= export.bounds.x + export.bounds.width + 4.);
+    assert!(clock.bounds.x + clock.bounds.width <= size.width);
+    assert!((clock.bounds.center_y() - export.bounds.center_y()).abs() < 1.);
+    for tab in &github[..5] {
+        let label = tab.name.trim_end_matches(" tab");
+        let width = crate::app::workspace::text_width(label, 12.);
+        assert!(width + 6. <= tab.bounds.width, "{label}: {:?}", tab.bounds);
+    }
+    // Tab moves from Export to the clock.
+    let id = |id: &str| Some(Id::from(id.to_owned()));
+    let after = stops
+        .iter()
+        .position(|stop| *stop == id("inspector-tab-Export"))
+        .expect("Export");
+    assert_eq!(stops[after + 1], id("inspector-history"));
+
+    let (_, messages, _) = tree(&app, Some(clock.bounds.center()));
+    assert!(!messages.is_empty());
+    for message in messages {
+        let _ = app.update(message);
+    }
+    assert_eq!(app.inspector_tab, InspectorTab::Versions);
+    let (nodes, ..) = tree(&app, None);
+    let clock = &header(&nodes)[5];
+    assert_eq!(clock.id, "inspector-history");
+    assert_eq!(clock.checked, Some(true));
+
+    app.add_tab();
+    app.inspector_tab = InspectorTab::Properties;
+    let (nodes, ..) = tree(&app, None);
+    assert!(!nodes.iter().any(|node| node.id == "inspector-history"));
+    let local = header(&nodes);
+    assert_ne!(local[5].id, "inspector-history");
+    // The track takes the clock's room.
+    assert!(
+        local[4].bounds.x + local[4].bounds.width > github[4].bounds.x + github[4].bounds.width
+    );
+    Ok(())
 }

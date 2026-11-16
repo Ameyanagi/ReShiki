@@ -3,9 +3,13 @@
 //! `reshiki::github`; this keeps what the window shows. Its messages are
 //! handled before the modal gates, like the star toast's: none of them edits
 //! a drawing except through the normal save and edit paths.
-use super::{App, InspectorTab, Message, document_tab::TabId, focus_drawing};
-use iced::widget::{column, row, text};
-use iced::{Alignment, Element, Length, Task};
+use super::{
+    App, InspectorTab, Message,
+    document_tab::{DocumentTab, TabId},
+    focus_drawing,
+};
+use iced::widget::{Space, button, column, container, row, text};
+use iced::{Alignment, Border, Color, Element, Length, Subscription, Task, Theme};
 use reshiki::github::{
     self as gh, Repo, RepoKey, api, auth,
     client::Client,
@@ -20,6 +24,7 @@ use std::path::{Path, PathBuf};
 mod account;
 mod compare;
 mod conflict;
+mod identity;
 pub(super) mod picker;
 #[cfg(test)]
 mod tests;
@@ -28,9 +33,7 @@ mod versions;
 pub(super) use picker::Mode;
 
 const OPEN_FROM: &str = "Open from GitHub…";
-const SEND: &str = "Send to GitHub";
-const VERSIONS: &str = "Versions";
-const ACCOUNT: &str = "GitHub account…";
+const SEND_TO: &str = "Send to GitHub…";
 const NOT_SET_UP: &str = "Not set up in this build";
 
 #[derive(Debug, Clone)]
@@ -54,8 +57,10 @@ pub(super) enum Account {
 
 #[derive(Debug)]
 pub(super) enum Dialog {
-    Account,
+    /// The sign-in code, or why the last sign-in ended.
+    SignIn,
     Picker(Box<picker::Picker>),
+    /// Drawn as a popover above the status chip.
     Send(SendDraft),
     Conflict(Box<conflict::Review>),
     /// A version, under its label, and the drawing now.
@@ -67,6 +72,8 @@ pub(super) struct SendDraft {
     key: RepoKey,
     files: Vec<String>,
     message: String,
+    /// The paths of a send of several drawings, shown on request.
+    listed: bool,
 }
 
 /// A close waiting for the Send question, or for the Send it started.
@@ -92,6 +99,8 @@ pub(super) struct State {
     repos: Vec<Repo>,
     pub(super) dialog: Option<Dialog>,
     pub(super) menu: bool,
+    /// What runs once a sign-in started for it succeeds.
+    after_sign_in: Option<Action>,
     /// Keyed by the repository's folder here.
     states: HashMap<RepoKey, RepoState>,
     /// Rises with every state write and picker request, so late ones drop.
@@ -115,11 +124,20 @@ pub(super) struct State {
     /// Starred through the API in this run.
     pub(super) starred: bool,
     versions: versions::Versions,
+    /// Repository colors and the repository last used.
+    prefs: identity::Prefs,
+    /// A status that is a question, not an error, shown in amber.
+    pub(super) amber: Option<String>,
 }
 
 impl State {
     pub(super) fn new() -> Self {
         let client_id = config::client_id();
+        let root = if cfg!(test) {
+            None
+        } else {
+            workcopy::root().ok()
+        };
         Self {
             account: if client_id.is_some() {
                 Account::SignedOut(None)
@@ -128,16 +146,14 @@ impl State {
             },
             client_id,
             ends: config::endpoints(),
-            root: if cfg!(test) {
-                None
-            } else {
-                workcopy::root().ok()
-            },
+            prefs: root.as_deref().map(identity::load).unwrap_or_default(),
+            root,
             generation: 0,
             client: None,
             repos: Vec::new(),
             dialog: None,
             menu: false,
+            after_sign_in: None,
             states: HashMap::new(),
             seq: 0,
             unsent: HashMap::new(),
@@ -152,6 +168,7 @@ impl State {
             window_answered: false,
             starred: false,
             versions: versions::Versions::default(),
+            amber: None,
         }
     }
 
@@ -167,6 +184,13 @@ impl State {
         }
     }
 
+    pub(super) fn login(&self) -> Option<&str> {
+        match &self.account {
+            Account::SignedIn { login, .. } | Account::NeedsInstall { login } => Some(login),
+            _ => None,
+        }
+    }
+
     /// The dialog owns the keyboard: see [`modal_key`].
     pub(super) fn dialog_open(&self) -> bool {
         self.dialog.is_some()
@@ -176,15 +200,40 @@ impl State {
     pub(super) fn locate(&self, path: Option<&Path>) -> Option<(RepoKey, String)> {
         workcopy::locate(self.root.as_deref()?, path?)
     }
+
+    /// The repository kept in folder `key`, as GitHub names it now.
+    fn named(&self, key: &RepoKey) -> RepoKey {
+        self.states
+            .get(key)
+            .map_or_else(|| key.clone(), RepoState::key)
+    }
+
+    /// The repository's id, when known.
+    fn repo_id(&self, key: &RepoKey) -> Option<u64> {
+        self.states.get(key).map(|state| state.repo_id).or_else(|| {
+            self.repos
+                .iter()
+                .find(|repo| repo.key == *key)
+                .map(|repo| repo.id)
+        })
+    }
+
+    fn hue(&self, key: &RepoKey) -> usize {
+        identity::hue(
+            &self.prefs,
+            self.repo_id(key).unwrap_or(u64::MAX),
+            &self.named(key),
+        )
+    }
 }
 
 #[derive(Debug, Clone)]
 pub enum Action {
     Menu(bool),
-    ShowAccount,
     /// Escape, Cancel or a click outside the dialog.
     Close,
     Loaded(u64, Result<Option<Tokens>, String>),
+    /// Asks GitHub for a code and shows it.
     SignIn,
     CodeReady(u64, Result<auth::DeviceCode, gh::Error>),
     Poll(u64),
@@ -197,14 +246,17 @@ pub enum Action {
     SignOut,
     SignedOut(Result<(), String>),
     ChooseRepositories,
-    CheckAgain,
+    /// The window is in front again after Choose repositories.
+    Returned,
     Listed(u64, Result<gh::Account, gh::Error>),
     Browser(Result<(), String>),
     Picker(picker::Action),
-    /// Send for the drawing in front: the Send box, or the picker's "Save
-    /// here" for a drawing not on GitHub.
+    /// Send for the drawing in front: the Send popover, or the picker for a
+    /// drawing not on GitHub.
     ShowSend,
     SendMessage(String),
+    /// Shows or hides the paths of a send of several drawings.
+    SendList,
     Send,
     /// Saves the next drawing a Send waits for, or sends.
     SaveNext,
@@ -215,11 +267,20 @@ pub enum Action {
     CloseAnswer(bool),
     /// The conflict dialog for the drawing in front's repository.
     Review,
+    /// Who changed the drawing in conflict on GitHub, and when: by
+    /// repository, repository path and the conflict's commit.
+    ReviewMeta(RepoKey, String, String, Option<api::RemoteVersion>),
     Resolve(send::Choice),
     /// The choice, once the save it waited for has landed.
     Settle(RepoKey, send::Choice),
     ShowVersions,
     Versions(versions::Action),
+    /// A hue chosen for the repository in a tab's menu.
+    Color(RepoKey, usize),
+    /// The repository colors and the last repository, written.
+    Kept(Result<(), String>),
+    CopyLink,
+    OpenOnGitHub,
 }
 
 /// Keys of an open GitHub dialog, before its fields: Escape closes, and the
@@ -241,6 +302,22 @@ pub(super) fn modal_key(
     }
 }
 
+/// Keys of an open GitHub dialog that no field took: in the picker, Enter
+/// opens what is selected and Backspace goes up a folder. Elsewhere they do
+/// nothing, so the conflict dialog has no default button.
+pub(super) fn leftover_key(
+    key: &iced::keyboard::Key,
+    modifiers: iced::keyboard::Modifiers,
+) -> Option<Message> {
+    use iced::keyboard::{Key, key::Named};
+    let action = match key {
+        Key::Named(Named::Enter) if modifiers.is_empty() => picker::Action::Enter,
+        Key::Named(Named::Backspace) if modifiers.is_empty() => picker::Action::Up,
+        _ => return None,
+    };
+    Some(Message::GitHub(Action::Picker(action)))
+}
+
 fn perform<T: Send + 'static>(
     future: impl Future<Output = T> + Send + 'static,
     then: impl FnOnce(T) -> Action + Send + 'static,
@@ -252,13 +329,14 @@ fn open_url(url: String) -> Task<Message> {
     perform(reshiki::updates::open_url(url), Action::Browser)
 }
 
-/// `Send “a.rsk” to GitHub?` with Send to GitHub and Later.
-fn ask_send(title: String) -> Task<Message> {
+/// `Send “a.rsk” to GitHub?` with Send and Later.
+fn ask_send(title: String, body: String) -> Task<Message> {
+    const SEND: &str = "Send";
     iced::window::latest().then(move |window| {
         let dialog = rfd::AsyncMessageDialog::new()
             .set_level(rfd::MessageLevel::Info)
             .set_title(title.clone())
-            .set_description("Saved on this computer only.")
+            .set_description(body.clone())
             .set_buttons(rfd::MessageButtons::OkCancelCustom(
                 SEND.into(),
                 "Later".into(),
@@ -278,6 +356,19 @@ fn ask_send(title: String) -> Task<Message> {
             None => Task::perform(dialog.show(), answer),
         }
     })
+}
+
+/// `1 drawing` or `3 drawings`.
+fn drawings(count: usize) -> String {
+    match count {
+        1 => "1 drawing".into(),
+        n => format!("{n} drawings"),
+    }
+}
+
+/// `scheme/ring.rsk` → `ring.rsk`.
+pub(super) fn file_name(repo_path: &str) -> &str {
+    repo_path.rsplit('/').next().unwrap_or(repo_path)
 }
 
 impl App {
@@ -313,22 +404,95 @@ impl App {
         focus_drawing()
     }
 
+    /// Shows a code at once; `then` runs once GitHub approves.
+    fn github_sign_in(&mut self, then: Option<Action>) -> Task<Message> {
+        self.github.menu = false;
+        if !self.github.configured() {
+            return Task::none();
+        }
+        if self.github.client().is_some() {
+            return then.map_or_else(Task::none, |then| self.github_action(then));
+        }
+        let (id, ends) = (
+            self.github.client_id.clone().unwrap_or_default(),
+            self.github.ends.clone(),
+        );
+        // Trying again in the dialog keeps what the first try was for.
+        if then.is_some() || !matches!(self.github.dialog, Some(Dialog::SignIn)) {
+            self.github.after_sign_in = then;
+        }
+        self.github.dialog = Some(Dialog::SignIn);
+        self.github.generation += 1;
+        let generation = self.github.generation;
+        self.github.account = Account::Requesting;
+        perform(
+            async move { auth::request_code(&id, &ends).await },
+            move |result| Action::CodeReady(generation, result),
+        )
+    }
+
+    /// Writes the repository colors and the last repository.
+    fn github_keep_prefs(&mut self) -> Task<Message> {
+        let (Some(root), prefs) = (self.github.root.clone(), self.github.prefs.clone()) else {
+            return Task::none();
+        };
+        self.github.seq += 1;
+        let seq = self.github.seq;
+        perform(
+            async move {
+                reshiki::task::spawn_blocking(move || identity::save(&root, &prefs, seq))
+                    .await
+                    .map_err(|error| error.to_string())?
+            },
+            Action::Kept,
+        )
+    }
+
+    /// Repositories seen for the first time keep a color.
+    fn github_seen<'a>(
+        &mut self,
+        repos: impl IntoIterator<Item = (u64, &'a RepoKey)>,
+    ) -> Task<Message> {
+        let mut new = false;
+        for (id, key) in repos {
+            new |= identity::assign(&mut self.github.prefs, id, key);
+        }
+        if new {
+            self.github_keep_prefs()
+        } else {
+            Task::none()
+        }
+    }
+
+    /// The window's focus, only while the picker waits for the user to come
+    /// back from choosing repositories in the browser.
+    pub(super) fn github_subscription(&self) -> Subscription<Message> {
+        match &self.github.dialog {
+            Some(Dialog::Picker(picker)) if picker.browsing => {
+                iced::event::listen_with(|event, _, _| {
+                    matches!(event, iced::Event::Window(iced::window::Event::Focused))
+                        .then_some(Message::GitHub(Action::Returned))
+                })
+            }
+            _ => Subscription::none(),
+        }
+    }
+
     pub(super) fn github_action(&mut self, action: Action) -> Task<Message> {
         let id = self.github.client_id.clone().unwrap_or_default();
         let ends = self.github.ends.clone();
         match action {
             Action::Menu(open) => self.github.menu = open,
-            Action::ShowAccount => {
-                self.github.menu = false;
-                self.github.dialog = Some(Dialog::Account);
-                let list = if self.github.repos.is_empty() {
-                    self.github_list()
-                } else {
-                    Task::none()
-                };
-                return Task::batch([list, self.account_focus()]);
-            }
             Action::Close => {
+                if matches!(self.github.dialog, Some(Dialog::SignIn))
+                    && let Some(then) = self.github.after_sign_in.take()
+                    && matches!(then, Action::CloseAnswer(_))
+                {
+                    // A close that waited for this sign-in waits no more.
+                    if let Some(Closing::Window(..)) = self.github.closing.take() {
+                        self.cancel_close();
+                    }
+                }
                 // Closing the sign-in dialog while waiting cancels the sign-in.
                 if matches!(
                     self.github.account,
@@ -356,6 +520,7 @@ impl App {
                             // Versions lists GitHub's versions again.
                             self.github.versions.target = None;
                             self.star_github_ready();
+                            return self.picker_signed_in();
                         }
                     }
                     Ok(None) => {}
@@ -364,18 +529,7 @@ impl App {
                     }
                 }
             }
-            Action::SignIn => {
-                if !self.github.configured() {
-                    return Task::none();
-                }
-                self.github.generation += 1;
-                let generation = self.github.generation;
-                self.github.account = Account::Requesting;
-                return perform(
-                    async move { auth::request_code(&id, &ends).await },
-                    move |result| Action::CodeReady(generation, result),
-                );
-            }
+            Action::SignIn => return self.github_sign_in(None),
             Action::CodeReady(generation, result) => {
                 if generation != self.github.generation {
                     return Task::none();
@@ -466,17 +620,26 @@ impl App {
                         // Kept for the next launch only now, so a canceled
                         // sign-in is never kept.
                         let (client, login) = (self.github.client.clone(), account.login.clone());
-                        self.github_listed(account, true);
+                        let colors = self.github_listed(account, true);
                         self.github.versions.target = None;
                         self.star_github_signed_in();
-                        self.status = "Signed in to GitHub".into();
+                        self.status = format!("Signed in as @{}", login);
                         self.error = false;
+                        let mut tasks = vec![colors];
                         if let Some(client) = client {
-                            return perform(
+                            tasks.push(perform(
                                 async move { client.remember(&login).await },
                                 move |kept| Action::Remembered(generation, kept),
-                            );
+                            ));
                         }
+                        // The dialog closes, and what started the sign-in goes on.
+                        if matches!(self.github.dialog, Some(Dialog::SignIn)) {
+                            tasks.push(self.github_close_dialog());
+                        }
+                        if let Some(then) = self.github.after_sign_in.take() {
+                            tasks.push(self.github_action(then));
+                        }
+                        return Task::batch(tasks);
                     }
                     Err(error) => self.github_signed_out(Some(error.to_string())),
                 }
@@ -487,9 +650,14 @@ impl App {
                     &mut self.github.account,
                 ) {
                     *remembered = kept;
+                    if !kept {
+                        self.status = "Sign-in won't be remembered on this computer.".into();
+                        self.error = false;
+                    }
                 }
             }
             Action::SignOut => {
+                self.github.menu = false;
                 let client = self.github.client.take();
                 self.github_signed_out(None);
                 self.github.repos.clear();
@@ -510,10 +678,14 @@ impl App {
                 }
             }
             Action::ChooseRepositories => {
+                self.github.menu = false;
+                if let Some(Dialog::Picker(picker)) = &mut self.github.dialog {
+                    picker.browsing = true;
+                }
                 let slug = config::app_slug().unwrap_or_default();
                 return open_url(ends.web(&format!("/apps/{slug}/installations/new")));
             }
-            Action::CheckAgain => return self.github_list(),
+            Action::Returned => return self.picker_returned(),
             Action::Listed(generation, result) => {
                 if generation != self.github.generation {
                     return Task::none();
@@ -527,10 +699,8 @@ impl App {
                                 ..
                             }
                         );
-                        self.github_listed(account, remembered);
-                        if let Some(Dialog::Picker(picker)) = &mut self.github.dialog {
-                            picker.listed(&self.github.repos);
-                        }
+                        let colors = self.github_listed(account, remembered);
+                        return Task::batch([colors, self.picker_listed()]);
                     }
                     Err(error) => {
                         let error = self.github_failed(&error);
@@ -550,19 +720,13 @@ impl App {
             Action::ShowSend => {
                 self.github.menu = false;
                 let Some((key, _)) = self.github.locate(self.tab.path.as_deref()) else {
-                    return self
-                        .github_action(Action::Picker(picker::Action::Show(Mode::SaveHere)));
+                    return self.picker_action(picker::Action::Show(Mode::SendTo));
                 };
                 if self.github.client().is_none() {
-                    return self.github_action(Action::ShowAccount);
+                    return self.github_sign_in(Some(Action::ShowSend));
                 }
                 self.github_refresh(&key);
-                let mut files = self.github.unsent.get(&key).cloned().unwrap_or_default();
-                for (_, path) in self.github_edited(&key) {
-                    if !files.contains(&path) {
-                        files.push(path);
-                    }
-                }
+                let files = self.github_waiting(&key, |tab| self.edited(tab));
                 if files.is_empty() {
                     self.status = "Nothing to send".into();
                     self.error = false;
@@ -573,12 +737,19 @@ impl App {
                     key,
                     files,
                     message,
+                    listed: false,
                 }));
-                return iced::widget::operation::focus(SEND_MESSAGE);
+                return iced::widget::operation::focus(SEND_MESSAGE)
+                    .chain(iced::widget::operation::select_all(SEND_MESSAGE));
             }
             Action::SendMessage(message) => {
                 if let Some(Dialog::Send(draft)) = &mut self.github.dialog {
                     draft.message = message;
+                }
+            }
+            Action::SendList => {
+                if let Some(Dialog::Send(draft)) = &mut self.github.dialog {
+                    draft.listed = !draft.listed;
                 }
             }
             Action::Send => {
@@ -623,6 +794,23 @@ impl App {
                     return self.github_review(key, 0);
                 }
             }
+            Action::ReviewMeta(key, repo_path, commit, found) => {
+                let current = self
+                    .github
+                    .conflicts
+                    .get(&key)
+                    .and_then(|found| found.first())
+                    .is_some_and(|conflict| conflict.commit == commit);
+                // A late failure never erases details already shown.
+                if let Some(Dialog::Conflict(review)) = &mut self.github.dialog
+                    && current
+                    && found.is_some()
+                    && review.key == key
+                    && review.repo_path == repo_path
+                {
+                    review.theirs = found;
+                }
+            }
             Action::Resolve(choice) => return self.github_resolve(choice),
             Action::Settle(key, choice) => return self.github_settle(key, choice),
             Action::ShowVersions => {
@@ -630,15 +818,52 @@ impl App {
                 if self.github.locate(self.tab.path.as_deref()).is_none() {
                     return Task::none();
                 }
+                let top = (self.inspector_tab != InspectorTab::Versions).then(|| {
+                    iced::widget::operation::snap_to(
+                        "inspector-content",
+                        iced::widget::operation::RelativeOffset { x: 0., y: 0. },
+                    )
+                });
                 let task = self.show_inspector_tab(InspectorTab::Versions);
-                return Task::batch([task.unwrap_or_else(Task::none), self.github_follow()]);
+                return Task::batch([
+                    task.unwrap_or_else(Task::none),
+                    top.unwrap_or_else(Task::none),
+                    self.github_follow(),
+                ]);
             }
             Action::Versions(action) => return self.versions_action(action),
+            Action::Color(key, hue) => {
+                self.tabs.color_menu = None;
+                if let Some(id) = self.github.repo_id(&key) {
+                    self.github.prefs.colors.insert(id, hue % identity::HUES);
+                    return self.github_keep_prefs();
+                }
+            }
+            Action::Kept(result) => {
+                if let Err(error) = result {
+                    self.status = format!("Couldn't keep the repository colors: {error}");
+                    self.error = true;
+                }
+            }
+            Action::CopyLink => {
+                if let Some(url) = self.github_link() {
+                    self.status = "Link copied".into();
+                    self.error = false;
+                    return iced::clipboard::write(url);
+                }
+            }
+            Action::OpenOnGitHub => {
+                if let Some(url) = self.github_link() {
+                    return open_url(url);
+                }
+            }
         }
         Task::none()
     }
 
-    fn github_listed(&mut self, account: gh::Account, remembered: bool) {
+    /// Signed in: the account and the repositories ReShiki may use, each
+    /// keeping a color from now on.
+    fn github_listed(&mut self, account: gh::Account, remembered: bool) -> Task<Message> {
         let login = account.login.clone();
         self.github.account = if account.needs_install() {
             Account::NeedsInstall { login }
@@ -646,6 +871,13 @@ impl App {
             Account::SignedIn { login, remembered }
         };
         self.github.repos = account.repos;
+        let repos: Vec<(u64, RepoKey)> = self
+            .github
+            .repos
+            .iter()
+            .map(|repo| (repo.id, repo.key.clone()))
+            .collect();
+        self.github_seen(repos.iter().map(|(id, key)| (*id, key)))
     }
 
     /// Lists the repositories ReShiki may use.
@@ -700,11 +932,23 @@ impl App {
         )
     }
 
-    /// A drawing just opened: count what is unsent in its repository.
-    pub(super) fn github_opened(&mut self, path: &Path) {
-        if let Some((key, _)) = self.github.locate(Some(path)) {
-            self.github_refresh(&key);
+    /// A drawing just opened: count what is unsent in its repository, and
+    /// remember the repository as the one last used.
+    pub(super) fn github_opened(&mut self, path: &Path) -> Task<Message> {
+        let Some((key, _)) = self.github.locate(Some(path)) else {
+            return Task::none();
+        };
+        self.github_refresh(&key);
+        let Some(id) = self.github.repo_id(&key) else {
+            return Task::none();
+        };
+        let named = self.github.named(&key);
+        let colors = self.github_seen([(id, &named)]);
+        if self.github.prefs.last == Some(id) {
+            return colors;
         }
+        self.github.prefs.last = Some(id);
+        self.github_keep_prefs()
     }
 
     /// The open drawings of `key` with unsaved edits, by tab and repository path.
@@ -716,6 +960,69 @@ impl App {
                 (other == *key).then_some((tab.id, path))
             })
             .collect()
+    }
+
+    /// The drawings of `key` a send would take: saved but unsent, or with
+    /// unsaved edits (`edited` tells which tabs have them).
+    fn github_waiting(&self, key: &RepoKey, edited: impl Fn(&DocumentTab) -> bool) -> Vec<String> {
+        let mut files = self.github.unsent.get(key).cloned().unwrap_or_default();
+        for tab in self.strip().filter(|tab| edited(tab)) {
+            if let Some((other, path)) = self.github.locate(tab.path.as_deref())
+                && other == *key
+                && !files.contains(&path)
+            {
+                files.push(path);
+            }
+        }
+        files
+    }
+
+    /// Whether anything of any repository is not on GitHub yet.
+    fn github_anything_unsent(&self) -> bool {
+        self.github.unsent.values().any(|unsent| !unsent.is_empty())
+            || self.strip().any(|tab| {
+                self.shown_edited(tab) && self.github.locate(tab.path.as_deref()).is_some()
+            })
+    }
+
+    /// The repository folders of the open tabs, in strip order.
+    fn github_open_repos(&self) -> Vec<RepoKey> {
+        let mut open = Vec::new();
+        for tab in self.strip() {
+            if let Some((key, _)) = self.github.locate(tab.path.as_deref())
+                && !open.contains(&key)
+            {
+                open.push(key);
+            }
+        }
+        open
+    }
+
+    /// The repository's name, with its owner only when another open
+    /// repository has the same name.
+    fn github_label(&self, key: &RepoKey) -> String {
+        let named = self.github.named(key);
+        let shared = self
+            .github_open_repos()
+            .iter()
+            .any(|other| other != key && self.github.named(other).repo == named.repo);
+        if shared {
+            format!("{}/{}", named.owner, named.repo)
+        } else {
+            named.repo
+        }
+    }
+
+    /// The front drawing's file on GitHub, on its default branch.
+    fn github_link(&self) -> Option<String> {
+        let (key, repo_path) = self.github.locate(self.tab.path.as_deref())?;
+        let state = self.github.states.get(&key)?;
+        state.files.get(&repo_path)?.base_blob.as_ref()?;
+        let path = format!(
+            "/{}/{}/blob/{}/{repo_path}",
+            state.owner, state.repo, state.branch
+        );
+        Some(self.github.ends.web(&api::encoded(&path)))
     }
 
     /// Saves the next drawing the Send waits for, in its own tab as Cmd+S
@@ -811,8 +1118,7 @@ impl App {
         only: Option<Vec<String>>,
     ) -> Task<Message> {
         let Some(client) = self.github.client() else {
-            self.github.dialog = Some(Dialog::Account);
-            return Task::none();
+            return self.github_sign_in(None);
         };
         let (Some(root), Some(state)) =
             (self.github.root.clone(), self.github_state(&key).cloned())
@@ -857,18 +1163,18 @@ impl App {
         let mut tasks = Vec::new();
         match result {
             Ok(outcome) => {
-                // Every drawing changed on GitHub: nothing was sent.
-                let not_sent = match outcome.conflicts.as_slice() {
+                let changed = match outcome.conflicts.as_slice() {
                     [] => None,
-                    _ if !outcome.sent.is_empty() => None,
-                    [one] => Some(format!(
-                        "Not sent · “{}” changed on GitHub",
-                        conflict::file_name(&one.repo_path)
-                    )),
-                    all => Some(format!(
-                        "Not sent · {} drawings changed on GitHub",
-                        all.len()
-                    )),
+                    [one] => Some(file_name(&one.repo_path).to_owned()),
+                    all => Some(drawings(all.len())),
+                };
+                let status = match (changed, outcome.sent.len(), kept) {
+                    (Some(changed), 0, _) => format!("Not sent · {changed} changed on GitHub"),
+                    (Some(changed), sent, _) => {
+                        format!("Sent {sent} · {changed} changed on GitHub")
+                    }
+                    (None, _, Some(kept)) => format!("{kept} · sent"),
+                    (None, ..) => "Sent to GitHub".into(),
                 };
                 let (Some(root), Some(state)) = (self.github.root.clone(), self.github_state(&key))
                 else {
@@ -881,6 +1187,7 @@ impl App {
                     .insert(key.clone(), outcome.conflicts.clone());
                 self.github.seq += 1;
                 let seq = self.github.seq;
+                let question = !outcome.conflicts.is_empty();
                 tasks.push(perform(
                     {
                         let key = key.clone();
@@ -905,17 +1212,10 @@ impl App {
                 {
                     self.github.versions.target = None;
                 }
-                let conflicts = self.github_conflicts(&key);
-                self.error = conflicts > 0;
-                self.status = match (not_sent, conflicts, kept) {
-                    (Some(not_sent), ..) => not_sent,
-                    (None, 0, Some(kept)) => format!("{kept} · sent"),
-                    (None, 0, None) => "Sent to GitHub".into(),
-                    (None, 1, _) => "Sent · 1 drawing changed on GitHub and was left out".into(),
-                    (None, n, _) => {
-                        format!("Sent · {n} drawings changed on GitHub and were left out")
-                    }
-                };
+                // A drawing changed on GitHub is a question, not an error.
+                self.error = false;
+                self.github.amber = question.then(|| status.clone());
+                self.status = status;
             }
             Err(error) => {
                 let reason = self.github_failed(&error);
@@ -966,12 +1266,23 @@ impl App {
             return None;
         }
         let path = self.strip().find(|tab| tab.id == id)?.path.clone();
-        self.github_unsent(path.as_deref())?;
+        let key = self.github_unsent(path.as_deref())?;
         if let Some(index) = self.tab_index(id) {
             self.select_tab(index);
         }
         self.github.closing = Some(Closing::Tab(id, self.tab.revision));
-        Some(ask_send(format!("Send “{}” to GitHub?", self.tab.name())))
+        // Send takes every unsent drawing of the repository: say so.
+        let body = match self.github.unsent.get(&key).map_or(0, Vec::len) {
+            count if count > 1 => format!(
+                "Sends {count} drawings in {}.",
+                self.github.named(&key).repo
+            ),
+            _ => "Saved on this computer only.".into(),
+        };
+        Some(ask_send(
+            format!("Send “{}” to GitHub?", self.tab.name()),
+            body,
+        ))
     }
 
     /// Before the window closes, once every Save question is answered.
@@ -1001,10 +1312,10 @@ impl App {
             return None;
         }
         self.github.closing = Some(Closing::Window(window, discarded.to_vec(), keys));
-        Some(ask_send(match count {
-            1 => "Send 1 drawing to GitHub?".into(),
-            n => format!("Send {n} drawings to GitHub?"),
-        }))
+        Some(ask_send(
+            format!("Send {} to GitHub?", drawings(count)),
+            "Saved on this computer only.".into(),
+        ))
     }
 
     fn github_close_answer(&mut self, send: bool) -> Task<Message> {
@@ -1043,6 +1354,10 @@ impl App {
     /// Sends from the saved files, never saving a drawing whose changes the
     /// user just discarded.
     fn github_send_unsent(&mut self, key: RepoKey) -> Task<Message> {
+        // Signed out: sign in first, then answer Send again.
+        if self.github.client().is_none() {
+            return self.github_sign_in(Some(Action::CloseAnswer(true)));
+        }
         self.github_refresh(&key);
         let files = self.github.unsent.get(&key).cloned().unwrap_or_default();
         let task = self.github_send(key.clone(), send::default_message(&files), None);
@@ -1108,62 +1423,227 @@ impl App {
 
     /// The panel and the Versions list follow the drawing in front.
     pub(super) fn github_follow(&mut self) -> Task<Message> {
-        if !self.inspector_open || self.inspector_tab != InspectorTab::Versions {
+        if self.inspector_tab != InspectorTab::Versions {
             return Task::none();
         }
         let front = self.github.locate(self.tab.path.as_deref());
+        // Only a GitHub drawing has History.
+        if front.is_none() {
+            self.inspector_tab = InspectorTab::Properties;
+        } else if !self.inspector_open {
+            return Task::none();
+        }
         if front == self.github.versions.target {
             return Task::none();
         }
         self.versions_load(front)
     }
 
-    /// The GitHub button in the command bar, with its menu.
+    /// A new tab of a repository opens after that repository's last tab.
+    pub(super) fn github_place_tab(&mut self, path: &Path) {
+        let Some((key, _)) = self.github.locate(Some(path)) else {
+            return;
+        };
+        let last = self
+            .strip()
+            .enumerate()
+            .filter(|(_, tab)| tab.id != self.tab.id)
+            .filter(|(_, tab)| {
+                self.github
+                    .locate(tab.path.as_deref())
+                    .is_some_and(|(other, _)| other == key)
+            })
+            .map(|(index, _)| index)
+            .last();
+        if let Some(last) = last
+            && last < self.tabs.active
+        {
+            self.tabs.active = last + 1;
+        }
+    }
+
+    /// The Send row of the menu and the palette: its label, its detail, and
+    /// its action, `None` while there is nothing to send.
+    fn github_send_row(&self) -> (String, String, Option<Action>) {
+        let Some((key, _)) = self.github.locate(self.tab.path.as_deref()) else {
+            return (
+                SEND_TO.into(),
+                "Choose a repository".into(),
+                Some(Action::ShowSend),
+            );
+        };
+        let files = self.github_waiting(&key, |tab| self.shown_edited(tab));
+        let repo = self.github.named(&key).repo;
+        match files.as_slice() {
+            [] => ("Nothing to send".into(), String::new(), None),
+            [one] => (
+                "Send 1 drawing".into(),
+                format!("{} → {repo}", file_name(one)),
+                Some(Action::ShowSend),
+            ),
+            all => (
+                format!("Send {}", drawings(all.len())),
+                format!("{} → {repo}", drawings(all.len())),
+                Some(Action::ShowSend),
+            ),
+        }
+    }
+
+    /// The GitHub rows of the command palette, only those that apply now:
+    /// name, detail and action (`None`: shown but unavailable).
+    pub(super) fn github_palette(&self) -> Vec<(String, String, Option<Action>)> {
+        if !self.github.configured() {
+            return Vec::new();
+        }
+        let mut rows = vec![(
+            OPEN_FROM.into(),
+            "Choose a repository and a drawing".into(),
+            Some(Action::Picker(picker::Action::Show(Mode::Open))),
+        )];
+        rows.push(self.github_send_row());
+        if let Some((key, repo_path)) = self.github.locate(self.tab.path.as_deref()) {
+            let name = file_name(&repo_path).to_owned();
+            if self.github_conflicts(&key) > 0 {
+                rows.push((
+                    "Review changes on GitHub".into(),
+                    name.clone(),
+                    Some(Action::Review),
+                ));
+            }
+            rows.push(("History".into(), name.clone(), Some(Action::ShowVersions)));
+            // A drawing GitHub has never had has no link yet.
+            if self.github_link().is_some() {
+                rows.push((
+                    "Copy GitHub link".into(),
+                    name.clone(),
+                    Some(Action::CopyLink),
+                ));
+                rows.push(("Open on GitHub ↗".into(), name, Some(Action::OpenOnGitHub)));
+            }
+        }
+        rows.push(match self.github.login() {
+            Some(login) => (
+                "Sign out of GitHub".into(),
+                format!("@{login}"),
+                Some(Action::SignOut),
+            ),
+            None => (
+                "Sign in to GitHub…".into(),
+                String::new(),
+                Some(Action::SignIn),
+            ),
+        });
+        rows
+    }
+
+    /// The GitHub button in the command bar, with its menu: what applies to
+    /// the drawing in front first, the account last. A dot while anything
+    /// is not on GitHub yet.
     pub(super) fn github_button(&self) -> Element<'_, Message> {
         let state = &self.github;
+        let unsent = self.github_anything_unsent();
+        let mut hint = match state.login() {
+            Some(login) => format!("GitHub · Signed in as @{login}"),
+            None => "GitHub · Not signed in".to_owned(),
+        };
+        if unsent {
+            hint.push_str(" · Not everything is sent");
+        }
         let anchor = super::workspace::icon_button(
             super::icons::Icon::Cloud,
-            "GitHub",
+            hint,
             Some(Message::GitHub(Action::Menu(!state.menu))),
             state.menu,
         );
+        // Signed in: a disc with the account's initial; unsent: a dot.
+        let account = state.login().map(|login| {
+            let initial = login
+                .chars()
+                .next()
+                .unwrap_or('?')
+                .to_uppercase()
+                .to_string();
+            container(
+                container(text(initial).size(7.5).style(|theme: &Theme| text::Style {
+                    color: Some(theme.palette().background),
+                }))
+                .center(11)
+                .style(|theme: &Theme| container::Style {
+                    background: Some(theme.palette().text.into()),
+                    border: Border {
+                        radius: 5.5.into(),
+                        width: 1.,
+                        color: theme.palette().background,
+                    },
+                    ..container::Style::default()
+                }),
+            )
+            .padding([4, 3])
+            .align_right(36)
+            .align_bottom(36)
+        });
+        let dot = unsent.then(|| {
+            container(identity::dot(|theme: &Theme| theme.palette().primary))
+                .padding([6, 5])
+                .align_right(36)
+                .align_top(36)
+        });
+        let anchor: Element<'_, Message> = iced::widget::Stack::with_children([anchor])
+            .extend(account.map(Element::from))
+            .extend(dot.map(Element::from))
+            .into();
         let popup = state.menu.then(|| {
             let configured = state.configured();
-            let on_github = state.locate(self.tab.path.as_deref()).is_some();
-            let item = |id: &'static str, label: &'static str, action: Option<Action>| {
-                reshiki::accessibility::button(id, label, text(label).size(12))
+            let item = |id: &'static str, label: String, action: Option<Action>| {
+                reshiki::accessibility::button(id, label.clone(), text(label).size(12))
                     .width(Length::Fill)
                     .padding([6, 10])
                     .style(super::workspace::control(false))
                     .on_press_maybe(action.map(Message::GitHub))
             };
+            let muted = |line: String| {
+                container(text(line).size(11).style(super::workspace::muted_text)).padding([6, 10])
+            };
+            let (send, _, send_action) = self.github_send_row();
             let mut items = column![
                 item(
                     "github-open",
-                    OPEN_FROM,
+                    OPEN_FROM.into(),
                     configured.then_some(Action::Picker(picker::Action::Show(Mode::Open)))
                 ),
-                item("github-send", SEND, configured.then_some(Action::ShowSend)),
-                item(
-                    "github-versions",
-                    VERSIONS,
-                    (configured && on_github).then_some(Action::ShowVersions)
-                ),
-                item("github-account", ACCOUNT, Some(Action::ShowAccount)),
+                item("github-send", send, send_action.filter(|_| configured)),
             ]
             .spacing(1);
-            if !configured {
-                items = items.push(
-                    iced::widget::container(
-                        text(NOT_SET_UP)
-                            .size(11)
-                            .style(super::workspace::muted_text),
-                    )
-                    .padding([6, 10]),
-                );
+            if configured && state.locate(self.tab.path.as_deref()).is_some() {
+                items = items.push(item(
+                    "github-versions",
+                    "History".into(),
+                    Some(Action::ShowVersions),
+                ));
             }
-            iced::widget::container(items)
-                .width(200)
+            items = items.push(super::workspace::horizontal_line());
+            items = match (state.login(), configured) {
+                (Some(login), _) => items
+                    .push(muted(format!("@{login}")))
+                    .push(item(
+                        "github-repositories",
+                        "Add repositories… ↗".into(),
+                        Some(Action::ChooseRepositories),
+                    ))
+                    .push(item(
+                        "github-sign-out",
+                        "Sign out".into(),
+                        Some(Action::SignOut),
+                    )),
+                (None, true) => items.push(item(
+                    "github-sign-in",
+                    "Sign in…".into(),
+                    Some(Action::SignIn),
+                )),
+                (None, false) => items.push(muted(NOT_SET_UP.into())),
+            };
+            container(items)
+                .width(220)
                 .padding(5)
                 .style(super::color_popover::surface)
                 .into()
@@ -1175,111 +1655,234 @@ impl App {
         ))
     }
 
-    /// The status bar chip for the drawing in front, if it is on GitHub.
+    /// The status bar chip for the drawing in front, if it is on GitHub: the
+    /// repository's dot and name, then what is left to do. The Send popover
+    /// opens above it.
     pub(super) fn github_chip(&self) -> Option<Element<'_, Message>> {
         let (key, repo_path) = self.github.locate(self.tab.path.as_deref())?;
         let state = &self.github;
-        let unsent = state.unsent.get(&key);
-        let mut count = unsent.map_or(0, Vec::len);
-        if self.tab.shown_dirty() && !unsent.is_some_and(|unsent| unsent.contains(&repo_path)) {
-            count += 1;
-        }
-        // Other drawings of the repository with unsaved edits.
-        count += self
-            .tabs
-            .background
-            .iter()
-            .filter(|tab| tab.edited)
-            .filter_map(|tab| state.locate(tab.path.as_deref()))
-            .filter(|(other, path)| *other == key && !unsent.is_some_and(|u| u.contains(path)))
-            .count();
-        let conflicts = self.github_conflicts(&key);
-        let chip = |id: &'static str, label: String, action: Option<Action>, strong: bool| {
-            super::workspace::accessible_command(id, label.clone(), label)
-                .on_press_maybe(action.map(Message::GitHub))
-                .style(super::workspace::control(strong))
+        let folder = repo_path
+            .rsplit_once('/')
+            .map(|(folder, _)| folder.to_owned());
+        // `lab-notes / scheme`, with a long folder shortened in the middle.
+        let name = match &folder {
+            Some(folder) => format!("{} / {}", self.github_label(&key), middle(folder)),
+            None => self.github_label(&key),
         };
-        let signed_in = state.client().is_some();
-        let mut items = row![].spacing(4).align_y(Alignment::Center);
-        if state.sending.contains(&key) {
-            items = items.push(chip("github-chip", "Sending…".into(), None, false));
-        } else if conflicts > 0 {
-            items = items
-                .push(chip(
-                    "github-chip",
-                    match conflicts {
-                        1 => "1 conflict".into(),
-                        n => format!("{n} conflicts"),
-                    },
-                    Some(Action::ShowVersions),
-                    false,
-                ))
-                .push(chip(
-                    "github-review",
-                    "Review".into(),
-                    Some(Action::Review),
-                    true,
-                ));
-        } else if state.failed.contains_key(&key) {
-            items = items
-                .push(chip(
-                    "github-chip",
-                    "Not sent".into(),
-                    Some(Action::ShowVersions),
-                    false,
-                ))
-                .push(chip(
-                    "github-retry",
-                    "Retry".into(),
-                    Some(Action::ShowSend),
-                    true,
-                ));
-        } else if count > 0 {
-            items = items
-                .push(chip(
-                    "github-chip",
-                    format!("{count} not on GitHub"),
-                    Some(Action::ShowVersions),
-                    false,
-                ))
-                .push(if signed_in {
-                    chip(
-                        "github-send-chip",
-                        "Send".into(),
-                        Some(Action::ShowSend),
-                        true,
-                    )
-                } else {
-                    chip(
-                        "github-sign-in-chip",
-                        "Sign in".into(),
-                        Some(Action::ShowAccount),
-                        true,
-                    )
-                });
-        } else {
-            items = items.push(chip(
-                "github-chip",
-                "On GitHub".into(),
-                Some(Action::ShowVersions),
-                false,
-            ));
+        let hue = state.hue(&key);
+        let muted = |line: String| text(line).size(12).style(super::workspace::muted_text);
+        let action = |id: &'static str, label: &'static str, action: Action| {
+            super::workspace::accessible_command(id, label, label)
+                .on_press(Message::GitHub(action))
+                .padding([4, 9])
+        };
+        // The name opens the picker in the drawing's folder.
+        let full = match &folder {
+            Some(folder) => format!("{} / {folder}", self.github_label(&key)),
+            None => self.github_label(&key),
+        };
+        let place = reshiki::accessibility::button(
+            "github-chip-place",
+            format!("{full}, open from GitHub here"),
+            row![
+                identity::dot(move |theme: &Theme| identity::color(theme, hue)),
+                text(name.clone()).size(12),
+            ]
+            .spacing(6)
+            .align_y(Alignment::Center),
+        )
+        .padding([4, 8])
+        .style(super::workspace::control(false))
+        .on_press(Message::GitHub(Action::Picker(picker::Action::ShowIn(
+            state.named(&key),
+            folder.unwrap_or_default(),
+        ))));
+        let mut content = row![].spacing(6).align_y(Alignment::Center);
+        let state_now = self.github_chip_state(&key);
+        let (suffix, after, said) = match state_now {
+            Chip::Sending => (Some("· Sending…".to_owned()), None, "sending".to_owned()),
+            Chip::Review => (
+                None,
+                Some(action("github-review", "Review", Action::Review).style(amber_button)),
+                "changed on GitHub".to_owned(),
+            ),
+            Chip::NotSent => (
+                Some("· Not sent".to_owned()),
+                Some(
+                    action("github-retry", "Retry", Action::ShowSend)
+                        .style(super::workspace::control(true)),
+                ),
+                "not sent".to_owned(),
+            ),
+            Chip::New | Chip::Unsent(_) => {
+                let said = match state_now {
+                    Chip::Unsent(count) => format!("{count} unsent"),
+                    _ => "not sent yet".to_owned(),
+                };
+                (
+                    Some(format!("· {said}")),
+                    Some(
+                        action("github-send-chip", "Send", Action::ShowSend)
+                            .style(super::workspace::control(true)),
+                    ),
+                    said,
+                )
+            }
+            Chip::Sent => (None, None, "everything sent".to_owned()),
+        };
+        if let Some(suffix) = suffix {
+            content = content.push(muted(suffix));
         }
-        Some(items.into())
+        if state_now == Chip::Sent {
+            content = content.push(text("✓").size(12).style(|theme: &Theme| text::Style {
+                color: Some(theme.palette().success),
+            }));
+        }
+        // The state opens History; Send and Review have their own buttons.
+        let spoken = format!("{said}, history");
+        let shown = suffix_shown(state_now);
+        let chip = row![place]
+            .push(shown.then(|| {
+                reshiki::accessibility::button("github-chip", spoken, content)
+                    .padding([4, 6])
+                    .style(super::workspace::control(false))
+                    .on_press(Message::GitHub(Action::ShowVersions))
+            }))
+            .push(after)
+            .spacing(2)
+            .align_y(Alignment::Center);
+        let popup = match &state.dialog {
+            Some(Dialog::Send(draft)) => Some(self.send_view(draft)),
+            _ => None,
+        };
+        Some(Element::new(
+            super::popover::popover(chip, popup, Message::GitHub(Action::Close)).align_end(),
+        ))
     }
 
-    /// The open GitHub dialog over everything else.
+    /// What the chip says about repository `key`.
+    pub(super) fn github_chip_state(&self, key: &RepoKey) -> Chip {
+        let state = &self.github;
+        let count = self.github_waiting(key, |tab| self.shown_edited(tab)).len();
+        // A drawing made here that GitHub has never had.
+        let new = self
+            .github
+            .locate(self.tab.path.as_deref())
+            .and_then(|(_, path)| state.states.get(key)?.files.get(&path).cloned())
+            .is_some_and(|file| file.base_blob.is_none());
+        if state.sending.contains(key) {
+            Chip::Sending
+        } else if self.github_conflicts(key) > 0 {
+            Chip::Review
+        } else if state.failed.contains_key(key) {
+            Chip::NotSent
+        } else if count == 1 && new {
+            Chip::New
+        } else if count > 0 {
+            Chip::Unsent(count)
+        } else {
+            Chip::Sent
+        }
+    }
+
+    /// A tab's repository badge and names; `None` for a drawing on this
+    /// computer only.
+    pub(super) fn github_tab(
+        &self,
+        tab: &DocumentTab,
+        menu: bool,
+    ) -> Option<super::tabs::RepoBadge<'_>> {
+        let (key, repo_path) = self.github.locate(tab.path.as_deref())?;
+        let named = self.github.named(&key);
+        let hue = self.github.hue(&key);
+        let letters = identity::monograms(&self.github_open_repos())
+            .remove(&key)
+            .unwrap_or_else(|| identity::monogram(&named.repo));
+        let unsent = self
+            .github_waiting(&key, |tab| self.shown_edited(tab))
+            .len();
+        let spoken = match unsent {
+            0 => self.github_label(&key),
+            n => format!("{}, {n} unsent", self.github_label(&key)),
+        };
+        let menu = menu.then(|| {
+            let mut items = column![
+                container(text("Color").size(11).style(super::workspace::muted_text))
+                    .padding([4, 10])
+            ]
+            .spacing(1);
+            for (at, label) in identity::NAMES.iter().enumerate() {
+                items = items.push(
+                    reshiki::accessibility::button(
+                        format!("github-color-{at}"),
+                        *label,
+                        row![
+                            identity::dot(move |theme: &Theme| identity::color(theme, at)),
+                            text(*label).size(12)
+                        ]
+                        .spacing(8)
+                        .align_y(Alignment::Center),
+                    )
+                    .checked(at == hue)
+                    .width(Length::Fill)
+                    .padding([6, 10])
+                    .style(super::workspace::control(at == hue))
+                    .on_press(Message::GitHub(Action::Color(key.clone(), at))),
+                );
+            }
+            container(items)
+                .width(160)
+                .padding(5)
+                .style(super::color_popover::surface)
+                .into()
+        });
+        Some(super::tabs::RepoBadge {
+            badge: identity::badge(hue, letters),
+            underline: container(Space::new().width(Length::Fill).height(2))
+                .style(move |theme: &Theme| container::Style {
+                    background: Some(identity::color(theme, hue).into()),
+                    ..container::Style::default()
+                })
+                .into(),
+            hint: format!("{}/{} · {repo_path}", named.owner, named.repo),
+            spoken,
+            menu,
+        })
+    }
+
+    /// The repository of the drawing in front, for the window title.
+    pub(super) fn github_title(&self) -> Option<String> {
+        let (key, _) = self.github.locate(self.tab.path.as_deref())?;
+        Some(self.github.named(&key).repo)
+    }
+
+    /// Whether the status chip is there to hold the Send popover: the theme
+    /// editor replaces the status bar, and a drawing not on GitHub has no chip.
+    pub(super) fn send_on_chip(&self) -> bool {
+        !(self.inspector_tab == InspectorTab::ThemeGenerator && self.theme_library.editor.is_some())
+            && self.github.locate(self.tab.path.as_deref()).is_some()
+    }
+
+    /// The open GitHub dialog over everything else. Send is a popover of the
+    /// status chip instead.
     pub(super) fn with_github<'a>(&'a self, content: Element<'a, Message>) -> Element<'a, Message> {
         let Some(dialog) = &self.github.dialog else {
             return content;
         };
         let close = Message::GitHub(Action::Close);
         let (body, width, height, placement): (_, f32, f32, _) = match dialog {
-            Dialog::Account => (
+            Dialog::Send(_) if self.send_on_chip() => return content,
+            Dialog::Send(draft) => (
+                self.send_view(draft),
+                360.,
+                self.viewport.height,
+                super::help::Placement::Fit,
+            ),
+            Dialog::SignIn => (
                 self.account_view(),
-                420.,
-                340.,
-                super::help::Placement::Center,
+                360.,
+                self.viewport.height,
+                super::help::Placement::Fit,
             ),
             Dialog::Picker(picker) => (
                 self.picker_view(picker),
@@ -1287,7 +1890,6 @@ impl App {
                 540.,
                 super::help::Placement::Center,
             ),
-            Dialog::Send(draft) => (send_view(draft), 420., 340., super::help::Placement::Center),
             Dialog::Conflict(review) => (
                 conflict::view(review),
                 960.,
@@ -1295,7 +1897,7 @@ impl App {
                 super::help::Placement::Center,
             ),
             Dialog::Compare(compare, label) => (
-                compare.dialog(self.tab.name(), label),
+                compare.dialog(label),
                 960.,
                 600.,
                 super::help::Placement::Center,
@@ -1308,6 +1910,158 @@ impl App {
         let modal = super::help::modal(content, body, width, height, placement, close);
         reshiki::accessibility::focus_scope(modal)
     }
+
+    /// The Send popover: what goes where, then the message, selected so
+    /// typing replaces it. Enter sends; Escape or a click outside closes.
+    fn send_view<'a>(&'a self, draft: &'a SendDraft) -> Element<'a, Message> {
+        let repo = self.github.named(&draft.key).repo;
+        let hue = self.github.hue(&draft.key);
+        let letters = identity::monograms(&self.github_open_repos())
+            .remove(&draft.key)
+            .unwrap_or_else(|| identity::monogram(&repo));
+        let what = match draft.files.as_slice() {
+            [one] => format!("{} → {repo}", file_name(one)),
+            all => format!("{} → {repo}", drawings(all.len())),
+        };
+        let line = row![identity::badge(hue, letters), text(what.clone()).size(12)]
+            .spacing(8)
+            .align_y(Alignment::Center);
+        let mut body = column![].spacing(10);
+        if draft.files.len() > 1 {
+            body = body.push(
+                reshiki::accessibility::button(
+                    "github-send-files",
+                    format!("{what}, list them"),
+                    row![line, super::workspace::caret(10.)]
+                        .spacing(6)
+                        .align_y(Alignment::Center),
+                )
+                .expanded(draft.listed)
+                .padding([2, 0])
+                .style(button::text)
+                .on_press(Message::GitHub(Action::SendList)),
+            );
+            if draft.listed {
+                body = body.push(
+                    iced::widget::scrollable(
+                        iced::widget::Column::with_children(draft.files.iter().map(|path| {
+                            text(path.as_str())
+                                .size(11)
+                                .style(super::workspace::muted_text)
+                                .into()
+                        }))
+                        .spacing(2),
+                    )
+                    .height(Length::Shrink),
+                );
+            }
+        } else {
+            body = body.push(line);
+        }
+        body = body
+            .push(
+                reshiki::accessibility::text_input(
+                    SEND_MESSAGE,
+                    "Message",
+                    "What changed?",
+                    &draft.message,
+                )
+                .style(crate::appearance::input_style)
+                .on_input(|message| Message::GitHub(Action::SendMessage(message)))
+                .on_submit(Message::GitHub(Action::Send))
+                .size(13)
+                .padding(8),
+            )
+            .push(
+                container(
+                    reshiki::accessibility::button(
+                        "github-send-confirm",
+                        "Send",
+                        text("Send").size(13),
+                    )
+                    .padding([6, 14])
+                    .style(crate::appearance::primary)
+                    .on_press(Message::GitHub(Action::Send)),
+                )
+                .align_right(Length::Fill),
+            );
+        container(body)
+            .width(320)
+            .padding(12)
+            .style(super::color_popover::surface)
+            .into()
+    }
+}
+
+/// Whether the chip has a state part to click; Review stands alone.
+fn suffix_shown(chip: Chip) -> bool {
+    chip != Chip::Review
+}
+
+/// A folder path of at most 24 characters: `scheme/…/drafts`, or the
+/// start and end of one long name.
+fn middle(folder: &str) -> String {
+    const ROOM: usize = 24;
+    let chars: Vec<char> = folder.chars().collect();
+    if chars.len() <= ROOM {
+        return folder.to_owned();
+    }
+    let ends = |head: usize, tail: usize| {
+        let head: String = chars.iter().take(head).collect();
+        let tail: String = chars.iter().skip(chars.len() - tail).collect();
+        format!("{head}…{tail}")
+    };
+    match (folder.split_once('/'), folder.rsplit_once('/')) {
+        (Some((first, _)), Some((_, last)))
+            if first.chars().count() + last.chars().count() + 3 <= ROOM =>
+        {
+            format!("{first}/…/{last}")
+        }
+        _ => ends(ROOM / 2, ROOM / 2 - 1),
+    }
+}
+
+/// What the status chip says, after the repository's dot and name.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Chip {
+    /// `· Sending…`
+    Sending,
+    /// An amber Review: a drawing changed on GitHub.
+    Review,
+    /// `· Not sent` and Retry.
+    NotSent,
+    /// `· not sent yet` and Send: a drawing GitHub has never had.
+    New,
+    /// `· 1 unsent` and Send.
+    Unsent(usize),
+    /// `✓`
+    Sent,
+}
+
+/// Review, in amber: a question waiting for the user, not an error.
+fn amber_button(theme: &Theme, status: button::Status) -> button::Style {
+    let amber = crate::appearance::readable(
+        theme.palette().warning,
+        &[theme.palette().background],
+        reshiki::color_contrast::TEXT_TARGET,
+    );
+    let hovered = matches!(status, button::Status::Hovered | button::Status::Pressed);
+    button::Style {
+        background: Some(
+            Color {
+                a: if hovered { 0.24 } else { 0.14 },
+                ..theme.palette().warning
+            }
+            .into(),
+        ),
+        text_color: amber,
+        border: Border {
+            color: amber,
+            width: 1.,
+            radius: 5.0.into(),
+        },
+        ..button::Style::default()
+    }
 }
 
 fn poll_after(generation: u64, wait: std::time::Duration) -> Task<Message> {
@@ -1317,39 +2071,3 @@ fn poll_after(generation: u64, wait: std::time::Duration) -> Task<Message> {
 }
 
 const SEND_MESSAGE: &str = "github-send-message";
-
-/// `3 drawings: a.rsk, b.rsk, c.rsk`, so nothing is sent unseen.
-fn send_view(draft: &SendDraft) -> Element<'_, Message> {
-    let names = draft.files.join(", ");
-    let files = match draft.files.len() {
-        1 => format!("1 drawing: {names}"),
-        n => format!("{n} drawings: {names}"),
-    };
-    column![
-        text(SEND).size(18),
-        text(format!("{}/{}", draft.key.owner, draft.key.repo))
-            .size(12)
-            .style(super::workspace::muted_text),
-        iced::widget::scrollable(text(files).size(13)).height(Length::Shrink),
-        reshiki::accessibility::text_input(SEND_MESSAGE, "Message", "Message", &draft.message)
-            .style(crate::appearance::input_style)
-            .on_input(|message| Message::GitHub(Action::SendMessage(message)))
-            .on_submit(Message::GitHub(Action::Send))
-            .size(13)
-            .padding(8),
-        row![
-            iced::widget::Space::new().width(Length::Fill),
-            reshiki::accessibility::button("github-send-cancel", "Cancel", text("Cancel").size(13))
-                .padding([7, 12])
-                .style(crate::appearance::secondary)
-                .on_press(Message::GitHub(Action::Close)),
-            reshiki::accessibility::button("github-send-confirm", "Send", text("Send").size(13))
-                .padding([7, 12])
-                .style(crate::appearance::primary)
-                .on_press(Message::GitHub(Action::Send)),
-        ]
-        .spacing(8),
-    ]
-    .spacing(12)
-    .into()
-}

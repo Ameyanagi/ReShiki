@@ -1,14 +1,15 @@
 //! A drawing changed on GitHub since it was opened here: GitHub's version and
-//! yours side by side, then Keep GitHub's, Keep mine or Keep both. Nothing is
-//! the default, so a bare Enter decides nothing; Escape decides later and the
-//! status bar keeps Review. Nothing is overwritten without a choice.
-use super::{Action, Dialog, compare::Compare};
+//! yours side by side, each with its Keep button under it, then Later or
+//! Keep both. Nothing is the default, so a bare Enter decides nothing; Later
+//! (Escape) decides later and the status bar keeps Review. Nothing is
+//! overwritten without a choice.
+use super::{Action, Dialog, compare::Compare, file_name, perform};
 use crate::app::{App, Message, workspace::muted_text};
-use iced::widget::{Space, column, row, text};
+use iced::widget::{Space, column, container, row, text, tooltip};
 use iced::{Alignment, Element, Length, Task};
 use reshiki::document::Document;
 use reshiki::github::{
-    RepoKey,
+    RepoKey, api,
     send::{self, Choice},
     workcopy,
 };
@@ -19,17 +20,18 @@ pub(in crate::app) struct Review {
     pub(super) key: RepoKey,
     /// The drawing here.
     path: PathBuf,
+    pub(super) repo_path: String,
     pub(super) name: String,
+    /// The commit that last changed GitHub's version, once known.
+    pub(super) theirs: Option<api::RemoteVersion>,
+    /// When yours was saved, as `14:10`.
+    saved: Option<String>,
     /// The name Keep both gives yours.
     pub(super) copy: String,
     /// Settled in this dialog so far, and in all, for `2 of 3`.
     pub(super) done: usize,
     pub(super) total: usize,
     pub(super) compare: Compare,
-}
-
-pub(super) fn file_name(repo_path: &str) -> String {
-    repo_path.rsplit('/').next().unwrap_or(repo_path).to_owned()
 }
 
 impl App {
@@ -39,8 +41,9 @@ impl App {
     /// what it was based on is in conflict no more.
     pub(super) fn github_review(&mut self, key: RepoKey, done: usize) -> Task<Message> {
         if let Some(review) = self.conflict_review(&key, done) {
+            let meta = self.conflict_meta(&key, &review.repo_path);
             self.github.dialog = Some(Dialog::Conflict(Box::new(review)));
-            return Task::none();
+            return meta;
         }
         self.github_refresh(&key);
         let unsent = self.github.unsent.get(&key).cloned().unwrap_or_default();
@@ -89,15 +92,54 @@ impl App {
             None => Err("Deleted on GitHub".into()),
         };
         let state = self.github.states.get(key)?;
+        let saved = std::fs::metadata(&path)
+            .and_then(|meta| meta.modified())
+            .ok()
+            .map(|time| {
+                chrono::DateTime::<chrono::Local>::from(time)
+                    .format("%H:%M")
+                    .to_string()
+            });
         Some(Review {
             key: key.clone(),
-            name: file_name(&conflict.repo_path),
-            copy: file_name(&send::copy_path(root, key, state, conflict)),
+            repo_path: conflict.repo_path.clone(),
+            name: file_name(&conflict.repo_path).to_owned(),
+            copy: file_name(&send::copy_path(root, key, state, conflict)).to_owned(),
+            theirs: None,
+            saved,
             path,
             done,
             total: done + conflicts.len(),
             compare: Compare::new(theirs, mine),
         })
+    }
+
+    /// Who last changed the drawing on GitHub, for the dialog's header.
+    fn conflict_meta(&mut self, key: &RepoKey, repo_path: &str) -> Task<Message> {
+        let (Some(client), Some(state), Some(commit)) = (
+            self.github.client(),
+            self.github.states.get(key),
+            self.github
+                .conflicts
+                .get(key)
+                .and_then(|found| found.first())
+                .map(|conflict| conflict.commit.clone()),
+        ) else {
+            return Task::none();
+        };
+        let (named, repo_path, key) = (state.key(), repo_path.to_owned(), key.clone());
+        perform(
+            {
+                let (repo_path, commit) = (repo_path.clone(), commit.clone());
+                async move {
+                    api::file_commits(&client, &named, &repo_path, &commit, 1)
+                        .await
+                        .ok()
+                        .and_then(|found| found.into_iter().next())
+                }
+            },
+            move |found| Action::ReviewMeta(key, repo_path, commit, found),
+        )
     }
 
     /// Settles the conflict shown. "Mine" is the drawing as it shows, so a
@@ -192,9 +234,20 @@ impl App {
                     .map(|copy| workcopy::working_path(&root, &key, copy)),
             );
         }
+        // Keep both: GitHub's opens beside yours.
+        let theirs = match (choice, &copy) {
+            (Choice::KeepBoth, Some(_)) if path.exists() => {
+                crate::app::files::open_paths(vec![path.clone()])
+            }
+            _ => Task::none(),
+        };
+        let undo = crate::app::shortcuts::label(&Message::Undo).unwrap_or_default();
         self.status = match (choice, &copy) {
             (Choice::KeepMine, _) => "Kept yours".into(),
-            (Choice::KeepBoth, Some(copy)) => format!("Kept both · yours is “{}”", file_name(copy)),
+            (Choice::KeepBoth, Some(copy)) => format!("Kept both · yours is {}", file_name(copy)),
+            _ if tab.is_some() && conflict.theirs.is_some() => {
+                format!("Kept GitHub’s · {undo} brings yours back")
+            }
             _ => "Kept GitHub’s".into(),
         };
         self.error = false;
@@ -210,7 +263,7 @@ impl App {
             .get(&key)
             .is_some_and(|left| !left.is_empty())
         {
-            return Task::batch([persist, self.github_review(key, done)]);
+            return Task::batch([persist, theirs, self.github_review(key, done)]);
         }
         let close = self.github_close_dialog();
         let unsent = self.github.unsent.get(&key).cloned().unwrap_or_default();
@@ -223,7 +276,7 @@ impl App {
             }
             send
         };
-        Task::batch([persist, close, send])
+        Task::batch([persist, close, theirs, send])
     }
 
     /// The tab in front was the drawing in conflict: it shows what was kept.
@@ -266,25 +319,67 @@ pub(super) fn view(review: &Review) -> Element<'_, Message> {
         let at = format!("{} of {}", review.done + 1, review.total);
         title = title.push(text(at).size(13).style(muted_text));
     }
-    let choice = |id: &'static str, label: &'static str, choice: Choice| {
+    let button = |id: &'static str, label: &'static str, action: Action| {
         reshiki::accessibility::button(id, label, text(label).size(13))
-            .padding([7, 12])
+            .padding([7, 14])
             .style(crate::appearance::secondary)
-            .on_press(Message::GitHub(Action::Resolve(choice)))
+            .on_press(Message::GitHub(action))
     };
+    let keep = |id, label, choice| {
+        container(button(id, label, Action::Resolve(choice))).center_x(Length::Fill)
+    };
+    // `GitHub · @alice · 14:02`, then the commit's message if there is room.
+    let mut theirs = row![text("GitHub").size(13)].spacing(6);
+    if let Some(found) = &review.theirs {
+        let who = found
+            .login
+            .as_ref()
+            .map_or_else(|| found.author.clone(), |login| format!("@{login}"));
+        theirs = theirs
+            .push(
+                text(format!("· {who} · {}", super::versions::clock(&found.date)))
+                    .size(13)
+                    .style(muted_text),
+            )
+            .push(
+                text(found.message.clone())
+                    .size(12)
+                    .style(muted_text)
+                    .wrapping(text::Wrapping::None),
+            );
+    }
+    let yours = row![text("Yours").size(13)]
+        .push(
+            review
+                .saved
+                .as_ref()
+                .map(|at| text(format!("· saved {at}")).size(13).style(muted_text)),
+        )
+        .spacing(6);
+    let keep_both = tooltip(
+        button(
+            "github-keep-both",
+            "Keep both",
+            Action::Resolve(Choice::KeepBoth),
+        ),
+        container(text(format!("Yours becomes {}", review.copy)).size(12))
+            .padding([4, 8])
+            .style(container::rounded_box),
+        tooltip::Position::Top,
+    );
     column![
         title,
-        review.compare.view(["GitHub’s", "Yours"]),
+        review.compare.view([theirs.into(), yours.into()]),
         row![
-            text(format!("Keep both: yours becomes “{}”", review.copy))
-                .size(12)
-                .style(muted_text),
-            Space::new().width(Length::Fill),
-            choice("github-keep-theirs", "Keep GitHub’s", Choice::KeepTheirs),
-            choice("github-keep-mine", "Keep mine", Choice::KeepMine),
-            choice("github-keep-both", "Keep both", Choice::KeepBoth),
+            keep("github-keep-theirs", "Keep GitHub’s", Choice::KeepTheirs),
+            keep("github-keep-mine", "Keep mine", Choice::KeepMine),
         ]
-        .spacing(8)
+        .spacing(12),
+        row![
+            button("github-later", "Later", Action::Close),
+            Space::new().width(Length::Fill),
+            keep_both,
+        ]
         .align_y(Alignment::Center),
     ]
     .spacing(12)

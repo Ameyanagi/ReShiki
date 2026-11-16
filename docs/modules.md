@@ -74,9 +74,10 @@ explains how the crates and modules fit together.
 - `src/app/gates.rs`: Modal gates that run before message dispatch.
 - `src/app/generic.rs`: Finite expansion creates a new drawing; the source and its history stay intact.
 - `src/app/github.rs`: GitHub in the editor
-- `src/app/github/account.rs`: The GitHub account dialog
+- `src/app/github/account.rs`: The sign-in dialog
 - `src/app/github/compare.rs`: Two versions of a drawing side by side, with what differs marked
 - `src/app/github/conflict.rs`: A drawing changed on GitHub since it was opened here
+- `src/app/github/identity.rs`: Which repository a drawing is in, at a glance
 - `src/app/github/picker.rs`: The repository picker
 - `src/app/github/versions.rs`: Versions
 - `src/app/graphics.rs`
@@ -152,7 +153,7 @@ explains how the crates and modules fit together.
 - `src/app/settings_page.rs`: Settings
 - `src/app/shortcut_examples.rs`: An editable, unbound copy of the bundled reference in a document tab.
 - `src/app/shortcuts.rs`
-- `src/app/star_prompt.rs`: The "Enjoying ReShiki?" toast, which asks once for a GitHub star after real use, and again at most once after a later feature release.
+- `src/app/star_prompt.rs`: The "Like ReShiki?" toast, which asks once for a GitHub star after real use, and again at most once after a later feature release.
 - `src/app/startup.rs`
 - `src/app/stereo.rs`: Advisory drawing checks and explicit, undoable stereobond fixes.
 - `src/app/tabs.rs`: Document tabs

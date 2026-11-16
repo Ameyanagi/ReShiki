@@ -645,7 +645,11 @@ impl App {
         (app, Task::batch([task, update_check]))
     }
     pub fn title(&self) -> String {
-        window_title(&self.document_name(), self.tab.shown_dirty())
+        #[cfg(not(target_arch = "wasm32"))]
+        let repo = self.github_title();
+        #[cfg(target_arch = "wasm32")]
+        let repo = None;
+        window_title(&self.document_name(), repo, self.tab.shown_dirty())
     }
     fn document_name(&self) -> String {
         self.tab.name()
@@ -693,6 +697,8 @@ impl App {
             iced::window::open_events().map(Message::LinuxClipboardWindow),
             self.updates.subscription(),
             self.star_subscription(),
+            #[cfg(not(target_arch = "wasm32"))]
+            self.github_subscription(),
             self.properties_subscription(),
             self.engine_subscription(),
             self.pulse_subscription(),
@@ -1414,6 +1420,16 @@ impl App {
                 } else {
                     None
                 },
+                if github {
+                    #[cfg(not(target_arch = "wasm32"))]
+                    {
+                        Some(github::leftover_key)
+                    }
+                    #[cfg(target_arch = "wasm32")]
+                    None
+                } else {
+                    None
+                },
                 self.assistant.viewed_image.is_some(),
                 self.updates.open,
                 self.tab.atom_text.is_some(),
@@ -1445,9 +1461,14 @@ impl App {
     }
 }
 
-/// The window's title: the document's name, marked while it has unsaved changes.
-fn window_title(name: &str, dirty: bool) -> String {
-    format!("{name}{} — ReShiki", if dirty { " •" } else { "" })
+/// The window's title: the document's name, marked while it has unsaved
+/// changes, then its GitHub repository, if any.
+fn window_title(name: &str, repo: Option<String>, dirty: bool) -> String {
+    let dirty = if dirty { " •" } else { "" };
+    match repo {
+        Some(repo) => format!("{name}{dirty} — {repo} — ReShiki"),
+        None => format!("{name}{dirty} — ReShiki"),
+    }
 }
 
 /// Hydrogen labels are a computed display cache, not unsaved drawing edits.

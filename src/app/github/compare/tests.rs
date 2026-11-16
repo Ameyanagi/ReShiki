@@ -122,7 +122,11 @@ fn changed_text_is_boxed() {
     let right = edited(&left, |doc| doc.annotations[0].text = "Step 2".into());
     let found = diff(&left, &right);
     assert_eq!(found.right.ids, HashSet::from([id]));
-    assert_eq!(boxes(&right, &found.right).len(), 1);
+    assert_eq!(
+        boxes(&right, &found.right).len(),
+        1,
+        "text is filled softly"
+    );
 }
 
 #[test]
@@ -162,7 +166,7 @@ fn style_theme_and_label_settings_are_caught_without_a_field_list() {
 }
 
 #[test]
-fn a_highlight_added_or_removed_is_boxed_and_both_drawings_stay_as_they_are() {
+fn what_differs_is_painted_on_copies_and_both_drawings_stay_as_they_are() {
     let plain = ring();
     let id = plain.atoms[0].id;
     let lit = edited(&plain, |doc| {
@@ -170,14 +174,24 @@ fn a_highlight_added_or_removed_is_boxed_and_both_drawings_stay_as_they_are() {
     });
     for (left, right) in [(&plain, &lit), (&lit, &plain)] {
         let compare = Compare::new(Ok(left.clone()), right.clone());
-        assert_eq!(compare.left.as_ref(), Ok(left), "drawn unchanged");
-        assert_eq!(&compare.right, right, "drawn unchanged");
-        assert_eq!(compare.marks[0].len(), 1);
-        assert_eq!(compare.marks[1].len(), 1);
-        let (lo, hi) = compare.marks[1][0];
-        let at = right.atom(id).unwrap().position;
-        assert!(lo.x < at.x && at.x < hi.x && lo.y < at.y && at.y < hi.y);
+        assert_eq!(compare.left.as_ref(), Ok(left), "kept unchanged");
+        assert_eq!(&compare.right, right, "kept unchanged");
+        // Atoms are painted, not boxed.
+        assert_eq!(compare.marks, [Vec::new(), Vec::new()]);
+        for shown in &compare.shown {
+            let shown = shown.as_ref().unwrap();
+            assert_eq!(shown.atom(id).unwrap().display.highlight, Some(DIFF));
+            let others = shown.atoms.iter().filter(|atom| atom.id != id);
+            assert!(others.clone().all(|atom| atom.display.highlight.is_none()));
+        }
     }
+    // A changed bond lights up with both of its atoms.
+    let bond = (plain.bonds[0].a, plain.bonds[0].b);
+    let other = edited(&plain, |doc| doc.bonds[0].order = 3);
+    let compare = Compare::new(Ok(plain.clone()), other);
+    let shown = compare.shown[1].as_ref().unwrap();
+    let painted = shown.bonds.iter().find(|b| (b.a, b.b) == bond).unwrap();
+    assert_eq!(painted.highlight, Some(DIFF));
 }
 
 #[test]

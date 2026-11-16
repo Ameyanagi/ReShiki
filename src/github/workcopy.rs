@@ -207,6 +207,23 @@ pub fn folder(root: &Path, repo: &super::Repo) -> RepoKey {
     key
 }
 
+/// Every repository with drawings kept here, as last known.
+pub fn known(root: &Path) -> Vec<RepoState> {
+    let folders = |dir: &Path| {
+        std::fs::read_dir(dir)
+            .into_iter()
+            .flatten()
+            .flatten()
+            .map(|entry| entry.path())
+            .collect::<Vec<_>>()
+    };
+    folders(root)
+        .iter()
+        .flat_map(|owner| folders(owner))
+        .filter_map(|repo| read_state(&repo.join("state.json")).ok().flatten())
+        .collect()
+}
+
 /// `None`: nothing from this repository has been opened here.
 pub fn load(root: &Path, key: &RepoKey) -> Result<Option<RepoState>, String> {
     read_state(&repo_dir(root, key).join("state.json"))

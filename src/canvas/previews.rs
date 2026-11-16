@@ -397,7 +397,8 @@ impl canvas::Program<crate::app::Message> for DrawingPreview<'_> {
 }
 
 /// One side of a compare: `doc` fitted into `frame`, which both sides share
-/// so they line up, with each of `marks` (what differs) shaded under it.
+/// so they line up, with each of `marks` (text or graphics that differ)
+/// filled softly under it.
 #[cfg(not(target_arch = "wasm32"))]
 pub struct ComparePreview<'a> {
     pub doc: &'a Document,
@@ -431,7 +432,7 @@ impl canvas::Program<crate::app::Message> for ComparePreview<'_> {
             let size = iced::Size::new((b.x - a.x).abs(), (b.y - a.y).abs());
             frame.fill(
                 &Path::rounded_rectangle(corner, size, 4.0.into()),
-                Color::from_rgba8(245, 166, 35, 0.35),
+                Color::from_rgba8(252, 204, 150, 0.55),
             );
         }
         draw_document_with_minimum_stroke(&mut frame, self.doc, camera, bounds, 0.6);

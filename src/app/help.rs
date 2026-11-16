@@ -352,6 +352,12 @@ impl App {
 pub(super) enum Placement {
     Center,
     Top,
+    /// Centered, and only as tall as its content.
+    #[cfg_attr(
+        target_arch = "wasm32",
+        expect(dead_code, reason = "Only the GitHub dialogs fit their content")
+    )]
+    Fit,
 }
 
 /// A dialog over a dimmed, inert workspace; clicking outside it sends
@@ -370,7 +376,7 @@ pub(super) fn modal<'a>(
         .width(width)
         .height(match placement {
             Placement::Center => Length::Fixed(height),
-            Placement::Top => Length::Shrink,
+            Placement::Top | Placement::Fit => Length::Shrink,
         })
         .max_height(height)
         .style(|theme| {
@@ -397,7 +403,7 @@ pub(super) fn modal<'a>(
         .center_x(Length::Fill)
         .height(Length::Fill);
     let popup = match placement {
-        Placement::Center => popup.align_y(Alignment::Center),
+        Placement::Center | Placement::Fit => popup.align_y(Alignment::Center),
         Placement::Top => popup.align_y(Alignment::Start),
     };
     stack![

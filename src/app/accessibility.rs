@@ -68,7 +68,8 @@ struct Context {
         super::InspectorTab,
         crate::canvas::Tool,
         // Tuples compare up to twelve fields.
-        [bool; 11],
+        [bool; 10],
+        u8,
     ),
 }
 
@@ -186,10 +187,13 @@ impl App {
             .inline_text
             .as_ref()
             .map(|draft| draft.session.clone());
+        // The GitHub menu, and the account, change which controls exist:
+        // one bit each.
         #[cfg(not(target_arch = "wasm32"))]
-        let github_menu = self.github.menu;
+        let github_menu =
+            u8::from(self.github.menu) | u8::from(self.github.client().is_some()) << 1;
         #[cfg(target_arch = "wasm32")]
-        let github_menu = false;
+        let github_menu = 0;
         let surface = (
             self.inspector_tab,
             self.tool,
@@ -204,8 +208,8 @@ impl App {
                 self.context_menu.is_some(),
                 self.imports.menu || self.imports.examples_menu,
                 self.style_menu.is_some() || self.tab.inspector_ui.menu_open(),
-                github_menu,
             ],
+            github_menu,
         );
         let keyboard_target = self.keyboard_drawing_active().then(|| {
             format!(

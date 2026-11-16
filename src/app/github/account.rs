@@ -1,8 +1,9 @@
-//! The GitHub account dialog: sign in with a code, choose repositories, sign out.
-use super::{Account, Action, NOT_SET_UP};
+//! The sign-in dialog: the code, large, copied already; click it to copy it
+//! again. It closes by itself once GitHub approves.
+use super::{Account, Action};
 use crate::app::{App, Message, workspace::muted_text};
-use iced::widget::{Space, column, row, text};
-use iced::{Element, Length};
+use iced::widget::{column, row, text};
+use iced::{Alignment, Element};
 
 fn button<'a>(
     id: &'static str,
@@ -24,38 +25,28 @@ impl App {
     /// Focus on the button the user most likely wants next.
     pub(super) fn account_focus(&self) -> iced::Task<Message> {
         let id = match &self.github.account {
-            Account::NotConfigured | Account::Requesting => "github-close",
-            Account::SignedOut(_) => "github-sign-in",
             Account::Waiting(_) => "github-open-device",
-            Account::NeedsInstall { .. } => "github-choose-repos",
-            Account::SignedIn { .. } => "github-choose-repos",
+            Account::SignedOut(Some(_)) => "github-sign-in",
+            _ => "github-cancel-sign-in",
         };
         iced::widget::operation::focus(id)
     }
 
     pub(super) fn account_view(&self) -> Element<'_, Message> {
-        let title = text("GitHub").size(20);
-        let muted = |line: String| text(line).size(12).style(muted_text);
+        let cancel = button("github-cancel-sign-in", "Cancel", Action::Close, false);
         let body: Element<'_, Message> = match &self.github.account {
-            Account::NotConfigured => muted(NOT_SET_UP.into()).into(),
-            Account::SignedOut(note) => column![
-                text("Keep drawings in your GitHub repositories.").size(14),
-                button(
-                    "github-sign-in",
-                    "Sign in with GitHub",
-                    Action::SignIn,
-                    true
-                ),
-            ]
-            .push(note.clone().map(muted))
-            .spacing(14)
-            .into(),
-            Account::Requesting => muted("Asking GitHub for a code…".into()).into(),
             Account::Waiting(code) => column![
-                text(code.user_code.clone())
-                    .size(32)
-                    .font(iced::Font::MONOSPACE),
-                text("Code copied. Paste it on GitHub.").size(14),
+                reshiki::accessibility::button(
+                    "github-code",
+                    format!("Code {}, copy again", code.user_code),
+                    text(code.user_code.clone())
+                        .size(34)
+                        .font(iced::Font::MONOSPACE),
+                )
+                .padding([2, 6])
+                .style(iced::widget::button::text)
+                .on_press(Message::GitHub(Action::CopyCode)),
+                text("Copied. Paste it on GitHub.").size(13),
                 row![
                     button(
                         "github-open-device",
@@ -63,77 +54,35 @@ impl App {
                         Action::OpenVerification,
                         true
                     ),
-                    button("github-copy-code", "Copy code", Action::CopyCode, false),
-                    button("github-cancel-sign-in", "Cancel", Action::Close, false),
+                    cancel,
                 ]
                 .spacing(8),
-                muted("Waiting for GitHub…".into()),
             ]
             .spacing(14)
+            .align_x(Alignment::Center)
             .into(),
-            Account::NeedsInstall { login } => column![
-                text(format!("Signed in as @{login}")).size(14),
-                text("Choose which repositories ReShiki can use.").size(14),
+            // Why the last sign-in ended, such as an expired code.
+            Account::SignedOut(Some(note)) => column![
+                text(note.clone()).size(13),
                 row![
-                    button(
-                        "github-choose-repos",
-                        "Choose repositories ↗",
-                        Action::ChooseRepositories,
-                        true
-                    ),
-                    button(
-                        "github-check-again",
-                        "Check again",
-                        Action::CheckAgain,
-                        false
-                    ),
+                    button("github-sign-in", "Sign in…", Action::SignIn, true),
+                    cancel
                 ]
                 .spacing(8),
-                button("github-sign-out", "Sign out", Action::SignOut, false),
             ]
             .spacing(14)
+            .align_x(Alignment::Center)
             .into(),
-            Account::SignedIn { login, remembered } => {
-                let count = self.github.repos.len();
-                column![text(format!("Signed in as @{login}")).size(14),]
-                    .push((count > 0).then(|| {
-                        muted(match count {
-                            1 => "1 repository".into(),
-                            n => format!("{n} repositories"),
-                        })
-                    }))
-                    .push(
-                        row![
-                            button(
-                                "github-choose-repos",
-                                "Choose repositories ↗",
-                                Action::ChooseRepositories,
-                                false
-                            ),
-                            button("github-sign-out", "Sign out", Action::SignOut, false),
-                        ]
-                        .spacing(8),
-                    )
-                    .push(
-                        (!remembered)
-                            .then(|| muted("Sign-in won't be remembered on this computer.".into())),
-                    )
-                    .spacing(14)
-                    .into()
-            }
+            _ => column![
+                text("Asking GitHub for a code…").size(13).style(muted_text),
+                cancel,
+            ]
+            .spacing(14)
+            .align_x(Alignment::Center)
+            .into(),
         };
-        column![
-            row![
-                title,
-                Space::new().width(Length::Fill),
-                reshiki::accessibility::button("github-close", "Close", text("Close").size(13))
-                    .padding([6, 10])
-                    .style(iced::widget::button::text)
-                    .on_press(Message::GitHub(Action::Close)),
-            ],
-            body
-        ]
-        .spacing(18)
-        .into()
+        iced::widget::container(body)
+            .center_x(iced::Length::Fill)
+            .into()
     }
 }
