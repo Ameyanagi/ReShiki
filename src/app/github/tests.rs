@@ -2870,3 +2870,37 @@ fn access_given_later_survives_a_late_download_and_a_new_listing() {
     github(&mut app, Action::Picker(late));
     assert!(!app.github.read_only(&repo().key));
 }
+
+#[test]
+fn access_taken_away_makes_the_repository_read_only_again() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_in(dir.path());
+    save_here(&mut app, &path);
+    assert!(app.github_anything_unsent());
+    let generation = app.github.generation;
+    let account = gh::Account {
+        login: "octo".into(),
+        repos: vec![Repo {
+            push: false,
+            ..repo()
+        }],
+    };
+    github(&mut app, Action::Listed(generation, Ok(account)));
+    assert!(app.github.read_only(&repo().key));
+    assert!(!app.github_anything_unsent());
+    assert_eq!(app.github_send_row().0, "Save a copy…");
+}
+
+#[test]
+fn signed_out_the_palette_opens_a_public_repository_in_the_picker() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = signed_out(dir.path());
+    github(
+        &mut app,
+        Action::Picker(picker::Action::ShowIn(alice().key, String::new())),
+    );
+    assert_eq!(
+        the_picker(&app).repo.as_ref().map(|repo| repo.id),
+        Some(alice().id)
+    );
+}
