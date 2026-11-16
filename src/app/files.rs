@@ -463,13 +463,7 @@ pub(super) fn open_dialog(
 ) -> Task<Message> {
     // Accept supported extensions without relying on macOS type
     // registration; the worker validates the content.
-    Task::future(pick(
-        OPEN_TITLE,
-        None,
-        false,
-        super::import::open_limit,
-    ))
-    .then(move |files| {
+    Task::future(pick(OPEN_TITLE, None, false, super::import::open_limit)).then(move |files| {
         open_picked(
             files,
             #[cfg(target_arch = "wasm32")]
