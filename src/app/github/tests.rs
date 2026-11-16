@@ -10,6 +10,7 @@ use std::future::Future;
 use std::sync::Arc;
 
 mod files;
+mod newer;
 
 fn repo() -> Repo {
     Repo {

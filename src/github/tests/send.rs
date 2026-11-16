@@ -706,3 +706,52 @@ async fn the_conflict_names_come_from_githubs_folder() {
         .remove(0);
     assert_eq!(conflict.names, ["a (2).svg", "a.rsk"]);
 }
+
+#[tokio::test]
+async fn newer_finds_each_drawing_changed_on_github_and_who_changed_it() {
+    let (mock, client) = notes(&[("dir/a.rsk", b"a"), ("b.rsk", b"b")]).await;
+    let based = |path: &str, bytes: &[u8]| (path.to_owned(), mock::sha(bytes));
+    let files = [based("dir/a.rsk", b"a"), based("b.rsk", b"b")];
+    let newer = || send::newer(&client, 1, &files);
+    assert!(newer().await.unwrap().1.is_empty(), "nothing changed yet");
+
+    // @alice changes one between two checks; a deletion is left for Send.
+    let commit = mock.model().repo("notes").commit_as(
+        "dir/a.rsk",
+        Some(b"ethyl"),
+        "alice",
+        "Add an ethyl group",
+    );
+    mock.model().repo("notes").remote_commit("b.rsk", None);
+    let head = mock.model().repo("notes").head().unwrap();
+    let (_, found) = newer().await.unwrap();
+    let [(conflict, by)] = found.as_slice() else {
+        panic!("one drawing changed: {found:?}");
+    };
+    assert_eq!(conflict.repo_path, "dir/a.rsk");
+    assert_eq!(conflict.commit, head);
+    assert_eq!(conflict.blob.as_deref(), Some(mock::sha(b"ethyl").as_str()));
+    assert_eq!(conflict.theirs.as_deref(), Some(b"ethyl".as_slice()));
+    assert_eq!(conflict.names, ["a.rsk"]);
+    let by = by.as_ref().unwrap();
+    assert_eq!(by.commit, commit);
+    assert_eq!(by.login.as_deref(), Some("alice"));
+    assert_eq!(by.message, "Add an ethyl group");
+    // Nothing is written.
+    assert_eq!(writes(&mock), 0);
+    // Found by id after a rename and a new default branch, as Send does.
+    {
+        let mut model = mock.model();
+        let repo = model.repo("notes");
+        let head = repo.head().unwrap();
+        repo.refs.insert("trunk".into(), head);
+        repo.default_branch = "trunk".into();
+        repo.name = "renamed".into();
+    }
+    let (repo, found) = newer().await.unwrap();
+    assert_eq!(found.len(), 1);
+    assert_eq!(
+        (repo.key.repo.as_str(), repo.default_branch.as_str()),
+        ("renamed", "trunk")
+    );
+}
