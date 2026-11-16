@@ -54,8 +54,8 @@ impl App {
             async move {
                 let found = send::newer(&client, id, &files).await?;
                 let base = |path: &str| {
-                    let at = files.iter().position(|(at, _)| at == path)?;
-                    Some(bases[at].clone())
+                    let (_, base) = files.iter().zip(&bases).find(|((at, _), _)| at == path)?;
+                    Some(base.clone())
                 };
                 Ok(found
                     .into_iter()
