@@ -514,8 +514,8 @@ pub enum Action {
     /// Puts the selected file's structures into the drawing in front.
     Insert,
     /// The file to insert, by repository path, for the drawing it was
-    /// chosen for.
-    Fetched(TabId, String, Result<Vec<u8>, gh::Error>),
+    /// chosen for as it was then (file epoch and revision).
+    Fetched(TabId, u64, u64, String, Result<Vec<u8>, gh::Error>),
     /// Its structures, read for that drawing as it was (file epoch and
     /// revision): pasted unless it changed since.
     Inserted(TabId, u64, u64, String, Box<Result<Batch, String>>),
@@ -794,6 +794,8 @@ impl App {
                             picker.waiting = 0;
                             return whole;
                         }
+                        // The folder left may still be waiting for dates.
+                        picker.waiting = 0;
                         // The tree opens where the tiles are.
                         let mut open = String::new();
                         for name in folders(&picker.folder()) {
@@ -1360,7 +1362,7 @@ impl App {
                 return self.picker_load();
             }
             Action::Insert => return self.picker_insert(),
-            Action::Fetched(tab, path, result) => {
+            Action::Fetched(tab, epoch, revision, path, result) => {
                 let contents = match result {
                     Ok(contents) => contents,
                     Err(error) => {
@@ -1377,7 +1379,6 @@ impl App {
                 let read = self.in_tab(tab, |app| {
                     let options = (&app.tab.doc.drawing_style).into();
                     let theme = app.tab.doc.canvas_theme;
-                    let (epoch, revision) = (app.tab.file_epoch, app.tab.revision);
                     Task::perform(
                         import::load(engine, vec![file], options, theme),
                         move |read| {
@@ -1475,13 +1476,15 @@ impl App {
         let Some(client) = self.github.reader() else {
             return Task::none();
         };
-        let tab = self.tab.id;
+        // An edit made while the file is read cancels the Insert, as it
+        // cancels a paste.
+        let (tab, epoch, revision) = (self.tab.id, self.tab.file_epoch, self.tab.revision);
         let close = self.github_close_dialog();
         self.status = "Reading from GitHub…".into();
         self.error = false;
         let read = perform(
             async move { api::blob(&client, &repo.key, &sha).await },
-            move |result| GitHubAction::Picker(Action::Fetched(tab, path, result)),
+            move |result| GitHubAction::Picker(Action::Fetched(tab, epoch, revision, path, result)),
         );
         Task::batch([close, read])
     }
@@ -2060,11 +2063,16 @@ impl App {
                     sha: String::new(),
                     folder: true,
                 });
-                picker.opened.insert(path.clone());
+                // Shown, with the folders it is in opened.
+                let mut open = String::new();
+                for name in folders(&path) {
+                    open = join(&open, &name);
+                    picker.opened.insert(open.clone());
+                }
                 picker.row = Some(path);
                 picker.new_item = None;
                 picker.error = None;
-                return Task::none();
+                return picker.reveal_row();
             }
             picker.trail.push((typed.to_owned(), String::new()));
             picker.new_item = None;
