@@ -751,9 +751,10 @@ impl App {
                             return whole;
                         }
                         // The tree opens where the tiles are.
-                        let folders = folders(&picker.folder());
-                        for depth in 1..=folders.len() {
-                            picker.opened.insert(folders[..depth].join("/"));
+                        let mut open = String::new();
+                        for name in folders(&picker.folder()) {
+                            open = join(&open, &name);
+                            picker.opened.insert(open.clone());
                         }
                         picker.entries = Some(entries);
                         picker.sort();
@@ -1261,12 +1262,11 @@ impl App {
                     return Task::none();
                 };
                 let rows = picker.rows();
-                let Some(at) =
-                    (rows.iter()).position(|row| Some(&row.entry.name) == picker.row.as_ref())
+                let Some((at, row)) = (rows.iter().enumerate())
+                    .find(|(_, row)| Some(&row.entry.name) == picker.row.as_ref())
                 else {
                     return Task::none();
                 };
-                let row = &rows[at];
                 let path = row.entry.name.clone();
                 let child = (rows.get(at + 1))
                     .filter(|next| next.depth > row.depth)
@@ -1501,11 +1501,10 @@ impl App {
             return Task::none();
         };
         // By repository path, with their blobs.
-        let (shown, previews): (Vec<(String, String)>, Vec<(String, String)>) = if picker.tree {
+        let (shown, previews) = if picker.tree {
             let rows = picker.rows();
             let range = tree::on_screen(picker.tree_view, rows.len());
-            let shown = rows[range]
-                .iter()
+            let shown: Vec<(String, String)> = (rows.get(range).unwrap_or_default().iter())
                 .filter(|row| !row.entry.folder)
                 .map(|row| (row.entry.name.clone(), row.entry.sha.clone()))
                 .collect();
@@ -1516,9 +1515,8 @@ impl App {
             };
             let (tiles, _) = picker.tiles();
             let range = on_screen(picker.view, picker.creating(), tiles.len());
-            let shown: Vec<(String, String)> = tiles[range]
-                .iter()
-                .map(|at| &entries[*at])
+            let shown: Vec<(String, String)> = (tiles.get(range).unwrap_or_default().iter())
+                .filter_map(|at| entries.get(*at))
                 .filter(|entry| !entry.folder)
                 .map(|entry| (picker.repo_path(&entry.name), entry.sha.clone()))
                 .collect();
@@ -2482,7 +2480,7 @@ impl App {
                 let (shown, matching) = picker.tiles();
                 let tiles = shown
                     .into_iter()
-                    .map(|at| (at, &entries[at]))
+                    .filter_map(|at| Some((at, entries.get(at)?)))
                     .map(|(at, entry)| {
                         let selected = picker.selected == Some(at);
                         let path = picker.repo_path(&entry.name);

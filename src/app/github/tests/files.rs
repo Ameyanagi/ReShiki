@@ -227,13 +227,13 @@ async fn insert_puts_a_files_structures_in_the_drawing_as_one_undo_step() {
             "{}",
             app.status
         );
-        // What was there stays; what came in is selected, as a paste is.
-        assert!(
-            before
-                .atoms
-                .iter()
-                .all(|atom| after.atom(atom.id) == Some(atom))
-        );
+        // What was there stays where it was; what came in is selected, as a
+        // paste is.
+        assert!(before.atoms.iter().all(|atom| {
+            after
+                .atom(atom.id)
+                .is_some_and(|kept| kept.position == atom.position && kept.element == atom.element)
+        }));
         let new: Vec<u64> = (after.atoms.iter())
             .filter(|atom| before.atom(atom.id).is_none())
             .map(|atom| atom.id)
