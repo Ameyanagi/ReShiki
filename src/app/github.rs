@@ -1115,15 +1115,17 @@ impl App {
             Account::SignedIn { login, remembered }
         };
         self.github.repos = account.repos;
-        // A repository the user may send to now is read only no more.
-        let pushable: HashSet<u64> = (self.github.repos.iter())
-            .filter(|repo| repo.push)
-            .map(|repo| repo.id)
+        // GitHub's answer now decides: access given ends read only, and
+        // access taken away starts it.
+        let push: HashMap<u64, bool> = (self.github.repos.iter())
+            .map(|repo| (repo.id, repo.push))
             .collect();
         let mut cleared = Vec::new();
         for (key, state) in &mut self.github.states {
-            if state.read_only && pushable.contains(&state.repo_id) {
-                state.read_only = false;
+            if let Some(push) = push.get(&state.repo_id)
+                && state.read_only == *push
+            {
+                state.read_only = !push;
                 cleared.push(key.clone());
             }
         }

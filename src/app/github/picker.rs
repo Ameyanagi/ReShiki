@@ -565,15 +565,17 @@ impl App {
         let Some(picker) = self.picker() else {
             return Task::none();
         };
-        if picker.chosen || picker.repo.is_some() || picker.signed_out {
+        // Signed out, only a repository asked for by name is chosen, and
+        // only a public one: the others cannot be read.
+        if picker.chosen || picker.repo.is_some() || picker.signed_out && picker.target.is_none() {
             return Task::none();
         }
+        let signed_out = picker.signed_out;
         let repos = picker.repos.as_deref().unwrap_or_default();
         let chosen = match repos {
-            _ if picker.target.is_some() => picker
-                .target
-                .clone()
-                .filter(|key| repos.iter().any(|repo| repo.key == *key)),
+            _ if picker.target.is_some() => picker.target.clone().filter(|key| {
+                (repos.iter()).any(|repo| repo.key == *key && !(signed_out && repo.private))
+            }),
             [only] => Some(only.key.clone()),
             _ => repos
                 .iter()
@@ -1693,6 +1695,8 @@ impl App {
         };
         picker.signed_out = false;
         picker.repos = None;
+        // A repository asked for that could not be read signed out is chosen now.
+        picker.chosen = false;
         self.github_list()
     }
 
