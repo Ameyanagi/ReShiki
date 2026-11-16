@@ -463,6 +463,79 @@ fn restoring_a_version_is_one_undo_step_and_a_new_save() {
     assert!(app.tab.name().starts_with("ring · "));
 }
 
+/// Ethanol whose Mol. Wt. caption the user placed, as stored, and the drawing
+/// after it: the molecule moved and the caption put back where it was.
+fn placed_caption(app: &mut App) -> (Vec<u8>, Document) {
+    use reshiki::linked_properties::Property;
+    fn place(app: &mut App, dx: f32, dy: f32) {
+        let before = app.tab.doc.clone();
+        let caption = &mut app.tab.doc.annotations[0];
+        caption.position = caption.position.offset(dx, dy);
+        app.changed(before);
+    }
+    app.tab.busy = false;
+    app.tab.doc = Document::from_json(include_bytes!(
+        "../../../tests/fixtures/chemical-naming-rust/ethanol-rust-native.rsk"
+    ))
+    .unwrap();
+    let atoms = app.tab.doc.atoms.iter().map(|a| a.id).collect();
+    let _ = app.update(Message::ToggleProperty(atoms, Property::Weight));
+    place(app, 40., 25.);
+    let stored = app.tab.doc.file_json().unwrap();
+    let before = app.tab.doc.clone();
+    for atom in &mut app.tab.doc.atoms {
+        atom.position = atom.position.offset(30., 0.);
+    }
+    app.changed(before);
+    place(app, -30., 0.);
+    assert_eq!(app.tab.doc.property_captions.len(), 1, "still linked");
+    (stored, app.tab.doc.clone())
+}
+
+#[test]
+fn restoring_a_version_puts_a_placed_property_caption_back_exactly() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _path) = app_in(dir.path());
+    let (stored, _) = placed_caption(&mut app);
+    let stored = Arc::new(Document::from_native_file(&stored).unwrap());
+    github(&mut app, Action::ShowVersions);
+    let generation = app.github.versions.generation;
+    let id = "1763200000000".to_owned();
+    github(
+        &mut app,
+        Action::Versions(versions::Action::LocalLoaded(
+            generation,
+            Ok(vec![(id.clone(), stored.clone())]),
+        )),
+    );
+    github(
+        &mut app,
+        Action::Versions(versions::Action::Select(versions::Pick::Local(id))),
+    );
+    assert_ne!(app.tab.doc, *stored);
+    github(&mut app, Action::Versions(versions::Action::Restore));
+    assert_eq!(
+        app.tab.doc.annotations[0].position,
+        stored.annotations[0].position
+    );
+    assert_eq!(app.tab.doc, *stored);
+}
+
+#[test]
+fn keep_githubs_shows_a_placed_property_caption_exactly() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_in(dir.path());
+    let (theirs, yours) = placed_caption(&mut app);
+    conflicted(&mut app, &path, Some(theirs.clone()));
+    app.github.sending.clear();
+    app.tab.doc = yours.clone();
+    app.tab.mark_saved(yours);
+    github(&mut app, Action::Resolve(send::Choice::KeepTheirs));
+    assert_eq!(app.status, "Kept GitHub’s");
+    assert_eq!(app.tab.doc, Document::from_native_file(&theirs).unwrap());
+    assert!(!app.dirty());
+}
+
 /// `ring.rsk` saved here as "mine" while GitHub got "theirs" (or deleted it),
 /// then sent: the send leaves it out as a conflict.
 fn conflicted(app: &mut App, path: &Path, theirs: Option<Vec<u8>>) -> Vec<u8> {
