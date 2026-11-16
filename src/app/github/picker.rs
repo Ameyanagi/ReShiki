@@ -2885,14 +2885,15 @@ fn view_switch<'a>(tree: bool) -> Element<'a, Message> {
     .into()
 }
 
-/// A file's drawing, once read.
+/// A file's drawing, once read; until then, or signed out, the room for it,
+/// so a format label still sits in its corner.
 fn drawing<'a>(picker: &'a Picker, sha: &str) -> Element<'a, Message> {
     match picker.thumbs.get(sha) {
         Some(Some(doc)) => crate::canvas::layered::canvas(crate::canvas::DrawingPreview(doc))
             .width(Length::Fill)
             .height(Length::Fill)
             .into(),
-        _ => Space::new().into(),
+        _ => Space::new().width(Length::Fill).height(Length::Fill).into(),
     }
 }
 
