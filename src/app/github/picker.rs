@@ -67,6 +67,8 @@ pub(in crate::app) struct Picker {
     waiting: usize,
     /// Every name in the folder, previews and other files too.
     names: Vec<String>,
+    /// The folder could not be listed, so its names are not known.
+    unlisted: bool,
     selected: Option<usize>,
     /// The last click, for a double click.
     clicked: Option<(usize, Instant)>,
@@ -101,6 +103,7 @@ impl Picker {
             entries: None,
             waiting: 0,
             names: Vec::new(),
+            unlisted: false,
             selected: None,
             clicked: None,
             thumbs: HashMap::new(),
@@ -379,6 +382,7 @@ impl App {
                 let Some(picker) = self.picker().filter(|p| p.generation == generation) else {
                     return Task::none();
                 };
+                picker.unlisted = result.is_err();
                 match result {
                     Ok((tree, entries)) => {
                         if picker.root.is_none() {
@@ -926,8 +930,13 @@ impl App {
         let Some(picker) = self.picker() else {
             return Task::none();
         };
-        // The folder's names are known once it is listed.
-        let (Some(repo), Some(_)) = (picker.repo.clone(), picker.entries.as_ref()) else {
+        // The folder's names are known once it is listed; after a listing
+        // that failed, a save could replace a file already there.
+        let (Some(repo), Some(_), false) = (
+            picker.repo.clone(),
+            picker.entries.as_ref(),
+            picker.unlisted,
+        ) else {
             return Task::none();
         };
         let typed = picker.save_name.trim();
@@ -1220,7 +1229,7 @@ impl App {
                 "github-send-here",
                 "Send",
                 Action::SendHere,
-                picker.repo.is_some() && picker.entries.is_some(),
+                picker.repo.is_some() && picker.entries.is_some() && !picker.unlisted,
             ),
         };
         footer = footer.push(

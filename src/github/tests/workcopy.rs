@@ -267,3 +267,51 @@ async fn a_renamed_repository_keeps_the_folder_it_was_first_opened_in() {
     let other = Repo { id: 8, ..renamed };
     assert_eq!(workcopy::folder(root, &other), other.key);
 }
+
+#[tokio::test]
+async fn a_new_repository_never_takes_the_folder_of_one_renamed_away() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    // Repository 7 was opened as `lab-notes`, then renamed on GitHub.
+    workcopy::persist(root, &key(), state(), 1).await.unwrap();
+    let new = Repo {
+        id: 8,
+        key: key(),
+        private: true,
+        default_branch: "main".into(),
+        push: true,
+    };
+    let folder = workcopy::folder(root, &new);
+    assert_ne!(folder, key());
+    assert_eq!(workcopy::load(root, &folder), Ok(None), "unused");
+    // Once it has drawings there, it is found there again.
+    workcopy::persist(root, &folder, RepoState::new(&new), 1)
+        .await
+        .unwrap();
+    assert_eq!(workcopy::folder(root, &new), folder);
+    assert_eq!(workcopy::load(root, &key()), Ok(Some(state())));
+}
+
+#[test]
+fn saves_made_together_are_all_kept() {
+    let dir = tempfile::tempdir().unwrap();
+    let (root, key) = (dir.path(), key());
+    let start = std::sync::Barrier::new(16);
+    std::thread::scope(|scope| {
+        for n in 0..16u8 {
+            let (key, start) = (&key, &start);
+            scope.spawn(move || {
+                start.wait();
+                let saved = workcopy::save_version(root, key, "a.rsk", &[n], None);
+                assert!(saved.unwrap().is_some());
+            });
+        }
+    });
+    let kept = workcopy::snapshots(root, &key, "a.rsk").unwrap();
+    let mut bytes: Vec<u8> = kept
+        .iter()
+        .flat_map(|save| std::fs::read(&save.path).unwrap())
+        .collect();
+    bytes.sort_unstable();
+    assert_eq!(bytes, (0..16).collect::<Vec<u8>>());
+}

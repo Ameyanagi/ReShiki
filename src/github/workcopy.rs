@@ -17,7 +17,7 @@ use sha2::{Digest, Sha256};
 use std::{
     collections::{BTreeMap, HashMap},
     path::{Path, PathBuf},
-    sync::LazyLock,
+    sync::{LazyLock, Mutex, PoisonError},
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -176,7 +176,8 @@ fn read_state(path: &Path) -> Result<Option<RepoState>, String> {
 
 /// The folder that `repo`'s drawings went to when it was first opened here,
 /// found by its id, so a rename on GitHub keeps them; for a repository new
-/// here, its names now.
+/// here, its names now, or those with its id added while another
+/// repository's folder has them.
 pub fn folder(root: &Path, repo: &super::Repo) -> RepoKey {
     let names = |dir: &Path| -> Vec<String> {
         std::fs::read_dir(dir)
@@ -197,7 +198,13 @@ pub fn folder(root: &Path, repo: &super::Repo) -> RepoKey {
             }
         }
     }
-    repo.key.clone()
+    // A folder under these names that holds another repository (renamed on
+    // GitHub since, its old name now given to this one) is never shared.
+    let mut key = repo.key.clone();
+    while load(root, &key).is_ok_and(|state| state.is_some_and(|s| s.repo_id != repo.id)) {
+        key.repo = format!("{}-{}", key.repo, repo.id);
+    }
+    key
 }
 
 /// Every repository with drawings kept here, as last known.
@@ -307,6 +314,10 @@ pub fn save_version(
     bytes: &[u8],
     base_hash: Option<&str>,
 ) -> Result<Option<SaveMeta>, String> {
+    // One at a time: two saves that read the list together would take the
+    // same id, and one would replace the other.
+    static SAVING: Mutex<()> = Mutex::new(());
+    let _saving = SAVING.lock().unwrap_or_else(PoisonError::into_inner);
     let saves = snapshots(root, key, repo_path)?;
     let newest = saves.last().and_then(|save| std::fs::read(&save.path).ok());
     if base_hash == Some(hash(bytes).as_str()) || newest.is_some_and(|newest| newest == bytes) {
