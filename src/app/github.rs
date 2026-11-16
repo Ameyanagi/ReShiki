@@ -383,14 +383,10 @@ pub(super) fn tree_key(key: &iced::keyboard::Key, modifiers: Modifiers) -> Optio
 
 impl App {
     /// The keys of the open GitHub dialog: [`tree_key`] in the picker's tree
-    /// while the search field is empty, else [`modal_key`].
+    /// while no field there has text to move through, else [`modal_key`].
     pub(super) fn github_keys(&self) -> super::file_shortcuts::ModalKeys {
         match &self.github.dialog {
-            Some(Dialog::Picker(picker))
-                if picker.tree && picker.search.is_empty() && picker.repo.is_some() =>
-            {
-                tree_key
-            }
+            Some(Dialog::Picker(picker)) if picker.tree_keys() => tree_key,
             _ => modal_key,
         }
     }

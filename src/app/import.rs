@@ -81,7 +81,7 @@ pub struct Ticket {
 pub struct Batch {
     label: String,
     pub(super) drawings: Vec<Document>,
-    warnings: Vec<String>,
+    pub(super) warnings: Vec<String>,
 }
 
 #[derive(Default)]
@@ -322,7 +322,7 @@ async fn read(
     }
 }
 /// An SD file's records, each a file of its own; any other file as it is.
-fn records(file: Picked) -> Vec<Picked> {
+pub(super) fn records(file: Picked) -> Vec<Picked> {
     let text = match std::str::from_utf8(&file.contents) {
         Ok(text) if extension(&file.path) == "sdf" => text,
         _ => return vec![file],
@@ -339,8 +339,10 @@ fn records(file: Picked) -> Vec<Picked> {
         .into_iter()
         .filter(|record| !record.trim().is_empty())
         .map(|record| Picked {
+            path: file.path.clone(),
             contents: record.into_bytes(),
-            ..file.clone()
+            #[cfg(target_arch = "wasm32")]
+            handle: file.handle.clone(),
         })
         .collect()
 }

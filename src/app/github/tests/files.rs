@@ -217,7 +217,8 @@ async fn insert_puts_a_files_structures_in_the_drawing_as_one_undo_step() {
         let _ = picker(&mut app, picker::Action::Insert);
         assert!(app.github.dialog.is_none(), "Insert closes the picker");
         let ticket = app.import_ticket();
-        let fetched = picker::Action::Fetched(ticket, name.into(), Ok(bytes.into_bytes()));
+        let fetched =
+            picker::Action::Fetched(app.tab.id, ticket, name.into(), Ok(bytes.into_bytes()));
         let task = picker(&mut app, fetched);
         run(&mut app, task).await;
         let after = app.tab.doc.clone();
@@ -506,4 +507,105 @@ fn signed_in_the_tree_asks_only_about_the_rows_on_screen() {
     // Scrolled down, the rows now on screen.
     let _ = picker(&mut app, picker::Action::TreeScrolled(28. * 80., 400.));
     assert!(the_picker(&app).asked.contains("hits/hit-085.mol"));
+}
+
+#[test]
+fn files_in_a_folder_show_once_their_dates_are_known() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = app_in(dir.path());
+    files_at(&mut app, &["sub/"], |_| None);
+    let _ = picker(&mut app, picker::Action::Folder("sub".into()));
+    let generation = picker_generation(&app);
+    let entries = vec![entry("phen.mol"), entry("ring.rsk")];
+    let _ = picker(
+        &mut app,
+        picker::Action::Listing(generation, Ok((sha('6'), entries))),
+    );
+    let asked: Vec<String> = the_picker(&app).asked.iter().cloned().collect();
+    assert!(
+        asked.iter().all(|path| path.starts_with("sub/")),
+        "{asked:?}"
+    );
+    assert!(
+        the_picker(&app).tiles().0.is_empty(),
+        "waiting for the dates"
+    );
+    for path in asked {
+        let _ = picker(&mut app, picker::Action::Changed(generation, path, None));
+    }
+    assert_eq!(the_picker(&app).tiles().0.len(), 2);
+}
+
+#[test]
+fn a_whole_listing_is_kept_only_for_its_repository_and_trusted_only_when_read() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = app_in(dir.path());
+    let other = Repo {
+        id: 9,
+        key: RepoKey {
+            owner: "octo".into(),
+            repo: "other".into(),
+        },
+        ..repo()
+    };
+    tree_at(&mut app, &["a.mol"], false);
+    let first = the_picker(&app).generation;
+    app.github.repos = vec![repo(), other.clone()];
+    let _ = picker(&mut app, picker::Action::PickRepo(other.key));
+    // The first repository's listing, late: dropped.
+    let late = picker::Action::Whole(first, Ok((vec![entry("a.mol")], false)));
+    let _ = picker(&mut app, late);
+    assert!(the_picker(&app).whole.is_none());
+    // A listing that failed makes nothing new.
+    let generation = picker_generation(&app);
+    let _ = picker(
+        &mut app,
+        picker::Action::Listing(generation, Ok((sha('8'), vec![]))),
+    );
+    let failed = picker::Action::Whole(generation, Err(gh::Error::Offline));
+    let _ = picker(&mut app, failed);
+    assert!(!the_picker(&app).can_create());
+    assert!(the_picker(&app).error.is_some());
+}
+
+#[tokio::test]
+async fn insert_lands_in_the_drawing_it_was_chosen_for() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = app_in(dir.path());
+    app.tab.busy = false;
+    let (chosen, atoms) = (app.tab.id, app.tab.doc.atoms.len());
+    let ticket = app.import_ticket();
+    // Another tab is in front when the file arrives.
+    open_other(&mut app, dir.path());
+    let other = app.tab.doc.atoms.len();
+    let fetched = picker::Action::Fetched(chosen, ticket, "PPh3.mol".into(), Ok(MOL.into()));
+    let task = picker(&mut app, fetched);
+    run(&mut app, task).await;
+    assert_eq!(
+        app.tab.doc.atoms.len(),
+        other,
+        "the tab in front is left alone"
+    );
+    let _ = app.update(Message::Tabs(tabs::Action::Select(chosen)));
+    assert_eq!(app.tab.id, chosen);
+    assert_eq!(app.tab.doc.atoms.len(), atoms + 9, "{}", app.status);
+    assert!(!app.tab.busy);
+}
+
+#[test]
+fn tree_keys_leave_a_name_field_its_arrows_and_search_hides_a_selection() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = app_in(dir.path());
+    tree_at(&mut app, &["a.mol", "b.mol"], false);
+    let _ = picker(&mut app, picker::Action::NewItem(false));
+    let keys = app.github_keys();
+    assert!(keys(&Key::Named(Named::ArrowLeft), Modifiers::empty()).is_none());
+    let _ = picker(&mut app, picker::Action::Row("a.mol".into()));
+    let _ = picker(&mut app, picker::Action::Search("b".into()));
+    assert!(selected_row(&app).is_none());
+    // Open on a folder opens it, as Enter does.
+    tree_at(&mut app, &["sub/", "sub/a.mol"], false);
+    let _ = picker(&mut app, picker::Action::Move(1));
+    let _ = picker(&mut app, picker::Action::Open);
+    assert_eq!(rows(&app), ["sub", "  a.mol"]);
 }

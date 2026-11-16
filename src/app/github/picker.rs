@@ -13,6 +13,7 @@
 use super::{Action as GitHubAction, Dialog, identity, perform, versions::who};
 use crate::app::{
     App, Message,
+    document_tab::TabId,
     import::{self, Batch, Ticket},
     workspace::muted_text,
 };
@@ -240,6 +241,17 @@ impl Picker {
             None => false,
         };
         listed && self.reference.is_none() && self.repo.as_ref().is_some_and(|repo| repo.push)
+    }
+
+    /// → and ← go to the tree: no text in the search field, and no other
+    /// field open.
+    pub(super) fn tree_keys(&self) -> bool {
+        self.tree
+            && self.repo.is_some()
+            && self.search.is_empty()
+            && self.new_item.is_none()
+            && self.new_repo.is_none()
+            && self.adding.is_none()
     }
 
     /// The search, lowercase; a link is no search.
@@ -484,7 +496,7 @@ pub enum Action {
     Insert,
     /// The file to insert, by repository path, for the drawing it was
     /// chosen for.
-    Fetched(Ticket, String, Result<Vec<u8>, gh::Error>),
+    Fetched(TabId, Ticket, String, Result<Vec<u8>, gh::Error>),
     /// Another chemistry file than a drawing, read for its read-only tab.
     Read(PathBuf, Box<Result<Batch, String>>),
 }
@@ -590,6 +602,12 @@ impl App {
                     picker.limited = false;
                     picker.error = None;
                     picker.file_menu = None;
+                    // A row the search hides is not selected.
+                    let hidden = !(picker.rows().iter())
+                        .any(|row| Some(&row.entry.name) == picker.row.as_ref());
+                    if hidden {
+                        picker.row = None;
+                    }
                 }
                 return self.picker_load();
             }
@@ -669,6 +687,8 @@ impl App {
                 picker.selected = None;
                 picker.error = None;
                 picker.whole = None;
+                // A whole listing still on its way is for the repository left.
+                picker.opening = generation;
                 picker.opened.clear();
                 picker.row = None;
                 picker.tree_view = None;
@@ -762,11 +782,7 @@ impl App {
                         // changes are known, then sort newest first, once.
                         let load = self.picker_load();
                         if let Some(picker) = self.picker() {
-                            picker.first = picker
-                                .asked
-                                .iter()
-                                .map(|name| picker.repo_path(name))
-                                .collect();
+                            picker.first = picker.asked.clone();
                             picker.waiting = picker.first.len();
                         }
                         return Task::batch([whole, load]);
@@ -911,9 +927,12 @@ impl App {
                     picker.thumbs.insert(sha, doc);
                 }
             }
+            // In the tree, a folder opens or closes, as Enter does.
+            Action::Open if self.picker().is_some_and(|picker| picker.tree) => {
+                return self.picker_action(Action::Enter);
+            }
             Action::Open => {
                 let folder = (self.picker())
-                    .filter(|picker| !picker.tree)
                     .and_then(|picker| picker.selected_entry())
                     .filter(|entry| entry.folder)
                     .map(|entry| entry.name.clone());
@@ -1210,7 +1229,9 @@ impl App {
                 let Some(picker) = self.picker().filter(|picker| picker.opening == opening) else {
                     return Task::none();
                 };
-                let (mut entries, truncated) = result.unwrap_or_default();
+                // Not listed is as good as listed in part: nothing new is
+                // made where the names are not known.
+                let (mut entries, truncated) = result.unwrap_or((Vec::new(), true));
                 // A listing in part may leave out a folder its files are in.
                 let mut known: HashSet<String> = (entries.iter())
                     .filter(|entry| entry.folder)
@@ -1310,12 +1331,13 @@ impl App {
                 picker.file_menu = path;
             }
             Action::Insert => return self.picker_insert(),
-            Action::Fetched(ticket, path, result) => {
+            Action::Fetched(tab, ticket, path, result) => {
                 return match result {
                     Ok(contents) => {
                         let path = PathBuf::from(last(&path));
                         let file = crate::app::files::Picked { path, contents };
-                        self.insert_read(ticket, vec![file])
+                        let read = self.in_tab(tab, |app| app.insert_read(ticket, vec![file]));
+                        crate::app::tagged(read.unwrap_or_else(Task::none), tab)
                     }
                     Err(error) => {
                         self.status = self.github_failed(&error);
@@ -1325,8 +1347,8 @@ impl App {
                 };
             }
             Action::Read(path, result) => {
-                let mut drawings = match *result {
-                    Ok(batch) => batch.drawings.into_iter(),
+                let (mut drawings, warnings) = match *result {
+                    Ok(batch) => (batch.drawings.into_iter(), batch.warnings),
                     Err(error) => {
                         self.status = error;
                         self.error = true;
@@ -1351,6 +1373,10 @@ impl App {
                 let kept = self.github_opened(&path);
                 if self.open_target(Some(&path)) {
                     self.show_opened(doc, Some(path));
+                    for warning in warnings {
+                        self.status.push_str(" · ");
+                        self.status.push_str(&warning);
+                    }
                 }
                 return kept;
             }
@@ -1359,28 +1385,24 @@ impl App {
     }
 
     /// Puts the selected file's structures into the drawing in front, placed
-    /// as an insert is, as one Undo step. Only Open inserts; Shift+Enter in
-    /// Send sends.
+    /// as an insert is, as one Undo step. Only Open inserts.
     fn picker_insert(&mut self) -> Task<Message> {
-        let Some(picker) = self.picker() else {
+        let Some(picker) = self.picker().filter(|picker| picker.mode == Mode::Open) else {
             return Task::none();
         };
-        if picker.mode != Mode::Open {
-            return self.picker_action(Action::Enter);
-        }
         let (Some(repo), Some((path, sha))) = (picker.repo.clone(), picker.selected_file()) else {
             return Task::none();
         };
         let Some(client) = self.github.reader() else {
             return Task::none();
         };
-        let ticket = self.import_ticket();
+        let (tab, ticket) = (self.tab.id, self.import_ticket());
         let close = self.github_close_dialog();
         self.status = "Reading from GitHub…".into();
         self.error = false;
         let read = perform(
             async move { api::blob(&client, &repo.key, &sha).await },
-            move |result| GitHubAction::Picker(Action::Fetched(ticket, path, result)),
+            move |result| GitHubAction::Picker(Action::Fetched(tab, ticket, path, result)),
         );
         Task::batch([close, read])
     }
@@ -1691,7 +1713,9 @@ impl App {
                         path: PathBuf::from(last(&path)),
                         contents,
                     };
-                    let read = import::load(engine, vec![file], Default::default(), theme);
+                    // An SD file's first record only.
+                    let first = import::records(file).into_iter().take(1).collect();
+                    let read = import::load(engine, first, Default::default(), theme);
                     let first = read.await.ok()?.drawings.into_iter().next()?;
                     Some(Arc::new(first))
                 },
@@ -2558,7 +2582,7 @@ impl App {
                         .padding(6)
                         .style(crate::app::workspace::control(selected))
                         .on_press(msg(Action::Select(at)));
-                        match entry.folder {
+                        match entry.folder || picker.mode != Mode::Open {
                             true => tile.into(),
                             false => file_menu(picker, path, tile.into()),
                         }
