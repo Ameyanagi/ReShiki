@@ -376,28 +376,6 @@ impl Picker {
     }
 }
 
-/// An SD file's records, or any file's one drawing, as one drawing: each
-/// beside the one before, centered on the same line. Also how many of them
-/// it holds, of how many: a record that no longer fits is left out.
-fn side_by_side(drawings: Vec<Document>) -> Option<(Document, usize, usize)> {
-    let total = drawings.len();
-    let mut drawings = drawings.into_iter();
-    let mut doc = drawings.next()?;
-    let mut placed = 1;
-    let bounds = |doc: &Document| reshiki::scene::selection_bounds(doc, &doc.all_ids());
-    for part in drawings {
-        if let (Some((top, right)), Some((lo, hi))) = (bounds(&doc), bounds(&part)) {
-            let gap = doc.drawing_style.bond_length_world;
-            let offset = reshiki::document::Point::new(
-                right.x + gap - lo.x,
-                (top.y + right.y - lo.y - hi.y) / 2.,
-            );
-            placed += usize::from(!reshiki::editing::append(&mut doc, &part, offset).is_empty());
-        }
-    }
-    Some((doc, placed, total))
-}
-
 /// The folder a repository path is in (`""` is the top).
 fn parent(path: &str) -> &str {
     path.rsplit_once('/').map_or("", |(folder, _)| folder)
@@ -1415,7 +1393,7 @@ impl App {
                         return Task::none();
                     }
                 };
-                let Some((doc, placed, total)) = side_by_side(drawings) else {
+                let Some((doc, placed, total)) = import::side_by_side(drawings) else {
                     return Task::none();
                 };
                 let kept = self.github_opened(&path);
@@ -1450,7 +1428,7 @@ impl App {
                 return;
             }
         };
-        let Some((mut part, placed, total)) = side_by_side(batch.drawings) else {
+        let Some((mut part, placed, total)) = import::side_by_side(batch.drawings) else {
             return;
         };
         // Another program's structure follows this drawing's label settings,

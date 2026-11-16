@@ -321,6 +321,8 @@ pub enum Prepared {
         format: &'static str,
         contents: String,
     },
+    /// An SD file's records, read.
+    Records(Box<super::import::Batch>),
     #[cfg(target_arch = "wasm32")]
     Browser {
         handle: wasm_bindgen::JsValue,
@@ -383,7 +385,11 @@ fn prepare(path: &std::path::Path, contents: Vec<u8>) -> Result<Prepared, String
             .map_err(|e| format!("Could not open document: {e}"))?;
         Ok(Prepared::Native(Box::new(doc)))
     } else {
-        let format = reshiki::compatibility::file_format(path)
+        // An SD file's records are read next, in `records`. Its extension
+        // comes first, as for Insert: POSCAR is told by its name.
+        let format = (extension == "sdf")
+            .then_some("sdf")
+            .or_else(|| reshiki::compatibility::file_format(path))
             .or_else(|| matches!(extension.as_str(), "smi" | "smiles").then_some("smiles"))
             .ok_or_else(|| super::import::unsupported_file(path))?;
         if contents.len() as u64 > super::import::limit(path) {
@@ -394,6 +400,35 @@ fn prepare(path: &std::path::Path, contents: Vec<u8>) -> Result<Prepared, String
             contents: super::import::contents(format, contents)?,
         })
     }
+}
+
+/// Every record of an SD file, read as Insert reads them, before the file
+/// is reported: files then still open in the order they were chosen.
+async fn records(
+    path: &std::path::Path,
+    prepared: Result<Prepared, String>,
+) -> Result<Prepared, String> {
+    let Ok(Prepared::Import {
+        format: "sdf",
+        contents,
+    }) = prepared
+    else {
+        return prepared;
+    };
+    let file = Picked {
+        path: path.to_path_buf(),
+        contents: contents.into_bytes(),
+        #[cfg(target_arch = "wasm32")]
+        handle: None,
+    };
+    let batch = super::import::load(
+        reshiki::engine::LocalEngine::default(),
+        vec![file],
+        Default::default(),
+        reshiki::document::Document::default().canvas_theme,
+    )
+    .await?;
+    Ok(Prepared::Records(Box::new(batch)))
 }
 
 /// Reading, decoding and native validation all run on a blocking worker, never
@@ -414,8 +449,12 @@ pub(super) async fn read(path: PathBuf) -> Opened {
     .await
     .map_err(|e| e.to_string())
     .and_then(|r| r);
+    let result = records(&path, result).await;
     Some((path, result))
 }
+
+/// The Open dialog's title, which names what it opens: it has no filter.
+const OPEN_TITLE: &str = "Open a ReShiki, editable PNG/SVG/PDF, MOL, SDF, RXN, CDXML, CDX, SMILES, CIF, PDB, POSCAR or XYZ file";
 
 /// Opens the files the user chooses, each in a tab.
 pub(super) fn open_dialog(
@@ -426,13 +465,7 @@ pub(super) fn open_dialog(
 ) -> Task<Message> {
     // Accept supported extensions without relying on macOS type
     // registration; the worker validates the content.
-    Task::future(pick(
-        "Open a ReShiki, editable PNG/SVG/PDF, MOL, RXN, CDXML, CDX, SMILES, CIF, PDB, POSCAR or XYZ file",
-        None,
-        false,
-        super::import::open_limit,
-    ))
-    .then(move |files| {
+    Task::future(pick(OPEN_TITLE, None, false, super::import::open_limit)).then(move |files| {
         open_picked(
             files,
             #[cfg(target_arch = "wasm32")]
@@ -459,7 +492,11 @@ pub(super) fn open_picked(
                     #[cfg(target_arch = "wasm32")]
                     let result = match (file.handle, result) {
                         (Some(handle), Ok(prepared))
-                            if !matches!(&prepared, Prepared::Picture(..)) =>
+                            // Neither a picture nor an SD file stays the tab's file.
+                            if !matches!(
+                                &prepared,
+                                Prepared::Picture(..) | Prepared::Records(..)
+                            ) =>
                         {
                             let mut duplicate = None;
                             for (id, other) in handles {
@@ -498,6 +535,7 @@ pub(super) async fn prepare_contents(path: PathBuf, contents: Result<Vec<u8>, St
         .await
         .map_err(|e| e.to_string())
         .and_then(|r| r);
+    let result = records(&path, result).await;
     Some((path, result))
 }
 
@@ -695,6 +733,34 @@ impl super::App {
             Err(error) => {
                 self.status = error;
                 self.error = true;
+            }
+            // Side by side, as an unsaved drawing with the file's name: Save
+            // cannot write an SD file back.
+            Ok(Prepared::Records(batch)) => {
+                let name = super::import::name(&path);
+                let Some((doc, placed, total)) = super::import::side_by_side(batch.drawings) else {
+                    self.status = format!("Could not open {name}: it has no structure");
+                    self.error = true;
+                    return Task::none();
+                };
+                self.open_target(None);
+                self.show_opened(doc, None);
+                self.tab.untitled_name = Some(name);
+                self.tab.mark_saved(reshiki::document::Document::default());
+                // A record that no longer fits in one drawing is left out, and
+                // the status says so in amber, as an open from GitHub does.
+                if placed < total {
+                    self.status =
+                        format!("Opened {placed} of {total} structures · The rest don't fit");
+                }
+                for warning in batch.warnings {
+                    self.status.push_str(" · ");
+                    self.status.push_str(&warning);
+                }
+                #[cfg(not(target_arch = "wasm32"))]
+                if placed < total {
+                    self.github.amber = Some(self.status.clone());
+                }
             }
             Ok(Prepared::Import { format, contents }) => {
                 // A ChemDraw or MOL file stays the tab's file, as a drawing does.

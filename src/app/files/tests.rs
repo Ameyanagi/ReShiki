@@ -451,8 +451,7 @@ fn edits_during_a_save_reopen_the_pending_dialog() {
 fn prepare_rejects_unsupported_files_and_shows_the_reason() {
     let contents = b"caffeine\n     RDKit          2D\n\n 14 15  0  0  0  0  0  0  0  0999 V2000\n";
     for (name, expected) in [
-        ("simple.sdf", "Can't import .sdf"),
-        ("simple.SDF", "Can't import .sdf"),
+        ("simple.sd", "Can't import .sd"),
         ("notes.txt", "Can't import .txt"),
         ("drawing", "Can't import this file"),
     ] {
@@ -498,6 +497,7 @@ fn cli_input_formats_match_the_app() {
             Prepared::Native(_) => "reshiki",
             Prepared::Import { format, .. } => format,
             Prepared::Picture(..) => panic!("Structure files are not pictures"),
+            Prepared::Records(_) => panic!("Structure files are not SD files"),
         };
         assert_eq!(
             chosen,
@@ -505,4 +505,107 @@ fn cli_input_formats_match_the_app() {
             "{extension:?}"
         );
     }
+}
+
+const ETHANOL: &str = include_str!("../../../tests/fixtures/ethanol.mol");
+const ACETOPHENONE: &str =
+    include_str!("../../../tests/fixtures/carbonyl-rotation/acetophenone.mol");
+
+/// Opens `contents` as the file `name`, as File › Open does once it is read.
+async fn open_sd_file(app: &mut App, name: &str, contents: String) {
+    let opened = prepare_contents(name.into(), Ok(contents.into_bytes())).await;
+    assert!(
+        matches!(&opened, Some((_, Ok(Prepared::Records(_))))),
+        "{opened:?}"
+    );
+    let _ = app.update(Message::FilePrepared(opened));
+}
+
+#[test]
+fn open_names_sd_files_among_what_it_reads() {
+    // The dialog has no extension filter; its title lists the formats.
+    assert!(OPEN_TITLE.contains(" SDF,"), "{OPEN_TITLE}");
+    // A name that starts like a VASP file is still an SD file.
+    for name in ["two.sdf", "two.SDF", "POSCAR_library.sdf"] {
+        assert!(
+            matches!(
+                prepare(std::path::Path::new(name), b"\n\n\n$$$$\n".to_vec()),
+                Ok(Prepared::Import { format: "sdf", .. })
+            ),
+            "{name}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn an_sd_file_opens_its_records_side_by_side_and_saves_as_a_drawing() {
+    let (mut app, _) = App::new();
+    app.cancel_engine_job();
+    app.tab.busy = false;
+    let before = app.tab.doc.clone();
+    app.tab.doc.add_atom("N", Point::default());
+    app.changed(before);
+    let kept = app.tab.doc.clone();
+    let sdf = format!("{ETHANOL}$$$$\n{ACETOPHENONE}>  <Name>\nacetophenone\n\n$$$$\n");
+    open_sd_file(&mut app, "library/two.SDF", sdf).await;
+    assert!(!app.error, "{}", app.status);
+    // Ethanol's three atoms, then acetophenone's nine to their right.
+    let doc = &app.tab.doc;
+    assert_eq!(doc.atoms.len(), 12, "{}", app.status);
+    let ids = |range: std::ops::Range<usize>| -> Vec<u64> {
+        doc.atoms[range].iter().map(|atom| atom.id).collect()
+    };
+    let (_, ethanol) = reshiki::scene::selection_bounds(doc, &ids(0..3)).unwrap();
+    let (acetophenone, _) = reshiki::scene::selection_bounds(doc, &ids(3..12)).unwrap();
+    assert!(ethanol.x < acetophenone.x);
+    // The drawing that was in front stays in its tab.
+    assert_eq!(app.tabs.background.len(), 1);
+    assert_eq!(app.tabs.background[0].doc, kept);
+    // Save cannot write an SD file: the drawing is unsaved, and Save asks
+    // where to keep it as a .rsk rather than writing over the file.
+    assert_eq!(app.tab.name(), "two.SDF");
+    assert!(app.tab.path.is_none() && app.dirty());
+    assert!(kept_format(std::path::Path::new("library/two.SDF")).is_none());
+    assert!(SAVE_FORMATS.iter().all(|(format, _)| *format != "sdf"));
+    assert_eq!(app.drawing_save_target(false), (None, "two.rsk".into()));
+}
+
+#[tokio::test]
+async fn an_sd_file_without_a_structure_reports_it_and_opens_nothing() {
+    let (mut app, _) = App::new();
+    app.cancel_engine_job();
+    app.tab.busy = false;
+    let before = app.tab.doc.clone();
+    open_sd_file(&mut app, "empty.sdf", "\n".into()).await;
+    assert!(app.error);
+    assert_eq!(app.status, "Could not open empty.sdf: it has no structure");
+    assert_eq!(app.tab.doc, before);
+    assert!(app.tabs.background.is_empty());
+}
+
+#[test]
+fn an_sd_file_with_a_record_that_does_not_fit_opens_the_rest_and_says_so() {
+    let (mut app, _) = App::new();
+    app.cancel_engine_job();
+    app.tab.busy = false;
+    let mut good = Document::default();
+    good.add_atom("O", Point::default());
+    // A record the drawing cannot take: two atoms share an id.
+    let mut bad = good.clone();
+    bad.atoms.push(bad.atoms[0].clone());
+    let mut batch = crate::app::import::Batch::default();
+    batch.drawings = vec![good.clone(), good, bad];
+    batch.warnings = vec!["Charge ignored".into()];
+    let records = Prepared::Records(Box::new(batch));
+    let _ = app.update(Message::FilePrepared(Some((
+        "three.sdf".into(),
+        Ok(records),
+    ))));
+    assert_eq!(app.tab.doc.atoms.len(), 2);
+    assert_eq!(
+        app.status,
+        "Opened 2 of 3 structures · The rest don't fit · Charge ignored"
+    );
+    assert!(!app.error);
+    assert_eq!(app.github.amber.as_deref(), Some(app.status.as_str()));
 }
