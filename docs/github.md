@@ -52,7 +52,9 @@ changed.
 **Insert** (or Shift+Enter, or right-click a file and choose **Insert into
 drawing**) puts a file's structures into the drawing in front instead, placed
 as a paste is (a large one beside what is there), as one Undo step. An SD
-file's records land side by side.
+file's records land side by side. If they do not all fit in one drawing, the
+ones that fit open or are inserted, and the status bar says so in amber, such
+as **Opened 120 of 150 structures · The rest don't fit**.
 
 A folder shows its first 200 files, newest first, and says how many there
 are; the search field finds the others.
