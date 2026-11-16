@@ -1086,6 +1086,174 @@ fn picker_at(app: &mut App, mode: Mode, names: &[&str]) {
         app,
         Action::Picker(picker::Action::Listing(generation, Ok((sha('8'), entries)))),
     );
+    // No last change is known; the drawings show.
+    for name in names.iter().filter(|name| name.ends_with(".rsk")) {
+        let unknown = picker::Action::Changed(generation, (*name).into(), None);
+        github(app, Action::Picker(unknown));
+    }
+}
+
+/// Lists the folder open in the picker with `folders` and `drawings`.
+fn picker_lists(app: &mut App, folders: &[&str], drawings: &[&str]) -> u64 {
+    let entry = |folder: bool| {
+        move |name: &&str| gh::Entry {
+            name: (*name).into(),
+            sha: sha(if folder { '9' } else { '7' }),
+            folder,
+        }
+    };
+    let entries = (folders.iter().map(entry(true)))
+        .chain(drawings.iter().map(entry(false)))
+        .collect();
+    let generation = picker_generation(app);
+    let listing = picker::Action::Listing(generation, Ok((sha('8'), entries)));
+    github(app, Action::Picker(listing));
+    generation
+}
+
+fn picker_changed(app: &mut App, generation: u64, path: &str, date: Option<&str>) {
+    let found = date.map(|date| ("@octo".to_owned(), date.to_owned()));
+    let changed = picker::Action::Changed(generation, path.into(), found);
+    github(app, Action::Picker(changed));
+}
+
+fn picker_names(app: &App) -> Vec<String> {
+    let Some(Dialog::Picker(picker)) = &app.github.dialog else {
+        panic!("no picker");
+    };
+    let entries = picker.entries.iter().flatten();
+    entries.map(|entry| entry.name.clone()).collect()
+}
+
+fn picker_selected(app: &App) -> Option<usize> {
+    match &app.github.dialog {
+        Some(Dialog::Picker(picker)) => picker.selected,
+        other => panic!("no picker: {other:?}"),
+    }
+}
+
+#[test]
+fn a_drawing_never_shows_what_another_of_its_name_was_last_changed_by() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = app_in(dir.path());
+    let other = Repo {
+        id: 9,
+        key: RepoKey {
+            owner: "octo".into(),
+            repo: "other".into(),
+        },
+        ..repo()
+    };
+    app.github.repos = vec![repo(), other.clone()];
+    let picker = |action| Action::Picker(action);
+    github(&mut app, picker(picker::Action::Show(Mode::Open)));
+    github(&mut app, picker(picker::Action::PickRepo(repo().key)));
+    let top = picker_lists(&mut app, &["sub"], &["ring.rsk"]);
+    picker_changed(&mut app, top, "ring.rsk", Some("2026-03-01T00:00:00Z"));
+
+    // Another `ring.rsk`, in a folder and in another repository, whose
+    // last change GitHub does not tell: it sorts after the one known.
+    github(&mut app, picker(picker::Action::Folder("sub".into())));
+    let sub = picker_lists(&mut app, &[], &["a.rsk", "ring.rsk"]);
+    picker_changed(&mut app, sub, "sub/a.rsk", Some("2025-01-01T00:00:00Z"));
+    picker_changed(&mut app, sub, "sub/ring.rsk", None);
+    assert_eq!(picker_names(&app), ["a.rsk", "ring.rsk"]);
+
+    github(&mut app, picker(picker::Action::PickRepo(other.key)));
+    let top = picker_lists(&mut app, &[], &["a.rsk", "ring.rsk"]);
+    picker_changed(&mut app, top, "a.rsk", Some("2025-01-01T00:00:00Z"));
+    picker_changed(&mut app, top, "ring.rsk", None);
+    assert_eq!(picker_names(&app), ["a.rsk", "ring.rsk"]);
+}
+
+#[test]
+fn a_download_still_running_never_closes_a_new_folder() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = app_in(dir.path());
+    picker_at(&mut app, Mode::Open, &["other.rsk"]);
+    let picker = |action| Action::Picker(action);
+    github(&mut app, picker(picker::Action::Select(0)));
+    github(&mut app, picker(picker::Action::Open));
+    let download = app.github.seq;
+    github(&mut app, picker(picker::Action::NewItem(true)));
+    github(
+        &mut app,
+        picker(picker::Action::NewItemName("fresh".into())),
+    );
+    github(&mut app, picker(picker::Action::CreateItem));
+
+    let late = api::Download {
+        commit: sha('c'),
+        blob: sha('b'),
+        bytes: drawing(42.),
+    };
+    let late = picker::Action::Downloaded(download, repo(), "other.rsk".into(), Ok(late));
+    github(&mut app, picker(late));
+    let Some(Dialog::Picker(picker)) = &app.github.dialog else {
+        panic!("the picker closed");
+    };
+    assert_eq!(picker.trail, [("fresh".to_owned(), String::new())]);
+    assert!(!workcopy::working_path(dir.path(), &repo().key, "other.rsk").exists());
+}
+
+#[test]
+fn the_keyboard_selects_only_the_tiles_that_show() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = app_in(dir.path());
+    app.github.repos = vec![repo()];
+    let picker = |action| Action::Picker(action);
+    github(&mut app, picker(picker::Action::Show(Mode::Open)));
+    github(&mut app, picker(picker::Action::PickRepo(repo().key)));
+    // The drawings wait for their last changes; only the folder shows.
+    let listed = picker_lists(&mut app, &["sub"], &["a.rsk", "b.rsk"]);
+    for _ in 0..3 {
+        github(&mut app, picker(picker::Action::Move(1)));
+    }
+    assert_eq!(picker_selected(&app), Some(0));
+    // A selection on a hidden drawing opens nothing.
+    github(&mut app, picker(picker::Action::Select(1)));
+    let requests = app.github.seq;
+    github(&mut app, picker(picker::Action::Enter));
+    assert_eq!(app.github.seq, requests);
+
+    // The order lands: the selection stays on `a.rsk`, now after `b.rsk`.
+    picker_changed(&mut app, listed, "a.rsk", Some("2025-01-01T00:00:00Z"));
+    picker_changed(&mut app, listed, "b.rsk", Some("2026-01-01T00:00:00Z"));
+    assert_eq!(picker_names(&app), ["sub", "b.rsk", "a.rsk"]);
+    assert_eq!(picker_selected(&app), Some(2));
+    github(&mut app, picker(picker::Action::Move(-1)));
+    assert_eq!(picker_selected(&app), Some(1));
+}
+
+#[test]
+fn a_picker_opened_before_the_saved_sign_in_loads_lists_once_it_does() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = app_in(dir.path());
+    let tokens = Tokens {
+        login: "octo".into(),
+        access: "unused".into(),
+        access_expires_at: None,
+        refresh: None,
+        refresh_expires_at: None,
+    };
+    app.github.client = None;
+    app.github.account = Account::SignedOut(None);
+    let picker = |app: &App| match &app.github.dialog {
+        Some(Dialog::Picker(picker)) => (picker.signed_out, picker.repos.clone()),
+        other => panic!("no picker: {other:?}"),
+    };
+    github(&mut app, Action::Picker(picker::Action::Show(Mode::Open)));
+    assert!(picker(&app).0);
+
+    let generation = app.github.generation;
+    github(&mut app, Action::Loaded(generation, Ok(Some(tokens))));
+    assert_eq!(picker(&app), (false, None), "listing");
+    let account = gh::Account {
+        login: "octo".into(),
+        repos: vec![repo()],
+    };
+    github(&mut app, Action::Listed(generation, Ok(account)));
+    assert_eq!(picker(&app), (false, Some(vec![repo()])));
 }
 
 fn picker_generation(app: &App) -> u64 {
@@ -1297,6 +1465,7 @@ fn a_renamed_repository_keeps_its_folder_here() {
             Ok((sha('8'), vec![entry])),
         )),
     );
+    picker_changed(&mut app, generation, "ring.rsk", None);
     github(&mut app, Action::Picker(picker::Action::Select(0)));
     github(&mut app, Action::Picker(picker::Action::Open));
     assert!(app.github.dialog.is_none(), "the unsent drawing opens");

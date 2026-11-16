@@ -69,11 +69,12 @@ pub(in crate::app) struct Picker {
     names: Vec<String>,
     /// The folder could not be listed, so its names are not known.
     unlisted: bool,
-    selected: Option<usize>,
+    pub(super) selected: Option<usize>,
     /// The last click, for a double click.
     clicked: Option<(usize, Instant)>,
     thumbs: HashMap<String, Option<Arc<Document>>>,
-    /// Who last changed each drawing, and when, by name.
+    /// Who last changed each drawing of this repository, and when, by
+    /// repository path.
     changed: HashMap<String, (String, DateTime<Local>)>,
     new_repo: Option<String>,
     /// A new drawing (`false`) or folder (`true`) being named here.
@@ -164,21 +165,35 @@ impl Picker {
         }
     }
 
-    fn selected_entry(&self) -> Option<&Entry> {
-        self.entries.as_ref()?.get(self.selected?)
+    /// A drawing's tile shows once every drawing's last change is known.
+    fn visible(&self, entry: &Entry) -> bool {
+        entry.folder || self.waiting == 0
     }
 
-    /// Folders by name, then drawings newest first.
+    /// What is selected, if its tile shows.
+    fn selected_entry(&self) -> Option<&Entry> {
+        let entry = self.entries.as_ref()?.get(self.selected?)?;
+        self.visible(entry).then_some(entry)
+    }
+
+    /// Folders by name, then drawings newest first. The selection stays on
+    /// the same tile.
     fn sort(&mut self) {
-        let changed = &self.changed;
-        if let Some(entries) = &mut self.entries {
-            entries.sort_by_cached_key(|entry| {
-                let newest = (!entry.folder)
-                    .then(|| changed.get(&entry.name).map(|(_, at)| -at.timestamp()))
-                    .flatten();
-                (!entry.folder, newest.is_none(), newest, entry.name.clone())
-            });
-        }
+        let selected = self.selected_entry().map(|entry| entry.name.clone());
+        let Some(mut entries) = self.entries.take() else {
+            return;
+        };
+        entries.sort_by_cached_key(|entry| {
+            let newest = (!entry.folder)
+                .then(|| self.changed.get(&self.repo_path(&entry.name)))
+                .flatten()
+                .map(|(_, at)| -at.timestamp());
+            (!entry.folder, newest.is_none(), newest, entry.name.clone())
+        });
+        self.selected =
+            selected.and_then(|name| entries.iter().position(|entry| entry.name == name));
+        self.clicked = None;
+        self.entries = Some(entries);
     }
 }
 
@@ -199,7 +214,8 @@ pub enum Action {
     Move(isize),
     PickRepo(RepoKey),
     Listing(u64, Result<(String, Vec<Entry>), gh::Error>),
-    /// Who last changed a drawing, and when (`None`: unknown).
+    /// Who last changed the drawing at a repository path, and when
+    /// (`None`: unknown).
     Changed(u64, String, Option<(String, String)>),
     Folder(String),
     /// Backspace: up one folder.
@@ -319,7 +335,9 @@ impl App {
                     (at as isize + step).clamp(0, len.saturating_sub(1) as isize) as usize
                 };
                 if picker.repo.is_some() && picker.search.is_empty() {
-                    let len = picker.entries.as_ref().map_or(0, Vec::len);
+                    // Folders come first, so the tiles that show are the first.
+                    let entries = picker.entries.iter().flatten();
+                    let len = entries.filter(|entry| picker.visible(entry)).count();
                     picker.selected =
                         (len > 0).then(|| picker.selected.map_or(0, |at| step_in(at, len)));
                 } else {
@@ -352,6 +370,7 @@ impl App {
                 }
                 picker.request = 0;
                 picker.busy = false;
+                picker.changed.clear();
                 picker.repo = Some(repo.clone());
                 picker.search.clear();
                 picker.root = None;
@@ -401,9 +420,9 @@ impl App {
                             .filter(|entry| !picker.thumbs.contains_key(&entry.sha))
                             .map(|entry| entry.sha.clone())
                             .collect();
-                        let paths: Vec<(String, String)> = drawings
+                        let paths: Vec<String> = drawings
                             .iter()
-                            .map(|entry| (entry.name.clone(), picker.repo_path(&entry.name)))
+                            .map(|entry| picker.repo_path(&entry.name))
                             .collect();
                         picker.waiting = paths.len();
                         // On the way to a folder asked for: open the next one.
@@ -447,14 +466,14 @@ impl App {
                     }
                 }
             }
-            Action::Changed(generation, name, found) => {
+            Action::Changed(generation, path, found) => {
                 let Some(picker) = self.picker().filter(|p| p.generation == generation) else {
                     return Task::none();
                 };
                 if let Some((who, date)) = found
                     && let Ok(at) = DateTime::parse_from_rfc3339(&date)
                 {
-                    picker.changed.insert(name, (who, at.with_timezone(&Local)));
+                    picker.changed.insert(path, (who, at.with_timezone(&Local)));
                 }
                 picker.waiting = picker.waiting.saturating_sub(1);
                 if picker.waiting == 0 {
@@ -734,6 +753,17 @@ impl App {
         Task::batch([self.github_list(), focus, self.picker_choose()])
     }
 
+    /// Saved credentials signed in after the picker opened signed out: it
+    /// lists the repositories now.
+    pub(super) fn picker_signed_in(&mut self) -> Task<Message> {
+        let Some(picker) = self.picker().filter(|picker| picker.signed_out) else {
+            return Task::none();
+        };
+        picker.signed_out = false;
+        picker.repos = None;
+        self.github_list()
+    }
+
     /// A number for a picker request, never given before in this run.
     fn github_request(&mut self) -> u64 {
         self.github.seq += 1;
@@ -826,9 +856,9 @@ impl App {
         }))
     }
 
-    /// The last commit of each drawing, `(name, repository path)`, for its
-    /// tile's second line and the order.
-    fn picker_changed(&mut self, generation: u64, paths: Vec<(String, String)>) -> Task<Message> {
+    /// The last commit of each drawing, by repository path, for its tile's
+    /// second line and the order.
+    fn picker_changed(&mut self, generation: u64, paths: Vec<String>) -> Task<Message> {
         let (Some(client), Some(repo)) = (
             self.github.client(),
             self.picker().and_then(|picker| picker.repo.clone()),
@@ -838,8 +868,9 @@ impl App {
             }
             return Task::none();
         };
-        Task::batch(paths.into_iter().map(|(name, path)| {
+        Task::batch(paths.into_iter().map(|path| {
             let (client, repo) = (client.clone(), repo.clone());
+            let asked = path.clone();
             perform(
                 async move {
                     let found =
@@ -850,7 +881,7 @@ impl App {
                     let who = last.login.map_or(last.author, |login| format!("@{login}"));
                     Some((who, last.date))
                 },
-                move |found| GitHubAction::Picker(Action::Changed(generation, name, found)),
+                move |found| GitHubAction::Picker(Action::Changed(generation, asked, found)),
             )
         }))
     }
@@ -1037,6 +1068,9 @@ impl App {
             }
             picker.trail.push((typed.to_owned(), String::new()));
             picker.new_item = None;
+            // A download still running is for the folder left.
+            picker.request = 0;
+            picker.busy = false;
             picker.entries = Some(Vec::new());
             picker.names.clear();
             picker.selected = None;
@@ -1372,7 +1406,7 @@ impl App {
                     .iter()
                     .enumerate()
                     // Drawings show once their last changes are known.
-                    .filter(|(_, entry)| entry.folder || picker.waiting == 0)
+                    .filter(|(_, entry)| picker.visible(entry))
                     .map(|(at, entry)| {
                         let selected = picker.selected == Some(at);
                         let path = picker.repo_path(&entry.name);
@@ -1401,7 +1435,7 @@ impl App {
                                     .into(),
                                     _ => Space::new().into(),
                                 };
-                                let meta = picker.changed.get(&entry.name).map(|(who, at)| {
+                                let meta = picker.changed.get(&path).map(|(who, at)| {
                                     format!("{who} · {}", super::versions::tile_time(*at))
                                 });
                                 (

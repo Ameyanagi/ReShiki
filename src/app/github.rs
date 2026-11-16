@@ -504,6 +504,7 @@ impl App {
                             // Versions lists GitHub's versions again.
                             self.github.versions.target = None;
                             self.star_github_ready();
+                            return self.picker_signed_in();
                         }
                     }
                     Ok(None) => {}
