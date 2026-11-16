@@ -497,6 +497,7 @@ fn cli_input_formats_match_the_app() {
             Prepared::Native(_) => "reshiki",
             Prepared::Import { format, .. } => format,
             Prepared::Picture(..) => panic!("Structure files are not pictures"),
+            Prepared::Records(_) => panic!("Structure files are not SD files"),
         };
         assert_eq!(
             chosen,
@@ -512,23 +513,12 @@ const ACETOPHENONE: &str =
 
 /// Opens `contents` as the file `name`, as File › Open does once it is read.
 async fn open_sd_file(app: &mut App, name: &str, contents: String) {
-    use iced::futures::StreamExt;
     let opened = prepare_contents(name.into(), Ok(contents.into_bytes())).await;
     assert!(
-        matches!(&opened, Some((_, Ok(Prepared::Import { format: "sdf", .. })))),
+        matches!(&opened, Some((_, Ok(Prepared::Records(_))))),
         "{opened:?}"
     );
-    let mut tasks = vec![app.update(Message::FilePrepared(opened))];
-    while let Some(task) = tasks.pop() {
-        let Some(mut stream) = iced_runtime::task::into_stream(task) else {
-            continue;
-        };
-        while let Some(action) = stream.next().await {
-            if let iced_runtime::Action::Output(message) = action {
-                tasks.push(app.update(message));
-            }
-        }
-    }
+    let _ = app.update(Message::FilePrepared(opened));
 }
 
 #[test]

@@ -387,7 +387,7 @@ fn prepare(path: &std::path::Path, contents: Vec<u8>) -> Result<Prepared, String
     } else {
         let format = reshiki::compatibility::file_format(path)
             .or_else(|| matches!(extension.as_str(), "smi" | "smiles").then_some("smiles"))
-            // An SD file is read one record at a time, as Insert reads it.
+            // An SD file's records are read next, in `records`.
             .or_else(|| (extension == "sdf").then_some("sdf"))
             .ok_or_else(|| super::import::unsupported_file(path))?;
         if contents.len() as u64 > super::import::limit(path) {
@@ -398,6 +398,35 @@ fn prepare(path: &std::path::Path, contents: Vec<u8>) -> Result<Prepared, String
             contents: super::import::contents(format, contents)?,
         })
     }
+}
+
+/// Every record of an SD file, read as Insert reads them, before the file
+/// is reported: files then still open in the order they were chosen.
+async fn records(
+    path: &std::path::Path,
+    prepared: Result<Prepared, String>,
+) -> Result<Prepared, String> {
+    let Ok(Prepared::Import {
+        format: "sdf",
+        contents,
+    }) = prepared
+    else {
+        return prepared;
+    };
+    let file = Picked {
+        path: path.to_path_buf(),
+        contents: contents.into_bytes(),
+        #[cfg(target_arch = "wasm32")]
+        handle: None,
+    };
+    let batch = super::import::load(
+        reshiki::engine::LocalEngine::default(),
+        vec![file],
+        Default::default(),
+        reshiki::document::Document::default().canvas_theme,
+    )
+    .await?;
+    Ok(Prepared::Records(Box::new(batch)))
 }
 
 /// Reading, decoding and native validation all run on a blocking worker, never
@@ -418,6 +447,7 @@ pub(super) async fn read(path: PathBuf) -> Opened {
     .await
     .map_err(|e| e.to_string())
     .and_then(|r| r);
+    let result = records(&path, result).await;
     Some((path, result))
 }
 
@@ -469,7 +499,7 @@ pub(super) fn open_picked(
                             // Neither a picture nor an SD file stays the tab's file.
                             if !matches!(
                                 &prepared,
-                                Prepared::Picture(..) | Prepared::Import { format: "sdf", .. }
+                                Prepared::Picture(..) | Prepared::Records(..)
                             ) =>
                         {
                             let mut duplicate = None;
@@ -509,6 +539,7 @@ pub(super) async fn prepare_contents(path: PathBuf, contents: Result<Vec<u8>, St
         .await
         .map_err(|e| e.to_string())
         .and_then(|r| r);
+    let result = records(&path, result).await;
     Some((path, result))
 }
 
@@ -706,28 +737,6 @@ impl super::App {
             Err(error) => {
                 self.status = error;
                 self.error = true;
-            }
-            // Every record of an SD file, read as Insert reads them.
-            Ok(Prepared::Import {
-                format: "sdf",
-                contents,
-            }) => {
-                let file = Picked {
-                    path: path.clone(),
-                    contents: contents.into_bytes(),
-                    #[cfg(target_arch = "wasm32")]
-                    handle: None,
-                };
-                let read = super::import::load(
-                    self.engine.clone(),
-                    vec![file],
-                    Default::default(),
-                    reshiki::document::Document::default().canvas_theme,
-                );
-                return Task::perform(read, move |read| {
-                    let read = read.map(|batch| Prepared::Records(Box::new(batch)));
-                    Message::FilePrepared(Some((path.clone(), read)))
-                });
             }
             // Side by side, as an unsaved drawing with the file's name: Save
             // cannot write an SD file back.
