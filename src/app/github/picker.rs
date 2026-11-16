@@ -82,7 +82,7 @@ pub(in crate::app) struct Picker {
     pub(super) entries: Option<Vec<Entry>>,
     /// Drawings whose last change is still being asked for; they show
     /// once all are known, so nothing moves under the pointer.
-    waiting: usize,
+    pub(super) waiting: usize,
     /// Every name in the folder, previews and other files too.
     names: Vec<String>,
     /// The folder could not be listed, so its names are not known.
@@ -119,6 +119,9 @@ pub(in crate::app) struct Picker {
     view: Option<(f32, f32, f32)>,
     /// Drawings whose author, time and preview were asked for.
     pub(super) asked: HashSet<String>,
+    /// The repository paths of the first tiles on screen, whose dates the
+    /// one sort waits for.
+    first: HashSet<String>,
     /// Save a copy: This computer is offered too.
     pub(super) copy: bool,
 }
@@ -161,6 +164,7 @@ impl Picker {
             menu: None,
             view: None,
             asked: HashSet::new(),
+            first: HashSet::new(),
             copy: false,
         }
     }
@@ -181,6 +185,12 @@ impl Picker {
                 repo.key.owner.to_lowercase(),
             )
         });
+        // The repository open here follows the new listing, as its access may.
+        if let Some(open) = &mut self.repo
+            && let Some(now) = repos.iter().find(|repo| repo.id == open.id)
+        {
+            *open = now.clone();
+        }
         self.repos = Some(repos);
     }
 
@@ -586,7 +596,12 @@ impl App {
                         // changes are known, then sort newest first, once.
                         let load = self.picker_load();
                         if let Some(picker) = self.picker() {
-                            picker.waiting = picker.asked.len();
+                            picker.first = picker
+                                .asked
+                                .iter()
+                                .map(|name| picker.repo_path(name))
+                                .collect();
+                            picker.waiting = picker.first.len();
                         }
                         return load;
                     }
@@ -603,13 +618,15 @@ impl App {
                 let Some(picker) = self.picker().filter(|p| p.generation == generation) else {
                     return Task::none();
                 };
+                // Tiles scrolled into view later never move the others, nor
+                // end the wait for the first ones.
+                let first = picker.first.remove(&path);
                 if let Some((who, date)) = found
                     && let Ok(at) = DateTime::parse_from_rfc3339(&date)
                 {
                     picker.changed.insert(path, (who, at.with_timezone(&Local)));
                 }
-                // Tiles scrolled into view later never move the others.
-                if picker.waiting > 0 {
+                if picker.waiting > 0 && first {
                     picker.waiting -= 1;
                     if picker.waiting == 0 {
                         picker.sort();
@@ -1196,7 +1213,12 @@ impl App {
             .or_insert_with(|| RepoState::new(repo));
         state.owner.clone_from(&repo.key.owner);
         state.repo.clone_from(&repo.key.repo);
-        state.read_only = !repo.push;
+        // Access only ever widens here: a repository read before access was
+        // given (a download on its way, a picker listed earlier) never makes
+        // it read only again. A new state takes the repository's own.
+        if repo.push {
+            state.read_only = false;
+        }
         state
     }
 
