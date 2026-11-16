@@ -534,6 +534,11 @@ impl App {
                     if catalog::github_word(command, query) {
                         return Some((9_000, i, 2));
                     }
+                    // One or two letters find commands first; drawings and
+                    // repositories known on GitHub come after them.
+                    if query.chars().count() <= 2 && catalog::github_place(&command.name) {
+                        return search::score(command, query).map(|_| (0, i, 0));
+                    }
                     let keyword = query.chars().count() >= 2
                         && !query.eq_ignore_ascii_case("template")
                         && match &command.run {

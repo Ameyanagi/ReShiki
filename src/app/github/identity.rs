@@ -4,7 +4,7 @@
 //! show a tinted one. The hues avoid the app's teal, red, amber and peach.
 use iced::widget::{container, text};
 use iced::{Border, Color, Element, Theme};
-use reshiki::github::RepoKey;
+use reshiki::github::{Repo, RepoKey};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
@@ -40,6 +40,75 @@ pub(super) struct Prefs {
     /// The repository a drawing was last opened from or sent to.
     #[serde(default)]
     pub(super) last: Option<u64>,
+    /// Repositories opened by link, listed until removed from the list.
+    #[serde(default)]
+    pub(super) shared: Vec<Shared>,
+}
+
+/// A repository opened by link, as GitHub last named it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(super) struct Shared {
+    id: u64,
+    owner: String,
+    repo: String,
+    branch: String,
+    private: bool,
+    push: bool,
+}
+
+impl From<&Repo> for Shared {
+    fn from(repo: &Repo) -> Self {
+        Self {
+            id: repo.id,
+            owner: repo.key.owner.clone(),
+            repo: repo.key.repo.clone(),
+            branch: repo.default_branch.clone(),
+            private: repo.private,
+            push: repo.push,
+        }
+    }
+}
+
+impl From<&Shared> for Repo {
+    fn from(shared: &Shared) -> Self {
+        Self {
+            id: shared.id,
+            key: RepoKey {
+                owner: shared.owner.clone(),
+                repo: shared.repo.clone(),
+            },
+            private: shared.private,
+            default_branch: shared.branch.clone(),
+            push: shared.push,
+        }
+    }
+}
+
+impl Prefs {
+    /// Lists `repo` as shared, or updates it; whether anything changed.
+    pub(super) fn share(&mut self, repo: &Repo) -> bool {
+        let shared = Shared::from(repo);
+        match self.shared.iter_mut().find(|one| one.id == repo.id) {
+            Some(one) if *one == shared => false,
+            Some(one) => {
+                *one = shared;
+                true
+            }
+            None => {
+                self.shared.push(shared);
+                true
+            }
+        }
+    }
+
+    pub(super) fn is_shared(&self, id: u64) -> bool {
+        self.shared.iter().any(|one| one.id == id)
+    }
+
+    /// Remove from list.
+    pub(super) fn forget(&mut self, id: u64) {
+        self.shared.retain(|one| one.id != id);
+    }
 }
 
 fn prefs_path(root: &Path) -> std::path::PathBuf {
@@ -159,22 +228,32 @@ fn ink(theme: &Theme) -> Color {
     Color::from_rgb8(r, g, b)
 }
 
-/// The solid badge of tabs and the chip: the monogram on the repository's hue.
-pub(super) fn badge<'a, Message: 'a>(hue: usize, letters: String) -> Element<'a, Message> {
+/// The solid badge of tabs and the chip: the monogram on the repository's
+/// hue. A read-only repository's is outlined: the monogram in the hue.
+pub(super) fn badge<'a, Message: 'a>(
+    hue: usize,
+    letters: String,
+    outlined: bool,
+) -> Element<'a, Message> {
     container(
         text(letters)
             .size(8.5)
             .font(bold())
             .style(move |theme: &Theme| text::Style {
-                color: Some(ink(theme)),
+                color: Some(if outlined {
+                    color(theme, hue)
+                } else {
+                    ink(theme)
+                }),
             }),
     )
     .center(16)
     .style(move |theme: &Theme| container::Style {
-        background: Some(color(theme, hue).into()),
+        background: (!outlined).then(|| color(theme, hue).into()),
         border: Border {
             radius: 4.0.into(),
-            ..Border::default()
+            width: if outlined { 1.2 } else { 0. },
+            color: color(theme, hue),
         },
         ..container::Style::default()
     })

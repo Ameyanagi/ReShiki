@@ -169,6 +169,13 @@ pub async fn repo(client: &Client, id: u64) -> Result<Repo, Error> {
     reply.checked()
 }
 
+/// By name, for a repository opened by link. Signed out, GitHub says
+/// nothing of permissions, so it reads as one the user may not send to.
+pub async fn repo_named(client: &Client, key: &RepoKey) -> Result<Repo, Error> {
+    let reply: RepoReply = call(client, Method::GET, &base(key), None).await?;
+    reply.checked()
+}
+
 /// Always private, with a first commit so drawings can be sent at once.
 pub async fn create_repo(client: &Client, name: &str) -> Result<Repo, Error> {
     let body = json!({ "name": name, "private": true, "auto_init": true });
@@ -200,6 +207,25 @@ pub async fn head(client: &Client, repo: &RepoKey, branch: &str) -> Result<Head,
     Ok(Head {
         commit,
         tree: sha(reply.tree.sha)?,
+    })
+}
+
+/// The commit a branch or commit name points at, and its tree.
+pub async fn commit(client: &Client, repo: &RepoKey, reference: &str) -> Result<Head, Error> {
+    #[derive(Deserialize)]
+    struct Reply {
+        sha: String,
+        commit: Commit,
+    }
+    #[derive(Deserialize)]
+    struct Commit {
+        tree: Named,
+    }
+    let path = format!("{}/commits/{}", base(repo), encoded(reference));
+    let reply: Reply = call(client, Method::GET, &path, None).await?;
+    Ok(Head {
+        commit: sha(reply.sha)?,
+        tree: sha(reply.commit.tree.sha)?,
     })
 }
 
@@ -324,6 +350,23 @@ pub async fn download(
     path: &str,
 ) -> Result<Download, Error> {
     let head = head(client, repo, branch).await?;
+    let found = Folders::new(client, repo, head.tree).blob(path).await?;
+    let sha = found.ok_or(Error::NotFound)?;
+    Ok(Download {
+        commit: head.commit,
+        bytes: blob(client, repo, &sha).await?,
+        blob: sha,
+    })
+}
+
+/// The file at `path` as it is at a branch or commit.
+pub async fn download_at(
+    client: &Client,
+    repo: &RepoKey,
+    reference: &str,
+    path: &str,
+) -> Result<Download, Error> {
+    let head = commit(client, repo, reference).await?;
     let found = Folders::new(client, repo, head.tree).blob(path).await?;
     let sha = found.ok_or(Error::NotFound)?;
     Ok(Download {

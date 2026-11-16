@@ -309,7 +309,7 @@ impl App {
     }
 }
 
-pub(super) fn view(review: &Review) -> Element<'_, Message> {
+pub(super) fn view<'a>(review: &'a Review, me: Option<&str>) -> Element<'a, Message> {
     let mut title = row![
         text(format!("“{}” changed on GitHub", review.name)).size(18),
         Space::new().width(Length::Fill),
@@ -331,10 +331,7 @@ pub(super) fn view(review: &Review) -> Element<'_, Message> {
     // `GitHub · @alice · 14:02`, then the commit's message if there is room.
     let mut theirs = row![text("GitHub").size(13)].spacing(6);
     if let Some(found) = &review.theirs {
-        let who = found
-            .login
-            .as_ref()
-            .map_or_else(|| found.author.clone(), |login| format!("@{login}"));
+        let who = super::versions::who(found.login.as_deref(), &found.author, me);
         theirs = theirs
             .push(
                 text(format!("· {who} · {}", super::versions::clock(&found.date)))

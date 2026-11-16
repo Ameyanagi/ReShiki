@@ -1187,7 +1187,7 @@ fn a_download_still_running_never_closes_a_new_folder() {
         blob: sha('b'),
         bytes: drawing(42.),
     };
-    let late = picker::Action::Downloaded(download, repo(), "other.rsk".into(), Ok(late));
+    let late = picker::Action::Downloaded(download, repo(), "other.rsk".into(), false, Ok(late));
     github(&mut app, picker(late));
     let Some(Dialog::Picker(picker)) = &app.github.dialog else {
         panic!("the picker closed");
@@ -2066,4 +2066,438 @@ async fn the_history_clock_follows_the_tab_track_on_github_drawings() -> Result<
         local[4].bounds.x + local[4].bounds.width > github[4].bounds.x + github[4].bounds.width
     );
     Ok(())
+}
+
+fn alice() -> Repo {
+    Repo {
+        id: 42,
+        key: RepoKey {
+            owner: "alice".into(),
+            repo: "ligands".into(),
+        },
+        private: false,
+        default_branch: "main".into(),
+        push: false,
+    }
+}
+
+const LIGANDS: &str = "https://github.com/alice/ligands";
+
+fn the_picker(app: &App) -> &picker::Picker {
+    match &app.github.dialog {
+        Some(Dialog::Picker(picker)) => picker,
+        other => panic!("no picker: {other:?}"),
+    }
+}
+
+/// A link followed in the picker, and GitHub's answer for its repository.
+fn resolved(app: &mut App, link: &str, answer: Result<Repo, gh::Error>) {
+    github(app, Action::Picker(picker::Action::Link(link.into())));
+    let found = gh::link::parse(link, &app.github.ends.web).unwrap();
+    let request = app.github.seq;
+    github(
+        app,
+        Action::Picker(picker::Action::Resolved(request, found, answer)),
+    );
+}
+
+#[test]
+fn a_pasted_link_shows_one_row_and_enter_opens_its_folder() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = app_in(dir.path());
+    app.github.repos = vec![repo()];
+    github(&mut app, Action::Picker(picker::Action::Show(Mode::Open)));
+    let link = "https://github.com/octo/lab/tree/main/scheme/drafts";
+    github(
+        &mut app,
+        Action::Picker(picker::Action::Search(link.into())),
+    );
+    let found = the_picker(&app).link.clone().unwrap();
+    assert_eq!(found.place(), "lab / scheme / drafts");
+    // A search that is not a link filters the repositories as before.
+    github(
+        &mut app,
+        Action::Picker(picker::Action::Search("la".into())),
+    );
+    assert!(the_picker(&app).link.is_none());
+    github(
+        &mut app,
+        Action::Picker(picker::Action::Search(link.into())),
+    );
+    // A repository listed here needs no request: Enter opens the folder.
+    github(&mut app, Action::Picker(picker::Action::Enter));
+    let picker = the_picker(&app);
+    assert_eq!(picker.repo.as_ref().map(|repo| repo.id), Some(repo().id));
+    assert!(picker.link.is_none());
+    let generation = picker_generation(&app);
+    let folder = gh::Entry {
+        name: "scheme".into(),
+        sha: sha('5'),
+        folder: true,
+    };
+    github(
+        &mut app,
+        Action::Picker(picker::Action::Listing(
+            generation,
+            Ok((sha('8'), vec![folder])),
+        )),
+    );
+    let trail: Vec<&str> = (the_picker(&app).trail.iter())
+        .map(|(name, _)| name.as_str())
+        .collect();
+    assert_eq!(trail, ["scheme"]);
+}
+
+#[test]
+fn a_shared_repository_stays_listed_until_removed() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = app_in(dir.path());
+    app.github.repos = vec![repo()];
+    resolved(&mut app, LIGANDS, Ok(alice()));
+    assert!(app.github.prefs.is_shared(alice().id));
+    let picker = the_picker(&app);
+    assert_eq!(picker.repo.as_ref().map(|repo| repo.id), Some(alice().id));
+    let listed: Vec<u64> = picker.repos.iter().flatten().map(|r| r.id).collect();
+    assert_eq!(listed, [repo().id, alice().id]);
+    // Listed again in the next picker, without asking GitHub.
+    github(&mut app, Action::Close);
+    github(&mut app, Action::Picker(picker::Action::Show(Mode::Open)));
+    let listed = the_picker(&app).repos.clone().unwrap();
+    assert!(
+        listed
+            .iter()
+            .any(|repo| repo.id == alice().id && !repo.push)
+    );
+    // Send never offers it.
+    github(&mut app, Action::Close);
+    github(&mut app, Action::Picker(picker::Action::Show(Mode::SendTo)));
+    let listed = the_picker(&app).repos.clone().unwrap();
+    assert!(!listed.iter().any(|repo| repo.id == alice().id));
+    github(&mut app, Action::Close);
+    // Right-click, Remove from list.
+    github(&mut app, Action::Picker(picker::Action::Show(Mode::Open)));
+    github(
+        &mut app,
+        Action::Picker(picker::Action::PickRepo(alice().key)),
+    );
+    github(
+        &mut app,
+        Action::Picker(picker::Action::RowMenu(Some(alice().id))),
+    );
+    assert_eq!(the_picker(&app).menu, Some(alice().id));
+    github(&mut app, Action::Picker(picker::Action::Forget(alice().id)));
+    assert!(!app.github.prefs.is_shared(alice().id));
+    let picker = the_picker(&app);
+    assert!(picker.repo.is_none());
+    assert!(!picker.repos.iter().flatten().any(|r| r.id == alice().id));
+}
+
+#[test]
+fn add_public_repository_takes_a_name_or_a_link() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = app_in(dir.path());
+    github(&mut app, Action::Picker(picker::Action::Show(Mode::Open)));
+    github(&mut app, Action::Picker(picker::Action::Add));
+    github(
+        &mut app,
+        Action::Picker(picker::Action::AddName("ligands".into())),
+    );
+    github(&mut app, Action::Picker(picker::Action::AddRepo));
+    assert_eq!(
+        picker_error(&app).as_deref(),
+        Some("Type owner/repo or a GitHub link")
+    );
+    github(&mut app, Action::Picker(picker::Action::Add));
+    github(
+        &mut app,
+        Action::Picker(picker::Action::AddName("alice/ligands".into())),
+    );
+    github(&mut app, Action::Picker(picker::Action::AddRepo));
+    let found = gh::link::parse(LIGANDS, "").unwrap();
+    let request = app.github.seq;
+    github(
+        &mut app,
+        Action::Picker(picker::Action::Resolved(request, found, Ok(alice()))),
+    );
+    assert!(app.github.prefs.is_shared(alice().id));
+    assert_eq!(picker_error(&app), None);
+}
+
+/// Signed out, with nothing kept here but `alice/ligands`, shared.
+fn signed_out(dir: &Path) -> App {
+    let (mut app, _) = App::new();
+    app.github.root = Some(dir.to_owned());
+    app.github.client_id = Some("test".into());
+    app.github.ends = nowhere();
+    app.github.account = Account::SignedOut(None);
+    app.github.prefs.share(&alice());
+    app
+}
+
+#[test]
+fn signed_out_public_repositories_list_with_names_only() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = signed_out(dir.path());
+    github(&mut app, Action::Picker(picker::Action::Show(Mode::Open)));
+    assert!(the_picker(&app).signed_out);
+    github(
+        &mut app,
+        Action::Picker(picker::Action::PickRepo(alice().key)),
+    );
+    let generation = picker_generation(&app);
+    let entries = ["index.rsk", "furan.rsk"]
+        .map(|name| gh::Entry {
+            name: name.into(),
+            sha: sha('7'),
+            folder: false,
+        })
+        .to_vec();
+    let seq = app.github.seq;
+    github(
+        &mut app,
+        Action::Picker(picker::Action::Listing(generation, Ok((sha('8'), entries)))),
+    );
+    // Names only: nobody is asked who changed them, nor for previews.
+    assert_eq!(app.github.seq, seq);
+    assert_eq!(picker_names(&app), ["furan.rsk", "index.rsk"]);
+}
+
+#[test]
+fn signed_out_the_hourly_limit_asks_to_sign_in() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = signed_out(dir.path());
+    app.github.prefs.shared.clear();
+    resolved(&mut app, LIGANDS, Err(gh::Error::RateLimited(None)));
+    let picker = the_picker(&app);
+    assert!(picker.limited && picker.error.is_none());
+    assert_eq!(
+        picker::LIMITED,
+        "GitHub's limit for signed-out use is reached. Sign in to continue."
+    );
+    github(&mut app, Action::Picker(picker::Action::SignIn));
+    assert!(matches!(app.github.dialog, Some(Dialog::SignIn)));
+}
+
+#[test]
+fn a_repository_github_will_not_show_cannot_be_opened_and_is_not_kept() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = signed_out(dir.path());
+    app.github.prefs.shared.clear();
+    resolved(
+        &mut app,
+        "https://github.com/alice/notes/blob/main/a.rsk",
+        Err(gh::Error::NotFound),
+    );
+    let picker = the_picker(&app);
+    assert_eq!(
+        picker.cant_open.as_ref().map(|key| key.repo.as_str()),
+        Some("notes")
+    );
+    assert!(picker.link.is_none());
+    assert!(app.github.prefs.shared.is_empty());
+    let key = picker.cant_open.clone().unwrap();
+    assert_eq!(
+        app.github.request(&key),
+        "Please add ReShiki to alice/notes so I can send drawings: \
+         http://127.0.0.1:9/apps/reshiki/installations/new"
+    );
+    github(&mut app, Action::CopyRequest(key));
+    assert_eq!(app.status, "Request copied · Send it to the owner");
+}
+
+/// `ring.rsk` of `repo()` is read only: someone else's repository.
+fn read_only_app(dir: &Path) -> (App, PathBuf) {
+    let (mut app, path) = app_in(dir);
+    app.github.states.get_mut(&repo().key).unwrap().read_only = true;
+    (app, path)
+}
+
+#[test]
+fn a_read_only_drawing_saves_here_and_offers_a_copy() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = read_only_app(dir.path());
+    save_here(&mut app, &path);
+    // Saved on this computer: a change, never asked to send.
+    assert_eq!(unsent(&app), ["ring.rsk"]);
+    assert!(!app.github_anything_unsent());
+    assert!(app.github_before_close(app.tab.id).is_none());
+    let (send, detail, action) = app.github_send_row();
+    assert_eq!(
+        (send.as_str(), detail.as_str()),
+        ("Save a copy…", "Read only")
+    );
+    assert!(matches!(action, Some(Action::SaveCopy)));
+    // The chip's menu, then Save a copy: the Send picker, name filled in.
+    github(&mut app, Action::ChipMenu(true));
+    assert!(app.github.chip_menu);
+    github(&mut app, Action::ShowSend);
+    assert!(!app.github.chip_menu);
+    let picker = the_picker(&app);
+    assert!(picker.copy);
+    assert_eq!(picker.mode, Mode::SendTo);
+    // Or this computer.
+    github(&mut app, Action::Picker(picker::Action::ThisComputer));
+    assert!(app.github.dialog.is_none());
+    assert!(matches!(
+        app.prompt,
+        Some(crate::app::prompt::Prompt::SaveAs)
+    ));
+}
+
+#[test]
+fn access_given_later_ends_read_only_and_changes_count_as_unsent() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = read_only_app(dir.path());
+    save_here(&mut app, &path);
+    // On window focus, at most every five minutes.
+    let _ = app.github_recheck();
+    let checked = app.github.checked;
+    assert!(checked.is_some());
+    let _ = app.github_recheck();
+    assert_eq!(app.github.checked, checked);
+    // Still no access: nothing changes.
+    let no_push = Repo {
+        push: false,
+        ..repo()
+    };
+    github(&mut app, Action::Access(repo().key, Ok(no_push)));
+    assert!(app.github.read_only(&repo().key));
+    github(&mut app, Action::Access(repo().key, Ok(repo())));
+    assert!(!app.github.read_only(&repo().key));
+    assert!(app.github_anything_unsent());
+    assert_eq!(app.github_send_row().0, "Send 1 drawing");
+    // A sign-in that lists it with access does the same.
+    app.github.states.get_mut(&repo().key).unwrap().read_only = true;
+    let generation = app.github.generation;
+    let account = gh::Account {
+        login: "octo".into(),
+        repos: vec![repo()],
+    };
+    github(&mut app, Action::Listed(generation, Ok(account)));
+    assert!(!app.github.read_only(&repo().key));
+}
+
+#[test]
+fn a_branch_link_opens_an_old_version_kept_apart_and_never_sent() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, working) = app_in(dir.path());
+    app.github.repos = vec![repo()];
+    github(
+        &mut app,
+        Action::Picker(picker::Action::Link(
+            "https://github.com/octo/lab/blob/draft/ring.rsk".into(),
+        )),
+    );
+    let old = api::Download {
+        commit: sha('d'),
+        blob: sha('e'),
+        bytes: drawing(30.),
+    };
+    let request = app.github.seq;
+    github(
+        &mut app,
+        Action::Picker(picker::Action::Downloaded(
+            request,
+            repo(),
+            "ring.rsk".into(),
+            true,
+            Ok(old.clone()),
+        )),
+    );
+    assert!(app.github.dialog.is_none());
+    let path = workcopy::old_path(dir.path(), &repo().key, &old.commit, "ring.rsk");
+    assert_eq!(std::fs::read(&path).unwrap(), old.bytes);
+    // The working copy is untouched.
+    assert_eq!(std::fs::read(&working).unwrap(), drawing(42.));
+    app.add_tab();
+    app.show_opened(
+        Document::from_native_file(&old.bytes).unwrap(),
+        Some(path.clone()),
+    );
+    assert!(app.github.old(app.tab.path.as_deref()).is_some());
+    // Edits stay here; nothing is sent; Cmd+S saves a copy.
+    edit(&mut app);
+    assert_eq!(app.github_title().as_deref(), Some("lab"));
+    let spoken = app.github_tab(&app.tab, false).unwrap().spoken;
+    assert!(spoken.ends_with("old version"));
+    assert_eq!(
+        app.github_link().as_deref(),
+        Some("http://127.0.0.1:9/octo/lab/blob/main/ring.rsk")
+    );
+    assert!(!app.github_anything_unsent());
+    assert_eq!(app.github_send_row().0, "Save a copy…");
+    let _ = app.update(Message::Save);
+    assert!(the_picker(&app).copy);
+    github(&mut app, Action::Close);
+    // Open latest: the working copy, already open, comes to the front.
+    github(&mut app, Action::OpenLatest);
+    assert!(app.github.dialog.is_none());
+}
+
+#[test]
+fn authors_read_you_for_the_signed_in_user() {
+    use super::versions::who;
+    assert_eq!(who(Some("octo"), "Octo", Some("octo")), "You");
+    assert_eq!(who(Some("alice"), "Alice", Some("octo")), "@alice");
+    assert_eq!(who(Some("alice"), "Alice", None), "@alice");
+    assert_eq!(who(None, "Alice Smith", Some("octo")), "Alice Smith");
+}
+
+#[test]
+fn a_tabs_menu_copies_its_github_link() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = app_in(dir.path());
+    let id = app.tab.id;
+    app.add_tab();
+    app.tabs.color_menu = Some(id);
+    github(&mut app, Action::CopyTabLink(id));
+    assert_eq!(app.status, "Link copied");
+    assert!(app.tabs.color_menu.is_none());
+}
+
+#[test]
+fn the_palette_lists_known_drawings_and_opens_a_link() {
+    let dir = tempfile::tempdir().unwrap();
+    let (app, path) = app_in(dir.path());
+    let state = app.github.states[&repo().key].clone();
+    run_blocking(workcopy::persist(dir.path(), &repo().key, state, 99)).unwrap();
+    let rows = app.github_palette();
+    let row = |name: &str| rows.iter().find(|(row, ..)| row == name);
+    let (_, detail, action) = row("Open from GitHub: lab/ring").unwrap();
+    assert_eq!(detail, "octo/lab · ring.rsk");
+    assert!(matches!(action, Some(Action::OpenKnown(known)) if *known == path));
+    let (_, detail, action) = row("Open from GitHub: lab").unwrap();
+    assert_eq!(detail, "octo/lab");
+    assert!(matches!(
+        action,
+        Some(Action::Picker(picker::Action::ShowIn(..)))
+    ));
+    let link = "https://github.com/alice/ligands/blob/main/esters/route.rsk";
+    let (name, detail, _) = app.github_link_row(link).unwrap();
+    assert_eq!(name, "Open from GitHub: ligands/esters/route");
+    assert_eq!(detail, "alice/ligands · main");
+    assert!(app.github_link_row("benzene").is_none());
+}
+
+#[test]
+fn a_link_pasted_or_dropped_on_the_window_opens() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = app_in(dir.path());
+    github(&mut app, Action::Pasted(Some("CCO".into())));
+    assert!(app.github.dialog.is_none());
+    github(&mut app, Action::Pasted(Some(LIGANDS.into())));
+    assert_eq!(the_picker(&app).search, LIGANDS);
+    github(&mut app, Action::Close);
+    let webloc = dir.path().join("ligands.webloc");
+    std::fs::write(
+        &webloc,
+        format!("<plist><dict><key>URL</key><string>{LIGANDS}</string></dict></plist>"),
+    )
+    .unwrap();
+    assert!(app.github_dropped(&[webloc]).is_some());
+    assert_eq!(the_picker(&app).search, LIGANDS);
+    // Any other file is imported as before.
+    let other = dir.path().join("ring.mol");
+    std::fs::write(&other, "").unwrap();
+    assert!(app.github_dropped(&[other]).is_none());
 }

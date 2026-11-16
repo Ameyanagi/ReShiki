@@ -178,6 +178,17 @@ pub(super) fn lock(f: &mut Frame<'_>, ink: Color, locked: bool) {
     f.stroke(&shackle, Stroke::default().with_width(1.4).with_color(ink));
 }
 
+/// An open eye in a 14 × 14 box: read only.
+pub(super) fn eye(f: &mut Frame<'_>, ink: Color) {
+    let lid = Path::new(|p| {
+        p.move_to(Point::new(1.5, 7.));
+        p.quadratic_curve_to(Point::new(7., 0.5), Point::new(12.5, 7.));
+        p.quadratic_curve_to(Point::new(7., 13.5), Point::new(1.5, 7.));
+    });
+    f.stroke(&lid, Stroke::default().with_width(1.3).with_color(ink));
+    f.fill(&Path::circle(Point::new(7., 7.), 1.9), ink);
+}
+
 /// A push pin in the lock's 20 × 20 box: head, collar and needle.
 pub(super) fn pin(f: &mut Frame<'_>, ink: Color) {
     super::polygon(

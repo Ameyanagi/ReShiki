@@ -9,6 +9,7 @@ pub mod auth;
 pub mod client;
 pub mod config;
 pub mod credentials;
+pub mod link;
 #[cfg(test)]
 pub(crate) mod mock;
 pub mod send;

@@ -293,6 +293,14 @@ impl App {
                 self.accessibility_refresh()
             }
             Action::Window(id, event) if self.accessibility.window == Some(id) => {
+                // On focus: whether read-only GitHub repositories may be sent to now.
+                #[cfg(not(target_arch = "wasm32"))]
+                let recheck = match event {
+                    window::Event::Focused => self.github_recheck(),
+                    _ => Task::none(),
+                };
+                #[cfg(target_arch = "wasm32")]
+                let recheck = Task::none();
                 match event {
                     window::Event::Resized(size) => self.accessibility.viewport = size,
                     window::Event::Rescaled(scale) => {
@@ -315,10 +323,10 @@ impl App {
                 if self.accessibility.fitting {
                     // A native resize may arrive before the startup fit's task
                     // finishes. Publish/install only after size and position fit.
-                    return Task::none();
+                    return recheck;
                 }
                 self.accessibility.last = None;
-                self.accessibility_refresh()
+                Task::batch([recheck, self.accessibility_refresh()])
             }
             Action::Refresh => self.accessibility_refresh(),
             Action::Snapshot(generation, sequence, snapshot)

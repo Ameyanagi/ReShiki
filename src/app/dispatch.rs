@@ -145,7 +145,14 @@ impl App {
             Message::CopyAs(format) => return Some(self.copy_as(format)),
             Message::Copy(cut) => return Some(self.copy_selection(cut)),
             Message::PastePicture => return Some(self.paste_native(true)),
-            Message::Paste => return Some(self.paste_clipboard()),
+            Message::Paste => {
+                // A github.com link on the clipboard opens instead.
+                #[cfg(not(target_arch = "wasm32"))]
+                if let Some(task) = self.github_paste() {
+                    return Some(task);
+                }
+                return Some(self.paste_clipboard());
+            }
             Message::Duplicate => self.duplicate_selection(),
             Message::Transform(transform) => self.transform_selection(transform),
             Message::Nmr(action) => return Some(self.nmr_action(action)),
@@ -236,6 +243,11 @@ impl App {
             #[cfg(target_os = "macos")]
             Message::MacFiles(_) => {}
             Message::Opened(file) => return Some(files::open_contents(file)),
+            // An old version from GitHub is saved as a copy.
+            #[cfg(not(target_arch = "wasm32"))]
+            Message::Save if self.github.old(self.tab.path.as_deref()).is_some() => {
+                return Some(self.github_action(super::github::Action::SaveCopy));
+            }
             Message::Save => return Some(self.save_drawing(None)),
             Message::SaveAs => return Some(self.save_as()),
             Message::SaveFormat(format) => return Some(self.save_drawing(Some(format))),

@@ -41,6 +41,12 @@ pub(super) enum Icon {
         expect(dead_code, reason = "The browser editor has no GitHub sign-in")
     )]
     Cloud,
+    /// An eye: a GitHub repository the user may only read.
+    #[cfg_attr(
+        target_arch = "wasm32",
+        expect(dead_code, reason = "The browser editor has no GitHub sign-in")
+    )]
+    Eye,
     /// A clock: a GitHub drawing's History.
     #[cfg_attr(
         target_arch = "wasm32",
@@ -122,6 +128,7 @@ impl Glyph {
             Icon::Lock(locked) => chrome::lock(f, ink, locked),
             Icon::Cloud => commands::cloud(f, ink),
             Icon::History => commands::history(f, ink),
+            Icon::Eye => chrome::eye(f, ink),
             Icon::Pin => chrome::pin(f, ink),
             Icon::ModelStyle(style) => chrome::model_style(f, ink, style),
         }

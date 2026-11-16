@@ -1,5 +1,7 @@
 //! GitHub in the editor: sign-in, the repository picker, Send, the status
-//! chip, the question on closing and Versions. The work itself is in
+//! chip, the question on closing and Versions. Other people's repositories
+//! open by link, read only (signed out too); a branch or a commit opens as
+//! an old version, kept apart and never sent. The work itself is in
 //! `reshiki::github`; this keeps what the window shows. Its messages are
 //! handled before the modal gates, like the star toast's: none of them edits
 //! a drawing except through the normal save and edit paths.
@@ -20,6 +22,7 @@ use reshiki::github::{
 };
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
 
 mod account;
 mod compare;
@@ -33,8 +36,13 @@ mod versions;
 pub(super) use picker::Mode;
 
 const OPEN_FROM: &str = "Open from GitHub…";
+/// The palette's rows for a repository or drawing: `Open from GitHub: lab-notes/ring`.
+pub(super) const OPEN_FROM_ROW: &str = "Open from GitHub: ";
 const SEND_TO: &str = "Send to GitHub…";
 const NOT_SET_UP: &str = "Not set up in this build";
+const SAVE_COPY: &str = "Save a copy…";
+/// Read-only repositories are asked again on window focus, at most this often.
+const RECHECK: Duration = Duration::from_secs(5 * 60);
 
 #[derive(Debug, Clone)]
 pub(super) enum Account {
@@ -128,6 +136,11 @@ pub(super) struct State {
     prefs: identity::Prefs,
     /// A status that is a question, not an error, shown in amber.
     pub(super) amber: Option<String>,
+    /// When read-only repositories were last asked whether the user may
+    /// send to them now.
+    checked: Option<Instant>,
+    /// The read-only chip's menu is open.
+    pub(super) chip_menu: bool,
 }
 
 impl State {
@@ -169,6 +182,8 @@ impl State {
             starred: false,
             versions: versions::Versions::default(),
             amber: None,
+            checked: None,
+            chip_menu: false,
         }
     }
 
@@ -182,6 +197,16 @@ impl State {
             Account::SignedIn { .. } | Account::NeedsInstall { .. } => self.client.clone(),
             _ => None,
         }
+    }
+
+    /// A client for reading: signed in, or else signed out, for public
+    /// repositories.
+    pub(super) fn reader(&self) -> Option<Client> {
+        self.client().or_else(|| {
+            self.configured()
+                .then(|| Client::public(self.ends.clone()).ok())
+                .flatten()
+        })
     }
 
     pub(super) fn login(&self) -> Option<&str> {
@@ -199,6 +224,27 @@ impl State {
     /// The repository and repository path of a drawing kept for GitHub.
     pub(super) fn locate(&self, path: Option<&Path>) -> Option<(RepoKey, String)> {
         workcopy::locate(self.root.as_deref()?, path?)
+    }
+
+    /// The repository and repository path of an old version.
+    pub(super) fn old(&self, path: Option<&Path>) -> Option<(RepoKey, String)> {
+        workcopy::locate_old(self.root.as_deref()?, path?)
+    }
+
+    /// Whether the user may not send to the repository kept in `key`.
+    fn read_only(&self, key: &RepoKey) -> bool {
+        self.states.get(key).is_some_and(|state| state.read_only)
+    }
+
+    /// `Please add ReShiki to owner/repo …` with the page that does it.
+    fn request(&self, key: &RepoKey) -> String {
+        let slug = config::app_slug().unwrap_or_default();
+        format!(
+            "Please add ReShiki to {}/{} so I can send drawings: {}",
+            key.owner,
+            key.repo,
+            self.ends.web(&format!("/apps/{slug}/installations/new"))
+        )
     }
 
     /// The repository kept in folder `key`, as GitHub names it now.
@@ -279,6 +325,25 @@ pub enum Action {
     Kept(Result<(), String>),
     CopyLink,
     OpenOnGitHub,
+    /// Copies the link of a tab's drawing, from its menu.
+    CopyTabLink(TabId),
+    /// Copies the request that the owner add ReShiki to a repository.
+    CopyRequest(RepoKey),
+    /// The repository's page on GitHub.
+    OpenRepo(RepoKey),
+    /// The drawing in front, read only or an old version, saved to a
+    /// repository the user may send to, or to this computer.
+    SaveCopy,
+    /// The read-only chip's menu.
+    ChipMenu(bool),
+    /// From an old version: the drawing as it is now.
+    OpenLatest,
+    /// Whether a read-only repository may be sent to now.
+    Access(RepoKey, Result<Repo, gh::Error>),
+    /// The clipboard's text on Paste: a link opens, anything else pastes.
+    Pasted(Option<String>),
+    /// A drawing known here, from the command palette.
+    OpenKnown(PathBuf),
 }
 
 /// Keys of an open GitHub dialog, before its fields: Escape closes, and the
@@ -702,6 +767,9 @@ impl App {
                 let Some((key, _)) = self.github.locate(self.tab.path.as_deref()) else {
                     return self.picker_action(picker::Action::Show(Mode::SendTo));
                 };
+                if self.github.read_only(&key) {
+                    return self.github_action(Action::SaveCopy);
+                }
                 if self.github.client().is_none() {
                     return self.github_sign_in(Some(Action::ShowSend));
                 }
@@ -833,12 +901,140 @@ impl App {
                 }
             }
             Action::OpenOnGitHub => {
+                self.github.chip_menu = false;
                 if let Some(url) = self.github_link() {
                     return open_url(url);
                 }
             }
+            Action::CopyTabLink(id) => {
+                self.tabs.color_menu = None;
+                let path = self
+                    .strip()
+                    .find(|tab| tab.id == id)
+                    .and_then(|tab| tab.path.clone());
+                if let Some(url) = self.github_link_for(path.as_deref()) {
+                    self.status = "Link copied".into();
+                    self.error = false;
+                    return iced::clipboard::write(url);
+                }
+            }
+            Action::CopyRequest(key) => {
+                self.github.chip_menu = false;
+                self.status = "Request copied · Send it to the owner".into();
+                self.error = false;
+                return iced::clipboard::write(self.github.request(&key));
+            }
+            Action::OpenRepo(key) => {
+                self.github.chip_menu = false;
+                let path = format!("/{}/{}", key.owner, key.repo);
+                return open_url(ends.web(&api::encoded(&path)));
+            }
+            Action::SaveCopy => {
+                self.github.chip_menu = false;
+                let show = self.picker_action(picker::Action::Show(Mode::SendTo));
+                if let Some(Dialog::Picker(picker)) = &mut self.github.dialog {
+                    picker.copy = true;
+                }
+                return show;
+            }
+            Action::ChipMenu(open) => self.github.chip_menu = open,
+            Action::OpenLatest => {
+                let Some((key, repo_path)) = self.github.old(self.tab.path.as_deref()) else {
+                    return Task::none();
+                };
+                let branch = self
+                    .github_state(&key)
+                    .map(|state| state.branch.clone())
+                    .unwrap_or_default();
+                let named = self.github.named(&key);
+                let path = format!("/{}/{}/blob/{branch}/{repo_path}", named.owner, named.repo);
+                let url = ends.web(&api::encoded(&path));
+                return self.picker_action(picker::Action::Link(url));
+            }
+            Action::Access(key, result) => {
+                // Access given since: local changes count as unsent now.
+                if let Ok(repo) = result
+                    && repo.push
+                    && let Some(state) = self.github.states.get_mut(&key)
+                    && state.read_only
+                {
+                    state.read_only = false;
+                    let shared = self.github.prefs.is_shared(repo.id);
+                    let keep = if shared && self.github.prefs.share(&repo) {
+                        self.github_keep_prefs()
+                    } else {
+                        Task::none()
+                    };
+                    self.github_refresh(&key);
+                    return Task::batch([keep, self.github_persist(&key)]);
+                }
+            }
+            Action::Pasted(text) => {
+                let web = &self.github.ends.web;
+                return match text.filter(|text| gh::link::parse(text, web).is_some()) {
+                    Some(link) => self.picker_action(picker::Action::Link(link)),
+                    None => self.paste_clipboard(),
+                };
+            }
+            Action::OpenKnown(path) => return super::files::open_paths(vec![path]),
         }
         Task::none()
+    }
+
+    /// On window focus, at most every five minutes: the read-only
+    /// repositories of the open drawings are asked whether the user may send
+    /// to them now.
+    pub(super) fn github_recheck(&mut self) -> Task<Message> {
+        let Some(client) = self.github.client() else {
+            return Task::none();
+        };
+        if self.github.checked.is_some_and(|at| at.elapsed() < RECHECK) {
+            return Task::none();
+        }
+        self.github.checked = Some(Instant::now());
+        let read_only: Vec<(RepoKey, u64)> = self
+            .github_open_repos()
+            .into_iter()
+            .filter_map(|key| {
+                let state = self.github.states.get(&key)?;
+                state.read_only.then_some((key, state.repo_id))
+            })
+            .collect();
+        Task::batch(read_only.into_iter().map(|(key, id)| {
+            let client = client.clone();
+            perform(async move { api::repo(&client, id).await }, move |result| {
+                Action::Access(key, result)
+            })
+        }))
+    }
+
+    /// Paste with no text field focused: a github.com link on the clipboard
+    /// opens; anything else pastes into the drawing.
+    pub(super) fn github_paste(&self) -> Option<Task<Message>> {
+        (self.github.configured() && !cfg!(test))
+            .then(|| iced::clipboard::read().map(|text| Message::GitHub(Action::Pasted(text))))
+    }
+
+    /// A link dropped on the window, as a `.webloc` or `.url` file: it opens.
+    pub(super) fn github_dropped(&mut self, paths: &[PathBuf]) -> Option<Task<Message>> {
+        let [path] = paths else {
+            return None;
+        };
+        let shortcut = path.extension().is_some_and(|ext| {
+            ext.eq_ignore_ascii_case("webloc") || ext.eq_ignore_ascii_case("url")
+        });
+        if !shortcut || !self.github.configured() {
+            return None;
+        }
+        let bytes = std::fs::read(path).ok()?;
+        let text = String::from_utf8_lossy(&bytes);
+        let start = text.find("https://").or_else(|| text.find("http://"))?;
+        let link: String = text[start..]
+            .chars()
+            .take_while(|c| !c.is_whitespace() && !"<\"'\0".contains(*c))
+            .collect();
+        gh::link::parse(&link, &self.github.ends.web)?;
+        Some(self.picker_action(picker::Action::Link(link)))
     }
 
     /// Signed in: the account and the repositories ReShiki may use, each
@@ -851,13 +1047,31 @@ impl App {
             Account::SignedIn { login, remembered }
         };
         self.github.repos = account.repos;
+        // A repository the user may send to now is read only no more.
+        let pushable: HashSet<u64> = (self.github.repos.iter())
+            .filter(|repo| repo.push)
+            .map(|repo| repo.id)
+            .collect();
+        let mut cleared = Vec::new();
+        for (key, state) in &mut self.github.states {
+            if state.read_only && pushable.contains(&state.repo_id) {
+                state.read_only = false;
+                cleared.push(key.clone());
+            }
+        }
+        let mut tasks = Vec::new();
+        for key in cleared {
+            self.github_refresh(&key);
+            tasks.push(self.github_persist(&key));
+        }
         let repos: Vec<(u64, RepoKey)> = self
             .github
             .repos
             .iter()
             .map(|repo| (repo.id, repo.key.clone()))
             .collect();
-        self.github_seen(repos.iter().map(|(id, key)| (*id, key)))
+        tasks.push(self.github_seen(repos.iter().map(|(id, key)| (*id, key))));
+        Task::batch(tasks)
     }
 
     /// Lists the repositories ReShiki may use.
@@ -915,7 +1129,8 @@ impl App {
     /// A drawing just opened: count what is unsent in its repository, and
     /// remember the repository as the one last used.
     pub(super) fn github_opened(&mut self, path: &Path) -> Task<Message> {
-        let Some((key, _)) = self.github.locate(Some(path)) else {
+        let found = (self.github.locate(Some(path))).or_else(|| self.github.old(Some(path)));
+        let Some((key, _)) = found else {
             return Task::none();
         };
         self.github_refresh(&key);
@@ -959,9 +1174,12 @@ impl App {
 
     /// Whether anything of any repository is not on GitHub yet.
     fn github_anything_unsent(&self) -> bool {
-        self.github.unsent.values().any(|unsent| !unsent.is_empty())
+        let sendable = |key: &RepoKey| !self.github.read_only(key);
+        (self.github.unsent.iter()).any(|(key, unsent)| !unsent.is_empty() && sendable(key))
             || self.strip().any(|tab| {
-                self.shown_edited(tab) && self.github.locate(tab.path.as_deref()).is_some()
+                self.shown_edited(tab)
+                    && (self.github.locate(tab.path.as_deref()))
+                        .is_some_and(|(key, _)| sendable(&key))
             })
     }
 
@@ -995,9 +1213,23 @@ impl App {
 
     /// The front drawing's file on GitHub, on its default branch.
     fn github_link(&self) -> Option<String> {
-        let (key, repo_path) = self.github.locate(self.tab.path.as_deref())?;
+        self.github_link_for(self.tab.path.as_deref())
+    }
+
+    /// The file on GitHub, on its default branch, of the drawing at `path`:
+    /// a working copy GitHub has, or an old version.
+    fn github_link_for(&self, path: Option<&Path>) -> Option<String> {
+        let (key, repo_path, working) = match self.github.locate(path) {
+            Some((key, repo_path)) => (key, repo_path, true),
+            None => {
+                let (key, repo_path) = self.github.old(path)?;
+                (key, repo_path, false)
+            }
+        };
         let state = self.github.states.get(&key)?;
-        state.files.get(&repo_path)?.base_blob.as_ref()?;
+        if working {
+            state.files.get(&repo_path)?.base_blob.as_ref()?;
+        }
         let path = format!(
             "/{}/{}/blob/{}/{repo_path}",
             state.owner, state.repo, state.branch
@@ -1231,6 +1463,10 @@ impl App {
     /// Whether the saved file of a GitHub drawing differs from GitHub's.
     fn github_unsent(&mut self, path: Option<&Path>) -> Option<RepoKey> {
         let (key, repo_path) = self.github.locate(path)?;
+        // Nothing of a read-only repository can be sent.
+        if self.github.read_only(&key) {
+            return None;
+        }
         self.github_refresh(&key);
         self.github
             .unsent
@@ -1282,6 +1518,7 @@ impl App {
         let keys: HashSet<RepoKey> = paths
             .iter()
             .filter_map(|path| self.github.locate(Some(path)).map(|(key, _)| key))
+            .filter(|key| !self.github.read_only(key))
             .collect();
         let mut count = 0;
         for key in &keys {
@@ -1445,6 +1682,13 @@ impl App {
     /// The Send row of the menu and the palette: its label, its detail, and
     /// its action, `None` while there is nothing to send.
     fn github_send_row(&self) -> (String, String, Option<Action>) {
+        if self.github.old(self.tab.path.as_deref()).is_some() {
+            return (
+                SAVE_COPY.into(),
+                "Old version".into(),
+                Some(Action::SaveCopy),
+            );
+        }
         let Some((key, _)) = self.github.locate(self.tab.path.as_deref()) else {
             return (
                 SEND_TO.into(),
@@ -1452,6 +1696,9 @@ impl App {
                 Some(Action::ShowSend),
             );
         };
+        if self.github.read_only(&key) {
+            return (SAVE_COPY.into(), "Read only".into(), Some(Action::SaveCopy));
+        }
         let files = self.github_waiting(&key, |tab| self.shown_edited(tab));
         let repo = self.github.named(&key).repo;
         match files.as_slice() {
@@ -1513,7 +1760,54 @@ impl App {
                 Some(Action::SignIn),
             ),
         });
+        // Every repository and drawing known here, read from this computer.
+        let known = self.github.root.as_deref().map(workcopy::known);
+        for (folder, state) in known.into_iter().flatten() {
+            let (owner, repo) = (&state.owner, &state.repo);
+            rows.push((
+                format!("{OPEN_FROM_ROW}{repo}"),
+                format!("{owner}/{repo}"),
+                Some(Action::Picker(picker::Action::ShowIn(
+                    state.key(),
+                    String::new(),
+                ))),
+            ));
+            for repo_path in state.files.keys() {
+                let root = self.github.root.as_deref().unwrap_or(Path::new(""));
+                let path = workcopy::working_path(root, &folder, repo_path);
+                let name = file_name(repo_path);
+                rows.push((
+                    format!(
+                        "{OPEN_FROM_ROW}{repo}/{}",
+                        name.strip_suffix(".rsk").unwrap_or(name)
+                    ),
+                    format!("{owner}/{repo} · {repo_path}"),
+                    Some(Action::OpenKnown(path)),
+                ));
+            }
+        }
         rows
+    }
+
+    /// The palette row for a github.com link typed or pasted there.
+    pub(super) fn github_link_row(&self, query: &str) -> Option<(String, String, Action)> {
+        let found = gh::link::parse(query, &self.github.ends.web)?;
+        let place: Vec<&str> = std::iter::once(found.key.repo.as_str())
+            .chain(found.path.split('/').filter(|name| !name.is_empty()))
+            .collect();
+        let place = place.join("/");
+        let mut detail = format!("{}/{}", found.key.owner, found.key.repo);
+        if let Some(reference) = &found.reference {
+            detail = format!("{detail} · {reference}");
+        }
+        Some((
+            format!(
+                "{OPEN_FROM_ROW}{}",
+                place.strip_suffix(".rsk").unwrap_or(&place)
+            ),
+            detail,
+            Action::Picker(picker::Action::Link(query.trim().to_owned())),
+        ))
     }
 
     /// The GitHub button in the command bar, with its menu: what applies to
@@ -1639,7 +1933,14 @@ impl App {
     /// repository's dot and name, then what is left to do. The Send popover
     /// opens above it.
     pub(super) fn github_chip(&self) -> Option<Element<'_, Message>> {
-        let (key, repo_path) = self.github.locate(self.tab.path.as_deref())?;
+        let front = self.tab.path.as_deref();
+        let (key, repo_path, old) = match self.github.locate(front) {
+            Some((key, repo_path)) => (key, repo_path, false),
+            None => {
+                let (key, repo_path) = self.github.old(front)?;
+                (key, repo_path, true)
+            }
+        };
         let state = &self.github;
         let folder = repo_path
             .rsplit_once('/')
@@ -1677,6 +1978,9 @@ impl App {
             state.named(&key),
             folder.unwrap_or_default(),
         ))));
+        if old || state.read_only(&key) {
+            return Some(self.github_read_only_chip(place, &key, old));
+        }
         let mut content = row![].spacing(6).align_y(Alignment::Center);
         let state_now = self.github_chip_state(&key);
         let (suffix, after, said) = match state_now {
@@ -1740,6 +2044,84 @@ impl App {
         ))
     }
 
+    /// The chip of a drawing nothing is sent from: an old version, with Open
+    /// latest; or a read-only repository's, whose menu offers the way on.
+    fn github_read_only_chip<'a>(
+        &'a self,
+        place: impl Into<Element<'a, Message>>,
+        key: &RepoKey,
+        old: bool,
+    ) -> Element<'a, Message> {
+        let muted = |line: String| text(line).size(12).style(super::workspace::muted_text);
+        if old {
+            let latest = super::workspace::accessible_command(
+                "github-open-latest",
+                "Open latest",
+                "Open latest",
+            )
+            .on_press(Message::GitHub(Action::OpenLatest))
+            .padding([4, 9])
+            .style(super::workspace::control(true));
+            return row![place.into(), muted("· Old version".into()), latest]
+                .spacing(6)
+                .align_y(Alignment::Center)
+                .into();
+        }
+        let changes = match self.github_waiting(key, |tab| self.shown_edited(tab)).len() {
+            0 => String::new(),
+            1 => "· 1 change".into(),
+            n => format!("· {n} changes"),
+        };
+        let open = self.github.chip_menu;
+        let state = reshiki::accessibility::button(
+            "github-chip-read-only",
+            format!("read only {}, more", changes.trim_start_matches("· ")),
+            row![
+                picker::read_only_label(),
+                muted(changes),
+                super::workspace::caret(10.)
+            ]
+            .spacing(6)
+            .align_y(Alignment::Center),
+        )
+        .expanded(open)
+        .padding([4, 6])
+        .style(super::workspace::control(open))
+        .on_press(Message::GitHub(Action::ChipMenu(!open)));
+        let menu = open.then(|| {
+            let item = |id: &'static str, label: &'static str, action: Action| {
+                reshiki::accessibility::button(id, label, text(label).size(12))
+                    .width(Length::Fill)
+                    .padding([6, 10])
+                    .style(super::workspace::control(false))
+                    .on_press(Message::GitHub(action))
+            };
+            container(
+                column![
+                    item("github-save-copy", SAVE_COPY, Action::SaveCopy),
+                    item(
+                        "github-copy-request",
+                        "Copy request for the owner",
+                        Action::CopyRequest(self.github.named(key)),
+                    ),
+                    item("github-open-on", "Open on GitHub ↗", Action::OpenOnGitHub),
+                ]
+                .spacing(1),
+            )
+            .width(230)
+            .padding(5)
+            .style(super::color_popover::surface)
+            .into()
+        });
+        let chip = row![place.into(), state]
+            .spacing(2)
+            .align_y(Alignment::Center);
+        Element::new(
+            super::popover::popover(chip, menu, Message::GitHub(Action::ChipMenu(false)))
+                .align_end(),
+        )
+    }
+
     /// What the chip says about repository `key`.
     pub(super) fn github_chip_state(&self, key: &RepoKey) -> Chip {
         let state = &self.github;
@@ -1772,7 +2154,13 @@ impl App {
         tab: &DocumentTab,
         menu: bool,
     ) -> Option<super::tabs::RepoBadge<'_>> {
-        let (key, repo_path) = self.github.locate(tab.path.as_deref())?;
+        let (key, repo_path, old) = match self.github.locate(tab.path.as_deref()) {
+            Some((key, repo_path)) => (key, repo_path, false),
+            None => {
+                let (key, repo_path) = self.github.old(tab.path.as_deref())?;
+                (key, repo_path, true)
+            }
+        };
         let named = self.github.named(&key);
         let hue = self.github.hue(&key);
         let letters = identity::monograms(&self.github_open_repos())
@@ -1781,16 +2169,35 @@ impl App {
         let unsent = self
             .github_waiting(&key, |tab| self.shown_edited(tab))
             .len();
-        let spoken = match unsent {
-            0 => self.github_label(&key),
-            n => format!("{}, {n} unsent", self.github_label(&key)),
+        // Nothing is sent from a read-only repository or an old version.
+        let read_only = old || self.github.read_only(&key);
+        let spoken = match (old, read_only, unsent) {
+            (true, ..) => format!("{}, old version", self.github_label(&key)),
+            (_, true, _) => format!("{}, read only", self.github_label(&key)),
+            (_, _, 0) => self.github_label(&key),
+            (_, _, n) => format!("{}, {n} unsent", self.github_label(&key)),
         };
+        let link = self.github_link_for(tab.path.as_deref()).is_some();
         let menu = menu.then(|| {
-            let mut items = column![
+            let mut items = column![].spacing(1);
+            if link {
+                items = items.push(
+                    reshiki::accessibility::button(
+                        "github-tab-copy-link",
+                        "Copy GitHub link",
+                        text("Copy GitHub link").size(12),
+                    )
+                    .width(Length::Fill)
+                    .padding([6, 10])
+                    .style(super::workspace::control(false))
+                    .on_press(Message::GitHub(Action::CopyTabLink(tab.id))),
+                );
+                items = items.push(super::workspace::horizontal_line());
+            }
+            items = items.push(
                 container(text("Color").size(11).style(super::workspace::muted_text))
-                    .padding([4, 10])
-            ]
-            .spacing(1);
+                    .padding([4, 10]),
+            );
             for (at, label) in identity::NAMES.iter().enumerate() {
                 items = items.push(
                     reshiki::accessibility::button(
@@ -1817,14 +2224,17 @@ impl App {
                 .into()
         });
         Some(super::tabs::RepoBadge {
-            badge: identity::badge(hue, letters),
+            badge: identity::badge(hue, letters, read_only),
             underline: container(Space::new().width(Length::Fill).height(2))
                 .style(move |theme: &Theme| container::Style {
                     background: Some(identity::color(theme, hue).into()),
                     ..container::Style::default()
                 })
                 .into(),
-            hint: format!("{}/{} · {repo_path}", named.owner, named.repo),
+            hint: match old {
+                true => format!("{}/{} · {repo_path} · Old version", named.owner, named.repo),
+                false => format!("{}/{} · {repo_path}", named.owner, named.repo),
+            },
             spoken,
             menu,
         })
@@ -1832,7 +2242,8 @@ impl App {
 
     /// The repository of the drawing in front, for the window title.
     pub(super) fn github_title(&self) -> Option<String> {
-        let (key, _) = self.github.locate(self.tab.path.as_deref())?;
+        let front = self.tab.path.as_deref();
+        let (key, _) = (self.github.locate(front)).or_else(|| self.github.old(front))?;
         Some(self.github.named(&key).repo)
     }
 
@@ -1867,7 +2278,7 @@ impl App {
                 super::help::Placement::Center,
             ),
             Dialog::Conflict(review) => (
-                conflict::view(review),
+                conflict::view(review, self.github.login()),
                 960.,
                 600.,
                 super::help::Placement::Center,
@@ -1899,9 +2310,12 @@ impl App {
             [one] => format!("{} → {repo}", file_name(one)),
             all => format!("{} → {repo}", drawings(all.len())),
         };
-        let line = row![identity::badge(hue, letters), text(what.clone()).size(12)]
-            .spacing(8)
-            .align_y(Alignment::Center);
+        let line = row![
+            identity::badge(hue, letters, false),
+            text(what.clone()).size(12)
+        ]
+        .spacing(8)
+        .align_y(Alignment::Center);
         let mut body = column![].spacing(10);
         if draft.files.len() > 1 {
             body = body.push(
