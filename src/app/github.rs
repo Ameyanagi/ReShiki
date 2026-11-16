@@ -2385,9 +2385,10 @@ impl App {
                 self.viewport.height,
                 super::help::Placement::Fit,
             ),
+            // The tree has a preview pane beside it.
             Dialog::Picker(picker) => (
                 self.picker_view(picker),
-                760.,
+                if picker.tree { 960. } else { 760. },
                 540.,
                 super::help::Placement::Center,
             ),

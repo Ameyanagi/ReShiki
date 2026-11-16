@@ -217,8 +217,15 @@ fn tree_row<'a>(
     };
     if let Some(meta) = meta {
         spoken = format!("{spoken}, {meta}");
-        content = content.push(text(meta).size(12).style(muted_text));
+        content = content.push(
+            text(meta)
+                .size(12)
+                .style(muted_text)
+                .wrapping(text::Wrapping::None),
+        );
     }
+    // A long name or date is cut, never wrapped: rows stay one line.
+    let content = content.clip(true);
     let selected = picker.row.as_ref() == Some(&entry.name);
     let mut button = reshiki::accessibility::button(format!("github-row-{at}"), spoken, content)
         .width(Length::Fill)
