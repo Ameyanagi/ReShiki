@@ -243,8 +243,11 @@ jobs:
       RUSTFLAGS: ${{ endsWith(matrix.target, '-pc-windows-msvc') && '-C target-feature=+crt-static' || '' }}
       # Cargo strips macOS into reshiki.dSYM. The MSVC linker writes no PDB for a
       # stripped build, and build_release.py splits Linux symbols into reshiki.debug.
-      CARGO_PROFILE_RELEASE_STRIP: ${{ startsWith(matrix.artifact, 'macos') && 'symbols' || 'none' }}
-      CARGO_PROFILE_RELEASE_SPLIT_DEBUGINFO: ${{ startsWith(matrix.artifact, 'linux') && 'off' || 'packed' }}
+      CARGO_PROFILE_DIST_STRIP: ${{ startsWith(matrix.artifact, 'macos') && 'symbols' || 'none' }}
+      CARGO_PROFILE_DIST_SPLIT_DEBUGINFO: ${{ startsWith(matrix.artifact, 'linux') && 'off' || 'packed' }}
+      # On macOS arm64 the fat-LTO link peaks at 8.3 GB and a thin-LTO link at
+      # 7.2 GB; the arm64 runner has 7 GB, so macOS builds use thin LTO.
+      CARGO_PROFILE_DIST_LTO: ${{ startsWith(matrix.artifact, 'macos') && 'thin' || 'fat' }}
     steps:
       - *actions_runtime
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -300,21 +303,21 @@ jobs:
           MACOSX_DEPLOYMENT_TARGET: "14.0"
         run: uv run --no-project --isolated --python 3.12.15 python scripts/build_release.py --target ${{ matrix.target }} --installer
       # Symbols for crash reports; a workflow artifact, never a release download.
-      # Upload them before any cargo test step: those rebuild the app with test
-      # features in place, and the new PDB would not match the shipped exe.
+      # The published build has its own profile folder, so the cargo test steps
+      # below (release profile) cannot replace them.
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: symbols-${{ matrix.artifact }}
           path: |
-            target/${{ matrix.target }}/release/reshiki.dSYM
-            target/${{ matrix.target }}/release/reshiki.pdb
-            target/${{ matrix.target }}/release/reshiki.debug
+            target/${{ matrix.target }}/dist/reshiki.dSYM
+            target/${{ matrix.target }}/dist/reshiki.pdb
+            target/${{ matrix.target }}/dist/reshiki.debug
           if-no-files-found: error
       - name: Check the application worker protocols and heap boundaries
         env:
           RESHIKI_REQUIRE_INCHI_HELPER: "1"
           RESHIKI_REQUIRE_GEOMETRY_APP: "1"
-          RESHIKI_TEST_PACKAGED_APP: ${{ github.workspace }}/target/${{ matrix.target }}/release/reshiki${{ runner.os == 'Windows' && '.exe' || '' }}
+          RESHIKI_TEST_PACKAGED_APP: ${{ github.workspace }}/target/${{ matrix.target }}/dist/reshiki${{ runner.os == 'Windows' && '.exe' || '' }}
         run: uv run --no-project --with certifi==2026.10.23 --isolated --python 3.12.15 python -m unittest tests.test_inchi_helper_protocol tests.test_inchi_distribution.HelperTests.test_packaged_application_worker_executes_when_supplied_for_validation tests.test_geometry_distribution.GeometryWorkerTests.test_packaged_application_worker_executes_when_supplied_for_validation
       # The default shell, as for every other Windows cargo step: under bash,
       # Git's /usr/bin/link shadows the MSVC linker.
@@ -331,7 +334,7 @@ jobs:
       - name: Compare geometry energies and gradients with the pinned independent oracle
         if: matrix.native_only != true
         env:
-          RESHIKI_GEOMETRY_REFERENCE_APP: ${{ github.workspace }}/target/${{ matrix.target }}/release/reshiki${{ runner.os == 'Windows' && '.exe' || '' }}
+          RESHIKI_GEOMETRY_REFERENCE_APP: ${{ github.workspace }}/target/${{ matrix.target }}/dist/reshiki${{ runner.os == 'Windows' && '.exe' || '' }}
           RESHIKI_REQUIRE_GEOMETRY_REFERENCE: "1"
         # The geometry oracle keeps its own RDKit, not the locked reference pin:
         # under 2026.09 every ETKDG embedding changes (energies are identical).
@@ -346,16 +349,16 @@ jobs:
         env:
           MACOSX_DEPLOYMENT_TARGET: "14.0"
           RESHIKI_REQUIRE_INCHI_HELPER: "1"
-          RESHIKI_INCHI_HELPER: ${{ github.workspace }}/target/x86_64-apple-darwin/release/reshiki
-          RESHIKI_NAMING_HELPER: ${{ github.workspace }}/target/x86_64-apple-darwin/release/reshiki
+          RESHIKI_INCHI_HELPER: ${{ github.workspace }}/target/x86_64-apple-darwin/dist/reshiki
+          RESHIKI_NAMING_HELPER: ${{ github.workspace }}/target/x86_64-apple-darwin/dist/reshiki
         run: cargo test --release --locked --no-default-features --lib --target x86_64-apple-darwin
       - name: Test the nightly application and renderer regressions
         if: inputs.nightly
         env:
           MACOSX_DEPLOYMENT_TARGET: "14.0"
           RESHIKI_REQUIRE_INCHI_HELPER: "1"
-          RESHIKI_INCHI_HELPER: ${{ github.workspace }}/target/${{ matrix.target }}/release/reshiki${{ runner.os == 'Windows' && '.exe' || '' }}
-          RESHIKI_NAMING_HELPER: ${{ github.workspace }}/target/${{ matrix.target }}/release/reshiki${{ runner.os == 'Windows' && '.exe' || '' }}
+          RESHIKI_INCHI_HELPER: ${{ github.workspace }}/target/${{ matrix.target }}/dist/reshiki${{ runner.os == 'Windows' && '.exe' || '' }}
+          RESHIKI_NAMING_HELPER: ${{ github.workspace }}/target/${{ matrix.target }}/dist/reshiki${{ runner.os == 'Windows' && '.exe' || '' }}
         run: cargo test --release --locked --no-default-features --bin reshiki --target ${{ matrix.target }}
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -636,7 +639,10 @@ jobs:
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: npm-package-dist
-          path: packages/editor/dist
+          # Both paths share packages/, so the artifact holds editor/dist and headless/dist.
+          path: |
+            packages/editor/dist
+            packages/headless/dist
           if-no-files-found: error
           retention-days: 7
       # Keep the published demo's files, which a page cached before this
@@ -698,10 +704,11 @@ jobs:
           fi
           gh release upload web-demo dist/reshiki-web-demo.tar.gz --clobber
           gh workflow run docs.yml --ref main
-  # @ameyanagi/reshiki (packages/editor) follows each release on npm with the
-  # app's version. A manual run with npm_only publishes main's version, for a
-  # first publish without a new tag. docs/releasing.md describes the npm setup;
-  # without a working credential this job leaves a notice and succeeds.
+  # @ameyanagi/reshiki (packages/editor) and @ameyanagi/reshiki-headless
+  # (packages/headless) follow each release on npm with the app's version. A
+  # manual run with npm_only publishes main's version, for a first publish
+  # without a new tag. docs/releasing.md describes the npm setup; without a
+  # working credential this job leaves a notice and succeeds.
   npm:
     needs: [publish, web_demo]
     # A tag needs the demo job's build, not its demo upload. !cancelled() and
@@ -737,7 +744,7 @@ jobs:
             mode=token
           else
             mode=none
-            echo "::notice::No npm credential is configured (see docs/releasing.md), so @ameyanagi/reshiki was not published."
+            echo "::notice::No npm credential is configured (see docs/releasing.md), so the npm packages were not published."
           fi
           echo "mode=$mode" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -764,7 +771,7 @@ jobs:
             echo "valid=true" >> "$GITHUB_OUTPUT"
           else
             cat "$RUNNER_TEMP/whoami.log"
-            echo "::notice::npm rejected NPM_TOKEN (expired or invalid; see docs/releasing.md), so @ameyanagi/reshiki was not published."
+            echo "::notice::npm rejected NPM_TOKEN (expired or invalid; see docs/releasing.md), so the npm packages were not published."
             echo "valid=false" >> "$GITHUB_OUTPUT"
           fi
       # A tag publishes the build web_demo tested; npm_only builds it here.
@@ -772,64 +779,76 @@ jobs:
         if: steps.auth.outputs.mode != 'none' && steps.token.outputs.valid != 'false' && github.event_name == 'push'
         with:
           name: npm-package-dist
-          path: packages/editor/dist
+          path: packages
       - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
         if: steps.auth.outputs.mode != 'none' && steps.token.outputs.valid != 'false' && github.event_name != 'push'
         with:
           version: "0.13.5"
           python-version: "3.12.15"
           enable-cache: false
-      - name: Build the package
+      - name: Build the packages
         if: steps.auth.outputs.mode != 'none' && steps.token.outputs.valid != 'false' && github.event_name != 'push'
         run: |
           rustup toolchain install 1.99.1 --profile minimal --target wasm32-unknown-unknown
           rustup default 1.99.1
           scripts/build_wasm.sh
-      - name: Test the package
+      - name: Test the packages
         if: steps.auth.outputs.mode != 'none' && steps.token.outputs.valid != 'false'
-        working-directory: packages/editor
-        run: bun test
-      - name: Publish the app's version unless npm has it
+        run: |
+          (cd packages/headless && bun test)
+          (cd packages/editor && bun test)
+      - name: Publish the app's version of each package unless npm has it
         if: steps.auth.outputs.mode != 'none' && steps.token.outputs.valid != 'false'
-        working-directory: packages/editor
         env:
           MODE: ${{ steps.auth.outputs.mode }}
-          NPM_TOKEN: ${{ steps.auth.outputs.mode == 'token' && secrets.NPM_TOKEN || '' }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           set -euo pipefail
           # validate has checked that a tag matches this version.
-          version=$(awk -F '"' '/^version = / { print $2; exit }' ../../Cargo.toml)
-          bun pm pkg set version="$version"
-          name=$(bun pm pkg get name | tr -d '"')
-          echo "npm $(npm --version), publishing $name@$version with $MODE"
-          if [[ $(npm view "$name@$version" version 2> /dev/null || true) == "$version" ]]; then
-            echo "::notice::$name@$version is already on npm."
-            exit 0
-          fi
-          if [[ $MODE == token ]]; then
-            export NPM_CONFIG_USERCONFIG=$RUNNER_TEMP/.npmrc
-          fi
-          # latest stays on the newest stable release: prereleases go under next,
-          # and an older stable release under release-<major.minor>.
-          tag=latest
-          if [[ $version == *-* ]]; then
-            tag=next
-          else
-            latest=$(npm view "$name" dist-tags.latest 2> /dev/null || true)
-            if [[ -n $latest && $(printf '%s\n' "$latest" "$version" | sort -V | tail -n 1) != "$version" ]]; then
-              tag=release-${version%.*}
+          version=$(awk -F '"' '/^version = / { print $2; exit }' Cargo.toml)
+          printf '//registry.npmjs.org/:_authToken=${NPM_TOKEN}\n' > "$RUNNER_TEMP/.npmrc"
+          for package in headless editor; do
+            cd "$GITHUB_WORKSPACE/packages/$package"
+            bun pm pkg set version="$version"
+            name=$(bun pm pkg get name | tr -d '"')
+            # Trusted publishing cannot create a package, so NPM_TOKEN, when set,
+            # publishes the first version of a package npm does not have yet.
+            credential=$MODE
+            if [[ $MODE == oidc && -n $NPM_TOKEN && -z $(npm view "$name" name 2> /dev/null || true) ]]; then
+              credential=token
             fi
-          fi
-          status=0
-          npm publish --provenance --access public --tag "$tag" --ignore-scripts 2>&1 | tee "$RUNNER_TEMP/publish.log" || status=$?
-          if (( status != 0 )); then
-            # Refused credentials skip npm; any other failure fails the job.
-            if grep -qE 'E401|E403|E404|ENEEDAUTH|EOTP' "$RUNNER_TEMP/publish.log"; then
-              echo "::notice::npm refused the $MODE credential (see docs/releasing.md), so $name@$version was not published."
-              exit 0
+            if [[ $credential == token ]]; then
+              export NPM_CONFIG_USERCONFIG=$RUNNER_TEMP/.npmrc
+            else
+              unset NPM_CONFIG_USERCONFIG
             fi
-            exit "$status"
-          fi
+            echo "npm $(npm --version), publishing $name@$version with $credential"
+            if [[ $(npm view "$name@$version" version 2> /dev/null || true) == "$version" ]]; then
+              echo "::notice::$name@$version is already on npm."
+              continue
+            fi
+            # latest stays on the newest stable release: prereleases go under next,
+            # and an older stable release under release-<major.minor>.
+            tag=latest
+            if [[ $version == *-* ]]; then
+              tag=next
+            else
+              latest=$(npm view "$name" dist-tags.latest 2> /dev/null || true)
+              if [[ -n $latest && $(printf '%s\n' "$latest" "$version" | sort -V | tail -n 1) != "$version" ]]; then
+                tag=release-${version%.*}
+              fi
+            fi
+            status=0
+            npm publish --provenance --access public --tag "$tag" --ignore-scripts 2>&1 | tee "$RUNNER_TEMP/publish.log" || status=$?
+            if (( status != 0 )); then
+              # Refused credentials skip this package; any other failure fails the job.
+              if grep -qE 'E401|E403|E404|ENEEDAUTH|EOTP' "$RUNNER_TEMP/publish.log"; then
+                echo "::notice::npm refused the $credential credential (see docs/releasing.md), so $name@$version was not published."
+                continue
+              fi
+              exit "$status"
+            fi
+          done
   # The reshiki Python package follows each release on PyPI with the app's
   # version; maturin turns a tag such as v0.13.1-rc.1 into 0.13.1rc1. A manual
   # run with pypi_only publishes main's version. See docs/releasing.md.

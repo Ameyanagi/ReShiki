@@ -1,9 +1,9 @@
 //! Per-document state. `App` keeps the active tab inline as `App::tab`; everything
 //! else on `App` is app-wide (tool, settings, libraries, chrome, dialogs).
 use super::{
-    CleanupPreview, arcs, arrows, atom_labels, atom_text, autosave, document_styles, graphics,
-    inline_text, inspector, joining, label_refresh, molecule_shortcuts, naming, numeric_transforms,
-    pages, pictures, reaction_mapping, reactions, typography,
+    arcs, arrows, atom_labels, atom_text, autosave, document_styles, graphics, inline_text,
+    inspector, joining, label_refresh, molecule_shortcuts, naming, numeric_transforms, pages,
+    pictures, reaction_mapping, reactions, typography,
 };
 use crate::canvas::Camera;
 use crate::session::Binding;
@@ -62,7 +62,6 @@ pub(super) struct DocumentTab {
     pub(super) joining: Option<joining::State>,
     pub(super) erase_stroke: bool,
     pub(super) erase_committed: bool,
-    pub(super) cleanup: Option<CleanupPreview>,
     pub(super) cleanup_serial: u64,
     pub(super) optimization: Option<super::optimization::Session>,
     pub(super) optimization_serial: u64,
@@ -150,8 +149,7 @@ impl DocumentTab {
     }
 
     pub(super) fn drawing_edit_active(&self) -> bool {
-        self.cleanup.is_some()
-            || self.joining.is_some()
+        self.joining.is_some()
             || self.optimization.is_some()
             || self.inline_text.is_some()
             || self.atom_text.is_some()
@@ -194,7 +192,6 @@ impl DocumentTab {
             joining: None,
             erase_stroke: false,
             erase_committed: false,
-            cleanup: None,
             cleanup_serial: 0,
             optimization: None,
             optimization_serial: 0,
@@ -341,7 +338,6 @@ impl DocumentTab {
             && !self.naming.is_pending()
             && !self.mapping.is_pending()
             && !self.nmr.is_pending()
-            && self.cleanup.is_none()
             && self.optimization.is_none()
             && self.inline_text.is_none()
             && self.atom_text.is_none()

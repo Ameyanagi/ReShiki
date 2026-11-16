@@ -123,7 +123,7 @@ under `tests/fixtures/mcp/` and `crates/mcp/tests/transcripts/` are edited by
 hand to the new expected lines. `tests/fixtures/agent-api/parity.json` holds
 one molecule and one reaction with the answers the command line
 (`tests/cli.rs`), the Python package (`crates/python/tests/test_parity.py`) and
-the JavaScript package (`packages/editor/test/parity.test.ts`) must all give.
+the JavaScript package (`packages/headless/test/parity.test.ts`) must all give.
 Rewrite it from a built binary:
 
 ```sh
@@ -310,7 +310,7 @@ On a pull request, the summary of the **Changed fixture rows** job lists the row
 
 CI runs the workspace tests with [cargo-nextest](https://nexte.st/) 0.9.150; [Run the checks](#run-the-checks) gives the same commands. On each platform the **rust build** job compiles the tests once and passes them on as a `cargo nextest archive` file. Two **rust** partition jobs run that file without compiling. The **rust extra** job runs beside them and covers the tests that nextest leaves out: the Windows renderer tests, the naming corpus, the custom harnesses and the doc tests. **Rust checks** passes only when all of these jobs pass. Each partition uploads its JUnit report as a `nextest-junit-*` artifact.
 
-The **Browser build (wasm32)** job checks the browser build on the same pull requests: Clippy with `-D warnings` for the editor and the headless library (`reshiki-web`) for `wasm32-unknown-unknown`, with the crates and target `scripts/build_wasm.sh` builds, then `bun test` in `packages/editor` against a debug build of the headless library. It skips with the native checks for documentation-only changes, and only release tags build the optimised bundle. The `web` job lints `packages/editor` with oxlint on every pull request. To run the same checks locally:
+The **Browser build (wasm32)** job checks the browser build on the same pull requests: Clippy with `-D warnings` for the editor and the headless library (`reshiki-web`) for `wasm32-unknown-unknown`, with the crates and target `scripts/build_wasm.sh` builds, then `bun test` in `packages/headless` against a debug build of the headless library, and in `packages/editor`. It skips with the native checks for documentation-only changes, and only release tags build the optimised bundle. The `web` job lints `packages/editor` and `packages/headless` with oxlint on every pull request. To run the same checks locally:
 
 ```sh
 cargo clippy -p reshiki-web -p reshiki --lib --bin reshiki --target wasm32-unknown-unknown --locked -- -D warnings

@@ -581,7 +581,6 @@ impl App {
             || self.tab.atom_text.is_some()
             || self.tab.inline_text.is_some()
             || self.tab.joining.is_some()
-            || self.tab.cleanup.is_some()
     }
 
     /// The toast floats at the canvas's bottom right. The stack stays when it

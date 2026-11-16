@@ -39,23 +39,6 @@ fn analysis() -> reshiki::engine::Analysis {
     }
 }
 
-fn preview(app: &App) -> CleanupPreview {
-    CleanupPreview {
-        job: cleanup::CleanupJob {
-            options: Default::default(),
-            selection: vec![],
-            serial: app.tab.cleanup_serial,
-            epoch: app.tab.file_epoch,
-        },
-        warnings: vec![],
-        document: app.tab.doc.clone(),
-        analysis: None,
-        revision: app.tab.revision,
-        epoch: app.tab.file_epoch,
-        original: false,
-    }
-}
-
 /// Two carbons joined by one bond of `order`.
 fn ethane(app: &mut App, order: u8) -> [u64; 2] {
     let doc = &mut app.tab.doc;
@@ -71,8 +54,6 @@ fn cache_properties(app: &mut App) {
     app.tab.analysis = Some(analysis());
     app.tab.labels_dirty = false;
     app.tab.chemistry_notice = Some("n".into());
-    let cleanup = preview(app);
-    app.tab.cleanup = Some(cleanup);
 }
 
 /// Reactant a–b and product c on one arrow, as in `app/reactions/tests.rs`.
@@ -122,7 +103,6 @@ fn display_only_edit_keeps_cached_properties_and_undo_is_exact() {
     app.tab.doc.atom_mut(a).unwrap().cip_label = Some("R".into());
     let revision = app.tab.revision;
     let before = app.tab.doc.clone();
-    assert!(app.tab.cleanup.is_some());
     assert!(!app.tab.history.can_undo());
 
     app.tab.doc.bonds[0].color = Color::Palette(Hue::Blue, Row::Strong);
@@ -134,7 +114,6 @@ fn display_only_edit_keeps_cached_properties_and_undo_is_exact() {
     assert!(app.tab.analysis.is_some());
     assert!(!app.tab.labels_dirty);
     assert_eq!(app.tab.chemistry_notice.as_deref(), Some("n"));
-    assert!(app.tab.cleanup.is_none());
     assert_eq!(app.tab.doc.atom(a).unwrap().cip_label.as_deref(), Some("R"));
 
     app.error = true;
@@ -158,7 +137,6 @@ fn chemistry_edits_clear_computed_labels_and_cached_properties() {
         app.tab.doc.bonds[0].cip_label = Some("E".into());
         let revision = app.tab.revision;
         let before = app.tab.doc.clone();
-        assert!(app.tab.cleanup.is_some(), "{context}");
         assert!(app.tab.analysis.is_some(), "{context}");
 
         if translate {
@@ -182,7 +160,6 @@ fn chemistry_edits_clear_computed_labels_and_cached_properties() {
         assert_eq!(app.status, CHEMISTRY, "{context}");
         assert!(!app.error, "{context}");
         assert_eq!(app.tab.revision, revision + 1, "{context}");
-        assert!(app.tab.cleanup.is_none(), "{context}");
         let committed = app.tab.doc.clone();
 
         // History keeps the labeled `before`; undo clears its labels again.
@@ -209,7 +186,6 @@ fn unchanged_document_neither_commits_nor_touches_status() {
     let existing = app.tab.doc.add_atom("C", Point::default());
     app.status = "sentinel".into();
     app.error = true;
-    app.tab.cleanup = Some(preview(&app));
     app.tab.erase_stroke = true;
     app.tab.selected = vec![existing, 999_999];
     let revision = app.tab.revision;
@@ -221,7 +197,6 @@ fn unchanged_document_neither_commits_nor_touches_status() {
     assert!(app.error);
     assert_eq!(app.tab.revision, revision);
     assert!(!app.tab.history.can_undo());
-    assert!(app.tab.cleanup.is_none());
     assert!(app.tab.erase_stroke);
     assert_eq!(app.tab.selected, [existing]);
 }
@@ -230,7 +205,6 @@ fn unchanged_document_neither_commits_nor_touches_status() {
 fn invalid_edit_rolls_back_with_edit_cancelled_status() {
     let mut app = app();
     let [a, _] = ethane(&mut app, 1);
-    app.tab.cleanup = Some(preview(&app));
     app.tab.erase_stroke = true;
     app.tab.selected = vec![a, 999_999];
     let revision = app.tab.revision;
@@ -243,7 +217,6 @@ fn invalid_edit_rolls_back_with_edit_cancelled_status() {
     assert_eq!(app.status, "Edit canceled: Invalid bond endpoints or order");
     assert_eq!(app.tab.revision, revision);
     assert!(!app.tab.history.can_undo());
-    assert!(app.tab.cleanup.is_none());
     // changed() ends the erase stroke before the edit is rejected.
     assert!(!app.tab.erase_stroke);
     // A rejection keeps only the selected objects that still exist.
@@ -258,7 +231,6 @@ fn reaction_join_rolls_back_with_unprefixed_reaction_message() {
     for order in [1, 8] {
         let mut app = app();
         let [_, b, c] = reaction(&mut app);
-        app.tab.cleanup = Some(preview(&app));
         let revision = app.tab.revision;
         let before = app.tab.doc.clone();
 
@@ -270,7 +242,6 @@ fn reaction_join_rolls_back_with_unprefixed_reaction_message() {
         assert_eq!(app.tab.doc, before, "order {order}");
         assert_eq!(app.tab.revision, revision, "order {order}");
         assert!(!app.tab.history.can_undo(), "order {order}");
-        assert!(app.tab.cleanup.is_none(), "order {order}");
     }
 }
 
@@ -617,12 +588,11 @@ fn step_history_restores_status_revision_and_selection() {
             assert_eq!(app.tab.selected, kept, "redo {redo}");
         }
     }
-    // (b) Undo with empty history still clears the stroke and cleanup preview.
+    // (b) Undo with empty history still clears the stroke.
     {
         let mut app = app();
         app.tab.doc.add_atom("C", Point::default());
         app.tab.erase_stroke = true;
-        app.tab.cleanup = Some(preview(&app));
         app.status = "sentinel".into();
         app.error = true;
         app.tab.selected = vec![999];
@@ -631,7 +601,6 @@ fn step_history_restores_status_revision_and_selection() {
         assert!(!app.tab.history.can_undo());
         app.step_history(false);
         assert!(!app.tab.erase_stroke);
-        assert!(app.tab.cleanup.is_none());
         assert_eq!(app.status, "sentinel");
         assert!(app.error);
         assert_eq!(app.tab.revision, revision);

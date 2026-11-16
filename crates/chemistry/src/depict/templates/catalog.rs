@@ -24,9 +24,13 @@ pub(super) struct Catalog {
     #[serde(skip)]
     pub by_size: BTreeMap<usize, Vec<usize>>,
 }
+/// `builtin.json`, deflated by `build.rs`.
+const BUILTIN: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/builtin.json.deflate"));
 fn load() -> Result<Catalog> {
-    let mut catalog: Catalog = serde_json::from_str(include_str!("builtin.json"))
+    let json = miniz_oxide::inflate::decompress_to_vec(BUILTIN)
         .map_err(|_| Error::Invalid("builtin template data"))?;
+    let mut catalog: Catalog =
+        serde_json::from_slice(&json).map_err(|_| Error::Invalid("builtin template data"))?;
     if catalog.source_commit != "fece8caa860bdf6c9c82bdb9253f22a0cf87150c"
         || catalog.source_sha256
             != "69530df08d9e532a2ce89275359333fe24a2c50868fe91f1942970bc03ee890b"
@@ -75,4 +79,15 @@ fn load() -> Result<Catalog> {
 pub(super) fn builtin() -> Result<&'static Catalog> {
     static CATALOG: OnceLock<Result<Catalog>> = OnceLock::new();
     CATALOG.get_or_init(load).as_ref().map_err(Clone::clone)
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn the_embedded_catalog_is_the_source_at_a_tenth_of_its_size() {
+        let source = include_bytes!("builtin.json");
+        let embedded = miniz_oxide::inflate::decompress_to_vec(super::BUILTIN).unwrap();
+        assert!(embedded == source);
+        assert!(super::BUILTIN.len() * 10 < source.len());
+    }
 }

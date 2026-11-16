@@ -325,6 +325,17 @@ fn cleanup_fallback_restores_the_requested_bond_length() -> anyhow::Result<()> {
     }
     let document = label_document(&state, &original.positions)
         .ok_or_else(|| anyhow::anyhow!("Scaled cleanup drawing"))?;
+    // Cleanup keeps the drawn size, not the style's 1.6 times longer bonds.
+    let mut drawn: Vec<_> = document
+        .bonds
+        .iter()
+        .map(|b| {
+            let (a, b) = (document.atom(b.a).unwrap(), document.atom(b.b).unwrap());
+            f64::from(a.position.distance(b.position)) / 28.
+        })
+        .collect();
+    drawn.sort_by(f64::total_cmp);
+    let bond_length = drawn[drawn.len() / 2];
     let mut request = crate::engine::Request::molecule("clean", document);
     request
         .document
@@ -335,7 +346,6 @@ fn cleanup_fallback_restores_the_requested_bond_length() -> anyhow::Result<()> {
     let cleaned = crate::engine::native_cleanup::prepare(&request)?;
     assert!(cleaned.warnings.is_empty());
     let after = cleaned.molecule.expect("scaled whole cleanup analysis");
-    let bond_length = f64::from(cleaned.document.drawing_style.bond_length_world) / 28.;
     for bond in &after.state.graph.bonds {
         let a = after.positions[bond.a];
         let b = after.positions[bond.b];

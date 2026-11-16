@@ -237,7 +237,7 @@ struct Transport(reqwest::Client);
 #[cfg(not(target_arch = "wasm32"))]
 impl Transport {
     fn new() -> Result<Self, Error> {
-        reqwest::Client::builder()
+        crate::http::client()
             .https_only(true)
             .redirect(reqwest::redirect::Policy::none())
             .connect_timeout(Duration::from_secs(5))

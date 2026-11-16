@@ -9,7 +9,7 @@ use serde_json::json;
 
 impl App {
     pub(super) fn assistant_request(&mut self, improving: bool) -> Task<Message> {
-        if self.assistant.busy || self.assistant.reading_image || self.tab.cleanup.is_some() {
+        if self.assistant.busy || self.assistant.reading_image {
             return Task::none();
         }
         if !matches!(

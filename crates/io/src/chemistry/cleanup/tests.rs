@@ -315,6 +315,24 @@ fn ring_on_grid(molecule: &Molecule) {
     }
 }
 
+fn ring_upright(molecule: &Molecule) {
+    ring_on_grid(molecule);
+    let ring = molecule
+        .state
+        .rings
+        .atoms
+        .iter()
+        .find(|ring| ring.len() == 6)
+        .unwrap();
+    for (&a, &b) in ring.iter().zip(ring.iter().cycle().skip(1)) {
+        let (a, b) = (molecule.positions[a], molecule.positions[b]);
+        assert!(
+            (6. * (b.y - a.y).atan2(b.x - a.x)).cos() < -0.999,
+            "{a:?} {b:?}"
+        );
+    }
+}
+
 fn drawing(text: &str) -> anyhow::Result<Document> {
     let input = smiles::read(text)?;
     let state = input.prepared.state;
@@ -625,7 +643,7 @@ fn cleanup_iupac_reflection_rewedges_visible_stereochemistry() -> anyhow::Result
 }
 
 #[test]
-fn keeping_orientation_leaves_substituted_six_rings_on_the_grid() -> anyhow::Result<()> {
+fn keeping_orientation_stands_substituted_six_rings_upright() -> anyhow::Result<()> {
     for text in [PROPYLBENZENE, ASPIRIN] {
         let source = drawing(text)?;
         let before = molecular::prepare(&source)?;
@@ -650,7 +668,7 @@ fn keeping_orientation_leaves_substituted_six_rings_on_the_grid() -> anyhow::Res
         }
         let cleaned = clean(&source, Options::default(), &[], 0.)?;
         let after = cleaned.molecule.as_ref().unwrap();
-        ring_on_grid(after);
+        ring_upright(after);
         let ring = &before.state.rings.atoms[0];
         for (&a, &b) in ring.iter().zip(ring.iter().cycle().skip(1)) {
             let direction =
@@ -658,7 +676,7 @@ fn keeping_orientation_leaves_substituted_six_rings_on_the_grid() -> anyhow::Res
             let angle = direction(&after.positions) - direction(&before.positions);
             let error = angle.sin().atan2(angle.cos()).abs();
             assert!(
-                error <= 1.5_f64.to_radians(),
+                error <= 30_f64.to_radians() + 1e-6,
                 "Ring bond {a}–{b} turned by {:.6} degrees",
                 error.to_degrees()
             );
@@ -687,11 +705,10 @@ fn cleanup_without_keep_orientation_straightens_a_rotated_solver_layout() -> any
 }
 
 #[test]
-fn cleanup_with_keep_orientation_straightens_a_tilted_drawing() -> anyhow::Result<()> {
+fn cleanup_with_keep_orientation_stands_a_tilted_ring_upright() -> anyhow::Result<()> {
     for text in [PROPYLBENZENE, ASPIRIN] {
         let source = drawing(text)?;
-        // A ring that turns at most 15 degrees onto the grid from a 20-degree
-        // tilt lands on the 30-degree line, not back on 0.
+        // The ring turns at most 30 degrees until it stands upright.
         let ring = molecular::prepare(&source)?.state.rings.atoms.remove(0);
         let (a, b) = (ring[0], ring[1]);
         let direction = |molecule: &Molecule| {
@@ -709,11 +726,11 @@ fn cleanup_with_keep_orientation_straightens_a_tilted_drawing() -> anyhow::Resul
             let before = molecular::prepare(&source)?;
             let cleaned = clean(&source, Options::default(), &[], 0.)?;
             let after = cleaned.molecule.as_ref().unwrap();
-            ring_on_grid(after);
+            ring_upright(after);
             let angle = direction(after) - direction(&before);
             let turn = angle.sin().atan2(angle.cos()).abs();
             assert!(
-                turn <= 15_f64.to_radians(),
+                turn <= 30_f64.to_radians() + 1e-6,
                 "{text} tilted by {tilt} degrees turned by {:.6} degrees",
                 turn.to_degrees()
             );
@@ -982,6 +999,201 @@ fn cleanup_with_keep_orientation_keeps_the_handedness_of_the_drawing() -> anyhow
             before * after > 0.,
             "mirror {mirror}: ring area {before} became {after}"
         );
+    }
+    Ok(())
+}
+
+/// A fresh depiction of `text`, scaled from the 1.5 bond length.
+fn scaled(text: &str, scale: f64) -> anyhow::Result<Document> {
+    let state = smiles::read(text)?.prepared.state;
+    let points = depict::compute(
+        &state,
+        &vec![None; state.graph.atoms.len()],
+        None,
+        Default::default(),
+    )?
+    .positions;
+    let xy: Vec<_> = points.iter().map(|p| (p.x * scale, p.y * scale)).collect();
+    drawing_at(text, &xy)
+}
+
+/// Regular hexagons with vertices at `phase + 60k` degrees, one per center.
+fn hexagons(text: &str, rings: &[((f64, f64), f64, f64)]) -> anyhow::Result<Document> {
+    let mut xy = vec![];
+    for &((x, y), phase, length) in rings {
+        for k in 0..6 {
+            let angle = (phase + 60. * f64::from(k)).to_radians();
+            xy.push((x + length * angle.cos(), y + length * angle.sin()));
+        }
+    }
+    drawing_at(text, &xy)
+}
+
+fn bond_angles(document: &Document) -> Vec<(f32, f64)> {
+    document
+        .bonds
+        .iter()
+        .map(|bond| {
+            let a = document.atom(bond.a).unwrap().position;
+            let b = document.atom(bond.b).unwrap().position;
+            (
+                a.distance(b),
+                f64::from(b.y - a.y).atan2(f64::from(b.x - a.x)),
+            )
+        })
+        .collect()
+}
+
+fn median_length(document: &Document) -> f32 {
+    let mut lengths: Vec<_> = bond_angles(document).into_iter().map(|(l, _)| l).collect();
+    lengths.sort_by(f32::total_cmp);
+    let half = lengths.len() / 2;
+    if lengths.len() % 2 == 0 {
+        (lengths[half - 1] + lengths[half]) / 2.
+    } else {
+        lengths[half]
+    }
+}
+
+#[test]
+fn cleanup_keeps_the_drawn_size_including_templated_rings() -> anyhow::Result<()> {
+    // Cyclododecane and norbornane are drawn from ring templates, which ignore
+    // the requested bond length.
+    for text in [
+        "c1ccccc1CCO",
+        "C1CCCCCCCCCCC1",
+        "C1CC2CCC1C2",
+        "C1C2CC3CC1CC(C2)C3",
+    ] {
+        for scale in [0.7, 1., 1.5] {
+            let source = scaled(text, scale)?;
+            for orientation in [Orientation::Keep, Orientation::Free, Orientation::Iupac] {
+                let mut options = Options::default();
+                options.set_orientation(orientation);
+                let cleaned = clean(&source, options, &[], 0.)?.document;
+                let (before, after) = (median_length(&source), median_length(&cleaned));
+                assert!(
+                    (after / before - 1.).abs() < 0.005,
+                    "{text} at {scale}x, {orientation}: {before} -> {after}"
+                );
+            }
+            // One fixed atom: the layout scales about it.
+            let selected: Vec<_> = source.atoms.iter().skip(1).map(|a| a.id).collect();
+            let options = Options {
+                scope: Scope::SelectedAtoms,
+                ..Options::default()
+            };
+            let cleaned = clean(&source, options, &selected, 0.)?.document;
+            let (before, after) = (median_length(&source), median_length(&cleaned));
+            assert!(
+                (after / before - 1.).abs() < 0.005,
+                "{text} at {scale}x, one fixed atom: {before} -> {after}"
+            );
+            assert_eq!(cleaned.atoms[0].position, source.atoms[0].position);
+        }
+    }
+    // An even count takes the middle pair: bonds of 42 and 84 give 63.
+    let propane = drawing_at("CCC", &[(0., 0.), (1.5, 0.), (4.5, 0.)])?;
+    let cleaned = clean(&propane, Options::default(), &[], 0.)?.document;
+    for (length, _) in bond_angles(&cleaned) {
+        assert!((length - 63.).abs() < 0.01, "{length}");
+    }
+    Ok(())
+}
+
+#[test]
+fn keeping_orientation_turns_six_rings_upright_by_at_most_30_degrees() -> anyhow::Result<()> {
+    // Flat (0), tilted towards flat (10, -10) and upright (30) benzene.
+    for phase in [0., 10., -10., 25., 30.] {
+        let source = hexagons("c1ccccc1", &[((0., 0.), phase, 1.5)])?;
+        let cleaned = clean(&source, Options::default(), &[], 0.)?.document;
+        for ((_, before), (_, after)) in bond_angles(&source).into_iter().zip(bond_angles(&cleaned))
+        {
+            assert!(
+                (6. * after).cos() < -0.9999,
+                "phase {phase}: a side at {} degrees is not upright",
+                after.to_degrees()
+            );
+            let turn = (after - before + PI).rem_euclid(2. * PI) - PI;
+            assert!(turn.abs() <= PI / 6. + 1e-6, "phase {phase}: turned {turn}");
+        }
+    }
+    // A flat naphthalene ties; it turns so the fusion bond stands vertical.
+    for turn in [30_f64, -30.] {
+        let mut source = scaled("c1ccc2ccccc2c1", 1.)?;
+        let degree = |id: u64| {
+            source
+                .bonds
+                .iter()
+                .filter(|b| b.a == id || b.b == id)
+                .count()
+        };
+        let fusion = source
+            .bonds
+            .iter()
+            .find(|bond| degree(bond.a) == 3 && degree(bond.b) == 3)
+            .map(|bond| (bond.a, bond.b))
+            .unwrap();
+        let (a, b) = (
+            source.atom(fusion.0).unwrap().position,
+            source.atom(fusion.1).unwrap().position,
+        );
+        let angle = f64::from(b.y - a.y).atan2(f64::from(b.x - a.x));
+        let (sin, cos) = (PI / 2. - angle + turn.to_radians()).sin_cos();
+        for atom in &mut source.atoms {
+            let (x, y) = (f64::from(atom.position.x), f64::from(atom.position.y));
+            atom.position.x = (cos * x - sin * y) as f32;
+            atom.position.y = (sin * x + cos * y) as f32;
+        }
+        let cleaned = clean(&source, Options::default(), &[], 0.)?.document;
+        let (a, b) = (
+            cleaned.atom(fusion.0).unwrap().position,
+            cleaned.atom(fusion.1).unwrap().position,
+        );
+        assert!((a.x - b.x).abs() < 1e-3, "{turn}: {a:?} {b:?}");
+    }
+    Ok(())
+}
+
+#[test]
+fn cleanup_without_a_selection_cleans_each_component_on_its_own() -> anyhow::Result<()> {
+    // A salt-like pair of rings, tilted opposite ways and drawn at two sizes.
+    let source = hexagons(
+        "c1ccccc1.C1CCCCC1",
+        &[((0., 0.), 10., 1.5), ((8., 0.), -12., 2.25)],
+    )?;
+    let cleaned = clean(&source, Options::default(), &[], 0.)?.document;
+    let angles = bond_angles(&cleaned);
+    for (length, angle) in &angles {
+        assert!((6. * angle).cos() < -0.9999, "{}", angle.to_degrees());
+        assert!(
+            [1.5_f32, 2.25]
+                .iter()
+                .any(|l| (length - l * 28.).abs() < 0.05),
+            "{length}"
+        );
+    }
+    // Each molecule keeps its center.
+    for (range, x) in [(0..6, 0.), (6..12, 8. * 28.)] {
+        let center = cleaned.atoms[range]
+            .iter()
+            .map(|a| a.position.x)
+            .sum::<f32>()
+            / 6.;
+        assert!((center - x).abs() < 0.01, "{center}");
+    }
+    Ok(())
+}
+
+#[test]
+fn straightening_a_side_chain_never_tilts_upright_rings() -> anyhow::Result<()> {
+    // Its cyclopentane and chain favour another grid than the benzene ring.
+    let source = scaled("c1ccccc1C2CCCC2CCCCCCCC", 1.)?;
+    for orientation in [Orientation::Keep, Orientation::Free] {
+        let mut options = Options::default();
+        options.set_orientation(orientation);
+        let cleaned = clean(&source, options, &[], 0.)?;
+        ring_upright(cleaned.molecule.as_ref().unwrap());
     }
     Ok(())
 }

@@ -6,6 +6,7 @@ on:
       [
         "docs/**",
         "packages/editor/README.md",
+        "packages/headless/README.md",
         "website/**",
         "scripts/assemble_changelog.py",
         "package.json",
@@ -17,6 +18,7 @@ on:
       [
         "docs/**",
         "packages/editor/README.md",
+        "packages/headless/README.md",
         "website/**",
         "scripts/assemble_changelog.py",
         "package.json",

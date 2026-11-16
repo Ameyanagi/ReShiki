@@ -116,7 +116,7 @@ rules, plus these:
 | Abbreviate selection…       | Create group label…, Contract selection                |
 | Save as abbreviation        | Define abbreviation from selection                     |
 | 3D optimize…                | 3D optimization                                        |
-| Clean up…                   | Clean up structure, Tidy                               |
+| Clean up                    | Clean up structure, Tidy                               |
 | Atom maps                   | Atom mapping                                           |
 | Show/hide side panel        | Toggle inspector, Show or hide inspector               |
 | Assistant                   | AI assistant, Codex (for the panel)                    |

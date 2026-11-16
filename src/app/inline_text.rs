@@ -205,7 +205,7 @@ impl App {
     pub(super) fn inline_action(&mut self, action: Action) -> Task<Message> {
         match action {
             Action::Begin(id, position) => {
-                if self.tab.cleanup.is_some() || !self.finish_inline(true) {
+                if !self.finish_inline(true) {
                     return Task::none();
                 }
                 let original = id

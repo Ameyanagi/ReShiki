@@ -2756,3 +2756,34 @@ async fn reaction_wedges_on_nonsingle_bonds_match_silent_molecule_imports() -> a
     }
     Ok(())
 }
+
+/// Each component's six-membered rings stand upright, also beside a branched
+/// chain that the rigid straightening favours, or a cage that keeps its turn.
+#[test]
+fn new_depictions_stand_each_components_six_rings_upright() -> anyhow::Result<()> {
+    for text in [
+        "c1ccccc1",
+        "c1ccc2ccccc2c1",
+        "c1ccccc1.CCCC(CCCC)CCCC",
+        "c1ccccc1.C1CC2CCC1C2",
+    ] {
+        let input = smiles::read(text)?;
+        let state = &input.prepared.state;
+        let positions = coordinates(state, &input.reaction_properties)?.positions;
+        let rings = state.rings.atoms.iter().filter(|ring| {
+            ring.len() == 6 && state.graph.atoms.get(ring[0]).is_some_and(|a| a.aromatic)
+        });
+        for ring in rings {
+            for (&a, &b) in ring.iter().zip(ring.iter().cycle().skip(1)) {
+                let (a, b) = (positions[a], positions[b]);
+                let angle = (b.y - a.y).atan2(b.x - a.x);
+                assert!(
+                    (6. * angle).cos() < -0.9999,
+                    "{text}: {}",
+                    angle.to_degrees()
+                );
+            }
+        }
+    }
+    Ok(())
+}

@@ -120,16 +120,9 @@ fn open_optimization_preview(app: &mut App) {
 
 #[test]
 fn update_discards_expansion_under_each_blocking_state_and_allows_retry() {
-    use crate::app::{CleanupPreview, atom_text, cleanup, optimization, tabs, template_library};
+    use crate::app::{atom_text, optimization, tabs, template_library};
     use reshiki::recovery::Recovery;
-    for modal in [
-        "atom text",
-        "cleanup",
-        "3D",
-        "updates",
-        "restarting",
-        "exit",
-    ] {
+    for modal in ["atom text", "3D", "updates", "restarting", "exit"] {
         let directory = tempfile::tempdir().unwrap();
         let (mut app, completion) = pending_expansion();
         let source = app.tab.id;
@@ -139,22 +132,6 @@ fn update_discards_expansion_under_each_blocking_state_and_allows_retry() {
                 let _ = app.update(Message::AtomText(atom_text::Action::Begin(Some(
                     app.tab.doc.atoms[0].id,
                 ))));
-            }
-            "cleanup" => {
-                app.tab.cleanup = Some(CleanupPreview {
-                    job: cleanup::CleanupJob {
-                        options: Default::default(),
-                        selection: vec![],
-                        serial: app.tab.cleanup_serial,
-                        epoch: app.tab.file_epoch,
-                    },
-                    warnings: vec![],
-                    document: app.tab.doc.clone(),
-                    analysis: None,
-                    revision: app.tab.revision,
-                    epoch: app.tab.file_epoch,
-                    original: false,
-                });
             }
             "3D" => open_optimization_preview(&mut app),
             "updates" => app.updates.open = true,
@@ -192,10 +169,6 @@ fn update_discards_expansion_under_each_blocking_state_and_allows_retry() {
             "atom text" => {
                 assert!(app.tab.atom_text.is_some());
                 let _ = app.update(Message::AtomText(atom_text::Action::Cancel));
-            }
-            "cleanup" => {
-                assert!(app.tab.cleanup.is_some());
-                let _ = app.update(Message::Cleanup(cleanup::Action::Cancel));
             }
             "3D" => {
                 assert!(app.tab.optimization.is_some());

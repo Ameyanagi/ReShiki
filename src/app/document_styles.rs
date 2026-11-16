@@ -428,7 +428,7 @@ impl App {
             }
             Choice::Journal(preset) => {
                 self.cancel_join();
-                if self.tab.cleanup.is_some() || !self.finish_inline(true) {
+                if !self.finish_inline(true) {
                     return Task::none();
                 }
                 match reshiki::document_styles::apply(&self.tab.doc, preset.style(), true, true) {
@@ -484,7 +484,7 @@ impl App {
             }
             Action::Open => {
                 self.cancel_join();
-                if self.tab.cleanup.is_some() || !self.finish_inline(true) {
+                if !self.finish_inline(true) {
                     return Task::none();
                 }
                 self.tab.styles.serial = self.tab.styles.serial.wrapping_add(1);

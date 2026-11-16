@@ -29,7 +29,7 @@ The optional AI assistant uses your own [Codex sign-in](https://reshiki.com/guid
 ## Use from code
 
 - **Python:** `uv add reshiki` ([Python package](docs/python.md)).
-- **JavaScript:** `bun add @ameyanagi/reshiki`, the editor and a headless converter in WebAssembly ([npm package](packages/editor/README.md)).
+- **JavaScript:** `bun add @ameyanagi/reshiki` for the editor in WebAssembly ([npm package](packages/editor/README.md)), or `bun add @ameyanagi/reshiki-headless` for a converter without it ([npm package](packages/headless/README.md)).
 - **AI agents (experimental):** `reshiki --mcp` or `reshiki --cli` ([Connect AI agents](https://reshiki.com/guide/agents/)).
 
 ## Acknowledging ReShiki

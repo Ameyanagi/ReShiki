@@ -79,6 +79,9 @@ function rewriteLinks(body, directory) {
     if (relative === "packages/editor/README.md") {
       return `](/developer/npm-package/${fragment}${suffix})`;
     }
+    if (relative === "packages/headless/README.md") {
+      return `](/developer/npm-headless/${fragment}${suffix})`;
+    }
     if (relative.startsWith("docs/images/")) {
       return `](/doc-images/${relative.slice("docs/images/".length)}${fragment}${suffix})`;
     }
@@ -137,13 +140,18 @@ for (const name of (await readdir(source))
   );
 }
 
-// The npm package README, which also shows on npmjs.com.
-const npmReadme = path.join(root, "packages/editor/README.md");
-const npmBody = (await readFile(npmReadme, "utf8")).replace(/^# .+\r?\n/m, "");
-await writeFile(
-  path.join(destination, "npm-package.md"),
-  `---\ntitle: Browser editor package (npm)\nslug: developer/npm-package\neditUrl: https://github.com/Ameyanagi/ReShiki/edit/main/packages/editor/README.md\n---\n${rewriteLinks(npmBody, path.dirname(npmReadme))}`,
-);
+// The npm package READMEs, which also show on npmjs.com.
+for (const [folder, topic, title] of [
+  ["editor", "npm-package", "Browser editor package (npm)"],
+  ["headless", "npm-headless", "Headless library package (npm)"],
+]) {
+  const readme = path.join(root, "packages", folder, "README.md");
+  const body = (await readFile(readme, "utf8")).replace(/^# .+\r?\n/m, "");
+  await writeFile(
+    path.join(destination, `${topic}.md`),
+    `---\ntitle: ${title}\nslug: developer/${topic}\neditUrl: https://github.com/Ameyanagi/ReShiki/edit/main/packages/${folder}/README.md\n---\n${rewriteLinks(body, path.dirname(readme))}`,
+  );
+}
 
 async function filesUnder(directory) {
   const files = [];

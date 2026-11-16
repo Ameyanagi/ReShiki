@@ -107,7 +107,7 @@ impl Command {
     }
 
     pub(super) fn enabled(self, app: &App, objects: usize) -> bool {
-        if app.tab.cleanup.is_some() || app.tab.joining.is_some() {
+        if app.tab.joining.is_some() {
             return false;
         }
         match self {

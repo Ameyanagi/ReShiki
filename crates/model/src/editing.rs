@@ -129,11 +129,9 @@ pub fn selection(doc: &Document, ids: &[u64]) -> Document {
 /// The part of `doc` that generic expansion copies: the selected components
 /// with every caption, arrow link, group, scope and reaction they reference; a
 /// selection that would cut one of these is an error rather than a repair, and
-/// the caller has already charged the work and validated `doc`.
-pub(crate) fn preserved_expansion_selection(
-    doc: &Document,
-    selected: &[u64],
-) -> Result<Document, String> {
+/// the caller has already charged the work and validated `doc`. Canvas
+/// previews use it to redraw only the components they change.
+pub fn preserved_expansion_selection(doc: &Document, selected: &[u64]) -> Result<Document, String> {
     let chosen = crate::generic::selection(doc, selected);
     let chosen = crate::attachments::selection(doc, &chosen);
     let mut ids: HashSet<_> = doc
@@ -1481,7 +1479,7 @@ fn aromatic_hexagon(
 ) -> Result<(Document, Vec<u64>), RingRejection> {
     let drawing = crate::rings::Drawing {
         preset: crate::rings::Preset::Benzene,
-        length: crate::style::DEFAULT.bond_length_world,
+        length: doc.drawing_style.bond_length_world,
         alternate: false,
         connect: false,
     };
@@ -1626,7 +1624,7 @@ fn attached_ring_vertices(
         .map(|a| a.position)
         .unwrap_or(p);
     let length = if neighbors.is_empty() {
-        crate::style::DEFAULT.bond_length_world
+        doc.drawing_style.bond_length_world
     } else {
         neighbors.iter().map(|p| p.distance(anchor)).sum::<f32>() / neighbors.len() as f32
     };
@@ -1656,8 +1654,13 @@ fn attached_ring_vertices(
     } else {
         p
     };
+    // Like ChemDraw's ring tools, a free ring keeps one side vertical: even
+    // rings stand upright (a hexagon has a vertex at the top), odd rings
+    // point right.
     let phase = if atom.is_some() {
         angle + std::f32::consts::PI
+    } else if n % 2 == 0 {
+        std::f32::consts::PI / n as f32
     } else {
         0.0
     };

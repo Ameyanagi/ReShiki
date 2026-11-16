@@ -11,7 +11,7 @@ issues: []
   (Japan) keeps Japanese kanji forms. Drawing labels keep their own fonts.
 - Before any command has run, the command palette opens on a **Start here**
   group: **Import structure or name**, **Benzene**, **Open…**,
-  **Clean up…**, **Molecular formula and properties**,
+  **Clean up**, **Molecular formula and properties**,
   **Predict NMR**, **Export panel** and **Help & shortcuts**. It used to open
   on Cyclopropane and the other ring templates.
 - Help rows that are also commands, such as **Select all** or **Fit drawing**,

@@ -729,9 +729,10 @@ fn edits() -> Vec<Command> {
             Message::Transform(Transform::FlipVertical),
         )
         .need(Need::Flippable),
-        selection(
-            "Clean up…",
-            "Preview a cleaned-up layout",
+        send(
+            "Clean up",
+            Edit,
+            "Redraw the selection, or the whole drawing, with regular geometry",
             "tidy beautify layout",
             Message::Cleanup(cleanup::Action::Begin),
         )
