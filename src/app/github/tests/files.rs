@@ -687,3 +687,52 @@ fn a_new_folder_in_the_tree_shows_under_its_folder() {
     // The file shown with it is asked about.
     assert!(the_picker(&app).asked.contains("sub/a.mol"));
 }
+
+#[test]
+fn tiles_shown_after_the_tree_sort_newest_first() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = app_in(dir.path());
+    app.github.prefs.tree = true;
+    app.github.repos = vec![repo()];
+    let _ = picker(&mut app, picker::Action::Show(Mode::Open));
+    let _ = picker(&mut app, picker::Action::PickRepo(repo().key));
+    let generation = picker_generation(&app);
+    let top = vec![entry("a.mol"), entry("b.mol")];
+    let _ = picker(
+        &mut app,
+        picker::Action::Listing(generation, Ok((sha('8'), top))),
+    );
+    // The tree asked about no tile; switching asks, then sorts once known.
+    let _ = picker(&mut app, picker::Action::View(false));
+    assert_eq!(the_picker(&app).asked.len(), 2);
+    for (path, date) in [
+        ("a.mol", "2025-01-01T00:00:00Z"),
+        ("b.mol", "2026-01-01T00:00:00Z"),
+    ] {
+        let found = Some(("@alice".to_owned(), date.to_owned()));
+        let _ = picker(
+            &mut app,
+            picker::Action::Changed(generation, path.into(), found),
+        );
+    }
+    assert_eq!(picker_names(&app), ["b.mol", "a.mol"]);
+}
+
+#[test]
+fn records_that_do_not_fit_are_left_out_and_said_so() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = app_in(dir.path());
+    let good = Document::from_native_file(&drawing(42.)).unwrap();
+    // A record this drawing cannot take: two atoms share an id.
+    let mut bad = good.clone();
+    bad.atoms.push(bad.atoms[0].clone());
+    let mut batch = crate::app::import::Batch::default();
+    batch.drawings = vec![good.clone(), good, bad];
+    let path = workcopy::old_path(dir.path(), &repo().key, &sha('c'), "dppe.sdf");
+    let read = picker::Action::Read(path.clone(), Box::new(Ok(batch)));
+    let _ = picker(&mut app, read);
+    assert_eq!(app.tab.path.as_deref(), Some(path.as_path()));
+    assert_eq!(app.status, "Opened 2 of 3 structures · The rest don't fit");
+    assert!(!app.error);
+    assert_eq!(app.github.amber.as_deref(), Some(app.status.as_str()));
+}
