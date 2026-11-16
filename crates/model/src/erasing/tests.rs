@@ -4,7 +4,8 @@ fn fast_stroke_cuts_both_ring_edges_without_deleting_off_path_atoms() {
     let mut doc = Document::default();
     crate::editing::ring(&mut doc, Point::default(), 6, false, 0.);
     let atoms = doc.atoms.clone();
-    stroke(&mut doc, Point::new(0., 100.), Point::new(0., -100.), 2.);
+    // The upright hexagon's two vertical sides lie across this stroke.
+    stroke(&mut doc, Point::new(-100., 0.), Point::new(100., 0.), 2.);
     assert_eq!(doc.atoms, atoms);
     assert_eq!(doc.bonds.len(), 4);
     doc.validate().unwrap();

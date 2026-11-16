@@ -940,3 +940,54 @@ fn prepared_ring_interiors_match_live_hits_including_ties_and_hidden_drawings() 
     doc.bonds.retain(|b| !b.connects(inner[0], inner[1]));
     compare(&doc);
 }
+
+/// Ring tool clicks on empty canvas: drawn at the document's bond length, and
+/// like ChemDraw, even rings keep vertical sides while odd rings point right.
+#[test]
+fn free_rings_follow_the_style_length_and_keep_a_vertical_side() {
+    for aromatic in [false, true] {
+        for size in 3..=8 {
+            if aromatic && size != 6 {
+                continue;
+            }
+            let mut doc = Document::default();
+            doc.drawing_style.set_bond_length(10.8);
+            let length = doc.drawing_style.bond_length_world;
+            assert!((length - crate::style::DEFAULT.bond_length_world).abs() > 1.);
+            let ids = ring(&mut doc, Point::new(100., 50.), size, aromatic, 0.);
+            assert_eq!(ids.len(), usize::from(size));
+            let points: Vec<_> = ids
+                .iter()
+                .map(|id| doc.atom(*id).unwrap().position)
+                .collect();
+            let sides: Vec<_> = points
+                .iter()
+                .zip(points.iter().cycle().skip(1))
+                .map(|(a, b)| (*a, *b))
+                .collect();
+            for (a, b) in &sides {
+                assert!(
+                    (a.distance(*b) - length).abs() < 0.01,
+                    "{size}: {a:?} {b:?}"
+                );
+            }
+            let vertical = sides
+                .iter()
+                .filter(|(a, b)| (a.x - b.x).abs() < 0.01)
+                .count();
+            let top = points.iter().map(|p| p.y).fold(f32::INFINITY, f32::min);
+            let at_top = points.iter().filter(|p| (p.y - top).abs() < 0.01).count();
+            match size {
+                // Upright: two vertical sides and one vertex at the top.
+                6 => assert_eq!((vertical, at_top), (2, 1), "{aromatic}"),
+                4 | 8 => assert_eq!(vertical, 2, "{size}"),
+                _ => {
+                    assert_eq!(vertical, 1, "{size}");
+                    let right = points.iter().map(|p| p.x).fold(f32::MIN, f32::max);
+                    let tip = points.iter().filter(|p| (p.x - right).abs() < 0.01).count();
+                    assert_eq!(tip, 1, "odd rings point right");
+                }
+            }
+        }
+    }
+}

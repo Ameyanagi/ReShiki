@@ -33,7 +33,7 @@ impl App {
     }
     pub(super) fn assistant_apply(&mut self) -> Task<Message> {
         let scroll = self.assistant.follow_chat;
-        if self.assistant.busy || self.tab.cleanup.is_some() {
+        if self.assistant.busy {
             return Task::none();
         }
         if self.tab.inline_text.is_some() || self.tab.joining.is_some() {

@@ -3604,6 +3604,16 @@ async fn pointer_hover_redraw_reuses_scene_geometry_at_fit() {
         "moving the camera must rebuild the scene geometry"
     );
     assert_eq!(tessellated(&canvas, &state, moved), 0);
+    // The audit's P6: each further pan at Fit re-tessellated every bond.
+    for _ in 0..8 {
+        canvas.camera.center.x += 20. / canvas.camera.zoom;
+        canvas.camera.center.y -= 5. / canvas.camera.zoom;
+        assert_eq!(
+            tessellated(&canvas, &state, moved),
+            0,
+            "a pan within the retained margin must shift the scene geometry"
+        );
+    }
     let selected = doc.all_ids();
     canvas.selected = &selected;
     assert!(

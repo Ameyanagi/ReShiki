@@ -452,7 +452,7 @@ fn background_engine_results_apply_in_their_own_history() {
 }
 
 #[test]
-fn background_skipped_checks_and_cleanup_previews_stay_with_their_drawing() {
+fn background_skipped_checks_and_cleanups_stay_with_their_drawing() {
     for cleanup in [false, true] {
         let mut app = ready();
         let atom = app.tab.doc.add_atom("N", Point::default());
@@ -474,37 +474,33 @@ fn background_skipped_checks_and_cleanup_previews_stay_with_their_drawing() {
             Job::Analyze
         };
         let front = Front::new(&mut app);
-        assert_eq!(
-            app.update(Message::Tab(
-                id,
-                Box::new(Message::EngineDone {
-                    revision,
-                    kind,
-                    result: Box::new(Ok(Response {
-                        document: Some(computed.clone()),
-                        analysis: None,
-                        output: None,
-                        engine_version: "test".into(),
-                        warnings: vec![],
-                    })),
-                })
-            ))
-            .units(),
-            0
-        );
+        let task = app.update(Message::Tab(
+            id,
+            Box::new(Message::EngineDone {
+                revision,
+                kind,
+                result: Box::new(Ok(Response {
+                    document: Some(computed.clone()),
+                    analysis: None,
+                    output: None,
+                    engine_version: "test".into(),
+                    warnings: vec![],
+                })),
+            }),
+        ));
+        // An applied cleanup refreshes its labels; a skipped check starts nothing.
+        assert_eq!(task.units() == 0, !cleanup);
         front.assert_unchanged(&app);
         let tab = &app.tabs.background[0];
-        assert!(!tab.busy && !tab.history.can_undo());
+        assert!(!tab.busy);
         if cleanup {
-            assert_eq!(tab.doc, before);
-            assert_eq!(tab.cleanup.as_ref().unwrap().document, computed);
+            assert_eq!(tab.doc, computed, "Cleanup applies to its own drawing");
             select(&mut app, id);
-            let _ = app.update(Message::Cleanup(crate::app::cleanup::Action::Apply));
-            assert_eq!(app.tab.doc, computed);
             let _ = app.update(Message::Undo);
             assert_eq!(app.tab.doc, before);
-            assert!(!app.tab.history.can_undo());
+            assert!(!app.tab.history.can_undo(), "Exactly one step");
         } else {
+            assert!(!tab.history.can_undo());
             assert_eq!(tab.doc, before);
             assert_eq!(tab.status, "Chemical analysis unavailable");
         }

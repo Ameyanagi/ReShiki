@@ -206,6 +206,7 @@ explains how the crates and modules fit together.
 - `src/canvas/paper.rs`: The drawing paper, layer by layer
 - `src/canvas/paper/bond_text.rs`: Preview a caption bond against the ink that remains visible during the drag.
 - `src/canvas/paper/draft.rs`: Previews of drags that edit the draft document directly (tilts, pointer edits, transforms and moves) or select a region.
+- `src/canvas/paper/fragment.rs`: Redraw only the molecules a preview changes, over the cached rest of the drawing.
 - `src/canvas/paper/geometry.rs`: Retain the paper's static selection markers and tessellated scene together.
 - `src/canvas/paper/overlays.rs`: Editing aids drawn over the document
 - `src/canvas/paper/placement.rs`: Previews that place new structure onto the draft, stroking the conflict when a placement fails.
@@ -266,6 +267,7 @@ explains how the crates and modules fit together.
 - `src/github/workcopy.rs`: The files of a repository on this computer
 - `src/hotkeys.rs`: Transactional chemistry edits shared by contextual drawing shortcuts.
 - `src/hotkeys/ligands.rs`: Contextual pi-ligand construction uses real ring atoms and typed attachments.
+- `src/http.rs`: HTTPS clients for the update check, online name lookup and GitHub.
 - `src/kept_fonts.rs`: The fonts the browser editor kept from earlier visits, by SHA-256, in the order they are added as fallbacks once text needs them.
 - `src/keyboard_drawing.rs`: A keyboard drawing hotspot, independent of pointer hover and selection.
 - `src/launch.rs`: Headless entry points selected by the first command-line token.

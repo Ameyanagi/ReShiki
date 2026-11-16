@@ -149,7 +149,10 @@ tokio = { version = "1", features = [
   "rt-multi-thread",
   "macros",
 ] }
-reqwest = { version = "0.13", default-features = false, features = ["rustls"] }
+# TLS through ring: reqwest's default aws-lc provider adds almost 2 MB and a
+# C build for the update check and online name lookup. src/http.rs installs ring.
+reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 open = "5"
 
 # The browser editor: one thread, no processes, and the page's own APIs.
@@ -236,6 +239,15 @@ debug = 1
 debug = "line-tables-only"
 split-debuginfo = "packed"
 strip = "symbols"
+
+# Published builds only (scripts/build_release.py): the whole program as one
+# optimized unit. It makes a smaller executable and a much slower build, so
+# tests and local runs keep the release profile. release.yml uses thin LTO on
+# macOS, whose arm64 runner has less memory than the fat-LTO link needs.
+[profile.dist]
+inherits = "release"
+lto = "fat"
+codegen-units = 1
 
 # Keep interactive geometry within its worker deadline in development builds,
 # using the same optimized solver crates (ETKDG, MMFF/UFF, model) as numerical tests.

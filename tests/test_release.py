@@ -305,7 +305,7 @@ class ReleaseTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             target = "x86_64-unknown-linux-gnu"
-            build = root / "target" / target / "release"
+            build = root / "target" / target / "dist"
             build.mkdir(parents=True)
             elf = bytearray(64)
             elf[:6] = b"\x7fELF\x02\x01"
@@ -326,12 +326,22 @@ class ReleaseTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             target = "aarch64-pc-windows-msvc"
-            binary = root / "target" / target / "release/reshiki.exe"
+            binary = root / "target" / target / "dist/reshiki.exe"
             binary.parent.mkdir(parents=True)
             binary.write_bytes(self.pe_image(0xAA64))
             run = self.package(root, target, "Windows")
             run.assert_called_once_with(
-                ["cargo", "build", "--release", "--locked", "--bin", "reshiki", "--target", target],
+                [
+                    "cargo",
+                    "build",
+                    "--profile",
+                    "dist",
+                    "--locked",
+                    "--bin",
+                    "reshiki",
+                    "--target",
+                    target,
+                ],
                 cwd=root,
             )
             self.assertTrue((root / "build/release-bundles/reshiki-1.2.3-windows-arm64").is_dir())
@@ -389,6 +399,67 @@ class ReleaseTests(unittest.TestCase):
         self.assertEqual(profile["split-debuginfo"], "packed")
         # The app recovers from panics with catch_unwind, so panics must unwind.
         self.assertNotIn("panic", profile)
+
+    def test_published_builds_use_one_optimized_unit_and_the_release_symbol_settings(self):
+        root = Path(__file__).resolve().parents[1]
+        manifest = tomllib.loads((root / "Cargo.toml").read_text(encoding="utf-8"))
+        self.assertEqual(
+            manifest["profile"]["dist"], {"inherits": "release", "lto": "fat", "codegen-units": 1}
+        )
+        # Tests and local runs keep the faster release profile.
+        self.assertNotIn("lto", manifest["profile"]["release"])
+        workflow = (root / ".github/workflows/release.yml").read_text(encoding="utf-8")
+        self.assertNotIn("/release/reshiki", workflow)
+        self.assertNotIn("CARGO_PROFILE_RELEASE_", workflow)
+        # Only macOS strips in Cargo (into reshiki.dSYM). Windows needs an
+        # unstripped link for reshiki.pdb; Linux keeps its symbols in the
+        # binary for build_release.py to split into reshiki.debug.
+        for setting in (
+            "CARGO_PROFILE_DIST_STRIP: "
+            "${{ startsWith(matrix.artifact, 'macos') && 'symbols' || 'none' }}",
+            "CARGO_PROFILE_DIST_SPLIT_DEBUGINFO: "
+            "${{ startsWith(matrix.artifact, 'linux') && 'off' || 'packed' }}",
+            # A fat-LTO link needs more memory than the macOS arm64 runner has.
+            "CARGO_PROFILE_DIST_LTO: ${{ startsWith(matrix.artifact, 'macos') && 'thin' || 'fat' }}",
+        ):
+            self.assertEqual(workflow.count(setting), 1, setting)
+        for path in (
+            "target/${{ matrix.target }}/dist/reshiki.dSYM",
+            "target/${{ matrix.target }}/dist/reshiki.pdb",
+            "target/${{ matrix.target }}/dist/reshiki.debug",
+            "RESHIKI_TEST_PACKAGED_APP: ${{ github.workspace }}/target/${{ matrix.target }}"
+            "/dist/reshiki${{ runner.os == 'Windows' && '.exe' || '' }}",
+        ):
+            self.assertIn(path, workflow)
+        script = (root / "scripts/build_release.py").read_text(encoding="utf-8")
+        self.assertIn('"cargo", "build", "--profile", "dist", "--locked"', script)
+        self.assertIn('target_directory() / target / "dist"', script)
+
+    def test_each_npm_package_ships_only_its_own_webassembly(self):
+        root = Path(__file__).resolve().parents[1]
+        exports = {
+            name: json.loads((root / "packages" / name / "package.json").read_text("utf-8"))[
+                "exports"
+            ]
+            for name in ("editor", "headless")
+        }
+        self.assertEqual(
+            exports["headless"],
+            {
+                ".": {"types": "./src/index.d.ts", "default": "./src/index.js"},
+                "./reshiki_web_bg.wasm": "./dist/wasm/reshiki_web_bg.wasm",
+            },
+        )
+        self.assertNotIn(".", exports["editor"])
+        self.assertNotIn("dist/wasm", json.dumps(exports["editor"]))
+        script = (root / "scripts/build_wasm.sh").read_text(encoding="utf-8")
+        self.assertIn(
+            "reshiki_web:headless/dist/wasm reshiki:editor/dist/editor \\\n"
+            "  reshiki_web_worker:editor/dist/worker",
+            script,
+        )
+        workflow = (root / ".github/workflows/release.yml").read_text(encoding="utf-8")
+        self.assertIn("for package in headless editor; do", workflow)
 
     def test_native_headers_reject_mislabeled_or_damaged_archives(self):
         elf = bytearray(64)

@@ -345,7 +345,6 @@ impl App {
                 }
                 if self.tab.atom_text.is_some()
                     || self.tab.inline_text.is_some()
-                    || self.tab.cleanup.is_some()
                     || self.tab.optimization.is_some()
                 {
                     self.status = "Finish editing first".into();

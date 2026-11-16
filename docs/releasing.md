@@ -115,7 +115,7 @@ Each release has a validation record, `docs/changes/release-<version>-validation
 
 1. Update the package version in `Cargo.toml`, update `Cargo.lock`, and record release changes. Run `uv run --locked python scripts/assemble_changelog.py --release 0.16.0` (with the new version): it appends the [release-note fragments](changes/unreleased/README.md) to `docs/changes-0.16.md` by section, adds their `credit` lines to `docs/contributors.md` and deletes the fragments. Then edit the notes into the [release notes template](writing-style.md#release-notes), move their **Developer** items into the release validation record, and point `docs/changes-unreleased.md` at them. If the website color reference is marked as Nightly, set `NIGHTLY` to `false` in `examples/theme_colors.rs`, regenerate it as the [theme guide](../presets/themes/README.md) describes, and remove the Nightly note from `website/src/content/docs/guide/color-palettes.mdx`.
 2. Run the checks and a manual release build. Review the resulting packages.
-3. In the release build, close Clean up, 3D preview, atom label, Name import preview, Structure import, reaction mapping proposal and assistant review with Enter and separately with Esc (use Apply/Discard buttons where those keys are unavailable). After each close, Delete or Cmd+Z must act on the drawing without a click. The automated `review_close_returns_focus_*` tests cover the keyboard paths except assistant review; local assistant button clicks are covered, but check live proposals manually.
+3. In the release build, run Clean up from the toolbar and close its ▾ menu with Esc, and close 3D preview, atom label, Name import preview, Structure import, reaction mapping proposal and assistant review with Enter and separately with Esc (use Apply/Discard buttons where those keys are unavailable). After each close, Delete or Cmd+Z must act on the drawing without a click. The automated `review_close_returns_focus_*` tests cover the keyboard paths except assistant review; local assistant button clicks are covered, but check live proposals manually.
 4. Merge the release preparation pull request to `main`, then create and push a matching tag on its tested commit, for example `v0.15.0` for version `0.15.0`.
 
 ```sh
@@ -144,7 +144,7 @@ The packaged demo names its JavaScript and WebAssembly by content hash (`src/edi
 
 Leave `/demo/` and `/demo/index.html` out of the rule, so a release reaches visitors within the 10-minute default.
 
-The **npm** job then publishes the browser package `@ameyanagi/reshiki` (`packages/editor`) from the build the **web_demo** job tested, so the WebAssembly is built only once. It runs the package tests, sets the package version to the app's version from `Cargo.toml` (which the tag matches, so `v0.13.1` publishes `0.13.1`; the `version` in `packages/editor/package.json` is only a placeholder), and publishes with `npm publish --provenance`. Stable versions get the `latest` dist-tag. Prerelease tags such as `v0.13.1-rc.1` get `next`, and a stable version older than the current `latest` gets `release-<major.minor>`, so `bun add @ameyanagi/reshiki` keeps installing the newest stable release, the same way the GitHub release is marked as a prerelease. Nightly builds never publish to npm. A version already on npm is skipped, so rerunning a release is safe. Without a credential, or when npm refuses it (an expired token, or a trusted publisher that is not set up), the job leaves a notice and succeeds, so npm never fails a release. See [Configure npm publishing](#configure-npm-publishing).
+The **npm** job then publishes the two browser packages, the editor `@ameyanagi/reshiki` (`packages/editor`) and the headless library `@ameyanagi/reshiki-headless` (`packages/headless`), from the build the **web_demo** job tested, so the WebAssembly is built only once. It runs both packages' tests, sets each package version to the app's version from `Cargo.toml` (which the tag matches, so `v0.13.1` publishes `0.13.1`; the `version` in each `package.json` is only a placeholder), and publishes each with `npm publish --provenance`. Stable versions get the `latest` dist-tag. Prerelease tags such as `v0.13.1-rc.1` get `next`, and a stable version older than the current `latest` gets `release-<major.minor>`, so `bun add @ameyanagi/reshiki` keeps installing the newest stable release, the same way the GitHub release is marked as a prerelease. Nightly builds never publish to npm. A version already on npm is skipped, so rerunning a release is safe. Without a credential, or when npm refuses it for a package (an expired token, or a trusted publisher that is not set up), the job leaves a notice for that package and succeeds, so npm never fails a release. See [Configure npm publishing](#configure-npm-publishing).
 
 The **pypi** job publishes the Python package `reshiki` (`crates/python`) after the GitHub release. The reusable **Python wheels** workflow (`python-wheels.yml`) builds abi3 wheels for all six targets: manylinux2014 x64 and ARM64, macOS ARM64 and Intel, and Windows x64 and ARM64. It runs the Python tests against the built wheel on Linux x64, Linux ARM64, macOS ARM64 and Windows x64; the tests' RDKit has no Intel macOS or Windows ARM64 wheel. The wheel version is the app's version from `Cargo.toml`, which maturin writes in PEP 440 form, so `v0.13.1` publishes `0.13.1` and `v0.13.1-rc.1` publishes `0.13.1rc1`. pip and uv skip prereleases unless asked for one. There is no sdist: the package compiles assets, presets and vendored crates from the repository root, which a maturin source distribution cannot include. Nightly builds never publish to PyPI, and files already on PyPI are skipped, so rerunning a release is safe. Pull requests that change `crates/python` or that workflow build and test the same wheels without publishing. See [Configure PyPI publishing](#configure-pypi-publishing).
 
@@ -165,7 +165,7 @@ Both Mac builds use the fixed abbreviation drawing coordinates recorded on Apple
 
 The **npm** job runs in the `npm` GitHub environment, which GitHub creates on its first run. It publishes with npm trusted publishing (OIDC) when the repository variable `NPM_TRUSTED_PUBLISHING` is `true`, and otherwise with the `NPM_TOKEN` secret. The npm account `ameyanagi` owns the `@ameyanagi` scope.
 
-npm can only add a trusted publisher to a package that already exists, so the first version is published with a token, and every later one through trusted publishing:
+npm can only add a trusted publisher to a package that already exists, so the first version of each package is published with a token, and every later one through trusted publishing. With trusted publishing on, the job still uses `NPM_TOKEN`, when it is set, for a package npm does not have yet. `@ameyanagi/reshiki-headless` is new after 0.15.0, so the next tag publishes its first version with the token, if npm accepts it. Then add that package's trusted publisher (step 2) before the following release.
 
 1. **First publish, with a token.** Create a [granular access token](https://docs.npmjs.com/creating-and-viewing-access-tokens) with **Packages and scopes: Read and write**, for all packages or the `@ameyanagi` scope, and a short expiry. Add it as the repository (or `npm` environment) secret `NPM_TOKEN`. Then publish main's version without a new tag:
 
@@ -174,7 +174,7 @@ npm can only add a trusted publisher to a package that already exists, so the fi
    gh run watch "$(gh run list --workflow release.yml --limit 1 --json databaseId -q '.[0].databaseId')"
    ```
 
-   `npm_only` skips every build, signing, GitHub release and demo job. The npm job builds and tests the package, then publishes the version in `Cargo.toml` on main. The next `v*` tag also uses the token while it is set. If npm refuses the token, the job ends with a notice: npm is restricting tokens that bypass two-factor authentication for direct publishing. In that case, publish the first version by hand from a checkout of main, with two-factor authentication:
+   `npm_only` skips every build, signing, GitHub release and demo job. The npm job builds and tests the packages, then publishes the version in `Cargo.toml` on main. The next `v*` tag also uses the token while it is set. If npm refuses the token, the job ends with a notice: npm is restricting tokens that bypass two-factor authentication for direct publishing. In that case, publish the first version by hand from a checkout of main, with two-factor authentication (shown for the editor; use `packages/headless` for the headless package):
 
    ```sh
    scripts/build_wasm.sh --test
@@ -185,7 +185,7 @@ npm can only add a trusted publisher to a package that already exists, so the fi
    git checkout package.json
    ```
 
-2. **Add the trusted publisher.** Open **npmjs.com → Packages → @ameyanagi/reshiki → Settings → Trusted publishing**, choose **GitHub Actions** and enter:
+2. **Add the trusted publisher.** For each package, open **npmjs.com → Packages → @ameyanagi/reshiki** (then **@ameyanagi/reshiki-headless**) **→ Settings → Trusted publishing**, choose **GitHub Actions** and enter:
 
    | Field                   | Value         |
    | ----------------------- | ------------- |
@@ -195,9 +195,9 @@ npm can only add a trusted publisher to a package that already exists, so the fi
    | Environment name        | `npm`         |
    | Allow direct publishing | on            |
 
-   Then set the repository variable `NPM_TRUSTED_PUBLISHING` to `true` (**Settings → Secrets and variables → Actions → Variables**). From then on the job uses OIDC (`id-token: write`, npm 11.5.1 or later from Node 24, provenance included) and ignores `NPM_TOKEN`. npm expires a new trusted publisher that has not published within 2 days. If yours expired before a release, delete it and add it again.
+   Then set the repository variable `NPM_TRUSTED_PUBLISHING` to `true` (**Settings → Secrets and variables → Actions → Variables**). From then on the job uses OIDC (`id-token: write`, npm 11.5.1 or later from Node 24, provenance included) and uses `NPM_TOKEN` only for a package npm does not have yet. npm expires a new trusted publisher that has not published within 2 days. If yours expired before a release, delete it and add it again.
 
-3. **Delete the token.** Once a version has published through trusted publishing, delete the `NPM_TOKEN` secret and revoke the token on npmjs.com. Under the package's **Settings → Publishing access**, choose to require two-factor authentication and disallow tokens. Trusted publishing keeps working.
+3. **Delete the token.** Once a version has published through trusted publishing, delete the `NPM_TOKEN` secret and revoke the token on npmjs.com. Under each package's **Settings → Publishing access**, choose to require two-factor authentication and disallow tokens. Trusted publishing keeps working.
 
 After that, every version tag publishes to npm with no further steps.
 
@@ -305,7 +305,9 @@ Build runners are macOS 14 on Apple Silicon, macOS 15 on Intel, Windows Server 2
 
 Build on the target operating system with Rust 1.99.1, a C/C++ compiler and Python 3.12. On Windows, use `python` instead of `python3`. Archives are written to `dist/releases/`.
 
-Shipped executables carry no symbols. Release builds keep line tables in a separate symbol file for crash reports: `reshiki.dSYM` on macOS, `reshiki.pdb` on Windows and `reshiki.debug` on Linux, next to the binary in `target/<target>/release/`. The Release builds workflow uploads them as the `symbols-<platform>` workflow artifact, not as a release download. Cargo strips macOS builds itself. In CI, Windows builds are not stripped, because the MSVC linker then writes no PDB, and `scripts/build_release.py` splits the Linux symbols off with `objcopy`. The Python wheel is stripped too. Never set `panic = "abort"`: the app recovers from panics.
+`scripts/build_release.py` builds with Cargo's `dist` profile: the `release` profile with fat link-time optimization and one codegen unit. This makes the executable smaller and the build much slower, so `cargo build --release`, `cargo test --release` and development bundles keep the `release` profile. The published binary is in `target/<target>/dist/`. The Release builds workflow sets `CARGO_PROFILE_DIST_LTO=thin` for macOS. On macOS arm64 the fat-LTO link peaks at 8.3 GB and the thin-LTO link at 7.2 GB, and the arm64 runner has 7 GB. Thin LTO makes that executable 72.6 MB instead of 67.3 MB.
+
+Shipped executables carry no symbols. Published builds keep line tables in a separate symbol file for crash reports: `reshiki.dSYM` on macOS, `reshiki.pdb` on Windows and `reshiki.debug` on Linux, next to the binary in `target/<target>/dist/`. The Release builds workflow uploads them as the `symbols-<platform>` workflow artifact, not as a release download. Cargo strips macOS builds itself. In CI, Windows builds are not stripped, because the MSVC linker then writes no PDB, and `scripts/build_release.py` splits the Linux symbols off with `objcopy`. The Python wheel is stripped too. Never set `panic = "abort"`: the app recovers from panics.
 
 On macOS, run `python3 scripts/build_macos_app.py` for a development app. Add `--portable --release` for an optimized bundle in `dist/ReShiki.app`. Both forms include one executable, the icon, license notices and an ad-hoc signature; release signing replaces that signature.
 

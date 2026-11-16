@@ -14,129 +14,77 @@ pub struct CleanupJob {
 mod tests;
 
 /// Cleanup commands, nested under `Message::Cleanup`.
-/// Starting a layout operation commits drafts and is blocked by the cleanup preview.
 #[derive(Debug, Clone)]
 pub enum Action {
     ToWedge,
     ToFischer,
-    /// Starts a cleanup preview (was `Clean`: toolbar "Clean up…", Shift+Cmd/Ctrl+K).
+    /// Cleans up the selection, or the whole drawing when nothing is
+    /// selected, as one Undo step (toolbar "Clean up", Shift+Cmd/Ctrl+K).
     Begin,
-    /// Applies the previewed cleanup (was `ApplyCleanup`).
-    Apply,
-    /// Discards the preview (was `CancelCleanup`).
-    Cancel,
-    /// Shows the original drawing under the preview (was `CleanupOriginal`, "Show original").
-    Original(bool),
-    /// Reruns the preview with another scope (was `CleanupScope`).
+    /// Opens or closes the toolbar's Clean up options menu.
+    Menu(bool),
+    /// What a selection cleans: its atoms, or the molecules they belong to.
     Scope(Scope),
-    /// Reruns the preview with another orientation mode.
     Orientation(Orientation),
 }
 
 impl App {
     pub(super) fn cleanup_action(&mut self, action: Action) -> Task<Message> {
         match action {
-            Action::ToWedge => self.convert_projection("fischer_wedge", "Wedge drawing"),
-            Action::ToFischer => self.convert_projection("fischer", "Fischer projection"),
-            Action::Begin => self.begin_cleanup(None, None),
-            Action::Scope(scope) => self.begin_cleanup(Some(scope), None),
-            Action::Orientation(mode) => self.begin_cleanup(None, Some(mode)),
-            Action::Original(original) => {
-                self.set_cleanup_original(original);
-                Task::none()
+            Action::ToWedge => return self.convert_projection("fischer_wedge", "Wedge drawing"),
+            Action::ToFischer => return self.convert_projection("fischer", "Fischer projection"),
+            // Like the other toolbar commands, the drawing keeps the keys.
+            Action::Begin => return Task::batch([self.begin_cleanup(), super::focus_drawing()]),
+            Action::Menu(true) => {
+                self.cleanup_menu = true;
+                return Task::none();
             }
-            Action::Cancel => {
-                self.cancel_cleanup();
-                super::focus_drawing()
-            }
-            Action::Apply => {
-                self.apply_cleanup();
-                super::focus_drawing()
-            }
+            Action::Menu(false) => self.cleanup_menu = false,
+            Action::Scope(scope) => self.cleanup_options.scope = scope,
+            Action::Orientation(mode) => self.cleanup_options.set_orientation(mode),
         }
+        super::focus_drawing()
     }
     fn convert_projection(&mut self, operation: &str, name: &'static str) -> Task<Message> {
         let mut request = Request::molecule(operation, self.tab.doc.clone());
         request.selected_ids = Some(self.tab.selected.clone());
         self.run(request, Job::Projection(name))
     }
-    pub(super) fn begin_cleanup(
-        &mut self,
-        scope: Option<Scope>,
-        orientation: Option<Orientation>,
-    ) -> Task<Message> {
+    pub(super) fn begin_cleanup(&mut self) -> Task<Message> {
         if self.tab.busy {
             return Task::none();
         }
-        let mut job = if let Some(preview) = &self.tab.cleanup {
-            preview.job.clone()
-        } else {
-            let selection: Vec<_> = self
-                .tab
-                .doc
-                .expand_abbreviation_selection(&self.tab.selected)
-                .into_iter()
-                .filter(|id| self.tab.doc.atom(*id).is_some())
-                .collect();
-            if selection.is_empty() {
-                self.status = "Select a molecule or atoms to clean up".into();
-                self.error = true;
-                return Task::none();
-            }
-            CleanupJob {
-                options: Options {
-                    scope: Scope::SelectedAtoms,
-                    ..Options::default()
-                },
-                selection,
-                serial: self.tab.cleanup_serial,
-                epoch: self.tab.file_epoch,
-            }
-        };
-        if let Some(scope) = scope {
-            job.options.scope = scope;
+        if self.tab.doc.atoms.is_empty() {
+            self.status = "Draw a structure to clean up".into();
+            self.error = true;
+            return Task::none();
         }
-        if let Some(orientation) = orientation {
-            job.options.set_orientation(orientation);
-        }
-        if job.options.scope != Scope::Drawing && job.selection.is_empty() {
-            self.status = "Select atoms before using selected cleanup".into();
+        let selection: Vec<_> = self
+            .tab
+            .doc
+            .expand_abbreviation_selection(&self.tab.selected)
+            .into_iter()
+            .filter(|id| self.tab.doc.atom(*id).is_some())
+            .collect();
+        let mut options = self.cleanup_options;
+        // Only an empty selection means the whole drawing.
+        if self.tab.selected.is_empty() {
+            options.scope = Scope::Drawing;
+        } else if selection.is_empty() {
+            self.status = "Select atoms or a molecule to clean up".into();
+            self.error = true;
             return Task::none();
         }
         self.tab.cleanup_serial = self.tab.cleanup_serial.wrapping_add(1);
-        job.serial = self.tab.cleanup_serial;
+        let job = CleanupJob {
+            options,
+            selection,
+            serial: self.tab.cleanup_serial,
+            epoch: self.tab.file_epoch,
+        };
         let mut request = Request::molecule("clean", self.tab.doc.clone());
         request.selected_ids = Some(job.selection.clone());
         request.cleanup = Some(job.options);
         self.run(request, Job::Clean(job))
-    }
-    pub(super) fn set_cleanup_original(&mut self, original: bool) {
-        if let Some(preview) = &mut self.tab.cleanup {
-            preview.original = original;
-        }
-    }
-    pub(super) fn cancel_cleanup(&mut self) {
-        self.tab.cleanup_serial = self.tab.cleanup_serial.wrapping_add(1);
-        self.tab.cleanup = None;
-        self.status = "Cleanup canceled · Drawing unchanged".into();
-        self.error = false;
-    }
-    pub(super) fn apply_cleanup(&mut self) {
-        if self.tab.busy {
-            return;
-        }
-        if let Some(preview) = self.tab.cleanup.take() {
-            if preview.revision != self.tab.revision || preview.epoch != self.tab.file_epoch {
-                self.status = "Drawing changed · Run cleanup again".into();
-                return;
-            }
-            let before = self.tab.doc.clone();
-            self.tab.doc = preview.document;
-            self.changed(before);
-            if !self.error {
-                self.tab.analysis = preview.analysis;
-                self.status = "Cleanup applied".into();
-            }
-        }
     }
 }

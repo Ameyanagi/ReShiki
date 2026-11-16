@@ -599,14 +599,14 @@ def main():
         shutil.rmtree(folder)
     folder.mkdir(parents=True)
     run(
-        ["cargo", "build", "--release", "--locked", "--bin", "reshiki", "--target", target],
+        ["cargo", "build", "--profile", "dist", "--locked", "--bin", "reshiki", "--target", target],
         cwd=ROOT,
     )
-    build = target_directory() / target / "release"
+    build = target_directory() / target / "dist"
     binary_name = "reshiki.exe" if system == "windows" else "reshiki"
     verify_binary(build / binary_name, system, arch)
     if system == "macos":
-        app = mac_bundle(folder / "ReShiki.app", "release", target=target)
+        app = mac_bundle(folder / "ReShiki.app", "dist", target=target)
         if args.sign:
             from sign_macos import sign_and_notarize
 

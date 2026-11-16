@@ -1,0 +1,34 @@
+{
+  "name": "@ameyanagi/reshiki-headless",
+  "version": "0.0.0-development",
+  "description": "ReShiki without the editor: structure conversion and drawing in WebAssembly",
+  "homepage": "https://github.com/Ameyanagi/ReShiki/tree/main/packages/headless#readme",
+  "bugs": "https://github.com/Ameyanagi/ReShiki/issues",
+  "license": "MIT OR Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Ameyanagi/ReShiki.git",
+    "directory": "packages/headless"
+  },
+  "files": [
+    "src",
+    "dist"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "types": "./src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "default": "./src/index.js"
+    },
+    "./reshiki_web_bg.wasm": "./dist/wasm/reshiki_web_bg.wasm"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "../../scripts/build_wasm.sh",
+    "test": "bun test"
+  }
+}

@@ -276,7 +276,30 @@ fn double_tool_cycles_only_line_position_and_preserves_chemistry() {
 }
 
 #[test]
-fn cancelling_a_running_cleanup_refresh_prevents_late_preview_or_apply() {
+fn cleanup_with_only_a_caption_selected_changes_nothing() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let a = app.tab.doc.add_atom("C", Point::default());
+    let b = app.tab.doc.add_atom("O", Point::new(70., 12.));
+    app.tab.doc.add_bond(a, b, 1, "plain");
+    let caption = app.tab.doc.next_id();
+    app.tab.doc.annotations.push(Annotation {
+        id: caption,
+        position: Point::new(0., 60.),
+        text: "note".into(),
+        format: Default::default(),
+    });
+    app.tab.selected = vec![caption];
+    let before = app.tab.doc.clone();
+    let _ = app.update(Message::Cleanup(cleanup::Action::Begin));
+    assert!(!app.tab.busy, "No cleanup runs");
+    assert!(app.error);
+    assert_eq!(app.status, "Select atoms or a molecule to clean up");
+    assert_eq!(app.tab.doc, before);
+}
+
+#[test]
+fn stale_cleanup_results_never_apply() {
     let (mut app, _) = App::new();
     app.tab.busy = false;
     let a = app.tab.doc.add_atom("C", Point::default());
@@ -284,52 +307,37 @@ fn cancelling_a_running_cleanup_refresh_prevents_late_preview_or_apply() {
     app.tab.doc.add_bond(a, b, 1, "plain");
     app.tab.selected = vec![b];
     let original = app.tab.doc.clone();
+    let mut cleaned = original.clone();
+    cleaned.atom_mut(b).unwrap().position = Point::new(42., 0.);
     let _ = app.update(Message::Cleanup(cleanup::Action::Begin));
-    let job = cleanup::CleanupJob {
-        options: reshiki::cleanup::Options {
-            scope: reshiki::cleanup::Scope::SelectedAtoms,
-            ..Default::default()
-        },
-        selection: vec![b],
-        serial: app.tab.cleanup_serial,
-        epoch: app.tab.file_epoch,
-    };
-    let response = || {
-        Box::new(Ok(Response {
-            document: Some(original.clone()),
+    assert!(app.tab.busy);
+    let (serial, revision, epoch) = (app.tab.cleanup_serial, app.tab.revision, app.tab.file_epoch);
+    let done = |revision, serial| Message::EngineDone {
+        revision,
+        kind: Job::Clean(cleanup::CleanupJob {
+            options: reshiki::cleanup::Options {
+                scope: reshiki::cleanup::Scope::SelectedAtoms,
+                ..Default::default()
+            },
+            selection: vec![b],
+            serial,
+            epoch,
+        }),
+        result: Box::new(Ok(Response {
+            document: Some(cleaned.clone()),
             analysis: None,
             output: None,
             engine_version: "test".into(),
             warnings: vec![],
-        }))
+        })),
     };
-    let _ = app.update(Message::EngineDone {
-        revision: app.tab.revision,
-        kind: Job::Clean(job.clone()),
-        result: response(),
-    });
-    assert_eq!(
-        app.tab.cleanup.as_ref().unwrap().job.options.scope,
-        reshiki::cleanup::Scope::SelectedAtoms
-    );
-    let _ = app.update(Message::Cleanup(cleanup::Action::Scope(
-        reshiki::cleanup::Scope::SelectedMolecules,
-    )));
-    assert!(app.tab.busy);
-    let mut pending = job;
-    pending.serial = app.tab.cleanup_serial;
-    let _ = app.update(Message::Cleanup(cleanup::Action::Apply));
-    assert_eq!(app.tab.doc, original);
-    assert!(app.tab.cleanup.is_some());
-    let _ = app.update(Message::Cleanup(cleanup::Action::Cancel));
-    let _ = app.update(Message::EngineDone {
-        revision: app.tab.revision,
-        kind: Job::Clean(pending),
-        result: response(),
-    });
-    assert!(app.tab.cleanup.is_none());
+    // An earlier run's result, and one for an older revision, change nothing.
+    let _ = app.update(done(revision, serial.wrapping_sub(1)));
+    let _ = app.update(done(revision.wrapping_sub(1), serial));
     assert_eq!(app.tab.doc, original);
     assert!(!app.tab.history.can_undo());
+    let _ = app.update(done(revision, serial));
+    assert_eq!(app.tab.doc, cleaned);
 }
 
 #[test]
@@ -407,7 +415,7 @@ fn rotation_shortcuts_report_direction_and_angle() {
 }
 
 #[test]
-fn cleanup_requires_apply_can_cancel_and_rejects_stale_results() {
+fn cleanup_applies_at_once_as_one_undo_step() {
     let (mut app, _) = App::new();
     app.tab.busy = false;
     let a = app.tab.doc.add_atom("C", Point::default());
@@ -418,63 +426,31 @@ fn cleanup_requires_apply_can_cancel_and_rejects_stale_results() {
     let original = app.tab.doc.clone();
     let mut cleaned = original.clone();
     cleaned.atom_mut(b).unwrap().position = Point::new(42., 0.);
-    let response = || {
-        Box::new(Ok(Response {
+    let _ = app.update(Message::EngineDone {
+        revision: app.tab.revision,
+        kind: Job::Clean(cleanup::CleanupJob {
+            options: Default::default(),
+            selection: vec![a, b],
+            serial: app.tab.cleanup_serial,
+            epoch: app.tab.file_epoch,
+        }),
+        result: Box::new(Ok(Response {
             document: Some(cleaned.clone()),
             analysis: None,
             output: None,
             engine_version: "test".into(),
             warnings: vec![],
-        }))
-    };
-    let _ = app.update(Message::EngineDone {
-        revision: app.tab.revision,
-        kind: Job::Clean(cleanup::CleanupJob {
-            options: Default::default(),
-            selection: vec![a, b],
-            serial: app.tab.cleanup_serial,
-            epoch: app.tab.file_epoch,
-        }),
-        result: response(),
+        })),
     });
-    assert_eq!(app.tab.doc, original);
-    assert_eq!(app.display_document(), &cleaned);
-    assert!(!app.dirty());
-    let _ = app.update(Message::Delete);
-    assert_eq!(app.tab.doc, original);
-    let _ = app.update(Message::Cleanup(cleanup::Action::Original(true)));
-    assert_eq!(app.display_document(), &original);
-    let _ = app.update(Message::Cleanup(cleanup::Action::Cancel));
-    assert_eq!(app.tab.doc, original);
-    assert!(!app.tab.history.can_undo());
-    let _ = app.update(Message::EngineDone {
-        revision: app.tab.revision,
-        kind: Job::Clean(cleanup::CleanupJob {
-            options: Default::default(),
-            selection: vec![a, b],
-            serial: app.tab.cleanup_serial,
-            epoch: app.tab.file_epoch,
-        }),
-        result: response(),
-    });
-    let _ = app.update(Message::Cleanup(cleanup::Action::Apply));
     assert_eq!(app.tab.doc, cleaned);
+    assert_eq!(app.display_document(), &cleaned);
+    assert!(app.dirty());
     assert_eq!(app.tab.selected, vec![a, b]);
     let _ = app.update(Message::Undo);
     assert_eq!(app.tab.doc, original);
+    assert!(!app.tab.history.can_undo(), "Undo is the comparison");
     let _ = app.update(Message::Redo);
     assert_eq!(app.tab.doc, cleaned);
-    let _ = app.update(Message::EngineDone {
-        revision: app.tab.revision.wrapping_sub(1),
-        kind: Job::Clean(cleanup::CleanupJob {
-            options: Default::default(),
-            selection: vec![a, b],
-            serial: app.tab.cleanup_serial,
-            epoch: app.tab.file_epoch,
-        }),
-        result: response(),
-    });
-    assert!(app.tab.cleanup.is_none());
 }
 
 #[test]
@@ -2751,47 +2727,55 @@ fn view_messages_and_shortcuts_set_their_view_aids() {
 }
 
 #[tokio::test]
-async fn cleanup_orientation_restarts_the_previewed_job() {
+async fn cleanup_without_a_selection_cleans_every_structure_with_the_menu_options() {
     use iced::futures::StreamExt;
     use reshiki::cleanup::Orientation;
 
     let (mut app, _) = App::new();
     app.engine = reshiki::engine::LocalEngine::in_process();
     app.tab.busy = false;
-    let a = app.tab.doc.add_atom("C", Point::default());
-    let b = app.tab.doc.add_atom("O", Point::new(42., 0.));
-    app.tab.doc.add_bond(a, b, 1, "plain");
-    app.tab.cleanup = Some(CleanupPreview {
-        job: cleanup::CleanupJob {
-            options: Default::default(),
-            selection: vec![],
-            serial: app.tab.cleanup_serial,
-            epoch: app.tab.file_epoch,
-        },
-        warnings: vec![],
-        document: app.tab.doc.clone(),
-        analysis: None,
-        revision: app.tab.revision,
-        epoch: app.tab.file_epoch,
-        original: false,
-    });
-    let original = app.tab.doc.clone();
-    for mode in [Orientation::Free, Orientation::Iupac, Orientation::Keep] {
-        let serial = app.tab.cleanup_serial;
-        let task = app.update(Message::Cleanup(cleanup::Action::Orientation(mode)));
-        assert!(app.tab.busy);
-        assert_eq!(app.tab.cleanup_serial, serial.wrapping_add(1));
-        let mut stream = iced_runtime::task::into_stream(task).unwrap();
-        let Some(iced_runtime::Action::Output(message)) = stream.next().await else {
-            panic!("Missing cleanup result");
-        };
-        let _ = app.update(message);
-        assert!(!app.tab.busy, "{}", app.status);
-        let preview = app.tab.cleanup.as_ref().unwrap();
-        assert_eq!(preview.job.options.orientation(), mode);
-        assert!(!preview.original);
-        assert_eq!(app.tab.doc, original);
+    let mut pairs = vec![];
+    for (x, rise) in [(0., 25.), (200., -25.)] {
+        let a = app.tab.doc.add_atom("C", Point::new(x, 0.));
+        let b = app.tab.doc.add_atom("O", Point::new(x + 30., rise));
+        app.tab.doc.add_bond(a, b, 1, "plain");
+        pairs.push((a, b));
     }
+    app.tab.selected.clear();
+    let _ = app.update(Message::Cleanup(cleanup::Action::Menu(true)));
+    assert!(app.cleanup_menu);
+    let _ = app.update(Message::Cleanup(cleanup::Action::Orientation(
+        Orientation::Free,
+    )));
+    assert!(!app.tab.busy, "Choosing an option does not run Clean up");
+    assert_eq!(app.cleanup_options.orientation(), Orientation::Free);
+    let original = app.tab.doc.clone();
+    let task = app.update(Message::Cleanup(cleanup::Action::Begin));
+    assert!(app.tab.busy);
+    let mut stream = iced_runtime::task::into_stream(task).unwrap();
+    while let Some(action) = stream.next().await {
+        if let iced_runtime::Action::Output(message) = action {
+            let _ = app.update(message);
+        }
+    }
+    assert!(!app.tab.busy && !app.error, "{}", app.status);
+    for (a, b) in pairs {
+        let (a, b) = (
+            app.tab.doc.atom(a).unwrap().position,
+            app.tab.doc.atom(b).unwrap().position,
+        );
+        assert!(
+            (a.distance(b) - 30_f32.hypot(25.)).abs() < 0.01,
+            "keeps the size"
+        );
+        let angle = (b.y - a.y).atan2(b.x - a.x).to_degrees().rem_euclid(30.);
+        assert!(
+            angle.min(30. - angle) < 0.01,
+            "each structure is cleaned: {angle}"
+        );
+    }
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, original);
 }
 
 #[test]

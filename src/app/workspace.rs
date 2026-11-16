@@ -276,12 +276,7 @@ impl App {
         let paper: Element<'_, Message> = iced::widget::Stack::with_children([paper])
             .extend(self.recovery_notice())
             .into();
-        let context: Element<'_, Message> = if let Some(preview) = &self.tab.cleanup {
-            self.cleanup_bar(preview)
-        } else {
-            self.context_bar()
-        };
-        let workspace = column![background(context), paper]
+        let workspace = column![background(self.context_bar()), paper]
             .height(Length::Fill)
             .width(Length::Fill);
         let mut body = row![background(self.tool_palette()), workspace].height(Length::Fill);
@@ -344,16 +339,12 @@ impl App {
             },
             doc: self.display_document(),
             reviewing_pair: self.tab.mapping.review_pair.is_some() && self.tool.selects(),
-            selected: if self.tab.cleanup.is_some() || self.tab.inline_text.is_some() {
+            selected: if self.tab.inline_text.is_some() {
                 &[]
             } else {
                 &self.tab.selected
             },
-            tool: if self.tab.cleanup.is_some() {
-                Tool::Select
-            } else {
-                self.tool
-            },
+            tool: self.tool,
             camera: self.tab.camera,
             grid: self.grid,
             guides: self.guides,
@@ -373,72 +364,98 @@ impl App {
                 .filter(|_| self.tool == Tool::Template)
                 .map(|t| (t, self.templates.anchor)),
         })
+        .shifted(crate::canvas::State::shifts)
         .width(Length::Fill)
         .height(Length::Fill)
         .into()
     }
 
-    fn cleanup_bar<'a>(&'a self, preview: &'a super::CleanupPreview) -> Element<'a, Message> {
+    /// Clean up runs at once with the current options, which its ▾ menu sets.
+    fn cleanup_button(&self) -> Element<'_, Message> {
+        use super::cleanup::Action;
         use reshiki::cleanup::{Orientation, Scope};
-        let scopes = vec![Scope::SelectedAtoms, Scope::SelectedMolecules];
-        let mut bar = column![
-            row![
-                text("Cleanup preview").size(13),
-                crate::appearance::pick_list(scopes, Some(preview.job.options.scope), |scope| {
-                    Message::Cleanup(super::cleanup::Action::Scope(scope))
-                })
-                .text_size(12)
-                .width(160),
-                checkbox(preview.original)
-                    .label("Show original")
-                    .text_size(12)
-                    .size(14)
-                    .on_toggle(
-                        |original| Message::Cleanup(super::cleanup::Action::Original(original))
-                    ),
-            ]
-            .spacing(10)
-            .align_y(Alignment::Center),
-            row![
-                text("Orientation").size(11),
-                crate::appearance::pick_list(
-                    [Orientation::Keep, Orientation::Free, Orientation::Iupac],
-                    Some(preview.job.options.orientation()),
-                    |mode| Message::Cleanup(super::cleanup::Action::Orientation(mode)),
+        let open = self.cleanup_menu;
+        let run = Message::Cleanup(Action::Begin);
+        let main = icon_button(
+            Icon::Cleanup,
+            keyed("Clean up", &run),
+            (!self.tab.busy).then_some(run.clone()),
+            false,
+        );
+        let options = hover_hint(
+            reshiki::accessibility::button(
+                "header-cleanup-options",
+                "Clean up options",
+                container(caret(10.)).center(Length::Fill),
+            )
+            .width(16)
+            .height(36)
+            .padding(0)
+            .style(control(open))
+            .expanded(open)
+            .on_press(Message::Cleanup(Action::Menu(!open))),
+            "Clean up options",
+            tooltip::Position::Bottom,
+        );
+        let popup = open.then(|| {
+            let chosen = self.cleanup_options;
+            let item = |id: &'static str, label: &'static str, on: bool, action| {
+                reshiki::accessibility::button(
+                    id,
+                    label,
+                    row![
+                        text(if on { "✓" } else { "" }).size(12).width(14),
+                        text(label).size(12)
+                    ]
+                    .align_y(Alignment::Center),
                 )
-                .text_size(11)
-                .width(170),
-                Space::new().width(Length::Fill),
-                accessible_command("cleanup.cancel", "Cancel cleanup preview", "Cancel")
-                    .on_press(Message::Cleanup(super::cleanup::Action::Cancel)),
-                accessible_command("cleanup.apply", "Apply cleanup preview", "Apply")
-                    .on_press_maybe(
-                        (!self.tab.busy).then_some(Message::Cleanup(super::cleanup::Action::Apply))
-                    )
-                    .style(crate::appearance::primary),
-            ]
-            .spacing(10)
-            .align_y(Alignment::Center),
-            text(preview.job.options.scope.hint())
-                .size(11)
-                .style(muted_text),
-        ]
-        .spacing(6);
-        if preview.job.options.orientation() == Orientation::Iupac {
-            bar = bar.push(
-                text("Largest fused ring system: horizontal row, extra rings upper right (FR-5.2)")
-                    .size(11)
-                    .style(muted_text),
-            );
-        }
-        for warning in &preview.warnings {
-            bar = bar.push(text(warning).size(11).style(muted_text));
-        }
-        reshiki::accessibility::focus_scope(container(bar).padding([8, 12]).style(panel))
+                .checked(on)
+                .padding([6, 8])
+                .width(Length::Fill)
+                .style(control(false))
+                .on_press(Message::Cleanup(action))
+            };
+            let orientation = |id, label, mode| {
+                item(
+                    id,
+                    label,
+                    chosen.orientation() == mode,
+                    Action::Orientation(mode),
+                )
+            };
+            let scope =
+                |id, label, scope| item(id, label, chosen.scope == scope, Action::Scope(scope));
+            container(
+                column![
+                    container(section("Orientation")).padding([4, 8]),
+                    orientation("cleanup-keep", "Keep", Orientation::Keep),
+                    orientation("cleanup-free", "Free", Orientation::Free),
+                    orientation("cleanup-iupac", "IUPAC fused rings", Orientation::Iupac),
+                    container(section("With a selection")).padding([4, 8]),
+                    scope("cleanup-atoms", "Selected atoms", Scope::SelectedAtoms),
+                    scope(
+                        "cleanup-molecules",
+                        "Whole molecules",
+                        Scope::SelectedMolecules
+                    ),
+                ]
+                .spacing(1),
+            )
+            .width(190)
+            .padding(5)
+            .style(super::color_popover::surface)
+            .into()
+        });
+        Element::new(
+            super::popover::popover(
+                row![main, options].align_y(Alignment::Center),
+                popup,
+                Message::Cleanup(Action::Menu(false)),
+            )
+            .align_end(),
+        )
     }
 
-    /// Check drawing. Its findings stay as a count on the button until the
-    /// drawing changes; the button then opens their list.
     fn check_button(&self) -> Element<'_, Message> {
         use super::stereo::Action;
         let findings = self.tab.stereo_notes.len();
@@ -624,15 +641,7 @@ impl App {
                 self.inspector_open && self.inspector_tab == InspectorTab::Import
             ),
             self.check_button(),
-            icon_button(
-                Icon::Cleanup,
-                keyed(
-                    "Clean up…",
-                    &Message::Cleanup(super::cleanup::Action::Begin)
-                ),
-                (!self.tab.busy).then_some(Message::Cleanup(super::cleanup::Action::Begin)),
-                false
-            ),
+            self.cleanup_button(),
             icon_button(
                 Icon::Export,
                 keyed("Export", &Message::Inspector(InspectorTab::Export)),
@@ -652,7 +661,9 @@ impl App {
                 self.inspector_open
             )
         ]
-        .spacing(4)
+        // 3 px gaps leave three tabs room in a 1040 px window beside the
+        // GitHub button and the Clean up options ▾.
+        .spacing(3)
         .align_y(Alignment::Center);
         container(bar).padding([9, 14]).style(panel).into()
     }

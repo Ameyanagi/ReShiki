@@ -317,7 +317,7 @@ impl App {
     pub(super) fn atom_text_action(&mut self, action: Action) -> Task<Message> {
         match action {
             Action::Begin(id) => {
-                if self.tab.cleanup.is_some() || self.tab.busy || !self.finish_inline(true) {
+                if self.tab.busy || !self.finish_inline(true) {
                     return Task::none();
                 }
                 // Like ChemDraw, moving to another atom commits the open
@@ -456,7 +456,7 @@ impl App {
                 return iced::widget::operation::focus("atom-text");
             }
             Action::ContractSelection => {
-                if self.tab.cleanup.is_some() || self.tab.busy || !self.finish_inline(true) {
+                if self.tab.busy || !self.finish_inline(true) {
                     return Task::none();
                 }
                 let mut candidate = self.tab.doc.clone();

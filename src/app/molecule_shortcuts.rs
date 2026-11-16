@@ -165,7 +165,6 @@ impl App {
                 && (self.tool != Tool::Select
                     || self.palette.is_some()
                     || self.assistant.menu.is_some()
-                    || self.tab.cleanup.is_some()
                     || self.tab.joining.is_some())
             {
                 return Some(Message::Tool(Tool::Select));

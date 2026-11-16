@@ -96,8 +96,10 @@ the drag measurements cover preview updates, not the mouse-release commit.
   being retained. Bounds conservatively include Bézier control points and an
   antialiasing margin for viewport culling. Underlines remain separate geometry.
 - A whole-document translation preserves relative geometry, so its preview uses
-  the existing scene with a translated camera. Partial drags still rebuild the
-  scene because bond endpoints, labels, ring fusion, and crossing gaps can change.
+  the existing scene with a translated camera. Partial drags rebuilt the scene
+  because bond endpoints, labels, ring fusion, and crossing gaps can change;
+  they now rebuild only the moved molecules (see
+  [Previews and panning](#previews-and-panning)).
 - A follow-up profile of partial drags found repeated ring endpoint lookups and
   bond-neighbor searches. Ring crossings now index atom endpoints and reject
   distant segments before visibility checks. Bond joins build eligibility,
@@ -177,3 +179,111 @@ evidence; a static before/after drawing would not demonstrate the lag reduction.
 Release-note caption: “Dragging and selecting the shortcut gallery requires much
 less CPU work, with bounded text caching and checks that edits and undo/redo keep
 the drawing current.”
+
+## Previews and panning
+
+Measured 2026-11-15 against main `fcd2cde`. Ring, template and bond previews and
+partial moves rebuilt the scene of the whole drawing on every pointer move, even
+with all of it off screen. Panning at Fit re-tessellated every visible bond and
+label, because the retained geometry was keyed on the camera center.
+
+- A preview that changes only atoms, bonds and abbreviations now draws the
+  molecules it touches over the retained rest of the drawing. Bonds from either
+  drawing join a changed atom to its molecule. The rest keeps its scene and
+  tessellation for as long as the same objects are left out. The split applies
+  only while the two parts stay apart. Each part counts its ink (each subpath,
+  label and halo), its atoms and bonds, drawn or not, and the reach of each
+  automatic indicator (`Indicator::reach`): the area whose atoms, bonds and text
+  can move it. No box of the redrawn molecules may come within three pixels plus
+  0.12 of the largest label font size of the rest's boxes. That is the gap
+  automatic hydrogens, charges and group labels keep from other ink. Crossing
+  gaps, halos, paint order and automatic label placement then cannot differ from
+  drawing the whole preview. Otherwise, and for captions, arrows, graphics, 3D
+  models and rear opacity, the preview draws the whole drawing as before.
+- The first pan at a zoom level tessellates half a view beyond each edge. Later
+  pans within that margin draw the same geometry shifted, through the canvas
+  widget's layer translation. Edits and zoom changes still tessellate only the
+  view, so they cost what they did.
+
+### Reproduction
+
+```sh
+cargo test --release --locked --bin reshiki \
+  canvas::performance::manual_preview_workloads -- --ignored --exact --nocapture
+```
+
+The benchmark uses the gallery at 1×, 4× and 16× (483, 1,932 and 7,728 atoms) in
+the same 1,066 × 570 view. "Onscreen" shows the gallery's bottom row at 50% zoom
+with the pointer on the empty paper below it; "offscreen" moves the camera far
+from all of it. The bond is drawn from the lowest end carbon, and the partial move
+drags that carbon and its neighbor. Pan runs at Fit and at 50%.
+
+Correctness checks (require a headless renderer):
+
+```sh
+cargo test --locked --bin reshiki canvas::paper::preview_tests -- --ignored --test-threads=1
+cargo test --locked --bin reshiki \
+  retained_paper_scene_matches_live_layers_and_invalidates_draw_inputs \
+  -- --ignored --test-threads=1
+```
+
+`preview_fragments_match_whole_previews` compares 384 preview frames (four tools,
+24 pointer positions, two zoom levels, two views) with the whole preview. All are
+pixel-identical; 208 of them split. It also moves an anonymous dummy atom, which
+draws nothing, next to an automatic attached number: the number moves in both. `preview_frames_draw_only_the_changed_molecules`
+counts the primitives a second preview frame draws at 4×: 1,321 before (the whole
+drawing), at most 26 after. A pan within the margin draws the shifted geometry
+within the drag preview's tolerance above; edges differ by floating-point ulps
+because the geometry was tessellated at other, equivalent coordinates.
+
+### Measurements
+
+Apple M1, 16 GB, macOS 27.0.1, release builds, wgpu renderer. The baseline is
+main `fcd2cde` with only this benchmark (`src/canvas/performance.rs`) added; the
+candidate is this change. Both were built before any run. The runs alternate
+baseline and candidate, three of each, and each starts only when no compiler,
+linker or cargo process runs. Another application kept the load average at 2.6–3.9
+throughout, so compare the columns rather than the absolute times.
+Milliseconds, the median over runs of each run's median of 20 iterations:
+
+| Workload                   | Before 1× | After 1× | Before 4× | After 4× | Before 16× | After 16× |
+| -------------------------- | --------: | -------: | --------: | -------: | ---------: | --------: |
+| Benzene hover, onscreen    |      6.54 |     2.03 |      29.5 |      9.7 |        214 |        77 |
+| Benzene hover, still       |      6.49 |     2.02 |      29.6 |     9.75 |        216 |        78 |
+| Benzene hover, offscreen   |      5.57 |     1.69 |      26.5 |      7.5 |        205 |        67 |
+| Cyclohexane template hover |      6.46 |     2.03 |      28.8 |     9.33 |        185 |        46 |
+| Bond drag                  |      6.60 |     2.54 |      34.6 |     17.1 |        295 |       171 |
+| Partial move               |      4.89 |     0.63 |      21.3 |     2.63 |        148 |      14.4 |
+| Pan at Fit                 |      7.66 |     0.10 |      31.2 |     0.57 |        138 |      5.25 |
+| Pan at 50%                 |      2.06 |     0.10 |      2.58 |     0.57 |       8.12 |      5.32 |
+| Unchanged redraw, onscreen |      0.86 |     0.83 |      5.58 |     5.47 |       27.8 |      26.9 |
+
+Each workload's run medians stayed within 8% of each other, most within 3%. The preview rows still grow
+with the drawing, because every frame builds the preview document and checks
+it against the whole drawing (see [Remaining cost](#remaining-cost)). "Still"
+redraws the same pointer position, and costs as much as a moving pointer. In
+`loaded_canvas_workloads` (two runs each), partial drags fell from 4.81 to
+0.64 ms at 1× and from 21.1 to 2.59 ms at 4×, dragging everything from 0.96 to
+0.36 ms at 1× and 2.55 to 1.82 ms at 4×, and its pan from 1.06 to 0.44 ms at 1×.
+Draws, hits and zoom stayed within 4%.
+
+### Remaining cost
+
+A preview frame still builds the preview document and checks it against the
+drawing, even when the pointer has not moved since the last frame. An earlier
+profile at 16× on this Mac, taken while other builds ran, found placing the
+benzene ring took about 40 ms (12 ms of it validating the whole drawing),
+copying the drawing about 3 ms, and the editor markers about 6 ms. A bond drag
+still costs about 170 ms at 16×. The first frame
+of a preview that changes an existing molecule builds the scene of the rest once.
+
+Inserting polyalanine-200 (1,001 atoms) from SMILES, measured with
+`app::engine_jobs::tests::profile_polyalanine_insert_stages` and a release
+helper while other builds ran: layout 313 ms, analysis 41 ms (130 ms with stereocenters), Fit 146 ms, and
+two scene builds of about 960 ms each. The analysis steps are SMILES 13–17 ms,
+InChI 15–100 ms and descriptors 3 ms; the rest take under a millisecond. In two
+runs, the first analysis after a new helper executable was copied took about one
+second (991 and 1,201 ms). That suggests a cost of first launching a new
+executable, such as macOS checking it, but the profiler does not time the
+helper's launch apart from its work, so the cause is not confirmed. The scene
+builds are the subject of the model scaling work.

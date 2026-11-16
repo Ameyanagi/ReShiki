@@ -1,4 +1,19 @@
-import type { Input, InputFormat, OutputFormat, BinaryFormat, TextFormat } from "./index.js";
+/** Formats a structure or drawing can be read from. `rsk` (also `reshiki`,
+ * the name the MCP tools and the CLI use) is a native ReShiki drawing, `cdx`
+ * the binary ChemDraw file, `rsmi` reaction SMILES; `auto` tells the text
+ * formats apart. */
+export type InputFormat =
+  "rsk" | "reshiki" | "mol" | "smiles" | "inchi" | "cdxml" | "cdx" | "rxn" | "rsmi" | "auto";
+
+/** Outputs returned as bytes. */
+export type BinaryFormat = "png" | "pdf" | "cdx";
+/** Outputs returned as text. */
+export type TextFormat =
+  "rsk" | "reshiki" | "svg" | "mol" | "smiles" | "inchi" | "cdxml" | "rxn" | "rsmi";
+export type OutputFormat = BinaryFormat | TextFormat;
+
+/** Text is read as UTF-8; `cdx` input must be bytes. */
+export type Input = string | Uint8Array;
 
 /** Figures as the desktop's Export makes them. */
 export type ImageFormat = "svg" | "png" | "pdf";

@@ -82,7 +82,9 @@ async fn close(ui: &mut Ui, app: &mut App, apply: bool) {
     }
 }
 
-async fn open_cleanup(ui: &mut Ui, app: &mut App) {
+/// Clean up applies at once as one Undo step.
+async fn clean_up(ui: &mut Ui, app: &mut App) {
+    let drawing = app.tab.doc.clone();
     ui.key(
         app,
         Key::Character("K".into()),
@@ -92,8 +94,9 @@ async fn open_cleanup(ui: &mut Ui, app: &mut App) {
     )
     .await;
     assert!(!app.error, "{}", app.status);
-    assert!(app.tab.cleanup.is_some(), "{}", app.status);
     assert!(!app.tab.busy);
+    assert_ne!(app.tab.doc, drawing, "{}", app.status);
+    assert!(app.tab.history.can_undo());
 }
 
 async fn open_optimization(ui: &mut Ui, app: &mut App) {
@@ -174,19 +177,11 @@ fn optimized() -> std::sync::Arc<reshiki::geometry::Optimized> {
 #[ignore = "Opt-in renderer input check"]
 async fn review_close_returns_focus_cleanup() {
     let mut ui = Ui::new().await;
-    for apply in [true, false] {
-        let mut app = drawing_app();
-        let drawing = app.tab.doc.clone();
-        let selected = app.tab.selected.clone();
-        open_cleanup(&mut ui, &mut app).await;
-        let preview = app.tab.cleanup.as_ref().unwrap().document.clone();
-        assert_eq!(app.tab.doc, drawing);
-        close(&mut ui, &mut app, apply).await;
-        assert!(app.tab.cleanup.is_none());
-        assert_eq!(app.tab.doc, if apply { preview } else { drawing });
-        assert_eq!(app.tab.selected, selected);
-        assert_canvas_delete(&mut ui, &mut app).await;
-    }
+    let mut app = drawing_app();
+    let selected = app.tab.selected.clone();
+    clean_up(&mut ui, &mut app).await;
+    assert_eq!(app.tab.selected, selected);
+    assert_canvas_delete(&mut ui, &mut app).await;
 }
 
 #[tokio::test]
@@ -217,18 +212,13 @@ async fn review_close_returns_focus_optimization() {
 #[ignore = "Opt-in renderer input check"]
 async fn review_close_returns_focus_preview_buttons() {
     let mut ui = Ui::new().await;
-    for optimization in [false, true] {
+    {
         for apply in [true, false] {
             let mut app = drawing_app();
             let selected = app.tab.selected.clone();
             let drawing = app.tab.doc.clone();
-            let (cancel, accept) = if optimization {
-                open_optimization(&mut ui, &mut app).await;
-                ("optimization.cancel", "optimization.apply")
-            } else {
-                open_cleanup(&mut ui, &mut app).await;
-                ("cleanup.cancel", "cleanup.apply")
-            };
+            open_optimization(&mut ui, &mut app).await;
+            let (cancel, accept) = ("optimization.cancel", "optimization.apply");
             // Shift+Tab reaches Apply first; the 3D scope also holds the
             // panel's other controls before Cancel.
             for (modifiers, expected) in [
@@ -286,41 +276,36 @@ async fn review_close_returns_focus_preview_buttons() {
                 }
                 assert_eq!(app.tab.doc, drawing);
             }
-            assert!(app.tab.cleanup.is_none() && app.tab.optimization.is_none());
+            assert!(app.tab.optimization.is_none());
             assert_eq!(app.tab.selected, selected);
             assert_canvas_delete(&mut ui, &mut app).await;
         }
     }
 }
 
-/// Applying from the preview bar also releases a field focused elsewhere.
+/// The toolbar's Clean up and its options menu also release a field focused
+/// elsewhere.
 #[tokio::test]
 #[ignore = "Opt-in renderer input check"]
-async fn review_close_returns_focus_cleanup_apply_with_import_focused() {
+async fn review_close_returns_focus_cleanup_toolbar_with_import_focused() {
     let mut ui = Ui::new().await;
     let mut app = drawing_app();
     let selected = app.tab.selected.clone();
-    open_cleanup(&mut ui, &mut app).await;
-    let preview = app.tab.cleanup.as_ref().unwrap().document.clone();
+    let drawing = app.tab.doc.clone();
     open_import(&mut ui, &mut app).await;
-    ui.key(
-        &mut app,
-        Key::Named(Named::Tab),
-        Code::Tab,
-        Modifiers::SHIFT,
-        None,
-    )
-    .await;
-    ui.key(
-        &mut app,
-        Key::Named(Named::Enter),
-        Code::Enter,
-        Modifiers::empty(),
-        None,
-    )
-    .await;
-    assert!(app.tab.cleanup.is_none());
-    assert_eq!(app.tab.doc, preview);
+    click_running_tasks(&mut ui, &mut app, "header-cleanup-options").await;
+    assert!(app.cleanup_menu);
+    click_running_tasks(&mut ui, &mut app, "cleanup-free").await;
+    assert!(!app.cleanup_menu);
+    assert_eq!(
+        app.cleanup_options.orientation(),
+        reshiki::cleanup::Orientation::Free
+    );
+    ui.assert_unfocused(&app);
+    open_import(&mut ui, &mut app).await;
+    click_running_tasks(&mut ui, &mut app, "header-cleanup").await;
+    assert!(!app.error, "{}", app.status);
+    assert_ne!(app.tab.doc, drawing);
     assert_eq!(app.tab.selected, selected);
     assert_canvas_delete(&mut ui, &mut app).await;
 }
@@ -449,7 +434,7 @@ async fn review_close_returns_focus_tab_without_preview_keeps_drawing() {
     for modifiers in [Modifiers::empty(), Modifiers::SHIFT] {
         ui.key(&mut app, Key::Named(Named::Tab), Code::Tab, modifiers, None)
             .await;
-        assert!(app.tab.cleanup.is_none() && app.tab.optimization.is_none());
+        assert!(app.tab.optimization.is_none());
         assert_eq!(app.tab.doc, drawing);
         assert_eq!(app.tab.selected, selected);
     }

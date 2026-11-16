@@ -385,7 +385,7 @@ impl App {
         match event {
             Action::Open => {
                 self.cancel_join();
-                if self.tab.cleanup.is_some() || !self.finish_inline(true) {
+                if !self.finish_inline(true) {
                     return Task::none();
                 }
                 self.theme_library.editor = Some(Editor::new(

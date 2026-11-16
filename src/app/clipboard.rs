@@ -533,7 +533,6 @@ impl App {
             || revision != self.tab.revision
             || self.tab.inline_text.is_some()
             || self.tab.joining.is_some()
-            || self.tab.cleanup.is_some()
         {
             self.status = "Drawing changed during paste · Paste again".into();
             return;

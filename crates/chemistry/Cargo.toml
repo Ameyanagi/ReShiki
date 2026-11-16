@@ -15,6 +15,8 @@ rdkit-reference = []
 # Keep identical to the root declaration; scripts/build_inchi_helper.py validates that one.
 cosmolkit-inchi = { version = "=0.5.0", git = "https://github.com/Ameyanagi/COSMolKit.git", rev = "501f7b234031ba4d87461e14d0947c77a7d1a631" }
 reshiki-depict-math = { path = "../depict-math" }
+# Large embedded data is stored deflated (build.rs) and inflated on first use.
+miniz_oxide = "0.8"
 reshiki-process-heap = { path = "../process-heap" }
 serde = { version = "1", features = ["derive", "rc"] }
 serde_json = { version = "1", features = ["float_roundtrip"] }
@@ -36,6 +38,9 @@ tokio = { version = "1", features = [
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 web-time = "1"
+
+[build-dependencies]
+miniz_oxide = "0.8"
 
 [dev-dependencies]
 anyhow = "1"

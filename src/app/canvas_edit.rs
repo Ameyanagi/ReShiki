@@ -66,26 +66,24 @@ impl App {
                 hit,
             } => {
                 self.tab.arrows.cancel_source();
-                if self.tab.cleanup.is_none() {
-                    let closed_inspector = (!self.inspector_open).then_some(self.inspector_tab);
-                    self.tab.selected = selected;
-                    self.tool = Tool::Select;
-                    self.sync_typography();
-                    if let Some(tab) = closed_inspector {
-                        self.inspector_open = false;
-                        self.inspector_tab = tab;
-                    }
-                    let mut menu = context_menu::State::new(position, Default::default());
-                    menu.hit = Some(hit);
-                    self.context_menu = Some(menu);
+                let closed_inspector = (!self.inspector_open).then_some(self.inspector_tab);
+                self.tab.selected = selected;
+                self.tool = Tool::Select;
+                self.sync_typography();
+                if let Some(tab) = closed_inspector {
+                    self.inspector_open = false;
+                    self.inspector_tab = tab;
                 }
+                let mut menu = context_menu::State::new(position, Default::default());
+                menu.hit = Some(hit);
+                self.context_menu = Some(menu);
                 return;
             }
             _ => {}
         }
         match edit {
             Edit::EraseStart(p) => {
-                self.tab.erase_stroke = self.tool == Tool::Erase && self.tab.cleanup.is_none();
+                self.tab.erase_stroke = self.tool == Tool::Erase;
                 self.tab.erase_committed = false;
                 if self.tab.erase_stroke {
                     self.erase_segment(p, p);
@@ -118,29 +116,6 @@ impl App {
         if edit.is_camera() {
             self.tab.hover = None;
             self.hover_bond_text(None);
-        }
-        if self.tab.cleanup.is_some() {
-            match edit {
-                Edit::Pan(dx, dy) => {
-                    self.tab.camera.center = self
-                        .tab
-                        .camera
-                        .center
-                        .offset(-dx / self.tab.camera.zoom, -dy / self.tab.camera.zoom);
-                    self.tab.fit_to_view = false;
-                }
-                Edit::Zoom(factor, _) => {
-                    self.tab.camera.zoom = (self.tab.camera.zoom * factor).clamp(0.005, 5.);
-                    self.tab.fit_to_view = false;
-                }
-                Edit::Navigate(navigation, offset) => {
-                    let point = self.tab.camera.navigate(navigation, offset, 0.005);
-                    self.keyboard_pointer_camera(Some(point));
-                    self.tab.fit_to_view = false;
-                }
-                _ => {}
-            }
-            return;
         }
         // Camera-only edits never touch the document, history or revision, so
         // they skip the document snapshot and edit pipeline on every wheel tick.
