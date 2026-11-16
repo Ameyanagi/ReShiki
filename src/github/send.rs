@@ -199,6 +199,42 @@ pub async fn send(
     Err(Error::Conflict)
 }
 
+/// GitHub's version of each drawing in `files` (its repository path and the
+/// blob it is based on) that changed on `branch` since, with the commit that
+/// last changed it. One deleted on GitHub is left for Send to find. `mine`
+/// is left for the caller.
+pub async fn newer(
+    client: &Client,
+    key: &RepoKey,
+    branch: &str,
+    files: &[(String, String)],
+) -> Result<Vec<(Conflict, Option<api::RemoteVersion>)>, Error> {
+    let head = api::head(client, key, branch).await?;
+    let mut folders = Folders::new(client, key, head.tree);
+    let mut found = Vec::new();
+    for (repo_path, base) in files {
+        let Some(blob) = folders.blob(repo_path).await?.filter(|blob| blob != base) else {
+            continue;
+        };
+        let folder = repo_path.rsplit_once('/').map_or("", |(folder, _)| folder);
+        let beside = folders.list(folder).await?.unwrap_or_default();
+        let names = beside.iter().map(|entry| entry.name.clone()).collect();
+        let by = api::file_commits(client, key, repo_path, &head.commit, 1).await?;
+        found.push((
+            Conflict {
+                repo_path: repo_path.clone(),
+                commit: head.commit.clone(),
+                theirs: Some(api::blob(client, key, &blob).await?),
+                blob: Some(blob),
+                mine: Vec::new(),
+                names,
+            },
+            by.into_iter().next(),
+        ));
+    }
+    Ok(found)
+}
+
 /// Take a send's result into the state: new bases for what was sent, a mark
 /// on every conflict, and the repository's current names.
 pub fn apply(state: &mut RepoState, outcome: &SendOutcome) {

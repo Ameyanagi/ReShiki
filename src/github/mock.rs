@@ -116,6 +116,22 @@ impl Repo {
             .insert(self.default_branch.clone(), commit.clone());
         commit
     }
+    /// Someone's push made now, as `author` (a GitHub login), with its own
+    /// message: write or delete one file on the default branch.
+    pub fn commit_as(
+        &mut self,
+        path: &str,
+        bytes: Option<&[u8]>,
+        author: &str,
+        message: &str,
+    ) -> String {
+        let commit = self.remote_commit(path, bytes);
+        let made = self.commits.get_mut(&commit).unwrap();
+        made.at = now();
+        made.author = author.into();
+        made.message = message.into();
+        commit
+    }
     /// Commits from `from` back to the first, newest first.
     fn history(&self, from: &str) -> Vec<String> {
         let mut out = Vec::new();
@@ -399,16 +415,13 @@ fn respond(model: &mut Model, base: &str, request: Logged) -> Reply {
                 .as_str()
                 .map(|text| text.as_bytes().to_vec());
             let repo = model.repo(body["repo"].as_str().unwrap());
-            let commit = repo.remote_commit(body["path"].as_str().unwrap(), bytes.as_deref());
+            let path = body["path"].as_str().unwrap();
             // Optionally someone else's, with their own message.
-            let made = repo.commits.get_mut(&commit).unwrap();
-            made.at = now();
-            if let Some(author) = body["author"].as_str() {
-                made.author = author.into();
-            }
-            if let Some(message) = body["message"].as_str() {
-                made.message = message.into();
-            }
+            let author = body["author"].as_str().unwrap_or(&repo.owner).to_owned();
+            let message = body["message"]
+                .as_str()
+                .map_or_else(|| format!("Remote change to {path}"), str::to_owned);
+            repo.commit_as(path, bytes.as_deref(), &author, &message);
             reply(200, json!({}))
         }
         ("POST", ["_mock", "limit"]) => {
@@ -827,8 +840,8 @@ impl Mock {
 /// `RESHIKI_GITHUB_CLIENT_ID=mock RESHIKI_GITHUB_API=http://127.0.0.1:47123/api
 /// RESHIKI_GITHUB_WEB=http://127.0.0.1:47123 RESHIKI_DATA_DIR=<fresh folder>`.
 /// A code is approved after two polls. `POST /_mock/commit` with
-/// `{"repo", "path", "content"}` makes someone else's change (`content: null`
-/// deletes). `alice/ligands` is someone else's public repository, with a
+/// `{"repo", "path", "content"}` makes a change on GitHub (`content: null`
+/// deletes); add `"author": "alice"` and `"message"` for someone else's. `alice/ligands` is someone else's public repository, with a
 /// `draft` branch; `alice/notes` is private. `POST /_mock/limit` with
 /// `{"left": 0}` spends the signed-out limit (`null`: no limit).
 #[tokio::test(flavor = "multi_thread")]
@@ -847,12 +860,12 @@ async fn serve_github_mock() {
             .add_repo("reaction-notes")
             .remote_commit("ring-opening.rsk", Some(ring));
         model.add_repo("spectra");
-        let lab = model.repo("lab-notes");
-        let commit = lab.remote_commit("scheme/furan.rsk", Some(ring));
-        let made = lab.commits.get_mut(&commit).unwrap();
-        made.at = now();
-        made.author = "alice".into();
-        made.message = "Start the furan route".into();
+        model.repo("lab-notes").commit_as(
+            "scheme/furan.rsk",
+            Some(ring),
+            "alice",
+            "Start the furan route",
+        );
     }
     mock.model().approve_after = Some(2);
     println!("Mock GitHub at {}", mock.base);

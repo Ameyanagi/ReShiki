@@ -706,3 +706,37 @@ async fn the_conflict_names_come_from_githubs_folder() {
         .remove(0);
     assert_eq!(conflict.names, ["a (2).svg", "a.rsk"]);
 }
+
+#[tokio::test]
+async fn newer_finds_each_drawing_changed_on_github_and_who_changed_it() {
+    let (mock, client) = notes(&[("dir/a.rsk", b"a"), ("b.rsk", b"b")]).await;
+    let based = |path: &str, bytes: &[u8]| (path.to_owned(), mock::sha(bytes));
+    let files = [based("dir/a.rsk", b"a"), based("b.rsk", b"b")];
+    let newer = || send::newer(&client, &key(), "main", &files);
+    assert!(newer().await.unwrap().is_empty(), "nothing changed yet");
+
+    // @alice changes one between two checks; a deletion is left for Send.
+    let commit = mock.model().repo("notes").commit_as(
+        "dir/a.rsk",
+        Some(b"ethyl"),
+        "alice",
+        "Add an ethyl group",
+    );
+    mock.model().repo("notes").remote_commit("b.rsk", None);
+    let head = mock.model().repo("notes").head().unwrap();
+    let found = newer().await.unwrap();
+    let [(conflict, by)] = found.as_slice() else {
+        panic!("one drawing changed: {found:?}");
+    };
+    assert_eq!(conflict.repo_path, "dir/a.rsk");
+    assert_eq!(conflict.commit, head);
+    assert_eq!(conflict.blob.as_deref(), Some(mock::sha(b"ethyl").as_str()));
+    assert_eq!(conflict.theirs.as_deref(), Some(b"ethyl".as_slice()));
+    assert_eq!(conflict.names, ["a.rsk"]);
+    let by = by.as_ref().unwrap();
+    assert_eq!(by.commit, commit);
+    assert_eq!(by.login.as_deref(), Some("alice"));
+    assert_eq!(by.message, "Add an ethyl group");
+    // Nothing is written.
+    assert_eq!(writes(&mock), 0);
+}

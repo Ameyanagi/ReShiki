@@ -350,17 +350,7 @@ impl App {
                 if front != self.github.versions.target {
                     return Task::none();
                 }
-                if self.tab.atom_text.is_some()
-                    || self.tab.inline_text.is_some()
-                    || self.tab.optimization.is_some()
-                {
-                    self.status = "Finish editing first".into();
-                    self.error = true;
-                    return Task::none();
-                }
-                if self.file_io.saving {
-                    self.status = "Wait for the save to finish".into();
-                    self.error = true;
+                if !self.replaceable() {
                     return Task::none();
                 }
                 self.replace_with_stored((*doc).clone());
@@ -373,6 +363,21 @@ impl App {
             Action::LocalLoaded(..) | Action::RemoteLoaded(..) | Action::Doc(..) => {}
         }
         Task::none()
+    }
+
+    /// Whether the drawing in front may be replaced now; if not, the status
+    /// says what to finish first.
+    pub(super) fn replaceable(&mut self) -> bool {
+        let editing = self.tab.atom_text.is_some()
+            || self.tab.inline_text.is_some()
+            || self.tab.optimization.is_some();
+        self.status = match (editing, self.file_io.saving) {
+            (true, _) => "Finish editing first".into(),
+            (_, true) => "Wait for the save to finish".into(),
+            _ => return true,
+        };
+        self.error = true;
+        false
     }
 
     /// The selected version's time and drawing.
