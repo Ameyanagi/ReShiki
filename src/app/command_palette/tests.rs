@@ -773,8 +773,11 @@ fn keyboard_moves_scroll_only_when_the_highlight_leaves_the_viewport() {
     );
     let _ = app.update(Message::Commands(Action::Move(isize::MIN)));
     assert_eq!(app.commands.scroll_offset, 0.);
-    assert_eq!(row_scroll_offset(0, 0., 31.), 0.);
-    assert_eq!(row_scroll_offset(1, 0., 31.), 27.);
+    let state = &mut app.commands;
+    (state.selected, state.viewport_height) = (0, 31.);
+    assert_eq!(row_scroll_offset(state), 0.);
+    state.selected = 1;
+    assert_eq!(row_scroll_offset(state), 27.);
     let _ = app.update(Message::Commands(Action::Move(PAGE)));
     let _ = app.update(Message::Commands(Action::Query("bond".into())));
     assert_eq!(
@@ -1235,6 +1238,56 @@ fn quit_on_a_dirty_tab_asks_to_save_and_bang_discards() {
     let _ = app.update(Message::Cancel);
     run(&mut app, "q!");
     assert!(app.dirty(), "a save in progress is never discarded");
+}
+
+#[test]
+fn start_here_leads_an_empty_palette_until_a_command_runs() {
+    let mut app = app();
+    open(&mut app);
+    let state = &app.commands;
+    assert_eq!(
+        state.start_here(),
+        START_HERE.len(),
+        "every name is a command"
+    );
+    let mut lead: Vec<_> = (state.ranked().into_iter())
+        .take(START_HERE.len())
+        .map(|command| command.name.as_str())
+        .collect();
+    // Commands that need a molecule follow the ones an empty drawing can run.
+    assert_eq!(lead[..3], ["Import structure or name", "Benzene", "Open…"]);
+    lead.sort_unstable();
+    let mut start = START_HERE;
+    start.sort_unstable();
+    assert_eq!(lead, start);
+
+    // A heading sits above each group; revealing a group's first row shows
+    // its heading too.
+    let state = &mut app.commands;
+    let row = ROW_HEIGHT + ROW_SPACING;
+    let heading = HEADING_HEIGHT + ROW_SPACING;
+    (state.selected, state.scroll_offset, state.viewport_height) = (0, 100., 4. * row);
+    assert_eq!(row_scroll_offset(state), 0.);
+    state.selected = START_HERE.len();
+    state.scroll_offset = 0.;
+    assert_eq!(
+        row_scroll_offset(state),
+        START_HERE.len() as f32 * row + 2. * heading + ROW_HEIGHT - 4. * row,
+        "the row's bottom, below both headings"
+    );
+    state.scroll_offset = 1000.;
+    assert_eq!(
+        row_scroll_offset(state),
+        START_HERE.len() as f32 * row + heading
+    );
+    // A category chip shows plain rows.
+    let _ = app.update(Message::Commands(Action::Filter(Some(Category::File))));
+    assert_eq!(app.commands.start_here(), 0);
+
+    run(&mut app, "zoom in");
+    open(&mut app);
+    assert_eq!(app.commands.start_here(), 0);
+    assert_eq!(top(&app).name, "Zoom in");
 }
 
 #[test]

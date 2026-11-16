@@ -809,6 +809,7 @@ pub(super) fn commits_draft(message: &Message) -> bool {
             | Message::Commands(
                 super::command_palette::Action::Run(_) | super::command_palette::Action::Submit
             )
+            | Message::Help(super::help::Action::Run(_))
             | Message::Shortcut(
                 super::shortcuts::Action::FixedLength
                     | super::shortcuts::Action::FixedAngles

@@ -6,11 +6,13 @@
   "source": "crates.io iced_widget 0.14.2",
   "upstream_file_sha256": {
     "Cargo.toml": "e8e6b9a72fc0f97c84b8fb2703fe6cdccd738c6c01d2fadf018a012182de93b5",
+    "src/combo_box.rs": "973901d05003f684be1d13da5adc88ef7e030dc31db07c1bb0717cf9210d2391",
     "src/text_editor.rs": "cecf8686c90aa92066d55075beba545dfb7dd5a44bad0c1519fcb110a56070e1",
     "src/text_input.rs": "7cd64b0f79c6000f2985cc290642698a814be5dcd7b7a56ae463b13ffe5c3b47"
   },
-  "purpose": "Let idle text carets stop producing frames so the GPU driver can release memory while the field stays focused.",
+  "purpose": "Let idle text carets stop producing frames so the GPU driver can release memory while the field stays focused, and let Tab and focus operations reach a combo box's search field.",
   "local_changes": [
+    "src/combo_box.rs: forward operate to the search field, so Tab and focus operations reach it, and let the field take an id",
     "src/text_editor.rs: stop scheduling caret blink redraws 10 seconds after updated_at and keep the caret visible after that timeout; input method preedit and commit reset updated_at, as typing already does",
     "src/text_input.rs: stop scheduling caret blink redraws 10 seconds after updated_at and keep the caret visible after that timeout; input method preedit resets updated_at, as commit already does; a click inside the field always requests a frame, so the blink restarts even when the cursor does not move",
     "LICENSE (added): Iced's MIT license, which the crate package does not include; the same text as licenses/iced/LICENSE"

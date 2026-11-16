@@ -11,6 +11,7 @@ mod image;
 mod inert;
 mod operations;
 mod scope;
+mod select;
 mod text_input;
 pub mod tree;
 
@@ -20,6 +21,7 @@ pub use image::image;
 pub use inert::inert;
 pub use operations::{Activate, Collect, SetValue, Snapshot};
 pub use scope::{FocusControl, focus_scope, focus_scope_with};
+pub use select::{Select, select};
 pub use text_input::{TextInput, text_input};
 
 use iced::Rectangle;
@@ -31,8 +33,17 @@ pub enum Role {
     ToggleButton,
     TextInput,
     TextArea,
+    /// A dropdown whose value is its chosen option's name.
+    ComboBox,
     /// A picture, named for what it shows. It takes no focus or actions.
     Image,
+}
+
+impl Role {
+    /// Assistive technology sets this control's value rather than pressing it.
+    pub fn takes_value(self) -> bool {
+        matches!(self, Self::TextInput | Self::TextArea | Self::ComboBox)
+    }
 }
 
 /// A snapshot produced by the actual control during a widget operation.

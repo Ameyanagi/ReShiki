@@ -3952,6 +3952,7 @@ dependencies = [
  "sha2",
  "svg2pdf",
  "swash",
+ "sys-locale",
  "tempfile",
  "thiserror 2.0.20",
  "tiff",
