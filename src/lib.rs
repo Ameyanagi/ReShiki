@@ -46,6 +46,8 @@ pub mod assistant;
 pub mod cli;
 pub mod clipboard;
 pub mod hotkeys;
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) mod http;
 pub mod keyboard_drawing;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod libreoffice;

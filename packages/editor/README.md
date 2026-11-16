@@ -1,8 +1,13 @@
 # @ameyanagi/reshiki
 
-ReShiki in the browser, compiled to WebAssembly: the drawing editor itself,
-and a headless library that converts structures between formats and draws
-them. Both run the same Rust code as the desktop app, without a server.
+ReShiki's drawing editor in the browser, compiled to WebAssembly. It runs the
+same Rust code as the desktop app, without a server.
+
+To convert structures between formats and draw them without the editor, use
+[`@ameyanagi/reshiki-headless`](../headless/README.md). Up to ReShiki 0.15.0
+that library was this package's main entry (`import … from
+"@ameyanagi/reshiki"`); see
+[Moving from 0.15](../headless/README.md#moving-from-015).
 
 ## Install
 
@@ -27,8 +32,10 @@ scripts/build_wasm.sh --test   # and run the tests
 The script needs Rust (the toolchain in `rust-toolchain.toml` and its
 `wasm32-unknown-unknown` target), `uv` and `bun`. It installs the matching
 `wasm-bindgen` CLI and a pinned binaryen `wasm-opt` under `target/tools`. It
-writes the headless library to `dist/wasm`, the editor to `dist/editor`, and
-the license texts and third-party notices to `dist/licenses`.
+writes the editor to `dist/editor`, its worker for [naming](#naming) to
+`dist/worker`, and the license texts and third-party notices to
+`dist/licenses`. The same run builds
+[`@ameyanagi/reshiki-headless`](../headless/README.md) in `packages/headless`.
 
 ## Editor
 
@@ -74,11 +81,12 @@ The title is `Name — ReShiki`, with a `•` after the name while the tab in
 front has unsaved changes, as on the desktop. Without `title: true` the page
 keeps its own title, and `onTitleChange` hands it the editor's.
 
-`load` takes the same formats as `convert` and rejects with the app's message
-when it cannot read the data; so does `mount` for its `data`, before the
-editor starts. Mount on an element in the page's body: the editor cannot
-start inside a shadow root. `save` and `exportImage` return what the
-headless library's `convert` would for the drawing in front.
+`load` takes the same formats as `convert` in
+[`@ameyanagi/reshiki-headless`](../headless/README.md#use) and rejects with
+the app's message when it cannot read the data; so does `mount` for its
+`data`, before the editor starts. Mount on an element in the page's body: the
+editor cannot start inside a shadow root. `save` and `exportImage` return what
+that `convert` would for the drawing in front.
 
 Some inputs import with a change or an assumption. For these, `load` resolves
 to `{ warnings }` with the app's messages, and the editor's status bar shows
@@ -132,8 +140,8 @@ empty folder with Bun and Python 3 installed:
 
 ```sh
 bun init -y
-bun add @ameyanagi/reshiki
-bun -e 'import { convert } from "@ameyanagi/reshiki"; await Bun.write("caffeine.mol", await convert("CN1C=NC2=C1C(=O)N(C(=O)N2C)C", "smiles", "mol"))'
+bun add @ameyanagi/reshiki @ameyanagi/reshiki-headless
+bun -e 'import { convert } from "@ameyanagi/reshiki-headless"; await Bun.write("caffeine.mol", await convert("CN1C=NC2=C1C(=O)N(C(=O)N2C)C", "smiles", "mol"))'
 ```
 
 Save the following as `index.html` in that folder:
@@ -343,103 +351,11 @@ it.
 - Without WebGPU, lines are drawn without antialiasing: WebGL2 loses most
   canvases with it.
 
-## Library
-
-```js
-import { convert, renderPng, renderSvg, smiles, inchi } from "@ameyanagi/reshiki";
-
-const mol = await convert("CN1C=NC2=C1C(=O)N(C(=O)N2C)C", "smiles", "mol");
-const svg = await renderSvg(mol, "mol");
-const png = await renderPng(mol, "mol", { maxWidth: 800, maxHeight: 600 });
-const id = await inchi(mol, "mol");
-```
-
-Each function loads the module on its first call, from `reshiki_web_bg.wasm`
-next to the package's JavaScript. Bundlers such as Vite and webpack follow
-that `new URL(..., import.meta.url)` reference. To load it from somewhere else,
-call `init` first with a URL, a `Response`, the bytes or a compiled
-`WebAssembly.Module`:
-
-```js
-import { init } from "@ameyanagi/reshiki";
-await init(new URL("/assets/reshiki_web_bg.wasm", location.href));
-```
-
-| Function                                           | Result                                                                        |
-| -------------------------------------------------- | ----------------------------------------------------------------------------- |
-| `read(data, format)`                               | `{ drawing, warnings }`: the native drawing (`rsk`) and the import warnings.  |
-| `convert(data, from, to, { svgText })`             | The structure or drawing in another format.                                   |
-| `renderSvg(data, format, { svgText })`             | The editor's SVG preview, with a transparent surround.                        |
-| `renderPng(data, format, { maxWidth, maxHeight })` | The editor's PNG preview on white, scaled to fit (1600 × 1000 by default).    |
-| `smiles(data, format)`                             | The canonical SMILES.                                                         |
-| `inchi(data, format)`                              | The standard InChI.                                                           |
-| `addFont(font)`                                    | Adds a font (a URL or bytes) that figures fall back to, such as for Japanese. |
-| `version()`                                        | The ReShiki release version, e.g. `0.15.0` (including any prerelease suffix). |
-
-`data` is a string or a `Uint8Array`; `cdx` input must be bytes.
-
-- Input formats: `rsk` (a ReShiki drawing), `mol`, `smiles`, `inchi`, `cdxml`,
-  `cdx`, `rxn`, `rsmi` (reaction SMILES) and `auto`, which tells the text
-  formats apart.
-- Output formats: `rsk`, `mol`, `smiles`, `inchi`, `cdxml`, `rxn`, `rsmi` and
-  `svg` (strings), and `cdx`, `png` and `pdf` (bytes). `svg`, `png` and `pdf`
-  are figures as the desktop's Export makes them.
-- `reshiki` is accepted wherever `rsk` is: it is the name the MCP tools and
-  `reshiki --cli` use for the same format.
-
-SVG from `convert` and `renderSvg` draws text as outlines, so it looks the
-same in every viewer. Pass `{ svgText: "live" }` to keep `<text>` elements,
-which a viewer without the drawing's font draws with a substitute. This is the
-`svg_text` option of the MCP tools, the command line and the Python package,
-with the same default.
-
-Failures reject with an `Error` that carries the app's message and a `code`,
-the [error code](https://reshiki.com/developer/agent-api/#error-codes) the MCP
-tools and the command line report for the same failure:
-`invalid_arguments` for a format or option that is not accepted, and `failed`
-when the structure cannot be read, drawn or written.
-
-```js
-try {
-  await convert("C(", "smiles", "mol");
-} catch (error) {
-  console.log(error.code, error.message); // failed Invalid SMILES at byte 2
-}
-```
-
-Some inputs import with a change or an assumption, such as a SMILES bond of any
-order (`~`), which is drawn as a single bond. The app shows
-a warning for these; `convert`, `renderSvg`, `renderPng`, `smiles` and `inchi`
-return only their result. To see the warnings, `read` the input first and
-continue from its drawing:
-
-```js
-import { convert, read } from "@ameyanagi/reshiki";
-
-const { drawing, warnings } = await read("C~C", "smiles");
-for (const warning of warnings) console.warn(warning);
-const mol = await convert(drawing, "rsk", "mol");
-```
-
-## How the library differs from the desktop
-
-- SMILES, MOL, InChI and CDXML output matches `reshiki --cli convert` on macOS.
-  The tests check this when `RESHIKI_CLI` names a native `reshiki` binary.
-- Labels are measured and drawn with the bundled Liberation Sans, which has
-  Arial's metrics. Coordinates near labels can differ from the desktop's by
-  under one drawing unit. Outlined SVG text is drawn with Liberation Sans
-  glyphs; live SVG text names Arial, so a browser draws it with the viewer's
-  Arial or a substitute.
-- Everything runs on the calling thread. Large drawings block the page until
-  they finish, and InChI and 3D work have no time limit in the browser. Run the
-  module in a Web Worker to keep a page responsive.
-
 ## Test
 
 ```sh
 cd packages/editor
-bun test                                          # needs a built dist/
-RESHIKI_CLI=../../target/debug/reshiki bun test   # also compares with the CLI
+bun test
 ```
 
 Pull request CI runs these tests, after Clippy for wasm32, in the **Browser

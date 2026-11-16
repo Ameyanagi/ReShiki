@@ -224,7 +224,7 @@ async fn cached_nightly_downloads_open_trusted_archives_when_asset_lookup_is_una
 async fn nightly_downloads_only_fall_back_for_transient_http_responses() {
     use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
 
-    let client = reqwest::Client::builder()
+    let client = crate::http::client()
         .no_proxy()
         .redirect(reqwest::redirect::Policy::none())
         .timeout(Duration::from_secs(5))

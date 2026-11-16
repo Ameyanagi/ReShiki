@@ -187,10 +187,18 @@ pub fn fingerprint(document: &Document, ids: &[u64]) -> Result<String, String> {
     Ok(core::identity_digest(&bytes))
 }
 
+/// `data/nmr/index.tsv`, deflated by `build.rs`.
+const BUNDLED_TSV: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/index.tsv.deflate"));
 static BUNDLED: OnceLock<Result<Index, String>> = OnceLock::new();
 pub fn bundled_index() -> Result<&'static Index, String> {
     BUNDLED
-        .get_or_init(|| parse_index(include_str!("../../../data/nmr/index.tsv")))
+        .get_or_init(|| {
+            let text = miniz_oxide::inflate::decompress_to_vec(BUNDLED_TSV)
+                .ok()
+                .and_then(|bytes| String::from_utf8(bytes).ok())
+                .ok_or("The bundled NMR index could not be read")?;
+            parse_index(&text)
+        })
         .as_ref()
         .map_err(Clone::clone)
 }

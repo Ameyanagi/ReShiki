@@ -282,7 +282,7 @@ pub async fn check(channel: Channel, manual: bool) -> Result<Release, String> {
 
 #[cfg(not(target_arch = "wasm32"))]
 fn release_client() -> Result<reqwest::Client, String> {
-    reqwest::Client::builder()
+    crate::http::client()
         .user_agent(concat!("ReShiki/", env!("CARGO_PKG_VERSION")))
         .https_only(true)
         .redirect(reqwest::redirect::Policy::none())

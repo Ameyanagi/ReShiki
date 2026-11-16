@@ -3,7 +3,7 @@
 The fixture holds one molecule and one reaction with the answers every
 surface must give for them: `reshiki --cli` (tests/cli.rs), the Python package
 (crates/python/tests/test_parity.py) and the JavaScript package
-(packages/editor/test/parity.test.ts). It keeps only values that are the same
+(packages/headless/test/parity.test.ts). It keeps only values that are the same
 on every platform: SMILES, InChI and rounded properties, not coordinates.
 
     uv run --locked python scripts/agent_parity_fixture.py target/debug/reshiki

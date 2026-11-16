@@ -2,7 +2,7 @@
 
 ``tests/fixtures/agent-api/parity.json`` is written by ``reshiki --cli``
 (``scripts/agent_parity_fixture.py``) and also checked by ``tests/cli.rs`` and
-``packages/editor/test/parity.test.ts``.
+``packages/headless/test/parity.test.ts``.
 """
 
 from __future__ import annotations

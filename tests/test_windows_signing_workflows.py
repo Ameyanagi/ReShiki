@@ -51,7 +51,8 @@ class NightlyApplicationWorkflowTests(unittest.TestCase):
             windows = target.endswith("-pc-windows-msvc")
             runner_os = "Windows" if windows else "macOS" if "-apple-" in target else "Linux"
             workspace = "D:/a/ReShiki/ReShiki" if windows else "/workspace/ReShiki"
-            expected = f"{workspace}/target/{target}/release/reshiki" + (".exe" if windows else "")
+            # The helpers are the published build, in the dist profile's folder.
+            expected = f"{workspace}/target/{target}/dist/reshiki" + (".exe" if windows else "")
             for helper in ("RESHIKI_INCHI_HELPER", "RESHIKI_NAMING_HELPER"):
                 with self.subTest(target=target, helper=helper):
                     self.assertIn(helper, environment)

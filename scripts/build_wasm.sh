@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# Build the headless browser library (crates/web), the browser editor (the app
-# itself, for wasm32) and the editor's Web Worker for heavy jobs
-# (crates/web-worker) into packages/editor/dist/{wasm,editor,worker}.
+# Build the two npm packages: the headless browser library (crates/web) into
+# packages/headless/dist/wasm, and the browser editor (the app itself, for
+# wasm32) with its Web Worker for heavy jobs (crates/web-worker) into
+# packages/editor/dist/{editor,worker}. Each package holds only its own modules.
 #
 # Installs the wasm-bindgen CLI that matches Cargo.lock and a pinned binaryen
 # release (for wasm-opt) under the target directory, so no global tools are
@@ -10,7 +11,7 @@ set -euo pipefail
 
 root=$(cd "$(dirname "$0")/.." && pwd)
 target=${CARGO_TARGET_DIR:-$root/target}
-package=$root/packages/editor
+packages=$root/packages
 
 version=$(awk '$0 == "name = \"wasm-bindgen\"" { getline; gsub(/"/, "", $3); print $3 }' \
   "$root/Cargo.lock")
@@ -54,11 +55,12 @@ CARGO_PROFILE_RELEASE_OPT_LEVEL=s \
   --lib --bin reshiki \
   --target wasm32-unknown-unknown --release --locked
 
-rm -rf "$package/dist"
+rm -rf "$packages/headless/dist" "$packages/editor/dist"
 # The features are those Rust enables by default for wasm32-unknown-unknown.
-for module in reshiki_web:wasm reshiki:editor reshiki_web_worker:worker; do
+for module in reshiki_web:headless/dist/wasm reshiki:editor/dist/editor \
+  reshiki_web_worker:editor/dist/worker; do
   name=${module%%:*}
-  out=$package/dist/${module##*:}
+  out=$packages/${module##*:}
   "$bindgen" --target web --out-dir "$out" "$target/wasm32-unknown-unknown/release/$name.wasm"
   wasm=$out/${name}_bg.wasm
   "$wasm_opt" -Os --strip-debug --strip-producers \
@@ -67,7 +69,7 @@ for module in reshiki_web:wasm reshiki:editor reshiki_web_worker:worker; do
     "$wasm" -o "$wasm"
 done
 
-# The package carries the same license texts and notices as the desktop release.
+# Each package carries the same license texts and notices as the desktop release.
 metadata=$(mktemp)
 trap 'rm -f "$metadata"' EXIT
 cargo metadata --manifest-path "$root/Cargo.toml" --format-version 1 --locked > "$metadata"
@@ -77,14 +79,16 @@ from pathlib import Path
 sys.path.insert(0, sys.argv[1])
 from license_notices import write_notices
 write_notices(Path(sys.argv[2]), Path(sys.argv[3]), json.loads(Path(sys.argv[4]).read_text()))
-' "$root/scripts" "$root" "$package/dist/licenses" "$metadata"
+' "$root/scripts" "$root" "$packages/headless/dist/licenses" "$metadata"
+cp -R "$packages/headless/dist/licenses" "$packages/editor/dist/licenses"
 
-for wasm in "$package"/dist/*/*_bg.wasm; do
+for wasm in "$packages"/*/dist/*/*_bg.wasm; do
   raw=$(wc -c < "$wasm" | tr -d ' ')
   zipped=$(gzip -9c "$wasm" | wc -c | tr -d ' ')
   echo "$(basename "$wasm"): $raw bytes, $zipped gzip -9"
 done
 
 if [[ ${1:-} == --test ]]; then
-  (cd "$package" && bun test)
+  (cd "$packages/headless" && bun test)
+  (cd "$packages/editor" && bun test)
 fi

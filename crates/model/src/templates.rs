@@ -448,10 +448,13 @@ fn shared_atom_rotations(
     }
 }
 
+/// `assets/templates.json`, deflated by `build.rs`.
+const BUNDLED_JSON: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/templates.json.deflate"));
 static BUNDLED: LazyLock<Result<Vec<Template>, String>> = LazyLock::new(|| {
-    let mut templates: Vec<Template> =
-        serde_json::from_str(include_str!("../../../assets/templates.json"))
-            .map_err(|e| format!("Bundled templates could not be read: {e}"))?;
+    let json = miniz_oxide::inflate::decompress_to_vec(BUNDLED_JSON)
+        .map_err(|e| format!("Bundled templates could not be read: {e}"))?;
+    let mut templates: Vec<Template> = serde_json::from_slice(&json)
+        .map_err(|e| format!("Bundled templates could not be read: {e}"))?;
     templates.extend(crate::haworth::templates()?);
     templates.extend(crate::fischer::templates()?);
     templates.push(porphine::template()?);
@@ -1251,5 +1254,16 @@ impl Attachment<'_> {
             }
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod embedded_tests {
+    #[test]
+    fn the_embedded_templates_are_the_source_at_a_twentieth_of_its_size() {
+        let source = include_bytes!("../../../assets/templates.json");
+        let embedded = miniz_oxide::inflate::decompress_to_vec(super::BUNDLED_JSON).unwrap();
+        assert!(embedded == source);
+        assert!(super::BUNDLED_JSON.len() * 20 < source.len());
     }
 }

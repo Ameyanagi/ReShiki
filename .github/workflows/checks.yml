@@ -622,7 +622,7 @@ jobs:
             esac
           done
   # The browser build: the editor and the headless library for wasm32, as
-  # scripts/build_wasm.sh builds them, and the packages/editor tests. The
+  # scripts/build_wasm.sh builds them, and the tests of both npm packages. The
   # tests load an unoptimised debug build; only releases build the bundle.
   browser:
     name: Browser build (wasm32)
@@ -649,10 +649,11 @@ jobs:
           version=$(awk '$0 == "name = \"wasm-bindgen\"" { getline; gsub(/"/, "", $3); print $3 }' Cargo.lock)
           cargo install wasm-bindgen-cli --version "$version" --locked
           cargo build -p reshiki-web --lib --target wasm32-unknown-unknown --locked
-          wasm-bindgen --target web --out-dir packages/editor/dist/wasm target/wasm32-unknown-unknown/debug/reshiki_web.wasm
-      - name: Test the browser package
-        working-directory: packages/editor
-        run: bun test
+          wasm-bindgen --target web --out-dir packages/headless/dist/wasm target/wasm32-unknown-unknown/debug/reshiki_web.wasm
+      - name: Test the browser packages
+        run: |
+          (cd packages/headless && bun test)
+          (cd packages/editor && bun test)
   geometry:
     name: Rust geometry (${{ matrix.target }})
     needs: scope
