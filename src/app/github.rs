@@ -1022,6 +1022,15 @@ impl App {
                     && state.repo_id == repo.id
                 {
                     state.read_only = false;
+                    // The open picker opens its drawings with access too.
+                    if let Some(Dialog::Picker(picker)) = &mut self.github.dialog {
+                        let listed = picker.repos.iter_mut().flatten();
+                        for one in listed.chain(picker.repo.as_mut()) {
+                            if one.id == repo.id {
+                                one.push = true;
+                            }
+                        }
+                    }
                     let shared = self.github.prefs.is_shared(repo.id);
                     let keep = if shared && self.github.prefs.share(&repo) {
                         self.github_keep_prefs()
@@ -1832,11 +1841,29 @@ impl App {
         let stem = |path: &str| path.strip_suffix(".rsk").unwrap_or(path).to_owned();
         let mut known = Vec::new();
         let root = self.github.root.as_deref();
-        for (folder, state) in root.map(workcopy::known).into_iter().flatten() {
+        let states: Vec<_> = root.map(workcopy::known).into_iter().flatten().collect();
+        // Repositories GitHub listed and those opened by link count too,
+        // before any drawing of theirs is opened here.
+        let mut repos: Vec<(u64, RepoKey)> = (states.iter())
+            .map(|(_, state)| (state.repo_id, state.key()))
+            .collect();
+        let listed = (self.github.repos.iter()).map(|repo| (repo.id, repo.key.clone()));
+        let shared = (self.github.prefs.shared.iter()).map(|one| {
+            let repo = Repo::from(one);
+            (repo.id, repo.key)
+        });
+        for (id, key) in listed.chain(shared) {
+            if !repos.iter().any(|(other, _)| *other == id) {
+                repos.push((id, key));
+            }
+        }
+        for (_, key) in repos {
+            let detail = format!("{}/{}", key.owner, key.repo);
+            let at = Action::Picker(picker::Action::ShowIn(key.clone(), String::new()));
+            known.push((key.repo, detail.clone(), detail, at));
+        }
+        for (folder, state) in states {
             let (owner, repo) = (&state.owner, &state.repo);
-            let at = Action::Picker(picker::Action::ShowIn(state.key(), String::new()));
-            let detail = format!("{owner}/{repo}");
-            known.push((repo.clone(), detail.clone(), detail, at));
             for repo_path in state.files.keys() {
                 let path =
                     workcopy::working_path(root.unwrap_or(Path::new("")), &folder, repo_path);

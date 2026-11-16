@@ -243,12 +243,18 @@ impl App {
             #[cfg(target_os = "macos")]
             Message::MacFiles(_) => {}
             Message::Opened(file) => return Some(files::open_contents(file)),
-            // An old version from GitHub is saved as a copy.
-            #[cfg(not(target_arch = "wasm32"))]
-            Message::Save if self.github.old(self.tab.path.as_deref()).is_some() => {
-                return Some(self.github_action(super::github::Action::SaveCopy));
+            Message::Save => {
+                // The tab a close question named comes to the front first.
+                self.front_pending();
+                // An old version from GitHub is saved as a copy, and a close
+                // that asked waits for the user instead.
+                #[cfg(not(target_arch = "wasm32"))]
+                if self.github.old(self.tab.path.as_deref()).is_some() {
+                    self.pending = None;
+                    return Some(self.github_action(super::github::Action::SaveCopy));
+                }
+                return Some(self.save_drawing(None));
             }
-            Message::Save => return Some(self.save_drawing(None)),
             Message::SaveAs => return Some(self.save_as()),
             Message::SaveFormat(format) => return Some(self.save_drawing(Some(format))),
             Message::KeepFormat => return Some(self.keep_format()),

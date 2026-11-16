@@ -2745,3 +2745,130 @@ fn send_to_github_reads_a_branch_link_at_the_default_branch() {
     assert!(matches!(app.github.dialog, Some(Dialog::Picker(_))));
     assert!(app.github.after_save.is_none());
 }
+
+#[test]
+fn save_on_a_close_question_saves_the_tab_it_named() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = app_in(dir.path());
+    let path = workcopy::old_path(dir.path(), &repo().key, &sha('d'), "ring.rsk");
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(&path, drawing(30.)).unwrap();
+    app.add_tab();
+    app.show_opened(
+        Document::from_native_file(&drawing(30.)).unwrap(),
+        Some(path),
+    );
+    edit(&mut app);
+    let old = app.tab.id;
+    // Closing the old version asks; another tab comes to the front meanwhile.
+    app.pending = Some(crate::app::Pending::CloseTab(old));
+    app.select_tab(0);
+    assert_ne!(app.tab.id, old);
+    let _ = app.update(Message::Save);
+    assert_eq!(app.tab.id, old);
+    assert!(the_picker(&app).copy, "Save a copy, not a save in place");
+    assert!(app.pending.is_none());
+}
+
+#[test]
+fn access_given_later_reaches_the_open_picker() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = read_only_app(dir.path());
+    app.github.repos = vec![Repo {
+        push: false,
+        ..repo()
+    }];
+    github(&mut app, Action::Picker(picker::Action::Show(Mode::Open)));
+    github(
+        &mut app,
+        Action::Picker(picker::Action::PickRepo(repo().key)),
+    );
+    assert_eq!(the_picker(&app).repo.as_ref().map(|r| r.push), Some(false));
+    let now = app.github.generation;
+    github(&mut app, Action::Access(now, repo().key, Ok(repo())));
+    let picker = the_picker(&app);
+    assert_eq!(picker.repo.as_ref().map(|r| r.push), Some(true));
+    assert!(picker.repos.iter().flatten().all(|r| r.push));
+}
+
+#[test]
+fn later_tiles_never_end_the_wait_for_the_first_ones() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = app_in(dir.path());
+    picker_at(&mut app, Mode::Open, &[]);
+    let top = picker_lists(&mut app, &[], &["a.rsk", "b.rsk"]);
+    assert_eq!(the_picker(&app).waiting, 2);
+    // Dates of tiles scrolled into view later arrive first.
+    picker_changed(&mut app, top, "y.rsk", Some("2026-03-01T00:00:00Z"));
+    picker_changed(&mut app, top, "z.rsk", None);
+    assert_eq!(the_picker(&app).waiting, 2, "still waiting for a and b");
+    picker_changed(&mut app, top, "a.rsk", Some("2025-01-01T00:00:00Z"));
+    picker_changed(&mut app, top, "b.rsk", Some("2026-01-01T00:00:00Z"));
+    assert_eq!(the_picker(&app).waiting, 0);
+    assert_eq!(picker_names(&app), ["b.rsk", "a.rsk"]);
+}
+
+#[test]
+fn the_palette_lists_repositories_before_any_drawing_of_theirs_opens() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = app_in(dir.path());
+    app.github.prefs.share(&alice());
+    app.github.repos = vec![repo()];
+    let rows: Vec<String> = (app.github_palette().into_iter())
+        .map(|(name, ..)| name)
+        .filter(|name| name.starts_with(OPEN_FROM_ROW))
+        .collect();
+    assert!(rows.contains(&"Open from GitHub: ligands".to_owned()));
+    // One row per repository, though GitHub listed it and it is kept here.
+    let run_blocking_state = app.github.states[&repo().key].clone();
+    run_blocking(workcopy::persist(
+        dir.path(),
+        &repo().key,
+        run_blocking_state,
+        7,
+    ))
+    .unwrap();
+    let lab = (app.github_palette().into_iter())
+        .filter(|(name, ..)| name == "Open from GitHub: lab")
+        .count();
+    assert_eq!(lab, 1);
+}
+
+#[test]
+fn access_given_later_survives_a_late_download_and_a_new_listing() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = read_only_app(dir.path());
+    let before = Repo {
+        push: false,
+        ..repo()
+    };
+    app.github.repos = vec![before.clone()];
+    github(&mut app, Action::Picker(picker::Action::Show(Mode::Open)));
+    github(
+        &mut app,
+        Action::Picker(picker::Action::PickRepo(repo().key)),
+    );
+    picker_lists(&mut app, &[], &["late.rsk"]);
+    // A download asked for while the repository was read only.
+    github(&mut app, Action::Picker(picker::Action::Select(0)));
+    github(&mut app, Action::Picker(picker::Action::Open));
+    let request = app.github.seq;
+    // GitHub lists it again with access: the open repository follows.
+    let generation = app.github.generation;
+    let account = gh::Account {
+        login: "octo".into(),
+        repos: vec![repo()],
+    };
+    github(&mut app, Action::Listed(generation, Ok(account)));
+    assert_eq!(the_picker(&app).repo.as_ref().map(|r| r.push), Some(true));
+    assert!(!app.github.read_only(&repo().key));
+    // The download lands later, with the repository as it was asked for.
+    let download = api::Download {
+        commit: sha('c'),
+        blob: sha('e'),
+        bytes: drawing(20.),
+    };
+    let late = picker::Action::Downloaded(request, before, "late.rsk".into(), false, Ok(download));
+    github(&mut app, Action::Picker(late));
+    assert!(!app.github.read_only(&repo().key));
+}
