@@ -255,13 +255,14 @@ explains how the crates and modules fit together.
 - `src/github.rs`: Drawings kept in the user's GitHub repositories, through GitHub's REST API.
 - `src/github/api.rs`: GitHub's REST API, one function per call.
 - `src/github/auth.rs`: Sign-in with a device code, and token refresh.
-- `src/github/client.rs`: Signed-in requests to GitHub's API
+- `src/github/client.rs`: Requests to GitHub's API, signed in or, for public repositories, not
 - `src/github/config.rs`: Which GitHub App this build signs in to, and where GitHub is.
 - `src/github/credentials.rs`: The GitHub sign-in, kept in the operating system's credential store and nowhere else
 - `src/github/credentials/linux.rs`: An item in the Secret Service keyring (the portal's keyring in a sandbox).
 - `src/github/credentials/macos.rs`: A generic password in the login Keychain.
 - `src/github/credentials/memory.rs`: A sign-in that lasts until the app quits.
 - `src/github/credentials/windows.rs`: A generic credential in the user's Credential Manager.
+- `src/github/link.rs`: github.com links, typed, pasted or dropped
 - `src/github/mock.rs`: A small GitHub in this process, for tests and for showing the real app without the network.
 - `src/github/send.rs`: Send
 - `src/github/workcopy.rs`: The files of a repository on this computer
