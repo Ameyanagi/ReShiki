@@ -276,6 +276,29 @@ fn double_tool_cycles_only_line_position_and_preserves_chemistry() {
 }
 
 #[test]
+fn cleanup_with_only_a_caption_selected_changes_nothing() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let a = app.tab.doc.add_atom("C", Point::default());
+    let b = app.tab.doc.add_atom("O", Point::new(70., 12.));
+    app.tab.doc.add_bond(a, b, 1, "plain");
+    let caption = app.tab.doc.next_id();
+    app.tab.doc.annotations.push(Annotation {
+        id: caption,
+        position: Point::new(0., 60.),
+        text: "note".into(),
+        format: Default::default(),
+    });
+    app.tab.selected = vec![caption];
+    let before = app.tab.doc.clone();
+    let _ = app.update(Message::Cleanup(cleanup::Action::Begin));
+    assert!(!app.tab.busy, "No cleanup runs");
+    assert!(app.error);
+    assert_eq!(app.status, "Select atoms or a molecule to clean up");
+    assert_eq!(app.tab.doc, before);
+}
+
+#[test]
 fn stale_cleanup_results_never_apply() {
     let (mut app, _) = App::new();
     app.tab.busy = false;

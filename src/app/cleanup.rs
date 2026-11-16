@@ -67,8 +67,13 @@ impl App {
             .filter(|id| self.tab.doc.atom(*id).is_some())
             .collect();
         let mut options = self.cleanup_options;
-        if selection.is_empty() {
+        // Only an empty selection means the whole drawing.
+        if self.tab.selected.is_empty() {
             options.scope = Scope::Drawing;
+        } else if selection.is_empty() {
+            self.status = "Select atoms or a molecule to clean up".into();
+            self.error = true;
+            return Task::none();
         }
         self.tab.cleanup_serial = self.tab.cleanup_serial.wrapping_add(1);
         let job = CleanupJob {
