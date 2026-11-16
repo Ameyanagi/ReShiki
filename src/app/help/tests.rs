@@ -396,6 +396,21 @@ fn rows_that_name_a_palette_command_run_it() {
     assert!(!app.tab.selected.is_empty());
 }
 
+/// The palette has no catalog until it first opens; a command run from
+/// Help before then is still its most recent one.
+#[test]
+fn a_command_run_from_help_first_is_recent_in_the_palette() {
+    let (mut app, _) = App::new();
+    app.tab.doc = reshiki::rings::Preset::Benzene.document(42., false);
+    let _ = app.update(Message::ToggleHelp);
+    let index = entries().iter().position(|e| e.name == "Select all");
+    let _ = app.update(Message::Help(Action::Run(index.unwrap())));
+    assert!(!app.help_open);
+
+    let _ = app.update(Message::Commands(crate::app::command_palette::Action::Open));
+    assert_eq!(app.commands.ranked()[0].name, "Select all");
+}
+
 /// Help runs a command through the same gates as the palette: a caption
 /// being typed is applied first, and a command that cannot run keeps it.
 #[test]

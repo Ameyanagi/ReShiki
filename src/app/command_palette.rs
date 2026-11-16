@@ -663,7 +663,11 @@ impl App {
         }
         let state = &mut self.commands;
         state.open = false;
-        if state.catalog().iter().any(|c| c.name == command.name) {
+        // Help runs commands before the palette has built its catalog; only
+        // a query's own rows stay out of the recent list.
+        let named = |list: &[Command]| list.iter().any(|c| c.name == command.name);
+        let extra = state.items.get(state.catalog..).unwrap_or_default();
+        if named(state.catalog()) || !named(extra) {
             state.recent.retain(|name| *name != command.name);
             state.recent.insert(0, command.name.clone());
             state.recent.truncate(RECENT);
