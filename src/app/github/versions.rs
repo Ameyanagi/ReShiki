@@ -358,7 +358,7 @@ impl App {
                     return Task::none();
                 }
                 self.replace_with_stored((*doc).clone());
-                let save = crate::app::tagged(self.save_drawing(false), self.tab.id);
+                let save = crate::app::tagged(self.save_drawing(None), self.tab.id);
                 self.status = format!("Restored {label}");
                 self.error = false;
                 return save;

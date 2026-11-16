@@ -1,7 +1,7 @@
 //! Questions the app asks in its own dialog: whether to save a drawing before
-//! closing it, and notices to acknowledge. The desktop asks with the system's
-//! dialogs; the browser's confirm() has only OK and Cancel, so the browser
-//! build asks here instead.
+//! closing it, which format to save in, and notices to acknowledge. The
+//! desktop asks about unsaved changes with the system's dialogs; the browser's
+//! confirm() has only OK and Cancel, so the browser build asks here instead.
 use super::{
     App, Message,
     help::{Placement, modal},
@@ -27,6 +27,11 @@ pub(super) enum Prompt {
         name: String,
         action: Download,
     },
+    /// The first Save of a ChemDraw or MOL file: keep this format, or save
+    /// as a ReShiki drawing.
+    KeepFormat(&'static str),
+    /// The formats Save as offers.
+    SaveAs,
     /// A notice with one OK button, which sends `then`.
     Notice {
         title: String,
@@ -52,6 +57,8 @@ pub enum Answer {
     DontSave,
     /// Cancel; Escape or a click outside the dialog. A notice takes it as OK.
     Cancel,
+    /// A row of the Save as list.
+    Format(&'static str),
 }
 
 impl Prompt {
@@ -61,7 +68,17 @@ impl Prompt {
             Self::Save(_) => match answer {
                 Answer::Save => Message::Save,
                 Answer::DontSave => Message::Discard,
-                Answer::Cancel => Message::Cancel,
+                Answer::Cancel | Answer::Format(_) => Message::Cancel,
+            },
+            Self::KeepFormat(_) => match answer {
+                Answer::Save => Message::SaveFormat(reshiki::compatibility::NATIVE_EXTENSION),
+                Answer::DontSave => Message::KeepFormat,
+                _ => Message::Cancel,
+            },
+            Self::SaveAs => match answer {
+                Answer::Save => Message::SaveFormat(reshiki::compatibility::NATIVE_EXTENSION),
+                Answer::Format(format) => Message::SaveFormat(format),
+                _ => Message::Cancel,
             },
             Self::Notice { then, .. } => *then,
             Self::Download { name, action } => {
@@ -108,8 +125,8 @@ impl App {
             // Keep the workspace at the same child position, as Help does.
             return stack![base].into();
         };
-        let button = |id, label: &'static str, answer, primary| {
-            reshiki::accessibility::button(id, label, text(label).size(13))
+        let button = |id: &str, label: &str, answer, primary| {
+            reshiki::accessibility::button(id.to_owned(), label, text(label.to_owned()).size(13))
                 .padding([7, 14])
                 .on_press(Message::Prompt(answer))
                 .style(control(primary))
@@ -139,6 +156,34 @@ impl App {
                     button("prompt-save", "Save", Answer::Save, true),
                 ],
             ),
+            Prompt::KeepFormat(format) => (
+                format!(
+                    "Save {}",
+                    std::path::Path::new(&self.document_name())
+                        .file_stem()
+                        .unwrap_or_default()
+                        .to_string_lossy()
+                ),
+                super::files::format_keeps(format).to_owned(),
+                row![
+                    Space::new().width(Length::Fill),
+                    button(
+                        "prompt-keep-format",
+                        &format!("Keep as {}", format.to_uppercase()),
+                        Answer::DontSave,
+                        false
+                    ),
+                    button("prompt-save", "Save as ReShiki", Answer::Save, true),
+                ],
+            ),
+            Prompt::SaveAs => (
+                "Save as".to_owned(),
+                "ChemDraw keeps most of the drawing. MOL keeps the structure only.".to_owned(),
+                row![
+                    Space::new().width(Length::Fill),
+                    button("prompt-cancel", "Cancel", Answer::Cancel, false),
+                ],
+            ),
             Prompt::Notice { title, text, .. } => (
                 title.clone(),
                 text.clone(),
@@ -160,17 +205,32 @@ impl App {
                     .on_input(Message::DownloadName)
                     .on_submit(Message::Prompt(Answer::Save)),
             )
+        } else if matches!(prompt, Prompt::SaveAs) {
+            super::files::SAVE_FORMATS.iter().enumerate().fold(
+                content,
+                |content, (index, (format, name))| {
+                    content.push(
+                        button(
+                            &format!("prompt-format-{format}"),
+                            name,
+                            Answer::Format(format),
+                            index == 0,
+                        )
+                        .width(Length::Fill),
+                    )
+                },
+            )
         } else {
             content
         };
         let content = content
             .push(Space::new().height(Length::Fill))
             .push(buttons.spacing(8).align_y(Alignment::Center));
-        let height = 180.;
-        let height = if matches!(prompt, Prompt::Download { .. }) {
-            225.
-        } else {
-            height
+        let height = match prompt {
+            Prompt::Download { .. } => 225.,
+            Prompt::KeepFormat(_) => 150.,
+            Prompt::SaveAs => 330.,
+            _ => 180.,
         };
         modal(
             base,

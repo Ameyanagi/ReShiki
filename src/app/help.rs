@@ -1,8 +1,9 @@
 //! Help: a searchable reference of every shortcut, with a live before/after
-//! drawing for contextual keys. Selecting a row only shows it; it never runs
-//! the command.
+//! drawing for contextual keys. Selecting a row only shows it; Enter or Run
+//! runs a row that names a command palette command, through the palette.
 use super::{
     App, Message,
+    command_palette::catalog::{Command, Run},
     workspace::{control, muted_text},
 };
 use iced::keyboard::{Key, Modifiers, key::Named};
@@ -57,8 +58,11 @@ pub enum Action {
     Query(String),
     /// Move the selection by this many rows, stopping at either end.
     Move(isize),
-    /// Select a registry entry; it is only shown, never run.
+    /// Select a registry entry; it is only shown.
     Select(usize),
+    /// Run a registry entry's palette command and close Help; an entry
+    /// without one, or a command that cannot run now, does nothing.
+    Run(usize),
 }
 
 #[derive(Debug, Default)]
@@ -66,6 +70,9 @@ pub(super) struct State {
     pub(super) query: String,
     /// A registry index; None selects the best match.
     selected: Option<usize>,
+    /// The palette command each runnable registry entry names, found when
+    /// Help opens.
+    commands: Vec<(usize, Command)>,
 }
 
 impl State {
@@ -81,6 +88,12 @@ impl State {
     /// The selected registry index.
     fn current(&self, results: &[usize]) -> Option<usize> {
         self.position(results).and_then(|p| results.get(p).copied())
+    }
+    /// The palette command registry entry `index` names, if any.
+    pub(super) fn command(&self, index: usize) -> Option<&Command> {
+        (self.commands.iter())
+            .find(|(entry, _)| *entry == index)
+            .map(|(_, command)| command)
     }
     #[cfg(test)]
     pub(super) fn selected(&self, contextual: bool) -> Option<&'static Entry> {
@@ -102,7 +115,24 @@ impl App {
         }
         self.palette = None;
         self.commands.open = false;
-        self.help = State::default();
+        // A row runs the palette command of the same name; templates are
+        // not commands Help describes.
+        let catalog = super::command_palette::catalog::build(self);
+        let commands = (entries().iter().enumerate())
+            .filter_map(|(index, entry)| {
+                catalog
+                    .iter()
+                    .find(|command| {
+                        !matches!(command.run, Run::Template(..))
+                            && command.name.eq_ignore_ascii_case(entry.name)
+                    })
+                    .map(|command| (index, command.clone()))
+            })
+            .collect();
+        self.help = State {
+            commands,
+            ..State::default()
+        };
         iced::widget::operation::focus(SEARCH)
     }
 
@@ -123,7 +153,17 @@ impl App {
                 if index < entries().len() {
                     self.help.selected = Some(index);
                 }
-                Task::none()
+                // A clicked row takes focus; typing and Enter stay in the search.
+                iced::widget::operation::focus(SEARCH)
+            }
+            Action::Run(index) => {
+                // The update gates refuse a command that cannot run now,
+                // before they commit a caption draft, as for the palette.
+                let Some(command) = self.help.command(index).cloned() else {
+                    return Task::none();
+                };
+                self.help_open = false;
+                self.run_command(command)
             }
             Action::Move(step) => {
                 let results = self.help.results(self.help_contextual());
@@ -153,14 +193,22 @@ impl App {
         let results = self.help.results(self.help_contextual());
         let current = self.help.current(&results);
         let selected = current.and_then(|i| entries().get(i));
+        // The selected row's command, and why it cannot run now.
+        let command = current.and_then(|i| self.help.command(i));
+        let unavailable = command.and_then(|command| self.command_unavailable(command));
         let name = match selected {
             Some(entry) => format!(
-                "Search shortcuts; {} results; selected {}, {}, {}: {}",
+                "Search shortcuts; {} results; selected {}, {}, {}: {}{}",
                 results.len(),
                 entry.name,
                 entry.keys,
                 entry.scope.label(),
-                entry.description
+                entry.description,
+                match (command, unavailable) {
+                    (None, _) => String::new(),
+                    (Some(_), None) => "; Enter runs it".into(),
+                    (Some(_), Some(reason)) => format!("; cannot run now: {reason}"),
+                }
             ),
             None => "Search shortcuts; no results".into(),
         };
@@ -172,7 +220,11 @@ impl App {
         )
         .style(crate::appearance::input_style)
         .on_input(|query| Message::Help(Action::Query(query)))
-        .on_submit_maybe(current.map(|i| Message::Help(Action::Select(i))))
+        .on_submit_maybe(
+            current
+                .filter(|_| command.is_some())
+                .map(|i| Message::Help(Action::Run(i))),
+        )
         .size(14)
         .padding(8);
         let mut list = column![].spacing(2);
@@ -183,9 +235,35 @@ impl App {
                     entry,
                     Some(index) == current,
                     self.help_contextual(),
+                    self.help.command(index).is_some(),
                 ));
             }
         }
+        // The selected row's command runs from the preview too, or says why
+        // it cannot.
+        let run = current.filter(|_| command.is_some()).map(|index| {
+            // One identity per row, so a press or a queued native activation
+            // never runs a row selected after it started.
+            let button = reshiki::accessibility::button(
+                format!("help-run-{index}"),
+                format!("Run {}", selected.map_or("", |entry| entry.name)),
+                row![text("Run").size(13), enter_chord()]
+                    .spacing(8)
+                    .align_y(Alignment::Center),
+            )
+            .padding([5, 12])
+            .style(control(true))
+            .on_press_maybe(
+                unavailable
+                    .is_none()
+                    .then_some(Message::Help(Action::Run(index))),
+            );
+            let mut run = column![button].spacing(4);
+            if let Some(reason) = unavailable {
+                run = run.push(text(reason).size(11).style(muted_text));
+            }
+            Element::from(run)
+        });
         if results.is_empty() {
             list = list.push(
                 text("No shortcut matches. Try a key such as r, a command such as copy, or a group such as Boc.")
@@ -222,12 +300,12 @@ impl App {
                         .id(RESULTS)
                         .width(Length::Fill)
                         .height(Length::Fill),
-                    preview(selected),
+                    preview(selected, run),
                 ]
                 .spacing(16)
                 .height(Length::Fill),
                 row![
-                    text("↑ ↓ move · Esc closes · Uppercase means Shift-letter · Reference only: nothing runs")
+                    text("↑ ↓ move · ↩ runs rows marked Run · Esc closes · Uppercase means Shift-letter")
                         .size(12)
                         .style(muted_text)
                         .width(Length::Fill),
@@ -370,60 +448,73 @@ pub(super) fn chord(keys: &str, size: u32) -> Element<'static, Message> {
         .into()
 }
 
+/// The Return key as menus show it, in a key cap.
+fn enter_chord() -> Element<'static, Message> {
+    chord(
+        &super::shortcuts::keys(iced::keyboard::Modifiers::empty(), "Enter"),
+        11,
+    )
+}
+
+/// One result row: chord, name and description, scope, and Run ↩ when Enter
+/// runs it.
 fn result_row(
     index: usize,
     entry: &'static Entry,
     selected: bool,
     contextual: bool,
+    runs: bool,
 ) -> Element<'static, Message> {
     let name = if contextual && !entry.classic_keys.is_empty() {
         format!("{} · {}: F8 off", entry.name, entry.classic_keys.join("/"))
     } else {
         entry.name.into()
     };
-    list_row(
-        format!("help-row-{index}"),
-        &entry.keys,
-        name,
-        entry.description.into(),
-        entry.scope.label(),
-        selected,
-        Message::Help(Action::Select(index)),
-    )
-}
-
-/// One result row: chord, name and description, and scope.
-fn list_row(
-    id: String,
-    keys: &str,
-    name: String,
-    description: String,
-    scope: &str,
-    selected: bool,
-    on_press: Message,
-) -> Element<'static, Message> {
-    let label = name.clone();
+    let label = if runs {
+        format!("{name}, runs with Enter")
+    } else {
+        name.clone()
+    };
+    let run: Element<'static, Message> = if runs {
+        row![text("Run").size(11).style(muted_text), enter_chord()]
+            .spacing(4)
+            .align_y(Alignment::Center)
+            .into()
+    } else {
+        Space::new().into()
+    };
     let body = container(
         row![
-            container(if keys.is_empty() {
+            container(if entry.keys.is_empty() {
                 Space::new().into()
             } else {
-                chord(keys, 11)
+                chord(&entry.keys, 11)
             })
             .width(150),
             column![
                 text(name).size(13),
-                text(description).size(11).style(muted_text),
+                text(entry.description).size(11).style(muted_text),
             ]
             .spacing(2)
             .width(Length::Fill),
-            text(scope.to_owned()).size(11).style(muted_text).width(96),
+            text(entry.scope.label())
+                .size(11)
+                .style(muted_text)
+                .width(96),
+            container(run).width(64),
         ]
         .spacing(10)
         .align_y(Alignment::Center),
     )
     .padding([6, 8]);
-    row_button(id, label, body, selected, on_press).into()
+    row_button(
+        format!("help-row-{index}"),
+        label,
+        body,
+        selected,
+        Message::Help(Action::Select(index)),
+    )
+    .into()
 }
 
 /// A result row's selection highlight and named button, shared with the
@@ -473,7 +564,10 @@ fn drawing(label: &'static str, doc: reshiki::document::Document) -> Element<'st
     .into()
 }
 
-fn preview(entry: Option<&'static Entry>) -> Element<'static, Message> {
+fn preview<'a>(
+    entry: Option<&'static Entry>,
+    run: Option<Element<'a, Message>>,
+) -> Element<'a, Message> {
     let mut pane = column![].spacing(10).width(300);
     if let Some(entry) = entry {
         pane = pane.push(
@@ -487,6 +581,7 @@ fn preview(entry: Option<&'static Entry>) -> Element<'static, Message> {
             ]
             .spacing(6),
         );
+        pane = pane.extend(run);
         pane = pane.push(match entry.example {
             Some(example) => match examples::render(example) {
                 Ok((before, after)) => {

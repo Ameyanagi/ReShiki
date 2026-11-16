@@ -836,6 +836,8 @@ fn completion(message: &Message) -> Option<Completion> {
         | Message::ApplyElement
         | Message::InsertTemplate(..)
         | Message::SaveAs
+        | Message::SaveFormat(..)
+        | Message::KeepFormat
         | Message::Tick
         | Message::Restore
         | Message::DismissRecovery

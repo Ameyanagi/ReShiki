@@ -1024,7 +1024,7 @@ impl App {
             }
             let save = self.in_tab(id, |app| {
                 if app.finish_inline(true) {
-                    app.save_drawing(false)
+                    app.save_drawing(None)
                 } else {
                     Task::none()
                 }

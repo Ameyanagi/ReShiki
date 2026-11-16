@@ -355,3 +355,58 @@ async fn escape_closes_an_open_pick_list() {
     let (_, closed) = send(&[redraw()], pointer);
     assert_eq!([batch, closed].concat(), [Msg::Close]);
 }
+
+/// Han forms follow the first preferred language that names a CJK language,
+/// script or region; macOS lists an English interface in Japan as "en-JP".
+#[test]
+fn han_locale_follows_the_first_cjk_preferred_language_or_region() {
+    for (preferred, locale) in [
+        (&["en-JP", "ja-JP"][..], Some("ja")),
+        (&["ja-JP"], Some("ja")),
+        (&["en-US", "ja-JP"], Some("ja")),
+        (&["en-US"], None),
+        (&["zh-Hans-CN", "ja-JP"], Some("zh-CN")),
+        (&["zh-Hant-TW"], Some("zh-TW")),
+        (&["zh-Hant-HK"], Some("zh-HK")),
+        (&["ko-KR"], Some("ko")),
+        (&["ko-JP"], Some("ko")),
+        (&["zh-Hans-HK"], Some("zh-CN")),
+        (&["en-CN", "ja-JP"], Some("zh-CN")),
+        (&["yue-Hant"], Some("zh-TW")),
+        (&["zh-JP"], Some("zh-CN")),
+    ] {
+        assert_eq!(han_locale(preferred), locale, "{preferred:?}");
+    }
+}
+
+/// Han-only interface text, such as a file name, falls back from the Latin
+/// interface font by locale; only the exact locale "ja" gets Japanese forms.
+#[cfg(target_os = "macos")]
+#[test]
+fn japanese_han_locale_sets_han_only_interface_text_in_japanese_forms() {
+    use iced::advanced::graphics::text::{
+        cosmic_text::{Attrs, Buffer, Family, FontSystem, Metrics, Shaping},
+        font_system,
+    };
+    let db = (font_system().write().unwrap().raw().db()).clone();
+    let family = reshiki::style::ui_font_family();
+    let face = |locale: &str| {
+        let mut fonts = FontSystem::new_with_locale_and_db(locale.into(), db.clone());
+        let mut buffer = Buffer::new(&mut fonts, Metrics::new(14., 18.));
+        let attrs = Attrs::new().family(Family::Name(family));
+        buffer.set_text(&mut fonts, "化学", &attrs, Shaping::Advanced, None);
+        buffer.shape_until_scroll(&mut fonts, false);
+        let id = buffer.layout_runs().next().unwrap().glyphs[0].font_id;
+        (fonts.db().face(id).unwrap().families.iter())
+            .map(|(name, _)| name.clone())
+            .collect::<Vec<_>>()
+    };
+    let japanese = "Hiragino Sans".to_owned();
+    assert_eq!(family, "Helvetica Neue");
+    // Without the locale fix: cosmic-text 0.15 matches only "ja".
+    for system in ["en-JP", "ja-JP"] {
+        assert!(!face(system).contains(&japanese), "{system}");
+    }
+    let locale = han_locale(["en-JP", "ja-JP"]).unwrap();
+    assert!(face(locale).contains(&japanese), "{:?}", face(locale));
+}

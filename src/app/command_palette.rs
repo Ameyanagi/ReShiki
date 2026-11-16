@@ -24,6 +24,19 @@ const RECENT: usize = 8;
 const PAGE: isize = 10;
 const ROW_HEIGHT: f32 = 28.;
 const ROW_SPACING: f32 = 2.;
+const HEADING_HEIGHT: f32 = 20.;
+/// What an empty palette offers before any command has run: getting a
+/// structure in, checking it and getting it out.
+pub(super) const START_HERE: [&str; 8] = [
+    "Import structure or name",
+    "Benzene",
+    "Open…",
+    "Clean up…",
+    "Molecular formula and properties",
+    "Predict NMR",
+    "Export panel",
+    "Help & shortcuts",
+];
 /// A whole word of a command's name scores 60; weaker best matches also
 /// offer to insert the query as a chemical name or SMILES.
 const STRONG: u32 = 60;
@@ -65,6 +78,8 @@ pub(super) struct State {
     viewport_height: f32,
     /// Names of recently run commands, newest first.
     recent: Vec<String>,
+    /// How many leading hits are the Start here group.
+    start_here: usize,
 }
 
 impl State {
@@ -108,6 +123,26 @@ impl State {
     }
     fn query(&self) -> &str {
         self.query.trim().trim_start_matches(':').trim()
+    }
+    /// The rows under the Start here heading; a category chip hides the
+    /// headings.
+    fn start_here(&self) -> usize {
+        if self.filter.is_none() {
+            self.start_here
+        } else {
+            0
+        }
+    }
+    /// Where a row starts in the list, below the headings before it. The
+    /// first row under a heading counts from the heading, to reveal both.
+    fn row_top(&self, position: usize) -> f32 {
+        let start = self.start_here();
+        let headings = match start {
+            0 => 0,
+            _ => usize::from(position > 0) + usize::from(position > start),
+        };
+        position as f32 * (ROW_HEIGHT + ROW_SPACING)
+            + headings as f32 * (HEADING_HEIGHT + ROW_SPACING)
     }
     /// Categories with hits and their counts, in catalog order.
     fn categories(&self) -> Vec<(Category, usize)> {
@@ -272,14 +307,21 @@ impl App {
         self.need_unavailable(command.need, &self.command_target())
     }
 
-    /// Refuse before the modal gates commit or cancel a live editing draft.
-    pub(super) fn command_action_unavailable(&self, action: &Action) -> bool {
-        let command = match action {
-            Action::Run(index) => self.commands.items.get(*index),
-            Action::Submit => self.commands.current(),
+    /// Whether this message runs a palette command, from the palette or
+    /// from Help, that cannot run now. The update gates refuse it before
+    /// they commit or cancel a live editing draft.
+    pub(super) fn runs_unavailable_command(&self, message: &Message) -> bool {
+        let command = match message {
+            Message::Commands(Action::Run(index)) if self.commands.open => {
+                self.commands.items.get(*index)
+            }
+            Message::Commands(Action::Submit) if self.commands.open => self.commands.current(),
+            Message::Help(super::help::Action::Run(index)) if self.help_open => {
+                self.help.command(*index)
+            }
             _ => None,
         };
-        self.commands.open && command.is_some_and(|c| self.command_unavailable(c).is_some())
+        command.is_some_and(|c| self.command_unavailable(c).is_some())
     }
 
     fn need_unavailable(&self, need: Need, target: &Target) -> Option<&'static str> {
@@ -380,8 +422,7 @@ impl App {
                 if state.viewport_height == 0. {
                     return Task::none();
                 }
-                let offset =
-                    row_scroll_offset(state.selected, state.scroll_offset, state.viewport_height);
+                let offset = row_scroll_offset(state);
                 if offset == state.scroll_offset {
                     return Task::none();
                 }
@@ -459,14 +500,19 @@ impl App {
         state.items.truncate(state.catalog);
         let catalog = &state.items;
         // (score, index, tier): an exact alias or recent command, then name or
-        // key matches, then the rest.
+        // key matches, then the rest. With no recent commands yet, Start here
+        // takes their place.
+        let lead: Vec<&str> = match state.recent.as_slice() {
+            [] => START_HERE.to_vec(),
+            recent => recent.iter().map(String::as_str).collect(),
+        };
         let mut scored: Vec<(u32, usize, u8)> = if query.is_empty() {
             catalog
                 .iter()
                 .zip(&blocked)
                 .enumerate()
                 .map(|(i, (command, blocked))| {
-                    let recent = state.recent.iter().position(|name| *name == command.name);
+                    let recent = lead.iter().position(|name| *name == command.name);
                     match recent {
                         Some(age) => {
                             let score = if *blocked { 500 } else { 1000 };
@@ -535,6 +581,11 @@ impl App {
             .iter()
             .filter(|(_, i, tier)| !late(*i, *tier))
             .count();
+        state.start_here = if query.is_empty() && state.recent.is_empty() {
+            scored.iter().filter(|(.., tier)| *tier == 2).count()
+        } else {
+            0
+        };
         state.hits = scored.into_iter().map(|(_, i, _)| i).collect();
         // A command word with a value is what was meant, not a name.
         let named = extra.is_none();
@@ -607,7 +658,7 @@ impl App {
         state.set_filter(filter);
     }
 
-    fn run_command(&mut self, command: Command) -> Task<Message> {
+    pub(super) fn run_command(&mut self, command: Command) -> Task<Message> {
         if let Some(reason) = self.command_unavailable(&command) {
             self.status = reason.into();
             self.error = true;
@@ -615,7 +666,11 @@ impl App {
         }
         let state = &mut self.commands;
         state.open = false;
-        if state.catalog().iter().any(|c| c.name == command.name) {
+        // Help runs commands before the palette has built its catalog; only
+        // a query's own rows stay out of the recent list.
+        let named = |list: &[Command]| list.iter().any(|c| c.name == command.name);
+        let extra = state.items.get(state.catalog..).unwrap_or_default();
+        if named(state.catalog()) || !named(extra) {
             state.recent.retain(|name| *name != command.name);
             state.recent.insert(0, command.name.clone());
             state.recent.truncate(RECENT);
@@ -849,10 +904,26 @@ impl App {
         .padding(8);
         let query = state.query();
         let mut list = column![].spacing(ROW_SPACING);
+        let start_here = state.start_here();
         for (position, &index) in state.results.iter().enumerate() {
             let Some(command) = state.items.get(index) else {
                 continue;
             };
+            if start_here > 0 && (position == 0 || position == start_here) {
+                list = list.push(
+                    container(
+                        text(if position == 0 {
+                            "Start here"
+                        } else {
+                            "More commands"
+                        })
+                        .size(11)
+                        .style(muted_text),
+                    )
+                    .padding([0, 8])
+                    .align_bottom(HEADING_HEIGHT),
+                );
+            }
             // A stable identity, so a queued assistive press never lands on
             // a different command after the results change: the catalog
             // index, or a hash of the title of a row the query created
@@ -962,9 +1033,10 @@ impl App {
 }
 
 /// Move only far enough to reveal the highlighted row in full.
-fn row_scroll_offset(index: usize, offset: f32, viewport: f32) -> f32 {
-    let top = index as f32 * (ROW_HEIGHT + ROW_SPACING);
-    let bottom = top + ROW_HEIGHT;
+fn row_scroll_offset(state: &State) -> f32 {
+    let (offset, viewport) = (state.scroll_offset, state.viewport_height);
+    let top = state.row_top(state.selected);
+    let bottom = state.row_top(state.selected + 1) - ROW_SPACING;
     if top < offset {
         top
     } else if bottom > offset + viewport {
