@@ -1357,6 +1357,8 @@ impl App {
                     }
                 }
                 picker.file_menu = path;
+                // The file selected shows its preview.
+                return self.picker_load();
             }
             Action::Insert => return self.picker_insert(),
             Action::Fetched(tab, path, result) => {

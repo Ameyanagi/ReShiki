@@ -499,9 +499,14 @@ fn signed_in_the_tree_asks_only_about_the_rows_on_screen() {
     let _ = picker(&mut app, picker::Action::Row("hits".into()));
     let asked = the_picker(&app).asked.len();
     assert!(asked > 0 && asked < 25, "{asked}");
-    // The selected file's preview is asked for.
+    // The selected file's preview is asked for, right-clicked too.
     let _ = picker(&mut app, picker::Action::Row("hits/hit-000.mol".into()));
-    assert!(!the_picker(&app).thumbs.is_empty());
+    assert_eq!(the_picker(&app).thumbs.len(), 1);
+    let _ = picker(
+        &mut app,
+        picker::Action::FileMenu(Some("hits/hit-001.mol".into())),
+    );
+    assert_eq!(the_picker(&app).thumbs.len(), 2);
     // Scrolled down, the rows now on screen.
     let _ = picker(&mut app, picker::Action::TreeScrolled(28. * 80., 400.));
     assert!(the_picker(&app).asked.contains("hits/hit-085.mol"));
