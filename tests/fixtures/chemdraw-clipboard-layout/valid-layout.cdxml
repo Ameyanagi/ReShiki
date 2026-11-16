@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CDXML BondLength="14.4" LabelFont="101" LabelSize="10" CaptionFont="101" CaptionSize="10">
+  <fonttable>
+    <font id="101" charset="iso-8859-1" name="Arial" />
+  </fonttable>
+  <page id="10">
+    <fragment id="20">
+      <n id="1" p="10 12" />
+      <n id="2" p="21 15" />
+      <n id="3" p="38 20" Element="8" />
+      <b id="4" B="1" E="2" />
+      <b id="5" B="2" E="3" />
+    </fragment>
+    <fragment id="30">
+      <n id="11" p="113 47" />
+      <n id="12" p="119 63" />
+      <n id="13" p="143 51" Element="7" />
+      <b id="14" B="11" E="12" />
+      <b id="15" B="12" E="13" />
+    </fragment>
+    <arrow id="40" Tail3D="55 22 0" Head3D="94 27 0" ArrowheadHead="Full" ArrowheadType="Solid" />
+    <t id="41" p="62 9">
+      <s font="101" size="10">NaOH</s>
+    </t>
+    <t id="42" p="68 42">
+      <s font="101" size="10">rt, 5 h</s>
+    </t>
+    <graphic id="43" BoundingBox="49 20 46 17" GraphicType="Symbol" SymbolType="Plus" />
+    <graphic id="44" BoundingBox="18 40 11 35" GraphicType="Rectangle" />
+  </page>
+</CDXML>

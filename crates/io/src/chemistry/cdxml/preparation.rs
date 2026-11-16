@@ -422,10 +422,19 @@ fn prepare(text: &str, check_chemistry: bool) -> Result<PreparedCdxml> {
     let molecular_root = at(Validation, source.node(0))?.tag == "CDXML";
     let mut flattened = at(Expansion, super::abbreviations::flatten_tree(source))?;
     flattened.xml = at(Normalization, super::pages::arrange(&flattened.xml))?;
-    let chemical = at(
-        Normalization,
-        super::normalize::normalize_tree(at(Normalization, Tree::parse_import(&flattened.xml))?),
-    )?;
+    let mut chemical = at(Normalization, Tree::parse_import(&flattened.xml))?;
+    if molecular_root
+        && at(Normalization, chemical.node(0))?
+            .attr("BondLength")
+            .is_none()
+    {
+        // Drawing presentation defaults an omitted BondLength to 30pt. The
+        // low-level native reader defaults to zero (raw integer coordinates),
+        // so resolve the drawing default in this chemical copy only. Keeping
+        // the source XML untouched preserves scene geometry and source IDs.
+        at(Normalization, chemical.node_mut(0))?.set("BondLength", "30".into());
+    }
+    let chemical = at(Normalization, super::normalize::normalize_tree(chemical))?;
     // The native ChemDraw reader recognizes a CDXML root only. Other permitted
     // roots can contain supported captions/graphics; read_bonds still rejects
     // any molecular fragment the native parser did not read.

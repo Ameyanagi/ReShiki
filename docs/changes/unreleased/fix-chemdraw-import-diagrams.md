@@ -21,3 +21,9 @@ issues: []
 - ChemDraw stationery files (`.cds`) containing artwork can be opened as
   drawings. Importing a stationery file as a drawing style remains a separate
   operation. See the [corpus and repair record](changes/chemdraw-import-corpus-2026-11-17.md).
+- Pasting a ChemDraw drawing preserves its authored arrangement. A failed
+  editable copy no longer silently falls back to SMILES and redraws it. Opening,
+  copying, exporting, recalculating properties and background label updates also
+  preserve linked arrows and captions. Explicit Clean Up and actual edits retain
+  their existing linked-object behavior. Drawings without an explicit bond
+  length use ChemDraw's default consistently during import.

@@ -686,3 +686,175 @@ fn annotation_text_is_capped_per_text_box_and_per_drawing() {
         "A drawing can hold at most 1 MB of text"
     );
 }
+
+fn passive_fixture() -> Document {
+    let doc: Document = serde_json::from_slice(include_bytes!(
+        "../../../../tests/fixtures/passive-drawing-geometry/unsettled-native.rsk"
+    ))
+    .unwrap();
+    doc.validate().unwrap();
+    doc
+}
+
+#[test]
+fn passive_native_open_preserves_authored_geometry_and_links() {
+    let source = passive_fixture();
+    let bytes = source.file_json().unwrap();
+    let opened = Document::from_json(&bytes).unwrap();
+    assert_eq!(opened, source.current());
+    let reopened = Document::from_native_file(&bytes).unwrap();
+    assert_eq!(reopened.arrows, source.arrows);
+    assert_eq!(reopened.annotations, source.annotations);
+    assert_eq!(reopened.graphics, source.graphics);
+    assert_eq!(reopened.arrow_labels, source.arrow_labels);
+    assert_eq!(reopened.property_captions, source.property_captions);
+    assert_eq!(reopened.molecule_names, source.molecule_names);
+    assert_eq!(reopened.file_json().unwrap(), bytes);
+}
+
+#[test]
+fn passive_label_cache_updates_do_not_repair_anchors_or_conditions() {
+    let source = passive_fixture();
+    let mut snapshot = source.clone();
+    snapshot.atoms[0].cip_label = Some("R".into());
+    crate::atom_labels::clear_computed(&mut snapshot);
+    assert!(snapshot.atoms.iter().all(|a| a.cip_label.is_none()));
+    assert_eq!(snapshot.arrows, source.arrows);
+    assert_eq!(snapshot.annotations, source.annotations);
+    crate::atom_labels::refresh_computed(&mut snapshot, &source);
+    assert_eq!(snapshot, source);
+}
+
+#[test]
+fn passive_partial_selection_preserves_points_and_detaches_missing_targets() {
+    let source = passive_fixture();
+    let part = crate::editing::selection(&source, &[1, 2, 10, 11, 12, 30]);
+    part.validate().unwrap();
+    assert_eq!(part.atoms.len(), 2);
+    assert_eq!(part.arrows, source.arrows);
+    assert_eq!(part.annotations, source.annotations);
+    assert_eq!(part.graphics, source.graphics);
+    assert_eq!(part.molecule_names, source.molecule_names);
+    assert_eq!(part.property_captions, source.property_captions);
+    let detached = crate::editing::selection(&source, &[10]);
+    let mut expected = source.arrows[0].clone();
+    expected.start_anchor = None;
+    assert_eq!(detached.arrows, [expected]);
+    detached.validate().unwrap();
+}
+
+#[test]
+fn passive_append_translates_once_and_keeps_ordinary_stereo_and_display_remapping() {
+    use crate::stereo_groups::{Kind, StereoGroup};
+    let mut source = passive_fixture();
+    source.atoms[0].stereo_group = Some(StereoGroup {
+        kind: Kind::And,
+        number: 1,
+    });
+    source.atom_labels.carbons = crate::atom_labels::Carbons::All;
+    let mut destination = passive_fixture();
+    destination.atoms[0].stereo_group = Some(StereoGroup {
+        kind: Kind::And,
+        number: 1,
+    });
+    let before = destination.clone();
+    let offset = Point::new(729.25, -391.5);
+    let ids = crate::editing::append_preserving_layout(&mut destination, &source, offset);
+    assert_eq!(ids.len(), source.all_ids().len());
+    destination.validate().unwrap();
+    assert_eq!(&destination.arrows[..before.arrows.len()], &before.arrows);
+    assert_eq!(
+        &destination.annotations[..before.annotations.len()],
+        &before.annotations
+    );
+    for (actual, expected) in destination.atoms[before.atoms.len()..]
+        .iter()
+        .zip(&source.atoms)
+    {
+        assert_eq!(
+            actual.position,
+            expected.position.offset(offset.x, offset.y)
+        );
+        assert_eq!(actual.display.carbons, Some(source.atom_labels.carbons));
+    }
+    assert_eq!(
+        destination.atoms[before.atoms.len()]
+            .stereo_group
+            .unwrap()
+            .number,
+        2
+    );
+    for (actual, expected) in destination.arrows[before.arrows.len()..]
+        .iter()
+        .zip(&source.arrows)
+    {
+        assert_eq!(actual.start, expected.start.offset(offset.x, offset.y));
+        assert_eq!(actual.end, expected.end.offset(offset.x, offset.y));
+        assert_eq!(
+            actual.control,
+            expected.control.map(|p| p.offset(offset.x, offset.y))
+        );
+        assert_eq!(
+            actual.cubic,
+            expected
+                .cubic
+                .map(|v| v.map(|p| p.offset(offset.x, offset.y)))
+        );
+        if let Some(anchor) = &expected.start_anchor {
+            assert_eq!(actual.start_anchor.as_ref().unwrap().offset, anchor.offset);
+        }
+    }
+    for (actual, expected) in destination.annotations[before.annotations.len()..]
+        .iter()
+        .zip(&source.annotations)
+    {
+        assert_eq!(
+            actual.position,
+            expected.position.offset(offset.x, offset.y)
+        );
+    }
+    let graphic = destination.graphics.last().unwrap();
+    assert_eq!(
+        graphic.origin,
+        source.graphics[0].origin.offset(offset.x, offset.y)
+    );
+    assert_eq!(graphic.axis_x, source.graphics[0].axis_x);
+    assert_eq!(graphic.axis_y, source.graphics[0].axis_y);
+    assert_eq!(destination.property_captions.len(), 2);
+    assert_eq!(destination.molecule_names.len(), 2);
+    assert_eq!(destination.arrow_labels.len(), 2);
+}
+
+#[test]
+fn passive_snapshot_adoption_still_allows_real_edits_to_follow_links() {
+    let source = passive_fixture();
+    let mut document = Document::default();
+    crate::transaction::replace(&mut document, source.clone()).commit(
+        &mut document,
+        &mut History::default(),
+        false,
+    );
+    assert_eq!(document.arrows, source.arrows);
+    assert_eq!(document.annotations, source.annotations);
+    let before = document.clone();
+    document.atom_mut(1).unwrap().position = Point::new(-50., 35.);
+    crate::transaction::apply(&mut document, &mut History::default(), before, false).unwrap();
+    assert_ne!(document.arrows[0].start, source.arrows[0].start);
+    assert!(document.arrows[0].start_anchor.is_some());
+    assert!(document.arrows[0].cubic.is_some());
+    assert_eq!(document.property_captions.len(), 1);
+    assert_ne!(
+        document
+            .annotations
+            .iter()
+            .find(|a| a.id == 22)
+            .unwrap()
+            .position,
+        source
+            .annotations
+            .iter()
+            .find(|a| a.id == 22)
+            .unwrap()
+            .position
+    );
+}

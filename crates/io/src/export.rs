@@ -119,7 +119,7 @@ pub async fn checked_document(
     let checked = response
         .document
         .ok_or("Chemistry engine returned no drawing")?;
-    crate::atom_labels::refresh_computed(&mut doc, &checked);
+    crate::atom_labels::copy_computed(&mut doc, &checked);
     Ok(doc)
 }
 

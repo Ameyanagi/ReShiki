@@ -452,16 +452,14 @@ async fn a_cancelled_import_creates_nothing() {
 }
 
 #[test]
-fn finalize_reconciles_and_restores_computed_labels() {
-    let mut response = Document::default();
-    let a = response.add_atom("C", crate::document::Point::new(0., 0.));
-    let b = response.add_atom("O", crate::document::Point::new(30., 0.));
-    response.add_bond(a, b, 1, "plain");
-    response.atoms[0].label_h = 3;
-    response.atoms[1].label_h = 1;
+fn finalize_adopts_the_snapshot_and_restores_computed_labels() {
+    let response: Document = serde_json::from_slice(include_bytes!(
+        "../../../../../tests/fixtures/passive-drawing-geometry/unsettled-native.rsk"
+    ))
+    .unwrap();
     let finalized = finalize(&response).unwrap();
-    // The chemistry changed from the empty drawing, so the commit cleared the
-    // computed labels and the refresh copied the response's back.
+    // Adoption clears derived labels after replacing empty chemistry; the
+    // checked response restores those caches without changing source geometry.
     assert_eq!(finalized, response);
 }
 

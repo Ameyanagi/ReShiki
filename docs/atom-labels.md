@@ -64,7 +64,8 @@ Numbers are owned by atoms, independent of reaction atom-map numbers.
 **Show stereodescriptors (R/S, E/Z…)** displays computed CIP assignments. Chemical edits
 invalidate cached assignments and trigger a quiet background refresh. Stale
 responses are ignored and rescheduled; refresh does not change selection,
-document dirtiness, drawn bond orders or Undo/Redo. Invalid chemistry produces
+document dirtiness, drawn bond orders, object positions or Undo/Redo. Linked
+arrows and captions stay where they were while labels arrive. Invalid chemistry produces
 an inspector error. Unassigned centers have no label.
 
 Enantiomorphic double bonds display _seqCis_/_seqTrans_; native files and

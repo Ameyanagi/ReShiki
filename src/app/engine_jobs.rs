@@ -285,7 +285,7 @@ impl App {
         // of overriding them per atom.
         let mut document = document.clone();
         document.atom_labels = self.tab.doc.atom_labels.clone();
-        let ids = editing::append(&mut self.tab.doc, &document, offset);
+        let ids = editing::append_preserving_layout(&mut self.tab.doc, &document, offset);
         (!ids.is_empty()).then_some(ids)
     }
 
@@ -316,7 +316,9 @@ impl App {
                 )
             });
         self.tab.selected = selected;
-        self.changed(before);
+        if !self.adopt_changed_document(before) {
+            return;
+        }
         // A rejected edit restores the drawing, leaving nothing to reveal.
         let Some((mut lo, mut hi)) =
             reshiki::scene::selection_bounds(&self.tab.doc, &self.tab.selected)
@@ -367,10 +369,8 @@ impl App {
             if self.error {
                 return;
             }
-            // The layout repair below moves what the labels' ink pushes.
             reshiki::atom_labels::copy_computed(&mut self.tab.doc, &document);
             self.tab.label_generation = self.tab.label_generation.wrapping_add(1);
-            self.settle_label_layout();
             self.tab.labels_dirty = false;
             self.tab.analysis = response.analysis;
             self.tool = Tool::Select;
@@ -419,10 +419,8 @@ impl App {
         // computed H labels without rewriting the user's bond
         // orders/stereo or inserting a step into Undo/Redo.
         if let Some(document) = response.document {
-            // The layout repair below moves what the labels' ink pushes.
             reshiki::atom_labels::copy_computed(&mut self.tab.doc, &document);
             self.tab.label_generation = self.tab.label_generation.wrapping_add(1);
-            self.settle_label_layout();
         }
         self.tab.analysis = response.analysis;
         self.tab.chemistry_notice = None;
@@ -435,11 +433,11 @@ impl App {
             self.cancel_reference_stretch();
             let before = self.tab.doc.clone();
             self.tab.doc = document.clone();
-            self.changed(before);
-            // The layout repair below moves what the labels' ink pushes.
+            if !self.adopt_changed_document(before) {
+                return;
+            }
             reshiki::atom_labels::copy_computed(&mut self.tab.doc, &document);
             self.tab.label_generation = self.tab.label_generation.wrapping_add(1);
-            self.settle_label_layout();
             self.tab.labels_dirty = false;
             self.tab.chemistry_notice = None;
             self.tab.selected.clear();

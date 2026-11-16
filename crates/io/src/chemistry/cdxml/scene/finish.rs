@@ -342,7 +342,8 @@ impl CdxmlScene {
                     && whole.first().is_some_and(|first| claimed.insert(*first))
             })
             .collect();
-        // Imported links show ReShiki's own lines at once, as after an edit.
+        // Source captions and positions stay authoritative during import.
+        // The saved text initializes the link for the next actual edit.
         document.property_captions = links;
         for link in &mut document.property_captions {
             if let Some(caption) = document
@@ -380,8 +381,6 @@ impl CdxmlScene {
             atom.attachment = Some(attachment.kind);
             atom.centroid = attachment.members;
         }
-        // After generic labels, so a generic structure shows no values.
-        crate::linked_properties::reconcile(document, &Default::default());
         Ok(())
     }
 }

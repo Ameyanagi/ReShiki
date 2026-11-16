@@ -229,6 +229,13 @@ pub fn refresh_edited(before: &Document, document: &mut Document) {
         return;
     }
     crate::transaction::recount_radicals(before, document);
+    refresh_hydrogens(before, document);
+}
+
+/// Refresh only the derived hydrogen cache of new or chemically changed
+/// components. Snapshot adoption must retain authored radicals, charges,
+/// singlet assignments, geometry and every other stored field.
+pub fn refresh_hydrogens(before: &Document, document: &mut Document) {
     let edited = crate::transaction::edited_atoms(before, document);
     if edited.is_empty() {
         return;

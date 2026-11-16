@@ -17,7 +17,6 @@ fn caption(d: &Document) -> &str {
     let id = d.property_captions[0].annotation;
     &d.annotations.iter().find(|a| a.id == id).unwrap().text
 }
-const PHENOL: &str = "Formula: C6H6O\nMol. Wt.: 94.11\nExact Mass: 94.0419\nAnal. Calcd for C6H6O: C, 76.57; H, 6.43";
 
 #[test]
 fn chemdraw_property_text_imports_with_its_link() {
@@ -35,7 +34,10 @@ fn chemdraw_property_text_imports_with_its_link() {
         ]
     );
     assert_eq!(d.property_captions[0].atoms.len(), 7);
-    assert_eq!(caption(&d), PHENOL);
+    assert_eq!(
+        caption(&d),
+        "Chemical formula: C6H6O\nExact mass: 94.04\nMolecular weight: 94.11\nElemental analysis: C, 76.57; H, 6.43; O, 17.00"
+    );
     let binary =
         include_bytes!("../../../../../tests/fixtures/chemdraw-properties/phenol-props.cdx");
     let from_cdx = import(&crate::exchange::from_cdx(binary).unwrap());
@@ -43,7 +45,10 @@ fn chemdraw_property_text_imports_with_its_link() {
     let edited = import(include_str!(
         "../../../../../tests/fixtures/chemdraw-properties/phenol-props-edited.cdxml"
     ));
-    assert!(caption(&edited).starts_with("Formula: C7H8O\nMol. Wt.: 108.14"));
+    assert!(
+        caption(&edited)
+            .starts_with("Chemical formula: C7H8O\nExact mass: 108.06\nMolecular weight: 108.14")
+    );
 }
 
 #[test]
@@ -81,7 +86,7 @@ fn chemdraw_text_over_a_salt_stays_plain_with_a_notice() {
     assert_eq!(d.property_captions.len(), 1);
     assert_eq!(d.property_captions[0].atoms.len(), 7);
     assert_eq!(d.annotations.len(), 2);
-    assert!(caption(&d).starts_with("Mol. Wt.: 93."));
+    assert_eq!(caption(&d), "Molecular weight: 93.11");
 }
 
 #[test]
@@ -109,10 +114,10 @@ fn chemdraw_captions_on_parts_of_one_molecule_keep_the_second_as_text() {
     );
     let imported = import_cdxml(&xml).unwrap();
     let d = &imported.document;
-    // ChemDraw scoped each to a selection. The first takes the whole molecule,
-    // and the second keeps its text.
+    // ChemDraw scoped each to a selection. The first keeps its source text
+    // and link until editing; the second remains ordinary text.
     assert_eq!(d.property_captions.len(), 1);
-    assert_eq!(caption(d), "Formula: C6H6O");
+    assert_eq!(caption(d), "Formula: C");
     assert!(d.annotations.iter().any(|a| a.text == "Formula: O"));
     assert_eq!(imported.notices.len(), 1);
 }
@@ -184,7 +189,7 @@ fn captions_without_a_chemdraw_type_export_as_plain_text() {
 }
 
 #[test]
-fn a_generic_structure_shows_no_values_on_import() {
+fn a_generic_structure_keeps_its_source_caption_on_passive_import() {
     let source = include_str!("../../../../../tests/fixtures/generic-structures/link-chain.cdxml");
     let end = source.find("</page>").unwrap();
     let fragment = source
@@ -200,5 +205,5 @@ fn a_generic_structure_shows_no_values_on_import() {
     );
     let d = import(&xml);
     assert_eq!(d.property_captions.len(), 1);
-    assert_eq!(caption(&d), "Formula: –");
+    assert_eq!(caption(&d), "Formula: C3H8");
 }

@@ -1,0 +1,19 @@
+{
+  "provenance": "Synthetic hand-authored native model data; no production exporter used",
+  "source": "unsettled-native.rsk",
+  "sha256": "4e6560e67721393863cb8df42ae1d2c5375387a0e4c28ed0af4a597c93ea96b7",
+  "expected": "Passive operations preserve authored points, paths, axes, link offsets and caption positions; real edits still reconcile constraints",
+  "external_format_limit": "CDXML/CDS cannot retain all native arrow-anchor, condition-caption and molecule-name links",
+  "remote_property_caption": {
+    "provenance": "Hand-authored synthetic CDXML; full-drawing CDS encoded independently by immutable reference/engine/cdx_exchange.py plus packed defaults",
+    "expected": "Remote source caption text and position are retained on import; linked value and placement update on a chemistry edit",
+    "files": {
+      "remote-property-caption.cdxml": {
+        "sha256": "f336a8cb4c77a5d5887316f7e15c567aee4b2cacf13860b1f115eff7ad51a37f"
+      },
+      "remote-property-caption.drawing.cds": {
+        "sha256": "2b956a274401628bc8d1fd5b2175910c81bf12c8c1373a93e69f9e942b2f9dc9"
+      }
+    }
+  }
+}

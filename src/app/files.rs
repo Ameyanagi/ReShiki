@@ -620,7 +620,7 @@ impl super::App {
         result: Result<Option<Saved>, String>,
     ) -> iced::Task<super::Message> {
         self.file_io.saving = false;
-        let snapshot = self.saved_snapshot(*snapshot);
+        let snapshot = *snapshot;
         // The write still releases the serial save slot, but its dialog and
         // error belong to the document that started it.
         if epoch != self.tab.file_epoch {
@@ -979,7 +979,6 @@ impl super::App {
         }
         let snapshot = std::sync::Arc::new(self.tab.doc.clone());
         let save_snapshot = std::sync::Arc::clone(&snapshot);
-        self.saving(&snapshot);
         let epoch = self.tab.file_epoch;
         #[cfg(target_arch = "wasm32")]
         let handle = if !save_as && path.is_some() {

@@ -433,8 +433,6 @@ impl Document {
         doc.validate()?;
         doc.migrate();
         crate::models3d::retain_whole(&mut doc);
-        crate::arrow_anchors::reconcile(&mut doc);
-        crate::arrow_labels::restore_custom_gaps(&mut doc);
         doc.validate()?;
         Ok(doc)
     }
@@ -646,6 +644,18 @@ impl Document {
         }
     }
     pub fn delete(&mut self, ids: &[u64]) {
+        self.delete_objects(ids);
+        crate::arrow_anchors::reconcile(self);
+    }
+    /// Prune an extracted drawing without repairing the surviving geometry.
+    pub(crate) fn delete_preserving_layout(&mut self, ids: &[u64]) {
+        self.delete_objects(ids);
+        let retained = self.atoms.iter().map(|atom| (atom.id, atom.id)).collect();
+        for arrow in &mut self.arrows {
+            crate::arrow_anchors::remap(arrow, &retained);
+        }
+    }
+    fn delete_objects(&mut self, ids: &[u64]) {
         crate::models3d::crystal::mark_distance_bonds(self);
         let ids = self.expand_abbreviation_selection(ids);
         let ids = ids.as_slice();
@@ -667,7 +677,6 @@ impl Document {
         self.prune_groups();
         crate::reactions::prune(self);
         crate::generic::prune(self);
-        crate::arrow_anchors::reconcile(self);
     }
     pub fn translate(&mut self, ids: &[u64], dx: f32, dy: f32) {
         let ids = self.expand_abbreviation_selection(ids);

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CDXML BondLength="14.4" LabelFont="101" LabelSize="10" CaptionFont="101" CaptionSize="10">
+  <fonttable><font id="101" charset="iso-8859-1" name="Arial"/></fonttable>
+  <page id="100">
+    <fragment id="10">
+      <n id="1" p="0 0"/>
+      <n id="2" p="18.25 7.5" Element="8"/>
+      <b id="3" B="1" E="2"/>
+    </fragment>
+    <t id="20" p="250 300"><s font="101" size="10">Formula: author positioned source text</s></t>
+    <chemicalproperty id="21" ChemicalPropertyIsActive="yes" ChemicalPropertyType="2" ChemicalPropertyDisplayID="20" BasisObjects="10"/>
+  </page>
+</CDXML>

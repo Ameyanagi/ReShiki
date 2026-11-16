@@ -77,6 +77,7 @@ fn complete_original_scene_and_actual_document_transport() -> anyhow::Result<()>
     let mut failures = Vec::new();
     let mut extensions = 0;
     let mut dative_extensions = 0;
+    let (mut omitted_default, mut explicit_default) = (None, None);
     let (mut restricted_native, mut restricted_documents, mut final_only_rejected) = (0, 0, 0);
     for line in lines {
         let value: Value = serde_json::from_str(&line?)?;
@@ -100,6 +101,28 @@ fn complete_original_scene_and_actual_document_transport() -> anyhow::Result<()>
             }
             Err(error) => Err(error.into()),
         };
+        if case.name == "preparation/single-scale/None" {
+            // The historical importer rejected this omitted default during
+            // bond association. Preserve that recorded outcome, then compare
+            // the extension with its independently captured explicit control.
+            assert!(case.scene.is_none() && case.document.is_none());
+            let error = "Could not safely associate CDXML bond appearance with its atoms";
+            assert_eq!(case.scene_error.as_deref(), Some(error));
+            assert_eq!(case.document_error.as_deref(), Some(error));
+            omitted_default = Some((case.text, actual?));
+            continue;
+        }
+        if case.name == "preparation/single-scale/30" {
+            explicit_default = Some((
+                case.text.clone(),
+                case.scene
+                    .clone()
+                    .context("Missing explicit-default scene")?,
+                case.document
+                    .clone()
+                    .context("Missing explicit-default document")?,
+            ));
+        }
         if let Some(expected) = &case.molecular_extension {
             // The old importer rejects annotations and multiple abbreviation
             // attachments. This newly accepted fixture uses direct RDKit
@@ -196,6 +219,33 @@ fn complete_original_scene_and_actual_document_transport() -> anyhow::Result<()>
         }
     }
     assert!(child.wait()?.success());
+    let (omitted_text, actual) = omitted_default.context("Missing omitted-default extension")?;
+    let (explicit_text, expected_scene, expected_document) =
+        explicit_default.context("Missing explicit-default oracle")?;
+    // This is an exact source identity check: only the root's explicit 30pt
+    // attribute differs. Compare every scene and document field with the
+    // unchanged Python worker's successful explicit-default result.
+    assert_eq!(explicit_text.matches(" BondLength=\"30\"").count(), 1);
+    assert_eq!(
+        omitted_text,
+        explicit_text.replacen(" BondLength=\"30\"", "", 1)
+    );
+    for difference in reference_diagnostics::numeric_differences(
+        &empty_heads::without(serde_json::to_value(&actual)?),
+        &expected_scene,
+        "scene",
+    ) {
+        failures.push(format!("omitted-BondLength extension {difference}"));
+    }
+    let expected = wire_document(expected_document)?;
+    for difference in reference_diagnostics::numeric_differences(
+        &empty_heads::without(serde_json::to_value(actual.into_document()?.document)?),
+        &serde_json::to_value(expected)?,
+        "document",
+    ) {
+        failures.push(format!("omitted-BondLength extension {difference}"));
+    }
+    eprintln!("Omitted-BondLength extension: 1 exact explicit-30pt scene and document comparison");
     eprintln!(
         "scene: {accepted} native accepts, {rejected} native rejects, {converted} document accepts, {bounds} document rejects, {restrictions} explicit restrictions; {} mismatches",
         failures.len()
@@ -212,7 +262,7 @@ fn complete_original_scene_and_actual_document_transport() -> anyhow::Result<()>
     // have them now become documents instead of being rejected.
     assert_eq!(
         (accepted, rejected, converted, bounds),
-        (2651, 286, 2405, 532)
+        (2651, 285, 2405, 531)
     );
     // Nine original raw Documents failed the projection requirement. The
     // independently adapted paint now passes the same validation boundary.

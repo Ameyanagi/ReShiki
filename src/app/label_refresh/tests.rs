@@ -190,13 +190,6 @@ fn carbonyl_with_arrow() -> (App, u64) {
     (app, oxygen)
 }
 
-/// What the next edit's reconcile used to make of the drawing.
-fn reconciled(doc: &Document) -> Document {
-    let mut expected = doc.clone();
-    let _ = reshiki::transaction::reconcile(&mut expected, doc.clone()).unwrap();
-    expected
-}
-
 /// Changes C=O to C–O as an edit and returns the labels request it starts.
 fn single_bond(app: &mut App) -> Key {
     let before = app.tab.doc.clone();
@@ -222,7 +215,7 @@ fn new_hydrogens_move_attached_arrows_clear_as_the_labels_land() {
     let _ = app.update(Message::LabelsReady(key, labels));
     // The background refresh needs no further layout repair.
     assert_eq!(app.tab.doc.atom(oxygen).unwrap().label_h, 1);
-    assert_eq!(app.tab.doc, reconciled(&landed));
+    assert_eq!(app.tab.doc, landed);
     assert!(app.tab.doc.arrows[0].start.distance(stale) > 1.);
     assert_eq!(app.tab.revision, key.revision);
     assert_eq!(app.tab.history.undo_frames().count(), frames);
@@ -239,7 +232,7 @@ fn new_hydrogens_move_attached_arrows_clear_as_the_labels_land() {
 }
 
 #[test]
-fn a_linked_caption_moves_clear_of_stereo_labels_as_they_land() {
+fn background_stereo_labels_preserve_the_linked_caption_position() {
     let (mut app, _) = App::new();
     let mut doc = Document::default();
     doc.atom_labels.stereo = true;
@@ -279,14 +272,21 @@ fn a_linked_caption_moves_clear_of_stereo_labels_as_they_land() {
     assert!(landed.atom(center).unwrap().cip_label.is_some());
     let frames = app.tab.history.undo_frames().count();
     let _ = app.update(Message::LabelsReady(key, labels));
-    assert_eq!(app.tab.doc, reconciled(&landed));
+    assert_eq!(app.tab.doc, landed);
     assert_eq!(
         app.tab.doc.molecule_names.len(),
         1,
         "The caption stays linked"
     );
-    assert!(app.tab.doc.annotations[0].position.y > caption.y + 1.);
+    assert_eq!(app.tab.doc.annotations[0].position, caption);
+    assert_eq!(app.tab.revision, key.revision);
     assert_eq!(app.tab.history.undo_frames().count(), frames);
+    // The semantic link still follows an actual subsequent edit.
+    let before = app.tab.doc.clone();
+    app.tab.doc.translate(&atoms, 0., 30.);
+    app.changed(before);
+    assert_ne!(app.tab.doc.annotations[0].position, caption);
+    assert_eq!(app.tab.doc.molecule_names.len(), 1);
 }
 
 #[test]
@@ -304,7 +304,7 @@ fn labels_for_a_drawing_that_undo_replaced_are_not_applied() {
 }
 
 #[test]
-fn opening_a_drawing_whose_arrow_overlaps_new_hydrogens_leaves_it_saved() {
+fn opening_a_drawing_keeps_its_authored_arrow_when_hydrogen_labels_land() {
     let (mut app, oxygen) = carbonyl_with_arrow();
     // A file whose arrow was drawn before its O gained an H.
     let mut file = app.tab.doc.clone();
@@ -314,9 +314,100 @@ fn opening_a_drawing_whose_arrow_overlaps_new_hydrogens_leaves_it_saved() {
     let key = app.tab.label_refresh.pending.unwrap();
     let _ = app.update(Message::LabelsReady(key, compute(&app)));
     assert_eq!(app.tab.doc.atom(oxygen).unwrap().label_h, 1);
-    assert_ne!(app.tab.doc.arrows, file.arrows, "The arrow moved clear");
+    assert_eq!(app.tab.doc.arrows, file.arrows);
+    assert_eq!(app.tab.revision, key.revision);
     assert!(!app.dirty(), "Opening alone leaves nothing to save");
     assert!(!app.tab.history.can_undo());
+}
+
+#[test]
+fn imported_drawings_keep_authored_arrow_geometry_instead_of_edit_repairs() {
+    use crate::app::Job;
+    for kind in [Job::Import, Job::ImportFile("authored.cdx".into())] {
+        let (mut app, _) = carbonyl_with_arrow();
+        let before = app.tab.doc.clone();
+        let mut imported = before.clone();
+        imported.bonds[0].order = 1;
+        Refresh::calculate(&imported, &Refresh::default())
+            .unwrap()
+            .apply(&mut imported);
+        let _ = app.update(Message::EngineDone {
+            revision: app.tab.revision,
+            kind,
+            result: Box::new(Ok(reshiki::engine::Response {
+                document: Some(imported.clone()),
+                analysis: None,
+                output: None,
+                engine_version: "test".into(),
+                warnings: vec![],
+            })),
+        });
+        assert!(!app.error, "{}", app.status);
+        assert_eq!(app.tab.doc.arrows, imported.arrows);
+        assert_eq!(app.tab.doc.atoms[1].label_h, 1);
+    }
+}
+
+#[tokio::test]
+async fn analyze_updates_derived_labels_without_moving_authored_arrows() {
+    use crate::app::Job;
+    let (mut app, _) = carbonyl_with_arrow();
+    let mut file = app.tab.doc.clone();
+    file.bonds[0].order = 1;
+    app.show_opened(file.clone(), Some("authored.rsk".into()));
+    let response = reshiki::engine::LocalEngine::in_process()
+        .request(reshiki::engine::Request::molecule("analyze", file.clone()))
+        .await
+        .unwrap();
+    assert!(response.analysis.is_some());
+    let frames = app.tab.history.frames();
+    let revision = app.tab.revision;
+    let _ = app.update(Message::EngineDone {
+        revision,
+        kind: Job::Analyze,
+        result: Box::new(Ok(response)),
+    });
+    assert_eq!(app.tab.doc.arrows, file.arrows);
+    assert_eq!(app.tab.doc.atoms[1].label_h, 1);
+    assert_eq!(app.tab.revision, revision);
+    assert_eq!(app.tab.history.frames(), frames);
+    assert!(!app.dirty());
+}
+
+#[test]
+fn explicit_cleanup_still_repairs_linked_arrows_in_one_undo_step() {
+    use crate::app::{Job, cleanup::CleanupJob};
+    let (mut app, _) = carbonyl_with_arrow();
+    let mut file = app.tab.doc.clone();
+    file.bonds[0].order = 1;
+    app.show_opened(file.clone(), Some("authored.rsk".into()));
+    let _ = app.start_label_refresh();
+    let key = app.tab.label_refresh.pending.unwrap();
+    let _ = app.update(Message::LabelsReady(key, compute(&app)));
+    assert_eq!(app.tab.doc.arrows, file.arrows);
+    let job = CleanupJob {
+        options: app.cleanup_options,
+        selection: vec![],
+        serial: app.tab.cleanup_serial,
+        epoch: app.tab.file_epoch,
+    };
+    let _ = app.update(Message::EngineDone {
+        revision: app.tab.revision,
+        kind: Job::Clean(job),
+        result: Box::new(Ok(reshiki::engine::Response {
+            document: Some(app.tab.doc.clone()),
+            analysis: None,
+            output: None,
+            engine_version: "test".into(),
+            warnings: vec![],
+        })),
+    });
+    assert!(!app.error, "{}", app.status);
+    assert_ne!(app.tab.doc.arrows, file.arrows);
+    assert_eq!(app.tab.history.undo_frames().count(), 1);
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc.arrows, file.arrows);
+    assert!(!app.dirty());
 }
 
 #[test]
@@ -326,8 +417,8 @@ fn a_save_written_while_labels_landed_leaves_the_drawing_saved() {
     // Save starts before the labels land; its write, and even its
     // completion message, finish before they land too.
     let snapshot = Arc::new(app.tab.doc.clone());
-    app.saving(&snapshot);
     let written = Arc::unwrap_or_clone(snapshot);
+    let written_arrows = written.arrows.clone();
     let _ = app.update(Message::LabelsReady(key, compute(&app)));
     assert!(app.dirty());
     let _ = app.file_saved(
@@ -336,6 +427,7 @@ fn a_save_written_while_labels_landed_leaves_the_drawing_saved() {
         Ok(Some("a.rsk".into())),
     );
     assert!(!app.dirty());
+    assert_eq!(app.tab.saved.arrows, written_arrows);
 }
 
 #[test]
@@ -343,25 +435,24 @@ fn undoing_display_edits_made_before_the_labels_landed_leaves_the_drawing_saved(
     let (mut app, _) = carbonyl_with_arrow();
     let mut file = app.tab.doc.clone();
     file.bonds[0].order = 1;
-    app.show_opened(file, Some("old.rsk".into()));
+    app.show_opened(file.clone(), Some("old.rsk".into()));
     // Two display-only edits that cancel out, before any labels land.
     for hide in [true, false] {
         let before = app.tab.doc.clone();
         app.tab.doc.atoms[2].display.hide_charge = hide;
         app.changed(before);
     }
-    assert!(!app.dirty());
+    let dirty_before_labels = app.dirty();
     let _ = app.start_label_refresh();
     let key = app.tab.label_refresh.pending.unwrap();
     let _ = app.update(Message::LabelsReady(key, compute(&app)));
-    assert!(!app.dirty());
-    let repaired = app.tab.doc.arrows.clone();
+    assert_eq!(app.dirty(), dirty_before_labels);
     let _ = app.update(Message::Undo);
     assert!(app.dirty(), "The hidden charge is not saved");
     let _ = app.update(Message::Undo);
-    // The opened snapshot gets the labels and the layout they need.
+    // History retains the authored snapshot, even after newer labels land.
     assert!(!app.tab.history.can_undo());
-    assert_eq!(app.tab.doc.arrows, repaired);
+    assert_eq!(app.tab.doc.arrows, file.arrows);
     assert!(!app.dirty());
 }
 
@@ -385,7 +476,7 @@ fn labels_that_change_no_layout_change_nothing_else() {
 #[test]
 fn move_and_attach_keeps_its_drawing_until_it_closes() {
     let (mut app, _) = carbonyl_with_arrow();
-    // An opened drawing can still need labels and their layout repair.
+    // Labels may finish while a preview uses the opened drawing.
     let mut file = app.tab.doc.clone();
     file.bonds[0].order = 1;
     app.show_opened(file, Some("old.rsk".into()));
@@ -396,15 +487,15 @@ fn move_and_attach_keeps_its_drawing_until_it_closes() {
     let _ = app.update(Message::Join(crate::app::joining::Action::Begin));
     assert!(app.tab.joining.is_some());
     let _ = app.update(Message::LabelsReady(key, compute(&app)));
-    // Its preview belongs to this revision, so the repair waits.
+    // Label completion changes neither the preview's geometry nor its revision.
     assert!(app.tab.joining.is_some());
     assert_eq!(app.tab.doc.arrows, stale);
     assert_eq!(app.tab.revision, key.revision);
     let frames = app.tab.history.undo_frames().count();
     let _ = app.update(Message::Escape);
     assert!(app.tab.joining.is_none());
-    assert_eq!(app.tab.doc, reconciled(&app.tab.doc));
-    assert_ne!(app.tab.doc.arrows, stale);
+    assert_eq!(app.tab.doc.arrows, stale);
+    assert_eq!(app.tab.revision, key.revision);
     assert_eq!(app.tab.history.undo_frames().count(), frames);
 }
 
@@ -428,7 +519,7 @@ fn labels_for_the_opened_gallery_change_no_layout() {
 }
 
 #[test]
-fn applying_an_unchanged_text_draft_settles_the_repair_without_an_undo_step() {
+fn applying_an_unchanged_text_draft_keeps_authored_geometry_and_history() {
     use crate::app::inline_text::Action;
     let (mut app, _) = carbonyl_with_arrow();
     let mut file = app.tab.doc.clone();
@@ -452,11 +543,11 @@ fn applying_an_unchanged_text_draft_settles_the_repair_without_an_undo_step() {
     let _ = app.update(Message::LabelsReady(key, compute(&app)));
     assert_eq!(
         app.tab.doc.arrows, file.arrows,
-        "The draft holds the repair"
+        "Label completion preserves the authored arrow"
     );
     let _ = app.update(Message::InlineText(Action::Finish(true)));
     assert!(app.tab.inline_text.is_none());
-    assert_ne!(app.tab.doc.arrows, file.arrows, "The arrow moved clear");
+    assert_eq!(app.tab.doc.arrows, file.arrows);
     assert!(!app.tab.history.can_undo());
     assert!(!app.dirty());
 }

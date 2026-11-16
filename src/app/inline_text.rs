@@ -175,7 +175,9 @@ impl App {
                 .collect();
             self.tab.caption_target = self.tab.selected.first().copied();
             self.tab.inline_text = None;
-            self.changed(before);
+            if self.tab.doc != before {
+                self.changed(before);
+            }
             if let Some(label) = self
                 .tab
                 .doc

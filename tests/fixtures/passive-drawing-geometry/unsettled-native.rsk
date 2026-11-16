@@ -1,0 +1,68 @@
+{
+  "version": 38,
+  "atoms": [
+    { "id": 1, "element": "O", "position": { "x": 0.0, "y": 0.0 }, "label_h": 1 },
+    { "id": 2, "element": "C", "position": { "x": 31.25, "y": 19.5 }, "label_h": 3 },
+    { "id": 3, "element": "N", "position": { "x": 170.0, "y": 100.0 }, "label_h": 2 },
+    { "id": 4, "element": "C", "position": { "x": 202.0, "y": 89.0 }, "label_h": 3 }
+  ],
+  "bonds": [
+    { "a": 1, "b": 2, "order": 1 },
+    { "a": 3, "b": 4, "order": 1 }
+  ],
+  "annotations": [
+    {
+      "id": 20,
+      "position": { "x": 300.25, "y": -200.5 },
+      "text": "Deliberately oversized reaction conditions kept where the author placed them",
+      "format": { "style": { "size_pt": 24.0 } }
+    },
+    { "id": 21, "position": { "x": 460.5, "y": 120.25 }, "text": "methanol" },
+    { "id": 22, "position": { "x": 510.75, "y": 150.5 }, "text": "Formula: CH4O" }
+  ],
+  "molecule_names": [
+    { "annotation": 21, "atoms": [1, 2], "smiles": "CO", "text": "methanol" }
+  ],
+  "property_captions": [
+    { "annotation": 22, "atoms": [1, 2], "properties": ["formula"], "text": "Formula: CH4O" }
+  ],
+  "arrows": [
+    {
+      "id": 10,
+      "kind": "curved",
+      "start": { "x": 4.125, "y": 1.75 },
+      "end": { "x": 80.5, "y": 15.25 },
+      "control": { "x": 31.5, "y": -40.75 },
+      "start_anchor": {
+        "target": { "kind": "atom", "atom": 1 },
+        "offset": { "x": 4.125, "y": 1.75 },
+        "direction": { "x": 1.0, "y": 0.0 },
+        "gap": 4.0
+      }
+    },
+    {
+      "id": 11,
+      "kind": "forward",
+      "start": { "x": 120.25, "y": 0.5 },
+      "end": { "x": 145.75, "y": 0.5 }
+    },
+    {
+      "id": 12,
+      "kind": "fishhook",
+      "start": { "x": 250.25, "y": 170.5 },
+      "end": { "x": 310.75, "y": 180.25 }
+    }
+  ],
+  "arrow_labels": [
+    { "arrow": 11, "annotation": 20, "side": "above", "gap": 30.0 }
+  ],
+  "graphics": [
+    {
+      "id": 30,
+      "kind": "rounded_rectangle",
+      "origin": { "x": 370.25, "y": 280.5 },
+      "axis_x": { "x": 83.5, "y": 13.25 },
+      "axis_y": { "x": -9.75, "y": 46.5 }
+    }
+  ]
+}

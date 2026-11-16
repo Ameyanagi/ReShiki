@@ -11,6 +11,142 @@ fn copy_key(app: &App) -> CopyAsKey {
     }
 }
 
+fn drawing_points(document: &Document) -> Vec<Point> {
+    let mut points: Vec<_> = document.atoms.iter().map(|atom| atom.position).collect();
+    points.extend(document.annotations.iter().map(|caption| caption.position));
+    for arrow in &document.arrows {
+        points.extend([arrow.start, arrow.end]);
+        points.extend(arrow.control);
+        if let Some(controls) = arrow.cubic {
+            points.extend(controls);
+        }
+        for node in &arrow.nodes {
+            points.push(node.point);
+            points.extend(node.controls);
+        }
+    }
+    for graphic in &document.graphics {
+        points.extend([
+            graphic.origin,
+            graphic.origin.offset(graphic.axis_x.x, graphic.axis_x.y),
+            graphic.origin.offset(graphic.axis_y.x, graphic.axis_y.y),
+        ]);
+    }
+    points
+}
+
+#[tokio::test]
+async fn chemdraw_paste_keeps_all_authored_vectors_through_labels_undo_and_redo() {
+    let engine = reshiki::engine::LocalEngine::in_process();
+    for (name, format, native) in [
+        (
+            "chemdraw-clipboard-layout/valid-layout.cdxml",
+            "cdxml",
+            false,
+        ),
+        ("chemdraw-clipboard-layout/valid-layout.cdx", "cdx", false),
+        (
+            "chemdraw-clipboard-layout/missing-bond-length.cdxml",
+            "cdxml",
+            false,
+        ),
+        (
+            "chemdraw-clipboard-layout/missing-bond-length.drawing.cds",
+            "cdx",
+            false,
+        ),
+        (
+            "passive-drawing-geometry/unsettled-native.rsk",
+            "reshiki",
+            true,
+        ),
+    ] {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures")
+            .join(name);
+        let (part, warnings) =
+            reshiki::formats::read_with_warnings(std::fs::read(path).unwrap(), format, &engine)
+                .await
+                .unwrap();
+        let points = drawing_points(&part);
+        let (mut app, _) = App::new();
+        app.tab.doc = Document::default();
+        app.tab.doc.drawing_style.bond_length_pt = 24.;
+        app.tab.doc.drawing_style.bond_length_world = 70.;
+        app.tab.doc.add_atom("O", Point::new(-160., 40.));
+        app.tab.busy = false;
+        app.viewport = iced::Size::new(1040., 680.);
+        let before = app.tab.doc.clone();
+        assert_ne!(
+            before.drawing_style.bond_length_pt,
+            part.drawing_style.bond_length_pt
+        );
+        app.clipboard_read(
+            app.tab.file_epoch,
+            app.tab.revision,
+            Ok(PasteOutcome {
+                document: part,
+                warnings,
+                native,
+            }),
+        );
+        assert!(!app.error, "{name}: {}", app.status);
+        let inserted = editing::selection(&app.tab.doc, &app.tab.selected);
+        let actual = drawing_points(&inserted);
+        assert_eq!(actual.len(), points.len(), "{name}");
+        let offset = actual[0].offset(-points[0].x, -points[0].y);
+        for (actual, source) in actual.iter().zip(&points) {
+            assert!(
+                actual.distance(source.offset(offset.x, offset.y)) < 0.001,
+                "{name}: paste changed a relative drawing vector"
+            );
+        }
+        let authored = drawing_points(&app.tab.doc);
+        let _ = app.start_label_refresh();
+        let key = app.tab.label_refresh.pending_key().unwrap();
+        let labels = std::sync::Arc::new(
+            reshiki::atom_labels::refresh::Refresh::calculate(&app.tab.doc, &Default::default())
+                .unwrap(),
+        );
+        let _ = app.update(Message::LabelsReady(key, Ok(labels)));
+        assert_eq!(drawing_points(&app.tab.doc), authored, "{name}");
+        assert_eq!(app.tab.history.undo_frames().count(), 1);
+        let _ = app.update(Message::Undo);
+        assert_eq!(
+            app.tab.doc, before,
+            "{name}: Undo must restore the destination"
+        );
+        let _ = app.update(Message::Redo);
+        assert_eq!(drawing_points(&app.tab.doc), authored, "{name}");
+    }
+}
+
+#[test]
+fn native_paste_preserves_authoritative_radicals_while_refreshing_labels() {
+    let (mut app, _) = App::new();
+    app.tab.doc = Document::default();
+    app.tab.doc.add_atom("O", Point::new(-100., 0.));
+    let mut part = Document::default();
+    let carbon = part.add_atom("C", Point::new(20., 40.));
+    let atom = part.atom_mut(carbon).unwrap();
+    atom.no_implicit = true;
+    atom.radical_electrons = 1;
+    part.validate().unwrap();
+    app.clipboard_read(
+        app.tab.file_epoch,
+        app.tab.revision,
+        Ok(PasteOutcome::native(part)),
+    );
+    assert!(!app.error, "{}", app.status);
+    let pasted = app.tab.doc.atom(app.tab.selected[0]).unwrap();
+    assert!(pasted.no_implicit);
+    assert_eq!(pasted.radical_electrons, 1);
+    assert!(!pasted.singlet);
+    assert_eq!(pasted.explicit_h, 0);
+    assert_eq!(pasted.charge, 0);
+    assert_eq!(app.tab.history.undo_frames().count(), 1);
+}
+
 #[tokio::test]
 async fn smiles_paste_and_import_keep_unspecified_alkenes_after_insertion() {
     use iced::futures::StreamExt;

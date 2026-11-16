@@ -58,11 +58,14 @@ pub async fn read_with_warnings(
 
 /// The engine's drawing as the editor keeps it, as the `import` tool stores it.
 fn finalize(response: &Document) -> Result<Document, String> {
-    let mut doc = response.clone();
-    transaction::reconcile(&mut doc, Document::default())
-        .map_err(|rejection| rejection.message().to_owned())?
-        .commit(&mut doc, &mut History::default(), false);
-    atom_labels::refresh_computed(&mut doc, response);
+    response.validate()?;
+    let mut doc = Document::default();
+    transaction::replace(&mut doc, response.clone()).commit(
+        &mut doc,
+        &mut History::default(),
+        false,
+    );
+    atom_labels::copy_computed(&mut doc, response);
     Ok(doc)
 }
 

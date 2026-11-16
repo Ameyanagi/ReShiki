@@ -15,6 +15,7 @@ sys.path.insert(0, str(ROOT / "reference/engine"))
 spec = importlib.util.spec_from_file_location(
     "adversarial_cdx", ROOT / "reference/engine/cdx_exchange.py"
 )
+assert spec is not None and spec.loader is not None
 codec = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(codec)
 # ChemDraw's native arrow object is 0x8021. The published SDK/reference
@@ -33,7 +34,7 @@ def encode_text(element):
     return original_encode_text(element)
 
 
-codec.encode_text = encode_text
+setattr(codec, "encode_text", encode_text)
 cases = []
 case_metadata = {
     "01-hidden-graphic": {

@@ -220,6 +220,7 @@ pub fn coordinate_atoms(source: &Document, donor: u64, metal: u64) -> Result<Coo
     ));
     candidate.reconcile_molecule_groups();
     crate::reactions::reconcile(&mut candidate)?;
+    crate::arrow_anchors::reconcile(&mut candidate);
     candidate.validate()?;
     Ok(Coordination::Added(candidate))
 }

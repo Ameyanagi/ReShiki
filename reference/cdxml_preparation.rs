@@ -103,6 +103,7 @@ fn chemical_prefix_matches_original_worker_capture() -> anyhow::Result<()> {
     let mut scale_oracles = std::collections::HashMap::new();
     let mut multi_scale_oracle = None;
     let mut scaled_extensions = Vec::new();
+    let mut default_extension = None;
     let mut reframed_fragments = 0;
     let mut canonicalized_curves = 0;
     for line in lines {
@@ -137,7 +138,11 @@ fn chemical_prefix_matches_original_worker_capture() -> anyhow::Result<()> {
         }
         if matches!(
             case.name.as_str(),
-            "multi-scale/5" | "multi-scale/30" | "multi-scale/100"
+            "multi-scale/5"
+                | "multi-scale/30"
+                | "multi-scale/100"
+                | "single-scale/None"
+                | "multi-scale/None"
         ) {
             assert!(case.expected.is_none());
             assert_eq!(case.failure_stage.as_deref(), Some("bonds"));
@@ -145,7 +150,12 @@ fn chemical_prefix_matches_original_worker_capture() -> anyhow::Result<()> {
                 case.failure.as_deref(),
                 Some("Could not safely associate CDXML bond appearance with its atoms")
             );
-            scaled_extensions.push((case.name, case.text, observed(&actual?)?));
+            let extension = (case.name, case.text, observed(&actual?)?);
+            if extension.0 == "single-scale/None" {
+                default_extension = Some(extension);
+            } else {
+                scaled_extensions.push(extension);
+            }
             continue;
         }
         if case.text == "<CDXML><page/><page/></CDXML>" {
@@ -309,6 +319,17 @@ fn chemical_prefix_matches_original_worker_capture() -> anyhow::Result<()> {
         }
     }
     anyhow::ensure!(child.wait()?.success(), "Oracle failed");
+    let (name, text, actual) = default_extension.context("Missing omitted-default extension")?;
+    // Omission now resolves to the drawing style's existing 30pt default.
+    // Compare every field with the unchanged explicit-30pt single oracle;
+    // only the retained source tree differs, by its missing attribute.
+    let mut expected = scale_oracles.get("30").unwrap().clone();
+    expected["expanded"] = tree(roxmltree::Document::parse(&text)?.root_element());
+    failures.extend(
+        reference_diagnostics::numeric_differences(&actual, &expected, "prepared")
+            .into_iter()
+            .map(|error| format!("{name}: {error}")),
+    );
     for (name, text, actual) in &scaled_extensions {
         // The unchanged default-scale two-fragment oracle supplies all
         // chemistry, bindings, and bond appearance. The corresponding
@@ -317,8 +338,9 @@ fn chemical_prefix_matches_original_worker_capture() -> anyhow::Result<()> {
         let mut expected = multi_scale_oracle
             .clone()
             .context("Missing two-fragment oracle")?;
+        let length = name.strip_prefix("multi-scale/").unwrap();
         let single = scale_oracles
-            .get(name.strip_prefix("multi-scale/").unwrap())
+            .get(if length == "None" { "30" } else { length })
             .unwrap();
         assert_eq!(expected["fragments"].as_array().unwrap().len(), 2);
         assert_eq!(single["fragments"].as_array().unwrap().len(), 1);
@@ -354,15 +376,15 @@ fn chemical_prefix_matches_original_worker_capture() -> anyhow::Result<()> {
         "Original complete application: {application_accepted} valid Documents, {application_rejected} rejected imports"
     );
     eprintln!(
-        "Explicit preparation contracts: {multipage_extensions} independent-page extension, {} scaled-fragment extensions, {reframed_fragments} fragments compared in the frozen combined frame, {canonicalized_curves} canonical legacy curves",
-        scaled_extensions.len()
+        "Explicit preparation contracts: {multipage_extensions} independent-page extension, {} explicit scaled-fragment extensions, 2 omitted-BondLength extensions, {reframed_fragments} fragments compared in the frozen combined frame, {canonicalized_curves} canonical legacy curves",
+        scaled_extensions.len() - 1
     );
     reference_diagnostics::report("CDXML preparation", &failures)?;
-    assert_eq!((accepted, errors, restricted, stages), (2044, 160, 4, 6));
+    assert_eq!((accepted, errors, restricted, stages), (2044, 158, 4, 6));
     assert_eq!((application_accepted, application_rejected), (6, 5));
     assert_eq!(extensions, 1);
     assert_eq!(multipage_extensions, 1);
-    assert_eq!(scaled_extensions.len(), 3);
+    assert_eq!(scaled_extensions.len(), 4);
     assert_eq!(canonicalized_curves, 2);
     Ok(())
 }

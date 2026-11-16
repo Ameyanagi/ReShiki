@@ -335,7 +335,9 @@ pub(super) fn side_by_side(drawings: Vec<Document>) -> Option<(Document, usize, 
         if let (Some((top, right)), Some((lo, hi))) = (bounds(&doc), bounds(&part)) {
             let gap = doc.drawing_style.bond_length_world;
             let offset = Point::new(right.x + gap - lo.x, (top.y + right.y - lo.y - hi.y) / 2.);
-            placed += usize::from(!reshiki::editing::append(&mut doc, &part, offset).is_empty());
+            placed += usize::from(
+                !reshiki::editing::append_preserving_layout(&mut doc, &part, offset).is_empty(),
+            );
         }
     }
     Some((doc, placed, total))
@@ -645,7 +647,8 @@ impl App {
         let mut selected = vec![];
         for (drawing, (lo, hi)) in parts {
             let offset = Point::new(x - lo.x, at.y - (lo.y + hi.y) / 2.);
-            let ids = reshiki::editing::append(&mut self.tab.doc, drawing, offset);
+            let ids =
+                reshiki::editing::append_preserving_layout(&mut self.tab.doc, drawing, offset);
             if ids.is_empty() {
                 self.tab.doc = before;
                 self.error = true;
@@ -657,8 +660,7 @@ impl App {
         }
         self.tab.selected = selected;
         self.error = false;
-        self.changed(before);
-        if self.error {
+        if !self.adopt_changed_document(before) {
             self.tab.selected.clear();
             return;
         }

@@ -17,6 +17,7 @@ sys.path.insert(0, str(ROOT / "reference/engine"))
 spec = importlib.util.spec_from_file_location(
     "page_boundary_codec", ROOT / "reference/engine/cdx_exchange.py"
 )
+assert spec is not None and spec.loader is not None
 codec = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(codec)
 encode_styled_text = codec.encode_text
@@ -30,7 +31,7 @@ def encode_text(element):
     return encode_styled_text(element)
 
 
-codec.encode_text = encode_text
+setattr(codec, "encode_text", encode_text)
 
 
 def numeric(name, kind, enum, value, encode=True):
@@ -47,7 +48,7 @@ def numeric(name, kind, enum, value, encode=True):
     return encode_numeric(name, kind, enum, value, encode)
 
 
-codec.numeric = numeric
+setattr(codec, "numeric", numeric)
 manifest = []
 
 

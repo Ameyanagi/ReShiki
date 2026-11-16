@@ -113,6 +113,31 @@ have separate receipts and expectations.
   extents beyond the original control points.
 - **Drawing stationery discovery.** File import recognizes full `.cds` artwork
   through the CDX drawing reader. The style import workflow remains separate.
+- **Clipboard fallback and omitted bond lengths.** A failed editable drawing
+  no longer falls through to coordinate-generating SMILES, reaction SMILES,
+  InChI or name import. Layout-bearing alternatives and reported picture
+  fallback remain available. The detached chemistry preparation uses the same
+  30 pt default as the presentation reader when `BondLength` is omitted; the
+  original source and low-level molecular reader contract stay unchanged.
+- **Passive drawing operations.** Open, import, copy, paste, Analyze, export,
+  printing, background label refresh, and Undo/Redo retain authored geometry.
+  Paste remaps IDs and translates all incoming objects by one common offset,
+  without reconciling links against the receiving drawing. Hydrogen-label
+  caches can refresh without recounting authoritative radicals or singlet
+  state. Actual edits and explicit Clean Up still reconcile linked objects in
+  their Undo transaction. Save records the snapshot actually written, rather
+  than silently moving a later saved-state snapshot.
+
+The independent [clipboard layout controls](../../tests/fixtures/chemdraw-clipboard-layout/README.md)
+retain irregular bonds, arrows, captions and graphics in explicit-length and
+default-length CDXML/CDX/full-CDS variants. Unsupported shadow graphics retain
+their failures alongside misleading SMILES fallback text. The
+[passive geometry controls](../../tests/fixtures/passive-drawing-geometry/README.md)
+add a deliberately unsettled native drawing with linked arrows, names,
+conditions and a property caption, plus independent CDXML/CDS property-caption
+sources. Regression checks cover partial copy, insertion into a nonempty
+drawing, late labels, save, Analyze, Undo/Redo, native radical state and a
+subsequent real edit proving that links still work.
 
 Two documentation/code inconsistencies were resolved during the investigation.
 CDX was already exposed by the application's open/save controls; it was not a
@@ -120,6 +145,24 @@ missing UI format. Conversely, [Generic structures](../generic-structures.md#fil
 already documented represented CDXML/CDX semantics, but the engine's generic
 identity guard blocked editable drawing exports. The drawing route now follows
 that documented boundary.
+
+## Visual checks
+
+These paired images render retained pre-fix and fixed importer snapshots with
+the same application renderer and a matched coordinate frame. They are newly
+rendered evidence, not historical application screenshots. The
+[capture provenance](../images/chemdraw-import-corpus/capture-provenance.json)
+records input hashes, snapshot revisions, rendering commands and framing.
+
+| Case                                                               | Before                                                                                               | After                                                                                                 |
+| ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Hidden red rectangle, with the blue visible control fixed in place | ![Hidden rectangle incorrectly visible](../images/chemdraw-import-corpus/visibility-before.png)      | ![Hidden rectangle omitted](../images/chemdraw-import-corpus/visibility-after.png)                    |
+| Inherited bold italic atom label                                   | ![Atom label loses inherited styling](../images/chemdraw-import-corpus/label-inheritance-before.png) | ![Atom label retains inherited styling](../images/chemdraw-import-corpus/label-inheritance-after.png) |
+
+The full drawing CDS retains the molecular control, caption and 60 editable
+vector stamps without clipping:
+
+![Full CDS drawing with 60 editable vector stamps](../images/chemdraw-import-corpus/full-cds-60-stamps.png)
 
 ## Generation, failure retention, and repair cycles
 
@@ -166,10 +209,18 @@ All final receipts have zero unexpected findings or probe errors. Every accepted
 drawing exports and reimports as CDXML, CDX, and actual CDS. Supplemental
 rejections are the retained reference-encoder line-height diagnostics.
 
+After the clipboard and passive-layout repairs, the same three seeds and all
+supplemental cases were run again as `final-clipboard-*`. The new supplemental
+run adds nine clipboard positives, three retained shadow-graphic negatives and
+two property-caption sources. The completed batch contains **1,118 inputs**:
+**1,000 accepted drawings**, **100 expected rejections** and **18 style
+controls**, with **3,000 successful CDXML/CDX/CDS export/reimports** and zero
+findings or probe errors. No historical failing input was removed.
+
 The reports explicitly identify working-tree builds rather than claiming their
-base commit alone identifies the code. The delivery metadata records the tested
-probe SHA-256:
-`9cf254d620b0b1df134198ea9131b27b7c35990524f108e1406db27a946ad73a`.
+base commit alone identifies the code. The delivery metadata records the latest
+tested probe SHA-256:
+`11d983b0394758a989dbac8759acbb3a66dd2de59017c4d2f8b870cc3a976fbd`.
 
 Focused regression runs cover CDXML and CDX visibility, inherited faces,
 explicit overrides, hidden charge/dummy compatibility, and unchecked drawing
@@ -180,8 +231,13 @@ checks pass with targeted reruns after the new integration shard assignments
 and module-index artifact exclusion were fixed. Raw outputs and the detailed
 status history are in `validation/python-summary.json` and
 `validation/python-final-summary.json` under the artifact root. Final Python
-discovery passes 279 tests with 11 documented skips; the corpus runner's 11 tests
-also cover geometry comparison for atomless drawings.
+discovery passes 280 tests with 11 documented skips; the corpus runner's tests
+also cover geometry comparison for atomless drawings. The final routine checks
+are recorded in `validation/python-docs-passive-final-summary.json`: Ruff, Ty
+(including explicit fixture-generator checks), 185 reference tests, 59 minimal
+dependency tests, the module index, and the documentation build all pass. The
+documentation build checks 13,703 links and assets. Regenerating the two
+typing-adjusted fixture sets changed none of their 84 fixture files.
 
 The broad Rust workspace run recorded 5,922 passing tests and five failures in
 four targets. Four were expected CDS extension lists that needed updating; the
@@ -215,6 +271,17 @@ format from the extension, and exported a 40,557-byte CDXML drawing. It emitted
 the expected page-stacking and external-reaction-metadata notices. The isolated
 GUI QA application launched, but the computer-use bridge timed out attaching to
 it; this record does not claim a final GUI inspection.
+
+Native ChemDraw **26.0.0.6599** also opened the independent irregular-layout
+CDXML and copied it using ordinary Select All and Copy, without Clean Up. The
+captured native CDX and its independently decoded CDXML produce byte-identical
+ReShiki documents. Sixteen checked geometric anchors share one translation,
+with a maximum import residual of 0.0000089 world units. Six editable
+CDXML/CDX/CDS roundtrips stay within 0.0000543 world units. ChemDraw itself
+converts the source NaOH caption to a contracted fragment and the plus mark to
+a chemical charge; the receipt distinguishes that native interpretation from
+ReShiki import behavior. Capture files and the detailed geometry receipt remain
+local validation artifacts.
 
 ## Remaining interchange boundaries
 
@@ -268,6 +335,8 @@ cargo test -p reshiki-io --test chemdraw_multipage
 cargo test -p reshiki-io --test chemdraw_multipage_boundaries
 cargo test -p reshiki-io --test chemdraw_visibility_and_label_faces
 cargo test -p reshiki-io --test generic_editable_export
+cargo test -p reshiki-io --test chemdraw_clipboard_layout
+cargo test -p reshiki-io --test passive_drawing_geometry
 ```
 
 For a new batch, preserve existing failures and choose a new output directory:
