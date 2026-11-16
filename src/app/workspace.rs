@@ -602,6 +602,7 @@ impl App {
                 Some(Message::SaveAs),
                 false
             ),
+            self.github_command(),
             divider(),
             icon_button(
                 Icon::Undo,
@@ -660,9 +661,19 @@ impl App {
                 self.inspector_open
             )
         ]
-        .spacing(4)
+        // 3 px gaps leave three tabs room in a 1040 px window beside the
+        // GitHub button and the Clean up options ▾.
+        .spacing(3)
         .align_y(Alignment::Center);
         container(bar).padding([9, 14]).style(panel).into()
+    }
+
+    /// The GitHub button and its menu, on the desktop.
+    fn github_command(&self) -> Option<Element<'_, Message>> {
+        #[cfg(not(target_arch = "wasm32"))]
+        return Some(self.github_button());
+        #[cfg(target_arch = "wasm32")]
+        None
     }
 
     fn tool_palette(&self) -> Element<'_, Message> {
@@ -1785,6 +1796,10 @@ impl App {
         if self.inspector_tab == InspectorTab::Assistant {
             return self.inspector_frame(self.assistant_panel());
         }
+        #[cfg(not(target_arch = "wasm32"))]
+        if self.inspector_tab == InspectorTab::Versions {
+            return self.inspector_frame(self.versions_panel());
+        }
         let mut tabs = row![].spacing(SEGMENT_GAP);
         for (label, tab) in INSPECTOR_TABS {
             let selected = self.inspector_tab == tab
@@ -1826,6 +1841,8 @@ impl App {
             InspectorTab::Import => self.import_panel(),
             InspectorTab::Names => self.naming_panel(),
             InspectorTab::Export => self.export_panel(),
+            // Shown above on the desktop; the browser has no GitHub drawings.
+            InspectorTab::Versions => Space::new().into(),
         };
         let mut content = column![
             container(tabs).padding([10., SEGMENT_MARGIN]),
@@ -2916,6 +2933,10 @@ impl App {
                 tooltip::Position::Top,
             ));
         }
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(chip) = self.github_chip() {
+            status = status.push(chip);
+        }
         if self.updates.available() {
             status = status.push(
                 accessible_command("status-update", "Update available", "Update available")
@@ -3511,7 +3532,7 @@ pub(super) fn keyed_command<'a>(label: &str, message: Message) -> button::Button
         .on_press(message)
         .style(control(false))
 }
-fn icon_button(
+pub(super) fn icon_button(
     icon: Icon,
     hint: impl Into<std::borrow::Cow<'static, str>>,
     message: Option<Message>,
@@ -3540,6 +3561,7 @@ fn icon_button_at(
         Icon::Import => "header-import",
         Icon::Export => "header-export",
         Icon::Inspector => "header-inspector",
+        Icon::Cloud => "header-github",
         Icon::Keyboard => "help-open",
         Icon::Settings => "header-settings",
         _ => "header-other",

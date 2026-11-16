@@ -89,6 +89,7 @@ impl App {
             || self.pending.is_some()
             || self.updates.open
             || self.updates.restarting
+            || self.github.dialog_open()
     }
     pub(super) fn desktop_action(&mut self, action: Action) -> Task<Message> {
         match action {

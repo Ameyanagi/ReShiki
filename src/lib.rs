@@ -45,6 +45,8 @@ pub mod assistant;
 #[doc(hidden)]
 pub mod cli;
 pub mod clipboard;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod github;
 pub mod hotkeys;
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) mod http;

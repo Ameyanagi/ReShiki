@@ -181,3 +181,42 @@ pub(super) fn inspector(f: &mut Frame<'_>, ink: Color) {
     );
     line(f, ink, &[(15., 4.), (15., 20.)]);
 }
+
+pub(super) fn cloud(f: &mut Frame<'_>, ink: Color) {
+    let outline = Path::new(|p| {
+        p.move_to(Point::new(7., 19.));
+        p.bezier_curve_to(
+            Point::new(3.5, 19.),
+            Point::new(2., 16.5),
+            Point::new(2.5, 14.5),
+        );
+        p.bezier_curve_to(
+            Point::new(3., 12.5),
+            Point::new(4.5, 11.5),
+            Point::new(6.5, 11.5),
+        );
+        p.bezier_curve_to(
+            Point::new(6.5, 7.5),
+            Point::new(9.5, 5.),
+            Point::new(12.5, 5.),
+        );
+        p.bezier_curve_to(
+            Point::new(15.5, 5.),
+            Point::new(17.5, 7.),
+            Point::new(18., 9.5),
+        );
+        p.bezier_curve_to(
+            Point::new(20.5, 9.8),
+            Point::new(22., 12.),
+            Point::new(21.8, 14.5),
+        );
+        p.bezier_curve_to(
+            Point::new(21.5, 17.2),
+            Point::new(19.5, 19.),
+            Point::new(17., 19.),
+        );
+    });
+    f.stroke(&outline, Stroke::default().with_width(1.6).with_color(ink));
+    line(f, ink, &[(12., 20.), (12., 12.)]);
+    line(f, ink, &[(9., 15.), (12., 12.), (15., 15.)]);
+}

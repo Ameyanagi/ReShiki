@@ -61,9 +61,13 @@ nazuchem-s2n = { git = "https://github.com/Ameyanagi/nazuchem", rev = "5dd39d824
 
 [target.'cfg(target_os = "macos")'.dependencies]
 reshiki-macos = { path = "native/macos" }
+# The GitHub sign-in is kept in the Keychain.
+security-framework = "3.7"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 reshiki-linux = { path = "native/linux" }
+# The GitHub sign-in is kept in the Secret Service keyring.
+oo7 = { version = "0.6", default-features = false, features = ["tokio", "native_crypto"] }
 
 [target.'cfg(windows)'.dependencies]
 reshiki-windows = { path = "native/windows" }

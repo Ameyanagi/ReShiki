@@ -35,6 +35,8 @@ impl App {
             }
         }
         let message = self.updates_dialog_gate(message)?;
+        #[cfg(not(target_arch = "wasm32"))]
+        let message = self.github_dialog_gate(message)?;
         let Some(message) = self.prepare_molecule_shortcut(message) else {
             return Break(Task::none());
         };
@@ -159,6 +161,24 @@ impl App {
             match message {
                 Message::Updates(action) => return Break(self.update_action(action)),
                 Message::Escape => return Break(self.update_action(updates::Action::Show(false))),
+                _ if !updates::background(&message) && !self.answers_save_dialog(&message) => {
+                    return Break(Task::none());
+                }
+                _ => {}
+            }
+        }
+        Continue(message)
+    }
+
+    /// A GitHub dialog owns input like the Updates dialog; its own messages
+    /// never reach the gates (see `App::update`).
+    #[cfg(not(target_arch = "wasm32"))]
+    fn github_dialog_gate(&mut self, message: Message) -> Gate {
+        if self.github.dialog_open() {
+            match message {
+                Message::Escape => {
+                    return Break(self.github_action(super::github::Action::Close));
+                }
                 _ if !updates::background(&message) && !self.answers_save_dialog(&message) => {
                     return Break(Task::none());
                 }

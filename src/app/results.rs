@@ -695,6 +695,9 @@ fn completion(message: &Message) -> Option<Completion> {
         }),
         // Tab wraps a routed message; its inner message is classified where it is delivered.
         Message::Tab(..) => None,
+        // Handled in App::update before tab routing and every gate.
+        #[cfg(not(target_arch = "wasm32"))]
+        Message::GitHub(..) => None,
         #[cfg(target_os = "linux")]
         Message::LinuxClipboardWindow(_) => None,
         // Controls, view/window lifecycle and sub-enums without completion variants.

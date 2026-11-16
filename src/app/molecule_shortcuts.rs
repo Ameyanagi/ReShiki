@@ -157,6 +157,7 @@ impl App {
                 || self.settings.open
                 || self.commands.open
                 || self.updates.open
+                || self.github_dialog()
             {
                 return None;
             }

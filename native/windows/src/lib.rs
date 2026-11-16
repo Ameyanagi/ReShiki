@@ -16,6 +16,7 @@
 
 pub mod accessibility;
 mod clipboard;
+pub mod credentials;
 pub mod desktop;
 mod metafile_worker;
 mod ole;

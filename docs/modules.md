@@ -73,6 +73,12 @@ explains how the crates and modules fit together.
 - `src/app/files/performance.rs`
 - `src/app/gates.rs`: Modal gates that run before message dispatch.
 - `src/app/generic.rs`: Finite expansion creates a new drawing; the source and its history stay intact.
+- `src/app/github.rs`: GitHub in the editor
+- `src/app/github/account.rs`: The GitHub account dialog
+- `src/app/github/compare.rs`: Two versions of a drawing side by side, with what differs marked
+- `src/app/github/conflict.rs`: A drawing changed on GitHub since it was opened here
+- `src/app/github/picker.rs`: The repository picker
+- `src/app/github/versions.rs`: Versions
 - `src/app/graphics.rs`
 - `src/app/graphics/heads.rs`
 - `src/app/graphics/path.rs`: Contextual pen authoring and node edits.
@@ -245,9 +251,22 @@ explains how the crates and modules fit together.
 - `src/desktop/launch.rs`: Launch classification
 - `src/desktop/protocol.rs`: A bounded typed protocol.
 - `src/desktop/server.rs`: The elected host
+- `src/github.rs`: Drawings kept in the user's GitHub repositories, through GitHub's REST API.
+- `src/github/api.rs`: GitHub's REST API, one function per call.
+- `src/github/auth.rs`: Sign-in with a device code, and token refresh.
+- `src/github/client.rs`: Signed-in requests to GitHub's API
+- `src/github/config.rs`: Which GitHub App this build signs in to, and where GitHub is.
+- `src/github/credentials.rs`: The GitHub sign-in, kept in the operating system's credential store and nowhere else
+- `src/github/credentials/linux.rs`: An item in the Secret Service keyring (the portal's keyring in a sandbox).
+- `src/github/credentials/macos.rs`: A generic password in the login Keychain.
+- `src/github/credentials/memory.rs`: A sign-in that lasts until the app quits.
+- `src/github/credentials/windows.rs`: A generic credential in the user's Credential Manager.
+- `src/github/mock.rs`: A small GitHub in this process, for tests and for showing the real app without the network.
+- `src/github/send.rs`: Send
+- `src/github/workcopy.rs`: The files of a repository on this computer
 - `src/hotkeys.rs`: Transactional chemistry edits shared by contextual drawing shortcuts.
 - `src/hotkeys/ligands.rs`: Contextual pi-ligand construction uses real ring atoms and typed attachments.
-- `src/http.rs`: HTTPS clients for the update check and online name lookup.
+- `src/http.rs`: HTTPS clients for the update check, online name lookup and GitHub.
 - `src/kept_fonts.rs`: The fonts the browser editor kept from earlier visits, by SHA-256, in the order they are added as fallbacks once text needs them.
 - `src/keyboard_drawing.rs`: A keyboard drawing hotspot, independent of pointer hover and selection.
 - `src/launch.rs`: Headless entry points selected by the first command-line token.
@@ -812,6 +831,7 @@ explains how the crates and modules fit together.
 
 - `native/windows/src/accessibility.rs`: Owner-thread AccessKit lifecycle.
 - `native/windows/src/clipboard.rs`
+- `native/windows/src/credentials.rs`: One generic credential in the user's Credential Manager, by target name.
 - `native/windows/src/desktop.rs`: Local, authenticated desktop IPC.
 - `native/windows/src/lib.rs`: Safe entry points for the editor.
 - `native/windows/src/metafile_worker.rs`: Native file playback is isolated from the editor and bounded by a Windows job, including allocations GDI+ makes outside the Rust global allocator.
