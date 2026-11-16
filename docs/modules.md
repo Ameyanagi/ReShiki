@@ -78,6 +78,7 @@ explains how the crates and modules fit together.
 - `src/app/github/compare.rs`: Two versions of a drawing side by side, with what differs marked
 - `src/app/github/conflict.rs`: A drawing changed on GitHub since it was opened here
 - `src/app/github/identity.rs`: Which repository a drawing is in, at a glance
+- `src/app/github/newer.rs`: Newer on GitHub
 - `src/app/github/picker.rs`: The repository picker
 - `src/app/github/versions.rs`: Versions
 - `src/app/graphics.rs`

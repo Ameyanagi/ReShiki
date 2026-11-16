@@ -34,6 +34,7 @@ pub(super) mod picker;
 mod tests;
 mod versions;
 
+use newer::Found;
 pub(super) use picker::Mode;
 
 const OPEN_FROM: &str = "Open from GitHub…";
@@ -45,10 +46,6 @@ const SAVE_COPY: &str = "Save a copy…";
 /// The open drawings' repositories are asked again on window focus, at
 /// most this often.
 const RECHECK: Duration = Duration::from_secs(5 * 60);
-
-/// A drawing changed on GitHub since it was opened or sent here: GitHub's
-/// version, and the commit that last changed it.
-type Found = (send::Conflict, Option<api::RemoteVersion>);
 
 #[derive(Debug, Clone)]
 pub(super) enum Account {
@@ -885,7 +882,8 @@ impl App {
             Action::CloseAnswer(send) => return self.github_close_answer(send),
             Action::Review => {
                 if let Some((key, _)) = self.github.locate(self.tab.path.as_deref()) {
-                    return self.github_review(key, 0);
+                    let promote = self.github_promote();
+                    return Task::batch([promote, self.github_review(key, 0)]);
                 }
             }
             Action::ReviewMeta(key, repo_path, commit, found) => {
@@ -1794,7 +1792,9 @@ impl App {
         rows.push(self.github_send_row());
         if let Some((key, repo_path)) = self.github.locate(self.tab.path.as_deref()) {
             let name = file_name(&repo_path).to_owned();
-            if self.github_conflicts(&key) > 0 {
+            if self.github_conflicts(&key) > 0
+                || self.github_newer_conflict(self.tab.path.as_deref())
+            {
                 rows.push((
                     "Review changes on GitHub".into(),
                     name.clone(),
@@ -2221,12 +2221,14 @@ impl App {
             .is_some_and(|file| file.base_blob.is_none());
         if state.sending.contains(key) {
             Chip::Sending
-        } else if self.github_conflicts(key) > 0 {
+        } else if self.github_conflicts(key) > 0
+            || self.github_newer_conflict(self.tab.path.as_deref())
+        {
             Chip::Review
-        } else if state.failed.contains_key(key) {
-            Chip::NotSent
         } else if self.github_newer(self.tab.path.as_deref()).is_some() {
             Chip::Newer
+        } else if state.failed.contains_key(key) {
+            Chip::NotSent
         } else if count == 1 && new {
             Chip::New
         } else if count > 0 {

@@ -1,7 +1,8 @@
 //! Newer on GitHub: a drawing someone changed there, found on window focus.
 use super::*;
 
-/// `ring.rsk` as @`login` changed it on GitHub: 30 atoms where it had 42.
+/// `ring.rsk` as @`login` changed it on GitHub: 30 atoms where it had 42,
+/// asked against the base `app_in` opens it with.
 fn changed_by(login: &str) -> Found {
     let theirs = drawing(30.);
     let conflict = send::Conflict {
@@ -19,7 +20,11 @@ fn changed_by(login: &str) -> Found {
         author: login.into(),
         date: "2026-11-16T14:02:00Z".into(),
     };
-    (conflict, Some(by))
+    Found {
+        base: sha('b'),
+        theirs: conflict,
+        by: Some(by),
+    }
 }
 
 fn found(app: &mut App, login: &str) {
@@ -45,9 +50,12 @@ fn a_drawing_changed_on_github_with_no_changes_here_waits_for_update() {
     found(&mut app, "alice");
     assert_eq!(app.github_chip_state(&repo().key), Chip::Newer);
     let tab = app.strip().find(|tab| tab.id == app.tab.id).unwrap();
-    let badge = app.github_tab(tab, false).unwrap();
-    assert_eq!(badge.hint, "octo/lab · ring.rsk · Newer on GitHub");
-    assert_eq!(badge.spoken, "lab, newer on GitHub");
+    let (hint, spoken) = app
+        .github_tab(tab, false)
+        .map(|badge| (badge.hint, badge.spoken))
+        .unwrap();
+    assert_eq!(hint, "octo/lab · ring.rsk · Newer on GitHub");
+    assert_eq!(spoken, "lab, newer on GitHub");
     // The palette's row, only while it applies.
     let update = (app.github_palette().into_iter())
         .find(|(name, ..)| name == "Update from GitHub")
@@ -60,12 +68,17 @@ fn a_drawing_changed_on_github_with_no_changes_here_waits_for_update() {
         file_state(&app, "ring.rsk").unwrap().base_blob,
         Some(sha('b'))
     );
-    // A save here since: Send, and no Update.
-    save_here(&mut app, &path);
-    assert_eq!(app.github_chip_state(&repo().key), Chip::Unsent(1));
+    // A save here since: no Update, but Review, which shows the conflict.
+    let mine = save_here(&mut app, &path);
+    assert_eq!(app.github_chip_state(&repo().key), Chip::Review);
     assert!(!rows(&app).contains(&"Update from GitHub".into()));
+    assert!(rows(&app).contains(&"Review changes on GitHub".into()));
     let _ = app.github_update();
-    assert_eq!(std::fs::read(&path).unwrap(), drawing(50.));
+    assert_eq!(std::fs::read(&path).unwrap(), mine);
+    github(&mut app, Action::Review);
+    assert_eq!(review(&app).name, "ring.rsk");
+    let mark = file_state(&app, "ring.rsk").unwrap().conflict.unwrap();
+    assert_eq!((mark.commit, mark.blob), (sha('e'), Some(sha('a'))));
 }
 
 #[test]
@@ -90,6 +103,14 @@ fn update_is_one_undo_step_to_githubs_drawing_exactly() {
     );
     assert_eq!(app.github_chip_state(&repo().key), Chip::Sent);
     assert!(!rows(&app).contains(&"Update from GitHub".into()));
+    // A late reply asked against the old base, or one kept from before:
+    // the drawing has moved on, so no Update.
+    found(&mut app, "alice");
+    assert!(app.github.newer.is_empty(), "asked against the old base");
+    app.github
+        .newer
+        .insert((repo().key, "ring.rsk".into()), changed_by("alice"));
+    assert_eq!(app.github_chip_state(&repo().key), Chip::Sent);
     // One Undo brings yours back.
     let _ = app.update(Message::Undo);
     assert!(super::super::super::same_drawing(&app.tab.doc, &yours));
@@ -136,6 +157,14 @@ fn with_changes_here_it_becomes_the_conflict_review() {
     // A second check finds it again, and asks nothing new.
     found(&mut app, "alice");
     assert_eq!(app.github.conflicts[&repo().key].len(), 1);
+
+    // While the repository sends, the send finds out instead.
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _path) = app_in(dir.path());
+    app.github.sending.insert(repo().key);
+    found(&mut app, "alice");
+    assert!(app.github.newer.is_empty());
+    assert!(!app.github.conflicts.contains_key(&repo().key));
 }
 
 #[test]
