@@ -23,9 +23,11 @@ pub enum InputKind {
     Structure,
     Name,
 }
-/// File extensions inserted as structures, with their import format.
-const STRUCTURES: [(&str, &str); 6] = [
+/// File extensions inserted as structures, with their import format. An SD
+/// file is read one record at a time.
+const STRUCTURES: [(&str, &str); 7] = [
     ("mol", "mol"),
+    ("sdf", "mol"),
     ("rxn", "rxn"),
     ("cdxml", "cdxml"),
     ("cdx", "cdx"),
@@ -78,8 +80,8 @@ pub struct Ticket {
 #[derive(Debug, Clone, Default)]
 pub struct Batch {
     label: String,
-    drawings: Vec<Document>,
-    warnings: Vec<String>,
+    pub(super) drawings: Vec<Document>,
+    pub(super) warnings: Vec<String>,
 }
 
 #[derive(Default)]
@@ -304,10 +306,47 @@ async fn read(
             }
             Ok((drawing, response.warnings))
         }
-        Kind::Document | Kind::Unsupported => Err("Unsupported file type".into()),
+        // Inserted from GitHub; a dropped or chosen drawing opens instead.
+        Kind::Document => {
+            let drawing = reshiki::task::spawn_blocking(move || {
+                Document::from_native_file(&file.contents).map_err(|e| e.to_string())
+            })
+            .await
+            .map_err(|e| e.to_string())??;
+            Ok((
+                reshiki::canvas_theme::for_native_paste(drawing, canvas_theme),
+                vec![],
+            ))
+        }
+        Kind::Unsupported => Err("Unsupported file type".into()),
     }
 }
-async fn load(
+/// An SD file's records, each a file of its own; any other file as it is.
+pub(super) fn records(file: Picked) -> Vec<Picked> {
+    let text = match std::str::from_utf8(&file.contents) {
+        Ok(text) if extension(&file.path) == "sdf" => text,
+        _ => return vec![file],
+    };
+    let (mut records, mut record) = (Vec::new(), String::new());
+    for line in text.split_inclusive('\n') {
+        record.push_str(line);
+        if line.starts_with("$$$$") {
+            records.push(std::mem::take(&mut record));
+        }
+    }
+    records.push(record);
+    records
+        .into_iter()
+        .filter(|record| !record.trim().is_empty())
+        .map(|record| Picked {
+            path: file.path.clone(),
+            contents: record.into_bytes(),
+            #[cfg(target_arch = "wasm32")]
+            handle: file.handle.clone(),
+        })
+        .collect()
+}
+pub(super) async fn load(
     engine: LocalEngine,
     files: Vec<Picked>,
     options: DrawingOptions,
@@ -318,10 +357,11 @@ async fn load(
         label: describe(&paths),
         ..Default::default()
     };
-    for (file, path) in files.into_iter().zip(&paths) {
+    for file in files.into_iter().flat_map(records) {
+        let path = file.path.clone();
         let (drawing, warnings) = read(&engine, file, options, canvas_theme)
             .await
-            .map_err(|e| format!("Could not import {}: {e}", name(path)))?;
+            .map_err(|e| format!("Could not import {}: {e}", name(&path)))?;
         batch.drawings.push(drawing);
         for warning in warnings {
             if !batch.warnings.contains(&warning) {

@@ -34,12 +34,38 @@ pub struct Repo {
     pub push: bool,
 }
 
-/// A folder, drawing or preview in one repository folder.
+/// A folder, drawing, other chemistry file or preview in one repository
+/// folder (or, read whole, the repository).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Entry {
     pub name: String,
     pub sha: String,
     pub folder: bool,
+}
+
+/// The chemistry files listed besides drawings, as File › Open reads them,
+/// and the label each shows.
+const FORMATS: [(&str, &str); 6] = [
+    ("mol", "MOL"),
+    ("sdf", "SDF"),
+    ("cdxml", "CDXML"),
+    ("cdx", "CDX"),
+    ("rxn", "RXN"),
+    ("smi", "SMI"),
+];
+
+/// The label of a chemistry file that is not a drawing, by its extension.
+pub fn format_label(name: &str) -> Option<&'static str> {
+    let (_, extension) = name.rsplit_once('.')?;
+    FORMATS
+        .iter()
+        .find(|(format, _)| extension.eq_ignore_ascii_case(format))
+        .map(|(_, label)| *label)
+}
+
+/// A file the picker lists: a drawing or another chemistry file.
+pub fn listed(name: &str) -> bool {
+    name.ends_with(".rsk") || format_label(name).is_some()
 }
 
 /// The signed-in user and the repositories ReShiki may use.

@@ -593,7 +593,7 @@ impl App {
     /// lands one bond length right of the drawing and is revealed, as an
     /// inserted structure is. Pages keep the small offset: right of the
     /// drawing may be off the page.
-    fn append_pasted(&mut self, part: &Document) -> bool {
+    pub(super) fn append_pasted(&mut self, part: &Document) -> bool {
         let before = self.tab.doc.clone();
         let center = editing::center(part, &part.all_ids());
         let view = self.guides.paper(iced::Rectangle::with_size(self.viewport));

@@ -1,7 +1,7 @@
 use super::line;
 use crate::canvas::layered::Frame;
-use iced::widget::canvas::{Path, Stroke};
-use iced::{Color, Point};
+use iced::widget::canvas::{LineCap, Path, Stroke};
+use iced::{Color, Point, Size};
 
 pub(super) fn color_tiles(f: &mut Frame<'_>, ink: Color, soft: bool) {
     for (i, color) in [
@@ -187,6 +187,71 @@ pub(super) fn eye(f: &mut Frame<'_>, ink: Color) {
     });
     f.stroke(&lid, Stroke::default().with_width(1.3).with_color(ink));
     f.fill(&Path::circle(Point::new(7., 7.), 1.9), ink);
+}
+
+/// Four rounded squares in a 16 × 16 box: the Tiles view.
+pub(super) fn tiles(f: &mut Frame<'_>, ink: Color) {
+    for (x, y) in [(1.5, 1.5), (9., 1.5), (1.5, 9.), (9., 9.)] {
+        let square = Path::rounded_rectangle(Point::new(x, y), Size::new(5.5, 5.5), 1.0.into());
+        f.fill(&square, ink);
+    }
+}
+
+/// A list whose lower rows branch off the first, in a 16 × 16 box: the
+/// Tree view.
+pub(super) fn tree(f: &mut Frame<'_>, ink: Color) {
+    let lines = Path::new(|p| {
+        for (from, to) in [
+            ((3., 2.5), (13., 2.5)),
+            ((6., 6.5), (13., 6.5)),
+            ((6., 10.5), (13., 10.5)),
+            ((3., 2.5), (3., 10.5)),
+            ((3., 10.5), (6., 10.5)),
+            ((3., 6.5), (6., 6.5)),
+        ] {
+            p.move_to(Point::new(from.0, from.1));
+            p.line_to(Point::new(to.0, to.1));
+        }
+    });
+    let stroke = Stroke {
+        line_cap: LineCap::Round,
+        ..Stroke::default().with_width(1.5).with_color(ink)
+    };
+    f.stroke(&lines, stroke);
+}
+
+/// A page with its corner folded, in a 16 × 16 box: a file.
+pub(super) fn file(f: &mut Frame<'_>, ink: Color) {
+    let page = Path::new(|p| {
+        p.move_to(Point::new(3.5, 1.5));
+        p.line_to(Point::new(9.5, 1.5));
+        p.line_to(Point::new(12.5, 4.5));
+        p.line_to(Point::new(12.5, 14.5));
+        p.line_to(Point::new(3.5, 14.5));
+        p.close();
+        p.move_to(Point::new(9.5, 1.5));
+        p.line_to(Point::new(9.5, 4.5));
+        p.line_to(Point::new(12.5, 4.5));
+    });
+    f.stroke(&page, Stroke::default().with_width(1.).with_color(ink));
+}
+
+/// A sage folder with a tab, in a 16 × 16 box: a folder.
+pub(super) fn folder(f: &mut Frame<'_>) {
+    let shape = Path::new(|p| {
+        p.move_to(Point::new(1.5, 4.5));
+        p.line_to(Point::new(6.1, 3.5));
+        p.line_to(Point::new(7.5, 5.));
+        p.line_to(Point::new(14.5, 5.));
+        p.line_to(Point::new(14.5, 13.));
+        p.line_to(Point::new(1.5, 13.));
+        p.close();
+    });
+    f.fill(&shape, Color::from_rgb8(0xc9, 0xd9, 0xd2));
+    let edge = Stroke::default()
+        .with_width(1.)
+        .with_color(Color::from_rgb8(0x7d, 0x97, 0x8c));
+    f.stroke(&shape, edge);
 }
 
 /// A push pin in the lock's 20 × 20 box: head, collar and needle.

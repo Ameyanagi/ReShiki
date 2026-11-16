@@ -80,6 +80,7 @@ explains how the crates and modules fit together.
 - `src/app/github/identity.rs`: Which repository a drawing is in, at a glance
 - `src/app/github/newer.rs`: Newer on GitHub
 - `src/app/github/picker.rs`: The repository picker
+- `src/app/github/picker/tree.rs`: The picker's Tree view
 - `src/app/github/versions.rs`: Versions
 - `src/app/graphics.rs`
 - `src/app/graphics/heads.rs`

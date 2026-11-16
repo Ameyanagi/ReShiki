@@ -10,6 +10,7 @@ use super::{
     document_tab::{DocumentTab, TabId},
     focus_drawing,
 };
+use iced::keyboard::Modifiers;
 use iced::widget::{Space, button, column, container, row, text};
 use iced::{Alignment, Border, Color, Element, Length, Task, Theme};
 use reshiki::github::{
@@ -366,20 +367,41 @@ pub enum Action {
 
 /// Keys of an open GitHub dialog, before its fields: Escape closes, and the
 /// arrows move in the picker's lists.
-pub(super) fn modal_key(
-    key: &iced::keyboard::Key,
-    modifiers: iced::keyboard::Modifiers,
-) -> Option<Message> {
+pub(super) fn modal_key(key: &iced::keyboard::Key, modifiers: Modifiers) -> Option<Message> {
     use iced::keyboard::{Key, key::Named};
-    match key {
-        Key::Named(Named::Escape) => Some(Message::GitHub(Action::Close)),
-        Key::Named(Named::ArrowUp) if modifiers.is_empty() => {
-            Some(Message::GitHub(Action::Picker(picker::Action::Move(-1))))
+    let action = match key {
+        Key::Named(Named::Escape) => return Some(Message::GitHub(Action::Close)),
+        Key::Named(Named::ArrowUp) if modifiers.is_empty() => picker::Action::Move(-1),
+        Key::Named(Named::ArrowDown) if modifiers.is_empty() => picker::Action::Move(1),
+        // Before the search field's Enter.
+        Key::Named(Named::Enter) if modifiers == Modifiers::SHIFT => picker::Action::Insert,
+        _ => return None,
+    };
+    Some(Message::GitHub(Action::Picker(action)))
+}
+
+/// [`modal_key`] in the picker's tree while the search field is empty, so
+/// no cursor is moved there: → opens a folder and ← closes it.
+pub(super) fn tree_key(key: &iced::keyboard::Key, modifiers: Modifiers) -> Option<Message> {
+    use iced::keyboard::{Key, key::Named};
+    let open = match key {
+        Key::Named(Named::ArrowRight) if modifiers.is_empty() => true,
+        Key::Named(Named::ArrowLeft) if modifiers.is_empty() => false,
+        _ => return modal_key(key, modifiers),
+    };
+    Some(Message::GitHub(Action::Picker(picker::Action::Expand(
+        open,
+    ))))
+}
+
+impl App {
+    /// The keys of the open GitHub dialog: [`tree_key`] in the picker's tree
+    /// while no field there has text to move through, else [`modal_key`].
+    pub(super) fn github_keys(&self) -> super::file_shortcuts::ModalKeys {
+        match &self.github.dialog {
+            Some(Dialog::Picker(picker)) if picker.tree_keys() => tree_key,
+            _ => modal_key,
         }
-        Key::Named(Named::ArrowDown) if modifiers.is_empty() => {
-            Some(Message::GitHub(Action::Picker(picker::Action::Move(1))))
-        }
-        _ => None,
     }
 }
 
@@ -1764,12 +1786,13 @@ impl App {
     /// The Send row of the menu and the palette: its label, its detail, and
     /// its action, `None` while there is nothing to send.
     fn github_send_row(&self) -> (String, String, Option<Action>) {
-        if self.github.old(self.tab.path.as_deref()).is_some() {
-            return (
-                SAVE_COPY.into(),
-                "Old version".into(),
-                Some(Action::SaveCopy),
-            );
+        if let Some((_, repo_path)) = self.github.old(self.tab.path.as_deref()) {
+            let detail = if repo_path.ends_with(".rsk") {
+                "Old version"
+            } else {
+                "Read only"
+            };
+            return (SAVE_COPY.into(), detail.into(), Some(Action::SaveCopy));
         }
         let Some((key, _)) = self.github.locate(self.tab.path.as_deref()) else {
             return (
@@ -2097,6 +2120,8 @@ impl App {
             folder.unwrap_or_default(),
         ))));
         if old || state.read_only(&key) {
+            // Another chemistry file than a drawing is read only, not old.
+            let old = old && repo_path.ends_with(".rsk");
             return Some(self.github_read_only_chip(place, &key, old));
         }
         let mut content = row![].spacing(6).align_y(Alignment::Center);
@@ -2171,7 +2196,8 @@ impl App {
     }
 
     /// The chip of a drawing nothing is sent from: an old version, with Open
-    /// latest; or a read-only repository's, whose menu offers the way on.
+    /// latest; or a read-only repository's, or another chemistry file than a
+    /// drawing, whose menu offers the way on.
     fn github_read_only_chip<'a>(
         &'a self,
         place: impl Into<Element<'a, Message>>,
@@ -2193,8 +2219,9 @@ impl App {
                 .align_y(Alignment::Center)
                 .into();
         }
+        let read_only = self.github.read_only(key);
         let changes = match self.github_waiting(key, |tab| self.shown_edited(tab)).len() {
-            0 => String::new(),
+            n if n == 0 || !read_only => String::new(),
             1 => "· 1 change".into(),
             n => format!("· {n} changes"),
         };
@@ -2223,16 +2250,20 @@ impl App {
                     .on_press(Message::GitHub(action))
             };
             container(
-                column![
-                    item("github-save-copy", SAVE_COPY, Action::SaveCopy),
-                    item(
-                        "github-copy-request",
-                        "Copy request for the owner",
-                        Action::CopyRequest(self.github.named(key)),
-                    ),
-                    item("github-open-on", "Open on GitHub ↗", Action::OpenOnGitHub),
-                ]
-                .spacing(1),
+                column![item("github-save-copy", SAVE_COPY, Action::SaveCopy)]
+                    .push(read_only.then(|| {
+                        item(
+                            "github-copy-request",
+                            "Copy request for the owner",
+                            Action::CopyRequest(self.github.named(key)),
+                        )
+                    }))
+                    .push(item(
+                        "github-open-on",
+                        "Open on GitHub ↗",
+                        Action::OpenOnGitHub,
+                    ))
+                    .spacing(1),
             )
             .width(230)
             .padding(5)
@@ -2291,6 +2322,9 @@ impl App {
                 (key, repo_path, true)
             }
         };
+        // Another chemistry file than a drawing is read only, not old.
+        let other = old && !repo_path.ends_with(".rsk");
+        let old = old && !other;
         let named = self.github.named(&key);
         let hue = self.github.hue(&key);
         let letters = identity::monograms(&self.github_open_repos())
@@ -2300,7 +2334,7 @@ impl App {
             .github_waiting(&key, |tab| self.shown_edited(tab))
             .len();
         // Nothing is sent from a read-only repository or an old version.
-        let read_only = old || self.github.read_only(&key);
+        let read_only = old || other || self.github.read_only(&key);
         let mut spoken = match (old, read_only, unsent) {
             (true, ..) => format!("{}, old version", self.github_label(&key)),
             (_, true, _) => format!("{}, read only", self.github_label(&key)),
@@ -2412,9 +2446,10 @@ impl App {
                 self.viewport.height,
                 super::help::Placement::Fit,
             ),
+            // The tree has a preview pane beside it.
             Dialog::Picker(picker) => (
                 self.picker_view(picker),
-                760.,
+                if picker.tree { 960. } else { 760. },
                 540.,
                 super::help::Placement::Center,
             ),

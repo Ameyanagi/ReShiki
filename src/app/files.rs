@@ -511,11 +511,19 @@ pub(super) fn open_contents(file: Option<(PathBuf, Result<Vec<u8>, String>)>) ->
 impl super::App {
     pub(super) fn drawing_save_target(&self, save_as: bool) -> (Option<PathBuf>, String) {
         let path = if save_as { None } else { self.tab.path.clone() };
-        let name = if self.tab.path.is_some() {
-            self.document_name()
+        let name = self.document_name();
+        // A file Save writes back keeps its name; an imported "co2.cif", or
+        // an "a.sdf" opened from GitHub, suggests "co2.rsk".
+        let writable = self.tab.path.as_deref().is_some_and(|path| {
+            kept_format(path).is_some()
+                || path
+                    .extension()
+                    .and_then(|extension| extension.to_str())
+                    .is_some_and(reshiki::compatibility::is_native_extension)
+        });
+        let name = if writable {
+            name
         } else {
-            // An imported "co2.cif" suggests "co2.rsk".
-            let name = self.document_name();
             let stem = std::path::Path::new(&name)
                 .file_stem()
                 .map_or(name.clone(), |s| s.to_string_lossy().into_owned());

@@ -374,3 +374,39 @@ async fn a_branch_or_commit_downloads_the_file_as_it_was_there() {
         Err(Error::NotFound)
     );
 }
+
+#[tokio::test]
+async fn a_repository_reads_whole_with_every_chemistry_file() {
+    let mock = Mock::start(0).await;
+    mock.model().seed_shared();
+    mock.model().seed_formats();
+    let client = crate::github::client::Client::public(mock.ends()).unwrap();
+    let key = alice("ligands");
+    let head = api::head(&client, &key, "main").await.unwrap();
+    let (all, truncated) = api::tree_all(&client, &key, &head.tree).await.unwrap();
+    assert!(!truncated);
+    let listed = names(&all);
+    for (path, folder) in [
+        ("bipyridines", true),
+        ("bipyridines/phen.mol", false),
+        ("bipyridines/bpy.cdxml", false),
+        ("bipyridines/phenol.cdx", false),
+        ("phosphines/dppe.sdf", false),
+        ("reactions/coupling.rxn", false),
+        ("salen.smi", false),
+        ("aromatics/furan.rsk", false),
+    ] {
+        assert!(listed.contains(&(path, folder)), "{path}");
+    }
+    let screening = listed
+        .iter()
+        .filter(|(path, _)| path.starts_with("screening/"));
+    assert_eq!(screening.count(), 240);
+    // A folder's own listing has them too; previews stay listed for names.
+    let top = api::tree(&client, &key, &head.tree).await.unwrap();
+    assert!(names(&top).contains(&("salen.smi", false)));
+    // Past GitHub's limit, part of it, said so.
+    mock.model().repo("ligands").truncated = true;
+    let (part, truncated) = api::tree_all(&client, &key, &head.tree).await.unwrap();
+    assert!(truncated && part.len() < all.len());
+}
