@@ -684,4 +684,6 @@ fn a_new_folder_in_the_tree_shows_under_its_folder() {
     let _ = picker(&mut app, picker::Action::CreateItem);
     assert_eq!(rows(&app), ["sub", "  new", "  a.mol", "z.mol"]);
     assert_eq!(selected_row(&app).as_deref(), Some("sub/new"));
+    // The file shown with it is asked about.
+    assert!(the_picker(&app).asked.contains("sub/a.mol"));
 }

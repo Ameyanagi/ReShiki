@@ -2072,7 +2072,8 @@ impl App {
                 picker.row = Some(path);
                 picker.new_item = None;
                 picker.error = None;
-                return picker.reveal_row();
+                let reveal = picker.reveal_row();
+                return Task::batch([reveal, self.picker_load()]);
             }
             picker.trail.push((typed.to_owned(), String::new()));
             picker.new_item = None;
