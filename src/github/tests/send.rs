@@ -712,7 +712,8 @@ async fn newer_finds_each_drawing_changed_on_github_and_who_changed_it() {
     let (mock, client) = notes(&[("dir/a.rsk", b"a"), ("b.rsk", b"b")]).await;
     let based = |path: &str, bytes: &[u8]| (path.to_owned(), mock::sha(bytes));
     let files = [based("dir/a.rsk", b"a"), based("b.rsk", b"b")];
-    let newer = || send::newer(&client, &key(), "main", &files);
+    let key = key();
+    let newer = || send::newer(&client, &key, "main", &files);
     assert!(newer().await.unwrap().is_empty(), "nothing changed yet");
 
     // @alice changes one between two checks; a deletion is left for Send.
