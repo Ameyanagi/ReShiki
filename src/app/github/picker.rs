@@ -1175,6 +1175,8 @@ impl App {
         };
         picker.signed_out = false;
         picker.repos = None;
+        // A repository asked for that could not be read signed out is chosen now.
+        picker.chosen = false;
         self.github_list()
     }
 

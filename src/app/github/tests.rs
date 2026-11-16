@@ -2904,3 +2904,36 @@ fn signed_out_the_palette_opens_a_public_repository_in_the_picker() {
         Some(alice().id)
     );
 }
+
+#[test]
+fn a_private_repository_asked_for_signed_out_opens_once_signed_in() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = app_in(dir.path());
+    let state = app.github.states[&repo().key].clone();
+    run_blocking(workcopy::persist(dir.path(), &repo().key, state, 9)).unwrap();
+    // Saved credentials are still loading when the palette asks for it.
+    app.github.account = Account::SignedOut(None);
+    github(
+        &mut app,
+        Action::Picker(picker::Action::ShowIn(repo().key, String::new())),
+    );
+    assert!(
+        the_picker(&app).repo.is_none(),
+        "private: not readable signed out"
+    );
+    app.github.account = Account::SignedIn {
+        login: "octo".into(),
+        remembered: true,
+    };
+    let _ = app.picker_signed_in();
+    let generation = app.github.generation;
+    let account = gh::Account {
+        login: "octo".into(),
+        repos: vec![repo()],
+    };
+    github(&mut app, Action::Listed(generation, Ok(account)));
+    assert_eq!(
+        the_picker(&app).repo.as_ref().map(|r| r.id),
+        Some(repo().id)
+    );
+}
