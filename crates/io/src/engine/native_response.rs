@@ -305,6 +305,40 @@ pub(crate) async fn execute_with_config(
         })
         .await?;
     }
+    if request.protocol == crate::engine::PROTOCOL
+        && request.operation == "export"
+        && matches!(request.format.as_deref(), Some("cdxml" | "cdx"))
+        && request
+            .document
+            .as_ref()
+            .is_some_and(crate::generic::present)
+    {
+        // Generic choices are validated drawing data, not a concrete molecule.
+        // Keep their source geometry and definitions without preparing an
+        // identity that would require choosing atoms or expanding repeats.
+        return crate::task::spawn_blocking(move || {
+            let document = request.document.as_ref().ok_or(Error::MissingDocument)?;
+            document.validate().map_err(Error::Chemistry)?;
+            let output = encode_drawing(document, &request, true)?;
+            let mut warnings = vec![crate::generic::NOTICE.into()];
+            warnings.extend(export_notices::notices(
+                document,
+                request.format.as_deref().ok_or(Error::MissingFormat)?,
+                Route::Prepared {
+                    source: document,
+                    figure_only: false,
+                },
+            ));
+            Ok(Response {
+                document: Some(document.clone()),
+                analysis: None,
+                output: Some(output),
+                engine_version: chemistry::RDKIT_VERSION.into(),
+                warnings,
+            })
+        })
+        .await?;
+    }
     let request = Arc::new(request);
     let source = Arc::clone(&request);
     let prepared = crate::task::spawn_blocking(move || {

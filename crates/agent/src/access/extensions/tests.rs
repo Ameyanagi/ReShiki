@@ -54,8 +54,8 @@ fn read_and_write_derive_from_the_table() {
     assert_eq!(
         *READ,
         [
-            "rsk", "reshiki", "moruno", "mol", "rxn", "rsmi", "cdxml", "cdx", "smi", "smiles",
-            "inchi"
+            "rsk", "reshiki", "moruno", "mol", "rxn", "rsmi", "cdxml", "cdx", "cds", "smi",
+            "smiles", "inchi"
         ]
     );
     assert_eq!(

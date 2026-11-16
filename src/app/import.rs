@@ -25,12 +25,13 @@ pub enum InputKind {
 }
 /// File extensions inserted as structures, with their import format. An SD
 /// file is read one record at a time.
-const STRUCTURES: [(&str, &str); 7] = [
+const STRUCTURES: [(&str, &str); 8] = [
     ("mol", "mol"),
     ("sdf", "mol"),
     ("rxn", "rxn"),
     ("cdxml", "cdxml"),
     ("cdx", "cdx"),
+    ("cds", "cdx"),
     ("smi", "smiles"),
     ("smiles", "smiles"),
 ];
@@ -892,7 +893,7 @@ impl App {
             hover_hint(
                 field("import-choose-file", "Choose file…")
                     .on_press(Message::Imports(Action::Choose)),
-                "MOL, RXN, CDXML, CDX, SMILES, CIF, PDB, POSCAR, XYZ or pictures · Several files go side by side",
+                "MOL, RXN, CDXML, CDX, CDS, SMILES, CIF, PDB, POSCAR, XYZ or pictures · Several files go side by side",
                 tooltip::Position::Top,
             ),
             field("import-paste-picture", "Paste picture").on_press_maybe(
@@ -902,10 +903,11 @@ impl App {
             self.import_examples_menu(),
         ]
         .spacing(5);
-        let hint =
-            text("Or drop MOL, RXN, CDXML, CDX, SMILES or picture files anywhere on the drawing.")
-                .size(11)
-                .style(muted_text);
+        let hint = text(
+            "Or drop MOL, RXN, CDXML, CDX, CDS, SMILES or picture files anywhere on the drawing.",
+        )
+        .size(11)
+        .style(muted_text);
         column![editor, actions, files, hint].spacing(10).into()
     }
 

@@ -1,0 +1,41 @@
+{
+  "provenance": "Synthetic hand-authored CDXML encoded with independent reference/engine/cdx_exchange.py; no ReShiki exporter or native ChemDraw authoring",
+  "binary_adaptation": "SDK zero-style CDXString payloads; CDS additionally has packed LabelStyle 0x080a and CaptionStyle 0x080b document defaults",
+  "cds_scope": "Full stationery payload contains artwork; drawing decoder and style loader are distinct consumers",
+  "expected": {
+    "atom_label": {
+      "family": "Times New Roman",
+      "size_pt": 18,
+      "bold": true,
+      "italic": true
+    },
+    "caption": {
+      "family": "Arial",
+      "size_pt": 12,
+      "bold": false,
+      "italic": true
+    }
+  },
+  "unused_palette": {
+    "provenance": "Synthetic representative of preparation/unused-wide-color/1.1 from the unchanged original scene oracle",
+    "files": {
+      "cdxml": "unused-palette.cdxml",
+      "cdx": null,
+      "cds": null
+    },
+    "expected_import": {
+      "atoms": 2,
+      "bonds": 1,
+      "atom_text_styles": 0,
+      "notices": []
+    },
+    "binary_encoder_limit": "Invalid drawing color",
+    "binary_representation_limit": "CDX/CDS color tables use normalized unsigned 16-bit channels; source r=1.1 is unrepresentable. It is retained unchanged, never clamped, stripped, or wrapped."
+  },
+  "sha256": {
+    "defaults.cdxml": "aa73ed4c80a8e9f1042049ed93927dfb47239912ae35815ddce666b8829fc488",
+    "defaults.cdx": "96c3e94123f057e1fab96159c89953eb4a7e692bb082a913e5283213cbde39e7",
+    "defaults.cds": "0a8eacf04666db2375f268dbcfd0b51fb3a24a30d79273f64f32c7274b44acee",
+    "unused-palette.cdxml": "59f7bb2e73c8c0463e20e6aded09c4f27ab9b336f8881ea82c3daeeec64ec35f"
+  }
+}

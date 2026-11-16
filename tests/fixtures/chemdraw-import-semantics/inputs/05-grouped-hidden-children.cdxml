@@ -1,0 +1,24 @@
+<?xml version="1.0"?>
+<CDXML BondLength="24" BondSpacing="18" LineWidth="0.6" BoldWidth="2" MarginWidth="1.6" HashSpacing="2.5" LabelFont="3" CaptionFont="3" LabelSize="10" CaptionSize="10" LabelFace="0" CaptionFace="0">
+  <fonttable>
+    <font id="3" name="Arial" charset="utf-8" />
+    <font id="4" name="Times New Roman" charset="utf-8" />
+  </fonttable>
+  <colortable>
+    <color r="1" g="1" b="1" />
+    <color r="0" g="0" b="0" />
+    <color r="1" g="0" b="0" />
+    <color r="0" g="0" b="1" />
+  </colortable>
+  <page id="1" BoundingBox="0 0 360 240">
+    <group id="2" Integral="yes">
+      <graphic id="3" GraphicType="Rectangle" BoundingBox="30 30 100 80" RectangleType="Filled" Visible="no" color="4" />
+      <t id="4" p="30 110" Visible="no">
+        <s font="3" size="10" face="0" color="3">HIDDEN GROUP CHILD</s>
+      </t>
+    </group>
+    <t id="5" p="30 170">
+      <s font="3" size="10" face="0" color="3">visible control</s>
+    </t>
+  </page>
+</CDXML>

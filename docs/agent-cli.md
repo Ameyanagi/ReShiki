@@ -70,7 +70,7 @@ The input extension picks the format, ignoring case:
 | `.rxn`                                                                    | `rxn`                              |
 | `.rsmi`                                                                   | `rsmi`, reaction SMILES            |
 | `.cdxml`                                                                  | `cdxml`                            |
-| `.cdx`                                                                    | `cdx`                              |
+| `.cdx`, `.cds`                                                            | `cdx`                              |
 | `.inchi`                                                                  | `inchi`                            |
 | `.cif`, `.pdb`, `.ent`, `.vasp`, `.poscar`, `.contcar`, `.xyz`, `.extxyz` | Unsupported crystal input (exit 2) |
 | Any other, or none                                                        | `smiles`                           |

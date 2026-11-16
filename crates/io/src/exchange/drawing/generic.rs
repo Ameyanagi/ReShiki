@@ -232,6 +232,16 @@ impl Writer<'_> {
                 "Semantic single-sided brackets require native ReShiki export",
             ));
         }
+        if g.axis_x.y != 0. || g.axis_y.x != 0. || g.axis_x.x <= 0. || g.axis_y.y <= 0. {
+            return Err(invalid(
+                "CDXML/CDX cannot preserve rotated, skewed or mirrored chemical brackets. Save as native ReShiki (.rsk) to retain the bracket frame.",
+            ));
+        }
+        if g.style.pattern != crate::graphics::LinePattern::Solid {
+            return Err(invalid(
+                "CDXML/CDX cannot preserve dashed or dotted chemical brackets. Save as native ReShiki (.rsk) to retain the bracket appearance.",
+            ));
+        }
         let parent = if g
             .superscript_label(&self.doc.drawing_style.text_style())
             .is_some()
@@ -243,7 +253,13 @@ impl Writer<'_> {
             self.page
         };
         let id = self.id()?;
-        let (lo, hi) = g.shape_bounds();
+        // ChemDraw's bracket box defines the shape's frame, not its painted
+        // bounds. Stroke padding (and curved control extents) would enlarge
+        // that frame every time the file is exported and imported again.
+        let lo = g.origin;
+        let hi = g
+            .origin
+            .offset(g.axis_x.x + g.axis_y.x, g.axis_x.y + g.axis_y.y);
         let stroke = self.color(g.style.stroke)?;
         let node = self.tree.add(
             Some(parent),

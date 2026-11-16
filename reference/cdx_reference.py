@@ -1,11 +1,14 @@
 """Differential corpus for the Rust codec; Python stays an independent oracle.
 
 Invoked by reference/cdx_codec.rs. This script never regenerates expected results
-with Rust, so a migration cannot make both sides agree by accident. Explicit
-compatibility corrections below are independently grounded by GUI-captured
-ChemDraw binary/XML pairs in fixtures/chemdraw-captions and
-fixtures/chemdraw-arrows. The historical Python codec source remains unchanged.
+with Rust, so a migration cannot make both sides agree by accident. Arrow/fill
+compatibility corrections are grounded by GUI-captured ChemDraw binary/XML
+pairs in fixtures/chemdraw-captions and fixtures/chemdraw-arrows. Coordinate
+precision follows the signed 16.16 representation; UTF8Text supplies an explicit
+charset for UTF-8 payloads. The historical Python codec source remains unchanged.
 """
+
+from __future__ import annotations
 
 import base64
 import json
@@ -15,7 +18,10 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import engine.cdx_exchange as legacy_codec
 from engine.cdx_exchange import BY_NAME, INTS, OBJECTS, PROPERTIES, property_bytes
+from engine.cdx_exchange import coordinates as legacy_coordinates
+from engine.cdx_exchange import encode_text as legacy_encode_text
 from engine.cdx_exchange import from_cdx as legacy_from_cdx
 from engine.cdx_exchange import to_cdx as legacy_to_cdx
 
@@ -32,9 +38,57 @@ PROPERTIES[0xA37] = ("FillType", "INT16", fill_types)
 BY_NAME["FillType"] = (0xA37, "INT16", fill_types)
 
 LINE_HEIGHTS = {"LineHeight", "CaptionLineHeight", "LabelLineHeight"}
+COORDINATE_ATTRIBUTES = sorted(
+    name
+    for name, kind, _ in PROPERTIES.values()
+    if kind in ("CDXPoint2D", "CDXPoint3D", "CDXRectangle", "CDXCurvePoints")
+)
 # An encoding-only alias uses the reference codec's existing explicit boolean
 # encoder for false, while its ordinary implied-boolean behavior stays intact.
 BY_NAME["_NonchemicalCaption"] = (0x0708, "CDXBoolean", {})
+
+
+def coordinate_adapter(value, kind: str, encode: bool = True) -> bytes | str:
+    if encode:
+        return legacy_coordinates(value, kind)
+    count = {"CDXPoint2D": 2, "CDXPoint3D": 3, "CDXRectangle": 4}[kind]
+    if len(value) != count * 4:
+        raise ValueError("Invalid binary coordinates")
+    ticks = struct.unpack("<" + "i" * count, value)
+    order = {2: (1, 0), 3: (0, 1, 2), 4: (1, 0, 3, 2)}[count]
+    # Signed 16.16 coordinates are exactly representable in binary64. The
+    # historical decoder's eight significant digits can lose an integer tick
+    # when the molecular reader truncates XYZ. Preserve the actual fixed-point
+    # values independently of Rust's decimal spelling and formatting algorithm.
+    return " ".join(str(ticks[index] / 65536) for index in order)
+
+
+class Utf8TextPayload(bytes):
+    """Distinguish styled text from metadata aliases sharing the Text tag."""
+
+
+def text_adapter(element: ET.Element[str]) -> bytes:
+    data = legacy_encode_text(element)
+    runs = struct.unpack_from("<H", data)[0]
+    text = data[2 + runs * 10 :]
+    # UTF8Text is self-describing even without a font table. The legacy
+    # encoder already writes UTF-8 bytes, but tags every text object as
+    # charset-dependent Text. Only inspect its character payload: styled
+    # run headers can contain high bytes for entirely ASCII text.
+    return data if text.isascii() else Utf8TextPayload(data)
+
+
+def text_property_adapter(code: int, data: bytes) -> bytes:
+    if code == 0x700 and isinstance(data, Utf8TextPayload):
+        code = 0x709
+    return property_bytes(code, data)
+
+
+# Keep these intentional interchange corrections in the independent adapter;
+# reference/engine/cdx_exchange.py remains the immutable historical worker.
+setattr(legacy_codec, "coordinates", coordinate_adapter)
+setattr(legacy_codec, "encode_text", text_adapter)
+setattr(legacy_codec, "property_bytes", text_property_adapter)
 
 
 def to_cdx(text):
@@ -65,12 +119,68 @@ def from_cdx(data):
     return ET.tostring(root, encoding="unicode")
 
 
+def coordinate_boundary_cases():
+    header = b"VjCD0100\x04\x03\x02\x01" + bytes(10)
+    cases = []
+    for name, order in [
+        ("p", (1, 0)),
+        ("xyz", (0, 1, 2)),
+        ("BoundingBox", (1, 0, 3, 2)),
+        ("CurvePoints", (1, 0, 3, 2)),
+    ]:
+        for ticks in [
+            (-(2**31), 2**31 - 1, -1, 1),
+            (-1, 1, -(2**31), 2**31 - 1),
+            (1431717, -1431717, 65535, -65535),
+        ]:
+            payload = struct.pack("<" + "i" * len(order), *(ticks[index] for index in order))
+            if name == "CurvePoints":
+                payload = struct.pack("<H", 2) + payload
+            data = (
+                header
+                + struct.pack("<HIHI", 0x8000, 0, 0x8004, 1)
+                + property_bytes(BY_NAME[name][0], payload)
+                + bytes(6)
+            )
+            xml = from_cdx(data)
+            node = ET.fromstring(xml).find("n")
+            assert node is not None
+            values = node.attrib[name].split()
+            # Parsing the oracle XML must recover every original signed tick,
+            # including +/- one tick and both signed 32-bit endpoints.
+            actual_ticks = tuple(float(value) * 65536 for value in values)
+            assert actual_ticks == ticks[: len(order)], (name, ticks, xml)
+            cases.append((f"exact fixed-point {name} {ticks}", data))
+    return cases
+
+
+def check_adapters():
+    cases = coordinate_boundary_cases()
+    for text, tag in [("ASCII", 0x700), ("触媒 α", 0x709)]:
+        # Font 300 and size 144 make the run header non-ASCII in both cases.
+        xml = f'<CDXML><t id="1"><s font="300" size="144">{text}</s></t></CDXML>'
+        data = to_cdx(xml)
+        assert struct.unpack_from("<H", data, 34)[0] == tag
+        span = ET.fromstring(from_cdx(data)).find("t/s")
+        assert span is not None and span.text == text
+    metadata = to_cdx('<CDXML><n id="1" temp_Text="café"/></CDXML>')
+    assert struct.unpack_from("<H", metadata, 34)[0] == 0x700
+    span = ET.fromstring(from_cdx(metadata)).find("n/s")
+    assert span is not None and span.text == "café"
+    return len(cases) + 3
+
+
 def corpus():
     cases = []
 
     def binary(name, data):
         cases.append(
-            dict(name=name, binary=base64.b64encode(data).decode(), decoded=from_cdx(data))
+            dict(
+                name=name,
+                binary=base64.b64encode(data).decode(),
+                decoded=from_cdx(data),
+                coordinate_attributes=COORDINATE_ATTRIBUTES,
+            )
         )
 
     def xml(name, text):
@@ -88,6 +198,8 @@ def corpus():
         except (ValueError, UnicodeError):
             pass
     xml("empty", "<CDXML/>")
+    for name, data in coordinate_boundary_cases():
+        binary(name, data)
     xml("implicit ids", "<CDXML><page><group><t><s>text</s></t></group></page></CDXML>")
     xml(
         "styled unicode",
@@ -265,7 +377,9 @@ def corpus():
 
 
 if __name__ == "__main__":
-    if sys.argv[1:] == ["--roundtrip"]:
+    if sys.argv[1:] == ["--check-adapters"]:
+        print(f"CDX oracle adapter checks passed: {check_adapters()}")
+    elif sys.argv[1:] == ["--roundtrip"]:
         binary = to_cdx(sys.stdin.read())
         print(json.dumps(dict(binary=base64.b64encode(binary).decode(), decoded=from_cdx(binary))))
     elif sys.argv[1:] == ["--decode"]:

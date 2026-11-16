@@ -394,10 +394,15 @@ fn untrusted_nodes_work_and_ids_are_bounded_and_inputs_remain_immutable() -> any
     let external = roxmltree::Document::parse(&xml)?;
     assert!(matches!(
         graphics::read(external.root_element(), 1., 1, &claim),
-        Err(graphics::Error::Presentation(presentation::Error::Limit))
+        Err(graphics::Error::Presentation(presentation::Error::Xml(message)))
+            if message == "XML elements are nested more than 64 levels deep"
     ));
     let entity = "<!DOCTYPE CDXML [<!ENTITY x 'x'>]><CDXML/>";
-    assert!(graphics::parse(entity, 1., 1, &claim).is_err());
+    assert!(matches!(
+        graphics::parse(entity, 1., 1, &claim),
+        Err(graphics::Error::Presentation(presentation::Error::Xml(message)))
+            if message == "DTD declarations are not supported"
+    ));
     let huge = format!(
         "<CDXML><page><curve CurvePoints='{}'/></page></CDXML>",
         "0 0 ".repeat(1_000_002)

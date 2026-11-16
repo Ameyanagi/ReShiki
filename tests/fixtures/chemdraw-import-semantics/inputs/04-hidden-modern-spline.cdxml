@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<CDXML BondLength="24" BondSpacing="18" LineWidth="0.6" BoldWidth="2" MarginWidth="1.6" HashSpacing="2.5" LabelFont="3" CaptionFont="3" LabelSize="10" CaptionSize="10" LabelFace="0" CaptionFace="0">
+  <fonttable>
+    <font id="3" name="Arial" charset="utf-8" />
+    <font id="4" name="Times New Roman" charset="utf-8" />
+  </fonttable>
+  <colortable>
+    <color r="1" g="1" b="1" />
+    <color r="0" g="0" b="0" />
+    <color r="1" g="0" b="0" />
+    <color r="0" g="0" b="1" />
+  </colortable>
+  <page id="1" BoundingBox="0 0 360 240">
+    <curve id="2" CurvePoints="30 80 30 80 55 30 80 30 105 80 130 130 155 130 180 80 180 80" ArrowheadHead="Full" ArrowheadTail="HalfRight" ArrowheadType="Hollow" Visible="no" color="4" />
+    <t id="3" p="30 160">
+      <s font="3" size="10" face="0" color="3">visible control</s>
+    </t>
+  </page>
+</CDXML>

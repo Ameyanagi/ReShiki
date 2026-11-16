@@ -1,0 +1,254 @@
+{
+  "cases": [
+    {
+      "id": "01-hidden-graphic",
+      "description": "Visible=no on a red rectangle; blue rectangle is a visible control",
+      "expected_semantics": {
+        "visible_graphics": 1,
+        "hidden_graphics": 1,
+        "hidden_ink_rgb": [
+          255,
+          0,
+          0
+        ]
+      },
+      "historical_failure": "Visible=no becomes visible without warning",
+      "paths": [
+        "tests/fixtures/chemdraw-import-semantics/inputs/01-hidden-graphic.cdxml",
+        "tests/fixtures/chemdraw-import-semantics/inputs/01-hidden-graphic.cdx",
+        "tests/fixtures/chemdraw-import-semantics/inputs/01-hidden-graphic.cds"
+      ]
+    },
+    {
+      "id": "02-hidden-caption",
+      "description": "Visible=no on caption; ordinary second caption is a visible control",
+      "expected_semantics": {
+        "visible_text": [
+          "visible control"
+        ],
+        "hidden_text": [
+          "HIDDEN TEXT"
+        ]
+      },
+      "historical_failure": "Visible=no becomes visible without warning",
+      "paths": [
+        "tests/fixtures/chemdraw-import-semantics/inputs/02-hidden-caption.cdxml",
+        "tests/fixtures/chemdraw-import-semantics/inputs/02-hidden-caption.cdx",
+        "tests/fixtures/chemdraw-import-semantics/inputs/02-hidden-caption.cds"
+      ]
+    },
+    {
+      "id": "03-hidden-arrow",
+      "description": "Visible=no on an ordinary modern full-head arrow",
+      "expected_semantics": {
+        "visible_arrows": 1,
+        "hidden_arrows": 1,
+        "hidden_ink_rgb": [
+          255,
+          0,
+          0
+        ]
+      },
+      "historical_failure": "Visible=no becomes visible without warning",
+      "paths": [
+        "tests/fixtures/chemdraw-import-semantics/inputs/03-hidden-arrow.cdxml",
+        "tests/fixtures/chemdraw-import-semantics/inputs/03-hidden-arrow.cdx",
+        "tests/fixtures/chemdraw-import-semantics/inputs/03-hidden-arrow.cds"
+      ]
+    },
+    {
+      "id": "04-hidden-modern-spline",
+      "description": "Visible=no on a two-segment curve with modern heads",
+      "expected_semantics": {
+        "visible_text": [
+          "visible control"
+        ],
+        "hidden_graphics": 1,
+        "hidden_ink_rgb": [
+          255,
+          0,
+          0
+        ]
+      },
+      "historical_failure": "Visible=no becomes visible without warning",
+      "paths": [
+        "tests/fixtures/chemdraw-import-semantics/inputs/04-hidden-modern-spline.cdxml",
+        "tests/fixtures/chemdraw-import-semantics/inputs/04-hidden-modern-spline.cdx",
+        "tests/fixtures/chemdraw-import-semantics/inputs/04-hidden-modern-spline.cds"
+      ]
+    },
+    {
+      "id": "05-grouped-hidden-children",
+      "description": "Group contains separately hidden graphic and text; no nonstandard properties on group",
+      "expected_semantics": {
+        "visible_text": [
+          "visible control"
+        ],
+        "hidden_text": [
+          "HIDDEN GROUP CHILD"
+        ],
+        "hidden_graphics": 1,
+        "group_integral": true
+      },
+      "historical_failure": "Visible=no becomes visible without warning",
+      "paths": [
+        "tests/fixtures/chemdraw-import-semantics/inputs/05-grouped-hidden-children.cdxml",
+        "tests/fixtures/chemdraw-import-semantics/inputs/05-grouped-hidden-children.cdx",
+        "tests/fixtures/chemdraw-import-semantics/inputs/05-grouped-hidden-children.cds"
+      ]
+    },
+    {
+      "id": "06-caption-defaults",
+      "description": "Unstyled s inherits Times New Roman 18pt bold italic caption defaults",
+      "expected_semantics": {
+        "caption_style": {
+          "family": "Times New Roman",
+          "size_pt": 18,
+          "bold": true,
+          "italic": true
+        }
+      },
+      "paths": [
+        "tests/fixtures/chemdraw-import-semantics/inputs/06-caption-defaults.cdxml",
+        "tests/fixtures/chemdraw-import-semantics/inputs/06-caption-defaults.cdx",
+        "tests/fixtures/chemdraw-import-semantics/inputs/06-caption-defaults.cds"
+      ]
+    },
+    {
+      "id": "07-label-defaults-no-text",
+      "description": "Methanol oxygen has no t child and inherits Times New Roman 18pt bold italic atom defaults",
+      "expected_semantics": {
+        "oxygen_label_style": {
+          "family": "Times New Roman",
+          "size_pt": 18,
+          "bold": true,
+          "italic": true
+        }
+      },
+      "historical_failure": "Root LabelFace ignored when node has no t child or node-level style",
+      "paths": [
+        "tests/fixtures/chemdraw-import-semantics/inputs/07-label-defaults-no-text.cdxml",
+        "tests/fixtures/chemdraw-import-semantics/inputs/07-label-defaults-no-text.cdx",
+        "tests/fixtures/chemdraw-import-semantics/inputs/07-label-defaults-no-text.cds"
+      ]
+    },
+    {
+      "id": "08-label-defaults-with-text",
+      "description": "Matched methanol control with an unstyled OH label t/s inheriting identical atom defaults",
+      "expected_semantics": {
+        "oxygen_label_style": {
+          "family": "Times New Roman",
+          "size_pt": 18,
+          "bold": true,
+          "italic": true
+        }
+      },
+      "paths": [
+        "tests/fixtures/chemdraw-import-semantics/inputs/08-label-defaults-with-text.cdxml",
+        "tests/fixtures/chemdraw-import-semantics/inputs/08-label-defaults-with-text.cdx",
+        "tests/fixtures/chemdraw-import-semantics/inputs/08-label-defaults-with-text.cds"
+      ]
+    },
+    {
+      "id": "09-document-line-width",
+      "description": "Rectangle inherits 2pt document line width; second rectangle overrides to 0.6pt",
+      "expected_semantics": {
+        "visible_graphics": 2,
+        "stroke_widths_pt": [
+          2,
+          0.6
+        ],
+        "stroke_rgb": [
+          [
+            255,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            255
+          ]
+        ]
+      },
+      "paths": [
+        "tests/fixtures/chemdraw-import-semantics/inputs/09-document-line-width.cdxml",
+        "tests/fixtures/chemdraw-import-semantics/inputs/09-document-line-width.cdx",
+        "tests/fixtures/chemdraw-import-semantics/inputs/09-document-line-width.cds"
+      ]
+    },
+    {
+      "id": "10-page-bounds-margins",
+      "description": "Single page 432x288pt with nondefault document print margins; documented page-layout limitation",
+      "expected_semantics": {
+        "source_page_bounds_pt": [
+          0,
+          0,
+          432,
+          288
+        ],
+        "source_print_margins": [
+          12,
+          18,
+          24,
+          30
+        ],
+        "documented_limit": "Publication-page layout is not retained by molecular interchange."
+      },
+      "paths": [
+        "tests/fixtures/chemdraw-import-semantics/inputs/10-page-bounds-margins.cdxml",
+        "tests/fixtures/chemdraw-import-semantics/inputs/10-page-bounds-margins.cdx",
+        "tests/fixtures/chemdraw-import-semantics/inputs/10-page-bounds-margins.cds"
+      ]
+    },
+    {
+      "id": "11-modern-multisegment-heads",
+      "description": "Two-segment cubic path with hollow full head and half-right tail",
+      "expected_semantics": {
+        "cubic_segments": 2,
+        "head": "full",
+        "tail": "right",
+        "head_shape": "hollow"
+      },
+      "paths": [
+        "tests/fixtures/chemdraw-import-semantics/inputs/11-modern-multisegment-heads.cdxml",
+        "tests/fixtures/chemdraw-import-semantics/inputs/11-modern-multisegment-heads.cdx",
+        "tests/fixtures/chemdraw-import-semantics/inputs/11-modern-multisegment-heads.cds"
+      ]
+    },
+    {
+      "id": "12-legacy-multisegment-heads",
+      "description": "Same two-segment cubic using SDK CurveType=8 (full arrow at end); no conflicting modern attributes",
+      "expected_semantics": {
+        "cubic_segments": 2,
+        "CurveType": 8,
+        "head": "full",
+        "tail": "none",
+        "support_note": "Valid SDK legacy representation; both cubic segments and the full end head must be retained."
+      },
+      "paths": [
+        "tests/fixtures/chemdraw-import-semantics/inputs/12-legacy-multisegment-heads.cdxml",
+        "tests/fixtures/chemdraw-import-semantics/inputs/12-legacy-multisegment-heads.cdx",
+        "tests/fixtures/chemdraw-import-semantics/inputs/12-legacy-multisegment-heads.cds"
+      ]
+    }
+  ],
+  "generation_command": "PYTHONDONTWRITEBYTECODE=1 python3 tests/fixtures/chemdraw-import-semantics/generate.py",
+  "binary_encoder": "reference/engine/cdx_exchange.py; generator-local native arrow object 0x8021 and zero-run text following SDK CDXString; full CDS adds packed LabelStyle/CaptionStyle defaults without removing artwork",
+  "validity_notes": [
+    "Group Visible/color/LineWidth were excluded: SDK object property lists do not permit them on Group.",
+    "Arrow object code is 0x8021, matching actual native ChemDraw and crates/io/src/exchange/mod.rs; the published 0x8027 alias fails the native ChemDraw arrow-display spot-check.",
+    "SDK CurveType=8 is a full arrow at end; 16 means full arrow at start, 32/64 mean half arrows.",
+    "Modern ArrowheadHead/Tail spelling follows the current repository schema/native fixtures."
+  ],
+  "sources": [
+    "https://iupac.github.io/IUPAC-FAIRSpec/cdx_sdk/properties/Visible.htm",
+    "https://iupac.github.io/IUPAC-FAIRSpec/cdx_sdk/Group.htm",
+    "https://iupac.github.io/IUPAC-FAIRSpec/cdx_sdk/properties/LineWidth.htm",
+    "https://iupac.github.io/IUPAC-FAIRSpec/cdx_sdk/properties/ForegroundColor.htm",
+    "https://iupac.github.io/IUPAC-FAIRSpec/cdx_sdk/DataType/CDXString.htm",
+    "https://iupac.github.io/IUPAC-FAIRSpec/cdx_sdk/properties/LabelStyleFace.htm",
+    "https://iupac.github.io/IUPAC-FAIRSpec/cdx_sdk/properties/Curve_Type.htm",
+    "https://iupac.github.io/IUPAC-FAIRSpec/cdx_sdk/properties/PrintMargins.htm"
+  ]
+}

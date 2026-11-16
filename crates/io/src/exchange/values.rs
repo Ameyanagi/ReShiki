@@ -238,10 +238,13 @@ pub(super) fn decode_coordinates(data: &[u8], kind: &str) -> Result<String> {
     }
     r.done()?;
     reorder(&mut values);
+    // Every signed 16.16 coordinate is exactly representable as f64. Keep
+    // that value through the XML bridge: eight significant digits can move
+    // XYZ across an integer boundary when the molecular reader truncates it.
     Ok(values
-        .into_iter()
-        .map(general)
-        .collect::<Result<Vec<_>>>()?
+        .iter()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>()
         .join(" "))
 }
 fn reorder(values: &mut [f64]) {

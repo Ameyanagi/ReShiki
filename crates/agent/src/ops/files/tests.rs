@@ -799,7 +799,7 @@ async fn info_lists_the_grants_and_the_file_extensions() {
     fs::create_dir(&read).unwrap();
     fs::create_dir(&write).unwrap();
     let files = json!({
-        "read": ["rsk", "reshiki", "moruno", "mol", "rxn", "rsmi", "cdxml", "cdx", "smi", "smiles", "inchi"],
+        "read": ["rsk", "reshiki", "moruno", "mol", "rxn", "rsmi", "cdxml", "cdx", "cds", "smi", "smiles", "inchi"],
         "write": ["rsk", "mol", "rxn", "rsmi", "cdxml", "cdx", "smi", "smiles", "inchi", "svg", "pdf", "png"],
     });
     let granted = host(Grants::open(slice::from_ref(&read), slice::from_ref(&write)).unwrap());

@@ -174,6 +174,10 @@ impl ReadGraphics {
 fn named(node: Node<'_, '_>, name: &str) -> bool {
     node.is_element() && node.tag_name().namespace().is_none() && node.tag_name().name() == name
 }
+fn visible(node: Node<'_, '_>) -> bool {
+    node.ancestors()
+        .all(|parent| parent.attribute("Visible") != Some("no"))
+}
 fn float(el: Node<'_, '_>, key: &str, default: &str) -> Result<f64> {
     Ok(numeric::float(el.attribute(key).unwrap_or(default))?)
 }
@@ -322,9 +326,10 @@ pub fn read(
         .collect();
     let mut middle = None;
     for el in root.descendants().filter(|n| {
-        ["fragment", "n", "b", "t", "arrow"]
-            .iter()
-            .any(|k| named(*n, k))
+        visible(*n)
+            && ["fragment", "n", "b", "t", "arrow"]
+                .iter()
+                .any(|k| named(*n, k))
     }) {
         if let Some(text) = el.attribute("Z") {
             let z = NativeLayer::parse(text)?;
@@ -375,6 +380,9 @@ pub fn read(
         {
             continue;
         }
+        if !visible(el) {
+            continue;
+        }
         let identity = *identities.get(&el.id()).ok_or(Error::Limit)?;
         if el.attribute("SupersededBy").is_some_and(|v| !v.is_empty())
             || claimed.contains(&identity)
@@ -382,7 +390,11 @@ pub fn read(
             continue;
         }
         let mut value = if named(el, "group") {
-            let children: Vec<_> = el.children().filter(Node::is_element).collect();
+            let children: Vec<_> = el
+                .children()
+                .filter(Node::is_element)
+                .filter(|n| visible(*n))
+                .collect();
             if !children.is_empty()
                 && children.iter().all(|n| {
                     named(*n, "curve")

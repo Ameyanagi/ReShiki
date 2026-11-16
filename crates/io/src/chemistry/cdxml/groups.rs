@@ -1,7 +1,7 @@
 //! Logical groups from reference/engine/groups_exchange.py::read_groups.
 use super::{Error, ObjectMapEntry, Result, association::invalid, tree::Tree};
 use crate::grouping::Group;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 /// Read groups in reverse source order, assigning checked consecutive IDs.
 /// Mapping keys are root-inclusive element ordinals in this unchanged XML.
@@ -15,6 +15,7 @@ pub fn read_groups(xml: &str, object_map: &[ObjectMapEntry], first_id: u64) -> R
     }
     let tree = Tree::parse_import(xml)?;
     let order = tree.descendants(0)?;
+    let pages: HashSet<_> = tree.children(0, "page")?.into_iter().collect();
     let mut mapped = HashMap::new();
     let mut members = 0usize;
     for entry in object_map {
@@ -30,7 +31,7 @@ pub fn read_groups(xml: &str, object_map: &[ObjectMapEntry], first_id: u64) -> R
     let mut result: Vec<Group> = Vec::new();
     let mut seen = HashMap::new();
     for &element in order.iter().rev() {
-        if tree.node(element)?.tag != "group" {
+        if tree.node(element)?.tag != "group" && !(pages.len() > 1 && pages.contains(&element)) {
             continue;
         }
         let mut ids = Vec::new();

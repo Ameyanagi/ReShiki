@@ -13,6 +13,7 @@ struct Case {
     xml: Option<String>,
     binary: String,
     decoded: String,
+    coordinate_attributes: Vec<String>,
 }
 
 fn binary_differences(actual: &[u8], expected: &[u8]) -> Vec<(&'static str, String)> {
@@ -47,11 +48,16 @@ fn binary_differences(actual: &[u8], expected: &[u8]) -> Vec<(&'static str, Stri
     differences
 }
 
-fn xml_differences(left: &str, right: &str) -> anyhow::Result<Vec<(&'static str, String)>> {
+fn xml_differences(
+    left: &str,
+    right: &str,
+    coordinate_attributes: &[String],
+) -> anyhow::Result<Vec<(&'static str, String)>> {
     fn compare(
         a: roxmltree::Node<'_, '_>,
         b: roxmltree::Node<'_, '_>,
         path: &str,
+        coordinate_attributes: &[String],
         differences: &mut Vec<(&'static str, String)>,
     ) {
         if a.tag_name().name() != b.tag_name().name() {
@@ -79,8 +85,22 @@ fn xml_differences(left: &str, right: &str) -> anyhow::Result<Vec<(&'static str,
                 ));
                 continue;
             };
+            // Coordinate vectors may have different shortest decimal spellings
+            // in Python and Rust. Require exactly equal decoded f64 values,
+            // retaining every signed 16.16 tick without a geometry tolerance.
+            let equal = if coordinate_attributes.contains(key) {
+                let coordinates = |value: &str| {
+                    value
+                        .split_whitespace()
+                        .map(str::parse::<f64>)
+                        .collect::<Result<Vec<_>, _>>()
+                };
+                match (coordinates(av), coordinates(bv)) {
+                    (Ok(x), Ok(y)) => x == y,
+                    _ => false,
+                }
             // Font sizes and table colors may have equivalent decimal spelling.
-            let equal = if let (Ok(x), Ok(y)) = (av.parse::<f64>(), bv.parse::<f64>()) {
+            } else if let (Ok(x), Ok(y)) = (av.parse::<f64>(), bv.parse::<f64>()) {
                 (x - y).abs() <= 1e-12 * x.abs().max(1.)
             } else {
                 av == bv
@@ -125,6 +145,7 @@ fn xml_differences(left: &str, right: &str) -> anyhow::Result<Vec<(&'static str,
                 *a,
                 *b,
                 &format!("{path}/{}[{index}]", a.tag_name().name()),
+                coordinate_attributes,
                 differences,
             );
         }
@@ -156,9 +177,33 @@ fn xml_differences(left: &str, right: &str) -> anyhow::Result<Vec<(&'static str,
         actual.root_element(),
         expected.root_element(),
         "/CDXML",
+        coordinate_attributes,
         &mut differences,
     );
     Ok(differences)
+}
+
+#[test]
+fn coordinate_comparison_accepts_decimal_spelling_but_detects_a_single_tick() -> TestResult {
+    let fields = vec!["p".into()];
+    assert!(
+        xml_differences(
+            "<CDXML p='21.846267700195313 0'/>",
+            "<CDXML p='21.846267700195312 0.0'/>",
+            &fields,
+        )?
+        .is_empty()
+    );
+    assert!(
+        !xml_differences(
+            "<CDXML p='0 0'/>",
+            "<CDXML p='0.0000152587890625 0'/>",
+            &fields,
+        )?
+        .is_empty()
+    );
+    assert!(!xml_differences("<CDXML Name='1 2'/>", "<CDXML Name='1.0 2'/>", &fields,)?.is_empty());
+    Ok(())
 }
 
 #[test]
@@ -204,18 +249,20 @@ fn matches_python_reference_for_native_files_all_properties_and_charsets() -> Te
             }
         }
         match from_cdx(&bytes) {
-            Ok(decoded) => match xml_differences(&decoded, &case.decoded) {
-                Ok(differences) => {
-                    for (category, difference) in differences {
-                        *categories.entry(category).or_default() += 1;
-                        failures.push(format!("{}: decoded {difference}", case.name));
+            Ok(decoded) => {
+                match xml_differences(&decoded, &case.decoded, &case.coordinate_attributes) {
+                    Ok(differences) => {
+                        for (category, difference) in differences {
+                            *categories.entry(category).or_default() += 1;
+                            failures.push(format!("{}: decoded {difference}", case.name));
+                        }
+                    }
+                    Err(error) => {
+                        *categories.entry("XML parse rejection").or_default() += 1;
+                        failures.push(format!("{}: decoded XML: {error:#}", case.name));
                     }
                 }
-                Err(error) => {
-                    *categories.entry("XML parse rejection").or_default() += 1;
-                    failures.push(format!("{}: decoded XML: {error:#}", case.name));
-                }
-            },
+            }
             Err(error) => {
                 *categories.entry("decode rejection").or_default() += 1;
                 failures.push(format!("{}: decode rejected: {error}", case.name));

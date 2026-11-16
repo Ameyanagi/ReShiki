@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE CDXML SYSTEM "https://static.chemistry.revvitycloud.com/cdxml/CDXML.dtd">
+<CDXML CreationProgram="ReShiki synthetic import corpus generator" Name="093-bitmapstamps-raster-grid-12" BoundingBox="0 0 612 792" BondLength="14.4" BondSpacing="18" LineWidth="0.6" BoldWidth="2" MarginWidth="1.6" HashSpacing="2.5" ChainAngle="120" LabelFont="1001" CaptionFont="1001" LabelSize="10" CaptionSize="10" LabelFace="0" CaptionFace="0" LabelColor="3" CaptionColor="3" color="3" bgcolor="2">
+  <colortable>
+    <color r="1" g="1" b="1" />
+    <color r="0" g="0" b="0" />
+    <color r="0.12" g="0.35" b="0.65" />
+    <color r="0.8" g="0.24" b="0.18" />
+    <color r="0.7" g="0.88" b="0.79" />
+  </colortable>
+  <fonttable>
+    <font id="1001" name="Arial" charset="utf-8" />
+    <font id="1002" name="Times New Roman" charset="utf-8" />
+    <font id="1003" name="Helvetica" charset="utf-8" />
+  </fonttable>
+  <page id="1" BoundingBox="0 0 612 792" WidthPages="1" HeightPages="1">
+    <t id="2" p="25 35" BoundingBox="25 23 210 37">
+      <s font="1001" size="10" color="3" face="0">12 independent bitmap stamp instances</s>
+    </t>
+    <fragment id="3">
+      <n id="4" p="450 35" Element="6" />
+      <n id="5" p="462.470766 42.2" Element="6" />
+      <n id="6" p="474.941532 35" Element="8" NumHydrogens="1">
+        <t id="7" p="471.441532 38.5" LabelJustification="Left">
+          <s font="1001" size="10" color="3" face="96">O</s>
+        </t>
+      </n>
+      <b id="8" B="4" E="5" Order="1" />
+      <b id="9" B="5" E="6" Order="1" />
+    </fragment>
+    <embeddedobject id="10" BoundingBox="25 70 54.421784 99.421784" RotationAngle="0" PNG="89504e470d0a1a0a0000000d4948445200000004000000040806000000a9f19e7e0000004f4944415478da014400bbff004a0c77676eaf996eb0ee1f05b59691f6003cccf158419a45785463314024272c3c0043593d97549aa8262555b3b14881f9c4003a55c99cf968af07c4bd60dfb5d8e601d28c1e8081eb1a5b0000000049454e44ae426082" />
+    <t id="11" p="25 118" BoundingBox="25 106 60 120">
+      <s font="1001" size="10" color="3" face="0">stamp 1</s>
+    </t>
+    <embeddedobject id="12" BoundingBox="95 70 123.015812 98.015812" RotationAngle="2949120" PNG="89504e470d0a1a0a0000000d4948445200000004000000040806000000a9f19e7e0000004f4944415478da014400bbff0068af26170973c3a1fdd8546f01751bbd00036a8db6316ac7496d7636fcda6e1aee005c824ecdc0b71d2097afc04fcb8aac3800648ddef14b4d217bc1eed30e8ec92f6003ae1f80ab7d9ac20000000049454e44ae426082" />
+    <t id="13" p="95 118" BoundingBox="95 106 130 120">
+      <s font="1001" size="10" color="3" face="0">stamp 2</s>
+    </t>
+    <embeddedobject id="14" BoundingBox="165 70 196.799373 101.799373" RotationAngle="5898240" PNG="89504e470d0a1a0a0000000d4948445200000004000000040806000000a9f19e7e0000004f4944415478da014400bbff00f66e0a82e3b91c8c195d900ef9a9996e001d037673f41f55a1c6011c47a06c6987002ddbe1729a1671b40c2b31ef5ad3ce1a00f88b257d5cf6eed172dcfe51f606ae21f75b1f6437460b7a0000000049454e44ae426082" />
+    <t id="15" p="165 118" BoundingBox="165 106 200 120">
+      <s font="1001" size="10" color="3" face="0">stamp 3</s>
+    </t>
+    <embeddedobject id="16" BoundingBox="235 70 261.084404 96.084404" RotationAngle="8847360" PNG="89504e470d0a1a0a0000000d4948445200000004000000040806000000a9f19e7e0000004f4944415478da014400bbff00e3c5966d47d536d944409e6fefbca95000992d991b3bb1cdbca1c1bbbc077bb47500ddfd1bd7bc16a1f5ebf5c48bcebd01eb00139d366857204fa890acdb420c17ff84ca3523146a4100e30000000049454e44ae426082" />
+    <t id="17" p="235 118" BoundingBox="235 106 270 120">
+      <s font="1001" size="10" color="3" face="0">stamp 4</s>
+    </t>
+    <embeddedobject id="18" BoundingBox="305 70 324.584938 89.584938" RotationAngle="11796480" PNG="89504e470d0a1a0a0000000d4948445200000004000000040806000000a9f19e7e0000004f4944415478da014400bbff004a0c77676eaf996eb0ee1f05b59691f6003cccf158419a45785463314024272c3c0043593d97549aa8262555b3b14881f9c4003a55c99cf968af07c4bd60dfb5d8e601d28c1e8081eb1a5b0000000049454e44ae426082" />
+    <t id="19" p="305 118" BoundingBox="305 106 340 120">
+      <s font="1001" size="10" color="3" face="0">stamp 5</s>
+    </t>
+    <embeddedobject id="20" BoundingBox="375 70 407.376311 102.376311" RotationAngle="14745600" PNG="89504e470d0a1a0a0000000d4948445200000004000000040806000000a9f19e7e0000004f4944415478da014400bbff0068af26170973c3a1fdd8546f01751bbd00036a8db6316ac7496d7636fcda6e1aee005c824ecdc0b71d2097afc04fcb8aac3800648ddef14b4d217bc1eed30e8ec92f6003ae1f80ab7d9ac20000000049454e44ae426082" />
+    <t id="21" p="375 118" BoundingBox="375 106 410 120">
+      <s font="1001" size="10" color="3" face="0">stamp 6</s>
+    </t>
+    <embeddedobject id="22" BoundingBox="445 70 474.856651 99.856651" RotationAngle="17694720" PNG="89504e470d0a1a0a0000000d4948445200000004000000040806000000a9f19e7e0000004f4944415478da014400bbff00f66e0a82e3b91c8c195d900ef9a9996e001d037673f41f55a1c6011c47a06c6987002ddbe1729a1671b40c2b31ef5ad3ce1a00f88b257d5cf6eed172dcfe51f606ae21f75b1f6437460b7a0000000049454e44ae426082" />
+    <t id="23" p="445 118" BoundingBox="445 106 480 120">
+      <s font="1001" size="10" color="3" face="0">stamp 7</s>
+    </t>
+    <embeddedobject id="24" BoundingBox="515 70 545.435084 100.435084" RotationAngle="20643840" PNG="89504e470d0a1a0a0000000d4948445200000004000000040806000000a9f19e7e0000004f4944415478da014400bbff00e3c5966d47d536d944409e6fefbca95000992d991b3bb1cdbca1c1bbbc077bb47500ddfd1bd7bc16a1f5ebf5c48bcebd01eb00139d366857204fa890acdb420c17ff84ca3523146a4100e30000000049454e44ae426082" />
+    <t id="25" p="515 118" BoundingBox="515 106 550 120">
+      <s font="1001" size="10" color="3" face="0">stamp 8</s>
+    </t>
+    <embeddedobject id="26" BoundingBox="25 148 46.506856 169.506856" RotationAngle="0" PNG="89504e470d0a1a0a0000000d4948445200000004000000040806000000a9f19e7e0000004f4944415478da014400bbff004a0c77676eaf996eb0ee1f05b59691f6003cccf158419a45785463314024272c3c0043593d97549aa8262555b3b14881f9c4003a55c99cf968af07c4bd60dfb5d8e601d28c1e8081eb1a5b0000000049454e44ae426082" />
+    <t id="27" p="25 196" BoundingBox="25 184 60 198">
+      <s font="1001" size="10" color="3" face="0">stamp 9</s>
+    </t>
+    <embeddedobject id="28" BoundingBox="95 148 127.668288 180.668288" RotationAngle="2949120" PNG="89504e470d0a1a0a0000000d4948445200000004000000040806000000a9f19e7e0000004f4944415478da014400bbff0068af26170973c3a1fdd8546f01751bbd00036a8db6316ac7496d7636fcda6e1aee005c824ecdc0b71d2097afc04fcb8aac3800648ddef14b4d217bc1eed30e8ec92f6003ae1f80ab7d9ac20000000049454e44ae426082" />
+    <t id="29" p="95 196" BoundingBox="95 184 135 198">
+      <s font="1001" size="10" color="3" face="0">stamp 10</s>
+    </t>
+    <embeddedobject id="30" BoundingBox="165 148 196.192584 179.192584" RotationAngle="5898240" PNG="89504e470d0a1a0a0000000d4948445200000004000000040806000000a9f19e7e0000004f4944415478da014400bbff00f66e0a82e3b91c8c195d900ef9a9996e001d037673f41f55a1c6011c47a06c6987002ddbe1729a1671b40c2b31ef5ad3ce1a00f88b257d5cf6eed172dcfe51f606ae21f75b1f6437460b7a0000000049454e44ae426082" />
+    <t id="31" p="165 196" BoundingBox="165 184 205 198">
+      <s font="1001" size="10" color="3" face="0">stamp 11</s>
+    </t>
+    <embeddedobject id="32" BoundingBox="235 148 265.697191 178.697191" RotationAngle="8847360" PNG="89504e470d0a1a0a0000000d4948445200000004000000040806000000a9f19e7e0000004f4944415478da014400bbff00e3c5966d47d536d944409e6fefbca95000992d991b3bb1cdbca1c1bbbc077bb47500ddfd1bd7bc16a1f5ebf5c48bcebd01eb00139d366857204fa890acdb420c17ff84ca3523146a4100e30000000049454e44ae426082" />
+    <t id="33" p="235 196" BoundingBox="235 184 275 198">
+      <s font="1001" size="10" color="3" face="0">stamp 12</s>
+    </t>
+  </page>
+</CDXML>

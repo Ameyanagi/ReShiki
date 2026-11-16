@@ -454,7 +454,7 @@ pub(super) async fn read(path: PathBuf) -> Opened {
 }
 
 /// The Open dialog's title, which names what it opens: it has no filter.
-const OPEN_TITLE: &str = "Open a ReShiki, editable PNG/SVG/PDF, MOL, SDF, RXN, CDXML, CDX, SMILES, CIF, PDB, POSCAR or XYZ file";
+const OPEN_TITLE: &str = "Open a ReShiki, editable PNG/SVG/PDF, MOL, SDF, RXN, CDXML, CDX, CDS, SMILES, CIF, PDB, POSCAR or XYZ file";
 
 /// Opens the files the user chooses, each in a tab.
 pub(super) fn open_dialog(

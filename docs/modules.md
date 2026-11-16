@@ -503,6 +503,7 @@ explains how the crates and modules fit together.
 - `crates/io/src/chemistry/cdxml/marks.rs`: Detached patches from reference/engine/marks_exchange.py::read_marks.
 - `crates/io/src/chemistry/cdxml/normalize.rs`: Chemistry-only copy from reference/engine/bonds_exchange.py::chemistry_xml.
 - `crates/io/src/chemistry/cdxml/numeric.rs`: Pinned native scalar parsing and diagnostic quoting shared by CDXML readers.
+- `crates/io/src/chemistry/cdxml/pages.rs`: Place independent top-level drawing spaces on one editable canvas.
 - `crates/io/src/chemistry/cdxml/parse.rs`
 - `crates/io/src/chemistry/cdxml/preparation.rs`: Chemical prefix of reference/engine/worker.py::import_cdxml, through legacy stereo.
 - `crates/io/src/chemistry/cdxml/presentation.rs`: Native-precision drawing styles and rich text from bounded, read-only XML.

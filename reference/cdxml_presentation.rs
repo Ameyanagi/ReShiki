@@ -230,7 +230,7 @@ fn external_nodes_and_defaults_remain_bounded_while_context_is_reused() -> anyho
     let entity = "<!DOCTYPE CDXML [<!-- <!ENTITY inert 'x'> --><!ENTITY actual 'x'>]><CDXML><t><s>&actual;</s></t></CDXML>";
     assert!(matches!(
         presentation::parse(entity),
-        Err(presentation::Error::Limit)
+        Err(presentation::Error::Xml(message)) if message == "DTD declarations are not supported"
     ));
     let expanded = roxmltree::Document::parse_with_options(
         entity,
@@ -241,7 +241,7 @@ fn external_nodes_and_defaults_remain_bounded_while_context_is_reused() -> anyho
     )?;
     assert!(matches!(
         presentation::TextReader::new(expanded.root_element()),
-        Err(presentation::Error::Limit)
+        Err(presentation::Error::Xml(message)) if message == "DTD declarations are not supported"
     ));
     let context = presentation::parse("<CDXML/>")?;
     let reader = presentation::TextReader::new(context.root_element())?;
@@ -249,11 +249,13 @@ fn external_nodes_and_defaults_remain_bounded_while_context_is_reused() -> anyho
     let external = roxmltree::Document::parse(&deep)?;
     assert!(matches!(
         reader.read(external.root_element(), None, true),
-        Err(presentation::Error::Limit)
+        Err(presentation::Error::Xml(message))
+            if message == "XML elements are nested more than 64 levels deep"
     ));
     assert!(matches!(
         presentation::drawing_style(external.root_element()),
-        Err(presentation::Error::Limit)
+        Err(presentation::Error::Xml(message))
+            if message == "XML elements are nested more than 64 levels deep"
     ));
     let external = presentation::parse("<t><s/></t>")?;
     let defaults =

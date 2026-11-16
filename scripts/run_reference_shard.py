@@ -69,6 +69,11 @@ SHARD_SECONDS = {0: 1700}
 # assignment explicit so a new workspace test can never silently disappear.
 # Shard 0 exists for every --count, so an assignment can never fall outside it.
 WORKSPACE_TARGET_SHARDS = {
+    ("reshiki-io", "chemdraw_import_semantics"): 0,
+    ("reshiki-io", "chemdraw_multipage"): 0,
+    ("reshiki-io", "chemdraw_multipage_boundaries"): 0,
+    ("reshiki-io", "chemdraw_visibility_and_label_faces"): 0,
+    ("reshiki-io", "generic_editable_export"): 0,
     ("reshiki-io", "path_heads"): 0,
     ("reshiki-io", "pdf_gradients"): 0,
     ("reshiki-io", "spacefill_seams"): 0,

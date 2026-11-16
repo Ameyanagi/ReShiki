@@ -40,6 +40,7 @@ pub const FILE_FORMATS: &[FileFormat] = &[
     row("rsmi", Some("rsmi"), Some("rsmi")),
     row("cdxml", Some("cdxml"), Some("cdxml")),
     row("cdx", Some("cdx"), Some("cdx")),
+    row("cds", Some("cdx"), None),
     row("smi", Some("smiles"), Some("smiles")),
     row("smiles", Some("smiles"), Some("smiles")),
     row("inchi", Some("inchi"), Some("inchi")),

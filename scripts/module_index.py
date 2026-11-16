@@ -48,7 +48,9 @@ def crates():
     for manifest in [ROOT / "Cargo.toml"] + sorted(ROOT.glob("*/*/Cargo.toml")):
         source = manifest.parent / "src"
         name = re.search(r'^name = "(.+)"$', manifest.read_text(encoding="utf-8"), re.M)
-        if source.is_dir() and name and manifest.parent.parent.name != "vendor":
+        # Disposable validation checkouts under the ignored artifact root are
+        # output, just like vendored code, rather than repository modules.
+        if source.is_dir() and name and manifest.parent.parent.name not in {"artifacts", "vendor"}:
             yield name.group(1), source
 
 

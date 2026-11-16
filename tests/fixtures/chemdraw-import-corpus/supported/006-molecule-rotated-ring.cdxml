@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE CDXML SYSTEM "https://static.chemistry.revvitycloud.com/cdxml/CDXML.dtd">
+<CDXML CreationProgram="ReShiki synthetic import corpus generator" Name="006-molecule-rotated-ring" BoundingBox="0 0 612 792" BondLength="24" BondSpacing="18" LineWidth="0.6" BoldWidth="2" MarginWidth="1.6" HashSpacing="2.5" ChainAngle="120" LabelFont="1001" CaptionFont="1001" LabelSize="10" CaptionSize="10" LabelFace="0" CaptionFace="0" LabelColor="3" CaptionColor="3" color="3" bgcolor="2">
+  <colortable>
+    <color r="1" g="1" b="1" />
+    <color r="0" g="0" b="0" />
+    <color r="0.12" g="0.35" b="0.65" />
+    <color r="0.8" g="0.24" b="0.18" />
+    <color r="0.7" g="0.88" b="0.79" />
+  </colortable>
+  <fonttable>
+    <font id="1001" name="Arial" charset="utf-8" />
+    <font id="1002" name="Times New Roman" charset="utf-8" />
+    <font id="1003" name="Helvetica" charset="utf-8" />
+  </fonttable>
+  <page id="1" BoundingBox="0 0 612 792" WidthPages="1" HeightPages="1">
+    <fragment id="2">
+      <n id="3" p="89.167252 95.556439" Element="7" NumHydrogens="1">
+        <t id="4" p="85.667252 99.056439" LabelJustification="Left">
+          <s font="1001" size="10" color="3" face="96">N</s>
+        </t>
+      </n>
+      <n id="5" p="92.092116 119.377547" Element="6" />
+      <n id="6" p="72.924864 133.821108" Element="6" />
+      <n id="7" p="50.832748 124.443561" Element="6" />
+      <n id="8" p="47.907884 100.622453" Element="6" />
+      <n id="9" p="67.075136 86.178892" Element="6" />
+      <b id="10" B="3" E="5" Order="1" />
+      <b id="11" B="5" E="6" Order="1" />
+      <b id="12" B="6" E="7" Order="1" />
+      <b id="13" B="7" E="8" Order="1" />
+      <b id="14" B="8" E="9" Order="1" />
+      <b id="15" B="9" E="3" Order="1" />
+    </fragment>
+  </page>
+</CDXML>

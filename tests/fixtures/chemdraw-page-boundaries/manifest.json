@@ -1,0 +1,231 @@
+{
+  "provenance": "Synthetic source XML and independent Python reference CDX packing; CDS retains drawing objects and packed font defaults.",
+  "binary_notes": [
+    "Unstyled s is a zero-run CDXString, retaining document defaults.",
+    "Numeric LineHeight/CaptionLineHeight/LabelLineHeight uses native twentieths of a point; auto/variable sentinel values are unchanged.",
+    "XYZ is canonicalized to trunc(value*65536)/65536 before binary packing so paired sources preserve the same native integer coordinates."
+  ],
+  "encoder_baseline": "encoder-baseline/*.reference.cds retains the original legacy-reference numeric lineheight packing, which describes unsupported 0.15x paragraph spacing rather than the intended 3x. These are source-encoder diagnostic receipts, not valid counterparts of the intended XML controls.",
+  "cases": [
+    {
+      "id": "line-height-single",
+      "pages": 1,
+      "atoms_per_page": 0,
+      "captions_per_page": 1,
+      "description": "Box-less caption inherits 216pt line height with 72pt text; second page must follow all three lines.",
+      "files": {
+        "cdxml": "line-height-single.cdxml",
+        "cds": "line-height-single.drawing.cds"
+      }
+    },
+    {
+      "id": "line-height-two-pages",
+      "pages": 2,
+      "atoms_per_page": 0,
+      "captions_per_page": 1,
+      "description": "Box-less caption inherits 216pt line height with 72pt text; second page must follow all three lines.",
+      "files": {
+        "cdxml": "line-height-two-pages.cdxml",
+        "cds": "line-height-two-pages.drawing.cds"
+      }
+    },
+    {
+      "id": "wrapped-caption-single",
+      "pages": 1,
+      "atoms_per_page": 0,
+      "captions_per_page": 1,
+      "description": "Box-less caption wraps without explicit newlines; inherited paragraph metrics determine its full bounds.",
+      "files": {
+        "cdxml": "wrapped-caption-single.cdxml",
+        "cds": "wrapped-caption-single.drawing.cds"
+      }
+    },
+    {
+      "id": "wrapped-caption-two-pages",
+      "pages": 2,
+      "atoms_per_page": 0,
+      "captions_per_page": 1,
+      "description": "Box-less caption wraps without explicit newlines; inherited paragraph metrics determine its full bounds.",
+      "files": {
+        "cdxml": "wrapped-caption-two-pages.cdxml",
+        "cds": "wrapped-caption-two-pages.drawing.cds"
+      }
+    },
+    {
+      "id": "large-label-default-single",
+      "pages": 1,
+      "atoms_per_page": 1,
+      "captions_per_page": 0,
+      "description": "Box-less isolated oxygen has a72pt atom label, including automatic or explicitly stacked hydrogens; source atom text is optional.",
+      "files": {
+        "cdxml": "large-label-default-single.cdxml",
+        "cds": "large-label-default-single.drawing.cds"
+      }
+    },
+    {
+      "id": "large-label-default-two-pages",
+      "pages": 2,
+      "atoms_per_page": 1,
+      "captions_per_page": 0,
+      "description": "Box-less isolated oxygen has a72pt atom label, including automatic or explicitly stacked hydrogens; source atom text is optional.",
+      "files": {
+        "cdxml": "large-label-default-two-pages.cdxml",
+        "cds": "large-label-default-two-pages.drawing.cds"
+      }
+    },
+    {
+      "id": "large-label-explicit-single",
+      "pages": 1,
+      "atoms_per_page": 1,
+      "captions_per_page": 0,
+      "description": "Box-less isolated oxygen has a72pt atom label, including automatic or explicitly stacked hydrogens; source atom text is optional.",
+      "files": {
+        "cdxml": "large-label-explicit-single.cdxml",
+        "cds": "large-label-explicit-single.drawing.cds"
+      }
+    },
+    {
+      "id": "large-label-explicit-two-pages",
+      "pages": 2,
+      "atoms_per_page": 1,
+      "captions_per_page": 0,
+      "description": "Box-less isolated oxygen has a72pt atom label, including automatic or explicitly stacked hydrogens; source atom text is optional.",
+      "files": {
+        "cdxml": "large-label-explicit-two-pages.cdxml",
+        "cds": "large-label-explicit-two-pages.drawing.cds"
+      }
+    },
+    {
+      "id": "large-label-above-single",
+      "pages": 1,
+      "atoms_per_page": 1,
+      "captions_per_page": 0,
+      "description": "Box-less isolated oxygen has a72pt atom label, including automatic or explicitly stacked hydrogens; source atom text is optional.",
+      "files": {
+        "cdxml": "large-label-above-single.cdxml",
+        "cds": "large-label-above-single.drawing.cds"
+      }
+    },
+    {
+      "id": "large-label-above-two-pages",
+      "pages": 2,
+      "atoms_per_page": 1,
+      "captions_per_page": 0,
+      "description": "Box-less isolated oxygen has a72pt atom label, including automatic or explicitly stacked hydrogens; source atom text is optional.",
+      "files": {
+        "cdxml": "large-label-above-two-pages.cdxml",
+        "cds": "large-label-above-two-pages.drawing.cds"
+      }
+    },
+    {
+      "id": "large-label-below-single",
+      "pages": 1,
+      "atoms_per_page": 1,
+      "captions_per_page": 0,
+      "description": "Box-less isolated oxygen has a72pt atom label, including automatic or explicitly stacked hydrogens; source atom text is optional.",
+      "files": {
+        "cdxml": "large-label-below-single.cdxml",
+        "cds": "large-label-below-single.drawing.cds"
+      }
+    },
+    {
+      "id": "large-label-below-two-pages",
+      "pages": 2,
+      "atoms_per_page": 1,
+      "captions_per_page": 0,
+      "description": "Box-less isolated oxygen has a72pt atom label, including automatic or explicitly stacked hydrogens; source atom text is optional.",
+      "files": {
+        "cdxml": "large-label-below-two-pages.cdxml",
+        "cds": "large-label-below-two-pages.drawing.cds"
+      }
+    },
+    {
+      "id": "xyz-origin-single",
+      "pages": 1,
+      "atoms_per_page": 1,
+      "captions_per_page": 0,
+      "description": "Minimal single atom XYZ control, duplicated with independent IDs on the second page.",
+      "files": {
+        "cdxml": "xyz-origin-single.cdxml",
+        "cds": "xyz-origin-single.drawing.cds"
+      }
+    },
+    {
+      "id": "xyz-origin-two-pages",
+      "pages": 2,
+      "atoms_per_page": 1,
+      "captions_per_page": 0,
+      "description": "Minimal single atom XYZ control, duplicated with independent IDs on the second page.",
+      "files": {
+        "cdxml": "xyz-origin-two-pages.cdxml",
+        "cds": "xyz-origin-two-pages.drawing.cds"
+      }
+    },
+    {
+      "id": "fractional-xyz-single",
+      "pages": 1,
+      "atoms_per_page": 2,
+      "captions_per_page": 1,
+      "description": "Nondefault24pt scale, negative fractional XYZ tick crossing zero after page placement; both atoms carry explicit XYZ.",
+      "files": {
+        "cdxml": "fractional-xyz-single.cdxml",
+        "cds": "fractional-xyz-single.drawing.cds"
+      }
+    },
+    {
+      "id": "fractional-xyz-two-pages",
+      "pages": 2,
+      "atoms_per_page": 2,
+      "captions_per_page": 1,
+      "description": "Nondefault24pt scale, negative fractional XYZ tick crossing zero after page placement; both atoms carry explicit XYZ.",
+      "files": {
+        "cdxml": "fractional-xyz-two-pages.cdxml",
+        "cds": "fractional-xyz-two-pages.drawing.cds"
+      }
+    },
+    {
+      "id": "mixed-xyz-single",
+      "pages": 1,
+      "atoms_per_page": 2,
+      "captions_per_page": 1,
+      "description": "Nondefault24pt scale, negative fractional XYZ tick crossing zero after page placement; the same native3D fragment contains one p-only atom.",
+      "files": {
+        "cdxml": "mixed-xyz-single.cdxml",
+        "cds": "mixed-xyz-single.drawing.cds"
+      }
+    },
+    {
+      "id": "mixed-xyz-two-pages",
+      "pages": 2,
+      "atoms_per_page": 2,
+      "captions_per_page": 1,
+      "description": "Nondefault24pt scale, negative fractional XYZ tick crossing zero after page placement; the same native3D fragment contains one p-only atom.",
+      "files": {
+        "cdxml": "mixed-xyz-two-pages.cdxml",
+        "cds": "mixed-xyz-two-pages.drawing.cds"
+      }
+    },
+    {
+      "id": "hybrid-fragments-single",
+      "pages": 1,
+      "atoms_per_page": 4,
+      "captions_per_page": 1,
+      "description": "The mixed native3D fragment shares a page with an independent ordinary2D fragment; both coordinate domains must receive the same visible translation.",
+      "files": {
+        "cdxml": "hybrid-fragments-single.cdxml",
+        "cds": "hybrid-fragments-single.drawing.cds"
+      }
+    },
+    {
+      "id": "hybrid-fragments-two-pages",
+      "pages": 2,
+      "atoms_per_page": 4,
+      "captions_per_page": 1,
+      "description": "The mixed native3D fragment shares a page with an independent ordinary2D fragment; both coordinate domains must receive the same visible translation.",
+      "files": {
+        "cdxml": "hybrid-fragments-two-pages.cdxml",
+        "cds": "hybrid-fragments-two-pages.drawing.cds"
+      }
+    }
+  ]
+}

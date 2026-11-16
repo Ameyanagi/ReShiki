@@ -539,6 +539,8 @@ fn input_files_pick_the_format_the_app_picks() {
         ("rsmi", "rsmi"),
         ("cdxml", "cdxml"),
         ("cdx", "cdx"),
+        ("cds", "cdx"),
+        ("CDS", "cdx"),
         ("inchi", "inchi"),
         ("smi", "smiles"),
         ("smiles", "smiles"),

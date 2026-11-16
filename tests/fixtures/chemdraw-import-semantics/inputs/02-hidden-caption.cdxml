@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<CDXML BondLength="24" BondSpacing="18" LineWidth="0.6" BoldWidth="2" MarginWidth="1.6" HashSpacing="2.5" LabelFont="3" CaptionFont="3" LabelSize="10" CaptionSize="10" LabelFace="0" CaptionFace="0">
+  <fonttable>
+    <font id="3" name="Arial" charset="utf-8" />
+    <font id="4" name="Times New Roman" charset="utf-8" />
+  </fonttable>
+  <colortable>
+    <color r="1" g="1" b="1" />
+    <color r="0" g="0" b="0" />
+    <color r="1" g="0" b="0" />
+    <color r="0" g="0" b="1" />
+  </colortable>
+  <page id="1" BoundingBox="0 0 360 240">
+    <t id="2" p="30 50" Visible="no">
+      <s font="3" size="10" face="0" color="3">HIDDEN TEXT</s>
+    </t>
+    <t id="3" p="30 100">
+      <s font="3" size="10" face="0" color="3">visible control</s>
+    </t>
+  </page>
+</CDXML>

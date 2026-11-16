@@ -1,0 +1,207 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE CDXML SYSTEM "https://static.chemistry.revvitycloud.com/cdxml/CDXML.dtd">
+<CDXML CreationProgram="ReShiki synthetic import corpus generator" Name="072-multipage-4-pages-8" BoundingBox="0 0 612 3168" BondLength="14.4" BondSpacing="18" LineWidth="0.6" BoldWidth="2" MarginWidth="1.6" HashSpacing="2.5" ChainAngle="120" LabelFont="1001" CaptionFont="1001" LabelSize="10" CaptionSize="10" LabelFace="0" CaptionFace="0" LabelColor="3" CaptionColor="3" color="3" bgcolor="2">
+  <colortable>
+    <color r="1" g="1" b="1" />
+    <color r="0" g="0" b="0" />
+    <color r="0.12" g="0.35" b="0.65" />
+    <color r="0.8" g="0.24" b="0.18" />
+    <color r="0.7" g="0.88" b="0.79" />
+  </colortable>
+  <fonttable>
+    <font id="1001" name="Arial" charset="utf-8" />
+    <font id="1002" name="Times New Roman" charset="utf-8" />
+    <font id="1003" name="Helvetica" charset="utf-8" />
+  </fonttable>
+  <page id="1" BoundingBox="0 0 792 612" WidthPages="1" HeightPages="1" BoundsInParent="0 0 792 612">
+    <group id="2" Integral="yes">
+      <fragment id="3">
+        <n id="4" p="65 100" Element="6" />
+        <n id="5" p="77.470766 107.2" Element="6" />
+        <n id="6" p="89.941532 100" Element="8" NumHydrogens="1">
+          <t id="7" p="86.441532 103.5" LabelJustification="Left">
+            <s font="1001" size="10" color="3" face="96">O</s>
+          </t>
+        </n>
+        <b id="8" B="4" E="5" Order="1" />
+        <b id="9" B="5" E="6" Order="1" />
+      </fragment>
+      <t id="10" p="40 45" BoundingBox="40 33 140 47">
+        <s font="1001" size="10" color="3" face="0">Figure 8, page 1 / 4</s>
+      </t>
+      <graphic id="11" GraphicType="Rectangle" BoundingBox="25 25 767 200" RectangleType="RoundEdge" />
+      <arrow id="12" BoundingBox="180 97 240 103" Tail3D="180 100 0" Head3D="240 100 0" ArrowheadHead="Full" ArrowheadTail="None" ArrowheadType="Solid" FillType="None" />
+      <group id="13" Integral="yes">
+        <graphic id="14" GraphicType="Oval" BoundingBox="284.081223 79.081223 315.918777 110.918777" Center3D="300 95 0" MajorAxisEnd3D="314.816111 100.82154 0" MinorAxisEnd3D="295.342768 106.852889 0" color="4" />
+        <group id="15">
+          <graphic id="16" GraphicType="Line" BoundingBox="296.402172 86.74494 303.597828 103.25506" color="4" />
+          <graphic id="17" GraphicType="Line" BoundingBox="291.74494 98.597828 308.25506 91.402172" color="4" />
+        </group>
+      </group>
+      <group id="18" Integral="yes">
+        <curve id="19" CurvePoints="357.43103 83.428844 357.43103 83.428844 357.43103 83.428844 358.945645 91.430448 358.945645 91.430448 358.945645 91.430448 366.756053 93.736363 366.756053 93.736363 366.756053 93.736363 359.614117 97.649479 359.614117 97.649479 359.614117 97.649479 359.83461 105.790186 359.83461 105.790186 359.83461 105.790186 353.906036 100.20702 353.906036 100.20702 353.906036 100.20702 346.2319 102.932338 346.2319 102.932338 346.2319 102.932338 349.709776 95.568637 349.709776 95.568637 349.709776 95.568637 344.746406 89.112269 344.746406 89.112269 344.746406 89.112269 352.824425 90.144416 352.824425 90.144416 352.824425 90.144416" CurveType="1" Closed="yes" color="5" />
+        <curve id="20" CurvePoints="349.79298 93.906036 349.79298 93.906036 349.79298 93.906036 352.870472 99.385359 352.870472 99.385359 352.870472 99.385359 361.75799 91.587053 361.75799 91.587053 361.75799 91.587053" color="5" />
+      </group>
+      <group id="21" Integral="yes">
+        <curve id="22" CurvePoints="405.565339 85.376309 405.565339 85.376309 405.565339 85.376309 420.551691 95.971317 420.551691 95.971317 420.551691 95.971317 403.882969 103.652375 403.882969 103.652375 403.882969 103.652375" CurveType="1" Closed="yes" color="3" />
+        <t id="23" p="409 98.178891" BoundingBox="409 86.178891 433 100.178891">
+          <s font="1001" size="10" color="3" face="1">!</s>
+        </t>
+      </group>
+    </group>
+  </page>
+  <page id="24" BoundingBox="0 0 612 792" BoundsInParent="0 792 612 1584" WidthPages="1" HeightPages="1">
+    <group id="25" Integral="yes">
+      <fragment id="26">
+        <n id="27" p="79.4 100" Element="7" NumHydrogens="1">
+          <t id="28" p="75.9 103.5" LabelJustification="Left">
+            <s font="1001" size="10" color="3" face="96">N</s>
+          </t>
+        </n>
+        <n id="29" p="65 114.4" Element="6" />
+        <n id="30" p="50.6 100" Element="6" />
+        <n id="31" p="65 85.6" Element="6" />
+        <b id="32" B="27" E="29" Order="1" />
+        <b id="33" B="29" E="30" Order="1" />
+        <b id="34" B="30" E="31" Order="1" />
+        <b id="35" B="31" E="27" Order="1" />
+      </fragment>
+      <t id="36" p="40 45" BoundingBox="40 33 140 47">
+        <s font="1001" size="10" color="3" face="0">Figure 8, page 2 / 4</s>
+      </t>
+      <graphic id="37" GraphicType="Rectangle" BoundingBox="25 25 587 200" RectangleType="RoundEdge" />
+      <arrow id="38" BoundingBox="180 97 240 103" Tail3D="180 100 0" Head3D="240 100 0" ArrowheadHead="Full" ArrowheadTail="None" ArrowheadType="Solid" FillType="None" />
+      <group id="39" Integral="yes">
+        <graphic id="40" GraphicType="Oval" BoundingBox="289.803088 84.803088 310.196912 105.196912" Center3D="300 95 0" MajorAxisEnd3D="310.169211 94.248897 0" MinorAxisEnd3D="300.600883 103.135369 0" color="3" />
+        <group id="41">
+          <graphic id="42" GraphicType="Line" BoundingBox="295.631874 91.232757 304.368126 98.767243" color="3" />
+          <graphic id="43" GraphicType="Line" BoundingBox="296.232757 99.368126 303.767243 90.631874" color="3" />
+        </group>
+      </group>
+      <group id="44" Integral="yes">
+        <curve id="45" CurvePoints="363.136786 82.77221 363.136786 82.77221 363.136786 82.77221 361.196551 92.700587 361.196551 92.700587 361.196551 92.700587 369.143724 98.959949 369.143724 98.959949 369.143724 98.959949 359.101711 100.182712 359.101711 100.182712 359.101711 100.182712 355.604516 109.675173 355.604516 109.675173 355.604516 109.675173 351.338446 100.502505 351.338446 100.502505 351.338446 100.502505 341.229887 100.109807 341.229887 100.109807 341.229887 100.109807 348.635324 93.218023 348.635324 93.218023 348.635324 93.218023 345.885086 83.482862 345.885086 83.482862 345.885086 83.482862 354.727968 88.396172 354.727968 88.396172 354.727968 88.396172" CurveType="1" Closed="yes" color="4" />
+        <curve id="46" CurvePoints="349.497495 91.338446 349.497495 91.338446 349.497495 91.338446 350.522507 99.077437 350.522507 99.077437 350.522507 99.077437 364.368609 94.177277 364.368609 94.177277 364.368609 94.177277" color="4" />
+      </group>
+      <group id="47" Integral="yes">
+        <curve id="48" CurvePoints="413.742559 80.485833 413.742559 80.485833 413.742559 80.485833 420.698358 105.498235 420.698358 105.498235 420.698358 105.498235 395.559083 99.015932 395.559083 99.015932 395.559083 99.015932" CurveType="1" Closed="yes" color="5" />
+        <t id="49" p="409 99.496677" BoundingBox="409 87.496677 433 101.496677">
+          <s font="1001" size="10" color="5" face="1">!</s>
+        </t>
+      </group>
+      <group id="50" Integral="yes">
+        <graphic id="51" GraphicType="Oval" BoundingBox="451.455553 81.455553 478.544447 108.544447" Center3D="465 95 0" MajorAxisEnd3D="477.063345 88.841448 0" MinorAxisEnd3D="469.926842 104.650676 0" color="3" />
+        <group id="52">
+          <graphic id="53" GraphicType="Line" BoundingBox="457.711241 92.638083 472.288759 97.361917" color="3" />
+          <graphic id="54" GraphicType="Line" BoundingBox="462.638083 102.288759 467.361917 87.711241" color="3" />
+        </group>
+      </group>
+    </group>
+  </page>
+  <page id="55" BoundingBox="0 0 792 612" BoundsInParent="0 1584 792 2196" WidthPages="1" HeightPages="1">
+    <group id="56" Integral="yes">
+      <fragment id="57">
+        <n id="58" p="65 100" Element="6" />
+        <n id="59" p="77.470766 107.2" Element="6" />
+        <n id="60" p="89.941532 100" Element="6" />
+        <n id="61" p="102.412297 107.2" Element="6" />
+        <n id="62" p="114.883063 100" Element="8" NumHydrogens="1">
+          <t id="63" p="111.383063 103.5" LabelJustification="Left">
+            <s font="1001" size="10" color="3" face="96">O</s>
+          </t>
+        </n>
+        <b id="64" B="58" E="59" Order="1" />
+        <b id="65" B="59" E="60" Order="1" />
+        <b id="66" B="60" E="61" Order="1" />
+        <b id="67" B="61" E="62" Order="1" />
+      </fragment>
+      <t id="68" p="40 45" BoundingBox="40 33 140 47">
+        <s font="1001" size="10" color="3" face="0">Figure 8, page 3 / 4</s>
+      </t>
+      <graphic id="69" GraphicType="Rectangle" BoundingBox="25 25 767 200" RectangleType="RoundEdge" />
+      <arrow id="70" BoundingBox="180 97 240 103" Tail3D="180 100 0" Head3D="240 100 0" ArrowheadHead="Full" ArrowheadTail="None" ArrowheadType="Solid" FillType="None" />
+      <group id="71" Integral="yes">
+        <graphic id="72" GraphicType="Oval" BoundingBox="288.819999 83.819999 311.180001 106.180001" Center3D="300 95 0" MajorAxisEnd3D="311.178881 94.841768 0" MinorAxisEnd3D="300.126585 103.943105 0" color="3" />
+        <group id="73">
+          <graphic id="74" GraphicType="Line" BoundingBox="295.465155 90.59174 304.534845 99.40826" color="3" />
+          <graphic id="75" GraphicType="Line" BoundingBox="295.59174 99.534845 304.40826 90.465155" color="3" />
+        </group>
+      </group>
+      <group id="76" Integral="yes">
+        <curve id="77" CurvePoints="356.826196 82.837088 356.826196 82.837088 356.826196 82.837088 358.881972 91.055034 358.881972 91.055034 358.881972 91.055034 367.131942 92.978269 367.131942 92.978269 367.131942 92.978269 359.951481 97.472913 359.951481 97.472913 359.951481 97.472913 360.671757 105.913414 360.671757 105.913414 360.671757 105.913414 354.178212 100.473311 354.178212 100.473311 354.178212 100.473311 346.373396 103.766592 346.373396 103.766592 346.373396 103.766592 349.540626 95.909779 349.540626 95.909779 349.540626 95.909779 343.996708 89.504638 343.996708 89.504638 343.996708 89.504638 352.447709 90.088964 352.447709 90.088964 352.447709 90.088964" CurveType="1" Closed="yes" color="5" />
+        <curve id="78" CurvePoints="349.526689 94.178212 349.526689 94.178212 349.526689 94.178212 353.053231 99.682545 353.053231 99.682545 353.053231 99.682545 361.811934 91.047933 361.811934 91.047933 361.811934 91.047933" color="5" />
+      </group>
+      <group id="79" Integral="yes">
+        <curve id="80" CurvePoints="412.147072 84.145561 412.147072 84.145561 412.147072 84.145561 418.326684 102.286639 418.326684 102.286639 418.326684 102.286639 399.526244 98.567801 399.526244 98.567801 399.526244 98.567801" CurveType="1" Closed="yes" color="5" />
+        <t id="81" p="409 98.319426" BoundingBox="409 86.319426 433 100.319426">
+          <s font="1001" size="10" color="5" face="1">!</s>
+        </t>
+      </group>
+      <group id="82" Integral="yes">
+        <graphic id="83" GraphicType="Oval" BoundingBox="450.649852 80.649852 479.350148 109.350148" Center3D="465 95 0" MajorAxisEnd3D="478.041142 100.987935 0" MinorAxisEnd3D="460.209652 105.432914 0" color="3" />
+        <group id="84">
+          <graphic id="85" GraphicType="Line" BoundingBox="462.178717 87.388369 467.821283 102.611631" color="3" />
+          <graphic id="86" GraphicType="Line" BoundingBox="457.388369 97.821283 472.611631 92.178717" color="3" />
+        </group>
+      </group>
+      <group id="87" Integral="yes">
+        <curve id="88" CurvePoints="307.385283 151.852362 307.385283 151.852362 307.385283 151.852362 304.843746 158.987222 304.843746 158.987222 304.843746 158.987222 310.031042 164.506063 310.031042 164.506063 310.031042 164.506063 302.460009 164.293711 302.460009 164.293711 302.460009 164.293711 298.814242 170.932538 298.814242 170.932538 298.814242 170.932538 296.676623 163.666437 296.676623 163.666437 296.676623 163.666437 289.23612 162.250617 289.23612 162.250617 289.23612 162.250617 295.486031 157.972272 295.486031 157.972272 295.486031 157.972272 294.533314 150.45842 294.533314 150.45842 294.533314 150.45842 300.533591 155.080358 300.533591 155.080358 300.533591 155.080358" CurveType="1" Closed="yes" color="3" />
+        <curve id="89" CurvePoints="296.333563 156.676623 296.333563 156.676623 296.333563 156.676623 296.231123 162.520527 296.231123 162.520527 296.231123 162.520527 307.027932 160.433586 307.027932 160.433586 307.027932 160.433586" color="3" />
+      </group>
+    </group>
+  </page>
+  <page id="90" BoundingBox="0 0 612 792" BoundsInParent="0 2376 612 3168" WidthPages="1" HeightPages="1">
+    <group id="91" Integral="yes">
+      <fragment id="92">
+        <n id="93" p="79.4 100" Element="7" NumHydrogens="1">
+          <t id="94" p="75.9 103.5" LabelJustification="Left">
+            <s font="1001" size="10" color="3" face="96">N</s>
+          </t>
+        </n>
+        <n id="95" p="57.8 112.470766" Element="6" />
+        <n id="96" p="57.8 87.529234" Element="6" />
+        <b id="97" B="93" E="95" Order="1" />
+        <b id="98" B="95" E="96" Order="1" />
+        <b id="99" B="96" E="93" Order="1" />
+      </fragment>
+      <t id="100" p="40 45" BoundingBox="40 33 140 47">
+        <s font="1001" size="10" color="3" face="0">Figure 8, page 4 / 4</s>
+      </t>
+      <graphic id="101" GraphicType="Rectangle" BoundingBox="25 25 587 200" RectangleType="RoundEdge" />
+      <arrow id="102" BoundingBox="180 97 240 103" Tail3D="180 100 0" Head3D="240 100 0" ArrowheadHead="Full" ArrowheadTail="None" ArrowheadType="Solid" FillType="None" />
+      <group id="103" Integral="yes">
+        <graphic id="104" GraphicType="Oval" BoundingBox="282.242359 77.242359 317.757641 112.757641" Center3D="300 95 0" MajorAxisEnd3D="313.482272 106.556909 0" MinorAxisEnd3D="290.754473 105.785818 0" color="5" />
+        <group id="105">
+          <graphic id="106" GraphicType="Line" BoundingBox="299.229855 84.984328 300.770145 105.015672" color="5" />
+          <graphic id="107" GraphicType="Line" BoundingBox="289.984328 95.770145 310.015672 94.229855" color="5" />
+        </group>
+      </group>
+      <group id="108" Integral="yes">
+        <curve id="109" CurvePoints="351.120282 85.626297 351.120282 85.626297 351.120282 85.626297 356.066935 90.561233 356.066935 90.561233 356.066935 90.561233 362.716023 88.413535 362.716023 88.413535 362.716023 88.413535 359.551219 94.643061 359.551219 94.643061 359.551219 94.643061 363.648482 100.303044 363.648482 100.303044 363.648482 100.303044 356.745873 99.218166 356.745873 99.218166 356.745873 99.218166 352.629033 104.863926 352.629033 104.863926 352.629033 104.863926 351.52779 97.963909 351.52779 97.963909 351.52779 97.963909 344.88618 95.793197 344.88618 95.793197 344.88618 95.793197 351.108183 92.61363 351.108183 92.61363 351.108183 92.61363" CurveType="1" Closed="yes" color="4" />
+        <curve id="110" CurvePoints="350.781834 96.745873 350.781834 96.745873 350.781834 96.745873 355.614517 99.137453 355.614517 99.137453 355.614517 99.137453 358.134964 89.31066 358.134964 89.31066 358.134964 89.31066" color="4" />
+      </group>
+      <group id="111" Integral="yes">
+        <curve id="112" CurvePoints="402.779999 79.560809 402.779999 79.560809 402.779999 79.560809 426.980732 96.466891 426.980732 96.466891 426.980732 96.466891 400.239269 108.9723 400.239269 108.9723 400.239269 108.9723" CurveType="1" Closed="yes" color="3" />
+        <t id="113" p="409 100.113192" BoundingBox="409 88.113192 433 102.113192">
+          <s font="1001" size="10" color="3" face="1">!</s>
+        </t>
+      </group>
+      <group id="114" Integral="yes">
+        <graphic id="115" GraphicType="Oval" BoundingBox="451.864475 81.864475 478.135525 108.135525" Center3D="465 95 0" MajorAxisEnd3D="477.812836 92.106342 0" MinorAxisEnd3D="467.314926 105.250269 0" color="5" />
+        <group id="116">
+          <graphic id="117" GraphicType="Line" BoundingBox="458.717402 91.032328 471.282598 98.967672" color="5" />
+          <graphic id="118" GraphicType="Line" BoundingBox="461.032328 101.282598 468.967672 88.717402" color="5" />
+        </group>
+      </group>
+      <group id="119" Integral="yes">
+        <curve id="120" CurvePoints="303.97 146.45799 303.97 146.45799 303.97 146.45799 305.027216 156.120006 305.027216 156.120006 305.027216 156.120006 314.106015 159.590983 314.106015 159.590983 314.106015 159.590983 305.243589 163.582183 305.243589 163.582183 305.243589 163.582183 304.747997 173.289224 304.747997 173.289224 304.747997 173.289224 298.2135 166.093905 298.2135 166.093905 298.2135 166.093905 288.828409 168.622209 288.828409 168.622209 288.828409 168.622209 293.652293 160.184058 293.652293 160.184058 293.652293 160.184058 288.34758 152.039594 288.34758 152.039594 288.34758 152.039594 297.863402 154.019849 297.863402 154.019849 297.863402 154.019849" CurveType="1" Closed="yes" color="5" />
+        <curve id="121" CurvePoints="293.906095 158.2135 293.906095 158.2135 293.906095 158.2135 297.057799 165.019804 297.057799 165.019804 297.057799 165.019804 308.359005 156.568196 308.359005 156.568196 308.359005 156.568196" color="5" />
+      </group>
+      <group id="122" Integral="yes">
+        <curve id="123" CurvePoints="362.300193 151.21714 362.300193 151.21714 362.300193 151.21714 358.956084 170.713582 358.956084 170.713582 358.956084 170.713582 343.743724 158.069278 343.743724 158.069278 343.743724 158.069278" CurveType="1" Closed="yes" color="5" />
+        <t id="124" p="354 163.426198" BoundingBox="354 151.426198 378 165.426198">
+          <s font="1001" size="10" color="5" face="1">!</s>
+        </t>
+      </group>
+    </group>
+  </page>
+</CDXML>
