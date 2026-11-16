@@ -661,7 +661,9 @@ impl App {
                 self.inspector_open
             )
         ]
-        .spacing(4)
+        // 3 px gaps leave three tabs room in a 1040 px window beside the
+        // GitHub button and the Clean up options ▾.
+        .spacing(3)
         .align_y(Alignment::Center);
         container(bar).padding([9, 14]).style(panel).into()
     }
