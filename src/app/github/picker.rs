@@ -1010,10 +1010,14 @@ impl App {
         let Some(picker) = self.picker() else {
             return Task::none();
         };
-        // Listings still on their way, and a walk to a folder, end here.
+        // Listings still on their way, and a walk to a folder, end here,
+        // with the repository they were for.
         picker.generation = generation;
         picker.request = generation;
         picker.goto.clear();
+        picker.repo = None;
+        picker.entries = None;
+        picker.waiting = 0;
         picker.busy = true;
         picker.cant_open = None;
         picker.limited = false;
@@ -1627,7 +1631,7 @@ impl App {
             row![
                 identity::tile(hue, identity::monogram(&found.key.repo)),
                 column![
-                    text(place.clone()).size(12),
+                    text(place.clone()).size(12).wrapping(text::Wrapping::None),
                     text(shown)
                         .size(10)
                         .style(muted_text)

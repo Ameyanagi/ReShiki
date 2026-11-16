@@ -343,8 +343,9 @@ pub enum Action {
     /// Whether a read-only repository may be sent to now, asked in the
     /// sign-in of that generation.
     Access(u64, RepoKey, Result<Repo, gh::Error>),
-    /// The clipboard's text on Paste: a link opens, anything else pastes.
-    Pasted(Option<String>),
+    /// The clipboard's text on Paste in a tab: a link opens, anything else
+    /// pastes into that tab.
+    Pasted(TabId, Option<String>),
     /// A drawing known here, from the command palette.
     OpenKnown(PathBuf),
 }
@@ -998,12 +999,14 @@ impl App {
                     return Task::batch([keep, self.github_persist(&key)]);
                 }
             }
-            Action::Pasted(text) => {
+            Action::Pasted(id, text) => {
                 let web = &self.github.ends.web;
-                return match text.filter(|text| gh::link::parse(text, web).is_some()) {
-                    Some(link) => self.picker_action(picker::Action::Link(link)),
-                    None => self.paste_clipboard(),
-                };
+                if let Some(link) = text.filter(|text| gh::link::parse(text, web).is_some()) {
+                    return self.picker_action(picker::Action::Link(link));
+                }
+                // The tab Paste was pressed in, even if another is in front now.
+                let paste = self.in_tab(id, |app| app.paste_clipboard());
+                return super::tagged(paste.unwrap_or_else(Task::none), id);
             }
             Action::OpenKnown(path) => return super::files::open_paths(vec![path]),
         }
@@ -1041,8 +1044,10 @@ impl App {
     /// Paste with no text field focused: a github.com link on the clipboard
     /// opens; anything else pastes into the drawing.
     pub(super) fn github_paste(&self) -> Option<Task<Message>> {
-        (self.github.configured() && !cfg!(test))
-            .then(|| iced::clipboard::read().map(|text| Message::GitHub(Action::Pasted(text))))
+        let id = self.tab.id;
+        (self.github.configured() && !cfg!(test)).then(|| {
+            iced::clipboard::read().map(move |text| Message::GitHub(Action::Pasted(id, text)))
+        })
     }
 
     /// A link dropped on the window, as a `.webloc` or `.url` file: it opens.
@@ -1810,7 +1815,11 @@ impl App {
             }
         }
         for (short, long, detail, action) in &known {
-            let twice = known.iter().filter(|(other, ..)| other == short).count() > 1;
+            // Long names never meet each other: a repository's has two parts,
+            // a drawing's three or more.
+            let twice = known.iter().any(|(other, other_long, ..)| {
+                (other == short && other_long != long) || other_long == short
+            });
             rows.push((
                 format!("{OPEN_FROM_ROW}{}", if twice { long } else { short }),
                 detail.clone(),

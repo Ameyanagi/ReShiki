@@ -2539,9 +2539,10 @@ fn the_palette_lists_known_drawings_and_opens_a_link() {
 fn a_link_pasted_or_dropped_on_the_window_opens() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, _) = app_in(dir.path());
-    github(&mut app, Action::Pasted(Some("CCO".into())));
+    let id = app.tab.id;
+    github(&mut app, Action::Pasted(id, Some("CCO".into())));
     assert!(app.github.dialog.is_none());
-    github(&mut app, Action::Pasted(Some(LIGANDS.into())));
+    github(&mut app, Action::Pasted(id, Some(LIGANDS.into())));
     assert_eq!(the_picker(&app).search, LIGANDS);
     github(&mut app, Action::Close);
     let webloc = dir.path().join("ligands.webloc");
