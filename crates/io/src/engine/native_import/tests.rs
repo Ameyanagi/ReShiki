@@ -2948,10 +2948,7 @@ fn lone_large_rings_are_regular_polygons_with_radial_substituents() -> anyhow::R
             &molecule.state,
             &molecule.positions,
         );
-        assert_eq!(
-            cleaned.document.atoms[0].position,
-            source.atoms[0].position
-        );
+        assert_eq!(cleaned.document.atoms[0].position, source.atoms[0].position);
     }
     Ok(())
 }
