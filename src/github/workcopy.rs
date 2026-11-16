@@ -176,7 +176,8 @@ fn read_state(path: &Path) -> Result<Option<RepoState>, String> {
 
 /// The folder that `repo`'s drawings went to when it was first opened here,
 /// found by its id, so a rename on GitHub keeps them; for a repository new
-/// here, its names now.
+/// here, its names now, or those with its id added while another
+/// repository's folder has them.
 pub fn folder(root: &Path, repo: &super::Repo) -> RepoKey {
     let names = |dir: &Path| -> Vec<String> {
         std::fs::read_dir(dir)
@@ -197,7 +198,13 @@ pub fn folder(root: &Path, repo: &super::Repo) -> RepoKey {
             }
         }
     }
-    repo.key.clone()
+    // A folder under these names that holds another repository (renamed on
+    // GitHub since, its old name now given to this one) is never shared.
+    let mut key = repo.key.clone();
+    while load(root, &key).is_ok_and(|state| state.is_some_and(|s| s.repo_id != repo.id)) {
+        key.repo = format!("{}-{}", key.repo, repo.id);
+    }
+    key
 }
 
 /// `None`: nothing from this repository has been opened here.

@@ -1145,6 +1145,35 @@ fn save_here_waits_for_a_folder_that_could_not_be_listed() {
 }
 
 #[test]
+fn a_new_repository_with_a_renamed_ones_name_gets_its_own_folder() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = app_in(dir.path());
+    let old = app.github.states[&repo().key].clone();
+    let folder = dir.path().join("octo/lab");
+    std::fs::write(folder.join("state.json"), serde_json::to_vec(&old).unwrap()).unwrap();
+    // `lab` was renamed on GitHub, and a new `lab` made.
+    let new = Repo { id: 8, ..repo() };
+    app.add_tab();
+    app.github.repos = vec![new.clone()];
+    let picker = |action| Action::Picker(action);
+    github(&mut app, picker(picker::Action::Show(Mode::SaveHere)));
+    github(&mut app, picker(picker::Action::PickRepo(new.key.clone())));
+    let generation = picker_generation(&app);
+    github(
+        &mut app,
+        picker(picker::Action::Listing(generation, Ok((sha('8'), vec![])))),
+    );
+    github(&mut app, picker(picker::Action::SaveName("new".into())));
+    github(&mut app, picker(picker::Action::SaveHere));
+
+    let path = app.tab.path.clone().expect("saved here");
+    assert!(!path.starts_with(&folder), "{path:?}");
+    assert_eq!(app.github.states[&repo().key], old);
+    let (key, _) = app.github.locate(Some(&path)).unwrap();
+    assert_eq!(app.github.states[&key].repo_id, 8);
+}
+
+#[test]
 fn a_working_copy_unlike_its_base_is_never_downloaded_over() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, path) = app_in(dir.path());

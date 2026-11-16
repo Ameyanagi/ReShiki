@@ -267,3 +267,27 @@ async fn a_renamed_repository_keeps_the_folder_it_was_first_opened_in() {
     let other = Repo { id: 8, ..renamed };
     assert_eq!(workcopy::folder(root, &other), other.key);
 }
+
+#[tokio::test]
+async fn a_new_repository_never_takes_the_folder_of_one_renamed_away() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    // Repository 7 was opened as `lab-notes`, then renamed on GitHub.
+    workcopy::persist(root, &key(), state(), 1).await.unwrap();
+    let new = Repo {
+        id: 8,
+        key: key(),
+        private: true,
+        default_branch: "main".into(),
+        push: true,
+    };
+    let folder = workcopy::folder(root, &new);
+    assert_ne!(folder, key());
+    assert_eq!(workcopy::load(root, &folder), Ok(None), "unused");
+    // Once it has drawings there, it is found there again.
+    workcopy::persist(root, &folder, RepoState::new(&new), 1)
+        .await
+        .unwrap();
+    assert_eq!(workcopy::folder(root, &new), folder);
+    assert_eq!(workcopy::load(root, &key()), Ok(Some(state())));
+}
