@@ -2576,3 +2576,35 @@ fn a_link_pasted_or_dropped_on_the_window_opens() {
     std::fs::write(&other, "").unwrap();
     assert!(app.github_dropped(&[other]).is_none());
 }
+
+#[test]
+fn known_drawings_rank_by_their_name_and_after_commands_for_short_queries() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = app_in(dir.path());
+    let state = app.github.states[&repo().key].clone();
+    run_blocking(workcopy::persist(dir.path(), &repo().key, state, 99)).unwrap();
+    let ranked = |app: &mut App, query: &str| -> Vec<String> {
+        let _ = app.update(Message::Commands(crate::app::command_palette::Action::Open));
+        let _ = app.update(Message::Commands(
+            crate::app::command_palette::Action::Query(query.into()),
+        ));
+        let names = (app.commands.ranked().iter())
+            .map(|command| command.name.clone())
+            .collect();
+        let _ = app.update(Message::Escape);
+        names
+    };
+    let rows = ranked(&mut app, "ring");
+    assert_eq!(
+        rows.first().map(String::as_str),
+        Some("Open from GitHub: lab/ring")
+    );
+    // One or two letters: commands first, then known drawings.
+    let rows = ranked(&mut app, "ri");
+    let known = rows
+        .iter()
+        .position(|name| name == "Open from GitHub: lab/ring");
+    let tool = rows.iter().position(|name| name == "Ring tool");
+    assert!(known.is_some_and(|known| tool.is_some_and(|tool| known > tool)));
+    assert!(!rows[0].starts_with("Open from GitHub: "));
+}

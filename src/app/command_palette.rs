@@ -534,10 +534,20 @@ impl App {
                     if catalog::github_word(command, query) {
                         return Some((9_000, i, 2));
                     }
-                    // One or two letters find commands first; drawings and
-                    // repositories known on GitHub come after them.
-                    if query.chars().count() <= 2 && catalog::github_place(&command.name) {
-                        return search::score(command, query).map(|_| (0, i, 0));
+                    // A drawing or repository known on GitHub whose name
+                    // has a word starting with the query comes first; for one
+                    // or two letters, after every command instead.
+                    if catalog::github_place(&command.name) {
+                        let short = query.chars().count() <= 2;
+                        let word = (command.name.rsplit(": ").next().unwrap_or_default())
+                            .split(|c: char| !c.is_alphanumeric())
+                            .any(|word| word.to_lowercase().starts_with(&query.to_lowercase()));
+                        if short {
+                            return search::score(command, query).map(|_| (0, i, 0));
+                        }
+                        if word {
+                            return Some((8_500, i, 2));
+                        }
                     }
                     let keyword = query.chars().count() >= 2
                         && !query.eq_ignore_ascii_case("template")
