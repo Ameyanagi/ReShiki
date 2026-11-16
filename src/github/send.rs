@@ -201,13 +201,14 @@ pub async fn send(
 
 /// GitHub's version of each drawing in `files` (its repository path and the
 /// blob it is based on) that changed on the default branch since, with the
-/// commit that last changed it. One deleted on GitHub is left for Send to
-/// find. `mine` is left for the caller.
+/// commit that last changed it, and the repository as GitHub names it now.
+/// One deleted on GitHub is left for Send to find. `mine` is left for the
+/// caller.
 pub async fn newer(
     client: &Client,
     repo_id: u64,
     files: &[(String, String)],
-) -> Result<Vec<(Conflict, Option<api::RemoteVersion>)>, Error> {
+) -> Result<(Repo, Vec<(Conflict, Option<api::RemoteVersion>)>), Error> {
     // By id, as Send: the repository may have been renamed, or its default
     // branch changed.
     let repo = api::repo(client, repo_id).await?;
@@ -235,7 +236,7 @@ pub async fn newer(
             by.into_iter().next(),
         ));
     }
-    Ok(found)
+    Ok((repo, found))
 }
 
 /// Take a send's result into the state: new bases for what was sent, a mark

@@ -31,7 +31,11 @@ fn found(app: &mut App, login: &str) {
     let generation = app.github.generation;
     github(
         app,
-        Action::Newer(generation, repo().key, Ok(vec![changed_by(login)])),
+        Action::Newer(
+            generation,
+            repo().key,
+            Ok((repo(), vec![changed_by(login)])),
+        ),
     );
 }
 
@@ -235,6 +239,16 @@ fn with_changes_here_it_becomes_the_conflict_review() {
     github(&mut app, Action::Review);
     assert!(app.github.dialog.is_none());
 
+    // A Send starting after the check: no Update while it runs.
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_in(dir.path());
+    found(&mut app, "alice");
+    app.github.sending.insert(repo().key);
+    assert!(app.github_newer(app.tab.path.as_deref()).is_none());
+    assert!(!rows(&app).contains(&"Update from GitHub".into()));
+    let _ = app.github_update();
+    assert_eq!(std::fs::read(&path).unwrap(), drawing(42.));
+
     // While the repository sends, the send finds out instead.
     let dir = tempfile::tempdir().unwrap();
     let (mut app, _path) = app_in(dir.path());
@@ -262,7 +276,7 @@ fn the_open_drawings_are_checked_at_most_every_five_minutes() {
         Action::Newer(
             generation.wrapping_sub(1),
             repo().key,
-            Ok(vec![changed_by("alice")]),
+            Ok((repo(), vec![changed_by("alice")])),
         ),
     );
     assert_eq!(app.github_chip_state(&repo().key), Chip::Sent);
@@ -279,4 +293,29 @@ fn the_open_drawings_are_checked_at_most_every_five_minutes() {
         Action::Newer(generation, repo().key, Err(gh::Error::SignInExpired)),
     );
     assert!(matches!(app.github.account, Account::SignedOut(Some(_))));
+}
+
+#[test]
+fn a_check_keeps_githubs_names_and_default_branch_for_history() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _path) = app_in(dir.path());
+    let now = Repo {
+        key: RepoKey {
+            owner: "octo".into(),
+            repo: "lab-renamed".into(),
+        },
+        default_branch: "trunk".into(),
+        ..repo()
+    };
+    let generation = app.github.generation;
+    github(
+        &mut app,
+        Action::Newer(generation, repo().key, Ok((now, vec![changed_by("alice")]))),
+    );
+    let state = &app.github.states[&repo().key];
+    assert_eq!(
+        (state.repo.as_str(), state.branch.as_str()),
+        ("lab-renamed", "trunk")
+    );
+    assert_eq!(app.github_chip_state(&repo().key), Chip::Newer);
 }

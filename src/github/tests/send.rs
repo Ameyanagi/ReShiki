@@ -713,7 +713,7 @@ async fn newer_finds_each_drawing_changed_on_github_and_who_changed_it() {
     let based = |path: &str, bytes: &[u8]| (path.to_owned(), mock::sha(bytes));
     let files = [based("dir/a.rsk", b"a"), based("b.rsk", b"b")];
     let newer = || send::newer(&client, 1, &files);
-    assert!(newer().await.unwrap().is_empty(), "nothing changed yet");
+    assert!(newer().await.unwrap().1.is_empty(), "nothing changed yet");
 
     // @alice changes one between two checks; a deletion is left for Send.
     let commit = mock.model().repo("notes").commit_as(
@@ -724,7 +724,7 @@ async fn newer_finds_each_drawing_changed_on_github_and_who_changed_it() {
     );
     mock.model().repo("notes").remote_commit("b.rsk", None);
     let head = mock.model().repo("notes").head().unwrap();
-    let found = newer().await.unwrap();
+    let (_, found) = newer().await.unwrap();
     let [(conflict, by)] = found.as_slice() else {
         panic!("one drawing changed: {found:?}");
     };
@@ -748,5 +748,10 @@ async fn newer_finds_each_drawing_changed_on_github_and_who_changed_it() {
         repo.default_branch = "trunk".into();
         repo.name = "renamed".into();
     }
-    assert_eq!(newer().await.unwrap().len(), 1);
+    let (repo, found) = newer().await.unwrap();
+    assert_eq!(found.len(), 1);
+    assert_eq!(
+        (repo.key.repo.as_str(), repo.default_branch.as_str()),
+        ("renamed", "trunk")
+    );
 }

@@ -353,7 +353,8 @@ pub enum Action {
     Access(u64, RepoKey, Result<Repo, gh::Error>),
     /// The open drawings of a repository changed on GitHub, asked in the
     /// sign-in of that generation.
-    Newer(u64, RepoKey, Result<Vec<Found>, gh::Error>),
+    /// With the repository as GitHub names it now.
+    Newer(u64, RepoKey, Result<(Repo, Vec<Found>), gh::Error>),
     /// GitHub's newer version replaces the drawing in front.
     Update,
     /// The clipboard's text on Paste in a tab: a link opens, anything else
@@ -1030,8 +1031,10 @@ impl App {
                     return Task::batch([keep, self.github_persist(&key)]);
                 }
             }
-            Action::Newer(generation, key, Ok(found)) if generation == self.github.generation => {
-                return self.github_newer_found(key, found);
+            Action::Newer(generation, key, Ok((repo, found)))
+                if generation == self.github.generation =>
+            {
+                return self.github_newer_found(key, repo, found);
             }
             // A check that failed waits for the next one; an ended sign-in
             // signs out.

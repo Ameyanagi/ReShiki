@@ -7,7 +7,7 @@ use crate::app::{App, Message, document_tab::DocumentTab};
 use iced::Task;
 use reshiki::document::Document;
 use reshiki::github::{
-    RepoKey, api,
+    Repo, RepoKey, api,
     client::Client,
     send,
     workcopy::{self, ConflictMark},
@@ -52,12 +52,12 @@ impl App {
         let (id, generation) = (state.repo_id, self.github.generation);
         perform(
             async move {
-                let found = send::newer(&client, id, &files).await?;
+                let (repo, found) = send::newer(&client, id, &files).await?;
                 let base = |path: &str| {
                     let (_, base) = files.iter().zip(&bases).find(|((at, _), _)| at == path)?;
                     Some(base.clone())
                 };
-                Ok(found
+                let found: Vec<Found> = found
                     .into_iter()
                     .filter_map(|(theirs, by)| {
                         Some(Found {
@@ -66,7 +66,8 @@ impl App {
                             by,
                         })
                     })
-                    .collect())
+                    .collect();
+                Ok((repo, found))
             },
             move |result| Action::Newer(generation, key, result),
         )
@@ -81,9 +82,25 @@ impl App {
     /// What a check of `key` found. A reply that lands while the repository
     /// sends, after it turned read only, or after a drawing's base moved, is
     /// dropped.
-    pub(super) fn github_newer_found(&mut self, key: RepoKey, found: Vec<Found>) -> Task<Message> {
+    pub(super) fn github_newer_found(
+        &mut self,
+        key: RepoKey,
+        repo: Repo,
+        found: Vec<Found>,
+    ) -> Task<Message> {
         if self.github_busy(&key) || self.github.read_only(&key) {
             return Task::none();
+        }
+        // GitHub's names and default branch now, for History, as a send keeps them.
+        let mut renamed = false;
+        if let Some(state) = self.github.states.get_mut(&key)
+            && state.repo_id == repo.id
+            && (state.key() != repo.key || state.branch != repo.default_branch)
+        {
+            state.owner.clone_from(&repo.key.owner);
+            state.repo.clone_from(&repo.key.repo);
+            state.branch.clone_from(&repo.default_branch);
+            renamed = true;
         }
         self.github_refresh(&key);
         self.github.newer.retain(|(other, _), _| *other != key);
@@ -100,7 +117,7 @@ impl App {
                 marked |= self.github_mark_conflict(&at);
             }
         }
-        if marked {
+        if marked || renamed {
             self.github_persist(&key)
         } else {
             Task::none()
@@ -130,10 +147,9 @@ impl App {
         path: Option<&Path>,
         edited: impl Fn(&DocumentTab) -> bool,
     ) -> Option<(&Found, bool)> {
-        let at = self
-            .github
-            .locate(path)
-            .filter(|(key, _)| !self.github.read_only(key))?;
+        // Not while the repository sends: Update would change what it sends.
+        let at = (self.github.locate(path))
+            .filter(|(key, _)| !self.github.read_only(key) && !self.github_busy(key))?;
         let found = self.github.newer.get(&at)?;
         let file = (self.github.states.get(&at.0)).and_then(|state| state.files.get(&at.1))?;
         (file.base_commit == found.base && file.conflict.is_none())
