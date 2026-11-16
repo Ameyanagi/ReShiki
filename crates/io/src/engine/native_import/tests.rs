@@ -2787,3 +2787,207 @@ fn new_depictions_stand_each_components_six_rings_upright() -> anyhow::Result<()
     }
     Ok(())
 }
+
+/// Every bond is within 1% of the median, every ring is a regular polygon to
+/// within a degree, and each substituent bond points straight out from the
+/// ring's centre.
+fn assert_regular_rings_with_radial_substituents(text: &str, state: &State, p: &[Point3]) {
+    let length = |a: usize, b: usize| (p[a].x - p[b].x).hypot(p[a].y - p[b].y);
+    let mut lengths: Vec<_> = state.graph.bonds.iter().map(|b| length(b.a, b.b)).collect();
+    lengths.sort_by(f64::total_cmp);
+    let median = lengths[lengths.len() / 2];
+    for bond in &state.graph.bonds {
+        let ratio = length(bond.a, bond.b) / median;
+        assert!(
+            (ratio - 1.).abs() < 0.01,
+            "{text}: bond {}-{} is {ratio:.4} of the median",
+            bond.a,
+            bond.b
+        );
+    }
+    let between = |(ax, ay): (f64, f64), (bx, by): (f64, f64)| {
+        ((ax * bx + ay * by) / (ax.hypot(ay) * bx.hypot(by)))
+            .clamp(-1., 1.)
+            .acos()
+            .to_degrees()
+    };
+    for ring in &state.rings.atoms {
+        let n = ring.len();
+        let expected = 180. * (n - 2) as f64 / n as f64;
+        let cx = ring.iter().map(|&a| p[a].x).sum::<f64>() / n as f64;
+        let cy = ring.iter().map(|&a| p[a].y).sum::<f64>() / n as f64;
+        for i in 0..n {
+            let (a, b, c) = (p[ring[(i + n - 1) % n]], p[ring[i]], p[ring[(i + 1) % n]]);
+            let angle = between((a.x - b.x, a.y - b.y), (c.x - b.x, c.y - b.y));
+            assert!(
+                (angle - expected).abs() < 1.,
+                "{text}: ring angle at {} is {angle:.3}, expected {expected:.3}",
+                ring[i]
+            );
+            for bond in &state.graph.bonds {
+                let out = match (bond.a == ring[i], bond.b == ring[i]) {
+                    (true, _) => bond.b,
+                    (_, true) => bond.a,
+                    _ => continue,
+                };
+                if ring.contains(&out) {
+                    continue;
+                }
+                let turn = between((b.x - cx, b.y - cy), (p[out].x - b.x, p[out].y - b.y));
+                assert!(
+                    turn < 1.,
+                    "{text}: substituent {out} is {turn:.3} degrees off radial"
+                );
+            }
+        }
+    }
+}
+
+/// A ring of nine or more atoms that shares no atom with another ring is a
+/// regular polygon in a new depiction and after Clean up, as in ChemDraw,
+/// where RDKit's macrocycle templates fold it into lobes. Clean up keeps the
+/// drawn size, and Keep turns the drawing by at most 30 degrees.
+#[test]
+fn lone_large_rings_are_regular_polygons_with_radial_substituents() -> anyhow::Result<()> {
+    use crate::cleanup::{Options, Orientation, Scope};
+    for (seed, text) in [
+        "C1CCCCCCCCCCC1",
+        "CC1CCCCCCCC1",
+        "OC1CCCCCCCCCCCCCCCCC1",
+        "C1COCCOCCOCCOCCOCCO1",
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let imported = imported_smiles(text)?;
+        assert_regular_rings_with_radial_substituents(
+            text,
+            &imported.molecule.state,
+            &imported.molecule.positions,
+        );
+        // A messy copy: 1.5 times the size, turned 20 degrees, and every atom
+        // moved by up to 8% of a bond.
+        let mut source = imported.document.clone();
+        let world = source.drawing_style.bond_length_world;
+        let mut random = seed as u64 + 1;
+        let mut jitter = || {
+            random = random
+                .wrapping_mul(6_364_136_223_846_793_005)
+                .wrapping_add(1_442_695_040_888_963_407);
+            ((random >> 33) as f32 / (1u64 << 31) as f32 * 2. - 1.) * 0.08 * world
+        };
+        let (sin, cos) = 20f32.to_radians().sin_cos();
+        for atom in &mut source.atoms {
+            let (x, y) = (atom.position.x, atom.position.y);
+            atom.position.x = 1.5 * (cos * x - sin * y) + jitter();
+            atom.position.y = 1.5 * (sin * x + cos * y) + jitter();
+        }
+        let drawn: Vec<_> = source
+            .atoms
+            .iter()
+            .map(|atom| (f64::from(atom.position.x), -f64::from(atom.position.y)))
+            .collect();
+        let mut lengths: Vec<_> = source
+            .bonds
+            .iter()
+            .map(|bond| {
+                let a = source.atom(bond.a).unwrap().position;
+                f64::from(a.distance(source.atom(bond.b).unwrap().position))
+            })
+            .collect();
+        lengths.sort_by(f64::total_cmp);
+        let drawn_median = lengths[lengths.len() / 2];
+        for orientation in [Orientation::Keep, Orientation::Free, Orientation::Iupac] {
+            let mut options = Options::default();
+            options.set_orientation(orientation);
+            let mut request = Request::molecule("clean", source.clone());
+            request.cleanup = Some(options);
+            let cleaned = crate::engine::native_cleanup::prepare(&request)?;
+            let molecule = cleaned.molecule.expect("cleanup analysis");
+            let label = format!("{text}, {orientation}");
+            assert_regular_rings_with_radial_substituents(
+                &label,
+                &molecule.state,
+                &molecule.positions,
+            );
+            let bond = &molecule.state.graph.bonds[0];
+            let (a, b) = (molecule.positions[bond.a], molecule.positions[bond.b]);
+            let kept = (a.x - b.x).hypot(a.y - b.y) * 28. / drawn_median;
+            assert!((kept - 1.).abs() < 0.01, "{label}: size {kept:.4}");
+            if orientation == Orientation::Keep {
+                // The best rigid rotation from the drawing to the result.
+                let n = drawn.len() as f64;
+                let centre = |points: &mut dyn Iterator<Item = (f64, f64)>| {
+                    let (x, y) = points.fold((0., 0.), |(x, y), p| (x + p.0, y + p.1));
+                    (x / n, y / n)
+                };
+                let (ox, oy) = centre(&mut drawn.iter().copied());
+                let (nx, ny) = centre(&mut molecule.positions.iter().map(|p| (p.x, p.y)));
+                let (dot, cross) = drawn.iter().zip(&molecule.positions).fold(
+                    (0., 0.),
+                    |(dot, cross), (&(x, y), new)| {
+                        let (x, y, u, v) = (x - ox, y - oy, new.x - nx, new.y - ny);
+                        (dot + x * u + y * v, cross + x * v - y * u)
+                    },
+                );
+                let turn = f64::atan2(cross, dot).to_degrees();
+                assert!(turn.abs() <= 30., "{label}: turned {turn:.2} degrees");
+            }
+        }
+        // One fixed atom: the rest is still regular around it.
+        let mut request = Request::molecule("clean", source.clone());
+        request.cleanup = Some(Options {
+            scope: Scope::SelectedAtoms,
+            ..Options::default()
+        });
+        request.selected_ids = Some(source.atoms.iter().skip(1).map(|atom| atom.id).collect());
+        let cleaned = crate::engine::native_cleanup::prepare(&request)?;
+        let molecule = cleaned.molecule.expect("cleanup analysis");
+        assert_regular_rings_with_radial_substituents(
+            &format!("{text}, one fixed atom"),
+            &molecule.state,
+            &molecule.positions,
+        );
+        assert_eq!(cleaned.document.atoms[0].position, source.atoms[0].position);
+    }
+    Ok(())
+}
+
+/// Only a ring on its own is redrawn: fused, spiro and bridged macrocycles,
+/// and rings of up to eight atoms, keep their templated layout. A lone ring
+/// with a trans double bond has no template, so it is the same either way.
+#[test]
+fn only_lone_large_rings_leave_their_ring_template() -> anyhow::Result<()> {
+    let layout = |text: &str, regular_large_rings| -> anyhow::Result<Vec<Point3>> {
+        let state = smiles::read(text)?.prepared.state;
+        Ok(depict::compute(
+            &state,
+            &vec![None; state.graph.atoms.len()],
+            None,
+            depict::Options {
+                use_ring_templates: true,
+                regular_large_rings,
+                ..Default::default()
+            },
+        )?
+        .positions)
+    };
+    for text in [
+        // Benzo-fused: benzocyclododecene and dibenzo-18-crown-6.
+        "c1ccc2CCCCCCCCCCc2c1",
+        "C1COc2ccccc2OCCOCCOc2ccccc2OCCO1",
+        // Spiro and bridged.
+        "C1CCC2(CC1)CCCCCCCCCCC2",
+        "C1CCCC2CCCCC(CCC1)CC2",
+        "CC1CCCCCCC1",
+        // A trans double bond keeps its inward corner either way.
+        "C1CCCC/C=C/CCCCC1",
+    ] {
+        assert_eq!(layout(text, true)?, layout(text, false)?, "{text}");
+    }
+    assert_ne!(
+        layout("C1CCCCCCCCCCC1", true)?,
+        layout("C1CCCCCCCCCCC1", false)?
+    );
+    Ok(())
+}

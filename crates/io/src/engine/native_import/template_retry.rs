@@ -112,6 +112,7 @@ fn templated(
             use_ring_templates: true,
             path_angle_expansion_extra_trials: crate::chemistry::document::refine(),
             preserve_spiro_rings: crate::chemistry::document::refine(),
+            regular_large_rings: crate::chemistry::document::refine(),
             ..Default::default()
         },
     )
