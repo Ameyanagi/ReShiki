@@ -1170,6 +1170,7 @@ fn a_drawing_never_shows_what_another_of_its_name_was_last_changed_by() {
     };
     app.github.repos = vec![repo(), other.clone()];
     let picker = |action| Action::Picker(action);
+    app.github.prefs.tiles = true;
     github(&mut app, picker(picker::Action::Show(Mode::Open)));
     github(&mut app, picker(picker::Action::PickRepo(repo().key)));
     let top = picker_lists(&mut app, &["sub"], &["ring.rsk"]);
@@ -1267,6 +1268,7 @@ fn a_picker_opened_before_the_saved_sign_in_loads_lists_once_it_does() {
         Some(Dialog::Picker(picker)) => (picker.signed_out, picker.repos.clone()),
         other => panic!("no picker: {other:?}"),
     };
+    app.github.prefs.tiles = true;
     github(&mut app, Action::Picker(picker::Action::Show(Mode::Open)));
     assert!(picker(&app).0);
 
@@ -1300,6 +1302,7 @@ fn a_closed_pickers_late_reply_never_reaches_a_new_one() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, _) = app_in(dir.path());
     app.github.repos = vec![repo()];
+    app.github.prefs.tiles = true;
     github(&mut app, Action::Picker(picker::Action::Show(Mode::Open)));
     github(
         &mut app,
@@ -1392,6 +1395,7 @@ fn nothing_is_made_in_a_folder_that_could_not_be_listed() {
     let (mut app, _) = app_in(dir.path());
     app.github.repos = vec![repo()];
     let picker = |action| Action::Picker(action);
+    app.github.prefs.tiles = true;
     github(&mut app, picker(picker::Action::Show(Mode::Open)));
     github(&mut app, picker(picker::Action::PickRepo(repo().key)));
     let failed = picker_generation(&app);
@@ -1713,6 +1717,7 @@ fn the_picker_lists_the_last_used_repository_first_and_opens_it() {
     let (mut app, _) = app_in(dir.path());
     app.github.repos = vec![named("zeta", 1), named("Alpha", 2), named("mid", 3)];
     app.github.prefs.last = Some(3);
+    app.github.prefs.tiles = true;
     github(&mut app, Action::Picker(picker::Action::Show(Mode::Open)));
     let Some(Dialog::Picker(picker)) = &app.github.dialog else {
         panic!("no picker");
@@ -1735,6 +1740,7 @@ fn signed_out_the_picker_shows_known_repositories_and_signs_in_first() {
     let state = app.github.states[&repo().key].clone();
     run_blocking(workcopy::persist(dir.path(), &repo().key, state, 99)).unwrap();
     app.github.account = Account::SignedOut(None);
+    app.github.prefs.tiles = true;
     github(&mut app, Action::Picker(picker::Action::Show(Mode::Open)));
     let Some(Dialog::Picker(picker)) = &app.github.dialog else {
         panic!("no picker");
@@ -1832,6 +1838,7 @@ fn back_from_choosing_repositories_the_open_picker_lists_them_again_once() {
     let lists = |task: Task<Message>| iced_runtime::task::into_stream(task).is_some();
     let dir = tempfile::tempdir().unwrap();
     let (mut app, _) = app_in(dir.path());
+    app.github.prefs.tiles = true;
     github(&mut app, Action::Picker(picker::Action::Show(Mode::Open)));
     let generation = app.github.generation;
     let none = gh::Account {
@@ -2198,6 +2205,7 @@ fn a_pasted_link_shows_one_row_and_enter_opens_its_folder() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, _) = app_in(dir.path());
     app.github.repos = vec![repo()];
+    app.github.prefs.tiles = true;
     github(&mut app, Action::Picker(picker::Action::Show(Mode::Open)));
     let link = "https://github.com/octo/lab/tree/main/scheme/drafts";
     github(
@@ -2253,6 +2261,7 @@ fn a_shared_repository_stays_listed_until_removed() {
     assert_eq!(listed, [repo().id, alice().id]);
     // Listed again in the next picker, without asking GitHub.
     github(&mut app, Action::Close);
+    app.github.prefs.tiles = true;
     github(&mut app, Action::Picker(picker::Action::Show(Mode::Open)));
     let listed = the_picker(&app).repos.clone().unwrap();
     assert!(
@@ -2288,6 +2297,7 @@ fn a_shared_repository_stays_listed_until_removed() {
 fn add_public_repository_takes_a_name_or_a_link() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, _) = app_in(dir.path());
+    app.github.prefs.tiles = true;
     github(&mut app, Action::Picker(picker::Action::Show(Mode::Open)));
     github(&mut app, Action::Picker(picker::Action::Add));
     github(
@@ -2783,6 +2793,7 @@ fn access_given_later_reaches_the_open_picker() {
         push: false,
         ..repo()
     }];
+    app.github.prefs.tiles = true;
     github(&mut app, Action::Picker(picker::Action::Show(Mode::Open)));
     github(
         &mut app,
@@ -2848,6 +2859,7 @@ fn access_given_later_survives_a_late_download_and_a_new_listing() {
         ..repo()
     };
     app.github.repos = vec![before.clone()];
+    app.github.prefs.tiles = true;
     github(&mut app, Action::Picker(picker::Action::Show(Mode::Open)));
     github(
         &mut app,
