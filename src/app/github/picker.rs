@@ -14,7 +14,7 @@ use super::{Action as GitHubAction, Dialog, identity, perform, versions::who};
 use crate::app::{
     App, Message,
     document_tab::TabId,
-    import::{self, Batch, Ticket},
+    import::{self, Batch},
     workspace::muted_text,
 };
 use chrono::{DateTime, Local};
@@ -376,6 +376,25 @@ impl Picker {
     }
 }
 
+/// An SD file's records, or any file's one drawing, as one drawing: each
+/// beside the one before, centered on the same line.
+fn side_by_side(drawings: Vec<Document>) -> Option<Document> {
+    let mut drawings = drawings.into_iter();
+    let mut doc = drawings.next()?;
+    let bounds = |doc: &Document| reshiki::scene::selection_bounds(doc, &doc.all_ids());
+    for part in drawings {
+        if let (Some((top, right)), Some((lo, hi))) = (bounds(&doc), bounds(&part)) {
+            let gap = doc.drawing_style.bond_length_world;
+            let offset = reshiki::document::Point::new(
+                right.x + gap - lo.x,
+                (top.y + right.y - lo.y - hi.y) / 2.,
+            );
+            reshiki::editing::append(&mut doc, &part, offset);
+        }
+    }
+    Some(doc)
+}
+
 /// The folder a repository path is in (`""` is the top).
 fn parent(path: &str) -> &str {
     path.rsplit_once('/').map_or("", |(folder, _)| folder)
@@ -496,7 +515,10 @@ pub enum Action {
     Insert,
     /// The file to insert, by repository path, for the drawing it was
     /// chosen for.
-    Fetched(TabId, Ticket, String, Result<Vec<u8>, gh::Error>),
+    Fetched(TabId, String, Result<Vec<u8>, gh::Error>),
+    /// Its structures, read for that drawing as it was (file epoch and
+    /// revision): pasted unless it changed since.
+    Inserted(TabId, u64, u64, String, Box<Result<Batch, String>>),
     /// Another chemistry file than a drawing, read for its read-only tab.
     Read(PathBuf, Box<Result<Batch, String>>),
 }
@@ -1335,45 +1357,48 @@ impl App {
                 picker.file_menu = path;
             }
             Action::Insert => return self.picker_insert(),
-            Action::Fetched(tab, ticket, path, result) => {
-                return match result {
-                    Ok(contents) => {
-                        let path = PathBuf::from(last(&path));
-                        let file = crate::app::files::Picked { path, contents };
-                        let read = self.in_tab(tab, |app| app.insert_read(ticket, vec![file]));
-                        crate::app::tagged(read.unwrap_or_else(Task::none), tab)
-                    }
+            Action::Fetched(tab, path, result) => {
+                let contents = match result {
+                    Ok(contents) => contents,
                     Err(error) => {
                         self.status = self.github_failed(&error);
                         self.error = true;
-                        Task::none()
+                        return Task::none();
                     }
                 };
+                let file = crate::app::files::Picked {
+                    path: PathBuf::from(last(&path)),
+                    contents,
+                };
+                let engine = self.engine.clone();
+                let read = self.in_tab(tab, |app| {
+                    let options = (&app.tab.doc.drawing_style).into();
+                    let theme = app.tab.doc.canvas_theme;
+                    let (epoch, revision) = (app.tab.file_epoch, app.tab.revision);
+                    Task::perform(
+                        import::load(engine, vec![file], options, theme),
+                        move |read| {
+                            msg(Action::Inserted(tab, epoch, revision, path, Box::new(read)))
+                        },
+                    )
+                });
+                return read.unwrap_or_else(Task::none);
+            }
+            Action::Inserted(tab, epoch, revision, path, read) => {
+                self.in_tab(tab, |app| app.picker_paste(epoch, revision, &path, *read));
             }
             Action::Read(path, result) => {
-                let (mut drawings, warnings) = match *result {
-                    Ok(batch) => (batch.drawings.into_iter(), batch.warnings),
+                let (drawings, warnings) = match *result {
+                    Ok(batch) => (batch.drawings, batch.warnings),
                     Err(error) => {
                         self.status = error;
                         self.error = true;
                         return Task::none();
                     }
                 };
-                let Some(mut doc) = drawings.next() else {
+                let Some(doc) = side_by_side(drawings) else {
                     return Task::none();
                 };
-                // An SD file's other records, beside the first.
-                let bounds = |doc: &Document| reshiki::scene::selection_bounds(doc, &doc.all_ids());
-                for part in drawings {
-                    if let (Some((top, right)), Some((lo, hi))) = (bounds(&doc), bounds(&part)) {
-                        let gap = doc.drawing_style.bond_length_world;
-                        let offset = reshiki::document::Point::new(
-                            right.x + gap - lo.x,
-                            (top.y + right.y - lo.y - hi.y) / 2.,
-                        );
-                        reshiki::editing::append(&mut doc, &part, offset);
-                    }
-                }
                 let kept = self.github_opened(&path);
                 if self.open_target(Some(&path)) {
                     self.show_opened(doc, Some(path));
@@ -1388,8 +1413,55 @@ impl App {
         Task::none()
     }
 
+    /// Pastes a file's structures into the drawing in front as one Undo step,
+    /// placed as a paste is, unless the drawing changed while they were read.
+    fn picker_paste(&mut self, epoch: u64, revision: u64, path: &str, read: Result<Batch, String>) {
+        let name = last(path);
+        if epoch != self.tab.file_epoch
+            || revision != self.tab.revision
+            || self.tab.inline_text.is_some()
+            || self.tab.joining.is_some()
+        {
+            self.status = "Drawing changed during Insert · Insert again".into();
+            return;
+        }
+        let batch = match read {
+            Ok(batch) => batch,
+            Err(error) => {
+                self.status = error;
+                self.error = true;
+                return;
+            }
+        };
+        let Some(mut part) = side_by_side(batch.drawings) else {
+            return;
+        };
+        // Another program's structure follows this drawing's label settings,
+        // as a pasted one does.
+        if !path.ends_with(".rsk") {
+            part = reshiki::canvas_theme::for_paste(part, self.tab.doc.canvas_theme);
+            part.atom_labels = self.tab.doc.atom_labels.clone();
+        }
+        if !self.append_pasted(&part) {
+            self.status = format!("Could not insert {name}");
+            self.error = true;
+            return;
+        }
+        self.tool = crate::canvas::Tool::Select;
+        self.sync_typography();
+        self.sync_graphics();
+        self.sync_arrows();
+        self.sync_bonds();
+        self.status = format!("Inserted {name}");
+        self.error = false;
+        for warning in batch.warnings {
+            self.status.push_str(" · ");
+            self.status.push_str(&warning);
+        }
+    }
+
     /// Puts the selected file's structures into the drawing in front, placed
-    /// as an insert is, as one Undo step. Only Open inserts.
+    /// as a paste is, as one Undo step. Only Open inserts.
     fn picker_insert(&mut self) -> Task<Message> {
         let Some(picker) = self.picker().filter(|picker| picker.mode == Mode::Open) else {
             return Task::none();
@@ -1400,13 +1472,13 @@ impl App {
         let Some(client) = self.github.reader() else {
             return Task::none();
         };
-        let (tab, ticket) = (self.tab.id, self.import_ticket());
+        let tab = self.tab.id;
         let close = self.github_close_dialog();
         self.status = "Reading from GitHub…".into();
         self.error = false;
         let read = perform(
             async move { api::blob(&client, &repo.key, &sha).await },
-            move |result| GitHubAction::Picker(Action::Fetched(tab, ticket, path, result)),
+            move |result| GitHubAction::Picker(Action::Fetched(tab, path, result)),
         );
         Task::batch([close, read])
     }

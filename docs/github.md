@@ -51,8 +51,8 @@ changed.
 
 **Insert** (or Shift+Enter, or right-click a file and choose **Insert into
 drawing**) puts a file's structures into the drawing in front instead, placed
-as an inserted file is, as one Undo step. An SD file's records land side by
-side.
+as a paste is (a large one beside what is there), as one Undo step. An SD
+file's records land side by side.
 
 A folder shows its first 200 files, newest first, and says how many there
 are; the search field finds the others.

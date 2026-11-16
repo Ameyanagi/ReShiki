@@ -216,9 +216,7 @@ async fn insert_puts_a_files_structures_in_the_drawing_as_one_undo_step() {
         let before = app.tab.doc.clone();
         let _ = picker(&mut app, picker::Action::Insert);
         assert!(app.github.dialog.is_none(), "Insert closes the picker");
-        let ticket = app.import_ticket();
-        let fetched =
-            picker::Action::Fetched(app.tab.id, ticket, name.into(), Ok(bytes.into_bytes()));
+        let fetched = picker::Action::Fetched(app.tab.id, name.into(), Ok(bytes.into_bytes()));
         let task = picker(&mut app, fetched);
         run(&mut app, task).await;
         let after = app.tab.doc.clone();
@@ -574,11 +572,10 @@ async fn insert_lands_in_the_drawing_it_was_chosen_for() {
     let (mut app, _) = app_in(dir.path());
     app.tab.busy = false;
     let (chosen, atoms) = (app.tab.id, app.tab.doc.atoms.len());
-    let ticket = app.import_ticket();
     // Another tab is in front when the file arrives.
     open_other(&mut app, dir.path());
     let other = app.tab.doc.atoms.len();
-    let fetched = picker::Action::Fetched(chosen, ticket, "PPh3.mol".into(), Ok(MOL.into()));
+    let fetched = picker::Action::Fetched(chosen, "PPh3.mol".into(), Ok(MOL.into()));
     let task = picker(&mut app, fetched);
     run(&mut app, task).await;
     assert_eq!(
@@ -589,7 +586,6 @@ async fn insert_lands_in_the_drawing_it_was_chosen_for() {
     let _ = app.update(Message::Tabs(tabs::Action::Select(chosen)));
     assert_eq!(app.tab.id, chosen);
     assert_eq!(app.tab.doc.atoms.len(), atoms + 9, "{}", app.status);
-    assert!(!app.tab.busy);
 }
 
 #[test]

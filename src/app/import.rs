@@ -549,7 +549,24 @@ impl App {
                             self.browser_file_handles(),
                         );
                     }
-                    Plan::Insert(_) => return self.insert_read(ticket, files),
+                    Plan::Insert(_) => {
+                        // A drawing opened in this tab meanwhile is not the
+                        // one the files were meant for. Edits made while they
+                        // were read, such as the caption draft finished just
+                        // before this, are kept: the import starts from now.
+                        if ticket.epoch != self.tab.file_epoch || !self.begin_import() {
+                            return Task::none();
+                        }
+                        let ticket = self.import_ticket();
+                        let options = (&self.tab.doc.drawing_style).into();
+                        let canvas_theme = self.tab.doc.canvas_theme;
+                        return Task::perform(
+                            load(self.engine.clone(), files, options, canvas_theme),
+                            move |result| {
+                                Message::Imports(Action::Loaded(ticket, Box::new(result)))
+                            },
+                        );
+                    }
                 }
             }
             Action::Loaded(ticket, result) => {
@@ -579,23 +596,6 @@ impl App {
             }
         }
         Task::none()
-    }
-
-    /// Inserts files already read into the drawing they were read for. A
-    /// drawing opened in this tab meanwhile is not the one they were meant
-    /// for. Edits made while they were read, such as the caption draft
-    /// finished just before this, are kept: the import starts from now.
-    pub(super) fn insert_read(&mut self, ticket: Ticket, files: Vec<Picked>) -> Task<Message> {
-        if ticket.epoch != self.tab.file_epoch || !self.begin_import() {
-            return Task::none();
-        }
-        let ticket = self.import_ticket();
-        let options = (&self.tab.doc.drawing_style).into();
-        let canvas_theme = self.tab.doc.canvas_theme;
-        Task::perform(
-            load(self.engine.clone(), files, options, canvas_theme),
-            move |result| Message::Imports(Action::Loaded(ticket, Box::new(result))),
-        )
     }
 
     /// Inserts the drawings side by side around the drop point as one Undo step.
