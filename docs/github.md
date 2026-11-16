@@ -240,5 +240,6 @@ first.
   `draft` branch, every other chemistry file and a `screening` folder of 240,
   and `alice/notes`, private; `octo-test/spectra` is too big to list whole.
   `POST /_mock/limit` with `{"left": 0}` spends the signed-out limit.
-  `POST /_mock/commit` with `{"repo", "path", "content", "author": "alice",
-  "message"}` changes a drawing as someone else.
+  `POST /_mock/commit` with
+  `{"repo", "path", "content", "author": "alice", "message"}` changes a
+  drawing as someone else.
