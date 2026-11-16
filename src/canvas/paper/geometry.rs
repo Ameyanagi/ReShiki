@@ -1,6 +1,10 @@
 //! Retain the paper's static selection markers and tessellated scene together.
-use super::super::{Camera, layered, markers::Markers, models3d, render::draw_primitives};
-use iced::Rectangle;
+//!
+//! Panning reuses the tessellation, shifted: the first pan at a zoom level
+//! tessellates half a view beyond each edge, so later pans within that margin
+//! draw nothing new.
+use super::super::{Camera, World, layered, markers::Markers, models3d, render::draw_primitives};
+use iced::{Rectangle, Vector};
 use reshiki::scene::Primitive;
 use std::rc::Rc;
 
@@ -12,13 +16,16 @@ struct Entry {
     markers: Rc<Markers>,
     view: View,
     nmr_ids: Vec<u64>,
+    center: World,
+    /// How far the view can pan, in pixels, before the edges need tessellating.
+    margin: Vector,
     // Model drawing reads frame-local tile sampling state; leave it live.
     geometry: Option<Vec<layered::RetainedGeometry>>,
 }
 
 #[derive(PartialEq, Eq)]
 struct View {
-    camera: [u32; 3],
+    zoom: u32,
     bounds: [u32; 4],
     frame: layered::FrameKey,
     reviewing_pair: bool,
@@ -37,11 +44,7 @@ impl SceneGeometryCache {
         use iced::advanced::graphics::cache::{Cached, Group};
         let (markers, scene) = rendered;
         let view = View {
-            camera: [
-                camera.center.x.to_bits(),
-                camera.center.y.to_bits(),
-                camera.zoom.to_bits(),
-            ],
+            zoom: camera.zoom.to_bits(),
             bounds: [
                 bounds.x.to_bits(),
                 bounds.y.to_bits(),
@@ -51,21 +54,42 @@ impl SceneGeometryCache {
             frame: frame.key(),
             reviewing_pair,
         };
-        let draw = |frame: &mut layered::Frame<'_>| {
+        let draw = |frame: &mut layered::Frame<'_>, camera: Camera, bounds: Rectangle| {
             if !reviewing_pair {
                 markers.draw_with_nmr(frame, camera, bounds, true, nmr_ids);
             }
             draw_primitives(frame, &scene, camera, bounds, 0.);
         };
-        if !self.0.as_ref().is_some_and(|entry| {
+        let same = self.0.as_ref().filter(|entry| {
             Rc::ptr_eq(&entry.scene, &scene)
                 && Rc::ptr_eq(&entry.markers, &markers)
                 && entry.view == view
                 && entry.nmr_ids == nmr_ids
-        }) {
+        });
+        let shift = same.map(|entry| {
+            Vector::new(
+                (entry.center.x - camera.center.x) * camera.zoom,
+                (entry.center.y - camera.center.y) * camera.zoom,
+            )
+        });
+        let reuse = same.zip(shift).is_some_and(|(entry, shift)| {
+            shift.x.abs() <= entry.margin.x && shift.y.abs() <= entry.margin.y
+        });
+        if !reuse {
+            // Only a pan pays for the margin; edits and zooms tessellate the view.
+            let margin = if shift.is_some() {
+                Vector::new(bounds.width / 2., bounds.height / 2.)
+            } else {
+                Vector::ZERO
+            };
             let geometry = (!scene.iter().any(models3d::is_model)).then(|| {
-                let mut layer = frame.layer();
-                draw(&mut layer);
+                let mut layer = frame.layer(margin);
+                let wide = Rectangle {
+                    width: bounds.width + 2. * margin.x,
+                    height: bounds.height + 2. * margin.y,
+                    ..bounds
+                };
+                draw(&mut layer, camera, wide);
                 layer
                     .finish()
                     .into_iter()
@@ -77,13 +101,24 @@ impl SceneGeometryCache {
                 markers: markers.clone(),
                 view,
                 nmr_ids: nmr_ids.to_vec(),
+                center: camera.center,
+                margin,
                 geometry,
             });
         }
-        if let Some(geometry) = self.0.as_ref().and_then(|entry| entry.geometry.as_ref()) {
-            frame.retained(geometry);
-        } else {
-            draw(frame);
+        match self.0.as_ref() {
+            Some(Entry {
+                geometry: Some(geometry),
+                center,
+                ..
+            }) => frame.retained(
+                geometry,
+                Vector::new(
+                    (center.x - camera.center.x) * camera.zoom,
+                    (center.y - camera.center.y) * camera.zoom,
+                ),
+            ),
+            _ => draw(frame, camera, bounds),
         }
     }
 }

@@ -373,6 +373,7 @@ impl App {
                 .filter(|_| self.tool == Tool::Template)
                 .map(|t| (t, self.templates.anchor)),
         })
+        .shifted(crate::canvas::State::shifts)
         .width(Length::Fill)
         .height(Length::Fill)
         .into()

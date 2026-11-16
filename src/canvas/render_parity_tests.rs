@@ -698,26 +698,29 @@ async fn retained_paper_scene_matches_live_layers_and_invalidates_draw_inputs() 
     let mut selected = &[][..];
     let mut nmr_ids = &[][..];
     let mut reviewing_pair = false;
-    for case in 0..12 {
+    // A pan within the margin the first pan retained shifts that geometry.
+    let shifted = 5;
+    for case in 0..13 {
         match case {
             0 => {}
             1 => selected = &all,
             2 => nmr_ids = &all,
             3 => reviewing_pair = true,
             4 => camera.center.x += 5.,
-            5 => camera.zoom = 1.125,
-            6 => {
+            5 => camera.center = camera.center.offset(-60., 25.),
+            6 => camera.zoom = 1.125,
+            7 => {
                 bounds.x = 20.;
                 bounds.y = 40.;
             }
-            7 => {
+            8 => {
                 bounds.width = 596.5;
                 bounds.height = 361.25;
             }
-            8 => offset = Vector::new(guides::RULER_WIDTH, guides::RULER_HEIGHT),
-            9 => doc.canvas_theme = CanvasTheme::Dark,
-            10 => doc.atoms[0].position.x += 12.,
-            11 => selected = &[],
+            9 => offset = Vector::new(guides::RULER_WIDTH, guides::RULER_HEIGHT),
+            10 => doc.canvas_theme = CanvasTheme::Dark,
+            11 => doc.atoms[0].position.x += 12.,
+            12 => selected = &[],
             _ => unreachable!(),
         }
         let (markers, scene) = scene_cache.render(&doc, selected);
@@ -758,8 +761,26 @@ async fn retained_paper_scene_matches_live_layers_and_invalidates_draw_inputs() 
                     .with_width(3.),
             );
             let drawn = render::DRAWN_PRIMITIVES.with(std::cell::Cell::get);
-            for layer in frame.finish() {
-                renderer.draw_geometry(layer);
+            let paper = Rectangle {
+                x: offset.x,
+                y: offset.y,
+                ..Rectangle::with_size(bounds.size())
+            };
+            let (layers, shifts) = frame.finish_shifted();
+            for (i, layer) in layers.into_iter().enumerate() {
+                let shift = shifts
+                    .iter()
+                    .find(|(layers, _)| layers.contains(&i))
+                    .map_or(Vector::ZERO, |(_, shift)| *shift);
+                // Draw the pan case as the canvas widget does: each layer in
+                // order, clipped to the paper, shifted if it was retained.
+                if case == shifted {
+                    renderer.with_layer(paper, |renderer| {
+                        renderer.with_translation(shift, |renderer| renderer.draw_geometry(layer));
+                    });
+                } else {
+                    renderer.draw_geometry(layer);
+                }
             }
             (
                 Headless::screenshot(&mut renderer, iced::Size::new(760, 480), 1., Color::WHITE),
@@ -768,12 +789,46 @@ async fn retained_paper_scene_matches_live_layers_and_invalidates_draw_inputs() 
         };
         let (live, _) = render(None);
         let (cold, drawn) = render(Some(&mut geometry));
-        assert!(drawn > 0, "case {case} must invalidate the retained scene");
-        assert_same_pixels(&format!("case {case}: live/cold retained"), &live, &cold);
+        // Shifted geometry was tessellated at other, algebraically equivalent
+        // coordinates, so antialiased edges may differ by floating-point ulps.
+        let same: fn(&str, &[u8], &[u8]) = if case == shifted {
+            assert_eq!(drawn, 0, "case {case} must shift the retained scene");
+            assert_close_pixels
+        } else {
+            assert!(drawn > 0, "case {case} must invalidate the retained scene");
+            assert_same_pixels
+        };
+        same(&format!("case {case}: live/cold retained"), &live, &cold);
         let (warm, drawn) = render(Some(&mut geometry));
         assert_eq!(drawn, 0, "case {case} must reuse the retained scene");
-        assert_same_pixels(&format!("case {case}: live/warm retained"), &live, &warm);
+        same(&format!("case {case}: live/warm retained"), &live, &warm);
     }
+}
+
+/// The drag preview's tolerance (`docs/performance/loaded-canvas.md`): under
+/// 0.1% of pixels differ by more than eight levels, mean error under 0.1.
+fn assert_close_pixels(name: &str, pixels: &[u8], expected: &[u8]) {
+    assert_eq!(pixels.len(), expected.len(), "{name}: image size changed");
+    let changed = pixels
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .zip(expected.as_chunks::<4>().0)
+        .filter(|(a, b)| a.iter().zip(*b).any(|(a, b)| a.abs_diff(*b) > 8))
+        .count();
+    let error: u64 = pixels
+        .iter()
+        .zip(expected)
+        .map(|(a, b)| u64::from(a.abs_diff(*b)))
+        .sum();
+    assert!(
+        changed * 4 * 1000 < pixels.len(),
+        "{name}: {changed} significantly different pixels"
+    );
+    assert!(
+        (error as f64 / pixels.len() as f64) < 0.1,
+        "{name}: mean channel error {error}"
+    );
 }
 
 #[tokio::test]
