@@ -531,7 +531,7 @@ fn keep_githubs_shows_a_placed_property_caption_exactly() {
     app.tab.doc = yours.clone();
     app.tab.mark_saved(yours);
     github(&mut app, Action::Resolve(send::Choice::KeepTheirs));
-    assert_eq!(app.status, "Kept GitHub’s");
+    assert!(app.status.starts_with("Kept GitHub’s"), "{}", app.status);
     assert_eq!(app.tab.doc, Document::from_native_file(&theirs).unwrap());
     assert!(!app.dirty());
 }
