@@ -1058,9 +1058,13 @@ impl App {
     /// Opens what a link names in `repo`: a drawing in a tab (an old version
     /// at another branch or a commit), or else the picker in its folder.
     fn picker_follow(&mut self, repo: Repo, found: Link) -> Task<Message> {
+        // Send goes to the default branch: a link there is read at it.
+        let send = self
+            .picker()
+            .is_some_and(|picker| picker.mode == Mode::SendTo);
         let reference = found
             .reference
-            .filter(|reference| *reference != repo.default_branch);
+            .filter(|reference| *reference != repo.default_branch && !send);
         if found.file && found.path.ends_with(".rsk") {
             return self.picker_open_path(repo, found.path, reference);
         }
@@ -1381,11 +1385,13 @@ impl App {
             return Task::none();
         };
         // The folder's names are known once it is listed; after a listing
-        // that failed, a save could replace a file already there.
-        let (Some(repo), Some(_), false) = (
+        // that failed, a save could replace a file already there. Send goes
+        // to the default branch, so names read at another one do not count.
+        let (Some(repo), Some(_), false, None) = (
             picker.repo.clone(),
             picker.entries.as_ref(),
             picker.unlisted,
+            &picker.reference,
         ) else {
             return Task::none();
         };
@@ -1781,7 +1787,10 @@ impl App {
                 "github-send-here",
                 "Send",
                 Action::SendHere,
-                picker.repo.is_some() && picker.entries.is_some() && !picker.unlisted,
+                picker.repo.is_some()
+                    && picker.entries.is_some()
+                    && !picker.unlisted
+                    && picker.reference.is_none(),
             ),
         };
         footer = footer.push(

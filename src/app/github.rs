@@ -2297,8 +2297,10 @@ impl App {
     /// Whether the status chip is there to hold the Send popover: the theme
     /// editor replaces the status bar, and a drawing not on GitHub has no chip.
     pub(super) fn send_on_chip(&self) -> bool {
+        // A read-only repository's chip has no Send to hold it.
         !(self.inspector_tab == InspectorTab::ThemeGenerator && self.theme_library.editor.is_some())
-            && self.github.locate(self.tab.path.as_deref()).is_some()
+            && (self.github.locate(self.tab.path.as_deref()))
+                .is_some_and(|(key, _)| !self.github.read_only(&key))
     }
 
     /// The open GitHub dialog over everything else. Send is a popover of the

@@ -2694,3 +2694,52 @@ fn known_drawings_rank_by_their_name_and_after_commands_for_short_queries() {
     assert!(known.is_some_and(|known| tool.is_some_and(|tool| known > tool)));
     assert!(!rows[0].starts_with("Open from GitHub: "));
 }
+
+#[test]
+fn a_read_only_drawing_in_front_draws_send_as_a_dialog() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_in(dir.path());
+    save_here(&mut app, &path);
+    github(&mut app, Action::ShowSend);
+    assert!(app.send_on_chip());
+    // A drawing of a read-only repository comes to the front: its chip has
+    // no Send to hold the box.
+    app.github.states.get_mut(&repo().key).unwrap().read_only = true;
+    assert!(matches!(app.github.dialog, Some(Dialog::Send(_))));
+    assert!(!app.send_on_chip());
+}
+
+#[test]
+fn send_to_github_reads_a_branch_link_at_the_default_branch() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = app_in(dir.path());
+    app.add_tab();
+    picker_at(&mut app, Mode::SendTo, &["a.rsk"]);
+    let link = "https://github.com/octo/lab/tree/draft";
+    github(
+        &mut app,
+        Action::Picker(picker::Action::Search(link.into())),
+    );
+    github(&mut app, Action::Picker(picker::Action::Enter));
+    // Send goes to main, so its names are read there, not at draft.
+    assert_eq!(the_picker(&app).reference, None);
+    let generation = picker_generation(&app);
+    github(
+        &mut app,
+        Action::Picker(picker::Action::Listing(
+            generation,
+            Ok((sha('8'), Vec::new())),
+        )),
+    );
+    // Names read at another branch never let Send through.
+    if let Some(Dialog::Picker(picker)) = &mut app.github.dialog {
+        picker.reference = Some("draft".into());
+    }
+    github(
+        &mut app,
+        Action::Picker(picker::Action::SaveName("x".into())),
+    );
+    github(&mut app, Action::Picker(picker::Action::SendHere));
+    assert!(matches!(app.github.dialog, Some(Dialog::Picker(_))));
+    assert!(app.github.after_save.is_none());
+}
