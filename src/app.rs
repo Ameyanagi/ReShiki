@@ -824,6 +824,7 @@ impl App {
     /// Shows a stored drawing, such as a version from GitHub, in place of this
     /// one as one undoable edit. It comes back exactly as stored: an edit's
     /// repairs would place its captions against the drawing it replaces.
+    #[cfg(not(target_arch = "wasm32"))]
     fn replace_with_stored(&mut self, stored: Document) {
         self.tab.selected.clear();
         if stored == self.tab.doc {
