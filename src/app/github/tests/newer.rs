@@ -158,6 +158,36 @@ fn with_changes_here_it_becomes_the_conflict_review() {
     found(&mut app, "alice");
     assert_eq!(app.github.conflicts[&repo().key].len(), 1);
 
+    // A send that found it in conflict since (here with GitHub at another
+    // version) leaves only that conflict to review.
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_in(dir.path());
+    found(&mut app, "alice");
+    conflicted(&mut app, &path, Some(drawing(20.)));
+    app.github.sending.clear();
+    let _ = app.update(Message::Escape);
+    github(&mut app, Action::Review);
+    let conflicts = &app.github.conflicts[&repo().key];
+    assert_eq!(conflicts.len(), 1);
+    assert_eq!(conflicts[0].commit, sha('f'));
+    assert_eq!(
+        file_state(&app, "ring.rsk")
+            .unwrap()
+            .conflict
+            .unwrap()
+            .commit,
+        sha('f')
+    );
+
+    // A save made elsewhere since: Update keeps it, and the chip says Review.
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_in(dir.path());
+    found(&mut app, "alice");
+    std::fs::write(&path, drawing(50.)).unwrap();
+    let _ = app.github_update();
+    assert_eq!(std::fs::read(&path).unwrap(), drawing(50.));
+    assert_eq!(app.github_chip_state(&repo().key), Chip::Review);
+
     // While the repository sends, the send finds out instead.
     let dir = tempfile::tempdir().unwrap();
     let (mut app, _path) = app_in(dir.path());

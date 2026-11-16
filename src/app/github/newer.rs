@@ -42,7 +42,7 @@ impl App {
                 Some((repo_path, file.base_blob.clone()?))
             })
             .collect();
-        if files.is_empty() || self.github.sending.contains(&key) {
+        if files.is_empty() || self.github_busy(&key) {
             return Task::none();
         }
         let (named, branch) = (state.key(), state.branch.clone());
@@ -71,10 +71,16 @@ impl App {
         )
     }
 
+    /// Whether a Send of `key` is saving its drawings or sending them.
+    fn github_busy(&self, key: &RepoKey) -> bool {
+        self.github.sending.contains(key)
+            || (self.github.after_save.as_ref()).is_some_and(|(at, ..)| at == key)
+    }
+
     /// What a check of `key` found. A reply that lands while the repository
     /// sends, or after a drawing's base moved, is dropped.
     pub(super) fn github_newer_found(&mut self, key: RepoKey, found: Vec<Found>) -> Task<Message> {
-        if self.github.sending.contains(&key) {
+        if self.github_busy(&key) {
             return Task::none();
         }
         self.github_refresh(&key);
@@ -116,8 +122,8 @@ impl App {
     }
 
     /// GitHub's newer version of the drawing at `path`, while the drawing is
-    /// still based on what GitHub was asked against, and whether it has
-    /// changes here.
+    /// still based on what GitHub was asked against and no send found it in
+    /// conflict since, and whether it has changes here.
     fn github_found(
         &self,
         path: Option<&Path>,
@@ -125,10 +131,9 @@ impl App {
     ) -> Option<(&Found, bool)> {
         let at = self.github.locate(path)?;
         let found = self.github.newer.get(&at)?;
-        let base = (self.github.states.get(&at.0))
-            .and_then(|state| state.files.get(&at.1))
-            .and_then(|file| file.base_blob.as_ref());
-        (base == Some(&found.base)).then(|| (found, self.github_changed(&at, edited)))
+        let file = (self.github.states.get(&at.0)).and_then(|state| state.files.get(&at.1))?;
+        (file.base_blob.as_ref() == Some(&found.base) && file.conflict.is_none())
+            .then(|| (found, self.github_changed(&at, edited)))
     }
 
     /// For the window: GitHub's newer version of the drawing at `path`,
@@ -191,6 +196,10 @@ impl App {
     /// undoable edit and becomes what it is based on.
     pub(super) fn github_update(&mut self) -> Task<Message> {
         let front = self.tab.path.clone();
+        // A save made elsewhere since counts as a change here.
+        if let Some((key, _)) = self.github.locate(front.as_deref()) {
+            self.github_refresh(&key);
+        }
         let found = self.github_found(front.as_deref(), |tab| self.edited(tab));
         let (Some(root), Some((key, repo_path)), Some((found, false))) = (
             self.github.root.clone(),
