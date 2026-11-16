@@ -17,7 +17,7 @@ use sha2::{Digest, Sha256};
 use std::{
     collections::{BTreeMap, HashMap},
     path::{Path, PathBuf},
-    sync::LazyLock,
+    sync::{LazyLock, Mutex, PoisonError},
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -297,6 +297,10 @@ pub fn save_version(
     bytes: &[u8],
     base_hash: Option<&str>,
 ) -> Result<Option<SaveMeta>, String> {
+    // One at a time: two saves that read the list together would take the
+    // same id, and one would replace the other.
+    static SAVING: Mutex<()> = Mutex::new(());
+    let _saving = SAVING.lock().unwrap_or_else(PoisonError::into_inner);
     let saves = snapshots(root, key, repo_path)?;
     let newest = saves.last().and_then(|save| std::fs::read(&save.path).ok());
     if base_hash == Some(hash(bytes).as_str()) || newest.is_some_and(|newest| newest == bytes) {
