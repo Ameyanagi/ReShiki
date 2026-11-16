@@ -79,9 +79,10 @@ impl App {
     }
 
     /// What a check of `key` found. A reply that lands while the repository
-    /// sends, or after a drawing's base moved, is dropped.
+    /// sends, after it turned read only, or after a drawing's base moved, is
+    /// dropped.
     pub(super) fn github_newer_found(&mut self, key: RepoKey, found: Vec<Found>) -> Task<Message> {
-        if self.github_busy(&key) {
+        if self.github_busy(&key) || self.github.read_only(&key) {
             return Task::none();
         }
         self.github_refresh(&key);
@@ -121,14 +122,18 @@ impl App {
     }
 
     /// GitHub's newer version of the drawing at `path`, while the drawing is
-    /// still based on what GitHub was asked against and no send found it in
-    /// conflict since, and whether it has changes here.
+    /// still based on what GitHub was asked against, no send found it in
+    /// conflict since and the user may still send to it, and whether it has
+    /// changes here.
     fn github_found(
         &self,
         path: Option<&Path>,
         edited: impl Fn(&DocumentTab) -> bool,
     ) -> Option<(&Found, bool)> {
-        let at = self.github.locate(path)?;
+        let at = self
+            .github
+            .locate(path)
+            .filter(|(key, _)| !self.github.read_only(key))?;
         let found = self.github.newer.get(&at)?;
         let file = (self.github.states.get(&at.0)).and_then(|state| state.files.get(&at.1))?;
         (file.base_commit == found.base && file.conflict.is_none())

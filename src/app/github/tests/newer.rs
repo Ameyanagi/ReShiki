@@ -196,6 +196,27 @@ fn with_changes_here_it_becomes_the_conflict_review() {
     state.files.get_mut("ring.rsk").unwrap().base_commit = sha('9');
     assert_eq!(app.github_chip_state(&repo().key), Chip::Sent);
 
+    // Access taken away since (main's listing makes it read only): nothing
+    // to update or review here, and a late reply is dropped.
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _path) = app_in(dir.path());
+    found(&mut app, "alice");
+    let generation = app.github.generation;
+    let account = gh::Account {
+        login: "octo".into(),
+        repos: vec![Repo {
+            push: false,
+            ..repo()
+        }],
+    };
+    github(&mut app, Action::Listed(generation, Ok(account)));
+    assert!(app.github.read_only(&repo().key));
+    assert!(app.github_newer(app.tab.path.as_deref()).is_none());
+    assert!(!rows(&app).contains(&"Update from GitHub".into()));
+    app.github.newer.clear();
+    found(&mut app, "alice");
+    assert!(app.github.newer.is_empty());
+
     // While the repository sends, the send finds out instead.
     let dir = tempfile::tempdir().unwrap();
     let (mut app, _path) = app_in(dir.path());
