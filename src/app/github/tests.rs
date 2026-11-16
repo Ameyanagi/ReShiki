@@ -2831,3 +2831,42 @@ fn the_palette_lists_repositories_before_any_drawing_of_theirs_opens() {
         .count();
     assert_eq!(lab, 1);
 }
+
+#[test]
+fn access_given_later_survives_a_late_download_and_a_new_listing() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = read_only_app(dir.path());
+    let before = Repo {
+        push: false,
+        ..repo()
+    };
+    app.github.repos = vec![before.clone()];
+    github(&mut app, Action::Picker(picker::Action::Show(Mode::Open)));
+    github(
+        &mut app,
+        Action::Picker(picker::Action::PickRepo(repo().key)),
+    );
+    picker_lists(&mut app, &[], &["late.rsk"]);
+    // A download asked for while the repository was read only.
+    github(&mut app, Action::Picker(picker::Action::Select(0)));
+    github(&mut app, Action::Picker(picker::Action::Open));
+    let request = app.github.seq;
+    // GitHub lists it again with access: the open repository follows.
+    let generation = app.github.generation;
+    let account = gh::Account {
+        login: "octo".into(),
+        repos: vec![repo()],
+    };
+    github(&mut app, Action::Listed(generation, Ok(account)));
+    assert_eq!(the_picker(&app).repo.as_ref().map(|r| r.push), Some(true));
+    assert!(!app.github.read_only(&repo().key));
+    // The download lands later, with the repository as it was asked for.
+    let download = api::Download {
+        commit: sha('c'),
+        blob: sha('e'),
+        bytes: drawing(20.),
+    };
+    let late = picker::Action::Downloaded(request, before, "late.rsk".into(), false, Ok(download));
+    github(&mut app, Action::Picker(late));
+    assert!(!app.github.read_only(&repo().key));
+}

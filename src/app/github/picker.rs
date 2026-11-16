@@ -185,6 +185,12 @@ impl Picker {
                 repo.key.owner.to_lowercase(),
             )
         });
+        // The repository open here follows the new listing, as its access may.
+        if let Some(open) = &mut self.repo
+            && let Some(now) = repos.iter().find(|repo| repo.id == open.id)
+        {
+            *open = now.clone();
+        }
         self.repos = Some(repos);
     }
 
@@ -1207,7 +1213,12 @@ impl App {
             .or_insert_with(|| RepoState::new(repo));
         state.owner.clone_from(&repo.key.owner);
         state.repo.clone_from(&repo.key.repo);
-        state.read_only = !repo.push;
+        // Access only ever widens here: a repository read before access was
+        // given (a download on its way, a picker listed earlier) never makes
+        // it read only again. A new state takes the repository's own.
+        if repo.push {
+            state.read_only = false;
+        }
         state
     }
 
