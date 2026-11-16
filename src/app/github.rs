@@ -1856,6 +1856,13 @@ impl App {
         Some(self.github.named(&key).repo)
     }
 
+    /// Whether the status chip is there to hold the Send popover: the theme
+    /// editor replaces the status bar, and a drawing not on GitHub has no chip.
+    pub(super) fn send_on_chip(&self) -> bool {
+        !(self.inspector_tab == InspectorTab::ThemeGenerator && self.theme_library.editor.is_some())
+            && self.github.locate(self.tab.path.as_deref()).is_some()
+    }
+
     /// The open GitHub dialog over everything else. Send is a popover of the
     /// status chip instead.
     pub(super) fn with_github<'a>(&'a self, content: Element<'a, Message>) -> Element<'a, Message> {
@@ -1863,11 +1870,8 @@ impl App {
             return content;
         };
         let close = Message::GitHub(Action::Close);
-        // The theme editor replaces the workspace and its status bar.
-        let chip_shown = !(self.inspector_tab == InspectorTab::ThemeGenerator
-            && self.theme_library.editor.is_some());
         let (body, width, height, placement): (_, f32, f32, _) = match dialog {
-            Dialog::Send(_) if chip_shown => return content,
+            Dialog::Send(_) if self.send_on_chip() => return content,
             Dialog::Send(draft) => (
                 self.send_view(draft),
                 360.,

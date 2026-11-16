@@ -456,6 +456,26 @@ fn send_lists_the_unsent_drawings_with_a_message() {
 }
 
 #[test]
+fn send_stays_visible_when_a_drawing_not_on_github_comes_to_the_front() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_in(dir.path());
+    save_here(&mut app, &path);
+    github(&mut app, Action::ShowSend);
+    assert!(app.send_on_chip());
+    // A drawing opened from Finder comes to the front past the Send box.
+    let mut finder = Document::default();
+    finder.add_atom("S", reshiki::document::Point::default());
+    let _ = app.update(Message::FilePrepared(Some((
+        dir.path().join("finder.rsk"),
+        Ok(crate::app::files::Prepared::Native(Box::new(finder))),
+    ))));
+    assert!(app.github.locate(app.tab.path.as_deref()).is_none());
+    assert!(matches!(app.github.dialog, Some(Dialog::Send(_))));
+    // No chip holds it now, so it is drawn as a dialog that Esc closes.
+    assert!(!app.send_on_chip());
+}
+
+#[test]
 fn restoring_a_version_is_one_undo_step_and_a_new_save() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, _path) = app_in(dir.path());
