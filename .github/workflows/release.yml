@@ -246,8 +246,13 @@ jobs:
       CARGO_PROFILE_DIST_STRIP: ${{ startsWith(matrix.artifact, 'macos') && 'symbols' || 'none' }}
       CARGO_PROFILE_DIST_SPLIT_DEBUGINFO: ${{ startsWith(matrix.artifact, 'linux') && 'off' || 'packed' }}
       # On macOS arm64 the fat-LTO link peaks at 8.3 GB and a thin-LTO link at
-      # 7.2 GB; the arm64 runner has 7 GB, so macOS builds use thin LTO.
-      CARGO_PROFILE_DIST_LTO: ${{ startsWith(matrix.artifact, 'macos') && 'thin' || 'fat' }}
+      # 7.2 GB; the arm64 runner has 7 GB, so macOS builds use thin LTO. On Linux
+      # arm64 the fat-LTO link peaks at 18.6 GiB; that runner has 16 GB and was
+      # shut down mid-link. Thin LTO fits (8.5 GiB) but makes a larger download
+      # than without it, so Linux arm64 builds as the release profile does: no
+      # LTO across crates (lto = false) and 16 codegen units (2.8 GiB).
+      CARGO_PROFILE_DIST_LTO: ${{ startsWith(matrix.artifact, 'macos') && 'thin' || matrix.artifact == 'linux-arm64' && 'false' || 'fat' }}
+      CARGO_PROFILE_DIST_CODEGEN_UNITS: ${{ matrix.artifact == 'linux-arm64' && '16' || '1' }}
     steps:
       - *actions_runtime
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

@@ -243,7 +243,8 @@ strip = "symbols"
 # Published builds only (scripts/build_release.py): the whole program as one
 # optimized unit. It makes a smaller executable and a much slower build, so
 # tests and local runs keep the release profile. release.yml uses thin LTO on
-# macOS, whose arm64 runner has less memory than the fat-LTO link needs.
+# macOS and no LTO across crates (lto = false) with 16 codegen units on Linux
+# arm64, whose runners have less memory than the fat-LTO link needs.
 [profile.dist]
 inherits = "release"
 lto = "fat"
