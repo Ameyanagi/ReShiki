@@ -21,6 +21,8 @@ pub enum Action {
     RecoveryCleared,
     Restarted(Result<(), String>),
     Opened(Result<(), String>),
+    /// Opens the data folder in the file manager.
+    OpenDataFolder,
 }
 
 /// Already-started work and window/save lifecycle events keep running while
@@ -50,6 +52,8 @@ pub struct State {
     saving: bool,
     latest: Option<Release>,
     error: Option<String>,
+    /// The data folder About names, as resolved after startup moved it.
+    pub(super) data_folder: Option<std::path::PathBuf>,
 }
 impl State {
     /// Whether a preference save is in progress, which holds both preferences.
@@ -83,6 +87,9 @@ impl State {
             saving: false,
             latest: None,
             error: None,
+            data_folder: reshiki::compatibility::data_directory_location()
+                .ok()
+                .map(|location| location.path),
         }
     }
     pub fn available(&self) -> bool {
@@ -270,6 +277,24 @@ impl App {
                     self.updates.error = Some(error);
                 }
             }
+            Action::OpenDataFolder => {
+                #[cfg(not(target_arch = "wasm32"))]
+                if let Some(folder) = self.updates.data_folder.clone() {
+                    let open = move || {
+                        // Nothing may have written there yet.
+                        std::fs::create_dir_all(&folder).and_then(|()| open::that(&folder))
+                    };
+                    return Task::perform(
+                        async move {
+                            reshiki::task::spawn_blocking(open)
+                                .await
+                                .map_err(|error| error.to_string())?
+                                .map_err(|error| format!("Could not open the data folder: {error}"))
+                        },
+                        |result| Message::Updates(Action::Opened(result)),
+                    );
+                }
+            }
         }
         Task::none()
     }
@@ -433,7 +458,22 @@ impl App {
             ]
         } else { column![
             header,
-            version,
+            column![version]
+                .push(state.data_folder.as_ref().map(|folder| {
+                    row![
+                        text(format!("Data folder: {}", folder.display()))
+                            .size(12)
+                            .style(super::workspace::muted_text)
+                            .width(Length::Fill),
+                        reshiki::accessibility::button("updates-data-folder", "Open data folder", "Open")
+                            .on_press(msg(Action::OpenDataFolder))
+                            .padding([4, 10])
+                            .style(crate::appearance::outline),
+                    ]
+                    .spacing(8)
+                    .align_y(Alignment::Center)
+                }))
+                .spacing(6),
             row![
                 text("Channel").size(13),
                 reshiki::accessibility::button("updates-stable", "Stable update channel", "Stable").checked(state.channel == Channel::Stable)

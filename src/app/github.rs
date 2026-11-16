@@ -44,6 +44,14 @@ pub(super) const OPEN_FROM_ROW: &str = "Open from GitHub: ";
 const SEND_TO: &str = "Send to GitHub…";
 const NOT_SET_UP: &str = "Not set up in this build";
 const SAVE_COPY: &str = "Save a copy…";
+/// Shows a drawing's working copy in the system's file manager.
+const SHOW_FILE: &str = if cfg!(target_os = "macos") {
+    "Show in Finder"
+} else if cfg!(windows) {
+    "Show in Explorer"
+} else {
+    "Open containing folder"
+};
 /// The open drawings' repositories are asked again on window focus, at
 /// most this often.
 const RECHECK: Duration = Duration::from_secs(5 * 60);
@@ -334,6 +342,8 @@ pub enum Action {
     OpenOnGitHub,
     /// Copies the link of a tab's drawing, from its menu.
     CopyTabLink(TabId),
+    /// Shows a tab's working copy in the file manager ([`SHOW_FILE`]).
+    ShowFile(TabId),
     /// Copies the request that the owner add ReShiki to a repository.
     CopyRequest(RepoKey),
     /// The repository's page on GitHub.
@@ -430,6 +440,48 @@ fn perform<T: Send + 'static>(
 
 fn open_url(url: String) -> Task<Message> {
     perform(reshiki::updates::open_url(url), Action::Browser)
+}
+
+/// Selects `path` in Finder or File Explorer; elsewhere opens the folder that
+/// holds it, as no file manager standard selects a file.
+fn show_file(path: PathBuf) -> Task<Message> {
+    let show = move || -> std::io::Result<()> {
+        #[cfg(target_os = "macos")]
+        {
+            let status = std::process::Command::new("/usr/bin/open")
+                .arg("-R")
+                .arg(&path)
+                .status()?;
+            if !status.success() {
+                return Err(std::io::Error::other(format!(
+                    "open -R exited with {status}"
+                )));
+            }
+            Ok(())
+        }
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            // Explorer exits 1 even when it shows the file, so it is not awaited.
+            std::process::Command::new("explorer")
+                .raw_arg(format!("/select,\"{}\"", path.display()))
+                .spawn()
+                .map(drop)
+        }
+        #[cfg(not(any(target_os = "macos", windows)))]
+        {
+            open::that(path.parent().unwrap_or(&path))
+        }
+    };
+    perform(
+        async move {
+            reshiki::task::spawn_blocking(show)
+                .await
+                .map_err(|error| error.to_string())?
+                .map_err(|error| format!("Could not show the file: {error}"))
+        },
+        Action::Browser,
+    )
 }
 
 /// `Send “a.rsk” to GitHub?` with Send and Later.
@@ -973,6 +1025,17 @@ impl App {
                 self.github.chip_menu = false;
                 if let Some(url) = self.github_link() {
                     return open_url(url);
+                }
+            }
+            Action::ShowFile(id) => {
+                self.tabs.color_menu = None;
+                self.github.chip_menu = false;
+                if let Some(path) = self
+                    .strip()
+                    .find(|tab| tab.id == id)
+                    .and_then(|tab| tab.path.clone())
+                {
+                    return show_file(path);
                 }
             }
             Action::CopyTabLink(id) => {
@@ -1853,6 +1916,11 @@ impl App {
                 ));
             }
             rows.push(("History".into(), name.clone(), Some(Action::ShowVersions)));
+            rows.push((
+                SHOW_FILE.into(),
+                name.clone(),
+                Some(Action::ShowFile(self.tab.id)),
+            ));
             // A drawing GitHub has never had has no link yet.
             if self.github_link().is_some() {
                 rows.push((
@@ -2263,6 +2331,11 @@ impl App {
                         "Open on GitHub ↗",
                         Action::OpenOnGitHub,
                     ))
+                    .push(item(
+                        "github-show-file",
+                        SHOW_FILE,
+                        Action::ShowFile(self.tab.id),
+                    ))
                     .spacing(1),
             )
             .width(230)
@@ -2351,21 +2424,28 @@ impl App {
         }
         let link = self.github_link_for(tab.path.as_deref()).is_some();
         let menu = menu.then(|| {
-            let mut items = column![].spacing(1);
-            if link {
-                items = items.push(
-                    reshiki::accessibility::button(
-                        "github-tab-copy-link",
-                        "Copy GitHub link",
-                        text("Copy GitHub link").size(12),
-                    )
+            let item = |id: &'static str, label: &'static str, action: Action| {
+                reshiki::accessibility::button(id, label, text(label).size(12))
                     .width(Length::Fill)
                     .padding([6, 10])
                     .style(super::workspace::control(false))
-                    .on_press(Message::GitHub(Action::CopyTabLink(tab.id))),
-                );
-                items = items.push(super::workspace::horizontal_line());
+                    .on_press(Message::GitHub(action))
+            };
+            let mut items = column![].spacing(1);
+            if link {
+                items = items.push(item(
+                    "github-tab-copy-link",
+                    "Copy GitHub link",
+                    Action::CopyTabLink(tab.id),
+                ));
             }
+            items = items
+                .push(item(
+                    "github-tab-show-file",
+                    SHOW_FILE,
+                    Action::ShowFile(tab.id),
+                ))
+                .push(super::workspace::horizontal_line());
             items = items.push(
                 container(text("Color").size(11).style(super::workspace::muted_text))
                     .padding([4, 10]),

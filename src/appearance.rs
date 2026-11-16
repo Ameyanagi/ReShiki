@@ -161,14 +161,7 @@ impl Settings {
         self.copy_background.paper(self.custom_background)
     }
     fn path() -> Result<std::path::PathBuf, String> {
-        let root = std::env::var_os("RESHIKI_DATA_DIR")
-            .map(std::path::PathBuf::from)
-            .or_else(|| {
-                directories_next::ProjectDirs::from("dev", "reshiki", "ReShiki")
-                    .map(|dirs| dirs.data_local_dir().to_owned())
-            })
-            .or_else(reshiki::storage::browser_data_directory)
-            .ok_or("No application data directory")?;
+        let root = reshiki::compatibility::data_directory_location()?.path;
         Ok(root.join("appearance.json"))
     }
     pub fn load() -> Self {

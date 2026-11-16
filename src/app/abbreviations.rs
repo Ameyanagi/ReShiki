@@ -211,14 +211,7 @@ impl App {
 
 /// The user's own groups, in the bundled catalog's JSON format.
 pub(super) fn user_catalog_path() -> Result<PathBuf, String> {
-    let root = std::env::var_os("RESHIKI_DATA_DIR")
-        .map(PathBuf::from)
-        .or_else(|| {
-            directories_next::ProjectDirs::from("dev", "reshiki", "ReShiki")
-                .map(|d| d.data_local_dir().to_owned())
-        })
-        .or_else(reshiki::storage::browser_data_directory)
-        .ok_or("No application data directory")?;
+    let root = reshiki::compatibility::data_directory_location()?.path;
     Ok(root.join("abbreviations.json"))
 }
 

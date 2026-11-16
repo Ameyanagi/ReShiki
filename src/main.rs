@@ -129,7 +129,9 @@ fn main() -> iced::Result {
             }
         }
     }
-    let startup = session::parse(std::env::args_os().skip(1));
+    let mut startup = session::parse(std::env::args_os().skip(1));
+    // Before anything reads or writes data; headless modes only resolve it.
+    startup.data_warning = reshiki::compatibility::move_data_directory().err();
     #[cfg(any(windows, target_os = "linux"))]
     let _desktop = {
         let args = std::env::args_os().skip(1).collect::<Vec<_>>();

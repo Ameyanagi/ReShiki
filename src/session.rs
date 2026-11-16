@@ -148,6 +148,8 @@ impl Binding {
 #[derive(Clone, Default)]
 pub(crate) struct Arguments {
     pub(crate) paths: Vec<PathBuf>,
+    /// Why the data folder could not move to `~/.reshiki` this run.
+    pub(crate) data_warning: Option<String>,
     pub(crate) shortcut_examples: bool,
     pub(crate) office_host: Option<Host>,
 }

@@ -58,7 +58,7 @@ The server cannot read or write any file until you grant a folder. Create a dedi
 - `--allow-write <folder>` lets the agent save files into the folder.
 - `--allow-read <folder>` lets it open files from the folder. A write grant does not include reading, so add both to let it reopen what it saved.
 
-You can also grant folders for every client in `agent-access.json` in ReShiki’s data folder (`~/Library/Application Support/dev.reshiki.ReShiki/` on macOS, `%LOCALAPPDATA%\reshiki\ReShiki\data\` on Windows, `~/.local/share/reshiki/` on Linux):
+You can also grant folders for every client in `agent-access.json` in ReShiki’s data folder (`~/.reshiki/` on macOS and Linux, `%LOCALAPPDATA%\reshiki\ReShiki\data\` on Windows; **About ReShiki** shows it):
 
 ```json
 { "version": 1, "read": ["/Users/you/ReShiki-Agent"], "write": ["/Users/you/ReShiki-Agent"] }

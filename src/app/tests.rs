@@ -172,6 +172,19 @@ fn exports_are_named_after_the_saved_document() {
 }
 
 #[test]
+fn a_data_folder_that_could_not_move_is_named_in_the_status_bar() {
+    let message = "Kept your data in /old: could not move it to ~/.reshiki (denied)";
+    let (app, _) = App::with_startup(crate::session::Arguments {
+        data_warning: Some(message.into()),
+        ..Default::default()
+    });
+    assert_eq!(app.status, message);
+    assert!(app.error);
+    let (app, _) = App::new();
+    assert_eq!(app.status, READY);
+}
+
+#[test]
 fn dismissing_the_recovery_offer_restores_the_ready_message() {
     use reshiki::recovery::Snapshot;
     let (mut app, _) = App::new();

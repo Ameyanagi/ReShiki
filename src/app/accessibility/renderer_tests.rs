@@ -182,3 +182,34 @@ async fn changed_surfaces_expose_live_controls_and_mask_foreground_backgrounds()
         );
     }
 }
+
+#[tokio::test]
+#[ignore = "Opt-in real App widget tree and overlay check"]
+async fn about_names_the_data_folder_with_an_open_button() {
+    let mut renderer =
+        <iced::Renderer as Headless>::new(iced::Font::default(), iced::Pixels(16.), None)
+            .await
+            .unwrap();
+    let size = iced::Size::new(1280., 820.);
+    let (mut app, _) = App::new();
+    app.updates.open = true;
+    app.updates.data_folder = Some(std::path::PathBuf::from("/home/me/.reshiki"));
+    let tree = snapshot(&app, &mut renderer, size);
+    let open = tree
+        .nodes
+        .iter()
+        .find(|node| node.id == "updates-data-folder")
+        .expect("About has the data folder's Open button");
+    assert_eq!(open.name, "Open data folder");
+    let _ = app.update(Message::Updates(
+        super::super::updates::Action::OpenDataFolder,
+    ));
+    app.updates.data_folder = None;
+    let tree = snapshot(&app, &mut renderer, size);
+    assert!(
+        !tree
+            .nodes
+            .iter()
+            .any(|node| node.id == "updates-data-folder")
+    );
+}

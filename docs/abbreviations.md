@@ -183,12 +183,11 @@ one attachment cannot be saved.
 
 Your groups live in `abbreviations.json` in the ReShiki data folder:
 
-| System  | Location                                                                             |
-| ------- | ------------------------------------------------------------------------------------ |
-| macOS   | `~/Library/Application Support/dev.reshiki.ReShiki/abbreviations.json`               |
-| Windows | `%LOCALAPPDATA%\reshiki\ReShiki\data\abbreviations.json`                             |
-| Linux   | `$XDG_DATA_HOME/reshiki/abbreviations.json`, by default in `~/.local/share/reshiki/` |
-| Any     | `$RESHIKI_DATA_DIR/abbreviations.json` when `RESHIKI_DATA_DIR` is set                |
+| System          | Location                                                              |
+| --------------- | --------------------------------------------------------------------- |
+| macOS and Linux | `~/.reshiki/abbreviations.json`                                       |
+| Windows         | `%LOCALAPPDATA%\reshiki\ReShiki\data\abbreviations.json`              |
+| Any             | `$RESHIKI_DATA_DIR/abbreviations.json` when `RESHIKI_DATA_DIR` is set |
 
 It uses the same format as the bundled catalog, so you can also edit it by
 hand or share it:
