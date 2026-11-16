@@ -9,7 +9,7 @@ use super::{
     focus_drawing,
 };
 use iced::widget::{Space, button, column, container, row, text};
-use iced::{Alignment, Border, Color, Element, Length, Task, Theme};
+use iced::{Alignment, Border, Color, Element, Length, Subscription, Task, Theme};
 use reshiki::github::{
     self as gh, Repo, RepoKey, api, auth,
     client::Client,
@@ -246,6 +246,8 @@ pub enum Action {
     SignOut,
     SignedOut(Result<(), String>),
     ChooseRepositories,
+    /// The window is in front again after Choose repositories.
+    Returned,
     Listed(u64, Result<gh::Account, gh::Error>),
     Browser(Result<(), String>),
     Picker(picker::Action),
@@ -462,6 +464,20 @@ impl App {
         }
     }
 
+    /// The window's focus, only while the picker waits for the user to come
+    /// back from choosing repositories in the browser.
+    pub(super) fn github_subscription(&self) -> Subscription<Message> {
+        match &self.github.dialog {
+            Some(Dialog::Picker(picker)) if picker.browsing => {
+                iced::event::listen_with(|event, _, _| {
+                    matches!(event, iced::Event::Window(iced::window::Event::Focused))
+                        .then_some(Message::GitHub(Action::Returned))
+                })
+            }
+            _ => Subscription::none(),
+        }
+    }
+
     pub(super) fn github_action(&mut self, action: Action) -> Task<Message> {
         let id = self.github.client_id.clone().unwrap_or_default();
         let ends = self.github.ends.clone();
@@ -663,9 +679,13 @@ impl App {
             }
             Action::ChooseRepositories => {
                 self.github.menu = false;
+                if let Some(Dialog::Picker(picker)) = &mut self.github.dialog {
+                    picker.browsing = true;
+                }
                 let slug = config::app_slug().unwrap_or_default();
                 return open_url(ends.web(&format!("/apps/{slug}/installations/new")));
             }
+            Action::Returned => return self.picker_returned(),
             Action::Listed(generation, result) => {
                 if generation != self.github.generation {
                     return Task::none();

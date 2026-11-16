@@ -1768,6 +1768,72 @@ fn a_new_drawing_is_an_empty_working_copy_with_nothing_on_github() {
 }
 
 #[test]
+fn nothing_is_made_in_a_repository_the_user_may_not_send_to() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = app_in(dir.path());
+    picker_at(&mut app, Mode::Open, &[]);
+    let may_send = |app: &mut App, push: bool| match &mut app.github.dialog {
+        Some(Dialog::Picker(picker)) => picker.repo.as_mut().unwrap().push = push,
+        other => panic!("no picker: {other:?}"),
+    };
+    let name = |app: &mut App, folder: bool| {
+        github(app, Action::Picker(picker::Action::NewItem(folder)));
+        let name = picker::Action::NewItemName("route".into());
+        github(app, Action::Picker(name));
+    };
+    let path = workcopy::working_path(dir.path(), &repo().key, "route.rsk");
+    for folder in [false, true] {
+        // Neither offered ...
+        may_send(&mut app, false);
+        name(&mut app, folder);
+        github(&mut app, Action::Picker(picker::Action::CreateItem));
+        // ... nor made when the permission went while naming it.
+        may_send(&mut app, true);
+        name(&mut app, folder);
+        may_send(&mut app, false);
+        github(&mut app, Action::Picker(picker::Action::CreateItem));
+        let Some(Dialog::Picker(picker)) = &app.github.dialog else {
+            panic!("no picker");
+        };
+        assert!(picker.trail.is_empty());
+        assert!(!path.exists());
+        assert_eq!(file_state(&app, "route.rsk"), None);
+    }
+}
+
+#[test]
+fn back_from_choosing_repositories_the_open_picker_lists_them_again_once() {
+    let lists = |task: Task<Message>| iced_runtime::task::into_stream(task).is_some();
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = app_in(dir.path());
+    github(&mut app, Action::Picker(picker::Action::Show(Mode::Open)));
+    let generation = app.github.generation;
+    let none = gh::Account {
+        login: "octo".into(),
+        repos: Vec::new(),
+    };
+    github(&mut app, Action::Listed(generation, Ok(none)));
+    // The window coming back in front lists nothing by itself.
+    assert!(!lists(app.picker_returned()));
+    github(&mut app, Action::ChooseRepositories);
+    assert!(lists(app.picker_returned()));
+    assert!(!lists(app.picker_returned()));
+    github(&mut app, Action::ChooseRepositories);
+    github(&mut app, Action::Returned);
+    assert!(!lists(app.picker_returned()));
+    // The only repository chosen in the browser is chosen here.
+    let one = gh::Account {
+        login: "octo".into(),
+        repos: vec![repo()],
+    };
+    github(&mut app, Action::Listed(generation, Ok(one)));
+    let Some(Dialog::Picker(picker)) = &app.github.dialog else {
+        panic!("no picker");
+    };
+    assert_eq!(picker.repo, Some(repo()));
+}
+
+#[test]
 fn a_new_folder_opens_at_once_and_is_empty() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, _) = app_in(dir.path());

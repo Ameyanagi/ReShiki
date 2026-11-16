@@ -50,6 +50,9 @@ pub(in crate::app) struct Picker {
     pub(super) signed_out: bool,
     /// The only or last used repository was chosen once on opening.
     chosen: bool,
+    /// Choose repositories was opened in the browser from here: the
+    /// repositories are listed again once the window is back in front.
+    pub(super) browsing: bool,
     /// Where the picker was asked to show (see `ShowIn`): the repository,
     /// once listed, and the folders still to open, outermost first.
     target: Option<RepoKey>,
@@ -95,6 +98,7 @@ impl Picker {
             repos: None,
             signed_out: false,
             chosen: false,
+            browsing: false,
             target: None,
             goto: Vec::new(),
             highlighted: 0,
@@ -134,6 +138,12 @@ impl Picker {
             )
         });
         self.repos = Some(repos);
+    }
+
+    /// A drawing or folder may be made here: the folder was listed, so its
+    /// names are known, and the user may send to the repository.
+    fn can_create(&self) -> bool {
+        !self.unlisted && self.repo.as_ref().is_some_and(|repo| repo.push)
     }
 
     fn shown_repos(&self) -> Vec<&Repo> {
@@ -265,6 +275,20 @@ impl App {
         };
         picker.listed(&repos, last);
         self.picker_choose()
+    }
+
+    /// The window is in front again. After Choose repositories in the
+    /// browser, the open picker lists them again, once.
+    pub(super) fn picker_returned(&mut self) -> Task<Message> {
+        match self.picker() {
+            Some(picker) if picker.browsing => {
+                picker.browsing = false;
+                // The only repository chosen there is chosen here too.
+                picker.chosen = false;
+                self.github_list()
+            }
+            _ => Task::none(),
+        }
     }
 
     fn picker_choose(&mut self) -> Task<Message> {
@@ -696,7 +720,7 @@ impl App {
             }
             Action::SendHere => return self.picker_send_here(),
             Action::NewItem(folder) => {
-                if let Some(picker) = self.picker() {
+                if let Some(picker) = self.picker().filter(|picker| picker.can_create()) {
                     picker.new_item = Some((folder, String::new()));
                     picker.error = None;
                     return iced::widget::operation::focus(ITEM_NAME);
@@ -1042,11 +1066,10 @@ impl App {
         let Some(picker) = self.picker() else {
             return Task::none();
         };
-        // Not in a folder whose listing failed: its names are not known.
-        let (Some(repo), Some((folder, typed)), false) = (
+        let (Some(repo), Some((folder, typed)), true) = (
             picker.repo.clone(),
             picker.new_item.clone(),
-            picker.unlisted,
+            picker.can_create(),
         ) else {
             return Task::none();
         };
@@ -1490,8 +1513,7 @@ impl App {
                             .into()
                     });
                 let creating: Vec<Element<'_, Message>> = match picker.mode {
-                    // Nothing is made in a folder that could not be listed.
-                    _ if picker.unlisted => vec![],
+                    _ if !picker.can_create() => vec![],
                     Mode::Open => vec![new_item_tile(picker, false), new_item_tile(picker, true)],
                     Mode::SendTo => vec![new_item_tile(picker, true)],
                 };
