@@ -15,6 +15,7 @@ explains how the crates and modules fit together.
 - `src/accessibility/mod.rs`: Semantics and keyboard behavior attached to the controls that are drawn.
 - `src/accessibility/operations.rs`
 - `src/accessibility/scope.rs`
+- `src/accessibility/select.rs`: A named combo box around a pick list or combo box, for assistive technology.
 - `src/accessibility/text_input.rs`
 - `src/accessibility/tree.rs`: Convert live widget snapshots into the native tree and validate requests.
 - `src/app.rs`

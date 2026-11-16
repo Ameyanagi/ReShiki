@@ -227,8 +227,12 @@ async fn keyboard_and_native_actions_use_the_live_control_and_real_focus_state()
             })
             .collect();
         assert!(changed.len() > 20);
+        // The ring sits around the control, not on its own border.
+        assert!(changed.iter().any(|point| !bounds.contains(*point)));
         assert!(
-            changed.iter().all(|point| bounds.contains(*point)),
+            changed
+                .iter()
+                .all(|point| bounds.expand(3.).contains(*point)),
             "focus ring must not alter other controls"
         );
         assert_eq!(
@@ -551,4 +555,28 @@ async fn native_field_edits_and_modal_focus_use_live_widgets() {
     let mut edit = SetValue::<Message>::new("width", "99".into());
     ui.operate(&mut modal, &mut edit);
     assert!(matches!(edit.finish(), operation::Outcome::None));
+}
+
+/// Tab lays the view out again, so a control that shows something else
+/// while focused (a combo box's search text) repaints as it loses focus.
+#[tokio::test]
+#[ignore = "requires the real Iced headless renderer"]
+async fn tab_traversal_lays_the_view_out_again() {
+    let mut ui = Ui::new(Size::new(220., 220.)).await;
+    let mut view = controls(true, "apply");
+    let node = ui.layout(&mut view);
+    let mut messages = Vec::new();
+    let mut shell = Shell::new(&mut messages);
+    view.as_widget_mut().update(
+        &mut ui.tree,
+        &key(Named::Tab, Modifiers::empty(), false, false),
+        Layout::new(&node),
+        mouse::Cursor::Unavailable,
+        &ui.renderer,
+        &mut iced::advanced::clipboard::Null,
+        &mut shell,
+        &ui.viewport,
+    );
+    assert_eq!(shell.event_status(), iced::event::Status::Captured);
+    assert!(shell.is_layout_invalid());
 }

@@ -391,6 +391,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Scope<'_, Message> {
             })
         {
             shell.capture_event();
+            // Focus can change what a control shows, such as a combo box's search text.
+            shell.invalidate_layout();
             shell.request_redraw();
             return;
         }
@@ -466,6 +468,8 @@ impl<Message> overlay::Overlay<Message, Theme, Renderer> for FocusOverlay<'_, Me
             self.0.as_overlay_mut().operate(layout, renderer, operation)
         }) {
             shell.capture_event();
+            // Focus can change what a control shows, such as a combo box's search text.
+            shell.invalidate_layout();
             shell.request_redraw();
             return;
         }
