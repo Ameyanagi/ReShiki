@@ -1022,7 +1022,11 @@ impl App {
             Action::Newer(generation, key, Ok(found)) if generation == self.github.generation => {
                 return self.github_newer_found(key, found);
             }
-            // A check that failed waits for the next one.
+            // A check that failed waits for the next one; an ended sign-in
+            // signs out.
+            Action::Newer(generation, _, Err(error)) if generation == self.github.generation => {
+                self.github_failed(&error);
+            }
             Action::Newer(..) => {}
             Action::Update => return self.github_update(),
             Action::Pasted(id, text) => {

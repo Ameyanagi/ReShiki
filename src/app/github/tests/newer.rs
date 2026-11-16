@@ -2,7 +2,7 @@
 use super::*;
 
 /// `ring.rsk` as @`login` changed it on GitHub: 30 atoms where it had 42,
-/// asked against the base `app_in` opens it with.
+/// asked against the base commit `app_in` opens it with.
 fn changed_by(login: &str) -> Found {
     let theirs = drawing(30.);
     let conflict = send::Conflict {
@@ -21,7 +21,7 @@ fn changed_by(login: &str) -> Found {
         date: "2026-11-16T14:02:00Z".into(),
     };
     Found {
-        base: sha('b'),
+        base: sha('c'),
         theirs: conflict,
         by: Some(by),
     }
@@ -188,6 +188,14 @@ fn with_changes_here_it_becomes_the_conflict_review() {
     assert_eq!(std::fs::read(&path).unwrap(), drawing(50.));
     assert_eq!(app.github_chip_state(&repo().key), Chip::Review);
 
+    // Sent back to the very bytes it was based on: a new base all the same.
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _path) = app_in(dir.path());
+    found(&mut app, "alice");
+    let state = app.github.states.get_mut(&repo().key).unwrap();
+    state.files.get_mut("ring.rsk").unwrap().base_commit = sha('9');
+    assert_eq!(app.github_chip_state(&repo().key), Chip::Sent);
+
     // While the repository sends, the send finds out instead.
     let dir = tempfile::tempdir().unwrap();
     let (mut app, _path) = app_in(dir.path());
@@ -225,4 +233,11 @@ fn the_open_drawings_are_checked_at_most_every_five_minutes() {
     empty.github.account = app.github.account.clone();
     assert!(!asked(empty.github_recheck()));
     assert_eq!(empty.github.checked, None);
+    // A check whose sign-in GitHub no longer takes signs out.
+    let generation = app.github.generation;
+    github(
+        &mut app,
+        Action::Newer(generation, repo().key, Err(gh::Error::SignInExpired)),
+    );
+    assert!(matches!(app.github.account, Account::SignedOut(Some(_))));
 }

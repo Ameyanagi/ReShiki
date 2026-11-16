@@ -17,8 +17,9 @@ use std::path::Path;
 /// A drawing someone changed on GitHub.
 #[derive(Debug, Clone)]
 pub struct Found {
-    /// The blob the drawing here was based on when GitHub was asked: the
-    /// rest holds only while it still is.
+    /// The commit the drawing here was based on when GitHub was asked: the
+    /// rest holds only while it still is. Every send and every download
+    /// moves it, even one back to the same bytes.
     pub(super) base: String,
     /// GitHub's version, as a send would find it in the way.
     pub(super) theirs: send::Conflict,
@@ -33,15 +34,18 @@ impl App {
         let Some(state) = self.github.states.get(&key) else {
             return Task::none();
         };
-        let files: Vec<(String, String)> = self
+        let (files, bases): (Vec<(String, String)>, Vec<String>) = self
             .strip()
             .filter_map(|tab| {
                 let (other, repo_path) = self.github.locate(tab.path.as_deref())?;
                 let file = (state.files.get(&repo_path))
                     .filter(|file| other == key && file.conflict.is_none())?;
-                Some((repo_path, file.base_blob.clone()?))
+                Some((
+                    (repo_path, file.base_blob.clone()?),
+                    file.base_commit.clone(),
+                ))
             })
-            .collect();
+            .unzip();
         if files.is_empty() || self.github_busy(&key) {
             return Task::none();
         }
@@ -51,10 +55,8 @@ impl App {
             async move {
                 let found = send::newer(&client, &named, &branch, &files).await?;
                 let base = |path: &str| {
-                    files
-                        .iter()
-                        .find(|(at, _)| at == path)
-                        .map(|(_, base)| base.clone())
+                    let at = files.iter().position(|(at, _)| at == path)?;
+                    Some(bases[at].clone())
                 };
                 Ok(found
                     .into_iter()
@@ -89,9 +91,7 @@ impl App {
         for found in found {
             let file = (self.github.states.get(&key))
                 .and_then(|state| state.files.get(&found.theirs.repo_path));
-            if file.is_none_or(|file| {
-                file.base_blob.as_ref() != Some(&found.base) || file.conflict.is_some()
-            }) {
+            if file.is_none_or(|file| file.base_commit != found.base || file.conflict.is_some()) {
                 continue;
             }
             let at = (key.clone(), found.theirs.repo_path.clone());
@@ -132,7 +132,7 @@ impl App {
         let at = self.github.locate(path)?;
         let found = self.github.newer.get(&at)?;
         let file = (self.github.states.get(&at.0)).and_then(|state| state.files.get(&at.1))?;
-        (file.base_blob.as_ref() == Some(&found.base) && file.conflict.is_none())
+        (file.base_commit == found.base && file.conflict.is_none())
             .then(|| (found, self.github_changed(&at, edited)))
     }
 
