@@ -1,0 +1,282 @@
+//! One molecule as chemistry, for comparing: its canonical isomeric SMILES
+//! with drawn hydrogens folded in, plus the stereo the plain SMILES leaves
+//! out (unknown stereo, AND/OR groups). Drawing choices are not chemistry:
+//! aromatic or Kekulé bonds, which bond carries the wedge, a collapsed label
+//! and computed labels all give the same signature. What cannot be read as
+//! concrete chemistry gives the reason instead, never a match.
+use crate::chemistry::{
+    ELEMENTS, document,
+    kekulize::Direction,
+    smiles::{self, write},
+    stereo::perception::State,
+};
+use crate::document::Document;
+use std::collections::{BTreeMap, HashMap, HashSet};
+
+pub(super) struct Signature {
+    /// Canonical isomeric SMILES, drawn hydrogens folded in.
+    pub smiles: String,
+    /// Stereo beyond the plain SMILES, in canonical atom order.
+    pub extra: String,
+    /// Canonical SMILES as drawn, hydrogens included: equal text means
+    /// `order` pairs atoms one to one.
+    pub drawn: String,
+    /// Drawing atom ids in canonical order.
+    pub order: Vec<u64>,
+    pub atoms: HashMap<u64, Facts>,
+    pub bonds: HashMap<(u64, u64), u8>,
+    /// Stereocenters and stereo double bonds, by drawing ids.
+    pub stereo: Vec<u64>,
+}
+
+impl Signature {
+    pub fn same(&self, other: &Self) -> bool {
+        self.smiles == other.smiles && self.extra == other.extra
+    }
+}
+
+/// What an atom is, as chemistry: element, isotope, charge, hydrogens and
+/// unpaired electrons after sanitization.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) struct Facts {
+    pub element: u8,
+    pub isotope: u16,
+    pub charge: i8,
+    pub hydrogens: u32,
+    pub radicals: u8,
+}
+
+pub(super) fn key(a: u64, b: u64) -> (u64, u64) {
+    (a.min(b), a.max(b))
+}
+
+/// The atoms `ids` of `doc`, with the bonds between them, as a drawing of
+/// their own.
+fn part(doc: &Document, ids: &HashSet<u64>) -> Document {
+    Document {
+        version: doc.version,
+        atoms: doc
+            .atoms
+            .iter()
+            .filter(|atom| ids.contains(&atom.id))
+            .cloned()
+            .collect(),
+        bonds: doc
+            .bonds
+            .iter()
+            .filter(|bond| ids.contains(&bond.a) && ids.contains(&bond.b))
+            .cloned()
+            .collect(),
+        ..Default::default()
+    }
+}
+
+pub(super) fn signature(doc: &Document, ids: &[u64]) -> Result<Signature, String> {
+    if !doc.generic.is_empty() {
+        return Err("Generic structures (R-groups, alternatives, repeats)".into());
+    }
+    let ids: HashSet<u64> = ids.iter().copied().collect();
+    let molecule = document::prepare(&part(doc, &ids)).map_err(|error| error.to_string())?;
+    let options = write::Options {
+        ignore_maps: true,
+        ..Default::default()
+    };
+    let drawn = write::write(&molecule.state, options).map_err(|error| error.to_string())?;
+    let id = |index: usize| molecule.ids.get(index).copied();
+    let order: Vec<u64> = drawn.atom_order.iter().filter_map(|&i| id(i)).collect();
+    let extra = extra(&molecule.state, &drawn.atom_order)?;
+    // Reading the SMILES back folds drawn hydrogens into their atoms.
+    let smiles = smiles::prepare(&drawn.text)
+        .ok()
+        .and_then(|folded| write::write(&folded.state, options).ok())
+        .map_or_else(|| drawn.text.clone(), |written| written.text);
+    let state = &molecule.state;
+    let atoms = state
+        .graph
+        .atoms
+        .iter()
+        .zip(&state.valences)
+        .enumerate()
+        .filter_map(|(i, (atom, valence))| {
+            Some((
+                id(i)?,
+                Facts {
+                    element: atom.atomic_number,
+                    isotope: atom.isotope,
+                    charge: atom.charge,
+                    hydrogens: u32::from(atom.explicit_hydrogens) + valence.implicit_hydrogens,
+                    radicals: atom.radical_electrons,
+                },
+            ))
+        })
+        .collect();
+    let bonds = state
+        .graph
+        .bonds
+        .iter()
+        .filter_map(|bond| {
+            let order = if bond.aromatic { 4 } else { bond.order };
+            Some((key(id(bond.a)?, id(bond.b)?), order))
+        })
+        .collect();
+    let mut stereo: Vec<u64> = state
+        .metadata
+        .atoms
+        .iter()
+        .enumerate()
+        .filter(|(_, meta)| meta.chiral_tag != 0)
+        .filter_map(|(i, _)| id(i))
+        .collect();
+    for (bond, meta) in state.graph.bonds.iter().zip(&state.metadata.bonds) {
+        if meta.stereo != 0 || meta.unknown_stereo {
+            stereo.extend([id(bond.a), id(bond.b)].into_iter().flatten());
+        }
+    }
+    Ok(Signature {
+        smiles,
+        extra,
+        drawn: drawn.text,
+        order,
+        atoms,
+        bonds,
+        stereo,
+    })
+}
+
+/// Unknown stereo and AND/OR groups, which plain SMILES drops, by position in
+/// the canonical atom order.
+fn extra(state: &State, atom_order: &[usize]) -> Result<String, String> {
+    let groups = write::cx_groups(&state.metadata, atom_order).map_err(|e| e.to_string())?;
+    let position: HashMap<usize, usize> = atom_order
+        .iter()
+        .enumerate()
+        .map(|(position, &atom)| (atom, position))
+        .collect();
+    let mut unknown: Vec<(usize, usize)> = state
+        .graph
+        .bonds
+        .iter()
+        .zip(&state.directions)
+        .zip(&state.metadata.bonds)
+        .filter(|((_, direction), meta)| {
+            matches!(direction, Direction::Unknown | Direction::EitherDouble)
+                || meta.stereo == 1
+                || meta.unknown_stereo
+        })
+        .filter_map(|((bond, _), _)| Some((*position.get(&bond.a)?, *position.get(&bond.b)?)))
+        .collect();
+    unknown.sort_unstable();
+    let unknown: Vec<String> = unknown.iter().map(|(a, b)| format!("{a}-{b}")).collect();
+    Ok(if unknown.is_empty() {
+        groups
+    } else {
+        format!("{groups} w:{}", unknown.join(","))
+    })
+}
+
+/// What changed between two versions of one molecule, by drawing id.
+#[derive(Debug, Default)]
+pub(super) struct Edit {
+    /// Atoms only on the left, only on the right, and changed on both.
+    pub removed: Vec<u64>,
+    pub added: Vec<u64>,
+    pub changed: Vec<u64>,
+    pub removed_bonds: Vec<(u64, u64)>,
+    pub added_bonds: Vec<(u64, u64)>,
+    pub changed_bonds: Vec<(u64, u64)>,
+    /// Nothing above explains it, so the stereo changed.
+    pub stereo: bool,
+}
+
+pub(super) fn edit(left: &Signature, right: &Signature) -> Edit {
+    let mut edit = Edit::default();
+    for (id, facts) in &left.atoms {
+        match right.atoms.get(id) {
+            None => edit.removed.push(*id),
+            Some(theirs) if theirs != facts => edit.changed.push(*id),
+            Some(_) => {}
+        }
+    }
+    edit.added = right
+        .atoms
+        .keys()
+        .filter(|id| !left.atoms.contains_key(id))
+        .copied()
+        .collect();
+    for (bond, order) in &left.bonds {
+        match right.bonds.get(bond) {
+            None => edit.removed_bonds.push(*bond),
+            Some(theirs) if theirs != order => edit.changed_bonds.push(*bond),
+            Some(_) => {}
+        }
+    }
+    edit.added_bonds = right
+        .bonds
+        .keys()
+        .filter(|bond| !left.bonds.contains_key(bond))
+        .copied()
+        .collect();
+    let nothing = edit.removed.is_empty()
+        && edit.added.is_empty()
+        && edit.changed.is_empty()
+        && edit.removed_bonds.is_empty()
+        && edit.added_bonds.is_empty()
+        && edit.changed_bonds.is_empty();
+    if nothing {
+        edit.stereo = true;
+        let mut stereo: Vec<u64> = left.stereo.iter().chain(&right.stereo).copied().collect();
+        stereo.sort_unstable();
+        stereo.dedup();
+        edit.changed = stereo;
+    }
+    for list in [&mut edit.removed, &mut edit.added, &mut edit.changed] {
+        list.sort_unstable();
+    }
+    for list in [
+        &mut edit.removed_bonds,
+        &mut edit.added_bonds,
+        &mut edit.changed_bonds,
+    ] {
+        list.sort_unstable();
+    }
+    edit
+}
+
+/// Heavy atoms of `ids` as a formula, carbon first then by symbol, such as
+/// `NO₂`. Empty for none.
+pub(super) fn formula(signature: &Signature, ids: &[u64]) -> String {
+    let mut counts = BTreeMap::<&str, usize>::new();
+    let mut carbons = 0;
+    for facts in ids.iter().filter_map(|id| signature.atoms.get(id)) {
+        let Some(element) = ELEMENTS.get(usize::from(facts.element)) else {
+            continue;
+        };
+        match element.symbol {
+            "H" => {}
+            "C" => carbons += 1,
+            symbol => *counts.entry(symbol).or_default() += 1,
+        }
+    }
+    let mut text = String::new();
+    let mut push = |symbol: &str, count: usize| {
+        if count == 0 {
+            return;
+        }
+        text.push_str(symbol);
+        if count > 1 {
+            text.extend(count.to_string().chars().map(subscript));
+        }
+    };
+    push("C", carbons);
+    for (symbol, count) in counts {
+        push(symbol, count);
+    }
+    text
+}
+
+fn subscript(digit: char) -> char {
+    digit
+        .to_digit(10)
+        .and_then(|d| char::from_u32(0x2080 + d))
+        .unwrap_or(digit)
+}
