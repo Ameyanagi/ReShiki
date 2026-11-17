@@ -267,6 +267,12 @@ impl State {
         )
     }
 
+    /// Repository `key`'s page on GitHub.
+    fn repo_page(&self, key: &RepoKey) -> String {
+        let path = format!("/{}/{}", key.owner, key.repo);
+        self.ends.web(&api::encoded(&path))
+    }
+
     /// The repository kept in folder `key`, as GitHub names it now.
     fn named(&self, key: &RepoKey) -> RepoKey {
         self.states
@@ -1063,8 +1069,10 @@ impl App {
             }
             Action::OpenRepo(key) => {
                 self.github.chip_menu = false;
-                let path = format!("/{}/{}", key.owner, key.repo);
-                return open_url(ends.web(&api::encoded(&path)));
+                if let Some(Dialog::Picker(picker)) = &mut self.github.dialog {
+                    picker.menu = None;
+                }
+                return open_url(self.github.repo_page(&key));
             }
             Action::SaveCopy => {
                 self.github.chip_menu = false;
@@ -2024,9 +2032,9 @@ impl App {
         ))
     }
 
-    /// The GitHub button in the command bar, with its menu: what applies to
-    /// the drawing in front first, the account last. A dot while anything
-    /// is not on GitHub yet.
+    /// The GitHub button at the left end of the status bar, with its menu,
+    /// which opens upward: what applies to the drawing in front first, the
+    /// account last. A dot while anything is not on GitHub yet.
     pub(super) fn github_button(&self) -> Element<'_, Message> {
         let state = &self.github;
         let unsent = self.github_anything_unsent();
@@ -2037,7 +2045,7 @@ impl App {
         if unsent {
             hint.push_str(" · Not everything is sent");
         }
-        let anchor = super::workspace::icon_button(
+        let anchor = super::workspace::status_icon_button(
             super::icons::Icon::Cloud,
             hint,
             Some(Message::GitHub(Action::Menu(!state.menu))),
@@ -2066,15 +2074,15 @@ impl App {
                     ..container::Style::default()
                 }),
             )
-            .padding([4, 3])
-            .align_right(36)
-            .align_bottom(36)
+            .padding([2, 1])
+            .align_right(32)
+            .align_bottom(32)
         });
         let dot = unsent.then(|| {
             container(identity::dot(|theme: &Theme| theme.palette().primary))
-                .padding([6, 5])
-                .align_right(36)
-                .align_top(36)
+                .padding([4, 3])
+                .align_right(32)
+                .align_top(32)
         });
         let anchor: Element<'_, Message> = iced::widget::Stack::with_children([anchor])
             .extend(account.map(Element::from))
