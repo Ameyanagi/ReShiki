@@ -44,6 +44,7 @@ pub(super) struct Facts {
     pub charge: i8,
     pub hydrogens: u32,
     pub radicals: u8,
+    pub singlet: bool,
 }
 
 pub(super) fn key(a: u64, b: u64) -> (u64, u64) {
@@ -76,6 +77,15 @@ pub(super) fn signature(doc: &Document, ids: &[u64]) -> Result<Signature, String
         return Err("Generic structures (R-groups, alternatives, repeats)".into());
     }
     let ids: HashSet<u64> = ids.iter().copied().collect();
+    // A wildcard or a free label is not concrete chemistry.
+    if doc
+        .atoms
+        .iter()
+        .filter(|atom| ids.contains(&atom.id))
+        .any(|atom| atom.element == "*" || atom.display.variable.is_some())
+    {
+        return Err("Unresolved labels such as R1".into());
+    }
     let molecule = document::prepare(&part(doc, &ids)).map_err(|error| error.to_string())?;
     let options = write::Options {
         ignore_maps: true,
@@ -84,7 +94,12 @@ pub(super) fn signature(doc: &Document, ids: &[u64]) -> Result<Signature, String
     let drawn = write::write(&molecule.state, options).map_err(|error| error.to_string())?;
     let id = |index: usize| molecule.ids.get(index).copied();
     let order: Vec<u64> = drawn.atom_order.iter().filter_map(|&i| id(i)).collect();
-    let extra = extra(&molecule.state, &drawn.atom_order)?;
+    let singlet: Vec<bool> = molecule
+        .ids
+        .iter()
+        .map(|id| doc.atom(*id).is_some_and(|atom| atom.singlet))
+        .collect();
+    let extra = extra(&molecule.state, &drawn.atom_order, &singlet)?;
     // Reading the SMILES back folds drawn hydrogens into their atoms.
     let smiles = smiles::prepare(&drawn.text)
         .ok()
@@ -106,6 +121,7 @@ pub(super) fn signature(doc: &Document, ids: &[u64]) -> Result<Signature, String
                     charge: atom.charge,
                     hydrogens: u32::from(atom.explicit_hydrogens) + valence.implicit_hydrogens,
                     radicals: atom.radical_electrons,
+                    singlet: singlet.get(i) == Some(&true),
                 },
             ))
         })
@@ -143,35 +159,77 @@ pub(super) fn signature(doc: &Document, ids: &[u64]) -> Result<Signature, String
     })
 }
 
-/// Unknown stereo and AND/OR groups, which plain SMILES drops, by position in
-/// the canonical atom order.
-fn extra(state: &State, atom_order: &[usize]) -> Result<String, String> {
-    let groups = write::cx_groups(&state.metadata, atom_order).map_err(|e| e.to_string())?;
+/// What plain SMILES drops, by position in the canonical atom order:
+/// unknown stereo, AND/OR groups (by membership, not by their numbers),
+/// unpaired electrons and singlet spin. Axial stereo is not compared.
+fn extra(state: &State, atom_order: &[usize], singlet: &[bool]) -> Result<String, String> {
+    if state.metadata.bonds.iter().any(|meta| meta.stereo >= 6)
+        || state
+            .metadata
+            .groups
+            .iter()
+            .any(|group| !group.bonds.is_empty())
+    {
+        return Err("Axial stereo (atropisomers)".into());
+    }
     let position: HashMap<usize, usize> = atom_order
         .iter()
         .enumerate()
         .map(|(position, &atom)| (atom, position))
         .collect();
-    let mut unknown: Vec<(usize, usize)> = state
+    let at = |atom: usize| position.get(&atom).copied();
+    let mut parts: Vec<String> = Vec::new();
+    for ((bond, direction), meta) in state
         .graph
         .bonds
         .iter()
         .zip(&state.directions)
         .zip(&state.metadata.bonds)
-        .filter(|((_, direction), meta)| {
-            matches!(direction, Direction::Unknown | Direction::EitherDouble)
+    {
+        let (Some(a), Some(b)) = (at(bond.a), at(bond.b)) else {
+            continue;
+        };
+        if bond.order == 2 || matches!(direction, Direction::EitherDouble) {
+            if matches!(direction, Direction::Unknown | Direction::EitherDouble)
                 || meta.stereo == 1
                 || meta.unknown_stereo
+            {
+                parts.push(format!("w{}-{}", a.min(b), a.max(b)));
+            }
+        } else if matches!(direction, Direction::Unknown) || meta.unknown_stereo {
+            // A wavy single bond: its first atom's configuration is unknown.
+            parts.push(format!("u{a}"));
+        }
+    }
+    let mut groups: Vec<String> = state
+        .metadata
+        .groups
+        .iter()
+        .filter(|group| group.kind != 0)
+        .map(|group| {
+            let mut atoms: Vec<usize> = group.atoms.iter().filter_map(|&atom| at(atom)).collect();
+            atoms.sort_unstable();
+            let kind = if group.kind == 2 { "&" } else { "o" };
+            let atoms: Vec<String> = atoms.iter().map(usize::to_string).collect();
+            format!("{kind}{}", atoms.join(","))
         })
-        .filter_map(|((bond, _), _)| Some((*position.get(&bond.a)?, *position.get(&bond.b)?)))
         .collect();
-    unknown.sort_unstable();
-    let unknown: Vec<String> = unknown.iter().map(|(a, b)| format!("{a}-{b}")).collect();
-    Ok(if unknown.is_empty() {
-        groups
-    } else {
-        format!("{groups} w:{}", unknown.join(","))
-    })
+    groups.sort_unstable();
+    parts.extend(groups);
+    for (i, atom) in state.graph.atoms.iter().enumerate() {
+        let Some(p) = at(i) else {
+            continue;
+        };
+        if atom.radical_electrons > 0 {
+            parts.push(format!("r{p}:{}", atom.radical_electrons));
+        }
+        if singlet.get(i) == Some(&true) {
+            parts.push(format!("s{p}"));
+        }
+    }
+    parts.sort_unstable();
+    parts.dedup();
+    Ok(parts.join(" "))
 }
 
 /// What changed between two versions of one molecule, by drawing id.

@@ -285,6 +285,40 @@ fn centroid(points: impl Iterator<Item = Xy>) -> Xy {
     }
 }
 
+/// Each right atom with the nearest left atom of the same element once the
+/// centroids meet, as (right, left); empty unless that pairs all one to one.
+fn nearest(left: &Side, mine: &[u64], right: &Side, theirs: &[u64]) -> Vec<(u64, u64)> {
+    if mine.len() != theirs.len() {
+        return Vec::new();
+    }
+    let center =
+        |side: &Side, ids: &[u64]| centroid(ids.iter().filter_map(|id| side.position(*id)));
+    let (from, to) = (center(right, theirs), center(left, mine));
+    let element = |side: &Side, id: u64| side.doc.atom(id).map(|atom| atom.element.clone());
+    let mut taken = HashSet::new();
+    let mut pairs = Vec::new();
+    for b in theirs {
+        let Some((x, y)) = right.position(*b) else {
+            return Vec::new();
+        };
+        let at = (x - from.0 + to.0, y - from.1 + to.1);
+        let best = mine
+            .iter()
+            .filter(|a| !taken.contains(*a) && element(left, **a) == element(right, *b))
+            .filter_map(|a| {
+                let (ax, ay) = left.position(*a)?;
+                Some(((ax - at.0).hypot(ay - at.1), *a))
+            })
+            .min_by(|p, q| p.0.total_cmp(&q.0));
+        let Some((_, a)) = best else {
+            return Vec::new();
+        };
+        taken.insert(a);
+        pairs.push((*b, a));
+    }
+    pairs
+}
+
 /// Pairs molecules that share ids. Shared ids are evidence, not proof: a
 /// pair needs a bond both sides keep, or for single atoms the same element,
 /// so an id reused for another atom elsewhere is not a match.
@@ -389,8 +423,10 @@ impl Entity {
         }
     }
 
+    /// Its shape changed; with no point-for-point match, as an arrow that
+    /// gained a bend, that is so too.
     fn reshaped(&self, unit: f64) -> bool {
-        !self.loose && (self.fit.rms > RMS * unit || self.fit.max > MAX * unit)
+        self.loose || self.fit.rms > RMS * unit || self.fit.max > MAX * unit
     }
 
     /// Whether `fit` carries it about as well as its own fit does.
@@ -790,7 +826,7 @@ pub fn compare(left: &Document, right: &Document) -> Report {
 
     let molecule_entity = |i: usize, j: usize, by: MatchedBy| -> Entity {
         let (atoms_l, atoms_r) = (l.atoms(i).to_vec(), r.atoms(j).to_vec());
-        let ordered = match (l.signature(i), r.signature(j)) {
+        let ordered: Option<Vec<(u64, u64)>> = match (l.signature(i), r.signature(j)) {
             (Some(Ok(a)), Some(Ok(b))) if by == MatchedBy::Smiles && a.drawn == b.drawn => Some(
                 a.order
                     .iter()
@@ -800,18 +836,36 @@ pub fn compare(left: &Document, right: &Document) -> Report {
             ),
             _ => None,
         };
-        let correspondence: Vec<(u64, u64)> = match by {
-            MatchedBy::Id => atoms_r
+        let points = |correspondence: &[(u64, u64)]| -> Vec<(Xy, Xy)> {
+            correspondence
                 .iter()
-                .filter(|id| left.atom(**id).is_some())
-                .map(|id| (*id, *id))
-                .collect(),
-            MatchedBy::Smiles => ordered.unwrap_or_default(),
+                .filter_map(|(b, a)| Some((r.position(*b)?, l.position(*a)?)))
+                .collect()
         };
-        let points: Vec<(Xy, Xy)> = correspondence
-            .iter()
-            .filter_map(|(b, a)| Some((r.position(*b)?, l.position(*a)?)))
-            .collect();
+        let points: Vec<(Xy, Xy)> = match by {
+            MatchedBy::Id => {
+                let mine: HashSet<u64> = atoms_l.iter().copied().collect();
+                let shared: Vec<(u64, u64)> = atoms_r
+                    .iter()
+                    .filter(|id| mine.contains(id))
+                    .map(|id| (*id, *id))
+                    .collect();
+                points(&shared)
+            }
+            // Canonical order pairs symmetric atoms either way round; the
+            // nearest same-element atoms may pair them as drawn. The better
+            // fit wins.
+            MatchedBy::Smiles => {
+                let canonical = points(&ordered.unwrap_or_default());
+                let nearest = points(&nearest(&l, &atoms_l, &r, &atoms_r));
+                let rms = |pairs: &[(Xy, Xy)]| Fit::rigid(pairs).map_or(f64::INFINITY, |f| f.rms);
+                if nearest.len() == canonical.len() && rms(&nearest) <= rms(&canonical) + 1e-6 {
+                    nearest
+                } else {
+                    canonical
+                }
+            }
+        };
         if points.is_empty() {
             let pairs = vec![(r.centroid(j), l.centroid(i))];
             let mut entity = Entity::new(Subject::Molecule, atoms_l, atoms_r, pairs);

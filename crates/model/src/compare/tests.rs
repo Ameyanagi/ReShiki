@@ -730,3 +730,138 @@ fn style_and_settings_are_style_lines() {
     );
     assert_eq!(report.count(Category::Chemistry), 0);
 }
+
+#[test]
+fn an_unresolved_label_cannot_be_verified() {
+    let s = scheme();
+    let right = edited(&s.doc, |doc| {
+        let oxygen = *s
+            .ethanol
+            .iter()
+            .find(|id| doc.atom(**id).unwrap().element == "O")
+            .unwrap();
+        let at = doc.atom(oxygen).unwrap().position;
+        let r = doc.add_atom("*", at.offset(30., 0.));
+        doc.atom_mut(r).unwrap().display.variable = Some("R1".into());
+        doc.add_bond(oxygen, r, 1, "plain");
+        join(doc, oxygen, &[r]);
+    });
+    let report = compare(&right, &right);
+    assert_eq!(report.unverified(), 1, "{:?}", report.changes);
+    let renamed = edited(&right, |doc| {
+        let r = doc.atoms.iter_mut().find(|a| a.element == "*").unwrap();
+        r.display.variable = Some("R2".into());
+    });
+    assert_eq!(compare(&right, &renamed).unverified(), 1);
+}
+
+#[test]
+fn unpaired_electrons_and_spin_are_chemistry() {
+    let lone = |element: &str, radicals: u8, singlet: bool| {
+        let mut doc = Document::default();
+        let id = doc.add_atom(element, Point::new(0., 0.));
+        let atom = doc.atom_mut(id).unwrap();
+        if element == "C" {
+            atom.no_implicit = true;
+            atom.explicit_h = 2;
+        }
+        atom.radical_electrons = radicals;
+        atom.singlet = singlet;
+        load(&doc)
+    };
+    // A carbene, triplet or singlet.
+    let (triplet, singlet) = (lone("C", 2, false), lone("C", 2, true));
+    assert_eq!(compare(&triplet, &singlet).count(Category::Chemistry), 1);
+    // Iron writes as [Fe] with one unpaired electron or two.
+    let report = compare(&lone("Fe", 1, false), &lone("Fe", 2, false));
+    assert_eq!(report.count(Category::Chemistry), 1, "{:?}", report.changes);
+    assert_eq!(compare(&triplet, &triplet).changes, vec![]);
+}
+
+#[test]
+fn an_arrow_given_a_bend_is_redrawn() {
+    let s = scheme();
+    let right = edited(&s.doc, |doc| {
+        doc.arrows[0].control = Some(Point::new(370., -40.))
+    });
+    assert_eq!(
+        kinds(&compare(&s.doc, &right)),
+        [(Kind::Redrawn, Subject::Arrow)]
+    );
+}
+
+#[test]
+fn renumbered_stereo_groups_are_the_same_chemistry() {
+    let group = |number: u32| {
+        edited(&load(&molecule("C[C@H](O)CC")), |doc| {
+            for atom in doc.atoms.iter_mut().filter(|a| a.stereo.is_some()) {
+                atom.stereo_group = Some(crate::stereo_groups::StereoGroup {
+                    kind: crate::stereo_groups::Kind::And,
+                    number,
+                });
+            }
+        })
+    };
+    let report = compare(&group(7), &group(1));
+    assert_eq!(report.count(Category::Chemistry), 0, "{:?}", report.changes);
+}
+
+#[test]
+fn a_molecule_is_fitted_on_its_own_atoms_only() {
+    // Two propanes far apart; the right side swapped the ids of their ends.
+    let mut left = Document::default();
+    let chain = |doc: &mut Document, x: f32| -> Vec<u64> {
+        let ids: Vec<u64> = (0..3)
+            .map(|i| doc.add_atom("C", Point::new(x + 36. * i as f32, 21. * (i % 2) as f32)))
+            .collect();
+        doc.add_bond(ids[0], ids[1], 1, "plain");
+        doc.add_bond(ids[1], ids[2], 1, "plain");
+        ids
+    };
+    let a = chain(&mut left, 0.);
+    let b = chain(&mut left, 400.);
+    let left = load(&left);
+    let right = edited(&left, |doc| {
+        let (p, q) = (
+            doc.atom(a[2]).unwrap().position,
+            doc.atom(b[2]).unwrap().position,
+        );
+        doc.atom_mut(a[2]).unwrap().position = q;
+        doc.atom_mut(b[2]).unwrap().position = p;
+        for bond in &mut doc.bonds {
+            for end in [&mut bond.a, &mut bond.b] {
+                if *end == a[2] {
+                    *end = b[2];
+                } else if *end == b[2] {
+                    *end = a[2];
+                }
+            }
+        }
+    });
+    let report = compare(&left, &right);
+    assert!(
+        report.changes.iter().all(|c| c.kind != Kind::Redrawn),
+        "{:?}",
+        report.changes
+    );
+}
+
+#[test]
+fn a_symmetric_molecule_with_new_ids_is_not_turned() {
+    let mut left = Document::default();
+    let a = left.add_atom("C", Point::new(0., 0.));
+    let b = left.add_atom("C", Point::new(42., 0.));
+    left.add_bond(a, b, 1, "plain");
+    let left = load(&left);
+    // Deleted and drawn again, from the other end.
+    let right = edited(&left, |doc| {
+        let old = doc.all_ids();
+        let c = doc.add_atom("C", Point::new(42., 0.));
+        let d = doc.add_atom("C", Point::new(0., 0.));
+        doc.add_bond(c, d, 1, "plain");
+        doc.delete(&old);
+    });
+    let report = compare(&left, &right);
+    assert_eq!(report.changes, vec![]);
+    assert_eq!(report.molecules[0].by, MatchedBy::Smiles);
+}
