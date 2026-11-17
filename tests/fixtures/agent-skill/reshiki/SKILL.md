@@ -1,6 +1,6 @@
 ---
 name: "reshiki"
-description: "Draws, converts, renders and analyzes chemical structures and reaction schemes with the local ReShiki app (experimental agent API). Use when asked to lay out molecules or reactions from SMILES, convert MOL, RXN, CDXML, CDX, SMILES, InChI or ReShiki .rsk files to MOL, CDXML, SMILES, InChI, SVG, PDF or PNG, generate systematic names, compute formula, mass, logP or InChIKey, predict 1H or 13C NMR shifts, or produce a ReShiki .rsk drawing."
+description: "Draws, converts, renders and analyzes chemical structures and reaction schemes with the local ReShiki app (experimental agent API). Use when asked to lay out molecules or reactions from SMILES, convert MOL, RXN, CDXML, CDX, SMILES, InChI or ReShiki .rsk files to MOL, CDXML, SMILES, InChI, SVG, PDF or PNG, generate systematic names, compute formula, mass, logP or InChIKey, predict 1H or 13C NMR shifts and label them on the atoms, or produce a ReShiki .rsk drawing."
 license: "MIT OR Apache-2.0"
 compatibility: "Requires ReShiki 0.12.0 or later (experimental agent API). Runs offline."
 metadata:
@@ -42,6 +42,7 @@ file_open       Open file
 file_save       Save file
 compose         Compose scheme
 apply           Edit document
+label_atoms     Label atoms
 convert         Convert structure
 name            Name structure
 schema          Input schema
@@ -73,6 +74,7 @@ In a POSIX shell (sh, bash or zsh, and Git Bash on Windows):
 '/opt/reshiki/reshiki' --cli help convert
 '/opt/reshiki/reshiki' --cli analyze --smiles 'CC(=O)OCC'
 '/opt/reshiki/reshiki' --cli predict-nmr --smiles 'CC(=O)OCC' --nucleus 13C
+'/opt/reshiki/reshiki' --cli convert --smiles 'CC(=O)OCC' --nucleus 13C --labels both -o assigned.svg
 '/opt/reshiki/reshiki' --cli name --smiles 'CC(=O)O' --json
 '/opt/reshiki/reshiki' --cli convert --smiles 'CC(=O)OCC' -o ethyl-acetate.mol
 '/opt/reshiki/reshiki' --cli convert reaction.cdxml -o reaction.pdf
@@ -89,6 +91,7 @@ Windows release builds have no console, so their output and error messages appea
 & '/opt/reshiki/reshiki' --cli help convert 2>&1 | Write-Output
 & '/opt/reshiki/reshiki' --cli analyze --smiles 'CC(=O)OCC' 2>&1 | Write-Output
 & '/opt/reshiki/reshiki' --cli predict-nmr --smiles 'CC(=O)OCC' --nucleus 13C 2>&1 | Write-Output
+& '/opt/reshiki/reshiki' --cli convert --smiles 'CC(=O)OCC' --nucleus 13C --labels both -o assigned.svg 2>&1 | Write-Output
 & '/opt/reshiki/reshiki' --cli name --smiles 'CC(=O)O' --json 2>&1 | Write-Output
 & '/opt/reshiki/reshiki' --cli convert --smiles 'CC(=O)OCC' -o ethyl-acetate.mol 2>&1 | Write-Output
 & '/opt/reshiki/reshiki' --cli convert reaction.cdxml -o reaction.pdf 2>&1 | Write-Output

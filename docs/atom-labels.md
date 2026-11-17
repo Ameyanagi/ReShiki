@@ -60,6 +60,9 @@ Number assigns one sequence in creation/import order. Starts include `1`,
 `atom1`, `a`, `A`, `α` and `Α`; letter sequences continue beyond the alphabet.
 A single selected atom also accepts a custom number such as `Cα` or `12a`.
 Numbers are owned by atoms, independent of reaction atom-map numbers.
+Scripts can write predicted NMR shifts as atom numbers, such as
+`#3 · 1.280 ppm`; they are ordinary numbers that can be moved, restyled or
+cleared here (see [NMR prediction](nmr-prediction.md#labels-from-scripts)).
 
 **Show stereodescriptors (R/S, E/Z…)** displays computed CIP assignments. Chemical edits
 invalidate cached assignments and trigger a quiet background refresh. Stale

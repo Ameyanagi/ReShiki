@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 import pytest
 import reshiki
 
@@ -101,3 +104,70 @@ M  END
 """
     rows = reshiki.Molecule.from_molfile(molfile).predict_nmr("13C").rows
     assert [row.atom for row in rows] == [1, 2]
+
+
+def _numbers(drawing: reshiki.Drawing) -> dict[int, str]:
+    """Each numbered atom's number, from the native document."""
+    atoms = json.loads(drawing.rsk())["atoms"]
+    return {
+        int(atom["id"]): atom["display"]["number"]["text"]
+        for atom in atoms
+        if atom.get("display", {}).get("number")
+    }
+
+
+def test_the_issue_example_writes_labels_that_every_figure_keeps(tmp_path: Path) -> None:
+    molecule = reshiki.Molecule.from_smiles(ETHYL_ACETATE).clean()
+    shifts = molecule.predict_nmr("13C")
+    labelled = molecule.with_labels(shifts, format="both")
+    assert isinstance(labelled, reshiki.Molecule)
+    expected = {
+        1: "#1 · 14.200 ppm",
+        2: "#2 · 61.050 ppm",
+        4: "#4 · 170.700 ppm",
+        5: "#5 · 20.900 ppm",
+    }
+    assert _numbers(labelled) == expected
+    assert _numbers(molecule) == {}
+    path = labelled.save(tmp_path / "assigned.svg", style="JACS / ACS", svg_text="live")
+    svg = path.read_text()
+    assert all(f">{text}</text>" in svg for text in expected.values())
+    # SVG, PNG and PDF carry the labelled drawing, and the labels change the picture.
+    for format in ("svg", "png", "pdf"):
+        figure = labelled.render(format)
+        assert figure != molecule.render(format), format
+        data = figure.encode() if isinstance(figure, str) else figure
+        assert _numbers(reshiki.parse(data, format)) == expected, format
+    assert _numbers(reshiki.parse(labelled.rsk())) == expected
+    assert 'AtomNumber="#4 · 170.700 ppm"' in labelled.cdxml()
+
+
+def test_rows_can_be_shifts_mappings_or_pairs() -> None:
+    molecule = reshiki.Molecule.from_smiles(ETHYL_ACETATE)
+    protons = molecule.predict_nmr("1H")
+    expected = {1: "1.280 ppm", 2: "4.160 ppm", 5: "2.095 ppm"}
+    mappings = [{"atom": row.atom, "ppm": row.ppm} for row in protons]
+    pairs = [(row.atom, row.ppm) for row in protons]
+    for rows in (protons, list(protons), mappings, pairs):
+        assert _numbers(molecule.with_labels(rows, format="ppm")) == expected
+    assert _numbers(molecule.with_labels(protons, format="numbers")) == {1: "#1", 2: "#2", 5: "#5"}
+    # A row without a ppm is skipped; a second nucleus replaces only its own atoms.
+    carbons = molecule.with_labels([(3, None), (4, 170.7)], format="numbers")
+    assert _numbers(carbons.with_labels(protons, format="ppm")) == {**expected, 4: "#4"}
+
+
+def test_a_bad_row_writes_nothing() -> None:
+    molecule = reshiki.Molecule.from_smiles(ETHYL_ACETATE)
+    for rows, message in (
+        ([(1, 14.2), (99, 1.0)], "Atom 99 is not in the drawing"),
+        ([(1, float("nan"))], "The ppm of atom 1 is not a finite number"),
+        ([(1, float("inf"))], "The ppm of atom 1 is not a finite number"),
+        ([(1, 1e20)], "The label of atom 1 is longer than 32 characters"),
+    ):
+        with pytest.raises(reshiki.ReShikiError) as error:
+            molecule.with_labels(rows)
+        assert error.value.code == "invalid_arguments"
+        assert str(error.value) == message
+    with pytest.raises(reshiki.ReShikiError) as error:
+        molecule.with_labels([], format="atom")  # type: ignore[arg-type]
+    assert str(error.value) == "format must be numbers, ppm or both"

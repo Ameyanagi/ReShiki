@@ -58,8 +58,9 @@ atom in the drawing.
 - Nearby sticks share one label. Clicking the label again selects its next
   atom.
 - Labels move with their atoms. An atom inside a collapsed abbreviation is
-  labeled at the abbreviation. Labels never appear in exports or the Undo
-  history.
+  labeled at the abbreviation. **Show labels** is an on-screen overlay: its
+  labels never appear in exports or the Undo history. To put labels in a
+  file, write them from a script (see [Labels from scripts](#labels-from-scripts)).
 - A soft teal halo marks a selected atom that has a prediction.
 
 ### When results update
@@ -84,7 +85,42 @@ The same prediction runs without the app:
 Each returns the rows the palette lists, with the broad-match flag as data and
 the method, data version, conditions, limitations and data credit that
 **Export…** writes. The nucleus is required, and the drawing, or the atoms
-named, must be exactly one molecule. **Show labels** stays in the app.
+named, must be exactly one molecule.
+
+### Labels from scripts
+
+Scripts can also write the shifts onto the drawing, in the formats of the
+**Show labels** menu: `numbers` (`#3`), `ppm` (`1.280 ppm`) or `both`
+(`#3 · 1.280 ppm`).
+
+- Python: `molecule.with_labels(shifts, format="both")`; see
+  [Python package](python.md#label-the-atoms).
+- Command line:
+  `reshiki --cli convert --smiles 'CCOC(C)=O' --nucleus 13C --labels both -o assigned.svg`;
+  see [command line](agent-cli.md#nmr-labels).
+- MCP: the `label_atoms` tool, with the `revision` that `predict_nmr`
+  returned; see [agent API](agent-api.md#tools).
+
+Unlike **Show labels**, which stays on screen, these labels are stored in the
+drawing as atom numbers:
+
+- They save in `.rsk` files, appear in SVG, PNG and PDF, and go to ChemDraw
+  (CDXML and CDX) as atom numbers. You can move, restyle or delete them in the
+  app like any atom number.
+- They use the drawing's atom-number style, not the teal overlay, and have no
+  leader lines. An atom inside a collapsed abbreviation shows its label only
+  when the abbreviation is expanded.
+- They replace the numbers of the listed atoms only. Each atom keeps its
+  number style, and its label returns to the default position. Sites without
+  a ppm get no label. Labelling ¹H after ¹³C replaces the labels on the atoms
+  the ¹H rows list and keeps the others.
+- They are plain text. Editing the structure later does not update or clear
+  them; predict and label again to refresh them.
+- If **Show labels** is on while a labelled drawing is open, both appear.
+
+No caption or credit line is added to the figure. When you publish a labelled
+figure, cite the prediction's `credit`, the nmrshiftdb2 attribution its
+licence asks for.
 
 ## Limits
 

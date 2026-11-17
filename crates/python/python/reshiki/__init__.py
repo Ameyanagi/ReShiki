@@ -314,6 +314,9 @@ class NmrPrediction:
         return iter(self.rows)
 
 
+_LabelRow: TypeAlias = NmrShift | Mapping[str, Any] | tuple[int, float | None]
+
+
 @dataclass(frozen=True)
 class Drawing:
     """An immutable ReShiki document. Transforms return a new document."""
@@ -532,6 +535,32 @@ class Drawing:
             row["hydrogens"] = tuple(int(h) for h in row["hydrogens"])
             rows.append(NmrShift(**row))
         return NmrPrediction(rows=tuple(rows), **fields)
+
+    def with_labels(
+        self: _D,
+        rows: NmrPrediction | Iterable[_LabelRow],
+        *,
+        format: Literal["numbers", "ppm", "both"] = "both",
+    ) -> _D:
+        """Return a drawing with predicted shifts written onto the atoms as atom numbers.
+
+        ``rows`` is an :class:`NmrPrediction`, or :class:`NmrShift` rows, ``{"atom", "ppm"}``
+        mappings or ``(atom, ppm)`` tuples. The labels read ``#3``, ``1.280 ppm`` or
+        ``#3 · 1.280 ppm``, as the app's **Show labels** menu offers. They replace the listed
+        atoms' numbers, keeping their style; rows without a ppm are skipped. The labels are
+        static text: they do not change after later edits. An unknown atom, a ppm that is not
+        finite or a label over 32 characters raises :class:`ReShikiError` and writes nothing.
+        """
+        pairs: list[tuple[int, float | None]] = []
+        for row in rows:
+            if isinstance(row, NmrShift):
+                pairs.append((row.atom, row.ppm))
+            elif isinstance(row, Mapping):
+                pairs.append((row["atom"], row["ppm"]))
+            else:
+                atom, ppm = row
+                pairs.append((atom, ppm))
+        return type(self)(_native.with_labels(self._data, pairs, format))
 
     def _repr_svg_(self) -> str:
         return self.svg()

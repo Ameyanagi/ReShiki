@@ -8,7 +8,7 @@ use super::{
     exec::{Context, Executor},
     export, files,
     host::{Call, ToolHost},
-    import, inspect,
+    import, inspect, label_atoms,
     naming::{self, Hook, Naming},
     predict_nmr, render,
     result::ToolResult,
@@ -112,6 +112,7 @@ async fn run(
             compose::compose(ctx, store, engine, who, versions, budgets, *args).await
         }
         Op::Apply(args) => apply::apply(ctx, store, who, versions, args).await,
+        Op::LabelAtoms(args) => label_atoms::label_atoms(ctx, store, who, versions, args).await,
         Op::Convert(args) => convert::convert(ctx, engine, naming, versions, budgets, args).await,
         Op::Name(args) => naming::name(ctx, store, naming, who, versions, args).await,
         Op::Schema(args) => ctx.checkpoint().map(|()| schema::run(&args, &versions)),

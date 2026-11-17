@@ -5,8 +5,10 @@ use serde::Serialize;
 use std::sync::OnceLock;
 
 pub mod dataset;
+mod labels;
 mod shifts;
 pub use core::{METHOD, Nucleus};
+pub use labels::{LabelFormat, label_text, write_labels};
 pub use shifts::{SOLVENT, Shift, Shifts};
 pub const DATA_VERSION: &str = "nmrshiftdb2 2026-03-15 · measured CDCl3 subset v1";
 pub const CONDITIONS: &str =

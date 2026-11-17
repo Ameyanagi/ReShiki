@@ -608,3 +608,113 @@ fn unsupported_chemistry_and_missing_sites_are_errors() {
         "This molecule has no supported ¹H sites"
     );
 }
+
+#[test]
+fn label_text_matches_the_show_labels_menu() {
+    for (code, format, text) in [
+        ("numbers", LabelFormat::Numbers, "#3"),
+        ("ppm", LabelFormat::Ppm, "1.280 ppm"),
+        ("both", LabelFormat::Both, "#3 · 1.280 ppm"),
+    ] {
+        assert_eq!(LabelFormat::from_code(code), Some(format));
+        assert_eq!(label_text(format, 3, 1.28), text);
+    }
+    assert_eq!(LabelFormat::from_code("Both"), None);
+}
+
+/// Ethyl acetate's ¹³C rows as scripts pass them.
+fn carbon_rows(doc: &Document) -> Vec<(u64, Option<f64>)> {
+    let shifts = predict_drawing(doc, None, Nucleus::C13).unwrap();
+    shifts.rows.iter().map(|row| (row.atom, row.ppm)).collect()
+}
+
+#[test]
+fn labels_replace_the_numbers_of_the_listed_atoms_only() {
+    use crate::atom_labels::{Number, number_style};
+    let mut doc = ethyl_acetate();
+    let rows = carbon_rows(&doc);
+    let mut styled = number_style();
+    styled.bold = true;
+    doc.atom_mut(1).unwrap().display.number = Some(Number {
+        text: "a".into(),
+        offset: Some(Point::new(4., 4.)),
+        style: styled.clone(),
+    });
+    // The ether O has no ¹³C row.
+    let unlisted = Some(Number {
+        text: "O".into(),
+        offset: Some(Point::new(1., 1.)),
+        style: number_style(),
+    });
+    doc.atom_mut(3).unwrap().display.number = unlisted.clone();
+    let labelled = write_labels(&mut doc, &rows, LabelFormat::Both).unwrap();
+    assert_eq!(labelled, [1, 2, 4, 5]);
+    let number = |id| doc.atom(id).unwrap().display.number.clone().unwrap();
+    assert_eq!(number(1).text, "#1 · 14.200 ppm");
+    assert_eq!((number(1).offset, number(1).style), (None, styled));
+    assert_eq!(number(4).text, "#4 · 170.700 ppm");
+    assert_eq!(number(4).style, number_style());
+    assert_eq!(doc.atom(3).unwrap().display.number, unlisted);
+    doc.validate().unwrap();
+    assert!(crate::scene::svg(&doc).contains(">#4 · 170.700 ppm</text>"));
+    let cdxml = crate::exchange::drawing::write(&doc, Default::default()).unwrap();
+    assert!(cdxml.contains("AtomNumber=\"#4 · 170.700 ppm\""), "{cdxml}");
+}
+
+#[test]
+fn rows_without_a_shift_are_skipped() {
+    let mut doc = ethyl_acetate();
+    let labelled = write_labels(&mut doc, &[(1, None), (2, Some(61.05))], LabelFormat::Ppm);
+    assert_eq!(labelled.unwrap(), [2]);
+    assert_eq!(doc.atom(1).unwrap().display.number, None);
+    let number = doc.atom(2).unwrap().display.number.clone().unwrap();
+    assert_eq!(number.text, "61.050 ppm");
+}
+
+#[test]
+fn a_bad_row_anywhere_changes_nothing() {
+    let doc = ethyl_acetate();
+    let first = (1, Some(14.2));
+    for (row, error) in [
+        ((99, Some(1.)), "Atom 99 is not in the drawing"),
+        ((99, None), "Atom 99 is not in the drawing"),
+        (
+            (2, Some(f64::NAN)),
+            "The ppm of atom 2 is not a finite number",
+        ),
+        (
+            (2, Some(f64::INFINITY)),
+            "The ppm of atom 2 is not a finite number",
+        ),
+        // "#2 · 100000000000000000000.000 ppm" is 34 characters.
+        (
+            (2, Some(1e20)),
+            "The label of atom 2 is longer than 32 characters",
+        ),
+    ] {
+        let mut copy = doc.clone();
+        let result = write_labels(&mut copy, &[first, row], LabelFormat::Both);
+        assert_eq!(result.unwrap_err(), error);
+        assert_eq!(copy, doc);
+    }
+}
+
+#[test]
+fn labelled_drawings_keep_their_version_floor_through_rsk() {
+    let mut raised = ethyl_acetate();
+    raised.drawing_style.crossing_clearance_pt += 0.5;
+    assert!(raised.file_version() > crate::document::DISTANCE_BONDS);
+    for doc in [ethyl_acetate(), raised] {
+        let mut labelled = doc.clone();
+        write_labels(&mut labelled, &carbon_rows(&doc), LabelFormat::Numbers).unwrap();
+        assert_eq!(labelled.file_version(), doc.file_version());
+        let reopened = Document::from_native_file(&labelled.file_json().unwrap()).unwrap();
+        assert_eq!(reopened.version, doc.file_version());
+        for atom in &labelled.atoms {
+            let number = &reopened.atom(atom.id).unwrap().display.number;
+            assert_eq!(number, &atom.display.number);
+        }
+        let number = reopened.atom(5).unwrap().display.number.clone().unwrap();
+        assert_eq!(number.text, "#5");
+    }
+}

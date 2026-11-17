@@ -11,6 +11,7 @@ use super::{
     files::{self, Open, Save},
     import::{self, Import},
     inspect::{self, Inspect},
+    label_atoms::{self, LabelAtoms},
     naming::{self, Name},
     predict_nmr::{self, PredictNmr},
     render::{self, Render},
@@ -36,6 +37,7 @@ pub const SPECS: &[ToolSpec] = &[
     files::FILE_SAVE,
     compose::COMPOSE,
     apply::APPLY,
+    label_atoms::LABEL_ATOMS,
     convert::CONVERT,
     naming::NAME,
     schema::SCHEMA,
@@ -206,6 +208,15 @@ pub const RESULTS: &[(&str, &str)] = &[
         ),
     ),
     (
+        "label_atoms",
+        concat!(
+            "{effect, document, revision, recorded, labeled} effect is \"applied\"; document ",
+            "and revision are the labelled document's handle and revision. recorded is false ",
+            "when nothing changed. labeled lists the atom IDs given a label, in row order. ",
+            "warnings is empty.",
+        ),
+    ),
+    (
         "convert",
         concat!(
             "{receipt, width, height, analysis} receipt is {format, byte_len, detail}, as ",
@@ -277,6 +288,7 @@ pub(crate) enum Op {
     FileSave(Save),
     Compose(Box<Compose>),
     Apply(Apply),
+    LabelAtoms(LabelAtoms),
     Convert(Convert),
     Name(Name),
     Schema(Schema),
@@ -300,6 +312,7 @@ pub(crate) fn decode(tool: &str, args: Value, budgets: &Budgets) -> Option<Resul
         "file_save" => files::decode_save(args).map(Op::FileSave),
         "compose" => compose::decode(args).map(|compose| Op::Compose(Box::new(compose))),
         "apply" => apply::decode(args, budgets).map(Op::Apply),
+        "label_atoms" => label_atoms::decode(args, budgets).map(Op::LabelAtoms),
         "convert" => convert::decode(args, budgets).map(Op::Convert),
         "name" => naming::decode(args).map(Op::Name),
         "schema" => schema::decode(args).map(Op::Schema),

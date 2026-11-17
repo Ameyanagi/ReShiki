@@ -26,7 +26,7 @@ const DESCRIPTION: &str = "Draws, converts, renders and analyzes chemical struct
 reaction schemes with the local ReShiki app (experimental agent API). Use when asked to lay out \
 molecules or reactions from SMILES, convert MOL, RXN, CDXML, CDX, SMILES, InChI or ReShiki .rsk \
 files to MOL, CDXML, SMILES, InChI, SVG, PDF or PNG, generate systematic names, compute formula, \
-mass, logP or InChIKey, predict 1H or 13C NMR shifts, or produce a ReShiki .rsk drawing.";
+mass, logP or InChIKey, predict 1H or 13C NMR shifts and label them on the atoms, or produce a ReShiki .rsk drawing.";
 
 /// At most 500 characters, so never the executable path.
 const COMPATIBILITY: &str =
@@ -43,6 +43,7 @@ const RECIPES: &[&str] = &[
     "--cli help convert",
     "--cli analyze --smiles 'CC(=O)OCC'",
     "--cli predict-nmr --smiles 'CC(=O)OCC' --nucleus 13C",
+    "--cli convert --smiles 'CC(=O)OCC' --nucleus 13C --labels both -o assigned.svg",
     "--cli name --smiles 'CC(=O)O' --json",
     "--cli convert --smiles 'CC(=O)OCC' -o ethyl-acetate.mol",
     "--cli convert reaction.cdxml -o reaction.pdf",

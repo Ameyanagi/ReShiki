@@ -62,6 +62,7 @@ fn the_catalog_lists_each_tool_once_with_explicit_hints() {
             "file_save",
             "compose",
             "apply",
+            "label_atoms",
             "convert",
             "name",
             "schema"
@@ -90,6 +91,7 @@ fn the_catalog_lists_each_tool_once_with_explicit_hints() {
         hints(false, true, false),
         hints(false, false, false),
         hints(false, true, false),
+        hints(false, true, true),
     ];
     for (spec, hints) in catalog::SPECS.iter().zip(expected) {
         assert!(valid_name(spec.name), "{}", spec.name);

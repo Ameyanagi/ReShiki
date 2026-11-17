@@ -1,0 +1,93 @@
+{
+  "rules": [
+    {
+      "id": "arguments.object",
+      "cite": "crates/agent/src/ops/catalog.rs:335-344; crates/agent/src/ops/label_atoms.rs:99-107"
+    },
+    {
+      "id": "label_atoms.document_required",
+      "cite": "crates/agent/src/ops/label_atoms.rs:53,62,79"
+    },
+    {
+      "id": "label_atoms.rows",
+      "cite": "crates/agent/src/ops/label_atoms.rs:54,62,80"
+    },
+    {
+      "id": "label_atoms.row_items",
+      "cite": "crates/agent/src/ops/label_atoms.rs:43-48,69-73; crates/agent/src/ops/wire.rs:59-70,172-175"
+    },
+    {
+      "id": "label_atoms.rows_count",
+      "cite": "crates/agent/src/ops/label_atoms.rs:109-118; crates/agent/src/ops/budget.rs:26-27,84"
+    },
+    {
+      "id": "label_atoms.format",
+      "cite": "crates/agent/src/ops/label_atoms.rs:55,81,120-122; crates/io/src/nmr/labels.rs:21-28"
+    },
+    {
+      "id": "label_atoms.base_revision_required",
+      "cite": "crates/agent/src/ops/label_atoms.rs:56,82; crates/agent/src/ops/wire.rs:177-180"
+    },
+    {
+      "id": "label_atoms.idempotency_key_bytes",
+      "cite": "crates/agent/src/ops/label_atoms.rs:57-61,108; crates/agent/src/ops/apply.rs:207-222"
+    },
+    {
+      "id": "label_atoms.no_unknown_fields",
+      "cite": "crates/agent/src/ops/label_atoms.rs:69,77"
+    }
+  ],
+  "bases": {
+    "label": {"tool": "label_atoms", "arguments": {"document": "doc_0123456789abcdef0123456789abcdef", "rows": [{"atom": "1", "ppm": 14.2}, {"atom": "3", "ppm": null}], "format": "both", "base_revision": "0", "idempotency_key": null}},
+    "keyed": {"tool": "label_atoms", "arguments": {"document": "doc_0123456789abcdef0123456789abcdef", "rows": [{"atom": "12", "ppm": -0.5}], "format": "numbers", "base_revision": "7", "idempotency_key": "label-1"}}
+  },
+  "cases": [
+    {"name": "arguments_object", "rule": "arguments.object", "base": "label", "expect": "both_accept"},
+    {"name": "arguments_array", "rule": "arguments.object", "base": "label", "patch": [{"op": "replace", "path": "/arguments", "value": ["doc_1", [], "both", "0", null]}], "expect": "both_reject", "message": "Tool arguments must be a JSON object"},
+
+    {"name": "document_given", "rule": "label_atoms.document_required", "base": "keyed", "expect": "both_accept"},
+    {"name": "document_omitted", "rule": "label_atoms.document_required", "base": "label", "patch": [{"op": "remove", "path": "/arguments/document"}], "expect": "both_reject", "message": "missing field `document`"},
+    {"name": "document_null", "rule": "label_atoms.document_required", "base": "label", "patch": [{"op": "replace", "path": "/arguments/document", "value": null}], "expect": "both_reject"},
+
+    {"name": "rows_given", "rule": "label_atoms.rows", "base": "label", "expect": "both_accept"},
+    {"name": "rows_empty", "rule": "label_atoms.rows", "base": "label", "patch": [{"op": "replace", "path": "/arguments/rows", "value": []}], "expect": "both_accept"},
+    {"name": "rows_omitted", "rule": "label_atoms.rows", "base": "label", "patch": [{"op": "remove", "path": "/arguments/rows"}], "expect": "both_reject", "message": "missing field `rows`"},
+    {"name": "rows_null", "rule": "label_atoms.rows", "base": "label", "patch": [{"op": "replace", "path": "/arguments/rows", "value": null}], "expect": "both_reject"},
+
+    {"name": "row_ppm_null", "rule": "label_atoms.row_items", "base": "label", "patch": [{"op": "replace", "path": "/arguments/rows/0/ppm", "value": null}], "expect": "both_accept"},
+    {"name": "row_ppm_integer", "rule": "label_atoms.row_items", "base": "label", "patch": [{"op": "replace", "path": "/arguments/rows/0/ppm", "value": 14}], "expect": "both_accept"},
+    {"name": "row_ppm_negative", "rule": "label_atoms.row_items", "base": "keyed", "expect": "both_accept"},
+    {"name": "row_ppm_omitted", "rule": "label_atoms.row_items", "base": "label", "patch": [{"op": "remove", "path": "/arguments/rows/0/ppm"}], "expect": "schema_rejects_only"},
+    {"name": "row_ppm_string", "rule": "label_atoms.row_items", "base": "label", "patch": [{"op": "replace", "path": "/arguments/rows/0/ppm", "value": "14.2"}], "expect": "both_reject"},
+    {"name": "row_atom_number", "rule": "label_atoms.row_items", "base": "label", "patch": [{"op": "replace", "path": "/arguments/rows/0/atom", "value": 1}], "expect": "both_reject"},
+    {"name": "row_atom_zero", "rule": "label_atoms.row_items", "base": "label", "patch": [{"op": "replace", "path": "/arguments/rows/0/atom", "value": "0"}], "expect": "both_reject", "message": "Object IDs are decimal strings such as \"12\""},
+    {"name": "row_atom_omitted", "rule": "label_atoms.row_items", "base": "label", "patch": [{"op": "remove", "path": "/arguments/rows/0/atom"}], "expect": "both_reject", "message": "missing field `atom`"},
+    {"name": "row_tuple", "rule": "label_atoms.row_items", "base": "label", "patch": [{"op": "replace", "path": "/arguments/rows/0", "value": ["1", 14.2]}], "expect": "schema_rejects_only"},
+    {"name": "row_unknown_field", "rule": "label_atoms.row_items", "base": "label", "patch": [{"op": "add", "path": "/arguments/rows/0/note", "value": null}], "expect": "both_reject", "message": "unknown field `note`, expected `atom` or `ppm`"},
+
+    {"name": "rows_at_max_ids", "rule": "label_atoms.rows_count", "base": "label", "patch": [{"op": "replace", "path": "/arguments/rows", "value": {"$repeat": {"atom": "7", "ppm": 1.5}, "count": 5000}}], "expect": "both_accept"},
+    {"name": "rows_over_max_ids", "rule": "label_atoms.rows_count", "base": "label", "patch": [{"op": "replace", "path": "/arguments/rows", "value": {"$repeat": {"atom": "7", "ppm": 1.5}, "count": 5001}}], "expect": "both_reject", "message": "5001 rows were given; at most 5000 are allowed per request"},
+
+    {"name": "format_numbers", "rule": "label_atoms.format", "base": "keyed", "expect": "both_accept"},
+    {"name": "format_ppm", "rule": "label_atoms.format", "base": "label", "patch": [{"op": "replace", "path": "/arguments/format", "value": "ppm"}], "expect": "both_accept"},
+    {"name": "format_both", "rule": "label_atoms.format", "base": "label", "expect": "both_accept"},
+    {"name": "format_capitalised", "rule": "label_atoms.format", "base": "label", "patch": [{"op": "replace", "path": "/arguments/format", "value": "Both"}], "expect": "both_reject", "message": "format must be numbers, ppm or both"},
+    {"name": "format_atom", "rule": "label_atoms.format", "base": "label", "patch": [{"op": "replace", "path": "/arguments/format", "value": "atom"}], "expect": "both_reject", "message": "format must be numbers, ppm or both"},
+    {"name": "format_null", "rule": "label_atoms.format", "base": "label", "patch": [{"op": "replace", "path": "/arguments/format", "value": null}], "expect": "both_reject"},
+    {"name": "format_omitted", "rule": "label_atoms.format", "base": "label", "patch": [{"op": "remove", "path": "/arguments/format"}], "expect": "both_reject", "message": "missing field `format`"},
+
+    {"name": "base_revision_zero", "rule": "label_atoms.base_revision_required", "base": "label", "expect": "both_accept"},
+    {"name": "base_revision_null", "rule": "label_atoms.base_revision_required", "base": "label", "patch": [{"op": "replace", "path": "/arguments/base_revision", "value": null}], "expect": "both_reject"},
+    {"name": "base_revision_omitted", "rule": "label_atoms.base_revision_required", "base": "label", "patch": [{"op": "remove", "path": "/arguments/base_revision"}], "expect": "both_reject", "message": "missing field `base_revision`"},
+    {"name": "base_revision_leading_zero", "rule": "label_atoms.base_revision_required", "base": "keyed", "patch": [{"op": "replace", "path": "/arguments/base_revision", "value": "07"}], "expect": "both_reject", "message": "Revisions are decimal strings such as \"0\" or \"12\""},
+
+    {"name": "idempotency_key_given", "rule": "label_atoms.idempotency_key_bytes", "base": "keyed", "expect": "both_accept"},
+    {"name": "idempotency_key_omitted", "rule": "label_atoms.idempotency_key_bytes", "base": "label", "patch": [{"op": "remove", "path": "/arguments/idempotency_key"}], "expect": "schema_rejects_only"},
+    {"name": "idempotency_key_128_bytes", "rule": "label_atoms.idempotency_key_bytes", "base": "label", "patch": [{"op": "replace", "path": "/arguments/idempotency_key", "value": {"$text": "a", "count": 128}}], "expect": "both_accept"},
+    {"name": "idempotency_key_129_bytes", "rule": "label_atoms.idempotency_key_bytes", "base": "label", "patch": [{"op": "replace", "path": "/arguments/idempotency_key", "value": {"$text": "a", "count": 129}}], "expect": "both_reject", "message": "idempotency_key is 129 bytes; at most 128 are allowed"},
+    {"name": "idempotency_key_65_two_byte_characters", "rule": "label_atoms.idempotency_key_bytes", "base": "keyed", "patch": [{"op": "replace", "path": "/arguments/idempotency_key", "value": {"$text": "é", "count": 65}}], "expect": "decoder_rejects_only", "message": "idempotency_key is 130 bytes; at most 128 are allowed"},
+
+    {"name": "known_fields_only", "rule": "label_atoms.no_unknown_fields", "base": "keyed", "expect": "both_accept"},
+    {"name": "unknown_null_field", "rule": "label_atoms.no_unknown_fields", "base": "label", "patch": [{"op": "add", "path": "/arguments/nucleus", "value": null}], "expect": "both_reject", "message": "unknown field `nucleus`, expected one of `document`, `rows`, `format`, `base_revision`, `idempotency_key`"}
+  ]
+}

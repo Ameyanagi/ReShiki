@@ -200,6 +200,21 @@ fn ops_predict_nmr_schema_and_decoder_parity() {
     }
 }
 
+const LABEL_ATOMS: Contract = Contract {
+    name: "ops-label-atoms",
+    schema: || tools_schema(&["label_atoms"]),
+    decode: decode_tool_call,
+    cases: "ops-label-atoms-cases.json",
+};
+
+#[test]
+fn ops_label_atoms_schema_and_decoder_parity() {
+    match corpus::check(&LABEL_ATOMS) {
+        Ok(report) => eprintln!("{report}"),
+        Err(failures) => panic!("{failures}"),
+    }
+}
+
 const RENDER: Contract = Contract {
     name: "ops-render",
     schema: || tools_schema(&["render"]),
@@ -814,7 +829,7 @@ enum Effect {
 }
 
 /// Every operation tool's effect class.
-const EFFECTS: [(&str, Effect); 17] = [
+const EFFECTS: [(&str, Effect); 18] = [
     ("info", Effect::ReadOnly),
     ("convert", Effect::ReadOnly),
     ("name", Effect::ReadOnly),
@@ -831,6 +846,7 @@ const EFFECTS: [(&str, Effect); 17] = [
     ("file_open", Effect::Additive),
     ("document_close", Effect::Destructive),
     ("apply", Effect::Destructive),
+    ("label_atoms", Effect::Destructive),
     ("file_save", Effect::Destructive),
 ];
 

@@ -59,6 +59,7 @@ Experimental: ReShiki's agent tools, schemas and results may change between rele
 Usage: reshiki --cli convert (INPUT | - | --smiles TEXT) [--from FORMAT] [--to FORMAT]
                              [-o OUTPUT|-] [--svg-text MODE] [--pages]
                              [--force] [--receipt]
+                             [--nucleus NUCLEUS --labels FORMAT]
 
 Converts a structure or drawing, making the file as the app's Export does.
 
@@ -91,6 +92,12 @@ Options:
   --force        Replace OUTPUT if it exists; otherwise that is an error.
   --receipt      With -o OUTPUT, print one JSON line to stdout:
                  {"receipt": {"format", "byte_len", "detail"}, "api": {…}}.
+  --nucleus NUCLEUS --labels FORMAT
+                 Predict 1H or 13C shifts as predict-nmr does and write
+                 them onto the atoms as atom numbers: numbers (#3), ppm
+                 (1.280 ppm) or both (#3 · 1.280 ppm), replacing those
+                 atoms' numbers. Only for svg, png, pdf, cdxml, cdx. Cite
+                 predict-nmr's credit with published values.
 
 Inputs are at most 16777216 bytes (16777218 for cdx), so a ReShiki drawing with
 large embedded pictures that the app opens can be too large here. rsk and

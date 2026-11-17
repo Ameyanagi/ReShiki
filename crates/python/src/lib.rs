@@ -144,6 +144,25 @@ fn predict_nmr(py: Python<'_>, data: Vec<u8>, nucleus: &str) -> PyResult<String>
         .map_err(failed(py))
 }
 
+#[pyfunction]
+fn with_labels(
+    py: Python<'_>,
+    data: Vec<u8>,
+    rows: Vec<(u64, Option<f64>)>,
+    format: &str,
+) -> PyResult<Py<PyBytes>> {
+    let format = reshiki_io::nmr::LabelFormat::from_code(format)
+        .ok_or_else(|| invalid(py)("format must be numbers, ppm or both".into()))?;
+    let data = py
+        .detach(|| {
+            let mut document = Document::from_native_file(&data)?;
+            reshiki_io::nmr::write_labels(&mut document, &rows, format)?;
+            document.file_json()
+        })
+        .map_err(invalid(py))?;
+    Ok(bytes(py, data))
+}
+
 type BatchOutput = (
     Vec<Option<Py<PyBytes>>>,
     Vec<(usize, String)>,
@@ -211,6 +230,7 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(render_drawing, module)?)?;
     module.add_function(wrap_pyfunction!(properties, module)?)?;
     module.add_function(wrap_pyfunction!(predict_nmr, module)?)?;
+    module.add_function(wrap_pyfunction!(with_labels, module)?)?;
     module.add_function(wrap_pyfunction!(render_many, module)?)?;
     Ok(())
 }

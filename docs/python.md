@@ -84,6 +84,41 @@ The reference data comes from nmrshiftdb2 under the
 When you publish predicted values, cite `credit` with them. See
 [NMR prediction](nmr-prediction.md) for the method and its limits.
 
+### Label the atoms
+
+`with_labels(rows, format=...)` returns a drawing with the shifts written onto
+the atoms:
+
+```python
+m = reshiki.Molecule.from_smiles("CCOC(C)=O").clean()
+shifts = m.predict_nmr("13C")
+m.with_labels(shifts, format="both").save("assigned.svg", style="JACS / ACS")
+```
+
+`rows` is an `NmrPrediction`, or any iterable of `NmrShift` rows,
+`{"atom": ..., "ppm": ...}` mappings or `(atom, ppm)` tuples. `format` is one of
+the app's **Show labels** formats:
+
+| `format`         | Label on atom 3  |
+| ---------------- | ---------------- |
+| `numbers`        | `#3`             |
+| `ppm`            | `1.280 ppm`      |
+| `both` (default) | `#3 · 1.280 ppm` |
+
+The labels are stored as atom numbers, so `rsk()` keeps them and SVG, PNG,
+PDF, CDXML and CDX output shows them; ChemDraw reads them as atom numbers.
+They replace the numbers of the listed atoms only, keep each atom's number
+style (the drawing's atom-number style when it had none) and reset its
+position. Rows without a ppm are skipped. Labelling ¹H after ¹³C replaces the
+labels of the atoms the ¹H rows list and keeps the others.
+
+The labels are plain text: they do not change when the drawing is edited
+later. Run `predict_nmr` and `with_labels` again to refresh them. An atom that
+is not in the drawing, a ppm that is not a finite number or a label longer
+than 32 characters raises `ReShikiError` with code `invalid_arguments`, and
+nothing is written. No caption is added; cite `credit` with a published
+labelled figure.
+
 ## Inputs and outputs
 
 Use explicit constructors `from_smiles(text)`, `from_molfile(text)`,
