@@ -241,11 +241,11 @@ async fn one_key_labels_once() {
     );
 }
 
-/// Only the numbers change: labelling leaves a drawing that reconciliation
-/// would normalize (this one's quadratic arrow) as it was, and a call that
-/// changes nothing still binds its key.
+/// A call that writes nothing leaves a drawing that reconciliation would
+/// normalize (this one's quadratic arrow) as it was, and still binds its
+/// key.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn labels_change_only_numbers_and_a_no_op_binds_its_key() {
+async fn a_call_that_writes_nothing_changes_nothing_and_binds_its_key() {
     let host = HeadlessHost::new("9.8.7", Budgets::default());
     let unsettled = Document::from_json(include_bytes!(
         "../../../../../tests/fixtures/passive-drawing-geometry/unsettled-native.rsk"
@@ -256,7 +256,7 @@ async fn labels_change_only_numbers_and_a_no_op_binds_its_key() {
         .create(&Principal::local(), unsettled)
         .unwrap()
         .handle;
-    let (before, _) = stored(&host, &handle);
+    let before = stored(&host, &handle);
     let skipped = json!([{"atom": "1", "ppm": null}, {"atom": "2", "ppm": null}]);
     let result = call(
         &host,
@@ -270,7 +270,7 @@ async fn labels_change_only_numbers_and_a_no_op_binds_its_key() {
         result.value
     );
     assert_eq!(result.value["value"]["labeled"], json!([]));
-    assert_eq!(stored(&host, &handle), (before.clone(), Revision(0)));
+    assert_eq!(stored(&host, &handle), before);
     let rows = json!([{"atom": "4", "ppm": 1.5}]);
     let reused = call(
         &host,
@@ -279,18 +279,5 @@ async fn labels_change_only_numbers_and_a_no_op_binds_its_key() {
     )
     .await;
     assert_eq!(error(&reused).0, "invalid_arguments");
-    let result = call(
-        &host,
-        "label_atoms",
-        label(&handle, &rows, &json!("0"), Value::Null),
-    )
-    .await;
-    assert_eq!(
-        result.value["value"]["recorded"], true,
-        "{:?}",
-        result.value
-    );
-    let mut expected = before;
-    nmr::write_labels(&mut expected, &[(4, Some(1.5))], LabelFormat::Both).unwrap();
-    assert_eq!(stored(&host, &handle), (expected, Revision(1)));
+    assert_eq!(stored(&host, &handle), before);
 }

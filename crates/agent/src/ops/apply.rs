@@ -530,47 +530,61 @@ fn edit(
         }
     };
     let Edited {
-        mut doc,
+        doc,
         inserted,
         id_remap,
         deleted,
     } = edited;
-    store.fits(who, &document, &snapshot.doc, &doc)?;
+    let report = Report {
+        document,
+        versions: versions.clone(),
+        inserted: object_ids(inserted),
+        id_remap: IdRemapJson::from(&id_remap),
+        deleted: object_ids(deleted),
+    };
+    replace(store, who, &snapshot, doc, key, &versions, report.receipt())
+}
+
+/// The commit that replaces the edit snapshot `snapshot` with `doc`:
+/// [`transaction::reconcile`] against it and the label precompute. A
+/// rejection is an `is_error` result with validation `rejected` and no
+/// commit.
+pub(super) fn replace(
+    store: &dyn Documents,
+    who: &Principal,
+    snapshot: &Snapshot,
+    mut doc: Document,
+    key: Option<IdempotencyKey>,
+    versions: &Versions,
+    receipt: Receipt,
+) -> Result<Prepared, OpError> {
+    store.fits(who, &snapshot.handle, &snapshot.doc, &doc)?;
     let reconciled = match transaction::reconcile(&mut doc, (*snapshot.doc).clone()) {
         Ok(reconciled) => reconciled,
         Err(rejection) => {
             return Ok(Prepared::Done(ToolResult::rejected(
                 rejection,
                 Vec::new(),
-                &versions,
+                versions,
             )));
         }
     };
     // The inputs `Reconciled::commit` decides with.
     let chemistry_changed = transaction::chemistry_changed(reconciled.before(), &doc);
     let labels = labels(&doc, chemistry_changed);
-    let report = Report {
-        document,
-        versions,
-        inserted: object_ids(inserted),
-        id_remap: IdRemapJson::from(&id_remap),
-        deleted: object_ids(deleted),
-    };
     Ok(Prepared::Commit(Change {
         base: snapshot.revision,
         edit: Edit::Replace { doc, reconciled },
         key,
         labels,
-        receipt: report.receipt(),
+        receipt,
     }))
 }
 
 /// Applies one edit to a session document.
 ///
-/// - Insert and delete: [`insert`] or [`delete`] on an edit snapshot,
-///   [`transaction::reconcile`] against it, and the label precompute, all on
-///   the blocking pool. A rejection is an `is_error` result with validation
-///   `rejected` and no commit.
+/// - Insert and delete: [`insert`] or [`delete`] on an edit snapshot, then
+///   [`replace`], all on the blocking pool.
 /// - Undo and redo: the store's step target, checked against
 ///   `base_revision`; nothing to step gives `recorded: false`, without a
 ///   commit unless the call is keyed.

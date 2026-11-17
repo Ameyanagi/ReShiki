@@ -15,7 +15,7 @@ use super::{
     store::{Applied, Change, Documents, Edit, IdempotencyKey, Receipt},
     wire::{
         DocHandle, ObjectId, Principal, Revision, described, handle_schema, nullable,
-        object_id_schema, revision_schema,
+        object_id_schema, revision_schema, warnings,
     },
 };
 use crate::{
@@ -142,8 +142,9 @@ struct Outcome<'a> {
 }
 
 /// The edit at `base_revision`: every row checked, then the numbers written
-/// into a copy that replaces the snapshot; a copy equal to it commits
-/// `recorded: false`, which still binds the key. An atom that is not in the
+/// into a copy that [`apply::replace`] reconciles, as the app reconciles an
+/// atom-number edit; a copy equal to the snapshot commits `recorded: false`
+/// unchanged, which still binds the key. An atom that is not in the
 /// drawing is [`ErrorKind::UnknownObject`]; any other bad row is
 /// [`ErrorKind::InvalidArguments`]. Either changes nothing.
 fn edit(
@@ -174,7 +175,7 @@ fn edit(
     let labeled = nmr::write_labels(&mut labelled, &rows, format)
         .map_err(|error| OpError::invalid(error).param("rows"))?;
     let labeled: Vec<ObjectId> = labeled.into_iter().map(ObjectId).collect();
-    store.fits(who, &document, &snapshot.doc, &labelled)?;
+    let result = versions.clone();
     let receipt: Receipt = Box::new(move |applied: &Applied| {
         ToolResult::valid(
             Outcome {
@@ -184,15 +185,18 @@ fn edit(
                 recorded: applied.recorded,
                 labeled: &labeled,
             },
-            Vec::new(),
-            versions,
+            warnings(applied.label_notice.iter().cloned().collect()),
+            result,
         )
     });
-    // Only atom numbers changed, and write_labels checked them, so the copy
-    // replaces the snapshot as written: reconciliation would also normalize
-    // unrelated parts of the drawing.
-    let mut doc = (*snapshot.doc).clone();
-    let reconciled = transaction::replace(&mut doc, labelled);
+    if labelled != *snapshot.doc {
+        return apply::replace(store, who, &snapshot, labelled, key, &versions, receipt);
+    }
+    // Nothing to write: commit the snapshot as it is, without reconciliation,
+    // which could normalize a drawing this call leaves alone. History
+    // records nothing, and a key is bound as for any other commit.
+    let mut doc = labelled;
+    let reconciled = transaction::replace(&mut doc, (*snapshot.doc).clone());
     Ok(Prepared::Commit(Change {
         base: snapshot.revision,
         edit: Edit::Replace { doc, reconciled },
