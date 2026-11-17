@@ -31,6 +31,57 @@ Jupyter displays each object as SVG.
 and `tpsa` are rounded to 9 decimal places, as the command line and the MCP
 tools report them.
 
+## Predict NMR
+
+`predict_nmr("1H")` or `predict_nmr("13C")` predicts chemical shifts offline,
+as **Properties → Predict NMR…** does in the app. The drawing must be exactly
+one molecule. The nucleus is required.
+
+```python
+ethyl_acetate = reshiki.Molecule.from_smiles("CCOC(C)=O")
+carbons = ethyl_acetate.predict_nmr("13C")
+for row in carbons:
+    print(row.atom, row.ppm)
+print(carbons.credit)
+```
+
+It returns a frozen `NmrPrediction` with the same fields as
+[`reshiki --cli predict-nmr`](agent-cli.md#predict-nmr) and the MCP
+`predict_nmr` tool, except the document revision. Iterating over it yields
+its `rows`, one `NmrShift` per site in drawing order:
+
+| Field                 | Meaning                                                              |
+| --------------------- | -------------------------------------------------------------------- |
+| `atom`                | The drawing's atom ID; for ¹H, the heavy atom that carries the H     |
+| `nucleus`             | `1H` or `13C`                                                        |
+| `ppm`                 | The predicted shift: the median of the matched reference group       |
+| `shell`, `references` | The sphere radius of the match and the number of reference molecules |
+| `sd`, `min`, `max`    | The spread of the reference shifts, in ppm                           |
+| `broad`               | The shortest sphere matched a group with a wide spread               |
+| `hydrogen_count`      | The number of attached H, for ¹H; `None` for ¹³C                     |
+| `hydrogens`           | The IDs of attached H drawn as atoms                                 |
+| `note`                | What **Export…** writes in its Limitations column, or `None`         |
+
+`ppm` through `max` are `None` for a site without reference data, and `note`
+says why. The prediction also carries `nucleus`, `solvent` (`CDCl3`), `method`,
+`data_version`, `conditions`, `limitations`, `credit` and `data_access`, as
+**Export…** writes them.
+
+Atom IDs follow the input. For SMILES, atom `N` is the `N`th atom of the
+SMILES, which is index `N - 1` in RDKit's `Chem.MolFromSmiles`. For a MOL
+file, it is the atom's number in the file. A `.rsk` drawing keeps its stored
+IDs, which can have gaps. `clean()` keeps IDs.
+
+A drawing that is not one molecule, unsupported chemistry (such as metals,
+charges or isotope labels) and a molecule without sites for the nucleus raise
+`ReShikiError` with code `failed`; a nucleus other than `1H` or `13C` raises it
+with code `invalid_arguments`.
+
+The reference data comes from nmrshiftdb2 under the
+[nmrshiftdb2 Database License](https://github.com/Ameyanagi/ReShiki/blob/main/licenses/nmrshiftdb2/DATABASE-LICENSE.txt).
+When you publish predicted values, cite `credit` with them. See
+[NMR prediction](nmr-prediction.md) for the method and its limits.
+
 ## Inputs and outputs
 
 Use explicit constructors `from_smiles(text)`, `from_molfile(text)`,

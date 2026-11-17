@@ -21,6 +21,7 @@ from typing import (
     Any,
     Generic,
     Iterable,
+    Iterator,
     Literal,
     Mapping,
     TypeAlias,
@@ -43,6 +44,8 @@ __all__ = [
     "Style",
     "StyleContext",
     "Properties",
+    "NmrShift",
+    "NmrPrediction",
     "RenderResults",
     "ReShikiError",
     "StructureWarning",
@@ -266,6 +269,51 @@ class Properties:
 
 
 @dataclass(frozen=True)
+class NmrShift:
+    """One predicted NMR site, a row of the app's Predict NMR palette.
+
+    ``atom`` is the drawing's atom ID: for SMILES, the atom's position counting from 1
+    (RDKit ``MolFromSmiles`` index ``atom - 1``); for MOL, its atom number. A ¹H row names
+    the heavy atom carrying the H; ``hydrogens`` lists the H drawn as atoms. The values are
+    ``None`` for a site without data, and ``note`` says why.
+    """
+
+    atom: int
+    nucleus: str
+    ppm: float | None
+    shell: int | None
+    references: int | None
+    sd: float | None
+    min: float | None
+    max: float | None
+    broad: bool
+    hydrogen_count: int | None
+    hydrogens: tuple[int, ...]
+    note: str | None
+
+
+@dataclass(frozen=True)
+class NmrPrediction:
+    """Predicted shifts of one molecule with what the app's Export… writes beside them.
+
+    Iterating yields the rows. Cite ``credit`` with published values.
+    """
+
+    nucleus: str
+    solvent: str
+    rows: tuple[NmrShift, ...]
+    method: str
+    data_version: str
+    conditions: str
+    limitations: str
+    credit: str
+    data_access: str
+
+    def __iter__(self) -> Iterator[NmrShift]:
+        return iter(self.rows)
+
+
+@dataclass(frozen=True)
 class Drawing:
     """An immutable ReShiki document. Transforms return a new document."""
 
@@ -469,6 +517,24 @@ class Drawing:
         # Like the CLI analysis JSON, the public descriptors leave out the inspector's mass percentages.
         del fields["mass_percent"]
         return Properties(**fields)
+
+    def predict_nmr(self, nucleus: Literal["1H", "13C"]) -> NmrPrediction:
+        """Predict ¹H or ¹³C NMR shifts offline, as the app's Predict NMR does.
+
+        The drawing must be exactly one molecule.
+        """
+        fields = json.loads(_native.predict_nmr(self._data, nucleus))
+        rows = tuple(
+            NmrShift(
+                **{
+                    **row,
+                    "atom": int(row["atom"]),
+                    "hydrogens": tuple(int(h) for h in row["hydrogens"]),
+                }
+            )
+            for row in fields.pop("rows")
+        )
+        return NmrPrediction(rows=rows, **fields)
 
     def _repr_svg_(self) -> str:
         return self.svg()

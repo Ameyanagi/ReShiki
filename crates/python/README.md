@@ -30,6 +30,14 @@ SVG output draws text as outlines, so it looks the same in every viewer. Pass
 `svg_text="live"`, as in `aspirin.svg(svg_text="live")`, to keep editable
 `<text>` elements instead.
 
+## Predict NMR
+
+`reshiki.Molecule.from_smiles("CCOC(C)=O").predict_nmr("13C")` predicts ¹³C,
+or with `"1H"` ¹H, chemical shifts offline, one row per site with its atom ID.
+The reference data comes from nmrshiftdb2 under the
+[nmrshiftdb2 Database License](https://github.com/Ameyanagi/ReShiki/blob/main/licenses/nmrshiftdb2/DATABASE-LICENSE.txt),
+which the wheel includes. Cite the prediction's `credit` with published values.
+
 ## Reuse a style
 
 Create a style context once and reuse its constructors and export functions:
