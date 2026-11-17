@@ -91,7 +91,7 @@ Codex supports account sign-in through ChatGPT and API-key authentication. Avail
 
 [![Connected assistant with Codex in the footer, a model selector, and Review mode](images/assistant-updates/codex-connected.png)](images/assistant-updates/codex-connected.png)
 
-The screenshot shows a connected local preview build. **GPT-6.2 Astra** is selected when available; another account may offer different models. You can close the terminal after login. See [drawing with the assistant](assistant.md) for image input, review modes, and follow-up edits.
+The screenshot shows a connected local preview build. **GPT-6.2 Sol** is selected when available; another account may offer different models. You can close the terminal after login. See [drawing with the assistant](assistant.md) for image input, review modes, and follow-up edits.
 
 ## What happens when you send a request
 

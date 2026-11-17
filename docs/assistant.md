@@ -71,7 +71,7 @@ A five-minute inactivity timeout renews with relevant progress; each model turn 
 
 ## Model and navigation defaults
 
-The assistant defaults to GPT-6.2 Astra (`gpt-6.2-astra`) when it is available in the connected Codex catalog, otherwise to the account default (or, when the catalog marks none, its newest model). Explicit model choices remain saved. Reasoning and service options come from the selected model’s catalog entry.
+The assistant defaults to GPT-6.2 Sol (`gpt-6.2-sol`) when it is available in the connected Codex catalog, otherwise to the account default (or, when the catalog marks none, its newest model). Explicit model choices remain saved. Reasoning and service options come from the selected model’s catalog entry.
 
 Opening model, effort or edit-mode menus preserves the conversation position. Closing and reopening the panel restores that position. Use **Jump to result** to return to a completed draft after reading earlier messages.
 

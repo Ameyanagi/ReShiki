@@ -422,7 +422,7 @@ impl App {
                 .preferences
                 .model
                 .clone()
-                .unwrap_or_else(|| "GPT-6.2 Astra".into()),
+                .unwrap_or_else(|| "GPT-6.2 Sol".into()),
         };
         let editor = text_editor(&state.input)
             .id("assistant-input")

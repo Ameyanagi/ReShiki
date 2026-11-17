@@ -3,16 +3,16 @@ fn model(id: &str, default: bool) -> Model {
     serde_json::from_value(serde_json::json!({"model":id,"displayName":id,"isDefault":default,"defaultReasoningEffort":"medium","supportedReasoningEfforts":[{"reasoningEffort":"medium","description":"Balanced"}]})).unwrap()
 }
 #[test]
-fn default_prefers_astra_but_explicit_choice_survives_refresh() {
+fn default_prefers_gpt_6_2_sol_but_explicit_choice_survives_refresh() {
     let mut models = vec![model("gpt-5.6-sol", true), model("gpt-6-sol", false)];
     let mut prefs = Preferences::default();
     assert_eq!(prefs.resolve(&models).unwrap().id, "gpt-5.6-sol");
-    models.push(model("gpt-6-astra", false));
-    assert_eq!(prefs.resolve(&models).unwrap().id, "gpt-5.6-sol");
     models.push(model("gpt-6.2-astra", false));
-    assert_eq!(prefs.resolve(&models).unwrap().id, "gpt-6.2-astra");
+    assert_eq!(prefs.resolve(&models).unwrap().id, "gpt-5.6-sol");
+    models.push(model("gpt-6.2-sol", false));
+    assert_eq!(prefs.resolve(&models).unwrap().id, "gpt-6.2-sol");
     models.push(model("gpt-6.3", false));
-    assert_eq!(prefs.resolve(&models).unwrap().id, "gpt-6.2-astra");
+    assert_eq!(prefs.resolve(&models).unwrap().id, "gpt-6.2-sol");
     prefs.model = Some("gpt-5.6-sol".into());
     let persisted: Preferences =
         serde_json::from_str(&serde_json::to_string(&prefs).unwrap()).unwrap();
