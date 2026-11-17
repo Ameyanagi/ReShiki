@@ -865,3 +865,65 @@ fn a_symmetric_molecule_with_new_ids_is_not_turned() {
     assert_eq!(report.changes, vec![]);
     assert_eq!(report.molecules[0].by, MatchedBy::Smiles);
 }
+
+#[test]
+fn atoms_paired_by_place_must_keep_their_bonds() {
+    // Propane on a triangle's corners, drawn again with new ids and another
+    // corner in the middle.
+    let corners = [
+        Point::new(0., 0.),
+        Point::new(36., 21.),
+        Point::new(72., 0.),
+    ];
+    let propane = |doc: &mut Document, middle: usize| {
+        let ids: Vec<u64> = corners.iter().map(|p| doc.add_atom("C", *p)).collect();
+        for (i, id) in ids.iter().enumerate() {
+            if i != middle {
+                doc.add_bond(ids[middle], *id, 1, "plain");
+            }
+        }
+    };
+    let mut left = Document::default();
+    propane(&mut left, 1);
+    let left = load(&left);
+    let right = edited(&left, |doc| {
+        let old = doc.all_ids();
+        propane(doc, 0);
+        doc.delete(&old);
+    });
+    assert_eq!(
+        kinds(&compare(&left, &right)),
+        [(Kind::Redrawn, Subject::Molecule)]
+    );
+}
+
+#[test]
+fn a_hydrogen_bond_between_molecules_is_listed() {
+    let mut left = Document::default();
+    let o = left.add_atom("O", Point::new(0., 0.));
+    let h = left.add_atom("H", Point::new(20., 0.));
+    left.add_bond(o, h, 1, "plain");
+    let n = left.add_atom("N", Point::new(60., 0.));
+    let left = load(&left);
+    let right = edited(&left, |doc| {
+        doc.add_bond(h, n, 0, "dotted");
+    });
+    let report = compare(&left, &right);
+    assert_eq!(report.count(Category::Chemistry), 1, "{:?}", report.changes);
+}
+
+#[test]
+fn a_stereo_group_shared_by_two_molecules_cannot_be_verified() {
+    let one = molecule("C[C@H](O)CC");
+    let mut doc = Document::default();
+    crate::editing::append(&mut doc, &one, Point::new(0., 0.));
+    crate::editing::append(&mut doc, &one, Point::new(300., 0.));
+    for atom in doc.atoms.iter_mut().filter(|a| a.stereo.is_some()) {
+        atom.stereo_group = Some(crate::stereo_groups::StereoGroup {
+            kind: crate::stereo_groups::Kind::And,
+            number: 1,
+        });
+    }
+    let doc = load(&doc);
+    assert_eq!(compare(&doc, &doc).unverified(), 2);
+}

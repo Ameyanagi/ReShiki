@@ -277,6 +277,7 @@ fn change_row(index: usize, change: &Change, left: &Document, right: &Document) 
                         parts.join(", ")
                     }
                 }
+                Detail::Reason(reason) => reason.clone(),
                 _ => "Molecule changed".to_owned(),
             };
             (
@@ -504,10 +505,10 @@ fn marks(
             }
             for (a, b) in &marks.bonds {
                 // Inside a collapsed label, the label's mark shows it.
-                if let (Some(a), Some(b)) = (at(a), at(b))
-                    && a != b
-                {
-                    mark(ComparePlace::Bond(a, b));
+                match (at(a), at(b)) {
+                    (Some(a), Some(b)) if a != b => mark(ComparePlace::Bond(a, b)),
+                    (Some(a), Some(_)) => mark(ComparePlace::Atom(a)),
+                    _ => {}
                 }
             }
         } else if let Some((lo, hi)) = spot {

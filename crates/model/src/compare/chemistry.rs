@@ -86,6 +86,18 @@ pub(super) fn signature(doc: &Document, ids: &[u64]) -> Result<Signature, String
     {
         return Err("Unresolved labels such as R1".into());
     }
+    // A stereo group shared with another molecule ties them together.
+    let groups: HashSet<_> = doc
+        .atoms
+        .iter()
+        .filter(|atom| ids.contains(&atom.id))
+        .filter_map(|atom| atom.stereo_group)
+        .collect();
+    if doc.atoms.iter().any(|atom| {
+        !ids.contains(&atom.id) && atom.stereo_group.is_some_and(|g| groups.contains(&g))
+    }) {
+        return Err("A stereo group shared with another molecule".into());
+    }
     let molecule = document::prepare(&part(doc, &ids)).map_err(|error| error.to_string())?;
     let options = write::Options {
         ignore_maps: true,

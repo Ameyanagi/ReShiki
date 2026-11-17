@@ -316,7 +316,16 @@ fn nearest(left: &Side, mine: &[u64], right: &Side, theirs: &[u64]) -> Vec<(u64,
         taken.insert(a);
         pairs.push((*b, a));
     }
-    pairs
+    // Only a pairing that keeps every bond is the same drawing.
+    let map: HashMap<u64, u64> = pairs.iter().copied().collect();
+    let kept = right
+        .bonds
+        .iter()
+        .all(|(a, b)| match (map.get(a), map.get(b)) {
+            (Some(x), Some(y)) => left.bonds.contains(&key(*x, *y)),
+            _ => true,
+        });
+    if kept { pairs } else { Vec::new() }
 }
 
 /// Pairs molecules that share ids. Shared ids are evidence, not proof: a
@@ -1206,6 +1215,42 @@ pub fn compare(left: &Document, right: &Document) -> Report {
         if let Some(fit) = scheme {
             report.alignment.push((r.atoms(j).to_vec(), fit));
         }
+    }
+
+    // Hydrogen bonds and other order-0 links between atoms.
+    let links = |doc: &Document| -> HashMap<(u64, u64), Value> {
+        doc.bonds
+            .iter()
+            .filter(|bond| bond.order == 0)
+            .map(|bond| (key(bond.a, bond.b), without(json(bond), &["a", "b"])))
+            .collect()
+    };
+    let (mine, theirs) = (links(left), links(right));
+    let mut changed: Vec<&(u64, u64)> = mine
+        .iter()
+        .filter(|(pair, value)| theirs.get(*pair) != Some(*value))
+        .map(|(pair, _)| pair)
+        .chain(theirs.keys().filter(|pair| !mine.contains_key(*pair)))
+        .collect();
+    changed.sort_unstable();
+    changed.dedup();
+    for (a, b) in changed {
+        let mut change = Change::new(Kind::Chemical, Subject::Molecule);
+        for (side, links, doc) in [
+            (&mut change.left, &mine, left),
+            (&mut change.right, &theirs, right),
+        ] {
+            if links.contains_key(&(*a, *b)) {
+                side.objects = [*a, *b]
+                    .into_iter()
+                    .filter(|id| doc.atom(*id).is_some())
+                    .collect();
+                side.atoms.clone_from(&side.objects);
+                side.bonds = vec![(*a, *b)];
+            }
+        }
+        change.detail = Detail::Reason("Hydrogen bond or other link changed".into());
+        report.changes.push(change);
     }
 
     if settings(left) != settings(right) {
