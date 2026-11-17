@@ -127,7 +127,7 @@ The installed Structure menu exposed structure/reaction cleanup, label expansion
 - Exported PNG through the actual GUI, checked its 2893 × 1411 pixel dimensions and approximately 300 dpi metadata, and visually inspected a preview.
 - The standalone chemistry check succeeded from `/tmp` with `RESHIKI_ROOT=/nonexistent`. This verifies use of the bundled Python/RDKit worker without the project's `.venv`.
 
-The recovery fixture was synthetic; this was not a forced termination of a user's document. The standalone build is approximately 233 MB on the tested Apple Silicon Mac. No ruviz files were modified; integration requirements are in `ruviz-integration.md`.
+The recovery fixture was synthetic; this was not a forced termination of a user's document. The standalone build is approximately 233 MB on the tested Apple Silicon Mac.
 
 ## Chain-growth regression check
 
