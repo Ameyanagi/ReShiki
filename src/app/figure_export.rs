@@ -155,6 +155,9 @@ impl App {
         let dpi = self.appearance.export_dpi.get();
         Task::perform(
             async move {
+                // Let "Preparing … export…" show before this holds the page's thread.
+                #[cfg(target_arch = "wasm32")]
+                crate::web::after_paint().await;
                 let p = reshiki::export::publication(
                     &engine,
                     doc,

@@ -55,6 +55,12 @@ accepts native `.rsk`, MOL/SDF, RXN, SMILES/reaction SMILES, InChI, CDXML, binar
 CIF, PDB/ENT, POSCAR/CONTCAR/`.vasp` and XYZ/extXYZ. Crystal imports use the
 [existing crystal readers](crystal-structures.md).
 
+Both also read a PNG, SVG or PDF that the app exported with
+[the editable drawing inside](figure-export.md#keep-the-drawing-editable-inside-a-picture),
+and return that drawing. A picture without one raises `ValueError`: "This
+picture has no ReShiki drawing inside". The package does not put the drawing
+into the pictures it writes yet.
+
 Make figures with `png()`, `svg()` or `pdf()`, and chemistry files with
 `cdxml()`, `cdx()`, `mol()`, `sdf()`, `smiles()`, `inchi()` or `rsk()`. A
 reaction also has `rxn()` and `rsmi()` (reaction SMILES). PNG, PDF, CDX and

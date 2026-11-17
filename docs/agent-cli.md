@@ -82,6 +82,13 @@ ReShiki drawing. The CLI rejects crystal inputs before reading them or writing
 output, including when `--from auto` is used. Open crystal files in the
 desktop or browser editor instead.
 
+A PNG, SVG or PDF that ReShiki exported with
+[the editable drawing inside](figure-export.md#keep-the-drawing-editable-inside-a-picture)
+is read as that drawing, also when `--from` names another format. A picture
+without one fails with `This picture has no ReShiki drawing inside`. The input
+limit of 16 MB applies to the picture file. The CLI does not put the drawing
+into the pictures it writes yet.
+
 `--from FORMAT` sets the format instead: `auto`, `smiles`, `mol`, `rxn`,
 `rsmi`, `inchi`, `cdxml`, `cdx`, `reshiki`, `rsk` or `name`. `auto` tells
 SMILES, MOL, RXN, reaction SMILES, InChI and CDXML apart. `rsk` is another

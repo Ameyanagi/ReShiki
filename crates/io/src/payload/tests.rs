@@ -420,3 +420,25 @@ fn hostile_chunk_lengths_and_oversized_text_are_rejected() {
             .contains("larger than 2 MB")
     );
 }
+
+#[test]
+fn pictures_are_told_from_drawings_and_structure_text() {
+    for picture in [
+        png(),
+        b"%PDF-1.7\n".to_vec(),
+        b"<svg xmlns=\"http://www.w3.org/2000/svg\"/>".to_vec(),
+        b"\xef\xbb\xbf <?xml version=\"1.0\"?>\n<svg/>".to_vec(),
+    ] {
+        assert!(is_picture(&picture));
+        assert!(read(&picture).is_none());
+    }
+    for other in [
+        // A native drawing whose caption mentions the tag.
+        br#"{"annotations":[{"text":"<svg>"}]}"#.as_slice(),
+        b"<?xml version=\"1.0\"?><CDXML></CDXML>",
+        b"CCO",
+        b"VjCD0100",
+    ] {
+        assert!(!is_picture(other));
+    }
+}

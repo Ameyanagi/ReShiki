@@ -46,7 +46,19 @@ pub fn is_input_format(format: &str) -> bool {
     let format = format_name(format);
     matches!(
         format.as_str(),
-        "auto" | "smiles" | "mol" | "sdf" | "rxn" | "rsmi" | "inchi" | "cdxml" | "cdx" | "rsk"
+        "auto"
+            | "smiles"
+            | "mol"
+            | "sdf"
+            | "rxn"
+            | "rsmi"
+            | "inchi"
+            | "cdxml"
+            | "cdx"
+            | "rsk"
+            | "png"
+            | "svg"
+            | "pdf"
     ) || reshiki_io::crystal::is_crystal_format(&format)
 }
 
@@ -104,17 +116,25 @@ fn detect(data: &[u8]) -> Result<&'static str, String> {
 
 pub async fn read(data: Vec<u8>, format: &str) -> Result<(Document, Vec<String>), String> {
     let mut format = format_name(format);
-    if format == "auto" {
-        format = detect(&data)?.into();
-    }
-    if data.len() > reshiki_io::exchange::LIMIT && format != "rsk" {
-        return Err("Structure exceeds the 16 MB import limit".into());
-    }
-    if format == "sdf" {
-        format = "mol".into();
-    }
-    let (mut document, warnings) =
-        formats::read_with_warnings(data, &format, &LocalEngine::in_process()).await?;
+    // A picture is read for the editable drawing ReShiki put inside it.
+    let picture = matches!(format.as_str(), "png" | "svg" | "pdf")
+        || format == "auto" && reshiki_io::payload::is_picture(&data);
+    let (mut document, warnings) = if picture {
+        let drawing = reshiki_io::payload::read(&data)
+            .unwrap_or_else(|| Err(reshiki_io::payload::NO_DRAWING.into()))?;
+        (drawing, Vec::new())
+    } else {
+        if format == "auto" {
+            format = detect(&data)?.into();
+        }
+        if data.len() > reshiki_io::exchange::LIMIT && format != "rsk" {
+            return Err("Structure exceeds the 16 MB import limit".into());
+        }
+        if format == "sdf" {
+            format = "mol".into();
+        }
+        formats::read_with_warnings(data, &format, &LocalEngine::in_process()).await?
+    };
     // CDXML can carry a visible reaction without explicit participant roles.
     // Use the editor's inference so its existing reaction exporter can use it.
     if document.reactions.is_empty()

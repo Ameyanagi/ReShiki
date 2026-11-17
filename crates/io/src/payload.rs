@@ -153,6 +153,21 @@ pub fn xmp(envelope: &[u8]) -> String {
     )
 }
 
+/// Whether `bytes` are a PNG, SVG or PDF: the pictures that can carry a drawing.
+pub fn is_picture(bytes: &[u8]) -> bool {
+    let head = bytes.get(..1024).unwrap_or(bytes);
+    // A drawing's own text can hold "<svg"; an SVG file starts as markup.
+    let markup = head
+        .strip_prefix(b"\xef\xbb\xbf")
+        .unwrap_or(head)
+        .trim_ascii_start()
+        .starts_with(b"<");
+    bytes.starts_with(PNG) || bytes.starts_with(b"%PDF-") || markup && find(head, b"<svg").is_some()
+}
+
+/// What a reader says about a picture that [`read`] found no drawing in.
+pub const NO_DRAWING: &str = "This picture has no ReShiki drawing inside";
+
 /// Find a drawing without decoding pixels: None when there is none, an error
 /// when one is present but damaged.
 pub fn read(bytes: &[u8]) -> Option<Result<Document, String>> {

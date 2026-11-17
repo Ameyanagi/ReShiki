@@ -678,7 +678,7 @@ fn completion(message: &Message) -> Option<Completion> {
             }
         }
         #[cfg(target_arch = "wasm32")]
-        Message::Host(_) | Message::SaveDownload(_) => None,
+        Message::Host(_) | Message::SaveDownload(_) | Message::Opening => None,
         #[cfg(target_os = "macos")]
         Message::MacFiles(action) => {
             use super::macos_files::Action;

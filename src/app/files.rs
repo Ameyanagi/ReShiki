@@ -344,6 +344,10 @@ pub struct Saved {
 
 pub type Opened = Option<(PathBuf, Result<Prepared, String>)>;
 
+/// The browser's status while it prepares chosen files on the page's thread.
+#[cfg(target_arch = "wasm32")]
+pub(super) const OPENING: &str = "Opening…";
+
 /// Ex file commands use native drawings, retaining an explicit native suffix.
 pub(super) fn native_drawing_name(name: &str) -> String {
     if std::path::Path::new(name)
@@ -486,6 +490,9 @@ pub(super) fn open_picked(
         Ok(files) => files.into_iter().fold(Task::none(), |task, file| {
             #[cfg(target_arch = "wasm32")]
             let handles = handles.clone();
+            // The browser prepares each file on the page's thread, which holds the page.
+            #[cfg(target_arch = "wasm32")]
+            let task = task.chain(Task::done(Message::Opening));
             task.chain(Task::perform(
                 async move {
                     let (path, result) = prepare_contents(file.path, Ok(file.contents)).await?;
@@ -531,6 +538,12 @@ pub(super) fn open_paths(paths: Vec<PathBuf>) -> Task<Message> {
 
 pub(super) async fn prepare_contents(path: PathBuf, contents: Result<Vec<u8>, String>) -> Opened {
     let source = path.clone();
+    // Let "Opening…" show before this holds the page's thread. Two frames:
+    // the first can be drawn before the app has taken the `Opening` message.
+    #[cfg(target_arch = "wasm32")]
+    for _ in 0..2 {
+        crate::web::after_paint().await;
+    }
     let result = reshiki::task::spawn_blocking(move || prepare(&source, contents?))
         .await
         .map_err(|e| e.to_string())
@@ -712,6 +725,11 @@ impl super::App {
     pub(super) fn file_prepared(&mut self, opened: Opened) -> iced::Task<super::Message> {
         if self.updates.restarting {
             return iced::Task::none();
+        }
+        // The file may open in another tab, which would park this status.
+        #[cfg(target_arch = "wasm32")]
+        if self.status == OPENING {
+            self.status = super::READY.into();
         }
         let Some((path, result)) = opened else {
             return iced::Task::none();

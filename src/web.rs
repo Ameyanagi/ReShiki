@@ -140,6 +140,23 @@ extern "C" {
 }
 
 /// Report panics on the console; the browser build aborts on them.
+/// Waits until the next frame is drawn, so a busy status shows before work
+/// holds the page's thread.
+pub(crate) async fn after_paint() {
+    for frame in [true, false] {
+        let next = js_sys::Promise::new(&mut |resolve, _| {
+            let scheduled = web_sys::window().and_then(|window| match frame {
+                true => window.request_animation_frame(&resolve).ok().map(drop),
+                false => window.set_timeout_with_callback(&resolve).ok().map(drop),
+            });
+            if scheduled.is_none() {
+                let _ = resolve.call0(&JsValue::NULL);
+            }
+        });
+        let _ = wasm_bindgen_futures::JsFuture::from(next).await;
+    }
+}
+
 pub(crate) fn start() {
     std::panic::set_hook(Box::new(|info| error(&info.to_string())));
 }

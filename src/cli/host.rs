@@ -110,17 +110,33 @@ impl Session {
         input: Input,
         err: &mut dyn Write,
     ) -> Result<Value, CliError> {
-        let text = self.text(input.source, &input.format)?;
-        self.import_text(text, input.format, err).await
+        let (text, format) = self.text(input)?;
+        self.import_text(text, format, err).await
     }
 
-    /// The import text of `source`.
-    pub(crate) fn text(&self, source: Source, format: &str) -> Result<String, CliError> {
-        match source {
-            Source::Smiles(text) => Ok(text),
-            Source::File(path) => self.read(Some(&path), format),
-            Source::Stdin => self.read(None, format),
+    /// The import text of `input` and its format. A PNG, SVG or PDF gives
+    /// the editable drawing ReShiki put inside it, as a native document.
+    pub(crate) fn text(&self, input: Input) -> Result<(String, String), CliError> {
+        let Input { source, format } = input;
+        let path = match source {
+            Source::Smiles(text) => return Ok((text, format)),
+            Source::File(path) => Some(path),
+            Source::Stdin => None,
+        };
+        let bytes =
+            read_input(path.as_deref(), limit(&format, &self.budgets)).map_err(CliError::Failed)?;
+        if !crate::payload::is_picture(&bytes) {
+            return text(&format, bytes)
+                .map(|text| (text, format))
+                .map_err(CliError::Failed);
         }
+        crate::payload::read(&bytes)
+            .unwrap_or_else(|| Err(crate::payload::NO_DRAWING.into()))
+            .and_then(|drawing| {
+                serde_json::to_string(&drawing.current()).map_err(|error| error.to_string())
+            })
+            .map(|text| (text, "reshiki".into()))
+            .map_err(CliError::Failed)
     }
 
     /// Imports `text` as a session document; returns the document's handle.
@@ -156,12 +172,6 @@ impl Session {
             .snapshot(&self.principal, &handle, Access::Read)
             .map(|snapshot| snapshot.doc)
             .map_err(|error| CliError::Failed(error.message))
-    }
-
-    /// The file at `path`, or standard input, as import text in `format`.
-    fn read(&self, path: Option<&std::path::Path>, format: &str) -> Result<String, CliError> {
-        let bytes = read_input(path, limit(format, &self.budgets)).map_err(CliError::Failed)?;
-        text(format, bytes).map_err(CliError::Failed)
     }
 }
 

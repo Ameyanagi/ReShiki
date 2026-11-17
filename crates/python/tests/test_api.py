@@ -97,6 +97,35 @@ def test_open_all_binary_and_crystal_families(fixtures: Path, filename: str) -> 
     assert drawing.rsk()
 
 
+@pytest.mark.parametrize("extension", ["png", "svg", "pdf"])
+def test_open_picture_with_the_editable_drawing_inside(fixtures: Path, extension: str) -> None:
+    # Exported by the app's figure export with "Include editable drawing".
+    picture = fixtures / "editable-drawing" / f"ethanol.{extension}"
+    for drawing in (
+        reshiki.Drawing.open(picture),
+        reshiki.parse(picture.read_bytes()),
+        reshiki.parse(picture.read_bytes(), extension),
+    ):
+        assert drawing.properties().formula == "C2H6O"
+        assert "<svg" in drawing.svg(width=180)
+
+
+@pytest.mark.parametrize("extension", ["png", "svg", "pdf"])
+def test_picture_without_a_drawing_says_so(tmp_path: Path, extension: str) -> None:
+    # The package does not put the drawing into its own pictures yet (#1183).
+    picture = reshiki.Molecule.from_smiles("CCO").save(tmp_path / f"plain.{extension}")
+    readers: list[Callable[[], object]] = [
+        lambda: reshiki.Drawing.open(picture),
+        lambda: reshiki.parse(picture.read_bytes()),
+        lambda: reshiki.parse(picture.read_bytes(), extension),
+    ]
+    for read in readers:
+        with pytest.raises(reshiki.ReShikiError) as raised:
+            read()
+        assert str(raised.value) == "This picture has no ReShiki drawing inside"
+        assert raised.value.code == "failed"
+
+
 @pytest.mark.parametrize("filename", ["POSCAR", "CONTCAR", "rutile.VASP"])
 def test_poscar_filenames(fixtures: Path, tmp_path: Path, filename: str) -> None:
     target = tmp_path / filename

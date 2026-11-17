@@ -133,6 +133,25 @@ example when `src` answers 404, and has `load`, `save` and `exportImage`.
 if it could not start. This promise also works when the `ready` event has
 already fired.
 
+Changing the `src` or `format` attribute once the editor runs loads the drawing
+at `src` in place of the one in front. Loading does not ask about unsaved
+changes, so once the file is fetched the element fires a cancelable
+`beforeload` event whose `detail` is `{ src, format, dirty }`; `dirty` is
+`isDirty()` at that moment. Call `preventDefault()` to keep the current
+drawing:
+
+```js
+element.addEventListener("beforeload", (event) => {
+  if (event.detail.dirty && !confirm("Discard unsaved changes?")) event.preventDefault();
+});
+element.setAttribute("src", "aspirin.mol");
+```
+
+A `src` that cannot be loaded fires `error` and keeps the current drawing.
+Removing `src` keeps it too. Of several changes in a row, only the last loads.
+If the editor could not start, for example because the first `src` answered
+404, a changed `src` starts it.
+
 ### Plain HTML page
 
 This example uses the installed npm package without a bundler. Start in an

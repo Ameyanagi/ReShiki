@@ -401,3 +401,71 @@ fn installed_arial_leaves_the_bundled_faces_unloaded() {
     assert!(has("Arial"));
     assert!(!has(super::font::BUNDLED_FAMILY));
 }
+
+#[test]
+fn an_added_arial_is_used_instead_of_the_bundled_stand_in() {
+    use resvg::usvg::fontdb::{Database, Family, Language, Query, Stretch, Weight};
+
+    let bytes = include_bytes!("../../../../tests/fixtures/font-export-103/static-400.subset.ttf");
+    let mut db = Database::new();
+    super::load_bundled_fonts(&mut db);
+    let families = |db: &Database| -> Vec<_> { db.faces().map(|f| f.families.clone()).collect() };
+    // Without an added Arial the bundled faces keep the name.
+    let bundled = families(&db);
+    super::prefer_added_arial(&mut db);
+    assert_eq!(families(&db), bundled);
+
+    db.load_font_data(bytes.to_vec());
+    let mut face = db.faces().last().unwrap().clone();
+    db.remove_face(face.id);
+    face.families = vec![("Arial".into(), Language::English_UnitedStates)];
+    // A condensed Arial is no substitute for the normal-width regular face.
+    let mut condensed = face.clone();
+    condensed.stretch = Stretch::Condensed;
+    let condensed = db.push_face_info(condensed);
+    super::prefer_added_arial(&mut db);
+    db.remove_face(condensed);
+    assert_eq!(families(&db), bundled);
+    let added = db.push_face_info(face);
+    let arial = |weight| Query {
+        families: &[Family::Name("Arial")],
+        weight: Weight(weight),
+        ..Default::default()
+    };
+    // The bundled regular face was registered first, so it wins the tie.
+    assert_ne!(db.query(&arial(400)), Some(added));
+    super::prefer_added_arial(&mut db);
+    assert_eq!(db.query(&arial(400)), Some(added));
+    // The page added no bold Arial, so the bundled bold face still serves it.
+    let is_bundled = |id| {
+        let face = db.face(id).unwrap();
+        face.families
+            .iter()
+            .any(|(name, _)| name == super::font::BUNDLED_FAMILY)
+    };
+    assert!(is_bundled(db.query(&arial(700)).unwrap()));
+    assert_eq!(db.faces().filter(|face| is_bundled(face.id)).count(), 4);
+
+    let fonts = super::Fonts {
+        names: super::family_names(&db),
+        db: std::sync::Arc::new(db),
+        added: vec!["Arial"],
+    };
+    let style = crate::typography::TextStyle::default();
+    let advance = |bytes: &[u8], c| {
+        let face = super::font::face(bytes, 0, 400).unwrap();
+        let advance = face
+            .glyph_hor_advance(face.glyph_index(c).unwrap())
+            .unwrap();
+        f32::from(advance) / f32::from(face.units_per_em())
+    };
+    assert_eq!(
+        super::glyph_metrics_in('N', &style, &fonts),
+        ("Arial", advance(bytes, 'N'))
+    );
+    // The added face has no C: the bundled face stays the glyph fallback.
+    let regular = include_bytes!("../../fonts/LiberationSans-Regular.ttf");
+    let (family, width) = super::glyph_metrics_in('C', &style, &fonts);
+    assert_ne!(family, "Arial");
+    assert_eq!(width, advance(regular, 'C'));
+}

@@ -45,7 +45,7 @@ impl App {
             #[cfg(not(target_arch = "wasm32"))]
             Message::GitHub(_) => {}
             #[cfg(target_arch = "wasm32")]
-            Message::Host(_) | Message::SaveDownload(_) => {}
+            Message::Host(_) | Message::SaveDownload(_) | Message::Opening => {}
             Message::KeyboardDrawing(action) => return Some(self.keyboard_drawing_action(action)),
             Message::Optimization(action) => return Some(self.optimization_action(action)),
             Message::Models3d(action) => return Some(self.models3d_action(action)),

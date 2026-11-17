@@ -6,15 +6,28 @@
 // `fonts` lists font URLs separated by spaces, and `cjk-font` is the CJK
 // fallback's URL, or "false" for none. It fires `ready` once the editor runs,
 // `change` after each edit and `error` for a font that could not load, and has
-// the editor's load, save and exportImage methods.
+// the editor's load, save and exportImage methods. Changing `src` or `format`
+// afterwards loads the drawing again, after a cancelable `beforeload`.
 import { mount } from "./editor.js";
 
 export class ReshikiEditor extends HTMLElement {
+  static observedAttributes = ["src", "format"];
+
   #editor;
+  // Counts attribute changes, so a slow fetch never replaces a later one.
+  #loads = 0;
+  #changed = false;
+  // Stops the first file's fetch, and the change the editor started with.
+  #abort;
+  #started = 0;
 
   connectedCallback() {
     if (this.#editor) return;
     if (!this.style.display) this.style.display = "block";
+    this.#run();
+  }
+
+  #run() {
     this.#editor = this.#start();
     this.#editor.catch((error) => this.#error(error));
   }
@@ -33,18 +46,79 @@ export class ReshikiEditor extends HTMLElement {
       .catch(() => {});
   }
 
-  async #start() {
+  // The browser also reports the attributes the element starts with; those
+  // are read by #start. `src` and `format` set together load once.
+  attributeChangedCallback(_name, before, now) {
+    if (!this.#editor || before === now) return;
+    this.#loads += 1;
+    this.#abort?.abort();
+    if (this.#changed) return;
+    this.#changed = true;
+    queueMicrotask(() => {
+      this.#changed = false;
+      this.#reload().catch((error) => this.#error(error));
+    });
+  }
+
+  async #reload() {
+    const load = this.#loads;
+    // Whether no later change, and no removal from the page, overtook this one.
+    const current = () => load === this.#loads && this.isConnected;
     const src = this.getAttribute("src");
-    const cjkFont = this.getAttribute("cjk-font");
-    let data;
-    if (src) {
-      const response = await fetch(src);
-      if (!response.ok) throw new Error(`Could not load ${src}: HTTP ${response.status}`);
-      data = new Uint8Array(await response.arrayBuffer());
+    if (!src) return;
+    const format = this.getAttribute("format") ?? "auto";
+    let editor;
+    try {
+      editor = await this.#editor;
+    } catch {
+      // The editor never started, for example on a src that answered 404,
+      // and reported it then. Start it with the new attributes.
+      if (current()) this.#run();
+      return;
     }
+    // The start itself took a change made while its first file was on the way.
+    if (load === this.#started) return;
+    const data = await this.#fetch(src).catch((error) => {
+      if (current()) throw error;
+    });
+    if (!current()) return;
+    // load() replaces the drawing in front without asking, so the page gets
+    // to keep one with unsaved changes. It is asked once the file is here,
+    // so edits made while it was fetched count.
+    const asked = new CustomEvent("beforeload", {
+      cancelable: true,
+      detail: { src, format, dirty: editor.isDirty() },
+    });
+    if (this.dispatchEvent(asked) && current()) await editor.load(data, format);
+  }
+
+  async #fetch(src, signal) {
+    const response = await fetch(src, { signal });
+    if (!response.ok) throw new Error(`Could not load ${src}: HTTP ${response.status}`);
+    return new Uint8Array(await response.arrayBuffer());
+  }
+
+  async #start() {
+    let load, data, format;
+    // A src or format changed while the file is on its way starts over with
+    // the new pair, without waiting for the old file.
+    do {
+      load = this.#loads;
+      const src = this.getAttribute("src");
+      format = this.getAttribute("format") ?? "auto";
+      this.#abort = new AbortController();
+      data = src
+        ? await this.#fetch(src, this.#abort.signal).catch((error) => {
+            if (load === this.#loads) throw error;
+          })
+        : undefined;
+    } while (load !== this.#loads);
+    this.#abort = undefined;
+    this.#started = load;
+    const cjkFont = this.getAttribute("cjk-font");
     const editor = await mount(this, {
       data,
-      format: this.getAttribute("format") ?? "auto",
+      format,
       fonts: this.getAttribute("fonts")?.split(/\s+/).filter(Boolean),
       cjkFont: cjkFont === "false" ? false : (cjkFont ?? undefined),
       onChange: () => this.dispatchEvent(new Event("change")),
