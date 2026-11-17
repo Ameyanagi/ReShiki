@@ -112,6 +112,7 @@ Then run from the benchmark branch, with no reference data in the model request:
 uv run --locked python scripts/run_assistant_benchmark.py \
   --manifest tests/fixtures/assistant-benchmark/v1/manifest.json \
   --runner /absolute/path/to/frozen/assistant_benchmark \
+  --model gpt-6.1-sol \
   --output /absolute/path/to/new/results \
   --backend-commit 51fa0991da2507bb00b27c1b420e807468de6423 \
   --nightly-version 0.11.0-nightly.20261008.37859845267.1 \

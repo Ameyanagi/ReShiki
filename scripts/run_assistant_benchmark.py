@@ -58,7 +58,7 @@ def main():
     parser.add_argument("--request-seconds", type=int, default=300)
     parser.add_argument("--max-requests", type=int, default=16)
     parser.add_argument("--repeats", type=int, default=2)
-    parser.add_argument("--model", default="gpt-6.1-sol")
+    parser.add_argument("--model", default="gpt-6.2-sol")
     parser.add_argument("--effort", default="xhigh")
     parser.add_argument(
         "--run",

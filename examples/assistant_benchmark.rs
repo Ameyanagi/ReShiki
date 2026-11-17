@@ -39,7 +39,7 @@ async fn benchmark() -> anyhow::Result<()> {
         PathBuf::from(option("--output").ok_or_else(|| anyhow::anyhow!("--output required"))?);
     let requested_model = option("--model")
         .map(String::as_str)
-        .unwrap_or("gpt-6.1-sol");
+        .unwrap_or("gpt-6.2-sol");
     let requested_effort = option("--effort").map(String::as_str).unwrap_or("xhigh");
     let seconds: u64 = option("--seconds")
         .map(String::as_str)

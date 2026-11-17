@@ -112,14 +112,14 @@ impl App {
                         .padding(9),
                 );
                 options = options.push(
-                    action("Default · GPT-6 Astra", Action::Model(None))
+                    action("Default · GPT-6.2 Sol", Action::Model(None))
                         .width(Length::Fill)
                         .style(super::super::workspace::control(
                             state.preferences.model.is_none(),
                         )),
                 );
                 options = options.push(
-                    text("Uses GPT-6 Astra when available; otherwise your account default")
+                    text("Uses GPT-6.2 Sol when available; otherwise your account default")
                         .size(10)
                         .style(super::super::workspace::muted_text),
                 );

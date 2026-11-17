@@ -199,7 +199,7 @@ class BenchmarkScoringTests(unittest.TestCase):
 
             def unavailable(command, seconds, environment):
                 commands.append(command)
-                self.assertEqual(command[command.index("--model") + 1], "gpt-6.1-sol")
+                self.assertEqual(command[command.index("--model") + 1], "gpt-6.2-sol")
                 self.assertEqual(command[command.index("--effort") + 1], "xhigh")
                 run_dir = Path(command[command.index("--output") + 1])
                 (run_dir / "run.json").write_text(

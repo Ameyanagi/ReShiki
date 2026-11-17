@@ -1160,7 +1160,7 @@ impl App {
             }
         }
         let choices_now = self.assistant_choices();
-        let models: Vec<_> = std::iter::once(Model(None, "Default · GPT-6 Astra".into()))
+        let models: Vec<_> = std::iter::once(Model(None, "Default · GPT-6.2 Sol".into()))
             .chain(
                 choices_now
                     .models
@@ -1194,7 +1194,7 @@ impl App {
                 if choices_now.models.is_empty() {
                     "Connect the assistant to load your available models."
                 } else {
-                    "Default uses GPT-6 Astra when available, or else your account default."
+                    "Default uses GPT-6.2 Sol when available, or else your account default."
                 },
                 crate::appearance::close_on_escape(
                     crate::appearance::pick_list(models, selected, |model: Model| {
