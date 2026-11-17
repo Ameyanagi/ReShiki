@@ -150,6 +150,8 @@ fn main() -> iced::Result {
         Ok(None) => {}
         Err(message) => startup.data_warning = Some(message),
     }
+    // Off the main thread: an interrupted download can be hundreds of megabytes.
+    std::thread::spawn(reshiki::updates::install::clean);
     #[cfg(windows)]
     reshiki_windows::enable_office_embedding();
     #[cfg(windows)]

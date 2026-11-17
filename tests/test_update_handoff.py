@@ -16,7 +16,7 @@ class RestartArgumentsTests(unittest.TestCase):
     def test_shell_reopen_preserves_multiple_legacy_and_empty_paths(self):
         source = (ROOT / "src/updates/install.sh").read_text()
         # Execute only argument preparation and reopen(), with a shell stub.
-        source = source.split('touch "$stage/ready"', 1)[0]
+        source = source.split("# This helper now uses the stage", 1)[0]
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             target = root / "installed app 資料"
@@ -70,7 +70,7 @@ class RestartArgumentsTests(unittest.TestCase):
             executable for name in ("powershell.exe", "pwsh") if (executable := shutil.which(name))
         ]
         source = (ROOT / "src/updates/install.ps1").read_text()
-        source = source.split("New-Item -ItemType File", 1)[0]
+        source = source.split("# This helper now uses the stage", 1)[0]
         with tempfile.TemporaryDirectory() as temporary:
             script = Path(temporary) / "arguments.ps1"
             script.write_text(
