@@ -9,6 +9,27 @@ fn ethanol() -> Document {
     doc.add_bond(b, c, 1, "plain");
     doc
 }
+/// A drawing of `smiles` with atom IDs 1..=n in SMILES order, as import
+/// numbers them.
+fn from_smiles(smiles: &str) -> Document {
+    let prepared = crate::chemistry::smiles::prepare(smiles).unwrap();
+    let count = prepared.state.graph.atoms.len();
+    let molecule = document::Molecule {
+        rdkit_version: crate::chemistry::RDKIT_VERSION,
+        ids: (1..=count as u64).collect(),
+        positions: vec![crate::chemistry::stereo::Point3::default(); count],
+        state: prepared.state,
+    };
+    let drawing = document::for_import(&molecule, false, &prepared.dummy_labels).unwrap();
+    let labels = drawing.labels().unwrap();
+    drawing.finish(labels).unwrap()
+}
+fn ethyl_acetate() -> Document {
+    Document::from_json(include_bytes!(
+        "../../../../tests/fixtures/nmr/ethyl-acetate.rsk"
+    ))
+    .unwrap()
+}
 #[test]
 fn complete_component_and_collapsed_groups_retain_drawing_atom_links() {
     let mut doc = ethanol();
@@ -71,6 +92,7 @@ fn export_identifies_predictions_and_does_not_invent_missing_values() {
             radius: None,
             statistics: None,
             limitation: Some("No compatible data".into()),
+            broad: false,
         }],
         method: core::METHOD.into(),
         data_version: DATA_VERSION.into(),
@@ -208,17 +230,7 @@ fn ethyl_acetate_is_a_fully_supported_small_organic_acceptance_example() {
 #[test]
 fn acetyl_arylamide_methyls_retain_their_shift_with_an_explicit_broad_match_note() {
     for (smiles, supported) in [("CC(=O)Nc1ccc(O)cc1", 5), ("CC(=O)Nc1ccccc1", 6)] {
-        let prepared = crate::chemistry::smiles::prepare(smiles).unwrap();
-        let count = prepared.state.graph.atoms.len();
-        let molecule = document::Molecule {
-            rdkit_version: crate::chemistry::RDKIT_VERSION,
-            ids: (1..=count as u64).collect(),
-            positions: vec![crate::chemistry::stereo::Point3::default(); count],
-            state: prepared.state,
-        };
-        let drawing = document::for_import(&molecule, false, &prepared.dummy_labels).unwrap();
-        let labels = drawing.labels().unwrap();
-        let doc = drawing.finish(labels).unwrap();
+        let doc = from_smiles(smiles);
         let report = predict(&prepare(&doc, &[]).unwrap(), Nucleus::H1).unwrap();
         let (index, methyl) = report
             .rows
@@ -319,6 +331,7 @@ fn row_with_median(atom_id: u64, median: Option<f64>) -> Row {
             maximum: median,
         }),
         limitation: None,
+        broad: false,
     }
 }
 
@@ -389,4 +402,209 @@ fn the_embedded_index_is_the_source_at_under_60_percent_of_its_size() {
     let embedded = miniz_oxide::inflate::decompress_to_vec(BUNDLED_TSV).unwrap();
     assert!(embedded == source);
     assert!(BUNDLED_TSV.len() * 10 < source.len() * 6);
+}
+
+/// **Export…** writes the same TSV as before scripts could predict: these
+/// files were written by [`to_tsv`] before the change.
+#[test]
+fn the_exported_tsv_is_unchanged() {
+    let goldens = [
+        (
+            ethyl_acetate(),
+            Nucleus::H1,
+            include_str!("../../../../tests/fixtures/nmr/ethyl-acetate-1H.tsv"),
+        ),
+        (
+            ethyl_acetate(),
+            Nucleus::C13,
+            include_str!("../../../../tests/fixtures/nmr/ethyl-acetate-carbon-desktop.tsv"),
+        ),
+        (
+            from_smiles("CC(=O)Nc1ccc(O)cc1"),
+            Nucleus::H1,
+            include_str!("../../../../tests/fixtures/nmr/paracetamol-1H.tsv"),
+        ),
+        (
+            from_smiles("CC(=O)Nc1ccc(O)cc1"),
+            Nucleus::C13,
+            include_str!("../../../../tests/fixtures/nmr/paracetamol-13C.tsv"),
+        ),
+    ];
+    for (doc, nucleus, golden) in goldens {
+        let report = predict(&prepare(&doc, &[]).unwrap(), nucleus).unwrap();
+        assert_eq!(to_tsv(&report), golden, "{nucleus:?}");
+    }
+}
+
+#[test]
+fn scripts_get_every_ethyl_acetate_site_with_the_export_metadata() {
+    let doc = ethyl_acetate();
+    for (nucleus, sites) in [(Nucleus::H1, 3), (Nucleus::C13, 4)] {
+        let shifts = predict_drawing(&doc, None, nucleus).unwrap();
+        let report = predict(&prepare(&doc, &[]).unwrap(), nucleus).unwrap();
+        assert_eq!(shifts.nucleus, nucleus.code());
+        assert_eq!(shifts.solvent, "CDCl3");
+        assert_eq!(shifts.rows.len(), sites);
+        assert_eq!(shifts.credit, ATTRIBUTION);
+        assert_eq!(
+            (shifts.method.as_str(), shifts.data_version.as_str()),
+            (METHOD, DATA_VERSION)
+        );
+        assert_eq!(
+            (shifts.conditions.as_str(), shifts.limitations.as_str()),
+            (CONDITIONS, LIMITATIONS)
+        );
+        assert_eq!(shifts.data_access, DATA_ACCESS);
+        for (shift, row) in shifts.rows.iter().zip(&report.rows) {
+            let statistics = row.statistics.as_ref().unwrap();
+            assert_eq!(shift.atom, row.atom_id);
+            assert_eq!(shift.nucleus, nucleus.code());
+            assert!((shift.ppm.unwrap() - statistics.median).abs() < 1e-9);
+            assert_eq!(shift.references, Some(statistics.support));
+            assert_eq!(shift.shell, row.radius);
+            assert!(!shift.broad);
+            assert_eq!(
+                shift.hydrogen_count,
+                (nucleus == Nucleus::H1).then_some(row.hydrogen_count)
+            );
+            assert_eq!(shift.note.as_deref(), row.note(nucleus));
+        }
+    }
+    // IDs are decimal strings on the wire, as every MCP result writes them.
+    let value = serde_json::to_value(predict_drawing(&doc, None, Nucleus::H1).unwrap()).unwrap();
+    let keys: Vec<_> = value.as_object().unwrap().keys().cloned().collect();
+    assert_eq!(
+        keys,
+        [
+            "conditions",
+            "credit",
+            "data_access",
+            "data_version",
+            "limitations",
+            "method",
+            "nucleus",
+            "rows",
+            "solvent"
+        ]
+    );
+    let row = &value["rows"][0];
+    let keys: Vec<_> = row.as_object().unwrap().keys().cloned().collect();
+    assert_eq!(
+        keys,
+        [
+            "atom",
+            "broad",
+            "hydrogen_count",
+            "hydrogens",
+            "max",
+            "min",
+            "note",
+            "nucleus",
+            "ppm",
+            "references",
+            "sd",
+            "shell"
+        ]
+    );
+    assert!(row["atom"].is_string());
+}
+
+#[test]
+fn unsupported_sites_are_rows_without_values() {
+    let doc = ethanol();
+    let ids: Vec<_> = doc.atoms.iter().map(|a| a.id).collect();
+    let protons = predict_drawing(&doc, None, Nucleus::H1).unwrap();
+    let ppm: Vec<_> = protons.rows.iter().map(|row| row.ppm.is_some()).collect();
+    assert_eq!(ppm, [true, false, false]);
+    let hydroxyl = &protons.rows[2];
+    assert_eq!(hydroxyl.atom, ids[2]);
+    assert_eq!(hydroxyl.hydrogen_count, Some(1));
+    assert!(hydroxyl.note.as_deref().unwrap().contains("Exchangeable"));
+    assert_eq!(
+        (hydroxyl.shell, hydroxyl.references, hydroxyl.sd),
+        (None, None, None)
+    );
+    // A molecule whose sites all lack data is still a result.
+    let carbons = predict_drawing(&doc, None, Nucleus::C13).unwrap();
+    assert_eq!(carbons.rows.len(), 2);
+    assert!(carbons.rows.iter().all(|row| row.ppm.is_none()));
+    assert!(carbons.rows.iter().all(|row| row.hydrogen_count.is_none()));
+}
+
+#[test]
+fn drawn_hydrogens_are_listed_on_their_parent_row() {
+    let mut doc = ethanol();
+    let carbon = doc.atoms[0].id;
+    let hydrogen = doc.add_atom("H", Point::new(-30., 0.));
+    doc.add_bond(carbon, hydrogen, 1, "plain");
+    let shifts = predict_drawing(&doc, None, Nucleus::H1).unwrap();
+    assert_eq!(shifts.rows[0].atom, carbon);
+    assert_eq!(shifts.rows[0].hydrogens, [hydrogen]);
+    assert_eq!(shifts.rows[0].hydrogen_count, Some(3));
+    let value = serde_json::to_value(&shifts.rows[0]).unwrap();
+    assert_eq!(
+        value["hydrogens"],
+        serde_json::json!([hydrogen.to_string()])
+    );
+}
+
+#[test]
+fn a_broad_match_is_flagged_as_data() {
+    let shifts = predict_drawing(&from_smiles("CC(=O)Nc1ccc(O)cc1"), None, Nucleus::H1).unwrap();
+    let broad: Vec<_> = shifts
+        .rows
+        .iter()
+        .filter(|row| row.broad)
+        .map(|row| row.atom)
+        .collect();
+    assert_eq!(broad, [1]);
+    assert_eq!(
+        shifts.rows[0].note.as_deref(),
+        Some("Broad match · Shell 2 · SD 0.507 ppm")
+    );
+}
+
+#[test]
+fn scripts_predict_exactly_one_molecule() {
+    let mut doc = ethanol();
+    let ids: Vec<_> = doc.atoms.iter().map(|a| a.id).collect();
+    let other = editing::append(&mut doc, &from_smiles("CC(C)=O"), Point::new(300., 0.));
+    assert_eq!(
+        predict_drawing(&doc, None, Nucleus::H1).unwrap_err(),
+        "NMR prediction needs exactly one molecule; this drawing has 2"
+    );
+    assert_eq!(
+        predict_drawing(&doc, Some(&[ids[0], other[0]]), Nucleus::H1).unwrap_err(),
+        "NMR prediction needs exactly one molecule; the given IDs cover 2"
+    );
+    // Any atom selects its whole molecule.
+    let acetone = predict_drawing(&doc, Some(&[other[1]]), Nucleus::C13).unwrap();
+    let atoms: Vec<_> = acetone.rows.iter().map(|row| row.atom).collect();
+    assert_eq!(atoms, other[..3]);
+    assert_eq!(
+        predict_drawing(&Document::default(), None, Nucleus::H1).unwrap_err(),
+        "NMR prediction needs exactly one molecule; this drawing has 0"
+    );
+}
+
+#[test]
+fn unsupported_chemistry_and_missing_sites_are_errors() {
+    for (smiles, nucleus) in [
+        ("[Fe]", Nucleus::C13),
+        ("[2H]C", Nucleus::H1),
+        ("[CH3-]", Nucleus::H1),
+    ] {
+        assert!(
+            predict_drawing(&from_smiles(smiles), None, nucleus).is_err(),
+            "{smiles}"
+        );
+    }
+    assert_eq!(
+        predict_drawing(&from_smiles("O"), None, Nucleus::C13).unwrap_err(),
+        "This molecule has no supported ¹³C sites"
+    );
+    assert_eq!(
+        predict_drawing(&from_smiles("ClC(Cl)(Cl)Cl"), None, Nucleus::H1).unwrap_err(),
+        "This molecule has no supported ¹H sites"
+    );
 }

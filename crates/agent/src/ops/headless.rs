@@ -10,7 +10,7 @@ use super::{
     host::{Call, ToolHost},
     import, inspect,
     naming::{self, Hook, Naming},
-    render,
+    predict_nmr, render,
     result::ToolResult,
     schema,
     session::SessionStore,
@@ -99,6 +99,7 @@ async fn run(
         Op::Import(args) => import::import(ctx, store, engine, naming, who, versions, args).await,
         Op::Inspect(args) => inspect::inspect(ctx, store, who, versions, budgets, args).await,
         Op::Analyze(args) => analyze::analyze(ctx, store, engine, who, versions, args).await,
+        Op::PredictNmr(args) => predict_nmr::predict_nmr(ctx, store, who, versions, args).await,
         Op::Render(args) => render::render(ctx, store, who, versions, budgets, args).await,
         Op::Export(args) => export::export(ctx, store, engine, who, versions, budgets, args).await,
         Op::FileOpen(args) => {

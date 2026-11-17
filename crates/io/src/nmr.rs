@@ -5,7 +5,9 @@ use serde::Serialize;
 use std::sync::OnceLock;
 
 pub mod dataset;
+mod shifts;
 pub use core::{METHOD, Nucleus};
+pub use shifts::{SOLVENT, Shift, Shifts};
 pub const DATA_VERSION: &str = "nmrshiftdb2 2026-03-15 · measured CDCl3 subset v1";
 pub const CONDITIONS: &str =
     "CDCl3; recorded temperature 273–323 K, pooled without temperature/concentration correction";
@@ -25,6 +27,8 @@ pub const PLOT_NOTES: [&str; 4] = [
 pub const NO_REFERENCE_DATA: &str = "No qualified reference data";
 /// The request is not one whole molecule: nothing, part of several, or several.
 pub const SELECT_ONE_MOLECULE: &str = "Select one whole molecule to predict NMR shifts";
+/// The note on a ¹H row for several attached H without a limitation.
+const UNRESOLVED_GROUP: &str = "Unresolved attached-H group; not a stereospecific peak assignment";
 
 #[derive(Debug, Clone)]
 pub struct Request {
@@ -41,8 +45,18 @@ pub struct Row {
     pub statistics: Option<Statistics>,
     /// A missing-data reason or a caution on a retained numerical prediction.
     pub limitation: Option<String>,
+    /// A broad reference match; [`Self::limitation`] then says so.
+    pub broad: bool,
 }
 impl Row {
+    /// The note **Export…** writes for this row: its limitation or, for an
+    /// unresolved ¹H group, a reminder that it is not one assigned peak.
+    pub fn note(&self, nucleus: Nucleus) -> Option<&str> {
+        self.limitation
+            .as_deref()
+            .or((nucleus == Nucleus::H1 && self.hydrogen_count > 1).then_some(UNRESOLVED_GROUP))
+    }
+
     /// A finite predicted median suitable for plotting and drawing labels.
     pub fn shift(&self) -> Option<f64> {
         self.statistics
@@ -80,6 +94,33 @@ impl Report {
             .enumerate()
             .filter_map(|(index, row)| row.shift().map(|shift| (index, shift)))
     }
+}
+
+/// Predicts `nucleus` shifts for scripts: for the molecule the atoms `ids`
+/// belong to, or for the whole drawing with `None`, which must then be exactly
+/// one molecule. IDs that are not atoms select nothing.
+pub fn predict_drawing(
+    document: &Document,
+    ids: Option<&[u64]>,
+    nucleus: Nucleus,
+) -> Result<Shifts, String> {
+    let selection = match ids {
+        Some(ids) => document.expand_abbreviation_selection(ids),
+        None => document.atoms.iter().map(|a| a.id).collect(),
+    };
+    let count = reactions::molecules(document, &selection).len();
+    if count != 1 {
+        let part = if ids.is_some() {
+            "the given IDs cover"
+        } else {
+            "this drawing has"
+        };
+        return Err(format!(
+            "NMR prediction needs exactly one molecule; {part} {count}"
+        ));
+    }
+    let request = prepare(document, ids.unwrap_or_default())?;
+    Ok(Shifts::from(predict(&request, nucleus)?))
 }
 
 pub fn prepare(document: &Document, selection: &[u64]) -> Result<Request, String> {
@@ -267,6 +308,7 @@ pub fn predict(request: &Request, nucleus: Nucleus) -> Result<Report, String> {
                  radius,
                  statistics,
                  limitation,
+                 broad,
              }| {
                 Ok(Row {
                     atom_id: *molecule
@@ -282,6 +324,7 @@ pub fn predict(request: &Request, nucleus: Nucleus) -> Result<Report, String> {
                     radius,
                     statistics,
                     limitation,
+                    broad,
                 })
             },
         )
@@ -344,13 +387,7 @@ pub fn to_tsv(report: &Report) -> String {
             sd,
             min,
             max,
-            row.limitation.as_deref().unwrap_or(
-                if report.nucleus == Nucleus::H1 && row.hydrogen_count > 1 {
-                    "Unresolved attached-H group; not a stereospecific peak assignment"
-                } else {
-                    ""
-                }
-            )
+            row.note(report.nucleus).unwrap_or_default()
         ));
     }
     output

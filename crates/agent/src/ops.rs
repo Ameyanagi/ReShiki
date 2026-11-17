@@ -69,6 +69,7 @@ pub mod import;
 pub mod inspect;
 pub mod naming;
 pub mod policy;
+pub mod predict_nmr;
 pub mod progress;
 pub mod render;
 pub mod result;

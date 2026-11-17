@@ -34,6 +34,7 @@ mod host;
 mod io;
 mod mcp_usage;
 mod name;
+mod predict_nmr;
 mod reference;
 mod render;
 mod skill;
@@ -160,6 +161,7 @@ async fn run_command(
         Command::Render(render) => render::run(render, out, err, terminal).await,
         Command::Compose(compose) => compose::run(compose, out, err, terminal).await,
         Command::Analyze(input) => analyze::run(input, out, err).await,
+        Command::PredictNmr(command) => predict_nmr::run(command, out, err).await,
         Command::Name(name) => name::run(name, out, err).await,
     };
     match result {

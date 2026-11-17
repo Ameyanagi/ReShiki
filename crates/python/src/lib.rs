@@ -136,6 +136,14 @@ fn properties(py: Python<'_>, data: Vec<u8>) -> PyResult<String> {
         .map_err(failed(py))
 }
 
+#[pyfunction]
+fn predict_nmr(py: Python<'_>, data: Vec<u8>, nucleus: &str) -> PyResult<String> {
+    let nucleus = reshiki_io::nmr::Nucleus::from_code(nucleus)
+        .ok_or_else(|| invalid(py)("nucleus must be 1H or 13C".into()))?;
+    py.detach(|| drawing::predict_nmr(&data, nucleus))
+        .map_err(failed(py))
+}
+
 type BatchOutput = (
     Vec<Option<Py<PyBytes>>>,
     Vec<(usize, String)>,
@@ -202,6 +210,7 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(style, module)?)?;
     module.add_function(wrap_pyfunction!(render_drawing, module)?)?;
     module.add_function(wrap_pyfunction!(properties, module)?)?;
+    module.add_function(wrap_pyfunction!(predict_nmr, module)?)?;
     module.add_function(wrap_pyfunction!(render_many, module)?)?;
     Ok(())
 }

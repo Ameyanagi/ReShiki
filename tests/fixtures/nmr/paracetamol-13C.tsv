@@ -1,0 +1,16 @@
+# PREDICTED ¹³C chemical shifts (ppm)
+# HOSE spherical environments · median · ReShiki v1
+# nmrshiftdb2 2026-03-15 · measured CDCl3 subset v1
+# CDCl3; recorded temperature 273–323 K, pooled without temperature/concentration correction
+# Connectivity-only 2D environments do not distinguish E/Z or relative configurations, stereoisomers, or resolve diastereotopic H. Multiple attached H are an unresolved group median, not an assigned peak. Exchangeable H, charged/radical structures, metals and non-default isotope labels are unsupported. Reference spread is descriptive and is not a calibrated confidence interval.
+# Contains information from nmrshiftdb2 (https://nmrshiftdb.nmr.uni-koeln.de), available under the nmrshiftdb2 Database License (https://svn.code.sf.net/p/nmrshiftdb2/code/trunk/snapshots/nmrshiftdb2datalicense.txt).
+# The derivative index and exact transformation method are available at https://github.com/Ameyanagi/ReShiki/tree/main/data/nmr and https://github.com/Ameyanagi/ReShiki/blob/main/crates/io/src/nmr/dataset.rs.
+Atom ID	H count	Predicted ppm	Sphere radius	Reference molecules	Observed SD ppm	Observed min ppm	Observed max ppm	Limitations
+1		22.900	2	4	0.599	22.689	24.000	
+2								No compatible environment with at least two independent reference molecules
+5		137.870	2	5	2.866	135.800	143.400	
+6		116.150	2	2	5.869	112.000	120.300	Broad match · Shell 2 · SD 5.869 ppm
+7		115.600	2	33	2.854	107.300	123.900	
+8		155.400	3	25	3.860	145.300	161.800	
+10		115.600	2	33	2.854	107.300	123.900	
+11		116.150	2	2	5.869	112.000	120.300	Broad match · Shell 2 · SD 5.869 ppm

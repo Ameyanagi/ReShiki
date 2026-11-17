@@ -29,6 +29,7 @@ pub(crate) enum Command {
     Render(Render),
     Compose(Compose),
     Analyze(Input),
+    PredictNmr(PredictNmr),
     Name(Name),
 }
 
@@ -51,6 +52,13 @@ pub(crate) enum Source {
 pub(crate) struct Input {
     pub(crate) source: Source,
     pub(crate) format: String,
+}
+
+/// `predict-nmr`: one molecule and the nucleus, `1H` or `13C`.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct PredictNmr {
+    pub(crate) input: Input,
+    pub(crate) nucleus: &'static str,
 }
 
 /// `name`: one structure, with optional preference status in JSON.
@@ -148,6 +156,22 @@ pub(crate) fn parse(name: &OsStr, rest: &[OsString]) -> Result<Command, String> 
         "render" => render(&options(spec, rest)?),
         "compose" => compose(&options(spec, rest)?),
         "analyze" => input(spec.name, &options(spec, rest)?).map(Command::Analyze),
+        "predict-nmr" => {
+            let options = options(spec, rest)?;
+            let input = input(spec.name, &options)?;
+            let nucleus = options
+                .nucleus
+                .as_deref()
+                .ok_or("predict-nmr needs --nucleus 1H or 13C")?;
+            let nucleus = nucleus
+                .to_str()
+                .and_then(crate::nmr::Nucleus::from_code)
+                .ok_or("--nucleus must be 1H or 13C")?;
+            Ok(Command::PredictNmr(PredictNmr {
+                input,
+                nucleus: nucleus.code(),
+            }))
+        }
         "name" => {
             let options = options(spec, rest)?;
             Ok(Command::Name(Name {
@@ -241,6 +265,7 @@ struct Options {
     name: Option<OsString>,
     executable: Option<OsString>,
     isotope_style: Option<OsString>,
+    nucleus: Option<OsString>,
     svg_text: SvgText,
     pages: bool,
     force: bool,
@@ -294,6 +319,7 @@ fn options(spec: &CommandSpec, tokens: &[OsString]) -> Result<Options, String> {
                 "--name" => options.name = Some(value),
                 "--executable" => options.executable = Some(value),
                 "--isotope-style" => options.isotope_style = Some(value),
+                "--nucleus" => options.nucleus = Some(value),
                 "--svg-text" => {
                     options.svg_text = match value.to_str() {
                         Some("live") => SvgText::Live,

@@ -45,7 +45,7 @@ with the sketch object as a plain object whose description points to the
 pinned schema states it. contract.rs checks that compose's schema, with the
 placeholder swapped for the `schema` tool's result, equals the pinned schema
 with exactly those differences, and that the whole catalog stays within
-19,500 characters.
+21,500 characters.
 
 Regenerate it only for an intentional contract change, such as a tool, title,
 description, schema or hint that is meant to change, and in the same PR as that

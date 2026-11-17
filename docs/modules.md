@@ -235,6 +235,7 @@ explains how the crates and modules fit together.
 - `src/cli/io.rs`: The CLI's file and standard-input access
 - `src/cli/mcp_usage.rs`: Shared MCP help and heap limits for headless entry points.
 - `src/cli/name.rs`: `reshiki --cli name`
+- `src/cli/predict_nmr.rs`: `reshiki --cli predict-nmr`
 - `src/cli/reference.rs`: Deterministic agent documentation from the live CLI and operation contracts.
 - `src/cli/render.rs`: `reshiki --cli render`
 - `src/cli/skill.rs`: The Agent Skill folder `reshiki --cli skill` writes
@@ -347,6 +348,7 @@ explains how the crates and modules fit together.
 - `crates/agent/src/ops/inspect.rs`: The `inspect` tool
 - `crates/agent/src/ops/naming.rs`: Chemical naming for the operation tools.
 - `crates/agent/src/ops/policy.rs`: Who may read or edit which document.
+- `crates/agent/src/ops/predict_nmr.rs`: The `predict_nmr` tool
 - `crates/agent/src/ops/progress.rs`: Progress reports from a running operation to the transport.
 - `crates/agent/src/ops/render.rs`: The `render` tool
 - `crates/agent/src/ops/result.rs`: The protocol-neutral result of a tool call.
@@ -593,6 +595,7 @@ explains how the crates and modules fit together.
 - `crates/io/src/native_windows.rs`: Windows print geometry is passed to the isolated Rust platform crate.
 - `crates/io/src/nmr.rs`: Complete drawing graph adapter and separately licensed offline NMR index.
 - `crates/io/src/nmr/dataset.rs`: Reproducible measured-only nmrshiftdb2 SDF transformation.
+- `crates/io/src/nmr/shifts.rs`: The NMR prediction that Python, the command line and MCP return.
 - `crates/io/src/payload.rs`: Editable drawing snapshots carried by ordinary PNG, SVG, and PDF figures.
 - `crates/io/src/preview.rs`: The editor's PNG preview of a drawing, shared by the assistant's canvas tools, the MCP `render` and `convert` tools, the CLI and the browser library, so every surface draws the same pixels.
 - `crates/io/src/recovery.rs`

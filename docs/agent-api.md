@@ -101,12 +101,19 @@ completions, sends no progress notifications and publishes no
 
 ## Tools
 
-The [generated tool reference](agent-reference.md#tools) lists the 16 tools in
+The [generated tool reference](agent-reference.md#tools) lists the 17 tools in
 `tools/list` order, with their annotation hints, parameters and result shapes.
 `reshiki --cli tools` prints the same catalog as JSON. Every tool sets all
 four annotation hints explicitly, with `openWorldHint: false`. `file_save`,
 `apply` and `document_close` are marked destructive, so a client can ask you
 before it runs them.
+
+`predict_nmr` predicts ¹H or ¹³C shifts offline for one molecule, as the
+app's **Predict NMR…** does. `ids: null` predicts the whole drawing, which must
+be one molecule; atom IDs predict the molecule they belong to. Each row's
+`atom` is a drawing atom ID, as `inspect` reports it. The result names the
+`revision` it was predicted from and carries the data `credit` to cite with
+published values. See [NMR prediction](nmr-prediction.md#from-scripts).
 
 `compose` takes a Proposal, the JSON that ReShiki's own assistant writes. Its
 `inputSchema` is a shorter form of the

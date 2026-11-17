@@ -11,7 +11,10 @@ const catalog = fileURLToPath(
 const proposalSchema = fileURLToPath(
   new URL("../../tests/fixtures/agent-contract/proposal-schema.json", import.meta.url),
 );
-const maxBytes = 200 * 1024;
+// 200 KiB held the 16 tools at 204,140 bytes. predict_nmr (#1203) adds about
+// 7.7 KB of tool reference, command help and guide text, and its label tool
+// about as much again, so the cap leaves room for both.
+const maxBytes = 220 * 1024;
 
 async function read(relativePath) {
   return readFile(path.join(output, relativePath)).catch((cause) => {

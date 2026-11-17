@@ -186,6 +186,13 @@ pub async fn properties(data: &[u8]) -> Result<String, String> {
     serde_json::to_string(&analysis).map_err(|error| error.to_string())
 }
 
+/// The whole drawing's predicted shifts as JSON; it must be one molecule.
+pub fn predict_nmr(data: &[u8], nucleus: reshiki_io::nmr::Nucleus) -> Result<String, String> {
+    let document = Document::from_json(data)?;
+    let shifts = reshiki_io::nmr::predict_drawing(&document, None, nucleus)?;
+    serde_json::to_string(&shifts).map_err(|error| error.to_string())
+}
+
 pub async fn from_name(name: &str) -> Result<(Vec<u8>, String, Vec<String>), String> {
     if name.trim().is_empty() {
         return Err("Enter a chemical name first".into());

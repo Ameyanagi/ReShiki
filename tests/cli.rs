@@ -504,6 +504,18 @@ fn the_cross_surface_parity_fixture_holds_for_the_cli() {
         ),
         fixture["reaction"]["outputs"]["rsmi"]
     );
+    let nmr = fixture["nmr"]["smiles"].as_str().expect("NMR SMILES");
+    for nucleus in ["1H", "13C"] {
+        let predicted: serde_json::Value = serde_json::from_str(&ok(
+            &["predict-nmr", "--smiles", nmr, "--nucleus", nucleus],
+            "",
+        ))
+        .expect("one JSON line");
+        assert_eq!(
+            predicted["value"]["rows"], fixture["nmr"][nucleus],
+            "{nucleus}"
+        );
+    }
     let rxn = ok(&["convert", "-", "--from", "rsmi", "--to", "rxn"], reaction);
     assert!(rxn.starts_with("$RXN"), "{rxn}");
     // SVG text is outlined unless live text is asked for, as on every surface.

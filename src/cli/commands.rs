@@ -188,6 +188,15 @@ const ISOTOPE_STYLE: OptionSpec = OptionSpec {
     equivalent: None,
 };
 
+const NUCLEUS: OptionSpec = OptionSpec {
+    flag: "--nucleus",
+    value: Some("NUCLEUS"),
+    help: "The nucleus to predict: 1H or 13C. Required.",
+    default: None,
+    sets: Some("predict_nmr.nucleus"),
+    equivalent: None,
+};
+
 const INPUT: Operand = Operand {
     name: "INPUT",
     help: "Read a file, or standard input with -; --smiles TEXT supplies text instead.",
@@ -252,6 +261,16 @@ const ANALYZE: CommandSpec = CommandSpec {
     body: analyze_help,
 };
 
+const PREDICT_NMR: CommandSpec = CommandSpec {
+    name: "predict-nmr",
+    summary: "Print predicted NMR shifts as one JSON line",
+    usage: "reshiki --cli predict-nmr (INPUT | - | --smiles TEXT) [--from FORMAT] --nucleus NUCLEUS",
+    options: &[SMILES, FROM, NUCLEUS],
+    tools: &["import", "predict_nmr"],
+    operand: Some(INPUT),
+    body: predict_nmr_help,
+};
+
 const NAME: CommandSpec = CommandSpec {
     name: "name",
     summary: "Print the systematic name of a structure",
@@ -264,7 +283,7 @@ const NAME: CommandSpec = CommandSpec {
 
 /// The commands whose flags another command rejects by name ("X does not
 /// take FLAG"); other flags are unknown options to the commands without them.
-pub(crate) const FILE_COMMANDS: &[CommandSpec] = &[CONVERT, RENDER, COMPOSE, ANALYZE];
+pub(crate) const FILE_COMMANDS: &[CommandSpec] = &[CONVERT, RENDER, COMPOSE, ANALYZE, PREDICT_NMR];
 
 const INFO: CommandSpec = CommandSpec {
     name: "info",
@@ -368,7 +387,17 @@ const HELP: CommandSpec = CommandSpec {
 
 /// Commands in overview-help order; option order is the parsing grammar.
 pub(crate) const COMMANDS: &[CommandSpec] = &[
-    CONVERT, RENDER, COMPOSE, ANALYZE, NAME, INFO, TOOLS, SCHEMA, SKILL, HELP,
+    CONVERT,
+    RENDER,
+    COMPOSE,
+    ANALYZE,
+    PREDICT_NMR,
+    NAME,
+    INFO,
+    TOOLS,
+    SCHEMA,
+    SKILL,
+    HELP,
 ];
 
 const OVERVIEW_USAGE: &str = "reshiki --cli <command> [options]";
@@ -475,6 +504,7 @@ Examples:
   reshiki --cli convert scheme.rsk -o figure.pdf
   reshiki --cli render scheme.rsk -o preview.png
   reshiki --cli analyze --smiles 'c1ccccc1O'
+  reshiki --cli predict-nmr --smiles 'CCOC(C)=O' --nucleus 13C
   reshiki --cli name --smiles 'CC(=O)O'
   reshiki --cli compose proposal.json -o scheme.svg
 
@@ -648,6 +678,30 @@ A ReShiki drawing (.rsk) cannot be written.
 
 fn analyze_help() -> String {
     format!("Usage: {}\n\n{ANALYZE_HELP}", ANALYZE.usage)
+}
+
+fn predict_nmr_help() -> String {
+    let body = "\
+Predicts 1H or 13C NMR chemical shifts offline, as the app's Predict NMR
+does, and prints them as one JSON line. The input is read as for convert
+(reshiki --cli help convert) and must be exactly one molecule.
+
+Options:
+  --nucleus NUCLEUS  1H or 13C. Required.
+
+value.rows has one row per site, in drawing order. atom is the drawing's
+atom ID: for SMILES, the atom's position counting from 1 after explicit H
+are removed as RDKit does, which is RDKit MolFromSmiles index atom - 1;
+for a MOL file, its position in the atom block, counting from 1. A 1H row
+names the heavy atom that carries the H. ppm, shell, references, sd, min
+and max are null for a site without reference data, and note says why.
+value also carries the method, data version, conditions, limitations and
+credit; cite credit with published values.
+
+A molecule with no sites for the nucleus, or with metals, charges,
+radicals or isotope labels, is an error.
+";
+    format!("Usage: {}\n\n{body}", PREDICT_NMR.usage)
 }
 
 fn name_help() -> String {

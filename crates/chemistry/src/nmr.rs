@@ -46,6 +46,14 @@ impl Nucleus {
             Self::C13 => "13C",
         }
     }
+    /// The nucleus a [`Self::code`] names: `1H` or `13C`.
+    pub fn from_code(code: &str) -> Option<Self> {
+        match code {
+            "1H" => Some(Self::H1),
+            "13C" => Some(Self::C13),
+            _ => None,
+        }
+    }
 }
 
 /// One proton group attached to an original atom, or one original carbon.
@@ -122,6 +130,9 @@ pub struct Prediction {
     pub statistics: Option<Statistics>,
     /// A missing-data reason or a caution on a retained numerical prediction.
     pub limitation: Option<String>,
+    /// The shortest sphere matched a reference group with a wide spread; the
+    /// limitation then says so.
+    pub broad: bool,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -146,6 +157,7 @@ impl Index {
                         "Exchangeable proton; solvent, concentration and exchange are not modeled"
                             .into(),
                     ),
+                    broad: false,
                 });
                 continue;
             }
@@ -154,6 +166,7 @@ impl Index {
                 radius: None,
                 statistics: None,
                 limitation: None,
+                broad: false,
             };
             for radius in (MIN_RADIUS..=MAX_RADIUS).rev() {
                 let code = environment.code(&site, nucleus, radius, deadline)?;
@@ -171,6 +184,7 @@ impl Index {
                         Nucleus::C13 => 5.,
                     };
                     if radius == MIN_RADIUS && statistics.standard_deviation >= broad_match_sd {
+                        prediction.broad = true;
                         prediction.limitation = Some(format!(
                             "Broad match · Shell {radius} · SD {:.3} ppm",
                             statistics.standard_deviation
