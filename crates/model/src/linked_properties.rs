@@ -316,6 +316,24 @@ fn refresh(
         caption.text = text.clone();
         caption.position.x = center - caption.size().0 / 2.;
     }
+    // A new name, typed or generated, takes the style of its first letter
+    // throughout, so typing over a bold name keeps it bold.
+    let line = |text: &str| text.split('\n').next().unwrap_or_default().to_owned();
+    if link.properties.first() == Some(&Property::Name) && line(&link.text) != line(&text) {
+        let end = text.find('\n').unwrap_or(text.len());
+        let first = caption.format.at(0).clone();
+        let styles = text
+            .char_indices()
+            .map(|(i, _)| {
+                if i < end {
+                    first.clone()
+                } else {
+                    caption.format.at(i).clone()
+                }
+            })
+            .collect();
+        caption.format.pack(&text, styles);
+    }
     link.text = text;
 }
 
@@ -516,7 +534,10 @@ fn reshaped(before: &Document, doc: &Document, atoms: &[u64]) -> bool {
     let (Some(old), Some(new)) = (positions(before), positions(doc)) else {
         return true;
     };
-    let (dx, dy) = (new[0].x - old[0].x, new[0].y - old[0].y);
+    let (Some(a), Some(b)) = (old.first(), new.first()) else {
+        return false;
+    };
+    let (dx, dy) = (b.x - a.x, b.y - a.y);
     old.iter()
         .zip(&new)
         .any(|(a, b)| (b.x - a.x - dx).abs() > 1e-3 || (b.y - a.y - dy).abs() > 1e-3)

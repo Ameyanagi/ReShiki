@@ -622,6 +622,7 @@ fn completion(message: &Message) -> Option<Completion> {
                 Action::Finished(..) | Action::CaptionNamed(..) => Some(Completion::Naming),
                 Action::NameDraft(..)
                 | Action::Rename(..)
+                | Action::NameRow(..)
                 | Action::Name(..)
                 | Action::PeptideSequence(..)
                 | Action::ClearName

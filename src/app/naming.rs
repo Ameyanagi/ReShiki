@@ -111,6 +111,8 @@ pub enum Action {
     NameDraft(Vec<u64>, String),
     /// Name this molecule in its property caption; empty is automatic.
     Rename(Vec<u64>, String),
+    /// Show or hide this molecule's name row (Show chemical name).
+    NameRow(Vec<u64>),
     /// The automatic name of a property caption's structure.
     CaptionNamed(String, Box<Result<Outcome, naming::Error>>),
 }
@@ -726,6 +728,9 @@ impl App {
             Action::Finished(ticket, result) => self.naming_finished(ticket, *result),
             Action::NameDraft(atoms, name) => self.tab.naming.name_draft = Some((atoms, name)),
             Action::Rename(atoms, name) => self.rename_molecule(&atoms, &name),
+            Action::NameRow(atoms) => {
+                self.toggle_property(&atoms, reshiki::linked_properties::Property::Name);
+            }
             Action::CaptionNamed(smiles, result) => self.caption_named(&smiles, *result),
             Action::PreviewEdit(edit) => self.edit_name_preview(edit),
             Action::Acknowledge(value) => self.tab.naming.acknowledged = value,

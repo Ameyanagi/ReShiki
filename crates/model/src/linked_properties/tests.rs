@@ -681,3 +681,28 @@ fn reshaping_a_double_bond_renames_but_moving_the_molecule_does_not() {
     assert_ne!(doc.property_captions[0].smiles, trans);
     assert!(doc.property_captions[0].needs_name());
 }
+
+#[test]
+fn typing_over_the_bold_name_keeps_it_bold() {
+    let (mut doc, atoms) = shown_doc(&[Property::Weight], true);
+    rename(&mut doc, &atoms, "3a", TextFormat::default(), true).unwrap();
+    let mut history = History::default();
+    // The text editor gives the replacement's first letter the selection's
+    // style and the rest the caption's own.
+    edit(&mut doc, &mut history, |doc| {
+        let caption = &mut doc.annotations[0];
+        let text = "Compound 3a\nMol. Wt.: 94.11";
+        let styles = text
+            .char_indices()
+            .map(|(i, _)| {
+                let mut style = caption.format.style.clone();
+                style.bold = i == 0;
+                style
+            })
+            .collect();
+        caption.text = text.into();
+        caption.format.pack(text, styles);
+    });
+    assert_eq!(doc.property_captions[0].custom_name, "Compound 3a");
+    assert_eq!(bold(&doc), "Compound 3a");
+}

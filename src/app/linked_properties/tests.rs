@@ -187,6 +187,10 @@ fn the_name_field_and_the_canvas_edit_one_name() {
     // The same stored name, still linked.
     assert_eq!(caption(&app), Some("Aspirin\nMol. Wt.: 46.07"));
     assert_eq!(link(&app).custom_name, "Aspirin");
+    // The typed name is bold throughout, like the name it replaced.
+    let text = &app.tab.doc.annotations[0];
+    assert!((0.."Aspirin".len()).all(|i| text.format.at(i).bold));
+    assert!(!text.format.at("Aspirin\n".len()).bold);
     // ↺ returns to the automatic name.
     let _ = app.update(Message::Naming(Action::Rename(atoms, String::new())));
     assert_eq!(link(&app).custom_name, "");

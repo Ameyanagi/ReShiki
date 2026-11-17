@@ -406,10 +406,7 @@ impl App {
                 if caption {
                     Message::Naming(super::naming::Action::HideMoleculeName(target.clone()))
                 } else if row {
-                    Message::ToggleProperty(
-                        target.clone(),
-                        reshiki::linked_properties::Property::Name,
-                    )
+                    Message::Naming(super::naming::Action::NameRow(target.clone()))
                 } else {
                     Message::Naming(super::naming::Action::ShowMoleculeName(target.clone()))
                 },

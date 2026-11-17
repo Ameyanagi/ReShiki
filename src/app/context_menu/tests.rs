@@ -841,7 +841,7 @@ fn chemical_name_menu_uses_clicked_component_and_switches_between_show_and_hide(
     // One molecule's name is the Name row of its property caption.
     assert!(app.context_entries(Page::Main).iter().any(|entry| matches!(entry,
         Entry::Item { label: "Show chemical name", enabled: true, action: Action::Run(message), .. }
-            if matches!(message.as_ref(), Message::ToggleProperty(atoms, reshiki::linked_properties::Property::Name) if *atoms == first)
+            if matches!(message.as_ref(), Message::Naming(super::super::naming::Action::NameRow(atoms)) if *atoms == first)
     )));
     let before = app.tab.doc.clone();
     let reopen = |app: &mut App| {
@@ -859,6 +859,12 @@ fn chemical_name_menu_uses_clicked_component_and_switches_between_show_and_hide(
     ));
     reopen(&mut app);
     assert!(labels(&app, Page::Main).contains(&"Hide chemical name"));
+    // Only the Show properties rows carry ticks.
+    assert!(
+        app.context_entries(Page::Main).iter().all(
+            |entry| !matches!(entry, Entry::Item { action, .. } if app.ticked(action).is_some())
+        )
+    );
     run_item(&mut app, Page::Main, "Hide chemical name")?;
     assert!(app.tab.doc.property_captions.is_empty());
     let _ = app.update(Message::Undo);
