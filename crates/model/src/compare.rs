@@ -1217,30 +1217,25 @@ pub fn compare(left: &Document, right: &Document) -> Report {
         }
     }
 
-    // Hydrogen bonds and other order-0 links between atoms.
-    let links = |doc: &Document| -> HashMap<(u64, u64), Value> {
+    // Hydrogen bonds and other order-0 links: whether they are there. How
+    // they look is style.
+    let links = |doc: &Document| -> HashSet<(u64, u64)> {
         doc.bonds
             .iter()
             .filter(|bond| bond.order == 0)
-            .map(|bond| (key(bond.a, bond.b), without(json(bond), &["a", "b"])))
+            .map(|bond| key(bond.a, bond.b))
             .collect()
     };
     let (mine, theirs) = (links(left), links(right));
-    let mut changed: Vec<&(u64, u64)> = mine
-        .iter()
-        .filter(|(pair, value)| theirs.get(*pair) != Some(*value))
-        .map(|(pair, _)| pair)
-        .chain(theirs.keys().filter(|pair| !mine.contains_key(*pair)))
-        .collect();
+    let mut changed: Vec<&(u64, u64)> = mine.symmetric_difference(&theirs).collect();
     changed.sort_unstable();
-    changed.dedup();
     for (a, b) in changed {
         let mut change = Change::new(Kind::Chemical, Subject::Molecule);
         for (side, links, doc) in [
             (&mut change.left, &mine, left),
             (&mut change.right, &theirs, right),
         ] {
-            if links.contains_key(&(*a, *b)) {
+            if links.contains(&(*a, *b)) {
                 side.objects = [*a, *b]
                     .into_iter()
                     .filter(|id| doc.atom(*id).is_some())
