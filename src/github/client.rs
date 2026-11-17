@@ -247,11 +247,11 @@ impl Client {
         }
         let session = self.session.lock().await;
         let login = session.tokens.as_ref()?.login.to_ascii_lowercase();
-        // As GitHub names accounts: letters, digits and hyphens.
-        let named = login
-            .bytes()
-            .all(|c| c.is_ascii_alphanumeric() || c == b'-');
-        (named && super::api::name_ok(&login)).then_some((disk, login))
+        // As GitHub names accounts: letters, digits, hyphens, and an
+        // underscore before a managed user's enterprise shortcode.
+        let named = (login.bytes()).all(|c| c.is_ascii_alphanumeric() || b"-_".contains(&c));
+        let named = named && login != cache::PUBLIC && super::api::name_ok(&login);
+        named.then_some((disk, login))
     }
 
     /// A GET whose reply never changes, such as an object by its name: asked

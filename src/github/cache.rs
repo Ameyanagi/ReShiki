@@ -17,13 +17,14 @@ use std::{
 /// The most bytes kept, for every account together.
 const CAP: u64 = 200 << 20;
 
-/// Signed out. No GitHub login has an underscore (a client keeps only
-/// letters, digits and hyphens), so no account shares it.
+/// Signed out. No GitHub login starts with an underscore, and a client never
+/// keeps one by this name, so no account shares it.
 pub(super) const PUBLIC: &str = "_public";
 
-/// `<cache>/github/`, or `github-<host-port-path>/` for a GitHub set by
-/// `RESHIKI_GITHUB_API` or `RESHIKI_GITHUB_WEB`, so a test server's replies
-/// never pass for GitHub's or another server's.
+/// `<cache>/github/`, or `github-<hash of the API address>/` for a GitHub
+/// set by `RESHIKI_GITHUB_API` or `RESHIKI_GITHUB_WEB`, so a test server's
+/// replies never pass for GitHub's or another server's (and an address's
+/// credentials never name a folder).
 #[derive(Clone)]
 pub(super) struct Disk {
     root: PathBuf,
@@ -45,14 +46,7 @@ impl Disk {
     pub(super) fn new(cache: &Path, ends: &Endpoints) -> Self {
         let name = match ends.overridden {
             false => "github".to_owned(),
-            true => {
-                let api = ends
-                    .api
-                    .split_once("://")
-                    .map_or(&*ends.api, |(_, api)| api);
-                let named = |c: char| c.is_ascii_alphanumeric() || c == '.';
-                format!("github-{}", api.replace(|c| !named(c), "-"))
-            }
+            true => format!("github-{}", &hash(ends.api.as_bytes())[..16]),
         };
         Self {
             root: cache.join(name),
@@ -85,21 +79,21 @@ impl Disk {
         let rest = [etag.unwrap_or_default().as_bytes(), b"\n", bytes].concat();
         let _ = crate::task::spawn_blocking(move || {
             let head = format!("{}\n", hash(&rest));
-            if store(&file, &head, &rest).is_ok() {
-                disk.counted((head.len() + rest.len()) as u64);
+            if let Ok(replaced) = store(&file, &head, &rest) {
+                disk.counted((head.len() + rest.len()) as u64, replaced);
             }
         })
         .await;
     }
 
-    /// Counts `added` bytes just written. Past the cap, the least recently
-    /// used go until nine tenths of it is left, so the next writes list
-    /// nothing.
-    fn counted(&self, added: u64) {
+    /// Counts `added` bytes just written over `replaced`. Past the cap, the
+    /// least recently used go until nine tenths of it is left, so the next
+    /// writes list nothing.
+    fn counted(&self, added: u64, replaced: u64) {
         let mut used = USED.lock().unwrap_or_else(PoisonError::into_inner);
         let total = match used.get_mut(&self.root) {
             Some(total) => {
-                *total += added;
+                *total = (*total + added).saturating_sub(replaced);
                 *total
             }
             // The listing holds this write already.
@@ -158,8 +152,8 @@ fn parse(data: &[u8]) -> Option<Kept> {
     if sum != hash(rest).as_bytes() {
         return None;
     }
-    let end = rest.iter().position(|&byte| byte == b'\n')?;
-    let (etag, bytes) = (&rest[..end], &rest[end + 1..]);
+    let mut parts = rest.splitn(2, |&byte| byte == b'\n');
+    let (etag, bytes) = (parts.next()?, parts.next()?);
     let etag = String::from_utf8(etag.to_vec()).ok()?;
     Some(Kept {
         etag: (!etag.is_empty()).then_some(etag),
@@ -169,22 +163,25 @@ fn parse(data: &[u8]) -> Option<Kept> {
 
 /// Written to a temporary file renamed over the entry, so a reader finds the
 /// old entry or the new one. No `fsync`: an entry a crash cut short fails its
-/// sum.
-fn store(file: &Path, head: &str, rest: &[u8]) -> std::io::Result<()> {
+/// sum. The size of the entry replaced, if any.
+fn store(file: &Path, head: &str, rest: &[u8]) -> std::io::Result<u64> {
     let folder = file.parent().unwrap_or(Path::new("."));
     std::fs::create_dir_all(folder)?;
     let mut temp = crate::storage::temporary_in(folder, 0o600)?;
     temp.write_all(head.as_bytes())?;
     temp.write_all(rest)?;
     temp.as_file().set_modified(SystemTime::now())?;
+    let replaced = std::fs::metadata(file).map_or(0, |entry| entry.len());
     temp.persist(file)?;
-    Ok(())
+    Ok(replaced)
 }
 
 /// Every file in every account folder: when it was last used, its size.
+/// Links are never followed, so nothing outside the cache is ever removed.
 fn entries(root: &Path) -> Vec<(SystemTime, u64, PathBuf)> {
     let mut found = Vec::new();
-    for account in std::fs::read_dir(root).into_iter().flatten().flatten() {
+    let folders = std::fs::read_dir(root).into_iter().flatten().flatten();
+    for account in folders.filter(|folder| folder.file_type().is_ok_and(|kind| kind.is_dir())) {
         for entry in (std::fs::read_dir(account.path()).into_iter().flatten()).flatten() {
             if let Ok(metadata) = entry.metadata()
                 && metadata.is_file()

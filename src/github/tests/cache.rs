@@ -36,6 +36,13 @@ fn disk(cache: &Path) -> Disk {
     )
 }
 
+/// The file of `path` kept for `account`, under the one server's folder.
+fn entry(cache: &Path, account: &str, path: &str) -> PathBuf {
+    let server = std::fs::read_dir(cache).unwrap().next().unwrap().unwrap();
+    let name = crate::github::workcopy::hash(path.as_bytes());
+    server.path().join(account).join(name)
+}
+
 /// The files kept for `account`, under the one server's folder in `cache`.
 fn kept(cache: &Path, account: &str) -> Vec<PathBuf> {
     let server = std::fs::read_dir(cache).unwrap().next().unwrap().unwrap();
@@ -99,6 +106,12 @@ async fn a_changed_branch_is_read_again_and_kept_with_its_new_etag() {
     assert_eq!(mock.model().unchanged, 0);
     assert_eq!(api::head(&client, &repo, "main").await.unwrap().commit, new);
     assert_eq!(mock.model().unchanged, 1);
+    // A refusal is never answered from what was kept.
+    let path = "/api/repos/octo-test/lab-notes/git/ref/heads/main";
+    mock.model().fail_next("GET", path, 404);
+    let client = signed_in(&mock, LOGIN, cache.path());
+    let gone = api::head(&client, &repo, "main").await;
+    assert_eq!(gone, Err(crate::github::Error::NotFound));
 }
 
 #[tokio::test]
@@ -160,21 +173,27 @@ async fn each_account_and_signed_out_reading_keep_their_own() {
     let reader = |n| match n {
         0 => signed_in(&mock, LOGIN, cache.path()),
         1 => signed_in(&mock, "Bob", cache.path()),
+        // A managed user's login has an underscore.
+        2 => signed_in(&mock, "mona-cat_octo", cache.path()),
         _ => (Client::public(mock.ends()).unwrap()).cached(Some(cache.path())),
     };
-    for n in 0..3 {
+    for n in 0..4 {
         // Never what another account kept.
         assert_eq!(api::blob(&reader(n), &repo, &blob).await.unwrap(), ring);
         assert_eq!(requests(&mock), n + 1);
     }
-    assert_eq!(kept(cache.path(), LOGIN).len(), 1);
-    assert_eq!(kept(cache.path(), "bob").len(), 1);
-    assert_eq!(kept(cache.path(), "_public").len(), 1);
+    for account in [LOGIN, "bob", "mona-cat_octo", "_public"] {
+        assert_eq!(kept(cache.path(), account).len(), 1, "{account}");
+    }
     // Each reads its own again with no request, signed out too.
-    for n in 0..3 {
+    for n in 0..4 {
         assert_eq!(api::blob(&reader(n), &repo, &blob).await.unwrap(), ring);
     }
-    assert_eq!(requests(&mock), 3);
+    assert_eq!(requests(&mock), 4);
+    // A login named as signed-out reading is kept nowhere.
+    let odd = signed_in(&mock, "_public", cache.path());
+    assert_eq!(api::blob(&odd, &repo, &blob).await.unwrap(), ring);
+    assert_eq!(requests(&mock), 5);
 }
 
 #[tokio::test]
@@ -182,13 +201,19 @@ async fn past_the_cap_the_least_recently_used_go_first() {
     let cache = tempfile::tempdir().unwrap();
     // 64 + 2 bytes of head and 100 of reply: two fit, three do not.
     let disk = disk(cache.path()).with_cap(400);
-    let pause = || std::thread::sleep(std::time::Duration::from_millis(5));
     disk.store(LOGIN, "/a", None, &[1; 100]).await;
-    pause();
     disk.store(LOGIN, "/b", None, &[2; 100]).await;
-    pause();
+    // Writing an entry again replaces it: nothing more is kept, nothing goes.
+    disk.store(LOGIN, "/b", None, &[2; 100]).await;
+    assert!(entry(cache.path(), LOGIN, "/a").exists());
+    // Used a minute and a second ago, whatever the clock's resolution.
+    let ago = |seconds| std::time::SystemTime::now() - std::time::Duration::from_secs(seconds);
+    for (path, seconds) in [("/a", 60), ("/b", 1)] {
+        let file = entry(cache.path(), LOGIN, path);
+        let file = std::fs::File::options().write(true).open(file).unwrap();
+        file.set_modified(ago(seconds)).unwrap();
+    }
     assert!(disk.load(LOGIN, "/a").await.is_some());
-    pause();
     disk.store("bob", "/c", Some("\"c\""), &[3; 100]).await;
     assert!(disk.load(LOGIN, "/b").await.is_none());
     assert_eq!(disk.load(LOGIN, "/a").await.unwrap().bytes, [1; 100]);
@@ -239,4 +264,26 @@ async fn an_entry_that_cannot_be_read_whole_is_a_miss_and_removed() {
     assert!(api::tree(&client, &repo, &head.tree).await.is_ok());
     assert_eq!(requests(&mock), before + 1);
     assert_ne!(std::fs::read(&file).unwrap(), b"garbage");
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn eviction_never_reaches_through_a_linked_folder() {
+    let (cache, outside) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+    let drawing = outside.path().join("drawing.rsk");
+    std::fs::write(&drawing, [0; 500]).unwrap();
+    let old = std::time::SystemTime::now() - std::time::Duration::from_secs(3600);
+    (std::fs::File::options().write(true).open(&drawing).unwrap())
+        .set_modified(old)
+        .unwrap();
+    let disk = disk(cache.path()).with_cap(400);
+    disk.store(LOGIN, "/a", None, &[1; 100]).await;
+    let server = entry(cache.path(), LOGIN, "/a");
+    let server = server.parent().unwrap().parent().unwrap();
+    std::os::unix::fs::symlink(outside.path(), server.join("linked")).unwrap();
+    for path in ["/b", "/c"] {
+        disk.store(LOGIN, path, None, &[1; 100]).await;
+    }
+    assert!(drawing.exists());
+    assert!(!entry(cache.path(), LOGIN, "/a").exists());
 }

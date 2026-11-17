@@ -262,7 +262,8 @@ fn a_sign_in_shows_the_code_and_cancel_drops_late_answers() {
 /// What an earlier run kept on disk for `path`, as `account`.
 fn kept_earlier(cache: &Path, account: &str, path: &str, reply: &[u8]) {
     // The folder of `nowhere`'s server.
-    let folder = cache.join("github-127.0.0.1-9").join(account);
+    let server = format!("github-{}", &workcopy::hash(nowhere().api.as_bytes())[..16]);
+    let folder = cache.join(server).join(account);
     std::fs::create_dir_all(&folder).unwrap();
     // No ETag: `<SHA-256 of the rest>\n\n<reply>`.
     let rest = [b"\n", reply].concat();
