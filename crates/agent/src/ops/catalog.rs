@@ -213,7 +213,7 @@ pub const RESULTS: &[(&str, &str)] = &[
             "{effect, document, revision, recorded, labeled} effect is \"applied\"; document ",
             "and revision are the labelled document's handle and revision. recorded is false ",
             "when nothing changed. labeled lists the atom IDs given a label, in row order. ",
-            "warnings is empty.",
+            "The label refresh's notice becomes a warning.",
         ),
     ),
     (

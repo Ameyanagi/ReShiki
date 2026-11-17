@@ -308,7 +308,7 @@ Write predict_nmr rows onto a session document as atom numbers, replacing those 
 | `idempotency_key` | `null or string` | true | true | maxLength: `128` | As in apply. |
 | `rows` | `array<object>` | true | false | maxItems: `5000` | predict_nmr's rows; a null ppm is skipped. |
 
-Result `value`: `{effect, document, revision, recorded, labeled}`. effect is "applied"; document and revision are the labelled document's handle and revision. recorded is false when nothing changed. labeled lists the atom IDs given a label, in row order. warnings is empty.
+Result `value`: `{effect, document, revision, recorded, labeled}`. effect is "applied"; document and revision are the labelled document's handle and revision. recorded is false when nothing changed. labeled lists the atom IDs given a label, in row order. The label refresh's notice becomes a warning.
 
 ## convert
 
