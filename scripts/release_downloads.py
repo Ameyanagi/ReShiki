@@ -8,7 +8,8 @@ import zipfile
 from pathlib import Path
 from urllib.parse import quote
 
-# Both publishing workflows use this exact package contract.
+# Both publishing workflows use this exact package contract. Nightlies leave out
+# Intel macOS, which only stable releases build.
 PLATFORMS = (
     ("macOS", "Apple Silicon (ARM64)", "macos-arm64", ".dmg", ".zip"),
     ("macOS", "Intel (x64)", "macos-x64", ".dmg", ".zip"),
@@ -37,10 +38,15 @@ def release_version(tag: str) -> str:
     return version
 
 
+def platforms(version: str) -> list[tuple]:
+    nightly = "-nightly." in version
+    return [row for row in PLATFORMS if not (nightly and row[2] == "macos-x64")]
+
+
 def filenames(version: str) -> list[str]:
     return [
         f"reshiki-{version}-{platform}{suffix}"
-        for _, _, platform, installer, portable in PLATFORMS
+        for _, _, platform, installer, portable in platforms(version)
         for suffix in (installer, portable)
         if suffix
     ]
@@ -70,6 +76,8 @@ def verify_assets(directory: Path, version: str, windows_signing: str = "unsigne
         checksums.append(checksum)
     for architecture in ("arm64", "x64"):
         name = f"reshiki-{version}-macos-{architecture}"
+        if f"{name}.zip" not in expected:
+            continue
         with zipfile.ZipFile(directory / f"{name}.zip") as archive:
             metadata = json.loads(archive.read(f"{name}/build.json"))
         expected_metadata = {
@@ -136,7 +144,7 @@ def prepare(directory: Path, repository: str, tag: str, windows_signing: str = "
         "| Operating system | Architecture | Installer | Portable archive |",
         "| --- | --- | --- | --- |",
     ]
-    for system, architecture, platform, installer, portable in PLATFORMS:
+    for system, architecture, platform, installer, portable in platforms(version):
         stem = f"reshiki-{version}-{platform}"
         installation = (
             link(stem + installer, "DMG" if installer == ".dmg" else "Setup EXE")
@@ -145,6 +153,14 @@ def prepare(directory: Path, repository: str, tag: str, windows_signing: str = "
         )
         archive = link(stem + portable, "ZIP" if portable == ".zip" else "tar.gz")
         lines.append(f"| {system} | {architecture} | {installation} | {archive} |")
+    if len(platforms(version)) < len(PLATFORMS):
+        lines.extend(
+            [
+                "",
+                "Nightly builds are not made for Intel Macs. On an Intel Mac, use the "
+                f"[latest stable release](https://github.com/{repository}/releases/latest).",
+            ]
+        )
     lines.extend(
         [
             "",

@@ -165,6 +165,9 @@ impl Release {
         if self.channel() != Some(Channel::Nightly) {
             return Err("Portable downloads are offered for nightly builds.".into());
         }
+        if (os, arch) == INTEL_MAC {
+            return Err(NO_INTEL_MAC_NIGHTLY.into());
+        }
         let arch = match arch {
             "aarch64" => "arm64",
             "x86_64" => "x64",
@@ -244,8 +247,16 @@ impl Cache {
     }
 }
 
+/// Nightlies are not built for Intel Macs; stable releases are.
+const INTEL_MAC: (&str, &str) = ("macos", "x86_64");
+const NO_INTEL_MAC_NIGHTLY: &str =
+    "Nightly builds are not made for Intel Macs. Choose Stable to get updates.";
+
 #[cfg(not(target_arch = "wasm32"))]
 pub async fn check(channel: Channel, manual: bool) -> Result<Release, String> {
+    if channel == Channel::Nightly && (std::env::consts::OS, std::env::consts::ARCH) == INTEL_MAC {
+        return Err(NO_INTEL_MAC_NIGHTLY.into());
+    }
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()

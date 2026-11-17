@@ -70,12 +70,13 @@ LICENSE_CHECK = (
 )
 
 # CI and manual evidence this script cannot produce, as (gate, evidence, source).
+# A nightly run has five targets, without Intel macOS; nightly=false builds all six.
 PENDING = (
     ("G1", "(a) transcripts and rmcp interop on 3 OSes", "checks.yml rust job"),
-    ("G1", "(b) stdlib driver on 6 package targets", "release.yml nightly=true"),
+    ("G1", "(b) stdlib driver on 6 package targets", "release.yml nightly=false"),
     ("G1", "(c) phase-aware corpus on 3 OSes", "checks.yml rust job"),
     ("G1", "(d) Claude Code, Claude Desktop (macOS, Windows), Codex CLI", "owner"),
-    ("G2", "6 build jobs green with verify_agent_api", "release.yml nightly=true"),
+    ("G2", "6 build jobs green with verify_agent_api", "release.yml nightly=false"),
     ("G2", "quarantined launch of the signed app", "release.yml sign_macos=true on main"),
     ("G2", "Windows upgrade over a running server", "release.yml nightly=true"),
     ("G3", "escape suite on 3 OSes, RESHIKI_REQUIRE_LINK_TESTS=1", "checks.yml rust job"),
@@ -83,7 +84,7 @@ PENDING = (
     ("G4", "Windows pipe EOF, release profile, x64 and ARM64", "release.yml nightly=true"),
     ("G4", "quota and cancellation tests on 3 OSes", "checks.yml rust job"),
     ("G5", "malformed corpus on 3 OSes", "checks.yml rust job"),
-    ("G6", "audit inside release notices() on 6 targets", "release.yml nightly=true"),
+    ("G6", "audit inside release notices() on 6 targets", "release.yml nightly=false"),
     ("G7", "privacy-policy review sign-off", "owner"),
     ("G8", "full checks.yml on 3 OSes", "checks.yml on the tip"),
     ("G8", "live_reference=true, 12 shards", "checks.yml dispatch"),
