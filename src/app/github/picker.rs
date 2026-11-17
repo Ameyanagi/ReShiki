@@ -2231,19 +2231,22 @@ impl App {
         .padding(0)
         .style(crate::app::workspace::control(false))
         .on_press(Message::GitHub(GitHubAction::OpenRepo(repo.key.clone())));
+        // The row's padding is inside the hover, so the ↗ shows wherever the
+        // row itself reacts to the pointer.
         let content = iced::widget::hover(
-            content.push(slot),
+            container(content.push(slot)).padding([4, 6]),
             container(crate::app::workspace::hover_hint(
                 arrow,
                 page,
                 iced::widget::tooltip::Position::Top,
             ))
+            .padding([4, 6])
             .align_right(Length::Fill)
             .center_y(Length::Fill),
         );
         let row = reshiki::accessibility::button(format!("github-repo-{at}"), spoken, content)
             .width(Length::Fill)
-            .padding([4, 6])
+            .padding(0)
             .style(crate::app::workspace::control(current || highlighted))
             .on_press_maybe((!greyed).then(|| msg(Action::PickRepo(repo.key.clone()))));
         // Right-click: Open on GitHub ↗, and Remove from list for a shared one.

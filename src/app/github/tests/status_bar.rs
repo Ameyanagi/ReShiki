@@ -357,13 +357,32 @@ async fn repository_rows_open_their_page_on_github() {
         .map(|at| window.nodes[at].id.clone())
         .expect("the long row");
     let row = window.node(&at).bounds;
-    let shown = (window.found.texts.iter())
-        .find(|(text, bounds)| text == "↗" && (bounds.center_y() - row.center_y()).abs() < 1.)
-        .expect("the selected row's ↗")
-        .1;
-    assert!((shown.width - 18.).abs() < 0.5, "{shown:?}");
-    assert!(
-        shown.x + shown.width <= row.x + row.width,
-        "{shown:?} {row:?}"
-    );
+    // Each row draws the ↗ of its button, which shows only on the pointer
+    // or focus; the selected row also draws its own, in the room kept for it.
+    let arrows = |row: Rectangle| -> Vec<Rectangle> {
+        (window.found.texts.iter())
+            .filter(|(text, bounds)| text == "↗" && (bounds.center_y() - row.center_y()).abs() < 1.)
+            .map(|(_, bounds)| *bounds)
+            .collect()
+    };
+    let shown = arrows(row);
+    assert_eq!(shown.len(), 2, "{shown:?}");
+    for shown in shown {
+        assert!((shown.width - 18.).abs() < 0.5, "{shown:?}");
+        assert!(
+            shown.x + shown.width <= row.x + row.width,
+            "{shown:?} {row:?}"
+        );
+    }
+    let others: Vec<_> = (window.nodes.iter())
+        .filter(|node| {
+            node.id != at
+                && (node.id.strip_prefix("github-repo-"))
+                    .is_some_and(|n| n.parse::<usize>().is_ok())
+        })
+        .collect();
+    assert_eq!(others.len(), 2);
+    for other in others {
+        assert_eq!(arrows(other.bounds).len(), 1, "{}", other.id);
+    }
 }
