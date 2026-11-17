@@ -194,8 +194,11 @@ fn an_automatic_name_line_exports_linked_and_a_custom_one_as_plain_text() {
     ] {
         let link = &back.property_captions[0];
         assert_eq!(link.properties, [Property::Name, Property::Weight]);
-        // The structure is identified on import, so the app can name it.
+        // The structure is identified on import, and the saved line is its
+        // automatic name until the structure changes.
         assert_eq!(link.smiles, smiles);
+        assert_eq!(link.name, "phenol");
+        assert!(!link.needs_name());
         assert_eq!(caption(&back), "phenol\nMol. Wt.: 94.11");
         // The name line stays bold.
         let text = &back.annotations[0];

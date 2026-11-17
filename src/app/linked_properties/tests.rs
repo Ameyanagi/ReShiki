@@ -111,12 +111,15 @@ fn the_automatic_name_arrives_in_the_edit_undo_step() {
     let smiles = app.tab.naming.caption_pending.clone().unwrap();
     assert_eq!(caption(&app), Some("–"));
     let frames = app.tab.history.frames();
+    let revision = app.tab.revision;
     let _ = app.update(Message::Naming(Action::CaptionNamed(
         smiles,
         Box::new(Ok(Outcome::Structure(record("CCO")))),
     )));
     assert_eq!(caption(&app), Some("ethan-1-ol"));
     assert_eq!(app.tab.history.frames(), frames);
+    // No new revision either, so a Cut or Paste in flight still applies.
+    assert_eq!(app.tab.revision, revision);
     assert!(app.tab.naming.caption_pending.is_none());
     let _ = app.update(Message::Undo);
     assert_eq!(caption(&app), None);
@@ -145,6 +148,12 @@ fn a_structure_the_generator_refuses_is_not_asked_again() {
             .map(String::as_str),
         Some("not supported")
     );
+    let _ = app.update(Message::Undo);
+    assert!(app.tab.naming.caption_pending.is_none());
+    // Showing the name again retries it.
+    let atoms = app.tab.doc.atoms.iter().map(|a| a.id).collect();
+    let _ = app.update(Message::ToggleProperty(atoms, Property::Name));
+    assert_eq!(app.tab.naming.caption_pending, Some(smiles));
 }
 
 #[test]

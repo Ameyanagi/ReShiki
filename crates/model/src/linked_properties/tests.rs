@@ -404,7 +404,11 @@ fn styling_part_of_the_caption_keeps_it() {
 
 #[test]
 fn analysis_without_values_uses_its_caption_label() {
-    let (text, _) = write(None, &[Property::Analysis], true);
+    let link = PropertyCaption {
+        properties: vec![Property::Analysis],
+        ..Default::default()
+    };
+    let (text, _) = write(None, &link);
     assert_eq!(text, "Anal. Calcd: –");
 }
 
@@ -512,6 +516,13 @@ fn bold(doc: &Document) -> String {
         .collect()
 }
 
+/// Type over the caption the way the text editor does, keeping styles in place.
+fn retype(doc: &mut Document, text: &str) {
+    let caption = &mut doc.annotations[0];
+    let old = std::mem::replace(&mut caption.text, text.into());
+    caption.format.edited(&old, text, old.len()..old.len());
+}
+
 #[test]
 fn the_name_is_the_first_line_and_bold() {
     let (mut doc, _) = shown_doc(
@@ -553,20 +564,20 @@ fn a_custom_name_from_the_panel_or_the_canvas_is_one_value() {
     // Typing over the name line on the canvas sets the same value and keeps the link.
     let mut history = History::default();
     edit(&mut doc, &mut history, |doc| {
-        doc.annotations[0].text = "Aspirin precursor\nMol. Wt.: 94.11".into()
+        retype(doc, "Aspirin precursor\nMol. Wt.: 94.11")
     });
     let link = &doc.property_captions[0];
     assert_eq!(link.custom_name, "Aspirin precursor");
     assert_eq!(text(&doc), "Aspirin precursor\nMol. Wt.: 94.11");
     // A line break typed at the end of the name stays one line.
     edit(&mut doc, &mut history, |doc| {
-        doc.annotations[0].text = "3a\n\nMol. Wt.: 94.11".into()
+        retype(doc, "3a\n\nMol. Wt.: 94.11")
     });
     assert_eq!(doc.property_captions[0].custom_name, "3a");
     assert_eq!(text(&doc), "3a\nMol. Wt.: 94.11");
     // Clearing the name, or ↺, returns to the automatic name.
     edit(&mut doc, &mut history, |doc| {
-        doc.annotations[0].text = "\nMol. Wt.: 94.11".into()
+        retype(doc, "\nMol. Wt.: 94.11")
     });
     assert_eq!(doc.property_captions[0].custom_name, "");
     assert_eq!(text(&doc), "phenol\nMol. Wt.: 94.11");
@@ -578,9 +589,7 @@ fn a_custom_name_from_the_panel_or_the_canvas_is_one_value() {
     rename(&mut doc, &atoms, "phenol", TextFormat::default(), true).unwrap();
     assert_eq!(doc.property_captions[0].custom_name, "");
     // Editing a property line still makes the caption plain text.
-    edit(&mut doc, &mut history, |doc| {
-        doc.annotations[0].text = "phenol\nMW 94".into()
-    });
+    edit(&mut doc, &mut history, |doc| retype(doc, "phenol\nMW 94"));
     assert!(doc.property_captions.is_empty());
 }
 
@@ -641,4 +650,34 @@ fn names_save_as_version_39_only_when_used() {
     assert_eq!(loaded.property_captions[0].custom_name, "3a");
     assert_eq!(loaded.property_captions[0].name, "phenol");
     assert_eq!(loaded.annotations, doc.annotations);
+}
+
+#[test]
+fn reshaping_a_double_bond_renames_but_moving_the_molecule_does_not() {
+    let mut doc = Document::default();
+    let a = doc.add_atom("C", Point::new(-20., -20.));
+    let b = doc.add_atom("C", Point::new(0., 0.));
+    let c = doc.add_atom("C", Point::new(30., 0.));
+    let d = doc.add_atom("C", Point::new(50., 20.));
+    doc.add_bond(a, b, 1, "plain");
+    doc.add_bond(b, c, 2, "plain");
+    doc.add_bond(c, d, 1, "plain");
+    let atoms = vec![a, b, c, d];
+    toggle(
+        &mut doc,
+        &atoms,
+        Property::Name,
+        TextFormat::default(),
+        true,
+    )
+    .unwrap();
+    let trans = doc.property_captions[0].smiles.clone();
+    named(&mut doc, &trans, "(2E)-but-2-ene");
+    let mut history = History::default();
+    edit(&mut doc, &mut history, |doc| doc.translate(&atoms, 15., 5.));
+    assert_eq!(doc.property_captions[0].name, "(2E)-but-2-ene");
+    // Dragging one end across the double bond makes the Z isomer.
+    edit(&mut doc, &mut history, |doc| doc.translate(&[d], 0., -40.));
+    assert_ne!(doc.property_captions[0].smiles, trans);
+    assert!(doc.property_captions[0].needs_name());
 }

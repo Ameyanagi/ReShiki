@@ -33,6 +33,10 @@ impl App {
     }
 
     pub(super) fn toggle_property(&mut self, atoms: &[u64], property: Property) {
+        // Showing a name again retries structures that could not be named.
+        if property == Property::Name {
+            self.tab.naming.caption_failed.clear();
+        }
         let before = self.tab.doc.clone();
         let shown = linked_properties::shown(&before, atoms, property);
         if let Err(error) = linked_properties::toggle(
@@ -139,8 +143,10 @@ impl App {
         };
         match name {
             Ok(name) => {
+                // Like background labels: no new revision, so a Cut or Paste
+                // waiting for the clipboard still applies.
                 if linked_properties::named(&mut self.tab.doc, smiles, &name) {
-                    self.drawing_revised(false);
+                    self.tab.label_generation = self.tab.label_generation.wrapping_add(1);
                 }
             }
             Err(error) => {

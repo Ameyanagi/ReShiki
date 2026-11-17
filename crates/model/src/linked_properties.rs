@@ -488,14 +488,38 @@ pub fn named(doc: &mut Document, smiles: &str, name: &str) -> bool {
     changed
 }
 
-/// Identify the molecules of name lines read from a file, so the app can
-/// name them.
+/// Identify the molecules of name lines read from a file. The name line as
+/// saved is the automatic name until the structure changes, so opening a file
+/// does not rename it.
 pub fn identify_names(doc: &mut Document) {
     let mut links = std::mem::take(&mut doc.property_captions);
     for link in links.iter_mut().filter(|link| link.tracks_name()) {
         link.identify(doc);
+        if link.properties.first() == Some(&Property::Name) {
+            let line = link.text.split('\n').next().unwrap_or_default();
+            if line != "–" {
+                link.name = line.into();
+            }
+        }
     }
     doc.property_captions = links;
+}
+
+/// Whether the atoms moved other than all together.
+fn reshaped(before: &Document, doc: &Document, atoms: &[u64]) -> bool {
+    let positions = |doc: &Document| {
+        atoms
+            .iter()
+            .map(|id| doc.atom(*id).map(|a| a.position))
+            .collect::<Option<Vec<_>>>()
+    };
+    let (Some(old), Some(new)) = (positions(before), positions(doc)) else {
+        return true;
+    };
+    let (dx, dy) = (new[0].x - old[0].x, new[0].y - old[0].y);
+    old.iter()
+        .zip(&new)
+        .any(|(a, b)| (b.x - a.x - dx).abs() > 1e-3 || (b.y - a.y - dy).abs() > 1e-3)
 }
 
 /// The molecule's atoms, wherever they are drawn, its bonds and any
@@ -586,8 +610,10 @@ pub fn reconcile(doc: &mut Document, before: &Document) {
                     && old.two_decimal_weight == link.two_decimal_weight
             })
             && before.drawing_style == doc.drawing_style;
+        // Stereo read from the drawing can change with the shape, not with a move.
+        let identify = link.tracks_name() && !(same && !reshaped(before, doc, &whole));
         link.atoms = whole;
-        if !same && link.tracks_name() {
+        if identify {
             link.identify(doc);
         }
         if let Some(name) = typed {
