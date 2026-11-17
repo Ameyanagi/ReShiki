@@ -75,7 +75,7 @@ explains how the crates and modules fit together.
 - `src/app/generic.rs`: Finite expansion creates a new drawing; the source and its history stay intact.
 - `src/app/github.rs`: GitHub in the editor
 - `src/app/github/account.rs`: The sign-in dialog
-- `src/app/github/compare.rs`: Two versions of a drawing side by side, with what differs marked
+- `src/app/github/compare.rs`: Two versions of a drawing side by side, with what changed marked by kind
 - `src/app/github/conflict.rs`: A drawing changed on GitHub since it was opened here
 - `src/app/github/identity.rs`: Which repository a drawing is in, at a glance
 - `src/app/github/newer.rs`: Newer on GitHub
@@ -656,6 +656,9 @@ explains how the crates and modules fit together.
 - `crates/model/src/chemistry/stereo_lint.rs`: Advisory checks for stereochemical drawing conventions.
 - `crates/model/src/color_contrast.rs`: Perceptual palette generation, followed by contrast checks on final sRGB bytes.
 - `crates/model/src/common_groups.rs`: Additional complete groups, built from the established endpoint replacement.
+- `crates/model/src/compare.rs`: Two versions of a drawing compared as chemistry and as layout, for History's Compare and the changed-on-GitHub dialog.
+- `crates/model/src/compare/chemistry.rs`: One molecule as chemistry, for comparing
+- `crates/model/src/compare/fit.rs`: The proper 2D rigid fit (Kabsch)
 - `crates/model/src/crossings.rs`: Drawing depth at crossings; never changes chemical connectivity.
 - `crates/model/src/crossings/depth.rs`: Resolve crossings at their actual XYZ intersection, with explicit layers taking precedence over automatic depth.
 - `crates/model/src/crossings/ring_strokes.rs`: Crossing clearance for cubic aromatic circles and partial ring curves.

@@ -3812,7 +3812,7 @@ pub(super) fn control(active: bool) -> impl Fn(&Theme, button::Status) -> button
     }
 }
 /// The sunken track behind the inspector's tab segments.
-fn segment_track(theme: &Theme) -> container::Style {
+pub(in crate::app) fn segment_track(theme: &Theme) -> container::Style {
     let dark = crate::appearance::is_dark(theme);
     container::Style {
         background: Some(
@@ -3831,7 +3831,7 @@ fn segment_track(theme: &Theme) -> container::Style {
     }
 }
 /// A tab segment: the selected one is a raised surface on the track.
-fn segment(selected: bool) -> impl Fn(&Theme, button::Status) -> button::Style {
+pub(in crate::app) fn segment(selected: bool) -> impl Fn(&Theme, button::Status) -> button::Style {
     move |theme, status| {
         let dark = crate::appearance::is_dark(theme);
         let hovered = matches!(status, button::Status::Hovered | button::Status::Pressed);

@@ -3,7 +3,11 @@
 //! Keep both. Nothing is the default, so a bare Enter decides nothing; Later
 //! (Escape) decides later and the status bar keeps Review. Nothing is
 //! overwritten without a choice.
-use super::{Action, Dialog, compare::Compare, file_name, perform};
+use super::{
+    Action, Dialog,
+    compare::{Compare, Side, reading},
+    file_name, perform,
+};
 use crate::app::{App, Message, workspace::muted_text};
 use iced::widget::{Space, column, container, row, text, tooltip};
 use iced::{Alignment, Element, Length, Task};
@@ -42,8 +46,9 @@ impl App {
     pub(super) fn github_review(&mut self, key: RepoKey, done: usize) -> Task<Message> {
         if let Some(review) = self.conflict_review(&key, done) {
             let meta = self.conflict_meta(&key, &review.repo_path);
+            let start = review.compare.start();
             self.github.dialog = Some(Dialog::Conflict(Box::new(review)));
-            return meta;
+            return Task::batch([meta, start]);
         }
         self.github_refresh(&key);
         let unsent = self.github.unsent.get(&key).cloned().unwrap_or_default();
@@ -310,11 +315,11 @@ impl App {
 }
 
 pub(super) fn view<'a>(review: &'a Review, me: Option<&str>) -> Element<'a, Message> {
-    let mut title = row![
-        text(format!("“{}” changed on GitHub", review.name)).size(18),
-        Space::new().width(Length::Fill),
-    ]
-    .align_y(Alignment::Center);
+    let mut title = row![text(format!("“{}” changed on GitHub", review.name)).size(18)]
+        .push(review.compare.verdict_badge())
+        .push(Space::new().width(Length::Fill))
+        .spacing(10)
+        .align_y(Alignment::Center);
     if review.total > 1 {
         let at = format!("{} of {}", review.done + 1, review.total);
         title = title.push(text(at).size(13).style(muted_text));
@@ -328,31 +333,23 @@ pub(super) fn view<'a>(review: &'a Review, me: Option<&str>) -> Element<'a, Mess
     let keep = |id, label, choice| {
         container(button(id, label, Action::Resolve(choice))).center_x(Length::Fill)
     };
-    // `GitHub · @alice · 14:02`, then the commit's message if there is room.
-    let mut theirs = row![text("GitHub").size(13)].spacing(6);
-    if let Some(found) = &review.theirs {
+    // `On GitHub · @alice · 14:02 · message` beside `Your drawing · not sent`.
+    let theirs = review.theirs.as_ref().map_or_else(String::new, |found| {
         let who = super::versions::who(found.login.as_deref(), &found.author, me);
-        theirs = theirs
-            .push(
-                text(format!("· {who} · {}", super::versions::clock(&found.date)))
-                    .size(13)
-                    .style(muted_text),
-            )
-            .push(
-                text(found.message.clone())
-                    .size(12)
-                    .style(muted_text)
-                    .wrapping(text::Wrapping::None),
-            );
-    }
-    let yours = row![text("Yours").size(13)]
-        .push(
-            review
-                .saved
-                .as_ref()
-                .map(|at| text(format!("· saved {at}")).size(13).style(muted_text)),
+        format!(
+            "{who} · {} · {}",
+            super::versions::clock(&found.date),
+            found.message
         )
-        .spacing(6);
+    });
+    let yours = review.saved.as_ref().map_or_else(
+        || "not sent".to_owned(),
+        |at| format!("not sent · saved {at}"),
+    );
+    let sides = [
+        Side::new("On GitHub", theirs),
+        Side::new("Your drawing", yours),
+    ];
     let keep_both = tooltip(
         button(
             "github-keep-both",
@@ -366,17 +363,20 @@ pub(super) fn view<'a>(review: &'a Review, me: Option<&str>) -> Element<'a, Mess
     );
     column![
         title,
-        review.compare.view([theirs.into(), yours.into()]),
-        row![
-            keep("github-keep-theirs", "Keep GitHub’s", Choice::KeepTheirs),
-            keep("github-keep-mine", "Keep mine", Choice::KeepMine),
-        ]
-        .spacing(12),
+        review.compare.view(
+            sides.clone(),
+            [
+                Some(keep("github-keep-theirs", "Keep GitHub’s", Choice::KeepTheirs).into()),
+                Some(keep("github-keep-mine", "Keep mine", Choice::KeepMine).into()),
+            ],
+        ),
         row![
             button("github-later", "Later", Action::Close),
+            text(reading(&sides)).size(12).style(muted_text),
             Space::new().width(Length::Fill),
             keep_both,
         ]
+        .spacing(12)
         .align_y(Alignment::Center),
     ]
     .spacing(12)

@@ -136,8 +136,8 @@ open the drawing. The GitHub button has a dot while anything is not sent.
 
 If a drawing changed on GitHub since you opened it, Send leaves it out, the
 status bar says so in amber (**Not sent · ring.rsk changed on GitHub**), and
-ReShiki shows **GitHub** and **Yours** side by side. What differs is painted
-with ReShiki's highlight on both. Choose:
+ReShiki shows **GitHub** and **Yours** side by side, compared as in
+[Compare](#compare-two-versions). Choose:
 
 - **Keep GitHub’s** (under GitHub's): your drawing becomes GitHub's. Undo
   brings yours back, and yours stays in Versions.
@@ -178,6 +178,39 @@ palette offers the GitHub commands that apply to the drawing in front, such as
 typing a whole word such as `send`, `history`, `versions` or `repo` puts them
 first.
 
+### Compare two versions
+
+Compare, and the changed-on-GitHub dialog, show both drawings with what
+changed marked by kind, and a list of the changes beside them. The version
+you compare with is on the left, in a dashed grey frame marked **COMPARED**
+(**Version · saved 14:02**, or **On GitHub · @alice · 14:05**); the drawing
+you have open is on the right, in a green frame marked **CURRENT** (**Your
+drawing · open now**, or **· not sent**). Changes read from left to right. A badge says
+**Chemically identical**, **2 chemical changes** or **Couldn't verify all
+chemistry**.
+
+- **Chemistry**, **Layout** and **Everything** (the default) choose which
+  changes show, each with its count. Chemistry is atoms, bonds, charges,
+  isotopes, hydrogens, stereo and reaction roles. Layout is moves, redraws,
+  style and text.
+- A molecule drawn as aromatic or Kekulé, a wedge moved to another bond with
+  the same configuration, a collapsed label and refreshed R/S labels are not
+  chemical changes. Chemistry that cannot be checked, such as an R-group, is
+  **Couldn't verify** with the reason, never "the same".
+- A moved or turned molecule gets a blue dashed outline and one **MOVED**
+  line; when most of the drawing moved together, that is one line, **Whole
+  scheme moved**. A molecule whose shape changed, as Clean Up does, is
+  **Molecule redrawn**.
+- **Line up moved molecules** (on by default) shows each moved object of the
+  right side where the left side has it, so real differences stand out. Turn
+  it off to see where they are.
+- Each line has a tag that reads without colour: **CHEM**, **MOVED**,
+  **STYLE**, **TEXT**, **RXN**, **ADDED**, **REMOVED**, **SAME** and **?**.
+  A chemical change shows its SMILES before → after. Click a line to point at
+  it in both drawings; click it again to let go.
+- The comparison runs in the background (**Comparing…**), so a big drawing
+  never stops the window.
+
 ## Limits
 
 - Desktop only. The browser editor has no GitHub sign-in yet.
@@ -192,7 +225,10 @@ first.
 - Only `.webloc` and `.url` files carry a dropped link; a link dragged from a
   browser's address bar is not received.
 - A change to the drawing's style or settings is not painted. The compare
-  says **Style or settings changed** instead.
+  lists **Style or settings changed** instead.
+- Compare matches molecules by ReShiki's own ids, then by SMILES. A molecule
+  both changed and given new ids, as after importing it again, shows as
+  removed and added. A mirror image or a scaled molecule is a redraw.
 - Send sends saved files. It first saves every open drawing of that
   repository; a drawing that is not open is sent as last saved.
 - On Linux without a keyring, the sign-in lasts until ReShiki quits:
@@ -216,12 +252,17 @@ first.
 - Send reads the repository by id, builds one tree on the branch head and
   moves the branch only forward. If the head moved, it retries against the new
   head.
-- The compare matches atoms, text, arrows and graphics by id (ids survive
-  saving) and bonds by their two atoms, and compares each as saved. A bond
-  whose atom moved counts as changed. Everything else in the file is compared
-  as a whole for **Style or settings changed**. Atoms and bonds that differ
-  get the persistent highlight paint in one diff colour, on copies made for
-  the compare; text and graphics get a soft fill of that colour behind them.
+- The compare (`reshiki::compare`) matches molecules (connected atoms) by
+  shared ids checked against a bond both sides keep, then by canonical
+  isomeric SMILES, duplicates by where they sit once the common move is
+  removed; text, arrows and graphics by id, then by content and place. Each
+  matched molecule is compared as chemistry over its prepared, sanitized
+  structure, and fitted onto its old self with a proper 2D rigid fit
+  (Kabsch): within 0.01 bond lengths RMS and 0.03 at most it moved; beyond
+  that, with the same chemistry, it was redrawn. A move at least two objects
+  and three in four share is **Whole scheme moved**. Everything else in the
+  file is compared as a whole for **Style or settings changed**. The marks are
+  drawn as a layer over the drawings; neither drawing is changed.
 - Tiles list one folder at a time, at most 200 matching the search. They
   render the file itself, the way an opened file renders (an SD file's first
   record); no preview file from the repository is parsed. A folder's names
