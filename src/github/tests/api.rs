@@ -140,6 +140,110 @@ async fn a_drawing_downloads_with_its_blob_and_commit() {
     assert_eq!(gone, Err(Error::NotFound));
 }
 
+/// The requests made since the log held `from` of them, by path.
+fn asked(mock: &Mock, from: usize) -> Vec<String> {
+    let model = mock.model();
+    model.log[from..].iter().map(|one| one.path.clone()).collect()
+}
+
+#[tokio::test]
+async fn a_listed_file_opens_by_its_blob_alone_and_once_read_with_none() {
+    let mock = Mock::start(0).await;
+    mock.model().seed_demo();
+    let (client, repo) = (mock.client(), key("lab-notes"));
+    let head = api::head(&client, &repo, "main").await.unwrap();
+    let top = api::tree(&client, &repo, &head.tree).await.unwrap();
+    let ring = top.iter().find(|entry| entry.name == "ring.rsk").unwrap();
+    let ring = ring.sha.clone();
+    let bytes = mock.model().repo("lab-notes").files()["ring.rsk"].clone();
+    // Someone changes it after it was listed: it opens as listed, based
+    // on the listing's commit, for Send to find the change in the way.
+    mock.model()
+        .repo("lab-notes")
+        .remote_commit("ring.rsk", Some(b"theirs"));
+    let from = mock.model().log.len();
+    let got = api::download_listed(&client, &repo, head.commit.clone(), ring.clone()).await;
+    let want = api::Download {
+        commit: head.commit.clone(),
+        blob: ring.clone(),
+        bytes,
+    };
+    assert_eq!(got.as_ref(), Ok(&want));
+    let blob = format!("/api/repos/{LOGIN}/lab-notes/git/blobs/{ring}");
+    assert_eq!(asked(&mock, from), [blob]);
+    // Its preview read it already: opening asks GitHub nothing.
+    let from = mock.model().log.len();
+    let again = api::download_listed(&client, &repo, head.commit, ring).await;
+    assert_eq!(again, Ok(want));
+    assert!(asked(&mock, from).is_empty());
+}
+
+#[tokio::test]
+async fn what_never_changes_is_asked_once_and_the_branch_every_time() {
+    let mock = Mock::start(0).await;
+    mock.model().seed_demo();
+    let (client, repo) = (mock.client(), key("lab-notes"));
+    // Choosing the repository, as the picker does: its branch, its top
+    // folder, and the whole of it.
+    let (client, repo) = (&client, &repo);
+    let choose = move || async move {
+        let head = api::head(client, repo, "main").await.unwrap();
+        let top = api::tree(client, repo, &head.tree).await.unwrap();
+        api::tree_all(client, repo, &head.tree).await.unwrap();
+        (head, top)
+    };
+    let (head, top) = choose().await;
+    let scheme = top.iter().find(|entry| entry.folder).unwrap().sha.clone();
+    api::tree(client, repo, &scheme).await.unwrap();
+    let route = api::last_commit(client, repo, "scheme/route.rsk", &head.commit)
+        .await
+        .unwrap()
+        .unwrap();
+    // Up, into the folder again, its date, and the repository chosen again:
+    // only the branch is asked.
+    let from = mock.model().log.len();
+    api::tree(client, repo, &head.tree).await.unwrap();
+    api::tree(client, repo, &scheme).await.unwrap();
+    let again = api::last_commit(client, repo, "scheme/route.rsk", &head.commit).await;
+    assert_eq!(again, Ok(Some(route)));
+    assert_eq!(choose().await.0, head);
+    let branch = format!("/api/repos/{LOGIN}/lab-notes/git/ref/heads/main");
+    assert_eq!(asked(&mock, from), [branch]);
+    // A new commit shows the next time the repository is chosen.
+    mock.model()
+        .repo("lab-notes")
+        .remote_commit("new.rsk", Some(b"new"));
+    let (moved, top) = choose().await;
+    assert_ne!(moved, head);
+    assert!(top.iter().any(|entry| entry.name == "new.rsk"));
+}
+
+#[tokio::test]
+async fn a_files_last_change_is_one_commit_asked_for() {
+    let mock = Mock::start(0).await;
+    mock.model().seed_demo();
+    let (client, repo) = (mock.client(), key("lab-notes"));
+    let head = api::head(&client, &repo, "main").await.unwrap();
+    let last = api::last_commit(&client, &repo, "scheme/furan.rsk", &head.commit).await;
+    assert_eq!(last, Ok(None));
+    let last = api::last_commit(&client, &repo, "ring.rsk", &head.commit)
+        .await
+        .unwrap()
+        .unwrap();
+    let all = api::file_commits(&client, &repo, "ring.rsk", &head.commit, 1)
+        .await
+        .unwrap();
+    assert_eq!(Some(&last), all.first());
+    assert_eq!(
+        mock.model()
+            .count("GET", &format!("/api/repos/{LOGIN}/lab-notes/commits?")),
+        3
+    );
+    let model = mock.model();
+    let one = model.log.iter().filter(|one| one.path.ends_with("per_page=1"));
+    assert_eq!(one.count(), 2, "History still asks for pages of 20");
+}
+
 #[tokio::test]
 async fn an_empty_repository_and_a_missing_branch_differ() {
     let mock = Mock::start(0).await;

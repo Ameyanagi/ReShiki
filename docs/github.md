@@ -18,8 +18,9 @@ so drawings show on GitHub.
 3. The picker opens the only repository, or the one you used last. Pick
    another on the left; open folders and drawings with a double-click, Enter
    or **Open**. Backspace goes up a folder; the parents in **lab-notes /
-   scheme** go back too. Drawings show who changed them last and when (**You**
-   for your own changes), newest first. With a repository open, the search
+   scheme** go back too. Folders come first, then files, each by name; who
+   changed each file last and when (**You** for your own changes) fills in
+   as GitHub answers, and nothing moves. With a repository open, the search
    field filters its files.
 4. Edit and save as usual. The status bar chip shows the repository, the
    folder and what is left: **● lab-notes / scheme · 1 unsent** with **Send**.
@@ -27,7 +28,8 @@ so drawings show on GitHub.
 5. Choose **Send**. A small box above the chip says what goes where, such as
    **ring.rsk → lab-notes**, with the message selected: type over it or keep
    it, then press Enter. ReShiki first saves every open drawing of that
-   repository, as **Save** does. The chip shows **● lab-notes ✓**.
+   repository, as **Save** does: the chip says **Saving…**, then
+   **Sending…**, then shows **● lab-notes ✓**.
 
 Each repository keeps a color. Its tabs show a badge with its initials, such
 as **LN** for lab-notes, and the tab in front is underlined in that color; the
@@ -56,8 +58,8 @@ file's records land side by side. If they do not all fit in one drawing, the
 ones that fit open or are inserted, and the status bar says so in amber, such
 as **Opened 120 of 150 structures · The rest don't fit**.
 
-A folder shows its first 200 files, newest first, and says how many there
-are; the search field finds the others.
+A folder shows its first 200 files by name, and says how many there are;
+the search field finds the others.
 
 ### Tiles or Tree
 
@@ -216,10 +218,28 @@ first.
   the compare; text and graphics get a soft fill of that colour behind them.
 - Tiles list one folder at a time, at most 200 matching the search. They
   render the file itself, the way an opened file renders (an SD file's first
-  record); no preview file from the repository is parsed. Each file's last
-  commit and preview are one request each, made only once its tile is on
-  screen. The first screenful shows once all of its dates are known and sorts
-  newest first, once; tiles scrolled to later never move the others.
+  record); no preview file from the repository is parsed. A folder's names
+  show as soon as it is listed, folders first, then by name. Each file's last
+  commit (one, as of the listed commit) and preview are one request each,
+  made only once its tile is on screen, and fill in without moving anything.
+  A folder opened again in the same repository asks for neither again.
+- Opening a file from the picker reads it by the blob the listing named, one
+  request, or none once its preview was read; its working copy is based on
+  the listed commit. If someone changed it on GitHub since the listing, the
+  check on window focus offers **Update**, and Send finds the change in the
+  way as a conflict: it never goes over it.
+- What GitHub never changes is kept while ReShiki runs, apart for each
+  sign-in and for signed-out reading: folders and files by their object
+  names, commits by name, and a file's last commit as of a commit. Up to
+  64 MB, the least recently used going first. Choosing a repository still
+  asks for its branch head each time, so new commits show; going up, into a
+  folder again or choosing the repository again asks GitHub for nothing
+  else. Nothing is kept on disk.
+- Requests go over HTTP/2 where GitHub offers it, one connection for the
+  previews, dates and uploads running at once; signed-in, signed-out and
+  sign-in requests share the connections. Send uploads each drawing and its
+  preview four at a time, then makes the tree, the commit and the branch
+  move in that order.
 - The tree reads the repository whole with one recursive tree request when
   the repository opens, kept until it opens again. Only its rows on screen are
   built; their last commits, and the selected file's preview, are asked for as

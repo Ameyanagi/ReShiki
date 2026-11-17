@@ -1108,7 +1108,7 @@ fn picker_at(app: &mut App, mode: Mode, names: &[&str]) {
     let generation = picker_generation(app);
     github(
         app,
-        Action::Picker(picker::Action::Listing(generation, Ok((sha('8'), entries)))),
+        Action::Picker(picker::Action::Listing(generation, Ok((None, sha('8'), entries)))),
     );
     // No last change is known; the drawings show.
     for name in names.iter().filter(|name| name.ends_with(".rsk")) {
@@ -1117,7 +1117,8 @@ fn picker_at(app: &mut App, mode: Mode, names: &[&str]) {
     }
 }
 
-/// Lists the folder open in the picker with `folders` and `drawings`.
+/// Lists the folder open in the picker with `folders` and `drawings`; the
+/// request their dates answer to.
 fn picker_lists(app: &mut App, folders: &[&str], drawings: &[&str]) -> u64 {
     let entry = |folder: bool| {
         move |name: &&str| gh::Entry {
@@ -1130,9 +1131,9 @@ fn picker_lists(app: &mut App, folders: &[&str], drawings: &[&str]) -> u64 {
         .chain(drawings.iter().map(entry(false)))
         .collect();
     let generation = picker_generation(app);
-    let listing = picker::Action::Listing(generation, Ok((sha('8'), entries)));
+    let listing = picker::Action::Listing(generation, Ok((None, sha('8'), entries)));
     github(app, Action::Picker(listing));
-    generation
+    the_picker(app).opening
 }
 
 fn picker_changed(app: &mut App, generation: u64, path: &str, date: Option<&str>) {
@@ -1177,18 +1178,23 @@ fn a_drawing_never_shows_what_another_of_its_name_was_last_changed_by() {
     picker_changed(&mut app, top, "ring.rsk", Some("2026-03-01T00:00:00Z"));
 
     // Another `ring.rsk`, in a folder and in another repository, whose
-    // last change GitHub does not tell: it sorts after the one known.
+    // last change GitHub does not tell.
     github(&mut app, picker(picker::Action::Folder("sub".into())));
     let sub = picker_lists(&mut app, &[], &["a.rsk", "ring.rsk"]);
     picker_changed(&mut app, sub, "sub/a.rsk", Some("2025-01-01T00:00:00Z"));
     picker_changed(&mut app, sub, "sub/ring.rsk", None);
-    assert_eq!(picker_names(&app), ["a.rsk", "ring.rsk"]);
+    let known = |app: &App| -> Vec<String> {
+        let mut known: Vec<String> = the_picker(app).changed.keys().cloned().collect();
+        known.sort();
+        known
+    };
+    assert_eq!(known(&app), ["ring.rsk", "sub/a.rsk"]);
 
     github(&mut app, picker(picker::Action::PickRepo(other.key)));
     let top = picker_lists(&mut app, &[], &["a.rsk", "ring.rsk"]);
     picker_changed(&mut app, top, "a.rsk", Some("2025-01-01T00:00:00Z"));
     picker_changed(&mut app, top, "ring.rsk", None);
-    assert_eq!(picker_names(&app), ["a.rsk", "ring.rsk"]);
+    assert_eq!(known(&app), ["a.rsk"]);
 }
 
 #[test]
@@ -1222,7 +1228,7 @@ fn a_download_still_running_never_closes_a_new_folder() {
 }
 
 #[test]
-fn the_keyboard_selects_only_the_tiles_that_show() {
+fn names_show_before_their_dates_and_open_at_once() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, _) = app_in(dir.path());
     app.github.repos = vec![repo()];
@@ -1230,25 +1236,18 @@ fn the_keyboard_selects_only_the_tiles_that_show() {
     app.github.prefs.tiles = true;
     github(&mut app, picker(picker::Action::Show(Mode::Open)));
     github(&mut app, picker(picker::Action::PickRepo(repo().key)));
-    // The drawings wait for their last changes; only the folder shows.
-    let listed = picker_lists(&mut app, &["sub"], &["a.rsk", "b.rsk"]);
+    // No date is known yet: every name shows, folders first, then by name.
+    picker_lists(&mut app, &["sub"], &["b.rsk", "A.rsk"]);
+    assert_eq!(picker_names(&app), ["sub", "A.rsk", "b.rsk"]);
+    assert_eq!(the_picker(&app).tiles().0.len(), 3);
     for _ in 0..3 {
         github(&mut app, picker(picker::Action::Move(1)));
     }
-    assert_eq!(picker_selected(&app), Some(0));
-    // A selection on a hidden drawing opens nothing.
-    github(&mut app, picker(picker::Action::Select(1)));
+    assert_eq!(picker_selected(&app), Some(2));
+    // A drawing opens without waiting for any date.
     let requests = app.github.seq;
     github(&mut app, picker(picker::Action::Enter));
-    assert_eq!(app.github.seq, requests);
-
-    // The order lands: the selection stays on `a.rsk`, now after `b.rsk`.
-    picker_changed(&mut app, listed, "a.rsk", Some("2025-01-01T00:00:00Z"));
-    picker_changed(&mut app, listed, "b.rsk", Some("2026-01-01T00:00:00Z"));
-    assert_eq!(picker_names(&app), ["sub", "b.rsk", "a.rsk"]);
-    assert_eq!(picker_selected(&app), Some(2));
-    github(&mut app, picker(picker::Action::Move(-1)));
-    assert_eq!(picker_selected(&app), Some(1));
+    assert_eq!(app.github.seq, requests + 1, "a download was asked for");
 }
 
 #[test]
@@ -1323,7 +1322,7 @@ fn a_closed_pickers_late_reply_never_reaches_a_new_one() {
     };
     github(
         &mut app,
-        Action::Picker(picker::Action::Listing(late, Ok((sha('8'), vec![entry])))),
+        Action::Picker(picker::Action::Listing(late, Ok((None, sha('8'), vec![entry])))),
     );
     let Some(Dialog::Picker(picker)) = &app.github.dialog else {
         panic!("no picker");
@@ -1380,7 +1379,7 @@ fn save_here_waits_for_a_folder_that_could_not_be_listed() {
     let listed = picker_generation(&app);
     github(
         &mut app,
-        picker(picker::Action::Listing(listed, Ok((sha('8'), vec![entry])))),
+        picker(picker::Action::Listing(listed, Ok((None, sha('8'), vec![entry])))),
     );
     github(&mut app, picker(picker::Action::SendHere));
     assert_eq!(picker_error(&app).as_deref(), Some("Name taken"));
@@ -1428,7 +1427,7 @@ fn a_new_repository_with_a_renamed_ones_name_gets_its_own_folder() {
     let generation = picker_generation(&app);
     github(
         &mut app,
-        picker(picker::Action::Listing(generation, Ok((sha('8'), vec![])))),
+        picker(picker::Action::Listing(generation, Ok((None, sha('8'), vec![])))),
     );
     github(&mut app, picker(picker::Action::SaveName("new".into())));
     github(&mut app, picker(picker::Action::SendHere));
@@ -1492,7 +1491,7 @@ fn a_renamed_repository_keeps_its_folder_here() {
         &mut app,
         Action::Picker(picker::Action::Listing(
             generation,
-            Ok((sha('8'), vec![entry])),
+            Ok((None, sha('8'), vec![entry])),
         )),
     );
     picker_changed(&mut app, generation, "ring.rsk", None);
@@ -1623,6 +1622,35 @@ fn the_chip_says_what_is_left_to_do() {
     conflicted(&mut app, &path, Some(drawing(30.)));
     app.github.sending.clear();
     assert_eq!(app.github_chip_state(&key), Chip::Review);
+}
+
+#[tokio::test]
+async fn the_chip_says_saving_then_sending_from_the_moment_send_is_pressed() {
+    use iced::futures::StreamExt;
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = app_in(dir.path());
+    let key = repo().key;
+    edit(&mut app);
+    github(&mut app, Action::ShowSend);
+    assert_eq!(app.github_chip_state(&key), Chip::Unsent(1));
+    let send = app.update(Message::GitHub(Action::Send));
+    // The chip after each message, as the app runs them: never unsent again
+    // until the send ends, which fails here as offline.
+    let mut said = vec![app.github_chip_state(&key)];
+    let mut tasks = std::collections::VecDeque::from([send]);
+    while let Some(task) = tasks.pop_front() {
+        let Some(mut stream) = iced_runtime::task::into_stream(task) else {
+            continue;
+        };
+        while let Some(action) = stream.next().await {
+            if let iced_runtime::Action::Output(message) = action {
+                tasks.push_back(app.update(message));
+                said.push(app.github_chip_state(&key));
+            }
+        }
+    }
+    said.dedup();
+    assert_eq!(said, [Chip::Saving, Chip::Sending, Chip::NotSent]);
 }
 
 #[test]
@@ -2024,7 +2052,7 @@ fn the_chip_opens_the_picker_in_the_drawings_folder() {
         let generation = picker_generation(app);
         github(
             app,
-            Action::Picker(picker::Action::Listing(generation, Ok((sha('8'), listed)))),
+            Action::Picker(picker::Action::Listing(generation, Ok((None, sha('8'), listed)))),
         );
     };
     let folder = gh::Entry {
@@ -2239,7 +2267,7 @@ fn a_pasted_link_shows_one_row_and_enter_opens_its_folder() {
         &mut app,
         Action::Picker(picker::Action::Listing(
             generation,
-            Ok((sha('8'), vec![folder])),
+            Ok((None, sha('8'), vec![folder])),
         )),
     );
     let trail: Vec<&str> = (the_picker(&app).trail.iter())
@@ -2363,7 +2391,7 @@ fn signed_out_public_repositories_list_with_names_only() {
     });
     github(
         &mut app,
-        Action::Picker(picker::Action::Listing(generation, Ok((sha('8'), entries)))),
+        Action::Picker(picker::Action::Listing(generation, Ok((None, sha('8'), entries)))),
     );
     // Names only: nobody is asked who changed them, nor for previews.
     assert!(the_picker(&app).asked.is_empty());
@@ -2391,7 +2419,7 @@ fn signed_out_public_repositories_list_with_names_only() {
         &mut app,
         Action::Picker(picker::Action::Listing(
             generation,
-            Ok((sha('6'), vec![drawing])),
+            Ok((None, sha('6'), vec![drawing])),
         )),
     );
     assert_eq!(the_picker(&app).asked.len(), 1);
@@ -2764,7 +2792,7 @@ fn send_to_github_reads_a_branch_link_at_the_default_branch() {
         &mut app,
         Action::Picker(picker::Action::Listing(
             generation,
-            Ok((sha('8'), Vec::new())),
+            Ok((None, sha('8'), Vec::new())),
         )),
     );
     // Names read at another branch never let Send through.
@@ -2827,20 +2855,19 @@ fn access_given_later_reaches_the_open_picker() {
 }
 
 #[test]
-fn later_tiles_never_end_the_wait_for_the_first_ones() {
+fn dates_fill_in_without_moving_a_tile() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, _) = app_in(dir.path());
     picker_at(&mut app, Mode::Open, &[]);
-    let top = picker_lists(&mut app, &[], &["a.rsk", "b.rsk"]);
-    assert_eq!(the_picker(&app).waiting, 2);
-    // Dates of tiles scrolled into view later arrive first.
-    picker_changed(&mut app, top, "y.rsk", Some("2026-03-01T00:00:00Z"));
-    picker_changed(&mut app, top, "z.rsk", None);
-    assert_eq!(the_picker(&app).waiting, 2, "still waiting for a and b");
+    let top = picker_lists(&mut app, &[], &["a.rsk", "b.rsk", "c.rsk"]);
+    // The pointer is on `b.rsk` when the dates come, the newest last.
+    github(&mut app, Action::Picker(picker::Action::Select(1)));
     picker_changed(&mut app, top, "a.rsk", Some("2025-01-01T00:00:00Z"));
-    picker_changed(&mut app, top, "b.rsk", Some("2026-01-01T00:00:00Z"));
-    assert_eq!(the_picker(&app).waiting, 0);
-    assert_eq!(picker_names(&app), ["b.rsk", "a.rsk"]);
+    picker_changed(&mut app, top, "c.rsk", Some("2026-06-01T00:00:00Z"));
+    picker_changed(&mut app, top, "b.rsk", None);
+    assert_eq!(picker_names(&app), ["a.rsk", "b.rsk", "c.rsk"]);
+    assert_eq!(picker_selected(&app), Some(1));
+    assert_eq!(the_picker(&app).changed.len(), 2);
 }
 
 #[test]

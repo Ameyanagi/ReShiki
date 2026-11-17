@@ -1,6 +1,6 @@
 use crate::github::{
     Error, api,
-    client::{Accept, Client},
+    client::{Accept, Client, Replies},
     credentials::{self, memory},
     mock::Mock,
 };
@@ -203,4 +203,49 @@ async fn a_sign_out_that_cannot_forget_says_so() {
     memory::fail(true);
     assert!(client.sign_out().await.is_err());
     assert_eq!(api::user(&client).await, Err(Error::NotSignedIn));
+}
+
+#[test]
+fn replies_kept_are_bounded_and_the_least_recently_used_go_first() {
+    let mut kept = Replies::default();
+    kept.put("a".into(), vec![1; 40], 100);
+    kept.put("b".into(), vec![2; 40], 100);
+    // `a` is used again, so `b` is the one to go.
+    assert_eq!(kept.get("a"), Some(vec![1; 40]));
+    kept.put("c".into(), vec![3; 40], 100);
+    assert_eq!(kept.get("b"), None);
+    assert!(kept.get("a").is_some() && kept.get("c").is_some());
+    assert_eq!(kept.bytes(), 80);
+    // A reply over the limit is never kept, and drops nothing.
+    kept.put("huge".into(), vec![0; 101], 100);
+    assert_eq!(kept.get("huge"), None);
+    assert_eq!(kept.bytes(), 80);
+    // The same path again replaces its reply.
+    kept.put("a".into(), vec![1; 10], 100);
+    assert_eq!(kept.bytes(), 50);
+}
+
+#[tokio::test]
+async fn a_blob_is_asked_for_once_while_the_client_lives() {
+    let mock = Mock::start(0).await;
+    mock.model().seed_demo();
+    let blob = crate::github::mock::sha(include_bytes!(
+        "../../../website/public/examples/benzofuran.rsk"
+    ));
+    let repo = crate::github::RepoKey {
+        owner: crate::github::mock::LOGIN.into(),
+        repo: "lab-notes".into(),
+    };
+    let client = mock.client();
+    let one = api::blob(&client, &repo, &blob).await.unwrap();
+    // A copy of the client shares what it read; a client of its own does not.
+    assert_eq!(api::blob(&client.clone(), &repo, &blob).await, Ok(one.clone()));
+    assert_eq!(mock.model().count("GET", "/api/repos"), 1);
+    assert_eq!(api::blob(&mock.client(), &repo, &blob).await, Ok(one));
+    assert_eq!(mock.model().count("GET", "/api/repos"), 2);
+    // A failed read is not kept.
+    let gone = "0".repeat(40);
+    assert_eq!(api::blob(&client, &repo, &gone).await, Err(Error::NotFound));
+    assert_eq!(api::blob(&client, &repo, &gone).await, Err(Error::NotFound));
+    assert_eq!(mock.model().count("GET", "/api/repos"), 4);
 }

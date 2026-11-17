@@ -199,6 +199,11 @@ pub struct Model {
     pub races: Vec<Race>,
     /// Signed-out requests left this hour; `None`: no limit.
     pub signed_out_left: Option<usize>,
+    /// How long every reply waits, so requests overlap.
+    pub delay: std::time::Duration,
+    /// Requests being answered now, and the most there ever were at once.
+    busy: usize,
+    pub most_busy: usize,
 }
 
 /// Someone else's push to `file` that lands just before the next
@@ -854,7 +859,14 @@ async fn serve(mut stream: TcpStream, model: Arc<Mutex<Model>>, base: String) {
             body,
         };
     };
-    let reply = respond(&mut model.lock().unwrap(), &base, request);
+    let (reply, delay) = {
+        let mut model = model.lock().unwrap();
+        model.busy += 1;
+        model.most_busy = model.most_busy.max(model.busy);
+        (respond(&mut model, &base, request), model.delay)
+    };
+    tokio::time::sleep(delay).await;
+    model.lock().unwrap().busy -= 1;
     let mut head = format!(
         "HTTP/1.1 {} Mock\r\nContent-Length: {}\r\nConnection: close\r\n",
         reply.status,

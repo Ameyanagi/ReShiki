@@ -115,6 +115,9 @@ pub(super) struct State {
     generation: u64,
     pub(super) account: Account,
     client: Option<Client>,
+    /// Signed out, for public repositories: one for the session, so what it
+    /// read is kept as the signed-in client keeps it.
+    public: std::sync::OnceLock<Option<Client>>,
     /// The repositories ReShiki may use, as last listed.
     repos: Vec<Repo>,
     pub(super) dialog: Option<Dialog>,
@@ -177,6 +180,7 @@ impl State {
             root,
             generation: 0,
             client: None,
+            public: std::sync::OnceLock::new(),
             repos: Vec::new(),
             dialog: None,
             menu: false,
@@ -218,8 +222,9 @@ impl State {
     /// repositories.
     pub(super) fn reader(&self) -> Option<Client> {
         self.client().or_else(|| {
+            let public = || Client::public(self.ends.clone()).ok();
             self.configured()
-                .then(|| Client::public(self.ends.clone()).ok())
+                .then(|| self.public.get_or_init(public).clone())
                 .flatten()
         })
     }
@@ -2195,6 +2200,7 @@ impl App {
         let mut content = row![].spacing(6).align_y(Alignment::Center);
         let state_now = self.github_chip_state(&key);
         let (suffix, after, said) = match state_now {
+            Chip::Saving => (Some("· Saving…".to_owned()), None, "saving".to_owned()),
             Chip::Sending => (Some("· Sending…".to_owned()), None, "sending".to_owned()),
             Chip::Review => (
                 None,
@@ -2364,6 +2370,9 @@ impl App {
             .is_some_and(|file| file.base_blob.is_none());
         if state.sending.contains(key) {
             Chip::Sending
+        } else if (state.after_save.as_ref()).is_some_and(|(at, ..)| at == key) {
+            // A Send saving its drawings first.
+            Chip::Saving
         } else if self.github_conflicts(key) > 0
             || self.github_newer_conflict(self.tab.path.as_deref())
         {
@@ -2670,6 +2679,8 @@ fn middle(folder: &str) -> String {
 /// What the status chip says, after the repository's dot and name.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Chip {
+    /// `· Saving…`: a Send saves its drawings first.
+    Saving,
     /// `· Sending…`
     Sending,
     /// An amber Review: a drawing changed on GitHub.

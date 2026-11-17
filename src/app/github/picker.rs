@@ -1,11 +1,13 @@
 //! The repository picker: repositories on the left, the folders, drawings
-//! and other chemistry files of the chosen one on the right, as tiles newest
-//! first or as a tree. It opens a drawing from GitHub, inserts a file's
+//! and other chemistry files of the chosen one on the right, as tiles or as a
+//! tree, by name. It opens a drawing from GitHub, inserts a file's
 //! structures into the drawing in front, or chooses where a drawing not on
 //! GitHub yet is sent. Files other than drawings open read only. Tiles list
 //! one folder at a time as it opens, at most [`SHOWN`]; the tree reads the
-//! whole repository once. Who changed a file and its preview are asked for
-//! only once it is on screen, so the size of a repository does not matter. A
+//! whole repository once. Names show at once; who changed a file and its
+//! preview are asked for only once it is on screen, so the size of a
+//! repository does not matter. What GitHub never changes (folders, files and
+//! commits by their names) is asked once while the client lives. A
 //! github.com link in the search field shows one row for what it names;
 //! repositories opened by link stay listed, tagged "shared". Signed out,
 //! public repositories list and open (names only); the others known here are
@@ -88,14 +90,14 @@ pub(in crate::app) struct Picker {
     /// The highlighted repository in the filtered list.
     highlighted: usize,
     pub(super) repo: Option<Repo>,
+    /// The commit the repository is listed at: files open from it as
+    /// listed, and their last changes are asked as of it.
+    pub(super) commit: Option<String>,
     /// The top folder's tree, then each folder opened below it.
     root: Option<String>,
     pub(super) trail: Vec<(String, String)>,
-    /// Folders first, then drawings, newest first; `None` while listing.
+    /// Folders first, then files, each by name; `None` while listing.
     pub(super) entries: Option<Vec<Entry>>,
-    /// Drawings whose last change is still being asked for; they show
-    /// once all are known, so nothing moves under the pointer.
-    pub(super) waiting: usize,
     /// Every name in the folder, previews and other files too.
     names: Vec<String>,
     /// The folder could not be listed, so its names are not known.
@@ -104,9 +106,9 @@ pub(in crate::app) struct Picker {
     /// The last click, by repository path, for a double click.
     clicked: Option<(String, Instant)>,
     pub(super) thumbs: HashMap<String, Option<Arc<Document>>>,
-    /// Who last changed each drawing of this repository, and when, by
+    /// Who last changed each file of this repository, and when, by
     /// repository path.
-    changed: HashMap<String, (String, DateTime<Local>)>,
+    pub(super) changed: HashMap<String, (String, DateTime<Local>)>,
     new_repo: Option<String>,
     /// A new drawing (`false`) or folder (`true`) being named here.
     pub(super) new_item: Option<(bool, String)>,
@@ -130,11 +132,9 @@ pub(in crate::app) struct Picker {
     /// The files pane's scroll offset, height and width, for the tiles on
     /// screen; `None` before the first scroll.
     view: Option<(f32, f32, f32)>,
-    /// Drawings whose author, time and preview were asked for.
+    /// Files of this repository whose author, time and preview were asked
+    /// for, by repository path: a folder opened again asks for none.
     pub(super) asked: HashSet<String>,
-    /// The repository paths of the first tiles on screen, whose dates the
-    /// one sort waits for.
-    first: HashSet<String>,
     /// Save a copy: This computer is offered too.
     pub(super) copy: bool,
     /// The tree, not tiles; Open only.
@@ -143,8 +143,9 @@ pub(in crate::app) struct Picker {
     /// when it opens, and whether GitHub listed only part of it; `None` while
     /// it is read.
     pub(super) whole: Option<(Vec<Entry>, bool)>,
-    /// The request that opened the repository, for its whole listing.
-    opening: u64,
+    /// The request that opened the repository: its whole listing and its
+    /// files' last changes answer to it, whichever folder is open by then.
+    pub(super) opening: u64,
     /// The folders open in the tree, by repository path.
     pub(super) opened: HashSet<String>,
     /// The tree's selected row, by repository path.
@@ -170,10 +171,10 @@ impl Picker {
             goto: Vec::new(),
             highlighted: 0,
             repo: None,
+            commit: None,
             root: None,
             trail: Vec::new(),
             entries: None,
-            waiting: 0,
             names: Vec::new(),
             unlisted: false,
             selected: None,
@@ -193,7 +194,6 @@ impl Picker {
             menu: None,
             view: None,
             asked: HashSet::new(),
-            first: HashSet::new(),
             copy: false,
             tree: false,
             whole: None,
@@ -302,15 +302,10 @@ impl Picker {
         }
     }
 
-    /// A drawing's tile shows once every drawing's last change is known.
-    fn visible(&self, entry: &Entry) -> bool {
-        entry.folder || self.waiting == 0
-    }
-
     /// What is selected, if its tile shows.
     fn selected_entry(&self) -> Option<&Entry> {
         let entry = self.entries.as_ref()?.get(self.selected?)?;
-        (self.visible(entry) && entry.name.to_lowercase().contains(&self.query())).then_some(entry)
+        entry.name.to_lowercase().contains(&self.query()).then_some(entry)
     }
 
     /// The tiles that show, by entry: those the search matches, at most
@@ -318,7 +313,7 @@ impl Picker {
     pub(super) fn tiles(&self) -> (Vec<usize>, usize) {
         let query = self.query();
         let matching: Vec<usize> = (self.entries.iter().flatten().enumerate())
-            .filter(|(_, entry)| self.visible(entry) && entry.name.to_lowercase().contains(&query))
+            .filter(|(_, entry)| entry.name.to_lowercase().contains(&query))
             .map(|(at, _)| at)
             .collect();
         let count = matching.len();
@@ -353,26 +348,6 @@ impl Picker {
             .map(|entry| last(&entry.name).to_owned())
             .collect();
         (folder, names)
-    }
-
-    /// Folders by name, then drawings newest first. The selection stays on
-    /// the same tile.
-    fn sort(&mut self) {
-        let selected = self.selected_entry().map(|entry| entry.name.clone());
-        let Some(mut entries) = self.entries.take() else {
-            return;
-        };
-        entries.sort_by_cached_key(|entry| {
-            let newest = (!entry.folder)
-                .then(|| self.changed.get(&self.repo_path(&entry.name)))
-                .flatten()
-                .map(|(_, at)| -at.timestamp());
-            (!entry.folder, newest.is_none(), newest, entry.name.clone())
-        });
-        self.selected =
-            selected.and_then(|name| entries.iter().position(|entry| entry.name == name));
-        self.clicked = None;
-        self.entries = Some(entries);
     }
 }
 
@@ -433,9 +408,11 @@ pub enum Action {
     Search(String),
     Move(isize),
     PickRepo(RepoKey),
-    Listing(u64, Result<(String, Vec<Entry>), gh::Error>),
-    /// Who last changed the drawing at a repository path, and when
-    /// (`None`: unknown).
+    /// A folder listed: the commit the repository is listed at (only for
+    /// its top folder), the folder's tree and what it holds.
+    Listing(u64, Result<(Option<String>, String, Vec<Entry>), gh::Error>),
+    /// Who last changed the file at a repository path, and when (`None`:
+    /// unknown), by the request that opened the repository.
     Changed(u64, String, Option<(String, String)>),
     Folder(String),
     /// Backspace: up one folder.
@@ -686,6 +663,7 @@ impl App {
                 picker.changed.clear();
                 picker.repo = Some(repo.clone());
                 picker.search.clear();
+                picker.commit = None;
                 picker.root = None;
                 picker.trail.clear();
                 picker.entries = None;
@@ -700,6 +678,7 @@ impl App {
                 picker.file_menu = None;
                 return perform(
                     async move {
+                        // The branch is asked again each time: new commits show.
                         let head = match &reference {
                             Some(reference) => api::commit(&client, &repo.key, reference).await,
                             None => api::head(&client, &repo.key, &repo.default_branch).await,
@@ -707,10 +686,10 @@ impl App {
                         match head {
                             Ok(head) => {
                                 let entries = api::tree(&client, &repo.key, &head.tree).await?;
-                                Ok((head.tree, entries))
+                                Ok((Some(head.commit), head.tree, entries))
                             }
                             // An empty repository has nothing to list yet.
-                            Err(gh::Error::Conflict) => Ok((String::new(), Vec::new())),
+                            Err(gh::Error::Conflict) => Ok((None, String::new(), Vec::new())),
                             Err(error) => Err(error),
                         }
                     },
@@ -720,7 +699,7 @@ impl App {
             Action::Listing(generation, result) => {
                 // The top folder: the repository is read whole too, once.
                 let top = match (&result, self.picker()) {
-                    (Ok((tree, _)), Some(picker))
+                    (Ok((_, tree, _)), Some(picker))
                         if picker.generation == generation && picker.root.is_none() =>
                     {
                         Some(tree.clone())
@@ -737,14 +716,15 @@ impl App {
                 };
                 picker.unlisted = result.is_err();
                 match result {
-                    Ok((tree, entries)) => {
+                    Ok((commit, tree, entries)) => {
                         if picker.root.is_none() {
                             picker.root = Some(tree);
+                            picker.commit = commit;
                         }
                         picker.names = entries.iter().map(|entry| entry.name.clone()).collect();
-                        let entries = shown(entries);
+                        let mut entries = shown(entries);
                         picker.selected = None;
-                        picker.asked.clear();
+                        picker.clicked = None;
                         picker.view = None;
                         // On the way to a folder asked for: open the next one.
                         // One GitHub does not have yet is opened as new.
@@ -772,54 +752,39 @@ impl App {
                                 .extend(rest.into_iter().map(|name| (name, String::new())));
                             picker.entries = Some(Vec::new());
                             picker.names.clear();
-                            picker.waiting = 0;
                             return whole;
                         }
-                        // The folder left may still be waiting for dates.
-                        picker.waiting = 0;
                         // The tree opens where the tiles are.
                         let mut open = String::new();
                         for name in folders(&picker.folder()) {
                             open = join(&open, &name);
                             picker.opened.insert(open.clone());
                         }
+                        // Shown at once, as the tree sorts; who changed each
+                        // file fills in without moving it.
+                        entries.sort_by_cached_key(|entry| {
+                            (!entry.folder, entry.name.to_lowercase(), entry.name.clone())
+                        });
                         picker.entries = Some(entries);
-                        picker.sort();
-                        // The first tiles on screen show once their last
-                        // changes are known, then sort newest first, once.
-                        let load = self.picker_load();
-                        if let Some(picker) = self.picker() {
-                            picker.first = picker.asked.clone();
-                            picker.waiting = picker.first.len();
-                        }
-                        return Task::batch([whole, load]);
+                        return Task::batch([whole, self.picker_load()]);
                     }
                     Err(_) => {
                         picker.entries = Some(Vec::new());
-                        picker.waiting = 0;
                         picker.names.clear();
                         picker.limited = failed == Some(None);
                         picker.error = failed.flatten();
                     }
                 }
             }
-            Action::Changed(generation, path, found) => {
-                let Some(picker) = self.picker().filter(|p| p.generation == generation) else {
+            Action::Changed(opening, path, found) => {
+                let Some(picker) = self.picker().filter(|p| p.opening == opening) else {
                     return Task::none();
                 };
-                // Tiles scrolled into view later never move the others, nor
-                // end the wait for the first ones.
-                let first = picker.first.remove(&path);
+                // It fills in its tile's second line; nothing moves.
                 if let Some((who, date)) = found
                     && let Ok(at) = DateTime::parse_from_rfc3339(&date)
                 {
                     picker.changed.insert(path, (who, at.with_timezone(&Local)));
-                }
-                if picker.waiting > 0 && first {
-                    picker.waiting -= 1;
-                    if picker.waiting == 0 {
-                        picker.sort();
-                    }
                 }
             }
             Action::Folder(name) => {
@@ -1227,20 +1192,8 @@ impl App {
                 if tree && let Some(entry) = picker.selected_entry() {
                     picker.row = Some(picker.repo_path(&entry.name));
                 }
-                // Tiles show in the order the dates known give, and wait for
-                // the dates of the first on screen, as a listing does.
-                if !tree {
-                    picker.sort();
-                }
-                let asked = picker.asked.clone();
                 self.github.prefs.tiles = !tree;
-                let (keep, load) = (self.github_keep_prefs(), self.picker_load());
-                // A wait still running goes on.
-                if let Some(picker) = self.picker().filter(|p| !p.tree && p.waiting == 0) {
-                    picker.first = picker.asked.difference(&asked).cloned().collect();
-                    picker.waiting = picker.first.len();
-                }
-                return Task::batch([keep, load]);
+                return Task::batch([self.github_keep_prefs(), self.picker_load()]);
             }
             Action::Whole(opening, result) => {
                 let failed = result.as_ref().err().map(|error| self.picker_failed(error));
@@ -1570,7 +1523,6 @@ impl App {
         picker.goto.clear();
         picker.repo = None;
         picker.entries = None;
-        picker.waiting = 0;
         picker.busy = true;
         picker.cant_open = None;
         picker.limited = false;
@@ -1593,7 +1545,7 @@ impl App {
             .reference
             .filter(|reference| *reference != repo.default_branch && !send);
         if found.file && gh::listed(&found.path) {
-            return self.picker_open_path(repo, found.path, reference);
+            return self.picker_open_path(repo, found.path, reference, None);
         }
         // A link to another kind of file shows its folder.
         let folder = match found.path.rsplit_once('/') {
@@ -1656,10 +1608,10 @@ impl App {
         for (_, sha) in &previews {
             picker.thumbs.insert(sha.clone(), None);
         }
-        let generation = picker.generation;
+        let opening = picker.opening;
         let changed = match paths.is_empty() {
             true => Task::none(),
-            false => self.picker_changed(generation, paths),
+            false => self.picker_changed(opening, paths),
         };
         Task::batch([self.picker_thumbs(previews), changed])
     }
@@ -1791,7 +1743,7 @@ impl App {
         perform(
             async move {
                 let entries = api::tree(&client, &repo.key, &tree).await?;
-                Ok((tree, entries))
+                Ok((None, tree, entries))
             },
             move |result| GitHubAction::Picker(Action::Listing(generation, result)),
         )
@@ -1829,37 +1781,30 @@ impl App {
         }))
     }
 
-    /// The last commit of each drawing, by repository path, for its tile's
-    /// second line and the order.
-    fn picker_changed(&mut self, generation: u64, paths: Vec<String>) -> Task<Message> {
-        let (Some(client), Some(repo)) = (
-            self.github.client(),
-            self.picker().and_then(|picker| picker.repo.clone()),
-        ) else {
-            if let Some(picker) = self.picker() {
-                picker.waiting = 0;
-            }
+    /// The last commit of each file, by repository path, as of the commit
+    /// the repository is listed at, for its tile's or row's second line.
+    fn picker_changed(&mut self, opening: u64, paths: Vec<String>) -> Task<Message> {
+        let client = self.github.client();
+        let listed = self.picker().and_then(|picker| {
+            let repo = picker.repo.as_ref()?;
+            Some((client?, repo.key.clone(), picker.commit.clone()?))
+        });
+        let Some((client, key, commit)) = listed else {
             return Task::none();
         };
         let me = self.github.login().map(str::to_owned);
-        // At a branch or commit, its own history.
-        let head = self
-            .picker()
-            .and_then(|picker| picker.reference.clone())
-            .unwrap_or_else(|| repo.default_branch.clone());
         Task::batch(paths.into_iter().map(|path| {
-            let (client, repo, me, head) = (client.clone(), repo.clone(), me.clone(), head.clone());
+            let (client, key, me, commit) = (client.clone(), key.clone(), me.clone(), commit.clone());
             let asked = path.clone();
             perform(
                 async move {
-                    let found = api::file_commits(&client, &repo.key, &path, &head, 1)
+                    let last = api::last_commit(&client, &key, &path, &commit)
                         .await
-                        .ok()?;
-                    let last = found.into_iter().next()?;
+                        .ok()??;
                     let who = who(last.login.as_deref(), &last.author, me.as_deref());
                     Some((who, last.date))
                 },
-                move |found| GitHubAction::Picker(Action::Changed(generation, asked, found)),
+                move |found| GitHubAction::Picker(Action::Changed(opening, asked, found)),
             )
         }))
     }
@@ -1868,21 +1813,25 @@ impl App {
         let Some(picker) = self.picker() else {
             return Task::none();
         };
-        let (Some(repo), Some((repo_path, _))) = (picker.repo.clone(), picker.selected_file())
+        let (Some(repo), Some((repo_path, blob))) = (picker.repo.clone(), picker.selected_file())
         else {
             return Task::none();
         };
-        let reference = picker.reference.clone();
-        self.picker_open_path(repo, repo_path, reference)
+        let (reference, listed) = (picker.reference.clone(), picker.commit.clone());
+        self.picker_open_path(repo, repo_path, reference, listed.map(|commit| (commit, blob)))
     }
 
     /// Opens the drawing at `repo_path`; at `reference`, an old version.
     /// Another chemistry file opens read only, kept as old versions are.
+    /// `listed`: the commit the picker lists and the file's blob there, so
+    /// the file is read by its blob alone and based on that commit. A newer
+    /// commit that changed it is found as any other: on focus, or by Send.
     fn picker_open_path(
         &mut self,
         repo: Repo,
         repo_path: String,
         reference: Option<String>,
+        listed: Option<(String, String)>,
     ) -> Task<Message> {
         let Some(client) = self.github.reader() else {
             return Task::none();
@@ -1934,11 +1883,14 @@ impl App {
             {
                 let (repo, repo_path) = (repo.clone(), repo_path.clone());
                 async move {
-                    match reference {
-                        Some(reference) => {
+                    match (listed, reference) {
+                        (Some((commit, blob)), _) => {
+                            api::download_listed(&client, &repo.key, commit, blob).await
+                        }
+                        (None, Some(reference)) => {
                             api::download_at(&client, &repo.key, &reference, &repo_path).await
                         }
-                        None => {
+                        (None, None) => {
                             let branch = &repo.default_branch;
                             api::download(&client, &repo.key, branch, &repo_path).await
                         }
