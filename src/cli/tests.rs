@@ -2051,3 +2051,59 @@ async fn name_json_reports_endo_exo_alternatives() {
         );
     }
 }
+
+/// A picture ReShiki exported gives back the drawing inside it; one without
+/// a drawing says so, where it used to fail as invalid UTF-8 or SMILES.
+#[tokio::test(flavor = "multi_thread")]
+async fn pictures_convert_from_the_editable_drawing_inside_them() {
+    use crate::{
+        document::{Document, Point},
+        export::{self, Background},
+    };
+    let mut doc = Document::default();
+    let carbon = doc.add_atom("C", Point::default());
+    let oxygen = doc.add_atom("O", Point::new(40., 0.));
+    doc.add_bond(carbon, oxygen, 1, "plain");
+    let engine = crate::engine::LocalEngine::in_process();
+    let directory = tempfile::tempdir().unwrap();
+    for format in ["png", "svg", "pdf"] {
+        for editable in [true, false] {
+            let picture = export::publication(
+                &engine,
+                doc.clone(),
+                format,
+                false,
+                editable,
+                Background::Canvas,
+                72,
+                export::FILE_PIXELS,
+            )
+            .await
+            .unwrap();
+            let path = directory.path().join(format!("picture.{format}"));
+            std::fs::write(&path, picture.bytes).unwrap();
+            for command in ["convert", "name"] {
+                let mut tokens = vec![command.into(), path.clone().into_os_string()];
+                if command == "convert" {
+                    tokens.extend(["--to".into(), "smiles".into()]);
+                }
+                let (code, out, err) = call_os(tokens).await;
+                if editable {
+                    assert_eq!(code, SUCCESS, "{command} {format}: {err}");
+                    let expected = if command == "convert" {
+                        "CO"
+                    } else {
+                        "methanol"
+                    };
+                    assert_eq!(out.trim(), expected, "{command} {format}");
+                } else {
+                    assert_eq!(code, FAILURE, "{command} {format}");
+                    assert_eq!(
+                        err, "reshiki: error: This picture has no ReShiki drawing inside\n",
+                        "{command} {format}"
+                    );
+                }
+            }
+        }
+    }
+}

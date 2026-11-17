@@ -46,7 +46,19 @@ pub fn is_input_format(format: &str) -> bool {
     let format = format_name(format);
     matches!(
         format.as_str(),
-        "auto" | "smiles" | "mol" | "sdf" | "rxn" | "rsmi" | "inchi" | "cdxml" | "cdx" | "rsk"
+        "auto"
+            | "smiles"
+            | "mol"
+            | "sdf"
+            | "rxn"
+            | "rsmi"
+            | "inchi"
+            | "cdxml"
+            | "cdx"
+            | "rsk"
+            | "png"
+            | "svg"
+            | "pdf"
     ) || reshiki_io::crystal::is_crystal_format(&format)
 }
 
@@ -104,6 +116,17 @@ fn detect(data: &[u8]) -> Result<&'static str, String> {
 
 pub async fn read(data: Vec<u8>, format: &str) -> Result<(Document, Vec<String>), String> {
     let mut format = format_name(format);
+    // A picture is read for the editable drawing ReShiki put inside it.
+    let picture = matches!(format.as_str(), "png" | "svg" | "pdf");
+    if picture || format == "auto" {
+        match reshiki_io::payload::read(&data) {
+            Some(drawing) => return Ok((drawing?, Vec::new())),
+            None if picture || reshiki_io::payload::is_picture(&data) => {
+                return Err(reshiki_io::payload::NO_DRAWING.into());
+            }
+            None => {}
+        }
+    }
     if format == "auto" {
         format = detect(&data)?.into();
     }
