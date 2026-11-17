@@ -2171,27 +2171,30 @@ impl App {
         let hue = identity::hue(&self.github.prefs, repo.id, &repo.key);
         let shared = self.github.prefs.is_shared(repo.id);
         let mut spoken = repo.key.repo.clone();
+        // The name takes the room the rest leaves and is cut off at its end,
+        // so a long one never pushes the state, lock or ↗ out.
+        let one_line = |line: String| text(line).size(12).wrapping(text::Wrapping::None);
         let mut name = row![].align_y(Alignment::Center);
         if shared_name || shared {
             spoken = format!("{}/{}", repo.key.owner, repo.key.repo);
-            name = name.push(
-                text(format!("{}/", repo.key.owner))
-                    .size(12)
+            name = name.push(one_line(format!("{}/", repo.key.owner)).style(muted_text));
+        }
+        name = name.push(one_line(repo.key.repo.clone()));
+        if shared {
+            spoken.push_str(", shared");
+            name = name.push(Space::new().width(8)).push(
+                text("shared")
+                    .size(10)
+                    .wrapping(text::Wrapping::None)
                     .style(muted_text),
             );
         }
-        name = name.push(text(repo.key.repo.clone()).size(12));
         let mut content = row![
             identity::tile(hue, identity::monogram(&repo.key.repo)),
-            name
+            container(name).width(Length::Fill).clip(true)
         ]
         .spacing(8)
         .align_y(Alignment::Center);
-        if shared {
-            spoken.push_str(", shared");
-            content = content.push(text("shared").size(10).style(muted_text));
-        }
-        content = content.push(Space::new().width(Length::Fill));
         if !repo.push {
             spoken.push_str(", read only");
             content = content.push(read_only_label());

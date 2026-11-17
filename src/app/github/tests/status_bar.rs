@@ -174,6 +174,14 @@ async fn the_github_button_leads_the_status_bar_and_its_menu_opens_upward() {
         assert_eq!(window.stop("github-chip-place"), at + 1);
         assert!(window.stop("journal-preset") > at + 1);
     }
+    // Controls wider than the room, as a long theme name makes them: the
+    // message gives way, the cloud keeps its size.
+    let mut ui = Ui::new(Size::new(700., 800.)).await;
+    let cloud = ui.pass(&app, None, &[]).node("status-github").bounds;
+    assert!(
+        cloud.x < 20. && cloud.width == 32. && cloud.height == 32.,
+        "{cloud:?}"
+    );
 
     let mut ui = Ui::new(Size::new(1280., 800.)).await;
     let cloud = ui.pass(&app, None, &[]).node("status-github").bounds;
@@ -321,4 +329,41 @@ async fn repository_rows_open_their_page_on_github() {
         apply(&mut app, chosen);
         assert_eq!(the_picker(&app).menu, None);
     }
+
+    // A name longer than the list is wide is cut off; the lock and the ↗ of
+    // the selected row keep their room at the end.
+    let long = Repo {
+        id: 9,
+        key: RepoKey {
+            owner: "octo".into(),
+            repo: "a-repository-name-much-longer-than-the-list-is-wide".into(),
+        },
+        ..repo()
+    };
+    app.github.repos.push(long.clone());
+    let repos = app.github_picker_repos();
+    if let Some(Dialog::Picker(picker)) = &mut app.github.dialog {
+        picker.listed(&repos, None);
+    }
+    github(
+        &mut app,
+        Action::Picker(picker::Action::PickRepo(long.key.clone())),
+    );
+    let window = ui.pass(&app, None, &[]);
+    let at = (window.nodes.iter())
+        .position(|node| {
+            node.id.starts_with("github-repo-") && node.name.starts_with("a-repository")
+        })
+        .map(|at| window.nodes[at].id.clone())
+        .expect("the long row");
+    let row = window.node(&at).bounds;
+    let shown = (window.found.texts.iter())
+        .find(|(text, bounds)| text == "↗" && (bounds.center_y() - row.center_y()).abs() < 1.)
+        .expect("the selected row's ↗")
+        .1;
+    assert!((shown.width - 18.).abs() < 0.5, "{shown:?}");
+    assert!(
+        shown.x + shown.width <= row.x + row.width,
+        "{shown:?} {row:?}"
+    );
 }

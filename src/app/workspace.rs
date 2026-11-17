@@ -2954,10 +2954,11 @@ impl App {
         })
         .height(Length::Shrink);
         let mut status = row![].spacing(8).align_y(Alignment::Center);
-        // GitHub first: its button, then the chip of the drawing in front.
+        // GitHub first: its button (outside, so the controls never squeeze
+        // it out), then the chip of the drawing in front.
         #[cfg(not(target_arch = "wasm32"))]
         {
-            status = status.push(self.github_button()).push(self.github_chip());
+            status = status.push(self.github_chip());
         }
         if self.recovery_banner_shown() {
             status = status.push(self.recovery_banner());
@@ -3030,7 +3031,13 @@ impl App {
             );
         // One row at every width: the message shortens, its full text stays
         // in the tooltip, and the controls keep their place.
-        let content = row![status.width(Length::Fill).height(32), controls]
+        #[cfg(not(target_arch = "wasm32"))]
+        let content = row![self.github_button()];
+        #[cfg(target_arch = "wasm32")]
+        let content = row![];
+        let content = content
+            .push(status.width(Length::Fill).height(32))
+            .push(controls)
             .spacing(8)
             .align_y(Alignment::Center);
         container(content)
