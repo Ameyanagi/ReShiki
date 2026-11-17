@@ -67,8 +67,9 @@ says why. The prediction also carries `nucleus`, `solvent` (`CDCl3`), `method`,
 `data_version`, `conditions`, `limitations`, `credit` and `data_access`, as
 **Export…** writes them.
 
-Atom IDs follow the input. For SMILES, atom `N` is the `N`th atom of the
-SMILES, which is index `N - 1` in RDKit's `Chem.MolFromSmiles`. For a MOL
+Atom IDs follow the input. For SMILES, atom `N` is the `N`th atom after
+explicit H are removed as RDKit does, which is index `N - 1` in RDKit's
+`Chem.MolFromSmiles`. For a MOL
 file, it is the atom's position in the atom block, counting from 1: the V2000
 atom number (V3000 record numbers are not kept). A `.rsk` drawing keeps its stored
 IDs, which can have gaps. `clean()` keeps IDs.

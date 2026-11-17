@@ -690,15 +690,16 @@ Options:
   --nucleus NUCLEUS  1H or 13C. Required.
 
 value.rows has one row per site, in drawing order. atom is the drawing's
-atom ID: for SMILES, the atom's position counting from 1, which is RDKit
-MolFromSmiles index atom - 1; for a MOL file, its position in the atom
-block, counting from 1. A 1H row names the heavy atom that carries the H.
-ppm, shell, references, sd, min and max are null for a site without data,
-and note says why. value also carries the method, data version,
-conditions, limitations and credit; cite credit with published values.
+atom ID: for SMILES, the atom's position counting from 1 after explicit H
+are removed as RDKit does, which is RDKit MolFromSmiles index atom - 1;
+for a MOL file, its position in the atom block, counting from 1. A 1H row
+names the heavy atom that carries the H. ppm, shell, references, sd, min
+and max are null for a site without reference data, and note says why.
+value also carries the method, data version, conditions, limitations and
+credit; cite credit with published values.
 
-A molecule with no sites for the nucleus, or chemistry the reference data
-does not cover, is an error.
+A molecule with no sites for the nucleus, or with metals, charges,
+radicals or isotope labels, is an error.
 ";
     format!("Usage: {}\n\n{body}", PREDICT_NMR.usage)
 }

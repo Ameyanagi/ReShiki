@@ -131,12 +131,13 @@ async fn a_molecule_without_sites_for_the_nucleus_fails() {
     assert_eq!(message, "This molecule has no supported ¹³C sites");
 }
 
-/// The revision is the one predicted, which an edit advances.
+/// The revision is the one predicted: the inserted atom exists only in the
+/// edited snapshot.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn the_revision_is_the_predicted_snapshot_after_an_edit() {
     let (host, handle) = hosting(ethyl_acetate());
     let mut methane = Document::default();
-    methane.add_atom("C", Point::default());
+    let carbon = methane.add_atom("C", Point::default());
     let source = host
         .store()
         .create(&Principal::local(), methane)
@@ -156,8 +157,12 @@ async fn the_revision_is_the_predicted_snapshot_after_an_edit() {
         .await
         .unwrap();
     assert!(!applied.is_error, "{:?}", applied.value);
-    let result = predict(&host, &handle, "13C", json!(["1"])).await;
+    let remap = &applied.value["value"]["id_remap"][0];
+    assert_eq!(remap["source"], carbon.to_string());
+    let inserted = remap["inserted"].clone();
+    let result = predict(&host, &handle, "13C", json!([inserted])).await;
     assert!(!result.is_error, "{:?}", result.value);
     assert_eq!(result.value["value"]["revision"], "1");
-    assert_eq!(result.value["value"]["rows"].as_array().unwrap().len(), 4);
+    assert_eq!(result.value["value"]["rows"][0]["atom"], inserted);
+    assert_eq!(result.value["value"]["rows"].as_array().unwrap().len(), 1);
 }

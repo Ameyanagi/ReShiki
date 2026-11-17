@@ -422,8 +422,9 @@ lines with the long text fields cut:
 ```
 
 `value.rows` has one row per site, in drawing order. `atom` is the drawing's
-atom ID: for SMILES, the atom's position counting from 1, which is index
-`atom - 1` in RDKit's `Chem.MolFromSmiles`; for a MOL file, the atom's
+atom ID: for SMILES, the atom's position counting from 1 after explicit H
+are removed as RDKit does, which is index `atom - 1` in RDKit's
+`Chem.MolFromSmiles`; for a MOL file, the atom's
 position in the atom block, counting from 1, which is the V2000 atom number
 (V3000 record numbers are not kept); for a `.rsk` drawing, its stored ID. A ¹H row names the heavy
 atom that carries the H, and `hydrogens` lists the IDs of H drawn as atoms.
@@ -433,9 +434,10 @@ match with a wide spread. `hydrogen_count` is `null` for ¹³C. Values are
 rounded to 9 decimal places. `revision` is the document revision the
 prediction was made from.
 
-A drawing that is not one molecule, chemistry the reference data does not
-cover, and a molecule without sites for the nucleus fail with
-`error[failed]`. The result has the same fields as the MCP `predict_nmr`
+A drawing that is not one molecule, chemistry the method does not support
+(metals, charges, radicals, isotope labels) and a molecule without sites for
+the nucleus fail with `error[failed]`; a site without reference data is a row
+with `null` values. The result has the same fields as the MCP `predict_nmr`
 tool's [result](agent-api.md#results), plus `experimental` and `api`. When you
 publish predicted values, cite `credit` with them.
 
