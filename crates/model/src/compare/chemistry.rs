@@ -33,6 +33,8 @@ pub(super) struct Signature {
     /// Each stereo double bond's code, with its reference atoms for cis and
     /// trans.
     pub double: HashMap<(u64, u64), (u8, Vec<u64>)>,
+    /// Each AND/OR group member's kind and fellow members, by id.
+    pub grouped: HashMap<u64, (u8, Vec<u64>)>,
 }
 
 impl Signature {
@@ -185,6 +187,20 @@ pub(super) fn signature(doc: &Document, ids: &[u64]) -> Result<Signature, String
         stereo,
         chirality: chirality(state, &molecule.ids),
         double,
+        grouped: state
+            .metadata
+            .groups
+            .iter()
+            .filter(|group| group.kind != 0)
+            .flat_map(|group| {
+                let mut members: Vec<u64> = group.atoms.iter().filter_map(|&i| id(i)).collect();
+                members.sort_unstable();
+                members
+                    .clone()
+                    .into_iter()
+                    .map(move |member| (member, (group.kind, members.clone())))
+            })
+            .collect(),
     })
 }
 
@@ -362,14 +378,22 @@ pub(super) fn edit(left: &Signature, right: &Signature) -> Edit {
         .filter(|bond| left.double.get(*bond) != right.double.get(*bond))
         .copied()
         .collect();
+    let grouped: Vec<u64> = left
+        .grouped
+        .keys()
+        .chain(right.grouped.keys())
+        .filter(|atom| left.grouped.get(*atom) != right.grouped.get(*atom))
+        .copied()
+        .collect();
     if nothing {
         edit.stereo = true;
-        if centres.is_empty() && doubles.is_empty() {
+        if centres.is_empty() && doubles.is_empty() && grouped.is_empty() {
             // Groups and the like: point at every stereo unit.
             edit.changed = left.stereo.iter().chain(&right.stereo).copied().collect();
         }
     }
     edit.changed.extend(centres);
+    edit.changed.extend(grouped);
     for (a, b) in doubles {
         edit.changed.extend([a, b]);
         edit.changed_bonds.push((a, b));

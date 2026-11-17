@@ -1123,3 +1123,24 @@ fn a_restyled_hydrogen_bond_inside_a_molecule_is_one_line() {
         [(Kind::Style, Subject::Molecule)]
     );
 }
+
+#[test]
+fn a_regrouped_centre_is_marked_beside_a_turned_double_bond() {
+    let group = |smiles: &str, kind: crate::stereo_groups::Kind| {
+        edited(&load(&molecule(smiles)), |doc| {
+            for atom in doc.atoms.iter_mut().filter(|a| a.stereo.is_some()) {
+                atom.stereo_group = Some(crate::stereo_groups::StereoGroup { kind, number: 1 });
+            }
+        })
+    };
+    let left = group("C/C=C/[C@H](O)CC", crate::stereo_groups::Kind::And);
+    let right = group("C/C=C\\[C@H](O)CC", crate::stereo_groups::Kind::Or);
+    let center = left.atoms.iter().find(|a| a.stereo.is_some()).unwrap().id;
+    let report = compare(&left, &right);
+    let change = chemical(&report)[0];
+    assert!(
+        change.right.atoms.contains(&center),
+        "{:?}",
+        change.right.atoms
+    );
+}
