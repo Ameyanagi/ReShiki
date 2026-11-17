@@ -36,6 +36,9 @@ fn prepare(ui: &mut Ui) -> (App, u64, Point, Vec<u8>) {
     app.appearance.mode = crate::appearance::Mode::Light;
     app.tab.fit_to_view = false;
     app.tab.camera.zoom = 2.;
+    // The frames compare the dialog's area only. Clicking selects the atom,
+    // which changes the Properties panel beside it; keep the panel out.
+    app.inspector_open = false;
     for _ in 0..4 {
         ui.redraw(
             &mut app,

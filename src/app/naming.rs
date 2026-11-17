@@ -242,6 +242,8 @@ pub(super) struct State {
     pub(super) caption_pending: Option<String>,
     /// Structures the generator could not name, with the reason.
     pub(super) caption_failed: HashMap<String, String>,
+    /// Generated names, so Undo and Redo do not ask again.
+    pub(super) caption_names: HashMap<String, String>,
     pub(super) name_draft: Option<(Vec<u64>, String)>,
 }
 impl Default for State {
@@ -271,6 +273,7 @@ impl Default for State {
             online_confirmation: None,
             caption_pending: None,
             caption_failed: HashMap::new(),
+            caption_names: HashMap::new(),
             name_draft: None,
         }
     }

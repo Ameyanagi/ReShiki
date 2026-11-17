@@ -32,6 +32,11 @@ pub(super) fn read(
         else {
             continue;
         };
+        // ReShiki's name line is the first; text with the name further down
+        // stays plain rather than taking another line for the name.
+        if properties.contains(&Property::Name) && properties.first() != Some(&Property::Name) {
+            continue;
+        }
         properties.sort_by_key(|p| Property::ALL.iter().position(|q| q == p));
         properties.dedup();
         let Some(&caption) = link

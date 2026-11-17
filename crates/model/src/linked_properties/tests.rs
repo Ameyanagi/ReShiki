@@ -539,8 +539,22 @@ fn the_name_is_the_first_line_and_bold() {
     assert_eq!(text(&doc), "phenol\nMol. Wt.: 94.113\nExact Mass: 94.0419");
     assert_eq!(bold(&doc), "phenol");
     assert!(!doc.property_captions[0].needs_name());
-    // Another structure's name changes nothing.
+    // Another structure's name changes nothing, and neither does a second
+    // answer for a caption that has its name.
     assert!(!named(&mut doc, "CCO", "ethanol"));
+    assert!(!named(&mut doc, &smiles, "hydroxybenzene"));
+    // Hiding the name row forgets the automatic name, which would go stale.
+    let atoms = doc.property_captions[0].atoms.clone();
+    toggle(
+        &mut doc,
+        &atoms,
+        Property::Name,
+        TextFormat::default(),
+        false,
+    )
+    .unwrap();
+    assert_eq!(doc.property_captions[0].name, "");
+    assert_eq!(text(&doc), "Mol. Wt.: 94.113\nExact Mass: 94.0419");
 }
 
 #[test]
@@ -680,6 +694,8 @@ fn reshaping_a_double_bond_renames_but_moving_the_molecule_does_not() {
     edit(&mut doc, &mut history, |doc| doc.translate(&[d], 0., -40.));
     assert_ne!(doc.property_captions[0].smiles, trans);
     assert!(doc.property_captions[0].needs_name());
+    // The E name leaves the caption in the same step.
+    assert_eq!(text(&doc), "–");
 }
 
 #[test]

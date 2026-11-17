@@ -205,6 +205,12 @@ fn an_automatic_name_line_exports_linked_and_a_custom_one_as_plain_text() {
         assert!(text.format.at(0).bold);
         assert!(!text.format.at(text.text.find('M').unwrap()).bold);
     }
+    // Text whose name is not its first line stays plain.
+    let reordered = x.replace(
+        r#"ChemicalPropertyType="1 4""#,
+        r#"ChemicalPropertyType="4 1""#,
+    );
+    assert!(import(&reordered).property_captions.is_empty());
     // A custom name would be replaced by ChemDraw's own, so it stays text.
     rename(&mut d, &atoms, "Compound 3a", TextFormat::default(), true).unwrap();
     let x = xml(&d);

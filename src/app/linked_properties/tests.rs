@@ -223,3 +223,25 @@ fn a_custom_name_stays_through_a_structure_edit_with_a_note() {
     let _ = app.update(Message::Undo);
     assert!(!link(&app).renamed_structure_changed());
 }
+
+#[test]
+fn undo_and_redo_reuse_a_generated_name() {
+    let (mut app, _) = App::new();
+    let atoms = ethanol(&mut app);
+    let _ = app.update(Message::ToggleProperty(atoms, Property::Name));
+    let smiles = app.tab.naming.caption_pending.clone().unwrap();
+    // An unrelated edit while the generator runs.
+    let before = app.tab.doc.clone();
+    app.tab.doc.add_atom("Ne", Point::new(300., 0.));
+    app.changed(before);
+    let _ = app.update(Message::Naming(Action::CaptionNamed(
+        smiles,
+        Box::new(Ok(Outcome::Structure(record("CCO")))),
+    )));
+    assert_eq!(caption(&app), Some("ethan-1-ol"));
+    // Undo brings back the drawing from before the name arrived; it is
+    // named again at once, without asking the generator.
+    let _ = app.update(Message::Undo);
+    assert_eq!(caption(&app), Some("ethan-1-ol"));
+    assert!(app.tab.naming.caption_pending.is_none());
+}

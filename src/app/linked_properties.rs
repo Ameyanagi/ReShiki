@@ -91,18 +91,38 @@ impl App {
 
     /// Generate the automatic name of the first caption waiting for one. One
     /// request runs at a time; a structure the generator refused is not asked
-    /// again.
+    /// again, and one it named before (Undo, Redo) is named at once.
     pub(super) fn start_caption_names(&mut self) -> Task<Message> {
-        if self.tab.naming.caption_pending.is_some() || !self.naming_can_edit() {
+        if !self.naming_can_edit() {
             return Task::none();
         }
-        let failed = &self.tab.naming.caption_failed;
+        let state = &self.tab.naming;
+        let known: Vec<_> = self
+            .tab
+            .doc
+            .property_captions
+            .iter()
+            .filter(|link| link.needs_name())
+            .filter_map(|link| {
+                Some((
+                    link.smiles.clone(),
+                    state.caption_names.get(&link.smiles)?.clone(),
+                ))
+            })
+            .collect();
+        for (smiles, name) in known {
+            self.write_caption_name(&smiles, &name);
+        }
+        let state = &self.tab.naming;
+        if state.caption_pending.is_some() {
+            return Task::none();
+        }
         let Some(link) = self
             .tab
             .doc
             .property_captions
             .iter()
-            .find(|link| link.needs_name() && !failed.contains_key(&link.smiles))
+            .find(|link| link.needs_name() && !state.caption_failed.contains_key(&link.smiles))
         else {
             return Task::none();
         };
@@ -129,10 +149,6 @@ impl App {
             return;
         }
         self.tab.naming.caption_pending = None;
-        // A text edit or a modal tool owns the drawing; ask again after it.
-        if !self.naming_can_edit() {
-            return;
-        }
         let name = match result {
             Ok(Outcome::Structure(record)) => record
                 .systematic_name
@@ -143,17 +159,41 @@ impl App {
         };
         match name {
             Ok(name) => {
-                // Like background labels: no new revision, so a Cut or Paste
-                // waiting for the clipboard still applies.
-                if linked_properties::named(&mut self.tab.doc, smiles, &name) {
-                    self.tab.label_generation = self.tab.label_generation.wrapping_add(1);
+                self.tab
+                    .naming
+                    .caption_names
+                    .insert(smiles.into(), name.clone());
+                // A text edit or a modal tool owns the drawing; the next
+                // update writes the name after it.
+                if self.naming_can_edit() {
+                    self.write_caption_name(smiles, &name);
                 }
             }
             Err(error) => {
-                self.status = format!("No automatic name: {error}");
-                self.error = true;
-                self.tab.naming.caption_failed.insert(smiles.into(), error);
+                let waiting = self
+                    .tab
+                    .doc
+                    .property_captions
+                    .iter()
+                    .any(|link| link.needs_name() && link.smiles == smiles);
+                if waiting {
+                    self.status = format!("No automatic name: {error}");
+                    self.error = true;
+                    self.tab.naming.caption_failed.insert(smiles.into(), error);
+                }
             }
+        }
+    }
+
+    fn write_caption_name(&mut self, smiles: &str, name: &str) {
+        // Like background labels: no new revision, so a Cut or Paste waiting
+        // for the clipboard still applies.
+        if linked_properties::named(&mut self.tab.doc, smiles, name) {
+            self.tab.label_generation = self.tab.label_generation.wrapping_add(1);
+            // A selected caption's text box shows the new name.
+            let inspector = (self.inspector_open, self.inspector_tab);
+            self.sync_typography();
+            (self.inspector_open, self.inspector_tab) = inspector;
         }
     }
 }

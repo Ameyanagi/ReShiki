@@ -408,6 +408,10 @@ pub fn toggle(
     link.two_decimal_weight = two_decimal_weight;
     if link.tracks_name() {
         link.identify(doc);
+    } else {
+        // An untracked name would go stale.
+        link.name.clear();
+        link.smiles.clear();
     }
     // An edited caption is plain text; showing a property links it again.
     rewrite(doc, link, &shown)
@@ -478,13 +482,13 @@ fn set_custom(link: &mut PropertyCaption, name: &str) {
     }
 }
 
-/// The generator named `smiles`: write the name into every caption that
-/// names that structure, without an Undo step of its own. Returns whether a
-/// link changed.
+/// The generator named `smiles`: write the name into every caption of that
+/// structure still waiting for one, without an Undo step of its own. Returns
+/// whether a link changed.
 pub fn named(doc: &mut Document, smiles: &str, name: &str) -> bool {
     let mut changed = false;
     for mut link in std::mem::take(&mut doc.property_captions) {
-        if link.smiles == smiles && link.name != name && link.tracks_name() {
+        if link.smiles == smiles && link.name.is_empty() && link.tracks_name() {
             link.name = name.into();
             changed = true;
             if let Some(mut caption) = doc
@@ -624,7 +628,7 @@ pub fn reconcile(doc: &mut Document, before: &Document) {
                 && before.generic == doc.generic
                 && chemistry(before, &whole) == chemistry(doc, &whole)
         });
-        let unchanged = same
+        let mut unchanged = same
             && typed.is_none()
             && previous.is_some_and(|old| {
                 old.properties == link.properties
@@ -635,7 +639,10 @@ pub fn reconcile(doc: &mut Document, before: &Document) {
         let identify = link.tracks_name() && !(same && !reshaped(before, doc, &whole));
         link.atoms = whole;
         if identify {
+            let name = link.name.clone();
             link.identify(doc);
+            // A dropped name leaves the caption at once.
+            unchanged &= link.name == name;
         }
         if let Some(name) = typed {
             set_custom(&mut link, &name);
