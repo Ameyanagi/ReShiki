@@ -12,7 +12,7 @@ The Release builds workflow produces signed macOS disk images, Windows x64/ARM64
 
 Windows setup uses Inno Setup 6.7.3, downloaded with a pinned SHA-256 checksum. It installs per user, adds a Start menu shortcut, and offers a desktop shortcut and `.rsk` file association. Setup and uninstall preserve user data. CI installs twice to check upgrades, runs native chemistry, and checks uninstallation. Upgrades remove the old app-owned worker while preserving user drawings and caches.
 
-The macOS disk image contains the signed app and an Applications shortcut, created as a zlib image (`UDZO`) and then converted to LZMA (`ULMO`), because creating an LZMA image straight from a folder can fail. Both the app and disk image are notarized and stapled. CI mounts the image, copies the app out, and verifies chemistry, its signature and Gatekeeper status. The release has ten downloads plus `SHA256SUMS`. Both publishers validate the exact ten filenames and their checksum sidecars before creating the shared OS/architecture/installer/portable download table. macOS archive manifests must declare the matching version, architecture, signature and notarization. Generated GitHub release notes are retained after this table.
+The macOS disk image contains the signed app and an Applications shortcut, created as a zlib image (`UDZO`) and then converted to LZMA (`ULMO`), because creating an LZMA image straight from a folder can fail. Both the app and disk image are notarized and stapled. CI mounts the image, copies the app out, and verifies chemistry, its signature and Gatekeeper status. The release has ten downloads plus `SHA256SUMS`; a nightly has eight, without the Intel Mac pair. Both publishers validate the exact filenames and their checksum sidecars before creating the shared OS/architecture/installer/portable download table. macOS archive manifests must declare the matching version, architecture, signature and notarization. Generated GitHub release notes are retained after this table.
 
 Keep the homepage, README, and installation guide's primary download links pointed
 at [the latest stable release](https://github.com/Ameyanagi/ReShiki/releases/latest).
@@ -29,9 +29,11 @@ branch. Tag tested commits on `main` for stable releases.
 
 The **Nightly builds** workflow builds `main` daily at 18:37 UTC (03:37 JST), or on
 manual dispatch with `main` selected. Each successful run publishes a downloadable
-GitHub prerelease with ten downloads and `SHA256SUMS`: signed and notarized macOS
-DMG/ZIP for both architectures, Windows setup/ZIP for both architectures, and
-Linux archives for both architectures. Nightlies reuse the stable installer,
+GitHub prerelease with eight downloads and `SHA256SUMS`: a signed and notarized macOS
+DMG/ZIP for Apple Silicon, Windows setup/ZIP for both architectures, and
+Linux archives for both architectures. Nightlies are not built for Intel Macs,
+whose build kept reaching the job's time limit; stable releases still include
+them. Nightlies reuse the stable installer,
 Developer ID signing, notarization and extracted-application verification paths. The complete
 live reference suite remains a stable-release requirement; nightly package checks
 do not replace it.
@@ -58,7 +60,7 @@ Older nightlies published before this installer workflow contain unsigned archiv
 
 After a manual nightly-version test-signing run passes, enable
 `SIGNPATH_NIGHTLY_TEST_ENABLED=true` to retain internal test-signed Windows
-nightly artifacts. The same six-target build supplies both the public unsigned
+nightly artifacts. The same five-target build supplies both the public unsigned
 Windows packages and the input for four test-policy requests: application and
 setup for x64 and ARM64. Completed test packages are workflow artifacts named
 `test-signed-windows-x64` and `test-signed-windows-arm64`; the public release
@@ -73,7 +75,7 @@ gh workflow run nightly.yml --ref main
 
 GitHub schedules run from the repository's default branch, `main`.
 The workflow publishes only runs from `main` and only
-after all six package jobs, both macOS signing jobs, and any enabled Windows
+after all five package jobs, the macOS signing job, and any enabled Windows
 signing jobs pass. Signing failures
 prevent publication; there is no unsigned macOS fallback, or unsigned Windows
 fallback when production nightly Windows signing is enabled. An enabled internal

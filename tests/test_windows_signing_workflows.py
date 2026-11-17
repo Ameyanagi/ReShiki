@@ -1,5 +1,6 @@
 """Release workflow helpers, signing policy, and publication gates stay explicit."""
 
+import json
 import os
 import re
 import shutil
@@ -30,6 +31,49 @@ def evaluate(expression: str, **context):
     return eval(expression, {"__builtins__": {}, "always": lambda: True}, context)
 
 
+def matrix(name: str, nightly) -> list[dict]:
+    """The rows of a release job's matrix for a stable (None/False) or nightly run."""
+    expression = re.search(
+        r"^        include: >-\n((?:          .*\n)+)", job(RELEASE, name), re.M
+    )[1]
+    return evaluate(
+        expression,
+        fromJSON=json.loads,
+        format=lambda template, *values: template.format(*values),
+        inputs=SimpleNamespace(nightly=nightly),
+        true=True,
+    )
+
+
+class NightlyMatrixWorkflowTests(unittest.TestCase):
+    def test_only_nightlies_leave_out_intel_macos(self):
+        build = [
+            ("macos-15", "macos-arm64", "aarch64-apple-darwin"),
+            ("windows-2022", "windows-x64", "x86_64-pc-windows-msvc"),
+            ("windows-11-arm", "windows-arm64", "aarch64-pc-windows-msvc"),
+            ("ubuntu-22.04", "linux-x64", "x86_64-unknown-linux-gnu"),
+            ("ubuntu-24.04-arm", "linux-arm64", "aarch64-unknown-linux-gnu"),
+        ]
+        intel = ("macos-15-intel", "macos-x64", "x86_64-apple-darwin")
+        # A tag push has no inputs, so `inputs.nightly` is null there.
+        for nightly in (None, False, True):
+            with self.subTest(nightly=nightly):
+                expected = build + ([] if nightly else [intel])
+                rows = matrix("build", nightly)
+                self.assertEqual(
+                    [(row["os"], row["artifact"], row["target"]) for row in rows], expected
+                )
+                self.assertEqual(
+                    [row["artifact"] for row in rows if row.get("native_only")],
+                    [] if nightly else ["macos-x64"],
+                )
+                # Sign every macOS package that was built, and nothing else.
+                self.assertEqual(
+                    [(row["os"], row["artifact"]) for row in matrix("sign", nightly)],
+                    [row[:2] for row in expected if row[1].startswith("macos")],
+                )
+
+
 class NightlyApplicationWorkflowTests(unittest.TestCase):
     def test_nightly_tests_use_built_helpers_for_every_release_target(self):
         build = job(RELEASE, "build")
@@ -40,7 +84,7 @@ class NightlyApplicationWorkflowTests(unittest.TestCase):
             re.M | re.S,
         )[1]
         environment = dict(re.findall(r"^          (RESHIKI_\w+): (.*)$", step, re.M))
-        targets = re.findall(r"^            target: (\S+)$", build, re.M)
+        targets = [row["target"] for row in matrix("build", None)]
         self.assertEqual(len(targets), 6)
         self.assertIn("--bin reshiki --target ${{ matrix.target }}", step)
         self.assertLess(

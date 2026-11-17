@@ -113,10 +113,9 @@ fn preferences_preserve_legacy_opt_out_and_round_trip_channel_selection() {
 }
 
 #[test]
-fn portable_downloads_cover_the_six_published_nightly_packages() {
+fn portable_downloads_cover_the_five_published_nightly_packages() {
     for (os, arch, suffix) in [
         ("macos", "aarch64", "macos-arm64.zip"),
-        ("macos", "x86_64", "macos-x64.zip"),
         ("windows", "aarch64", "windows-arm64.zip"),
         ("windows", "x86_64", "windows-x64.zip"),
         ("linux", "aarch64", "linux-arm64.tar.gz"),
@@ -133,11 +132,35 @@ fn portable_downloads_cover_the_six_published_nightly_packages() {
     assert!(release("0.9.1").portable_url("linux", "x86_64").is_err());
 }
 
+#[tokio::test]
+async fn an_intel_mac_is_pointed_to_stable_instead_of_a_missing_nightly() {
+    let (os, arch) = INTEL_MAC;
+    assert_eq!(
+        release(NIGHTLY).portable_url(os, arch).unwrap_err(),
+        NO_INTEL_MAC_NIGHTLY
+    );
+    assert!(NO_INTEL_MAC_NIGHTLY.contains("Choose Stable"));
+    // Nothing is looked up or opened, even for a nightly cached before the change.
+    let result = open_nightly_download_with(
+        release(NIGHTLY),
+        os,
+        arch,
+        async |_| -> Result<Vec<u8>, FetchError> { panic!("no lookup") },
+        async |_| -> Result<(), String> { panic!("nothing opens") },
+    )
+    .await;
+    assert_eq!(result.unwrap_err(), NO_INTEL_MAC_NIGHTLY);
+    #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
+    assert_eq!(
+        check(Channel::Nightly, true).await.unwrap_err(),
+        NO_INTEL_MAC_NIGHTLY
+    );
+}
+
 #[test]
 fn nightly_downloads_prefer_published_installers_and_fall_back_to_legacy_archives() {
     for (os, arch, platform, installer, portable) in [
         ("macos", "aarch64", "macos-arm64", ".dmg", ".zip"),
-        ("macos", "x86_64", "macos-x64", ".dmg", ".zip"),
         ("windows", "aarch64", "windows-arm64", "-setup.exe", ".zip"),
         ("windows", "x86_64", "windows-x64", "-setup.exe", ".zip"),
         ("linux", "aarch64", "linux-arm64", ".tar.gz", ".tar.gz"),
@@ -191,7 +214,6 @@ fn nightly_downloads_prefer_published_installers_and_fall_back_to_legacy_archive
 async fn cached_nightly_downloads_open_trusted_archives_when_asset_lookup_is_unavailable() {
     for (os, arch) in [
         ("macos", "aarch64"),
-        ("macos", "x86_64"),
         ("windows", "aarch64"),
         ("windows", "x86_64"),
         ("linux", "aarch64"),

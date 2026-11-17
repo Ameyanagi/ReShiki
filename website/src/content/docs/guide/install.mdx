@@ -136,9 +136,11 @@ whenever you can. In the browser:
 
 Nightly builds are optional prereleases for testing upcoming changes from `main`. For everyday work, use the [latest stable release](https://github.com/Ameyanagi/ReShiki/releases/latest).
 
-To try a nightly, open [GitHub Releases](https://github.com/Ameyanagi/ReShiki/releases), choose a release named **Nightly** with the **Pre-release** label, and use its operating-system and architecture download table. New nightlies include macOS DMG/ZIP downloads, Windows setup/ZIP downloads and Linux tar.gz archives, signed as the [code signing policy](/developer/code-signing-policy/) describes.
+To try a nightly, open [GitHub Releases](https://github.com/Ameyanagi/ReShiki/releases), choose a release named **Nightly** with the **Pre-release** label, and use its operating-system and architecture download table. New nightlies include macOS DMG/ZIP downloads for Apple Silicon, Windows setup/ZIP downloads and Linux tar.gz archives, signed as the [code signing policy](/developer/code-signing-policy/) describes.
 
 Installers replace the existing ReShiki installation. To retain Stable, choose a portable archive and extract it into a separate folder, keeping its contents together. Use copies of drawings when testing. Older nightlies may offer only unsigned portable archives; the release notes identify the available packages.
+
+Nightly builds are not made for Intel Macs. On an Intel Mac, use the stable release.
 
 The all-releases page includes stable releases and nightlies; a newer nightly can appear above stable. The **Latest** label and the stable download links identify the stable release.
 
@@ -181,6 +183,6 @@ If a download or verification fails, the running app stays in place.
 **Release notes** opens the release page. Automatic checks never install an
 update without your click.
 
-On **Nightly**, choose **Download nightly ↗** to download the DMG or Windows setup for your operating system and architecture when available. Older nightlies fall back to ZIP; Linux uses tar.gz. Installation remains manual. **Release notes** opens the selected build’s table with both installer and portable options, notes and checksums. Nightlies do not use the automatic stable installer. Older app versions label this button **Download portable ↗** and always choose an archive.
+On **Nightly**, choose **Download nightly ↗** to download the DMG or Windows setup for your operating system and architecture when available. Older nightlies fall back to ZIP; Linux uses tar.gz. Installation remains manual. **Release notes** opens the selected build’s table with both installer and portable options, notes and checksums. Nightlies do not use the automatic stable installer. On an Intel Mac, **Nightly** reports that no nightly is made for it; choose **Stable**. Older app versions label this button **Download portable ↗** and always choose an archive.
 
 Switching channels offers the latest release in the chosen channel even when its version number is lower. This lets stable users try a nightly with the same base version, and nightly users return to the latest stable release. Within a channel, only newer versions are offered.

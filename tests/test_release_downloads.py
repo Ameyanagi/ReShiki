@@ -48,8 +48,9 @@ class ReleaseDownloadTests(unittest.TestCase):
         digest = hashlib.sha256(path.read_bytes()).hexdigest()
         Path(str(path) + ".sha256").write_text(f"{digest}  {path.name}\n", encoding="ascii")
 
-    def test_stable_and_nightly_tables_link_all_ten_verified_assets(self):
-        for tag in ("v0.9.1", "nightly-0.9.1-nightly.20260929.36501221724.1"):
+    def test_stable_and_nightly_tables_link_every_verified_asset(self):
+        # Nightlies have no Intel macOS DMG or ZIP.
+        for tag, count in (("v0.9.1", 10), ("nightly-0.9.1-nightly.20260929.36501221724.1", 8)):
             with self.subTest(tag=tag):
                 for path in self.directory.iterdir():
                     path.unlink()
@@ -59,9 +60,21 @@ class ReleaseDownloadTests(unittest.TestCase):
                 links = re.findall(r"\]\((https://github.com/[^)]+/download/[^)]+)\)", notes)
                 linked = {unquote(urlparse(url).path.rsplit("/", 1)[-1]) for url in links}
                 self.assertEqual(linked, set(filenames(version)) | {"SHA256SUMS"})
-                self.assertEqual(len((self.directory / "SHA256SUMS").read_text().splitlines()), 10)
+                self.assertEqual(
+                    len((self.directory / "SHA256SUMS").read_text().splitlines()), count
+                )
+                self.assertEqual(len(filenames(version)), count)
+                self.assertEqual("macos-x64" in notes, count == 10)
+                self.assertEqual("not made for Intel Macs" in notes, count == 8)
                 self.assertIn("Windows and Linux downloads are unsigned", notes)
                 self.assertIn("/releases/latest", notes)
+
+    def test_a_nightly_with_an_intel_mac_package_cannot_publish(self):
+        version = "0.9.1-nightly.20260929.36501221724.1"
+        self.assets(version)
+        (self.directory / f"reshiki-{version}-macos-x64.zip").touch()
+        with self.assertRaisesRegex(ValueError, "unexpected="):
+            prepare(self.directory, "Ameyanagi/ReShiki", f"nightly-{version}")
 
     def test_missing_installer_or_unexpected_old_asset_cannot_publish(self):
         self.assets("0.9.1")
