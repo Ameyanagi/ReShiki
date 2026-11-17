@@ -123,14 +123,26 @@ async fn uploads_go_four_at_a_time_before_the_tree_commit_and_branch() {
     let (mock, client) = notes(&[]).await;
     mock.model().delay = std::time::Duration::from_millis(40);
     let files: Vec<Outgoing> = (0..6)
-        .map(|n| out(&format!("d{n}.rsk"), format!("drawing {n}").as_bytes(), None))
+        .map(|n| {
+            out(
+                &format!("d{n}.rsk"),
+                format!("drawing {n}").as_bytes(),
+                None,
+            )
+        })
         .collect();
     let outcome = send::send(&client, 1, "m", &files).await.unwrap();
     assert_eq!(outcome.sent.len(), 6);
     for n in 0..6 {
         let (drawing, preview) = (format!("d{n}.rsk"), format!("d{n}.svg"));
-        assert_eq!(remote(&mock, &drawing).unwrap(), format!("drawing {n}").as_bytes());
-        assert_eq!(remote(&mock, &preview).unwrap(), format!("<svg>{drawing}</svg>").as_bytes());
+        assert_eq!(
+            remote(&mock, &drawing).unwrap(),
+            format!("drawing {n}").as_bytes()
+        );
+        assert_eq!(
+            remote(&mock, &preview).unwrap(),
+            format!("<svg>{drawing}</svg>").as_bytes()
+        );
     }
     let model = mock.model();
     assert_eq!(model.most_busy, 4);
@@ -149,8 +161,15 @@ async fn a_drawing_opened_from_an_older_listing_meets_the_change_on_send() {
     // Listed, then changed on GitHub before it is opened from that listing.
     let head = api::head(&client, &key(), "main").await.unwrap();
     let top = api::tree(&client, &key(), &head.tree).await.unwrap();
-    let blob = top.iter().find(|entry| entry.name == "a.rsk").unwrap().sha.clone();
-    mock.model().repo("notes").remote_commit("a.rsk", Some(b"two"));
+    let blob = top
+        .iter()
+        .find(|entry| entry.name == "a.rsk")
+        .unwrap()
+        .sha
+        .clone();
+    mock.model()
+        .repo("notes")
+        .remote_commit("a.rsk", Some(b"two"));
     let download = api::download_listed(&client, &key(), head.commit.clone(), blob.clone())
         .await
         .unwrap();
@@ -163,14 +182,20 @@ async fn a_drawing_opened_from_an_older_listing_meets_the_change_on_send() {
     });
     workcopy::checkout(dir.path(), &key(), &mut state, "a.rsk", &download).unwrap();
     let file = &state.files["a.rsk"];
-    assert_eq!((&file.base_commit, file.base_blob.as_ref()), (&head.commit, Some(&blob)));
+    assert_eq!(
+        (&file.base_commit, file.base_blob.as_ref()),
+        (&head.commit, Some(&blob))
+    );
     // An edit sent from it never goes over GitHub's newer version.
     let outcome = send::send(&client, 1, "m", &[out("a.rsk", b"mine", Some(b"one"))])
         .await
         .unwrap();
     assert!(outcome.sent.is_empty());
     assert_eq!(outcome.conflicts.len(), 1);
-    assert_eq!(outcome.conflicts[0].theirs.as_deref(), Some(b"two".as_slice()));
+    assert_eq!(
+        outcome.conflicts[0].theirs.as_deref(),
+        Some(b"two".as_slice())
+    );
     assert_eq!(remote(&mock, "a.rsk").unwrap(), b"two");
 }
 

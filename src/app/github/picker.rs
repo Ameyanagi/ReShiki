@@ -305,7 +305,11 @@ impl Picker {
     /// What is selected, if its tile shows.
     fn selected_entry(&self) -> Option<&Entry> {
         let entry = self.entries.as_ref()?.get(self.selected?)?;
-        entry.name.to_lowercase().contains(&self.query()).then_some(entry)
+        entry
+            .name
+            .to_lowercase()
+            .contains(&self.query())
+            .then_some(entry)
     }
 
     /// The tiles that show, by entry: those the search matches, at most
@@ -1794,7 +1798,8 @@ impl App {
         };
         let me = self.github.login().map(str::to_owned);
         Task::batch(paths.into_iter().map(|path| {
-            let (client, key, me, commit) = (client.clone(), key.clone(), me.clone(), commit.clone());
+            let (client, key, me, commit) =
+                (client.clone(), key.clone(), me.clone(), commit.clone());
             let asked = path.clone();
             perform(
                 async move {
@@ -1818,7 +1823,12 @@ impl App {
             return Task::none();
         };
         let (reference, listed) = (picker.reference.clone(), picker.commit.clone());
-        self.picker_open_path(repo, repo_path, reference, listed.map(|commit| (commit, blob)))
+        self.picker_open_path(
+            repo,
+            repo_path,
+            reference,
+            listed.map(|commit| (commit, blob)),
+        )
     }
 
     /// Opens the drawing at `repo_path`; at `reference`, an old version.

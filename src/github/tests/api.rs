@@ -107,9 +107,9 @@ async fn a_folder_lists_its_drawings_previews_and_folders_only() {
     assert_eq!(folders.list("ring.rsk").await, Ok(None));
     assert!(folders.blob("scheme/route.rsk").await.unwrap().is_some());
     assert_eq!(folders.blob("scheme/deep").await, Ok(None));
-    // Each folder was read once.
+    // Each folder was read once; the top one, listed above, not again.
     let prefix = format!("/api/repos/{LOGIN}/lab-notes/git/trees/");
-    assert_eq!(mock.model().count("GET", &prefix), 4);
+    assert_eq!(mock.model().count("GET", &prefix), 3);
 }
 
 #[tokio::test]
@@ -143,7 +143,10 @@ async fn a_drawing_downloads_with_its_blob_and_commit() {
 /// The requests made since the log held `from` of them, by path.
 fn asked(mock: &Mock, from: usize) -> Vec<String> {
     let model = mock.model();
-    model.log[from..].iter().map(|one| one.path.clone()).collect()
+    model.log[from..]
+        .iter()
+        .map(|one| one.path.clone())
+        .collect()
 }
 
 #[tokio::test]
@@ -240,7 +243,10 @@ async fn a_files_last_change_is_one_commit_asked_for() {
         3
     );
     let model = mock.model();
-    let one = model.log.iter().filter(|one| one.path.ends_with("per_page=1"));
+    let one = model
+        .log
+        .iter()
+        .filter(|one| one.path.ends_with("per_page=1"));
     assert_eq!(one.count(), 2, "History still asks for pages of 20");
 }
 
@@ -509,8 +515,10 @@ async fn a_repository_reads_whole_with_every_chemistry_file() {
     // A folder's own listing has them too; previews stay listed for names.
     let top = api::tree(&client, &key, &head.tree).await.unwrap();
     assert!(names(&top).contains(&("salen.smi", false)));
-    // Past GitHub's limit, part of it, said so.
+    // Past GitHub's limit, part of it, said so (to a client that has not
+    // read it whole already).
     mock.model().repo("ligands").truncated = true;
+    let client = crate::github::client::Client::public(mock.ends()).unwrap();
     let (part, truncated) = api::tree_all(&client, &key, &head.tree).await.unwrap();
     assert!(truncated && part.len() < all.len());
 }

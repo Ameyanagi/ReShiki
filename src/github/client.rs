@@ -239,7 +239,8 @@ impl Client {
             return Ok(bytes);
         }
         let bytes = self.send(Method::GET, path, None, accept, limit).await?;
-        self.replies().put(path.to_owned(), bytes.clone(), KEPT_LIMIT);
+        self.replies()
+            .put(path.to_owned(), bytes.clone(), KEPT_LIMIT);
         Ok(bytes)
     }
 

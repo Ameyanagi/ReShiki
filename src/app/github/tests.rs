@@ -1108,7 +1108,10 @@ fn picker_at(app: &mut App, mode: Mode, names: &[&str]) {
     let generation = picker_generation(app);
     github(
         app,
-        Action::Picker(picker::Action::Listing(generation, Ok((None, sha('8'), entries)))),
+        Action::Picker(picker::Action::Listing(
+            generation,
+            Ok((None, sha('8'), entries)),
+        )),
     );
     // No last change is known; the drawings show.
     for name in names.iter().filter(|name| name.ends_with(".rsk")) {
@@ -1322,7 +1325,10 @@ fn a_closed_pickers_late_reply_never_reaches_a_new_one() {
     };
     github(
         &mut app,
-        Action::Picker(picker::Action::Listing(late, Ok((None, sha('8'), vec![entry])))),
+        Action::Picker(picker::Action::Listing(
+            late,
+            Ok((None, sha('8'), vec![entry])),
+        )),
     );
     let Some(Dialog::Picker(picker)) = &app.github.dialog else {
         panic!("no picker");
@@ -1379,7 +1385,10 @@ fn save_here_waits_for_a_folder_that_could_not_be_listed() {
     let listed = picker_generation(&app);
     github(
         &mut app,
-        picker(picker::Action::Listing(listed, Ok((None, sha('8'), vec![entry])))),
+        picker(picker::Action::Listing(
+            listed,
+            Ok((None, sha('8'), vec![entry])),
+        )),
     );
     github(&mut app, picker(picker::Action::SendHere));
     assert_eq!(picker_error(&app).as_deref(), Some("Name taken"));
@@ -1427,7 +1436,10 @@ fn a_new_repository_with_a_renamed_ones_name_gets_its_own_folder() {
     let generation = picker_generation(&app);
     github(
         &mut app,
-        picker(picker::Action::Listing(generation, Ok((None, sha('8'), vec![])))),
+        picker(picker::Action::Listing(
+            generation,
+            Ok((None, sha('8'), vec![])),
+        )),
     );
     github(&mut app, picker(picker::Action::SaveName("new".into())));
     github(&mut app, picker(picker::Action::SendHere));
@@ -2052,7 +2064,10 @@ fn the_chip_opens_the_picker_in_the_drawings_folder() {
         let generation = picker_generation(app);
         github(
             app,
-            Action::Picker(picker::Action::Listing(generation, Ok((None, sha('8'), listed)))),
+            Action::Picker(picker::Action::Listing(
+                generation,
+                Ok((None, sha('8'), listed)),
+            )),
         );
     };
     let folder = gh::Entry {
@@ -2391,7 +2406,10 @@ fn signed_out_public_repositories_list_with_names_only() {
     });
     github(
         &mut app,
-        Action::Picker(picker::Action::Listing(generation, Ok((None, sha('8'), entries)))),
+        Action::Picker(picker::Action::Listing(
+            generation,
+            Ok((None, sha('8'), entries)),
+        )),
     );
     // Names only: nobody is asked who changed them, nor for previews.
     assert!(the_picker(&app).asked.is_empty());

@@ -546,7 +546,11 @@ pub async fn last_commit(
         encoded(path)
     );
     let items: Vec<CommitItem> = kept(client, &path).await?;
-    items.into_iter().next().map(CommitItem::checked).transpose()
+    items
+        .into_iter()
+        .next()
+        .map(CommitItem::checked)
+        .transpose()
 }
 
 /// The file as it was at `commit`. `Error::NotFound`: that commit deleted it.

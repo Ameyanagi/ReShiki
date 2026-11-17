@@ -239,7 +239,10 @@ async fn a_blob_is_asked_for_once_while_the_client_lives() {
     let client = mock.client();
     let one = api::blob(&client, &repo, &blob).await.unwrap();
     // A copy of the client shares what it read; a client of its own does not.
-    assert_eq!(api::blob(&client.clone(), &repo, &blob).await, Ok(one.clone()));
+    assert_eq!(
+        api::blob(&client.clone(), &repo, &blob).await,
+        Ok(one.clone())
+    );
     assert_eq!(mock.model().count("GET", "/api/repos"), 1);
     assert_eq!(api::blob(&mock.client(), &repo, &blob).await, Ok(one));
     assert_eq!(mock.model().count("GET", "/api/repos"), 2);

@@ -174,8 +174,12 @@ pub async fn send(
         let new: Vec<&Outgoing> = (clean.iter().copied())
             .filter(|file| !uploaded.contains_key(file.repo_path.as_str()))
             .collect();
-        let blobs: Vec<String> = stream::iter(new.iter().flat_map(|file| [&file.bytes, &file.svg]))
+        // Made before any is awaited, so the send stays a `Send` future.
+        let uploads: Vec<_> = (new.iter())
+            .flat_map(|file| [&file.bytes, &file.svg])
             .map(|bytes| api::create_blob(client, key, bytes))
+            .collect();
+        let blobs: Vec<String> = stream::iter(uploads)
             .buffered(UPLOADS)
             .try_collect()
             .await?;

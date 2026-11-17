@@ -783,7 +783,8 @@ fn repo_api(
             }
         }
         ("GET", ["commits"]) => {
-            let (path, page) = (&query["path"], query["page"].parse::<usize>().unwrap());
+            let path = &query["path"];
+            let page = query.get("page").map_or(1, |page| page.parse::<usize>().unwrap());
             let size: usize = query["per_page"].parse().unwrap();
             let blob_at =
                 |commit: &String| repo.trees[&repo.commits[commit].tree].get(path).cloned();

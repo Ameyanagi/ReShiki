@@ -718,6 +718,30 @@ fn a_new_folder_in_the_tree_shows_under_its_folder() {
 }
 
 #[test]
+fn files_open_as_listed_at_the_repositorys_commit() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = app_in(dir.path());
+    app.github.repos = vec![repo()];
+    app.github.prefs.tiles = true;
+    let _ = picker(&mut app, picker::Action::Show(Mode::Open));
+    let _ = picker(&mut app, picker::Action::PickRepo(repo().key));
+    let generation = picker_generation(&app);
+    let top = vec![entry("sub/"), entry("a.mol")];
+    let listed = Ok((Some(sha('c')), sha('8'), top));
+    let _ = picker(&mut app, picker::Action::Listing(generation, listed));
+    assert_eq!(the_picker(&app).commit, Some(sha('c')));
+    // A folder below is listed at the same commit.
+    let _ = picker(&mut app, picker::Action::Folder("sub".into()));
+    let generation = picker_generation(&app);
+    let sub = Ok((None, sha('6'), vec![entry("b.mol")]));
+    let _ = picker(&mut app, picker::Action::Listing(generation, sub));
+    assert_eq!(the_picker(&app).commit, Some(sha('c')));
+    // Chosen again, the repository is listed at its branch head anew.
+    let _ = picker(&mut app, picker::Action::PickRepo(repo().key));
+    assert_eq!(the_picker(&app).commit, None);
+}
+
+#[test]
 fn tiles_shown_after_the_tree_keep_their_order() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, _) = app_in(dir.path());
