@@ -74,7 +74,6 @@ const engineeringNotes = {
     "pictures",
     "figure-export",
     "publication-pages",
-    "ruviz-integration",
   ],
   Platform: ["assistant", "assistant-benchmark", "framework-research", "settings"],
 };
@@ -112,7 +111,6 @@ export default defineConfig({
     "/reference/ring-presets": "/guide/templates/",
     "/reference/roadmap": "/developer/roadmap/",
     "/reference/runtime-safety": "/developer/runtime-safety/",
-    "/reference/ruviz-integration": "/developer/ruviz-integration/",
     "/reference/scientific-symbols": "/guide/figures/",
     "/reference/selection-and-groups": "/guide/editing/",
     "/reference/selection-and-ring-placement": "/developer/selection-and-ring-placement/",
