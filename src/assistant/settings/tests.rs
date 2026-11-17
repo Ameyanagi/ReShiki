@@ -8,9 +8,11 @@ fn default_prefers_astra_but_explicit_choice_survives_refresh() {
     let mut prefs = Preferences::default();
     assert_eq!(prefs.resolve(&models).unwrap().id, "gpt-5.6-sol");
     models.push(model("gpt-6-astra", false));
-    assert_eq!(prefs.resolve(&models).unwrap().id, DEFAULT_MODEL);
-    models.push(model("gpt-6.1", false));
-    assert_eq!(prefs.resolve(&models).unwrap().id, DEFAULT_MODEL);
+    assert_eq!(prefs.resolve(&models).unwrap().id, "gpt-5.6-sol");
+    models.push(model("gpt-6.2-astra", false));
+    assert_eq!(prefs.resolve(&models).unwrap().id, "gpt-6.2-astra");
+    models.push(model("gpt-6.3", false));
+    assert_eq!(prefs.resolve(&models).unwrap().id, "gpt-6.2-astra");
     prefs.model = Some("gpt-5.6-sol".into());
     let persisted: Preferences =
         serde_json::from_str(&serde_json::to_string(&prefs).unwrap()).unwrap();

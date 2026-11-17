@@ -84,7 +84,7 @@ pub fn latest(models: &[Model]) -> Option<&Model> {
         .max_by_key(|(i, m)| (generation(&m.id), m.is_default, std::cmp::Reverse(*i)))
         .map(|(_, m)| m)
 }
-pub const DEFAULT_MODEL: &str = "gpt-6-astra";
+pub const DEFAULT_MODEL: &str = "gpt-6.2-astra";
 
 /// Use the requested application default when available, then the account default.
 pub fn default_model(models: &[Model]) -> Option<&Model> {
