@@ -185,6 +185,21 @@ fn ops_analyze_schema_and_decoder_parity() {
     }
 }
 
+const PREDICT_NMR: Contract = Contract {
+    name: "ops-predict-nmr",
+    schema: || tools_schema(&["predict_nmr"]),
+    decode: decode_tool_call,
+    cases: "ops-predict-nmr-cases.json",
+};
+
+#[test]
+fn ops_predict_nmr_schema_and_decoder_parity() {
+    match corpus::check(&PREDICT_NMR) {
+        Ok(report) => eprintln!("{report}"),
+        Err(failures) => panic!("{failures}"),
+    }
+}
+
 const RENDER: Contract = Contract {
     name: "ops-render",
     schema: || tools_schema(&["render"]),
@@ -331,7 +346,10 @@ fn compose_derives_its_proposal_schema_from_the_pinned_one() {
 fn the_operation_catalog_stays_small() {
     let size = catalog_json().to_string().chars().count();
     eprintln!("the operation catalog is {size} characters");
-    assert!(size <= 19_500, "the catalog is {size} characters");
+    // 19,500 held the 16 tools at 19,418. predict_nmr (#1203) adds about
+    // 1,000, and the label tool that follows it about as much again, so the
+    // cap leaves room for both while descriptions stay short.
+    assert!(size <= 21_500, "the catalog is {size} characters");
     let sketch = reshiki_agent::ops::schema::sketch()
         .to_string()
         .chars()
@@ -796,7 +814,7 @@ enum Effect {
 }
 
 /// Every operation tool's effect class.
-const EFFECTS: [(&str, Effect); 16] = [
+const EFFECTS: [(&str, Effect); 17] = [
     ("info", Effect::ReadOnly),
     ("convert", Effect::ReadOnly),
     ("name", Effect::ReadOnly),
@@ -804,6 +822,7 @@ const EFFECTS: [(&str, Effect); 16] = [
     ("document_list", Effect::ReadOnly),
     ("inspect", Effect::ReadOnly),
     ("analyze", Effect::ReadOnly),
+    ("predict_nmr", Effect::ReadOnly),
     ("render", Effect::ReadOnly),
     ("export", Effect::ReadOnly),
     ("document_new", Effect::Additive),

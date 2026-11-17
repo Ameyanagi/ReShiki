@@ -26,6 +26,7 @@ TOOLS = (
     "import",
     "inspect",
     "analyze",
+    "predict_nmr",
     "render",
     "export",
     "file_open",
