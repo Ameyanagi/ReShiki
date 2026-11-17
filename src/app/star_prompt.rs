@@ -196,7 +196,7 @@ pub enum Action {
     IsStarred(Option<bool>),
     /// The same answer, asked when About opened.
     #[cfg(not(target_arch = "wasm32"))]
-    AboutChecked(Option<bool>),
+    AboutChecked(Result<bool, reshiki::github::Error>),
     /// The one-click star through GitHub, from the toast or not.
     #[cfg(not(target_arch = "wasm32"))]
     Starred(Result<(), reshiki::github::Error>),
@@ -397,10 +397,14 @@ impl App {
             }
             #[cfg(not(target_arch = "wasm32"))]
             Action::AboutChecked(starred) => match starred {
-                Some(true) => return self.star_action(Action::IsStarred(starred)),
-                Some(false) => {}
-                // GitHub could not tell: the next About asks again.
-                None => self.github.star_asked = false,
+                Ok(true) => return self.star_action(Action::IsStarred(Some(true))),
+                Ok(false) => {}
+                // GitHub could not tell: the next About asks again. A sign-in
+                // GitHub no longer takes is signed out, as anywhere else.
+                Err(error) => {
+                    self.github.star_asked = false;
+                    self.github_failed(&error);
+                }
             },
             #[cfg(not(target_arch = "wasm32"))]
             Action::Starred(result) => match result {
@@ -561,7 +565,7 @@ impl App {
         }
         Task::perform(
             async move { reshiki::github::api::starred(&client, OWNER, NAME).await },
-            |result| Message::Star(Action::AboutChecked(result.ok())),
+            |result| Message::Star(Action::AboutChecked(result)),
         )
     }
 

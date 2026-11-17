@@ -716,6 +716,7 @@ fn a_failed_star_says_why_before_the_page_opens() {
 #[cfg(not(target_arch = "wasm32"))]
 fn about_asks_github_once_per_sign_in_whether_it_is_starred() {
     use crate::app::updates::Action::Show;
+    use reshiki::github::Error;
     let asks = |app: &mut App| iced_runtime::task::into_stream(app.star_about_opened()).is_some();
     let (mut app, _dir) = app_with(asking(day("2026-01-01")));
     let _ = app.update(Message::Updates(Show(true)));
@@ -726,13 +727,14 @@ fn about_asks_github_once_per_sign_in_whether_it_is_starred() {
     assert!(app.github.star_asked);
     assert!(!asks(&mut app), "only once");
     // GitHub could not tell: the next About asks again.
-    let _ = app.update(Message::Star(Action::AboutChecked(None)));
+    let _ = app.update(Message::Star(Action::AboutChecked(Err(Error::Offline))));
+    assert!(app.github.login().is_some());
     assert!(asks(&mut app));
-    let _ = app.update(Message::Star(Action::AboutChecked(Some(false))));
+    let _ = app.update(Message::Star(Action::AboutChecked(Ok(false))));
     assert_eq!(app.star_link().0, "★ Star on GitHub");
     assert!(!asks(&mut app));
 
-    let _ = app.update(Message::Star(Action::AboutChecked(Some(true))));
+    let _ = app.update(Message::Star(Action::AboutChecked(Ok(true))));
     assert_eq!(app.star_link(), ("★ Starred on GitHub".to_owned(), None));
     assert_eq!(saved_record(&app).unwrap().state, Answer::Starred);
     // Already starred: the link opens the page, with no request to GitHub.
@@ -745,6 +747,11 @@ fn about_asks_github_once_per_sign_in_whether_it_is_starred() {
     assert_eq!(app.star_link().0, "★ Star on GitHub ↗");
     sign_in(&mut app);
     assert!(asks(&mut app));
+    // A sign-in GitHub no longer takes is signed out, as anywhere else.
+    let _ = app.update(Message::Star(Action::AboutChecked(Err(
+        Error::SignInExpired,
+    ))));
+    assert!(app.github.login().is_none());
 }
 
 #[test]
@@ -769,7 +776,7 @@ fn the_palette_stars_as_about_does_until_it_is_starred() {
         row(&app),
         Some(("Star ReShiki on GitHub".into(), "As @octo".into()))
     );
-    let _ = app.update(Message::Star(Action::AboutChecked(Some(true))));
+    let _ = app.update(Message::Star(Action::AboutChecked(Ok(true))));
     assert_eq!(row(&app), None);
 }
 
