@@ -2,39 +2,39 @@
   "rules": [
     {
       "id": "arguments.object",
-      "cite": "crates/agent/src/ops/catalog.rs:335-344; crates/agent/src/ops/label_atoms.rs:99-107"
+      "cite": "crates/agent/src/ops/catalog.rs:335-344; crates/agent/src/ops/label_atoms.rs:101-109"
     },
     {
       "id": "label_atoms.document_required",
-      "cite": "crates/agent/src/ops/label_atoms.rs:53,62,79"
+      "cite": "crates/agent/src/ops/label_atoms.rs:53,62,81"
     },
     {
       "id": "label_atoms.rows",
-      "cite": "crates/agent/src/ops/label_atoms.rs:54,62,80"
+      "cite": "crates/agent/src/ops/label_atoms.rs:54,62,82"
     },
     {
       "id": "label_atoms.row_items",
-      "cite": "crates/agent/src/ops/label_atoms.rs:43-48,69-73; crates/agent/src/ops/wire.rs:59-70,172-175"
+      "cite": "crates/agent/src/ops/label_atoms.rs:43-48,69-75; crates/agent/src/ops/wire.rs:59-70,172-175"
     },
     {
       "id": "label_atoms.rows_count",
-      "cite": "crates/agent/src/ops/label_atoms.rs:109-118; crates/agent/src/ops/budget.rs:26-27,84"
+      "cite": "crates/agent/src/ops/label_atoms.rs:111-120; crates/agent/src/ops/budget.rs:26-27,84"
     },
     {
       "id": "label_atoms.format",
-      "cite": "crates/agent/src/ops/label_atoms.rs:55,81,120-122; crates/io/src/nmr/labels.rs:21-28"
+      "cite": "crates/agent/src/ops/label_atoms.rs:55,83,122-123; crates/io/src/nmr/labels.rs:21-28"
     },
     {
       "id": "label_atoms.base_revision_required",
-      "cite": "crates/agent/src/ops/label_atoms.rs:56,82; crates/agent/src/ops/wire.rs:177-180"
+      "cite": "crates/agent/src/ops/label_atoms.rs:56,84; crates/agent/src/ops/wire.rs:177-180"
     },
     {
       "id": "label_atoms.idempotency_key_bytes",
-      "cite": "crates/agent/src/ops/label_atoms.rs:57-61,108; crates/agent/src/ops/apply.rs:207-222"
+      "cite": "crates/agent/src/ops/label_atoms.rs:57-61,110; crates/agent/src/ops/apply.rs:207-222"
     },
     {
       "id": "label_atoms.no_unknown_fields",
-      "cite": "crates/agent/src/ops/label_atoms.rs:69,77"
+      "cite": "crates/agent/src/ops/label_atoms.rs:69,79"
     }
   ],
   "bases": {
@@ -57,7 +57,7 @@
     {"name": "row_ppm_null", "rule": "label_atoms.row_items", "base": "label", "patch": [{"op": "replace", "path": "/arguments/rows/0/ppm", "value": null}], "expect": "both_accept"},
     {"name": "row_ppm_integer", "rule": "label_atoms.row_items", "base": "label", "patch": [{"op": "replace", "path": "/arguments/rows/0/ppm", "value": 14}], "expect": "both_accept"},
     {"name": "row_ppm_negative", "rule": "label_atoms.row_items", "base": "keyed", "expect": "both_accept"},
-    {"name": "row_ppm_omitted", "rule": "label_atoms.row_items", "base": "label", "patch": [{"op": "remove", "path": "/arguments/rows/0/ppm"}], "expect": "schema_rejects_only"},
+    {"name": "row_ppm_omitted", "rule": "label_atoms.row_items", "base": "label", "patch": [{"op": "remove", "path": "/arguments/rows/0/ppm"}], "expect": "both_reject", "message": "missing field `ppm`"},
     {"name": "row_ppm_string", "rule": "label_atoms.row_items", "base": "label", "patch": [{"op": "replace", "path": "/arguments/rows/0/ppm", "value": "14.2"}], "expect": "both_reject"},
     {"name": "row_atom_number", "rule": "label_atoms.row_items", "base": "label", "patch": [{"op": "replace", "path": "/arguments/rows/0/atom", "value": 1}], "expect": "both_reject"},
     {"name": "row_atom_zero", "rule": "label_atoms.row_items", "base": "label", "patch": [{"op": "replace", "path": "/arguments/rows/0/atom", "value": "0"}], "expect": "both_reject", "message": "Object IDs are decimal strings such as \"12\""},

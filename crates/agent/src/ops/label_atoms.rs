@@ -69,6 +69,8 @@ fn schema() -> Value {
 #[serde(deny_unknown_fields)]
 struct Row {
     atom: ObjectId,
+    /// Required, as the schema says: an omitted Option is not null here.
+    #[serde(deserialize_with = "Option::deserialize")]
     ppm: Option<f64>,
 }
 
@@ -139,7 +141,8 @@ struct Outcome<'a> {
 }
 
 /// The edit at `base_revision`: every row checked, then the numbers written
-/// into a copy that [`apply::replace`] reconciles. An atom that is not in
+/// into a copy that [`apply::replace`] reconciles; a copy that did not change
+/// is `recorded: false` without a commit. An atom that is not in
 /// the drawing is [`ErrorKind::UnknownObject`]; any other bad row is
 /// [`ErrorKind::InvalidArguments`]. Either changes nothing.
 fn edit(
@@ -184,6 +187,16 @@ fn edit(
             result,
         )
     });
+    // Labels already as written, or no row with a ppm: nothing to commit,
+    // so reconciliation never normalizes a drawing this call left alone.
+    if doc == *snapshot.doc {
+        return Ok(Prepared::Done(receipt(&Applied {
+            revision: snapshot.revision,
+            recorded: false,
+            chemistry_changed: false,
+            label_notice: None,
+        })));
+    }
     apply::replace(store, who, &snapshot, doc, key, &versions, receipt)
 }
 

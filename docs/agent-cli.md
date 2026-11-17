@@ -248,8 +248,8 @@ numbers of the atoms that have a prediction. Sites without a ppm get no label.
 The input must be exactly one molecule.
 
 `--labels` is allowed only for outputs that keep atom numbers: `svg`, `png`,
-`pdf`, `cdxml` and `cdx`. SVG, PNG and PDF draw them and carry the editable
-drawing; CDXML and CDX write them as ChemDraw atom numbers. `--labels` without
+`pdf`, `cdxml` and `cdx`. SVG, PNG and PDF draw them; CDXML and CDX write
+them as ChemDraw atom numbers. `--labels` without
 `--nucleus`, `--nucleus` without `--labels`, or another output format is a
 usage error. The command runs the `import`, `predict_nmr`, `label_atoms` and
 `export` tools; see [NMR prediction](nmr-prediction.md#labels-from-scripts).

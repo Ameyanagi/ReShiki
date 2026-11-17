@@ -240,3 +240,33 @@ async fn one_key_labels_once() {
         "invalid_arguments"
     );
 }
+
+/// A call that writes nothing new commits nothing, so reconciliation never
+/// rewrites a drawing it would normalize (this one's quadratic arrow).
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_call_that_changes_no_number_commits_nothing() {
+    let host = HeadlessHost::new("9.8.7", Budgets::default());
+    let unsettled = Document::from_json(include_bytes!(
+        "../../../../../tests/fixtures/passive-drawing-geometry/unsettled-native.rsk"
+    ))
+    .unwrap();
+    let handle = host
+        .store()
+        .create(&Principal::local(), unsettled)
+        .unwrap()
+        .handle;
+    let before = stored(&host, &handle);
+    let rows = json!([{"atom": "1", "ppm": null}, {"atom": "2", "ppm": null}]);
+    for key in [Value::Null, json!("k")] {
+        let result = call(
+            &host,
+            "label_atoms",
+            label(&handle, &rows, &json!("0"), key),
+        )
+        .await;
+        assert!(!result.is_error, "{:?}", result.value);
+        assert_eq!(result.value["value"]["recorded"], false);
+        assert_eq!(result.value["value"]["labeled"], json!([]));
+        assert_eq!(stored(&host, &handle), before);
+    }
+}
