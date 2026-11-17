@@ -130,8 +130,6 @@ fn main() -> iced::Result {
         }
     }
     let mut startup = session::parse(std::env::args_os().skip(1));
-    // Before anything reads or writes data; headless modes only resolve it.
-    startup.data_warning = reshiki::compatibility::move_data_directory().err();
     #[cfg(any(windows, target_os = "linux"))]
     let _desktop = {
         let args = std::env::args_os().skip(1).collect::<Vec<_>>();
@@ -145,6 +143,9 @@ fn main() -> iced::Result {
             desktop::LaunchOutcome::Exit(code) => std::process::exit(code),
         }
     };
+    // After a second launch has handed off to the running window, and before
+    // anything reads or writes data; headless modes only resolve the folder.
+    startup.data_warning = reshiki::compatibility::move_data_directory().err();
     #[cfg(windows)]
     reshiki_windows::enable_office_embedding();
     #[cfg(windows)]

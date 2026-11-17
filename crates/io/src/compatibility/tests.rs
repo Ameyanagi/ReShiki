@@ -217,6 +217,10 @@ fn rename(from: &Path, to: &Path) -> std::io::Result<()> {
     std::fs::rename(from, to)
 }
 
+fn idle(_: &Path) -> bool {
+    false
+}
+
 #[cfg(any(target_os = "macos", target_os = "linux"))]
 #[test]
 fn the_data_folder_is_dot_reshiki_in_home_on_macos_and_linux() {
@@ -287,7 +291,7 @@ fn the_old_folder_moves_whole_with_its_recovery_drafts() {
     let old = old_folder(root.path());
     let new = root.path().join(".reshiki");
     assert_eq!(
-        move_data(None, Some(old.clone()), Some(new.clone()), rename),
+        move_data(None, Some(old.clone()), Some(new.clone()), idle, rename),
         Ok(())
     );
     assert!(!present(&old), "the old folder is gone");
@@ -299,7 +303,7 @@ fn the_old_folder_moves_whole_with_its_recovery_drafts() {
     assert_eq!(current_or_earlier(new.clone(), Some(old.clone())), new);
     // A second run finds nothing to do.
     let unused = |_: &Path, _: &Path| -> std::io::Result<()> { panic!("no second move") };
-    assert_eq!(move_data(None, Some(old), Some(new), unused), Ok(()));
+    assert_eq!(move_data(None, Some(old), Some(new), idle, unused), Ok(()));
 }
 
 #[test]
@@ -310,7 +314,7 @@ fn with_both_folders_the_old_one_is_left_alone() {
     std::fs::create_dir(&new).unwrap();
     let unused = |_: &Path, _: &Path| -> std::io::Result<()> { panic!("nothing moves") };
     assert_eq!(
-        move_data(None, Some(old.clone()), Some(new.clone()), unused),
+        move_data(None, Some(old.clone()), Some(new.clone()), idle, unused),
         Ok(())
     );
     assert_eq!(
@@ -330,7 +334,13 @@ fn a_failed_move_keeps_the_old_folder_in_use_and_says_so() {
         Err(std::io::Error::other("Cross-device link"))
     };
     assert_eq!(
-        move_data(None, Some(old.clone()), Some(new.clone()), cross_device),
+        move_data(
+            None,
+            Some(old.clone()),
+            Some(new.clone()),
+            idle,
+            cross_device
+        ),
         Err(format!(
             "Kept your data in {}: could not move it to ~/.reshiki (Cross-device link)",
             old.display()
@@ -354,7 +364,12 @@ fn a_read_only_parent_keeps_the_old_folder() {
     let parent = old.parent().unwrap().to_path_buf();
     let new = root.path().join(".reshiki");
     std::fs::set_permissions(&parent, std::fs::Permissions::from_mode(0o555)).unwrap();
-    let result = move_data(None, Some(old.clone()), Some(new.clone()), rename);
+    // Root ignores the mode; the injected failure above covers it there.
+    if std::fs::write(parent.join("probe"), b"").is_ok() {
+        std::fs::set_permissions(&parent, std::fs::Permissions::from_mode(0o755)).unwrap();
+        return;
+    }
+    let result = move_data(None, Some(old.clone()), Some(new.clone()), idle, rename);
     std::fs::set_permissions(&parent, std::fs::Permissions::from_mode(0o755)).unwrap();
     let message = result.unwrap_err();
     assert!(
@@ -377,7 +392,10 @@ fn a_move_another_reshiki_made_first_is_no_failure() {
         std::fs::rename(from, to)?;
         Err(std::io::ErrorKind::NotFound.into())
     };
-    assert_eq!(move_data(None, Some(old), Some(new.clone()), raced), Ok(()));
+    assert_eq!(
+        move_data(None, Some(old), Some(new.clone()), idle, raced),
+        Ok(())
+    );
     assert!(present(&new.join("recovery/123-1-0.json")));
 }
 
@@ -388,16 +406,20 @@ fn nothing_moves_without_an_old_folder_or_with_an_override() {
     let unused = |_: &Path, _: &Path| -> std::io::Result<()> { panic!("nothing moves") };
     let missing = root.path().join("missing");
     assert_eq!(
-        move_data(None, Some(missing), Some(new.clone()), unused),
+        move_data(None, Some(missing), Some(new.clone()), idle, unused),
         Ok(())
     );
-    assert_eq!(move_data(None, None, Some(new.clone()), unused), Ok(()));
+    assert_eq!(
+        move_data(None, None, Some(new.clone()), idle, unused),
+        Ok(())
+    );
     let old = old_folder(root.path());
     assert_eq!(
         move_data(
             Some(OsString::from("/override")),
             Some(old.clone()),
             Some(new.clone()),
+            idle,
             unused
         ),
         Ok(())
@@ -425,4 +447,51 @@ fn caches_live_in_the_data_folder_except_on_windows_by_default() {
         cache_in(at(DataLocationOrigin::Override), platform()),
         PathBuf::from("/data/cache")
     );
+}
+
+#[test]
+fn a_folder_another_reshiki_uses_stays_and_says_so() {
+    let root = tempfile::tempdir().unwrap();
+    let old = old_folder(root.path());
+    let new = root.path().join(".reshiki");
+    let unused = |_: &Path, _: &Path| -> std::io::Result<()> { panic!("nothing moves") };
+    assert_eq!(
+        move_data(None, Some(old.clone()), Some(new.clone()), |_| true, unused),
+        Err(format!(
+            "Kept your data in {}: could not move it to ~/.reshiki (another ReShiki is using it)",
+            old.display()
+        ))
+    );
+    assert!(!present(&new));
+    // A draft named after this running process marks the folder as in use;
+    // the seeded draft's process 123 is not this one.
+    assert!(!used_by_another_reshiki(&root.path().join("missing")));
+    std::fs::write(
+        old.join("recovery")
+            .join(format!("{}-1-0.json", std::process::id())),
+        b"draft",
+    )
+    .unwrap();
+    assert!(used_by_another_reshiki(&old));
+}
+
+#[cfg(unix)]
+#[test]
+fn a_linked_old_folder_stays_where_it_is() {
+    let root = tempfile::tempdir().unwrap();
+    let real = old_folder(root.path());
+    let link = root.path().join("reshiki");
+    std::os::unix::fs::symlink("Application Support/dev.reshiki.ReShiki", &link).unwrap();
+    let new = root.path().join(".reshiki");
+    let unused = |_: &Path, _: &Path| -> std::io::Result<()> { panic!("nothing moves") };
+    assert_eq!(
+        move_data(None, Some(link.clone()), Some(new.clone()), idle, unused),
+        Err(format!(
+            "Kept your data in {}: could not move it to ~/.reshiki (it is a symbolic link)",
+            link.display()
+        ))
+    );
+    assert!(!present(&new));
+    assert_eq!(current_or_earlier(new, Some(link.clone())), link);
+    assert!(real.join("recovery/123-1-0.json").is_file());
 }

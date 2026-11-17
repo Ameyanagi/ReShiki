@@ -635,11 +635,13 @@ impl App {
             // Opening a drawing replaces the status; the panel keeps it.
             app.abbreviations.catalog_warning = Some(message);
         }
-        if let Some(message) = &startup.data_warning {
-            app.status = message.clone();
+        let data_warning = startup.data_warning.clone();
+        let task = app.open_startup(startup);
+        // After startup's own messages, such as the shortcut examples'.
+        if let Some(message) = data_warning {
+            app.status = message;
             app.error = true;
         }
-        let task = app.open_startup(startup);
         #[cfg(any(windows, target_os = "linux"))]
         let task = task.chain(Task::done(Message::Desktop(desktop::Action::Ready)));
         let update_check = app.update_action(updates::Action::Check(false));

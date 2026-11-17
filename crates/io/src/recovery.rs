@@ -38,7 +38,7 @@ impl Candidate {
     }
 }
 
-fn owned_by_running_instance(path: &Path) -> bool {
+pub(crate) fn owned_by_running_instance(path: &Path) -> bool {
     path.file_stem()
         .and_then(|stem| stem.to_str())
         .and_then(|stem| stem.split('-').next())

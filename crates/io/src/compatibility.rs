@@ -159,16 +159,29 @@ pub fn move_data_directory() -> Result<(), String> {
         environment("DATA_DIR"),
         project_data_directory(),
         home_data_directory(),
+        used_by_another_reshiki,
         |from, to| std::fs::rename(from, to),
     )
 }
 
+/// Whether a running ReShiki has a recovery draft in `data`: it keeps that
+/// folder's paths until it quits, so moving it would strand its next drafts.
+fn used_by_another_reshiki(data: &Path) -> bool {
+    std::fs::read_dir(data.join("recovery"))
+        .into_iter()
+        .flatten()
+        .flatten()
+        .any(|entry| crate::recovery::owned_by_running_instance(&entry.path()))
+}
+
 /// One rename, so the data is wholly in one place or the other: nothing is
-/// copied or deleted, and a failed rename leaves both paths as they were.
+/// copied or deleted, and a failed rename leaves both paths as they were. A
+/// linked folder stays: renaming the link would break a relative one.
 fn move_data(
     override_path: Option<OsString>,
     old: Option<PathBuf>,
     new: Option<PathBuf>,
+    busy: impl FnOnce(&Path) -> bool,
     rename: impl FnOnce(&Path, &Path) -> std::io::Result<()>,
 ) -> Result<(), String> {
     let (None, Some(old), Some(new)) = (override_path, old, new) else {
@@ -177,14 +190,26 @@ fn move_data(
     if present(&new) || !old.is_dir() {
         return Ok(());
     }
+    let kept = |reason: &dyn std::fmt::Display| {
+        format!(
+            "Kept your data in {}: could not move it to ~/.reshiki ({reason})",
+            old.display()
+        )
+    };
+    if old
+        .symlink_metadata()
+        .is_ok_and(|meta| meta.file_type().is_symlink())
+    {
+        return Err(kept(&"it is a symbolic link"));
+    }
+    if busy(&old) {
+        return Err(kept(&"another ReShiki is using it"));
+    }
     match rename(&old, &new) {
         Ok(()) => Ok(()),
         // Another ReShiki moved it first; `~/.reshiki` is used.
         Err(_) if present(&new) => Ok(()),
-        Err(error) => Err(format!(
-            "Kept your data in {}: could not move it to ~/.reshiki ({error})",
-            old.display()
-        )),
+        Err(error) => Err(kept(&error)),
     }
 }
 
