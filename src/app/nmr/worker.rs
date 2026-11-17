@@ -50,26 +50,8 @@ async fn run<T>(
     let _permit = work
         .try_acquire()
         .map_err(|_| "An NMR calculation is already running; try again shortly")?;
-    after_paint().await;
+    crate::web::after_paint().await;
     calculate()
-}
-
-/// Waits until the next frame is drawn, so the busy state shows before the
-/// page's thread is held.
-#[cfg(target_arch = "wasm32")]
-async fn after_paint() {
-    for frame in [true, false] {
-        let next = js_sys::Promise::new(&mut |resolve, _| {
-            let scheduled = web_sys::window().and_then(|window| match frame {
-                true => window.request_animation_frame(&resolve).ok().map(drop),
-                false => window.set_timeout_with_callback(&resolve).ok().map(drop),
-            });
-            if scheduled.is_none() {
-                let _ = resolve.call0(&wasm_bindgen::JsValue::NULL);
-            }
-        });
-        let _ = wasm_bindgen_futures::JsFuture::from(next).await;
-    }
 }
 
 #[cfg(test)]

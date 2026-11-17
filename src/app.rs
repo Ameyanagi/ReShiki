@@ -390,6 +390,9 @@ pub enum Message {
     Saved(u64, Box<Document>, Result<Option<files::Saved>, String>),
     #[cfg(target_arch = "wasm32")]
     SaveDownload(String),
+    /// The browser reads chosen files on the page's thread; say so first.
+    #[cfg(target_arch = "wasm32")]
+    Opening,
     DownloadName(String),
     ExportReady(figure_export::Prepared),
     SaveExport(String, figure_export::Prepared),
@@ -1193,6 +1196,12 @@ impl App {
             Message::SaveDownload(name) => {
                 let task = self.save_download(name);
                 return ControlFlow::Break(tagged(task, self.tab.id));
+            }
+            #[cfg(target_arch = "wasm32")]
+            Message::Opening => {
+                self.status = "Opening…".into();
+                self.error = false;
+                return ControlFlow::Break(Task::none());
             }
             _ => {}
         }

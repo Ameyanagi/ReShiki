@@ -482,8 +482,16 @@ pub(super) fn open_picked(
         wasm_bindgen::JsValue,
     )>,
 ) -> Task<Message> {
+    // The browser prepares files on the page's thread, which holds the page.
+    #[cfg(target_arch = "wasm32")]
+    let start = match &files {
+        Ok(files) if !files.is_empty() => Task::done(Message::Opening),
+        _ => Task::none(),
+    };
+    #[cfg(not(target_arch = "wasm32"))]
+    let start = Task::none();
     match files {
-        Ok(files) => files.into_iter().fold(Task::none(), |task, file| {
+        Ok(files) => files.into_iter().fold(start, |task, file| {
             #[cfg(target_arch = "wasm32")]
             let handles = handles.clone();
             task.chain(Task::perform(
@@ -531,6 +539,9 @@ pub(super) fn open_paths(paths: Vec<PathBuf>) -> Task<Message> {
 
 pub(super) async fn prepare_contents(path: PathBuf, contents: Result<Vec<u8>, String>) -> Opened {
     let source = path.clone();
+    // Let "Opening…" show before this holds the page's thread.
+    #[cfg(target_arch = "wasm32")]
+    crate::web::after_paint().await;
     let result = reshiki::task::spawn_blocking(move || prepare(&source, contents?))
         .await
         .map_err(|e| e.to_string())
