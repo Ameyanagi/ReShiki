@@ -538,9 +538,12 @@ pub(super) fn open_paths(paths: Vec<PathBuf>) -> Task<Message> {
 
 pub(super) async fn prepare_contents(path: PathBuf, contents: Result<Vec<u8>, String>) -> Opened {
     let source = path.clone();
-    // Let "Opening…" show before this holds the page's thread.
+    // Let "Opening…" show before this holds the page's thread. Two frames:
+    // the first can be drawn before the app has taken the `Opening` message.
     #[cfg(target_arch = "wasm32")]
-    crate::web::after_paint().await;
+    for _ in 0..2 {
+        crate::web::after_paint().await;
+    }
     let result = reshiki::task::spawn_blocking(move || prepare(&source, contents?))
         .await
         .map_err(|e| e.to_string())
