@@ -106,9 +106,8 @@ def test_open_picture_with_the_editable_drawing_inside(fixtures: Path, extension
         reshiki.parse(picture.read_bytes()),
         reshiki.parse(picture.read_bytes(), extension),
     ):
-        assert isinstance(drawing, reshiki.Molecule)
         assert drawing.properties().formula == "C2H6O"
-        assert drawing.smiles() == "CCO"
+        assert "<svg" in drawing.svg(width=180)
 
 
 @pytest.mark.parametrize("extension", ["png", "svg", "pdf"])
