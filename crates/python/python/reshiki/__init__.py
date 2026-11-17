@@ -524,18 +524,14 @@ class Drawing:
 
         The drawing must be exactly one molecule.
         """
-        fields = json.loads(_native.predict_nmr(self._data, nucleus))
-        rows = tuple(
-            NmrShift(
-                **{
-                    **row,
-                    "atom": int(row["atom"]),
-                    "hydrogens": tuple(int(h) for h in row["hydrogens"]),
-                }
-            )
-            for row in fields.pop("rows")
-        )
-        return NmrPrediction(rows=rows, **fields)
+        fields: dict[str, Any] = json.loads(_native.predict_nmr(self._data, nucleus))
+        rows = []
+        for row in fields.pop("rows"):
+            # IDs are decimal strings on the wire.
+            row["atom"] = int(row["atom"])
+            row["hydrogens"] = tuple(int(h) for h in row["hydrogens"])
+            rows.append(NmrShift(**row))
+        return NmrPrediction(rows=tuple(rows), **fields)
 
     def _repr_svg_(self) -> str:
         return self.svg()
