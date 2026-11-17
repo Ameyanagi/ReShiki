@@ -130,7 +130,7 @@ def test_the_issue_example_writes_labels_that_every_figure_keeps(tmp_path: Path)
     assert _numbers(labelled) == expected
     assert _numbers(molecule) == {}
     path = labelled.save(tmp_path / "assigned.svg", style="JACS / ACS", svg_text="live")
-    svg = path.read_text()
+    svg = path.read_text(encoding="utf-8")
     assert all(f">{text}</text>" in svg for text in expected.values())
     # The labels change every figure, and the native file keeps them.
     for format in ("svg", "png", "pdf"):
