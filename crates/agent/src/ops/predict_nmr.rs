@@ -1,7 +1,7 @@
 //! The `predict_nmr` tool: offline ¹H or ¹³C shifts for one molecule of a
 //! session document.
 use super::{
-    budget::Budgets,
+    budget::{Budgets, MAX_IDS},
     catalog::arguments,
     error::{ErrorKind, OpError},
     exec::Context,
@@ -10,7 +10,8 @@ use super::{
     result::ToolResult,
     store::Documents,
     wire::{
-        DocHandle, ObjectId, Principal, Revision, described, handle_schema, ids_schema, nullable,
+        DocHandle, ObjectId, Principal, Revision, described, handle_schema, nullable,
+        object_id_schema,
     },
 };
 use crate::{
@@ -36,8 +37,9 @@ pub const PREDICT_NMR: ToolSpec = ToolSpec {
 };
 
 fn schema() -> Value {
-    let mut ids = ids_schema();
-    ids["minItems"] = json!(1);
+    // ids_schema() with at least one ID.
+    let ids =
+        json!({"type": "array", "minItems": 1, "maxItems": MAX_IDS, "items": object_id_schema()});
     json!({
         "type": "object",
         "properties": {

@@ -2,11 +2,11 @@
   "rules": [
     {
       "id": "arguments.object",
-      "cite": "crates/agent/src/ops/catalog.rs:322-330; crates/agent/src/ops/predict_nmr.rs:76"
+      "cite": "crates/agent/src/ops/catalog.rs:322-330; crates/agent/src/ops/predict_nmr.rs:78"
     },
     {
       "id": "predict_nmr.document_required",
-      "cite": "crates/agent/src/ops/predict_nmr.rs:44,48,57"
+      "cite": "crates/agent/src/ops/predict_nmr.rs:46,50,59"
     },
     {
       "id": "predict_nmr.document_handle",
@@ -14,15 +14,15 @@
     },
     {
       "id": "predict_nmr.nucleus",
-      "cite": "crates/agent/src/ops/predict_nmr.rs:45,48,58,77-79; crates/chemistry/src/nmr.rs:50-56"
+      "cite": "crates/agent/src/ops/predict_nmr.rs:47,50,60,79-81; crates/chemistry/src/nmr.rs:50-56"
     },
     {
       "id": "predict_nmr.ids_nullable_required",
-      "cite": "crates/agent/src/ops/wire.rs:3-10,192-195; crates/agent/src/ops/predict_nmr.rs:46,48,59-60"
+      "cite": "crates/agent/src/ops/wire.rs:3-10,192-195; crates/agent/src/ops/predict_nmr.rs:48,50,61-62"
     },
     {
       "id": "predict_nmr.ids_nonempty",
-      "cite": "crates/agent/src/ops/predict_nmr.rs:40,80-87"
+      "cite": "crates/agent/src/ops/predict_nmr.rs:41-42,82-89"
     },
     {
       "id": "predict_nmr.ids_items",
@@ -30,11 +30,11 @@
     },
     {
       "id": "predict_nmr.ids_count",
-      "cite": "crates/agent/src/ops/ids.rs:11-25; crates/agent/src/ops/predict_nmr.rs:88; crates/agent/src/ops/wire.rs:187-190; crates/agent/src/ops/budget.rs:26-27,84"
+      "cite": "crates/agent/src/ops/ids.rs:11-25; crates/agent/src/ops/predict_nmr.rs:90; crates/agent/src/ops/wire.rs:187-190; crates/agent/src/ops/budget.rs:26-27,84"
     },
     {
       "id": "predict_nmr.no_unknown_fields",
-      "cite": "crates/agent/src/ops/predict_nmr.rs:55-56"
+      "cite": "crates/agent/src/ops/predict_nmr.rs:57-58"
     }
   ],
   "bases": {
