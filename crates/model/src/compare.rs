@@ -767,7 +767,10 @@ fn look(doc: &Document, object: Object, id: u64) -> (Value, Value) {
             let arrow = doc.arrows.iter().find(|arrow| arrow.id == id);
             (
                 arrow.map(|arrow| json(&arrow.style)).unwrap_or_default(),
-                Value::Null,
+                // What its ends hold on to.
+                arrow
+                    .map(|arrow| json(&(&arrow.start_anchor, &arrow.end_anchor)))
+                    .unwrap_or_default(),
             )
         }
         Object::Graphic => {
@@ -1145,11 +1148,11 @@ pub fn compare(left: &Document, right: &Document) -> Report {
                 report.changes.push(change);
             } else if rest_a != rest_b {
                 let kind = match object {
-                    Object::Graphic => Kind::Redrawn,
-                    _ => Kind::Text,
+                    Object::Text => Kind::Text,
+                    Object::Arrow | Object::Graphic => Kind::Redrawn,
                 };
                 let mut change = one(kind);
-                if object == Object::Text {
+                if object != Object::Graphic {
                     change.detail = Detail::Reason("Attached differently".into());
                 }
                 report.changes.push(change);
@@ -1246,6 +1249,23 @@ pub fn compare(left: &Document, right: &Document) -> Report {
         }
         change.detail = Detail::Reason("Hydrogen bond or other link changed".into());
         report.changes.push(change);
+    }
+    let look = |doc: &Document, pair: &(u64, u64)| {
+        doc.bonds
+            .iter()
+            .find(|bond| bond.order == 0 && key(bond.a, bond.b) == *pair)
+            .map(|bond| without(json(bond), &["a", "b"]))
+    };
+    let mut kept: Vec<&(u64, u64)> = mine.intersection(&theirs).collect();
+    kept.sort_unstable();
+    for pair in kept {
+        if look(left, pair) != look(right, pair) {
+            let mut change = Change::new(Kind::Style, Subject::Molecule);
+            for side in [&mut change.left, &mut change.right] {
+                side.objects = vec![pair.0, pair.1];
+            }
+            report.changes.push(change);
+        }
     }
 
     if settings(left) != settings(right) {

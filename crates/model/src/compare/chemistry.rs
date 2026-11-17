@@ -27,6 +27,9 @@ pub(super) struct Signature {
     pub bonds: HashMap<(u64, u64), u8>,
     /// Stereocenters and stereo double bonds, by drawing ids.
     pub stereo: Vec<u64>,
+    /// Each tetrahedral centre's neighbours, sorted, and its winding about
+    /// them in that order, so the two sides compare id for id.
+    pub chirality: HashMap<u64, (Vec<u64>, u8)>,
 }
 
 impl Signature {
@@ -168,7 +171,46 @@ pub(super) fn signature(doc: &Document, ids: &[u64]) -> Result<Signature, String
         atoms,
         bonds,
         stereo,
+        chirality: chirality(state, &molecule.ids),
     })
+}
+
+/// Tetrahedral centres keyed by drawing id. A tag winds about the atom's
+/// neighbours in bond order; sorting them flips it once per odd swap.
+fn chirality(state: &State, ids: &[u64]) -> HashMap<u64, (Vec<u64>, u8)> {
+    let mut neighbors = vec![Vec::new(); state.graph.atoms.len()];
+    for bond in &state.graph.bonds {
+        for (a, b) in [(bond.a, bond.b), (bond.b, bond.a)] {
+            if let (Some(list), Some(id)) = (neighbors.get_mut(a), ids.get(b)) {
+                list.push(*id);
+            }
+        }
+    }
+    let mut found = HashMap::new();
+    for (i, meta) in state.metadata.atoms.iter().enumerate() {
+        let (Some(id), Some(order)) = (ids.get(i), neighbors.get(i)) else {
+            continue;
+        };
+        if !matches!(meta.chiral_tag, 1 | 2) {
+            continue;
+        }
+        let mut sorted = order.clone();
+        sorted.sort_unstable();
+        // Parity of the permutation, by counting inversions.
+        let odd = (0..order.len())
+            .flat_map(|x| (x + 1..order.len()).map(move |y| (x, y)))
+            .filter(|&(x, y)| order.get(x) > order.get(y))
+            .count()
+            % 2
+            == 1;
+        let tag = if odd {
+            3 - meta.chiral_tag
+        } else {
+            meta.chiral_tag
+        };
+        found.insert(*id, (sorted, tag));
+    }
+    found
 }
 
 /// What plain SMILES drops, by position in the canonical atom order:
@@ -292,13 +334,24 @@ pub(super) fn edit(left: &Signature, right: &Signature) -> Edit {
         && edit.removed_bonds.is_empty()
         && edit.added_bonds.is_empty()
         && edit.changed_bonds.is_empty();
+    // Centres whose configuration changed, alongside any other edit.
+    let centres: Vec<u64> = left
+        .chirality
+        .keys()
+        .chain(right.chirality.keys())
+        .filter(|id| left.chirality.get(*id) != right.chirality.get(*id))
+        .copied()
+        .collect();
     if nothing {
         edit.stereo = true;
-        let mut stereo: Vec<u64> = left.stereo.iter().chain(&right.stereo).copied().collect();
-        stereo.sort_unstable();
-        stereo.dedup();
-        edit.changed = stereo;
+        if centres.is_empty() {
+            // A double bond's E/Z, or groups: point at every stereo unit.
+            edit.changed = left.stereo.iter().chain(&right.stereo).copied().collect();
+        }
     }
+    edit.changed.extend(centres);
+    edit.changed.sort_unstable();
+    edit.changed.dedup();
     for list in [&mut edit.removed, &mut edit.added, &mut edit.changed] {
         list.sort_unstable();
     }

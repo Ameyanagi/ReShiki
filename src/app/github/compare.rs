@@ -355,7 +355,13 @@ fn change_row(index: usize, change: &Change, left: &Document, right: &Document) 
             "Its shape changed; the same molecule".into(),
             None,
         ),
-        Kind::Redrawn => (Tag::Moved, format!("{name} reshaped"), String::new(), None),
+        Kind::Redrawn => {
+            let detail = match &change.detail {
+                Detail::Reason(reason) => reason.clone(),
+                _ => String::new(),
+            };
+            (Tag::Moved, format!("{name} redrawn"), detail, None)
+        }
         Kind::Style if change.subject == Subject::Settings => (
             Tag::Style,
             "Style or settings changed".into(),

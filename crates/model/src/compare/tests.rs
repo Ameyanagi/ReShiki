@@ -927,3 +927,111 @@ fn a_stereo_group_shared_by_two_molecules_cannot_be_verified() {
     let doc = load(&doc);
     assert_eq!(compare(&doc, &doc).unverified(), 2);
 }
+
+#[test]
+fn an_inverted_centre_is_marked_beside_another_edit() {
+    // Drawn by hand: the wedges, not a stored winding, carry the stereo.
+    let drawn = edited(&load(&molecule("C[C@H](O)CC")), |doc| {
+        for atom in &mut doc.atoms {
+            atom.stereo = None;
+        }
+    });
+    let center = drawn
+        .atoms
+        .iter()
+        .find(|atom| {
+            drawn
+                .bonds
+                .iter()
+                .filter(|b| b.a == atom.id || b.b == atom.id)
+                .count()
+                == 3
+        })
+        .unwrap()
+        .id;
+    let end = drawn
+        .atoms
+        .iter()
+        .find(|atom| {
+            atom.element == "C"
+                && drawn
+                    .bonds
+                    .iter()
+                    .filter(|b| b.a == atom.id || b.b == atom.id)
+                    .count()
+                    == 1
+        })
+        .unwrap()
+        .id;
+    let right = edited(&drawn, |doc| {
+        let bond = doc
+            .bonds
+            .iter_mut()
+            .find(|b| matches!(b.display.as_str(), "wedge" | "hash"))
+            .unwrap();
+        bond.display = if bond.display == "wedge" {
+            "hash"
+        } else {
+            "wedge"
+        }
+        .into();
+        doc.atom_mut(end).unwrap().isotope = 13;
+    });
+    let report = compare(&drawn, &right);
+    let change = chemical(&report)[0];
+    assert!(
+        change.right.atoms.contains(&end),
+        "{:?}",
+        change.right.atoms
+    );
+    assert!(
+        change.right.atoms.contains(&center),
+        "{:?}",
+        change.right.atoms
+    );
+}
+
+#[test]
+fn a_restyled_hydrogen_bond_is_a_style_line() {
+    let mut left = Document::default();
+    let o = left.add_atom("O", Point::new(0., 0.));
+    let h = left.add_atom("H", Point::new(20., 0.));
+    left.add_bond(o, h, 1, "plain");
+    let n = left.add_atom("N", Point::new(60., 0.));
+    left.add_bond(h, n, 0, "dotted");
+    let left = load(&left);
+    let right = edited(&left, |doc| {
+        doc.bonds
+            .iter_mut()
+            .find(|b| b.order == 0)
+            .unwrap()
+            .highlight = Some(crate::palette::Color::Ink);
+    });
+    assert_eq!(
+        kinds(&compare(&left, &right)),
+        [(Kind::Style, Subject::Molecule)]
+    );
+}
+
+#[test]
+fn an_arrow_let_go_of_its_atom_is_listed() {
+    let s = scheme();
+    let attached = edited(&s.doc, |doc| {
+        let atom = doc.atom(s.ethanol[0]).unwrap().position;
+        let start = doc.arrows[0].start;
+        doc.arrows[0].start_anchor = Some(crate::arrow_anchors::Anchor {
+            target: crate::arrow_anchors::Target::Atom { atom: s.ethanol[0] },
+            offset: Point::new(start.x - atom.x, start.y - atom.y),
+            direction: Point::new(1., 0.),
+            gap: 0.,
+        });
+    });
+    assert!(attached.arrows[0].start_anchor.is_some(), "kept on reading");
+    let report = compare(&attached, &s.doc);
+    assert!(
+        report.changes.iter().any(|c| c.subject == Subject::Arrow
+            && c.detail == Detail::Reason("Attached differently".into())),
+        "{:?}",
+        report.changes
+    );
+}
