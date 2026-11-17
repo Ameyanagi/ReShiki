@@ -439,7 +439,13 @@ fn respond(model: &mut Model, base: &str, request: Logged) -> Reply {
         .as_ref()
         .is_some_and(|token| model.access.contains(token));
     let body: Value = serde_json::from_slice(&request.body).unwrap_or(Value::Null);
+    // As GitHub does: a write must state its length, even when it has no body.
+    let unsized_write = matches!(method.as_str(), "PUT" | "POST" | "PATCH")
+        && !request.headers.contains_key("content-length");
     model.log.push(request);
+    if unsized_write {
+        return reply(411, json!({ "message": "Length Required" }));
+    }
 
     let (path, query) = full.split_once('?').unwrap_or((&full, ""));
     let query: HashMap<String, String> = query
@@ -979,6 +985,10 @@ async fn serve_github_mock() {
         }
     }
     mock.model().approve_after = Some(2);
+    // The signed-in user starred ReShiki before.
+    if std::env::var_os("RESHIKI_GITHUB_MOCK_STARRED").is_some() {
+        mock.model().starred.insert("Ameyanagi/ReShiki".into());
+    }
     println!("Mock GitHub at {}", mock.base);
     std::future::pending::<()>().await;
 }

@@ -114,7 +114,7 @@ pub(super) struct State {
     /// Rises with every sign-in, sign-out and picker, so late results drop.
     generation: u64,
     pub(super) account: Account,
-    client: Option<Client>,
+    pub(super) client: Option<Client>,
     /// Signed out, for public repositories: one for the session, so what it
     /// read is kept as the signed-in client keeps it.
     public: std::sync::OnceLock<Option<Client>>,
@@ -144,8 +144,11 @@ pub(super) struct State {
     /// Tabs answered Later, and a window close answered once.
     later: HashSet<TabId>,
     window_answered: bool,
-    /// Starred through the API in this run.
+    /// The signed-in user starred ReShiki: through the API in this run, or
+    /// GitHub said so.
     pub(super) starred: bool,
+    /// About asked GitHub whether they did, in this sign-in.
+    pub(super) star_asked: bool,
     versions: versions::Versions,
     /// Repository colors and the repository last used.
     prefs: identity::Prefs,
@@ -198,6 +201,7 @@ impl State {
             later: HashSet::new(),
             window_answered: false,
             starred: false,
+            star_asked: false,
             versions: versions::Versions::default(),
             amber: None,
             checked: None,
@@ -576,10 +580,13 @@ impl App {
         self.github.generation += 1;
         self.github.client = None;
         self.github.account = Account::SignedOut(note);
+        // The next account has its own stars.
+        self.github.starred = false;
+        self.github.star_asked = false;
     }
 
     /// An error from GitHub. A sign-in GitHub no longer takes signs out.
-    fn github_failed(&mut self, error: &gh::Error) -> String {
+    pub(super) fn github_failed(&mut self, error: &gh::Error) -> String {
         if *error == gh::Error::SignInExpired {
             self.github_signed_out(Some(error.to_string()));
         }

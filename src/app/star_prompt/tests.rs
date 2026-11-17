@@ -667,11 +667,110 @@ fn a_one_click_star_thanks_and_a_failed_one_opens_the_page() {
     let _ = app.update(Message::Star(Action::Starred(Ok(()))));
     assert_eq!(app.status, "Starred ReShiki on GitHub as @octo. Thank you!");
     assert_eq!(app.star_link(), ("★ Starred on GitHub".to_owned(), None));
-    let _ = app.update(Message::Star(Action::Starred(Err(
-        "No access on GitHub.".into()
-    ))));
     let _ = app.update(Message::Star(Action::Opened(Ok(()))));
     assert_eq!(app.status, THANKS);
+}
+
+/// Signed in as @octo, to a GitHub that nothing reaches.
+#[cfg(not(target_arch = "wasm32"))]
+fn sign_in(app: &mut App) {
+    use reshiki::github::{client::Client, config::Endpoints};
+    let closed = "http://127.0.0.1:9".to_owned();
+    let ends = Endpoints {
+        api: closed.clone(),
+        web: closed,
+        overridden: true,
+    };
+    app.github.client = Some(Client::new("test".into(), ends, None).unwrap());
+    app.github.account = crate::app::github::Account::SignedIn {
+        login: "octo".into(),
+        remembered: true,
+    };
+}
+
+#[test]
+#[cfg(not(target_arch = "wasm32"))]
+fn a_failed_star_says_why_before_the_page_opens() {
+    use reshiki::github::Error;
+    assert_eq!(
+        fallback(&Error::NoAccess.to_string(), Ok(())),
+        "Couldn't star through GitHub (No access on GitHub). Opened GitHub instead."
+    );
+    assert_eq!(
+        fallback(&Error::Offline.to_string(), Err("No browser.".into())),
+        "Couldn't star through GitHub (Couldn't reach GitHub). No browser."
+    );
+    let (mut app, _dir) = app_with(asking(day("2026-01-01")));
+    sign_in(&mut app);
+    let _ = app.update(Message::Star(Action::Starred(Err(Error::NoAccess))));
+    assert!(!app.github.starred);
+    let status = fallback("No access on GitHub.", Ok(()));
+    let _ = app.update(Message::Star(Action::Opened(Err(status.clone()))));
+    assert_eq!(app.status, status);
+    // A sign-in GitHub no longer takes is signed out, as anywhere else.
+    let _ = app.update(Message::Star(Action::Starred(Err(Error::SignInExpired))));
+    assert!(app.github.login().is_none());
+}
+
+#[test]
+#[cfg(not(target_arch = "wasm32"))]
+fn about_asks_github_once_per_sign_in_whether_it_is_starred() {
+    use crate::app::updates::Action::Show;
+    let asks = |app: &mut App| iced_runtime::task::into_stream(app.star_about_opened()).is_some();
+    let (mut app, _dir) = app_with(asking(day("2026-01-01")));
+    let _ = app.update(Message::Updates(Show(true)));
+    assert!(!app.github.star_asked, "signed out");
+    sign_in(&mut app);
+    // Opening About is what asks.
+    let _ = app.update(Message::Updates(Show(true)));
+    assert!(app.github.star_asked);
+    assert!(!asks(&mut app), "only once");
+    // GitHub could not tell: the next About asks again.
+    let _ = app.update(Message::Star(Action::AboutChecked(None)));
+    assert!(asks(&mut app));
+    let _ = app.update(Message::Star(Action::AboutChecked(Some(false))));
+    assert_eq!(app.star_link().0, "★ Star on GitHub");
+    assert!(!asks(&mut app));
+
+    let _ = app.update(Message::Star(Action::AboutChecked(Some(true))));
+    assert_eq!(app.star_link(), ("★ Starred on GitHub".to_owned(), None));
+    assert_eq!(saved_record(&app).unwrap().state, Answer::Starred);
+    // Already starred: the link opens the page, with no request to GitHub.
+    let _ = app.update(Message::Star(Action::Star { toast: false }));
+    let _ = app.update(Message::Star(Action::Opened(Ok(()))));
+    assert_eq!(app.status, THANKS);
+
+    // Another account has its own stars, and is asked about once more.
+    let _ = app.update(Message::GitHub(crate::app::github::Action::SignOut));
+    assert_eq!(app.star_link().0, "★ Star on GitHub ↗");
+    sign_in(&mut app);
+    assert!(asks(&mut app));
+}
+
+#[test]
+#[cfg(not(target_arch = "wasm32"))]
+fn the_palette_stars_as_about_does_until_it_is_starred() {
+    let row = |app: &App| {
+        let found = crate::app::command_palette::catalog::build(app)
+            .into_iter()
+            .find(|command| command.name.starts_with("Star ReShiki on GitHub"))?;
+        Some((found.name.clone(), found.detail.clone()))
+    };
+    let (mut app, _dir) = app_with(asking(day("2026-01-01")));
+    assert_eq!(
+        row(&app),
+        Some((
+            "Star ReShiki on GitHub ↗".into(),
+            "Opens GitHub in your browser".into()
+        ))
+    );
+    sign_in(&mut app);
+    assert_eq!(
+        row(&app),
+        Some(("Star ReShiki on GitHub".into(), "As @octo".into()))
+    );
+    let _ = app.update(Message::Star(Action::AboutChecked(Some(true))));
+    assert_eq!(row(&app), None);
 }
 
 /// The real view: event dispatch, focus and 2× pictures.

@@ -194,9 +194,12 @@ pub enum Action {
     /// not tell.
     #[cfg(not(target_arch = "wasm32"))]
     IsStarred(Option<bool>),
+    /// The same answer, asked when About opened.
+    #[cfg(not(target_arch = "wasm32"))]
+    AboutChecked(Option<bool>),
     /// The one-click star through GitHub, from the toast or not.
     #[cfg(not(target_arch = "wasm32"))]
-    Starred(Result<(), String>),
+    Starred(Result<(), reshiki::github::Error>),
 }
 
 pub(super) struct State {
@@ -380,15 +383,25 @@ impl App {
                 };
                 self.star.checking = false;
                 if starred {
+                    self.github.starred = true;
                     self.star.signed_in = None;
                     self.star.change(|record| {
                         record.state = Answer::Starred;
                         true
                     });
+                    // About's link is named as it now shows.
+                    return self.accessibility_refresh();
                 } else if self.star_ready() {
                     return self.star_show();
                 }
             }
+            #[cfg(not(target_arch = "wasm32"))]
+            Action::AboutChecked(starred) => match starred {
+                Some(true) => return self.star_action(Action::IsStarred(starred)),
+                Some(false) => {}
+                // GitHub could not tell: the next About asks again.
+                None => self.github.star_asked = false,
+            },
             #[cfg(not(target_arch = "wasm32"))]
             Action::Starred(result) => match result {
                 Ok(()) => {
@@ -398,11 +411,13 @@ impl App {
                     // About's link is named as it now shows.
                     return self.accessibility_refresh();
                 }
-                // As when signed out: the repository page in the browser.
-                Err(_) => {
+                // As when signed out: the repository page in the browser,
+                // with the reason in the status.
+                Err(error) => {
+                    let reason = self.github_failed(&error);
                     return Task::perform(
                         reshiki::updates::open_url(REPOSITORY.into()),
-                        |result| Message::Star(Action::Opened(result)),
+                        move |opened| Message::Star(Action::Opened(Err(fallback(&reason, opened)))),
                     );
                 }
             },
@@ -413,15 +428,12 @@ impl App {
                     record.state = Answer::Starred;
                     true
                 });
-                // Signed in: one click stars it, with no browser.
+                // Signed in: one click stars it, with no browser. Already
+                // starred: the repository page, as when signed out.
                 #[cfg(not(target_arch = "wasm32"))]
-                if let Some(client) = self.github.client() {
+                if let Some(client) = self.github.client().filter(|_| !self.github.starred) {
                     let star = Task::perform(
-                        async move {
-                            reshiki::github::api::star(&client, OWNER, NAME)
-                                .await
-                                .map_err(|error| error.to_string())
-                        },
+                        async move { reshiki::github::api::star(&client, OWNER, NAME).await },
                         |result| Message::Star(Action::Starred(result)),
                     );
                     return if toast {
@@ -537,6 +549,22 @@ impl App {
         }
     }
 
+    /// About opened. Signed in, ask GitHub once per sign-in whether the user
+    /// starred ReShiki, so that the link says so.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(super) fn star_about_opened(&mut self) -> Task<Message> {
+        let Some(client) = self.github.client() else {
+            return Task::none();
+        };
+        if self.github.starred || std::mem::replace(&mut self.github.star_asked, true) {
+            return Task::none();
+        }
+        Task::perform(
+            async move { reshiki::github::api::starred(&client, OWNER, NAME).await },
+            |result| Message::Star(Action::AboutChecked(result.ok())),
+        )
+    }
+
     /// The signed-in GitHub account, which a star is made with.
     fn star_login(&self) -> Option<String> {
         #[cfg(not(target_arch = "wasm32"))]
@@ -547,7 +575,7 @@ impl App {
 
     /// The Star link in About, which is also its accessible name, and its
     /// tooltip: signed in, one click stars it with that account and no
-    /// browser opens.
+    /// browser opens. Once starred, it opens the repository page.
     pub(super) fn star_link(&self) -> (String, Option<String>) {
         #[cfg(not(target_arch = "wasm32"))]
         if self.github.starred {
@@ -560,6 +588,22 @@ impl App {
             ),
             None => ("★ Star on GitHub ↗".into(), None),
         }
+    }
+
+    /// The command palette's Star row, which does what About's link does:
+    /// its name and detail. Gone once starred.
+    pub(super) fn star_row(&self) -> Option<(&'static str, String)> {
+        #[cfg(not(target_arch = "wasm32"))]
+        if self.github.starred {
+            return None;
+        }
+        Some(match self.star_login() {
+            Some(login) => ("Star ReShiki on GitHub", format!("As @{login}")),
+            None => (
+                "Star ReShiki on GitHub ↗",
+                "Opens GitHub in your browser".into(),
+            ),
+        })
     }
 
     /// Anything the toast must not interrupt, besides a focused field.
@@ -621,6 +665,17 @@ pub(super) fn starred(login: Option<&str>) -> String {
     match login {
         Some(login) => format!("Starred ReShiki on GitHub as @{login}. Thank you!"),
         None => "Starred ReShiki on GitHub. Thank you!".into(),
+    }
+}
+
+/// The status when the one-click star failed and the browser was tried
+/// instead: why, and whether the page opened.
+#[cfg(not(target_arch = "wasm32"))]
+fn fallback(reason: &str, opened: Result<(), String>) -> String {
+    let reason = reason.trim_end_matches('.');
+    match opened {
+        Ok(()) => format!("Couldn't star through GitHub ({reason}). Opened GitHub instead."),
+        Err(error) => format!("Couldn't star through GitHub ({reason}). {error}"),
     }
 }
 

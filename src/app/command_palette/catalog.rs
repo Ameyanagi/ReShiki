@@ -403,6 +403,16 @@ pub(crate) fn build(app: &App) -> Vec<Command> {
                 }
             }),
     );
+    // What About's Star link does.
+    list.extend(app.star_row().map(|(name, detail)| {
+        send(
+            name,
+            Category::File,
+            detail,
+            "github like support",
+            Message::Star(crate::app::star_prompt::Action::Star { toast: false }),
+        )
+    }));
     list.extend(view(app));
     list.extend(tools());
     if cfg!(target_arch = "wasm32") {

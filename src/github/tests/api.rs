@@ -352,6 +352,10 @@ async fn a_star_is_one_put() {
     api::star(&client, "Ameyanagi", "ReShiki").await.unwrap();
     assert!(mock.model().starred.contains("Ameyanagi/ReShiki"));
     assert_eq!(mock.model().log[0].method, "PUT");
+    // GitHub answers 411 to a PUT that states no length.
+    assert_eq!(mock.model().log[0].headers["content-length"], "0");
+    // Starring again is the same 204.
+    api::star(&client, "Ameyanagi", "ReShiki").await.unwrap();
     mock.model()
         .fail_next("PUT", "/api/user/starred/Ameyanagi/ReShiki", 403);
     assert_eq!(

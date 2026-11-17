@@ -127,6 +127,10 @@ impl App {
                     self.updates.open = open;
                     // Help > About replaces Help.
                     self.help_open &= !open;
+                    #[cfg(not(target_arch = "wasm32"))]
+                    if open {
+                        return self.star_about_opened();
+                    }
                 }
             }
             Action::Poll => {
