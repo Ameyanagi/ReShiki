@@ -151,10 +151,10 @@ fn present(path: &Path) -> bool {
 /// On macOS and Linux, moves the earlier data folder to `~/.reshiki` when
 /// no override is set, nothing is at `~/.reshiki` yet and the earlier folder
 /// exists. The GUI calls this once at startup, before anything reads or
-/// writes data. `Err` is the status-bar message when the move fails; the data
-/// then stays where it was and is used there, as [`data_directory_location`]
-/// finds it.
-pub fn move_data_directory() -> Result<(), String> {
+/// writes data. `Ok(Some((old, new)))` when it moved; `Err` is the status-bar
+/// message when it did not, and the data then stays where it was and is used
+/// there, as [`data_directory_location`] finds it.
+pub fn move_data_directory() -> Result<Option<(PathBuf, PathBuf)>, String> {
     move_data(
         environment("DATA_DIR"),
         project_data_directory(),
@@ -164,31 +164,55 @@ pub fn move_data_directory() -> Result<(), String> {
     )
 }
 
-/// Whether a running ReShiki has a recovery draft in `data`: it keeps that
-/// folder's paths until it quits, so moving it would strand its next drafts.
+/// Whether a running ReShiki has a recovery draft in `data`, or the drafts
+/// cannot be listed: that ReShiki keeps the folder's paths until it quits, so
+/// moving it would strand its next drafts.
 fn used_by_another_reshiki(data: &Path) -> bool {
-    std::fs::read_dir(data.join("recovery"))
+    match std::fs::read_dir(data.join("recovery")) {
+        Ok(entries) => entries.into_iter().any(|entry| {
+            entry.is_err()
+                || entry
+                    .is_ok_and(|entry| crate::recovery::owned_by_running_instance(&entry.path()))
+        }),
+        Err(error) => error.kind() != std::io::ErrorKind::NotFound,
+    }
+}
+
+/// Whether a link under `folder` names its target relative to itself and so
+/// would point elsewhere once the folder moves. Links are not followed.
+fn holds_relative_link(folder: &Path) -> bool {
+    std::fs::read_dir(folder)
         .into_iter()
         .flatten()
         .flatten()
-        .any(|entry| crate::recovery::owned_by_running_instance(&entry.path()))
+        .any(|entry| {
+            let path = entry.path();
+            match entry.file_type() {
+                Ok(kind) if kind.is_symlink() => {
+                    std::fs::read_link(&path).is_ok_and(|target| target.is_relative())
+                }
+                Ok(kind) if kind.is_dir() => holds_relative_link(&path),
+                _ => false,
+            }
+        })
 }
 
 /// One rename, so the data is wholly in one place or the other: nothing is
 /// copied or deleted, and a failed rename leaves both paths as they were. A
-/// linked folder stays: renaming the link would break a relative one.
+/// linked folder, or one holding a relative link, stays: the link would point
+/// elsewhere after the move.
 fn move_data(
     override_path: Option<OsString>,
     old: Option<PathBuf>,
     new: Option<PathBuf>,
     busy: impl FnOnce(&Path) -> bool,
     rename: impl FnOnce(&Path, &Path) -> std::io::Result<()>,
-) -> Result<(), String> {
+) -> Result<Option<(PathBuf, PathBuf)>, String> {
     let (None, Some(old), Some(new)) = (override_path, old, new) else {
-        return Ok(());
+        return Ok(None);
     };
     if present(&new) || !old.is_dir() {
-        return Ok(());
+        return Ok(None);
     }
     let kept = |reason: &dyn std::fmt::Display| {
         format!(
@@ -202,13 +226,16 @@ fn move_data(
     {
         return Err(kept(&"it is a symbolic link"));
     }
+    if holds_relative_link(&old) {
+        return Err(kept(&"it holds a relative symbolic link"));
+    }
     if busy(&old) {
         return Err(kept(&"another ReShiki is using it"));
     }
     match rename(&old, &new) {
-        Ok(()) => Ok(()),
+        Ok(()) => Ok(Some((old, new))),
         // Another ReShiki moved it first; `~/.reshiki` is used.
-        Err(_) if present(&new) => Ok(()),
+        Err(_) if present(&new) => Ok(Some((old, new))),
         Err(error) => Err(kept(&error)),
     }
 }

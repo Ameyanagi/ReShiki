@@ -258,7 +258,7 @@ fn the_data_folder_is_unchanged_on_windows() {
         cache.ends_with(Path::new("reshiki").join("ReShiki").join("cache")),
         "{cache:?}"
     );
-    assert_eq!(move_data_directory(), Ok(()));
+    assert_eq!(move_data_directory(), Ok(None));
 }
 
 #[test]
@@ -292,7 +292,7 @@ fn the_old_folder_moves_whole_with_its_recovery_drafts() {
     let new = root.path().join(".reshiki");
     assert_eq!(
         move_data(None, Some(old.clone()), Some(new.clone()), idle, rename),
-        Ok(())
+        Ok(Some((old.clone(), new.clone())))
     );
     assert!(!present(&old), "the old folder is gone");
     assert_eq!(
@@ -303,7 +303,10 @@ fn the_old_folder_moves_whole_with_its_recovery_drafts() {
     assert_eq!(current_or_earlier(new.clone(), Some(old.clone())), new);
     // A second run finds nothing to do.
     let unused = |_: &Path, _: &Path| -> std::io::Result<()> { panic!("no second move") };
-    assert_eq!(move_data(None, Some(old), Some(new), idle, unused), Ok(()));
+    assert_eq!(
+        move_data(None, Some(old), Some(new), idle, unused),
+        Ok(None)
+    );
 }
 
 #[test]
@@ -315,7 +318,7 @@ fn with_both_folders_the_old_one_is_left_alone() {
     let unused = |_: &Path, _: &Path| -> std::io::Result<()> { panic!("nothing moves") };
     assert_eq!(
         move_data(None, Some(old.clone()), Some(new.clone()), idle, unused),
-        Ok(())
+        Ok(None)
     );
     assert_eq!(
         std::fs::read(old.join("recovery/123-1-0.json")).unwrap(),
@@ -392,10 +395,10 @@ fn a_move_another_reshiki_made_first_is_no_failure() {
         std::fs::rename(from, to)?;
         Err(std::io::ErrorKind::NotFound.into())
     };
-    assert_eq!(
+    assert!(matches!(
         move_data(None, Some(old), Some(new.clone()), idle, raced),
-        Ok(())
-    );
+        Ok(Some(_))
+    ));
     assert!(present(&new.join("recovery/123-1-0.json")));
 }
 
@@ -407,11 +410,11 @@ fn nothing_moves_without_an_old_folder_or_with_an_override() {
     let missing = root.path().join("missing");
     assert_eq!(
         move_data(None, Some(missing), Some(new.clone()), idle, unused),
-        Ok(())
+        Ok(None)
     );
     assert_eq!(
         move_data(None, None, Some(new.clone()), idle, unused),
-        Ok(())
+        Ok(None)
     );
     let old = old_folder(root.path());
     assert_eq!(
@@ -422,7 +425,7 @@ fn nothing_moves_without_an_old_folder_or_with_an_override() {
             idle,
             unused
         ),
-        Ok(())
+        Ok(None)
     );
     assert!(!present(&new));
     assert!(old.join("recovery/123-1-0.json").is_file());
@@ -494,4 +497,46 @@ fn a_linked_old_folder_stays_where_it_is() {
     assert!(!present(&new));
     assert_eq!(current_or_earlier(new, Some(link.clone())), link);
     assert!(real.join("recovery/123-1-0.json").is_file());
+}
+
+#[cfg(unix)]
+#[test]
+fn a_relative_link_inside_keeps_the_old_folder() {
+    let root = tempfile::tempdir().unwrap();
+    let old = old_folder(root.path());
+    let new = root.path().join(".reshiki");
+    let unused = |_: &Path, _: &Path| -> std::io::Result<()> { panic!("nothing moves") };
+    std::fs::create_dir(root.path().join("Drafts")).unwrap();
+    let nested = old.join("github/octo/lab");
+    std::fs::create_dir_all(&nested).unwrap();
+    // An absolute link points to the same place from anywhere.
+    std::os::unix::fs::symlink(root.path().join("Drafts"), nested.join("absolute")).unwrap();
+    assert!(!holds_relative_link(&old));
+    std::os::unix::fs::symlink("../../../../Drafts", nested.join("drafts")).unwrap();
+    assert!(holds_relative_link(&old));
+    assert_eq!(
+        move_data(None, Some(old.clone()), Some(new.clone()), idle, unused),
+        Err(format!(
+            "Kept your data in {}: could not move it to ~/.reshiki (it holds a relative symbolic link)",
+            old.display()
+        ))
+    );
+    assert!(!present(&new));
+}
+
+#[cfg(unix)]
+#[test]
+fn unlisted_drafts_count_as_in_use() {
+    use std::os::unix::fs::PermissionsExt;
+    let root = tempfile::tempdir().unwrap();
+    let old = old_folder(root.path());
+    let recovery = old.join("recovery");
+    std::fs::set_permissions(&recovery, std::fs::Permissions::from_mode(0o000)).unwrap();
+    let unreadable = std::fs::read_dir(&recovery).is_err();
+    let busy = used_by_another_reshiki(&old);
+    std::fs::set_permissions(&recovery, std::fs::Permissions::from_mode(0o755)).unwrap();
+    // Root reads it anyway; then the seeded draft's owner decides.
+    if unreadable {
+        assert!(busy);
+    }
 }

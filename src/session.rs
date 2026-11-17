@@ -154,6 +154,19 @@ pub(crate) struct Arguments {
     pub(crate) office_host: Option<Host>,
 }
 
+impl Arguments {
+    /// Files to open from the data folder, after it moved from `old` to
+    /// `new`: an update reopens its tabs by the paths they had.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) fn moved(&mut self, old: &Path, new: &Path) {
+        for path in &mut self.paths {
+            if let Ok(rest) = path.strip_prefix(old) {
+                *path = new.join(rest);
+            }
+        }
+    }
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn parse(args: impl IntoIterator<Item = OsString>) -> Arguments {
     let mut args = args.into_iter();

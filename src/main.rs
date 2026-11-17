@@ -145,7 +145,11 @@ fn main() -> iced::Result {
     };
     // After a second launch has handed off to the running window, and before
     // anything reads or writes data; headless modes only resolve the folder.
-    startup.data_warning = reshiki::compatibility::move_data_directory().err();
+    match reshiki::compatibility::move_data_directory() {
+        Ok(Some((old, new))) => startup.moved(&old, &new),
+        Ok(None) => {}
+        Err(message) => startup.data_warning = Some(message),
+    }
     #[cfg(windows)]
     reshiki_windows::enable_office_embedding();
     #[cfg(windows)]
