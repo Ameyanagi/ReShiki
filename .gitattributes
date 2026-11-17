@@ -6,6 +6,9 @@ licenses/name-aliases/LICENSE-CC-BY-4.0.txt whitespace=-blank-at-eof
 # Preserve exact inherited license, exported data, and captured evidence whitespace.
 licenses/nmrshiftdb2/DATABASE-LICENSE.txt -text whitespace=-blank-at-eof,-blank-at-eol
 tests/fixtures/nmr/ethyl-acetate-carbon-desktop.tsv -text whitespace=-blank-at-eol
+tests/fixtures/nmr/ethyl-acetate-1H.tsv -text whitespace=-blank-at-eol
+tests/fixtures/nmr/paracetamol-13C.tsv -text whitespace=-blank-at-eol
+tests/fixtures/nmr/paracetamol-1H.tsv -text whitespace=-blank-at-eol
 tests/fixtures/nmr/explicit-assigned-h.sd -text whitespace=-blank-at-eol
 tests/fixtures/nmr/mixed-measured-calculated.sd -text whitespace=-blank-at-eol
 tests/fixtures/nmr/mock-alignment/evidence/after-carbon13-both-labels-160-percent.ax.txt -text whitespace=-blank-at-eol
