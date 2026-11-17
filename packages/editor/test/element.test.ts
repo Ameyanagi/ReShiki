@@ -5,6 +5,7 @@ import { expect, mock, test } from "bun:test";
 let loads = 0;
 let mounts = 0;
 let freed = 0;
+let dirty = false;
 const warnings = ["First import warning", "Second import warning"];
 const imported: { data: Uint8Array; format: string }[] = [];
 mock.module("../dist/editor/reshiki.js", () => ({
@@ -25,6 +26,7 @@ mock.module("../dist/editor/reshiki.js", () => ({
     };
   },
   onChange() {},
+  isDirty: () => dirty,
   setWorker() {},
   onDirtyChange() {},
   onTitleChange() {},
@@ -81,4 +83,101 @@ test("the element forwards load's copied import warnings", async () => {
   expect(freed).toBe(1);
   result.warnings.push("Only in the caller's array");
   expect(warnings).toEqual(["First import warning", "Second import warning"]);
+});
+
+// Changes `src` (and `format`) the way the browser reports it, then waits for
+// the load to settle. Answers the `beforeload` details the element fired.
+async function changeSrc(
+  element: InstanceType<typeof ReshikiEditor>,
+  src: string,
+  format?: string,
+) {
+  const attributes = (element as unknown as Element).attributes;
+  const asked: unknown[] = [];
+  const listen = (event: Event) => asked.push((event as CustomEvent).detail);
+  element.addEventListener("beforeload", listen);
+  const before = attributes.src ?? null;
+  attributes.src = src;
+  element.attributeChangedCallback("src", before, src);
+  if (format) {
+    attributes.format = format;
+    element.attributeChangedCallback("format", null, format);
+  }
+  await new Promise((resolve) => setTimeout(resolve));
+  element.removeEventListener("beforeload", listen);
+  return asked;
+}
+
+test("a changed src loads the new drawing, unless the page prevents it", async () => {
+  const fetched = globalThis.fetch;
+  globalThis.fetch = (async (src: string) =>
+    src === "missing.mol"
+      ? new Response("", { status: 404 })
+      : new Response(src)) as unknown as typeof fetch;
+  const text = (data: Uint8Array) => new TextDecoder().decode(data);
+  try {
+    const element = new ReshikiEditor();
+    // Attributes the element starts with are reported before it connects.
+    element.attributeChangedCallback("src", null, "first.mol");
+    element.connectedCallback();
+    await element.ready;
+    imported.length = 0;
+
+    // Clean: the new drawing loads, with src and format changed together.
+    expect(await changeSrc(element, "clean.mol", "mol")).toEqual([
+      { src: "clean.mol", format: "mol", dirty: false },
+    ]);
+    expect(imported.map(({ data, format }) => [text(data), format])).toEqual([
+      ["clean.mol", "mol"],
+    ]);
+
+    // Unsaved changes: the page is told, and the drawing loads as asked.
+    dirty = true;
+    expect(await changeSrc(element, "dirty.mol")).toEqual([
+      { src: "dirty.mol", format: "mol", dirty: true },
+    ]);
+    expect(imported.map(({ data }) => text(data))).toEqual(["clean.mol", "dirty.mol"]);
+
+    // Prevented, with and without unsaved changes: the drawing in front stays.
+    const prevent = (event: Event) => event.preventDefault();
+    element.addEventListener("beforeload", prevent);
+    for (dirty of [true, false]) {
+      expect(await changeSrc(element, `kept-${dirty}.mol`)).toEqual([
+        { src: `kept-${dirty}.mol`, format: "mol", dirty },
+      ]);
+    }
+    element.removeEventListener("beforeload", prevent);
+    expect(imported).toHaveLength(2);
+
+    // A src that cannot be loaded fires error and keeps the drawing.
+    const errors: string[] = [];
+    element.addEventListener("error", (event) => errors.push((event as ErrorEvent).message));
+    await changeSrc(element, "missing.mol");
+    expect(errors).toEqual(["Could not load missing.mol: HTTP 404"]);
+    expect(imported).toHaveLength(2);
+  } finally {
+    dirty = false;
+    globalThis.fetch = fetched;
+  }
+});
+
+test("only the latest of two src changes loads", async () => {
+  const fetched = globalThis.fetch;
+  const answers: Record<string, (response: Response) => void> = {};
+  globalThis.fetch = ((src: string) =>
+    new Promise<Response>((resolve) => (answers[src] = resolve))) as unknown as typeof fetch;
+  try {
+    const element = new ReshikiEditor();
+    element.connectedCallback();
+    await element.ready;
+    imported.length = 0;
+    await changeSrc(element, "slow.mol");
+    await changeSrc(element, "fast.mol");
+    answers["fast.mol"](new Response("fast"));
+    answers["slow.mol"](new Response("slow"));
+    await new Promise((resolve) => setTimeout(resolve));
+    expect(imported.map(({ data }) => new TextDecoder().decode(data))).toEqual(["fast"]);
+  } finally {
+    globalThis.fetch = fetched;
+  }
 });

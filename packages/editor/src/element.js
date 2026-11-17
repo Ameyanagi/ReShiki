@@ -6,11 +6,17 @@
 // `fonts` lists font URLs separated by spaces, and `cjk-font` is the CJK
 // fallback's URL, or "false" for none. It fires `ready` once the editor runs,
 // `change` after each edit and `error` for a font that could not load, and has
-// the editor's load, save and exportImage methods.
+// the editor's load, save and exportImage methods. Changing `src` or `format`
+// afterwards loads the drawing again, after a cancelable `beforeload`.
 import { mount } from "./editor.js";
 
 export class ReshikiEditor extends HTMLElement {
+  static observedAttributes = ["src", "format"];
+
   #editor;
+  // Counts attribute loads, so a slow fetch never replaces a later one.
+  #loads = 0;
+  #changed = false;
 
   connectedCallback() {
     if (this.#editor) return;
@@ -33,17 +39,45 @@ export class ReshikiEditor extends HTMLElement {
       .catch(() => {});
   }
 
+  // The browser also reports the attributes the element starts with; those
+  // are read by #start. `src` and `format` set together load once.
+  attributeChangedCallback(_name, before, now) {
+    if (!this.#editor || before === now || this.#changed) return;
+    this.#changed = true;
+    queueMicrotask(() => {
+      this.#changed = false;
+      this.#reload().catch((error) => this.#error(error));
+    });
+  }
+
+  async #reload() {
+    const src = this.getAttribute("src");
+    if (!src) return;
+    const format = this.getAttribute("format") ?? "auto";
+    const editor = await this.#editor;
+    // load() replaces the drawing in front without asking, so the page gets
+    // to keep one with unsaved changes.
+    const asked = new CustomEvent("beforeload", {
+      cancelable: true,
+      detail: { src, format, dirty: editor.isDirty() },
+    });
+    if (!this.dispatchEvent(asked)) return;
+    const load = ++this.#loads;
+    const data = await this.#fetch(src);
+    if (load === this.#loads) await editor.load(data, format);
+  }
+
+  async #fetch(src) {
+    const response = await fetch(src);
+    if (!response.ok) throw new Error(`Could not load ${src}: HTTP ${response.status}`);
+    return new Uint8Array(await response.arrayBuffer());
+  }
+
   async #start() {
     const src = this.getAttribute("src");
     const cjkFont = this.getAttribute("cjk-font");
-    let data;
-    if (src) {
-      const response = await fetch(src);
-      if (!response.ok) throw new Error(`Could not load ${src}: HTTP ${response.status}`);
-      data = new Uint8Array(await response.arrayBuffer());
-    }
     const editor = await mount(this, {
-      data,
+      data: src ? await this.#fetch(src) : undefined,
       format: this.getAttribute("format") ?? "auto",
       fonts: this.getAttribute("fonts")?.split(/\s+/).filter(Boolean),
       cjkFont: cjkFont === "false" ? false : (cjkFont ?? undefined),
