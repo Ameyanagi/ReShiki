@@ -46,15 +46,16 @@ async fn label(
     let arguments = json!({"document": document, "nucleus": labels.nucleus, "ids": null});
     let predicted = session.call("predict_nmr", arguments, err).await?;
     let value = predicted.value.get("value").cloned().unwrap_or_default();
-    let rows: Vec<Value> = value["rows"]
-        .as_array()
+    let rows: Vec<Value> = value
+        .get("rows")
+        .and_then(Value::as_array)
         .into_iter()
         .flatten()
-        .map(|row| json!({"atom": row["atom"], "ppm": row["ppm"]}))
+        .map(|row| json!({"atom": row.get("atom"), "ppm": row.get("ppm")}))
         .collect();
     let arguments = json!({
         "document": document, "rows": rows, "format": labels.format,
-        "base_revision": value["revision"], "idempotency_key": null,
+        "base_revision": value.get("revision"), "idempotency_key": null,
     });
     session.call("label_atoms", arguments, err).await?;
     Ok(())
