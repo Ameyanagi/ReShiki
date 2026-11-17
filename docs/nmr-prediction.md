@@ -109,7 +109,8 @@ drawing as atom numbers:
   app like any atom number.
 - They use the drawing's atom-number style, not the teal overlay, and have no
   leader lines. An atom inside a collapsed abbreviation shows its label only
-  when the abbreviation is expanded.
+  when the abbreviation is expanded, and CDXML and CDX export asks you to
+  expand it first, as for any atom number there.
 - They replace the numbers of the listed atoms only. Each atom keeps its
   number style, and its label returns to the default position. Sites without
   a ppm get no label. Labelling ¹H after ¹³C replaces the labels on the atoms

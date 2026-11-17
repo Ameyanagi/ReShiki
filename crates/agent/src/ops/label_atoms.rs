@@ -12,15 +12,16 @@ use super::{
     exec::Context,
     policy::Effect,
     result::ToolResult,
-    store::{Applied, Documents, IdempotencyKey, Receipt},
+    store::{Applied, Change, Documents, Edit, IdempotencyKey, Receipt},
     wire::{
         DocHandle, ObjectId, Principal, Revision, described, handle_schema, nullable,
-        object_id_schema, revision_schema, warnings,
+        object_id_schema, revision_schema,
     },
 };
 use crate::{
     envelope::Versions,
     tool_spec::{Hints, ToolSpec},
+    transaction,
 };
 use reshiki_io::nmr::{self, LabelFormat};
 use serde::{Deserialize, Serialize};
@@ -141,9 +142,9 @@ struct Outcome<'a> {
 }
 
 /// The edit at `base_revision`: every row checked, then the numbers written
-/// into a copy that [`apply::replace`] reconciles; a copy that did not change
-/// is `recorded: false` without a commit. An atom that is not in
-/// the drawing is [`ErrorKind::UnknownObject`]; any other bad row is
+/// into a copy that replaces the snapshot; a copy equal to it commits
+/// `recorded: false`, which still binds the key. An atom that is not in the
+/// drawing is [`ErrorKind::UnknownObject`]; any other bad row is
 /// [`ErrorKind::InvalidArguments`]. Either changes nothing.
 fn edit(
     store: &dyn Documents,
@@ -169,11 +170,11 @@ fn edit(
         )
         .param("rows"));
     }
-    let mut doc = (*snapshot.doc).clone();
-    let labeled = nmr::write_labels(&mut doc, &rows, format)
+    let mut labelled = (*snapshot.doc).clone();
+    let labeled = nmr::write_labels(&mut labelled, &rows, format)
         .map_err(|error| OpError::invalid(error).param("rows"))?;
     let labeled: Vec<ObjectId> = labeled.into_iter().map(ObjectId).collect();
-    let result = versions.clone();
+    store.fits(who, &document, &snapshot.doc, &labelled)?;
     let receipt: Receipt = Box::new(move |applied: &Applied| {
         ToolResult::valid(
             Outcome {
@@ -183,21 +184,22 @@ fn edit(
                 recorded: applied.recorded,
                 labeled: &labeled,
             },
-            warnings(applied.label_notice.iter().cloned().collect()),
-            result,
+            Vec::new(),
+            versions,
         )
     });
-    // Labels already as written, or no row with a ppm: nothing to commit,
-    // so reconciliation never normalizes a drawing this call left alone.
-    if doc == *snapshot.doc {
-        return Ok(Prepared::Done(receipt(&Applied {
-            revision: snapshot.revision,
-            recorded: false,
-            chemistry_changed: false,
-            label_notice: None,
-        })));
-    }
-    apply::replace(store, who, &snapshot, doc, key, &versions, receipt)
+    // Only atom numbers changed, and write_labels checked them, so the copy
+    // replaces the snapshot as written: reconciliation would also normalize
+    // unrelated parts of the drawing.
+    let mut doc = (*snapshot.doc).clone();
+    let reconciled = transaction::replace(&mut doc, labelled);
+    Ok(Prepared::Commit(Change {
+        base: snapshot.revision,
+        edit: Edit::Replace { doc, reconciled },
+        key,
+        labels: None,
+        receipt,
+    }))
 }
 
 /// Writes the rows' labels onto a session document, at `base_revision` and

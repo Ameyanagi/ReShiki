@@ -2,39 +2,39 @@
   "rules": [
     {
       "id": "arguments.object",
-      "cite": "crates/agent/src/ops/catalog.rs:335-344; crates/agent/src/ops/label_atoms.rs:101-109"
+      "cite": "crates/agent/src/ops/catalog.rs:335-344; crates/agent/src/ops/label_atoms.rs:102-110"
     },
     {
       "id": "label_atoms.document_required",
-      "cite": "crates/agent/src/ops/label_atoms.rs:53,62,81"
+      "cite": "crates/agent/src/ops/label_atoms.rs:54,63,82"
     },
     {
       "id": "label_atoms.rows",
-      "cite": "crates/agent/src/ops/label_atoms.rs:54,62,82"
+      "cite": "crates/agent/src/ops/label_atoms.rs:55,63,83"
     },
     {
       "id": "label_atoms.row_items",
-      "cite": "crates/agent/src/ops/label_atoms.rs:43-48,69-75; crates/agent/src/ops/wire.rs:59-70,172-175"
+      "cite": "crates/agent/src/ops/label_atoms.rs:44-49,70-76; crates/agent/src/ops/wire.rs:59-70,172-175"
     },
     {
       "id": "label_atoms.rows_count",
-      "cite": "crates/agent/src/ops/label_atoms.rs:111-120; crates/agent/src/ops/budget.rs:26-27,84"
+      "cite": "crates/agent/src/ops/label_atoms.rs:112-121; crates/agent/src/ops/budget.rs:26-27,84"
     },
     {
       "id": "label_atoms.format",
-      "cite": "crates/agent/src/ops/label_atoms.rs:55,83,122-123; crates/io/src/nmr/labels.rs:21-28"
+      "cite": "crates/agent/src/ops/label_atoms.rs:56,84,123-124; crates/io/src/nmr/labels.rs:21-28"
     },
     {
       "id": "label_atoms.base_revision_required",
-      "cite": "crates/agent/src/ops/label_atoms.rs:56,84; crates/agent/src/ops/wire.rs:177-180"
+      "cite": "crates/agent/src/ops/label_atoms.rs:57,85; crates/agent/src/ops/wire.rs:177-180"
     },
     {
       "id": "label_atoms.idempotency_key_bytes",
-      "cite": "crates/agent/src/ops/label_atoms.rs:57-61,110; crates/agent/src/ops/apply.rs:207-222"
+      "cite": "crates/agent/src/ops/label_atoms.rs:58-62,111; crates/agent/src/ops/apply.rs:207-222"
     },
     {
       "id": "label_atoms.no_unknown_fields",
-      "cite": "crates/agent/src/ops/label_atoms.rs:69,79"
+      "cite": "crates/agent/src/ops/label_atoms.rs:70,80"
     }
   ],
   "bases": {

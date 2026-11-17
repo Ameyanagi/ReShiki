@@ -296,7 +296,7 @@ pub(super) enum Prepared {
 
 /// Fails with [`ErrorKind::Stale`] when `base` is given and differs from
 /// `current`.
-pub(super) fn check_base(base: Option<Revision>, current: Revision) -> Result<(), OpError> {
+fn check_base(base: Option<Revision>, current: Revision) -> Result<(), OpError> {
     match base {
         Some(base) if base != current => Err(OpError::new(
             ErrorKind::Stale,
@@ -439,42 +439,6 @@ pub(super) fn prepare(
     }
 }
 
-/// The commit that replaces the edit snapshot `snapshot` with `doc`:
-/// [`transaction::reconcile`] against it and the label precompute. A
-/// rejection is an `is_error` result with validation `rejected` and no
-/// commit.
-pub(super) fn replace(
-    store: &dyn Documents,
-    who: &Principal,
-    snapshot: &Snapshot,
-    mut doc: Document,
-    key: Option<IdempotencyKey>,
-    versions: &Versions,
-    receipt: Receipt,
-) -> Result<Prepared, OpError> {
-    store.fits(who, &snapshot.handle, &snapshot.doc, &doc)?;
-    let reconciled = match transaction::reconcile(&mut doc, (*snapshot.doc).clone()) {
-        Ok(reconciled) => reconciled,
-        Err(rejection) => {
-            return Ok(Prepared::Done(ToolResult::rejected(
-                rejection,
-                Vec::new(),
-                versions,
-            )));
-        }
-    };
-    // The inputs `Reconciled::commit` decides with.
-    let chemistry_changed = transaction::chemistry_changed(reconciled.before(), &doc);
-    let labels = labels(&doc, chemistry_changed);
-    Ok(Prepared::Commit(Change {
-        base: snapshot.revision,
-        edit: Edit::Replace { doc, reconciled },
-        key,
-        labels,
-        receipt,
-    }))
-}
-
 /// Runs `prepare` on the blocking pool, then commits its change as the
 /// single effect: one history step, with the revision, owner and
 /// idempotency key checked again under the store's lock. Nothing runs after
@@ -566,25 +530,47 @@ fn edit(
         }
     };
     let Edited {
-        doc,
+        mut doc,
         inserted,
         id_remap,
         deleted,
     } = edited;
+    store.fits(who, &document, &snapshot.doc, &doc)?;
+    let reconciled = match transaction::reconcile(&mut doc, (*snapshot.doc).clone()) {
+        Ok(reconciled) => reconciled,
+        Err(rejection) => {
+            return Ok(Prepared::Done(ToolResult::rejected(
+                rejection,
+                Vec::new(),
+                &versions,
+            )));
+        }
+    };
+    // The inputs `Reconciled::commit` decides with.
+    let chemistry_changed = transaction::chemistry_changed(reconciled.before(), &doc);
+    let labels = labels(&doc, chemistry_changed);
     let report = Report {
         document,
-        versions: versions.clone(),
+        versions,
         inserted: object_ids(inserted),
         id_remap: IdRemapJson::from(&id_remap),
         deleted: object_ids(deleted),
     };
-    replace(store, who, &snapshot, doc, key, &versions, report.receipt())
+    Ok(Prepared::Commit(Change {
+        base: snapshot.revision,
+        edit: Edit::Replace { doc, reconciled },
+        key,
+        labels,
+        receipt: report.receipt(),
+    }))
 }
 
 /// Applies one edit to a session document.
 ///
-/// - Insert and delete: [`insert`] or [`delete`] on an edit snapshot, then
-///   [`replace`], all on the blocking pool.
+/// - Insert and delete: [`insert`] or [`delete`] on an edit snapshot,
+///   [`transaction::reconcile`] against it, and the label precompute, all on
+///   the blocking pool. A rejection is an `is_error` result with validation
+///   `rejected` and no commit.
 /// - Undo and redo: the store's step target, checked against
 ///   `base_revision`; nothing to step gives `recorded: false`, without a
 ///   commit unless the call is keyed.
