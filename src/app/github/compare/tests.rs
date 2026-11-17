@@ -329,16 +329,53 @@ fn a_chemical_change_is_where_its_painted_atoms_are_not_its_whole_molecule() {
 
 #[test]
 fn smiles_breaks_only_between_tokens() {
-    let smiles = "C[C@@H](Cl)c1ccc(Br)cc1C%12CC%12";
+    let smiles = "C[C@@H](Cl)c1ccc(Br)cc1C%12CC%12N->[Cu]C%(123)";
     let broken = breakable(smiles);
-    assert_eq!(broken.replace('\u{200B}', ""), smiles);
-    let tokens: Vec<&str> = broken.split('\u{200B}').collect();
+    assert_eq!(broken.replace(['\u{200B}', '\u{2060}'], ""), smiles);
+    let tokens: Vec<String> = broken
+        .split('\u{200B}')
+        .map(|token| token.replace('\u{2060}', ""))
+        .collect();
     assert_eq!(
         tokens,
         [
             "C", "[C@@H]", "(", "Cl", ")", "c1", "c", "c", "c", "(", "Br", ")", "c", "c1", "C%12",
-            "C", "C%12"
+            "C", "C%12", "N", "->", "[Cu]", "C%(123)"
         ]
+    );
+}
+
+#[test]
+fn a_change_painted_on_one_side_only_is_found_on_the_other_by_its_atom() {
+    // A sulfide oxidised: on the left nothing changed, so the left looks at
+    // the sulfur the oxygen is on there, not the whole molecule.
+    let mut doc = Document::default();
+    let chain: Vec<u64> = (0..5)
+        .map(|i| {
+            let element = if i == 2 { "S" } else { "C" };
+            doc.add_atom(element, Point::new(36. * i as f32, 21. * (i % 2) as f32))
+        })
+        .collect();
+    for pair in chain.windows(2) {
+        doc.add_bond(pair[0], pair[1], 1, "plain");
+    }
+    let left = load(&doc);
+    let sulfur = chain[2];
+    let right = edited(&left, |doc| {
+        let at = doc.atom(sulfur).unwrap().position;
+        let oxygen = doc.add_atom("O", at.offset(0., -40.));
+        doc.add_bond(sulfur, oxygen, 2, "plain");
+    });
+    let compare = compared(&left, &right);
+    let shown = compare.shown.as_ref().unwrap();
+    let chem = (shown.report.changes.iter())
+        .position(|change| change.kind == Kind::Chemical)
+        .unwrap();
+    let carbon = left.atom(ring[0]).unwrap().position;
+    let (lo, hi) = shown.spots[chem][0].unwrap();
+    assert!(
+        lo.distance(carbon) < 0.01 && hi.distance(carbon) < 0.01,
+        "{lo:?} {hi:?}"
     );
 }
 

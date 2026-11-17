@@ -489,12 +489,12 @@ fn paint(change: &Change) -> ComparePaint {
     }
 }
 
-/// The marks of every change on one side, and where each change's objects
-/// are there.
+/// The marks of every change on one side, and where each change is there.
+/// `side` gives a change's marks on this side and on the other.
 fn marks(
     doc: &Document,
     report: &Report,
-    side: impl Fn(&Change) -> &reshiki::compare::Marks,
+    side: impl Fn(&Change) -> [&reshiki::compare::Marks; 2],
 ) -> (Vec<CompareMark>, Vec<Option<(World, World)>>) {
     // A collapsed label's hidden atoms are marked on the label.
     let shown_at: HashMap<u64, u64> = doc
@@ -508,7 +508,7 @@ fn marks(
     };
     let (mut found, mut spots) = (Vec::new(), Vec::new());
     for change in &report.changes {
-        let marks = side(change);
+        let [marks, other] = side(change);
         let objects = reshiki::scene::selection_bounds(doc, &marks.objects);
         let (paint, chemistry) = (paint(change), change.category() == Category::Chemistry);
         let mut mark = |place| {
@@ -535,6 +535,12 @@ fn marks(
                 }
                 painted.extend(at(a).into_iter().chain(at(b)));
             }
+            // Nothing painted here, as for an atom only added: where the
+            // other side's painted atoms are here, such as the one it is on.
+            if painted.is_empty() {
+                let ends = other.bonds.iter().flat_map(|(a, b)| [a, b]);
+                painted.extend(other.atoms.iter().chain(ends).filter_map(at));
+            }
         } else if let Some((lo, hi)) = objects {
             mark(ComparePlace::Box(lo, hi));
         }
@@ -553,9 +559,9 @@ fn build(left: &Document, right: &Document) -> Shown {
     let report = reshiki::compare::compare(left, right);
     let aligned = reshiki::compare::aligned(right, &report);
     let rows = rows(&report, left, right);
-    let (on_left, at_left) = marks(left, &report, |change| &change.left);
-    let (on_right, at_right) = marks(right, &report, |change| &change.right);
-    let (lined, at_lined) = marks(&aligned, &report, |change| &change.right);
+    let (on_left, at_left) = marks(left, &report, |change| [&change.left, &change.right]);
+    let (on_right, at_right) = marks(right, &report, |change| [&change.right, &change.left]);
+    let (lined, at_lined) = marks(&aligned, &report, |change| [&change.right, &change.left]);
     let spots = at_left
         .into_iter()
         .zip(at_right)
@@ -1074,40 +1080,54 @@ fn zoomed([a, b]: [Option<(World, World)>; 2]) -> Option<[(World, World); 2]> {
     }))
 }
 
-/// SMILES that wraps between tokens only: a zero-width space before each,
-/// none inside a bracket atom or `Cl`/`Br`, nor before a ring bond such as
-/// `1` or `%12`.
+/// SMILES that wraps between tokens only: a zero-width space between them,
+/// and a word joiner inside each, so a bracket atom, `Cl`, `Br`, `->`, `<-`
+/// or a ring bond (`1`, `%12`, `%(123)`, kept with the atom before it)
+/// never breaks.
 fn breakable(smiles: &str) -> String {
-    let mut out = String::with_capacity(smiles.len() * 2);
+    let mut tokens: Vec<String> = Vec::new();
     let mut chars = smiles.chars().peekable();
     while let Some(c) = chars.next() {
-        let ring_bond = c.is_ascii_digit() || c == '%';
-        if !out.is_empty() && !ring_bond {
-            out.push('\u{200B}');
-        }
-        out.push(c);
-        match c {
-            '[' => {
-                for inner in chars.by_ref() {
-                    out.push(inner);
-                    if inner == ']' {
-                        break;
-                    }
+        let mut token = String::from(c);
+        let close = match c {
+            '[' => Some(']'),
+            '%' if chars.peek() == Some(&'(') => Some(')'),
+            _ => None,
+        };
+        if let Some(close) = close {
+            for inner in chars.by_ref() {
+                token.push(inner);
+                if inner == close {
+                    break;
                 }
             }
-            '%' => out.extend(
-                chars
-                    .next_if(char::is_ascii_digit)
-                    .into_iter()
-                    .chain(chars.next_if(char::is_ascii_digit)),
-            ),
-            'C' | 'B' => {
-                out.extend(chars.next_if(|next| matches!((c, next), ('C', 'l') | ('B', 'r'))))
-            }
-            _ => {}
+        } else if c == '%' {
+            token.extend(chars.next_if(char::is_ascii_digit));
+            token.extend(chars.next_if(char::is_ascii_digit));
+        } else {
+            token.extend(chars.next_if(|next| {
+                matches!(
+                    (c, *next),
+                    ('C', 'l') | ('B', 'r') | ('-', '>') | ('<', '-')
+                )
+            }));
+        }
+        match tokens.last_mut() {
+            Some(last) if c.is_ascii_digit() || c == '%' => last.push_str(&token),
+            _ => tokens.push(token),
         }
     }
-    out
+    let joined: Vec<String> = tokens
+        .iter()
+        .map(|token| {
+            token
+                .chars()
+                .map(String::from)
+                .collect::<Vec<_>>()
+                .join("\u{2060}")
+        })
+        .collect();
+    joined.join("\u{200B}")
 }
 
 /// One pane: its frame and header say which side it is. The frame is drawn
@@ -1133,7 +1153,8 @@ fn pane<'a>(
                 ..container::Style::default()
             }
         });
-    let mut words = row![pill, text(side.name).size(13).font(bold())]
+    let name = text(side.name).size(13).font(bold());
+    let mut words = row![pill, name.wrapping(text::Wrapping::None)]
         .spacing(6)
         .align_y(Alignment::Center);
     if !side.meta.is_empty() {
