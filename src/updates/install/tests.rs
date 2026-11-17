@@ -586,7 +586,7 @@ fn an_update_stays_in_its_version_folder_and_is_gone_after_the_next_launch() {
                 show("before, as earlier versions left it");
 
                 // Launch, then a check.
-                clean_in(&updates, Some(&apps));
+                clean_in(&updates, Some(&target));
                 let cache = Cache {
                     checked_at: 100,
                     result: Ok(Release {
@@ -637,7 +637,8 @@ fn an_update_stays_in_its_version_folder_and_is_gone_after_the_next_launch() {
                 let (stage, payload) = if another_volume {
                     prepared.beside_app().unwrap()
                 } else {
-                    assert!(!on_another_volume(&folder, &target));
+                    assert!(!on_another_volume(&folder, &apps));
+                    assert!(on_another_volume(&folder, &apps.join("missing")));
                     prepared.stage().unwrap()
                 };
                 assert_eq!(
@@ -696,7 +697,7 @@ fn an_update_stays_in_its_version_folder_and_is_gone_after_the_next_launch() {
                 if another_volume {
                     std::fs::write(folder.join("pid"), "2147483647\n").unwrap();
                 }
-                clean_in(&updates, Some(&apps));
+                clean_in(&updates, Some(&target));
                 assert_eq!(
                     tree(&data),
                     ["update-preferences.json", "updates", "updates/stable.json"]
@@ -754,7 +755,15 @@ fn startup_removes_leftovers_but_not_an_update_in_use() {
     );
     file(apps.join("Other.app/reshiki-update"), "other");
 
-    clean_in(&updates, Some(&apps));
+    // A portable copy in a folder with an update folder's name keeps itself.
+    let portable = apps.join(".reshiki-update-portable");
+    file(portable.join("reshiki"), "portable app");
+    clean_in(&updates, Some(&portable));
+    assert!(portable.join("reshiki").exists());
+    assert!(!apps.join(".reshiki-update-Ab12Cd").exists());
+
+    let app = apps.join("ReShiki");
+    clean_in(&updates, Some(&app));
     let kept_data = [
         "recovery",
         "recovery/1-draft.rsk",
@@ -815,14 +824,14 @@ fn startup_removes_leftovers_but_not_an_update_in_use() {
     clean_in(&updates, None);
     assert_eq!(tree(&updates.join("1.2.0")), ["pid"]);
     std::fs::write(updates.join("1.2.0/pid"), "2147483647\n").unwrap();
-    clean_in(&updates, Some(&apps));
+    clean_in(&updates, Some(&app));
     assert_eq!(tree(&data), kept_data);
     assert_eq!(tree(&apps), kept_apps);
     // Nothing to clean, no app folder and no updates folder are all fine.
     clean_in(&updates, None);
     clean_in(
         &root.path().join("missing/updates"),
-        Some(&root.path().join("missing")),
+        Some(&root.path().join("missing/ReShiki")),
     );
     assert_eq!(tree(&data), kept_data);
 }

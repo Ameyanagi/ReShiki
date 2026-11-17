@@ -56,10 +56,10 @@ fn claim(folder: &Path) -> Result<(), String> {
     .map_err(|error| format!("Could not prepare {}: {error}", folder.display()))
 }
 /// Removes what earlier updates left: everything in the updates folder but
-/// the check files, `.reshiki-update-*` folders beside the app, and the check
-/// files earlier versions kept in the data folder. Called once at startup. A
-/// folder that another running ReShiki or installer helper is using stays for
-/// a later launch.
+/// the check files, `.reshiki-update-*` folders beside the app (never the
+/// app itself), and the check files earlier versions kept in the data
+/// folder. Called once at startup. A folder that another running ReShiki or
+/// installer helper is using stays for a later launch.
 pub fn clean() {
     let Ok(updates) = crate::compatibility::updates_directory() else {
         return;
@@ -67,9 +67,9 @@ pub fn clean() {
     let app = std::env::current_exe()
         .ok()
         .and_then(|exe| install_target(&exe).ok());
-    clean_in(&updates, app.as_deref().and_then(Path::parent));
+    clean_in(&updates, app.as_deref());
 }
-fn clean_in(updates: &Path, beside_app: Option<&Path>) {
+fn clean_in(updates: &Path, app: Option<&Path>) {
     // Listed before anything is removed, so a check file being written while
     // a large leftover is deleted is not taken for one.
     let entries = |folder: &Path| -> Vec<PathBuf> {
@@ -93,11 +93,13 @@ fn clean_in(updates: &Path, beside_app: Option<&Path>) {
             .all(|channel| channel.check_file() != name(path))
     });
     leftovers.extend(
-        beside_app
+        app.and_then(Path::parent)
             .map(entries)
             .unwrap_or_default()
             .into_iter()
-            .filter(|path| name(path).starts_with(".reshiki-update-")),
+            .filter(|path| {
+                name(path).starts_with(".reshiki-update-") && Some(path.as_path()) != app
+            }),
     );
     leftovers.extend(
         ["update-cache.json", "update-cache-nightly.json"]
@@ -569,7 +571,11 @@ impl Prepared {
     fn stage(&self) -> Result<(PathBuf, PathBuf), String> {
         // The Windows installer writes the app itself; nothing is renamed.
         #[cfg(unix)]
-        if on_another_volume(&self.folder, &self.target) {
+        if self
+            .target
+            .parent()
+            .is_some_and(|beside| on_another_volume(&self.folder, beside))
+        {
             return self.beside_app();
         }
         Ok((self.folder.clone(), self.payload.clone()))
@@ -603,12 +609,16 @@ impl Prepared {
         copied.map(|_| (stage, payload))
     }
 }
-/// Whether the update's folder is on another volume than the app, where a
-/// rename cannot reach it.
+/// Whether a rename cannot move a file from the update's folder to beside
+/// the app: they are on different volumes, or on two mounts of one. Tried
+/// with an empty file, since equal device numbers do not promise it.
 #[cfg(unix)]
-fn on_another_volume(folder: &Path, app: &Path) -> bool {
-    use std::os::unix::fs::MetadataExt;
-    matches!((folder.metadata(), app.metadata()), (Ok(folder), Ok(app)) if folder.dev() != app.dev())
+fn on_another_volume(folder: &Path, beside_app: &Path) -> bool {
+    let from = folder.join("probe");
+    let to = beside_app.join(format!(".reshiki-update-probe-{}", std::process::id()));
+    let moved = std::fs::write(&from, b"").and_then(|()| std::fs::rename(&from, &to));
+    let _ = std::fs::remove_file(if moved.is_ok() { &to } else { &from });
+    moved.is_err()
 }
 
 /// The helper acknowledges startup before the application exits. It waits for

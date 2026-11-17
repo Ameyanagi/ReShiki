@@ -284,7 +284,7 @@ pub async fn check(channel: Channel, manual: bool) -> Result<Release, String> {
         checked_at: now,
         result: result.clone(),
     };
-    // A read-only profile must not prevent checking or downloading releases.
+    // A read-only profile must not prevent checking for releases.
     let _ = crate::task::spawn_blocking(move || {
         cache.save(&crate::compatibility::updates_directory()?, channel)
     })

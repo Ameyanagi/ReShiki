@@ -37,7 +37,7 @@ if [ "$platform" = macos ]; then
             /bin/mv "$backup" "$target"
         fi
         # The stage goes only once the previous app is no longer in it.
-        [ -e "$backup" ] || rm -rf "$stage"
+        [ -e "$backup" ] || rm -rf "$stage" || true
         reopen "$@"
     }
     trap 'rollback "$@"' EXIT
@@ -53,7 +53,7 @@ else
             if [ -e "$stage/previous/$name" ]; then /bin/mv "$stage/previous/$name" "$target/$name"; fi
         done
         # rmdir fails, and keeps the stage, while a previous file is still in it.
-        rmdir "$stage/previous" && rm -rf "$stage"
+        rmdir "$stage/previous" && rm -rf "$stage" || true
         reopen "$@"
     }
     trap 'rollback "$@"' EXIT
