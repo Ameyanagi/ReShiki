@@ -1372,6 +1372,7 @@ async fn updates_automatic_check_supports_modal_keyboard_traversal_and_activatio
     let drawing = app.tab.doc.clone();
     let draft = app.assistant.input_text();
     app.updates.open = true;
+    app.updates.data_folder = Some(std::path::PathBuf::from("/home/me/.reshiki"));
     // Enter/Space without a focused modal control must never reach the
     // drawing's contextual-key or select-recent shortcuts.
     for (named, code) in [(Named::Enter, Code::Enter), (Named::Space, Code::Space)] {
@@ -1402,6 +1403,7 @@ async fn updates_automatic_check_supports_modal_keyboard_traversal_and_activatio
     };
     for expected in [
         "updates-close",
+        "updates-data-folder",
         "updates-stable",
         "updates-nightly",
         "updates-check",
@@ -1460,6 +1462,7 @@ async fn updates_automatic_check_supports_modal_keyboard_traversal_and_activatio
     );
     for expected in [
         "updates-close",
+        "updates-data-folder",
         "updates-check",
         "updates-notes",
         "updates-star",
