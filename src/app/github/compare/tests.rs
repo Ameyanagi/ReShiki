@@ -226,6 +226,18 @@ fn the_compared_version_is_on_the_left_and_the_drawing_now_on_the_right() {
         reading(&sides),
         "Changes read from version (left) to your drawing (right)"
     );
+    let github = [
+        Side::new("On GitHub", "@alice · 14:05 · add heat"),
+        Side::new("Your drawing", "not sent"),
+    ];
+    assert_eq!(
+        reading(&github),
+        "Changes read from on GitHub (left) to your drawing (right)"
+    );
+    assert_eq!(
+        github[0].spoken(Role::Compared),
+        "Compared: On GitHub · @alice · 14:05 · add heat"
+    );
     // The drawing now is the right side compared, and the left is the version.
     let (left, ..) = scheme();
     let right = edited(&left, |doc| doc.translate(&doc.all_ids(), 5., 0.));

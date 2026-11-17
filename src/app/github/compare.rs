@@ -985,7 +985,14 @@ impl Side {
 
 /// `Changes read from version (left) to your drawing (right)`.
 pub(super) fn reading(sides: &[Side; 2]) -> String {
-    let [from, to] = sides.each_ref().map(|side| side.name.to_lowercase());
+    // `On GitHub` reads `on GitHub`: only the first letter is lowered.
+    let [from, to] = sides.each_ref().map(|side| {
+        let mut chars = side.name.chars();
+        chars
+            .next()
+            .map(|first| first.to_lowercase().chain(chars).collect::<String>())
+            .unwrap_or_default()
+    });
     format!("Changes read from {from} (left) to {to} (right)")
 }
 
