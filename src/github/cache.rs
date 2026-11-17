@@ -60,6 +60,12 @@ impl Disk {
         self
     }
 
+    /// The bytes this process counts under the root.
+    #[cfg(test)]
+    pub(super) fn counted_bytes(&self) -> Option<u64> {
+        USED.lock().ok()?.get(&self.root).copied()
+    }
+
     fn file(&self, account: &str, path: &str) -> PathBuf {
         self.root.join(account).join(hash(path.as_bytes()))
     }
@@ -77,34 +83,32 @@ impl Disk {
     pub(super) async fn store(&self, account: &str, path: &str, etag: Option<&str>, bytes: &[u8]) {
         let (disk, file) = (self.clone(), self.file(account, path));
         let rest = [etag.unwrap_or_default().as_bytes(), b"\n", bytes].concat();
-        let _ = crate::task::spawn_blocking(move || {
-            let head = format!("{}\n", hash(&rest));
-            if let Ok(replaced) = store(&file, &head, &rest) {
-                disk.counted((head.len() + rest.len()) as u64, replaced);
-            }
-        })
-        .await;
+        let _ = crate::task::spawn_blocking(move || disk.keep(&file, &rest)).await;
     }
 
-    /// Counts `added` bytes just written over `replaced`. Past the cap, the
-    /// least recently used go until nine tenths of it is left, so the next
-    /// writes list nothing.
-    fn counted(&self, added: u64, replaced: u64) {
+    /// Writes a temporary file, then renames it over the entry, so a reader
+    /// finds the old entry or the new one. No `fsync`: an entry a crash cut
+    /// short fails its sum. The rename and its count happen under one lock,
+    /// so each write is counted once. Past the cap, the least recently used
+    /// go until nine tenths of it is left, so the next writes list nothing.
+    fn keep(&self, file: &Path, rest: &[u8]) -> std::io::Result<()> {
+        let folder = file.parent().unwrap_or(Path::new("."));
+        std::fs::create_dir_all(folder)?;
+        let mut temp = crate::storage::temporary_in(folder, 0o600)?;
+        let head = format!("{}\n", hash(rest));
+        temp.write_all(head.as_bytes())?;
+        temp.write_all(rest)?;
+        temp.as_file().set_modified(SystemTime::now())?;
         let mut used = USED.lock().unwrap_or_else(PoisonError::into_inner);
-        let total = match used.get_mut(&self.root) {
-            Some(total) => {
-                *total = (*total + added).saturating_sub(replaced);
-                *total
-            }
-            // The listing holds this write already.
-            None => entries(&self.root).iter().map(|(_, size, _)| size).sum(),
-        };
-        let total = if total > self.cap {
-            self.evict()
-        } else {
-            total
-        };
-        used.insert(self.root.clone(), total);
+        let total = (used.entry(self.root.clone()))
+            .or_insert_with(|| entries(&self.root).iter().map(|(_, size, _)| size).sum());
+        let replaced = std::fs::metadata(file).map_or(0, |entry| entry.len());
+        temp.persist(file)?;
+        *total = (*total + (head.len() + rest.len()) as u64).saturating_sub(replaced);
+        if *total > self.cap {
+            *total = self.evict();
+        }
+        Ok(())
     }
 
     fn evict(&self) -> u64 {
@@ -161,29 +165,18 @@ fn parse(data: &[u8]) -> Option<Kept> {
     })
 }
 
-/// Written to a temporary file renamed over the entry, so a reader finds the
-/// old entry or the new one. No `fsync`: an entry a crash cut short fails its
-/// sum. The size of the entry replaced, if any.
-fn store(file: &Path, head: &str, rest: &[u8]) -> std::io::Result<u64> {
-    let folder = file.parent().unwrap_or(Path::new("."));
-    std::fs::create_dir_all(folder)?;
-    let mut temp = crate::storage::temporary_in(folder, 0o600)?;
-    temp.write_all(head.as_bytes())?;
-    temp.write_all(rest)?;
-    temp.as_file().set_modified(SystemTime::now())?;
-    let replaced = std::fs::metadata(file).map_or(0, |entry| entry.len());
-    temp.persist(file)?;
-    Ok(replaced)
-}
-
-/// Every file in every account folder: when it was last used, its size.
-/// Links are never followed, so nothing outside the cache is ever removed.
+/// Every entry in every account folder: when it was last used, its size.
+/// Links are never followed, so nothing outside the cache is ever removed,
+/// and a temporary file still being written is not an entry.
 fn entries(root: &Path) -> Vec<(SystemTime, u64, PathBuf)> {
     let mut found = Vec::new();
     let folders = std::fs::read_dir(root).into_iter().flatten().flatten();
     for account in folders.filter(|folder| folder.file_type().is_ok_and(|kind| kind.is_dir())) {
         for entry in (std::fs::read_dir(account.path()).into_iter().flatten()).flatten() {
+            let name = entry.file_name();
+            let named = (name.to_str()).is_some_and(|name| name.len() == 64);
             if let Ok(metadata) = entry.metadata()
+                && named
                 && metadata.is_file()
                 && let Ok(used) = metadata.modified()
             {

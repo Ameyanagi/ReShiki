@@ -266,6 +266,22 @@ async fn an_entry_that_cannot_be_read_whole_is_a_miss_and_removed() {
     assert_ne!(std::fs::read(&file).unwrap(), b"garbage");
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn writes_at_once_are_each_counted_once() {
+    let cache = tempfile::tempdir().unwrap();
+    // 16 entries of 166 bytes fit; counted twice, some would go.
+    let disk = disk(cache.path()).with_cap(16 * 166 + 100);
+    let writes = (0..16).map(|n| {
+        let disk = disk.clone();
+        tokio::spawn(async move { disk.store(LOGIN, &format!("/{n}"), None, &[1; 100]).await })
+    });
+    for write in writes.collect::<Vec<_>>() {
+        write.await.unwrap();
+    }
+    assert_eq!(kept(cache.path(), LOGIN).len(), 16);
+    assert_eq!(disk.counted_bytes(), Some(16 * 166));
+}
+
 #[cfg(unix)]
 #[tokio::test]
 async fn eviction_never_reaches_through_a_linked_folder() {
