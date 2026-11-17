@@ -17,6 +17,9 @@ export class ReshikiEditor extends HTMLElement {
   // Counts attribute changes, so a slow fetch never replaces a later one.
   #loads = 0;
   #changed = false;
+  // Stops the first file's fetch, and the change the editor started with.
+  #abort;
+  #started = 0;
 
   connectedCallback() {
     if (this.#editor) return;
@@ -48,6 +51,7 @@ export class ReshikiEditor extends HTMLElement {
   attributeChangedCallback(_name, before, now) {
     if (!this.#editor || before === now) return;
     this.#loads += 1;
+    this.#abort?.abort();
     if (this.#changed) return;
     this.#changed = true;
     queueMicrotask(() => {
@@ -72,6 +76,8 @@ export class ReshikiEditor extends HTMLElement {
       if (current()) this.#run();
       return;
     }
+    // The start itself took a change made while its first file was on the way.
+    if (load === this.#started) return;
     const data = await this.#fetch(src).catch((error) => {
       if (current()) throw error;
     });
@@ -86,19 +92,32 @@ export class ReshikiEditor extends HTMLElement {
     if (this.dispatchEvent(asked) && current()) await editor.load(data, format);
   }
 
-  async #fetch(src) {
-    const response = await fetch(src);
+  async #fetch(src, signal) {
+    const response = await fetch(src, { signal });
     if (!response.ok) throw new Error(`Could not load ${src}: HTTP ${response.status}`);
     return new Uint8Array(await response.arrayBuffer());
   }
 
   async #start() {
-    const src = this.getAttribute("src");
-    // Read with src: either may change while the file is fetched.
-    const format = this.getAttribute("format") ?? "auto";
+    let load, data, format;
+    // A src or format changed while the file is on its way starts over with
+    // the new pair, without waiting for the old file.
+    do {
+      load = this.#loads;
+      const src = this.getAttribute("src");
+      format = this.getAttribute("format") ?? "auto";
+      this.#abort = new AbortController();
+      data = src
+        ? await this.#fetch(src, this.#abort.signal).catch((error) => {
+            if (load === this.#loads) throw error;
+          })
+        : undefined;
+    } while (load !== this.#loads);
+    this.#abort = undefined;
+    this.#started = load;
     const cjkFont = this.getAttribute("cjk-font");
     const editor = await mount(this, {
-      data: src ? await this.#fetch(src) : undefined,
+      data,
       format,
       fonts: this.getAttribute("fonts")?.split(/\s+/).filter(Boolean),
       cjkFont: cjkFont === "false" ? false : (cjkFont ?? undefined),

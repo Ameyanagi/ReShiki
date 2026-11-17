@@ -240,11 +240,18 @@ test("an earlier src never loads after a later change, also a prevented or remov
   }
 });
 
-test("src and format are read together when the editor starts", async () => {
+test("a src changed while the first file is on its way replaces it at the start", async () => {
   const fetched = globalThis.fetch;
   const answers: Record<string, (response: Response) => void> = {};
-  globalThis.fetch = ((src: string) =>
-    new Promise<Response>((resolve) => (answers[src] = resolve))) as unknown as typeof fetch;
+  const stopped: string[] = [];
+  globalThis.fetch = ((src: string, { signal }: { signal: AbortSignal }) =>
+    new Promise<Response>((resolve, reject) => {
+      answers[src] = resolve;
+      signal.addEventListener("abort", () => {
+        stopped.push(src);
+        reject(signal.reason);
+      });
+    })) as unknown as typeof fetch;
   const settle = () => new Promise((resolve) => setTimeout(resolve));
   const text = ({ data, format }: { data?: Uint8Array; format: string }) => [
     new TextDecoder().decode(data),
@@ -253,21 +260,26 @@ test("src and format are read together when the editor starts", async () => {
   try {
     const element = new ReshikiEditor();
     const attributes = (element as unknown as Element).attributes;
+    const errors: string[] = [];
+    element.addEventListener("error", (event) => errors.push((event as ErrorEvent).message));
     Object.assign(attributes, { src: "a.mol", format: "mol" });
     element.connectedCallback();
-    // The page changes both while the first file is still on its way.
+    // The page changes both while the first file is still on its way; that
+    // file never arrives.
     Object.assign(attributes, { src: "b.cdx", format: "cdx" });
     element.attributeChangedCallback("src", "a.mol", "b.cdx");
     element.attributeChangedCallback("format", "mol", "cdx");
     started.length = 0;
     imported.length = 0;
-    answers["a.mol"](new Response("a"));
-    await element.ready;
-    expect(started.map(text)).toEqual([["a", "mol"]]);
     await settle();
+    expect(stopped).toEqual(["a.mol"]);
     answers["b.cdx"](new Response("b"));
+    await element.ready;
     await settle();
-    expect(imported.map(text)).toEqual([["b", "cdx"]]);
+    // The editor starts with the new pair, and does not load it a second time.
+    expect(started.map(text)).toEqual([["b", "cdx"]]);
+    expect(imported).toEqual([]);
+    expect(errors).toEqual([]);
   } finally {
     globalThis.fetch = fetched;
   }
