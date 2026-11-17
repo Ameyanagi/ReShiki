@@ -7,7 +7,8 @@ so drawings show on GitHub.
 
 ## Use it
 
-1. Choose the **GitHub** button in the toolbar, then **Open from GitHub…**.
+1. Choose the **GitHub** button at the left end of the status bar, then
+   **Open from GitHub…**.
    Signed out, the picker shows the repositories known on this computer,
    greyed, and **Sign in…**. ReShiki shows a code, copies it and opens GitHub;
    paste the code there and allow ReShiki. The dialog closes by itself, the
@@ -87,6 +88,10 @@ command palette (one row, **Open from GitHub: ligands/esters/route**).
 a link. A repository opened by link stays in the list, tagged **shared**,
 until you right-click it and choose **Remove from list**.
 
+Each repository row ends in **↗** while the pointer is on it or it is
+selected; it opens the repository on GitHub in your browser. Right-click a
+row for **Open on GitHub ↗** too.
+
 Public repositories open signed out too. Signed out, the picker shows names
 only and says **Sign in to see who changed each file and a preview.** GitHub
 allows 60 signed-out requests an hour; past that, the picker says **GitHub's
@@ -159,9 +164,12 @@ one, then choose **Compare** to see it beside the drawing now, **Open** to see
 it in a new tab or **Restore** to make it the drawing again. Restore is one
 undo step and makes a new save.
 
-The GitHub button shows your initial while you are signed in; its tooltip
-says **Signed in as @you** or **Not signed in**. Its menu ends with your
-account: **@you**, **Add repositories… ↗** and **Sign out**. The command
+The GitHub button sits at the left end of the status bar, just before the
+chip, signed in or not. It shows your initial while you are signed in; its
+tooltip says **Signed in as @you** or **Not signed in**. Its menu opens
+upward and ends with your account: **@you**, **Add repositories… ↗** and
+**Sign out**. The theme editor hides the status bar; there, use the command
+palette for GitHub, and **Send** opens as a dialog. The command
 palette offers the GitHub commands that apply to the drawing in front, such as
 **Send 1 drawing**, **History**, **Show in Finder**, **Copy GitHub link** and
 **Open on GitHub ↗**;

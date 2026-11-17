@@ -602,7 +602,6 @@ impl App {
                 Some(Message::SaveAs),
                 false
             ),
-            self.github_command(),
             divider(),
             icon_button(
                 Icon::Undo,
@@ -661,19 +660,9 @@ impl App {
                 self.inspector_open
             )
         ]
-        // 3 px gaps leave three tabs room in a 1040 px window beside the
-        // GitHub button and the Clean up options ▾.
-        .spacing(3)
+        .spacing(4)
         .align_y(Alignment::Center);
         container(bar).padding([9, 14]).style(panel).into()
-    }
-
-    /// The GitHub button and its menu, on the desktop.
-    fn github_command(&self) -> Option<Element<'_, Message>> {
-        #[cfg(not(target_arch = "wasm32"))]
-        return Some(self.github_button());
-        #[cfg(target_arch = "wasm32")]
-        None
     }
 
     fn tool_palette(&self) -> Element<'_, Message> {
@@ -2965,6 +2954,11 @@ impl App {
         })
         .height(Length::Shrink);
         let mut status = row![].spacing(8).align_y(Alignment::Center);
+        // GitHub first: its button, then the chip of the drawing in front.
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            status = status.push(self.github_button()).push(self.github_chip());
+        }
         if self.recovery_banner_shown() {
             status = status.push(self.recovery_banner());
         }
@@ -2976,10 +2970,6 @@ impl App {
                 "Cancel this operation · Esc",
                 tooltip::Position::Top,
             ));
-        }
-        #[cfg(not(target_arch = "wasm32"))]
-        if let Some(chip) = self.github_chip() {
-            status = status.push(chip);
         }
         if self.updates.available() {
             status = status.push(
@@ -3586,7 +3576,17 @@ pub(super) fn icon_button(
     message: Option<Message>,
     active: bool,
 ) -> Element<'static, Message> {
-    icon_button_at(icon, hint, message, active, tooltip::Position::Bottom)
+    icon_button_at(icon, hint, message, active, tooltip::Position::Bottom, 36.)
+}
+/// An `icon_button` for the status bar: as high as its row, the hint above.
+#[cfg(not(target_arch = "wasm32"))]
+pub(super) fn status_icon_button(
+    icon: Icon,
+    hint: impl Into<std::borrow::Cow<'static, str>>,
+    message: Option<Message>,
+    active: bool,
+) -> Element<'static, Message> {
+    icon_button_at(icon, hint, message, active, tooltip::Position::Top, 32.)
 }
 fn icon_button_at(
     icon: Icon,
@@ -3594,6 +3594,7 @@ fn icon_button_at(
     message: Option<Message>,
     active: bool,
     position: tooltip::Position,
+    size: f32,
 ) -> Element<'static, Message> {
     let hint = hint.into();
     let id = match icon {
@@ -3609,7 +3610,7 @@ fn icon_button_at(
         Icon::Import => "header-import",
         Icon::Export => "header-export",
         Icon::Inspector => "header-inspector",
-        Icon::Cloud => "header-github",
+        Icon::Cloud => "status-github",
         Icon::Keyboard => "help-open",
         Icon::Settings => "header-settings",
         _ => "header-other",
@@ -3622,9 +3623,9 @@ fn icon_button_at(
                 .width(24)
                 .height(24),
         )
-        .width(36)
-        .height(36)
-        .padding(6)
+        .width(size)
+        .height(size)
+        .padding((size - 24.) / 2.)
         .style(control(active))
         .on_press_maybe(message),
         hint,

@@ -47,6 +47,8 @@ const TILE: f32 = 136.;
 const TILE_ROW: f32 = 150.;
 /// Every tile is this tall, so rows are [`TILE_ROW`] apart.
 const TILE_HEIGHT: f32 = TILE_ROW - 8.;
+/// The ↗ at a repository row's end, square.
+const ARROW: f32 = 18.;
 const NAME_TAKEN: &str = "Name taken";
 const CANT_OPEN: &str = "Can't open this name here";
 /// Two clicks on one tile this close together open it.
@@ -125,7 +127,7 @@ pub(in crate::app) struct Picker {
     pub(super) limited: bool,
     /// `+ Add public repository…` being typed.
     adding: Option<String>,
-    /// The shared row whose Remove from list is open, by repository id.
+    /// The repository row whose right-click menu is open, by repository id.
     pub(super) menu: Option<u64>,
     /// The files pane's scroll offset, height and width, for the tiles on
     /// screen; `None` before the first scroll.
@@ -459,7 +461,7 @@ pub enum Action {
     Add,
     AddName(String),
     AddRepo,
-    /// Right-click on a shared row, by repository id; `None` closes.
+    /// Right-click on a repository row, by repository id; `None` closes.
     RowMenu(Option<u64>),
     /// Remove from list: a shared repository, by id.
     Forget(u64),
@@ -2145,10 +2147,12 @@ impl App {
     }
 
     /// One repository row: its tinted tile, its name, what is unsent or in
-    /// conflict as a dot and a count, and a lock when it is private. One
-    /// opened by link is tagged "shared" and can be removed from the list;
-    /// one the user may not send to says "Read only". Signed out, only
-    /// public ones can be opened.
+    /// conflict as a dot and a count, and a lock when it is private; last, a
+    /// ↗ to its page on GitHub, shown while the pointer is on the row, it
+    /// has keyboard focus or the row is selected. One opened by link is
+    /// tagged "shared" and can be removed from the list; one the user may
+    /// not send to says "Read only". Signed out, only public ones can be
+    /// opened. Right-click: Open on GitHub ↗, and Remove from list.
     fn picker_repo_row<'a>(
         &'a self,
         picker: &'a Picker,
@@ -2206,26 +2210,62 @@ impl App {
         let highlighted =
             picker.repo.is_none() && !picker.search.is_empty() && at == picker.highlighted;
         let greyed = picker.signed_out && (repo.private || picker.mode == Mode::SendTo);
+        // The ↗ has its room kept, so nothing moves when it shows. A
+        // selected row shows it as text; the button shows on the pointer or
+        // keyboard focus and keeps one place in the tree either way.
+        let page = format!("Open {}/{} on GitHub", repo.key.owner, repo.key.repo);
+        let slot: Element<'a, Message> = match current || highlighted {
+            true => text("↗").size(12).width(ARROW).center().into(),
+            false => Space::new().width(ARROW).into(),
+        };
+        let arrow = reshiki::accessibility::button(
+            format!("github-repo-page-{at}"),
+            page.clone(),
+            text("↗").size(12).center(),
+        )
+        .width(ARROW)
+        .height(ARROW)
+        .padding(0)
+        .style(crate::app::workspace::control(false))
+        .on_press(Message::GitHub(GitHubAction::OpenRepo(repo.key.clone())));
+        let content = iced::widget::hover(
+            content.push(slot),
+            container(crate::app::workspace::hover_hint(
+                arrow,
+                page,
+                iced::widget::tooltip::Position::Top,
+            ))
+            .align_right(Length::Fill)
+            .center_y(Length::Fill),
+        );
         let row = reshiki::accessibility::button(format!("github-repo-{at}"), spoken, content)
             .width(Length::Fill)
             .padding([4, 6])
             .style(crate::app::workspace::control(current || highlighted))
             .on_press_maybe((!greyed).then(|| msg(Action::PickRepo(repo.key.clone()))));
-        if !shared {
-            return row.into();
-        }
-        // Right-click: Remove from list.
+        // Right-click: Open on GitHub ↗, and Remove from list for a shared one.
         let menu = (picker.menu == Some(repo.id)).then(|| {
+            let item = |id: &'static str, label: &'static str, message: Message| {
+                reshiki::accessibility::button(id, label, text(label).size(12))
+                    .width(Length::Fill)
+                    .padding([6, 10])
+                    .style(crate::app::workspace::control(false))
+                    .on_press(message)
+            };
             container(
-                reshiki::accessibility::button(
-                    "github-forget",
-                    "Remove from list",
-                    text("Remove from list").size(12),
-                )
-                .width(Length::Fill)
-                .padding([6, 10])
-                .style(crate::app::workspace::control(false))
-                .on_press(msg(Action::Forget(repo.id))),
+                column![item(
+                    "github-repo-open-on",
+                    "Open on GitHub ↗",
+                    Message::GitHub(GitHubAction::OpenRepo(repo.key.clone())),
+                )]
+                .push(shared.then(|| {
+                    item(
+                        "github-forget",
+                        "Remove from list",
+                        msg(Action::Forget(repo.id)),
+                    )
+                }))
+                .spacing(1),
             )
             .width(170)
             .padding(5)

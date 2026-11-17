@@ -11,6 +11,7 @@ use std::sync::Arc;
 
 mod files;
 mod newer;
+mod status_bar;
 
 fn repo() -> Repo {
     Repo {
