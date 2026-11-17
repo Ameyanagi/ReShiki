@@ -81,10 +81,12 @@ places one name caption under all of its ions instead, as before. That caption,
 and name captions in older drawings, are removed when the chemistry changes;
 editing or dragging one turns it into ordinary text that stays.
 
-CDXML and CDX keep an automatic name linked as ChemDraw chemical-name text, so
-ChemDraw renames it after an edit. A caption with a custom name is saved as
-plain text, because ChemDraw would replace the name with its own. Drawings with
-a name line or a custom name are saved as `.rsk` document version 39.
+CDXML and CDX save the name line as plain text of its own, just above the
+property lines, which stay linked so ChemDraw keeps them up to date. ChemDraw
+has no linked chemical name it keeps: its CDX documentation lists one, but
+ChemDraw 26 stops updating linked text that includes it. `.rsk` files keep the
+whole caption linked; drawings with a name line or a custom name are saved as
+document version 39.
 
 To see or copy a name without placing it, select one whole molecule and choose
 **Generate selected name** in **Import → Name → Details** or in the

@@ -177,7 +177,7 @@ fn linked_captions_export_as_chemdraw_property_text_and_return() {
 }
 
 #[test]
-fn an_automatic_name_line_exports_linked_and_a_custom_one_as_plain_text() {
+fn the_name_line_exports_as_plain_text_above_linked_properties() {
     use crate::linked_properties::{named, rename};
     let (mut d, atoms) = phenol();
     for p in [Property::Weight, Property::Name] {
@@ -185,40 +185,44 @@ fn an_automatic_name_line_exports_linked_and_a_custom_one_as_plain_text() {
     }
     let smiles = d.property_captions[0].smiles.clone();
     named(&mut d, &smiles, "phenol");
-    let x = xml(&d);
-    // ChemDraw's chemical-name type, first like the line.
-    assert!(x.contains(r#"ChemicalPropertyType="1 4""#), "{x}");
-    for back in [
-        import(&x),
-        import(&crate::exchange::from_cdx(&crate::exchange::to_cdx(&x).unwrap()).unwrap()),
-    ] {
-        let link = &back.property_captions[0];
-        assert_eq!(link.properties, [Property::Name, Property::Weight]);
-        // The structure is identified on import, and the saved line is its
-        // automatic name until the structure changes.
-        assert_eq!(link.smiles, smiles);
-        assert_eq!(link.name, "phenol");
-        assert!(!link.needs_name());
-        assert_eq!(caption(&back), "phenol\nMol. Wt.: 94.11");
-        // The name line stays bold.
-        let text = &back.annotations[0];
-        assert!(text.format.at(0).bold);
-        assert!(!text.format.at(text.text.find('M').unwrap()).bold);
+    for custom in [false, true] {
+        if custom {
+            rename(&mut d, &atoms, "Compound 3a", TextFormat::default(), true).unwrap();
+        }
+        let name = if custom { "Compound 3a" } else { "phenol" };
+        let x = xml(&d);
+        // Only the property line is linked; ChemDraw keeps no linked name.
+        assert!(x.contains(r#"ChemicalPropertyType="4""#), "{x}");
+        for back in [
+            import(&x),
+            import(&crate::exchange::from_cdx(&crate::exchange::to_cdx(&x).unwrap()).unwrap()),
+        ] {
+            assert_eq!(back.property_captions[0].properties, [Property::Weight]);
+            assert_eq!(caption(&back), "Mol. Wt.: 94.11");
+            // The name comes back as bold text of its own, above the line.
+            let text = back.annotations.iter().find(|a| a.text == name).unwrap();
+            assert!(text.format.at(0).bold);
+            let line = back
+                .annotations
+                .iter()
+                .find(|a| a.id == back.property_captions[0].annotation)
+                .unwrap();
+            assert!(text.position.y < line.position.y);
+            assert!(!line.format.at(0).bold);
+        }
     }
-    // Text whose name is not its first line stays plain.
-    let reordered = x.replace(
-        r#"ChemicalPropertyType="1 4""#,
-        r#"ChemicalPropertyType="4 1""#,
-    );
-    assert!(import(&reordered).property_captions.is_empty());
-    // A custom name would be replaced by ChemDraw's own, so it stays text.
-    rename(&mut d, &atoms, "Compound 3a", TextFormat::default(), true).unwrap();
+    // A name alone is plain text.
+    toggle(
+        &mut d,
+        &atoms,
+        Property::Weight,
+        TextFormat::default(),
+        true,
+    )
+    .unwrap();
     let x = xml(&d);
     assert!(!x.contains("chemicalproperty"), "{x}");
-    assert!(x.contains("Compound 3a"));
-    let back = import(&x);
-    assert!(back.property_captions.is_empty());
-    assert_eq!(back.annotations[0].text, "Compound 3a\nMol. Wt.: 94.11");
+    assert_eq!(import(&x).annotations[0].text, "Compound 3a");
 }
 
 #[test]

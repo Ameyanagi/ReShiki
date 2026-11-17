@@ -1,6 +1,8 @@
 use super::*;
 use crate::{
     atom_labels::{Carbons, HydrogenIsotopeLabels, HydrogenPosition, Owner, stereo_text},
+    document::Annotation,
+    linked_properties::Property,
     typography::{Script, TextAlign, TextSpan},
 };
 
@@ -777,24 +779,12 @@ impl Writer<'_> {
     /// ChemDraw's linked property text: a `chemicalproperty` that names the
     /// caption and the molecule's fragment (when it holds only this molecule),
     /// atoms and bonds, so ChemDraw keeps the lines up to date. A caption with
-    /// a property ChemDraw has no checked type for stays plain text, and so
-    /// does a custom name, which ChemDraw would replace with its own.
+    /// a property ChemDraw has no checked type for stays plain text. The name
+    /// line was written as text of its own ([`Self::annotations`]).
     pub(super) fn property_captions(&mut self) -> Result<()> {
         let doc = self.doc;
         for link in &doc.property_captions {
-            if !link.custom_name.is_empty()
-                && link
-                    .properties
-                    .contains(&crate::linked_properties::Property::Name)
-            {
-                continue;
-            }
-            let Some(types) = link
-                .properties
-                .iter()
-                .map(|p| p.chemdraw().map(|code| code.to_string()))
-                .collect::<Option<Vec<_>>>()
-            else {
+            let Some(types) = chemdraw_types(link) else {
                 continue;
             };
             let caption = self
@@ -844,96 +834,164 @@ impl Writer<'_> {
                     ("id", id),
                     ("ChemicalPropertyDisplayID", display),
                     ("ChemicalPropertyIsActive", "yes".into()),
-                    ("ChemicalPropertyType", types.join(" ")),
+                    ("ChemicalPropertyType", types),
                     ("BasisObjects", basis.join(" ")),
                 ],
             )?;
         }
         Ok(())
     }
+    /// Each annotation as ChemDraw text. A linked caption's name line becomes
+    /// text of its own above the property lines: ChemDraw keeps no linked
+    /// chemical name, and in ChemDraw 26 a name type in linked text stops it
+    /// updating the other lines.
     pub(super) fn annotations(&mut self) -> Result<()> {
         let doc = self.doc;
         for a in &doc.annotations {
-            let f = &a.format;
-            let s = &f.style;
-            let (width, height, baseline) =
-                if let Some(m) = self.options.text_layout.and_then(|t| t.get(&a.id)) {
-                    (real(m.width), real(m.height), real(m.baseline))
-                } else {
-                    (
-                        f.width_pt.map(real).unwrap_or_else(|| {
-                            a.text
-                                .split('\n')
-                                .map(|s| s.chars().count())
-                                .max()
-                                .unwrap_or(0) as f64
-                                * real(s.size_pt)
-                                * 0.6
-                        }),
-                        a.text.split('\n').count() as f64 * real(s.size_pt) * real(f.line_spacing),
-                        real(s.size_pt) * 0.9,
-                    )
-                };
-            if [width, height, baseline]
-                .iter()
-                .any(|v| !v.is_finite() || *v < 0.)
-            {
-                return Err(invalid("Invalid text metrics"));
-            }
-            let origin = P::from(a.position);
-            let factor = match f.alignment {
-                TextAlign::Center => 0.5,
-                TextAlign::Right => 1.,
-                _ => 0.,
-            };
-            let anchor = origin.add(width / self.scale * factor, baseline / self.scale);
-            let far = origin.add(width / self.scale, height / self.scale);
-            let id = self.id()?;
-            let node = self.text(
-                self.page,
-                &a.text,
-                f,
-                [
-                    ("id", id),
-                    // A caption is text even when it looks like a molecular
-                    // formula. ChemDraw otherwise converts it into an atom
-                    // label with its own inferred chemical graph on paste.
-                    ("InterpretChemically", "no".into()),
-                    ("p", self.position(anchor)),
-                    (
-                        "BoundingBox",
-                        format!("{} {}", self.position(origin), self.position(far)),
-                    ),
-                    (
-                        "CaptionJustification",
-                        match f.alignment {
-                            TextAlign::Center => "Center",
-                            TextAlign::Right => "Right",
-                            TextAlign::Justified => "Full",
-                            _ => "Left",
+            let measured = self.options.text_layout.and_then(|t| t.get(&a.id));
+            let named = doc.property_captions.iter().any(|link| {
+                link.annotation == a.id
+                    && link.properties.first() == Some(&Property::Name)
+                    && chemdraw_types(link).is_some()
+            });
+            let node = match a.text.find('\n').filter(|_| named) {
+                Some(end) => {
+                    let lines = a.text.split('\n').count() as f64;
+                    let (width, height) = measured.map_or_else(
+                        || estimate(&a.text, &a.format),
+                        |m| (real(m.width), real(m.height)),
+                    );
+                    let scale = self.scale;
+                    let center = a.position.x as f64 + width / scale / 2.;
+                    let part = |range: std::ops::Range<usize>, line: f64| {
+                        let text = &a.text[range.clone()];
+                        let mut format = a.format.clone();
+                        format.spans = a
+                            .format
+                            .spans
+                            .iter()
+                            .filter(|s| s.start < range.end && range.start < s.end)
+                            .map(|s| TextSpan {
+                                start: s.start.max(range.start) - range.start,
+                                end: s.end.min(range.end) - range.start,
+                                style: s.style.clone(),
+                            })
+                            .collect();
+                        let x = center - estimate(text, &format).0 / scale / 2.;
+                        let y = a.position.y as f64 + line * height / lines / scale;
+                        Annotation {
+                            position: Point::new(x as f32, y as f32),
+                            text: text.into(),
+                            format,
+                            ..a.clone()
                         }
-                        .into(),
-                    ),
-                    (
-                        "CaptionLineHeight",
-                        number(
-                            (real(s.size_pt) * real(f.line_spacing) * 1000.).round_ties_even()
-                                / 1000.,
-                        ),
-                    ),
-                ],
-            )?;
-            if let Some(width) = f.width_pt {
-                self.tree.set(
-                    node,
-                    "WordWrapWidth",
-                    format!("{:.0}", real(width).round_ties_even()),
-                )?;
-            }
+                    };
+                    let (name, lines) = (part(0..end, 0.), part(end + 1..a.text.len(), 1.));
+                    self.annotation(&name, None)?;
+                    self.annotation(&lines, None)?
+                }
+                None => self.annotation(a, measured)?,
+            };
             self.objects.push((a.id, node));
         }
         Ok(())
     }
+
+    fn annotation(&mut self, a: &Annotation, measured: Option<&TextMetrics>) -> Result<Key> {
+        let f = &a.format;
+        let s = &f.style;
+        let (width, height, baseline) = match measured {
+            Some(m) => (real(m.width), real(m.height), real(m.baseline)),
+            None => {
+                let (width, height) = estimate(&a.text, f);
+                (width, height, real(s.size_pt) * 0.9)
+            }
+        };
+        if [width, height, baseline]
+            .iter()
+            .any(|v| !v.is_finite() || *v < 0.)
+        {
+            return Err(invalid("Invalid text metrics"));
+        }
+        let origin = P::from(a.position);
+        let factor = match f.alignment {
+            TextAlign::Center => 0.5,
+            TextAlign::Right => 1.,
+            _ => 0.,
+        };
+        let anchor = origin.add(width / self.scale * factor, baseline / self.scale);
+        let far = origin.add(width / self.scale, height / self.scale);
+        let id = self.id()?;
+        let node = self.text(
+            self.page,
+            &a.text,
+            f,
+            [
+                ("id", id),
+                // A caption is text even when it looks like a molecular
+                // formula. ChemDraw otherwise converts it into an atom
+                // label with its own inferred chemical graph on paste.
+                ("InterpretChemically", "no".into()),
+                ("p", self.position(anchor)),
+                (
+                    "BoundingBox",
+                    format!("{} {}", self.position(origin), self.position(far)),
+                ),
+                (
+                    "CaptionJustification",
+                    match f.alignment {
+                        TextAlign::Center => "Center",
+                        TextAlign::Right => "Right",
+                        TextAlign::Justified => "Full",
+                        _ => "Left",
+                    }
+                    .into(),
+                ),
+                (
+                    "CaptionLineHeight",
+                    number(
+                        (real(s.size_pt) * real(f.line_spacing) * 1000.).round_ties_even() / 1000.,
+                    ),
+                ),
+            ],
+        )?;
+        if let Some(width) = f.width_pt {
+            self.tree.set(
+                node,
+                "WordWrapWidth",
+                format!("{:.0}", real(width).round_ties_even()),
+            )?;
+        }
+        Ok(node)
+    }
+}
+
+/// ChemDraw's types for the caption's property lines, when every one has a
+/// checked type. The name line has none.
+fn chemdraw_types(link: &crate::linked_properties::PropertyCaption) -> Option<String> {
+    let types = link
+        .properties
+        .iter()
+        .filter(|p| **p != Property::Name)
+        .map(|p| p.chemdraw().map(|code| code.to_string()))
+        .collect::<Option<Vec<_>>>()?;
+    (!types.is_empty()).then(|| types.join(" "))
+}
+
+/// Text size in points without measured metrics.
+fn estimate(text: &str, f: &TextFormat) -> (f64, f64) {
+    let size = real(f.style.size_pt);
+    (
+        f.width_pt.map(real).unwrap_or_else(|| {
+            text.split('\n')
+                .map(|s| s.chars().count())
+                .max()
+                .unwrap_or(0) as f64
+                * size
+                * 0.6
+        }),
+        text.split('\n').count() as f64 * size * real(f.line_spacing),
+    )
 }
 
 #[cfg(test)]

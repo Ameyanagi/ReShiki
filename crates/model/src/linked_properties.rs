@@ -55,17 +55,17 @@ impl Property {
             Self::Analysis => "Elemental analysis",
         }
     }
-    /// ChemDraw's ChemicalPropertyType: the chemical name from the CDX
-    /// documentation, the others checked against ChemDraw-made files. cLogP
-    /// and TPSA have no confirmed code.
+    /// ChemDraw's ChemicalPropertyType, for the types checked against
+    /// ChemDraw-made files. cLogP and TPSA have no confirmed code. The CDX
+    /// documentation lists 1 for a chemical name, but ChemDraw 26 stops
+    /// updating linked text that includes it, so the name has none.
     pub fn chemdraw(self) -> Option<u32> {
         match self {
-            Self::Name => Some(1),
+            Self::Name | Self::LogP | Self::Tpsa => None,
             Self::Formula => Some(2),
             Self::ExactMass => Some(3),
             Self::Weight => Some(4),
             Self::Analysis => Some(6),
-            Self::LogP | Self::Tpsa => None,
         }
     }
     pub fn from_chemdraw(code: u32) -> Option<Self> {
@@ -508,23 +508,6 @@ pub fn named(doc: &mut Document, smiles: &str, name: &str) -> bool {
         doc.property_captions.push(link);
     }
     changed
-}
-
-/// Identify the molecules of name lines read from a file. The name line as
-/// saved is the automatic name until the structure changes, so opening a file
-/// does not rename it.
-pub fn identify_names(doc: &mut Document) {
-    let mut links = std::mem::take(&mut doc.property_captions);
-    for link in links.iter_mut().filter(|link| link.tracks_name()) {
-        link.identify(doc);
-        if link.properties.first() == Some(&Property::Name) {
-            let line = link.text.split('\n').next().unwrap_or_default();
-            if line != "–" {
-                link.name = line.into();
-            }
-        }
-    }
-    doc.property_captions = links;
 }
 
 /// Whether the atoms moved other than all together.

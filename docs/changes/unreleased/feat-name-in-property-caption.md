@@ -11,6 +11,6 @@ issues: []
   field of **Molecular properties**, or double-click the name on the canvas.
   ↺ returns to the automatic name. A custom name stays when the structure
   changes, and the panel notes that it changed.
-- CDXML and CDX save an automatic name as ChemDraw chemical-name text, linked
-  like the properties; a caption with a custom name is saved as plain text.
-  `.rsk` files with a name line use document version 39.
+- CDXML and CDX save the name as plain text above the property lines, which
+  stay linked for ChemDraw. `.rsk` files with a name line use document
+  version 39.
