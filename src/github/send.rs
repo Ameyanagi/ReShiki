@@ -183,12 +183,16 @@ pub async fn send(
             .buffered(UPLOADS)
             .try_collect()
             .await?;
-        for (file, pair) in new.into_iter().zip(blobs.chunks_exact(2)) {
-            uploaded.insert(file.repo_path.as_str(), [pair[0].clone(), pair[1].clone()]);
+        let (pairs, _) = blobs.as_chunks::<2>();
+        for (file, pair) in new.into_iter().zip(pairs) {
+            uploaded.insert(file.repo_path.as_str(), pair.clone());
         }
         let mut tree = Vec::new();
         for file in clean {
-            let [drawing, preview] = uploaded[file.repo_path.as_str()].clone();
+            // Every clean drawing has its blobs by now.
+            let Some([drawing, preview]) = uploaded.get(file.repo_path.as_str()).cloned() else {
+                continue;
+            };
             tree.push((file.repo_path.clone(), drawing.clone()));
             tree.push((svg_path(&file.repo_path), preview));
             sent.push((file.repo_path.clone(), drawing, file.hash.clone()));
