@@ -176,8 +176,6 @@ first.
 - ReShiki sends to each repository's default branch, and only `.rsk` drawings
   and their `.svg` previews. Other branches and commits, and other chemistry
   files, open read only.
-- Newest first is as far as known: only files on screen are asked for their
-  last change, so in a folder of more than 200 the rest follow by name.
 - A repository too big for GitHub to list whole shows part of it in the tree,
   with **Only part of this repository is listed**; **+ New** rows are then
   left out. Tiles list each folder in full.
