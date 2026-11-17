@@ -14,7 +14,7 @@ export class ReshikiEditor extends HTMLElement {
   static observedAttributes = ["src", "format"];
 
   #editor;
-  // Counts attribute loads, so a slow fetch never replaces a later one.
+  // Counts attribute changes, so a slow fetch never replaces a later one.
   #loads = 0;
   #changed = false;
 
@@ -51,20 +51,23 @@ export class ReshikiEditor extends HTMLElement {
   }
 
   async #reload() {
+    const load = ++this.#loads;
     const src = this.getAttribute("src");
     if (!src) return;
     const format = this.getAttribute("format") ?? "auto";
     const editor = await this.#editor;
+    const data = await this.#fetch(src).catch((error) => {
+      if (load === this.#loads) throw error;
+    });
+    if (load !== this.#loads || !this.isConnected) return;
     // load() replaces the drawing in front without asking, so the page gets
-    // to keep one with unsaved changes.
+    // to keep one with unsaved changes. It is asked once the file is here,
+    // so edits made while it was fetched count.
     const asked = new CustomEvent("beforeload", {
       cancelable: true,
       detail: { src, format, dirty: editor.isDirty() },
     });
-    if (!this.dispatchEvent(asked)) return;
-    const load = ++this.#loads;
-    const data = await this.#fetch(src);
-    if (load === this.#loads) await editor.load(data, format);
+    if (this.dispatchEvent(asked)) await editor.load(data, format);
   }
 
   async #fetch(src) {
@@ -75,10 +78,12 @@ export class ReshikiEditor extends HTMLElement {
 
   async #start() {
     const src = this.getAttribute("src");
+    // Read with src: either may change while the file is fetched.
+    const format = this.getAttribute("format") ?? "auto";
     const cjkFont = this.getAttribute("cjk-font");
     const editor = await mount(this, {
       data: src ? await this.#fetch(src) : undefined,
-      format: this.getAttribute("format") ?? "auto",
+      format,
       fonts: this.getAttribute("fonts")?.split(/\s+/).filter(Boolean),
       cjkFont: cjkFont === "false" ? false : (cjkFont ?? undefined),
       onChange: () => this.dispatchEvent(new Event("change")),

@@ -52,8 +52,8 @@ pub(super) fn prepare_fonts() {
                 }
             }
         }
-        reshiki::style::prefer_added_arial(fonts.raw().db_mut());
         variable::prepare_system_weights(fonts.raw());
+        reshiki::style::prefer_added_arial(fonts.raw().db_mut());
     }
 }
 

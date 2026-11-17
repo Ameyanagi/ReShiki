@@ -125,15 +125,17 @@ impl Session {
         };
         let bytes =
             read_input(path.as_deref(), limit(&format, &self.budgets)).map_err(CliError::Failed)?;
-        match crate::payload::read(&bytes) {
-            Some(drawing) => drawing
-                .and_then(|drawing| drawing.file_json())
-                .and_then(|json| String::from_utf8(json).map_err(|error| error.to_string()))
-                .map(|text| (text, "reshiki".into())),
-            None if crate::payload::is_picture(&bytes) => Err(crate::payload::NO_DRAWING.into()),
-            None => text(&format, bytes).map(|text| (text, format)),
+        if !crate::payload::is_picture(&bytes) {
+            return text(&format, bytes)
+                .map(|text| (text, format))
+                .map_err(CliError::Failed);
         }
-        .map_err(CliError::Failed)
+        crate::payload::read(&bytes)
+            .unwrap_or_else(|| Err(crate::payload::NO_DRAWING.into()))
+            .and_then(|drawing| drawing.file_json())
+            .and_then(|json| String::from_utf8(json).map_err(|error| error.to_string()))
+            .map(|text| (text, "reshiki".into()))
+            .map_err(CliError::Failed)
     }
 
     /// Imports `text` as a session document; returns the document's handle.

@@ -135,9 +135,10 @@ already fired.
 
 Changing the `src` or `format` attribute once the editor runs loads the drawing
 at `src` in place of the one in front. Loading does not ask about unsaved
-changes, so the element first fires a cancelable `beforeload` event whose
-`detail` is `{ src, format, dirty }`; `dirty` is `isDirty()`. Call
-`preventDefault()` to keep the current drawing:
+changes, so once the file is fetched the element fires a cancelable
+`beforeload` event whose `detail` is `{ src, format, dirty }`; `dirty` is
+`isDirty()` at that moment. Call `preventDefault()` to keep the current
+drawing:
 
 ```js
 element.addEventListener("beforeload", (event) => {
@@ -147,7 +148,7 @@ element.setAttribute("src", "aspirin.mol");
 ```
 
 A `src` that cannot be loaded fires `error` and keeps the current drawing.
-Removing `src` changes nothing.
+Removing `src` keeps it too. Of several changes in a row, only the last loads.
 
 ### Plain HTML page
 

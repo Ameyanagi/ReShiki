@@ -404,7 +404,7 @@ fn installed_arial_leaves_the_bundled_faces_unloaded() {
 
 #[test]
 fn an_added_arial_is_used_instead_of_the_bundled_stand_in() {
-    use resvg::usvg::fontdb::{Database, Family, Language, Query, Weight};
+    use resvg::usvg::fontdb::{Database, Family, Language, Query, Stretch, Weight};
 
     let bytes = include_bytes!("../../../../tests/fixtures/font-export-103/static-400.subset.ttf");
     let mut db = Database::new();
@@ -419,6 +419,13 @@ fn an_added_arial_is_used_instead_of_the_bundled_stand_in() {
     let mut face = db.faces().last().unwrap().clone();
     db.remove_face(face.id);
     face.families = vec![("Arial".into(), Language::English_UnitedStates)];
+    // A condensed Arial is no substitute for the normal-width regular face.
+    let mut condensed = face.clone();
+    condensed.stretch = Stretch::Condensed;
+    let condensed = db.push_face_info(condensed);
+    super::prefer_added_arial(&mut db);
+    db.remove_face(condensed);
+    assert_eq!(families(&db), bundled);
     let added = db.push_face_info(face);
     let arial = |weight| Query {
         families: &[Family::Name("Arial")],

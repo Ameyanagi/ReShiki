@@ -118,14 +118,10 @@ pub async fn read(data: Vec<u8>, format: &str) -> Result<(Document, Vec<String>)
     let mut format = format_name(format);
     // A picture is read for the editable drawing ReShiki put inside it.
     let picture = matches!(format.as_str(), "png" | "svg" | "pdf");
-    if picture || format == "auto" {
-        match reshiki_io::payload::read(&data) {
-            Some(drawing) => return Ok((drawing?, Vec::new())),
-            None if picture || reshiki_io::payload::is_picture(&data) => {
-                return Err(reshiki_io::payload::NO_DRAWING.into());
-            }
-            None => {}
-        }
+    if picture || format == "auto" && reshiki_io::payload::is_picture(&data) {
+        let drawing = reshiki_io::payload::read(&data)
+            .unwrap_or_else(|| Err(reshiki_io::payload::NO_DRAWING.into()))?;
+        return Ok((drawing, Vec::new()));
     }
     if format == "auto" {
         format = detect(&data)?.into();

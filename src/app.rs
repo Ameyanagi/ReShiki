@@ -1199,7 +1199,7 @@ impl App {
             }
             #[cfg(target_arch = "wasm32")]
             Message::Opening => {
-                self.status = "Opening…".into();
+                self.status = files::OPENING.into();
                 self.error = false;
                 return ControlFlow::Break(Task::none());
             }

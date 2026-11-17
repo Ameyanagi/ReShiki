@@ -344,6 +344,10 @@ pub struct Saved {
 
 pub type Opened = Option<(PathBuf, Result<Prepared, String>)>;
 
+/// The browser's status while it prepares chosen files on the page's thread.
+#[cfg(target_arch = "wasm32")]
+pub(super) const OPENING: &str = "Opening…";
+
 /// Ex file commands use native drawings, retaining an explicit native suffix.
 pub(super) fn native_drawing_name(name: &str) -> String {
     if std::path::Path::new(name)
@@ -723,6 +727,11 @@ impl super::App {
     pub(super) fn file_prepared(&mut self, opened: Opened) -> iced::Task<super::Message> {
         if self.updates.restarting {
             return iced::Task::none();
+        }
+        // The file may open in another tab, which would park this status.
+        #[cfg(target_arch = "wasm32")]
+        if self.status == OPENING {
+            self.status = super::READY.into();
         }
         let Some((path, result)) = opened else {
             return iced::Task::none();

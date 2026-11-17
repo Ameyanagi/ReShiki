@@ -8,13 +8,15 @@ let freed = 0;
 let dirty = false;
 const warnings = ["First import warning", "Second import warning"];
 const imported: { data: Uint8Array; format: string }[] = [];
+const started: { data?: Uint8Array; format: string }[] = [];
 mock.module("../dist/editor/reshiki.js", () => ({
   default: async () => {
     loads += 1;
     if (loads === 1) throw new Error("network error");
   },
-  mount: async () => {
+  mount: async (_element: unknown, data: Uint8Array | undefined, format: string) => {
     mounts += 1;
+    started.push({ data, format });
   },
   load: async (data: Uint8Array, format: string) => {
     imported.push({ data, format });
@@ -33,6 +35,7 @@ mock.module("../dist/editor/reshiki.js", () => ({
 }));
 
 class Element extends EventTarget {
+  isConnected = true;
   style: Record<string, string> = {};
   attributes: Record<string, string> = {};
   getAttribute(name: string) {
@@ -161,22 +164,87 @@ test("a changed src loads the new drawing, unless the page prevents it", async (
   }
 });
 
-test("only the latest of two src changes loads", async () => {
+test("an earlier src never loads after a later change, also a prevented or removed one", async () => {
   const fetched = globalThis.fetch;
   const answers: Record<string, (response: Response) => void> = {};
   globalThis.fetch = ((src: string) =>
     new Promise<Response>((resolve) => (answers[src] = resolve))) as unknown as typeof fetch;
+  const settle = () => new Promise((resolve) => setTimeout(resolve));
   try {
     const element = new ReshikiEditor();
+    const attributes = (element as unknown as Element).attributes;
     element.connectedCallback();
     await element.ready;
     imported.length = 0;
+    const errors: string[] = [];
+    element.addEventListener("error", (event) => errors.push((event as ErrorEvent).message));
+    const loaded = () => imported.map(({ data }) => new TextDecoder().decode(data));
+
+    // The later change answers first; the earlier one neither loads nor reports its error.
     await changeSrc(element, "slow.mol");
     await changeSrc(element, "fast.mol");
     answers["fast.mol"](new Response("fast"));
-    answers["slow.mol"](new Response("slow"));
-    await new Promise((resolve) => setTimeout(resolve));
-    expect(imported.map(({ data }) => new TextDecoder().decode(data))).toEqual(["fast"]);
+    answers["slow.mol"](new Response("", { status: 404 }));
+    await settle();
+    expect(loaded()).toEqual(["fast"]);
+    expect(errors).toEqual([]);
+
+    // The page is asked when the file is here, so edits made meanwhile count.
+    const asked: unknown[] = [];
+    const prevent = (event: Event) => {
+      asked.push((event as CustomEvent).detail);
+      event.preventDefault();
+    };
+    element.addEventListener("beforeload", prevent);
+    await changeSrc(element, "edited-meanwhile.mol");
+    expect(asked).toEqual([]);
+    dirty = true;
+    answers["edited-meanwhile.mol"](new Response("lost edits"));
+    await settle();
+    expect(asked).toEqual([{ src: "edited-meanwhile.mol", format: "auto", dirty: true }]);
+    element.removeEventListener("beforeload", prevent);
+
+    // Removing src drops a load that is still on its way.
+    await changeSrc(element, "pending.mol");
+    delete attributes.src;
+    element.attributeChangedCallback("src", "pending.mol", null);
+    answers["pending.mol"](new Response("pending"));
+    await settle();
+    expect(loaded()).toEqual(["fast"]);
+  } finally {
+    dirty = false;
+    globalThis.fetch = fetched;
+  }
+});
+
+test("src and format are read together when the editor starts", async () => {
+  const fetched = globalThis.fetch;
+  const answers: Record<string, (response: Response) => void> = {};
+  globalThis.fetch = ((src: string) =>
+    new Promise<Response>((resolve) => (answers[src] = resolve))) as unknown as typeof fetch;
+  const settle = () => new Promise((resolve) => setTimeout(resolve));
+  const text = ({ data, format }: { data?: Uint8Array; format: string }) => [
+    new TextDecoder().decode(data),
+    format,
+  ];
+  try {
+    const element = new ReshikiEditor();
+    const attributes = (element as unknown as Element).attributes;
+    Object.assign(attributes, { src: "a.mol", format: "mol" });
+    element.connectedCallback();
+    // The page changes both while the first file is still on its way.
+    Object.assign(attributes, { src: "b.cdx", format: "cdx" });
+    element.attributeChangedCallback("src", "a.mol", "b.cdx");
+    element.attributeChangedCallback("format", "mol", "cdx");
+    started.length = 0;
+    imported.length = 0;
+    answers["a.mol"](new Response("a"));
+    await element.ready;
+    expect(started.map(text)).toEqual([["a", "mol"]]);
+    await settle();
+    answers["b.cdx"](new Response("b"));
+    await settle();
+    expect(imported.map(text)).toEqual([["b", "cdx"]]);
   } finally {
     globalThis.fetch = fetched;
   }

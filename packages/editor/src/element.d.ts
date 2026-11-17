@@ -7,9 +7,9 @@ import type { Editor } from "./editor.js";
  * editor that could not start, such as a `src` that answers 404.
  *
  * Changing `src` or `format` once the editor runs loads the drawing at `src`
- * in place of the one in front. First it fires a cancelable `beforeload`
- * {@link BeforeLoadEvent}; `preventDefault()` keeps the current drawing. A
- * `src` that cannot be loaded fires `error` and keeps it too. */
+ * in place of the one in front. Once the file is fetched it fires a cancelable
+ * `beforeload` {@link BeforeLoadEvent}; `preventDefault()` keeps the current
+ * drawing. A `src` that cannot be loaded fires `error` and keeps it too. */
 export class ReshikiEditor extends HTMLElement {
   /** Resolves once the editor runs. */
   readonly ready: Promise<Editor>;
