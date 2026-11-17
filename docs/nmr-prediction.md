@@ -70,6 +70,22 @@ atom in the drawing.
 - Each document keeps its own report, palette position, docking and label
   format while it is open.
 
+### From scripts
+
+The same prediction runs without the app:
+
+- Python: `reshiki.Molecule.from_smiles("CCOC(C)=O").predict_nmr("13C")`; see
+  [Python package](python.md#predict-nmr).
+- Command line:
+  `reshiki --cli predict-nmr --smiles 'CCOC(C)=O' --nucleus 13C`; see
+  [command line](agent-cli.md#predict-nmr).
+- MCP: the `predict_nmr` tool; see [agent API](agent-api.md#tools).
+
+Each returns the rows the palette lists, with the broad-match flag as data and
+the method, data version, conditions, limitations and data credit that
+**Export…** writes. The nucleus is required, and the drawing, or the atoms
+named, must be exactly one molecule. **Show labels** stays in the app.
+
 ## Limits
 
 - Molecules up to 128 atoms of H, C, N, O, F, P, S, Cl, Br and I. Charged
