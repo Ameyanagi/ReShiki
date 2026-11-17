@@ -20,6 +20,36 @@ async fn analysis(engine: &LocalEngine, doc: &Document) -> reshiki::engine::Anal
         .unwrap()
 }
 
+/// The graph distance between the two N–H sites: the neutral nitrogens whose
+/// bonds are both single. Opposite sites are eight bonds apart; neighbouring
+/// ones, which InChI's mobile hydrogens do not tell apart, are four.
+fn nh_distance(doc: &Document) -> usize {
+    let neighbors = |id| {
+        let bonds = doc.bonds.iter().filter(move |b| b.a == id || b.b == id);
+        bonds.map(move |b| (if b.a == id { b.b } else { b.a }, b.order))
+    };
+    let sites: Vec<_> = doc
+        .atoms
+        .iter()
+        .filter(|a| a.element == "N" && a.charge == 0)
+        .filter(|a| neighbors(a.id).map(|(_, order)| order).eq([1, 1]))
+        .map(|a| a.id)
+        .collect();
+    assert_eq!(sites.len(), 2, "two N–H sites");
+    let (mut seen, mut front, mut distance) = (vec![sites[0]], vec![sites[0]], 0);
+    while !front.contains(&sites[1]) {
+        front = front
+            .iter()
+            .flat_map(|id| neighbors(*id).map(|(next, _)| next))
+            .filter(|next| !seen.contains(next))
+            .collect();
+        assert!(!front.is_empty(), "the N–H sites share a ring system");
+        seen.extend(&front);
+        distance += 1;
+    }
+    distance
+}
+
 #[tokio::test]
 async fn chosen_free_base_has_two_opposite_nh_sites_and_persists_exact_identity() {
     let engine = LocalEngine::default();
@@ -62,7 +92,8 @@ async fn chosen_free_base_has_two_opposite_nh_sites_and_persists_exact_identity(
     }
     let native = Document::from_native_file(&core.document.file_json().unwrap()).unwrap();
     assert_eq!(native, core.document.current());
-    for format in ["mol", "cdxml"] {
+    assert_eq!(nh_distance(&core.document), 8);
+    for format in ["mol", "cdxml", "cdx"] {
         let mut request = Request::molecule("export", core.document.clone());
         request.format = Some(format.into());
         let output = engine.execute(request).await.unwrap().output.unwrap();
@@ -75,6 +106,7 @@ async fn chosen_free_base_has_two_opposite_nh_sites_and_persists_exact_identity(
         let actual = analysis(&engine, &reopened).await;
         assert_eq!(actual.formula, expected.formula, "{format}");
         assert_eq!(actual.inchikey, expected.inchikey, "{format}");
+        assert_eq!(nh_distance(&reopened), 8, "{format}");
     }
 }
 
