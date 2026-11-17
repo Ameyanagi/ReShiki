@@ -396,13 +396,84 @@ impl canvas::Program<crate::app::Message> for DrawingPreview<'_> {
     }
 }
 
+/// How a compare marks one kind of change, readable by its pattern as well
+/// as its colour: chemistry is painted under the atoms and bonds, a move is a
+/// dashed blue outline, style a dotted purple one, text a soft ochre fill.
+#[cfg(not(target_arch = "wasm32"))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ComparePaint {
+    Chemical,
+    Moved,
+    Style,
+    Text,
+    Reaction,
+    Added,
+    Unverified,
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl ComparePaint {
+    /// The stroke colour; fills use it lighter.
+    pub fn color(self) -> Color {
+        let [r, g, b] = match self {
+            Self::Chemical => [224, 123, 58],
+            Self::Moved => [59, 111, 208],
+            Self::Style => [125, 79, 196],
+            Self::Text => [198, 154, 26],
+            Self::Reaction => [184, 64, 143],
+            Self::Added => [47, 140, 82],
+            Self::Unverified => [128, 132, 130],
+        };
+        Color::from_rgb8(r, g, b)
+    }
+    fn fill(self) -> Option<Color> {
+        match self {
+            Self::Chemical => Some(Color::from_rgba8(240, 140, 70, 0.4)),
+            Self::Text => Some(Color::from_rgba8(240, 200, 80, 0.3)),
+            _ => None,
+        }
+    }
+    fn dash(self) -> &'static [f32] {
+        match self {
+            Self::Moved => &[6., 4.],
+            Self::Style => &[2., 3.],
+            Self::Unverified => &[3., 3.],
+            _ => &[],
+        }
+    }
+}
+
+/// Where a compare mark goes, in drawing coordinates.
+#[cfg(not(target_arch = "wasm32"))]
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum ComparePlace {
+    /// Around objects, padded.
+    Box(World, World),
+    Atom(World),
+    Bond(World, World),
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct CompareMark {
+    pub paint: ComparePaint,
+    /// A chemistry change, for the Chemistry and Layout filters.
+    pub chemistry: bool,
+    pub place: ComparePlace,
+}
+
 /// One side of a compare: `doc` fitted into `frame`, which both sides share
-/// so they line up, with each of `marks` (text or graphics that differ)
-/// filled softly under it.
+/// so they line up, with the marks of the changes shown drawn over and under
+/// it. The marks are a layer of their own: the drawing, and its own
+/// highlights, are drawn as they are.
 #[cfg(not(target_arch = "wasm32"))]
 pub struct ComparePreview<'a> {
     pub doc: &'a Document,
-    pub marks: &'a [(World, World)],
+    pub marks: &'a [CompareMark],
+    /// Which marks show: chemistry, and layout.
+    pub show: (bool, bool),
+    /// The change pointed at, outlined wherever its objects are.
+    pub selected: Option<(World, World)>,
     pub frame: (World, World),
 }
 #[cfg(not(target_arch = "wasm32"))]
@@ -426,16 +497,103 @@ impl canvas::Program<crate::app::Message> for ComparePreview<'_> {
                 .min((bounds.height - 24.) / (hi.y - lo.y).max(1.))
                 .clamp(0.001, 1.4),
         };
-        for (lo, hi) in self.marks {
-            let (a, b) = (camera.screen(*lo, bounds), camera.screen(*hi, bounds));
-            let corner = Point::new(a.x.min(b.x), a.y.min(b.y));
-            let size = iced::Size::new((b.x - a.x).abs(), (b.y - a.y).abs());
-            frame.fill(
-                &Path::rounded_rectangle(corner, size, 4.0.into()),
-                Color::from_rgba8(252, 204, 150, 0.55),
-            );
+        let shown = |mark: &&CompareMark| {
+            if mark.chemistry {
+                self.show.0
+            } else {
+                self.show.1
+            }
+        };
+        let rectangle = |a: World, b: World, pad: f32| {
+            let (a, b) = (camera.screen(a, bounds), camera.screen(b, bounds));
+            let corner = Point::new(a.x.min(b.x) - pad, a.y.min(b.y) - pad);
+            let size = iced::Size::new((b.x - a.x).abs() + 2. * pad, (b.y - a.y).abs() + 2. * pad);
+            Path::rounded_rectangle(corner, size, 6.0.into())
+        };
+        // Paint under the drawing: changed atoms and bonds, and text.
+        let radius = (camera.zoom * 9.).clamp(4., 14.);
+        for mark in self.marks.iter().filter(shown) {
+            let Some(fill) = mark.paint.fill() else {
+                continue;
+            };
+            match mark.place {
+                ComparePlace::Atom(at) => {
+                    frame.fill(&Path::circle(camera.screen(at, bounds), radius), fill);
+                }
+                ComparePlace::Bond(a, b) => frame.stroke(
+                    &Path::line(camera.screen(a, bounds), camera.screen(b, bounds)),
+                    Stroke::default()
+                        .with_color(fill)
+                        .with_width(radius * 1.2)
+                        .with_line_cap(canvas::LineCap::Round),
+                ),
+                ComparePlace::Box(a, b) => frame.fill(&rectangle(a, b, 4.), fill),
+            }
         }
         draw_document_with_minimum_stroke(&mut frame, self.doc, camera, bounds, 0.6);
+        // Outlines over it.
+        for mark in self.marks.iter().filter(shown) {
+            let ComparePlace::Box(a, b) = mark.place else {
+                continue;
+            };
+            frame.stroke(
+                &rectangle(a, b, 4.),
+                Stroke {
+                    line_dash: canvas::LineDash {
+                        segments: mark.paint.dash(),
+                        offset: 0,
+                    },
+                    ..Stroke::default()
+                        .with_color(mark.paint.color())
+                        .with_width(1.6)
+                },
+            );
+        }
+        if let Some((a, b)) = self.selected {
+            frame.stroke(
+                &rectangle(a, b, 9.),
+                Stroke::default()
+                    .with_color(Color::from_rgb8(31, 107, 75))
+                    .with_width(2.5),
+            );
+        }
+        frame.finish()
+    }
+}
+
+/// A legend swatch: the mark of `0` on a small patch.
+#[cfg(not(target_arch = "wasm32"))]
+pub struct CompareSwatch(pub ComparePaint);
+#[cfg(not(target_arch = "wasm32"))]
+impl canvas::Program<crate::app::Message> for CompareSwatch {
+    type State = ();
+    fn draw(
+        &self,
+        _: &(),
+        renderer: &Renderer,
+        _theme: &Theme,
+        bounds: Rectangle,
+        _: mouse::Cursor,
+    ) -> Vec<Geometry> {
+        let mut frame = layered::Frame::new(renderer, bounds.size());
+        let path = Path::rounded_rectangle(
+            Point::new(1., 1.),
+            iced::Size::new(bounds.width - 2., bounds.height - 2.),
+            3.0.into(),
+        );
+        if let Some(fill) = self.0.fill() {
+            frame.fill(&path, fill);
+        }
+        frame.stroke(
+            &path,
+            Stroke {
+                line_dash: canvas::LineDash {
+                    segments: self.0.dash(),
+                    offset: 0,
+                },
+                ..Stroke::default().with_color(self.0.color()).with_width(1.5)
+            },
+        );
         frame.finish()
     }
 }

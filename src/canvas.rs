@@ -107,12 +107,12 @@ pub use tool::Tool;
 use grid::grid_dots;
 #[cfg(test)]
 use hit::{bond_target, bond_target_with, hit_selection, region_selection};
-#[cfg(not(target_arch = "wasm32"))]
-pub use previews::ComparePreview;
 #[cfg(test)]
 pub(crate) use previews::PREVIEWS_BUILT;
 #[cfg(test)]
 use previews::PreviewState;
+#[cfg(not(target_arch = "wasm32"))]
+pub use previews::{CompareMark, ComparePaint, ComparePlace, ComparePreview, CompareSwatch};
 #[cfg(test)]
 use render::draw_primitives;
 #[cfg(test)]

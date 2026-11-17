@@ -44,6 +44,8 @@ pub(super) const OPEN_FROM_ROW: &str = "Open from GitHub: ";
 const SEND_TO: &str = "Send to GitHub…";
 const NOT_SET_UP: &str = "Not set up in this build";
 const SAVE_COPY: &str = "Save a copy…";
+/// Both compare dialogs: two drawings and the list of what changed.
+const COMPARE_WIDTH: f32 = 1060.;
 /// Shows a drawing's working copy in the system's file manager.
 const SHOW_FILE: &str = if cfg!(target_os = "macos") {
     "Show in Finder"
@@ -334,6 +336,8 @@ pub enum Action {
     Settle(RepoKey, send::Choice),
     ShowVersions,
     Versions(versions::Action),
+    /// In a compare: its result, mode, line-up or the change pointed at.
+    Compare(compare::Action),
     /// A hue chosen for the repository in a tab's menu.
     Color(RepoKey, usize),
     /// The repository colors and the last repository, written.
@@ -981,6 +985,7 @@ impl App {
                 }
             }
             Action::Resolve(choice) => return self.github_resolve(choice),
+            Action::Compare(action) => return self.github_compare(action),
             Action::Settle(key, choice) => return self.github_settle(key, choice),
             Action::ShowVersions => {
                 self.github.menu = false;
@@ -2535,13 +2540,13 @@ impl App {
             ),
             Dialog::Conflict(review) => (
                 conflict::view(review, self.github.login()),
-                960.,
-                600.,
+                COMPARE_WIDTH.min(self.viewport.width - 32.),
+                640.,
                 super::help::Placement::Center,
             ),
             Dialog::Compare(compare, label) => (
                 compare.dialog(label),
-                960.,
+                COMPARE_WIDTH.min(self.viewport.width - 32.),
                 600.,
                 super::help::Placement::Center,
             ),

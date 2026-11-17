@@ -42,8 +42,9 @@ impl App {
     pub(super) fn github_review(&mut self, key: RepoKey, done: usize) -> Task<Message> {
         if let Some(review) = self.conflict_review(&key, done) {
             let meta = self.conflict_meta(&key, &review.repo_path);
+            let start = review.compare.start();
             self.github.dialog = Some(Dialog::Conflict(Box::new(review)));
-            return meta;
+            return Task::batch([meta, start]);
         }
         self.github_refresh(&key);
         let unsent = self.github.unsent.get(&key).cloned().unwrap_or_default();
@@ -310,11 +311,11 @@ impl App {
 }
 
 pub(super) fn view<'a>(review: &'a Review, me: Option<&str>) -> Element<'a, Message> {
-    let mut title = row![
-        text(format!("“{}” changed on GitHub", review.name)).size(18),
-        Space::new().width(Length::Fill),
-    ]
-    .align_y(Alignment::Center);
+    let mut title = row![text(format!("“{}” changed on GitHub", review.name)).size(18)]
+        .push(review.compare.verdict_badge())
+        .push(Space::new().width(Length::Fill))
+        .spacing(10)
+        .align_y(Alignment::Center);
     if review.total > 1 {
         let at = format!("{} of {}", review.done + 1, review.total);
         title = title.push(text(at).size(13).style(muted_text));
@@ -366,17 +367,22 @@ pub(super) fn view<'a>(review: &'a Review, me: Option<&str>) -> Element<'a, Mess
     );
     column![
         title,
-        review.compare.view([theirs.into(), yours.into()]),
-        row![
-            keep("github-keep-theirs", "Keep GitHub’s", Choice::KeepTheirs),
-            keep("github-keep-mine", "Keep mine", Choice::KeepMine),
-        ]
-        .spacing(12),
+        review.compare.view(
+            [theirs.into(), yours.into()],
+            [
+                Some(keep("github-keep-theirs", "Keep GitHub’s", Choice::KeepTheirs).into()),
+                Some(keep("github-keep-mine", "Keep mine", Choice::KeepMine).into()),
+            ],
+        ),
         row![
             button("github-later", "Later", Action::Close),
+            text("Click a line to point at it in both drawings.")
+                .size(12)
+                .style(muted_text),
             Space::new().width(Length::Fill),
             keep_both,
         ]
+        .spacing(12)
         .align_y(Alignment::Center),
     ]
     .spacing(12)

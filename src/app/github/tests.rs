@@ -645,16 +645,9 @@ fn a_conflict_shows_githubs_and_yours_with_the_changes_marked() {
     assert_eq!((review.done, review.total), (0, 1));
     let compare = &review.compare;
     assert!(compare.left.is_ok());
-    // What differs is painted on both copies shown, never on the drawings.
-    for shown in &compare.shown {
-        let shown = shown.as_ref().unwrap();
-        assert!(
-            shown
-                .atoms
-                .iter()
-                .any(|atom| atom.display.highlight.is_some())
-        );
-    }
+    // Compared in the background; the marks never land in the drawings.
+    assert!(compare.shown.is_none());
+    assert_eq!(compare.verdict(), Some(compare::Verdict::Comparing));
     assert!(
         app.tab
             .doc
@@ -935,8 +928,8 @@ fn review_after_a_restart_asks_github_again() {
     assert!(app.github.sending.contains(&repo().key));
 }
 
-#[test]
-fn a_version_compares_with_the_drawing_now() {
+#[tokio::test]
+async fn a_version_compares_with_the_drawing_now() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, _path) = app_in(dir.path());
     github(&mut app, Action::ShowVersions);
@@ -954,19 +947,29 @@ fn a_version_compares_with_the_drawing_now() {
         &mut app,
         Action::Versions(versions::Action::Select(versions::Pick::Local(id))),
     );
-    github(&mut app, Action::Versions(versions::Action::Compare));
+    let start = app.update(Message::GitHub(Action::Versions(versions::Action::Compare)));
     let Some(Dialog::Compare(compare, _)) = &app.github.dialog else {
         panic!("no compare");
     };
     assert_eq!(compare.left.as_ref().ok(), Some(&*old));
     assert_eq!(compare.right, app.tab.doc);
-    let shown = compare.shown[1].as_ref().unwrap();
-    assert!(
-        shown
-            .atoms
-            .iter()
-            .any(|atom| atom.display.highlight.is_some())
+    assert!(compare.shown.is_none(), "comparing in the background");
+    run(&mut app, start).await;
+    let Some(Dialog::Compare(compare, _)) = &app.github.dialog else {
+        panic!("no compare");
+    };
+    assert!(!compare.listed().is_empty(), "the comparison landed");
+    // A late result of another comparison is dropped.
+    let generation = compare.generation;
+    github(
+        &mut app,
+        Action::Compare(compare::Action::Done(generation + 1, None)),
     );
+    let Some(Dialog::Compare(compare, _)) = &app.github.dialog else {
+        panic!("no compare");
+    };
+    assert!(compare.shown.is_some());
+    assert!(!compare.failed);
     let _ = app.update(Message::Escape);
     assert!(app.github.dialog.is_none());
 }
