@@ -204,6 +204,29 @@ test("an earlier src never loads after a later change, also a prevented or remov
     expect(asked).toEqual([{ src: "edited-meanwhile.mol", format: "auto", dirty: true }]);
     element.removeEventListener("beforeload", prevent);
 
+    // Preventing a later load does not let an earlier one through.
+    element.addEventListener("beforeload", prevent);
+    await changeSrc(element, "earlier.mol");
+    await changeSrc(element, "later.mol");
+    answers["later.mol"](new Response("later"));
+    await settle();
+    answers["earlier.mol"](new Response("earlier"));
+    await settle();
+    element.removeEventListener("beforeload", prevent);
+    expect(loaded()).toEqual(["fast"]);
+
+    // A listener that removes src keeps the drawing, as removing it always does.
+    const remove = () => {
+      delete attributes.src;
+      element.attributeChangedCallback("src", "removed.mol", null);
+    };
+    element.addEventListener("beforeload", remove);
+    await changeSrc(element, "removed.mol");
+    answers["removed.mol"](new Response("removed"));
+    await settle();
+    element.removeEventListener("beforeload", remove);
+    expect(loaded()).toEqual(["fast"]);
+
     // Removing src drops a load that is still on its way.
     await changeSrc(element, "pending.mol");
     delete attributes.src;
@@ -245,6 +268,29 @@ test("src and format are read together when the editor starts", async () => {
     answers["b.cdx"](new Response("b"));
     await settle();
     expect(imported.map(text)).toEqual([["b", "cdx"]]);
+  } finally {
+    globalThis.fetch = fetched;
+  }
+});
+
+test("a changed src starts an editor whose first src could not be loaded", async () => {
+  const fetched = globalThis.fetch;
+  globalThis.fetch = (async (src: string) =>
+    src === "typo.mol"
+      ? new Response("", { status: 404 })
+      : new Response(src)) as unknown as typeof fetch;
+  try {
+    const element = new ReshikiEditor();
+    const errors: string[] = [];
+    element.addEventListener("error", (event) => errors.push((event as ErrorEvent).message));
+    (element as unknown as Element).attributes.src = "typo.mol";
+    element.connectedCallback();
+    await expect(element.ready).rejects.toThrow("HTTP 404");
+    started.length = 0;
+    await changeSrc(element, "right.mol");
+    await element.ready;
+    expect(errors).toEqual(["Could not load typo.mol: HTTP 404"]);
+    expect(started.map(({ data }) => new TextDecoder().decode(data))).toEqual(["right.mol"]);
   } finally {
     globalThis.fetch = fetched;
   }

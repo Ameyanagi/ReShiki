@@ -21,6 +21,10 @@ export class ReshikiEditor extends HTMLElement {
   connectedCallback() {
     if (this.#editor) return;
     if (!this.style.display) this.style.display = "block";
+    this.#run();
+  }
+
+  #run() {
     this.#editor = this.#start();
     this.#editor.catch((error) => this.#error(error));
   }
@@ -42,7 +46,9 @@ export class ReshikiEditor extends HTMLElement {
   // The browser also reports the attributes the element starts with; those
   // are read by #start. `src` and `format` set together load once.
   attributeChangedCallback(_name, before, now) {
-    if (!this.#editor || before === now || this.#changed) return;
+    if (!this.#editor || before === now) return;
+    this.#loads += 1;
+    if (this.#changed) return;
     this.#changed = true;
     queueMicrotask(() => {
       this.#changed = false;
@@ -51,15 +57,25 @@ export class ReshikiEditor extends HTMLElement {
   }
 
   async #reload() {
-    const load = ++this.#loads;
+    const load = this.#loads;
+    // Whether no later change, and no removal from the page, overtook this one.
+    const current = () => load === this.#loads && this.isConnected;
     const src = this.getAttribute("src");
     if (!src) return;
     const format = this.getAttribute("format") ?? "auto";
-    const editor = await this.#editor;
+    let editor;
+    try {
+      editor = await this.#editor;
+    } catch {
+      // The editor never started, for example on a src that answered 404,
+      // and reported it then. Start it with the new attributes.
+      if (current()) this.#run();
+      return;
+    }
     const data = await this.#fetch(src).catch((error) => {
-      if (load === this.#loads) throw error;
+      if (current()) throw error;
     });
-    if (load !== this.#loads || !this.isConnected) return;
+    if (!current()) return;
     // load() replaces the drawing in front without asking, so the page gets
     // to keep one with unsaved changes. It is asked once the file is here,
     // so edits made while it was fetched count.
@@ -67,7 +83,7 @@ export class ReshikiEditor extends HTMLElement {
       cancelable: true,
       detail: { src, format, dirty: editor.isDirty() },
     });
-    if (this.dispatchEvent(asked)) await editor.load(data, format);
+    if (this.dispatchEvent(asked) && current()) await editor.load(data, format);
   }
 
   async #fetch(src) {

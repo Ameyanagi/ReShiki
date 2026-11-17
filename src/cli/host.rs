@@ -132,8 +132,9 @@ impl Session {
         }
         crate::payload::read(&bytes)
             .unwrap_or_else(|| Err(crate::payload::NO_DRAWING.into()))
-            .and_then(|drawing| drawing.file_json())
-            .and_then(|json| String::from_utf8(json).map_err(|error| error.to_string()))
+            .and_then(|drawing| {
+                serde_json::to_string(&drawing.current()).map_err(|error| error.to_string())
+            })
             .map(|text| (text, "reshiki".into()))
             .map_err(CliError::Failed)
     }

@@ -149,6 +149,8 @@ element.setAttribute("src", "aspirin.mol");
 
 A `src` that cannot be loaded fires `error` and keeps the current drawing.
 Removing `src` keeps it too. Of several changes in a row, only the last loads.
+If the editor could not start, for example because the first `src` answered
+404, a changed `src` starts it.
 
 ### Plain HTML page
 

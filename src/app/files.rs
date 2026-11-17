@@ -486,18 +486,13 @@ pub(super) fn open_picked(
         wasm_bindgen::JsValue,
     )>,
 ) -> Task<Message> {
-    // The browser prepares files on the page's thread, which holds the page.
-    #[cfg(target_arch = "wasm32")]
-    let start = match &files {
-        Ok(files) if !files.is_empty() => Task::done(Message::Opening),
-        _ => Task::none(),
-    };
-    #[cfg(not(target_arch = "wasm32"))]
-    let start = Task::none();
     match files {
-        Ok(files) => files.into_iter().fold(start, |task, file| {
+        Ok(files) => files.into_iter().fold(Task::none(), |task, file| {
             #[cfg(target_arch = "wasm32")]
             let handles = handles.clone();
+            // The browser prepares each file on the page's thread, which holds the page.
+            #[cfg(target_arch = "wasm32")]
+            let task = task.chain(Task::done(Message::Opening));
             task.chain(Task::perform(
                 async move {
                     let (path, result) = prepare_contents(file.path, Ok(file.contents)).await?;
