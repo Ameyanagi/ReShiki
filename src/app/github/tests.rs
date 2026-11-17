@@ -259,6 +259,47 @@ fn a_sign_in_shows_the_code_and_cancel_drops_late_answers() {
     }
 }
 
+/// What an earlier run kept on disk for `path`, as `account`.
+fn kept_earlier(cache: &Path, account: &str, path: &str, reply: &[u8]) {
+    let folder = cache.join("github-override").join(account);
+    std::fs::create_dir_all(&folder).unwrap();
+    let entry = [format!("{}\n\n", workcopy::hash(reply)).as_bytes(), reply].concat();
+    std::fs::write(folder.join(workcopy::hash(path.as_bytes())), entry).unwrap();
+}
+
+#[tokio::test]
+async fn a_new_app_reads_what_github_sent_before_from_the_data_folder() {
+    let cache = tempfile::tempdir().unwrap();
+    let (mut app, _) = App::new();
+    app.github.cache = Some(cache.path().to_owned());
+    app.github.ends = nowhere();
+    let (key, blob) = (repo().key, sha('b'));
+    let path = format!("/repos/octo/lab/git/blobs/{blob}");
+    kept_earlier(cache.path(), "_public", &path, b"signed out");
+    kept_earlier(cache.path(), "octo", &path, b"signed in");
+    // GitHub is unreachable: only the disk can answer.
+    let reader = app.github.reader().unwrap();
+    assert_eq!(
+        gh::api::blob(&reader, &key, &blob).await.unwrap(),
+        b"signed out"
+    );
+
+    let tokens = Tokens {
+        login: "octo".into(),
+        access: "unused".into(),
+        access_expires_at: None,
+        refresh: None,
+        refresh_expires_at: None,
+    };
+    let generation = app.github.generation;
+    github(&mut app, Action::Loaded(generation, Ok(Some(tokens))));
+    let client = app.github.client().unwrap();
+    assert_eq!(
+        gh::api::blob(&client, &key, &blob).await.unwrap(),
+        b"signed in"
+    );
+}
+
 #[test]
 fn signed_in_without_repositories_asks_to_choose_them() {
     let (mut app, _) = App::new();

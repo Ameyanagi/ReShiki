@@ -116,6 +116,9 @@ pub(super) struct State {
     ends: config::Endpoints,
     /// `<data>/github`; `None` in tests until one sets a folder.
     pub(super) root: Option<PathBuf>,
+    /// `<data>/cache`, where clients keep GitHub's replies between runs;
+    /// `None` in tests.
+    pub(super) cache: Option<PathBuf>,
     /// Rises with every sign-in, sign-out and picker, so late results drop.
     generation: u64,
     pub(super) account: Account,
@@ -187,10 +190,11 @@ pub(super) struct State {
 impl State {
     pub(super) fn new() -> Self {
         let client_id = config::client_id();
-        let root = if cfg!(test) {
-            None
+        let (root, cache) = if cfg!(test) {
+            (None, None)
         } else {
-            workcopy::root().ok()
+            let cache = reshiki::compatibility::cache_directory().ok();
+            (workcopy::root().ok(), cache)
         };
         Self {
             account: if client_id.is_some() {
@@ -202,6 +206,7 @@ impl State {
             ends: config::endpoints(),
             prefs: root.as_deref().map(identity::load).unwrap_or_default(),
             root,
+            cache,
             generation: 0,
             client: None,
             public: std::sync::OnceLock::new(),
@@ -252,7 +257,10 @@ impl State {
     /// repositories.
     pub(super) fn reader(&self) -> Option<Client> {
         self.client().or_else(|| {
-            let public = || Client::public(self.ends.clone()).ok();
+            let public = || {
+                let client = Client::public(self.ends.clone()).ok()?;
+                Some(client.cached(self.cache.as_deref()))
+            };
             self.configured()
                 .then(|| self.public.get_or_init(public).clone())
                 .flatten()
@@ -776,7 +784,7 @@ impl App {
                     Ok(Some(tokens)) => {
                         let login = tokens.login.clone();
                         if let Ok(client) = Client::new(id, ends, Some(tokens)) {
-                            self.github.client = Some(client);
+                            self.github.client = Some(client.cached(self.github.cache.as_deref()));
                             self.github.account = Account::SignedIn {
                                 login,
                                 remembered: true,
@@ -854,6 +862,7 @@ impl App {
                             self.github_signed_out(Some(gh::Error::Offline.to_string()));
                             return Task::none();
                         };
+                        let client = client.cached(self.github.cache.as_deref());
                         self.github.client = Some(client.clone());
                         return perform(
                             async move { api::account(&client).await },

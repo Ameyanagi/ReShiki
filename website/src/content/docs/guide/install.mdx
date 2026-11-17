@@ -42,6 +42,12 @@ and update downloads in one folder: `~/.reshiki/` on macOS and Linux, and
 `%LOCALAPPDATA%\reshiki\ReShiki\data\` on Windows. Click **ReShiki** at the top
 left to see it in **About ReShiki**; **Open** shows it in your file manager.
 
+What GitHub sent, so a repository opens again without downloading it, is
+kept in `cache/github/` in that folder on macOS and Linux, and in
+`%LOCALAPPDATA%\reshiki\ReShiki\cache\github\` on Windows: up to 200 MB,
+one folder per GitHub account. You can delete it at any time; ReShiki
+downloads what it needs again.
+
 Earlier versions used `~/Library/Application Support/dev.reshiki.ReShiki/` on
 macOS and `~/.local/share/reshiki/` (or `$XDG_DATA_HOME/reshiki/`) on Linux.
 ReShiki moves that folder to `~/.reshiki/` the first time it starts. If it
@@ -75,9 +81,10 @@ Send them before you delete it.
 3. If you were signed in to GitHub, open **Credential Manager → Windows
    Credentials** and remove `dev.reshiki.ReShiki.github`.
 
-Update downloads are in `updates/` in the data folder, so deleting the data
-folder removes them too. Earlier versions left a hidden `.reshiki-update-…`
-folder next to the app: in **Applications** on macOS, or beside the installed
+Update downloads (`updates/`) and the GitHub cache (`cache/`) are in
+`~/.reshiki/` or `%LOCALAPPDATA%\reshiki\`, so deleting that folder removes
+them too. Earlier versions left a hidden `.reshiki-update-…` folder next to the
+app: in **Applications** on macOS, or beside the installed
 or extracted folder on Linux and Windows (`%LOCALAPPDATA%\Programs\` for the
 setup program's install). ReShiki removes those when it starts; if you
 uninstall an earlier version and one remains, delete it too.

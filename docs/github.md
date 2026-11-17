@@ -292,7 +292,27 @@ chemistry**.
   64 MB, the least recently used going first. Choosing a repository still
   asks for its branch head each time, so new commits show; going up, into a
   folder again or choosing the repository again asks GitHub for nothing
-  else. Nothing is kept on disk.
+  else.
+- The same replies are also kept on disk, so they last past a restart, in
+  `cache/github/<login>/` in the data folder (`~/.reshiki/cache/github/` on
+  macOS and Linux, `%LOCALAPPDATA%\reshiki\ReShiki\cache\github\` on
+  Windows); signed-out reading keeps its own in `cache/github/_public/`. One
+  folder per account keeps one account's private repositories from another,
+  so signing out clears nothing. Replies that can change (a branch head, a
+  repository, the account's repositories, a drawing's History) are kept with
+  GitHub's ETag and asked again each time with `If-None-Match`; GitHub's
+  304 (unchanged) costs no download. After a restart, choosing the same
+  repository asks only for its branch head (a 304 when nothing moved), and
+  opening the same folder or drawing asks for nothing.
+- The disk cache holds up to 200 MB for all accounts together. Past that,
+  the entries used least recently go until 180 MB are left. Each entry is
+  written to a temporary file and renamed into place, with a SHA-256 of the
+  reply; an entry that is cut short or unreadable is removed and read from
+  GitHub again, never shown as an error. Reads and writes run off the
+  window's thread. Delete `cache/github/` (or the whole `cache/`) whenever
+  you like, with ReShiki closed or not; it is rebuilt as you browse. With
+  `RESHIKI_GITHUB_API` set, replies go to `cache/github-override/` instead,
+  so a test server's never pass for GitHub's.
 - Requests go over HTTP/2 where GitHub offers it, one connection for the
   previews, dates and uploads running at once; signed-in, signed-out and
   sign-in requests share the connections. Send uploads each drawing and its

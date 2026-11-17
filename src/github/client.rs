@@ -2,12 +2,14 @@
 //! headers, limits, token refresh and one meaning for every status.
 use super::{
     Error, auth,
+    cache::{self, Disk},
     config::Endpoints,
     credentials::{self, Tokens},
 };
 use reqwest::{Method, StatusCode, header::HeaderMap};
 use std::{
     collections::HashMap,
+    path::Path,
     sync::{Arc, Mutex, OnceLock, PoisonError},
     time::Duration,
 };
@@ -34,6 +36,8 @@ pub struct Client {
     /// Signed out, for public repositories: no token, 60 requests an hour.
     public: bool,
     replies: Arc<Mutex<Replies>>,
+    /// Replies kept between runs, beneath `replies`; none unless asked for.
+    disk: Option<Disk>,
 }
 
 /// Replies GitHub never changes (an object by its name), by request path,
@@ -141,6 +145,7 @@ impl Client {
             })),
             public: false,
             replies: Arc::default(),
+            disk: None,
         })
     }
 
@@ -150,6 +155,12 @@ impl Client {
             public: true,
             ..Self::new(String::new(), ends, None)?
         })
+    }
+
+    /// Keeps replies in `cache` (the data folder's `cache`) between runs too.
+    pub fn cached(mut self, cache: Option<&Path>) -> Self {
+        self.disk = cache.map(|cache| Disk::new(cache, self.ends.overridden));
+        self
     }
 
     pub fn is_public(&self) -> bool {
@@ -227,8 +238,20 @@ impl Client {
         self.replies.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
+    /// The disk folder of this sign-in's replies: its login's, or one for
+    /// signed out. None before GitHub names the user.
+    async fn kept(&self) -> Option<(&Disk, String)> {
+        let disk = self.disk.as_ref()?;
+        if self.public {
+            return Some((disk, cache::PUBLIC.into()));
+        }
+        let session = self.session.lock().await;
+        let login = session.tokens.as_ref()?.login.to_ascii_lowercase();
+        super::api::name_ok(&login).then_some((disk, login))
+    }
+
     /// A GET whose reply never changes, such as an object by its name: asked
-    /// of GitHub once while the client lives.
+    /// of GitHub once, then kept on disk and while the client lives.
     pub(super) async fn get_kept(
         &self,
         path: &str,
@@ -238,10 +261,52 @@ impl Client {
         if let Some(bytes) = self.replies().get(path) {
             return Ok(bytes);
         }
-        let bytes = self.send(Method::GET, path, None, accept, limit).await?;
+        let kept = self.kept().await;
+        let on_disk = match &kept {
+            Some((disk, account)) => disk.load(account, path).await,
+            None => None,
+        };
+        let bytes = match on_disk {
+            Some(on_disk) => on_disk.bytes,
+            None => {
+                let bytes = self.send(Method::GET, path, None, accept, limit).await?;
+                if let Some((disk, account)) = &kept {
+                    disk.store(account, path, None, &bytes).await;
+                }
+                bytes
+            }
+        };
         self.replies()
             .put(path.to_owned(), bytes.clone(), KEPT_LIMIT);
         Ok(bytes)
+    }
+
+    /// A GET whose reply may change. What was kept on disk is asked again
+    /// with its ETag, and GitHub's 304 (still the same) keeps it.
+    pub(super) async fn get_fresh(
+        &self,
+        path: &str,
+        accept: Accept,
+        limit: usize,
+    ) -> Result<Vec<u8>, Error> {
+        let Some((disk, account)) = self.kept().await else {
+            return self.send(Method::GET, path, None, accept, limit).await;
+        };
+        let on_disk = disk.load(&account, path).await;
+        let etag = on_disk.as_ref().and_then(|kept| kept.etag.as_deref());
+        match self
+            .exchange(Method::GET, path, None, accept, limit, etag)
+            .await?
+        {
+            Some((bytes, etag)) => {
+                if let Some(etag) = etag {
+                    disk.store(&account, path, Some(&etag), &bytes).await;
+                }
+                Ok(bytes)
+            }
+            // A 304 answers only an ETag sent, so the entry is there.
+            None => Ok(on_disk.map(|kept| kept.bytes).unwrap_or_default()),
+        }
     }
 
     /// One API call; `path` is already percent-encoded.
@@ -253,6 +318,23 @@ impl Client {
         accept: Accept,
         limit: usize,
     ) -> Result<Vec<u8>, Error> {
+        let reply = self
+            .exchange(method, path, body, accept, limit, None)
+            .await?;
+        Ok(reply.map(|(bytes, _)| bytes).unwrap_or_default())
+    }
+
+    /// [`Self::send`], asking with `If-None-Match: etag` when given: the
+    /// reply and its ETag, or `None` when GitHub answers 304.
+    async fn exchange(
+        &self,
+        method: Method,
+        path: &str,
+        body: Option<Vec<u8>>,
+        accept: Accept,
+        limit: usize,
+        etag: Option<&str>,
+    ) -> Result<Option<(Vec<u8>, Option<String>)>, Error> {
         let mut access = self.access(None).await?;
         let mut retried = false;
         loop {
@@ -270,6 +352,9 @@ impl Client {
             if !self.public {
                 request = request.bearer_auth(&access);
             }
+            if let Some(etag) = etag {
+                request = request.header("If-None-Match", etag);
+            }
             if let Some(body) = &body {
                 request = request
                     .header("Content-Type", "application/json")
@@ -281,8 +366,14 @@ impl Client {
             }
             let response = request.send().await.map_err(|_| Error::Offline)?;
             let status = response.status();
+            if status == StatusCode::NOT_MODIFIED && etag.is_some() {
+                return Ok(None);
+            }
             if status.is_success() {
-                return read(response, limit).await;
+                let etag = (response.headers().get("etag"))
+                    .and_then(|etag| etag.to_str().ok())
+                    .map(str::to_owned);
+                return Ok(Some((read(response, limit).await?, etag)));
             }
             if status == StatusCode::UNAUTHORIZED && self.public {
                 return Err(Error::NotSignedIn);

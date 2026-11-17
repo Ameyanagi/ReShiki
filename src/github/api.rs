@@ -17,10 +17,13 @@ async fn call<T: DeserializeOwned>(
     path: &str,
     body: Option<Value>,
 ) -> Result<T, Error> {
-    let body = body.map(|body| body.to_string().into_bytes());
-    let bytes = client
-        .send(method, path, body, Accept::Json, JSON_LIMIT)
-        .await?;
+    let bytes = match (method, body) {
+        (Method::GET, None) => client.get_fresh(path, Accept::Json, JSON_LIMIT).await?,
+        (method, body) => {
+            let body = body.map(|body| body.to_string().into_bytes());
+            (client.send(method, path, body, Accept::Json, JSON_LIMIT)).await?
+        }
+    };
     serde_json::from_slice(&bytes).map_err(|_| Error::Rejected(UNREADABLE.into()))
 }
 
@@ -83,7 +86,7 @@ struct Permissions {
 
 /// An owner or repository names a folder of the working copy, so it must
 /// be a name every platform can hold (`con` is a real GitHub account).
-fn name_ok(name: &str) -> bool {
+pub(super) fn name_ok(name: &str) -> bool {
     !name.contains('/') && super::workcopy::valid_repo_path(name)
 }
 
