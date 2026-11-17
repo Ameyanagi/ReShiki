@@ -12,7 +12,7 @@ pub(super) fn ethanol() -> Document {
 
 /// A generated record for `smiles` named "ethan-1-ol", with no aliases or
 /// warnings. Tests that need another title, name or source override fields.
-pub(super) fn record(smiles: &str) -> Record {
+pub(in crate::app) fn record(smiles: &str) -> Record {
     Record {
         title: "ethan-1-ol".into(),
         systematic_name: Some("ethan-1-ol".into()),

@@ -177,6 +177,42 @@ fn linked_captions_export_as_chemdraw_property_text_and_return() {
 }
 
 #[test]
+fn an_automatic_name_line_exports_linked_and_a_custom_one_as_plain_text() {
+    use crate::linked_properties::{named, rename};
+    let (mut d, atoms) = phenol();
+    for p in [Property::Weight, Property::Name] {
+        toggle(&mut d, &atoms, p, TextFormat::default(), true).unwrap();
+    }
+    let smiles = d.property_captions[0].smiles.clone();
+    named(&mut d, &smiles, "phenol");
+    let x = xml(&d);
+    // ChemDraw's chemical-name type, first like the line.
+    assert!(x.contains(r#"ChemicalPropertyType="1 4""#), "{x}");
+    for back in [
+        import(&x),
+        import(&crate::exchange::from_cdx(&crate::exchange::to_cdx(&x).unwrap()).unwrap()),
+    ] {
+        let link = &back.property_captions[0];
+        assert_eq!(link.properties, [Property::Name, Property::Weight]);
+        // The structure is identified on import, so the app can name it.
+        assert_eq!(link.smiles, smiles);
+        assert_eq!(caption(&back), "phenol\nMol. Wt.: 94.11");
+        // The name line stays bold.
+        let text = &back.annotations[0];
+        assert!(text.format.at(0).bold);
+        assert!(!text.format.at(text.text.find('M').unwrap()).bold);
+    }
+    // A custom name would be replaced by ChemDraw's own, so it stays text.
+    rename(&mut d, &atoms, "Compound 3a", TextFormat::default(), true).unwrap();
+    let x = xml(&d);
+    assert!(!x.contains("chemicalproperty"), "{x}");
+    assert!(x.contains("Compound 3a"));
+    let back = import(&x);
+    assert!(back.property_captions.is_empty());
+    assert_eq!(back.annotations[0].text, "Compound 3a\nMol. Wt.: 94.11");
+}
+
+#[test]
 fn captions_without_a_chemdraw_type_export_as_plain_text() {
     let (mut d, atoms) = phenol();
     toggle(&mut d, &atoms, Property::LogP, TextFormat::default(), true).unwrap();

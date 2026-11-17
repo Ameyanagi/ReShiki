@@ -500,3 +500,145 @@ fn an_attachment_to_the_molecule_recalculates_it() {
     });
     assert_eq!(text(&doc), "Formula: –");
 }
+
+/// The bold characters of the caption.
+fn bold(doc: &Document) -> String {
+    let caption = &doc.annotations[0];
+    caption
+        .text
+        .char_indices()
+        .filter(|(i, _)| caption.format.at(*i).bold)
+        .map(|(_, c)| c)
+        .collect()
+}
+
+#[test]
+fn the_name_is_the_first_line_and_bold() {
+    let (mut doc, _) = shown_doc(
+        &[Property::ExactMass, Property::Name, Property::Weight],
+        false,
+    );
+    let link = &doc.property_captions[0];
+    assert_eq!(link.properties[0], Property::Name);
+    assert!(link.needs_name());
+    // Until the generator answers, the name line is a dash.
+    assert_eq!(text(&doc), "–\nMol. Wt.: 94.113\nExact Mass: 94.0419");
+    let smiles = link.smiles.clone();
+    assert!(named(&mut doc, &smiles, "phenol"));
+    assert_eq!(text(&doc), "phenol\nMol. Wt.: 94.113\nExact Mass: 94.0419");
+    assert_eq!(bold(&doc), "phenol");
+    assert!(!doc.property_captions[0].needs_name());
+    // Another structure's name changes nothing.
+    assert!(!named(&mut doc, "CCO", "ethanol"));
+}
+
+#[test]
+fn a_custom_name_from_the_panel_or_the_canvas_is_one_value() {
+    let (mut doc, atoms) = shown_doc(&[Property::Weight], true);
+    let smiles = crate::molecule_names::identity(&doc, &atoms).unwrap();
+    // Naming a molecule shows the name line.
+    rename(
+        &mut doc,
+        &atoms,
+        " Compound   3a ",
+        TextFormat::default(),
+        true,
+    )
+    .unwrap();
+    assert_eq!(text(&doc), "Compound 3a\nMol. Wt.: 94.11");
+    assert_eq!(bold(&doc), "Compound 3a");
+    named(&mut doc, &smiles, "phenol");
+    // The automatic name waits behind the custom one.
+    assert_eq!(text(&doc), "Compound 3a\nMol. Wt.: 94.11");
+    // Typing over the name line on the canvas sets the same value and keeps the link.
+    let mut history = History::default();
+    edit(&mut doc, &mut history, |doc| {
+        doc.annotations[0].text = "Aspirin precursor\nMol. Wt.: 94.11".into()
+    });
+    let link = &doc.property_captions[0];
+    assert_eq!(link.custom_name, "Aspirin precursor");
+    assert_eq!(text(&doc), "Aspirin precursor\nMol. Wt.: 94.11");
+    // A line break typed at the end of the name stays one line.
+    edit(&mut doc, &mut history, |doc| {
+        doc.annotations[0].text = "3a\n\nMol. Wt.: 94.11".into()
+    });
+    assert_eq!(doc.property_captions[0].custom_name, "3a");
+    assert_eq!(text(&doc), "3a\nMol. Wt.: 94.11");
+    // Clearing the name, or ↺, returns to the automatic name.
+    edit(&mut doc, &mut history, |doc| {
+        doc.annotations[0].text = "\nMol. Wt.: 94.11".into()
+    });
+    assert_eq!(doc.property_captions[0].custom_name, "");
+    assert_eq!(text(&doc), "phenol\nMol. Wt.: 94.11");
+    assert_eq!(bold(&doc), "phenol");
+    rename(&mut doc, &atoms, "3a", TextFormat::default(), true).unwrap();
+    rename(&mut doc, &atoms, "", TextFormat::default(), true).unwrap();
+    assert_eq!(text(&doc), "phenol\nMol. Wt.: 94.11");
+    // Typing the automatic name is not a custom name.
+    rename(&mut doc, &atoms, "phenol", TextFormat::default(), true).unwrap();
+    assert_eq!(doc.property_captions[0].custom_name, "");
+    // Editing a property line still makes the caption plain text.
+    edit(&mut doc, &mut history, |doc| {
+        doc.annotations[0].text = "phenol\nMW 94".into()
+    });
+    assert!(doc.property_captions.is_empty());
+}
+
+#[test]
+fn a_structure_edit_clears_an_automatic_name_and_keeps_a_custom_one() {
+    let (mut doc, atoms) = shown_doc(&[Property::Name, Property::Weight], true);
+    let phenol_smiles = doc.property_captions[0].smiles.clone();
+    named(&mut doc, &phenol_smiles, "phenol");
+    let mut history = History::default();
+    let named_doc = doc.clone();
+    let mut methyl = 0;
+    edit(&mut doc, &mut history, |doc| {
+        methyl = doc.add_atom("C", Point::new(-60., 0.));
+        doc.add_bond(atoms[3], methyl, 1, "plain");
+    });
+    // In the edit's own Undo step: new values, and the old name is gone.
+    let link = &doc.property_captions[0];
+    assert_ne!(link.smiles, phenol_smiles);
+    assert!(link.needs_name());
+    assert_eq!(text(&doc), "–\nMol. Wt.: 108.14");
+    // The app writes the new name into the same step.
+    let cresol = link.smiles.clone();
+    named(&mut doc, &cresol, "4-methylphenol");
+    assert_eq!(text(&doc), "4-methylphenol\nMol. Wt.: 108.14");
+    assert!(history.undo(&mut doc));
+    assert_eq!(doc, named_doc);
+    // A custom name stays, with the note that the structure changed.
+    rename(&mut doc, &atoms, "3a", TextFormat::default(), true).unwrap();
+    assert!(!doc.property_captions[0].renamed_structure_changed());
+    edit(&mut doc, &mut history, |doc| {
+        let methyl = doc.add_atom("C", Point::new(-60., 0.));
+        doc.add_bond(atoms[3], methyl, 1, "plain");
+    });
+    assert_eq!(text(&doc), "3a\nMol. Wt.: 108.14");
+    assert!(doc.property_captions[0].renamed_structure_changed());
+    assert!(history.undo(&mut doc));
+    assert!(!doc.property_captions[0].renamed_structure_changed());
+    // Moving the molecule keeps the automatic name.
+    let before = doc.property_captions[0].clone();
+    edit(&mut doc, &mut history, |doc| doc.translate(&atoms, 30., 0.));
+    assert_eq!(doc.property_captions[0].name, before.name);
+}
+
+#[test]
+fn names_save_as_version_39_only_when_used() {
+    let (mut doc, atoms) = shown_doc(&[Property::Weight], true);
+    let file = doc.file_json().unwrap();
+    assert_eq!(
+        Document::from_json(&file).unwrap().version,
+        crate::document::PROPERTY_CAPTIONS
+    );
+    rename(&mut doc, &atoms, "3a", TextFormat::default(), true).unwrap();
+    let smiles = doc.property_captions[0].smiles.clone();
+    named(&mut doc, &smiles, "phenol");
+    let loaded = Document::from_json(&doc.file_json().unwrap()).unwrap();
+    assert_eq!(loaded.version, crate::document::CAPTION_NAMES);
+    assert_eq!(loaded.property_captions, doc.property_captions);
+    assert_eq!(loaded.property_captions[0].custom_name, "3a");
+    assert_eq!(loaded.property_captions[0].name, "phenol");
+    assert_eq!(loaded.annotations, doc.annotations);
+}

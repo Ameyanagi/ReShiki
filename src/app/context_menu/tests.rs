@@ -838,10 +838,34 @@ fn chemical_name_menu_uses_clicked_component_and_switches_between_show_and_hide(
         selected: all,
         hit: vec![first[0]],
     });
+    // One molecule's name is the Name row of its property caption.
     assert!(app.context_entries(Page::Main).iter().any(|entry| matches!(entry,
         Entry::Item { label: "Show chemical name", enabled: true, action: Action::Run(message), .. }
-            if matches!(message.as_ref(), Message::Naming(super::super::naming::Action::ShowMoleculeName(atoms)) if *atoms == first)
+            if matches!(message.as_ref(), Message::ToggleProperty(atoms, reshiki::linked_properties::Property::Name) if *atoms == first)
     )));
+    let before = app.tab.doc.clone();
+    let reopen = |app: &mut App| {
+        app.edit(Edit::ContextMenu {
+            position: Point::new(30., 40.),
+            selected: app.tab.doc.all_ids(),
+            hit: vec![first[0]],
+        })
+    };
+    run_item(&mut app, Page::Main, "Show chemical name")?;
+    assert!(reshiki::linked_properties::shown(
+        &app.tab.doc,
+        &first,
+        reshiki::linked_properties::Property::Name
+    ));
+    reopen(&mut app);
+    assert!(labels(&app, Page::Main).contains(&"Hide chemical name"));
+    run_item(&mut app, Page::Main, "Hide chemical name")?;
+    assert!(app.tab.doc.property_captions.is_empty());
+    let _ = app.update(Message::Undo);
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+    reopen(&mut app);
+    // A name caption from an older drawing still hides on its own.
     reshiki::molecule_names::show(
         &mut app.tab.doc,
         &first,
@@ -1519,6 +1543,7 @@ fn show_properties_menu_ticks_shown_rows_and_starts_with_weight() -> Result<(), 
     assert_eq!(
         labels(&app, Page::Properties),
         [
+            "Name",
             "Formula",
             "Mol. Wt.",
             "Exact Mass",
@@ -1560,7 +1585,12 @@ fn show_properties_menu_ticks_shown_rows_and_starts_with_weight() -> Result<(), 
             _ => None,
         })
         .collect();
-    assert_eq!(ticks, [false, true, false, false, false, false]);
+    assert_eq!(ticks, [false, false, true, false, false, false, false]);
+    // The name row sits above a separator.
+    assert!(matches!(
+        app.context_entries(Page::Properties)[1],
+        Entry::Separator
+    ));
     run_item(&mut app, Page::Properties, "Formula")?;
     assert!(app.context_menu.is_none());
     assert!(shown(&app.tab.doc, &ethanol, Property::Formula));

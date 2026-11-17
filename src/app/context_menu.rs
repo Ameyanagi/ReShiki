@@ -386,19 +386,34 @@ impl App {
             return entries;
         }
         if let Some(target) = self.context_name_target() {
-            let shown = reshiki::molecule_names::label(&self.tab.doc, &target).is_some();
+            // One molecule's name is the Name row of its property caption. A
+            // salt, or a name caption from an older drawing, keeps its own caption.
+            let caption = reshiki::molecule_names::label(&self.tab.doc, &target).is_some();
+            let row = self.context_property_target().as_ref() == Some(&target);
+            let shown = caption
+                || row
+                    && reshiki::linked_properties::shown(
+                        &self.tab.doc,
+                        &target,
+                        reshiki::linked_properties::Property::Name,
+                    );
             entries.push(command(
                 if shown {
                     "Hide chemical name"
                 } else {
                     "Show chemical name"
                 },
-                Message::Naming(if shown {
-                    super::naming::Action::HideMoleculeName(target.clone())
+                if caption {
+                    Message::Naming(super::naming::Action::HideMoleculeName(target.clone()))
+                } else if row {
+                    Message::ToggleProperty(
+                        target.clone(),
+                        reshiki::linked_properties::Property::Name,
+                    )
                 } else {
-                    super::naming::Action::ShowMoleculeName(target.clone())
-                }),
-                self.naming_can_show_molecule(),
+                    Message::Naming(super::naming::Action::ShowMoleculeName(target.clone()))
+                },
+                row && !caption || self.naming_can_show_molecule(),
             ));
             entries.push(command(
                 "Chemical names…",
@@ -448,15 +463,18 @@ impl App {
         }
     }
 
-    /// One row per property, in the Properties panel's order.
+    /// One row per property, in the Properties panel's order: the name,
+    /// then the values.
     fn property_entries(&self) -> Vec<Entry> {
         let Some(target) = self.context_property_target() else {
             return vec![];
         };
-        reshiki::linked_properties::Property::ALL
+        let mut entries: Vec<_> = reshiki::linked_properties::Property::ALL
             .into_iter()
             .map(|p| Entry::command(p.name(), Message::ToggleProperty(target.clone(), p), true))
-            .collect()
+            .collect();
+        entries.insert(1, Entry::Separator);
+        entries
     }
 
     /// Whether a property row is ticked; `None` for other rows.

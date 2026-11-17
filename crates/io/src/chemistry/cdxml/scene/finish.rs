@@ -165,6 +165,7 @@ impl CdxmlScene {
         if restored {
             molecule = chemistry::document::prepare(&document)?;
         }
+        crate::linked_properties::identify_names(&mut document);
         Ok(ImportedCdxml {
             molecule,
             document,

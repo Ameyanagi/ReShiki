@@ -777,10 +777,18 @@ impl Writer<'_> {
     /// ChemDraw's linked property text: a `chemicalproperty` that names the
     /// caption and the molecule's fragment (when it holds only this molecule),
     /// atoms and bonds, so ChemDraw keeps the lines up to date. A caption with
-    /// a property ChemDraw has no checked type for stays plain text.
+    /// a property ChemDraw has no checked type for stays plain text, and so
+    /// does a custom name, which ChemDraw would replace with its own.
     pub(super) fn property_captions(&mut self) -> Result<()> {
         let doc = self.doc;
         for link in &doc.property_captions {
+            if !link.custom_name.is_empty()
+                && link
+                    .properties
+                    .contains(&crate::linked_properties::Property::Name)
+            {
+                continue;
+            }
             let Some(types) = link
                 .properties
                 .iter()

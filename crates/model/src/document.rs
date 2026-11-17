@@ -256,14 +256,17 @@ pub const STEREO_GROUPS: u32 = 36;
 pub const RADICAL_ELECTRONS: u32 = 37;
 /// Property captions linked to their molecules.
 pub const PROPERTY_CAPTIONS: u32 = 38;
+/// A name line or a custom name in a property caption.
+pub const CAPTION_NAMES: u32 = 39;
 
 /// The newest document format this build reads. Native output uses version 30
 /// unless a custom reaction-label gap requires version 31, ORTEP settings
 /// require version 32, model polish requires version 33 or two-sided groups
 /// require version 34, arrows with interior nodes or a custom crossing
 /// clearance require version 35, stereo groups require version 36, atoms
-/// with three or four radical electrons require version 37, or linked
-/// property captions require version 38.
+/// with three or four radical electrons require version 37, linked
+/// property captions require version 38, or a property caption with a name
+/// requires version 39.
 /// Optional atom-label settings, including steroid α/β display, retain this
 /// version; older readers may ignore those presentation preferences.
 ///
@@ -300,7 +303,8 @@ pub const PROPERTY_CAPTIONS: u32 = 38;
 /// | 36 | Enhanced stereo groups (#766). |
 /// | 37 | Three or four radical electrons on an atom. |
 /// | 38 | Property captions linked to their molecules (#1175). |
-pub const VERSION: u32 = 38;
+/// | 39 | Names in property captions: a name line and custom names. |
+pub const VERSION: u32 = 39;
 
 /// Bytes of text in one annotation. Layout time grows faster than the text.
 pub const MAX_ANNOTATION_TEXT: usize = 64 * 1024;
@@ -475,7 +479,13 @@ impl Document {
     }
     /// Use the newest feature floor needed by the drawing's saved fields.
     pub fn file_version(&self) -> u32 {
-        if !self.property_captions.is_empty() {
+        if self.property_captions.iter().any(|link| {
+            link.properties
+                .contains(&crate::linked_properties::Property::Name)
+                || !link.custom_name.is_empty()
+        }) {
+            CAPTION_NAMES
+        } else if !self.property_captions.is_empty() {
             PROPERTY_CAPTIONS
         } else if self.atoms.iter().any(|a| a.radical_electrons > 2) {
             RADICAL_ELECTRONS

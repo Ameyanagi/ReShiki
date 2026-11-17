@@ -76,7 +76,7 @@ pub(super) fn read(
             atoms: atoms.into_iter().collect(),
             properties,
             two_decimal_weight: true,
-            text: String::new(),
+            ..Default::default()
         });
     }
     Ok(links)

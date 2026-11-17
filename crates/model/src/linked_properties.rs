@@ -2,8 +2,14 @@
 //! property, recalculated in the transaction of every structure edit.
 //!
 //! The caption is an ordinary annotation, so every export keeps its text.
-//! Editing the text makes it plain text, as with linked chemical names;
-//! deleting the molecule removes it.
+//! Editing a property line makes it plain text, as with linked chemical names;
+//! editing the name line sets a custom name instead. Deleting the molecule
+//! removes it.
+//!
+//! The name line shows a custom name, or the automatic name the app generates
+//! with the local name generator, which runs outside the transaction. An edit
+//! that changes the structure clears the automatic name; the app writes the
+//! new one into the same Undo step when it arrives ([`named`]).
 use crate::{
     document::{Annotation, Atom, Bond, Document, Point},
     typography::{Script, StyleChange, TextAlign, TextFormat, TextSpan},
@@ -17,6 +23,7 @@ use std::{
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Property {
+    Name,
     Formula,
     Weight,
     ExactMass,
@@ -26,7 +33,8 @@ pub enum Property {
 }
 impl Property {
     /// The Properties panel's order, which is also the caption's line order.
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 7] = [
+        Self::Name,
         Self::Formula,
         Self::Weight,
         Self::ExactMass,
@@ -38,6 +46,7 @@ impl Property {
     /// analysis, which reads "Anal. Calcd for …".
     pub fn name(self) -> &'static str {
         match self {
+            Self::Name => "Name",
             Self::Formula => "Formula",
             Self::Weight => "Mol. Wt.",
             Self::ExactMass => "Exact Mass",
@@ -46,10 +55,12 @@ impl Property {
             Self::Analysis => "Elemental analysis",
         }
     }
-    /// ChemDraw's ChemicalPropertyType, for the types checked against
-    /// ChemDraw-made files. cLogP and TPSA have no confirmed code.
+    /// ChemDraw's ChemicalPropertyType: the chemical name from the CDX
+    /// documentation, the others checked against ChemDraw-made files. cLogP
+    /// and TPSA have no confirmed code.
     pub fn chemdraw(self) -> Option<u32> {
         match self {
+            Self::Name => Some(1),
             Self::Formula => Some(2),
             Self::ExactMass => Some(3),
             Self::Weight => Some(4),
@@ -62,7 +73,7 @@ impl Property {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct PropertyCaption {
     pub annotation: u64,
     /// Every atom of the molecule, in drawing order.
@@ -74,6 +85,53 @@ pub struct PropertyCaption {
     pub two_decimal_weight: bool,
     /// The text last written. Different caption text means the user edited it.
     pub text: String,
+    /// The molecule's canonical identity while it has a name line or a custom
+    /// name; empty when it cannot be named.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub smiles: String,
+    /// The automatic name of `smiles`; empty until the generator answers.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub name: String,
+    /// A name the user typed, shown instead of the automatic name.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub custom_name: String,
+    /// The identity when the custom name was typed.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub custom_smiles: String,
+}
+impl PropertyCaption {
+    /// Whether the molecule's name is tracked: shown, or typed.
+    fn tracks_name(&self) -> bool {
+        self.properties.contains(&Property::Name) || !self.custom_name.is_empty()
+    }
+
+    /// The name line: the custom name, else the automatic one.
+    pub fn name_line(&self) -> &str {
+        if self.custom_name.is_empty() {
+            &self.name
+        } else {
+            &self.custom_name
+        }
+    }
+
+    /// The structure changed after the custom name was typed.
+    pub fn renamed_structure_changed(&self) -> bool {
+        !self.custom_name.is_empty() && self.custom_smiles != self.smiles
+    }
+
+    /// A name line the app still has to generate.
+    pub fn needs_name(&self) -> bool {
+        self.properties.contains(&Property::Name) && self.name.is_empty() && !self.smiles.is_empty()
+    }
+
+    /// Follow the molecule's identity. A new structure drops the automatic name.
+    fn identify(&mut self, doc: &Document) {
+        let smiles = crate::molecule_names::identity(doc, &self.atoms).unwrap_or_default();
+        if smiles != self.smiles {
+            self.name.clear();
+            self.smiles = smiles;
+        }
+    }
 }
 
 fn covers(link: &PropertyCaption, atoms: &[u64]) -> bool {
@@ -139,20 +197,21 @@ fn values(doc: &Document, atoms: &[u64]) -> Option<Values> {
 }
 
 /// The caption text and the byte ranges written in formula style.
-fn write(
-    values: Option<&Values>,
-    properties: &[Property],
-    two_decimal_weight: bool,
-) -> (String, Vec<Range<usize>>) {
+fn write(values: Option<&Values>, link: &PropertyCaption) -> (String, Vec<Range<usize>>) {
     let mut text = String::new();
     let mut formulas = Vec::new();
     let mut formula = |text: &mut String, formula: &str| {
         formulas.push(text.len()..text.len() + formula.len());
         text.push_str(formula);
     };
-    for &property in Property::ALL.iter().filter(|p| properties.contains(p)) {
+    for &property in Property::ALL.iter().filter(|p| link.properties.contains(p)) {
         if !text.is_empty() {
             text.push('\n');
+        }
+        if property == Property::Name {
+            let name = link.name_line();
+            text.push_str(if name.is_empty() { "–" } else { name });
+            continue;
         }
         let Some(v) = values else {
             let label = match property {
@@ -167,8 +226,9 @@ fn write(
                 text.push_str("Formula: ");
                 formula(&mut text, &v.formula);
             }
+            Property::Name => {}
             Property::Weight => {
-                let places = if two_decimal_weight { 2 } else { 3 };
+                let places = if link.two_decimal_weight { 2 } else { 3 };
                 text.push_str(&format!("Mol. Wt.: {:.places$}", v.weight));
             }
             Property::ExactMass => text.push_str(&format!("Exact Mass: {:.4}", v.exact_mass)),
@@ -206,11 +266,7 @@ fn refresh(
     caption: &mut Annotation,
     shown: &[Property],
 ) {
-    let (text, formulas) = write(
-        values(doc, &link.atoms).as_ref(),
-        &link.properties,
-        link.two_decimal_weight,
-    );
+    let (text, formulas) = write(values(doc, &link.atoms).as_ref(), link);
     if text != caption.text {
         let center = caption.position.x + caption.size().0 / 2.;
         let mut lines = HashMap::new();
@@ -224,6 +280,8 @@ fn refresh(
             if !styles.is_empty() {
                 styles.push(caption.format.style.clone());
             }
+            // A new or emptied line takes the default style.
+            let new = lines.get(property).is_none_or(|line| line.is_empty());
             let old = lines.get(property).cloned().unwrap_or_default();
             let mut format = caption.format.clone();
             format.spans = caption
@@ -240,7 +298,14 @@ fn refresh(
             let old = &caption.text[old];
             // An empty range at the end makes `edited` find the changed part.
             format.edited(old, line, old.len()..old.len());
-            styles.extend(line.char_indices().map(|(i, _)| format.at(i).clone()));
+            // A name line starts bold, like a compound heading.
+            styles.extend(line.char_indices().map(|(i, _)| {
+                let mut style = format.at(i).clone();
+                if new && *property == Property::Name {
+                    StyleChange::Bold(true).apply(&mut style);
+                }
+                style
+            }));
         }
         for ((i, _), style) in text.char_indices().zip(&mut styles) {
             if formulas.iter().any(|r| r.contains(&i)) {
@@ -304,10 +369,8 @@ pub fn toggle(
             });
             PropertyCaption {
                 annotation: id,
-                atoms: vec![],
-                properties: vec![],
                 two_decimal_weight,
-                text: String::new(),
+                ..Default::default()
             }
         }
     };
@@ -325,19 +388,114 @@ pub fn toggle(
     }
     link.atoms = whole;
     link.two_decimal_weight = two_decimal_weight;
+    if link.tracks_name() {
+        link.identify(doc);
+    }
+    // An edited caption is plain text; showing a property links it again.
+    rewrite(doc, link, &shown)
+}
+
+/// Write the link's caption from its molecule and keep the link.
+fn rewrite(
+    doc: &mut Document,
+    mut link: PropertyCaption,
+    shown: &[Property],
+) -> Result<(), String> {
     let mut caption = doc
         .annotations
         .iter()
         .find(|a| a.id == link.annotation)
         .cloned()
         .ok_or("The property caption is missing")?;
-    // An edited caption is plain text; showing a property links it again.
-    refresh(doc, &mut link, &mut caption, &shown);
+    refresh(doc, &mut link, &mut caption, shown);
     if let Some(current) = doc.annotations.iter_mut().find(|a| a.id == link.annotation) {
         *current = caption;
     }
     doc.property_captions.push(link);
     Ok(())
+}
+
+/// Name the molecule made of `atoms`: a custom name, or the automatic name
+/// when `name` is empty or equals it. The name line is shown, with a new
+/// caption if the molecule has none.
+pub fn rename(
+    doc: &mut Document,
+    atoms: &[u64],
+    name: &str,
+    format: TextFormat,
+    two_decimal_weight: bool,
+) -> Result<(), String> {
+    if !shown(doc, atoms, Property::Name) {
+        toggle(doc, atoms, Property::Name, format, two_decimal_weight)?;
+    }
+    let index = doc
+        .property_captions
+        .iter()
+        .position(|link| covers(link, atoms))
+        .ok_or("The property caption is missing")?;
+    let mut link = doc.property_captions.remove(index);
+    let shown = link.properties.clone();
+    set_custom(&mut link, name);
+    rewrite(doc, link, &shown)
+}
+
+/// The name typed over the caption's first line, when the property lines
+/// below it are unchanged.
+fn typed_name<'a>(link: &PropertyCaption, text: &'a str) -> Option<&'a str> {
+    if link.properties.first() != Some(&Property::Name) {
+        return None;
+    }
+    text.strip_suffix(link.text.find('\n').map_or("", |i| &link.text[i..]))
+}
+
+/// A typed name, on one line; empty or the automatic name means automatic.
+fn set_custom(link: &mut PropertyCaption, name: &str) {
+    let name = name.split_whitespace().collect::<Vec<_>>().join(" ");
+    if name.is_empty() || name == link.name {
+        link.custom_name.clear();
+        link.custom_smiles.clear();
+    } else if name != link.custom_name {
+        link.custom_name = name;
+        link.custom_smiles = link.smiles.clone();
+    }
+}
+
+/// The generator named `smiles`: write the name into every caption that
+/// names that structure, without an Undo step of its own. Returns whether a
+/// link changed.
+pub fn named(doc: &mut Document, smiles: &str, name: &str) -> bool {
+    let mut changed = false;
+    for mut link in std::mem::take(&mut doc.property_captions) {
+        if link.smiles == smiles && link.name != name && link.tracks_name() {
+            link.name = name.into();
+            changed = true;
+            if let Some(mut caption) = doc
+                .annotations
+                .iter()
+                .find(|a| a.id == link.annotation)
+                .cloned()
+            {
+                let shown = link.properties.clone();
+                refresh(doc, &mut link, &mut caption, &shown);
+                if let Some(current) = doc.annotations.iter_mut().find(|a| a.id == link.annotation)
+                {
+                    *current = caption;
+                }
+            }
+        }
+        doc.property_captions.push(link);
+    }
+    changed
+}
+
+/// Identify the molecules of name lines read from a file, so the app can
+/// name them.
+pub fn identify_names(doc: &mut Document) {
+    let mut links = std::mem::take(&mut doc.property_captions);
+    for link in links.iter_mut().filter(|link| link.tracks_name()) {
+        link.identify(doc);
+    }
+    doc.property_captions = links;
 }
 
 /// The molecule's atoms, wherever they are drawn, its bonds and any
@@ -379,9 +537,15 @@ pub fn reconcile(doc: &mut Document, before: &Document) {
         else {
             continue;
         };
-        if caption.text != link.text {
+        // Typing over the name line names the molecule; any other change to
+        // the text makes it plain text.
+        let typed = if caption.text == link.text {
+            None
+        } else if let Some(name) = typed_name(&link, &caption.text) {
+            Some(name.to_owned())
+        } else {
             continue;
-        }
+        };
         let mut seen = HashSet::new();
         let mut whole = vec![];
         for id in &link.atoms {
@@ -410,15 +574,25 @@ pub fn reconcile(doc: &mut Document, before: &Document) {
                     .any(|a| a.id == link.annotation && a.position == caption.position)
             })
             .and_then(|old| anchor(before, &old.atoms));
-        let unchanged = previous.is_some_and(|old| {
+        let same = previous.is_some_and(|old| {
             covers(old, &whole)
-                && old.properties == link.properties
-                && old.two_decimal_weight == link.two_decimal_weight
-                && before.drawing_style == doc.drawing_style
                 && before.generic == doc.generic
                 && chemistry(before, &whole) == chemistry(doc, &whole)
         });
+        let unchanged = same
+            && typed.is_none()
+            && previous.is_some_and(|old| {
+                old.properties == link.properties
+                    && old.two_decimal_weight == link.two_decimal_weight
+            })
+            && before.drawing_style == doc.drawing_style;
         link.atoms = whole;
+        if !same && link.tracks_name() {
+            link.identify(doc);
+        }
+        if let Some(name) = typed {
+            set_custom(&mut link, &name);
+        }
         if !unchanged {
             let shown = link.properties.clone();
             refresh(doc, &mut link, &mut caption, &shown);
@@ -468,6 +642,8 @@ pub fn validate(doc: &Document) -> Result<(), String> {
             || link.properties.is_empty()
             || !link.properties.iter().all(|p| properties.insert(*p))
             || link.text.is_empty()
+            || link.name.contains('\n')
+            || link.custom_name.contains('\n')
         {
             return Err("Invalid property caption link".into());
         }

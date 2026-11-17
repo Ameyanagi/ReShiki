@@ -1285,6 +1285,96 @@ impl App {
         .into()
     }
 
+    /// The molecule's name at the top of Molecular properties: empty shows
+    /// the automatic name, typing and Return sets a custom one, ↺ goes back.
+    fn molecule_name(&self, atoms: Vec<u64>) -> Element<'_, Message> {
+        use super::naming::Action;
+        use reshiki::linked_properties::{Property, caption};
+        let link = caption(&self.tab.doc, &atoms);
+        let custom = link.map_or("", |link| link.custom_name.as_str());
+        let automatic = link.map_or("", |link| link.name.as_str());
+        let state = &self.tab.naming;
+        let value = match &state.name_draft {
+            Some((draft, name)) if *draft == atoms => name.as_str(),
+            _ => custom,
+        };
+        let failed = link.and_then(|link| state.caption_failed.get(&link.smiles));
+        let placeholder = if !automatic.is_empty() {
+            automatic
+        } else if link.is_some_and(|link| link.needs_name()) && failed.is_none() {
+            "Naming…"
+        } else {
+            "Automatic name"
+        };
+        let source = if !custom.is_empty() {
+            format!(
+                "Custom name · automatic: {}",
+                if automatic.is_empty() {
+                    "–"
+                } else {
+                    automatic
+                }
+            )
+        } else if let Some(error) = failed {
+            format!("No automatic name: {error}")
+        } else {
+            "Automatic (IUPAC) · type a name, then Return".into()
+        };
+        let mut field =
+            column![
+                text("Name").size(11).style(muted_text),
+                row![
+                    reshiki::accessibility::text_input(
+                        "molecule-name",
+                        "Molecule name",
+                        placeholder,
+                        value
+                    )
+                    .on_input({
+                        let atoms = atoms.clone();
+                        move |name| Message::Naming(Action::NameDraft(atoms.clone(), name))
+                    })
+                    .on_submit(Message::Naming(Action::Rename(
+                        atoms.clone(),
+                        value.to_owned()
+                    )))
+                    .size(12)
+                    .padding(6)
+                    .style(crate::appearance::input_style),
+                    hover_hint(
+                        reshiki::accessibility::button(
+                            "molecule-name-automatic",
+                            "Use the automatic name",
+                            text("↺").size(13),
+                        )
+                        .padding([3, 6])
+                        .style(control(false))
+                        .on_press_maybe((!custom.is_empty()).then(|| {
+                            Message::Naming(Action::Rename(atoms.clone(), String::new()))
+                        })),
+                        "Use the automatic name",
+                        tooltip::Position::Left,
+                    ),
+                    self.property_pin(Property::Name),
+                ]
+                .spacing(6)
+                .align_y(Alignment::Center),
+                text(source)
+                    .size(11)
+                    .style(muted_text)
+                    .wrapping(text::Wrapping::WordOrGlyph),
+            ]
+            .spacing(4);
+        if link.is_some_and(|link| link.renamed_structure_changed()) {
+            field = field.push(
+                text("Structure changed since you named it.")
+                    .size(11)
+                    .color(self.theme().palette().warning),
+            );
+        }
+        field.into()
+    }
+
     fn molecular_properties(&self) -> Element<'_, Message> {
         // Let the crystal subsystem decide which drawings need a constrained
         // analysis scope, including distance provenance retained without a cell.
@@ -1380,11 +1470,15 @@ impl App {
             (self.tab.doc.atoms.len(), self.tab.doc.bonds.len())
         };
         // A selection's counts are already the panel's summary.
-        let mut body = column![key.is_none().then(|| {
-            text(super::workspace::atom_bond_counts(atoms, bonds))
-                .size(11)
-                .style(muted_text)
-        })]
+        let mut body = column![
+            self.property_target(&[])
+                .map(|atoms| self.molecule_name(atoms)),
+            key.is_none().then(|| {
+                text(super::workspace::atom_bond_counts(atoms, bonds))
+                    .size(11)
+                    .style(muted_text)
+            })
+        ]
         .spacing(8);
         for hint in self.checked_arrow_hints() {
             body = body.push(text(hint.kind.message()).size(11).style(muted_text));
