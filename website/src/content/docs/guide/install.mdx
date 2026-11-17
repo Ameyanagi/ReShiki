@@ -37,8 +37,8 @@ Upgrading from an earlier version? Open your existing `.reshiki` and `.moruno` d
 
 ### Your data folder
 
-ReShiki keeps its settings, templates, recovery drafts and GitHub working
-copies in one folder: `~/.reshiki/` on macOS and Linux, and
+ReShiki keeps its settings, templates, recovery drafts, GitHub working copies
+and update downloads in one folder: `~/.reshiki/` on macOS and Linux, and
 `%LOCALAPPDATA%\reshiki\ReShiki\data\` on Windows. Click **ReShiki** at the top
 left to see it in **About ReShiki**; **Open** shows it in your file manager.
 
@@ -75,10 +75,12 @@ Send them before you delete it.
 3. If you were signed in to GitHub, open **Credential Manager → Windows
    Credentials** and remove `dev.reshiki.ReShiki.github`.
 
-If an update was interrupted, a hidden `.reshiki-update-…` folder may remain
-next to the app: in **Applications** on macOS, or beside the installed or
-extracted folder on Linux and Windows (`%LOCALAPPDATA%\Programs\` for the
-setup program's install). Delete it too.
+Update downloads are in `updates/` in the data folder, so deleting the data
+folder removes them too. Earlier versions left a hidden `.reshiki-update-…`
+folder next to the app: in **Applications** on macOS, or beside the installed
+or extracted folder on Linux and Windows (`%LOCALAPPDATA%\Programs\` for the
+setup program's install). ReShiki removes those when it starts; if you
+uninstall an earlier version and one remains, delete it too.
 
 Starting with 0.9.0, Mac supports Apple Silicon and Intel on macOS 14+. Windows requires Windows 10/11 on x64 or Windows 11 on ARM64. Linux builds target Ubuntu 22.04+ on x64 and 24.04+ on ARM.
 
@@ -179,7 +181,17 @@ On **Stable**, when an update is available, save your drawings and choose
   developer signature);
 - installs it and reopens every saved tab in its original order.
 
-If a download or verification fails, the running app stays in place.
+The download goes to `updates/<version>/` in your
+[data folder](#your-data-folder) and is verified there. ReShiki removes it once
+the update is installed, and removes whatever an interrupted update left the
+next time it starts, so `updates/` normally holds only the last check's result
+(`stable.json` or `nightly.json`). When the data folder is on another disk than
+the app, the verified app is first copied to a hidden `.reshiki-update-…` folder
+next to the app, so the swap is still a single rename.
+
+If a download or verification fails, the running app stays in place. On macOS
+and Linux, if the install itself fails, ReShiki puts the previous version back
+and reopens it.
 **Release notes** opens the release page. Automatic checks never install an
 update without your click.
 

@@ -9,9 +9,11 @@ use std::{
 };
 use tokio::io::AsyncWriteExt;
 
+/// A downloaded, verified update in its folder, `<updates folder>/<version>`.
+/// The folder goes with it unless the installer helper took it over.
 #[derive(Debug)]
 pub struct Prepared {
-    directory: tempfile::TempDir,
+    folder: PathBuf,
     target: PathBuf,
     payload: PathBuf,
     /// The [`tree_digest`] of `payload` from when it was verified;
@@ -21,9 +23,97 @@ pub struct Prepared {
 }
 impl Drop for Prepared {
     fn drop(&mut self) {
-        if self.handed_off.load(std::sync::atomic::Ordering::Acquire) {
-            self.directory.disable_cleanup(true);
+        if !self.handed_off.load(std::sync::atomic::Ordering::Acquire) {
+            let _ = std::fs::remove_dir_all(&self.folder);
         }
+    }
+}
+/// The file in an update's folder that lists the processes using it, one ID
+/// per line: the ReShiki that downloads it, then its installer helper.
+const OWNERS: &str = "pid";
+/// The running processes that use the update folder at `path`.
+fn users(path: &Path) -> Vec<u32> {
+    std::fs::read_to_string(path.join(OWNERS))
+        .unwrap_or_default()
+        .lines()
+        .filter_map(|pid| pid.trim().parse().ok())
+        .filter(|pid| crate::recovery::process_alive(*pid))
+        .collect()
+}
+/// Makes `folder` new, empty and this process's. One that another running
+/// ReShiki or installer helper is using is left as it is.
+fn claim(folder: &Path) -> Result<(), String> {
+    if users(folder).iter().any(|pid| *pid != std::process::id()) {
+        return Err(
+            "Another ReShiki is installing this update. Try again when it finishes.".into(),
+        );
+    }
+    match std::fs::remove_dir_all(folder) {
+        Err(error) if error.kind() != std::io::ErrorKind::NotFound => Err(error),
+        _ => std::fs::create_dir_all(folder),
+    }
+    .and_then(|()| std::fs::write(folder.join(OWNERS), format!("{}\n", std::process::id())))
+    .map_err(|error| format!("Could not prepare {}: {error}", folder.display()))
+}
+/// Removes what earlier updates left: everything in the updates folder but
+/// the check files, `.reshiki-update-*` folders beside the app, and the check
+/// files earlier versions kept in the data folder. Called once at startup. A
+/// folder that another running ReShiki or installer helper is using stays for
+/// a later launch.
+pub fn clean() {
+    let Ok(updates) = crate::compatibility::updates_directory() else {
+        return;
+    };
+    let app = std::env::current_exe()
+        .ok()
+        .and_then(|exe| install_target(&exe).ok());
+    clean_in(&updates, app.as_deref().and_then(Path::parent));
+}
+fn clean_in(updates: &Path, beside_app: Option<&Path>) {
+    // Listed before anything is removed, so a check file being written while
+    // a large leftover is deleted is not taken for one.
+    let entries = |folder: &Path| -> Vec<PathBuf> {
+        std::fs::read_dir(folder)
+            .into_iter()
+            .flatten()
+            .flatten()
+            .map(|entry| entry.path())
+            .collect()
+    };
+    let name = |path: &Path| {
+        path.file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or_default()
+            .to_owned()
+    };
+    let mut leftovers = entries(updates);
+    leftovers.retain(|path| {
+        Channel::ALL
+            .iter()
+            .all(|channel| channel.check_file() != name(path))
+    });
+    leftovers.extend(
+        beside_app
+            .map(entries)
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|path| name(path).starts_with(".reshiki-update-")),
+    );
+    leftovers.extend(
+        ["update-cache.json", "update-cache-nightly.json"]
+            .iter()
+            .filter_map(|name| Some(updates.parent()?.join(name))),
+    );
+    for path in leftovers {
+        if !users(&path).is_empty() {
+            continue;
+        }
+        // A link is removed, never followed.
+        let _ = if path.symlink_metadata().is_ok_and(|meta| meta.is_dir()) {
+            std::fs::remove_dir_all(&path)
+        } else {
+            std::fs::remove_file(&path)
+        };
     }
 }
 #[derive(Debug, Clone)]
@@ -221,32 +311,50 @@ pub async fn prepare(
     )?;
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
     let target = install_target(&exe)?;
-    let directory=tempfile::Builder::new().prefix(".reshiki-update-").tempdir_in(target.parent().ok_or("Missing installation parent")?)
+    // The helper swaps the app by renaming beside it, so nothing is
+    // downloaded when that folder cannot be written.
+    tempfile::Builder::new().prefix(".reshiki-update-").tempdir_in(target.parent().ok_or("Missing installation parent")?)
         .map_err(|_|"ReShiki cannot write to its installation folder. Move the app to a writable folder and try again.".to_owned())?;
-    let base = format!("{RELEASES}/download/v{}", release.version);
+    let folder = crate::compatibility::updates_directory()?.join(&release.version);
+    claim(&folder)?;
+    let prepared = download_and_stage(&release.version, &name, &folder, target, &progress).await;
+    if prepared.is_err() {
+        let _ = std::fs::remove_dir_all(&folder);
+    }
+    prepared
+}
+/// Downloads the release into `folder`, verifies it and unpacks the app there.
+async fn download_and_stage(
+    version: &str,
+    name: &str,
+    folder: &Path,
+    target: PathBuf,
+    progress: &tokio::sync::mpsc::Sender<Progress>,
+) -> Result<Arc<Prepared>, String> {
+    let base = format!("{RELEASES}/download/v{version}");
     let client = client()?;
-    let manifest = directory.path().join("SHA256SUMS");
+    let manifest = folder.join("SHA256SUMS");
     download(
         &client,
         &format!("{base}/SHA256SUMS"),
         &manifest,
         1024 * 1024,
-        &progress,
+        progress,
     )
     .await?;
     let expected = expected_digest(
         &tokio::fs::read_to_string(manifest)
             .await
             .map_err(|e| e.to_string())?,
-        &name,
+        name,
     )?;
-    let asset = directory.path().join(&name);
+    let asset = folder.join(name);
     let actual = download(
         &client,
         &format!("{base}/{name}"),
         &asset,
         512 * 1024 * 1024,
-        &progress,
+        progress,
     )
     .await?;
     if actual != expected {
@@ -257,11 +365,12 @@ pub async fn prepare(
     let _ = progress
         .send(Progress("Verifying and preparing installation…".into()))
         .await;
+    let (folder, version) = (folder.to_owned(), version.to_owned());
     tokio::task::spawn_blocking(move || {
-        let payload = stage(&asset, directory.path(), &release.version)?;
+        let payload = stage(&asset, &folder, &version)?;
         let digest = tree_digest(&payload)?;
         Ok(Arc::new(Prepared {
-            directory,
+            folder,
             target,
             payload,
             digest,
@@ -440,27 +549,98 @@ fn stage(asset: &Path, directory: &Path, version: &str) -> Result<PathBuf, Strin
     Ok(payload)
 }
 
+impl Prepared {
+    /// Whether `payload` is still what was verified. On macOS the bundle's
+    /// signature is checked again as well.
+    fn unchanged(&self, payload: &Path) -> Result<(), String> {
+        let unchanged = tree_digest(payload).is_ok_and(|digest| digest == self.digest);
+        #[cfg(target_os = "macos")]
+        let unchanged = unchanged && verify_app(payload).is_ok();
+        if unchanged {
+            Ok(())
+        } else {
+            Err("The downloaded update changed after it was checked. Nothing was installed; check for updates again.".into())
+        }
+    }
+    /// The folder the helper works in and the payload it installs. On the
+    /// app's volume that is the update's folder: the helper renames from
+    /// there. From another volume a rename cannot reach the app, so the
+    /// payload is first copied into a hidden folder beside the app.
+    fn stage(&self) -> Result<(PathBuf, PathBuf), String> {
+        // The Windows installer writes the app itself; nothing is renamed.
+        #[cfg(unix)]
+        if on_another_volume(&self.folder, &self.target) {
+            return self.beside_app();
+        }
+        Ok((self.folder.clone(), self.payload.clone()))
+    }
+    #[cfg(unix)]
+    fn beside_app(&self) -> Result<(PathBuf, PathBuf), String> {
+        let (Some(beside), Some(version), Some(name)) = (
+            self.target.parent(),
+            self.folder.file_name(),
+            self.payload.file_name(),
+        ) else {
+            return Err("Missing installation parent".into());
+        };
+        let stage = beside.join(format!(".reshiki-update-{}", version.to_string_lossy()));
+        std::fs::create_dir(&stage)
+            .map_err(|error| format!("ReShiki cannot write to its installation folder: {error}"))?;
+        let payload = stage.join(name);
+        let copied = std::fs::write(stage.join(OWNERS), format!("{}\n", std::process::id()))
+            .map_err(|e| e.to_string())
+            .and_then(|()| {
+                command(
+                    Command::new("cp")
+                        .arg("-a")
+                        .arg(&self.payload)
+                        .arg(&payload),
+                )
+            });
+        if copied.is_err() {
+            let _ = std::fs::remove_dir_all(&stage);
+        }
+        copied.map(|_| (stage, payload))
+    }
+}
+/// Whether the update's folder is on another volume than the app, where a
+/// rename cannot reach it.
+#[cfg(unix)]
+fn on_another_volume(folder: &Path, app: &Path) -> bool {
+    use std::os::unix::fs::MetadataExt;
+    matches!((folder.metadata(), app.metadata()), (Ok(folder), Ok(app)) if folder.dev() != app.dev())
+}
+
 /// The helper acknowledges startup before the application exits. It waits for
 /// this process to terminate, then installs and reopens the saved tabs.
 /// Nothing starts when anything staged no longer has its verified digest.
 pub async fn handoff(prepared: Arc<Prepared>, drawings: Vec<PathBuf>) -> Result<(), String> {
     // The update can wait a long time for the user between its checks and
-    // this handoff, so everything staged is checked again: the helper
-    // installs the whole payload, not just its executable. On macOS the
-    // bundle's signature is checked again as well.
+    // this handoff, so what the helper installs is checked again, where it
+    // installs it from: the whole payload, not just its executable.
     let staged = Arc::clone(&prepared);
-    let unchanged = tokio::task::spawn_blocking(move || {
-        let unchanged = tree_digest(&staged.payload).is_ok_and(|digest| digest == staged.digest);
-        #[cfg(target_os = "macos")]
-        let unchanged = unchanged && verify_app(&staged.payload).is_ok();
-        unchanged
+    let (stage, payload, unchanged) = tokio::task::spawn_blocking(move || {
+        let (stage, payload) = staged.stage()?;
+        let unchanged = staged.unchanged(&payload);
+        Ok::<_, String>((stage, payload, unchanged))
     })
     .await
-    .map_err(|e| e.to_string())?;
-    if !unchanged {
-        return Err("The downloaded update changed after it was checked. Nothing was installed; check for updates again.".into());
+    .map_err(|e| e.to_string())??;
+    let started = match unchanged {
+        Ok(()) => start_helper(&prepared, &stage, &payload, &drawings).await,
+        changed => changed,
+    };
+    if started.is_err() && stage != prepared.folder {
+        let _ = std::fs::remove_dir_all(&stage);
     }
-    let dir = prepared.directory.path();
+    started
+}
+async fn start_helper(
+    prepared: &Prepared,
+    dir: &Path,
+    payload: &Path,
+    drawings: &[PathBuf],
+) -> Result<(), String> {
     let ready = dir.join("ready");
     // A retry must receive an acknowledgement from the new helper, not a
     // marker left behind by an earlier failed handoff.
@@ -494,9 +674,9 @@ pub async fn handoff(prepared: Arc<Prepared>, drawings: Vec<PathBuf>) -> Result<
         &script,
         std::process::id(),
         &prepared.target,
-        &prepared.payload,
+        payload,
         dir,
-        &drawings,
+        drawings,
         std::env::consts::OS,
     );
     cmd.stdin(Stdio::null()).stdout(log).stderr(error);

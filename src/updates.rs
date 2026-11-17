@@ -28,10 +28,11 @@ pub enum Channel {
 impl Channel {
     pub const ALL: [Self; 2] = [Self::Stable, Self::Nightly];
 
-    fn cache_name(self) -> &'static str {
+    /// The file in the updates folder that keeps this channel's last check.
+    fn check_file(self) -> &'static str {
         match self {
-            Self::Stable => "update-cache.json",
-            Self::Nightly => "update-cache-nightly.json",
+            Self::Stable => "stable.json",
+            Self::Nightly => "nightly.json",
         }
     }
 
@@ -228,6 +229,14 @@ struct Cache {
     result: Result<Release, String>,
 }
 impl Cache {
+    fn load(updates: &std::path::Path, channel: Channel) -> Option<Self> {
+        serde_json::from_slice(&std::fs::read(updates.join(channel.check_file())).ok()?).ok()
+    }
+    fn save(&self, updates: &std::path::Path, channel: Channel) -> Result<(), String> {
+        std::fs::create_dir_all(updates).map_err(|e| e.to_string())?;
+        let bytes = serde_json::to_vec(self).map_err(|e| e.to_string())?;
+        crate::storage::write_atomic(&updates.join(channel.check_file()), &bytes)
+    }
     fn fresh(&self, now: u64) -> bool {
         let interval = if self.result.is_ok() {
             CHECK_INTERVAL.as_secs()
@@ -262,12 +271,7 @@ pub async fn check(channel: Channel, manual: bool) -> Result<Release, String> {
         .unwrap_or_default()
         .as_secs();
     let cached = crate::task::spawn_blocking(move || {
-        let path = crate::compatibility::data_directory()
-            .ok()?
-            .join(channel.cache_name());
-        let bytes = std::fs::read(path).ok()?;
-        serde_json::from_slice::<Cache>(&bytes)
-            .ok()
+        Cache::load(&crate::compatibility::updates_directory().ok()?, channel)
             .filter(|cache| cache.usable(channel, manual, now))
     })
     .await
@@ -281,11 +285,8 @@ pub async fn check(channel: Channel, manual: bool) -> Result<Release, String> {
         result: result.clone(),
     };
     // A read-only profile must not prevent checking or downloading releases.
-    let _ = crate::task::spawn_blocking(move || -> Result<(), String> {
-        let dir = crate::compatibility::data_directory()?;
-        std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-        let bytes = serde_json::to_vec(&cache).map_err(|e| e.to_string())?;
-        crate::storage::write_atomic(&dir.join(channel.cache_name()), &bytes)
+    let _ = crate::task::spawn_blocking(move || {
+        cache.save(&crate::compatibility::updates_directory()?, channel)
     })
     .await;
     result

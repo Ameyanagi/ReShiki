@@ -114,6 +114,12 @@ pub fn data_directory_location() -> Result<DataLocation, String> {
     )
 }
 
+/// Where update checks and downloads are kept: `updates` in the data folder,
+/// without creating it.
+pub fn updates_directory() -> Result<PathBuf, String> {
+    Ok(data_directory_location()?.path.join("updates"))
+}
+
 /// `~/.reshiki`, the data folder on macOS and Linux; none elsewhere.
 fn home_data_directory() -> Option<PathBuf> {
     if cfg!(any(target_os = "macos", target_os = "linux")) {

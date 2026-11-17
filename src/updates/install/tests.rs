@@ -170,11 +170,9 @@ fn helper_replaces_owned_files_and_rolls_back_an_interrupted_install() {
                     "complete notices"
                 );
             }
-            assert_eq!(
-                std::fs::read_to_string(stage.join("previous/reshiki-inchi-helper")).unwrap(),
-                "old helper"
-            );
         }
+        // The helper removes its stage once nothing of the app is left in it.
+        assert!(!stage.exists());
     }
 }
 #[cfg(target_os = "macos")]
@@ -313,7 +311,7 @@ async fn a_staged_program_that_changed_is_not_installed() {
     let program = stage.join("payload");
     std::fs::write(&program, b"verified").unwrap();
     let prepared = Arc::new(Prepared {
-        directory,
+        folder: stage.clone(),
         target: stage.join("installed"),
         payload: program.clone(),
         digest: tree_digest(&program).unwrap(),
@@ -352,7 +350,7 @@ async fn a_staged_application_that_changed_outside_its_executable_is_not_install
     let digest = tree_digest(&app).unwrap();
     assert_eq!(tree_digest(&app).unwrap(), digest);
     let prepared = Arc::new(Prepared {
-        directory,
+        folder: stage.clone(),
         target: stage.join("installed"),
         payload: app.clone(),
         digest,
@@ -502,5 +500,354 @@ fn a_signed_app_needs_an_installer_from_its_publisher() {
             Err("The installer's signature could not be checked. Nothing was installed.".into()),
             "{broken:?}"
         );
+    }
+}
+
+/// Every path under `root`, relative and in order, as `find` lists them.
+#[cfg(unix)]
+fn tree(root: &Path) -> Vec<String> {
+    fn walk(root: &Path, folder: &Path, paths: &mut Vec<String>) {
+        for entry in std::fs::read_dir(folder).unwrap() {
+            let path = entry.unwrap().path();
+            paths.push(path.strip_prefix(root).unwrap().display().to_string());
+            if path.symlink_metadata().unwrap().is_dir() {
+                walk(root, &path, paths);
+            }
+        }
+    }
+    let mut paths = vec![];
+    walk(root, root, &mut paths);
+    paths.sort();
+    paths
+}
+#[cfg(unix)]
+fn program(path: &Path, body: &str) {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(path, body).unwrap();
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755)).unwrap();
+}
+
+/// A check, a download, an install and the next launch, in a data folder and
+/// an applications folder of their own, for the app folder of Linux and the
+/// bundle of macOS. The update is installed from its version folder (same
+/// volume) and from a copy beside the app (another volume), and once fails
+/// after the swap. `--nocapture` prints the folders after each step.
+#[cfg(unix)]
+#[test]
+fn an_update_stays_in_its_version_folder_and_is_gone_after_the_next_launch() {
+    use crate::updates::Cache;
+    const OLD: &str = "#!/bin/sh\n# old\nexit 0\n";
+    const NEW: &str = "#!/bin/sh\n# new\nexit 0\n";
+    for platform in ["linux", "macos"] {
+        for another_volume in [false, true] {
+            for fails in [false, true] {
+                let root = tempfile::tempdir().unwrap();
+                let (data, apps) = (root.path().join("data"), root.path().join("Applications"));
+                let updates = data.join("updates");
+                let show = |step: &str| {
+                    eprintln!(
+                        "\n## {platform}, {}, {}: {step}",
+                        if another_volume {
+                            "updates folder on another volume"
+                        } else {
+                            "updates folder on the app's volume"
+                        },
+                        if fails {
+                            "install fails"
+                        } else {
+                            "install succeeds"
+                        },
+                    );
+                    for (name, folder) in [("data", &data), ("Applications", &apps)] {
+                        for path in tree(folder) {
+                            eprintln!("{name}/{path}");
+                        }
+                    }
+                };
+                // The app, with what earlier versions left behind.
+                let (target, executable, app) = if platform == "macos" {
+                    ("ReShiki.app", "Contents/MacOS/reshiki", "ReShiki.app")
+                } else {
+                    ("ReShiki", "reshiki", "extracted/reshiki-9.9.9-linux-arm64")
+                };
+                let target = apps.join(target);
+                program(&target.join(executable), OLD);
+                program(
+                    &apps.join(".reshiki-update-Ab12Cd/previous.app/reshiki"),
+                    OLD,
+                );
+                std::fs::write(apps.join(".reshiki-update-Ab12Cd/install.log"), "").unwrap();
+                std::fs::create_dir(&data).unwrap();
+                std::fs::write(data.join("update-preferences.json"), "true").unwrap();
+                for name in ["update-cache.json", "update-cache-nightly.json"] {
+                    std::fs::write(data.join(name), "{}").unwrap();
+                }
+                show("before, as earlier versions left it");
+
+                // Launch, then a check.
+                clean_in(&updates, Some(&apps));
+                let cache = Cache {
+                    checked_at: 100,
+                    result: Ok(Release {
+                        version: "9.9.9".into(),
+                    }),
+                };
+                cache.save(&updates, Channel::Stable).unwrap();
+                assert!(Cache::load(&updates, Channel::Stable).is_some());
+                assert!(Cache::load(&updates, Channel::Nightly).is_none());
+                assert_eq!(
+                    tree(&data),
+                    ["update-preferences.json", "updates", "updates/stable.json"]
+                );
+                assert_eq!(tree(&apps).len(), tree(&target).len() + 1);
+                show("after launch and a check");
+
+                // A download: the checksums, the archive and the unpacked app.
+                let folder = updates.join("9.9.9");
+                claim(&folder).unwrap();
+                std::fs::write(folder.join("SHA256SUMS"), "sums").unwrap();
+                std::fs::write(folder.join("reshiki-9.9.9.archive"), "archive").unwrap();
+                let payload = folder.join(app);
+                program(&payload.join(executable), NEW);
+                let prepared = Prepared {
+                    digest: tree_digest(&payload).unwrap(),
+                    folder: folder.clone(),
+                    target: target.clone(),
+                    payload,
+                    handed_off: std::sync::atomic::AtomicBool::new(false),
+                };
+                let mut expected = [
+                    "9.9.9",
+                    &format!("9.9.9/{}", app.split('/').next().unwrap()),
+                    "9.9.9/SHA256SUMS",
+                    "9.9.9/pid",
+                    "9.9.9/reshiki-9.9.9.archive",
+                    "stable.json",
+                ]
+                .map(str::to_owned);
+                expected.sort();
+                let mut found = tree(&updates);
+                found.retain(|path| path.matches('/').count() < 2);
+                assert_eq!(found, expected);
+                assert_eq!(tree(&apps).len(), tree(&target).len() + 1);
+                show("after the download");
+
+                // Restart: the helper works where a rename reaches the app.
+                let (stage, payload) = if another_volume {
+                    prepared.beside_app().unwrap()
+                } else {
+                    assert!(!on_another_volume(&folder, &target));
+                    prepared.stage().unwrap()
+                };
+                assert_eq!(
+                    stage,
+                    if another_volume {
+                        apps.join(".reshiki-update-9.9.9")
+                    } else {
+                        folder.clone()
+                    }
+                );
+                assert!(payload.starts_with(&stage));
+                assert_eq!(tree_digest(&payload).unwrap(), prepared.digest);
+                show("at restart, before the helper runs");
+                let script = include_str!("../install.sh").replace(
+                    "/usr/bin/open",
+                    if fails {
+                        "/usr/bin/false"
+                    } else {
+                        "/usr/bin/true"
+                    },
+                );
+                if fails && platform == "linux" {
+                    std::fs::remove_file(payload.join(executable)).unwrap();
+                }
+                std::fs::write(stage.join("install.sh"), script).unwrap();
+                let helper = Command::new("/bin/sh")
+                    .arg(stage.join("install.sh"))
+                    .arg("2147483647")
+                    .arg(&target)
+                    .arg(&payload)
+                    .arg(&stage)
+                    .arg("")
+                    .arg(platform)
+                    .output()
+                    .unwrap();
+                assert_eq!(
+                    helper.status.success(),
+                    !fails,
+                    "{}",
+                    String::from_utf8_lossy(&helper.stderr)
+                );
+                prepared
+                    .handed_off
+                    .store(true, std::sync::atomic::Ordering::Release);
+                // Installed or rolled back, the app is whole and the helper's
+                // stage, with the previous app in it, is gone.
+                assert_eq!(
+                    std::fs::read_to_string(target.join(executable)).unwrap(),
+                    if fails { OLD } else { NEW }
+                );
+                assert!(!stage.exists());
+                assert_eq!(folder.exists(), another_volume);
+                show("after the helper");
+
+                // The next launch, when the ReShiki that downloaded is gone.
+                if another_volume {
+                    std::fs::write(folder.join("pid"), "2147483647\n").unwrap();
+                }
+                clean_in(&updates, Some(&apps));
+                assert_eq!(
+                    tree(&data),
+                    ["update-preferences.json", "updates", "updates/stable.json"]
+                );
+                assert_eq!(tree(&apps).len(), tree(&target).len() + 1);
+                assert_eq!(tree(&target).last().unwrap(), executable);
+                show("after the next launch");
+            }
+        }
+    }
+}
+
+/// Startup removes what an interrupted update left, and nothing else: not
+/// the check files, an update another running ReShiki is using, what a link
+/// points to, or anything of the user's beside the app.
+#[cfg(unix)]
+#[test]
+fn startup_removes_leftovers_but_not_an_update_in_use() {
+    let root = tempfile::tempdir().unwrap();
+    let (data, apps) = (root.path().join("data"), root.path().join("Applications"));
+    let updates = data.join("updates");
+    let mut other = Command::new("sleep").arg("60").spawn().unwrap();
+    let file = |path: PathBuf, body: &str| {
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, body).unwrap();
+    };
+    for name in ["stable.json", "nightly.json", "half.tmp"] {
+        file(updates.join(name), "{}");
+    }
+    // A finished update, a half download and one in use.
+    file(updates.join("1.0.0/pid"), "2147483647\n2147483646\n");
+    file(updates.join("1.0.0/previous.app/reshiki"), "old");
+    file(updates.join("1.1.0/reshiki-1.1.0.archive"), "half");
+    file(
+        updates.join("1.2.0/pid"),
+        &format!("2147483647\n{}\n", other.id()),
+    );
+    file(updates.join("1.2.0/SHA256SUMS"), "sums");
+    file(root.path().join("elsewhere/kept"), "kept");
+    std::os::unix::fs::symlink(root.path().join("elsewhere"), updates.join("link")).unwrap();
+    for name in ["update-cache.json", "update-cache-nightly.json"] {
+        file(data.join(name), "{}");
+    }
+    file(data.join("update-channel.json"), "\"stable\"");
+    file(data.join("recovery/1-draft.rsk"), "draft");
+    file(apps.join("ReShiki/reshiki"), "app");
+    file(apps.join(".reshiki-update-Ab12Cd/previous/reshiki"), "old");
+    file(
+        apps.join(".reshiki-update-1.2.0/pid"),
+        &format!("{}\n", other.id()),
+    );
+    file(
+        apps.join(".reshiki-updates/mine"),
+        "not an update folder's name",
+    );
+    file(apps.join("Other.app/reshiki-update"), "other");
+
+    clean_in(&updates, Some(&apps));
+    let kept_data = [
+        "recovery",
+        "recovery/1-draft.rsk",
+        "update-channel.json",
+        "updates",
+        "updates/nightly.json",
+        "updates/stable.json",
+    ];
+    assert_eq!(
+        tree(&data),
+        [
+            "recovery",
+            "recovery/1-draft.rsk",
+            "update-channel.json",
+            "updates",
+            "updates/1.2.0",
+            "updates/1.2.0/SHA256SUMS",
+            "updates/1.2.0/pid",
+            "updates/nightly.json",
+            "updates/stable.json",
+        ]
+    );
+    let kept_apps = [
+        ".reshiki-updates",
+        ".reshiki-updates/mine",
+        "Other.app",
+        "Other.app/reshiki-update",
+        "ReShiki",
+        "ReShiki/reshiki",
+    ];
+    assert_eq!(
+        tree(&apps),
+        [
+            &[".reshiki-update-1.2.0", ".reshiki-update-1.2.0/pid"],
+            &kept_apps[..]
+        ]
+        .concat()
+    );
+    assert_eq!(
+        std::fs::read_to_string(root.path().join("elsewhere/kept")).unwrap(),
+        "kept"
+    );
+    // Another ReShiki cannot take over the update in use either.
+    assert!(
+        claim(&updates.join("1.2.0"))
+            .unwrap_err()
+            .contains("Another ReShiki")
+    );
+    assert!(updates.join("1.2.0/SHA256SUMS").exists());
+
+    // Once that ReShiki is gone, its update is a leftover like the others.
+    other.kill().unwrap();
+    other.wait().unwrap();
+    claim(&updates.join("1.2.0")).unwrap();
+    assert_eq!(tree(&updates.join("1.2.0")), ["pid"]);
+    // This process's own update is in use; it is a leftover to the next
+    // launch, which is another process.
+    clean_in(&updates, None);
+    assert_eq!(tree(&updates.join("1.2.0")), ["pid"]);
+    std::fs::write(updates.join("1.2.0/pid"), "2147483647\n").unwrap();
+    clean_in(&updates, Some(&apps));
+    assert_eq!(tree(&data), kept_data);
+    assert_eq!(tree(&apps), kept_apps);
+    // Nothing to clean, no app folder and no updates folder are all fine.
+    clean_in(&updates, None);
+    clean_in(
+        &root.path().join("missing/updates"),
+        Some(&root.path().join("missing")),
+    );
+    assert_eq!(tree(&data), kept_data);
+}
+
+/// An update that is given up before it installs takes its folder with it;
+/// one the helper took over is the helper's to remove.
+#[test]
+fn an_update_given_up_before_it_installs_removes_its_folder() {
+    let root = tempfile::tempdir().unwrap();
+    for handed_off in [false, true] {
+        let folder = root.path().join("updates/9.9.9");
+        claim(&folder).unwrap();
+        assert_eq!(
+            std::fs::read_to_string(folder.join("pid")).unwrap(),
+            format!("{}\n", std::process::id())
+        );
+        std::fs::write(folder.join("payload"), b"verified").unwrap();
+        drop(Prepared {
+            target: root.path().join("installed"),
+            payload: folder.join("payload"),
+            digest: String::new(),
+            handed_off: std::sync::atomic::AtomicBool::new(handed_off),
+            folder: folder.clone(),
+        });
+        assert_eq!(folder.exists(), handed_off);
+        assert!(root.path().join("updates").exists());
     }
 }

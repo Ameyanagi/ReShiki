@@ -20,6 +20,8 @@ reopen() {
         "$target/reshiki" "$@" </dev/null >/dev/null 2>&1 &
     fi
 }
+# This helper now uses the stage; startup cleanup leaves it alone meanwhile.
+echo $$ >> "$stage/pid"
 touch "$stage/ready"
 attempt=0
 while kill -0 "$parent_pid" 2>/dev/null; do
@@ -34,6 +36,8 @@ if [ "$platform" = macos ]; then
             if [ -e "$target" ]; then /bin/mv "$target" "$stage/failed.app"; fi
             /bin/mv "$backup" "$target"
         fi
+        # The stage goes only once the previous app is no longer in it.
+        [ -e "$backup" ] || rm -rf "$stage"
         reopen "$@"
     }
     trap 'rollback "$@"' EXIT
@@ -48,6 +52,8 @@ else
             if [ -e "$stage/installed/$name" ]; then rm -rf "$target/$name"; fi
             if [ -e "$stage/previous/$name" ]; then /bin/mv "$stage/previous/$name" "$target/$name"; fi
         done
+        # rmdir fails, and keeps the stage, while a previous file is still in it.
+        rmdir "$stage/previous" && rm -rf "$stage"
         reopen "$@"
     }
     trap 'rollback "$@"' EXIT
@@ -70,5 +76,6 @@ else
     reopen "$@"
     trap - EXIT
 fi
-# Retain the previous application and log for recovery. No user files are deleted.
-echo 'Update installed and application restarted.'
+# The previous application, the download and this helper's files go with the
+# stage. No user files are deleted.
+rm -rf "$stage"

@@ -395,7 +395,7 @@ fn caches_are_channel_specific_and_manual_checks_bypass_them() {
         checked_at: 100,
         result: Ok(release("0.4.0")),
     };
-    assert_ne!(Channel::Stable.cache_name(), Channel::Nightly.cache_name());
+    assert_ne!(Channel::Stable.check_file(), Channel::Nightly.check_file());
     assert!(cache.usable(Channel::Stable, false, 101));
     assert!(!cache.usable(Channel::Nightly, false, 101));
     assert!(!cache.usable(Channel::Stable, true, 101));

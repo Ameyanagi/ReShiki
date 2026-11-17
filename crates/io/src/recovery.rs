@@ -252,8 +252,9 @@ fn running(owner: &str) -> bool {
     crate::storage::browser::open(owner)
 }
 
+/// Whether a process with this ID is running, or cannot be asked.
 #[cfg(not(target_arch = "wasm32"))]
-fn process_alive(pid: u32) -> bool {
+pub fn process_alive(pid: u32) -> bool {
     if pid == std::process::id() {
         return true;
     }
