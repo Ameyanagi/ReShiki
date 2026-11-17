@@ -9,9 +9,10 @@
 use crate::app::{App, Message, workspace::muted_text};
 use crate::canvas::{
     CompareFrame, CompareMark, ComparePaint, ComparePlace, ComparePreview, CompareSwatch,
+    compare_zoom,
 };
-use iced::widget::{Space, checkbox, column, container, row, scrollable, text};
-use iced::{Alignment, Border, Color, Element, Length, Task, Theme};
+use iced::widget::{Space, checkbox, column, container, responsive, row, scrollable, text};
+use iced::{Alignment, Border, Color, Element, Length, Size, Task, Theme};
 use reshiki::compare::{Category, Change, Chemistry, Detail, Kind, Report, Subject};
 use reshiki::document::{Document, Point as World};
 use std::collections::HashMap;
@@ -20,6 +21,16 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 /// Every comparison started, so a result knows which one it belongs to.
 static GENERATION: AtomicU64 = AtomicU64::new(0);
+
+/// The width of "What changed".
+const LIST: f32 = 290.;
+/// A pane's header, and the space between panes.
+const HEADER: f32 = 30.;
+const GAP: f32 = 10.;
+/// What sits under a pane, such as the conflict dialog's Keep buttons.
+const UNDER: f32 = 40.;
+/// The dialog's buttons under everything.
+const FOOTER: f32 = 32.;
 
 /// Which changes show.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -148,7 +159,8 @@ pub struct Shown {
     pub(super) aligned: Document,
     pub(super) rows: Vec<Row>,
     pub(super) marks: Marks,
-    /// Each change's objects: on the left, the right where it is, and lined up.
+    /// Where each change is: on the left, the right where it is, and lined
+    /// up. A chemical change is its painted atoms and bonds.
     pub(super) spots: Vec<[Option<(World, World)>; 3]>,
     /// Both sides where they are, and lined up.
     frame: (World, World),
@@ -497,8 +509,7 @@ fn marks(
     let (mut found, mut spots) = (Vec::new(), Vec::new());
     for change in &report.changes {
         let marks = side(change);
-        let spot = reshiki::scene::selection_bounds(doc, &marks.objects);
-        spots.push(spot);
+        let objects = reshiki::scene::selection_bounds(doc, &marks.objects);
         let (paint, chemistry) = (paint(change), change.category() == Category::Chemistry);
         let mut mark = |place| {
             found.push(CompareMark {
@@ -507,21 +518,32 @@ fn marks(
                 place,
             });
         };
+        // A chemical change is where its painted atoms and bonds are, not
+        // its whole molecule.
+        let mut painted: Vec<World> = Vec::new();
         if paint == ComparePaint::Chemical {
             for position in marks.atoms.iter().filter_map(at) {
                 mark(ComparePlace::Atom(position));
+                painted.push(position);
             }
             for (a, b) in &marks.bonds {
                 // Inside a collapsed label, the label's mark shows it.
                 match (at(a), at(b)) {
                     (Some(a), Some(b)) if a != b => mark(ComparePlace::Bond(a, b)),
                     (Some(a), Some(_)) => mark(ComparePlace::Atom(a)),
-                    _ => {}
+                    _ => continue,
                 }
+                painted.extend(at(a).into_iter().chain(at(b)));
             }
-        } else if let Some((lo, hi)) = spot {
+        } else if let Some((lo, hi)) = objects {
             mark(ComparePlace::Box(lo, hi));
         }
+        let around = painted
+            .iter()
+            .fold(None, |bounds: Option<(World, World)>, p| {
+                Some(bounds.map_or((*p, *p), |bounds| union(bounds, (*p, *p))))
+            });
+        spots.push(around.or(objects));
     }
     (found, spots)
 }
@@ -679,11 +701,14 @@ impl Compare {
 
     /// The mode switch, the line-up switch, then both drawings, the compared
     /// version on the left and the drawing now on the right (see [`SIDES`]),
-    /// and the list of what changed. `under` goes below each drawing.
+    /// and the list of what changed. A wide drawing in tall panes stacks them,
+    /// the compared one on top. `under` goes below each drawing, and
+    /// `footer`, given how the changes read, below them all.
     pub(super) fn view<'a>(
         &'a self,
         sides: [Side; 2],
-        under: [Option<Element<'a, Message>>; 2],
+        under: impl Fn() -> [Option<Element<'a, Message>>; 2] + 'a,
+        footer: impl Fn(String) -> Element<'a, Message> + 'a,
     ) -> Element<'a, Message> {
         let send = |action| Message::GitHub(super::Action::Compare(action));
         let mut modes = row![].spacing(2);
@@ -742,8 +767,10 @@ impl Compare {
                 .copied()
                 .flatten()
         };
+        let spots = [spot(0), spot(if lined { 2 } else { 1 })];
+        let [left_frame, right_frame] = zoomed(spots).unwrap_or([frame; 2]);
         let none: &[CompareMark] = &[];
-        let preview = |doc: &'a Document, marks: &'a [CompareMark], selected| {
+        let preview = move |doc: &'a Document, marks: &'a [CompareMark], selected, frame| {
             crate::canvas::layered::canvas(ComparePreview {
                 doc,
                 marks,
@@ -754,39 +781,53 @@ impl Compare {
             .width(Length::Fill)
             .height(Length::Fill)
         };
-        let left: Element<'a, Message> = match &self.left {
-            Ok(doc) => preview(doc, shown.map_or(none, |shown| &shown.marks.left), spot(0)).into(),
-            Err(note) => container(text(note).size(13).style(muted_text))
-                .center(Length::Fill)
+        let right_marks = shown.map_or(none, |shown| {
+            if lined {
+                &shown.marks.lined
+            } else {
+                &shown.marks.right
+            }
+        });
+        let panes = responsive(move |size| {
+            let [left_under, right_under] = under();
+            let chrome = HEADER + if left_under.is_some() { UNDER } else { 0. };
+            let stacked = stacks(
+                Size::new(size.width - LIST - GAP, size.height - FOOTER - 12.),
+                frame,
+                chrome,
+            );
+            let left: Element<'a, Message> = match &self.left {
+                Ok(doc) => preview(
+                    doc,
+                    shown.map_or(none, |shown| &shown.marks.left),
+                    spots[0],
+                    left_frame,
+                )
                 .into(),
-        };
-        let right: Element<'a, Message> = preview(
-            self.right_shown(),
-            shown.map_or(none, |shown| {
-                if lined {
-                    &shown.marks.lined
-                } else {
-                    &shown.marks.right
-                }
-            }),
-            spot(if lined { 2 } else { 1 }),
-        )
-        .into();
-        let [left_side, right_side] = sides;
-        let [left_under, right_under] = under;
-        let [left_role, right_role] = SIDES;
-        column![
-            bar,
-            row![
+                Err(note) => container(text(note).size(13).style(muted_text))
+                    .center(Length::Fill)
+                    .into(),
+            };
+            let right = preview(self.right_shown(), right_marks, spots[1], right_frame);
+            let [left_role, right_role] = SIDES;
+            let [left_side, right_side] = sides.clone();
+            let [left, right] = [
                 pane(left_role, left_side, left, left_under),
-                pane(right_role, right_side, right, right_under),
-                self.list(),
+                pane(right_role, right_side, right.into(), right_under),
+            ];
+            let panes: Element<'a, Message> = if stacked {
+                column![left, right].spacing(GAP).into()
+            } else {
+                row![left, right].spacing(GAP).into()
+            };
+            column![
+                row![panes, self.list()].spacing(GAP).height(Length::Fill),
+                footer(reading(&sides, stacked)),
             ]
-            .spacing(10)
-            .height(Length::Fill),
-        ]
-        .spacing(10)
-        .into()
+            .spacing(12)
+            .into()
+        });
+        column![bar, panes].spacing(10).into()
     }
 
     /// "What changed", then the legend.
@@ -851,7 +892,7 @@ impl Compare {
             .spacing(8)
             .padding(10),
         ))
-        .width(290)
+        .width(LIST)
         .into()
     }
 
@@ -864,13 +905,9 @@ impl Compare {
                 .style(crate::appearance::secondary)
                 .on_press(message)
         };
-        column![
-            row![text("Compare").size(18), Space::new().width(Length::Fill)]
-                .push(self.verdict_badge())
-                .align_y(Alignment::Center),
-            self.view(sides.clone(), [None, None]),
+        let footer = move |reading: String| {
             row![
-                text(reading(&sides)).size(12).style(muted_text),
+                text(reading).size(12).style(muted_text),
                 Space::new().width(Length::Fill),
                 button(
                     "github-compare-restore",
@@ -884,10 +921,23 @@ impl Compare {
                 ),
             ]
             .spacing(8)
-            .align_y(Alignment::Center),
+            .align_y(Alignment::Center)
+            .into()
+        };
+        column![
+            self.title("Compare".into()),
+            self.view(sides, || [None, None], footer),
         ]
         .spacing(12)
         .into()
+    }
+
+    /// A dialog's title with the verdict beside it.
+    pub(super) fn title(&self, title: String) -> iced::widget::Row<'_, Message> {
+        row![text(title).size(18)]
+            .push(self.verdict_badge())
+            .spacing(10)
+            .align_y(Alignment::Center)
     }
 
     /// "Chemically identical", "2 chemical changes", "Couldn't verify all
@@ -983,8 +1033,9 @@ impl Side {
     }
 }
 
-/// `Changes read from version (left) to your drawing (right)`.
-pub(super) fn reading(sides: &[Side; 2]) -> String {
+/// `Changes read from version (left) to your drawing (right)`, or top to
+/// bottom when the panes are stacked.
+pub(super) fn reading(sides: &[Side; 2], stacked: bool) -> String {
     // `On GitHub` reads `on GitHub`: only the first letter is lowered.
     let [from, to] = sides.each_ref().map(|side| {
         let mut chars = side.name.chars();
@@ -993,7 +1044,70 @@ pub(super) fn reading(sides: &[Side; 2]) -> String {
             .map(|first| first.to_lowercase().chain(chars).collect::<String>())
             .unwrap_or_default()
     });
-    format!("Changes read from {from} (left) to {to} (right)")
+    let (first, second) = if stacked {
+        ("top", "bottom")
+    } else {
+        ("left", "right")
+    };
+    format!("Changes read from {from} ({first}) to {to} ({second})")
+}
+
+/// Whether the panes, in `size` beside the list, stack: when `frame` then
+/// draws at least 10% larger. `chrome` is each pane's header and what is
+/// under it.
+fn stacks(size: Size, frame: (World, World), chrome: f32) -> bool {
+    let beside = Size::new((size.width - GAP) / 2., size.height - chrome);
+    let stacked = Size::new(size.width, (size.height - GAP) / 2. - chrome);
+    compare_zoom(stacked, frame) >= 1.1 * compare_zoom(beside, frame)
+}
+
+/// Both panes zoomed to a change: each centred where the change is there,
+/// both one size so they keep one scale. A side without it looks where the
+/// other has it.
+fn zoomed([a, b]: [Option<(World, World)>; 2]) -> Option<[(World, World); 2]> {
+    let (a, b) = (a.or(b)?, b.or(a)?);
+    let w = (a.1.x - a.0.x).max(b.1.x - b.0.x) / 2.;
+    let h = (a.1.y - a.0.y).max(b.1.y - b.0.y) / 2.;
+    Some([a, b].map(|(lo, hi)| {
+        let (x, y) = ((lo.x + hi.x) / 2., (lo.y + hi.y) / 2.);
+        (World::new(x - w, y - h), World::new(x + w, y + h))
+    }))
+}
+
+/// SMILES that wraps between tokens only: a zero-width space before each,
+/// none inside a bracket atom or `Cl`/`Br`, nor before a ring bond such as
+/// `1` or `%12`.
+fn breakable(smiles: &str) -> String {
+    let mut out = String::with_capacity(smiles.len() * 2);
+    let mut chars = smiles.chars().peekable();
+    while let Some(c) = chars.next() {
+        let ring_bond = c.is_ascii_digit() || c == '%';
+        if !out.is_empty() && !ring_bond {
+            out.push('\u{200B}');
+        }
+        out.push(c);
+        match c {
+            '[' => {
+                for inner in chars.by_ref() {
+                    out.push(inner);
+                    if inner == ']' {
+                        break;
+                    }
+                }
+            }
+            '%' => out.extend(
+                chars
+                    .next_if(char::is_ascii_digit)
+                    .into_iter()
+                    .chain(chars.next_if(char::is_ascii_digit)),
+            ),
+            'C' | 'B' => {
+                out.extend(chars.next_if(|next| matches!((c, next), ('C', 'l') | ('B', 'r'))))
+            }
+            _ => {}
+        }
+    }
+    out
 }
 
 /// One pane: its frame and header say which side it is. The frame is drawn
@@ -1100,15 +1214,23 @@ fn line<'a>(
     if !detail.is_empty() {
         words = words.push(text(detail.to_owned()).size(11).style(muted_text));
     }
-    if let Some(smiles) = smiles {
-        words = words.push(
-            text(smiles.to_owned())
+    // Before, then `→ after` under it.
+    let (before, after) = smiles.map_or((None, None), |smiles| match smiles.split_once(" → ") {
+        Some((before, after)) => (Some(before), Some(after)),
+        None => (Some(smiles), None),
+    });
+    for (arrow, code) in [("", before), ("→ ", after)] {
+        words = words.push(code.map(|code| {
+            text(format!("{arrow}{}", breakable(code)))
                 .size(11)
                 .font(iced::Font::MONOSPACE)
-                .wrapping(text::Wrapping::Glyph),
-        );
+                .wrapping(text::Wrapping::WordOrGlyph)
+        }));
     }
-    let name = format!("{}: {title}", tag.label());
+    let mut name = format!("{}: {title}", tag.label());
+    if let Some(smiles) = smiles {
+        name = format!("{name}, {smiles}");
+    }
     let content = row![badge, words.width(Length::Fill)].spacing(8);
     reshiki::accessibility::button(id, name, content)
         .checked(selected)

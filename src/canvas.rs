@@ -114,6 +114,7 @@ use previews::PreviewState;
 #[cfg(not(target_arch = "wasm32"))]
 pub use previews::{
     CompareFrame, CompareMark, ComparePaint, ComparePlace, ComparePreview, CompareSwatch,
+    compare_zoom,
 };
 #[cfg(test)]
 use render::draw_primitives;

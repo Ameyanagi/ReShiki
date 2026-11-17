@@ -5,7 +5,7 @@
 //! overwritten without a choice.
 use super::{
     Action, Dialog,
-    compare::{Compare, Side, reading},
+    compare::{Compare, Side},
     file_name, perform,
 };
 use crate::app::{App, Message, workspace::muted_text};
@@ -377,11 +377,9 @@ impl App {
 }
 
 pub(super) fn view<'a>(review: &'a Review, me: Option<&str>) -> Element<'a, Message> {
-    let mut title = row![text(format!("“{}” changed on GitHub", review.name)).size(18)]
-        .push(review.compare.verdict_badge())
-        .push(Space::new().width(Length::Fill))
-        .spacing(10)
-        .align_y(Alignment::Center);
+    let mut title = (review.compare)
+        .title(format!("“{}” changed on GitHub", review.name))
+        .push(Space::new().width(Length::Fill));
     if review.total > 1 {
         let at = format!("{} of {}", review.done + 1, review.total);
         title = title.push(text(at).size(13).style(muted_text));
@@ -392,7 +390,7 @@ pub(super) fn view<'a>(review: &'a Review, me: Option<&str>) -> Element<'a, Mess
             .style(crate::appearance::secondary)
             .on_press(Message::GitHub(action))
     };
-    let keep = |id, label, choice| {
+    let keep = move |id, label, choice| {
         container(button(id, label, Action::Resolve(choice))).center_x(Length::Fill)
     };
     // `On GitHub · @alice · 14:02 · message` beside `Your drawing · not sent`.
@@ -412,35 +410,37 @@ pub(super) fn view<'a>(review: &'a Review, me: Option<&str>) -> Element<'a, Mess
         Side::new("On GitHub", theirs),
         Side::new("Your drawing", yours),
     ];
-    let keep_both = tooltip(
-        button(
-            "github-keep-both",
-            "Keep both",
-            Action::Resolve(Choice::KeepBoth),
-        ),
-        container(text(format!("Yours becomes {}", review.copy)).size(12))
-            .padding([4, 8])
-            .style(container::rounded_box),
-        tooltip::Position::Top,
-    );
-    column![
-        title,
-        review.compare.view(
-            sides.clone(),
-            [
-                Some(keep("github-keep-theirs", "Keep GitHub’s", Choice::KeepTheirs).into()),
-                Some(keep("github-keep-mine", "Keep mine", Choice::KeepMine).into()),
-            ],
-        ),
+    let keep_both = move || {
+        tooltip(
+            button(
+                "github-keep-both",
+                "Keep both",
+                Action::Resolve(Choice::KeepBoth),
+            ),
+            container(text(format!("Yours becomes {}", review.copy)).size(12))
+                .padding([4, 8])
+                .style(container::rounded_box),
+            tooltip::Position::Top,
+        )
+    };
+    let under = move || {
+        [
+            Some(keep("github-keep-theirs", "Keep GitHub’s", Choice::KeepTheirs).into()),
+            Some(keep("github-keep-mine", "Keep mine", Choice::KeepMine).into()),
+        ]
+    };
+    let footer = move |reading: String| {
         row![
             button("github-later", "Later", Action::Close),
-            text(reading(&sides)).size(12).style(muted_text),
+            text(reading).size(12).style(muted_text),
             Space::new().width(Length::Fill),
-            keep_both,
+            keep_both(),
         ]
         .spacing(12)
-        .align_y(Alignment::Center),
-    ]
-    .spacing(12)
-    .into()
+        .align_y(Alignment::Center)
+        .into()
+    };
+    column![title, review.compare.view(sides, under, footer)]
+        .spacing(12)
+        .into()
 }

@@ -462,6 +462,14 @@ pub struct CompareMark {
     pub place: ComparePlace,
 }
 
+/// How large a compare pane of `size` draws `frame`.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn compare_zoom(size: iced::Size, (lo, hi): (World, World)) -> f32 {
+    ((size.width - 24.) / (hi.x - lo.x).max(1.))
+        .min((size.height - 24.) / (hi.y - lo.y).max(1.))
+        .clamp(0.001, 1.4)
+}
+
 /// One side of a compare: `doc` fitted into `frame`, which both sides share
 /// so they line up, with the marks of the changes shown drawn over and under
 /// it. The marks are a layer of their own: the drawing, and its own
@@ -493,9 +501,7 @@ impl canvas::Program<crate::app::Message> for ComparePreview<'_> {
         let (lo, hi) = self.frame;
         let camera = Camera {
             center: World::new((lo.x + hi.x) / 2., (lo.y + hi.y) / 2.),
-            zoom: ((bounds.width - 24.) / (hi.x - lo.x).max(1.))
-                .min((bounds.height - 24.) / (hi.y - lo.y).max(1.))
-                .clamp(0.001, 1.4),
+            zoom: compare_zoom(bounds.size(), self.frame),
         };
         let shown = |mark: &&CompareMark| {
             if mark.chemistry {
