@@ -371,10 +371,10 @@ fn a_change_painted_on_one_side_only_is_found_on_the_other_by_its_atom() {
     let chem = (shown.report.changes.iter())
         .position(|change| change.kind == Kind::Chemical)
         .unwrap();
-    let carbon = left.atom(ring[0]).unwrap().position;
+    let at = left.atom(sulfur).unwrap().position;
     let (lo, hi) = shown.spots[chem][0].unwrap();
     assert!(
-        lo.distance(carbon) < 0.01 && hi.distance(carbon) < 0.01,
+        lo.distance(at) < 0.01 && hi.distance(at) < 0.01,
         "{lo:?} {hi:?}"
     );
 }
