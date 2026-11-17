@@ -19,7 +19,7 @@ use reshiki::github::{
     config,
     credentials::{self, Tokens},
     send,
-    workcopy::{self, RepoState},
+    workcopy::{self, FileState, RepoState},
 };
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -57,6 +57,9 @@ const SHOW_FILE: &str = if cfg!(target_os = "macos") {
 /// The open drawings' repositories are asked again on window focus, at
 /// most this often.
 const RECHECK: Duration = Duration::from_secs(5 * 60);
+/// What [`State::hashes`] holds for a file just saved and not read back
+/// yet: never a hash, so it counts as unsent.
+const UNREAD: &str = "unread";
 
 #[derive(Debug, Clone)]
 pub(super) enum Account {
@@ -130,7 +133,20 @@ pub(super) struct State {
     states: HashMap<RepoKey, RepoState>,
     /// Rises with every state write and picker request, so late ones drop.
     seq: u64,
-    unsent: HashMap<RepoKey, Vec<String>>,
+    /// What each working copy held when last read or written here, by
+    /// repository folder and path: its hash (`None`: no file), and the `seq`
+    /// that read began at. Reads finish out of order, so the one begun last
+    /// wins; each write here is followed by a read or sets its hash itself.
+    hashes: HashMap<RepoKey, HashMap<String, (u64, Option<String>)>>,
+    /// Working-copy writes still running off the UI thread. A Send waits for
+    /// them before it reads the files, and so does closing the window.
+    writes: usize,
+    /// Sends waiting for `writes` to end: repository, message and drawings.
+    deferred: Vec<(RepoKey, String, Option<Vec<String>>)>,
+    /// A window close waiting for `writes` to end.
+    quit_after: Option<(iced::window::Id, Vec<TabId>)>,
+    /// A conflict choice is being written.
+    settling: bool,
     sending: HashSet<RepoKey>,
     failed: HashMap<RepoKey, String>,
     /// What the last send of each repository found changed on GitHub.
@@ -192,7 +208,11 @@ impl State {
             after_sign_in: None,
             states: HashMap::new(),
             seq: 0,
-            unsent: HashMap::new(),
+            hashes: HashMap::new(),
+            writes: 0,
+            deferred: Vec::new(),
+            quit_after: None,
+            settling: false,
             sending: HashSet::new(),
             failed: HashMap::new(),
             conflicts: HashMap::new(),
@@ -296,6 +316,41 @@ impl State {
         })
     }
 
+    /// The drawings of `key` whose file here differs from what was last
+    /// synced, as last read. A missing file is never taken for a deletion.
+    fn unsent(&self, key: &RepoKey) -> Vec<String> {
+        let (Some(state), Some(read)) = (self.states.get(key), self.hashes.get(key)) else {
+            return Vec::new();
+        };
+        (state.files.iter())
+            .filter(|(path, file)| {
+                read.get(*path)
+                    .and_then(|(_, hash)| hash.as_ref())
+                    .is_some_and(|hash| *hash != file.base_hash)
+            })
+            .map(|(path, _)| path.clone())
+            .collect()
+    }
+
+    /// Takes what a read begun at `seq` found, unless a later read or a
+    /// write got there first.
+    fn hashed(&mut self, key: &RepoKey, seq: u64, read: Vec<(String, Option<String>)>) {
+        let known = self.hashes.entry(key.clone()).or_default();
+        for (path, hash) in read {
+            let entry = known.entry(path).or_insert((0, None));
+            if entry.0 < seq {
+                *entry = (seq, hash);
+            }
+        }
+    }
+
+    /// A file just written here holds `hash`.
+    fn wrote(&mut self, key: &RepoKey, path: &str, hash: Option<String>) {
+        self.seq += 1;
+        let seq = self.seq;
+        self.hashed(key, seq, vec![(path.to_owned(), hash)]);
+    }
+
     fn hue(&self, key: &RepoKey) -> usize {
         identity::hue(
             &self.prefs,
@@ -337,8 +392,26 @@ pub enum Action {
     /// Saves the next drawing a Send waits for, or sends.
     SaveNext,
     Sent(RepoKey, String, Result<send::SendOutcome, gh::Error>),
-    Recorded(RepoKey, Result<Option<workcopy::SaveMeta>, String>),
-    Persisted(RepoKey, Result<(), String>),
+    Recorded(Result<Option<workcopy::SaveMeta>, String>),
+    /// `state.json` written; `true`: it ends a working-copy write.
+    Persisted(bool, Result<(), String>),
+    /// What the working copies of a repository folder held, read from the
+    /// `seq` of that time on.
+    Scanned(RepoKey, u64, Vec<(String, Option<String>)>),
+    /// Update's write of GitHub's version, by repository folder and path.
+    Updated(
+        RepoKey,
+        String,
+        Box<newer::Updating>,
+        Result<FileState, String>,
+    ),
+    /// A conflict choice, written: the state it left, the copy Keep both
+    /// made, and what the files it touched hold now.
+    Settled(
+        RepoKey,
+        send::Choice,
+        Box<Result<conflict::Settled, String>>,
+    ),
     /// Send (`true`) or Later, asked on closing.
     CloseAnswer(bool),
     /// The conflict dialog for the drawing in front's repository.
@@ -587,6 +660,7 @@ impl App {
         // The next account has its own stars.
         self.github.starred = false;
         self.github.star_asked = false;
+        self.github.versions.forget();
     }
 
     /// An error from GitHub. A sign-in GitHub no longer takes signs out.
@@ -913,7 +987,6 @@ impl App {
                 if self.github.client().is_none() {
                     return self.github_sign_in(Some(Action::ShowSend));
                 }
-                self.github_refresh(&key);
                 let files = self.github_waiting(&key, |tab| self.edited(tab));
                 if files.is_empty() {
                     self.status = "Nothing to send".into();
@@ -960,21 +1033,32 @@ impl App {
             }
             Action::SaveNext => return self.github_save_next(),
             Action::Sent(key, sent_at, result) => return self.github_sent(key, sent_at, result),
-            Action::Recorded(key, result) => {
+            Action::Recorded(result) => {
                 if let Err(error) = result {
                     self.status = format!("Couldn't keep this version: {error}");
                     self.error = true;
                 }
-                self.github_refresh(&key);
                 return self.versions_reload_local();
             }
-            Action::Persisted(key, result) => {
+            Action::Persisted(wrote, result) => {
                 if let Err(error) = result {
                     self.status = error;
                     self.error = true;
                 }
-                self.github_refresh(&key);
-                return self.versions_reload_local();
+                let wrote = if wrote {
+                    self.github_wrote()
+                } else {
+                    Task::none()
+                };
+                return Task::batch([wrote, self.versions_reload_local()]);
+            }
+            Action::Scanned(key, seq, read) => self.github.hashed(&key, seq, read),
+            Action::Updated(key, repo_path, updating, result) => {
+                return self.github_updated(key, repo_path, *updating, result);
+            }
+            Action::Settled(key, choice, result) => {
+                self.github.settling = false;
+                return self.github_settled(key, choice, *result);
             }
             Action::CloseAnswer(send) => return self.github_close_answer(send),
             Action::Review => {
@@ -1110,7 +1194,11 @@ impl App {
             }
             Action::Focused => {
                 let listed = self.picker_returned();
-                return Task::batch([listed, self.github_recheck()]);
+                // A drawing may have been changed in another app meanwhile.
+                let read: Vec<_> = (self.github_open_repos().iter())
+                    .map(|key| self.github_scan(key, None))
+                    .collect();
+                return Task::batch([listed, self.github_recheck(), Task::batch(read)]);
             }
             Action::Access(generation, key, result) => {
                 // Access given since: local changes count as unsent now.
@@ -1137,7 +1225,6 @@ impl App {
                     } else {
                         Task::none()
                     };
-                    self.github_refresh(&key);
                     return Task::batch([keep, self.github_persist(&key)]);
                 }
             }
@@ -1251,7 +1338,6 @@ impl App {
         }
         let mut tasks = Vec::new();
         for key in cleared {
-            self.github_refresh(&key);
             tasks.push(self.github_persist(&key));
         }
         let repos: Vec<(u64, RepoKey)> = self
@@ -1285,34 +1371,95 @@ impl App {
         self.github.states.get_mut(key)
     }
 
-    /// Recounts the drawings of `key` that differ from what GitHub has.
-    fn github_refresh(&mut self, key: &RepoKey) {
+    /// Reads what the working copies of `key` hold (only `only`, or every
+    /// tracked one) off the UI thread; see [`State::hashes`].
+    fn github_scan(&mut self, key: &RepoKey, only: Option<String>) -> Task<Message> {
         let Some(root) = self.github.root.clone() else {
-            return;
-        };
-        let unsent = self
-            .github_state(key)
-            .map(|state| workcopy::unsent(&root, key, state).unwrap_or_default());
-        self.github
-            .unsent
-            .insert(key.clone(), unsent.unwrap_or_default());
-    }
-
-    fn github_persist(&mut self, key: &RepoKey) -> Task<Message> {
-        let (Some(root), Some(state)) = (
-            self.github.root.clone(),
-            self.github.states.get(key).cloned(),
-        ) else {
             return Task::none();
+        };
+        let paths = match only {
+            Some(path) => vec![path],
+            None => match self.github_state(key) {
+                Some(state) => state.files.keys().cloned().collect(),
+                None => return Task::none(),
+            },
         };
         self.github.seq += 1;
         let (seq, key) = (self.github.seq, key.clone());
         perform(
             {
                 let key = key.clone();
-                async move { workcopy::persist(&root, &key, state, seq).await }
+                async move {
+                    let read = move || workcopy::hashes(&root, &key, paths);
+                    reshiki::task::spawn_blocking(read)
+                        .await
+                        .unwrap_or_default()
+                }
             },
-            move |result| Action::Persisted(key, result),
+            move |read| Action::Scanned(key, seq, read),
+        )
+    }
+
+    /// Runs a working-copy write off the UI thread. Its result's handler
+    /// takes the result in and writes `state.json` with
+    /// [`Self::github_keep_state`] (or, with nothing to keep, calls
+    /// [`Self::github_wrote`]), so a Send and closing the window wait for all
+    /// of it.
+    fn github_write<T: Send + 'static>(
+        &mut self,
+        write: impl FnOnce() -> Result<T, String> + Send + 'static,
+        then: impl FnOnce(Result<T, String>) -> Action + Send + 'static,
+    ) -> Task<Message> {
+        self.github.writes += 1;
+        perform(
+            async move {
+                reshiki::task::spawn_blocking(write)
+                    .await
+                    .map_err(|error| error.to_string())?
+            },
+            then,
+        )
+    }
+
+    /// A write from [`Self::github_write`] ended: once none is left, the
+    /// Sends and the window close that waited for them go on.
+    fn github_wrote(&mut self) -> Task<Message> {
+        self.github.writes -= 1;
+        if self.github.writes > 0 {
+            return Task::none();
+        }
+        let mut tasks: Vec<_> = std::mem::take(&mut self.github.deferred)
+            .into_iter()
+            .map(|(key, message, only)| self.github_send_now(key, message, only))
+            .collect();
+        if let Some((window, discarded)) = self.github.quit_after.take() {
+            tasks.push(self.close_window(window, discarded));
+        }
+        Task::batch(tasks)
+    }
+
+    fn github_persist(&mut self, key: &RepoKey) -> Task<Message> {
+        self.github_keep_state(key, false)
+    }
+
+    /// Writes `state.json` of `key`; `wrote`: it ends a working-copy write
+    /// ([`Self::github_write`]), so what waits for that write waits for it.
+    fn github_keep_state(&mut self, key: &RepoKey, wrote: bool) -> Task<Message> {
+        let (Some(root), Some(state)) = (
+            self.github.root.clone(),
+            self.github.states.get(key).cloned(),
+        ) else {
+            return if wrote {
+                self.github_wrote()
+            } else {
+                Task::none()
+            };
+        };
+        self.github.seq += 1;
+        let (seq, key) = (self.github.seq, key.clone());
+        perform(
+            async move { workcopy::persist(&root, &key, state, seq).await },
+            move |result| Action::Persisted(wrote, result),
         )
     }
 
@@ -1323,17 +1470,17 @@ impl App {
         let Some((key, _)) = found else {
             return Task::none();
         };
-        self.github_refresh(&key);
+        let read = self.github_scan(&key, None);
         let Some(id) = self.github.repo_id(&key) else {
-            return Task::none();
+            return read;
         };
         let named = self.github.named(&key);
         let colors = self.github_seen([(id, &named)]);
         if self.github.prefs.last == Some(id) {
-            return colors;
+            return Task::batch([read, colors]);
         }
         self.github.prefs.last = Some(id);
-        self.github_keep_prefs()
+        Task::batch([read, self.github_keep_prefs()])
     }
 
     /// The open drawings of `key` with unsaved edits, by tab and repository path.
@@ -1350,7 +1497,7 @@ impl App {
     /// The drawings of `key` a send would take: saved but unsent, or with
     /// unsaved edits (`edited` tells which tabs have them).
     fn github_waiting(&self, key: &RepoKey, edited: impl Fn(&DocumentTab) -> bool) -> Vec<String> {
-        let mut files = self.github.unsent.get(key).cloned().unwrap_or_default();
+        let mut files = self.github.unsent(key);
         for tab in self.strip().filter(|tab| edited(tab)) {
             if let Some((other, path)) = self.github.locate(tab.path.as_deref())
                 && other == *key
@@ -1365,7 +1512,7 @@ impl App {
     /// Whether anything of any repository is not on GitHub yet.
     fn github_anything_unsent(&self) -> bool {
         let sendable = |key: &RepoKey| !self.github.read_only(key);
-        (self.github.unsent.iter()).any(|(key, unsent)| !unsent.is_empty() && sendable(key))
+        (self.github.hashes.keys()).any(|key| sendable(key) && !self.github.unsent(key).is_empty())
             || self.strip().any(|tab| {
                 self.shown_edited(tab)
                     && (self.github.locate(tab.path.as_deref()))
@@ -1465,6 +1612,15 @@ impl App {
         self.github_send(key, message, None)
     }
 
+    /// A save of `path` just landed: until the file is read back it counts
+    /// as unsent, so the count never dips, and a close the save goes on with
+    /// still asks to send it.
+    pub(super) fn github_unread(&mut self, path: &Path) {
+        if let Some((key, repo_path)) = self.github.locate(Some(path)) {
+            self.github.wrote(&key, &repo_path, Some(UNREAD.into()));
+        }
+    }
+
     /// After every save of an open tab, with that tab in front: a GitHub
     /// drawing keeps what was written as a version, and a Send or a choice
     /// waiting for this save goes on.
@@ -1494,6 +1650,7 @@ impl App {
             .github_state(&key)
             .and_then(|state| state.files.get(&repo_path))
             .map(|file| file.base_hash.clone());
+        let read = self.github_scan(&key, Some(repo_path.clone()));
         let record = perform(
             {
                 let key = key.clone();
@@ -1502,13 +1659,9 @@ impl App {
                     workcopy::snapshot(&root, &key, &repo_path, bytes, base).await
                 }
             },
-            {
-                let key = key.clone();
-                move |result| Action::Recorded(key, result)
-            },
+            Action::Recorded,
         );
-        self.github_refresh(&key);
-        Task::batch([record, next, resolve])
+        Task::batch([record, next, resolve, read])
     }
 
     /// One commit of every unsent drawing of `key` (or of those in `only`),
@@ -1519,18 +1672,39 @@ impl App {
         message: String,
         only: Option<Vec<String>>,
     ) -> Task<Message> {
-        let Some(client) = self.github.client() else {
+        if self.github.client().is_none() {
             return self.github_sign_in(None);
-        };
-        let (Some(root), Some(state)) =
-            (self.github.root.clone(), self.github_state(&key).cloned())
-        else {
+        }
+        if self.github.root.is_none() || self.github_state(&key).is_none() {
             return Task::none();
-        };
+        }
         if !self.github.sending.insert(key.clone()) {
             return Task::none();
         }
         self.github.failed.remove(&key);
+        // A working copy still being written is read once it is written.
+        if self.github.writes > 0 {
+            self.github.deferred.push((key, message, only));
+            return Task::none();
+        }
+        self.github_send_now(key, message, only)
+    }
+
+    /// [`Self::github_send`] once no write is left: reads the files and sends.
+    fn github_send_now(
+        &mut self,
+        key: RepoKey,
+        message: String,
+        only: Option<Vec<String>>,
+    ) -> Task<Message> {
+        let (Some(client), Some(root), Some(state)) = (
+            self.github.client(),
+            self.github.root.clone(),
+            self.github.states.get(&key).cloned(),
+        ) else {
+            self.github.sending.remove(&key);
+            return Task::none();
+        };
         let sent_at = workcopy::now_id();
         perform(
             {
@@ -1598,12 +1772,8 @@ impl App {
                             send::record(&root, &key, &mut state, seq, &outcome, &sent_at).await
                         }
                     },
-                    {
-                        let key = key.clone();
-                        move |result| Action::Persisted(key, result)
-                    },
+                    |result| Action::Persisted(false, result),
                 ));
-                self.github_refresh(&key);
                 // Versions lists again, with the new commit.
                 if self
                     .github
@@ -1657,12 +1827,7 @@ impl App {
         if self.github.read_only(&key) {
             return None;
         }
-        self.github_refresh(&key);
-        self.github
-            .unsent
-            .get(&key)
-            .is_some_and(|unsent| unsent.contains(&repo_path))
-            .then_some(key)
+        (self.github.unsent(&key).contains(&repo_path)).then_some(key)
     }
 
     /// Before a tab closes: asks whether to send its saved, unsent drawing.
@@ -1678,7 +1843,7 @@ impl App {
         }
         self.github.closing = Some(Closing::Tab(id, self.tab.revision));
         // Send takes every unsent drawing of the repository: say so.
-        let body = match self.github.unsent.get(&key).map_or(0, Vec::len) {
+        let body = match self.github.unsent(&key).len() {
             count if count > 1 => format!(
                 "Sends {count} drawings in {}.",
                 self.github.named(&key).repo
@@ -1697,6 +1862,12 @@ impl App {
         window: iced::window::Id,
         discarded: &[TabId],
     ) -> Option<Task<Message>> {
+        // A working copy still being written is finished first; the close
+        // then starts again (see `github_wrote`).
+        if self.github.writes > 0 {
+            self.github.quit_after = Some((window, discarded.to_vec()));
+            return Some(Task::none());
+        }
         if std::mem::take(&mut self.github.window_answered) {
             return None;
         }
@@ -1712,8 +1883,7 @@ impl App {
             .collect();
         let mut count = 0;
         for key in &keys {
-            self.github_refresh(key);
-            count += self.github.unsent.get(key).map_or(0, Vec::len);
+            count += self.github.unsent(key).len();
         }
         if count == 0 {
             return None;
@@ -1765,8 +1935,7 @@ impl App {
         if self.github.client().is_none() {
             return self.github_sign_in(Some(Action::CloseAnswer(true)));
         }
-        self.github_refresh(&key);
-        let files = self.github.unsent.get(&key).cloned().unwrap_or_default();
+        let files = self.github.unsent(&key);
         let task = self.github_send(key.clone(), send::default_message(&files), None);
         if !self.github.sending.contains(&key) {
             // Not signed in, or nothing to send: the close waits for the user.
@@ -1804,8 +1973,7 @@ impl App {
                 // Saves in a read-only repository never hold the window open.
                 let left = self.github.states.keys().any(|key| {
                     !self.github.read_only(key)
-                        && (self.github.unsent.get(key).is_some_and(|u| !u.is_empty())
-                            || self.github_conflicts(key) > 0)
+                        && (!self.github.unsent(key).is_empty() || self.github_conflicts(key) > 0)
                 });
                 if left || !self.github.failed.is_empty() {
                     self.cancel_close();

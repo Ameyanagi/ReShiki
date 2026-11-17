@@ -607,6 +607,11 @@ impl super::App {
         };
         #[cfg(not(target_arch = "wasm32"))]
         let saved = matches!(&result, Ok(Some(_))) && epoch == self.tab.file_epoch;
+        // Before a close the save goes on with asks whether to send it.
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some((path, _)) = &written {
+            self.github_unread(path);
+        }
         let task = self.drawing_saved(epoch, snapshot, result);
         #[cfg(not(target_arch = "wasm32"))]
         let task = iced::Task::batch([task, self.github_saved(saved, written)]);

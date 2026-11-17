@@ -406,6 +406,10 @@ fn shown(entries: Vec<Entry>) -> Vec<Entry> {
         .collect()
 }
 
+/// A download written here: where, its new base (none for an old
+/// version) and its bytes.
+type Checkout = (PathBuf, Option<FileState>, Vec<u8>);
+
 #[derive(Debug, Clone)]
 pub enum Action {
     Show(Mode),
@@ -433,6 +437,10 @@ pub enum Action {
     Open,
     /// The drawing at a repository path, and whether it is an old version.
     Downloaded(u64, Repo, String, bool, Result<api::Download, gh::Error>),
+    /// The download written here, by the request that downloaded it, in a
+    /// repository folder at a repository path: where, its new base unless
+    /// it is an old version, and its bytes.
+    Written(u64, RepoKey, String, Result<Checkout, String>),
     /// A github.com link from the window, the palette or Open latest: shown
     /// in the search field and opened at once.
     Link(String),
@@ -947,53 +955,74 @@ impl App {
                 };
                 let root = self.github.root.clone().unwrap_or_default();
                 let key = self.github_folder(&repo);
-                let state = self.github_tracked(&key, &repo);
-                let written = if old {
-                    // Kept apart from the working copy, and never sent.
-                    let path = workcopy::old_path(&root, &key, &download.commit, &repo_path);
-                    path.parent()
-                        .map_or(Ok(()), |folder| {
-                            std::fs::create_dir_all(folder).map_err(|error| error.to_string())
-                        })
-                        .and_then(|()| reshiki::storage::write_saved(&path, &download.bytes))
-                        .map(|()| path)
-                } else {
-                    workcopy::checkout(&root, &key, state, &repo_path, &download)
+                let state = self.github_tracked(&key, &repo).clone();
+                // Written off the UI thread; the picker stays busy meanwhile.
+                let write = {
+                    let (key, repo_path) = (key.clone(), repo_path.clone());
+                    move || {
+                        if !old {
+                            let (path, file) = workcopy::checkout_synced(
+                                &root, &key, state, &repo_path, &download,
+                            )?;
+                            return Ok((path, Some(file), download.bytes));
+                        }
+                        // Kept apart from the working copy, and never sent.
+                        let path = workcopy::old_path(&root, &key, &download.commit, &repo_path);
+                        if let Some(folder) = path.parent() {
+                            std::fs::create_dir_all(folder).map_err(|error| error.to_string())?;
+                        }
+                        reshiki::storage::write_saved(&path, &download.bytes)?;
+                        Ok((path, None, download.bytes))
+                    }
                 };
-                return match written {
-                    // Another chemistry file is read as Insert reads it.
-                    Ok(path) if !repo_path.ends_with(".rsk") => {
-                        let persist = self.github_persist(&key);
-                        let close = self.github_close_dialog();
-                        let file = crate::app::files::Picked {
-                            path: path.clone(),
-                            contents: download.bytes,
-                        };
-                        let theme = Document::default().canvas_theme;
-                        let read = import::load(
-                            self.engine.clone(),
-                            vec![file],
-                            Default::default(),
-                            theme,
-                        );
-                        let read = Task::perform(read, move |result| {
-                            msg(Action::Read(path.clone(), Box::new(result)))
-                        });
-                        Task::batch([persist, close, read])
-                    }
-                    Ok(path) => {
-                        let persist = self.github_persist(&key);
-                        let close = self.github_close_dialog();
-                        Task::batch([persist, close, crate::app::files::open_paths(vec![path])])
-                    }
+                return self.github_write(write, move |written| {
+                    GitHubAction::Picker(Action::Written(generation, key, repo_path, written))
+                });
+            }
+            Action::Written(generation, key, repo_path, written) => {
+                let current = self
+                    .picker()
+                    .is_some_and(|picker| picker.request == generation);
+                let (path, file, bytes) = match written {
+                    Ok(written) => written,
                     Err(error) => {
-                        if let Some(picker) = self.picker() {
+                        if let Some(picker) = self.picker().filter(|_| current) {
                             picker.busy = false;
                             picker.error = Some(error);
                         }
-                        Task::none()
+                        return self.github_wrote();
                     }
                 };
+                // The file is written, so its base is kept even when the
+                // picker has moved on.
+                if let Some(file) = file {
+                    let hash = file.base_hash.clone();
+                    if let Some(state) = self.github.states.get_mut(&key) {
+                        state.files.insert(repo_path.clone(), file);
+                    }
+                    self.github.wrote(&key, &repo_path, Some(hash));
+                }
+                let persist = self.github_keep_state(&key, true);
+                if !current {
+                    return persist;
+                }
+                let close = self.github_close_dialog();
+                // Another chemistry file is read as Insert reads it.
+                let open = if repo_path.ends_with(".rsk") {
+                    crate::app::files::open_paths(vec![path])
+                } else {
+                    let file = crate::app::files::Picked {
+                        path: path.clone(),
+                        contents: bytes,
+                    };
+                    let theme = Document::default().canvas_theme;
+                    let read =
+                        import::load(self.engine.clone(), vec![file], Default::default(), theme);
+                    Task::perform(read, move |result| {
+                        msg(Action::Read(path.clone(), Box::new(result)))
+                    })
+                };
+                return Task::batch([persist, close, open]);
             }
             Action::NewRepo => {
                 if let Some(picker) = self.picker() {
@@ -2135,7 +2164,7 @@ impl App {
             .iter()
             .find(|(_, state)| state.repo_id == repo.id)
             .map_or_else(|| repo.key.clone(), |(key, _)| key.clone());
-        let unsent = self.github.unsent.get(&folder).map_or(0, Vec::len);
+        let unsent = self.github.unsent(&folder).len();
         let conflicts = self.github_conflicts(&folder);
         let hue = identity::hue(&self.github.prefs, repo.id, &repo.key);
         let shared = self.github.prefs.is_shared(repo.id);
@@ -2593,7 +2622,7 @@ impl App {
             .iter()
             .find(|(_, state)| state.repo_id == repo.id)
             .map_or_else(|| repo.key.clone(), |(key, _)| key.clone());
-        let unsent = self.github.unsent.get(&folder_key);
+        let unsent = self.github.unsent(&folder_key);
         let conflicted: Vec<&String> = self
             .github
             .states
@@ -2618,9 +2647,7 @@ impl App {
                 })
                 .count()
         };
-        let unsent_under = |path: &str, folder: bool| {
-            unsent.map_or(0, |unsent| under(&mut unsent.iter(), path, folder))
-        };
+        let unsent_under = |path: &str, folder: bool| under(&mut unsent.iter(), path, folder);
         let conflicts_under =
             |path: &str, folder: bool| under(&mut conflicted.iter().copied(), path, folder);
         let body: Element<'_, Message> = match &picker.entries {

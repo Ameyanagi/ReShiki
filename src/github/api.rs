@@ -515,17 +515,19 @@ impl CommitItem {
     }
 }
 
-/// Commits touching `path`, newest first, 20 a page, counted from `head`.
+/// Commits touching `path`, newest first, 20 a page, counted from `from`:
+/// a commit, or a branch (as of now).
 pub async fn file_commits(
     client: &Client,
     repo: &RepoKey,
     path: &str,
-    head: &str,
+    from: &str,
     page: u32,
 ) -> Result<Vec<RemoteVersion>, Error> {
     let path = format!(
-        "{}/commits?sha={head}&path={}&per_page=20&page={page}",
+        "{}/commits?sha={}&path={}&per_page=20&page={page}",
         base(repo),
+        encoded(from),
         encoded(path)
     );
     let items: Vec<CommitItem> = call(client, Method::GET, &path, None).await?;
@@ -554,6 +556,7 @@ pub async fn last_commit(
 }
 
 /// The file as it was at `commit`. `Error::NotFound`: that commit deleted it.
+/// A commit's name, not a branch: the reply never changes, so it is asked once.
 pub async fn raw_at(
     client: &Client,
     repo: &RepoKey,
@@ -561,9 +564,7 @@ pub async fn raw_at(
     commit: &str,
 ) -> Result<Vec<u8>, Error> {
     let path = format!("{}/contents/{}?ref={commit}", base(repo), encoded(path));
-    client
-        .send(Method::GET, &path, None, Accept::Raw, FILE_LIMIT)
-        .await
+    client.get_kept(&path, Accept::Raw, FILE_LIMIT).await
 }
 
 pub async fn star(client: &Client, owner: &str, repo: &str) -> Result<(), Error> {

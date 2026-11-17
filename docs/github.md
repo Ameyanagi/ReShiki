@@ -161,10 +161,11 @@ the chip shows **Review** instead, with the same choices as above.
 **History**, the clock button just after the inspector's tabs (or **GitHub →
 History**, or the chip's state), lists the saves on this computer since the
 last send (**This computer**) and the commits on GitHub that changed the
-drawing (**GitHub**), by day. It shows only for drawings on GitHub. Select
-one, then choose **Compare** to see it beside the drawing now, **Open** to see
-it in a new tab or **Restore** to make it the drawing again. Restore is one
-undo step and makes a new save.
+drawing (**GitHub**), by day. It shows only for drawings on GitHub. GitHub's
+list shows as soon as it arrives; each version's picture fills in as its row
+comes into view. Select one, then choose **Compare** to see it beside the
+drawing now, **Open** to see it in a new tab or **Restore** to make it the
+drawing again. Restore is one undo step and makes a new save.
 
 The GitHub button sits at the left end of the status bar, just before the
 chip, signed in or not. It shows your initial while you are signed in; its
@@ -244,6 +245,16 @@ chemistry**.
   `state.json` (what GitHub had for each drawing) and `versions/` (up to 50
   saves per drawing since its last send). A drawing is unsent when its saved
   file differs from the bytes last synced, so nothing else needs to be stored.
+- Files are read and written off the window's thread. Whether drawings are
+  unsent is read in the background when a drawing opens and on window focus;
+  after a save, only that drawing is read back. Opening from the picker,
+  **Update** and a conflict choice write the working copy in the background:
+  **Send** and closing the window wait for a write still running, and Update
+  never writes over a drawing that changed here meanwhile.
+- History lists GitHub's versions from the branch in one request (20 a page).
+  A version's drawing is read when its row first comes into view, once per
+  commit, and kept with its list for the session, so a drawing's History
+  shows again at once; signing out forgets them.
 - On window focus, at most every five minutes and only while GitHub drawings
   are open, ReShiki asks each open repository's branch head for the open
   drawings' blobs: the repositories you may send to whether a drawing changed

@@ -4,10 +4,11 @@
 use super::{Action as GitHubAction, perform};
 use crate::app::{App, Message, workspace::muted_text};
 use chrono::{DateTime, Local, NaiveDate};
-use iced::widget::{Space, column, container, row, text};
+use iced::widget::{Space, column, container, row, sensor, text};
 use iced::{Alignment, Element, Length, Task};
 use reshiki::document::Document;
 use reshiki::github::{self as gh, RepoKey, api, workcopy};
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 #[derive(Debug, Default)]
@@ -20,12 +21,41 @@ pub(super) struct Versions {
     /// Newest first; `None` while reading.
     local: Option<Vec<(String, Arc<Document>)>>,
     remote: Option<Vec<Remote>>,
-    /// The head the pages count from.
-    head: Option<String>,
+    /// The branch the pages are listed from.
+    branch: Option<String>,
     page: u32,
     more: bool,
     selected: Option<Pick>,
     error: Option<String>,
+    /// The commits whose drawing was asked for: each once, when its row
+    /// first shows.
+    asked: HashSet<String>,
+    /// GitHub's versions of each drawing listed while signed in, with the
+    /// drawings read so far, shown at once when it is listed again. A
+    /// commit's drawing never changes; the list is asked again each time.
+    kept: HashMap<(RepoKey, String), Vec<Remote>>,
+}
+
+impl Versions {
+    /// Signing out: the next account sees none of this one's versions.
+    pub(super) fn forget(&mut self) {
+        self.kept.clear();
+    }
+}
+
+#[cfg(test)]
+impl Versions {
+    /// GitHub's versions listed, newest first, and whether each has its
+    /// drawing read.
+    pub(super) fn listed(&self) -> Option<Vec<(String, bool)>> {
+        let remote = self.remote.as_ref()?;
+        Some(
+            remote
+                .iter()
+                .map(|r| (r.version.commit.clone(), r.doc.is_some()))
+                .collect(),
+        )
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -49,7 +79,9 @@ const PAGE: usize = 20;
 #[derive(Debug, Clone)]
 pub enum Action {
     LocalLoaded(u64, Result<Vec<(String, Arc<Document>)>, String>),
-    RemoteLoaded(u64, Result<(String, Vec<api::RemoteVersion>), gh::Error>),
+    RemoteLoaded(u64, Result<Vec<api::RemoteVersion>, gh::Error>),
+    /// A commit's row came into view: its drawing is read.
+    Shown(String),
     /// A commit's drawing; `Err(true)` when that commit deleted it.
     Doc(u64, String, Result<Arc<Document>, bool>),
     LoadMore,
@@ -154,10 +186,22 @@ fn parse(bytes: Vec<u8>) -> Option<Arc<Document>> {
 }
 
 impl App {
+    /// Lists the versions of `target`: GitHub's in one request, from its
+    /// branch; their drawings are read as their rows show.
     pub(super) fn versions_load(&mut self, target: Option<(RepoKey, String)>) -> Task<Message> {
+        let signed_in = self.github.client().is_some();
+        let old = std::mem::take(&mut self.github.versions);
+        let mut kept = old.kept;
+        if let (true, Some(at), Some(remote)) = (signed_in, old.target, old.remote)
+            && !remote.is_empty()
+        {
+            kept.insert(at, remote);
+        }
         self.github.versions = Versions {
+            remote: (target.as_ref()).and_then(|at| kept.get(at).cloned()),
             target: target.clone(),
-            generation: self.github.versions.generation + 1,
+            generation: old.generation + 1,
+            kept,
             ..Versions::default()
         };
         let Some((key, repo_path)) = target else {
@@ -176,13 +220,10 @@ impl App {
             return local;
         };
         self.github.versions.named = Some(key.clone());
+        self.github.versions.branch = Some(branch.clone());
         let generation = self.github.versions.generation;
         let remote = perform(
-            async move {
-                let head = api::head(&client, &key, &branch).await?.commit;
-                let versions = api::file_commits(&client, &key, &repo_path, &head, 1).await?;
-                Ok((head, versions))
-            },
+            async move { api::file_commits(&client, &key, &repo_path, &branch, 1).await },
             move |result| GitHubAction::Versions(Action::RemoteLoaded(generation, result)),
         );
         Task::batch([local, remote])
@@ -260,21 +301,29 @@ impl App {
                 }
             },
             Action::RemoteLoaded(at, result) if at == generation => match result {
-                Ok((head, found)) => {
+                Ok(found) => {
                     let versions = &mut self.github.versions;
-                    versions.head = Some(head);
+                    // The first page replaces a list kept from before, with
+                    // the drawings it read.
+                    let known = match versions.page {
+                        0 => versions.remote.take().unwrap_or_default(),
+                        _ => Vec::new(),
+                    };
                     versions.page += 1;
                     versions.more = found.len() == PAGE;
-                    let commits: Vec<String> = found.iter().map(|v| v.commit.clone()).collect();
-                    versions
-                        .remote
-                        .get_or_insert_default()
-                        .extend(found.into_iter().map(|version| Remote {
+                    let list = versions.remote.get_or_insert_default();
+                    for version in found {
+                        // A commit made since shifts the pages by one.
+                        if list.iter().any(|r| r.version.commit == version.commit) {
+                            continue;
+                        }
+                        let read = known.iter().find(|r| r.version.commit == version.commit);
+                        list.push(Remote {
+                            doc: read.and_then(|read| read.doc.clone()),
+                            deleted: read.is_some_and(|read| read.deleted),
                             version,
-                            doc: None,
-                            deleted: false,
-                        }));
-                    return self.versions_docs(commits);
+                        });
+                    }
                 }
                 Err(error) => {
                     let error = self.github_failed(&error);
@@ -283,6 +332,14 @@ impl App {
                     versions.error = Some(error);
                 }
             },
+            Action::Shown(commit) => {
+                let versions = &mut self.github.versions;
+                let unread = (versions.remote.iter().flatten())
+                    .any(|r| r.version.commit == commit && r.doc.is_none() && !r.deleted);
+                if unread && versions.asked.insert(commit.clone()) {
+                    return self.versions_docs(vec![commit]);
+                }
+            }
             Action::Doc(at, commit, result) if at == generation => {
                 let remote = self.github.versions.remote.iter_mut().flatten();
                 if let Some(found) = remote.into_iter().find(|r| r.version.commit == commit) {
@@ -294,22 +351,18 @@ impl App {
             }
             Action::LoadMore => {
                 let versions = &self.github.versions;
-                let (Some(client), Some(key), Some((_, repo_path)), Some(head)) = (
+                let (Some(client), Some(key), Some((_, repo_path)), Some(branch)) = (
                     self.github.client(),
                     versions.named.clone(),
                     versions.target.clone(),
-                    versions.head.clone(),
+                    versions.branch.clone(),
                 ) else {
                     return Task::none();
                 };
                 let page = versions.page + 1;
                 self.github.versions.more = false;
                 return perform(
-                    async move {
-                        let found =
-                            api::file_commits(&client, &key, &repo_path, &head, page).await?;
-                        Ok((head, found))
-                    },
+                    async move { api::file_commits(&client, &key, &repo_path, &branch, page).await },
                     move |result| GitHubAction::Versions(Action::RemoteLoaded(generation, result)),
                 );
             }
@@ -474,14 +527,25 @@ impl App {
                         self.github.login(),
                     );
                     let at = time.map_or_else(String::new, |time| time.format("%H:%M").to_string());
-                    body = body.push(version_row(
+                    let shown = version_row(
                         Pick::Remote(version.commit.clone()),
                         selected,
                         found.doc.as_ref(),
                         version.message.clone(),
                         Some((format!("{who} · {at}"), default_message(&version.message))),
                         found.deleted,
-                    ));
+                    );
+                    // Its drawing is read once the row comes into view.
+                    body = body.push(if found.doc.is_some() || found.deleted {
+                        shown
+                    } else {
+                        let commit = version.commit.clone();
+                        sensor(shown)
+                            .key(commit.clone())
+                            .anticipate(100)
+                            .on_show(move |_| msg(Action::Shown(commit.clone())))
+                            .into()
+                    });
                 }
                 if versions.more {
                     body = body.push(

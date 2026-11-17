@@ -10,8 +10,10 @@ use std::future::Future;
 use std::sync::Arc;
 
 mod files;
+mod history;
 mod newer;
 mod status_bar;
+mod writes;
 
 fn repo() -> Repo {
     Repo {
@@ -89,15 +91,22 @@ fn app_in(dir: &Path) -> (App, PathBuf) {
         Some(path.clone()),
     );
     let _ = app.github_opened(&path);
+    read_back(&mut app);
     (app, path)
 }
 
 fn unsent(app: &App) -> Vec<String> {
-    app.github
-        .unsent
-        .get(&repo().key)
-        .cloned()
-        .unwrap_or_default()
+    app.github.unsent(&repo().key)
+}
+
+/// What the scan of the repository's working copies finds, taken at once.
+fn read_back(app: &mut App) {
+    let (key, root) = (repo().key, app.github.root.clone().unwrap());
+    let paths = app.github.states[&key].files.keys().cloned().collect();
+    let read = workcopy::hashes(&root, &key, paths);
+    app.github.seq += 1;
+    let seq = app.github.seq;
+    app.github.hashed(&key, seq, read);
 }
 
 /// A save made on this computer, as Cmd+S writes it.
@@ -107,6 +116,7 @@ fn save_here(app: &mut App, path: &Path) -> Vec<u8> {
     app.tab.doc = Document::from_native_file(&bytes).unwrap();
     app.tab.mark_saved(app.tab.doc.clone());
     let _ = app.github_saved(true, Some((path.to_owned(), app.tab.doc.clone())));
+    read_back(app);
     bytes
 }
 
@@ -129,6 +139,43 @@ async fn run(app: &mut App, task: Task<Message>) {
             }
         }
     }
+}
+
+/// Does `action`, then lands the working-copy writes it starts, with their
+/// `state.json` and what they read back, as if done at once; anything else
+/// they start is dropped.
+fn landed(app: &mut App, action: Action) {
+    let task = app.update(Message::GitHub(action));
+    land(app, task);
+}
+
+/// [`landed`] for a task already started.
+fn land(app: &mut App, task: Task<Message>) {
+    use iced::futures::StreamExt;
+    let mut tasks = vec![task];
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    runtime.block_on(async {
+        while let Some(task) = tasks.pop() {
+            let Some(mut stream) = iced_runtime::task::into_stream(task) else {
+                continue;
+            };
+            while let Some(action) = stream.next().await {
+                if let iced_runtime::Action::Output(Message::GitHub(
+                    written @ (Action::Updated(..)
+                    | Action::Settled(..)
+                    | Action::Scanned(..)
+                    | Action::Persisted(true, _)
+                    | Action::Picker(picker::Action::Written(..))),
+                )) = action
+                {
+                    tasks.push(app.update(Message::GitHub(written)));
+                }
+            }
+        }
+    });
 }
 
 /// `b.rsk` of the same repository, opened in a new tab in front.
@@ -336,7 +383,7 @@ fn closing_an_unsent_drawing_asks_and_later_closes_it() {
     assert!(app.strip().all(|tab| tab.id != id));
     assert!(app.github.closing.is_none());
     // Later keeps the save on this computer, unsent.
-    app.github_refresh(&repo().key);
+    read_back(&mut app);
     assert_eq!(unsent(&app), ["ring.rsk"]);
 }
 
@@ -582,7 +629,7 @@ fn keep_githubs_shows_a_placed_property_caption_exactly() {
     app.github.sending.clear();
     app.tab.doc = yours.clone();
     app.tab.mark_saved(yours);
-    github(&mut app, Action::Resolve(send::Choice::KeepTheirs));
+    landed(&mut app, Action::Resolve(send::Choice::KeepTheirs));
     assert!(app.status.starts_with("Kept GitHub’s"), "{}", app.status);
     assert_eq!(app.tab.doc, Document::from_native_file(&theirs).unwrap());
     assert!(!app.dirty());
@@ -681,7 +728,7 @@ fn keep_mine_sends_yours_over_githubs() {
     let (mut app, path) = app_in(dir.path());
     let mine = conflicted(&mut app, &path, Some(drawing(30.)));
     app.github.sending.clear();
-    github(&mut app, Action::Resolve(send::Choice::KeepMine));
+    landed(&mut app, Action::Resolve(send::Choice::KeepMine));
     assert!(app.github.dialog.is_none());
     // Files: yours stays.
     assert_eq!(std::fs::read(&path).unwrap(), mine);
@@ -706,7 +753,7 @@ fn a_choice_whose_send_never_starts_keeps_no_outcome_for_later() {
     conflicted(&mut app, &path, Some(drawing(30.)));
     app.github.sending.clear();
     app.github.account = Account::SignedOut(None);
-    github(&mut app, Action::Resolve(send::Choice::KeepMine));
+    landed(&mut app, Action::Resolve(send::Choice::KeepMine));
     assert!(matches!(app.github.dialog, Some(Dialog::SignIn)));
     assert!(app.github.kept.is_empty());
 }
@@ -732,7 +779,7 @@ fn keep_githubs_shows_it_as_one_undo_step_and_keeps_yours_in_versions() {
     let mine = conflicted(&mut app, &path, Some(drawing(30.)));
     app.github.sending.clear();
     let yours = app.tab.doc.clone();
-    github(&mut app, Action::Resolve(send::Choice::KeepTheirs));
+    landed(&mut app, Action::Resolve(send::Choice::KeepTheirs));
     assert!(app.github.dialog.is_none());
     // Files: GitHub's is here; yours is the newest version.
     assert_eq!(std::fs::read(&path).unwrap(), drawing(30.));
@@ -758,7 +805,7 @@ fn keep_both_saves_yours_beside_githubs_and_sends_it() {
     let (mut app, path) = app_in(dir.path());
     let mine = conflicted(&mut app, &path, Some(drawing(30.)));
     app.github.sending.clear();
-    github(&mut app, Action::Resolve(send::Choice::KeepBoth));
+    landed(&mut app, Action::Resolve(send::Choice::KeepBoth));
     assert!(app.github.dialog.is_none());
     // Files: GitHub's under the name, yours beside it.
     let copy = workcopy::working_path(dir.path(), &repo().key, "ring (2).rsk");
@@ -785,7 +832,7 @@ fn keep_githubs_deletion_leaves_yours_open_unsaved() {
         review(&app).compare.left.as_ref().err().map(String::as_str),
         Some("Deleted on GitHub")
     );
-    github(&mut app, Action::Resolve(send::Choice::KeepTheirs));
+    landed(&mut app, Action::Resolve(send::Choice::KeepTheirs));
     assert!(!path.exists());
     assert_eq!(file_state(&app, "ring.rsk"), None);
     assert_eq!(app.tab.path, None);
@@ -868,7 +915,7 @@ fn a_choice_never_waits_for_a_closing_tabs_save() {
     app.pending = Some(crate::app::Pending::CloseTab(app.tab.id));
     app.file_io.saving = true;
     app.file_io.saving_tab = Some(app.tab.id);
-    github(&mut app, Action::Resolve(send::Choice::KeepBoth));
+    landed(&mut app, Action::Resolve(send::Choice::KeepBoth));
     assert!(app.github.resolving.is_none(), "it can be made again");
 }
 
@@ -913,14 +960,14 @@ fn several_conflicts_are_shown_one_after_another() {
     );
     assert_eq!(review(&app).name, "b.rsk");
     assert_eq!((review(&app).done, review(&app).total), (0, 2));
-    github(&mut app, Action::Resolve(send::Choice::KeepTheirs));
+    landed(&mut app, Action::Resolve(send::Choice::KeepTheirs));
     assert_eq!(review(&app).name, "ring.rsk");
     assert_eq!((review(&app).done, review(&app).total), (1, 2));
     assert!(
         app.github.sending.is_empty(),
         "sends once every conflict is settled"
     );
-    github(&mut app, Action::Resolve(send::Choice::KeepMine));
+    landed(&mut app, Action::Resolve(send::Choice::KeepMine));
     assert!(app.github.dialog.is_none());
     assert!(app.github.sending.contains(&repo().key));
 }
@@ -1542,6 +1589,7 @@ fn a_conflict_saved_back_to_its_base_is_cleared_by_review() {
     app.github.conflicts.clear();
     app.github.sending.clear();
     std::fs::write(&path, drawing(42.)).unwrap();
+    read_back(&mut app);
     github(&mut app, Action::Review);
     assert_eq!(app.github_conflicts(&repo().key), 0);
     assert!(app.github.sending.is_empty(), "nothing to send");
@@ -1847,7 +1895,7 @@ fn a_new_drawing_is_an_empty_working_copy_with_nothing_on_github() {
     assert!(path.exists());
     assert_eq!(file_state(&app, "route.rsk"), Some(FileState::default()));
     // It is unsent from the start, as a new file.
-    app.github_refresh(&repo().key);
+    read_back(&mut app);
     assert!(unsent(&app).contains(&"route.rsk".to_owned()));
 }
 
@@ -1948,7 +1996,7 @@ fn keep_githubs_says_how_to_get_yours_back() {
     let (mut app, path) = app_in(dir.path());
     conflicted(&mut app, &path, Some(drawing(30.)));
     app.github.sending.clear();
-    github(&mut app, Action::Resolve(send::Choice::KeepTheirs));
+    landed(&mut app, Action::Resolve(send::Choice::KeepTheirs));
     let undo = crate::app::shortcuts::label(&Message::Undo).unwrap();
     assert_eq!(
         app.status,
@@ -2594,7 +2642,7 @@ fn a_branch_link_opens_an_old_version_kept_apart_and_never_sent() {
         bytes: drawing(30.),
     };
     let request = app.github.seq;
-    github(
+    landed(
         &mut app,
         Action::Picker(picker::Action::Downloaded(
             request,
