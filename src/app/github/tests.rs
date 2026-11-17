@@ -1115,7 +1115,7 @@ fn picker_at(app: &mut App, mode: Mode, names: &[&str]) {
     );
     // No last change is known; the drawings show.
     for name in names.iter().filter(|name| name.ends_with(".rsk")) {
-        let unknown = picker::Action::Changed(generation, (*name).into(), None);
+        let unknown = picker::Action::Changed(generation, (*name).into(), Ok(None));
         github(app, Action::Picker(unknown));
     }
 }
@@ -1141,7 +1141,7 @@ fn picker_lists(app: &mut App, folders: &[&str], drawings: &[&str]) -> u64 {
 
 fn picker_changed(app: &mut App, generation: u64, path: &str, date: Option<&str>) {
     let found = date.map(|date| ("@octo".to_owned(), date.to_owned()));
-    let changed = picker::Action::Changed(generation, path.into(), found);
+    let changed = picker::Action::Changed(generation, path.into(), Ok(found));
     github(app, Action::Picker(changed));
 }
 

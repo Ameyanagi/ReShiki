@@ -44,7 +44,7 @@ fn files_at(app: &mut App, names: &[&str], date: impl Fn(&str) -> Option<String>
     let asked: Vec<String> = the_picker(app).asked.iter().cloned().collect();
     for path in asked {
         let found = date(&path).map(|date| ("@alice".to_owned(), date));
-        let _ = picker(app, picker::Action::Changed(generation, path, found));
+        let _ = picker(app, picker::Action::Changed(generation, path, Ok(found)));
     }
 }
 
@@ -547,7 +547,7 @@ fn files_in_a_folder_show_before_their_dates() {
     let found = Some(("@alice".to_owned(), "2026-01-01T00:00:00Z".to_owned()));
     let _ = picker(
         &mut app,
-        picker::Action::Changed(opening, "sub/ring.rsk".into(), found),
+        picker::Action::Changed(opening, "sub/ring.rsk".into(), Ok(found)),
     );
     assert!(the_picker(&app).changed.contains_key("sub/ring.rsk"));
     assert_eq!(picker_names(&app), ["phen.mol", "ring.rsk"]);
@@ -680,7 +680,7 @@ fn a_folder_opened_again_asks_for_no_date_twice() {
     let found = Some(("@alice".to_owned(), "2026-01-01T00:00:00Z".to_owned()));
     let _ = picker(
         &mut app,
-        picker::Action::Changed(opening, "a.mol".into(), found),
+        picker::Action::Changed(opening, "a.mol".into(), Ok(found)),
     );
     assert!(the_picker(&app).changed.contains_key("a.mol"));
     let asked = |app: &App| {
@@ -742,6 +742,37 @@ fn files_open_as_listed_at_the_repositorys_commit() {
 }
 
 #[test]
+fn a_date_that_failed_is_asked_again_and_one_with_no_history_is_not() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = app_in(dir.path());
+    app.github.repos = vec![repo()];
+    app.github.prefs.tiles = true;
+    let _ = picker(&mut app, picker::Action::Show(Mode::Open));
+    let _ = picker(&mut app, picker::Action::PickRepo(repo().key));
+    let generation = picker_generation(&app);
+    let top = vec![entry("a.mol"), entry("b.mol")];
+    let _ = picker(
+        &mut app,
+        picker::Action::Listing(generation, Ok((None, sha('8'), top))),
+    );
+    let opening = the_picker(&app).opening;
+    // `a.mol` could not be asked (offline); `b.mol` has no history.
+    let _ = picker(
+        &mut app,
+        picker::Action::Changed(opening, "a.mol".into(), Err(gh::Error::Offline)),
+    );
+    let _ = picker(
+        &mut app,
+        picker::Action::Changed(opening, "b.mol".into(), Ok(None)),
+    );
+    assert!(!the_picker(&app).asked.contains("a.mol"));
+    assert!(the_picker(&app).asked.contains("b.mol"));
+    // Shown again, only the failed one is asked again.
+    let _ = picker(&mut app, picker::Action::View(false));
+    assert!(the_picker(&app).asked.contains("a.mol"));
+}
+
+#[test]
 fn tiles_shown_after_the_tree_keep_their_order() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, _) = app_in(dir.path());
@@ -765,7 +796,7 @@ fn tiles_shown_after_the_tree_keep_their_order() {
         let found = Some(("@alice".to_owned(), date.to_owned()));
         let _ = picker(
             &mut app,
-            picker::Action::Changed(generation, path.into(), found),
+            picker::Action::Changed(generation, path.into(), Ok(found)),
         );
     }
     assert_eq!(picker_names(&app), ["a.mol", "b.mol"]);

@@ -416,8 +416,8 @@ pub enum Action {
     /// its top folder), the folder's tree and what it holds.
     Listing(u64, Result<(Option<String>, String, Vec<Entry>), gh::Error>),
     /// Who last changed the file at a repository path, and when (`None`:
-    /// unknown), by the request that opened the repository.
-    Changed(u64, String, Option<(String, String)>),
+    /// no history), by the request that opened the repository.
+    Changed(u64, String, Result<Option<(String, String)>, gh::Error>),
     Folder(String),
     /// Backspace: up one folder.
     Up,
@@ -784,11 +784,18 @@ impl App {
                 let Some(picker) = self.picker().filter(|p| p.opening == opening) else {
                     return Task::none();
                 };
-                // It fills in its tile's second line; nothing moves.
-                if let Some((who, date)) = found
-                    && let Ok(at) = DateTime::parse_from_rfc3339(&date)
-                {
-                    picker.changed.insert(path, (who, at.with_timezone(&Local)));
+                // It fills in its tile's second line; nothing moves. One
+                // that failed is asked again the next time it shows.
+                match found {
+                    Ok(Some((who, date))) => {
+                        if let Ok(at) = DateTime::parse_from_rfc3339(&date) {
+                            picker.changed.insert(path, (who, at.with_timezone(&Local)));
+                        }
+                    }
+                    Ok(None) => {}
+                    Err(_) => {
+                        picker.asked.remove(&path);
+                    }
                 }
             }
             Action::Folder(name) => {
@@ -1803,11 +1810,11 @@ impl App {
             let asked = path.clone();
             perform(
                 async move {
-                    let last = api::last_commit(&client, &key, &path, &commit)
-                        .await
-                        .ok()??;
-                    let who = who(last.login.as_deref(), &last.author, me.as_deref());
-                    Some((who, last.date))
+                    let last = api::last_commit(&client, &key, &path, &commit).await?;
+                    Ok(last.map(|last| {
+                        let who = who(last.login.as_deref(), &last.author, me.as_deref());
+                        (who, last.date)
+                    }))
                 },
                 move |found| GitHubAction::Picker(Action::Changed(opening, asked, found)),
             )
