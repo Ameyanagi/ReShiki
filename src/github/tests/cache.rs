@@ -3,6 +3,7 @@ use crate::github::{
     api::{self, Folders},
     cache::Disk,
     client::Client,
+    config,
     mock::{LOGIN, Mock},
 };
 use std::path::{Path, PathBuf};
@@ -27,12 +28,22 @@ fn requests(mock: &Mock) -> usize {
     mock.model().log.len()
 }
 
-/// The files kept for `account`.
+/// A disk cache in `cache` for a test server.
+fn disk(cache: &Path) -> Disk {
+    Disk::new(
+        cache,
+        &config::resolve(Some("http://127.0.0.1:1".into()), None),
+    )
+}
+
+/// The files kept for `account`, under the one server's folder in `cache`.
 fn kept(cache: &Path, account: &str) -> Vec<PathBuf> {
-    let folder = cache.join("github-override").join(account);
-    (std::fs::read_dir(folder).into_iter().flatten())
-        .map(|entry| entry.unwrap().path())
-        .collect()
+    let server = std::fs::read_dir(cache).unwrap().next().unwrap().unwrap();
+    (std::fs::read_dir(server.path().join(account))
+        .into_iter()
+        .flatten())
+    .map(|entry| entry.unwrap().path())
+    .collect()
 }
 
 /// Choosing a repository, opening a folder (its names, dates and previews)
@@ -91,6 +102,35 @@ async fn a_changed_branch_is_read_again_and_kept_with_its_new_etag() {
 }
 
 #[tokio::test]
+async fn a_drawing_changed_on_github_reads_new_after_a_restart_and_in_history() {
+    let (mock, cache) = (Mock::start(0).await, tempfile::tempdir().unwrap());
+    mock.model().seed_demo();
+    let repo = key(LOGIN, "lab-notes");
+    let client = signed_in(&mock, LOGIN, cache.path());
+    api::download(&client, &repo, "main", "ring.rsk")
+        .await
+        .unwrap();
+    let old = api::file_commits(&client, &repo, "ring.rsk", "main", 1);
+    assert_eq!(old.await.unwrap().len(), 1);
+    let new = mock
+        .model()
+        .repo("lab-notes")
+        .remote_commit("ring.rsk", Some(b"{}"));
+
+    let client = signed_in(&mock, LOGIN, cache.path());
+    let download = api::download(&client, &repo, "main", "ring.rsk")
+        .await
+        .unwrap();
+    assert_eq!(
+        (download.commit, download.bytes),
+        (new.clone(), b"{}".to_vec())
+    );
+    let versions = api::file_commits(&client, &repo, "ring.rsk", "main", 1);
+    let versions = versions.await.unwrap();
+    assert_eq!((versions.len(), &versions[0].commit), (2, &new));
+}
+
+#[tokio::test]
 async fn objects_by_name_are_read_from_disk_without_asking() {
     let (mock, cache) = (Mock::start(0).await, tempfile::tempdir().unwrap());
     mock.model().seed_demo();
@@ -141,7 +181,7 @@ async fn each_account_and_signed_out_reading_keep_their_own() {
 async fn past_the_cap_the_least_recently_used_go_first() {
     let cache = tempfile::tempdir().unwrap();
     // 64 + 2 bytes of head and 100 of reply: two fit, three do not.
-    let disk = Disk::new(cache.path(), true).with_cap(400);
+    let disk = disk(cache.path()).with_cap(400);
     let pause = || std::thread::sleep(std::time::Duration::from_millis(5));
     disk.store(LOGIN, "/a", None, &[1; 100]).await;
     pause();
@@ -159,8 +199,8 @@ async fn past_the_cap_the_least_recently_used_go_first() {
 #[tokio::test]
 async fn an_entry_that_cannot_be_read_whole_is_a_miss_and_removed() {
     let cache = tempfile::tempdir().unwrap();
-    let disk = Disk::new(cache.path(), true);
-    let damages: [fn(&Path); 3] = [
+    let disk = disk(cache.path());
+    let damages: [fn(&Path); 4] = [
         |file| std::fs::write(file, b"not an entry").unwrap(),
         // Cut short, as by a crash before the write reached the disk.
         |file| {
@@ -168,6 +208,12 @@ async fn an_entry_that_cannot_be_read_whole_is_a_miss_and_removed() {
             std::fs::write(file, &bytes[..bytes.len() - 1]).unwrap();
         },
         |file| std::fs::write(file, b"").unwrap(),
+        // An ETag no request could carry, the reply intact.
+        |file| {
+            let mut bytes = std::fs::read(file).unwrap();
+            bytes[66] = 0;
+            std::fs::write(file, bytes).unwrap();
+        },
     ];
     for (n, damage) in damages.into_iter().enumerate() {
         let path = format!("/entry-{n}");
@@ -179,7 +225,7 @@ async fn an_entry_that_cannot_be_read_whole_is_a_miss_and_removed() {
     }
 
     // Through a client, it is asked of GitHub again and kept again.
-    let mock = Mock::start(0).await;
+    let (mock, cache) = (Mock::start(0).await, tempfile::tempdir().unwrap());
     mock.model().seed_demo();
     let repo = key(LOGIN, "lab-notes");
     let head = api::head(&mock.client(), &repo, "main").await.unwrap();

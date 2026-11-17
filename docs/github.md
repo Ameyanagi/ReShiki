@@ -311,8 +311,10 @@ chemistry**.
   GitHub again, never shown as an error. Reads and writes run off the
   window's thread. Delete `cache/github/` (or the whole `cache/`) whenever
   you like, with ReShiki closed or not; it is rebuilt as you browse. With
-  `RESHIKI_GITHUB_API` set, replies go to `cache/github-override/` instead,
-  so a test server's never pass for GitHub's.
+  `RESHIKI_GITHUB_API` or `RESHIKI_GITHUB_WEB` set, replies go to a folder
+  named after that server instead, such as
+  `cache/github-127.0.0.1-47123-api/`, so a test server's never pass for
+  GitHub's.
 - Requests go over HTTP/2 where GitHub offers it, one connection for the
   previews, dates and uploads running at once; signed-in, signed-out and
   sign-in requests share the connections. Send uploads each drawing and its

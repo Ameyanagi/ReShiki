@@ -159,7 +159,7 @@ impl Client {
 
     /// Keeps replies in `cache` (the data folder's `cache`) between runs too.
     pub fn cached(mut self, cache: Option<&Path>) -> Self {
-        self.disk = cache.map(|cache| Disk::new(cache, self.ends.overridden));
+        self.disk = cache.map(|cache| Disk::new(cache, &self.ends));
         self
     }
 
@@ -247,7 +247,11 @@ impl Client {
         }
         let session = self.session.lock().await;
         let login = session.tokens.as_ref()?.login.to_ascii_lowercase();
-        super::api::name_ok(&login).then_some((disk, login))
+        // As GitHub names accounts: letters, digits and hyphens.
+        let named = login
+            .bytes()
+            .all(|c| c.is_ascii_alphanumeric() || c == b'-');
+        (named && super::api::name_ok(&login)).then_some((disk, login))
     }
 
     /// A GET whose reply never changes, such as an object by its name: asked

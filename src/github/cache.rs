@@ -5,7 +5,7 @@
 //! to [`CAP`] bytes in all, the least recently used going first. An entry that
 //! cannot be read whole is a miss and is removed: nothing here is ever an error
 //! the user sees.
-use super::workcopy::hash;
+use super::{config::Endpoints, workcopy::hash};
 use std::{
     collections::BTreeMap,
     io::Write,
@@ -17,11 +17,13 @@ use std::{
 /// The most bytes kept, for every account together.
 const CAP: u64 = 200 << 20;
 
-/// Signed out. No GitHub login has an underscore, so no account shares it.
+/// Signed out. No GitHub login has an underscore (a client keeps only
+/// letters, digits and hyphens), so no account shares it.
 pub(super) const PUBLIC: &str = "_public";
 
-/// `<cache>/github/`, or `github-override/` for a GitHub set by
-/// `RESHIKI_GITHUB_API`, so a test server's replies never pass for GitHub's.
+/// `<cache>/github/`, or `github-<host-port-path>/` for a GitHub set by
+/// `RESHIKI_GITHUB_API` or `RESHIKI_GITHUB_WEB`, so a test server's replies
+/// never pass for GitHub's or another server's.
 #[derive(Clone)]
 pub(super) struct Disk {
     root: PathBuf,
@@ -40,11 +42,17 @@ pub(super) struct Kept {
 static USED: Mutex<BTreeMap<PathBuf, u64>> = Mutex::new(BTreeMap::new());
 
 impl Disk {
-    pub(super) fn new(cache: &Path, overridden: bool) -> Self {
-        let name = if overridden {
-            "github-override"
-        } else {
-            "github"
+    pub(super) fn new(cache: &Path, ends: &Endpoints) -> Self {
+        let name = match ends.overridden {
+            false => "github".to_owned(),
+            true => {
+                let api = ends
+                    .api
+                    .split_once("://")
+                    .map_or(&*ends.api, |(_, api)| api);
+                let named = |c: char| c.is_ascii_alphanumeric() || c == '.';
+                format!("github-{}", api.replace(|c| !named(c), "-"))
+            }
         };
         Self {
             root: cache.join(name),
@@ -74,11 +82,11 @@ impl Disk {
     /// Keeps `bytes` for `path`; a write that fails keeps nothing.
     pub(super) async fn store(&self, account: &str, path: &str, etag: Option<&str>, bytes: &[u8]) {
         let (disk, file) = (self.clone(), self.file(account, path));
-        let (etag, bytes) = (etag.unwrap_or_default().to_owned(), bytes.to_vec());
+        let rest = [etag.unwrap_or_default().as_bytes(), b"\n", bytes].concat();
         let _ = crate::task::spawn_blocking(move || {
-            let head = format!("{}\n{etag}\n", hash(&bytes));
-            if store(&file, &head, &bytes).is_ok() {
-                disk.counted((head.len() + bytes.len()) as u64);
+            let head = format!("{}\n", hash(&rest));
+            if store(&file, &head, &rest).is_ok() {
+                disk.counted((head.len() + rest.len()) as u64);
             }
         })
         .await;
@@ -121,10 +129,14 @@ impl Disk {
     }
 }
 
-/// An entry is `<SHA-256 of the reply>\n<ETag>\n<reply>`; its modified time
+/// An entry is `<SHA-256 of the rest>\n<ETag>\n<reply>`; its modified time
 /// is when it was last used.
 fn load(file: &Path) -> Option<Kept> {
-    let kept = std::fs::read(file).ok().and_then(|data| parse(&data));
+    let kept = match std::fs::read(file) {
+        // Nothing to remove: one written meanwhile is left alone.
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return None,
+        read => read.ok().and_then(|data| parse(&data)),
+    };
     match kept {
         Some(_) => {
             let _ = std::fs::File::options()
@@ -143,11 +155,11 @@ fn load(file: &Path) -> Option<Kept> {
 fn parse(data: &[u8]) -> Option<Kept> {
     let (sum, rest) = data.split_at_checked(64)?;
     let rest = rest.strip_prefix(b"\n")?;
-    let end = rest.iter().position(|&byte| byte == b'\n')?;
-    let (etag, bytes) = (&rest[..end], &rest[end + 1..]);
-    if sum != hash(bytes).as_bytes() {
+    if sum != hash(rest).as_bytes() {
         return None;
     }
+    let end = rest.iter().position(|&byte| byte == b'\n')?;
+    let (etag, bytes) = (&rest[..end], &rest[end + 1..]);
     let etag = String::from_utf8(etag.to_vec()).ok()?;
     Some(Kept {
         etag: (!etag.is_empty()).then_some(etag),
@@ -158,12 +170,12 @@ fn parse(data: &[u8]) -> Option<Kept> {
 /// Written to a temporary file renamed over the entry, so a reader finds the
 /// old entry or the new one. No `fsync`: an entry a crash cut short fails its
 /// sum.
-fn store(file: &Path, head: &str, bytes: &[u8]) -> std::io::Result<()> {
+fn store(file: &Path, head: &str, rest: &[u8]) -> std::io::Result<()> {
     let folder = file.parent().unwrap_or(Path::new("."));
     std::fs::create_dir_all(folder)?;
     let mut temp = crate::storage::temporary_in(folder, 0o600)?;
     temp.write_all(head.as_bytes())?;
-    temp.write_all(bytes)?;
+    temp.write_all(rest)?;
     temp.as_file().set_modified(SystemTime::now())?;
     temp.persist(file)?;
     Ok(())

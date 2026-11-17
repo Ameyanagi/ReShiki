@@ -261,7 +261,8 @@ fn a_sign_in_shows_the_code_and_cancel_drops_late_answers() {
 
 /// What an earlier run kept on disk for `path`, as `account`.
 fn kept_earlier(cache: &Path, account: &str, path: &str, reply: &[u8]) {
-    let folder = cache.join("github-override").join(account);
+    // The folder of `nowhere`'s server.
+    let folder = cache.join("github-127.0.0.1-9").join(account);
     std::fs::create_dir_all(&folder).unwrap();
     let entry = [format!("{}\n\n", workcopy::hash(reply)).as_bytes(), reply].concat();
     std::fs::write(folder.join(workcopy::hash(path.as_bytes())), entry).unwrap();
