@@ -147,6 +147,9 @@ pub(super) struct State {
     quit_after: Option<(iced::window::Id, Vec<TabId>)>,
     /// A conflict choice is being written.
     settling: bool,
+    /// The `seq` each running Send began at: what it read of the files
+    /// counts as a read begun then.
+    sends: HashMap<RepoKey, u64>,
     sending: HashSet<RepoKey>,
     failed: HashMap<RepoKey, String>,
     /// What the last send of each repository found changed on GitHub.
@@ -213,6 +216,7 @@ impl State {
             deferred: Vec::new(),
             quit_after: None,
             settling: false,
+            sends: HashMap::new(),
             sending: HashSet::new(),
             failed: HashMap::new(),
             conflicts: HashMap::new(),
@@ -1706,6 +1710,8 @@ impl App {
             return Task::none();
         };
         let sent_at = workcopy::now_id();
+        self.github.seq += 1;
+        self.github.sends.insert(key.clone(), self.github.seq);
         perform(
             {
                 let key = key.clone();
@@ -1734,6 +1740,7 @@ impl App {
         result: Result<send::SendOutcome, gh::Error>,
     ) -> Task<Message> {
         self.github.sending.remove(&key);
+        let began = self.github.sends.remove(&key);
         // What a conflict choice kept, said before the send that followed it.
         let kept = self.github.kept.remove(&key);
         let mut tasks = Vec::new();
@@ -1758,6 +1765,13 @@ impl App {
                 };
                 send::apply(state, &outcome);
                 let state = state.clone();
+                // Sent as the Send read them, unless saved again since.
+                if let Some(began) = began {
+                    let read = (outcome.sent.iter())
+                        .map(|(path, _, hash)| (path.clone(), Some(hash.clone())))
+                        .collect();
+                    self.github.hashed(&key, began, read);
+                }
                 self.github
                     .conflicts
                     .insert(key.clone(), outcome.conflicts.clone());

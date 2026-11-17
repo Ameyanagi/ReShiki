@@ -103,3 +103,32 @@ fn a_save_that_goes_on_with_a_close_still_asks_to_send() {
     assert!(matches!(app.github.closing, Some(Closing::Tab(asked, _)) if asked == id));
     assert!(app.strip().any(|tab| tab.id == id), "still open");
 }
+
+#[test]
+fn what_a_send_read_counts_as_read_when_it_began() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_in(dir.path());
+    let sent = |app: &mut App, bytes: &[u8]| {
+        let outcome = SendOutcome {
+            repo: repo(),
+            commit: sha('d'),
+            sent: vec![("ring.rsk".into(), sha('e'), workcopy::hash(bytes))],
+            conflicts: Vec::new(),
+        };
+        github(
+            app,
+            Action::Sent(repo().key, workcopy::now_id(), Ok(outcome)),
+        );
+    };
+    // Changed in another app, not read here yet; a Send reads and sends it.
+    std::fs::write(&path, drawing(50.)).unwrap();
+    let _ = app.github_send(repo().key, "Update ring.rsk".into(), None);
+    sent(&mut app, &drawing(50.));
+    assert!(unsent(&app).is_empty(), "sent as read");
+    // A save read back after a Send began is newer than what it sent.
+    let _ = app.github_send(repo().key, "Update ring.rsk".into(), None);
+    std::fs::write(&path, drawing(60.)).unwrap();
+    read_back(&mut app);
+    sent(&mut app, &drawing(50.));
+    assert_eq!(unsent(&app), ["ring.rsk"]);
+}
