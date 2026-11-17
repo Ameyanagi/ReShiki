@@ -1,8 +1,10 @@
-//! GitHub's replies kept on disk between runs, beneath the session's
-//! [`super::client::Replies`]: one folder per account, so one account never
-//! reads another's private repositories. Up to [`CAP`] bytes in all, the least
-//! recently used going first. An entry that cannot be read whole is a miss and
-//! is removed: nothing here is ever an error the user sees.
+//! GitHub's replies kept on disk between runs, one folder per account.
+//!
+//! It lies beneath the session's [`super::client::Replies`]. A folder per
+//! account keeps one account from reading another's private repositories. Up
+//! to [`CAP`] bytes in all, the least recently used going first. An entry that
+//! cannot be read whole is a miss and is removed: nothing here is ever an error
+//! the user sees.
 use super::workcopy::hash;
 use std::{
     collections::BTreeMap,
