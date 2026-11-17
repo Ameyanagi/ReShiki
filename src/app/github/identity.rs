@@ -43,9 +43,10 @@ pub(super) struct Prefs {
     /// Repositories opened by link, listed until removed from the list.
     #[serde(default)]
     pub(super) shared: Vec<Shared>,
-    /// The picker shows a tree, not tiles: the view used last.
+    /// The picker shows tiles, not the tree it first opens in: the view used
+    /// last.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-    pub(super) tree: bool,
+    pub(super) tiles: bool,
 }
 
 /// A repository opened by link, as GitHub last named it.

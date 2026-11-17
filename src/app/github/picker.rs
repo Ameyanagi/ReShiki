@@ -1233,7 +1233,7 @@ impl App {
                     picker.sort();
                 }
                 let asked = picker.asked.clone();
-                self.github.prefs.tree = tree;
+                self.github.prefs.tiles = !tree;
                 let (keep, load) = (self.github_keep_prefs(), self.picker_load());
                 // A wait still running goes on.
                 if let Some(picker) = self.picker().filter(|p| !p.tree && p.waiting == 0) {
@@ -1698,8 +1698,8 @@ impl App {
         } else if !self.github.repos.is_empty() || !self.github.prefs.shared.is_empty() {
             picker.listed(&self.github_picker_repos(), self.github.prefs.last);
         }
-        // Tiles the very first time, then the view used last.
-        picker.tree = picker.mode == Mode::Open && self.github.prefs.tree;
+        // The tree the very first time, then the view used last.
+        picker.tree = picker.mode == Mode::Open && !self.github.prefs.tiles;
         let focus = match picker.mode {
             Mode::Open => iced::widget::operation::focus(SEARCH),
             Mode::SendTo => iced::widget::operation::focus(SAVE_NAME)

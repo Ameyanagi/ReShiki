@@ -27,11 +27,12 @@ fn picker(app: &mut App, action: picker::Action) -> Task<Message> {
     app.update(Message::GitHub(Action::Picker(action)))
 }
 
-/// The picker on `repo()`, its top folder listed with `names` (a trailing
-/// `/` is a folder), every file's last change answered: by `date` of its
-/// path, or unknown.
+/// The picker on `repo()` as tiles, its top folder listed with `names` (a
+/// trailing `/` is a folder), every file's last change answered: by `date` of
+/// its path, or unknown.
 fn files_at(app: &mut App, names: &[&str], date: impl Fn(&str) -> Option<String>) {
     app.github.repos = vec![repo()];
+    app.github.prefs.tiles = true;
     let _ = picker(app, picker::Action::Show(Mode::Open));
     let _ = picker(app, picker::Action::PickRepo(repo().key));
     let entries = names.iter().map(|name| entry(name)).collect();
@@ -413,25 +414,31 @@ fn the_picker_opens_in_the_view_used_last() {
     let (mut app, _) = app_in(dir.path());
     app.github.repos = vec![repo()];
     let _ = picker(&mut app, picker::Action::Show(Mode::Open));
-    assert!(!the_picker(&app).tree, "Tiles the very first time");
-    let _ = picker(&mut app, picker::Action::View(true));
-    assert!(app.github.prefs.tree);
+    assert!(the_picker(&app).tree, "the tree the very first time");
+    let _ = picker(&mut app, picker::Action::View(false));
+    assert!(app.github.prefs.tiles);
     github(&mut app, Action::Close);
     let _ = picker(&mut app, picker::Action::Show(Mode::Open));
-    assert!(the_picker(&app).tree);
-    // Send chooses a folder as tiles.
+    assert!(!the_picker(&app).tree);
+    // Send chooses a folder as tiles, and leaves the view kept as it is.
     github(&mut app, Action::Close);
     let _ = picker(&mut app, picker::Action::Show(Mode::SendTo));
     assert!(!the_picker(&app).tree);
     let _ = picker(&mut app, picker::Action::View(true));
     assert!(!the_picker(&app).tree);
+    assert!(app.github.prefs.tiles);
     github(&mut app, Action::Close);
-    // Kept with the repository colors; Tiles is not written.
+    // Kept with the repository colors; the tree is not written.
     let kept = serde_json::to_string(&app.github.prefs).unwrap();
-    assert!(kept.contains("\"tree\":true"));
-    app.github.prefs.tree = false;
+    assert!(kept.contains("\"tiles\":true"));
+    let _ = picker(&mut app, picker::Action::Show(Mode::Open));
+    let _ = picker(&mut app, picker::Action::View(true));
+    assert!(!app.github.prefs.tiles);
     let kept = serde_json::to_string(&app.github.prefs).unwrap();
-    assert!(!kept.contains("tree"));
+    assert!(!kept.contains("tiles"));
+    // The view an earlier nightly kept is not read: the tree.
+    let old: identity::Prefs = serde_json::from_str(r#"{"tree":true}"#).unwrap();
+    assert!(!old.tiles);
 }
 
 #[test]
@@ -650,6 +657,7 @@ fn a_folder_opened_while_dates_load_asks_for_its_own() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, _) = app_in(dir.path());
     app.github.repos = vec![repo()];
+    app.github.prefs.tiles = true;
     let _ = picker(&mut app, picker::Action::Show(Mode::Open));
     let _ = picker(&mut app, picker::Action::PickRepo(repo().key));
     let generation = picker_generation(&app);
@@ -692,7 +700,6 @@ fn a_new_folder_in_the_tree_shows_under_its_folder() {
 fn tiles_shown_after_the_tree_sort_newest_first() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, _) = app_in(dir.path());
-    app.github.prefs.tree = true;
     app.github.repos = vec![repo()];
     let _ = picker(&mut app, picker::Action::Show(Mode::Open));
     let _ = picker(&mut app, picker::Action::PickRepo(repo().key));
@@ -746,6 +753,7 @@ fn a_wait_for_dates_outlasts_a_trip_to_the_tree() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, _) = app_in(dir.path());
     app.github.repos = vec![repo()];
+    app.github.prefs.tiles = true;
     let _ = picker(&mut app, picker::Action::Show(Mode::Open));
     let _ = picker(&mut app, picker::Action::PickRepo(repo().key));
     let generation = picker_generation(&app);
