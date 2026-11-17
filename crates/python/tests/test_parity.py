@@ -45,6 +45,16 @@ def test_the_reaction_converts_as_the_command_line_converts_it(parity: dict[str,
     assert reaction.cdx().startswith(b"VjCD0100")
 
 
+def test_nmr_rows_are_the_rows_the_command_line_prints(parity: dict[str, Any]) -> None:
+    molecule = reshiki.Molecule.from_smiles(parity["nmr"]["smiles"])
+    for nucleus in ("1H", "13C"):
+        rows = [
+            {**asdict(row), "atom": str(row.atom), "hydrogens": [str(h) for h in row.hydrogens]}
+            for row in molecule.predict_nmr(nucleus)
+        ]
+        assert rows == parity["nmr"][nucleus], nucleus
+
+
 def test_svg_text_is_outlined_unless_live(parity: dict[str, Any]) -> None:
     molecule = reshiki.Molecule.from_smiles(parity["molecule"]["smiles"])
     for svg in (molecule.svg(), molecule.export("svg"), molecule.svg(svg_text="outline")):

@@ -1,7 +1,7 @@
 """Rewrite tests/fixtures/agent-api/parity.json from a built `reshiki`.
 
-The fixture holds one molecule and one reaction with the answers every
-surface must give for them: `reshiki --cli` (tests/cli.rs), the Python package
+The fixture holds one molecule, one reaction and one NMR prediction with the
+answers every surface must give for them: `reshiki --cli` (tests/cli.rs), the Python package
 (crates/python/tests/test_parity.py) and the JavaScript package
 (packages/headless/test/parity.test.ts). It keeps only values that are the same
 on every platform: SMILES, InChI and rounded properties, not coordinates.
@@ -17,6 +17,7 @@ from pathlib import Path
 FIXTURE = Path(__file__).resolve().parent.parent / "tests/fixtures/agent-api/parity.json"
 MOLECULE = "CC(=O)Oc1ccccc1C(=O)O"
 REACTION = "CCO>>CC=O"
+NMR = "CCOC(C)=O"
 PROPERTIES = (
     "formula",
     "mass",
@@ -58,6 +59,15 @@ def main() -> None:
             "rsmi": REACTION,
             "outputs": {
                 "rsmi": cli(binary, ["convert", "-", "--from", "rsmi", "--to", "rsmi"], REACTION)
+            },
+        },
+        "nmr": {
+            "smiles": NMR,
+            **{
+                nucleus: json.loads(
+                    cli(binary, ["predict-nmr", "--smiles", NMR, "--nucleus", nucleus])
+                )["value"]["rows"]
+                for nucleus in ("1H", "13C")
             },
         },
     }

@@ -22,5 +22,110 @@
     "outputs": {
       "rsmi": "CCO>>CC=O"
     }
+  },
+  "nmr": {
+    "smiles": "CCOC(C)=O",
+    "1H": [
+      {
+        "atom": "1",
+        "broad": false,
+        "hydrogen_count": 3,
+        "hydrogens": [],
+        "max": 1.4,
+        "min": 1.17,
+        "note": "Unresolved attached-H group; not a stereospecific peak assignment",
+        "nucleus": "1H",
+        "ppm": 1.28,
+        "references": 17,
+        "sd": 0.064495611,
+        "shell": 4
+      },
+      {
+        "atom": "2",
+        "broad": false,
+        "hydrogen_count": 2,
+        "hydrogens": [],
+        "max": 4.45,
+        "min": 2.735,
+        "note": "Unresolved attached-H group; not a stereospecific peak assignment",
+        "nucleus": "1H",
+        "ppm": 4.16,
+        "references": 17,
+        "sd": 0.3745428,
+        "shell": 3
+      },
+      {
+        "atom": "5",
+        "broad": false,
+        "hydrogen_count": 3,
+        "hydrogens": [],
+        "max": 2.1,
+        "min": 2.05,
+        "note": "Unresolved attached-H group; not a stereospecific peak assignment",
+        "nucleus": "1H",
+        "ppm": 2.095,
+        "references": 4,
+        "sd": 0.023804761,
+        "shell": 4
+      }
+    ],
+    "13C": [
+      {
+        "atom": "1",
+        "broad": false,
+        "hydrogen_count": null,
+        "hydrogens": [],
+        "max": 16.927,
+        "min": 12.4,
+        "note": null,
+        "nucleus": "13C",
+        "ppm": 14.2,
+        "references": 58,
+        "sd": 0.504020137,
+        "shell": 3
+      },
+      {
+        "atom": "2",
+        "broad": false,
+        "hydrogen_count": null,
+        "hydrogens": [],
+        "max": 65.9,
+        "min": 57.1,
+        "note": null,
+        "nucleus": "13C",
+        "ppm": 61.05,
+        "references": 58,
+        "sd": 1.444256887,
+        "shell": 2
+      },
+      {
+        "atom": "4",
+        "broad": false,
+        "hydrogen_count": null,
+        "hydrogens": [],
+        "max": 175.1,
+        "min": 167.07,
+        "note": null,
+        "nucleus": "13C",
+        "ppm": 170.7,
+        "references": 28,
+        "sd": 1.253977199,
+        "shell": 2
+      },
+      {
+        "atom": "5",
+        "broad": false,
+        "hydrogen_count": null,
+        "hydrogens": [],
+        "max": 25.8,
+        "min": 19.55,
+        "note": null,
+        "nucleus": "13C",
+        "ppm": 20.9,
+        "references": 28,
+        "sd": 1.005444412,
+        "shell": 3
+      }
+    ]
   }
 }
