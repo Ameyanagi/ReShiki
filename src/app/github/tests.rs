@@ -264,7 +264,9 @@ fn kept_earlier(cache: &Path, account: &str, path: &str, reply: &[u8]) {
     // The folder of `nowhere`'s server.
     let folder = cache.join("github-127.0.0.1-9").join(account);
     std::fs::create_dir_all(&folder).unwrap();
-    let entry = [format!("{}\n\n", workcopy::hash(reply)).as_bytes(), reply].concat();
+    // No ETag: `<SHA-256 of the rest>\n\n<reply>`.
+    let rest = [b"\n", reply].concat();
+    let entry = [format!("{}\n", workcopy::hash(&rest)).as_bytes(), &rest].concat();
     std::fs::write(folder.join(workcopy::hash(path.as_bytes())), entry).unwrap();
 }
 
