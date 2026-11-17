@@ -203,13 +203,28 @@ chemistry**.
   **Couldn't verify** with the reason, never "the same".
 - A moved or turned molecule gets a blue dashed outline and one **MOVED**
   line; when most of the drawing moved together, that is one line, **Whole
-  scheme moved**. A molecule whose shape changed, as Clean Up does, is
-  **Molecule redrawn**.
+  scheme moved**. A molecule or shape flipped is **MIRRORED** (**Molecule
+  flipped left–right**, **flipped top–bottom** or **mirrored**), and one drawn
+  larger or smaller is **SCALED** (**Molecule scaled to 120%**); a whole
+  scheme flipped or scaled is still one line, a straight arrow included. A
+  molecule whose shape changed, as Clean Up does, is **Molecule redrawn**.
+- The Flip tool swaps wedges and hashes, so a flipped chiral molecule keeps
+  its configuration: **Wedges swapped; same configuration**, no chemical
+  change. Mirrored without that swap, every stereocentre is inverted, and the
+  chemical line says **Mirror image: every stereocentre inverted**.
+- A chemical line says what changed, with the drawing's own atom numbers
+  where it has them: **OH added at C4**, **Cl → Br at C2**, **NO₂ removed**,
+  **C1–C2 single → double**, **inverted at C3**, the first two then **+N
+  more**. A bare number such as `4`, `4a` or `1′` is read with its element
+  (**C4**); other text, such as `N1′`, as written. A number on one side only
+  says so (**C4 (current)**), and one the sides number differently reads
+  **C5 → C4**. Without numbers there is no position: the paint shows where.
 - **Line up moved molecules** (on by default) shows each moved object of the
   right side where the left side has it, so real differences stand out. Turn
   it off to see where they are.
 - Each line has a tag that reads without colour: **CHEM**, **MOVED**,
   **STYLE**, **TEXT**, **RXN**, **ADDED**, **REMOVED**, **SAME** and **?**.
+  The legend reads **Moved, mirrored, scaled**.
   A chemical change shows its SMILES before, then → after on a line of its
   own; a long SMILES wraps between atoms and bonds, never inside `[NH4+]`,
   `Cl` or a ring bond. Click a line to point at it in both drawings and zoom
@@ -235,7 +250,10 @@ chemistry**.
   lists **Style or settings changed** instead.
 - Compare matches molecules by ReShiki's own ids, then by SMILES. A molecule
   both changed and given new ids, as after importing it again, shows as
-  removed and added. A mirror image or a scaled molecule is a redraw.
+  removed and added. A shape flipped or scaled is told from a redraw only
+  for molecules and graphics of three points or more off one line; an arrow
+  drawn longer is redrawn. Atom numbers come from the drawing, never
+  generated.
 - Send sends saved files. It first saves every open drawing of that
   repository; a drawing that is not open is sent as last saved.
 - On Linux without a keyring, the sign-in lasts until ReShiki quits:
@@ -275,9 +293,16 @@ chemistry**.
   removed; text, arrows and graphics by id, then by content and place. Each
   matched molecule is compared as chemistry over its prepared, sanitized
   structure, and fitted onto its old self with a proper 2D rigid fit
-  (Kabsch): within 0.01 bond lengths RMS and 0.03 at most it moved; beyond
-  that, with the same chemistry, it was redrawn. A move at least two objects
-  and three in four share is **Whole scheme moved**. Everything else in the
+  (Kabsch): within 0.01 bond lengths RMS and 0.03 at most it moved. Failing
+  that, a molecule or graphic of three points off one line is fitted
+  reflected, then scaled (by at least 1%), then both, at the same
+  tolerances; beyond that, with the same chemistry, it was redrawn. A move
+  at least two objects and three in four share is **Whole scheme moved**,
+  refitted with its reflection and scale; an object it carries within the
+  tolerances, such as a straight arrow under a scale, has no line of its
+  own. Lined up, a reflection's display is undone with the Flip tool's own
+  transform (wedges, double-bond sides, hydrogen sides and number offsets),
+  and style is compared on those lined-up values. Everything else in the
   file is compared as a whole for **Style or settings changed**. The marks are
   drawn as a layer over the drawings; neither drawing is changed.
 - Tiles list one folder at a time, at most 200 matching the search. They

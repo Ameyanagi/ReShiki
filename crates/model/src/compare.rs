@@ -2,14 +2,14 @@
 //! History's Compare and the changed-on-GitHub dialog. Molecules match by
 //! their ids, checked against the bonds they keep, then by canonical SMILES,
 //! duplicates by where they sit. Each matched pair is compared as chemistry
-//! (see [`chemistry`]) and fitted onto its old self with a rigid move: what
-//! the fit removes is a move, what it leaves is a redraw. A move most of the
-//! scheme shares is one change. Style and text are compared on their own.
-//! One object can have several kinds of change.
+//! (see [`chemistry`]) and fitted onto its old self with a rigid move, or
+//! failing that one that also reflects or scales: what the fit removes is a
+//! move, a mirror or a scale, what it leaves is a redraw. A move most of the
+//! scheme shares is one change. Style is compared once the right side is
+//! lined up, text on its own. One object can have several kinds of change.
 //!
-//! Matching by substructure when ids changed, mirror and scale as kinds of
-//! their own and atom-numbered wording are left to a later version; they
-//! slot in as another [`MatchedBy`], further [`Kind`]s and richer [`Detail`].
+//! Matching by substructure when ids changed is left to a later version; it
+//! slots in as another [`MatchedBy`] with its own atom correspondence.
 mod chemistry;
 pub mod fit;
 #[cfg(test)]
@@ -44,6 +44,10 @@ pub enum Kind {
     SchemeMoved,
     Moved,
     Rotated,
+    /// Reflected, as by the Flip tool.
+    Mirrored,
+    /// Drawn larger or smaller.
+    Scaled,
     /// Same chemistry or the same object, drawn in another shape.
     Redrawn,
     Style,
@@ -75,21 +79,55 @@ pub struct Marks {
 #[derive(Clone, Debug, PartialEq)]
 pub enum Detail {
     None,
-    /// Heavy atoms added and removed, as formulas such as `NO₂`, and whether
-    /// only the stereo changed.
+    /// Heavy atoms added and removed, as formulas such as `NO₂`, whether
+    /// only the stereo changed, and the edit in parts to word it.
     Edit {
         added: String,
         removed: String,
         changed: usize,
         stereo: bool,
+        /// Every stereocentre inverted and nothing else: the mirror image.
+        mirror_image: bool,
+        parts: Vec<Part>,
     },
-    /// How far, in drawing units, and how much it turned, clockwise.
+    /// How far, in drawing units, and how much it turned, clockwise; how
+    /// much larger it is drawn, and the mirror line, in degrees from the
+    /// x axis, if it was reflected.
     Move {
         dx: f64,
         dy: f64,
         degrees: f64,
+        scale: f64,
+        mirror: Option<f64>,
     },
     Reason(String),
+}
+
+/// One piece of a chemical edit, worded with the drawing's atom numbers.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Part {
+    pub kind: PartKind,
+    /// A formula such as `OH`, `Cl → Br`, `N → N⁺` or `single → double`.
+    pub what: String,
+    /// Where: atom numbers such as `C4`, as the drawings number them, empty
+    /// when they are not numbered.
+    pub at: Vec<String>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PartKind {
+    Added,
+    Removed,
+    /// A group removed and another added in its place.
+    Replaced,
+    /// An atom's charge, isotope, hydrogens or unpaired electrons.
+    Atom,
+    /// A bond's order, or a double bond's geometry.
+    Bond,
+    /// A stereocentre inverted.
+    Inverted,
+    /// A stereocentre's stereo set, cleared or otherwise changed.
+    Stereo,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -156,8 +194,8 @@ pub struct Report {
     pub changes: Vec<Change>,
     /// The move most of the drawing shares, right onto left, if it moved.
     pub scheme: Option<Fit>,
-    /// Right-side objects and the rigid move that lines each up with its
-    /// left counterpart: the right side in the left side's frame.
+    /// Right-side objects and the fit that lines each up with its left
+    /// counterpart: the right side in the left side's frame.
     pub alignment: Vec<(Vec<u64>, Fit)>,
     /// The bond length the tolerances are measured in.
     pub unit: f64,
@@ -207,6 +245,28 @@ fn xy(p: Point) -> Xy {
 
 fn json(value: &impl Serialize) -> Value {
     serde_json::to_value(value).unwrap_or_default()
+}
+
+/// Numbers to a hundredth of a drawing unit, angles within a turn.
+fn rounded(value: Value) -> Value {
+    match value {
+        Value::Number(n) if !n.is_i64() && !n.is_u64() => {
+            json(&n.as_f64().map(|x| (x * 100.).round() / 100.))
+        }
+        Value::Array(items) => Value::Array(items.into_iter().map(rounded).collect()),
+        // An angle of -90° is one of 270°.
+        Value::Object(fields) => Value::Object(
+            fields
+                .into_iter()
+                .map(|(key, value)| match value.as_f64() {
+                    Some(degrees) if key == "angle" => (key, json(&degrees.rem_euclid(360.))),
+                    _ => (key, value),
+                })
+                .map(|(key, value)| (key, rounded(value)))
+                .collect(),
+        ),
+        other => other,
+    }
 }
 
 fn without(mut value: Value, keys: &[&str]) -> Value {
@@ -432,23 +492,56 @@ impl Entity {
         }
     }
 
+    /// A molecule or graphic that no rigid move fits, with three points off
+    /// one line, may fit reflected, scaled, or both, in that order, at the
+    /// same tolerances. Fewer points always fit a scale, so an arrow drawn
+    /// longer stays redrawn.
+    fn reflect_or_scale(&mut self, unit: f64) {
+        if !self.reshaped(unit)
+            || !matches!(self.subject, Subject::Molecule | Subject::Graphic)
+            || fit::collinear(&self.pairs)
+            || fit::collinear(&self.pairs.iter().map(|(a, b)| (*b, *a)).collect::<Vec<_>>())
+        {
+            return;
+        }
+        for (mirror, scale) in [(true, false), (false, true), (true, true)] {
+            let Some(fit) = Fit::similar(&self.pairs, mirror, scale) else {
+                continue;
+            };
+            let scaled = (fit.scale - 1.).abs() >= 0.01;
+            if (scaled || !scale) && fit.rms <= RMS * unit && fit.max <= MAX * unit {
+                self.fit = fit;
+                return;
+            }
+        }
+    }
+
     /// Its shape changed; with no point-for-point match, as an arrow that
     /// gained a bend, that is so too.
     fn reshaped(&self, unit: f64) -> bool {
         self.loose || self.fit.rms > RMS * unit || self.fit.max > MAX * unit
     }
 
-    /// Whether `fit` carries it about as well as its own fit does.
+    /// Whether `fit` carries it within the tolerances, even one its own fit
+    /// leaves reshaped, such as an arrow scaled with the scheme. One with no
+    /// point-for-point match never is.
     fn agrees(&self, fit: &Fit, unit: f64) -> bool {
-        fit.residuals(&self.pairs).1 <= self.fit.max + MAX * unit
+        let (rms, max) = fit.residuals(&self.pairs);
+        !self.loose && rms <= RMS * unit && max <= MAX * unit
     }
 
     fn displaced(&self, unit: f64) -> bool {
         Fit::IDENTITY.residuals(&self.pairs).1 > MAX * unit
     }
 
-    /// Moved or rotated, by its own fit.
+    /// Mirrored, scaled, rotated or moved, by its own fit.
     fn pose(&self, unit: f64) -> Kind {
+        if self.fit.mirror {
+            return Kind::Mirrored;
+        }
+        if self.fit.scale != 1. {
+            return Kind::Scaled;
+        }
         let center = centroid(self.pairs.iter().map(|(from, _)| *from));
         let turn = Fit {
             dx: 0.,
@@ -468,31 +561,91 @@ impl Entity {
     }
 }
 
-/// The move most entities share, refitted on all that share it, and which
-/// entities share it. `None` unless at least two and three in four agree.
+/// The move most entities share, refitted with its reflection and scale on
+/// all that share it, and which entities share it. Each entity's own fit is
+/// a candidate; every entity it carries counts. `None` unless at least two
+/// and three in four agree.
 fn common(entities: &[Entity], unit: f64) -> Option<(Fit, Vec<bool>)> {
-    let rigid: Vec<&Entity> = entities.iter().filter(|e| !e.reshaped(unit)).collect();
+    let enough = |n: usize| n >= 2 && n * 4 >= entities.len() * 3;
     let mut best: Option<(usize, usize, Fit)> = None;
-    for candidate in &rigid {
+    for candidate in entities.iter().filter(|e| !e.reshaped(unit)) {
         let fit = candidate.fit;
-        let agree: Vec<&&Entity> = rigid.iter().filter(|e| e.agrees(&fit, unit)).collect();
+        let agree: Vec<&Entity> = entities.iter().filter(|e| e.agrees(&fit, unit)).collect();
         let points = agree.iter().map(|e| e.pairs.len()).sum::<usize>();
         if best.is_none_or(|(n, p, _)| (agree.len(), points) > (n, p)) {
             best = Some((agree.len(), points, fit));
         }
     }
     let (support, _, fit) = best?;
-    if support < 2 || support * 4 < entities.len() * 3 {
+    if !enough(support) {
         return None;
     }
-    let pairs: Vec<(Xy, Xy)> = rigid
+    let pairs: Vec<(Xy, Xy)> = entities
         .iter()
         .filter(|e| e.agrees(&fit, unit))
         .flat_map(|e| e.pairs.iter().copied())
         .collect();
-    let fit = Fit::rigid(&pairs).unwrap_or(fit);
-    let shared = entities.iter().map(|e| e.agrees(&fit, unit)).collect();
-    Some((fit, shared))
+    let fit = Fit::similar(&pairs, fit.mirror, fit.scale != 1.).unwrap_or(fit);
+    let shared: Vec<bool> = entities.iter().map(|e| e.agrees(&fit, unit)).collect();
+    enough(shared.iter().filter(|s| **s).count()).then_some((fit, shared))
+}
+
+/// An atom's number as the drawings show it, such as `C4` for a bare `4`,
+/// `4a` or `1′`, other text as written: the current side's, qualified where
+/// only one side numbers the atom or the two differ. `None` where neither
+/// does, or the atom is hidden in a collapsed label.
+fn locant(left: &Document, right: &Document, l: Option<u64>, r: Option<u64>) -> Option<String> {
+    let number = |doc: &Document, id: Option<u64>| {
+        let atom = doc.atom(id?)?;
+        let text = &atom.display.number.as_ref()?.text;
+        if text.is_empty() || !doc.atom_visible(atom.id) {
+            return None;
+        }
+        let rest = text.trim_start_matches(|c: char| c.is_ascii_digit());
+        let digits = rest.len() < text.len();
+        let rest = rest
+            .strip_prefix(|c: char| c.is_ascii_lowercase())
+            .unwrap_or(rest);
+        let bare = digits && rest.chars().all(|c| matches!(c, '\'' | '′' | '″'));
+        Some(if bare {
+            format!("{}{text}", atom.element)
+        } else {
+            text.clone()
+        })
+    };
+    match (number(left, l), number(right, r)) {
+        (Some(a), Some(b)) if a == b => Some(b),
+        (Some(a), Some(b)) => Some(format!("{a} → {b}")),
+        (None, Some(b)) => Some(format!("{b} (current)")),
+        (Some(a), None) => Some(format!("{a} (compared)")),
+        (None, None) => None,
+    }
+}
+
+/// How the right side moved from where the left side has it, given `fit`
+/// that lines it up and its points (right, left): how far the middle of its
+/// extent went, so a flip or scale in place is no move, and the turn, scale
+/// and mirror undone.
+fn movement(fit: &Fit, pairs: &[(Xy, Xy)]) -> Detail {
+    let middle = |points: &mut dyn Iterator<Item = Xy>| {
+        let (lo, hi) = points.fold(
+            (
+                (f64::INFINITY, f64::INFINITY),
+                (f64::NEG_INFINITY, f64::NEG_INFINITY),
+            ),
+            |(lo, hi), (x, y)| ((lo.0.min(x), lo.1.min(y)), (hi.0.max(x), hi.1.max(y))),
+        );
+        ((lo.0 + hi.0) / 2., (lo.1 + hi.1) / 2.)
+    };
+    let now = middle(&mut pairs.iter().map(|(right, _)| *right));
+    let was = middle(&mut pairs.iter().map(|(_, left)| *left));
+    Detail::Move {
+        dx: now.0 - was.0,
+        dy: now.1 - was.1,
+        degrees: -fit.degrees(),
+        scale: 1. / fit.scale,
+        mirror: fit.mirror.then(|| fit.axis_degrees()),
+    }
 }
 
 /// Points of a text, arrow or graphic that show where it is and its shape.
@@ -612,7 +765,15 @@ const ATOM_PLACE: &[&str] = &[
 /// Atoms whose style differs between the two sides, among those both have:
 /// colors, label display, highlights. With `chemistry` the drawing's own
 /// chemistry fields count too, such as aromatic or Kekulé bonds.
-fn restyled(left: &Document, right: &Document, atoms: &[u64], chemistry: bool) -> Vec<u64> {
+/// `mirrored`: lined up by a reflection, where a bold wedge comes back hollow,
+/// as the Flip tool turns both to hashed.
+fn restyled(
+    left: &Document,
+    right: &Document,
+    atoms: &[u64],
+    chemistry: bool,
+    mirrored: bool,
+) -> Vec<u64> {
     let atom_keys: Vec<&str> = ATOM_PLACE
         .iter()
         .chain(if chemistry { &[][..] } else { ATOM_CHEMISTRY })
@@ -625,9 +786,11 @@ fn restyled(left: &Document, right: &Document, atoms: &[u64], chemistry: bool) -
     };
     let set: HashSet<u64> = atoms.iter().copied().collect();
     let mut found = BTreeSet::new();
+    // Offsets lined up by a turn differ in their last digits.
+    let style = |value: Value, keys: &[&str]| rounded(without(value, keys));
     for id in atoms {
         if let (Some(a), Some(b)) = (left.atom(*id), right.atom(*id))
-            && without(json(a), &atom_keys) != without(json(b), &atom_keys)
+            && style(json(a), &atom_keys) != style(json(b), &atom_keys)
         {
             found.insert(*id);
         }
@@ -636,7 +799,16 @@ fn restyled(left: &Document, right: &Document, atoms: &[u64], chemistry: bool) -
         doc.bonds
             .iter()
             .filter(|bond| set.contains(&bond.a) && set.contains(&bond.b))
-            .map(|bond| (key(bond.a, bond.b), without(json(bond), bond_keys)))
+            .map(|bond| {
+                let mut value = style(json(bond), bond_keys);
+                if let Some(display) = value.get_mut("display")
+                    && mirrored
+                    && display == "bold"
+                {
+                    *display = "hollow_wedge".into();
+                }
+                (key(bond.a, bond.b), value)
+            })
             .collect()
     };
     let theirs = bonds(right);
@@ -891,7 +1063,9 @@ pub fn compare(left: &Document, right: &Document) -> Report {
             entity.loose = true;
             return entity;
         }
-        Entity::new(Subject::Molecule, atoms_l, atoms_r, points)
+        let mut entity = Entity::new(Subject::Molecule, atoms_l, atoms_r, points);
+        entity.reflect_or_scale(unit);
+        entity
     };
     let thing_entity = |object: Object, i: usize, j: usize| -> Option<Entity> {
         let (mine, theirs) = all_things.get(&object)?;
@@ -908,6 +1082,7 @@ pub fn compare(left: &Document, right: &Document) -> Report {
             zip_points(&b.points, &a.points),
         );
         entity.loose = a.points.len() != b.points.len();
+        entity.reflect_or_scale(unit);
         Some(entity)
     };
     let entities = |pairs: &[(usize, usize, MatchedBy)],
@@ -986,25 +1161,23 @@ pub fn compare(left: &Document, right: &Document) -> Report {
             change.right.objects.extend(&entity.right);
             points.extend(entity.pairs.iter().copied());
         }
-        // How the right side moved from where the left side has it.
-        let (from, to) = (
-            centroid(points.iter().map(|(_, to)| *to)),
-            centroid(points.iter().map(|(from, _)| *from)),
-        );
-        change.detail = Detail::Move {
-            dx: to.0 - from.0,
-            dy: to.1 - from.1,
-            degrees: -fit.degrees(),
-        };
+        change.detail = movement(&fit, &points);
         report.changes.push(change);
     }
 
     // Each entity's own change of place or shape, and how to line it up.
+    // One the scheme's move explains has none of its own, and lines up by
+    // it, so a flip of the whole scheme is undone on every molecule.
     for (n, entity) in entities.iter().enumerate() {
-        report.alignment.push((entity.right.clone(), entity.fit));
-        let kind = if entity.reshaped(unit) {
+        let explained = scheme.filter(|_| shared(n));
+        report
+            .alignment
+            .push((entity.right.clone(), explained.unwrap_or(entity.fit)));
+        let kind = if explained.is_some() {
+            None
+        } else if entity.reshaped(unit) {
             Some(Kind::Redrawn)
-        } else if entity.displaced(unit) && !(scheme.is_some() && shared(n)) {
+        } else if entity.displaced(unit) || entity.fit.mirror || entity.fit.scale != 1. {
             Some(entity.pose(unit))
         } else {
             None
@@ -1013,13 +1186,7 @@ pub fn compare(left: &Document, right: &Document) -> Report {
             let mut change = Change::new(kind, entity.subject);
             change.left = marks(&entity.left);
             change.right = marks(&entity.right);
-            change.detail = Detail::Move {
-                dx: entity.pairs.iter().map(|(f, t)| f.0 - t.0).sum::<f64>()
-                    / entity.pairs.len().max(1) as f64,
-                dy: entity.pairs.iter().map(|(f, t)| f.1 - t.1).sum::<f64>()
-                    / entity.pairs.len().max(1) as f64,
-                degrees: -entity.fit.degrees(),
-            };
+            change.detail = movement(&entity.fit, &entity.pairs);
             report.changes.push(change);
         }
     }
@@ -1033,7 +1200,10 @@ pub fn compare(left: &Document, right: &Document) -> Report {
         })
         .collect();
 
-    // Matched molecules as chemistry, style and reaction roles.
+    // Matched molecules as chemistry, style and reaction roles. Style is
+    // compared lined up, so what a turn or a flip does to wedges, hydrogens
+    // and number offsets is not a change of style.
+    let lined = aligned(right, &report);
     for (i, j, by) in &pairs {
         let (atoms_l, atoms_r) = (l.atoms(*i), r.atoms(*j));
         let (sig_l, sig_r) = (l.signature(*i), r.signature(*j));
@@ -1065,16 +1235,31 @@ pub fn compare(left: &Document, right: &Document) -> Report {
             change.left = marks(atoms_l);
             change.right = marks(atoms_r);
             if *by == MatchedBy::Id {
-                let edit = chemistry::edit(a, b);
-                change.left.atoms = [&edit.removed[..], &edit.changed].concat();
-                change.right.atoms = [&edit.added[..], &edit.changed].concat();
-                change.left.bonds = [&edit.removed_bonds[..], &edit.changed_bonds].concat();
-                change.right.bonds = [&edit.added_bonds[..], &edit.changed_bonds].concat();
+                let map: HashMap<u64, u64> = (a.atoms.keys())
+                    .filter(|id| b.atoms.contains_key(id))
+                    .map(|id| (*id, *id))
+                    .collect();
+                let edit = chemistry::edit_mapped(a, b, &map);
+                change.left.atoms = edit.removed.clone();
+                change.right.atoms = edit.added.clone();
+                change.left.bonds = edit.removed_bonds.clone();
+                change.right.bonds = edit.added_bonds.clone();
+                for (l, r) in &edit.changed {
+                    change.left.atoms.push(*l);
+                    change.right.atoms.push(*r);
+                }
+                for (l, r) in &edit.changed_bonds {
+                    change.left.bonds.push(*l);
+                    change.right.bonds.push(*r);
+                }
+                let parts = chemistry::parts(a, b, &edit, &map, |l, r| locant(left, right, l, r));
                 change.detail = Detail::Edit {
                     added: chemistry::formula(b, &edit.added),
                     removed: chemistry::formula(a, &edit.removed),
                     changed: edit.changed.len(),
                     stereo: edit.stereo,
+                    mirror_image: edit.mirror_image,
+                    parts,
                 };
             } else {
                 change.left.atoms = atoms_l.to_vec();
@@ -1090,7 +1275,15 @@ pub fn compare(left: &Document, right: &Document) -> Report {
                 .filter(|id| right.atom(**id).is_some())
                 .copied()
                 .collect();
-            let restyled = restyled(left, right, &common, chemistry == Chemistry::Same);
+            let mirrored = (report.alignment.iter())
+                .any(|(ids, fit)| fit.mirror && ids.first() == atoms_r.first());
+            let restyled = restyled(
+                left,
+                &lined,
+                &common,
+                chemistry == Chemistry::Same,
+                mirrored,
+            );
             if !restyled.is_empty() {
                 let mut change = Change::new(Kind::Style, Subject::Molecule);
                 change.left = marks(atoms_l);
@@ -1301,6 +1494,19 @@ pub fn aligned(right: &Document, report: &Report) -> Document {
     for (ids, fit) in &report.alignment {
         for id in ids {
             moves.insert(*id, *fit);
+        }
+        // Hydrogens, offsets and wedges turn, scale and reflect with the
+        // atoms, so a mirror undone keeps the configuration shown.
+        let atoms: Vec<u64> = ids
+            .iter()
+            .filter(|id| doc.atom(**id).is_some())
+            .copied()
+            .collect();
+        if !atoms.is_empty() {
+            crate::editing::transform_display(&mut doc, &atoms, |p| {
+                let (x, y) = fit.rotate(xy(p));
+                Point::new(x as f32, y as f32)
+            });
         }
     }
     let point = |fit: &Fit, p: Point| {

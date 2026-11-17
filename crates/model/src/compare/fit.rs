@@ -1,17 +1,20 @@
-//! The proper 2D rigid fit (Kabsch): the rotation and translation that best
-//! carry one set of points onto another, with what is left over. No
-//! reflection and no scale.
+//! The 2D fit (Kabsch) that best carries one set of points onto another,
+//! with what is left over: a rigid move, or one that also reflects, scales
+//! or both when asked.
 
 /// A point as `(x, y)` in drawing units.
 pub type Xy = (f64, f64);
 
-/// `to ≈ R · from + t`, with the residuals left after the fit.
+/// `to ≈ s · R · M · from + t`, with the residuals left after the fit: `M`
+/// reflects y when `mirror`, `R` turns and `s` scales.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Fit {
     pub cos: f64,
     pub sin: f64,
     pub dx: f64,
     pub dy: f64,
+    pub scale: f64,
+    pub mirror: bool,
     /// Root mean square and largest distance left after the fit.
     pub rms: f64,
     pub max: f64,
@@ -23,20 +26,25 @@ impl Fit {
         sin: 0.,
         dx: 0.,
         dy: 0.,
+        scale: 1.,
+        mirror: false,
         rms: 0.,
         max: 0.,
     };
 
-    pub fn apply(&self, (x, y): Xy) -> Xy {
-        (
-            self.cos * x - self.sin * y + self.dx,
-            self.sin * x + self.cos * y + self.dy,
-        )
+    pub fn apply(&self, p: Xy) -> Xy {
+        let (x, y) = self.rotate(p);
+        (x + self.dx, y + self.dy)
     }
 
-    /// The rotation alone, for directions such as a graphic's axes.
+    /// Reflection, turn and scale without the move, for directions such as
+    /// a graphic's axes.
     pub fn rotate(&self, (x, y): Xy) -> Xy {
-        (self.cos * x - self.sin * y, self.sin * x + self.cos * y)
+        let y = if self.mirror { -y } else { y };
+        (
+            self.scale * (self.cos * x - self.sin * y),
+            self.scale * (self.sin * x + self.cos * y),
+        )
     }
 
     /// Clockwise on screen is positive, as drawing y grows downward.
@@ -44,15 +52,28 @@ impl Fit {
         self.sin.atan2(self.cos).to_degrees()
     }
 
+    /// A reflection's mirror line, in degrees from the x axis in [0, 180):
+    /// 90 flips left and right, 0 top and bottom.
+    pub fn axis_degrees(&self) -> f64 {
+        (self.degrees() / 2.).rem_euclid(180.)
+    }
+
     /// The rigid fit of `pairs` (from, to). One point, or points that sit
     /// on one spot, fit by translation alone. `None` without points.
     pub fn rigid(pairs: &[(Xy, Xy)]) -> Option<Self> {
+        Self::similar(pairs, false, false)
+    }
+
+    /// The best fit that reflects first if `mirror`, and scales if `scale`.
+    pub fn similar(pairs: &[(Xy, Xy)], mirror: bool, scale: bool) -> Option<Self> {
         let (from, to) = centroids(pairs)?;
-        let (mut dot, mut cross) = (0., 0.);
+        let (mut dot, mut cross, mut spread) = (0., 0., 0.);
         for ((ax, ay), (bx, by)) in pairs {
             let (ax, ay, bx, by) = (ax - from.0, ay - from.1, bx - to.0, by - to.1);
+            let ay = if mirror { -ay } else { ay };
             dot += ax * bx + ay * by;
             cross += ax * by - ay * bx;
+            spread += ax * ax + ay * ay;
         }
         let length = dot.hypot(cross);
         let (cos, sin) = if length > 1e-9 {
@@ -60,21 +81,29 @@ impl Fit {
         } else {
             (1., 0.)
         };
-        Some(Self::through(cos, sin, from, to).with_residuals(pairs))
+        let fit = Self {
+            cos,
+            sin,
+            scale: if scale && spread > 1e-9 {
+                length / spread
+            } else {
+                1.
+            },
+            mirror,
+            ..Self::IDENTITY
+        };
+        Some(fit.through(from, to).with_residuals(pairs))
     }
 
     /// Translation alone, centroid onto centroid.
     pub fn translation(pairs: &[(Xy, Xy)]) -> Option<Self> {
         let (from, to) = centroids(pairs)?;
-        Some(Self::through(1., 0., from, to).with_residuals(pairs))
+        Some(Self::IDENTITY.through(from, to).with_residuals(pairs))
     }
 
-    fn through(cos: f64, sin: f64, from: Xy, to: Xy) -> Self {
-        let mut fit = Self {
-            cos,
-            sin,
-            ..Self::IDENTITY
-        };
+    /// The same reflection, turn and scale, moved to carry `from` onto `to`.
+    fn through(self, from: Xy, to: Xy) -> Self {
+        let mut fit = self;
         let turned = fit.rotate(from);
         fit.dx = to.0 - turned.0;
         fit.dy = to.1 - turned.1;
@@ -115,6 +144,22 @@ impl Fit {
             })
             .fold(0., f64::max)
     }
+}
+
+/// Whether the points the pairs carry lie on one line, or one spot: then
+/// a reflection or scale cannot be told from a move.
+pub fn collinear(pairs: &[(Xy, Xy)]) -> bool {
+    let Some((from, _)) = centroids(pairs) else {
+        return true;
+    };
+    let (mut xx, mut yy, mut xy) = (0., 0., 0.);
+    for ((x, y), _) in pairs {
+        let (x, y) = (x - from.0, y - from.1);
+        xx += x * x;
+        yy += y * y;
+        xy += x * y;
+    }
+    xx * yy - xy * xy <= 1e-6 * (xx + yy) * (xx + yy)
 }
 
 fn centroids(pairs: &[(Xy, Xy)]) -> Option<(Xy, Xy)> {
@@ -168,6 +213,48 @@ mod tests {
         assert_eq!((fit.cos, fit.sin), (1., 0.));
         assert_eq!((fit.dx, fit.dy), (3., 4.));
         assert_eq!(Fit::rigid(&[]), None);
+    }
+
+    #[test]
+    fn a_reflection_and_its_mirror_line_are_recovered() {
+        // Mirrored across the line at 30°, then moved.
+        let (sin, cos) = 60_f64.to_radians().sin_cos();
+        let pairs: Vec<_> = SHAPE
+            .iter()
+            .map(|&(x, y)| ((x, y), (cos * x + sin * y + 7., sin * x - cos * y - 3.)))
+            .collect();
+        assert!(Fit::rigid(&pairs).unwrap().max > 5.);
+        let fit = Fit::similar(&pairs, true, false).unwrap();
+        assert!(fit.mirror && fit.max < 1e-9, "{fit:?}");
+        assert!((fit.axis_degrees() - 30.).abs() < 1e-9);
+        // Left and right is the vertical line.
+        let flipped: Vec<_> = SHAPE.iter().map(|&(x, y)| ((x, y), (-x, y))).collect();
+        let fit = Fit::similar(&flipped, true, false).unwrap();
+        assert!((fit.axis_degrees() - 90.).abs() < 1e-9 && fit.max < 1e-9);
+    }
+
+    #[test]
+    fn a_uniform_scale_is_recovered() {
+        let pairs: Vec<_> = turn(&SHAPE, 20., 5., 9.)
+            .into_iter()
+            .map(|(from, (x, y))| (from, (1.2 * x, 1.2 * y)))
+            .collect();
+        let fit = Fit::similar(&pairs, false, true).unwrap();
+        assert!((fit.scale - 1.2).abs() < 1e-9 && fit.max < 1e-9, "{fit:?}");
+        assert!((fit.degrees() - 20.).abs() < 1e-9);
+        assert!(Fit::rigid(&pairs).unwrap().max > 1.);
+    }
+
+    #[test]
+    fn collinear_points_fit_rigidly_and_cannot_tell_a_reflection() {
+        let line: Vec<_> = [(0., 0.), (10., 5.), (20., 10.)]
+            .iter()
+            .map(|&(x, y)| ((x, y), (x + 3., y)))
+            .collect();
+        assert!(collinear(&line));
+        assert!(Fit::rigid(&line).unwrap().max < 1e-9);
+        let plane: Vec<_> = SHAPE.iter().map(|&p| (p, p)).collect();
+        assert!(!collinear(&plane));
     }
 
     #[test]

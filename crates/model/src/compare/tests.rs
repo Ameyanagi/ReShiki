@@ -151,6 +151,7 @@ fn a_whole_scheme_moved_and_turned_is_one_layout_line() {
             dx: x,
             dy: y,
             degrees: turn,
+            ..
         } = report.changes[0].detail
         else {
             panic!("no move");
@@ -264,13 +265,20 @@ fn moving_everything_and_adding_a_nitro_group_is_one_move_and_one_local_change()
     assert!(added.iter().all(|id| change.right.atoms.contains(id)));
     assert_eq!(change.left.atoms.len(), 1);
     assert_eq!(change.right.bonds.len(), 3);
+    // One part: the attachment carbon's lost hydrogen is painted, not worded.
     assert_eq!(
         change.detail,
         Detail::Edit {
             added: "NO₂".into(),
             removed: String::new(),
             changed: 1,
-            stereo: false
+            stereo: false,
+            mirror_image: false,
+            parts: vec![Part {
+                kind: PartKind::Added,
+                what: "NO₂".into(),
+                at: vec![],
+            }],
         }
     );
     assert_eq!(change.before.as_deref(), Some("CCOC(=O)c1ccccc1"));
@@ -1142,5 +1150,594 @@ fn a_regrouped_centre_is_marked_beside_a_turned_double_bond() {
         change.right.atoms.contains(&center),
         "{:?}",
         change.right.atoms
+    );
+}
+
+/// A chiral molecule drawn by hand: its wedge, not a stored winding,
+/// carries the stereo.
+fn chiral() -> Document {
+    edited(&load(&molecule("C[C@H](O)CC")), |doc| {
+        for atom in &mut doc.atoms {
+            atom.stereo = None;
+        }
+    })
+}
+
+fn pose(report: &Report) -> (f64, Option<f64>) {
+    match report.changes.iter().find_map(|c| match c.detail {
+        Detail::Move { scale, mirror, .. } => Some((scale, mirror)),
+        _ => None,
+    }) {
+        Some(found) => found,
+        None => panic!("no move: {:?}", report.changes),
+    }
+}
+
+fn smiles_of(doc: &Document) -> String {
+    let ids: Vec<u64> = doc.atoms.iter().map(|a| a.id).collect();
+    chemistry::signature(doc, &ids).unwrap().smiles
+}
+
+#[test]
+fn a_molecule_flipped_with_the_flip_tool_is_mirrored_only() {
+    let left = chiral();
+    for (flip, axis) in [
+        (crate::editing::Transform::FlipHorizontal, 90.),
+        (crate::editing::Transform::FlipVertical, 0.),
+    ] {
+        let right = edited(&left, |doc| {
+            crate::editing::transform(doc, &doc.all_ids(), flip)
+        });
+        let report = compare(&left, &right);
+        // The Flip tool swaps the wedge: same chemistry, and no style line.
+        assert_eq!(
+            kinds(&report),
+            [(Kind::Mirrored, Subject::Molecule)],
+            "{axis}"
+        );
+        let (scale, mirror) = pose(&report);
+        assert!((scale - 1.).abs() < 1e-6);
+        // Flipped in place: no move as well.
+        let Detail::Move { dx, dy, .. } = report.changes[0].detail else {
+            panic!("no move");
+        };
+        assert!(dx.abs() < 1e-3 && dy.abs() < 1e-3, "{dx} {dy}");
+        let mirror = mirror.unwrap();
+        assert!(
+            (mirror - axis).abs() < 0.5 || (mirror - axis).abs() > 179.5,
+            "{mirror}"
+        );
+        // Lined up, the mirror is undone and the configuration kept.
+        let lined = aligned(&right, &report);
+        assert_eq!(smiles_of(&lined), smiles_of(&right));
+        for atom in &left.atoms {
+            assert!(
+                atom.position
+                    .distance(lined.atom(atom.id).unwrap().position)
+                    < 0.01
+            );
+        }
+    }
+}
+
+#[test]
+fn a_mirror_image_drawn_without_swapping_wedges_inverts_every_centre() {
+    let left = chiral();
+    let right = edited(&left, |doc| {
+        for atom in &mut doc.atoms {
+            atom.position.x = -atom.position.x;
+        }
+    });
+    let report = compare(&left, &right);
+    assert_eq!(
+        kinds(&report),
+        [
+            (Kind::Chemical, Subject::Molecule),
+            (Kind::Mirrored, Subject::Molecule)
+        ]
+    );
+    let Detail::Edit {
+        stereo,
+        mirror_image,
+        parts,
+        ..
+    } = &chemical(&report)[0].detail
+    else {
+        panic!("no edit");
+    };
+    assert!(*stereo && *mirror_image);
+    assert_eq!(parts.len(), 1);
+    assert_eq!(parts[0].kind, PartKind::Inverted);
+    // Lined up it still shows the right side's configuration, not the left's.
+    let lined = aligned(&right, &report);
+    assert_eq!(smiles_of(&lined), smiles_of(&right));
+    assert_ne!(smiles_of(&lined), smiles_of(&left));
+}
+
+#[test]
+fn one_centre_inverted_of_two_is_not_the_mirror_image() {
+    let left = edited(&load(&molecule("C[C@H](O)[C@@H](N)C")), |doc| {
+        for atom in &mut doc.atoms {
+            atom.stereo = None;
+        }
+    });
+    let right = edited(&left, |doc| {
+        let bond = doc
+            .bonds
+            .iter_mut()
+            .find(|b| matches!(b.display.as_str(), "wedge" | "hash"))
+            .unwrap();
+        bond.display = if bond.display == "wedge" {
+            "hash"
+        } else {
+            "wedge"
+        }
+        .into();
+    });
+    let report = compare(&left, &right);
+    let Detail::Edit { mirror_image, .. } = &chemical(&report)[0].detail else {
+        panic!("no edit");
+    };
+    assert!(!mirror_image);
+}
+
+#[test]
+fn a_scaled_molecule_is_scaled_and_a_scaled_scheme_is_one_line() {
+    let s = scheme();
+    let right = edited(&s.doc, |doc| {
+        let center = doc.atom(s.ester[2]).unwrap().position;
+        crate::editing::transform_about(doc, &s.ester, center, 1.5, 0.);
+    });
+    let report = compare(&s.doc, &right);
+    assert_eq!(kinds(&report), [(Kind::Scaled, Subject::Molecule)]);
+    assert!((pose(&report).0 - 1.5).abs() < 1e-3, "{:?}", pose(&report));
+    // Everything scaled, the straight arrow too: one line, nothing redrawn.
+    let right = edited(&s.doc, |doc| {
+        crate::editing::transform_about(doc, &doc.all_ids(), Point::new(100., 40.), 1.2, 0.)
+    });
+    let report = compare(&s.doc, &right);
+    assert_eq!(kinds(&report), [(Kind::SchemeMoved, Subject::Scheme)]);
+    let (scale, mirror) = pose(&report);
+    assert!((scale - 1.2).abs() < 1e-3 && mirror.is_none(), "{scale}");
+    let lined = aligned(&right, &report);
+    let (a, b) = (&s.doc.arrows[0], &lined.arrows[0]);
+    assert!(a.start.distance(b.start) < 0.01 && a.end.distance(b.end) < 0.01);
+    for atom in &s.doc.atoms {
+        assert!(
+            atom.position
+                .distance(lined.atom(atom.id).unwrap().position)
+                < 0.01
+        );
+    }
+}
+
+#[test]
+fn a_whole_scheme_flipped_is_one_line() {
+    let s = scheme();
+    let right = edited(&s.doc, |doc| {
+        crate::editing::transform(
+            doc,
+            &doc.all_ids(),
+            crate::editing::Transform::FlipHorizontal,
+        )
+    });
+    let report = compare(&s.doc, &right);
+    assert_eq!(kinds(&report), [(Kind::SchemeMoved, Subject::Scheme)]);
+    assert!((pose(&report).1.unwrap() - 90.).abs() < 0.5);
+}
+
+#[test]
+fn an_arrow_drawn_longer_is_redrawn() {
+    let s = scheme();
+    let right = edited(&s.doc, |doc| doc.arrows[0].end = Point::new(470., 0.));
+    assert_eq!(
+        kinds(&compare(&s.doc, &right)),
+        [(Kind::Redrawn, Subject::Arrow)]
+    );
+}
+
+#[test]
+fn a_molecule_mirrored_and_reshaped_is_redrawn() {
+    let s = scheme();
+    let right = edited(&s.doc, |doc| {
+        crate::editing::transform(doc, &s.ester, crate::editing::Transform::FlipVertical);
+        let atom = doc.atom_mut(s.ester[0]).unwrap();
+        atom.position = atom.position.offset(9., 12.);
+    });
+    assert_eq!(
+        kinds(&compare(&s.doc, &right)),
+        [(Kind::Redrawn, Subject::Molecule)]
+    );
+}
+
+#[test]
+fn benzene_flipped_and_given_new_ids_is_no_change() {
+    let ring = molecule("c1ccccc1");
+    let mut left = Document::default();
+    crate::editing::append(&mut left, &ring, Point::new(0., 0.));
+    let left = load(&left);
+    let right = edited(&left, |doc| {
+        let old = doc.all_ids();
+        let mut flipped = ring.clone();
+        let ids = flipped.all_ids();
+        crate::editing::transform(
+            &mut flipped,
+            &ids,
+            crate::editing::Transform::FlipHorizontal,
+        );
+        crate::editing::append(doc, &flipped, Point::new(0., 0.));
+        doc.delete(&old);
+    });
+    assert!(right.atoms.iter().all(|a| left.atom(a.id).is_none()));
+    let report = compare(&left, &right);
+    assert_eq!(report.changes, vec![]);
+}
+
+/// Benzene with each carbon numbered 1 to 6 round the ring, if `numbered`.
+fn numbered_benzene(numbered: bool) -> (Document, Vec<u64>) {
+    let mut doc = Document::default();
+    let ids = crate::editing::append(&mut doc, &molecule("c1ccccc1"), Point::new(0., 0.));
+    let ring: Vec<u64> = ids
+        .into_iter()
+        .filter(|id| doc.atom(*id).is_some())
+        .collect();
+    // Round the ring, from the first carbon.
+    let mut order = vec![ring[0]];
+    while order.len() < ring.len() {
+        let last = *order.last().unwrap();
+        let next = doc
+            .bonds
+            .iter()
+            .filter_map(|b| match (b.a == last, b.b == last) {
+                (true, _) => Some(b.b),
+                (_, true) => Some(b.a),
+                _ => None,
+            })
+            .find(|id| !order.contains(id))
+            .unwrap();
+        order.push(next);
+    }
+    if numbered {
+        for (n, id) in order.iter().enumerate() {
+            doc.atom_mut(*id).unwrap().display.number = Some(crate::atom_labels::Number {
+                text: (n + 1).to_string(),
+                offset: None,
+                style: crate::atom_labels::number_style(),
+            });
+        }
+    }
+    (load(&doc), order)
+}
+
+fn substituted(doc: &Document, at: u64, element: &str) -> (Document, u64) {
+    let mut added = 0;
+    let doc = edited(doc, |doc| {
+        let p = doc.atom(at).unwrap().position;
+        added = doc.add_atom(element, p.offset(0., -40.));
+        doc.add_bond(at, added, 1, "plain");
+    });
+    (doc, added)
+}
+
+fn parts(report: &Report) -> Vec<Part> {
+    match &chemical(report)[0].detail {
+        Detail::Edit { parts, .. } => parts.clone(),
+        other => panic!("no edit: {other:?}"),
+    }
+}
+
+fn part(kind: PartKind, what: &str, at: &[&str]) -> Part {
+    Part {
+        kind,
+        what: what.into(),
+        at: at.iter().map(|s| (*s).to_owned()).collect(),
+    }
+}
+
+#[test]
+fn an_oh_added_at_a_numbered_carbon_names_it() {
+    let (left, ring) = numbered_benzene(true);
+    let (right, _) = substituted(&left, ring[3], "O");
+    let report = compare(&left, &right);
+    assert_eq!(parts(&report), [part(PartKind::Added, "OH", &["C4"])]);
+    // The attachment carbon is still painted.
+    assert!(chemical(&report)[0].right.atoms.contains(&ring[3]));
+    // Without numbers, no place is made up.
+    let (left, ring) = numbered_benzene(false);
+    let (right, _) = substituted(&left, ring[3], "O");
+    assert_eq!(
+        parts(&compare(&left, &right)),
+        [part(PartKind::Added, "OH", &[])]
+    );
+}
+
+#[test]
+fn a_group_put_in_anothers_place_is_one_replaced_part() {
+    let (benzene, ring) = numbered_benzene(true);
+    let (left, chlorine) = substituted(&benzene, ring[1], "Cl");
+    // Drawn anew: the bromine has an id of its own.
+    let right = edited(&left, |doc| {
+        let p = doc.atom(ring[1]).unwrap().position;
+        let bromine = doc.add_atom("Br", p.offset(0., -40.));
+        doc.add_bond(ring[1], bromine, 1, "plain");
+        doc.delete(&[chlorine]);
+    });
+    assert_eq!(
+        parts(&compare(&left, &right)),
+        [part(PartKind::Replaced, "Cl → Br", &["C2"])]
+    );
+}
+
+#[test]
+fn two_groups_are_two_parts_with_their_formulas() {
+    let (left, ring) = numbered_benzene(true);
+    let right = edited(&left, |doc| {
+        let p = doc.atom(ring[0]).unwrap().position;
+        let n = doc.add_atom("N", p.offset(0., -40.));
+        doc.add_bond(ring[0], n, 1, "plain");
+        let p = doc.atom(ring[3]).unwrap().position;
+        let o = doc.add_atom("O", p.offset(0., 40.));
+        let c = doc.add_atom("C", p.offset(30., 60.));
+        doc.add_bond(ring[3], o, 1, "plain");
+        doc.add_bond(o, c, 1, "plain");
+    });
+    let mut found = parts(&compare(&left, &right));
+    found.sort_by(|a, b| a.at.cmp(&b.at));
+    assert_eq!(
+        found,
+        [
+            part(PartKind::Added, "NH₂", &["C1"]),
+            part(PartKind::Added, "OCH₃", &["C4"])
+        ]
+    );
+}
+
+#[test]
+fn group_formulas_lead_with_the_attached_atom() {
+    for (smiles, formula) in [
+        ("c1ccccc1C(=O)O", "CO₂H"),
+        ("c1ccccc1[N+](=O)[O-]", "NO₂"),
+        ("c1ccccc1C#N", "CN"),
+        ("c1ccccc1OC", "OCH₃"),
+    ] {
+        // Atoms are numbered in SMILES order: the ring is 1 to 6.
+        let right = load(&molecule(smiles));
+        let ids: Vec<u64> = right.atoms.iter().map(|a| a.id).collect();
+        let signature = chemistry::signature(&right, &ids).unwrap();
+        let group: Vec<u64> = ids.iter().copied().filter(|id| *id > 6).collect();
+        let first = 7;
+        assert_eq!(
+            chemistry::fragment_formula(&signature, &group, first),
+            formula,
+            "{smiles}"
+        );
+    }
+}
+
+#[test]
+fn numbers_read_as_drawn_and_are_qualified_when_the_sides_differ() {
+    let (left, ring) = numbered_benzene(false);
+    let number = |doc: &mut Document, id: u64, text: &str| {
+        doc.atom_mut(id).unwrap().display.number = Some(crate::atom_labels::Number {
+            text: text.into(),
+            offset: None,
+            style: crate::atom_labels::number_style(),
+        });
+    };
+    let named = edited(&left, |doc| number(doc, ring[3], "N1′"));
+    let (right, _) = substituted(&named, ring[3], "O");
+    assert_eq!(
+        parts(&compare(&named, &right)),
+        [part(PartKind::Added, "OH", &["N1′"])]
+    );
+    // Numbered only now, or numbered differently.
+    let now = edited(&right, |doc| number(doc, ring[3], "4"));
+    assert_eq!(parts(&compare(&left, &now))[0].at, ["C4 (current)"]);
+    let before = edited(&left, |doc| number(doc, ring[3], "5"));
+    assert_eq!(parts(&compare(&before, &now))[0].at, ["C5 → C4"]);
+}
+
+#[test]
+fn an_inverted_numbered_centre_is_named() {
+    let left = edited(&chiral(), |doc| {
+        let centre = doc
+            .atoms
+            .iter()
+            .find(|a| {
+                doc.bonds
+                    .iter()
+                    .filter(|b| b.a == a.id || b.b == a.id)
+                    .count()
+                    == 3
+            })
+            .unwrap()
+            .id;
+        doc.atom_mut(centre).unwrap().display.number = Some(crate::atom_labels::Number {
+            text: "2".into(),
+            offset: None,
+            style: crate::atom_labels::number_style(),
+        });
+    });
+    let right = edited(&left, |doc| {
+        let bond = doc
+            .bonds
+            .iter_mut()
+            .find(|b| matches!(b.display.as_str(), "wedge" | "hash"))
+            .unwrap();
+        bond.display = if bond.display == "wedge" {
+            "hash"
+        } else {
+            "wedge"
+        }
+        .into();
+    });
+    assert_eq!(
+        parts(&compare(&left, &right)),
+        [part(PartKind::Inverted, "", &["C2"])]
+    );
+}
+
+#[test]
+fn a_charge_in_place_and_a_bond_order_are_worded() {
+    let (left, ring) = numbered_benzene(true);
+    let (amine, n) = substituted(&left, ring[0], "N");
+    let charged = edited(&amine, |doc| doc.atom_mut(n).unwrap().charge = 1);
+    assert_eq!(
+        parts(&compare(&amine, &charged)),
+        [part(PartKind::Atom, "NH₂ → NH₃⁺", &[])]
+    );
+    // The hydrogens a bond order takes are not worded.
+    let ethane = load(&molecule("CC"));
+    let ethene = edited(&ethane, |doc| doc.bonds[0].order = 2);
+    assert_eq!(
+        parts(&compare(&ethane, &ethene)),
+        [part(PartKind::Bond, "single → double", &[])]
+    );
+}
+
+#[test]
+fn two_molecules_and_a_straight_arrow_scaled_together_are_one_line() {
+    let mut doc = Document::default();
+    for x in [0., 400.] {
+        crate::editing::append(&mut doc, &molecule("OC(=O)c1ccccc1"), Point::new(x, 0.));
+    }
+    doc.arrows.push(crate::document::Arrow {
+        id: doc.next_id(),
+        start: Point::new(150., 0.),
+        end: Point::new(260., 0.),
+        start_anchor: None,
+        end_anchor: None,
+        kind: "forward".into(),
+        control: None,
+        cubic: None,
+        nodes: vec![],
+        style: None,
+    });
+    let left = load(&doc);
+    let right = edited(&left, |doc| {
+        crate::editing::transform_about(doc, &doc.all_ids(), Point::new(0., 0.), 1.2, 0.)
+    });
+    assert_eq!(
+        kinds(&compare(&left, &right)),
+        [(Kind::SchemeMoved, Subject::Scheme)]
+    );
+}
+
+#[test]
+fn an_exact_rotation_turns_atom_number_offsets_too() {
+    let (doc, ring) = numbered_benzene(true);
+    let doc = edited(&doc, |doc| {
+        let number = doc
+            .atom_mut(ring[0])
+            .unwrap()
+            .display
+            .number
+            .as_mut()
+            .unwrap();
+        number.offset = Some(Point::new(10., 0.));
+    });
+    let (turned, _) =
+        crate::editing::reference::rotate(&doc, &doc.all_ids(), Point::new(0., 0.), 90., false)
+            .unwrap();
+    let offset = turned
+        .atom(ring[0])
+        .unwrap()
+        .display
+        .number
+        .as_ref()
+        .unwrap()
+        .offset
+        .unwrap();
+    assert!(offset.distance(Point::new(0., 10.)) < 1e-3, "{offset:?}");
+}
+
+#[test]
+fn a_letter_for_a_number_is_not_given_an_element() {
+    let (left, ring) = numbered_benzene(false);
+    let named = edited(&left, |doc| {
+        doc.atom_mut(ring[3]).unwrap().display.number = Some(crate::atom_labels::Number {
+            text: "a".into(),
+            offset: None,
+            style: crate::atom_labels::number_style(),
+        });
+    });
+    let (right, _) = substituted(&named, ring[3], "O");
+    assert_eq!(
+        parts(&compare(&named, &right)),
+        [part(PartKind::Added, "OH", &["a"])]
+    );
+}
+
+#[test]
+fn a_halogen_given_another_element_in_place_is_replaced_at_its_carbon() {
+    let (benzene, ring) = numbered_benzene(true);
+    let (left, chlorine) = substituted(&benzene, ring[1], "Cl");
+    let right = edited(&left, |doc| {
+        doc.atom_mut(chlorine).unwrap().element = "Br".into()
+    });
+    assert_eq!(
+        parts(&compare(&left, &right)),
+        [part(PartKind::Replaced, "Cl → Br", &["C2"])]
+    );
+}
+
+#[test]
+fn a_hydrogen_drawn_out_beside_an_edit_is_not_worded() {
+    let (benzene, ring) = numbered_benzene(true);
+    let (left, oxygen) = substituted(&benzene, ring[0], "O");
+    let right = edited(&left, |doc| {
+        let at = doc.atom(oxygen).unwrap().position;
+        let h = doc.add_atom("H", at.offset(0., -30.));
+        doc.add_bond(oxygen, h, 1, "plain");
+        let at = doc.atom(ring[3]).unwrap().position;
+        let cl = doc.add_atom("Cl", at.offset(0., 40.));
+        doc.add_bond(ring[3], cl, 1, "plain");
+    });
+    assert_eq!(
+        parts(&compare(&left, &right)),
+        [part(PartKind::Added, "Cl", &["C4"])]
+    );
+}
+
+#[test]
+fn a_kept_end_of_a_stereo_double_bond_taken_away_is_still_marked() {
+    let left = load(&molecule("F/C=C/F"));
+    // Atoms 1 to 4 in SMILES order: keep F1 and C2, drop C3 and F4.
+    let right = edited(&left, |doc| {
+        let at = doc.atom(2).unwrap().position;
+        let oxygen = doc.add_atom("O", at.offset(30., 0.));
+        doc.add_bond(2, oxygen, 2, "plain");
+        doc.delete(&[3, 4]);
+    });
+    let report = compare(&left, &right);
+    assert!(
+        chemical(&report)[0].right.atoms.contains(&2),
+        "{:?}",
+        report.changes
+    );
+}
+
+#[test]
+fn a_bold_wedge_flipped_is_no_style_change() {
+    let left = edited(&chiral(), |doc| {
+        let bond = doc
+            .bonds
+            .iter_mut()
+            .find(|b| matches!(b.display.as_str(), "wedge" | "hash"))
+            .expect("a wedge as imported");
+        bond.display = "bold".into();
+    });
+    let right = edited(&left, |doc| {
+        crate::editing::transform(
+            doc,
+            &doc.all_ids(),
+            crate::editing::Transform::FlipHorizontal,
+        )
+    });
+    let report = compare(&left, &right);
+    assert!(
+        report.changes.iter().all(|c| c.kind != Kind::Style),
+        "{:?}",
+        report.changes
     );
 }

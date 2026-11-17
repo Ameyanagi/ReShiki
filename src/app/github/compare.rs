@@ -13,7 +13,9 @@ use crate::canvas::{
 };
 use iced::widget::{Space, checkbox, column, container, responsive, row, scrollable, text};
 use iced::{Alignment, Border, Color, Element, Length, Size, Task, Theme};
-use reshiki::compare::{Category, Change, Chemistry, Detail, Kind, Report, Subject};
+use reshiki::compare::{
+    Category, Change, Chemistry, Detail, Kind, Part, PartKind, Report, Subject,
+};
 use reshiki::document::{Document, Point as World};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -72,6 +74,8 @@ pub enum Action {
 pub(super) enum Tag {
     Chem,
     Moved,
+    Mirrored,
+    Scaled,
     Style,
     Text,
     Reaction,
@@ -86,6 +90,8 @@ impl Tag {
         match self {
             Self::Chem => "CHEM",
             Self::Moved => "MOVED",
+            Self::Mirrored => "MIRRORED",
+            Self::Scaled => "SCALED",
             Self::Style => "STYLE",
             Self::Text => "TEXT",
             Self::Reaction => "RXN",
@@ -103,7 +109,7 @@ impl Tag {
                 [[251, 225, 207], [162, 74, 20]],
                 [[74, 44, 26], [245, 170, 120]],
             ),
-            Self::Moved => (
+            Self::Moved | Self::Mirrored | Self::Scaled => (
                 [[219, 231, 251], [40, 86, 168]],
                 [[30, 45, 74], [150, 182, 240]],
             ),
@@ -203,9 +209,30 @@ fn union(a: (World, World), b: (World, World)) -> (World, World) {
     )
 }
 
-/// `1.3 cm left, 0.5 cm down`, and how far it turned.
+/// `flipped left–right`, `flipped top–bottom` or `mirrored`, by the mirror
+/// line in degrees.
+fn flip(axis: f64) -> &'static str {
+    let off = |line: f64| (axis - line).abs().min(180. - (axis - line).abs());
+    if off(90.) < 1. {
+        "flipped left–right"
+    } else if off(0.) < 1. {
+        "flipped top–bottom"
+    } else {
+        "mirrored"
+    }
+}
+
+/// `1.3 cm left, 0.5 cm down`, how far it turned, `flipped left–right` and
+/// `scaled to 120%`.
 fn movement(doc: &Document, detail: &Detail) -> String {
-    let Detail::Move { dx, dy, degrees } = *detail else {
+    let Detail::Move {
+        dx,
+        dy,
+        degrees,
+        scale,
+        mirror,
+    } = *detail
+    else {
         return String::new();
     };
     let per_cm = f64::from(doc.drawing_style.points_per_world()) * 2.54 / 72.;
@@ -219,7 +246,9 @@ fn movement(doc: &Document, detail: &Detail) -> String {
             parts.push(format!("{:.1} cm {way}", cm.abs()));
         }
     }
-    if degrees.abs() >= 0.5 {
+    if let Some(axis) = mirror {
+        parts.push(flip(axis).to_owned());
+    } else if degrees.abs() >= 0.5 {
         let way = if degrees < 0. {
             "counterclockwise"
         } else {
@@ -227,7 +256,48 @@ fn movement(doc: &Document, detail: &Detail) -> String {
         };
         parts.push(format!("turned {:.0}° {way}", degrees.abs()));
     }
+    if (scale * 100.).round() != 100. {
+        parts.push(format!("scaled to {:.0}%", scale * 100.));
+    }
     parts.join(", ")
+}
+
+/// One part of a chemical edit in words: `OH added at C4`, `Cl → Br at C2`,
+/// `C1–C2 single → double`, `inverted at C3`.
+fn part_text(part: &Part) -> String {
+    let at = part.at.join(", ");
+    let place = |word: &str| {
+        if at.is_empty() {
+            String::new()
+        } else {
+            format!(" {word} {at}")
+        }
+    };
+    match part.kind {
+        PartKind::Added => format!("{} added{}", part.what, place("at")),
+        PartKind::Removed => format!("{} removed{}", part.what, place("from")),
+        PartKind::Replaced | PartKind::Atom => format!("{}{}", part.what, place("at")),
+        PartKind::Bond if part.at.is_empty() => format!("bond {}", part.what),
+        PartKind::Bond => format!("{} {}", part.at.join("–"), part.what),
+        PartKind::Inverted if part.at.is_empty() => "stereocentre inverted".into(),
+        PartKind::Inverted => format!("inverted{}", place("at")),
+        PartKind::Stereo if part.at.is_empty() => "stereo changed".into(),
+        PartKind::Stereo => format!("stereo changed{}", place("at")),
+    }
+}
+
+/// The first two parts, then how many more, the first letter capitalised.
+fn parts_title(parts: &[Part]) -> String {
+    let mut words: Vec<String> = parts.iter().take(2).map(part_text).collect();
+    if parts.len() > 2 {
+        words.push(format!("+{} more", parts.len() - 2));
+    }
+    let words = words.join(", ");
+    let mut chars = words.chars();
+    chars
+        .next()
+        .map(|first| first.to_uppercase().chain(chars).collect())
+        .unwrap_or_default()
 }
 
 fn subject(subject: Subject) -> &'static str {
@@ -249,8 +319,9 @@ fn plural(n: usize, one: &str) -> String {
     }
 }
 
-/// The line of one change.
-fn change_row(index: usize, change: &Change, left: &Document, right: &Document) -> Row {
+/// The line of one change. `same` says the molecule's chemistry did not
+/// change.
+fn change_row(index: usize, change: &Change, left: &Document, right: &Document, same: bool) -> Row {
     let name = subject(change.subject);
     let smiles = match (&change.before, &change.after) {
         (Some(a), Some(b)) => format!("{a} → {b}"),
@@ -268,6 +339,10 @@ fn change_row(index: usize, change: &Change, left: &Document, right: &Document) 
     let (tag, title, detail, code) = match change.kind {
         Kind::Chemical => {
             let title = match &change.detail {
+                Detail::Edit {
+                    mirror_image: true, ..
+                } => "Mirror image: every stereocentre inverted".to_owned(),
+                Detail::Edit { parts, .. } if !parts.is_empty() => parts_title(parts),
                 Detail::Edit { stereo: true, .. } => "Stereo changed".to_owned(),
                 Detail::Edit {
                     added,
@@ -363,6 +438,50 @@ fn change_row(index: usize, change: &Change, left: &Document, right: &Document) 
             movement(left, &change.detail),
             None,
         ),
+        Kind::Mirrored | Kind::Scaled => {
+            let (dx, dy, degrees, scale, mirror) = match change.detail {
+                Detail::Move {
+                    dx,
+                    dy,
+                    degrees,
+                    scale,
+                    mirror,
+                } => (dx, dy, degrees, scale, mirror),
+                _ => (0., 0., 0., 1., None),
+            };
+            let mirrored = change.kind == Kind::Mirrored;
+            // The title says the flip or the scale, the detail the rest.
+            let rest = Detail::Move {
+                dx,
+                dy,
+                degrees: if mirrored { 0. } else { degrees },
+                scale: if mirrored { scale } else { 1. },
+                mirror: None,
+            };
+            let mut detail = movement(left, &rest);
+            // The Flip tool swaps wedges so the configuration stays.
+            let wedged = right.bonds.iter().any(|bond| {
+                change.right.objects.contains(&bond.a)
+                    && matches!(
+                        bond.display.as_str(),
+                        "wedge" | "hash" | "hollow_wedge" | "hashed" | "bold"
+                    )
+            });
+            if mirrored && molecule && same && wedged {
+                detail = [detail, "Wedges swapped; same configuration".into()]
+                    .into_iter()
+                    .filter(|part| !part.is_empty())
+                    .collect::<Vec<_>>()
+                    .join(" · ");
+            }
+            if mirrored {
+                let title = format!("{name} {}", flip(mirror.unwrap_or(0.)));
+                (Tag::Mirrored, title, detail, None)
+            } else {
+                let title = format!("{name} scaled to {:.0}%", scale * 100.);
+                (Tag::Scaled, title, detail, None)
+            }
+        }
         Kind::Redrawn if molecule => (
             Tag::Moved,
             "Molecule redrawn".into(),
@@ -427,7 +546,12 @@ fn rank(kind: Kind) -> u8 {
     match kind {
         Kind::Chemical | Kind::Removed | Kind::Added | Kind::Reaction | Kind::Unverified => 0,
         Kind::Text => 1,
-        Kind::SchemeMoved | Kind::Moved | Kind::Rotated | Kind::Redrawn => 2,
+        Kind::SchemeMoved
+        | Kind::Moved
+        | Kind::Rotated
+        | Kind::Mirrored
+        | Kind::Scaled
+        | Kind::Redrawn => 2,
         Kind::Style => 3,
     }
 }
@@ -437,7 +561,12 @@ fn rows(report: &Report, left: &Document, right: &Document) -> Vec<Row> {
         .changes
         .iter()
         .enumerate()
-        .map(|(i, change)| change_row(i, change, left, right))
+        .map(|(i, change)| {
+            let same = report.molecules.iter().any(|pair| {
+                pair.right == change.right.objects && pair.chemistry == Chemistry::Same
+            });
+            change_row(i, change, left, right, same)
+        })
         .collect();
     rows.sort_by_key(|row| {
         row.change
@@ -483,7 +612,12 @@ fn paint(change: &Change) -> ComparePaint {
         Kind::Reaction => ComparePaint::Reaction,
         Kind::Added | Kind::Removed => ComparePaint::Added,
         Kind::Unverified => ComparePaint::Unverified,
-        Kind::SchemeMoved | Kind::Moved | Kind::Rotated | Kind::Redrawn => ComparePaint::Moved,
+        Kind::SchemeMoved
+        | Kind::Moved
+        | Kind::Rotated
+        | Kind::Mirrored
+        | Kind::Scaled
+        | Kind::Redrawn => ComparePaint::Moved,
         Kind::Style => ComparePaint::Style,
         Kind::Text => ComparePaint::Text,
     }
@@ -883,7 +1017,7 @@ impl Compare {
         };
         let legend = iced::widget::Row::with_children([
             swatch(ComparePaint::Chemical, "Chemical").into(),
-            swatch(ComparePaint::Moved, "Moved / redrawn").into(),
+            swatch(ComparePaint::Moved, "Moved, mirrored, scaled").into(),
             swatch(ComparePaint::Style, "Style").into(),
             swatch(ComparePaint::Text, "Text").into(),
         ])
