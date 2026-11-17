@@ -201,6 +201,8 @@ async fn about_names_the_data_folder_with_an_open_button() {
         .find(|node| node.id == "updates-data-folder")
         .expect("About has the data folder's Open button");
     assert_eq!(open.name, "Open data folder");
+    app.updates.data_warning = Some("Kept your data in /old: could not move it".into());
+    let _ = snapshot(&app, &mut renderer, size);
     let _ = app.update(Message::Updates(
         super::super::updates::Action::OpenDataFolder,
     ));

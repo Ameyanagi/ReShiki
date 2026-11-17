@@ -180,6 +180,8 @@ fn a_data_folder_that_could_not_move_is_named_in_the_status_bar() {
     });
     assert_eq!(app.status, message);
     assert!(app.error);
+    // Opening a drawing replaces the status; About keeps the message.
+    assert_eq!(app.updates.data_warning.as_deref(), Some(message));
     let (app, _) = App::with_startup(crate::session::Arguments {
         data_warning: Some(message.into()),
         shortcut_examples: true,

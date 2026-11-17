@@ -56,14 +56,15 @@ Send them before you delete it.
 
 **macOS and Linux**
 
-1. In ReShiki, open the GitHub menu and choose **Sign out**. The sign-in is in
-   the Keychain (macOS) or the Secret Service keyring (Linux), not in
-   `~/.reshiki/`. If the app is already gone, delete the
-   `dev.reshiki.ReShiki.github` item in Keychain Access, or run
-   `secret-tool clear service dev.reshiki.ReShiki.github`.
+1. In ReShiki, note the data folder in **About ReShiki**, then open the GitHub
+   menu and choose **Sign out**. The sign-in is in the Keychain (macOS) or the
+   Secret Service keyring (Linux), not in `~/.reshiki/`. If the app is already
+   gone, delete the `dev.reshiki.ReShiki.github` item in Keychain Access, or
+   run `secret-tool clear service dev.reshiki.ReShiki.github`.
 2. Delete the app: **ReShiki** in **Applications**, or the extracted folder on
    Linux.
-3. Delete `~/.reshiki/`.
+3. Delete `~/.reshiki/`. If **About ReShiki** named another data folder (the
+   old one, when ReShiki could not move it), delete that one too.
 
 **Windows**
 

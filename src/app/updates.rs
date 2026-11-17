@@ -54,6 +54,8 @@ pub struct State {
     error: Option<String>,
     /// The data folder About names, as resolved after startup moved it.
     pub(super) data_folder: Option<std::path::PathBuf>,
+    /// Why startup could not move the data folder to `~/.reshiki`.
+    pub(super) data_warning: Option<String>,
 }
 impl State {
     /// Whether a preference save is in progress, which holds both preferences.
@@ -90,6 +92,7 @@ impl State {
             data_folder: reshiki::compatibility::data_directory_location()
                 .ok()
                 .map(|location| location.path),
+            data_warning: None,
         }
     }
     pub fn available(&self) -> bool {
@@ -472,6 +475,13 @@ impl App {
                     ]
                     .spacing(8)
                     .align_y(Alignment::Center)
+                }))
+                .push(state.data_warning.as_ref().map(|warning| {
+                    text(warning.as_str())
+                        .size(12)
+                        .style(|theme: &iced::Theme| text::Style {
+                            color: Some(theme.palette().danger),
+                        })
                 }))
                 .spacing(6),
             row![
