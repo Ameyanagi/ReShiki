@@ -102,6 +102,30 @@ fn graphic_bounds(document: &Document) -> Value {
     json!(bounds)
 }
 
+/// The drawn parts of every graphic in drawing coordinates. Editable exchange
+/// turns shapes into paths and may split them, so round trips are compared by
+/// what is drawn instead of by shape type.
+fn graphic_parts(document: &Document) -> Value {
+    document
+        .graphics
+        .iter()
+        .map(|graphic| {
+            graphic
+                .parts()
+                .into_iter()
+                .map(|part| {
+                    json!({
+                        "commands": part.commands,
+                        "style": part.style,
+                        "filled": part.filled,
+                    })
+                })
+                .collect()
+        })
+        .collect::<Vec<Value>>()
+        .into()
+}
+
 async fn import_drawing(
     bytes: Vec<u8>,
     format: &str,
@@ -116,6 +140,7 @@ async fn import_drawing(
                 "counts": counts(&document),
                 "drawing_style": document.drawing_style,
                 "graphic_bounds_relative_to_anchor": graphic_bounds(&document),
+                "graphic_parts": graphic_parts(&document),
                 "duration_ms": milliseconds(started),
             }),
             Some(document),

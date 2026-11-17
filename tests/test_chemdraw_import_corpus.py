@@ -389,5 +389,187 @@ class DrawingAssessmentTests(unittest.TestCase):
         self.assertIsNotNone(runner.drawing_semantic_difference(before, after))
 
 
+def outline_graphic(identifier, commands, stroke=(0, 0, 0), picture=None):
+    """One imported graphic and its drawn part, as the probe reports them."""
+    graphic = {"id": identifier, "kind": "picture" if picture else "path", "layer": -32767}
+    if picture:
+        graphic["picture"] = picture
+    style = {"stroke": list(stroke), "fill": None, "width_pt": 0.6, "pattern": "solid"}
+    return graphic, [{"commands": commands, "style": style, "filled": False}]
+
+
+def square(x):
+    corners = [(x, 50), (x + 10, 50), (x + 10, 60), (x, 60)]
+    move, *lines = [{"x": a, "y": b} for a, b in corners]
+    return [
+        {"command": "move", "points": move},
+        *({"command": "line", "points": point} for point in lines),
+        {"command": "close"},
+    ]
+
+
+def exchanged(commands, dx, dy):
+    """The path form written by editable exchange: cubic edges and an explicit closing edge."""
+    result, start = [], None
+    for command in commands:
+        if command["command"] == "close":
+            result += [
+                {
+                    "command": "cubic",
+                    "points": [dict(result[-1]["points"][-1]), dict(start), dict(start)],
+                },
+                command,
+            ]
+            continue
+        point = {"x": command["points"]["x"] + dx, "y": command["points"]["y"] + dy}
+        if command["command"] == "move":
+            start = point
+            result.append({"command": "move", "points": dict(point)})
+        else:
+            previous = result[-1]["points"]
+            previous = previous if isinstance(previous, dict) else previous[-1]
+            result.append({"command": "cubic", "points": [dict(previous), dict(point), point]})
+    return result
+
+
+class GraphicRoundtripTests(unittest.TestCase):
+    """A reopened drawing keeps its outer graphic bounds in every case below."""
+
+    PIXELS = ["iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAAAAAA6fptVAAAACklEQVR4nGNgAAAAAgAB", "AAAA"]
+
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.directory = Path(directory.name)
+        plus = [
+            {"command": "move", "points": {"x": 40, "y": 20}},
+            {"command": "line", "points": {"x": 50, "y": 20}},
+            {"command": "move", "points": {"x": 45, "y": 15}},
+            {"command": "line", "points": {"x": 45, "y": 25}},
+        ]
+        graphics = [
+            outline_graphic(1, square(0)),
+            outline_graphic(2, square(40), stroke=(31, 89, 166)),
+            outline_graphic(3, square(80)),
+            outline_graphic(4, plus),
+            outline_graphic(5, square(20), picture=self.PIXELS[0]),
+        ]
+        self.before = {
+            "atoms": [{"id": 9, "element": "C", "position": {"x": 5, "y": 5}}],
+            "graphics": [graphic for graphic, _ in graphics],
+        }
+        self.before_parts = [parts for _, parts in graphics]
+        # Reopened: translated, renumbered, restacked, in path form, with the plus split.
+        self.after = {
+            "atoms": [{"id": 1, "element": "C", "position": {"x": 75, "y": -15}}],
+            "graphics": [],
+        }
+        self.after_parts = []
+        split = [
+            *graphics[:3],
+            outline_graphic(4, plus[:2]),
+            outline_graphic(4, plus[2:]),
+            graphics[4],
+        ]
+        for index, (graphic, parts) in enumerate(reversed(split)):
+            part = copy.deepcopy(parts[0])
+            part["commands"] = exchanged(part["commands"], 70, -20)
+            part["style"]["width_pt"] = 0.6000061
+            self.after["graphics"].append({**graphic, "id": 20 + index, "layer": index - 6})
+            self.after_parts.append([part])
+
+    def findings(self):
+        """Assess a drawing whose three round trips all reopen as `self.after`."""
+        report = {
+            "status": "ok",
+            "counts": {},
+            "drawing_style": {},
+            "graphic_bounds_relative_to_anchor": [-5, 45, 85, 55],
+        }
+        snapshots = {}
+        for name, document in [("before", self.before), ("after", self.after)]:
+            path = self.directory / f"{name}.rsk"
+            path.write_text(json.dumps(document))
+            snapshots[name] = {"status": "ok", "path": str(path)}
+        roundtrip = {
+            "export": {"status": "ok"},
+            "reimport": {**report, "graphic_parts": self.after_parts},
+            "snapshot": snapshots["after"],
+        }
+        result = {
+            "import": {**report, "graphic_parts": self.before_parts},
+            "artifacts": {"snapshot": snapshots["before"]},
+            "roundtrips": dict.fromkeys(("cdxml", "cdx", "cds"), roundtrip),
+        }
+        return runner.assess({"expected_import": {"outcome": "accept"}}, "cdxml", result)
+
+    def changed(self):
+        findings = self.findings()
+        self.assertEqual({finding["kind"] for finding in findings}, {"roundtrip_graphic_changed"})
+        return findings[0]["detail"]
+
+    def interior_stamp(self):
+        """The reopened blue square between the two outer stamps."""
+        return self.after_parts[4][0]
+
+    def test_identical_drawing_passes_in_exchanged_path_form(self):
+        self.assertEqual(self.findings(), [])
+
+    def test_moved_interior_stamp_is_reported(self):
+        for command in self.interior_stamp()["commands"][:-1]:
+            points = command["points"]
+            for point in [points] if isinstance(points, dict) else points:
+                point["x"] += 3
+        self.assertIn("has no outline with the same points", self.changed())
+
+    def test_changed_colour_is_reported(self):
+        self.interior_stamp()["style"]["stroke"] = [204, 61, 46]
+        self.assertIn(".stroke: [31, 89, 166] -> [204, 61, 46]", self.changed())
+
+    def test_changed_line_width_is_reported(self):
+        self.interior_stamp()["style"]["width_pt"] = 0.7
+        self.assertIn(".width_pt: 0.6 -> 0.7", self.changed())
+
+    def test_changed_path_is_reported(self):
+        # Bend one straight edge inward: the corners and the bounds stay put.
+        self.interior_stamp()["commands"][2]["points"][0]["x"] -= 4
+        self.assertIn("has no outline with the same points", self.changed())
+
+    def test_changed_picture_pixels_are_reported(self):
+        self.after["graphics"][0]["picture"] = self.PIXELS[1]
+        self.assertIn(".picture: ", self.changed())
+
+    def test_missing_outline_is_reported(self):
+        del self.after["graphics"][1], self.after_parts[1]
+        self.assertIn("graphic outline count: 6 -> 5", self.changed())
+
+    def test_close_outlines_match_their_nearest_reopened_outline(self):
+        # Two equal stamps 0.15 apart, reopened 0.09 and 0 from the first one.
+        self.before["graphics"].insert(1, {"id": 6, "kind": "path", "layer": -32767})
+        self.before_parts.insert(1, outline_graphic(6, square(0.15))[1])
+        unmoved = copy.deepcopy(self.after_parts[-1])
+        for command in self.after_parts[-1][0]["commands"][:-1]:
+            points = command["points"]
+            for point in [points] if isinstance(points, dict) else points:
+                point["x"] += 0.09
+        self.after["graphics"].append({"id": 30, "kind": "path", "layer": -7})
+        self.after_parts.append(unmoved)
+        self.assertEqual(self.findings(), [])
+
+    def test_short_closing_edge_is_kept_as_an_edge(self):
+        # The outline ends 0.05 from its start; exchange still writes the closing edge.
+        commands = square(40)
+        commands.insert(-1, {"command": "line", "points": {"x": 40, "y": 50.05}})
+        self.before_parts[1][0]["commands"] = commands
+        self.interior_stamp()["commands"] = exchanged(commands, 70, -20)
+        self.assertEqual(self.findings(), [])
+
+    def test_drawing_without_other_objects_may_move_as_a_whole(self):
+        del self.before["atoms"], self.after["atoms"]
+        self.assertEqual(self.findings(), [])
+        self.interior_stamp()["style"]["pattern"] = "dashed"
+        self.assertIn(".pattern: 'solid' -> 'dashed'", self.changed())
+
+
 if __name__ == "__main__":
     unittest.main()

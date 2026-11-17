@@ -2,6 +2,7 @@
 """Exercise generated ChemDraw files against ReShiki's production Rust importer."""
 
 import argparse
+import hashlib
 import json
 import subprocess
 import time
@@ -36,11 +37,19 @@ def first_difference(before, after, path="", tolerance=0.1):
     return f"{path}: {before!r} -> {after!r}"
 
 
-def drawing_origin(document):
+def drawing_origin(document, graphic_parts=()):
     points = [atom["position"] for atom in document.get("atoms", [])]
     if not points:
         points = [caption["position"] for caption in document.get("annotations", [])]
         points += [arrow[key] for arrow in document.get("arrows", []) for key in ("start", "end")]
+    if not points:
+        points = [
+            point
+            for parts in graphic_parts
+            for part in parts
+            for command in part["commands"]
+            for point in command_points(command)
+        ]
     return {axis: min((point[axis] for point in points), default=0) for axis in ("x", "y")}
 
 
@@ -184,6 +193,105 @@ def drawing_semantic_difference(before, after):
         drawing_semantics(before, ordered_atoms=True),
         drawing_semantics({**after, "atoms": matched}, ordered_atoms=True),
     )
+
+
+def command_points(command):
+    points = command.get("points", [])
+    return [points] if isinstance(points, dict) else points
+
+
+def graphic_outlines(document, graphic_parts):
+    """Describe each drawn subpath of each graphic, relative to the drawing origin.
+
+    Editable exchange turns shapes into paths, writes straight edges as cubics,
+    closes outlines with an explicit edge and may split one graphic into several.
+    Subpaths of cubics are the common form: a line is the cubic that the exchange
+    writes for it, and a closed outline always ends with its closing edge.
+    """
+    origin = drawing_origin(document, graphic_parts)
+    outlines: list[dict[str, Any]] = []
+    for graphic, parts in zip(document.get("graphics", []), graphic_parts, strict=True):
+        picture = graphic.get("picture")
+        shared = {
+            "front": graphic["layer"] > 0,
+            # The stored picture is its PNG, with its EMF when it has one.
+            "picture": picture
+            and hashlib.sha256(json.dumps(picture, sort_keys=True).encode()).hexdigest(),
+        }
+        for part in parts:
+            style = part["style"]
+            for command in part["commands"]:
+                points = [
+                    {axis: point[axis] - origin[axis] for axis in ("x", "y")}
+                    for point in command_points(command)
+                ]
+                kind = command["command"]
+                if kind == "move":
+                    outlines.append(
+                        {
+                            **shared,
+                            "stroke": style["stroke"],
+                            "fill": style["fill"] if part["filled"] else None,
+                            "width_pt": style["width_pt"],
+                            "pattern": style["pattern"],
+                            "closed": False,
+                            "points": points,
+                        }
+                    )
+                    continue
+                path = outlines[-1]["points"]
+                if kind == "line":
+                    path += [path[-1], points[0], points[0]]
+                elif kind == "cubic":
+                    path += points
+                else:
+                    # Export adds the closing edge unless the path already ends at its start.
+                    if first_difference(path[-1], path[0], tolerance=0.000001):
+                        path += [path[-1], path[0], path[0]]
+                    outlines[-1]["closed"] = True
+    return outlines
+
+
+def graphic_difference(before, before_parts, after, after_parts):
+    """Match drawn subpaths by position, then compare their style and picture.
+
+    Positions use the 0.1 unit allowed for other drawing coordinates. Stroke
+    widths use the 0.0001 pt allowed for 16.16 fixed-point style values. A
+    mirrored picture is reported: export stores it unmirrored with flipped rows.
+    """
+    first = graphic_outlines(before, before_parts)
+    available = graphic_outlines(after, after_parts)
+    if len(first) != len(available):
+        return f"graphic outline count: {len(first)} -> {len(available)}"
+    for outline in first:
+        place = f"graphic outline at {outline['points'][0]}"
+        differences = []
+        for index, candidate in enumerate(available):
+            if len(outline["points"]) != len(candidate["points"]):
+                continue
+            distance = max(
+                abs(point[axis] - other[axis])
+                for point, other in zip(outline["points"], candidate["points"], strict=True)
+                for axis in ("x", "y")
+            )
+            if distance > 0.1:
+                continue
+            changed = [
+                key
+                for key in ("stroke", "fill", "pattern", "closed", "front", "picture")
+                if outline[key] != candidate[key]
+            ]
+            if abs(outline["width_pt"] - candidate["width_pt"]) > 0.0001:
+                changed.append("width_pt")
+            differences.append((len(changed), distance, index, changed))
+        if not differences:
+            return f"{place} has no outline with the same points"
+        *_, index, changed = min(differences)
+        if changed:
+            key = changed[0]
+            return f"{place}.{key}: {outline[key]!r} -> {available[index][key]!r}"
+        available.pop(index)
+    return None
 
 
 def style_changes(before, after):
@@ -380,15 +488,23 @@ def assess(case, variant, result):
                     }
                 )
             if imported_document is not None:
-                difference = drawing_semantic_difference(imported_document, document)
-                if difference:
-                    findings.append(
-                        {
-                            "kind": "roundtrip_drawing_semantics_changed",
-                            "format": format_name,
-                            "detail": difference,
-                        }
-                    )
+                for kind, difference in [
+                    (
+                        "roundtrip_drawing_semantics_changed",
+                        drawing_semantic_difference(imported_document, document),
+                    ),
+                    (
+                        "roundtrip_graphic_changed",
+                        graphic_difference(
+                            imported_document,
+                            imported["graphic_parts"],
+                            document,
+                            reopened["graphic_parts"],
+                        ),
+                    ),
+                ]:
+                    if difference:
+                        findings.append({"kind": kind, "format": format_name, "detail": difference})
         else:
             findings.append(
                 {

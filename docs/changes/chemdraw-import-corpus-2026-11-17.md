@@ -346,6 +346,12 @@ python3 scripts/generate_chemdraw_import_corpus.py --seed 99173 --extra-cases 8 
 python3 scripts/check_chemdraw_import_corpus.py --manifest artifacts/chemdraw-fresh-99173/manifest.json --output-dir artifacts/chemdraw-fresh-99173-results --strict
 ```
 
+The runner compares every drawn graphic outline of a reimport with the import:
+its points, stroke, fill, line width, pattern, picture and whether it sits in
+front of the structures. Outlines are matched by position, because exchange
+turns shapes into paths and may split them. Stacking order among graphics is not
+compared.
+
 The runner keeps input results, production exports, reimports, native snapshots,
 and SVG previews separate. Local receipts live under
 `artifacts/chemdraw-import-corpus/`. The final `chemdraw-fixtures-fixed.zip` and
