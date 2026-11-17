@@ -768,8 +768,14 @@ fn look(doc: &Document, object: Object, id: u64) -> (Value, Value) {
             (
                 arrow.map(|arrow| json(&arrow.style)).unwrap_or_default(),
                 // What its ends hold on to.
+                // Its targets only: offsets turn with the drawing.
                 arrow
-                    .map(|arrow| json(&(&arrow.start_anchor, &arrow.end_anchor)))
+                    .map(|arrow| {
+                        let target = |anchor: &Option<crate::arrow_anchors::Anchor>| {
+                            anchor.as_ref().map(|anchor| json(&anchor.target))
+                        };
+                        json(&(target(&arrow.start_anchor), target(&arrow.end_anchor)))
+                    })
                     .unwrap_or_default(),
             )
         }
@@ -1229,7 +1235,18 @@ pub fn compare(left: &Document, right: &Document) -> Report {
             .map(|bond| key(bond.a, bond.b))
             .collect()
     };
-    let (mine, theirs) = (links(left), links(right));
+    // Those within one molecule belong to its chemistry and style.
+    let between = |side: &Side, (a, b): &(u64, u64)| side.owner.get(a) != side.owner.get(b);
+    let (mine, theirs): (HashSet<_>, HashSet<_>) = (
+        links(left)
+            .into_iter()
+            .filter(|pair| between(&l, pair))
+            .collect(),
+        links(right)
+            .into_iter()
+            .filter(|pair| between(&r, pair))
+            .collect(),
+    );
     let mut changed: Vec<&(u64, u64)> = mine.symmetric_difference(&theirs).collect();
     changed.sort_unstable();
     for (a, b) in changed {

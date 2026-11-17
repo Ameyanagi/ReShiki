@@ -1035,3 +1035,91 @@ fn an_arrow_let_go_of_its_atom_is_listed() {
         report.changes
     );
 }
+
+#[test]
+fn a_double_bond_turned_beside_an_inverted_centre_is_marked_too() {
+    // The same atoms in the same order, so the ids match.
+    let left = load(&molecule("C/C=C/[C@H](O)CC"));
+    let right = load(&molecule("C/C=C\\[C@@H](O)CC"));
+    let report = compare(&left, &right);
+    let change = chemical(&report)[0];
+    let double = left.bonds.iter().find(|b| b.order == 2).unwrap();
+    let pair = key(double.a, double.b);
+    assert!(
+        change.right.bonds.contains(&pair),
+        "{:?}",
+        change.right.bonds
+    );
+    let center = left
+        .atoms
+        .iter()
+        .find(|atom| {
+            atom.element == "C"
+                && left
+                    .bonds
+                    .iter()
+                    .filter(|b| b.a == atom.id || b.b == atom.id)
+                    .count()
+                    == 3
+        })
+        .unwrap()
+        .id;
+    assert!(
+        change.right.atoms.contains(&center),
+        "{:?}",
+        change.right.atoms
+    );
+}
+
+#[test]
+fn an_attached_arrow_turned_with_the_scheme_is_not_detached() {
+    let s = scheme();
+    let attached = edited(&s.doc, |doc| {
+        let atom = doc.atom(s.ethanol[0]).unwrap().position;
+        let start = doc.arrows[0].start;
+        doc.arrows[0].start_anchor = Some(crate::arrow_anchors::Anchor {
+            target: crate::arrow_anchors::Target::Atom { atom: s.ethanol[0] },
+            offset: Point::new(start.x - atom.x, start.y - atom.y),
+            direction: Point::new(1., 0.),
+            gap: 0.,
+        });
+    });
+    let turned = edited(&attached, |doc| moved(doc, &doc.all_ids(), 40., 10., 25.));
+    let report = compare(&attached, &turned);
+    assert!(
+        report
+            .changes
+            .iter()
+            .all(|c| c.detail != Detail::Reason("Attached differently".into())),
+        "{:?}",
+        report.changes
+    );
+}
+
+#[test]
+fn a_restyled_hydrogen_bond_inside_a_molecule_is_one_line() {
+    // HO-CH2-CH2-OH with its H bonded back to the far oxygen.
+    let mut left = Document::default();
+    let o1 = left.add_atom("O", Point::new(0., 0.));
+    let c1 = left.add_atom("C", Point::new(36., 21.));
+    let c2 = left.add_atom("C", Point::new(72., 0.));
+    let o2 = left.add_atom("O", Point::new(108., 21.));
+    let h = left.add_atom("H", Point::new(70., 50.));
+    left.add_bond(o1, c1, 1, "plain");
+    left.add_bond(c1, c2, 1, "plain");
+    left.add_bond(c2, o2, 1, "plain");
+    left.add_bond(o2, h, 1, "plain");
+    left.add_bond(h, o1, 0, "dotted");
+    let left = load(&left);
+    let right = edited(&left, |doc| {
+        doc.bonds
+            .iter_mut()
+            .find(|b| b.order == 0)
+            .unwrap()
+            .highlight = Some(crate::palette::Color::Ink);
+    });
+    assert_eq!(
+        kinds(&compare(&left, &right)),
+        [(Kind::Style, Subject::Molecule)]
+    );
+}

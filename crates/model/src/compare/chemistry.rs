@@ -30,6 +30,9 @@ pub(super) struct Signature {
     /// Each tetrahedral centre's neighbours, sorted, and its winding about
     /// them in that order, so the two sides compare id for id.
     pub chirality: HashMap<u64, (Vec<u64>, u8)>,
+    /// Each stereo double bond's code, with its reference atoms for cis and
+    /// trans.
+    pub double: HashMap<(u64, u64), (u8, Vec<u64>)>,
 }
 
 impl Signature {
@@ -158,9 +161,18 @@ pub(super) fn signature(doc: &Document, ids: &[u64]) -> Result<Signature, String
         .filter(|(_, meta)| meta.chiral_tag != 0)
         .filter_map(|(i, _)| id(i))
         .collect();
+    let mut double = HashMap::new();
     for (bond, meta) in state.graph.bonds.iter().zip(&state.metadata.bonds) {
         if meta.stereo != 0 || meta.unknown_stereo {
             stereo.extend([id(bond.a), id(bond.b)].into_iter().flatten());
+            if let (Some(a), Some(b)) = (id(bond.a), id(bond.b)) {
+                let code = if meta.unknown_stereo { 1 } else { meta.stereo };
+                let atoms = match code {
+                    4 | 5 => meta.stereo_atoms.iter().filter_map(|&i| id(i)).collect(),
+                    _ => Vec::new(),
+                };
+                double.insert(key(a, b), (code, atoms));
+            }
         }
     }
     Ok(Signature {
@@ -172,6 +184,7 @@ pub(super) fn signature(doc: &Document, ids: &[u64]) -> Result<Signature, String
         bonds,
         stereo,
         chirality: chirality(state, &molecule.ids),
+        double,
     })
 }
 
@@ -342,14 +355,25 @@ pub(super) fn edit(left: &Signature, right: &Signature) -> Edit {
         .filter(|id| left.chirality.get(*id) != right.chirality.get(*id))
         .copied()
         .collect();
+    let doubles: Vec<(u64, u64)> = left
+        .double
+        .keys()
+        .chain(right.double.keys())
+        .filter(|bond| left.double.get(*bond) != right.double.get(*bond))
+        .copied()
+        .collect();
     if nothing {
         edit.stereo = true;
-        if centres.is_empty() {
-            // A double bond's E/Z, or groups: point at every stereo unit.
+        if centres.is_empty() && doubles.is_empty() {
+            // Groups and the like: point at every stereo unit.
             edit.changed = left.stereo.iter().chain(&right.stereo).copied().collect();
         }
     }
     edit.changed.extend(centres);
+    for (a, b) in doubles {
+        edit.changed.extend([a, b]);
+        edit.changed_bonds.push((a, b));
+    }
     edit.changed.sort_unstable();
     edit.changed.dedup();
     for list in [&mut edit.removed, &mut edit.added, &mut edit.changed] {
@@ -361,6 +385,7 @@ pub(super) fn edit(left: &Signature, right: &Signature) -> Edit {
         &mut edit.changed_bonds,
     ] {
         list.sort_unstable();
+        list.dedup();
     }
     edit
 }
