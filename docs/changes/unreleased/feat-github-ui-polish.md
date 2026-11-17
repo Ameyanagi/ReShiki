@@ -11,7 +11,7 @@ issues: []
   menu shows what applies now, then your account.
 - Sign-in shows the code at once and closes by itself, then goes on with what
   started it. **Open from GitHub…** opens the repository used last, lists
-  drawings newest first with who changed them, and makes a new repository,
+  drawings by name with who changed them, and makes a new repository,
   drawing or folder in place. Signed out, it shows the repositories known on
   this computer.
 - A drawing changed on GitHub is a question, not an error: the status is

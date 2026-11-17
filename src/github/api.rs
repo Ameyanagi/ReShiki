@@ -24,6 +24,12 @@ async fn call<T: DeserializeOwned>(
     serde_json::from_slice(&bytes).map_err(|_| Error::Rejected(UNREADABLE.into()))
 }
 
+/// A GET whose reply never changes, asked once while `client` lives.
+async fn kept<T: DeserializeOwned>(client: &Client, path: &str) -> Result<T, Error> {
+    let bytes = client.get_kept(path, Accept::Json, JSON_LIMIT).await?;
+    serde_json::from_slice(&bytes).map_err(|_| Error::Rejected(UNREADABLE.into()))
+}
+
 /// Object names go into request paths and file names: plain hex only.
 fn sha(sha: String) -> Result<String, Error> {
     if !sha.is_empty() && sha.bytes().all(|byte| byte.is_ascii_hexdigit()) {
@@ -203,7 +209,7 @@ pub async fn head(client: &Client, repo: &RepoKey, branch: &str) -> Result<Head,
     let reference: Ref = call(client, Method::GET, &path, None).await?;
     let commit = sha(reference.object.sha)?;
     let path = format!("{}/git/commits/{commit}", base(repo));
-    let reply: Commit = call(client, Method::GET, &path, None).await?;
+    let reply: Commit = kept(client, &path).await?;
     Ok(Head {
         commit,
         tree: sha(reply.tree.sha)?,
@@ -233,7 +239,7 @@ pub async fn commit(client: &Client, repo: &RepoKey, reference: &str) -> Result<
 /// (`.svg`) of one folder.
 pub async fn tree(client: &Client, repo: &RepoKey, tree: &str) -> Result<Vec<Entry>, Error> {
     let path = format!("{}/git/trees/{tree}", base(repo));
-    Ok(listing(call(client, Method::GET, &path, None).await?)?.0)
+    Ok(listing(kept(client, &path).await?)?.0)
 }
 
 /// What [`tree`] lists, of every folder below `tree` at once, by repository
@@ -244,7 +250,7 @@ pub async fn tree_all(
     tree: &str,
 ) -> Result<(Vec<Entry>, bool), Error> {
     let path = format!("{}/git/trees/{tree}?recursive=1", base(repo));
-    listing(call(client, Method::GET, &path, None).await?)
+    listing(kept(client, &path).await?)
 }
 
 #[derive(Deserialize)]
@@ -347,9 +353,7 @@ impl<'a> Folders<'a> {
 
 pub async fn blob(client: &Client, repo: &RepoKey, sha: &str) -> Result<Vec<u8>, Error> {
     let path = format!("{}/git/blobs/{sha}", base(repo));
-    client
-        .send(Method::GET, &path, None, Accept::Raw, FILE_LIMIT)
-        .await
+    client.get_kept(&path, Accept::Raw, FILE_LIMIT).await
 }
 
 /// A drawing as it is on GitHub now.
@@ -374,6 +378,21 @@ pub async fn download(
         commit: head.commit,
         bytes: blob(client, repo, &sha).await?,
         blob: sha,
+    })
+}
+
+/// The file a listing at `commit` named by its `blob`: one request, or none
+/// once its preview was read.
+pub async fn download_listed(
+    client: &Client,
+    repo: &RepoKey,
+    commit: String,
+    blob: String,
+) -> Result<Download, Error> {
+    Ok(Download {
+        bytes: self::blob(client, repo, &blob).await?,
+        commit,
+        blob,
     })
 }
 
@@ -465,6 +484,37 @@ pub struct RemoteVersion {
     pub date: String,
 }
 
+#[derive(Deserialize)]
+struct CommitItem {
+    sha: String,
+    commit: CommitText,
+    author: Option<Owner>,
+}
+#[derive(Deserialize)]
+struct CommitText {
+    message: String,
+    author: Author,
+}
+#[derive(Deserialize)]
+struct Author {
+    name: String,
+    date: String,
+}
+
+impl CommitItem {
+    fn checked(self) -> Result<RemoteVersion, Error> {
+        Ok(RemoteVersion {
+            commit: sha(self.sha)?,
+            message: (self.commit.message.lines().next())
+                .unwrap_or_default()
+                .into(),
+            login: self.author.map(|author| author.login),
+            author: self.commit.author.name,
+            date: self.commit.author.date,
+        })
+    }
+}
+
 /// Commits touching `path`, newest first, 20 a page, counted from `head`.
 pub async fn file_commits(
     client: &Client,
@@ -473,46 +523,34 @@ pub async fn file_commits(
     head: &str,
     page: u32,
 ) -> Result<Vec<RemoteVersion>, Error> {
-    #[derive(Deserialize)]
-    struct Item {
-        sha: String,
-        commit: Commit,
-        author: Option<Owner>,
-    }
-    #[derive(Deserialize)]
-    struct Commit {
-        message: String,
-        author: Author,
-    }
-    #[derive(Deserialize)]
-    struct Author {
-        name: String,
-        date: String,
-    }
     let path = format!(
         "{}/commits?sha={head}&path={}&per_page=20&page={page}",
         base(repo),
         encoded(path)
     );
-    let items: Vec<Item> = call(client, Method::GET, &path, None).await?;
+    let items: Vec<CommitItem> = call(client, Method::GET, &path, None).await?;
+    items.into_iter().map(CommitItem::checked).collect()
+}
+
+/// The last commit that changed `path`, as of `commit`. A commit's name, not a
+/// branch: the reply never changes, so it is asked once.
+pub async fn last_commit(
+    client: &Client,
+    repo: &RepoKey,
+    path: &str,
+    commit: &str,
+) -> Result<Option<RemoteVersion>, Error> {
+    let path = format!(
+        "{}/commits?sha={commit}&path={}&per_page=1",
+        base(repo),
+        encoded(path)
+    );
+    let items: Vec<CommitItem> = kept(client, &path).await?;
     items
         .into_iter()
-        .map(|item| {
-            Ok(RemoteVersion {
-                commit: sha(item.sha)?,
-                message: item
-                    .commit
-                    .message
-                    .lines()
-                    .next()
-                    .unwrap_or_default()
-                    .into(),
-                login: item.author.map(|author| author.login),
-                author: item.commit.author.name,
-                date: item.commit.author.date,
-            })
-        })
-        .collect()
+        .next()
+        .map(CommitItem::checked)
+        .transpose()
 }
 
 /// The file as it was at `commit`. `Error::NotFound`: that commit deleted it.

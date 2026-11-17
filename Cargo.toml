@@ -151,7 +151,8 @@ tokio = { version = "1", features = [
 ] }
 # TLS through ring: reqwest's default aws-lc provider adds almost 2 MB and a
 # C build for the update check and online name lookup. src/http.rs installs ring.
-reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider"] }
+# HTTP/2 lets GitHub's previews, dates and uploads share one connection.
+reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider", "http2"] }
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 open = "5"
 

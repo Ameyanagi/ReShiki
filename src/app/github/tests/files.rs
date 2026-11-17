@@ -39,12 +39,12 @@ fn files_at(app: &mut App, names: &[&str], date: impl Fn(&str) -> Option<String>
     let generation = picker_generation(app);
     let _ = picker(
         app,
-        picker::Action::Listing(generation, Ok((sha('8'), entries))),
+        picker::Action::Listing(generation, Ok((None, sha('8'), entries))),
     );
     let asked: Vec<String> = the_picker(app).asked.iter().cloned().collect();
     for path in asked {
         let found = date(&path).map(|date| ("@alice".to_owned(), date));
-        let _ = picker(app, picker::Action::Changed(generation, path, found));
+        let _ = picker(app, picker::Action::Changed(generation, path, Ok(found)));
     }
 }
 
@@ -73,7 +73,7 @@ fn tree_at(app: &mut App, paths: &[&str], truncated: bool) {
     let generation = picker_generation(app);
     let _ = picker(
         app,
-        picker::Action::Listing(generation, Ok((sha('8'), vec![]))),
+        picker::Action::Listing(generation, Ok((None, sha('8'), vec![]))),
     );
     let entries = paths.iter().map(|path| entry(path)).collect();
     let _ = picker(
@@ -174,7 +174,7 @@ async fn a_mol_opens_read_only_and_cmd_s_saves_a_copy_as_rsk() {
     let generation = picker_generation(&app);
     let _ = picker(
         &mut app,
-        picker::Action::Listing(generation, Ok((sha('8'), vec![]))),
+        picker::Action::Listing(generation, Ok((None, sha('8'), vec![]))),
     );
     let task = picker(&mut app, picker::Action::SendHere);
     run(&mut app, task).await;
@@ -249,12 +249,13 @@ async fn insert_puts_a_files_structures_in_the_drawing_as_one_undo_step() {
 }
 
 #[test]
-fn a_big_folder_shows_200_newest_first_and_the_search_finds_the_rest() {
+fn a_big_folder_shows_200_by_name_and_the_search_finds_the_rest() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, _) = app_in(dir.path());
     let names: Vec<String> = (0..240).map(|n| format!("hit-{n:03}.mol")).collect();
     let names: Vec<&str> = names.iter().map(String::as_str).collect();
-    // The tiles on screen are asked about; later ones are newer.
+    // The tiles on screen are asked about; later ones are newer, and
+    // nothing moves when their dates come.
     files_at(&mut app, &names, |path| {
         let n: u32 = path[4..7].parse().unwrap();
         Some(format!("2026-11-10T00:{:02}:00Z", n % 60))
@@ -272,8 +273,8 @@ fn a_big_folder_shows_200_newest_first_and_the_search_finds_the_rest() {
     let all = shown(&app);
     assert_eq!(all.len(), 201);
     assert_eq!(all[200], "240");
-    // Newest first.
-    assert_eq!(all[0], format!("hit-{:03}.mol", asked - 1));
+    assert_eq!(all[0], "hit-000.mol");
+    assert_eq!(all[199], "hit-199.mol");
     let _ = picker(&mut app, picker::Action::Search("HIT-23".into()));
     let found = shown(&app);
     assert_eq!(found.len(), 11);
@@ -525,30 +526,31 @@ fn signed_in_the_tree_asks_only_about_the_rows_on_screen() {
 }
 
 #[test]
-fn files_in_a_folder_show_once_their_dates_are_known() {
+fn files_in_a_folder_show_before_their_dates() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, _) = app_in(dir.path());
     files_at(&mut app, &["sub/"], |_| None);
     let _ = picker(&mut app, picker::Action::Folder("sub".into()));
     let generation = picker_generation(&app);
-    let entries = vec![entry("phen.mol"), entry("ring.rsk")];
+    let entries = vec![entry("ring.rsk"), entry("phen.mol")];
     let _ = picker(
         &mut app,
-        picker::Action::Listing(generation, Ok((sha('6'), entries))),
+        picker::Action::Listing(generation, Ok((None, sha('6'), entries))),
     );
-    let asked: Vec<String> = the_picker(&app).asked.iter().cloned().collect();
-    assert!(
-        asked.iter().all(|path| path.starts_with("sub/")),
-        "{asked:?}"
-    );
-    assert!(
-        the_picker(&app).tiles().0.is_empty(),
-        "waiting for the dates"
-    );
-    for path in asked {
-        let _ = picker(&mut app, picker::Action::Changed(generation, path, None));
-    }
+    let mut asked: Vec<String> = the_picker(&app).asked.iter().cloned().collect();
+    asked.sort();
+    assert_eq!(asked, ["sub/phen.mol", "sub/ring.rsk"]);
+    assert_eq!(picker_names(&app), ["phen.mol", "ring.rsk"]);
     assert_eq!(the_picker(&app).tiles().0.len(), 2);
+    // The dates answer to the repository's opening, not to the folder.
+    let opening = the_picker(&app).opening;
+    let found = Some(("@alice".to_owned(), "2026-01-01T00:00:00Z".to_owned()));
+    let _ = picker(
+        &mut app,
+        picker::Action::Changed(opening, "sub/ring.rsk".into(), Ok(found)),
+    );
+    assert!(the_picker(&app).changed.contains_key("sub/ring.rsk"));
+    assert_eq!(picker_names(&app), ["phen.mol", "ring.rsk"]);
 }
 
 #[test]
@@ -575,7 +577,7 @@ fn a_whole_listing_is_kept_only_for_its_repository_and_trusted_only_when_read() 
     let generation = picker_generation(&app);
     let _ = picker(
         &mut app,
-        picker::Action::Listing(generation, Ok((sha('8'), vec![]))),
+        picker::Action::Listing(generation, Ok((None, sha('8'), vec![]))),
     );
     let failed = picker::Action::Whole(generation, Err(gh::Error::Offline));
     let _ = picker(&mut app, failed);
@@ -653,7 +655,7 @@ async fn an_edit_made_while_insert_reads_the_file_cancels_it() {
 }
 
 #[test]
-fn a_folder_opened_while_dates_load_asks_for_its_own() {
+fn a_folder_opened_again_asks_for_no_date_twice() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, _) = app_in(dir.path());
     app.github.repos = vec![repo()];
@@ -664,19 +666,38 @@ fn a_folder_opened_while_dates_load_asks_for_its_own() {
     let top = vec![entry("sub/"), entry("a.mol")];
     let _ = picker(
         &mut app,
-        picker::Action::Listing(generation, Ok((sha('8'), top))),
+        picker::Action::Listing(generation, Ok((None, sha('8'), top.clone()))),
     );
-    // `a.mol`'s date has not come yet when the folder opens.
-    assert_eq!(the_picker(&app).waiting, 1);
+    let opening = the_picker(&app).opening;
+    // `a.mol`'s date has not come yet when the folder opens; it still lands.
     let _ = picker(&mut app, picker::Action::Folder("sub".into()));
     let generation = picker_generation(&app);
     let sub = vec![entry("b.mol")];
     let _ = picker(
         &mut app,
-        picker::Action::Listing(generation, Ok((sha('6'), sub))),
+        picker::Action::Listing(generation, Ok((None, sha('6'), sub))),
     );
-    let asked: Vec<&String> = the_picker(&app).asked.iter().collect();
-    assert_eq!(asked, ["sub/b.mol"]);
+    let found = Some(("@alice".to_owned(), "2026-01-01T00:00:00Z".to_owned()));
+    let _ = picker(
+        &mut app,
+        picker::Action::Changed(opening, "a.mol".into(), Ok(found)),
+    );
+    assert!(the_picker(&app).changed.contains_key("a.mol"));
+    let asked = |app: &App| {
+        let mut asked: Vec<String> = the_picker(app).asked.iter().cloned().collect();
+        asked.sort();
+        asked
+    };
+    assert_eq!(asked(&app), ["a.mol", "sub/b.mol"]);
+    // Back up: the top folder shows the date it has, and asks for none.
+    let _ = picker(&mut app, picker::Action::Up);
+    let generation = picker_generation(&app);
+    let _ = picker(
+        &mut app,
+        picker::Action::Listing(generation, Ok((None, sha('8'), top))),
+    );
+    assert_eq!(asked(&app), ["a.mol", "sub/b.mol"]);
+    assert!(the_picker(&app).changed.contains_key("a.mol"));
 }
 
 #[test]
@@ -697,7 +718,62 @@ fn a_new_folder_in_the_tree_shows_under_its_folder() {
 }
 
 #[test]
-fn tiles_shown_after_the_tree_sort_newest_first() {
+fn files_open_as_listed_at_the_repositorys_commit() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = app_in(dir.path());
+    app.github.repos = vec![repo()];
+    app.github.prefs.tiles = true;
+    let _ = picker(&mut app, picker::Action::Show(Mode::Open));
+    let _ = picker(&mut app, picker::Action::PickRepo(repo().key));
+    let generation = picker_generation(&app);
+    let top = vec![entry("sub/"), entry("a.mol")];
+    let listed = Ok((Some(sha('c')), sha('8'), top));
+    let _ = picker(&mut app, picker::Action::Listing(generation, listed));
+    assert_eq!(the_picker(&app).commit, Some(sha('c')));
+    // A folder below is listed at the same commit.
+    let _ = picker(&mut app, picker::Action::Folder("sub".into()));
+    let generation = picker_generation(&app);
+    let sub = Ok((None, sha('6'), vec![entry("b.mol")]));
+    let _ = picker(&mut app, picker::Action::Listing(generation, sub));
+    assert_eq!(the_picker(&app).commit, Some(sha('c')));
+    // Chosen again, the repository is listed at its branch head anew.
+    let _ = picker(&mut app, picker::Action::PickRepo(repo().key));
+    assert_eq!(the_picker(&app).commit, None);
+}
+
+#[test]
+fn a_date_that_failed_is_asked_again_and_one_with_no_history_is_not() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = app_in(dir.path());
+    app.github.repos = vec![repo()];
+    app.github.prefs.tiles = true;
+    let _ = picker(&mut app, picker::Action::Show(Mode::Open));
+    let _ = picker(&mut app, picker::Action::PickRepo(repo().key));
+    let generation = picker_generation(&app);
+    let top = vec![entry("a.mol"), entry("b.mol")];
+    let _ = picker(
+        &mut app,
+        picker::Action::Listing(generation, Ok((None, sha('8'), top))),
+    );
+    let opening = the_picker(&app).opening;
+    // `a.mol` could not be asked (offline); `b.mol` has no history.
+    let _ = picker(
+        &mut app,
+        picker::Action::Changed(opening, "a.mol".into(), Err(gh::Error::Offline)),
+    );
+    let _ = picker(
+        &mut app,
+        picker::Action::Changed(opening, "b.mol".into(), Ok(None)),
+    );
+    assert!(!the_picker(&app).asked.contains("a.mol"));
+    assert!(the_picker(&app).asked.contains("b.mol"));
+    // Shown again, only the failed one is asked again.
+    let _ = picker(&mut app, picker::Action::View(false));
+    assert!(the_picker(&app).asked.contains("a.mol"));
+}
+
+#[test]
+fn tiles_shown_after_the_tree_keep_their_order() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, _) = app_in(dir.path());
     app.github.repos = vec![repo()];
@@ -707,9 +783,10 @@ fn tiles_shown_after_the_tree_sort_newest_first() {
     let top = vec![entry("a.mol"), entry("b.mol")];
     let _ = picker(
         &mut app,
-        picker::Action::Listing(generation, Ok((sha('8'), top))),
+        picker::Action::Listing(generation, Ok((None, sha('8'), top))),
     );
-    // The tree asked about no tile; switching asks, then sorts once known.
+    // The tree asked about no tile; switching asks, and the dates move
+    // nothing. Tree and back asks for none again.
     let _ = picker(&mut app, picker::Action::View(false));
     assert_eq!(the_picker(&app).asked.len(), 2);
     for (path, date) in [
@@ -719,10 +796,14 @@ fn tiles_shown_after_the_tree_sort_newest_first() {
         let found = Some(("@alice".to_owned(), date.to_owned()));
         let _ = picker(
             &mut app,
-            picker::Action::Changed(generation, path.into(), found),
+            picker::Action::Changed(generation, path.into(), Ok(found)),
         );
     }
-    assert_eq!(picker_names(&app), ["b.mol", "a.mol"]);
+    assert_eq!(picker_names(&app), ["a.mol", "b.mol"]);
+    let _ = picker(&mut app, picker::Action::View(true));
+    let _ = picker(&mut app, picker::Action::View(false));
+    assert_eq!(the_picker(&app).asked.len(), 2);
+    assert_eq!(the_picker(&app).changed.len(), 2);
 }
 
 #[test]
@@ -746,36 +827,4 @@ fn records_that_do_not_fit_are_left_out_and_said_so() {
     );
     assert!(!app.error);
     assert_eq!(app.github.amber.as_deref(), Some(app.status.as_str()));
-}
-
-#[test]
-fn a_wait_for_dates_outlasts_a_trip_to_the_tree() {
-    let dir = tempfile::tempdir().unwrap();
-    let (mut app, _) = app_in(dir.path());
-    app.github.repos = vec![repo()];
-    app.github.prefs.tiles = true;
-    let _ = picker(&mut app, picker::Action::Show(Mode::Open));
-    let _ = picker(&mut app, picker::Action::PickRepo(repo().key));
-    let generation = picker_generation(&app);
-    let top = vec![entry("a.mol"), entry("b.mol")];
-    let _ = picker(
-        &mut app,
-        picker::Action::Listing(generation, Ok((sha('8'), top))),
-    );
-    assert_eq!(the_picker(&app).waiting, 2);
-    // Tree and back before the dates come.
-    let _ = picker(&mut app, picker::Action::View(true));
-    let _ = picker(&mut app, picker::Action::View(false));
-    assert_eq!(the_picker(&app).waiting, 2);
-    for (path, date) in [
-        ("a.mol", "2025-01-01T00:00:00Z"),
-        ("b.mol", "2026-01-01T00:00:00Z"),
-    ] {
-        let found = Some(("@alice".to_owned(), date.to_owned()));
-        let _ = picker(
-            &mut app,
-            picker::Action::Changed(generation, path.into(), found),
-        );
-    }
-    assert_eq!(picker_names(&app), ["b.mol", "a.mol"]);
 }

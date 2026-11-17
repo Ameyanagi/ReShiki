@@ -25,7 +25,7 @@ mod tests {
     }
 
     /// The update check's server, over the network:
-    /// `cargo test --lib http:: -- --ignored`.
+    /// `cargo test --lib http:: -- --ignored`. GitHub's API agrees on HTTP/2.
     #[tokio::test]
     #[ignore = "needs the network"]
     async fn ring_completes_a_handshake_with_the_release_server() {
@@ -36,5 +36,6 @@ mod tests {
             .unwrap();
         let response = client.get("https://api.github.com/").send().await.unwrap();
         assert!(response.status().is_success());
+        assert_eq!(response.version(), reqwest::Version::HTTP_2);
     }
 }

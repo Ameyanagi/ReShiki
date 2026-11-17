@@ -6,11 +6,17 @@ use super::{
     credentials::{self, Tokens},
 };
 use reqwest::{Method, StatusCode, header::HeaderMap};
-use std::{sync::Arc, time::Duration};
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex, OnceLock, PoisonError},
+    time::Duration,
+};
 
 pub(super) const JSON_LIMIT: usize = 8 << 20;
 /// The largest drawing or preview, in decoded bytes, sent or received.
 pub const FILE_LIMIT: usize = 64 << 20;
+/// The most bytes of replies a client keeps (see [`Replies`]).
+const KEPT_LIMIT: usize = 64 << 20;
 
 #[derive(Clone, Copy)]
 pub(super) enum Accept {
@@ -27,6 +33,51 @@ pub struct Client {
     session: Arc<tokio::sync::Mutex<Session>>,
     /// Signed out, for public repositories: no token, 60 requests an hour.
     public: bool,
+    replies: Arc<Mutex<Replies>>,
+}
+
+/// Replies GitHub never changes (an object by its name), by request path,
+/// for as long as the client lives. Past [`KEPT_LIMIT`] bytes, the least
+/// recently used go first.
+#[derive(Default)]
+pub(super) struct Replies {
+    by_path: HashMap<String, (Vec<u8>, u64)>,
+    bytes: usize,
+    clock: u64,
+}
+
+impl Replies {
+    pub(super) fn get(&mut self, path: &str) -> Option<Vec<u8>> {
+        self.clock += 1;
+        let (bytes, used) = self.by_path.get_mut(path)?;
+        *used = self.clock;
+        Some(bytes.clone())
+    }
+
+    pub(super) fn put(&mut self, path: String, bytes: Vec<u8>, limit: usize) {
+        if bytes.len() > limit {
+            return;
+        }
+        self.clock += 1;
+        self.bytes += bytes.len();
+        if let Some((old, _)) = self.by_path.insert(path, (bytes, self.clock)) {
+            self.bytes -= old.len();
+        }
+        while self.bytes > limit {
+            let oldest = (self.by_path.iter())
+                .min_by_key(|(_, (_, used))| *used)
+                .map(|(path, _)| path.clone());
+            let Some((gone, _)) = oldest.and_then(|path| self.by_path.remove(&path)) else {
+                break;
+            };
+            self.bytes -= gone.len();
+        }
+    }
+
+    #[cfg(test)]
+    pub(super) fn bytes(&self) -> usize {
+        self.bytes
+    }
 }
 
 struct Session {
@@ -37,19 +88,27 @@ struct Session {
     kept: bool,
 }
 
+/// One transport for every client, signed in or not, and for sign-in, so
+/// connections (over HTTP/2, one for many requests at once) are reused.
 pub(super) fn http(ends: &Endpoints) -> Result<reqwest::Client, Error> {
-    let mut builder = crate::http::client()
-        .user_agent(concat!("ReShiki/", env!("CARGO_PKG_VERSION")))
-        .redirect(reqwest::redirect::Policy::none())
-        .connect_timeout(Duration::from_secs(5))
-        .timeout(Duration::from_secs(30));
+    static HTTPS: OnceLock<Option<reqwest::Client>> = OnceLock::new();
+    static LOCAL: OnceLock<Option<reqwest::Client>> = OnceLock::new();
     // Only an override on this computer is plain http; it needs no proxy.
-    if ends.api.starts_with("http://") || ends.web.starts_with("http://") {
-        builder = builder.no_proxy();
-    } else {
-        builder = builder.https_only(true);
-    }
-    builder.build().map_err(|_| Error::Offline)
+    let local = ends.api.starts_with("http://") || ends.web.starts_with("http://");
+    let shared = if local { &LOCAL } else { &HTTPS };
+    let build = || {
+        let builder = crate::http::client()
+            .user_agent(concat!("ReShiki/", env!("CARGO_PKG_VERSION")))
+            .redirect(reqwest::redirect::Policy::none())
+            .connect_timeout(Duration::from_secs(5))
+            .timeout(Duration::from_secs(30));
+        let builder = match local {
+            true => builder.no_proxy(),
+            false => builder.https_only(true),
+        };
+        builder.build().ok()
+    };
+    shared.get_or_init(build).clone().ok_or(Error::Offline)
 }
 
 pub(super) async fn read(mut response: reqwest::Response, limit: usize) -> Result<Vec<u8>, Error> {
@@ -81,6 +140,7 @@ impl Client {
                 kept,
             })),
             public: false,
+            replies: Arc::default(),
         })
     }
 
@@ -161,6 +221,27 @@ impl Client {
             }
             Err(error) => Err(error),
         }
+    }
+
+    fn replies(&self) -> std::sync::MutexGuard<'_, Replies> {
+        self.replies.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    /// A GET whose reply never changes, such as an object by its name: asked
+    /// of GitHub once while the client lives.
+    pub(super) async fn get_kept(
+        &self,
+        path: &str,
+        accept: Accept,
+        limit: usize,
+    ) -> Result<Vec<u8>, Error> {
+        if let Some(bytes) = self.replies().get(path) {
+            return Ok(bytes);
+        }
+        let bytes = self.send(Method::GET, path, None, accept, limit).await?;
+        self.replies()
+            .put(path.to_owned(), bytes.clone(), KEPT_LIMIT);
+        Ok(bytes)
     }
 
     /// One API call; `path` is already percent-encoded.

@@ -8,7 +8,11 @@ use super::{
     workcopy::{self, ConflictMark, FileState, RepoState},
 };
 use crate::{document::Document, storage};
+use iced::futures::{StreamExt, TryStreamExt, stream};
 use std::{collections::HashMap, path::Path};
+
+/// The most uploads a send makes at once.
+const UPLOADS: usize = 4;
 
 /// A drawing to send, as it is saved on this computer.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -165,18 +169,29 @@ pub async fn send(
         if clean.is_empty() {
             return Ok(outcome(head.commit, sent));
         }
+        // Each drawing and its preview, a few at a time; what a try
+        // before a branch race uploaded is not uploaded again.
+        let new: Vec<&Outgoing> = (clean.iter().copied())
+            .filter(|file| !uploaded.contains_key(file.repo_path.as_str()))
+            .collect();
+        // Made before any is awaited, so the send stays a `Send` future.
+        let uploads: Vec<_> = (new.iter())
+            .flat_map(|file| [&file.bytes, &file.svg])
+            .map(|bytes| api::create_blob(client, key, bytes))
+            .collect();
+        let blobs: Vec<String> = stream::iter(uploads)
+            .buffered(UPLOADS)
+            .try_collect()
+            .await?;
+        let (pairs, _) = blobs.as_chunks::<2>();
+        for (file, pair) in new.into_iter().zip(pairs) {
+            uploaded.insert(file.repo_path.as_str(), pair.clone());
+        }
         let mut tree = Vec::new();
         for file in clean {
-            let [drawing, preview] = match uploaded.get(file.repo_path.as_str()) {
-                Some(blobs) => blobs.clone(),
-                None => {
-                    let blobs = [
-                        api::create_blob(client, key, &file.bytes).await?,
-                        api::create_blob(client, key, &file.svg).await?,
-                    ];
-                    uploaded.insert(file.repo_path.as_str(), blobs.clone());
-                    blobs
-                }
+            // Every clean drawing has its blobs by now.
+            let Some([drawing, preview]) = uploaded.get(file.repo_path.as_str()).cloned() else {
+                continue;
             };
             tree.push((file.repo_path.clone(), drawing.clone()));
             tree.push((svg_path(&file.repo_path), preview));
@@ -223,7 +238,7 @@ pub async fn newer(
         let folder = repo_path.rsplit_once('/').map_or("", |(folder, _)| folder);
         let beside = folders.list(folder).await?.unwrap_or_default();
         let names = beside.iter().map(|entry| entry.name.clone()).collect();
-        let by = api::file_commits(client, key, repo_path, &head.commit, 1).await?;
+        let by = api::last_commit(client, key, repo_path, &head.commit).await?;
         found.push((
             Conflict {
                 repo_path: repo_path.clone(),
@@ -233,7 +248,7 @@ pub async fn newer(
                 mine: Vec::new(),
                 names,
             },
-            by.into_iter().next(),
+            by,
         ));
     }
     Ok((repo, found))
