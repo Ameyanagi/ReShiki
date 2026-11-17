@@ -561,6 +561,56 @@ impl canvas::Program<crate::app::Message> for ComparePreview<'_> {
     }
 }
 
+/// A compare pane's frame, drawn over it: its colour on light and dark
+/// themes, dashed or solid.
+#[cfg(not(target_arch = "wasm32"))]
+pub struct CompareFrame {
+    pub colors: [Color; 2],
+    pub dashed: bool,
+}
+#[cfg(not(target_arch = "wasm32"))]
+impl canvas::Program<crate::app::Message> for CompareFrame {
+    type State = ();
+    fn draw(
+        &self,
+        _: &(),
+        renderer: &Renderer,
+        theme: &Theme,
+        bounds: Rectangle,
+        _: mouse::Cursor,
+    ) -> Vec<Geometry> {
+        let mut frame = layered::Frame::new(renderer, bounds.size());
+        let [light, dark] = self.colors;
+        let color = if crate::appearance::is_dark(theme) {
+            dark
+        } else {
+            light
+        };
+        let (width, dash): (f32, &[f32]) = if self.dashed {
+            (1.5, &[5., 4.])
+        } else {
+            (2.5, &[])
+        };
+        let inset = width / 2.;
+        let path = Path::rounded_rectangle(
+            Point::new(inset, inset),
+            iced::Size::new(bounds.width - width, bounds.height - width),
+            9.0.into(),
+        );
+        frame.stroke(
+            &path,
+            Stroke {
+                line_dash: canvas::LineDash {
+                    segments: dash,
+                    offset: 0,
+                },
+                ..Stroke::default().with_color(color).with_width(width)
+            },
+        );
+        frame.finish()
+    }
+}
+
 /// A legend swatch: the mark of `0` on a small patch.
 #[cfg(not(target_arch = "wasm32"))]
 pub struct CompareSwatch(pub ComparePaint);

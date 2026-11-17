@@ -645,6 +645,14 @@ fn a_conflict_shows_githubs_and_yours_with_the_changes_marked() {
     assert_eq!((review.done, review.total), (0, 1));
     let compare = &review.compare;
     assert!(compare.left.is_ok());
+    // GitHub's is the version compared, on the left; yours is current.
+    assert!(
+        compare
+            .left
+            .as_ref()
+            .is_ok_and(|theirs| *theirs != app.tab.doc)
+    );
+    assert_eq!(compare.right, app.tab.doc);
     // Compared in the background; the marks never land in the drawings.
     assert!(compare.shown.is_none());
     assert_eq!(compare.verdict(), Some(compare::Verdict::Comparing));

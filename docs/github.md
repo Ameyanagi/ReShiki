@@ -171,7 +171,11 @@ first.
 ### Compare two versions
 
 Compare, and the changed-on-GitHub dialog, show both drawings with what
-changed marked by kind, and a list of the changes beside them. A badge says
+changed marked by kind, and a list of the changes beside them. The version
+you compare with is on the left, in a dashed grey frame marked **COMPARED**
+(**Version · saved 14:02**, or **On GitHub · @alice · 14:05**); the drawing
+you have open is on the right, in a green frame marked **CURRENT** (**Your
+drawing · open now**, or **· not sent**). Changes read from left to right. A badge says
 **Chemically identical**, **2 chemical changes** or **Couldn't verify all
 chemistry**.
 

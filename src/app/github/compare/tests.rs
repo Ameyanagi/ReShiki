@@ -206,3 +206,30 @@ fn a_comparison_that_stops_says_so() {
     compare.update(Action::Done(compare.generation, None));
     assert_eq!(compare.verdict(), Some(Verdict::Failed));
 }
+
+#[test]
+fn the_compared_version_is_on_the_left_and_the_drawing_now_on_the_right() {
+    assert_eq!(SIDES, [Role::Compared, Role::Current]);
+    assert_eq!(SIDES.map(Role::pill), ["COMPARED", "CURRENT"]);
+    let [version, now] = history_sides("Saved 14:02");
+    assert_eq!(
+        version.spoken(Role::Compared),
+        "Compared: Version · saved 14:02"
+    );
+    assert_eq!(
+        now.spoken(Role::Current),
+        "Current: Your drawing · open now"
+    );
+    let sides = history_sides("Esterification · @alice · 02:02");
+    assert_eq!(sides[0].meta, "Esterification · @alice · 02:02");
+    assert_eq!(
+        reading(&sides),
+        "Changes read from version (left) to your drawing (right)"
+    );
+    // The drawing now is the right side compared, and the left is the version.
+    let (left, ..) = scheme();
+    let right = edited(&left, |doc| doc.translate(&doc.all_ids(), 5., 0.));
+    let compare = Compare::new(Ok(left.clone()), right.clone());
+    assert_eq!(compare.left.as_ref(), Ok(&left));
+    assert_eq!(compare.right, right);
+}

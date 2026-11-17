@@ -112,7 +112,9 @@ pub(crate) use previews::PREVIEWS_BUILT;
 #[cfg(test)]
 use previews::PreviewState;
 #[cfg(not(target_arch = "wasm32"))]
-pub use previews::{CompareMark, ComparePaint, ComparePlace, ComparePreview, CompareSwatch};
+pub use previews::{
+    CompareFrame, CompareMark, ComparePaint, ComparePlace, ComparePreview, CompareSwatch,
+};
 #[cfg(test)]
 use render::draw_primitives;
 #[cfg(test)]

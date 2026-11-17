@@ -7,7 +7,9 @@
 //! left side has it. The marks are a layer of their own over copies of
 //! nothing: both drawings, and their own highlights, are drawn as they are.
 use crate::app::{App, Message, workspace::muted_text};
-use crate::canvas::{CompareMark, ComparePaint, ComparePlace, ComparePreview, CompareSwatch};
+use crate::canvas::{
+    CompareFrame, CompareMark, ComparePaint, ComparePlace, ComparePreview, CompareSwatch,
+};
 use iced::widget::{Space, checkbox, column, container, row, scrollable, text};
 use iced::{Alignment, Border, Color, Element, Length, Task, Theme};
 use reshiki::compare::{Category, Change, Chemistry, Detail, Kind, Report, Subject};
@@ -553,6 +555,18 @@ fn build(left: &Document, right: &Document) -> Shown {
     }
 }
 
+/// History's sides: a save (`Saved 14:02`) or a commit's label, then now.
+pub(super) fn history_sides(label: &str) -> [Side; 2] {
+    let mut meta = label.to_owned();
+    if let Some(rest) = label.strip_prefix("Saved") {
+        meta = format!("saved{rest}");
+    }
+    [
+        Side::new("Version", meta),
+        Side::new("Your drawing", "open now"),
+    ]
+}
+
 /// The header's verdict: chemistry first.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Verdict {
@@ -663,11 +677,12 @@ impl Compare {
         }
     }
 
-    /// The mode switch, the line-up switch, then both drawings and the list
-    /// of what changed. `under` goes below each drawing.
+    /// The mode switch, the line-up switch, then both drawings, the compared
+    /// version on the left and the drawing now on the right (see [`SIDES`]),
+    /// and the list of what changed. `under` goes below each drawing.
     pub(super) fn view<'a>(
         &'a self,
-        headers: [Element<'a, Message>; 2],
+        sides: [Side; 2],
         under: [Option<Element<'a, Message>>; 2],
     ) -> Element<'a, Message> {
         let send = |action| Message::GitHub(super::Action::Compare(action));
@@ -757,22 +772,14 @@ impl Compare {
             spot(if lined { 2 } else { 1 }),
         )
         .into();
-        let [left_header, right_header] = headers;
+        let [left_side, right_side] = sides;
         let [left_under, right_under] = under;
-        let pane = |header: Element<'a, Message>, body: Element<'a, Message>, under| {
-            column![
-                container(header).clip(true),
-                crate::app::inspector::card(container(body).height(Length::Fill)),
-            ]
-            .push(under)
-            .spacing(6)
-            .width(Length::FillPortion(1))
-        };
+        let [left_role, right_role] = SIDES;
         column![
             bar,
             row![
-                pane(left_header, left, left_under),
-                pane(right_header, right, right_under),
+                pane(left_role, left_side, left, left_under),
+                pane(right_role, right_side, right, right_under),
                 self.list(),
             ]
             .spacing(10)
@@ -850,6 +857,7 @@ impl Compare {
 
     /// From Versions: a version beside the drawing now.
     pub(super) fn dialog<'a>(&'a self, label: &'a str) -> Element<'a, Message> {
+        let sides = history_sides(label);
         let button = |id: &'static str, name: &'static str, message: Message| {
             reshiki::accessibility::button(id, name, text(name).size(13))
                 .padding([7, 12])
@@ -860,17 +868,9 @@ impl Compare {
             row![text("Compare").size(18), Space::new().width(Length::Fill)]
                 .push(self.verdict_badge())
                 .align_y(Alignment::Center),
-            self.view(
-                [
-                    text(label).size(13).wrapping(text::Wrapping::None).into(),
-                    text("Now").size(13).into(),
-                ],
-                [None, None],
-            ),
+            self.view(sides.clone(), [None, None]),
             row![
-                text("Click a line to point at it in both drawings.")
-                    .size(12)
-                    .style(muted_text),
+                text(reading(&sides)).size(12).style(muted_text),
                 Space::new().width(Length::Fill),
                 button(
                     "github-compare-restore",
@@ -908,6 +908,152 @@ impl Compare {
                 .into(),
         )
     }
+}
+
+/// What a pane shows: the version compared, or the drawing now.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Role {
+    Compared,
+    Current,
+}
+
+/// The panes left to right: changes read from the version to the drawing now.
+pub(super) const SIDES: [Role; 2] = [Role::Compared, Role::Current];
+
+impl Role {
+    pub(super) fn pill(self) -> &'static str {
+        match self {
+            Self::Compared => "COMPARED",
+            Self::Current => "CURRENT",
+        }
+    }
+
+    /// Frame, header background, pill background and pill text: green for
+    /// the drawing now, grey for the version; neither is a change colour.
+    fn colors(self, dark: bool) -> [Color; 4] {
+        let rgb = |[r, g, b]: [u8; 3]| Color::from_rgb8(r, g, b);
+        let [frame, header, pill, ink] = match (self, dark) {
+            (Self::Current, false) => [
+                [47, 122, 95],
+                [233, 244, 238],
+                [47, 122, 95],
+                [255, 255, 255],
+            ],
+            (Self::Current, true) => [[127, 208, 172], [31, 52, 43], [127, 208, 172], [20, 23, 22]],
+            (Self::Compared, false) => [
+                [169, 176, 171],
+                [244, 245, 244],
+                [230, 232, 230],
+                [74, 81, 77],
+            ],
+            (Self::Compared, true) => {
+                [[110, 118, 113], [38, 43, 40], [52, 58, 54], [196, 203, 198]]
+            }
+        };
+        [rgb(frame), rgb(header), rgb(pill), rgb(ink)]
+    }
+}
+
+/// How a pane names its version: `Your drawing` and `open now`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) struct Side {
+    pub(super) name: String,
+    pub(super) meta: String,
+}
+
+impl Side {
+    pub(super) fn new(name: &str, meta: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            meta: meta.into(),
+        }
+    }
+
+    /// `Current: Your drawing · open now`, for screen readers.
+    pub(super) fn spoken(&self, role: Role) -> String {
+        let role = match role {
+            Role::Compared => "Compared",
+            Role::Current => "Current",
+        };
+        if self.meta.is_empty() {
+            format!("{role}: {}", self.name)
+        } else {
+            format!("{role}: {} · {}", self.name, self.meta)
+        }
+    }
+}
+
+/// `Changes read from version (left) to your drawing (right)`.
+pub(super) fn reading(sides: &[Side; 2]) -> String {
+    let [from, to] = sides.each_ref().map(|side| side.name.to_lowercase());
+    format!("Changes read from {from} (left) to {to} (right)")
+}
+
+/// One pane: its frame and header say which side it is. The frame is drawn
+/// over the pane so the compared one can be dashed.
+fn pane<'a>(
+    role: Role,
+    side: Side,
+    body: Element<'a, Message>,
+    under: Option<Element<'a, Message>>,
+) -> Element<'a, Message> {
+    let spoken = side.spoken(role);
+    let pill = container(text(role.pill()).size(9.5).font(bold()))
+        .padding([2, 7])
+        .style(move |theme: &Theme| {
+            let [_, _, background, ink] = role.colors(crate::appearance::is_dark(theme));
+            container::Style {
+                background: Some(background.into()),
+                text_color: Some(ink),
+                border: Border {
+                    radius: 99.0.into(),
+                    ..Border::default()
+                },
+                ..container::Style::default()
+            }
+        });
+    let mut words = row![pill, text(side.name).size(13).font(bold())]
+        .spacing(6)
+        .align_y(Alignment::Center);
+    if !side.meta.is_empty() {
+        words = words.push(
+            text(format!("· {}", side.meta))
+                .size(12)
+                .style(muted_text)
+                .wrapping(text::Wrapping::None),
+        );
+    }
+    let header = container(words)
+        .padding([6, 10])
+        .width(Length::Fill)
+        .clip(true)
+        .style(move |theme: &Theme| container::Style {
+            background: Some(role.colors(crate::appearance::is_dark(theme))[1].into()),
+            border: Border {
+                radius: iced::border::Radius::default().top(9.),
+                ..Border::default()
+            },
+            ..container::Style::default()
+        });
+    let drawing = reshiki::accessibility::image(
+        format!("github-compare-{}", role.pill().to_lowercase()),
+        spoken,
+        container(body).height(Length::Fill).width(Length::Fill),
+    );
+    let framed = iced::widget::stack![
+        column![header, drawing],
+        crate::canvas::layered::canvas(CompareFrame {
+            colors: [role.colors(false)[0], role.colors(true)[0]],
+            dashed: role == Role::Compared,
+        })
+        .width(Length::Fill)
+        .height(Length::Fill),
+    ];
+    column![framed]
+        .push(under)
+        .spacing(6)
+        .width(Length::FillPortion(1))
+        .into()
 }
 
 fn bold() -> iced::Font {
