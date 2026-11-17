@@ -4,6 +4,13 @@
 
 Use **Ctrl+Shift+C** / **Cmd+Shift+C**, or **Export → Copy image**, for a picture of the selection. With nothing selected, it copies the whole drawing. This supplies PDF, PNG and SVG. The PNG uses the copy resolution, 300 dpi unless you change it in [Settings → Copy & export](figure-export.md#png-resolution). Every SVG that ReShiki puts on the clipboard draws its text as outlines, so an app that pastes the SVG shows the labels as drawn even without ReShiki's fonts. On Windows, large raster previews use a lower resolution to fit clipboard and picture limits, with a notice showing the actual DPI. Resolution metadata preserves the physical size; editable drawing data and vector formats keep their precision. A raster-only drawing representation also carries explicit publication-size bounds for compatible drawing applications. Other apps get a picture without editable atoms or bonds. While **Put the editable drawing in pictures** is on in **Settings → Copy & export**, the PNG, SVG and PDF also carry the ReShiki drawing, so a picture copied back out of an app that keeps the picture unchanged restores the editable drawing; see [Keep the drawing editable inside a picture](figure-export.md#keep-the-drawing-editable-inside-a-picture). Pasting Copy Image back into ReShiki restores the drawing either way. View aids such as grid, rulers and crosshair are excluded.
 
+Opening, importing, copying and pasting an existing drawing preserve its authored
+layout. Paste places the incoming objects with one common translation; it does
+not standardize unequal bonds, rotate molecules, fit arrows or reposition linked
+captions. Background label updates and **Recalculate** also leave geometry in
+place. Chemical and drawing edits still update their linked objects, and explicit
+**Clean Up** remains available.
+
 Pictures use the canvas colors with a transparent background by default. Choose another background in **Settings → Copy & export**, or for one copy with **Copy image on** in the right-click menu. Its **Editable drawing** row also puts the drawing in, or leaves it out of, that one copy. See [Background](figure-export.md#background).
 
 [Clipboard compatibility](clipboard-compatibility.md) lists what each app receives on Windows, macOS, Linux and in the browser, and the exact clipboard formats. For example, on Windows use Copy Image for new Outlook and other web-based apps.
@@ -20,7 +27,17 @@ Pictures use the canvas colors with a transparent background by default. Choose 
 6. PNG, TIFF, JPEG, then WebP pictures. A PNG that carries a ReShiki drawing pastes as that editable drawing.
 7. Other plain text, PDF or SVG use the usual error messages if nothing can be pasted.
 
-On Windows, drawings embedded in Office objects are tried first. If a format fails, Paste tries the next one. PDF and SVG pictures without a ReShiki drawing need conversion to PNG. If every available format fails, Paste explains the problem. For a drawing from a newer version, the message asks you to update ReShiki. **Import → Paste picture** prefers pictures even when editable formats are present, and always inserts a picture, even from a PNG that carries a drawing.
+On Windows, drawings embedded in Office objects are tried first. If a format fails,
+Paste tries the next one. After an editable drawing fails, it skips SMILES,
+reaction SMILES, InChI and names that would generate new coordinates. It still
+tries alternate drawing formats, MOL with supplied coordinates, and pictures;
+picture fallback reports that the editable drawing could not be imported. A
+clipboard containing only chemical text can still generate a structure normally.
+PDF and SVG pictures without a ReShiki drawing need conversion to PNG. If every
+available format fails, Paste explains the problem. For a drawing from a newer
+version, the message asks you to update ReShiki. **Import → Paste picture** prefers
+pictures even when editable formats are present, and always inserts a picture,
+even from a PNG that carries a drawing.
 
 ## Copy chemical text
 

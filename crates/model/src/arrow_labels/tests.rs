@@ -449,9 +449,13 @@ fn custom_gap_native_version_auto_reset_and_authoritative_load() {
     let mut json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     assert_eq!(json["version"], 31);
     assert_eq!(json["arrow_labels"][0]["gap"], 0.);
-    // The persisted property, rather than a stale saved position, owns layout.
+    // Passive open retains authored positions and the declared gap independently.
     json["arrow_labels"][0]["gap"] = 25.into();
-    let restored = Document::from_native_file(&serde_json::to_vec(&json).unwrap()).unwrap();
+    let mut restored = Document::from_native_file(&serde_json::to_vec(&json).unwrap()).unwrap();
+    assert_eq!(restored.annotations, doc.annotations);
+    assert_eq!(restored.arrow_labels[0].gap, Some(25.));
+    // Explicitly changing gap layout remains an editing operation.
+    edit(&mut restored, |doc| set_gap(doc, &[id], Some(25.)).unwrap());
     let dim = gap_geometry(&restored, id).unwrap();
     assert!((dim.from.distance(dim.to) - 25.).abs() < 1e-3);
     json["version"] = 30.into();

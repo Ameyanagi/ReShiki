@@ -425,7 +425,10 @@ fn mechanism_attachment_92_legacy_marks_native21_and_validation() {
     );
     let mut stale = saved.clone();
     stale.arrows[0].start = Point::new(999., 999.);
-    let loaded = Document::from_native_file(&stale.file_json().unwrap()).unwrap();
+    let mut loaded = Document::from_native_file(&stale.file_json().unwrap()).unwrap();
+    assert_eq!(loaded.arrows[0].start, stale.arrows[0].start);
+    let before = loaded.clone();
+    let _ = transaction::reconcile(&mut loaded, before).unwrap();
     assert_eq!(loaded.arrows[0].start, saved.arrows[0].start);
     let mut same = original.clone();
     let before = same.clone();

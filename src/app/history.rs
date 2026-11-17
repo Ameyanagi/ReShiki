@@ -28,10 +28,9 @@ impl App {
             if chemistry_changed {
                 reshiki::atom_labels::clear_computed(&mut self.tab.doc);
             } else {
-                // Same chemistry, same labels: a snapshot taken before the
-                // labels landed gets them, and the layout they need.
+                // Derived labels may be reused without changing the geometry
+                // recorded in this history snapshot.
                 reshiki::atom_labels::copy_computed(&mut self.tab.doc, &before);
-                self.settle_label_layout();
             }
             let ids: HashSet<_> = self.tab.doc.object_ids().collect();
             self.tab.selected.retain(|id| ids.contains(id));

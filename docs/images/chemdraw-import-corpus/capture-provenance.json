@@ -1,0 +1,394 @@
+{
+  "created_at_utc": "2026-11-16T22:21:49.372494+00:00",
+  "baseline_import_revision": "ff0741268714eff0c6791a30026702872e620f9a",
+  "fixed_production_revision": "7372d63f4e03fcc6e64cbc9a65b6fda69e81da77",
+  "repository_head_at_capture": "f7b1f8bd56a880be7ee1501e07f2096441396146",
+  "renderer": {
+    "executable": "target/debug/reshiki",
+    "sha256": "0487a28379ec942b1fba1040fc87c0c8b2381559469f6ab868ca8bd683d5309d",
+    "scope": "The same final ReShiki application CLI converts every retained before/after native RSK state to SVG glyph outlines."
+  },
+  "rasterizer": "rsvg-convert version 2.63.4\n\nlibraries used:\n  cairo 1.18.6\n  pango 1.58.2\n  harfbuzz 15.1.0\n  fontconfig 2.18.3",
+  "baseline_disclosure": "No pre-fix executable is available or used. Before images are newly rendered retained pre-fix importer RSK snapshots, not historical application screenshots. After images render retained fixed-importer snapshots using the exact same final application renderer.",
+  "normalization": "The application outline exporter adds one outer positive uniform scale/translation to convert drawing-world coordinates into publication SVG units and independently recenter each figure. Remove only that recorded outer publication affine, leaving all paint paths, glyph outlines, inner transforms, colors and internal backgrounds unchanged. For each pair, use the union of the inverse-mapped exported world-space viewBoxes, identical 640 pixel width and computed common height. This restores the same authored coordinate frame and scale across both states; it does not move individual drawing objects. Rasterize on white with Cairo. Hero uses its own inverse-mapped native export frame. No AI, retouching, added labels, or canvas annotations.",
+  "reproduction_script": "artifacts/chemdraw-import-corpus/capture_visual_evidence.py",
+  "visual_inspection": {
+    "status": "passed",
+    "tool": "functions.view_image",
+    "images_inspected": [
+      "visibility-before",
+      "visibility-after",
+      "label-inheritance-before",
+      "label-inheritance-after",
+      "full-cds-60-stamps"
+    ],
+    "observations": {
+      "visibility-before": "Red hidden-source rectangle is incorrectly present beside the blue visible control.",
+      "visibility-after": "Red rectangle absent; blue control stays at exactly the same pixel bounding box.",
+      "label-inheritance-before": "Methanol OH uses regular serif letterforms with the authored bond and label position.",
+      "label-inheritance-after": "Methanol OH visibly uses bold italic serif letterforms; same source atom positions and matched frame.",
+      "full-cds-60-stamps": "Authored molecule/caption and all 60 varied colored stamps are visible, with the final half row intact and no clipping."
+    }
+  },
+  "captures": {
+    "visibility-before": {
+      "fixture": "tests/fixtures/chemdraw-import-semantics/inputs/01-hidden-graphic.cdxml",
+      "snapshot": "artifacts/chemdraw-import-corpus/semantic-run/exports/0000-01-hidden-graphic.cdxml/imported.rsk",
+      "meaning": "Retained baseline import incorrectly includes the source Visible=no red rectangle; the blue rectangle is the visible control.",
+      "state": "baseline",
+      "fixture_sha256": "cdfdbe17b84f61e102c1157c1b3f0afa51eceb860f6873776a0516cb7b19ff2d",
+      "snapshot_sha256": "89fe22314d8472a152f2a5ac9bafdb716d2d0fc899a605c580aed3f99fb3c2ca",
+      "raw_svg": "artifacts/chemdraw-import-corpus/visual-evidence/svg/visibility-before.original.svg",
+      "raw_svg_sha256": "b78b1d7a6d68a783be9f123751dab3e622a58e447cb4045893a66b3ae6abcba0",
+      "command": [
+        "/Users/ryuichi/dev/ReShiki/target/debug/reshiki",
+        "--cli",
+        "convert",
+        "/Users/ryuichi/dev/ReShiki/artifacts/chemdraw-import-corpus/semantic-run/exports/0000-01-hidden-graphic.cdxml/imported.rsk",
+        "--from",
+        "reshiki",
+        "--to",
+        "svg",
+        "--svg-text",
+        "outline",
+        "-o",
+        "/Users/ryuichi/dev/ReShiki/artifacts/chemdraw-import-corpus/visual-evidence/svg/visibility-before.original.svg",
+        "--force",
+        "--receipt"
+      ],
+      "receipt": {
+        "api": {
+          "operation_api": 2,
+          "stability": "experimental"
+        },
+        "experimental": true,
+        "receipt": {
+          "byte_len": 778,
+          "detail": null,
+          "format": "svg"
+        }
+      },
+      "exported_view_box": [0.0, 0.0, 238.13333, 78.13333],
+      "publication_affine_removed": [0.45714283, 0.0, 0.0, 0.45714283, -34.266666, -34.266663],
+      "world_view_box": [
+        74.95833632565122, 74.95832976315083, 520.9166903044285, 170.91666952317726
+      ],
+      "matched_view_box": [
+        74.95833632565122, 74.95832976315083, 520.9166903044285, 170.91666952317726
+      ],
+      "pixel_size": [640, 210],
+      "framed_svg": "artifacts/chemdraw-import-corpus/visual-evidence/svg/visibility-before.framed.svg",
+      "framed_svg_sha256": "bdb4843266b9f06901bdc68e38d405b412cd5c164e19a65f35acf674bc08b490",
+      "raster_command": [
+        "rsvg-convert",
+        "--background-color",
+        "white",
+        "--width",
+        "640",
+        "--height",
+        "210",
+        "--output",
+        "/Users/ryuichi/dev/ReShiki/docs/images/chemdraw-import-corpus/visibility-before.png",
+        "/Users/ryuichi/dev/ReShiki/artifacts/chemdraw-import-corpus/visual-evidence/svg/visibility-before.framed.svg"
+      ],
+      "png": "docs/images/chemdraw-import-corpus/visibility-before.png",
+      "png_sha256": "0f0d3473396a7333fc7e1fd094ac43504939ae9330f174e104dd47628256534f",
+      "png_bytes": 1094,
+      "paint_commands_sha256": "56284b9e2d4397f6fd78d3a36e828d01f37525f949f8d83c8fe3259b67008df9",
+      "paint_commands_preserved": true,
+      "retained_snapshot_copy": "artifacts/chemdraw-import-corpus/visual-evidence/snapshots/visibility-before.rsk"
+    },
+    "visibility-after": {
+      "fixture": "tests/fixtures/chemdraw-import-semantics/inputs/01-hidden-graphic.cdxml",
+      "snapshot": "artifacts/chemdraw-import-corpus/final-fixed-supplemental/exports/0002-01-hidden-graphic.cdxml/imported.rsk",
+      "meaning": "Fixed import omits the source hidden red rectangle while preserving the blue control at its authored coordinates.",
+      "state": "fixed",
+      "fixture_sha256": "cdfdbe17b84f61e102c1157c1b3f0afa51eceb860f6873776a0516cb7b19ff2d",
+      "snapshot_sha256": "7bfa43bcd9b119468b85b4343e8ec7755c3c2b962608148a7cf1e31a45df1776",
+      "raw_svg": "artifacts/chemdraw-import-corpus/visual-evidence/svg/visibility-after.original.svg",
+      "raw_svg_sha256": "0c4fa15cf63de22eaa08b2d70337f1c6c62352730b2d3432e349d3296ca0e746",
+      "command": [
+        "/Users/ryuichi/dev/ReShiki/target/debug/reshiki",
+        "--cli",
+        "convert",
+        "/Users/ryuichi/dev/ReShiki/artifacts/chemdraw-import-corpus/final-fixed-supplemental/exports/0002-01-hidden-graphic.cdxml/imported.rsk",
+        "--from",
+        "reshiki",
+        "--to",
+        "svg",
+        "--svg-text",
+        "outline",
+        "-o",
+        "/Users/ryuichi/dev/ReShiki/artifacts/chemdraw-import-corpus/visual-evidence/svg/visibility-after.original.svg",
+        "--force",
+        "--receipt"
+      ],
+      "receipt": {
+        "api": {
+          "operation_api": 2,
+          "stability": "experimental"
+        },
+        "experimental": true,
+        "receipt": {
+          "byte_len": 582,
+          "detail": null,
+          "format": "svg"
+        }
+      },
+      "exported_view_box": [0.0, 0.0, 104.799995, 78.13333],
+      "publication_affine_removed": [0.45714283, 0.0, 0.0, 0.45714283, -167.59999, -34.266663],
+      "world_view_box": [
+        366.62499989335936, 74.95832976315083, 229.2500026742189, 170.91666952317726
+      ],
+      "matched_view_box": [
+        74.95833632565122, 74.95832976315083, 520.9166903044285, 170.91666952317726
+      ],
+      "pixel_size": [640, 210],
+      "framed_svg": "artifacts/chemdraw-import-corpus/visual-evidence/svg/visibility-after.framed.svg",
+      "framed_svg_sha256": "d6bf27d3ede6a8752ab949333c47c9084d98c5f514410dd0571e91502978e7a5",
+      "raster_command": [
+        "rsvg-convert",
+        "--background-color",
+        "white",
+        "--width",
+        "640",
+        "--height",
+        "210",
+        "--output",
+        "/Users/ryuichi/dev/ReShiki/docs/images/chemdraw-import-corpus/visibility-after.png",
+        "/Users/ryuichi/dev/ReShiki/artifacts/chemdraw-import-corpus/visual-evidence/svg/visibility-after.framed.svg"
+      ],
+      "png": "docs/images/chemdraw-import-corpus/visibility-after.png",
+      "png_sha256": "ae1f1ea684bd302241a57c245ef6592949707227ab836020d4a67f6237b50f66",
+      "png_bytes": 1015,
+      "paint_commands_sha256": "ebfc4788497c1299319e38ee53b56cbc12754a6e3459f996464abc463b8c4986",
+      "paint_commands_preserved": true,
+      "retained_snapshot_copy": "artifacts/chemdraw-import-corpus/visual-evidence/snapshots/visibility-after.rsk"
+    },
+    "label-inheritance-before": {
+      "fixture": "tests/fixtures/chemdraw-import-semantics/inputs/07-label-defaults-no-text.cdxml",
+      "snapshot": "artifacts/chemdraw-import-corpus/semantic-run/exports/0012-07-label-defaults-no-text.cdxml/imported.rsk",
+      "meaning": "Retained baseline methanol import uses regular Times New Roman 18 pt oxygen/hydrogen label despite document LabelFace=3.",
+      "state": "baseline",
+      "fixture_sha256": "46c5843045c85b33d8c120d4456ecab62843f4ed9fd3ae5e01a202eabb8f9854",
+      "snapshot_sha256": "c34e3ddb8cc907393458f459986898f4eb306dffd218c8f7ca43f303845fe9d2",
+      "raw_svg": "artifacts/chemdraw-import-corpus/visual-evidence/svg/label-inheritance-before.original.svg",
+      "raw_svg_sha256": "37f9fe15eb13fb480efdd645435b8ae9f115eddcc82f2f0e82d79cff9db3f292",
+      "command": [
+        "/Users/ryuichi/dev/ReShiki/target/debug/reshiki",
+        "--cli",
+        "convert",
+        "/Users/ryuichi/dev/ReShiki/artifacts/chemdraw-import-corpus/semantic-run/exports/0012-07-label-defaults-no-text.cdxml/imported.rsk",
+        "--from",
+        "reshiki",
+        "--to",
+        "svg",
+        "--svg-text",
+        "outline",
+        "-o",
+        "/Users/ryuichi/dev/ReShiki/artifacts/chemdraw-import-corpus/visual-evidence/svg/label-inheritance-before.original.svg",
+        "--force",
+        "--receipt"
+      ],
+      "receipt": {
+        "api": {
+          "operation_api": 2,
+          "stability": "experimental"
+        },
+        "experimental": true,
+        "receipt": {
+          "byte_len": 2933,
+          "detail": null,
+          "format": "svg"
+        }
+      },
+      "exported_view_box": [0.0, 0.0, 68.66471, 37.066666],
+      "publication_affine_removed": [0.4571428, 0.0, 0.0, 0.4571428, -61.33332, -74.558586],
+      "world_view_box": [
+        134.16665427083177, 163.0969272621159, 150.20407190050898, 81.08334201041774
+      ],
+      "matched_view_box": [
+        134.16665427083177, 163.0969272621159, 153.12644101580514, 81.08334201041774
+      ],
+      "pixel_size": [640, 339],
+      "framed_svg": "artifacts/chemdraw-import-corpus/visual-evidence/svg/label-inheritance-before.framed.svg",
+      "framed_svg_sha256": "dd87c22f74195e5a22ac38995cda8758664eb6a6fe44cb6718640ef83288f26f",
+      "raster_command": [
+        "rsvg-convert",
+        "--background-color",
+        "white",
+        "--width",
+        "640",
+        "--height",
+        "339",
+        "--output",
+        "/Users/ryuichi/dev/ReShiki/docs/images/chemdraw-import-corpus/label-inheritance-before.png",
+        "/Users/ryuichi/dev/ReShiki/artifacts/chemdraw-import-corpus/visual-evidence/svg/label-inheritance-before.framed.svg"
+      ],
+      "png": "docs/images/chemdraw-import-corpus/label-inheritance-before.png",
+      "png_sha256": "c5b79907db897bb42a34a0c194cd85061c964b753259c72e89eeaf20ace40bdd",
+      "png_bytes": 8777,
+      "paint_commands_sha256": "bbbf69afdc23cf8c90a03089b4fcdb4d5e2e38429a95e879159bf9fa1aaaa76e",
+      "paint_commands_preserved": true,
+      "retained_snapshot_copy": "artifacts/chemdraw-import-corpus/visual-evidence/snapshots/label-inheritance-before.rsk"
+    },
+    "label-inheritance-after": {
+      "fixture": "tests/fixtures/chemdraw-import-semantics/inputs/07-label-defaults-no-text.cdxml",
+      "snapshot": "artifacts/chemdraw-import-corpus/final-fixed-supplemental/exports/0020-07-label-defaults-no-text.cdxml/imported.rsk",
+      "meaning": "Fixed import carries the document bold italic label face without needing a nested atom text child.",
+      "state": "fixed",
+      "fixture_sha256": "46c5843045c85b33d8c120d4456ecab62843f4ed9fd3ae5e01a202eabb8f9854",
+      "snapshot_sha256": "30bf0f2377ab61bf6409a2237a49812fb7d2041c58795bd72cb3592fbbbdabb8",
+      "raw_svg": "artifacts/chemdraw-import-corpus/visual-evidence/svg/label-inheritance-after.original.svg",
+      "raw_svg_sha256": "b8f1ed6ed53682ff2b4002fb80283a700c805d3e7746804b60cacac9fdb550ba",
+      "command": [
+        "/Users/ryuichi/dev/ReShiki/target/debug/reshiki",
+        "--cli",
+        "convert",
+        "/Users/ryuichi/dev/ReShiki/artifacts/chemdraw-import-corpus/final-fixed-supplemental/exports/0020-07-label-defaults-no-text.cdxml/imported.rsk",
+        "--from",
+        "reshiki",
+        "--to",
+        "svg",
+        "--svg-text",
+        "outline",
+        "-o",
+        "/Users/ryuichi/dev/ReShiki/artifacts/chemdraw-import-corpus/visual-evidence/svg/label-inheritance-after.original.svg",
+        "--force",
+        "--receipt"
+      ],
+      "receipt": {
+        "api": {
+          "operation_api": 2,
+          "stability": "experimental"
+        },
+        "experimental": true,
+        "receipt": {
+          "byte_len": 2999,
+          "detail": null,
+          "format": "svg"
+        }
+      },
+      "exported_view_box": [0.0, 0.0, 70.00065, 37.066666],
+      "publication_affine_removed": [0.4571428, 0.0, 0.0, 0.4571428, -61.33332, -74.558586],
+      "world_view_box": [
+        134.16665427083177, 163.0969272621159, 153.1264410158051, 81.08334201041774
+      ],
+      "matched_view_box": [
+        134.16665427083177, 163.0969272621159, 153.12644101580514, 81.08334201041774
+      ],
+      "pixel_size": [640, 339],
+      "framed_svg": "artifacts/chemdraw-import-corpus/visual-evidence/svg/label-inheritance-after.framed.svg",
+      "framed_svg_sha256": "a95f182244f7b3fb375457f6a6d01adb0d5f0534ec6cc1a32c7329e0b173f106",
+      "raster_command": [
+        "rsvg-convert",
+        "--background-color",
+        "white",
+        "--width",
+        "640",
+        "--height",
+        "339",
+        "--output",
+        "/Users/ryuichi/dev/ReShiki/docs/images/chemdraw-import-corpus/label-inheritance-after.png",
+        "/Users/ryuichi/dev/ReShiki/artifacts/chemdraw-import-corpus/visual-evidence/svg/label-inheritance-after.framed.svg"
+      ],
+      "png": "docs/images/chemdraw-import-corpus/label-inheritance-after.png",
+      "png_sha256": "6581239b9428df41dfe4c436bb857e71679c8ce7bf5fbdcc3cb4475e7084e9a1",
+      "png_bytes": 11130,
+      "paint_commands_sha256": "1fd4e4a0a74f07d7102a8bcbeb035092c32cc5e41a77afcedbbea321a2290731",
+      "paint_commands_preserved": true,
+      "retained_snapshot_copy": "artifacts/chemdraw-import-corpus/visual-evidence/snapshots/label-inheritance-after.rsk"
+    },
+    "full-cds-60-stamps": {
+      "fixture": "tests/fixtures/chemdraw-import-corpus/supported/092-stamps-editable-grid-60.drawing.cds",
+      "snapshot": "artifacts/chemdraw-import-corpus/final-fixed-20261117/exports/092-stamps-editable-grid-60/cds/0000-092-stamps-editable-grid-60.drawing.cds/imported.rsk",
+      "meaning": "Fixed production import of full drawing CDS: molecule, authored caption and 60 editable vector stamp instances.",
+      "state": "fixed",
+      "fixture_sha256": "1ab3ece416d5ac59c1c09b335ca165fa4f2a47fb71aaf764409b798234bfb6bd",
+      "snapshot_sha256": "8054dd924ba5693ed9c4693bef7d5fb56760aa35461e910fc1f4956153cb4540",
+      "raw_svg": "artifacts/chemdraw-import-corpus/visual-evidence/svg/full-cds-60-stamps.original.svg",
+      "raw_svg_sha256": "df83c4502a4d56210ff4588b86bdb84af479e40637fde9fd8b93fa362c562bdb",
+      "command": [
+        "/Users/ryuichi/dev/ReShiki/target/debug/reshiki",
+        "--cli",
+        "convert",
+        "/Users/ryuichi/dev/ReShiki/artifacts/chemdraw-import-corpus/final-fixed-20261117/exports/092-stamps-editable-grid-60/cds/0000-092-stamps-editable-grid-60.drawing.cds/imported.rsk",
+        "--from",
+        "reshiki",
+        "--to",
+        "svg",
+        "--svg-text",
+        "outline",
+        "-o",
+        "/Users/ryuichi/dev/ReShiki/artifacts/chemdraw-import-corpus/visual-evidence/svg/full-cds-60-stamps.original.svg",
+        "--force",
+        "--receipt"
+      ],
+      "receipt": {
+        "api": {
+          "operation_api": 2,
+          "stability": "experimental"
+        },
+        "experimental": true,
+        "receipt": {
+          "byte_len": 70288,
+          "detail": null,
+          "format": "svg"
+        }
+      },
+      "exported_view_box": [0.0, 0.0, 686.8704, 867.38684],
+      "publication_affine_removed": [0.45714283, 0.0, 0.0, 0.45714283, -27.43659, -45.33333],
+      "world_view_box": [
+        60.017544188541684, 99.16666526302075, 1502.5290892126648, 1897.408825158649
+      ],
+      "matched_view_box": [
+        60.017544188541684, 99.16666526302075, 1502.5290892126648, 1897.408825158649
+      ],
+      "pixel_size": [950, 1200],
+      "framed_svg": "artifacts/chemdraw-import-corpus/visual-evidence/svg/full-cds-60-stamps.framed.svg",
+      "framed_svg_sha256": "734ddf237cdb0d62ef5c744998b30b698ffbe7ff951351e2c3fd7f0aadfaa50d",
+      "raster_command": [
+        "rsvg-convert",
+        "--background-color",
+        "white",
+        "--width",
+        "950",
+        "--height",
+        "1200",
+        "--output",
+        "/Users/ryuichi/dev/ReShiki/docs/images/chemdraw-import-corpus/full-cds-60-stamps.png",
+        "/Users/ryuichi/dev/ReShiki/artifacts/chemdraw-import-corpus/visual-evidence/svg/full-cds-60-stamps.framed.svg"
+      ],
+      "png": "docs/images/chemdraw-import-corpus/full-cds-60-stamps.png",
+      "png_sha256": "7f4077031f2e6eb23542a7f12190d2c261448d27a027b12b8363793ae7e40155",
+      "png_bytes": 143521,
+      "paint_commands_sha256": "0b7b49bd2dc74de462598b5280cbe519cac26e1bf592f1c28ded01518264422d",
+      "paint_commands_preserved": true,
+      "retained_snapshot_copy": "artifacts/chemdraw-import-corpus/visual-evidence/snapshots/full-cds-60-stamps.rsk"
+    }
+  },
+  "pixel_assertions": {
+    "preserved_blue_control_bbox_before": [373, 15, 624, 194],
+    "preserved_blue_control_bbox_after": [373, 15, 624, 194],
+    "hidden_red_bbox_before": [15, 15, 266, 194],
+    "hidden_red_bbox_after": null
+  },
+  "label_assertions": {
+    "same_oxygen_position": {
+      "x": 215.83333,
+      "y": 204.16667
+    },
+    "baseline_atom_text_style": null,
+    "fixed_atom_text_style": {
+      "family": "Times New Roman",
+      "size_pt": 18.0,
+      "bold": true,
+      "italic": true,
+      "underline": false,
+      "color": [0, 0, 0],
+      "script": "normal",
+      "formula": false
+    }
+  },
+  "reproduction_command": "python3 artifacts/chemdraw-import-corpus/capture_visual_evidence.py --cli /path/to/reshiki"
+}

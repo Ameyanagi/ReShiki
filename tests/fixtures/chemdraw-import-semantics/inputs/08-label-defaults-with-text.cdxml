@@ -1,0 +1,24 @@
+<?xml version="1.0"?>
+<CDXML BondLength="24" BondSpacing="18" LineWidth="0.6" BoldWidth="2" MarginWidth="1.6" HashSpacing="2.5" LabelFont="4" CaptionFont="3" LabelSize="18" CaptionSize="10" LabelFace="3" CaptionFace="0">
+  <fonttable>
+    <font id="3" name="Arial" charset="utf-8" />
+    <font id="4" name="Times New Roman" charset="utf-8" />
+  </fonttable>
+  <colortable>
+    <color r="1" g="1" b="1" />
+    <color r="0" g="0" b="0" />
+    <color r="1" g="0" b="0" />
+    <color r="0" g="0" b="1" />
+  </colortable>
+  <page id="1" BoundingBox="0 0 360 240">
+    <fragment id="2">
+      <n id="3" Element="6" p="50 70" />
+      <n id="4" Element="8" p="74 70" NumHydrogens="1">
+        <t id="6" p="74 70">
+          <s>OH</s>
+        </t>
+      </n>
+      <b id="5" B="3" E="4" Order="1" />
+    </fragment>
+  </page>
+</CDXML>

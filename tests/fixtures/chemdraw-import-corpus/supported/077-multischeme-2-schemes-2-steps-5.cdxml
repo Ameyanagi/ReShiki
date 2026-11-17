@@ -1,0 +1,178 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE CDXML SYSTEM "https://static.chemistry.revvitycloud.com/cdxml/CDXML.dtd">
+<CDXML CreationProgram="ReShiki synthetic import corpus generator" Name="077-multischeme-2-schemes-2-steps-5" BoundingBox="0 0 1100 1100" BondLength="14.4" BondSpacing="18" LineWidth="0.6" BoldWidth="2" MarginWidth="1.6" HashSpacing="2.5" ChainAngle="120" LabelFont="1001" CaptionFont="1001" LabelSize="10" CaptionSize="10" LabelFace="0" CaptionFace="0" LabelColor="3" CaptionColor="3" color="3" bgcolor="2">
+  <colortable>
+    <color r="1" g="1" b="1" />
+    <color r="0" g="0" b="0" />
+    <color r="0.12" g="0.35" b="0.65" />
+    <color r="0.8" g="0.24" b="0.18" />
+    <color r="0.7" g="0.88" b="0.79" />
+  </colortable>
+  <fonttable>
+    <font id="1001" name="Arial" charset="utf-8" />
+    <font id="1002" name="Times New Roman" charset="utf-8" />
+    <font id="1003" name="Helvetica" charset="utf-8" />
+  </fonttable>
+  <page id="1" BoundingBox="0 0 1100 1100" WidthPages="1" HeightPages="1">
+    <t id="2" p="30 42" BoundingBox="30 30 125 44">
+      <s font="1001" size="10" color="3" face="0">Scheme 1: 2 step(s)</s>
+    </t>
+    <fragment id="3">
+      <n id="4" p="50 90" Element="6" />
+      <n id="5" p="62.155018 97.72111" Element="6" />
+      <n id="6" p="74.919204 91.055111" Element="6" />
+      <n id="7" p="87.074222 98.776221" Element="8" NumHydrogens="1">
+        <t id="8" p="83.574222 102.276221" LabelJustification="Left">
+          <s font="1001" size="10" color="3" face="96">O</s>
+        </t>
+      </n>
+      <b id="9" B="4" E="5" Order="1" />
+      <b id="10" B="5" E="6" Order="1" />
+      <b id="11" B="6" E="7" Order="1" />
+    </fragment>
+    <fragment id="12">
+      <n id="13" p="280 90" Element="6" />
+      <n id="14" p="293.005779 96.1814" Element="6" />
+      <n id="15" p="304.861918 88.008764" Element="6" />
+      <n id="16" p="317.867698 94.190164" Element="8" NumHydrogens="1">
+        <t id="17" p="314.367698 97.690164" LabelJustification="Left">
+          <s font="1001" size="10" color="3" face="96">O</s>
+        </t>
+      </n>
+      <b id="18" B="13" E="14" Order="1" />
+      <b id="19" B="14" E="15" Order="1" />
+      <b id="20" B="15" E="16" Order="1" />
+    </fragment>
+    <fragment id="21">
+      <n id="22" p="510 90" Element="6" />
+      <n id="23" p="522.822657 96.552821" Element="6" />
+      <n id="24" p="534.908895 88.724484" Element="6" />
+      <n id="25" p="547.731553 95.277305" Element="8" NumHydrogens="1">
+        <t id="26" p="544.231553 98.777305" LabelJustification="Left">
+          <s font="1001" size="10" color="3" face="96">O</s>
+        </t>
+      </n>
+      <b id="27" B="22" E="23" Order="1" />
+      <b id="28" B="23" E="24" Order="1" />
+      <b id="29" B="24" E="25" Order="1" />
+    </fragment>
+    <scheme id="30">
+      <step id="40" ReactionStepReactants="3 31" ReactionStepProducts="12" ReactionStepArrows="36" ReactionStepPlusses="37" ReactionStepObjectsAboveArrow="38" ReactionStepObjectsBelowArrow="39" ReactionStepAtomMap="4 13 5 14 6 15 7 16" />
+      <step id="50" ReactionStepReactants="12 41" ReactionStepProducts="21" ReactionStepArrows="46" ReactionStepPlusses="47" ReactionStepObjectsAboveArrow="48" ReactionStepObjectsBelowArrow="49" ReactionStepAtomMap="13 22 14 23 15 24 16 25" />
+    </scheme>
+    <fragment id="31">
+      <n id="32" p="62 155" Element="6" />
+      <n id="33" p="74.470766 162.2" Element="8" NumHydrogens="1">
+        <t id="34" p="70.970766 165.7" LabelJustification="Left">
+          <s font="1001" size="10" color="3" face="96">O</s>
+        </t>
+      </n>
+      <b id="35" B="32" E="33" Order="1" />
+    </fragment>
+    <arrow id="36" BoundingBox="145 87 220 93" Tail3D="145 90 0" Head3D="220 90 0" ArrowheadHead="Full" ArrowheadTail="None" ArrowheadType="Solid" FillType="None" />
+    <graphic id="37" GraphicType="Symbol" BoundingBox="78 117 86 125" SymbolType="Plus" />
+    <t id="38" p="142 65" BoundingBox="142 53 182 67">
+      <s font="1001" size="10" color="3" face="0">cat. 1.1</s>
+    </t>
+    <t id="39" p="145 120" BoundingBox="145 108 169 122">
+      <s font="1001" size="10" color="3" face="0">44%</s>
+    </t>
+    <fragment id="41">
+      <n id="42" p="292 155" Element="6" />
+      <n id="43" p="304.470766 162.2" Element="8" NumHydrogens="1">
+        <t id="44" p="300.970766 165.7" LabelJustification="Left">
+          <s font="1001" size="10" color="3" face="96">O</s>
+        </t>
+      </n>
+      <b id="45" B="42" E="43" Order="1" />
+    </fragment>
+    <arrow id="46" BoundingBox="375 87 450 93" Tail3D="375 90 0" Head3D="450 90 0" ArrowheadHead="Full" ArrowheadTail="None" ArrowheadType="Solid" FillType="None" />
+    <graphic id="47" GraphicType="Symbol" BoundingBox="308 117 316 125" SymbolType="Plus" />
+    <t id="48" p="372 65" BoundingBox="372 53 412 67">
+      <s font="1001" size="10" color="3" face="0">cat. 1.2</s>
+    </t>
+    <t id="49" p="375 120" BoundingBox="375 108 399 122">
+      <s font="1001" size="10" color="3" face="0">62%</s>
+    </t>
+    <t id="51" p="30 232" BoundingBox="30 220 125 234">
+      <s font="1001" size="10" color="3" face="0">Scheme 2: 2 step(s)</s>
+    </t>
+    <fragment id="52">
+      <n id="53" p="50 280" Element="6" />
+      <n id="54" p="63.317646 285.477254" Element="6" />
+      <n id="55" p="74.71991 276.682461" Element="6" />
+      <n id="56" p="88.037556 282.159715" Element="8" NumHydrogens="1">
+        <t id="57" p="84.537556 285.659715" LabelJustification="Left">
+          <s font="1001" size="10" color="3" face="96">O</s>
+        </t>
+      </n>
+      <b id="58" B="53" E="54" Order="1" />
+      <b id="59" B="54" E="55" Order="1" />
+      <b id="60" B="55" E="56" Order="1" />
+    </fragment>
+    <fragment id="61">
+      <n id="62" p="280 280" Element="6" />
+      <n id="63" p="292.873002 286.453357" Element="6" />
+      <n id="64" p="304.898274 278.531688" Element="6" />
+      <n id="65" p="317.771276 284.985045" Element="8" NumHydrogens="1">
+        <t id="66" p="314.271276 288.485045" LabelJustification="Left">
+          <s font="1001" size="10" color="3" face="96">O</s>
+        </t>
+      </n>
+      <b id="67" B="62" E="63" Order="1" />
+      <b id="68" B="63" E="64" Order="1" />
+      <b id="69" B="64" E="65" Order="1" />
+    </fragment>
+    <fragment id="70">
+      <n id="71" p="510 280" Element="6" />
+      <n id="72" p="521.607282 288.522382" Element="6" />
+      <n id="73" p="534.791523 282.731372" Element="6" />
+      <n id="74" p="546.398805 291.253754" Element="8" NumHydrogens="1">
+        <t id="75" p="542.898805 294.753754" LabelJustification="Left">
+          <s font="1001" size="10" color="3" face="96">O</s>
+        </t>
+      </n>
+      <b id="76" B="71" E="72" Order="1" />
+      <b id="77" B="72" E="73" Order="1" />
+      <b id="78" B="73" E="74" Order="1" />
+    </fragment>
+    <scheme id="79">
+      <step id="89" ReactionStepReactants="52 80" ReactionStepProducts="61" ReactionStepArrows="85" ReactionStepPlusses="86" ReactionStepObjectsAboveArrow="87" ReactionStepObjectsBelowArrow="88" ReactionStepAtomMap="53 62 54 63 55 64 56 65" />
+      <step id="99" ReactionStepReactants="61 90" ReactionStepProducts="70" ReactionStepArrows="95" ReactionStepPlusses="96" ReactionStepObjectsAboveArrow="97" ReactionStepObjectsBelowArrow="98" ReactionStepAtomMap="62 71 63 72 64 73 65 74" />
+    </scheme>
+    <fragment id="80">
+      <n id="81" p="62 345" Element="6" />
+      <n id="82" p="74.470766 352.2" Element="8" NumHydrogens="1">
+        <t id="83" p="70.970766 355.7" LabelJustification="Left">
+          <s font="1001" size="10" color="3" face="96">O</s>
+        </t>
+      </n>
+      <b id="84" B="81" E="82" Order="1" />
+    </fragment>
+    <arrow id="85" BoundingBox="145 277 220 283" Tail3D="145 280 0" Head3D="220 280 0" ArrowheadHead="Full" ArrowheadTail="None" ArrowheadType="Solid" FillType="None" />
+    <graphic id="86" GraphicType="Symbol" BoundingBox="78 307 86 315" SymbolType="Plus" />
+    <t id="87" p="142 255" BoundingBox="142 243 182 257">
+      <s font="1001" size="10" color="3" face="0">cat. 2.1</s>
+    </t>
+    <t id="88" p="145 310" BoundingBox="145 298 169 312">
+      <s font="1001" size="10" color="3" face="0">37%</s>
+    </t>
+    <fragment id="90">
+      <n id="91" p="292 345" Element="6" />
+      <n id="92" p="304.470766 352.2" Element="8" NumHydrogens="1">
+        <t id="93" p="300.970766 355.7" LabelJustification="Left">
+          <s font="1001" size="10" color="3" face="96">O</s>
+        </t>
+      </n>
+      <b id="94" B="91" E="92" Order="1" />
+    </fragment>
+    <arrow id="95" BoundingBox="375 277 450 283" Tail3D="375 280 0" Head3D="450 280 0" ArrowheadHead="Full" ArrowheadTail="None" ArrowheadType="Solid" FillType="None" />
+    <graphic id="96" GraphicType="Symbol" BoundingBox="308 307 316 315" SymbolType="Plus" />
+    <t id="97" p="372 255" BoundingBox="372 243 412 257">
+      <s font="1001" size="10" color="3" face="0">cat. 2.2</s>
+    </t>
+    <t id="98" p="375 310" BoundingBox="375 298 399 312">
+      <s font="1001" size="10" color="3" face="0">70%</s>
+    </t>
+  </page>
+</CDXML>

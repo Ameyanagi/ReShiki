@@ -56,7 +56,7 @@ pub fn snapshot(doc: &Document, ids: &[u64], scope: Scope) -> Result<Document, S
         let mut part = crate::editing::selection(doc, ids);
         // Removing unselected molecules invalidates computed labels for editing.
         // A print snapshot must retain the visible hydrogens and stereo labels.
-        crate::atom_labels::refresh_computed(&mut part, doc);
+        crate::atom_labels::copy_computed(&mut part, doc);
         for indicator in crate::atom_labels::indicators(doc) {
             if let Some(anchor) = indicator.owner.anchor(&part) {
                 indicator.owner.set_offset(
@@ -204,3 +204,28 @@ pub async fn show_dialog(job: Prepared) -> Result<Outcome, String> {
 
 #[cfg(all(test, not(windows)))]
 mod transport_tests;
+
+#[cfg(test)]
+mod passive_tests {
+    use super::*;
+
+    #[test]
+    fn selected_print_snapshot_preserves_linked_geometry() {
+        let mut source: Document = serde_json::from_slice(include_bytes!(
+            "../tests/fixtures/passive-drawing-geometry/unsettled-native.rsk"
+        ))
+        .unwrap();
+        source.page_layout = Some(Layout {
+            width_pt: 1800.,
+            height_pt: 1200.,
+            ..Layout::default()
+        });
+        let printed = snapshot(&source, &[1, 2, 10, 11, 12, 30], Scope::Selection).unwrap();
+        assert_eq!(printed.arrows, source.arrows);
+        assert_eq!(printed.annotations, source.annotations);
+        assert_eq!(printed.graphics, source.graphics);
+        assert_eq!(printed.atoms[0].label_h, source.atoms[0].label_h);
+        assert_eq!(printed.arrow_labels, source.arrow_labels);
+        assert_eq!(printed.property_captions, source.property_captions);
+    }
+}

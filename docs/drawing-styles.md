@@ -30,7 +30,7 @@ Atom labels without individual font overrides inherit the document style. **Upda
 
 The footer **Export** icon saves the panel settings as a `.reshiki-style` file without changing the drawing. The **Import** icon opens a saved style into the preview; the **Save** icon still applies it to the drawing. A style file contains settings only, not molecules or page contents. Native style files are validated before use and limited to 64 KB. **Import** also accepts ChemDraw `.cds`, `.cdx` and `.cdxml` files up to 16 MB, including older journal stationery. It extracts the document label font and bond dimensions; artwork, page layout, colors and separate caption settings are not imported.
 
-[Journal settings and publisher sources](journal-drawing-presets.md) explain the five publisher-based choices and compare their actual drawings in ReShiki and ChemDraw. Complete stationery documents combining page layouts, objects, and styles are not imported by this panel.
+[Journal settings and publisher sources](journal-drawing-presets.md) explain the five publisher-based choices and compare their actual drawings in ReShiki and ChemDraw. Complete stationery documents combining page layouts, objects, and styles are not imported by this panel. To open supported artwork from binary `.cds` stationery, use **File → Open** or drop the file on the canvas. Multiple top-level drawing spaces are arranged vertically; original paper settings are not retained.
 
 ## Persistence and exchange
 

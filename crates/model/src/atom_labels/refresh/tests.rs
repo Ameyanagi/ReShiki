@@ -585,3 +585,60 @@ fn edits_label_only_the_molecules_they_change() {
     refresh_edited(&before, &mut doc);
     assert_eq!(h(&doc, n), 9);
 }
+
+#[test]
+fn passive_hydrogen_refresh_preserves_native_radicals_and_every_authored_field() {
+    let mut source = Document::default();
+    let radical = source.add_atom("C", Point::new(13., -27.));
+    let atom = source.atom_mut(radical).unwrap();
+    atom.no_implicit = true;
+    atom.radical_electrons = 1;
+    let singlet = source.add_atom("C", Point::new(93., -11.));
+    let atom = source.atom_mut(singlet).unwrap();
+    atom.no_implicit = true;
+    atom.radical_electrons = 2;
+    atom.singlet = true;
+    source.add_atom("O", Point::new(177., 19.));
+    let native = Document::from_json(&source.file_json().unwrap()).unwrap();
+    assert_eq!(native.atom(radical).unwrap().radical_electrons, 1);
+    assert!(native.atom(singlet).unwrap().singlet);
+
+    let mut document = Document::default();
+    let existing = document.add_atom("N", Point::new(-123., 50.));
+    document.atom_mut(existing).unwrap().label_h = 7;
+    let before = document.clone();
+    let incoming =
+        crate::editing::append_preserving_layout(&mut document, &native, Point::new(37., 49.));
+    let mut expected = document.clone();
+    expected.atom_mut(incoming[2]).unwrap().label_h = 2;
+    refresh_hydrogens(&before, &mut document);
+    assert_eq!(document, expected);
+    assert_eq!(document.atom(incoming[0]).unwrap().radical_electrons, 1);
+    assert!(document.atom(incoming[1]).unwrap().singlet);
+    assert_eq!(document.atom(existing).unwrap().label_h, 7);
+    document.validate().unwrap();
+}
+
+#[test]
+fn actual_bond_edits_still_recount_radicals_before_refreshing_hydrogens() {
+    let mut document = Document::default();
+    let carbene = document.add_atom("C", Point::new(13., -27.));
+    let atom = document.atom_mut(carbene).unwrap();
+    atom.no_implicit = true;
+    atom.explicit_h = 2;
+    atom.radical_electrons = 2;
+    atom.singlet = true;
+    let neighbor = document.add_atom("C", Point::new(55., -27.));
+    document.validate().unwrap();
+    let before = document.clone();
+    document.add_bond(carbene, neighbor, 1, "plain");
+    refresh_edited(&before, &mut document);
+    assert_eq!(document.atom(carbene).unwrap().radical_electrons, 1);
+    assert!(!document.atom(carbene).unwrap().singlet);
+    assert_eq!(document.atom(carbene).unwrap().label_h, 2);
+    assert_eq!(document.atom(neighbor).unwrap().label_h, 3);
+    for (actual, original) in document.atoms.iter().zip(&before.atoms) {
+        assert_eq!(actual.position, original.position);
+    }
+    document.validate().unwrap();
+}

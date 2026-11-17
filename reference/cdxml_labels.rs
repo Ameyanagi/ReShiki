@@ -129,7 +129,40 @@ fn label_patches_and_callback_order_match_original_reader() -> anyhow::Result<()
             .collect::<Vec<_>>();
         let before = serde_json::to_value((&atoms, &case.positions, &case.bonds, &case.text))?;
         let prepared = cdxml::PreparedAtoms::new(&atoms, &case.positions)?;
-        let xml = presentation::parse(&case.text)?;
+        let xml = match presentation::parse(&case.text) {
+            Ok(xml) => xml,
+            Err(error) => {
+                // This oracle case explicitly records the old ElementTree
+                // acceptance of an internal ATTLIST. The production guard
+                // intentionally rejects declarations before either XML reader.
+                anyhow::ensure!(
+                    case.name == "dtd-restriction"
+                        && case.restriction.as_deref() == Some("Internal DTD")
+                        && case.expected.is_some()
+                        && matches!(&error, presentation::Error::Xml(message) if message == "DTD declarations are not supported"),
+                    "Unexpected early presentation rejection for {}: {error}",
+                    case.name
+                );
+                let mut called = false;
+                let rejected =
+                    cdxml::read_labels(&case.text, &prepared, &case.bonds, case.scale, |_, _| {
+                        called = true;
+                        Err::<presentation::NativeText, _>(presentation::Error::Runs)
+                    });
+                assert_eq!(
+                    rejected.unwrap_err().to_string(),
+                    "CDXML contains unsupported chemistry: internal DTD declarations"
+                );
+                assert!(!called);
+                assert_eq!(
+                    before,
+                    serde_json::to_value((&atoms, &case.positions, &case.bonds, &case.text))?
+                );
+                restrictions += 1;
+                eprintln!("Explicit internal-DTD restriction retained: {}", case.name);
+                continue;
+            }
+        };
         let nodes = xml
             .descendants()
             .filter(|n| n.is_element())

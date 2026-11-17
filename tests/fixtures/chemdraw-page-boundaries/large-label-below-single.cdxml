@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CDXML BondLength="14.4" LabelFont="3" LabelSize="72" LabelFace="0" CaptionFont="3" CaptionSize="10" CaptionFace="0">
+  <fonttable>
+    <font id="3" name="Arial" charset="utf-8" />
+  </fonttable>
+  <page id="1">
+    <fragment id="2">
+      <n id="3" Element="8" p="0 0" LabelDisplay="Below" />
+    </fragment>
+  </page>
+</CDXML>

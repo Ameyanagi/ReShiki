@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CDXML BondLength="14.4">
+  <colortable><color r="1.1" g="0" b="0"/></colortable>
+  <page id="1">
+    <fragment id="2">
+      <n id="3" p="0 0"/>
+      <n id="4" p="14.4 0"/>
+      <b id="5" B="3" E="4" color="0"/>
+    </fragment>
+  </page>
+</CDXML>

@@ -59,12 +59,12 @@ fn rejected_document_replacement_keeps_selection_history_revision_and_status() {
 }
 
 #[test]
-fn reference_edits_that_leave_a_named_molecule_in_place_detach_its_offset_caption()
--> Result<(), String> {
+fn reference_noops_preserve_authored_captions_and_real_edits_reconcile_them() -> Result<(), String>
+{
     // A loaded drawing can link a caption away from its computed position.
-    // Reference edits reconcile the caption twice, as they always have: the
-    // first pass moves it back, and the second detaches it because no named
-    // atom moved.
+    // A zero-degree rotation leaves that drawing intact. An actual reference
+    // edit retains its two caption passes: reposition, then detach when no
+    // named atom moved.
     for stretch_other in [false, true] {
         let (mut app, _) = App::new();
         let mut doc = Document::from_json(include_bytes!(
@@ -95,6 +95,7 @@ fn reference_edits_that_leave_a_named_molecule_in_place_detach_its_offset_captio
             |doc: &Document| -> Vec<_> { named.iter().map(|id| doc.atom(*id).cloned()).collect() };
         let named_atoms = atoms(&doc);
         app.tab.doc = doc;
+        let original = app.tab.doc.clone();
         app.tab.history = Default::default();
         if stretch_other {
             app.tab.selected = vec![a, b];
@@ -112,10 +113,20 @@ fn reference_edits_that_leave_a_named_molecule_in_place_detach_its_offset_captio
         let caption = caption(&app.tab.doc).ok_or("caption")?;
         assert_eq!(
             (caption.text.as_str(), caption.position),
-            ("ethan-1-ol", computed)
+            (
+                "ethan-1-ol",
+                if stretch_other {
+                    computed
+                } else {
+                    computed.offset(5., 5.)
+                }
+            )
         );
-        assert!(app.tab.doc.molecule_names.is_empty());
-        assert!(app.tab.history.can_undo());
+        assert_eq!(app.tab.doc.molecule_names.is_empty(), stretch_other);
+        assert_eq!(app.tab.history.can_undo(), stretch_other);
+        if !stretch_other {
+            assert_eq!(app.tab.doc, original);
+        }
     }
     Ok(())
 }

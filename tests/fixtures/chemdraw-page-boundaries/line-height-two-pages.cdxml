@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CDXML BondLength="14.4" LabelFont="3" LabelSize="10" LabelFace="0" CaptionFont="3" CaptionSize="72" CaptionFace="0" CaptionLineHeight="216">
+  <fonttable>
+    <font id="3" name="Arial" charset="utf-8" />
+  </fonttable>
+  <page id="1">
+    <t id="2" p="0 0">
+      <s>first line
+second line
+third line</s>
+    </t>
+  </page>
+  <page id="101">
+    <t id="102" p="0 0">
+      <s>SECOND PAGE</s>
+    </t>
+  </page>
+</CDXML>

@@ -68,7 +68,7 @@
     {"name": "open_smiles_file_as_mol", "rule": "file_open.format_matches_extension", "base": "open", "patch": [{"op": "replace", "path": "/arguments", "value": {"path": "/data/ethanol.smi", "format": "mol"}}], "expect": "decoder_rejects_only", "message": "format mol does not match the .smi extension, which opens as smiles"},
 
     {"name": "open_readable_extension", "rule": "file_open.extension_readable", "base": "open", "expect": "both_accept"},
-    {"name": "open_executable", "rule": "file_open.extension_readable", "base": "open", "patch": [{"op": "replace", "path": "/arguments/path", "value": "/data/tool.exe"}], "expect": "decoder_rejects_only", "message": "extension_not_allowed: \"/data/tool.exe\" does not have an allowed extension (rsk, reshiki, moruno, mol, rxn, rsmi, cdxml, cdx, smi, smiles, inchi)"},
+    {"name": "open_executable", "rule": "file_open.extension_readable", "base": "open", "patch": [{"op": "replace", "path": "/arguments/path", "value": "/data/tool.exe"}], "expect": "decoder_rejects_only", "message": "extension_not_allowed: \"/data/tool.exe\" does not have an allowed extension (rsk, reshiki, moruno, mol, rxn, rsmi, cdxml, cdx, cds, smi, smiles, inchi)"},
     {"name": "open_export_only_extension", "rule": "file_open.extension_readable", "base": "open", "patch": [{"op": "replace", "path": "/arguments/path", "value": "/data/ethanol.svg"}], "expect": "decoder_rejects_only"},
     {"name": "open_no_extension", "rule": "file_open.extension_readable", "base": "open", "patch": [{"op": "replace", "path": "/arguments/path", "value": "/data/ethanol"}], "expect": "decoder_rejects_only"},
 

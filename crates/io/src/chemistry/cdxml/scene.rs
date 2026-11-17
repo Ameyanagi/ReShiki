@@ -103,6 +103,8 @@ pub struct NativeScene {
 }
 #[derive(Clone, Debug, Serialize)]
 pub struct CdxmlScene {
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub notices: Vec<String>,
     #[serde(skip_serializing_if = "crate::generic::Generic::is_empty")]
     pub generic: crate::generic::Generic,
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -125,6 +127,8 @@ pub struct ImportedCdxml {
     pub document: Document,
     pub notices: Vec<String>,
 }
+
+pub const HIDDEN_DRAWING_NOTICE: &str = "Hidden drawing objects were omitted. Keep the original ChemDraw file to preserve their visibility settings.";
 
 fn point(text: &str, scale: f64) -> Result<ImportPoint> {
     let mut xy = [0.0; 2];
@@ -370,6 +374,12 @@ pub fn assemble_cdxml(prepared: &PreparedCdxml) -> Result<CdxmlScene> {
     let reader = TextReader::new(root)?;
     let next_id = first_scene_id(prepared)?;
     let mut objects = seed_objects(prepared, &nodes)?;
+    let hidden = hidden_drawing_sources(&nodes, &ordinals)?;
+    for &source in &hidden {
+        // An explicit empty mapping also stops logical groups from descending
+        // into omitted objects and accidentally claiming their children.
+        objects.put(source, Vec::new())?;
+    }
     let mut base = base_scene(prepared);
     let next_id = read_captions_and_arrows(
         prepared,
@@ -428,6 +438,9 @@ pub fn assemble_cdxml(prepared: &PreparedCdxml) -> Result<CdxmlScene> {
     } = remove_owned_circles(&mut tree, prepared, &source_by_index)?;
     let filtered_source = presentation::parse(&filtered)?;
     for (source, fill) in ring_fills::read(&nodes, &order, &tree, prepared, &association)? {
+        if hidden.contains(&source) {
+            continue;
+        }
         objects.put(source, fill.atoms.clone())?;
         base.ring_fills.push(fill);
     }
@@ -452,7 +465,78 @@ pub fn assemble_cdxml(prepared: &PreparedCdxml) -> Result<CdxmlScene> {
         &mut base,
     )?;
     restore_abbreviation_presentations(prepared, root, &reader, &mut base)?;
-    scene_result(prepared, base, objects, removed, &source_by_index)
+    let mut scene = scene_result(prepared, base, objects, removed, &source_by_index)?;
+    if !hidden.is_empty() {
+        scene.notices.push(HIDDEN_DRAWING_NOTICE.into());
+    }
+    if root
+        .children()
+        .filter(|node| node.has_tag_name("page"))
+        .count()
+        > 1
+    {
+        scene.notices.push(super::pages::NOTICE.into());
+    }
+    Ok(scene)
+}
+fn hidden_drawing_sources(
+    nodes: &[Node<'_, '_>],
+    ordinals: &HashMap<roxmltree::NodeId, usize>,
+) -> Result<BTreeSet<usize>> {
+    let mut hidden = BTreeSet::new();
+    for node in nodes
+        .iter()
+        .filter(|node| node.attribute("Visible") == Some("no"))
+    {
+        // Unspecified wildcard anchors already stay as invisible editor
+        // markers in the native model, including their connected bonds.
+        if node.has_tag_name("n")
+            && node.attribute("NodeType") == Some("Unspecified")
+            && node.attribute("Element") == Some("0")
+            && node
+                .children()
+                .filter(|n| n.has_tag_name("t"))
+                .flat_map(|n| n.children().filter(|s| s.has_tag_name("s")))
+                .filter_map(|s| s.text())
+                .collect::<String>()
+                == "*"
+        {
+            continue;
+        }
+        let represented: Vec<_> = node
+            .children()
+            .filter(|n| n.has_tag_name("represent"))
+            .collect();
+        // Attached charge marks already have a native hidden-charge setting.
+        // Other chemical objects cannot be dropped as presentation artwork.
+        if node.has_tag_name("graphic")
+            && !represented.is_empty()
+            && represented
+                .iter()
+                .all(|n| n.attribute("attribute") == Some("Charge"))
+        {
+            continue;
+        }
+        if !matches!(
+            node.tag_name().name(),
+            "t" | "arrow" | "curve" | "graphic" | "embeddedobject"
+        ) || !represented.is_empty()
+            || node.attribute("ChemicallySignificant") == Some("yes")
+            || node.attribute("ObjectID").is_some_and(|id| !id.is_empty())
+            || node.has_tag_name("t") && node.parent_element().is_some_and(|n| n.has_tag_name("n"))
+            || node
+                .descendants()
+                .any(|n| n.is_element() && matches!(n.tag_name().name(), "n" | "b" | "fragment"))
+        {
+            return Err(SceneError::Invalid(
+                "Hidden chemical objects are not supported",
+            ));
+        }
+        for child in node.descendants().filter(Node::is_element) {
+            hidden.insert(*ordinals.get(&child.id()).ok_or(SceneError::Limit)?);
+        }
+    }
+    Ok(hidden)
 }
 fn check_scene_limits(prepared: &PreparedCdxml) -> Result<()> {
     let members = prepared
@@ -535,6 +619,9 @@ fn read_captions_and_arrows(
         let defaults = attributes(*page);
         for node in page.descendants().filter(Node::is_element) {
             let ordinal = *ordinals.get(&node.id()).ok_or(SceneError::Limit)?;
+            if matches!(objects.get(ordinal), Some([])) {
+                continue;
+            }
             if node.has_tag_name("t")
                 && node
                     .parent_element()
@@ -588,6 +675,24 @@ fn styled_label_atoms(
     base: &mut NativeScene,
 ) -> Result<HashMap<u64, usize>> {
     let synthetic = presentation::parse("<t><s/></t>")?;
+    // DrawingStyle already carries the document font family and size. Only
+    // inherited face/color needs an extra patch on otherwise unlabelled atoms.
+    // Inspect declared defaults without reading a synthetic style: an unused
+    // palette need not even contain the default text-color index. The reader
+    // validates resolved styles below only when an atom actually uses them.
+    let root = nodes.first().ok_or(SceneError::Limit)?;
+    let inherited_face = root
+        .attribute("LabelFace")
+        .is_some_and(|face| !matches!(super::numeric::integer(face), Ok(Some(0 | 32 | 64 | 96))));
+    let inherited_color = root.attribute("LabelColor").is_some_and(|color| {
+        super::numeric::integer(color)
+            .ok()
+            .flatten()
+            .and_then(|index| usize::try_from(index).ok())
+            .and_then(|index| reader.palette().colors.get(index))
+            .is_none_or(|color| *color != presentation::NativeColor([0.; 3]))
+    });
+    let inherited_presentation = inherited_face || inherited_color;
     let mut slots = HashMap::new();
     for (ordinal, node) in nodes
         .iter()
@@ -596,6 +701,7 @@ fn styled_label_atoms(
     {
         let label = node.children().find(|n| n.has_tag_name("t"));
         if label.is_none()
+            && !inherited_presentation
             && !["LabelFont", "LabelSize", "LabelFace", "LabelColor"]
                 .iter()
                 .any(|key| node.attribute(*key).is_some())
@@ -971,6 +1077,7 @@ fn scene_result(
         }
     }
     Ok(CdxmlScene {
+        notices: Vec::new(),
         generic,
         generic_labels,
         attachments: prepared.attachments.clone(),

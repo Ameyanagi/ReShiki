@@ -2,6 +2,9 @@ use super::{values::*, *};
 use roxmltree::Node;
 use std::collections::HashSet;
 
+#[cfg(test)]
+mod text_defaults_tests;
+
 /// Convert checked drawing XML into its binary representation without RDKit.
 pub fn to_cdx(xml: &str) -> Result<Vec<u8>> {
     encode(xml, false)
@@ -131,7 +134,18 @@ impl Encoder {
             }
         }
         if name == "t" {
-            self.property(0x700, &encode_text(el)?)?;
+            // UTF8Text carries its own charset, including documents without
+            // an explicit font table. Ordinary ASCII remains legacy Text.
+            let tag = if el
+                .children()
+                .filter(|n| n.has_tag_name("s"))
+                .any(|span| span.text().is_some_and(|text| !text.is_ascii()))
+            {
+                0x709
+            } else {
+                0x700
+            };
+            self.property(tag, &encode_text(el)?)?;
         }
         for child in el.children().filter(|n| n.is_element()) {
             match child.tag_name().name() {
@@ -259,6 +273,22 @@ fn decode_hex(value: &str) -> Result<Vec<u8>> {
     Ok(data)
 }
 fn encode_text(el: Node<'_, '_>) -> Result<Vec<u8>> {
+    let atom = el
+        .parent_element()
+        .is_some_and(|parent| parent.has_tag_name("n"));
+    let prefix = if atom { "Label" } else { "Caption" };
+    let defaults = if atom {
+        el.parent_element()
+    } else {
+        el.ancestors().find(|node| node.has_tag_name("page"))
+    };
+    let root = el.document().root_element();
+    let inherited = |suffix: &str| {
+        let key = format!("{prefix}{suffix}");
+        el.attribute(key.as_str())
+            .or_else(|| defaults.and_then(|node| node.attribute(key.as_str())))
+            .or_else(|| root.attribute(key.as_str()))
+    };
     let spans = el
         .children()
         .filter(|n| n.has_tag_name("s"))
@@ -267,20 +297,34 @@ fn encode_text(el: Node<'_, '_>) -> Result<Vec<u8>> {
     let mut text = Vec::new();
     for span in spans {
         append(&mut data, &word(text.len())?)?;
-        for (key, default) in [("font", "3"), ("face", "0")] {
+        for (key, suffix, default) in [("font", "Font", "3"), ("face", "Face", "0")] {
             append(
                 &mut data,
-                &integer::<u16>(span.attribute(key).unwrap_or(default))?.to_le_bytes(),
+                &integer::<u16>(
+                    span.attribute(key)
+                        .or_else(|| inherited(suffix))
+                        .unwrap_or(default),
+                )?
+                .to_le_bytes(),
             )?;
         }
         pack_number(
             "UINT16",
-            finite(span.attribute("size").unwrap_or("10"))? * 20.,
+            finite(
+                span.attribute("size")
+                    .or_else(|| inherited("Size"))
+                    .unwrap_or("10"),
+            )? * 20.,
             |bytes| append(&mut data, bytes),
         )?;
         append(
             &mut data,
-            &integer::<u16>(span.attribute("color").unwrap_or("3"))?.to_le_bytes(),
+            &integer::<u16>(
+                span.attribute("color")
+                    .or_else(|| inherited("Color"))
+                    .unwrap_or("3"),
+            )?
+            .to_le_bytes(),
         )?;
         append(
             &mut text,

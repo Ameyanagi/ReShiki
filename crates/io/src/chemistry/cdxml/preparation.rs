@@ -58,7 +58,7 @@ pub enum PreparationCause {
     Sanitization(#[from] sanitize::Error),
     #[error("Unsupported query or reaction predicate: {0}")]
     Predicate(&'static str),
-    #[error("CDXML contains unsupported drawing objects or multiple pages.")]
+    #[error("CDXML contains unsupported drawing objects or nested pages.")]
     Objects,
     #[error("{0}")]
     Chemistry(String),
@@ -83,8 +83,8 @@ fn error(stage: PreparationStage, cause: PreparationCause) -> PreparationError {
 
 /// Detached chemical state plus original-precision inputs for later readers.
 /// `expanded_xml` is the single immutable source of document-order ordinals.
-/// `fragments` snapshot the parts at the bond-reader call: only a single part
-/// shares the combined molecule's scaled positions; chemistry is still raw.
+/// `fragments` snapshot the parts at the bond-reader call in the same drawing
+/// scale as the combined molecule; chemistry is still raw.
 #[derive(Clone, Debug, Serialize)]
 pub struct PreparedCdxml {
     #[serde(skip_serializing_if = "super::generic::SourceGeneric::is_empty")]
@@ -180,7 +180,10 @@ fn validate(text: &str) -> Result<Tree> {
             return Err(error(Validation, PreparationCause::Objects));
         }
     }
-    if pages != 1 {
+    if pages == 0
+        || at(Validation, tree.node(0))?.tag == "CDXML"
+            && pages != at(Validation, tree.children(0, "page"))?.len()
+    {
         return Err(error(Validation, PreparationCause::Objects));
     }
     Ok(tree)
@@ -377,13 +380,61 @@ fn prepare(text: &str, check_chemistry: bool) -> Result<PreparedCdxml> {
     validate_predicates(&at(Validation, Tree::parse_import(text))?, true)?;
     let (text, generic) = at(Validation, super::generic::extract(text))?;
     let mut source = validate(&text)?;
+    for index in at(Normalization, source.descendants(0))? {
+        let node = at(Normalization, source.node(index))?;
+        if node.tag != "curve" {
+            continue;
+        }
+        let Some(flags) = at(
+            Normalization,
+            super::numeric::integer(node.attr("CurveType").unwrap_or("0"))
+                .map_err(|e| super::Error::Invalid(e.to_string())),
+        )?
+        else {
+            continue;
+        };
+        if flags < 0 || flags & 120 == 0 {
+            continue;
+        }
+        let head = if flags & 8 != 0 {
+            "Full"
+        } else if flags & 32 != 0 {
+            "HalfLeft"
+        } else {
+            "None"
+        };
+        let tail = if flags & 16 != 0 {
+            "Full"
+        } else if flags & 64 != 0 {
+            "HalfLeft"
+        } else {
+            "None"
+        };
+        let node = at(Normalization, source.node_mut(index))?;
+        for (key, value) in [("ArrowheadHead", head), ("ArrowheadTail", tail)] {
+            if node.attr(key).is_none() {
+                node.set(key, value.into());
+            }
+        }
+        node.set("CurveType", (flags & !120).to_string());
+    }
     at(Validation, super::attachments::normalize(&mut source))?;
     let molecular_root = at(Validation, source.node(0))?.tag == "CDXML";
-    let flattened = at(Expansion, super::abbreviations::flatten_tree(source))?;
-    let chemical = at(
-        Normalization,
-        super::normalize::normalize_tree(at(Normalization, Tree::parse_import(&flattened.xml))?),
-    )?;
+    let mut flattened = at(Expansion, super::abbreviations::flatten_tree(source))?;
+    flattened.xml = at(Normalization, super::pages::arrange(&flattened.xml))?;
+    let mut chemical = at(Normalization, Tree::parse_import(&flattened.xml))?;
+    if molecular_root
+        && at(Normalization, chemical.node(0))?
+            .attr("BondLength")
+            .is_none()
+    {
+        // Drawing presentation defaults an omitted BondLength to 30pt. The
+        // low-level native reader defaults to zero (raw integer coordinates),
+        // so resolve the drawing default in this chemical copy only. Keeping
+        // the source XML untouched preserves scene geometry and source IDs.
+        at(Normalization, chemical.node_mut(0))?.set("BondLength", "30".into());
+    }
+    let chemical = at(Normalization, super::normalize::normalize_tree(chemical))?;
     // The native ChemDraw reader recognizes a CDXML root only. Other permitted
     // roots can contain supported captions/graphics; read_bonds still rejects
     // any molecular fragment the native parser did not read.
@@ -406,8 +457,17 @@ fn prepare(text: &str, check_chemistry: bool) -> Result<PreparedCdxml> {
         p.y *= conformer_scale;
         p.z *= conformer_scale;
     }
-    if let [part] = fragments.as_mut_slice() {
-        part.positions.clone_from(&combined.positions);
+    let mut offset = 0;
+    for part in &mut fragments {
+        let end = offset + part.positions.len();
+        let positions = combined.positions.get(offset..end).ok_or_else(|| {
+            error(
+                Scaling,
+                PreparationCause::Invariant("Missing scaled fragment positions"),
+            )
+        })?;
+        part.positions.clone_from_slice(positions);
+        offset = end;
     }
     let palette = at(Bonds, presentation::palette(document.root_element()))?;
     let bonds = at(

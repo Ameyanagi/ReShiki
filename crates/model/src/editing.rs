@@ -111,7 +111,7 @@ pub fn selection(doc: &Document, ids: &[u64]) -> Document {
         .retain(|g| g.members.iter().all(|id| ids.contains(id)));
     let removed: Vec<_> = doc.object_ids().filter(|id| !ids.contains(id)).collect();
     if !removed.is_empty() {
-        part.delete(&removed);
+        part.delete_preserving_layout(&removed);
     }
     // Keep models through deletion so it records crystal bond provenance.
     // Check the original links, before pruning can shorten a partial selection.
@@ -372,6 +372,20 @@ pub fn analysis_document(doc: &Document, atoms: &[u64]) -> Document {
 /// remapped, so the remap is `zip(source.all_ids(), returned)`. On failure
 /// nothing is inserted and the result is empty.
 pub fn append(doc: &mut Document, source: &Document, offset: Point) -> Vec<u64> {
+    append_in_mode(doc, source, offset, AppendMode::Ordinary)
+}
+/// Paste an existing drawing with ordinary ID, appearance and stereo-group
+/// remapping, preserving its geometry apart from the common translation.
+/// Linked constraints run only when the host subsequently makes a real edit.
+pub fn append_preserving_layout(doc: &mut Document, source: &Document, offset: Point) -> Vec<u64> {
+    append_in_mode(doc, source, offset, AppendMode::PreserveLayout)
+}
+fn append_in_mode(
+    doc: &mut Document,
+    source: &Document,
+    offset: Point,
+    mode: AppendMode,
+) -> Vec<u64> {
     if doc.validate().is_err()
         || source.validate().is_err()
         || !offset.x.is_finite()
@@ -379,12 +393,13 @@ pub fn append(doc: &mut Document, source: &Document, offset: Point) -> Vec<u64> 
     {
         return vec![];
     }
-    let Some((part, _mapping, ids)) = mapped_append_part(doc, source, offset, AppendMode::Ordinary)
-    else {
+    let Some((part, _mapping, ids)) = mapped_append_part(doc, source, offset, mode) else {
         return vec![];
     };
     extend_append_part(doc, part);
-    crate::arrow_anchors::reconcile(doc);
+    if matches!(mode, AppendMode::Ordinary) {
+        crate::arrow_anchors::reconcile(doc);
+    }
     ids
 }
 /// A remapped fragment, its source-to-inserted ID map, and inserted object IDs.
@@ -393,6 +408,7 @@ type MappedAppendPart = (Document, HashMap<u64, u64>, Vec<u64>);
 #[derive(Clone, Copy)]
 enum AppendMode {
     Ordinary,
+    PreserveLayout,
     Preserved,
 }
 /// Remaps a generic expansion product into `doc`'s IDs, translated by `offset`
@@ -436,13 +452,15 @@ fn mapped_append_part(
         .collect();
     let mapping = mapping?;
     let mut part = source.clone();
-    if matches!(mode, AppendMode::Ordinary) {
+    if matches!(mode, AppendMode::Ordinary | AppendMode::PreserveLayout) {
         crate::stereo_groups::renumber_incoming(doc, &mut part.atoms);
     }
     remap_ids(&mut part, &mapping)?;
     for a in &mut part.atoms {
         // A pasted fragment keeps its source appearance when document defaults differ.
-        if matches!(mode, AppendMode::Ordinary) && source.atom_labels != doc.atom_labels {
+        if matches!(mode, AppendMode::Ordinary | AppendMode::PreserveLayout)
+            && source.atom_labels != doc.atom_labels
+        {
             a.display.carbons.get_or_insert(source.atom_labels.carbons);
             a.display
                 .hydrogens
@@ -462,7 +480,9 @@ fn mapped_append_part(
         }
         a.position = a.position.offset(offset.x, offset.y);
     }
-    if matches!(mode, AppendMode::Ordinary) && source.atom_labels.stereo != doc.atom_labels.stereo {
+    if matches!(mode, AppendMode::Ordinary | AppendMode::PreserveLayout)
+        && source.atom_labels.stereo != doc.atom_labels.stereo
+    {
         for b in &mut part.bonds {
             b.indicator.show.get_or_insert(source.atom_labels.stereo);
         }

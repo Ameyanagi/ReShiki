@@ -187,8 +187,13 @@ not add chemical electron-flow semantics. See the
 
 A document lists each label as an arrow ID, a text ID and a side (`above` or
 `below`); document version 27 added the list. An optional gap, stored in world
-units, requires version 31. The text stays an ordinary caption. Every edit
-re-checks the labels in the same Undo step:
+units, requires version 31. The text stays an ordinary caption. Chemical and
+drawing edits re-check the labels in the same Undo step. Opening, importing,
+copying, pasting, exporting, recalculating properties and background label
+updates preserve the authored arrow and caption geometry, including linked
+objects. An explicit **Clean Up** can update dependent placement.
+
+For an edit that re-checks labels:
 
 1. Text dragged on its own re-centres in its slot. Perpendicular movement
    changes the saved gap or side; sideways movement beyond the arrow span
@@ -223,7 +228,8 @@ direction control is edited. Older ReShiki builds report that an update is
 required instead of discarding the links. Interior arrow nodes are stored in
 format version 35 as a list of points, controls and node types; arrows without
 nodes save exactly as before, so their files keep their earlier version. Legacy curved arrows materialize
-their implicit bend before reflection, copying or transformation. Translation,
+their implicit bend before reflection or geometric transformation. Copying
+preserves the saved representation. Translation,
 rotation, resizing, grouping and template placement carry the controls with the
 endpoints. Stroke widths and head dimensions keep their publication point sizes
 when the geometry is resized. Attached endpoints use final-ink clearance;

@@ -1,0 +1,66 @@
+{
+  "provenance": "Synthetic hand-authored asymmetric geometry, encoded independently by reference/engine/cdx_exchange.py; not native-authored",
+  "geometry_contract": "All paper points convert by 42/14.4 and may receive only one shared translation, including across disconnected molecules and reaction stamps",
+  "cases": [
+    {
+      "id": "valid-layout",
+      "bond_length": "14.4",
+      "expected": "preserve-layout",
+      "files": {
+        "cdxml": "valid-layout.cdxml",
+        "cdx": "valid-layout.cdx",
+        "cds": "valid-layout.drawing.cds"
+      },
+      "sha256": {
+        "cdxml": "abc106010b51e95345832261b1612dd691954b8464d9c9ca2e24d456747ca695",
+        "cdx": "5c310c47d87a4b7958b5b8cd876c48f31562c2f19c773b03e01059796a02ff16",
+        "cds": "707909ebcd55efddd07b93e51e04f83b6f9df265b75bab2199b02c776148b92d"
+      }
+    },
+    {
+      "id": "explicit-30",
+      "bond_length": "30",
+      "expected": "preserve-layout",
+      "files": {
+        "cdxml": "explicit-30.cdxml",
+        "cdx": "explicit-30.cdx",
+        "cds": "explicit-30.drawing.cds"
+      },
+      "sha256": {
+        "cdxml": "8c4f10e5c00b8604906bcb4cc38b85746cb0064b8265072bb8b69ab323980e70",
+        "cdx": "2e79779a9dc3b937e792967691edc0ff2e9e96c0ef9ea2783dca2d0c96f33a54",
+        "cds": "57113c6e881d97c1c3f9a1eb632f93c1a3221e83b8c7a569396e1d89e4ec331c"
+      }
+    },
+    {
+      "id": "missing-bond-length",
+      "bond_length": null,
+      "expected": "preserve-layout",
+      "files": {
+        "cdxml": "missing-bond-length.cdxml",
+        "cdx": "missing-bond-length.cdx",
+        "cds": "missing-bond-length.drawing.cds"
+      },
+      "sha256": {
+        "cdxml": "9191a481df3ba6f569290c871d258b03d665ccf73799a841a431ef2d1d327258",
+        "cdx": "236c06a6b9c4108e5d9a70ed2bbebb5c163eff30019f0ce5ed4c0b0ed14e259e",
+        "cds": "e772e3e03530a8320dff3eaef78886f44da5ea725f89dc33e3849c2b265b5e52"
+      }
+    },
+    {
+      "id": "unsupported-graphic",
+      "bond_length": "14.4",
+      "expected": "reject",
+      "files": {
+        "cdxml": "unsupported-graphic.cdxml",
+        "cdx": "unsupported-graphic.cdx",
+        "cds": "unsupported-graphic.drawing.cds"
+      },
+      "sha256": {
+        "cdxml": "2eb5bfc54978d1c71ef180ee89c16472149089a5eb77d7549bdf2246824eccda",
+        "cdx": "c144d9c204c8de5a1b92fddbb244cec52cb2b7e952f1bbbbd33d8c895b380be2",
+        "cds": "6366e8f07c448906e38daaf52132af75a0af256e48f5bef1ae232b1c7c43049c"
+      }
+    }
+  ]
+}

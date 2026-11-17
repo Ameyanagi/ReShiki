@@ -156,6 +156,7 @@ struct Writer<'a> {
     next: usize,
     scale: f64,
     shift: P,
+    painted_bounds: (P, P),
     work: usize,
     variable_labels: bool,
 }
@@ -424,6 +425,19 @@ fn write_impl(
         children.retain(|key| *key != rectangle);
         children.insert(0, rectangle);
     }
+    let (_, hi) = w.painted_bounds;
+    let right = (hi.x * w.scale + w.shift.x + 30.).ceil().max(612.);
+    let bottom = (hi.y * w.scale + w.shift.y + 30.).ceil().max(792.);
+    if right > 612. || bottom > 792. {
+        let bounds = format!("0 0 {} {}", number(right), number(bottom));
+        w.tree.set(w.page, "BoundingBox", bounds.clone())?;
+        w.tree.set(0, "BoundingBox", bounds)?;
+        w.tree.set(w.page, "DrawingSpace", "Pages")?;
+        w.tree
+            .set(w.page, "WidthPages", (right / 612.).ceil().to_string())?;
+        w.tree
+            .set(w.page, "HeightPages", (bottom / 792.).ceil().to_string())?;
+    }
     w.tree.serialize()
 }
 
@@ -494,7 +508,7 @@ impl<'a> Writer<'a> {
         if points.iter().any(|p| !p.x.is_finite() || !p.y.is_finite()) {
             return Err(invalid("Non-finite drawing coordinate"));
         }
-        let shift = P {
+        let mut shift = P {
             x: 30.
                 - points
                     .iter()
@@ -508,6 +522,17 @@ impl<'a> Writer<'a> {
                     .reduce(f64::min)
                     .unwrap_or(0.),
         };
+        let (lo, hi) = crate::scene::bounds(&crate::scene::primitives(original));
+        let painted_bounds = (P::from(lo), P::from(hi));
+        for (coordinate, translation) in [
+            (painted_bounds.0.x, &mut shift.x),
+            (painted_bounds.0.y, &mut shift.y),
+        ] {
+            let edge = coordinate * scale + *translation;
+            if edge < 0. {
+                *translation += 30. - edge;
+            }
+        }
         let mut tree = Tree::new();
         for (key, value) in [
             ("BondLength", style.bond_length_pt),
@@ -608,6 +633,7 @@ impl<'a> Writer<'a> {
             next: doc.atoms.len() + 3,
             scale,
             shift,
+            painted_bounds,
             work: 50_000_000,
             variable_labels: false,
         };

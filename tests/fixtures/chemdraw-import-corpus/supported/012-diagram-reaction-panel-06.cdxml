@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE CDXML SYSTEM "https://static.chemistry.revvitycloud.com/cdxml/CDXML.dtd">
+<CDXML CreationProgram="ReShiki synthetic import corpus generator" Name="012-diagram-reaction-panel-06" BoundingBox="0 0 612 792" BondLength="24" BondSpacing="18" LineWidth="0.6" BoldWidth="2" MarginWidth="1.6" HashSpacing="2.5" ChainAngle="120" LabelFont="1001" CaptionFont="1001" LabelSize="10" CaptionSize="10" LabelFace="0" CaptionFace="0" LabelColor="3" CaptionColor="3" color="3" bgcolor="2">
+  <colortable>
+    <color r="1" g="1" b="1" />
+    <color r="0" g="0" b="0" />
+    <color r="0.12" g="0.35" b="0.65" />
+    <color r="0.8" g="0.24" b="0.18" />
+    <color r="0.7" g="0.88" b="0.79" />
+  </colortable>
+  <fonttable>
+    <font id="1001" name="Arial" charset="utf-8" />
+    <font id="1002" name="Times New Roman" charset="utf-8" />
+    <font id="1003" name="Helvetica" charset="utf-8" />
+  </fonttable>
+  <page id="1" BoundingBox="0 0 612 792" WidthPages="1" HeightPages="1">
+    <group id="2" Integral="yes">
+      <fragment id="3">
+        <n id="4" p="65.698937 110.996798" Element="6" />
+        <n id="5" p="87.271336 121.514954" Element="6" />
+        <n id="6" p="107.166526 108.091787" Element="6" />
+        <n id="7" p="128.738925 118.609943" Element="6" />
+        <n id="8" p="148.634115 105.186776" Element="6" />
+        <n id="9" p="170.206514 115.704932" Element="8" NumHydrogens="1">
+          <t id="10" p="166.706514 119.204932" LabelJustification="Left">
+            <s font="1001" size="10" color="3" face="96">O</s>
+          </t>
+        </n>
+        <b id="11" B="4" E="5" Order="1" />
+        <b id="12" B="5" E="6" Order="1" />
+        <b id="13" B="6" E="7" Order="1" />
+        <b id="14" B="7" E="8" Order="1" />
+        <b id="15" B="8" E="9" Order="1" />
+      </fragment>
+      <arrow id="16" BoundingBox="193.036731 107 253.036731 113" Tail3D="193.036731 110 0" Head3D="253.036731 110 0" ArrowheadHead="HalfLeft" ArrowheadTail="None" ArrowheadType="Solid" FillType="None" color="5" LineType="Solid" />
+      <fragment id="17">
+        <n id="18" p="297.294358 110.313887" Element="6" />
+        <n id="19" p="318.078967 122.313887" Element="6" />
+        <n id="20" p="338.863577 110.313887" Element="6" />
+        <n id="21" p="359.648187 122.313887" Element="8" NumHydrogens="1">
+          <t id="22" p="356.148187 125.813887" LabelJustification="Left">
+            <s font="1001" size="10" color="3" face="96">O</s>
+          </t>
+        </n>
+        <b id="23" B="18" E="19" Order="1" />
+        <b id="24" B="19" E="20" Order="1" />
+        <b id="25" B="20" E="21" Order="1" />
+      </fragment>
+      <t id="26" p="188 83" BoundingBox="188 71 228 85">
+        <s font="1001" size="10" color="3" face="0">Pd/C, H2</s>
+      </t>
+      <t id="27" p="195 148" BoundingBox="195 136 240 150">
+        <s font="1001" size="10" color="3" face="0">56% yield</s>
+      </t>
+      <graphic id="28" GraphicType="Rectangle" BoundingBox="32 49 405 165" RectangleType="RoundEdge" color="4" Z="0" />
+      <graphic id="29" GraphicType="Symbol" BoundingBox="155 102 164 111" SymbolType="Plus" />
+    </group>
+  </page>
+</CDXML>

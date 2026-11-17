@@ -25,6 +25,7 @@ mod labels;
 mod marks;
 mod normalize;
 mod numeric;
+mod pages;
 mod parse;
 mod preparation;
 pub mod presentation;

@@ -1,5 +1,6 @@
 //! Optional drawing links for mechanism arrows. These references carry no
-//! chemical meaning. Stored endpoints are reconciled before history/export.
+//! chemical meaning. Editing transactions reconcile linked endpoints; passive
+//! opening, copying, exporting and label refresh retain the authored geometry.
 use crate::{
     arrows::{ArrowStyle, Preset},
     document::{Arrow, Bond, Document, Point},

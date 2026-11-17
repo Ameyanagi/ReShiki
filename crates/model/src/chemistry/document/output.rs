@@ -700,7 +700,9 @@ fn reconstruct(
         }
     }
     let mut document = Document {
-        version: crate::document::EDITOR_BASELINE,
+        // Rebuilding chemistry retains the base's presentation fields, which
+        // still require their validated native feature version.
+        version: base.map_or(crate::document::EDITOR_BASELINE, |doc| doc.version),
         atoms,
         bonds,
         ..base.cloned().unwrap_or_default()

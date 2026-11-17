@@ -345,7 +345,7 @@ async fn chemical_text_matches_former_refresh_first_conversion() {
 }
 
 #[tokio::test]
-async fn chemical_text_refreshes_stale_attached_forward_arrow_like_former_copy() {
+async fn chemical_text_refreshes_hydrogen_cache_without_moving_the_authored_forward_arrow() {
     use crate::arrow_anchors::{Anchor, Target};
     let mut source = rings(true);
     let target = source.atoms[0].id;
@@ -355,28 +355,64 @@ async fn chemical_text_refreshes_stale_attached_forward_arrow_like_former_copy()
         direction: Point::new(1., 0.),
         gap: 0.,
     });
+    for atom in &mut source.atoms {
+        atom.label_h = 0;
+    }
     let before = source.clone();
-    let engine = LocalEngine::default();
+    let engine = LocalEngine::in_process();
     let (format, chemical) = chemical_text_snapshot(&source, &source).unwrap();
     assert_eq!(format, CopyFormat::ChemDoodleReaction);
+    let reaction = chemical.reactions[0].clone();
     let unrefreshed = prepare_as(engine.clone(), chemical.clone(), format, Default::default())
         .await
         .unwrap();
     let direct = prepare_chemical_text(engine.clone(), chemical, format)
         .await
         .unwrap();
-    let reaction = crate::reactions::copy_reaction(&source, &source).unwrap();
     let mut refreshed = export::checked_document(&engine, source.clone())
         .await
         .unwrap();
-    assert_ne!(refreshed.arrows[0].start, source.arrows[0].start);
-    refreshed.reactions = reaction.into_iter().collect();
-    let former = prepare_as(engine, refreshed, format, Default::default())
+    assert!(
+        refreshed
+            .atoms
+            .iter()
+            .zip(&source.atoms)
+            .any(|(actual, original)| actual.label_h != original.label_h)
+    );
+    assert_eq!(refreshed.arrows, source.arrows);
+    assert_eq!(refreshed.annotations, source.annotations);
+    assert_eq!(refreshed.graphics, source.graphics);
+    for (actual, original) in refreshed.atoms.iter().zip(&source.atoms) {
+        let mut expected = original.clone();
+        expected.label_h = actual.label_h;
+        expected.cip_label.clone_from(&actual.cip_label);
+        assert_eq!(actual, &expected);
+    }
+    refreshed.reactions = vec![reaction.clone()];
+    let checked_copy = prepare_as(engine, refreshed, format, Default::default())
         .await
         .unwrap();
-    assert_ne!(direct.text(), unrefreshed.text());
-    assert_eq!(direct.text(), former.text());
-    assert_eq!(direct.notices, former.notices);
+    assert_eq!(direct.text(), unrefreshed.text());
+    assert_eq!(direct.text(), checked_copy.text());
+    assert_eq!(direct.notices, checked_copy.notices);
+    let json: serde_json::Value = serde_json::from_str(direct.text().unwrap()).unwrap();
+    let arrow = &source.arrows[0];
+    for (key, coordinate) in [
+        ("x1", arrow.start.x),
+        ("y1", arrow.start.y),
+        ("x2", arrow.end.x),
+        ("y2", arrow.end.y),
+    ] {
+        assert_eq!(json["s"][0][key].as_f64(), Some(f64::from(coordinate)));
+    }
+    assert_eq!(
+        json["s"][0]["rs"],
+        serde_json::json!([format!("a{}", reaction.reactants[0].atoms[0])])
+    );
+    assert_eq!(
+        json["s"][0]["ps"],
+        serde_json::json!([format!("a{}", reaction.products[0].atoms[0])])
+    );
     assert_eq!(source, before);
 }
 

@@ -80,6 +80,7 @@ Extensions accepted by `file_open` and `file_save`; a dash means unsupported.
 | `.rsmi` | `rsmi` | `rsmi` |
 | `.cdxml` | `cdxml` | `cdxml` |
 | `.cdx` | `cdx` | `cdx` |
+| `.cds` | `cdx` | — |
 | `.smi` | `smiles` | `smiles` |
 | `.smiles` | `smiles` | `smiles` |
 | `.inchi` | `inchi` | `inchi` |

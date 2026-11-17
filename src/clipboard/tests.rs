@@ -311,7 +311,7 @@ async fn vector_only_paste_restores_the_drawing_and_paste_picture_refuses_it() {
         assert!(restored.native, "{format}");
         assert_eq!(restored.document.all_ids(), source.all_ids());
         assert_eq!(restored.warnings, [RESTORED_DRAWING_NOTICE]);
-        let error = import_representation(LocalEngine::in_process(), item.clone(), true)
+        let error = paste_representation(LocalEngine::in_process(), item.clone(), true)
             .await
             .unwrap_err();
         assert_eq!(
@@ -374,7 +374,7 @@ async fn vector_paste_distinguishes_unreadable_drawings_from_plain_pictures() {
             let bytes = clipboard_figure(&source, format, Pictures::default(), drawing)
                 .unwrap()
                 .bytes;
-            let error = import_representation(
+            let error = paste_representation(
                 LocalEngine::in_process(),
                 Representation::new(kind, &bytes),
                 false,
@@ -1724,6 +1724,200 @@ async fn failed_native_cdx_and_cdxml_fall_through_and_newer_drawing_error_is_ret
 }
 
 #[tokio::test]
+async fn unsupported_chemdraw_clipboard_keeps_its_diagnostic_instead_of_generating_a_new_layout() {
+    let xml =
+        include_bytes!("../../tests/fixtures/chemdraw-clipboard-layout/unsupported-graphic.cdxml");
+    let binary =
+        include_bytes!("../../tests/fixtures/chemdraw-clipboard-layout/unsupported-graphic.cdx");
+    for drawing in [
+        Representation::new("chemical/x-cdxml", xml),
+        Representation::new("com.revvity.chemdraw.cdx-clipboard", binary),
+    ] {
+        let original_error =
+            paste_representation(LocalEngine::in_process(), drawing.clone(), false)
+                .await
+                .unwrap_err();
+        assert!(original_error.contains("Shadowed/shaded rectangle styles are not supported yet"));
+        for (kind, text) in [
+            (
+                "org.opensmiles.smiles",
+                include_str!("../../tests/fixtures/chemdraw-clipboard-layout/misleading.smiles"),
+            ),
+            ("public.utf8-plain-text", "CCO.CCN"),
+            ("public.utf8-plain-text", "CCO>>CCN"),
+            (
+                "public.utf8-plain-text",
+                "InChI=1S/C2H6O/c1-2-3/h3H,2H2,1H3",
+            ),
+        ] {
+            for picture in [false, true] {
+                let mut representations =
+                    vec![drawing.clone(), Representation::new(kind, text.as_bytes())];
+                if picture {
+                    representations.push(paste_test_picture("public.png", image::ImageFormat::Png));
+                }
+                let result = paste_packet_with_warnings(
+                    LocalEngine::in_process(),
+                    Packet {
+                        generation: Some("test".into()),
+                        representations,
+                    },
+                    false,
+                )
+                .await;
+                if picture {
+                    let pasted = result.unwrap();
+                    assert!(pasted.document.atoms.is_empty());
+                    assert_eq!(pasted.document.graphics.len(), 1);
+                    assert!(pasted.document.graphics[0].picture.is_some());
+                    assert_eq!(pasted.warnings, [PICTURE_FALLBACK_NOTICE]);
+                } else {
+                    assert_eq!(result.unwrap_err(), original_error, "{kind}: {text}");
+                }
+            }
+        }
+    }
+}
+
+#[tokio::test]
+async fn successful_chemdraw_clipboard_keeps_the_complete_source_geometry_over_identity_text() {
+    let xml = include_bytes!("../../tests/fixtures/chemdraw-clipboard-layout/valid-layout.cdxml");
+    let binary = include_bytes!("../../tests/fixtures/chemdraw-clipboard-layout/valid-layout.cdx");
+    for drawing in [
+        Representation::new("chemical/x-cdxml", xml),
+        Representation::new("com.revvity.chemdraw.cdx-clipboard", binary),
+    ] {
+        let expected = paste_representation(LocalEngine::in_process(), drawing.clone(), false)
+            .await
+            .unwrap();
+        assert_eq!(expected.document.atoms.len(), 6);
+        assert_eq!(expected.document.arrows.len(), 1);
+        assert_eq!(expected.document.annotations.len(), 2);
+        assert_eq!(expected.document.graphics.len(), 2);
+        let actual = paste_packet_with_warnings(
+            LocalEngine::in_process(),
+            Packet {
+                generation: Some("test".into()),
+                representations: vec![
+                    Representation::new("org.opensmiles.smiles", b"CCO.CCN"),
+                    drawing,
+                ],
+            },
+            false,
+        )
+        .await
+        .unwrap();
+        assert_eq!(actual.document, expected.document);
+        assert_eq!(actual.warnings, expected.warnings);
+    }
+}
+
+#[tokio::test]
+async fn failed_rich_drawing_still_allows_coordinate_bearing_plain_text() {
+    let xml = include_str!("../../tests/fixtures/chemdraw-clipboard-layout/valid-layout.cdxml");
+    let source = paste_representation(
+        LocalEngine::in_process(),
+        Representation::new("chemical/x-cdxml", xml.as_bytes()),
+        false,
+    )
+    .await
+    .unwrap()
+    .document;
+    let mol = crate::formats::write_with_engine(source.clone(), "mol", &LocalEngine::in_process())
+        .await
+        .unwrap();
+    let json = serde_json::to_vec(&source.current()).unwrap();
+    let prefixed_json = format!(
+        "{}{}",
+        editing::CLIPBOARD_PREFIX,
+        std::str::from_utf8(&json).unwrap()
+    );
+    for bytes in [xml.as_bytes(), &mol, &json, prefixed_json.as_bytes()] {
+        let text = Representation::new("public.utf8-plain-text", bytes);
+        let expected = paste_representation(LocalEngine::in_process(), text.clone(), false)
+            .await
+            .unwrap();
+        let actual = paste_packet_with_warnings(
+            LocalEngine::in_process(),
+            Packet {
+                generation: Some("test".into()),
+                representations: vec![
+                    Representation::new("com.revvity.chemdraw.cdx-clipboard", b"damaged CDX"),
+                    Representation::new("org.opensmiles.smiles", b"CCO.CCN"),
+                    text,
+                ],
+            },
+            false,
+        )
+        .await
+        .unwrap();
+        assert_eq!(actual.document, expected.document);
+        assert_eq!(actual.warnings, expected.warnings);
+    }
+}
+
+#[tokio::test]
+async fn failed_plain_text_drawing_or_mol_keeps_its_error_over_a_failed_picture() {
+    for drawing in [
+        Representation::new("com.mdli.molfile", b"invalid MOL data"),
+        Representation::new("public.utf8-plain-text", b"<CDXML><bad"),
+        Representation::new("public.utf8-plain-text", b"{\"version\":999999}"),
+    ] {
+        let original_error =
+            paste_representation(LocalEngine::in_process(), drawing.clone(), false)
+                .await
+                .unwrap_err();
+        let mut representations = vec![
+            drawing,
+            Representation::new("public.png", b"invalid picture"),
+        ];
+        // MOL precedes identity text; the sole UTF8 representation above is
+        // itself the drawing in the other cases.
+        if representations[0].kind == "com.mdli.molfile" {
+            representations.push(Representation::new("org.opensmiles.smiles", b"CCO.CCN"));
+        }
+        let error = paste_packet_with_warnings(
+            LocalEngine::in_process(),
+            Packet {
+                generation: Some("test".into()),
+                representations,
+            },
+            false,
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(error, original_error);
+    }
+}
+
+#[tokio::test]
+async fn genuine_smiles_only_clipboards_still_generate_a_molecular_drawing() {
+    for kind in ["org.opensmiles.smiles", "public.utf8-plain-text"] {
+        let pasted = paste_packet_with_warnings(
+            LocalEngine::in_process(),
+            Packet {
+                generation: Some("test".into()),
+                representations: vec![Representation::new(kind, b"CCO.CCN")],
+            },
+            false,
+        )
+        .await
+        .unwrap();
+        assert_eq!(pasted.document.atoms.len(), 6);
+        assert_eq!(pasted.document.bonds.len(), 4);
+        assert!(pasted.document.arrows.is_empty());
+        assert!(
+            pasted
+                .document
+                .atoms
+                .iter()
+                .any(|atom| atom.position != crate::document::Point::default())
+        );
+        assert!(pasted.warnings.is_empty());
+    }
+}
+
+#[tokio::test]
 async fn text_only_clipboard_reports_no_picture_for_picture_paste() {
     for (kind, image_only, expected) in [
         ("public.text", true, "No picture on the clipboard"),
@@ -1782,7 +1976,9 @@ async fn lazy_paste_reads_only_until_success_and_explicit_picture_paste_ignores_
                     representations: item.into_iter().collect(),
                 }))
             },
-            |item| paste_representation(Default::default(), item, picture_only),
+            |item, drawing_failed| {
+                import_candidate(Default::default(), item, picture_only, drawing_failed)
+            },
         )
         .await
         .unwrap()
@@ -1829,7 +2025,7 @@ async fn failed_office_drawing_retries_standalone_native_without_repeating_offic
                 }],
             }))
         },
-        |item| paste_representation(Default::default(), item, false),
+        |item, drawing_failed| import_candidate(Default::default(), item, false, drawing_failed),
     )
     .await
     .unwrap()
@@ -1865,7 +2061,7 @@ async fn failed_transport_alias_is_consumed_once_before_the_next_alias() {
                 representations: item.into_iter().collect(),
             }))
         },
-        |item| paste_representation(Default::default(), item, false),
+        |item, drawing_failed| import_candidate(Default::default(), item, false, drawing_failed),
     )
     .await
     .unwrap()
@@ -1934,7 +2130,7 @@ async fn later_clipboard_owner_failure_keeps_the_newer_drawing_diagnostic() {
                 Err("The clipboard owner is unavailable".into())
             })
         },
-        |item| paste_representation(Default::default(), item, false),
+        |item, drawing_failed| import_candidate(Default::default(), item, false, drawing_failed),
     )
     .await
     .unwrap_err();
@@ -1964,7 +2160,7 @@ async fn empty_clipboard_drawing_falls_through_to_picture() {
         assert!(pasted.document.atoms.is_empty());
         assert_eq!(pasted.document.graphics.len(), 1);
         assert!(pasted.document.graphics[0].picture.is_some());
-        assert!(pasted.warnings.is_empty());
+        assert_eq!(pasted.warnings, [PICTURE_FALLBACK_NOTICE]);
         let error = paste_packet(
             Default::default(),
             Packet {
@@ -2006,9 +2202,12 @@ async fn changed_generation_aborts_before_importing_the_replacement_candidate() 
                     representations: vec![item],
                 }))
             },
-            |_| {
+            |_, _| {
                 imports += 1;
-                std::future::ready(Err::<(), _>("damaged CDX".into()))
+                std::future::ready(Candidate::<()> {
+                    drawing: true,
+                    result: Err("damaged CDX".into()),
+                })
             },
         )
         .await
@@ -2035,10 +2234,11 @@ async fn native_generation_change_error_overrides_an_earlier_update_diagnostic()
                 Err(priority::CLIPBOARD_CHANGED.into())
             })
         },
-        |_| {
-            std::future::ready(Err::<(), _>(
-                "A newer version of ReShiki is needed; Update ReShiki".into(),
-            ))
+        |_, _| {
+            std::future::ready(Candidate::<()> {
+                drawing: true,
+                result: Err("A newer version of ReShiki is needed; Update ReShiki".into()),
+            })
         },
     )
     .await

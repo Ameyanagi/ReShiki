@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CDXML BondLength="24" LabelFont="3" LabelSize="10" LabelFace="0" CaptionFont="3" CaptionSize="10" CaptionFace="0">
+  <fonttable>
+    <font id="3" name="Arial" charset="utf-8" />
+  </fonttable>
+  <page id="1" BoundingBox="-32 -16 32 32">
+    <fragment id="2">
+      <n id="3" Element="8" p="-16 0" NumHydrogens="1" xyz="-0.00002899169921875 0 0.0000152587890625" />
+      <n id="4" Element="6" p="0 0" xyz="0 0 0" />
+      <b id="5" B="3" E="4" Order="1" />
+    </fragment>
+    <t id="6" p="-16 16">
+      <s>XYZ control</s>
+    </t>
+  </page>
+</CDXML>

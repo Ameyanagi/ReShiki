@@ -139,8 +139,7 @@ async fn manual_profile_polyalanine_insert_stages() -> anyhow::Result<()> {
         elapsed(&mut stages, "background_labels", started);
         let started = Instant::now();
         refresh.apply(&mut app.tab.doc);
-        app.settle_label_layout();
-        elapsed(&mut stages, "settle_labels", started);
+        elapsed(&mut stages, "apply_labels", started);
         let started = Instant::now();
         assert!(!scene::primitives(&app.tab.doc).is_empty());
         elapsed(&mut stages, "labelled_scene", started);

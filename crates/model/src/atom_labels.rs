@@ -1419,11 +1419,10 @@ pub fn clear_computed(doc: &mut Document) {
         b.cip_label = None;
         b.undefined_stereo = false;
     }
-    crate::arrow_anchors::reconcile(doc);
 }
+/// Refresh derived labels without changing the authored drawing geometry.
 pub fn refresh_computed(doc: &mut Document, checked: &Document) {
     copy_computed(doc, checked);
-    crate::arrow_anchors::reconcile(doc);
 }
 /// Copies `checked`'s computed H counts and stereo labels by atom id and bond,
 /// without moving anything that depends on their ink.

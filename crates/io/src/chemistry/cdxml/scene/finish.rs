@@ -134,7 +134,7 @@ impl CdxmlScene {
     /// Apply the original full-CIP reconstruction, then the actual response
     /// boundary (Value f64 -> Document f32). The prepared conformer is retained
     /// at f64 throughout chemical reconstruction. Errors publish no drawing.
-    pub fn into_document(self) -> Result<ImportedCdxml> {
+    pub fn into_document(mut self) -> Result<ImportedCdxml> {
         let planar = !self.conformer_3d.unwrap_or(false);
         let drawing = chemistry::document::for_import_scene(
             &self.molecule,
@@ -144,11 +144,10 @@ impl CdxmlScene {
         let labels = drawing.labels()?;
         let mut molecule = self.molecule.clone();
         let linked = self.base.property_captions.len();
+        let mut notices = std::mem::take(&mut self.notices);
         let mut document = drawing.finish_with(labels, |document| self.restore(document))?;
         let restored = planar && crate::haworth::interchange::restore(&mut document);
-        let mut notices: Vec<_> = chemistry::drop_added_axis_wedges(&mut document, &molecule)
-            .into_iter()
-            .collect();
+        notices.extend(chemistry::drop_added_axis_wedges(&mut document, &molecule));
         if molecule
             .state
             .metadata
@@ -343,7 +342,8 @@ impl CdxmlScene {
                     && whole.first().is_some_and(|first| claimed.insert(*first))
             })
             .collect();
-        // Imported links show ReShiki's own lines at once, as after an edit.
+        // Source captions and positions stay authoritative during import.
+        // The saved text initializes the link for the next actual edit.
         document.property_captions = links;
         for link in &mut document.property_captions {
             if let Some(caption) = document
@@ -381,8 +381,6 @@ impl CdxmlScene {
             atom.attachment = Some(attachment.kind);
             atom.centroid = attachment.members;
         }
-        // After generic labels, so a generic structure shows no values.
-        crate::linked_properties::reconcile(document, &Default::default());
         Ok(())
     }
 }

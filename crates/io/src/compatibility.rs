@@ -24,6 +24,8 @@ pub fn is_native_extension(extension: &str) -> bool {
 pub fn structure_format(extension: &str) -> Option<&'static str> {
     if is_native_extension(extension) {
         Some("reshiki")
+    } else if extension.eq_ignore_ascii_case("cds") {
+        Some("cdx")
     } else {
         ["mol", "rxn", "rsmi", "cdxml", "cdx", "inchi"]
             .into_iter()

@@ -613,8 +613,8 @@ impl App {
             let mut blank = before.clone();
             blank.clear_content();
             let mut alone = blank.clone();
-            let ids = editing::append(&mut alone, part, Point::default());
-            reshiki::atom_labels::refresh::refresh_edited(&blank, &mut alone);
+            let ids = editing::append_preserving_layout(&mut alone, part, Point::default());
+            reshiki::atom_labels::refresh::refresh_hydrogens(&blank, &mut alone);
             if let Some((lo, _)) = edges(&alone, &ids) {
                 offset = Point::new(
                     drawing.x + before.drawing_style.bond_length_world - lo.x,
@@ -623,7 +623,7 @@ impl App {
                 beside = true;
             }
         }
-        let selected = editing::append(&mut self.tab.doc, part, offset);
+        let selected = editing::append_preserving_layout(&mut self.tab.doc, part, offset);
         if selected.is_empty() || self.tab.doc.validate().is_err() {
             self.tab.doc = before;
             return false;
@@ -632,7 +632,9 @@ impl App {
             self.commit_structure_insert(before, selected);
         } else {
             self.tab.selected = selected;
-            self.changed(before);
+            if !self.adopt_changed_document(before) {
+                return false;
+            }
         }
         true
     }

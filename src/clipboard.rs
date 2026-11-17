@@ -30,6 +30,7 @@ const OVERSIZED_DRAWING_NOTICE: &str =
     "Pictures copied without the editable drawing (too large); pasting into ReShiki still keeps it";
 const RESTORED_DRAWING_NOTICE: &str =
     "Restored the editable drawing from the picture · Paste picture inserts the image instead";
+const PICTURE_FALLBACK_NOTICE: &str = "Editable clipboard data could not be imported; pasted its picture to preserve the original appearance";
 #[cfg(test)]
 mod browser_tests;
 mod copy_as;
@@ -708,8 +709,8 @@ pub async fn paste_with_warnings(
     engine: LocalEngine,
     image_only: bool,
 ) -> Result<PasteOutcome, String> {
-    read_candidates(image_only, read_packet, move |item| {
-        paste_representation(engine.clone(), item, image_only)
+    read_candidates(image_only, read_packet, move |item, drawing_failed| {
+        import_candidate(engine.clone(), item, image_only, drawing_failed)
     })
     .await?
     .ok_or_else(|| {
@@ -759,14 +760,15 @@ async fn read_candidates<T, Read, ReadFuture, Import, ImportFuture>(
 where
     Read: FnMut(Vec<String>, Vec<String>, bool, Option<String>) -> ReadFuture,
     ReadFuture: std::future::Future<Output = Result<Packet, String>>,
-    Import: FnMut(Representation) -> ImportFuture,
-    ImportFuture: std::future::Future<Output = Result<T, String>>,
+    Import: FnMut(Representation, bool) -> ImportFuture,
+    ImportFuture: std::future::Future<Output = Candidate<T>>,
 {
     let mut formats: Vec<_> = priority::read_formats(&[], picture_only)?
         .into_iter()
         .map(str::to_owned)
         .collect();
     let mut failure = None;
+    let mut drawing_failure = None;
     let mut skip_sources = Vec::new();
     let mut skip_embedded = false;
     let mut generation: Option<String> = None;
@@ -825,15 +827,31 @@ where
             formats.retain(|kind| *kind != item.kind);
         }
         let kind = item.kind.clone();
-        match import(item).await {
-            Ok(value) => return Ok(Some(value)),
-            Err(error) => remember_failure(&mut failure, &kind, error),
+        let candidate = import(item, drawing_failure.is_some()).await;
+        match candidate.result {
+            Ok(Some(value)) => return Ok(Some(value)),
+            Ok(None) => {}
+            Err(error) => {
+                let failures = if candidate.drawing {
+                    &mut drawing_failure
+                } else {
+                    &mut failure
+                };
+                remember_failure(failures, &kind, error);
+            }
         }
     }
-    match failure {
+    match drawing_failure.or(failure) {
         Some((_, error)) => Err(error),
         None => Ok(None),
     }
+}
+
+/// A skipped candidate would generate fresh molecular coordinates after a
+/// richer drawing failed; it must not replace that drawing's diagnostic.
+struct Candidate<T> {
+    drawing: bool,
+    result: Result<Option<T>, String>,
 }
 
 fn remember_failure(failure: &mut Option<(usize, String)>, kind: &str, error: String) {
@@ -865,11 +883,19 @@ fn remember_failure(failure: &mut Option<(usize, String)>, kind: &str, error: St
 /// Read only an explicitly requested clipboard image, without inserting it or
 /// falling back to chemical/text interpretation.
 pub async fn picture() -> Result<Option<crate::pictures::Picture>, String> {
-    read_candidates(true, read_packet, |item| async move {
-        let data = item.bytes()?;
-        crate::task::spawn_blocking(move || crate::pictures::Picture::import(&data))
-            .await
-            .map_err(|e| e.to_string())?
+    read_candidates(true, read_packet, |item, _| async move {
+        let result = async {
+            let data = item.bytes()?;
+            crate::task::spawn_blocking(move || crate::pictures::Picture::import(&data))
+                .await
+                .map_err(|e| e.to_string())?
+                .map(Some)
+        }
+        .await;
+        Candidate {
+            drawing: false,
+            result,
+        }
     })
     .await
 }
@@ -902,7 +928,9 @@ async fn paste_packet_with_warnings(
                 generation: Some("test".into()),
             }))
         },
-        move |item| paste_representation(engine.clone(), item, image_only),
+        move |item, drawing_failed| {
+            import_candidate(engine.clone(), item, image_only, drawing_failed)
+        },
     )
     .await?
     .ok_or_else(|| {
@@ -915,120 +943,154 @@ async fn paste_packet_with_warnings(
     })
 }
 
+#[cfg(test)]
 async fn paste_representation(
     engine: LocalEngine,
     item: Representation,
     image_only: bool,
 ) -> Result<PasteOutcome, String> {
-    let outcome = import_representation(engine, item, image_only).await?;
-    if outcome.document.all_ids().is_empty() {
-        return Err("The clipboard drawing is empty".into());
-    }
-    Ok(outcome)
+    import_candidate(engine, item, image_only, false)
+        .await
+        .result?
+        .ok_or_else(|| "The clipboard drawing is empty".into())
 }
 
-async fn import_representation(
+async fn import_candidate(
     engine: LocalEngine,
     item: Representation,
     image_only: bool,
-) -> Result<PasteOutcome, String> {
-    let data = item.bytes()?;
-    if item.kind == NATIVE || item.kind == "dev.moruno.drawing" {
-        return crate::task::spawn_blocking(move || Document::from_json(&data))
-            .await
-            .map_err(|e| e.to_string())?
-            .map(PasteOutcome::native);
-    }
-    if matches!(
+    drawing_failed: bool,
+) -> Candidate<PasteOutcome> {
+    let mut drawing = matches!(
         item.kind.as_str(),
-        "public.png" | "public.tiff" | "public.jpeg" | "org.webmproject.webp" | "public.webp"
-    ) {
-        return crate::task::spawn_blocking(move || {
-            let warning = if item.kind == "public.png" && !image_only {
-                match payload::read(&data) {
-                    Some(Ok(document)) => {
-                        return Ok(PasteOutcome {
-                            document,
-                            warnings: vec![RESTORED_DRAWING_NOTICE.into()],
-                            native: true,
-                        });
+        NATIVE | "dev.moruno.drawing" | "com.mdli.molfile"
+    ) || item.kind.contains("cdx")
+        || item.kind == "application/x-chemdraw";
+    let result = async {
+        let data = item.bytes()?;
+        if item.kind == NATIVE || item.kind == "dev.moruno.drawing" {
+            return crate::task::spawn_blocking(move || Document::from_json(&data))
+                .await
+                .map_err(|e| e.to_string())?
+                .map(PasteOutcome::native)
+                .map(Some);
+        }
+        if matches!(
+            item.kind.as_str(),
+            "public.png" | "public.tiff" | "public.jpeg" | "org.webmproject.webp" | "public.webp"
+        ) {
+            return crate::task::spawn_blocking(move || {
+                let warning = if item.kind == "public.png" && !image_only {
+                    match payload::read(&data) {
+                        Some(Ok(document)) => {
+                            return Ok(Some(PasteOutcome {
+                                document,
+                                warnings: vec![RESTORED_DRAWING_NOTICE.into()],
+                                native: true,
+                            }));
+                        }
+                        Some(Err(error)) => Some(format!(
+                            "Pasted as a picture: its editable drawing could not be read ({error})"
+                        )),
+                        None => None,
                     }
-                    Some(Err(error)) => Some(format!(
-                        "Pasted as a picture: its editable drawing could not be read ({error})"
-                    )),
-                    None => None,
+                } else {
+                    None
+                };
+                let mut outcome = PasteOutcome::from(crate::pictures::clipboard_document(&data)?);
+                outcome.warnings.extend(warning);
+                if drawing_failed && !image_only {
+                    outcome.warnings.push(PICTURE_FALLBACK_NOTICE.into());
                 }
-            } else {
-                None
-            };
-            let mut outcome = PasteOutcome::from(crate::pictures::clipboard_document(&data)?);
-            outcome.warnings.extend(warning);
-            Ok(outcome)
-        })
-        .await
-        .map_err(|e| e.to_string())?;
-    }
-    if !image_only && matches!(item.kind.as_str(), "com.adobe.pdf" | "public.svg-image") {
-        let format = if item.kind == "com.adobe.pdf" {
-            "PDF"
-        } else {
-            "SVG"
-        };
-        if let Some(result) = crate::task::spawn_blocking(move || payload::read(&data))
+                Ok(Some(outcome))
+            })
             .await
-            .map_err(|e| e.to_string())?
-        {
-            return result
+            .map_err(|e| e.to_string())?;
+        }
+        if !image_only && matches!(item.kind.as_str(), "com.adobe.pdf" | "public.svg-image") {
+            let format = if item.kind == "com.adobe.pdf" {
+                "PDF"
+            } else {
+                "SVG"
+            };
+            if let Some(result) = crate::task::spawn_blocking(move || payload::read(&data))
+                .await
+                .map_err(|e| e.to_string())?
+            {
+                drawing = true;
+                return result
                 .map(|document| PasteOutcome {
                     document,
                     warnings: vec![RESTORED_DRAWING_NOTICE.into()],
                     native: true,
                 })
+                .map(Some)
                 .map_err(|error| {
                     format!(
                         "This {format} carries a ReShiki drawing that could not be read: {error}"
                     )
                 });
-        }
-        return Err(
+            }
+            return Err(
             "Paste supports PNG, JPEG, TIFF and WebP pictures. Export this PDF or SVG to PNG first"
                 .into(),
         );
+        }
+        let request = if item.kind.contains("cdxml") {
+            Request::import(
+                "cdxml",
+                std::str::from_utf8(&data).map_err(|_| "Invalid XML text encoding")?,
+            )
+        } else if item.kind.contains("cdx") || item.kind == "application/x-chemdraw" {
+            Request::import("cdx", &item.data)
+        } else if item.kind == "com.mdli.molfile" {
+            Request::import("mol", &mol_text(&data)?)
+        } else if matches!(
+            item.kind.as_str(),
+            "public.utf8-plain-text" | "org.opensmiles.smiles"
+        ) {
+            let text = std::str::from_utf8(&data).map_err(|_| "Invalid clipboard text encoding")?;
+            if let Some(json) = editing::clipboard_json(text)
+                .or_else(|| text.trim_start().starts_with('{').then_some(text))
+            {
+                drawing = true;
+                return Document::from_json(json.as_bytes())
+                    .map(PasteOutcome::native)
+                    .map(Some);
+            }
+            text_request(text)
+        } else {
+            return Err(
+            "Paste supports PNG, JPEG, TIFF and WebP pictures. Export this PDF or SVG to PNG first"
+                .into(),
+        );
+        };
+        drawing = matches!(
+            request.format.as_deref(),
+            Some("cdxml" | "cdx" | "mol" | "rxn" | "reshiki")
+        );
+        if drawing_failed && !drawing {
+            return Ok(None);
+        }
+        let response = engine.request(request).await?;
+        let doc = response
+            .document
+            .ok_or("No drawing returned from the clipboard")?;
+        doc.validate()?;
+        Ok(Some(PasteOutcome {
+            document: doc,
+            warnings: response.warnings,
+            native: false,
+        }))
     }
-    let request = if item.kind.contains("cdxml") {
-        Request::import(
-            "cdxml",
-            std::str::from_utf8(&data).map_err(|_| "Invalid XML text encoding")?,
-        )
-    } else if item.kind.contains("cdx") || item.kind == "application/x-chemdraw" {
-        Request::import("cdx", &item.data)
-    } else if item.kind == "com.mdli.molfile" {
-        Request::import("mol", &mol_text(&data)?)
-    } else if matches!(
-        item.kind.as_str(),
-        "public.utf8-plain-text" | "org.opensmiles.smiles"
-    ) {
-        let text = std::str::from_utf8(&data).map_err(|_| "Invalid clipboard text encoding")?;
-        if let Some(json) = editing::clipboard_json(text) {
-            return Document::from_json(json.as_bytes()).map(PasteOutcome::native);
+    .await;
+    let result = result.and_then(|outcome| match outcome {
+        Some(outcome) if outcome.document.all_ids().is_empty() => {
+            Err("The clipboard drawing is empty".into())
         }
-        text_request(text)
-    } else {
-        return Err(
-            "Paste supports PNG, JPEG, TIFF and WebP pictures. Export this PDF or SVG to PNG first"
-                .into(),
-        );
-    };
-    let response = engine.request(request).await?;
-    let doc = response
-        .document
-        .ok_or("No drawing returned from the clipboard")?;
-    doc.validate()?;
-    Ok(PasteOutcome {
-        document: doc,
-        warnings: response.warnings,
-        native: false,
-    })
+        outcome => Ok(outcome),
+    });
+    Candidate { drawing, result }
 }
 
 #[cfg(test)]

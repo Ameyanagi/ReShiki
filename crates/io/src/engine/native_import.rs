@@ -340,7 +340,9 @@ fn prepare(request: Request) -> Result<Preparation, Error> {
             }
             if !variables.is_empty() {
                 let prepared = cdxml::prepare_drawing(&xml)?;
-                let mut document = cdxml::assemble_cdxml(&prepared)?.into_unchecked_drawing()?;
+                let scene = cdxml::assemble_cdxml(&prepared)?;
+                warnings.extend(scene.notices.iter().cloned());
+                let mut document = scene.into_unchecked_drawing()?;
                 variables
                     .restore(&prepared, &mut document)
                     .map_err(|e| Error::Binary(e.to_string()))?;
@@ -351,6 +353,7 @@ fn prepare(request: Request) -> Result<Preparation, Error> {
                 Ok(prepared) => prepared,
                 Err(error) if matches!(error.cause, cdxml::PreparationCause::Sanitization(_)) => {
                     let scene = cdxml::assemble_cdxml(&cdxml::prepare_drawing(&xml)?)?;
+                    warnings.extend(scene.notices.iter().cloned());
                     let document = scene.into_unchecked_drawing()?;
                     warnings.push(format!(
                         "Drawing imported; chemical assignments need review: {}",
@@ -362,6 +365,7 @@ fn prepare(request: Request) -> Result<Preparation, Error> {
             };
             if styled_coordination_changed(&prepared) {
                 let scene = cdxml::assemble_cdxml(&cdxml::prepare_drawing(&xml)?)?;
+                warnings.extend(scene.notices.iter().cloned());
                 warnings.push("Drawing imported; styled metal contacts retained as drawn. Coordination assignments need review; molecular properties are unavailable".into());
                 return Ok(Preparation::Drawing(
                     Box::new(scene.into_unchecked_drawing()?),

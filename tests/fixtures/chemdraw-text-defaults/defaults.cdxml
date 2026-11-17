@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CDXML BondLength="14.4" LabelFont="1002" LabelSize="18" LabelFace="3"
+ CaptionFont="1001" CaptionSize="12" CaptionFace="2" BondSpacing="18"
+ LineWidth="0.6" BoldWidth="2" MarginWidth="1.6" HashSpacing="2.5">
+  <fonttable>
+    <font id="1001" name="Arial" charset="utf-8"/>
+    <font id="1002" name="Times New Roman" charset="utf-8"/>
+  </fonttable>
+  <page id="1">
+    <fragment id="2">
+      <n id="3" p="10 20"/>
+      <n id="4" p="24.4 20" Element="8" NumHydrogens="1">
+        <t id="6"><s>OH</s></t>
+      </n>
+      <b id="5" B="3" E="4"/>
+    </fragment>
+    <t id="7" p="10 60"><s>Inherited caption</s></t>
+  </page>
+</CDXML>

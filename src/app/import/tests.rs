@@ -471,6 +471,75 @@ fn mixed_empty_batch_is_rejected_without_inserting_any_files() {
 }
 
 #[test]
+fn inserting_a_stored_drawing_preserves_both_source_and_destination_layouts() {
+    let source = Document::from_json(include_bytes!(
+        "../../../tests/fixtures/passive-drawing-geometry/unsettled-native.rsk"
+    ))
+    .unwrap();
+    let mut app = ready();
+    app.tab.doc = source.clone();
+    app.viewport = iced::Size::new(1040., 680.);
+    let before = app.tab.doc.clone();
+    app.insert_batch(Batch {
+        label: "authored drawing".into(),
+        drawings: vec![source.clone()],
+        warnings: vec![],
+    });
+    assert!(!app.error, "{}", app.status);
+    assert_eq!(&app.tab.doc.arrows[..before.arrows.len()], &before.arrows);
+    assert_eq!(
+        &app.tab.doc.annotations[..before.annotations.len()],
+        &before.annotations
+    );
+    let inserted = reshiki::editing::selection(&app.tab.doc, &app.tab.selected);
+    assert_eq!(inserted.atoms.len(), source.atoms.len());
+    assert_eq!(inserted.arrows.len(), source.arrows.len());
+    assert_eq!(inserted.annotations.len(), source.annotations.len());
+    let offset = inserted.atoms[0]
+        .position
+        .offset(-source.atoms[0].position.x, -source.atoms[0].position.y);
+    let arrow_points = |arrow: &reshiki::document::Arrow| {
+        let mut points = vec![arrow.start, arrow.end];
+        points.extend(arrow.control);
+        if let Some(controls) = arrow.cubic {
+            points.extend(controls);
+        }
+        for node in &arrow.nodes {
+            points.push(node.point);
+            points.extend(node.controls);
+        }
+        points
+    };
+    for (actual, authored) in inserted.arrows.iter().zip(&source.arrows) {
+        let actual = arrow_points(actual);
+        let authored = arrow_points(authored);
+        assert_eq!(actual.len(), authored.len());
+        for (actual, authored) in actual.iter().zip(authored) {
+            assert!(actual.distance(authored.offset(offset.x, offset.y)) < 0.001);
+        }
+    }
+    for (actual, authored) in inserted.annotations.iter().zip(&source.annotations) {
+        assert_eq!(actual.text, authored.text);
+        assert_eq!(actual.format, authored.format);
+        assert!(
+            actual
+                .position
+                .distance(authored.position.offset(offset.x, offset.y))
+                < 0.001
+        );
+    }
+    assert_eq!(inserted.molecule_names.len(), source.molecule_names.len());
+    assert_eq!(
+        inserted.property_captions.len(),
+        source.property_captions.len()
+    );
+    assert_eq!(inserted.arrow_labels.len(), source.arrow_labels.len());
+    assert_eq!(app.tab.history.undo_frames().count(), 1);
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+}
+
+#[test]
 fn stale_import_does_not_release_a_new_documents_operation() {
     let mut app = ready();
     let ticket = Ticket {

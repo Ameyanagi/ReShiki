@@ -157,20 +157,18 @@ pub(crate) struct Source {
     pub(crate) bytes: usize,
 }
 
-/// Finalizes an engine import's drawing exactly as `App::structure_replaced`
-/// (src/app/engine_jobs.rs) does for a new, empty drawing, minus the history
-/// step: reconcile against an empty document, commit into a discarded
-/// [`History`] (which clears computed labels when the chemistry changed),
-/// then copy the response's computed labels back.
+/// Adopt the validated engine snapshot without edit reconciliation, then keep
+/// its computed labels after the discarded import-history commit.
 #[doc(hidden)]
 pub fn finalize(response: &Document) -> Result<Document, Rejection> {
-    let mut doc = response.clone();
-    transaction::reconcile(&mut doc, Document::default())?.commit(
+    response.validate().map_err(Rejection::Invalid)?;
+    let mut doc = Document::default();
+    transaction::replace(&mut doc, response.clone()).commit(
         &mut doc,
         &mut History::default(),
         false,
     );
-    atom_labels::refresh_computed(&mut doc, response);
+    atom_labels::copy_computed(&mut doc, response);
     Ok(doc)
 }
 

@@ -784,9 +784,6 @@ impl App {
         for link in &mut self.tab.doc.property_captions {
             link.two_decimal_weight = self.appearance.two_decimal_weight;
         }
-        if self.settles_unchanged(&before) {
-            return;
-        }
         self.prepare_document_change(self.tab.doc != before);
         // Label the edited molecules before reconciling, so the edit's first
         // frame and the layout around it already have their hydrogens.
@@ -814,7 +811,7 @@ impl App {
         mut candidate: Document,
         selected: Vec<u64>,
     ) -> Result<(), String> {
-        if candidate == self.tab.doc && self.settles_unchanged(&candidate) {
+        if candidate == self.tab.doc {
             self.tab.selected = selected;
             return Ok(());
         }
@@ -851,15 +848,28 @@ impl App {
         self.prepare_document_change(true);
         self.commit_changed(reconciled, false);
     }
-    /// A commit that changes nothing, such as applying an unchanged text
-    /// draft, settles a waiting label-layout repair the way closing the
-    /// preview that held it back would, instead of recording it as an edit.
-    fn settles_unchanged(&mut self, before: &Document) -> bool {
-        if !self.label_layout_waiting() || self.tab.doc != *before {
+    /// Adopt an imported or pasted drawing as authored. The edit pipeline's
+    /// repairs belong to editing and Clean Up, not to snapshot adoption.
+    fn adopt_changed_document(&mut self, before: Document) -> bool {
+        if let Err(error) = self.tab.doc.validate() {
+            self.tab.doc = before;
+            let ids: std::collections::HashSet<_> = self.tab.doc.object_ids().collect();
+            self.tab.selected.retain(|id| ids.contains(id));
+            self.error = true;
+            self.status = format!("Could not adopt drawing: {error}");
             return false;
         }
-        self.prepare_document_change(false);
-        self.settle_label_layout();
+        // Publish the same derived H labels used to measure placement, while
+        // retaining every authored endpoint, caption and chemical assignment.
+        reshiki::atom_labels::refresh::refresh_hydrogens(&before, &mut self.tab.doc);
+        let stored = std::mem::replace(&mut self.tab.doc, before);
+        let changed = stored != self.tab.doc;
+        let replacement = reshiki::transaction::replace(&mut self.tab.doc, stored);
+        if changed {
+            self.tab.erase_stroke = false;
+        }
+        self.prepare_document_change(changed);
+        self.commit_changed(replacement, false);
         true
     }
     fn prepare_document_change(&mut self, changed: bool) {
@@ -892,7 +902,6 @@ impl App {
                 })
         });
         let committed = reconciled.commit(&mut self.tab.doc, &mut self.tab.history, continuing);
-        self.label_layout_settled();
         if committed.recorded {
             self.trim_histories(tabs::HISTORY_BYTES);
             self.drawing_revised(committed.chemistry_changed);
@@ -1072,7 +1081,6 @@ impl App {
         let document = (self.tab.id, self.tab.file_epoch);
         let mut task = self.handle(message);
         self.sync_drawing_panel_context();
-        self.settle_deferred_label_layout();
         task = Task::batch([task, self.render_png_preview()]);
         // Any message may change the drawing, some (previews, background
         // labels) without a new revision, so the next view compares afresh.
