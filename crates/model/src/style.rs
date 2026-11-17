@@ -220,6 +220,14 @@ pub fn load_fonts(db: &mut resvg::usvg::fontdb::Database) {
     for source in added_fonts(0) {
         db.load_font_source(source);
     }
+    prefer_added_arial(db);
+}
+
+/// Use an Arial added at runtime instead of the bundled stand-in, for each
+/// weight and style it supplies. A renderer with its own font database calls
+/// this after loading [`added_fonts`].
+pub fn prefer_added_arial(db: &mut resvg::usvg::fontdb::Database) {
+    font::yield_arial(db);
 }
 
 /// Register the bundled Arial-compatible faces when the database lacks Arial.
@@ -236,10 +244,12 @@ pub fn add_font(bytes: Vec<u8>) -> Result<usize, String> {
     let source = resvg::usvg::fontdb::Source::Binary(Arc::new(bytes));
     let mut fonts = FONTS.write().unwrap_or_else(PoisonError::into_inner);
     // Trees parsed earlier keep the database they were laid out with.
-    let ids = Arc::make_mut(&mut fonts.db).load_font_source(source.clone());
+    let db = Arc::make_mut(&mut fonts.db);
+    let ids = db.load_font_source(source.clone());
     if ids.is_empty() {
         return Err("Not a TrueType or OpenType font".into());
     }
+    font::yield_arial(db);
     fonts.names = family_names(&fonts.db);
     for id in &ids {
         let families = fonts.db.face(*id).map(|face| face.families.clone());

@@ -121,6 +121,34 @@ pub(super) fn load_bundled(db: &mut resvg::usvg::fontdb::Database) {
     }
 }
 
+/// Let an Arial added after the bundled faces win: the first of equally good
+/// matches is used, so each bundled face stops answering to `Arial` once
+/// another face supplies its weight and style under that name. It stays the
+/// glyph fallback through [`BUNDLED_FAMILY`].
+pub(super) fn yield_arial(db: &mut resvg::usvg::fontdb::Database) {
+    let named = |face: &resvg::usvg::fontdb::FaceInfo, family: &str| {
+        face.families.iter().any(|(name, _)| name == family)
+    };
+    let stand_ins: Vec<_> = db
+        .faces()
+        .filter(|bundled| {
+            named(bundled, BUNDLED_FAMILY)
+                && named(bundled, "Arial")
+                && db.faces().any(|face| {
+                    !named(face, BUNDLED_FAMILY)
+                        && named(face, "Arial")
+                        && (face.weight, face.style) == (bundled.weight, bundled.style)
+                })
+        })
+        .cloned()
+        .collect();
+    for mut face in stand_ins {
+        db.remove_face(face.id);
+        face.families.retain(|(name, _)| name != "Arial");
+        db.push_face_info(face);
+    }
+}
+
 /// Points along a glyph outline, in font units, with curves sampled.
 #[derive(Default)]
 pub(super) struct Outline {
