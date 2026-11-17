@@ -102,7 +102,6 @@ impl App {
             state.branch.clone_from(&repo.default_branch);
             renamed = true;
         }
-        self.github_refresh(&key);
         self.github.newer.retain(|(other, _), _| *other != key);
         let mut marked = false;
         for found in found {
@@ -134,7 +133,7 @@ impl App {
         let (key, repo_path) = at;
         let path =
             (self.github.root.as_deref()).map(|root| workcopy::working_path(root, key, repo_path));
-        (self.github.unsent.get(key)).is_some_and(|unsent| unsent.contains(repo_path))
+        self.github.unsent(key).contains(repo_path)
             || (self.strip()).any(|tab| tab.path.is_some() && tab.path == path && edited(tab))
     }
 
@@ -213,13 +212,11 @@ impl App {
     }
 
     /// Update: GitHub's newer version replaces the drawing in front as one
-    /// undoable edit and becomes what it is based on.
+    /// undoable edit and becomes what it is based on, once it is written
+    /// over the working copy off the UI thread. That write is refused if
+    /// the file changed here meanwhile, as in another app.
     pub(super) fn github_update(&mut self) -> Task<Message> {
         let front = self.tab.path.clone();
-        // A save made elsewhere since counts as a change here.
-        if let Some((key, _)) = self.github.locate(front.as_deref()) {
-            self.github_refresh(&key);
-        }
         let found = self.github_found(front.as_deref(), |tab| self.edited(tab));
         let (Some(root), Some((key, repo_path)), Some((found, false))) = (
             self.github.root.clone(),
@@ -228,8 +225,8 @@ impl App {
         ) else {
             return Task::none();
         };
-        let Found { theirs, by, .. } = found;
-        let (Some(blob), Some(bytes)) = (theirs.blob, theirs.theirs) else {
+        let (Some(blob), Some(bytes)) = (found.theirs.blob.clone(), found.theirs.theirs.clone())
+        else {
             return Task::none();
         };
         let doc = match Document::from_native_file(&bytes) {
@@ -244,23 +241,74 @@ impl App {
             return Task::none();
         }
         let download = api::Download {
-            commit: theirs.commit,
+            commit: found.theirs.commit.clone(),
             blob,
             bytes,
         };
-        let Some(state) = self.github_state(&key) else {
+        let Some(state) = self.github_state(&key).cloned() else {
             return Task::none();
         };
-        if let Err(error) = workcopy::checkout(&root, &key, state, &repo_path, &download) {
-            self.status = format!("Couldn't update: {error}");
-            self.error = true;
-            return Task::none();
+        let revision = self.tab.revision;
+        // Taken while it is written, so a second Update does nothing.
+        self.github.newer.remove(&(key.clone(), repo_path.clone()));
+        let write = {
+            let (key, repo_path) = (key.clone(), repo_path.clone());
+            move || workcopy::checkout_synced(&root, &key, state, &repo_path, &download)
+        };
+        self.github_write(
+            move || write().map(|(_, file)| file),
+            move |result| {
+                let updating = Box::new(Updating {
+                    doc,
+                    found,
+                    revision,
+                });
+                Action::Updated(key, repo_path, updating, result)
+            },
+        )
+    }
+
+    /// Update's write landed: the drawing's tab shows GitHub's version.
+    pub(super) fn github_updated(
+        &mut self,
+        key: RepoKey,
+        repo_path: String,
+        updating: Updating,
+        written: Result<workcopy::FileState, String>,
+    ) -> Task<Message> {
+        let file = match written {
+            Ok(file) => file,
+            // Changed here meanwhile, as in another app: that change is read,
+            // and GitHub's version waits, now for Review.
+            Err(error) => {
+                self.status = format!("Couldn't update: {error}");
+                self.error = true;
+                let at = (key.clone(), repo_path.clone());
+                self.github.newer.insert(at, updating.found);
+                let read = self.github_scan(&key, Some(repo_path));
+                return Task::batch([read, self.github_wrote()]);
+            }
+        };
+        let (Some(root), Some(state)) = (self.github.root.clone(), self.github_state(&key)) else {
+            return self.github_wrote();
+        };
+        let hash = file.base_hash.clone();
+        state.files.insert(repo_path.clone(), file);
+        self.github.wrote(&key, &repo_path, Some(hash));
+        let path = workcopy::working_path(&root, &key, &repo_path);
+        let tab = (self.strip()).find(|tab| tab.path.as_ref() == Some(&path));
+        if let Some(id) = tab.map(|tab| tab.id) {
+            self.in_tab(id, |app| {
+                let unchanged = app.tab.revision == updating.revision;
+                app.replace_with_stored(updating.doc);
+                // An edit made while it was written stays unsaved, one Undo away.
+                if unchanged {
+                    app.tab.mark_saved(app.tab.doc.clone());
+                }
+            });
         }
-        self.replace_with_stored(doc);
-        self.tab.mark_saved(self.tab.doc.clone());
-        self.github.newer.remove(&(key.clone(), repo_path));
         // `Updated · @alice: Add an ethyl group`
-        self.status = match by {
+        self.status = match updating.found.by {
             Some(by) => {
                 let who = versions::who(by.login.as_deref(), &by.author, self.github.login());
                 format!("Updated · {who}: {}", by.message)
@@ -268,15 +316,23 @@ impl App {
             None => "Updated".into(),
         };
         self.error = false;
-        self.github_refresh(&key);
         // A failed send with nothing left to send is over.
-        if (self.github.unsent.get(&key)).is_none_or(Vec::is_empty) {
+        if self.github.unsent(&key).is_empty() {
             self.github.failed.remove(&key);
         }
         // History lists GitHub's new commit.
         if (self.github.versions.target.as_ref()).is_some_and(|(at, _)| *at == key) {
             self.github.versions.target = None;
         }
-        Task::batch([self.github_persist(&key), self.github_follow()])
+        Task::batch([self.github_keep_state(&key, true), self.github_follow()])
     }
+}
+
+/// What Update shows once its write lands: GitHub's version, as found.
+#[derive(Debug, Clone)]
+pub struct Updating {
+    doc: Document,
+    found: Found,
+    /// The tab's revision when Update was chosen.
+    revision: u64,
 }

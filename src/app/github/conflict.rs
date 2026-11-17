@@ -19,6 +19,18 @@ use reshiki::github::{
 };
 use std::path::PathBuf;
 
+/// A conflict choice, written off the UI thread.
+#[derive(Debug, Clone)]
+pub struct Settled {
+    /// The repository's state as the choice left it.
+    state: workcopy::RepoState,
+    conflict: send::Conflict,
+    /// The file Keep both put yours in.
+    copy: Option<String>,
+    /// What the files the choice touched hold now.
+    read: Vec<(String, Option<String>)>,
+}
+
 #[derive(Debug)]
 pub(in crate::app) struct Review {
     pub(super) key: RepoKey,
@@ -50,8 +62,7 @@ impl App {
             self.github.dialog = Some(Dialog::Conflict(Box::new(review)));
             return Task::batch([meta, start]);
         }
-        self.github_refresh(&key);
-        let unsent = self.github.unsent.get(&key).cloned().unwrap_or_default();
+        let unsent = self.github.unsent(&key);
         let Some(state) = self.github_state(&key) else {
             return Task::none();
         };
@@ -197,8 +208,8 @@ impl App {
         Task::done(Message::GitHub(Action::Settle(key, choice)))
     }
 
-    /// Writes the choice here, shows it in the drawing's tab, then shows the
-    /// next conflict or, after the last, sends.
+    /// Writes the choice here off the UI thread; [`Self::github_settled`]
+    /// goes on once it is written.
     pub(super) fn github_settle(&mut self, key: RepoKey, choice: Choice) -> Task<Message> {
         let Some(root) = self.github.root.clone() else {
             return Task::none();
@@ -212,19 +223,71 @@ impl App {
         else {
             return Task::none();
         };
-        let Some(state) = self.github_state(&key) else {
+        if self.github.settling {
+            return Task::none();
+        }
+        let Some(mut state) = self.github_state(&key).cloned() else {
             return Task::none();
         };
-        let copy = match send::resolve(&root, &key, state, &conflict, choice) {
-            Ok(copy) => copy,
+        self.github.settling = true;
+        let write = {
+            let key = key.clone();
+            move || {
+                let copy = send::resolve(&root, &key, &mut state, &conflict, choice)?;
+                let touched = [Some(conflict.repo_path.clone()), copy.clone()];
+                let read = workcopy::hashes(&root, &key, touched.into_iter().flatten().collect());
+                Ok(Settled {
+                    state,
+                    conflict,
+                    copy,
+                    read,
+                })
+            }
+        };
+        self.github_write(write, move |result| {
+            Action::Settled(key, choice, Box::new(result))
+        })
+    }
+
+    /// The choice is written: it shows in the drawing's tab, then the next
+    /// conflict shows or, after the last, the repository sends.
+    pub(super) fn github_settled(
+        &mut self,
+        key: RepoKey,
+        choice: Choice,
+        written: Result<Settled, String>,
+    ) -> Task<Message> {
+        let Settled {
+            mut state,
+            conflict,
+            copy,
+            read,
+        } = match written {
+            Ok(settled) => settled,
             Err(error) => {
                 self.status = format!("Couldn't keep it: {error}");
                 self.error = true;
-                return Task::none();
+                return self.github_wrote();
             }
         };
+        let (Some(root), Some(live)) = (self.github.root.clone(), self.github_state(&key)) else {
+            return self.github_wrote();
+        };
+        // Only the files the choice touched: the rest may have moved on.
+        for path in [Some(&conflict.repo_path), copy.as_ref()]
+            .into_iter()
+            .flatten()
+        {
+            match state.files.remove(path) {
+                Some(file) => live.files.insert(path.clone(), file),
+                None => live.files.remove(path),
+            };
+        }
+        self.github.seq += 1;
+        let seq = self.github.seq;
+        self.github.hashed(&key, seq, read);
         if let Some(left) = self.github.conflicts.get_mut(&key) {
-            left.remove(0);
+            left.retain(|other| other.repo_path != conflict.repo_path);
         }
         let path = workcopy::working_path(&root, &key, &conflict.repo_path);
         let tab = self
@@ -256,8 +319,7 @@ impl App {
             _ => "Kept GitHub’s".into(),
         };
         self.error = false;
-        self.github_refresh(&key);
-        let persist = self.github_persist(&key);
+        let persist = self.github_keep_state(&key, true);
         let done = match &self.github.dialog {
             Some(Dialog::Conflict(review)) => review.done + 1,
             _ => 0,
@@ -271,7 +333,7 @@ impl App {
             return Task::batch([persist, theirs, self.github_review(key, done)]);
         }
         let close = self.github_close_dialog();
-        let unsent = self.github.unsent.get(&key).cloned().unwrap_or_default();
+        let unsent = self.github.unsent(&key);
         let send = if unsent.is_empty() {
             Task::none()
         } else {

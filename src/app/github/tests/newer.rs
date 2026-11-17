@@ -77,7 +77,7 @@ fn a_drawing_changed_on_github_with_no_changes_here_waits_for_update() {
     assert_eq!(app.github_chip_state(&repo().key), Chip::Review);
     assert!(!rows(&app).contains(&"Update from GitHub".into()));
     assert!(rows(&app).contains(&"Review changes on GitHub".into()));
-    let _ = app.github_update();
+    landed(&mut app, Action::Update);
     assert_eq!(std::fs::read(&path).unwrap(), mine);
     github(&mut app, Action::Review);
     assert_eq!(review(&app).name, "ring.rsk");
@@ -91,7 +91,7 @@ fn update_is_one_undo_step_to_githubs_drawing_exactly() {
     let (mut app, path) = app_in(dir.path());
     let yours = app.tab.doc.clone();
     found(&mut app, "alice");
-    github(&mut app, Action::Update);
+    landed(&mut app, Action::Update);
     // The tab shows GitHub's, exactly as stored, and saved.
     let theirs = Document::from_native_file(&drawing(30.)).unwrap();
     assert_eq!(app.tab.doc, theirs);
@@ -126,7 +126,7 @@ fn your_own_commit_from_another_computer_is_newer_too_and_says_you() {
     let (mut app, _path) = app_in(dir.path());
     found(&mut app, "octo");
     assert_eq!(app.github_chip_state(&repo().key), Chip::Newer);
-    github(&mut app, Action::Update);
+    landed(&mut app, Action::Update);
     assert_eq!(app.status, "Updated · You: Add an ethyl group");
 }
 
@@ -188,7 +188,7 @@ fn with_changes_here_it_becomes_the_conflict_review() {
     let (mut app, path) = app_in(dir.path());
     found(&mut app, "alice");
     std::fs::write(&path, drawing(50.)).unwrap();
-    let _ = app.github_update();
+    landed(&mut app, Action::Update);
     assert_eq!(std::fs::read(&path).unwrap(), drawing(50.));
     assert_eq!(app.github_chip_state(&repo().key), Chip::Review);
 
@@ -246,7 +246,7 @@ fn with_changes_here_it_becomes_the_conflict_review() {
     app.github.sending.insert(repo().key);
     assert!(app.github_newer(app.tab.path.as_deref()).is_none());
     assert!(!rows(&app).contains(&"Update from GitHub".into()));
-    let _ = app.github_update();
+    landed(&mut app, Action::Update);
     assert_eq!(std::fs::read(&path).unwrap(), drawing(42.));
 
     // While the repository sends, the send finds out instead.
@@ -318,4 +318,70 @@ fn a_check_keeps_githubs_names_and_default_branch_for_history() {
         ("lab-renamed", "trunk")
     );
     assert_eq!(app.github_chip_state(&repo().key), Chip::Newer);
+}
+
+#[test]
+fn update_never_writes_over_a_change_made_in_another_app() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_in(dir.path());
+    found(&mut app, "alice");
+    // Saved by another app since the drawing was last read here.
+    std::fs::write(&path, drawing(60.)).unwrap();
+    landed(&mut app, Action::Update);
+    assert_eq!(std::fs::read(&path).unwrap(), drawing(60.));
+    assert_eq!(app.status, "Couldn't update: It changed on this computer");
+    assert!(app.error);
+    // That change is read now: GitHub's version waits for Review.
+    assert_eq!(app.github_chip_state(&repo().key), Chip::Review);
+    assert_eq!(
+        file_state(&app, "ring.rsk").unwrap().base_blob,
+        Some(sha('b'))
+    );
+}
+
+#[tokio::test]
+async fn a_send_and_closing_the_window_wait_for_updates_write() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_in(dir.path());
+    // b.rsk is saved here, unsent; ring.rsk in front changed on GitHub.
+    let other = open_other(&mut app, dir.path());
+    std::fs::write(&other, drawing(70.)).unwrap();
+    read_back(&mut app);
+    app.select_tab(0);
+    found(&mut app, "alice");
+    let update = app.update(Message::GitHub(Action::Update));
+    assert_eq!(
+        std::fs::read(&path).unwrap(),
+        drawing(42.),
+        "not written yet"
+    );
+    // Send waits: nothing is read until the write lands.
+    let send = app.github_send(repo().key, "Update b.rsk".into(), None);
+    assert!(app.github.sending.contains(&repo().key));
+    assert_eq!(app.github.deferred.len(), 1);
+    // So does closing the window.
+    let window = iced::window::Id::unique();
+    let _ = app.update(Message::Close(window));
+    assert!(app.github.quit_after.is_some());
+    assert!(app.github.closing.is_none(), "nothing asked yet");
+    run(&mut app, Task::batch([update, send])).await;
+    assert_eq!(std::fs::read(&path).unwrap(), drawing(30.));
+    assert!(app.github.deferred.is_empty() && app.github.quit_after.is_none());
+    // The send ran once the write landed (and failed: this GitHub is offline).
+    assert!(app.github.failed.contains_key(&repo().key));
+    assert!(app.github.sending.is_empty());
+}
+
+#[test]
+fn an_edit_made_while_update_writes_stays_unsaved() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _path) = app_in(dir.path());
+    found(&mut app, "alice");
+    let update = app.update(Message::GitHub(Action::Update));
+    edit(&mut app);
+    app.tab.revision += 1;
+    land(&mut app, update);
+    let theirs = Document::from_native_file(&drawing(30.)).unwrap();
+    assert_eq!(app.tab.doc, theirs);
+    assert!(app.dirty(), "the edit is one Undo away, and closing asks");
 }

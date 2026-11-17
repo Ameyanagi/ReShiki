@@ -308,6 +308,19 @@ pub fn unsent(root: &Path, key: &RepoKey, state: &RepoState) -> Result<Vec<Strin
     Ok(unsent)
 }
 
+/// What each of `paths` holds here now, as its [`hash`]; `None`: no such
+/// file. One that cannot be read is left out. Blocking.
+pub fn hashes(root: &Path, key: &RepoKey, paths: Vec<String>) -> Vec<(String, Option<String>)> {
+    paths
+        .into_iter()
+        .filter_map(|path| match std::fs::read(working_path(root, key, &path)) {
+            Ok(bytes) => Some((path, Some(hash(&bytes)))),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Some((path, None)),
+            Err(_) => None,
+        })
+        .collect()
+}
+
 fn versions_dir(root: &Path, key: &RepoKey, repo_path: &str) -> PathBuf {
     let name: String = hash(repo_path.as_bytes()).chars().take(16).collect();
     repo_dir(root, key).join("versions").join(name)
@@ -434,4 +447,32 @@ pub fn checkout(
         },
     );
     Ok(path)
+}
+
+/// [`checkout`] on a copy of `state`, for running off the UI thread, and
+/// only over a file that has nothing unsent: one that is missing, or holds
+/// what was last synced. Returns where it was written and its new base.
+/// Blocking.
+pub fn checkout_synced(
+    root: &Path,
+    key: &RepoKey,
+    mut state: RepoState,
+    repo_path: &str,
+    download: &super::api::Download,
+) -> Result<(PathBuf, FileState), String> {
+    let synced = state
+        .files
+        .get(repo_path)
+        .map(|file| file.base_hash.clone());
+    match std::fs::read(working_path(root, key, repo_path)) {
+        Ok(bytes) if synced != Some(hash(&bytes)) => {
+            return Err("It changed on this computer".into());
+        }
+        Err(error) if error.kind() != std::io::ErrorKind::NotFound => {
+            return Err(error.to_string());
+        }
+        _ => {}
+    }
+    let path = checkout(root, key, &mut state, repo_path, download)?;
+    Ok((path, state.files.remove(repo_path).unwrap_or_default()))
 }

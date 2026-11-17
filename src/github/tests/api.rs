@@ -343,6 +343,23 @@ async fn a_drawing_has_its_commits_and_its_bytes_at_each() {
         api::raw_at(&client, &repo, path, &deleted).await,
         Err(Error::NotFound)
     );
+
+    // From the branch, as History lists: one request, the branch as it is now.
+    let before = mock.model().log.len();
+    let listed = api::file_commits(&client, &repo, path, "main", 1)
+        .await
+        .unwrap();
+    assert_eq!(listed, versions);
+    assert_eq!(mock.model().log.len(), before + 1);
+    // A commit's drawing never changes: asked once, a deletion every time.
+    let contents = |mock: &Mock| {
+        mock.model()
+            .count("GET", "/api/repos/octo-test/lab-notes/contents/")
+    };
+    let asked = contents(&mock);
+    api::raw_at(&client, &repo, path, &first).await.unwrap();
+    let _ = api::raw_at(&client, &repo, path, &deleted).await;
+    assert_eq!(contents(&mock), asked + 1);
 }
 
 #[tokio::test]
