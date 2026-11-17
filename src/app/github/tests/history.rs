@@ -107,4 +107,45 @@ fn signing_out_forgets_what_history_kept() {
     app.select_tab(0);
     let _ = app.github_follow();
     assert_eq!(listed(&app), None, "listed again from GitHub");
+
+    // What shows while signed out goes too, and a late reply drops.
+    let generation = app.github.versions.generation;
+    app.github_signed_out(None);
+    assert_eq!(listed(&app), Some(vec![]));
+    let found = Ok(vec![version('1')]);
+    versions(&mut app, versions::Action::RemoteLoaded(generation, found));
+    assert_eq!(listed(&app), Some(vec![]));
+}
+
+#[test]
+fn a_drawing_whose_row_left_the_list_is_asked_again_when_it_shows() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = listing(dir.path());
+    open_other(&mut app, dir.path());
+    let _ = app.github_follow();
+    app.select_tab(0);
+    let _ = app.github_follow();
+    // The kept row 2 shows and is asked for; meanwhile GitHub's first page
+    // has moved on without it.
+    assert!(versions(&mut app, versions::Action::Shown(sha('2'))) > 0);
+    let generation = app.github.versions.generation;
+    let found = Ok(vec![version('3'), version('1')]);
+    versions(&mut app, versions::Action::RemoteLoaded(generation, found));
+    let doc = Arc::new(Document::from_native_file(&drawing(30.)).unwrap());
+    versions(
+        &mut app,
+        versions::Action::Doc(generation, sha('2'), Ok(doc)),
+    );
+    // Load more brings it back: shown again, it is asked again.
+    let found = Ok(vec![version('1'), version('2')]);
+    versions(&mut app, versions::Action::RemoteLoaded(generation, found));
+    assert_eq!(
+        listed(&app),
+        Some(vec![
+            (sha('3'), false),
+            (sha('1'), false),
+            (sha('2'), false)
+        ])
+    );
+    assert!(versions(&mut app, versions::Action::Shown(sha('2'))) > 0);
 }

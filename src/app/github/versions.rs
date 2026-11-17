@@ -21,8 +21,6 @@ pub(super) struct Versions {
     /// Newest first; `None` while reading.
     local: Option<Vec<(String, Arc<Document>)>>,
     remote: Option<Vec<Remote>>,
-    /// The branch the pages are listed from.
-    branch: Option<String>,
     page: u32,
     more: bool,
     selected: Option<Pick>,
@@ -37,9 +35,13 @@ pub(super) struct Versions {
 }
 
 impl Versions {
-    /// Signing out: the next account sees none of this one's versions.
+    /// Signing out: GitHub's versions shown now and kept go, and late
+    /// replies drop, so the next account sees none of this one's.
     pub(super) fn forget(&mut self) {
         self.kept.clear();
+        self.asked.clear();
+        self.remote = Some(Vec::new());
+        self.generation += 1;
     }
 }
 
@@ -220,7 +222,6 @@ impl App {
             return local;
         };
         self.github.versions.named = Some(key.clone());
-        self.github.versions.branch = Some(branch.clone());
         let generation = self.github.versions.generation;
         let remote = perform(
             async move { api::file_commits(&client, &key, &repo_path, &branch, 1).await },
@@ -313,7 +314,7 @@ impl App {
                     versions.more = found.len() == PAGE;
                     let list = versions.remote.get_or_insert_default();
                     for version in found {
-                        // A commit made since shifts the pages by one.
+                        // Load more starts at the oldest listed, which comes back.
                         if list.iter().any(|r| r.version.commit == version.commit) {
                             continue;
                         }
@@ -342,27 +343,35 @@ impl App {
             }
             Action::Doc(at, commit, result) if at == generation => {
                 let remote = self.github.versions.remote.iter_mut().flatten();
-                if let Some(found) = remote.into_iter().find(|r| r.version.commit == commit) {
-                    match result {
+                match remote.into_iter().find(|r| r.version.commit == commit) {
+                    Some(found) => match result {
                         Ok(doc) => found.doc = Some(doc),
                         Err(deleted) => found.deleted = deleted,
+                    },
+                    // Its row moved past the first page meanwhile: asked
+                    // again when it shows.
+                    None => {
+                        self.github.versions.asked.remove(&commit);
                     }
                 }
             }
             Action::LoadMore => {
                 let versions = &self.github.versions;
-                let (Some(client), Some(key), Some((_, repo_path)), Some(branch)) = (
+                // From the oldest commit listed, which a push to the branch
+                // never moves; it comes back first and is dropped.
+                let oldest =
+                    (versions.remote.iter().flatten().last()).map(|r| r.version.commit.clone());
+                let (Some(client), Some(key), Some((_, repo_path)), Some(oldest)) = (
                     self.github.client(),
                     versions.named.clone(),
                     versions.target.clone(),
-                    versions.branch.clone(),
+                    oldest,
                 ) else {
                     return Task::none();
                 };
-                let page = versions.page + 1;
                 self.github.versions.more = false;
                 return perform(
-                    async move { api::file_commits(&client, &key, &repo_path, &branch, page).await },
+                    async move { api::file_commits(&client, &key, &repo_path, &oldest, 1).await },
                     move |result| GitHubAction::Versions(Action::RemoteLoaded(generation, result)),
                 );
             }
