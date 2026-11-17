@@ -13,16 +13,17 @@ Experimental: ReShiki's agent tools, schemas and results may change between rele
 Usage: reshiki --cli <command> [options]
 
 Commands:
-  convert  Convert a structure or drawing to another file format
-  render   Render a preview image of a structure or drawing
-  compose  Lay out an assistant Proposal (JSON) and write it as a file
-  analyze  Print molecular properties as one JSON line
-  name     Print the systematic name of a structure
-  info     Print versions, limits and formats as one JSON line
-  tools    Print the agent tool catalog as one JSON line
-  schema   Print a JSON Schema: reshiki --cli schema proposal
-  skill    Write an Agent Skill folder that teaches AI agents to use ReShiki
-  help     Show this help, or a command's help: reshiki --cli help <command>
+  convert      Convert a structure or drawing to another file format
+  render       Render a preview image of a structure or drawing
+  compose      Lay out an assistant Proposal (JSON) and write it as a file
+  analyze      Print molecular properties as one JSON line
+  predict-nmr  Print predicted NMR shifts as one JSON line
+  name         Print the systematic name of a structure
+  info         Print versions, limits and formats as one JSON line
+  tools        Print the agent tool catalog as one JSON line
+  schema       Print a JSON Schema: reshiki --cli schema proposal
+  skill        Write an Agent Skill folder that teaches AI agents to use ReShiki
+  help         Show this help, or a command's help: reshiki --cli help <command>
 
 Options are allowed once each; -- ends the options.
 
@@ -31,6 +32,7 @@ Examples:
   reshiki --cli convert scheme.rsk -o figure.pdf
   reshiki --cli render scheme.rsk -o preview.png
   reshiki --cli analyze --smiles 'c1ccccc1O'
+  reshiki --cli predict-nmr --smiles 'CCOC(C)=O' --nucleus 13C
   reshiki --cli name --smiles 'CC(=O)O'
   reshiki --cli compose proposal.json -o scheme.svg
 
@@ -176,6 +178,31 @@ Prints the molecular properties of a structure or drawing as one JSON line:
 SMILES, formula, mass, exact mass, logP, TPSA, hydrogen-bond donors and
 acceptors, rings, unpaired electrons, InChI and InChIKey, under
 value.analysis. The input is read as for convert (reshiki --cli help convert).
+```
+
+### reshiki --cli predict-nmr
+
+```text
+Experimental: ReShiki's agent tools, schemas and results may change between releases.
+Usage: reshiki --cli predict-nmr (INPUT | - | --smiles TEXT) [--from FORMAT] --nucleus NUCLEUS
+
+Predicts 1H or 13C NMR chemical shifts offline, as the app's Predict NMR
+does, and prints them as one JSON line. The input is read as for convert
+(reshiki --cli help convert) and must be exactly one molecule.
+
+Options:
+  --nucleus NUCLEUS  1H or 13C. Required.
+
+value.rows has one row per site, in drawing order. atom is the drawing's
+atom ID: for SMILES, the atom's position counting from 1, which is RDKit
+MolFromSmiles index atom - 1; for a MOL file, its atom number. A 1H row
+names the heavy atom that carries the H. ppm, shell, references, sd, min
+and max are null for a site without data, and note says why. value also
+carries the method, data version, conditions, limitations and credit;
+cite credit with published values.
+
+A molecule with no sites for the nucleus, or chemistry the reference data
+does not cover, is an error.
 ```
 
 ### reshiki --cli name
@@ -453,6 +480,27 @@ Compute the molecular properties of a session document: SMILES, formula, mass, e
 | `ids` | `null or array<string>` | true | true | maxItems: `5000`; items.pattern: `"^[1-9][0-9]{0,19}$"` | The part to analyze, or null for the whole drawing, as the app's inspector does: the selected atoms, where any abbreviation member pulls in the whole abbreviation. analyzed_atoms lists them; the selection must cover at least one atom. |
 
 Result `value`: `{analysis, analyzed_atoms}`. analysis is {smiles, formula, display_formula, mass, exact_mass, logp, tpsa, donors, acceptors, rings, unpaired_electrons, inchi, inchikey}; analyzed_atoms lists the analyzed atom IDs in document order. mass, exact_mass, logp and tpsa are rounded to 9 decimal places to remove floating-point noise. When the engine returns no analysis, the whole drawing gets analysis: null and a last warning, "No molecular properties were returned."; a selection fails with that message instead. The engine's warnings become the warnings; an engine error is failed with its message.
+
+### predict_nmr
+
+**Predict NMR shifts**
+
+Predict ¹H or ¹³C NMR chemical shifts offline for one molecule of a session document, as the app's Predict NMR does. Cite the returned credit with published values.
+
+| Hint | Value |
+| --- | --- |
+| `destructiveHint` | false |
+| `idempotentHint` | true |
+| `openWorldHint` | false |
+| `readOnlyHint` | true |
+
+| Parameter | Type | Required | Nullable | Constraints | Description |
+| --- | --- | --- | --- | --- | --- |
+| `document` | `string` | true | false | pattern: `"^[A-Za-z0-9_-]{1,64}$"` |  |
+| `ids` | `null or array<string>` | true | true | minItems: `1`; maxItems: `5000`; items.pattern: `"^[1-9][0-9]{0,19}$"` | null for the whole drawing, which must be one molecule; otherwise atoms of one molecule, which is predicted whole. |
+| `nucleus` | `string` | true | false | enum: `["1H","13C"]` |  |
+
+Result `value`: `{revision, nucleus, solvent, rows, method, data_version, conditions, limitations, credit, data_access}`. revision is the document revision predicted. rows is [{atom, nucleus, ppm, shell, references, sd, min, max, broad, hydrogen_count, hydrogens, note}], one per site in drawing order: atom is the atom ID, for 1H the heavy atom carrying the H; hydrogens lists H drawn as atoms. ppm, shell, references, sd, min and max are null for a site without data, and note says why. hydrogen_count is null for 13C. broad flags a wide reference spread. Values are rounded to 9 decimal places. credit is the data attribution to cite with published values. warnings is empty.
 
 ### render
 

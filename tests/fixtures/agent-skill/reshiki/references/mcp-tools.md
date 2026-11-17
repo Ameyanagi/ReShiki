@@ -132,6 +132,27 @@ Compute the molecular properties of a session document: SMILES, formula, mass, e
 
 Result `value`: `{analysis, analyzed_atoms}`. analysis is {smiles, formula, display_formula, mass, exact_mass, logp, tpsa, donors, acceptors, rings, unpaired_electrons, inchi, inchikey}; analyzed_atoms lists the analyzed atom IDs in document order. mass, exact_mass, logp and tpsa are rounded to 9 decimal places to remove floating-point noise. When the engine returns no analysis, the whole drawing gets analysis: null and a last warning, "No molecular properties were returned."; a selection fails with that message instead. The engine's warnings become the warnings; an engine error is failed with its message.
 
+## predict_nmr
+
+**Predict NMR shifts**
+
+Predict ¹H or ¹³C NMR chemical shifts offline for one molecule of a session document, as the app's Predict NMR does. Cite the returned credit with published values.
+
+| Hint | Value |
+| --- | --- |
+| `destructiveHint` | false |
+| `idempotentHint` | true |
+| `openWorldHint` | false |
+| `readOnlyHint` | true |
+
+| Parameter | Type | Required | Nullable | Constraints | Description |
+| --- | --- | --- | --- | --- | --- |
+| `document` | `string` | true | false | pattern: `"^[A-Za-z0-9_-]{1,64}$"` |  |
+| `ids` | `null or array<string>` | true | true | minItems: `1`; maxItems: `5000`; items.pattern: `"^[1-9][0-9]{0,19}$"` | null for the whole drawing, which must be one molecule; otherwise atoms of one molecule, which is predicted whole. |
+| `nucleus` | `string` | true | false | enum: `["1H","13C"]` |  |
+
+Result `value`: `{revision, nucleus, solvent, rows, method, data_version, conditions, limitations, credit, data_access}`. revision is the document revision predicted. rows is [{atom, nucleus, ppm, shell, references, sd, min, max, broad, hydrogen_count, hydrogens, note}], one per site in drawing order: atom is the atom ID, for 1H the heavy atom carrying the H; hydrogens lists H drawn as atoms. ppm, shell, references, sd, min and max are null for a site without data, and note says why. hydrogen_count is null for 13C. broad flags a wide reference spread. Values are rounded to 9 decimal places. credit is the data attribution to cite with published values. warnings is empty.
+
 ## render
 
 **Render preview**

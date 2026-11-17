@@ -1,7 +1,7 @@
 use super::{
     args::{
-        Compose, Convert, Export, Input, Name, Output, Render, Schema, Skill, Source, SvgText,
-        parse,
+        Compose, Convert, Export, Input, Name, Output, PredictNmr, Render, Schema, Skill, Source,
+        SvgText, parse,
     },
     *,
 };
@@ -75,6 +75,7 @@ async fn help_describes_one_command() {
         ("render", "Usage: reshiki --cli render "),
         ("compose", "Usage: reshiki --cli compose "),
         ("analyze", "Usage: reshiki --cli analyze "),
+        ("predict-nmr", "Usage: reshiki --cli predict-nmr "),
         ("name", "Usage: reshiki --cli name "),
         ("info", "Usage: reshiki --cli info"),
         ("tools", "Usage: reshiki --cli tools"),
@@ -723,6 +724,50 @@ fn analyze_command_lines_parse() {
             source: Source::Stdin,
             format: "inchi".into(),
         }))
+    );
+}
+
+#[test]
+fn predict_nmr_command_lines_parse() {
+    for nucleus in ["1H", "13C"] {
+        assert_eq!(
+            parsed(&["predict-nmr", "--smiles", "CCO", "--nucleus", nucleus]),
+            Ok(Command::PredictNmr(PredictNmr {
+                input: Input {
+                    source: Source::Smiles("CCO".into()),
+                    format: "smiles".into(),
+                },
+                nucleus,
+            }))
+        );
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn predict_nmr_prints_the_mcp_value_with_smiles_atom_ids() {
+    let (code, out, err) = call(&["predict-nmr", "--smiles", "CCOC(C)=O", "--nucleus", "1H"]).await;
+    assert_eq!(code, SUCCESS, "{err}");
+    assert!(err.is_empty(), "{err}");
+    let result: Value = serde_json::from_str(&out).unwrap();
+    assert_eq!(result["experimental"], true);
+    let value = &result["value"];
+    assert_eq!(value["revision"], "0");
+    assert_eq!(value["nucleus"], "1H");
+    assert_eq!(value["credit"], crate::nmr::ATTRIBUTION);
+    // The SMILES atoms 1, 2 and 5 carry H: CH3, CH2 and the acetyl CH3.
+    let atoms: Vec<_> = value["rows"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|row| row["atom"].as_str().unwrap())
+        .collect();
+    assert_eq!(atoms, ["1", "2", "5"]);
+    let (code, out, err) = call(&["predict-nmr", "--smiles", "CCO.CC", "--nucleus", "13C"]).await;
+    assert_eq!(code, FAILURE);
+    assert!(out.is_empty(), "{out}");
+    assert_eq!(
+        err,
+        "reshiki: error[failed]: NMR prediction needs exactly one molecule; this drawing has 2\n"
     );
 }
 
@@ -1615,6 +1660,38 @@ async fn usage_errors_exit_2_before_any_work() {
             "analyze does not take --width".into(),
         ),
         (
+            &["analyze", "--smiles", "C", "--nucleus", "1H"],
+            "analyze does not take --nucleus".into(),
+        ),
+        (
+            &["render", "--smiles", "C", "--to", "svg", "--nucleus", "1H"],
+            "render does not take --nucleus".into(),
+        ),
+        (
+            &["predict-nmr", "--smiles", "C"],
+            "predict-nmr needs --nucleus 1H or 13C".into(),
+        ),
+        (
+            &["predict-nmr", "--smiles", "C", "--nucleus", "H1"],
+            "--nucleus must be 1H or 13C".into(),
+        ),
+        (
+            &["predict-nmr", "--nucleus", "1H"],
+            "predict-nmr needs an input: a file, - for standard input, or --smiles TEXT".into(),
+        ),
+        (
+            &[
+                "predict-nmr",
+                "--smiles",
+                "C",
+                "--nucleus",
+                "1H",
+                "--to",
+                "svg",
+            ],
+            "predict-nmr does not take --to".into(),
+        ),
+        (
             &["convert", "a.mol", "--to", "png", "--height", "5"],
             "convert does not take --height".into(),
         ),
@@ -1922,6 +1999,10 @@ const HELP_GOLDENS: &[(&str, &str)] = &[
     (
         "analyze",
         include_str!("../../tests/fixtures/cli-help/analyze.txt"),
+    ),
+    (
+        "predict-nmr",
+        include_str!("../../tests/fixtures/cli-help/predict-nmr.txt"),
     ),
     (
         "name",

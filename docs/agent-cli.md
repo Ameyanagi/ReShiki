@@ -22,18 +22,19 @@ has every help text as the program prints it.
 
 ## Commands
 
-| Command             | What it does                                                      |
-| ------------------- | ----------------------------------------------------------------- |
-| [convert](#convert) | Convert a structure or drawing to another file format             |
-| [render](#render)   | Render a preview image of a structure or drawing                  |
-| [compose](#compose) | Lay out a Proposal (JSON) and write it as a file                  |
-| [analyze](#analyze) | Print molecular properties as one JSON line                       |
-| [name](#name)       | Print the systematic name of a structure                          |
-| [info](#info)       | Print versions, limits and formats as one JSON line               |
-| [tools](#tools)     | Print the agent tool catalog as one JSON line                     |
-| [schema](#schema)   | Print the Proposal JSON Schema                                    |
-| [skill](#skill)     | Write an Agent Skill folder that teaches AI agents to use ReShiki |
-| [help](#help)       | Show the help, or one command's help, as text or JSON             |
+| Command                     | What it does                                                      |
+| --------------------------- | ----------------------------------------------------------------- |
+| [convert](#convert)         | Convert a structure or drawing to another file format             |
+| [render](#render)           | Render a preview image of a structure or drawing                  |
+| [compose](#compose)         | Lay out a Proposal (JSON) and write it as a file                  |
+| [analyze](#analyze)         | Print molecular properties as one JSON line                       |
+| [predict-nmr](#predict-nmr) | Print predicted NMR shifts as one JSON line                       |
+| [name](#name)               | Print the systematic name of a structure                          |
+| [info](#info)               | Print versions, limits and formats as one JSON line               |
+| [tools](#tools)             | Print the agent tool catalog as one JSON line                     |
+| [schema](#schema)           | Print the Proposal JSON Schema                                    |
+| [skill](#skill)             | Write an Agent Skill folder that teaches AI agents to use ReShiki |
+| [help](#help)               | Show the help, or one command's help, as text or JSON             |
 
 ## Rules for every command
 
@@ -49,7 +50,7 @@ has every help text as the program prints it.
 
 ## Input
 
-`convert`, `render`, `analyze` and `name` read exactly one input:
+`convert`, `render`, `analyze`, `predict-nmr` and `name` read exactly one input:
 
 | Input           | Meaning                                                           |
 | --------------- | ----------------------------------------------------------------- |
@@ -139,27 +140,28 @@ EMF. To save an `.rsk` file, use the MCP server's `file_save` or the app.
 
 ## Options
 
-| Option                  | Commands                       | Meaning                                                                                    |
-| ----------------------- | ------------------------------ | ------------------------------------------------------------------------------------------ |
-| `--smiles TEXT`         | convert, render, analyze, name | Read SMILES text instead of a file or standard input                                       |
-| `--from FORMAT`         | convert, render, analyze, name | Set the input format                                                                       |
-| `--to FORMAT`           | convert, render, compose       | Set the output format; `png` or `svg` for render                                           |
-| `-o OUTPUT`             | convert, render, compose       | Write to OUTPUT, or to standard output with `-`                                            |
-| `--pages`               | convert, compose               | Export every publication page as one PDF; PDF output only                                  |
-| `--svg-text MODE`       | convert, render, compose       | SVG text as `outline` (default) or `live` `<text>` elements; other formats ignore it       |
-| `--width N`             | render                         | The widest the PNG may be, in pixels: 1 to 8192, default 1600                              |
-| `--height N`            | render                         | The tallest the PNG may be, in pixels: 1 to 8192, default 1000                             |
-| `--force`               | convert, render, compose       | Replace OUTPUT if it exists                                                                |
-| `--receipt`             | convert, compose               | Print one receipt JSON line after writing OUTPUT; needs `-o OUTPUT`                        |
-| `-o FOLDER`             | skill                          | The existing folder that receives the skill folder                                         |
-| `--name NAME`           | skill                          | The skill's name and folder name; default `reshiki`                                        |
-| `--executable PATH`     | skill                          | The absolute path of the executable the skill runs; default this executable                |
-| `--force`               | skill                          | Replace the generated files of an existing skill folder                                    |
-| `--receipt`             | skill                          | Print one receipt JSON line after writing the skill                                        |
-| `--isotope-style STYLE` | name                           | Isotope notation: `iupac` (default), as in (2H3)methanol, or `boughton`, as in methanol-d3 |
-| `--json`                | name                           | Print the name and its status as one JSON line                                             |
-| `--locants`             | name                           | Print JSON with parent locants in input atom order                                         |
-| `--json`                | help                           | Print the command catalog as one JSON line                                                 |
+| Option                  | Commands                                    | Meaning                                                                                    |
+| ----------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `--smiles TEXT`         | convert, render, analyze, predict-nmr, name | Read SMILES text instead of a file or standard input                                       |
+| `--from FORMAT`         | convert, render, analyze, predict-nmr, name | Set the input format                                                                       |
+| `--nucleus NUCLEUS`     | predict-nmr                                 | The nucleus to predict: `1H` or `13C`; required                                            |
+| `--to FORMAT`           | convert, render, compose                    | Set the output format; `png` or `svg` for render                                           |
+| `-o OUTPUT`             | convert, render, compose                    | Write to OUTPUT, or to standard output with `-`                                            |
+| `--pages`               | convert, compose                            | Export every publication page as one PDF; PDF output only                                  |
+| `--svg-text MODE`       | convert, render, compose                    | SVG text as `outline` (default) or `live` `<text>` elements; other formats ignore it       |
+| `--width N`             | render                                      | The widest the PNG may be, in pixels: 1 to 8192, default 1600                              |
+| `--height N`            | render                                      | The tallest the PNG may be, in pixels: 1 to 8192, default 1000                             |
+| `--force`               | convert, render, compose                    | Replace OUTPUT if it exists                                                                |
+| `--receipt`             | convert, compose                            | Print one receipt JSON line after writing OUTPUT; needs `-o OUTPUT`                        |
+| `-o FOLDER`             | skill                                       | The existing folder that receives the skill folder                                         |
+| `--name NAME`           | skill                                       | The skill's name and folder name; default `reshiki`                                        |
+| `--executable PATH`     | skill                                       | The absolute path of the executable the skill runs; default this executable                |
+| `--force`               | skill                                       | Replace the generated files of an existing skill folder                                    |
+| `--receipt`             | skill                                       | Print one receipt JSON line after writing the skill                                        |
+| `--isotope-style STYLE` | name                                        | Isotope notation: `iupac` (default), as in (2H3)methanol, or `boughton`, as in methanol-d3 |
+| `--json`                | name                                        | Print the name and its status as one JSON line                                             |
+| `--locants`             | name                                        | Print JSON with parent locants in input atom order                                         |
+| `--json`                | help                                        | Print the command catalog as one JSON line                                                 |
 
 A rendered PNG has at most 16,000,000 pixels. A `--width` or `--height` that
 is not a whole number is a usage error. A number outside 1 to 8192 fails, as
@@ -355,6 +357,86 @@ to 9 decimal places to remove floating-point noise. This is
 
 The result has the same fields as the MCP `analyze` tool's
 [result](agent-api.md#results), plus `experimental` and `api`.
+
+## predict-nmr
+
+```text
+reshiki --cli predict-nmr (INPUT | - | --smiles TEXT) [--from FORMAT] --nucleus NUCLEUS
+```
+
+`reshiki --cli help predict-nmr` prints the [full help](agent-reference.md#reshiki---cli-predict-nmr).
+
+Predicts ¹H or ¹³C chemical shifts offline, as the app's
+[Predict NMR](nmr-prediction.md) does, and prints them as one JSON line. The
+input is read as for `convert` and must be exactly one molecule. `--nucleus`
+is required. This is
+`reshiki --cli predict-nmr --smiles 'CCOC(C)=O' --nucleus 1H`, shown on several
+lines with the long text fields cut:
+
+```json
+{
+  "api": {
+    "operation_api": 2,
+    "stability": "experimental"
+  },
+  "experimental": true,
+  "validation": {
+    "status": "valid"
+  },
+  "value": {
+    "conditions": "CDCl3; recorded temperat…",
+    "credit": "Contains information fro…",
+    "data_access": "The derivative index and…",
+    "data_version": "nmrshiftdb2 2026-03-15 · measured CDCl3 subset v1",
+    "limitations": "Connectivity-only 2D env…",
+    "method": "HOSE spherical environments · median · ReShiki v1",
+    "nucleus": "1H",
+    "revision": "0",
+    "rows": [
+      {
+        "atom": "1",
+        "broad": false,
+        "hydrogen_count": 3,
+        "hydrogens": [],
+        "max": 1.4,
+        "min": 1.17,
+        "note": "Unresolved attached-H group; not a stereospecific peak assignment",
+        "nucleus": "1H",
+        "ppm": 1.28,
+        "references": 17,
+        "sd": 0.064495611,
+        "shell": 4
+      },
+      …
+    ],
+    "solvent": "CDCl3"
+  },
+  "versions": {
+    "app": "0.15.0",
+    "document": 38,
+    "engine_protocol": 1,
+    "operation_api": 2
+  },
+  "warnings": []
+}
+```
+
+`value.rows` has one row per site, in drawing order. `atom` is the drawing's
+atom ID: for SMILES, the atom's position counting from 1, which is index
+`atom - 1` in RDKit's `Chem.MolFromSmiles`; for a MOL file, the atom's number
+in the file; for a `.rsk` drawing, its stored ID. A ¹H row names the heavy
+atom that carries the H, and `hydrogens` lists the IDs of H drawn as atoms.
+`ppm`, `shell`, `references`, `sd`, `min` and `max` are `null` for a site
+without reference data, and `note` says why. `broad` flags a short-shell
+match with a wide spread. `hydrogen_count` is `null` for ¹³C. Values are
+rounded to 9 decimal places. `revision` is the document revision the
+prediction was made from.
+
+A drawing that is not one molecule, chemistry the reference data does not
+cover, and a molecule without sites for the nucleus fail with
+`error[failed]`. The result has the same fields as the MCP `predict_nmr`
+tool's [result](agent-api.md#results), plus `experimental` and `api`. When you
+publish predicted values, cite `credit` with them.
 
 ## name
 

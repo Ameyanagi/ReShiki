@@ -7,16 +7,17 @@ Experimental: ReShiki's agent tools, schemas and results may change between rele
 Usage: reshiki --cli <command> [options]
 
 Commands:
-  convert  Convert a structure or drawing to another file format
-  render   Render a preview image of a structure or drawing
-  compose  Lay out an assistant Proposal (JSON) and write it as a file
-  analyze  Print molecular properties as one JSON line
-  name     Print the systematic name of a structure
-  info     Print versions, limits and formats as one JSON line
-  tools    Print the agent tool catalog as one JSON line
-  schema   Print a JSON Schema: reshiki --cli schema proposal
-  skill    Write an Agent Skill folder that teaches AI agents to use ReShiki
-  help     Show this help, or a command's help: reshiki --cli help <command>
+  convert      Convert a structure or drawing to another file format
+  render       Render a preview image of a structure or drawing
+  compose      Lay out an assistant Proposal (JSON) and write it as a file
+  analyze      Print molecular properties as one JSON line
+  predict-nmr  Print predicted NMR shifts as one JSON line
+  name         Print the systematic name of a structure
+  info         Print versions, limits and formats as one JSON line
+  tools        Print the agent tool catalog as one JSON line
+  schema       Print a JSON Schema: reshiki --cli schema proposal
+  skill        Write an Agent Skill folder that teaches AI agents to use ReShiki
+  help         Show this help, or a command's help: reshiki --cli help <command>
 
 Options are allowed once each; -- ends the options.
 
@@ -25,6 +26,7 @@ Examples:
   reshiki --cli convert scheme.rsk -o figure.pdf
   reshiki --cli render scheme.rsk -o preview.png
   reshiki --cli analyze --smiles 'c1ccccc1O'
+  reshiki --cli predict-nmr --smiles 'CCOC(C)=O' --nucleus 13C
   reshiki --cli name --smiles 'CC(=O)O'
   reshiki --cli compose proposal.json -o scheme.svg
 
@@ -170,6 +172,31 @@ Prints the molecular properties of a structure or drawing as one JSON line:
 SMILES, formula, mass, exact mass, logP, TPSA, hydrogen-bond donors and
 acceptors, rings, unpaired electrons, InChI and InChIKey, under
 value.analysis. The input is read as for convert (reshiki --cli help convert).
+```
+
+## reshiki --cli predict-nmr
+
+```text
+Experimental: ReShiki's agent tools, schemas and results may change between releases.
+Usage: reshiki --cli predict-nmr (INPUT | - | --smiles TEXT) [--from FORMAT] --nucleus NUCLEUS
+
+Predicts 1H or 13C NMR chemical shifts offline, as the app's Predict NMR
+does, and prints them as one JSON line. The input is read as for convert
+(reshiki --cli help convert) and must be exactly one molecule.
+
+Options:
+  --nucleus NUCLEUS  1H or 13C. Required.
+
+value.rows has one row per site, in drawing order. atom is the drawing's
+atom ID: for SMILES, the atom's position counting from 1, which is RDKit
+MolFromSmiles index atom - 1; for a MOL file, its atom number. A 1H row
+names the heavy atom that carries the H. ppm, shell, references, sd, min
+and max are null for a site without data, and note says why. value also
+carries the method, data version, conditions, limitations and credit;
+cite credit with published values.
+
+A molecule with no sites for the nucleus, or chemistry the reference data
+does not cover, is an error.
 ```
 
 ## reshiki --cli name
