@@ -178,28 +178,31 @@ fn used_by_another_reshiki(data: &Path) -> bool {
     }
 }
 
-/// Whether a link under `folder` names its target relative to itself and so
-/// would point elsewhere once the folder moves. Links are not followed.
-fn holds_relative_link(folder: &Path) -> bool {
-    std::fs::read_dir(folder)
-        .into_iter()
-        .flatten()
-        .flatten()
-        .any(|entry| {
-            let path = entry.path();
-            match entry.file_type() {
-                Ok(kind) if kind.is_symlink() => {
-                    std::fs::read_link(&path).is_ok_and(|target| target.is_relative())
-                }
-                Ok(kind) if kind.is_dir() => holds_relative_link(&path),
-                _ => false,
+/// Whether anything under `folder` is a symbolic link, without following
+/// any: a relative link would point elsewhere once the folder moves, and so
+/// would an absolute one into the folder. A folder that cannot be read counts
+/// as holding one.
+fn holds_link(folder: &Path) -> bool {
+    let mut folders = vec![folder.to_path_buf()];
+    while let Some(folder) = folders.pop() {
+        let Ok(entries) = std::fs::read_dir(&folder) else {
+            return true;
+        };
+        for entry in entries {
+            match entry.and_then(|entry| Ok((entry.file_type()?, entry.path()))) {
+                Ok((kind, _)) if kind.is_symlink() => return true,
+                Ok((kind, path)) if kind.is_dir() => folders.push(path),
+                Ok(_) => {}
+                Err(_) => return true,
             }
-        })
+        }
+    }
+    false
 }
 
 /// One rename, so the data is wholly in one place or the other: nothing is
 /// copied or deleted, and a failed rename leaves both paths as they were. A
-/// linked folder, or one holding a relative link, stays: the link would point
+/// linked folder, or one holding a link, stays: the link could point
 /// elsewhere after the move.
 fn move_data(
     override_path: Option<OsString>,
@@ -226,11 +229,11 @@ fn move_data(
     {
         return Err(kept(&"it is a symbolic link"));
     }
-    if holds_relative_link(&old) {
-        return Err(kept(&"it holds a relative symbolic link"));
-    }
     if busy(&old) {
         return Err(kept(&"another ReShiki is using it"));
+    }
+    if holds_link(&old) {
+        return Err(kept(&"it holds a symbolic link"));
     }
     match rename(&old, &new) {
         Ok(()) => Ok(Some((old, new))),

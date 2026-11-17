@@ -160,6 +160,13 @@ impl Arguments {
     #[cfg(not(target_arch = "wasm32"))]
     pub(crate) fn moved(&mut self, old: &Path, new: &Path) {
         for path in &mut self.paths {
+            // `old/../x` is not in the folder.
+            if path
+                .components()
+                .any(|part| part == std::path::Component::ParentDir)
+            {
+                continue;
+            }
             if let Ok(rest) = path.strip_prefix(old) {
                 *path = new.join(rest);
             }

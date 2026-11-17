@@ -501,27 +501,34 @@ fn a_linked_old_folder_stays_where_it_is() {
 
 #[cfg(unix)]
 #[test]
-fn a_relative_link_inside_keeps_the_old_folder() {
+fn a_link_inside_keeps_the_old_folder() {
+    use std::os::unix::fs::PermissionsExt;
     let root = tempfile::tempdir().unwrap();
     let old = old_folder(root.path());
     let new = root.path().join(".reshiki");
     let unused = |_: &Path, _: &Path| -> std::io::Result<()> { panic!("nothing moves") };
-    std::fs::create_dir(root.path().join("Drafts")).unwrap();
     let nested = old.join("github/octo/lab");
     std::fs::create_dir_all(&nested).unwrap();
-    // An absolute link points to the same place from anywhere.
-    std::os::unix::fs::symlink(root.path().join("Drafts"), nested.join("absolute")).unwrap();
-    assert!(!holds_relative_link(&old));
-    std::os::unix::fs::symlink("../../../../Drafts", nested.join("drafts")).unwrap();
-    assert!(holds_relative_link(&old));
+    assert!(!holds_link(&old));
+    // An absolute link into the folder breaks as a relative one does.
+    std::os::unix::fs::symlink(old.join("recovery"), nested.join("drafts")).unwrap();
+    assert!(holds_link(&old));
     assert_eq!(
         move_data(None, Some(old.clone()), Some(new.clone()), idle, unused),
         Err(format!(
-            "Kept your data in {}: could not move it to ~/.reshiki (it holds a relative symbolic link)",
+            "Kept your data in {}: could not move it to ~/.reshiki (it holds a symbolic link)",
             old.display()
         ))
     );
     assert!(!present(&new));
+    // A folder that cannot be read may hide one.
+    std::fs::remove_file(nested.join("drafts")).unwrap();
+    std::fs::set_permissions(&nested, std::fs::Permissions::from_mode(0o000)).unwrap();
+    let unreadable = std::fs::read_dir(&nested).is_err();
+    let held = holds_link(&old);
+    std::fs::set_permissions(&nested, std::fs::Permissions::from_mode(0o755)).unwrap();
+    // Root reads it anyway.
+    assert_eq!(held, unreadable);
 }
 
 #[cfg(unix)]

@@ -63,6 +63,8 @@ fn files_in_a_moved_data_folder_open_from_its_new_place() {
             "/home/me/Documents/ring.rsk",
             "--open",
             "/home/me/.local/share/reshiki-other/ring.rsk",
+            "--open",
+            "/home/me/.local/share/reshiki/../docs/ring.rsk",
         ]
         .map(OsString::from),
     );
@@ -73,6 +75,7 @@ fn files_in_a_moved_data_folder_open_from_its_new_place() {
             PathBuf::from("/home/me/.reshiki/github/octo/lab/files/ring.rsk"),
             PathBuf::from("/home/me/Documents/ring.rsk"),
             PathBuf::from("/home/me/.local/share/reshiki-other/ring.rsk"),
+            PathBuf::from("/home/me/.local/share/reshiki/../docs/ring.rsk"),
         ]
     );
 }
