@@ -374,12 +374,11 @@ never asks it for roots. Folders come from two sources, which add up:
 absolute, unknown fields are refused and the file is at most 64 KiB. A missing
 file grants nothing.
 
-| System  | `agent-access.json` location                                                     |
-| ------- | -------------------------------------------------------------------------------- |
-| macOS   | `~/Library/Application Support/dev.reshiki.ReShiki/agent-access.json`            |
-| Windows | `%LOCALAPPDATA%\reshiki\ReShiki\data\agent-access.json`                          |
-| Linux   | `$XDG_DATA_HOME/reshiki/agent-access.json`, by default `~/.local/share/reshiki/` |
-| Any     | `$RESHIKI_DATA_DIR/agent-access.json` when `RESHIKI_DATA_DIR` is set             |
+| System          | `agent-access.json` location                                         |
+| --------------- | -------------------------------------------------------------------- |
+| macOS and Linux | `~/.reshiki/agent-access.json`                                       |
+| Windows         | `%LOCALAPPDATA%\reshiki\ReShiki\data\agent-access.json`              |
+| Any             | `$RESHIKI_DATA_DIR/agent-access.json` when `RESHIKI_DATA_DIR` is set |
 
 Read and write grants are separate: a write grant does not let `file_open`
 read. Each folder must exist. File system roots, the home folder (as Windows

@@ -6,7 +6,7 @@ use super::{
     root::{Root, normalize, within},
 };
 use reshiki_io::compatibility::{
-    data_directory_location, home_directories, legacy_data_directory_location,
+    data_directory_location, home_directories, known_data_directories,
 };
 use std::{
     io,
@@ -35,7 +35,7 @@ impl Protected {
     pub fn current() -> Result<Self, GrantError> {
         let data = data_directory_location().map_err(GrantError::Config)?.path;
         let mut paths = vec![data];
-        paths.extend(legacy_data_directory_location());
+        paths.extend(known_data_directories());
         let executable = std::env::current_exe().map_err(|error| {
             GrantError::Config(format!("cannot locate the ReShiki executable: {error}"))
         })?;

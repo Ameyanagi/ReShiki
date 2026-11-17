@@ -111,7 +111,9 @@ latest**. You can edit it; **Save** (Cmd+S) saves a copy, and nothing of it is
 ever sent.
 
 Right-click a GitHub tab and choose **Copy GitHub link** for the drawing's
-address on GitHub. The command palette also lists every drawing and
+address on GitHub, or **Show in Finder** (**Show in Explorer** on Windows,
+**Open containing folder** on Linux) for its working copy on this computer,
+in the [data folder](https://reshiki.com/guide/install/#your-data-folder). The command palette also lists every drawing and
 repository known on this computer, such as **Open from GitHub: lab-notes/ring**,
 without asking GitHub.
 
@@ -161,7 +163,8 @@ The GitHub button shows your initial while you are signed in; its tooltip
 says **Signed in as @you** or **Not signed in**. Its menu ends with your
 account: **@you**, **Add repositories… ↗** and **Sign out**. The command
 palette offers the GitHub commands that apply to the drawing in front, such as
-**Send 1 drawing**, **History**, **Copy GitHub link** and **Open on GitHub ↗**;
+**Send 1 drawing**, **History**, **Show in Finder**, **Copy GitHub link** and
+**Open on GitHub ↗**;
 typing a whole word such as `send`, `history`, `versions` or `repo` puts them
 first.
 

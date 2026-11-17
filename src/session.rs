@@ -148,8 +148,30 @@ impl Binding {
 #[derive(Clone, Default)]
 pub(crate) struct Arguments {
     pub(crate) paths: Vec<PathBuf>,
+    /// Why the data folder could not move to `~/.reshiki` this run.
+    pub(crate) data_warning: Option<String>,
     pub(crate) shortcut_examples: bool,
     pub(crate) office_host: Option<Host>,
+}
+
+impl Arguments {
+    /// Files to open from the data folder, after it moved from `old` to
+    /// `new`: an update reopens its tabs by the paths they had.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) fn moved(&mut self, old: &Path, new: &Path) {
+        for path in &mut self.paths {
+            // `old/../x` is not in the folder.
+            if path
+                .components()
+                .any(|part| part == std::path::Component::ParentDir)
+            {
+                continue;
+            }
+            if let Ok(rest) = path.strip_prefix(old) {
+                *path = new.join(rest);
+            }
+        }
+    }
 }
 
 #[cfg(not(target_arch = "wasm32"))]

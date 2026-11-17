@@ -33,12 +33,52 @@ available; keep a portable download’s extracted contents together. Windows may
 warn before running setup: the [code signing policy](/developer/code-signing-policy/)
 gives each platform’s signing status. See also the [privacy policy](/developer/privacy-policy/).
 
-To uninstall on Windows, open **Settings → Apps**, select **ReShiki**, and choose
-**Uninstall**. Uninstalling removes the installed application and its shortcuts;
-it preserves your drawings, preferences, and recovery drafts. For a portable
-download, remove the extracted application folder when you no longer need it.
-
 Upgrading from an earlier version? Open your existing `.reshiki` and `.moruno` drawings normally. Templates, assistant preferences, and recovery drafts are copied on first launch; the originals stay in place. New drawings use `.rsk`.
+
+### Your data folder
+
+ReShiki keeps its settings, templates, recovery drafts and GitHub working
+copies in one folder: `~/.reshiki/` on macOS and Linux, and
+`%LOCALAPPDATA%\reshiki\ReShiki\data\` on Windows. Click **ReShiki** at the top
+left to see it in **About ReShiki**; **Open** shows it in your file manager.
+
+Earlier versions used `~/Library/Application Support/dev.reshiki.ReShiki/` on
+macOS and `~/.local/share/reshiki/` (or `$XDG_DATA_HOME/reshiki/`) on Linux.
+ReShiki moves that folder to `~/.reshiki/` the first time it starts. If it
+cannot, it keeps using the old folder and says why in the status bar.
+
+### Uninstall
+
+:::caution
+GitHub drawings you have not sent live only in the data folder, in `github/`.
+Send them before you delete it.
+:::
+
+**macOS and Linux**
+
+1. In ReShiki, note the data folder in **About ReShiki**, then open the GitHub
+   menu and choose **Sign out**. The sign-in is in the Keychain (macOS) or the
+   Secret Service keyring (Linux), not in `~/.reshiki/`. If the app is already
+   gone, delete the `dev.reshiki.ReShiki.github` item in Keychain Access, or
+   run `secret-tool clear service dev.reshiki.ReShiki.github`.
+2. Delete the app: **ReShiki** in **Applications**, or the extracted folder on
+   Linux.
+3. Delete `~/.reshiki/`. If **About ReShiki** named another data folder (the
+   old one, when ReShiki could not move it), delete that one too.
+
+**Windows**
+
+1. Open **Settings → Apps**, select **ReShiki**, and choose **Uninstall**. This
+   removes the app and its shortcuts and keeps your data. For a portable
+   download, delete the extracted folder.
+2. Delete `%LOCALAPPDATA%\reshiki\`.
+3. If you were signed in to GitHub, open **Credential Manager → Windows
+   Credentials** and remove `dev.reshiki.ReShiki.github`.
+
+If an update was interrupted, a hidden `.reshiki-update-…` folder may remain
+next to the app: in **Applications** on macOS, or beside the installed or
+extracted folder on Linux and Windows (`%LOCALAPPDATA%\Programs\` for the
+setup program's install). Delete it too.
 
 Starting with 0.9.0, Mac supports Apple Silicon and Intel on macOS 14+. Windows requires Windows 10/11 on x64 or Windows 11 on ARM64. Linux builds target Ubuntu 22.04+ on x64 and 24.04+ on ARM.
 

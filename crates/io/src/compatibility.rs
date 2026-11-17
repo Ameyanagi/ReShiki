@@ -105,16 +105,172 @@ fn resolve_data_location(
 pub fn data_directory_location() -> Result<DataLocation, String> {
     resolve_data_location(
         environment("DATA_DIR"),
-        directories_next::ProjectDirs::from("dev", "reshiki", "ReShiki")
-            .map(|project| project.data_local_dir().to_path_buf())
-            .or_else(crate::storage::browser_data_directory),
+        match home_data_directory() {
+            Some(home) => Some(current_or_earlier(home, project_data_directory())),
+            None => project_data_directory().or_else(crate::storage::browser_data_directory),
+        },
     )
 }
 
-/// The data directory of earlier (Moruno) installations, which may not exist.
-pub fn legacy_data_directory_location() -> Option<PathBuf> {
+/// `~/.reshiki`, the data folder on macOS and Linux; none elsewhere.
+fn home_data_directory() -> Option<PathBuf> {
+    if cfg!(any(target_os = "macos", target_os = "linux")) {
+        directories_next::BaseDirs::new().map(|base| base.home_dir().join(".reshiki"))
+    } else {
+        None
+    }
+}
+
+/// The platform's per-user data folder: the data folder on Windows, and the
+/// one macOS and Linux used before `~/.reshiki`.
+fn project_data_directory() -> Option<PathBuf> {
+    directories_next::ProjectDirs::from("dev", "reshiki", "ReShiki")
+        .map(|project| project.data_local_dir().to_path_buf())
+}
+
+/// The data folder of earlier (Moruno) installations.
+fn moruno_data_directory() -> Option<PathBuf> {
     directories_next::ProjectDirs::from("dev", "moruno", "Moruno")
         .map(|previous| previous.data_local_dir().to_path_buf())
+}
+
+/// `new` once anything is there; until then `old`, if it is a folder, so data
+/// that has not moved (see [`move_data_directory`]) is still used where it is.
+fn current_or_earlier(new: PathBuf, old: Option<PathBuf>) -> PathBuf {
+    match old {
+        Some(old) if !present(&new) && old.is_dir() => old,
+        _ => new,
+    }
+}
+
+/// Whether anything, even a broken link, is at `path`.
+fn present(path: &Path) -> bool {
+    path.symlink_metadata().is_ok()
+}
+
+/// On macOS and Linux, moves the earlier data folder to `~/.reshiki` when
+/// no override is set, nothing is at `~/.reshiki` yet and the earlier folder
+/// exists. The GUI calls this once at startup, before anything reads or
+/// writes data. `Ok(Some((old, new)))` when it moved; `Err` is the status-bar
+/// message when it did not, and the data then stays where it was and is used
+/// there, as [`data_directory_location`] finds it.
+pub fn move_data_directory() -> Result<Option<(PathBuf, PathBuf)>, String> {
+    move_data(
+        environment("DATA_DIR"),
+        project_data_directory(),
+        home_data_directory(),
+        used_by_another_reshiki,
+        |from, to| std::fs::rename(from, to),
+    )
+}
+
+/// Whether a running ReShiki has a recovery draft in `data`, or the drafts
+/// cannot be listed: that ReShiki keeps the folder's paths until it quits, so
+/// moving it would strand its next drafts.
+fn used_by_another_reshiki(data: &Path) -> bool {
+    match std::fs::read_dir(data.join("recovery")) {
+        Ok(entries) => entries.into_iter().any(|entry| {
+            entry.is_err()
+                || entry
+                    .is_ok_and(|entry| crate::recovery::owned_by_running_instance(&entry.path()))
+        }),
+        Err(error) => error.kind() != std::io::ErrorKind::NotFound,
+    }
+}
+
+/// Whether anything under `folder` is a symbolic link, without following
+/// any: a relative link would point elsewhere once the folder moves, and so
+/// would an absolute one into the folder. A folder that cannot be read counts
+/// as holding one.
+fn holds_link(folder: &Path) -> bool {
+    let mut folders = vec![folder.to_path_buf()];
+    while let Some(folder) = folders.pop() {
+        let Ok(entries) = std::fs::read_dir(&folder) else {
+            return true;
+        };
+        for entry in entries {
+            match entry.and_then(|entry| Ok((entry.file_type()?, entry.path()))) {
+                Ok((kind, _)) if kind.is_symlink() => return true,
+                Ok((kind, path)) if kind.is_dir() => folders.push(path),
+                Ok(_) => {}
+                Err(_) => return true,
+            }
+        }
+    }
+    false
+}
+
+/// One rename, so the data is wholly in one place or the other: nothing is
+/// copied or deleted, and a failed rename leaves both paths as they were. A
+/// linked folder, or one holding a link, stays: the link could point
+/// elsewhere after the move.
+fn move_data(
+    override_path: Option<OsString>,
+    old: Option<PathBuf>,
+    new: Option<PathBuf>,
+    busy: impl FnOnce(&Path) -> bool,
+    rename: impl FnOnce(&Path, &Path) -> std::io::Result<()>,
+) -> Result<Option<(PathBuf, PathBuf)>, String> {
+    let (None, Some(old), Some(new)) = (override_path, old, new) else {
+        return Ok(None);
+    };
+    if present(&new) || !old.is_dir() {
+        return Ok(None);
+    }
+    let kept = |reason: &dyn std::fmt::Display| {
+        format!(
+            "Kept your data in {}: could not move it to ~/.reshiki ({reason})",
+            old.display()
+        )
+    };
+    if old
+        .symlink_metadata()
+        .is_ok_and(|meta| meta.file_type().is_symlink())
+    {
+        return Err(kept(&"it is a symbolic link"));
+    }
+    if busy(&old) {
+        return Err(kept(&"another ReShiki is using it"));
+    }
+    if holds_link(&old) {
+        return Err(kept(&"it holds a symbolic link"));
+    }
+    match rename(&old, &new) {
+        Ok(()) => Ok(Some((old, new))),
+        // Another ReShiki moved it first; `~/.reshiki` is used.
+        Err(_) if present(&new) => Ok(Some((old, new))),
+        Err(error) => Err(kept(&error)),
+    }
+}
+
+/// Where ReShiki keeps caches it can rebuild: `cache` in the data folder
+/// (`~/.reshiki/cache` on macOS and Linux), or the platform's cache folder on
+/// Windows when no override is set. Inside the data folder in use, so a cache
+/// never creates `~/.reshiki` before the data has moved there.
+pub fn cache_directory() -> Result<PathBuf, String> {
+    let windows = cfg!(windows).then(|| {
+        directories_next::ProjectDirs::from("dev", "reshiki", "ReShiki")
+            .map(|project| project.cache_dir().to_path_buf())
+    });
+    Ok(cache_in(data_directory_location()?, windows.flatten()))
+}
+
+fn cache_in(data: DataLocation, platform: Option<PathBuf>) -> PathBuf {
+    match (data.origin, platform) {
+        (DataLocationOrigin::Default, Some(platform)) => platform,
+        _ => data.path.join("cache"),
+    }
+}
+
+/// Every default data folder of this and earlier installations, which may not
+/// exist: `~/.reshiki` and the folder it moved from on macOS and Linux (the
+/// data folder itself on Windows), and Moruno's.
+pub fn known_data_directories() -> Vec<PathBuf> {
+    home_data_directory()
+        .into_iter()
+        .chain(project_data_directory())
+        .chain(moruno_data_directory())
+        .collect()
 }
 
 /// Every folder that may be the user's home: the platform's (on Windows the
@@ -168,12 +324,13 @@ fn finish_data_directory(
 }
 
 pub fn data_directory() -> Result<PathBuf, String> {
-    finish_data_directory(data_directory_location()?, |root| {
-        match directories_next::ProjectDirs::from("dev", "moruno", "Moruno") {
-            Some(previous) => migrate_data(previous.data_local_dir(), root),
+    finish_data_directory(
+        data_directory_location()?,
+        |root| match moruno_data_directory() {
+            Some(previous) => migrate_data(&previous, root),
             None => Ok(()),
-        }
-    })
+        },
+    )
 }
 
 fn copy_if_missing(source: &std::path::Path, target: &std::path::Path) -> Result<(), String> {

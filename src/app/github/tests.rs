@@ -2598,6 +2598,25 @@ fn a_tabs_menu_copies_its_github_link() {
 }
 
 #[test]
+fn a_tabs_menu_and_the_palette_show_its_working_copy() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_in(dir.path());
+    let id = app.tab.id;
+    assert_eq!(app.tab.path.as_deref(), Some(path.as_path()));
+    let rows = app.github_palette();
+    let (_, detail, action) = rows.iter().find(|(row, ..)| row == SHOW_FILE).unwrap();
+    assert_eq!(detail, "ring.rsk");
+    assert!(matches!(action, Some(Action::ShowFile(tab)) if *tab == id));
+    app.add_tab();
+    app.tabs.color_menu = Some(id);
+    app.github.chip_menu = true;
+    // The task that shows the file is dropped here, not run.
+    github(&mut app, Action::ShowFile(id));
+    assert!(app.tabs.color_menu.is_none());
+    assert!(!app.github.chip_menu);
+}
+
+#[test]
 fn the_palette_lists_known_drawings_and_opens_a_link() {
     let dir = tempfile::tempdir().unwrap();
     let (app, path) = app_in(dir.path());

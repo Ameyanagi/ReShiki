@@ -36,14 +36,7 @@ pub struct State {
     pub(super) editor: Option<super::theme_generator::Editor>,
 }
 pub(super) fn directory() -> Result<PathBuf, String> {
-    let root = std::env::var_os("RESHIKI_DATA_DIR")
-        .map(PathBuf::from)
-        .or_else(|| {
-            directories_next::ProjectDirs::from("dev", "reshiki", "ReShiki")
-                .map(|d| d.data_local_dir().to_owned())
-        })
-        .or_else(reshiki::storage::browser_data_directory)
-        .ok_or("No application data directory")?;
+    let root = reshiki::compatibility::data_directory_location()?.path;
     Ok(root.join("themes"))
 }
 impl State {

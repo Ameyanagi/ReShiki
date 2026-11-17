@@ -50,3 +50,32 @@ fn paths_do_not_require_utf8() {
     let args = parse([OsString::from("--open"), path.clone()]);
     assert_eq!(args.paths, [PathBuf::from(path)]);
 }
+
+#[test]
+fn files_in_a_moved_data_folder_open_from_its_new_place() {
+    let old = Path::new("/home/me/.local/share/reshiki");
+    let new = Path::new("/home/me/.reshiki");
+    let mut args = parse(
+        [
+            "--open",
+            "/home/me/.local/share/reshiki/github/octo/lab/files/ring.rsk",
+            "--open",
+            "/home/me/Documents/ring.rsk",
+            "--open",
+            "/home/me/.local/share/reshiki-other/ring.rsk",
+            "--open",
+            "/home/me/.local/share/reshiki/../notes/ring.rsk",
+        ]
+        .map(OsString::from),
+    );
+    args.moved(old, new);
+    assert_eq!(
+        args.paths,
+        [
+            PathBuf::from("/home/me/.reshiki/github/octo/lab/files/ring.rsk"),
+            PathBuf::from("/home/me/Documents/ring.rsk"),
+            PathBuf::from("/home/me/.local/share/reshiki-other/ring.rsk"),
+            PathBuf::from("/home/me/.local/share/reshiki/../notes/ring.rsk"),
+        ]
+    );
+}
