@@ -130,3 +130,34 @@ async fn a_molecule_without_sites_for_the_nucleus_fails() {
     assert_eq!(code, "failed");
     assert_eq!(message, "This molecule has no supported ¹³C sites");
 }
+
+/// The revision is the one predicted, which an edit advances.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn the_revision_is_the_predicted_snapshot_after_an_edit() {
+    let (host, handle) = hosting(ethyl_acetate());
+    let mut methane = Document::default();
+    methane.add_atom("C", Point::default());
+    let source = host
+        .store()
+        .create(&Principal::local(), methane)
+        .unwrap()
+        .handle;
+    let applied = host
+        .call(Call {
+            principal: Principal::local(),
+            request: RequestId::Int(2),
+            tool: "apply".into(),
+            arguments: json!({
+                "document": handle.as_str(), "edit": "insert", "source": source.as_str(),
+                "ids": null, "base_revision": "0", "idempotency_key": null,
+            }),
+            progress: None,
+        })
+        .await
+        .unwrap();
+    assert!(!applied.is_error, "{:?}", applied.value);
+    let result = predict(&host, &handle, "13C", json!(["1"])).await;
+    assert!(!result.is_error, "{:?}", result.value);
+    assert_eq!(result.value["value"]["revision"], "1");
+    assert_eq!(result.value["value"]["rows"].as_array().unwrap().len(), 4);
+}

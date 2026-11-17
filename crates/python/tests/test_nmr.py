@@ -77,3 +77,27 @@ def test_smiles_and_mol_atom_ids_follow_rdkit_numbering() -> None:
                 assert atom.GetTotalNumHs() == row.hydrogen_count, (smiles, row)
             for row in molecule.predict_nmr("13C"):
                 assert source.GetAtomWithIdx(row.atom - 1).GetSymbol() == "C", (smiles, row)
+
+
+def test_mol_atom_ids_are_atom_block_positions() -> None:
+    # V3000 record numbers 10, 20 and 30 are not kept: ethanol's carbons are atoms 1 and 2.
+    molfile = """
+  ReShiki
+
+  0  0  0     0  0            999 V3000
+M  V30 BEGIN CTAB
+M  V30 COUNTS 3 2 0 0 0
+M  V30 BEGIN ATOM
+M  V30 10 C 0 0 0 0
+M  V30 20 C 1.5 0 0 0
+M  V30 30 O 2.25 1.3 0 0
+M  V30 END ATOM
+M  V30 BEGIN BOND
+M  V30 1 1 10 20
+M  V30 2 1 20 30
+M  V30 END BOND
+M  V30 END CTAB
+M  END
+"""
+    rows = reshiki.Molecule.from_molfile(molfile).predict_nmr("13C").rows
+    assert [row.atom for row in rows] == [1, 2]

@@ -423,8 +423,9 @@ lines with the long text fields cut:
 
 `value.rows` has one row per site, in drawing order. `atom` is the drawing's
 atom ID: for SMILES, the atom's position counting from 1, which is index
-`atom - 1` in RDKit's `Chem.MolFromSmiles`; for a MOL file, the atom's number
-in the file; for a `.rsk` drawing, its stored ID. A ¹H row names the heavy
+`atom - 1` in RDKit's `Chem.MolFromSmiles`; for a MOL file, the atom's
+position in the atom block, counting from 1, which is the V2000 atom number
+(V3000 record numbers are not kept); for a `.rsk` drawing, its stored ID. A ¹H row names the heavy
 atom that carries the H, and `hydrogens` lists the IDs of H drawn as atoms.
 `ppm`, `shell`, `references`, `sd`, `min` and `max` are `null` for a site
 without reference data, and `note` says why. `broad` flags a short-shell

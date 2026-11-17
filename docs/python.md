@@ -69,7 +69,8 @@ says why. The prediction also carries `nucleus`, `solvent` (`CDCl3`), `method`,
 
 Atom IDs follow the input. For SMILES, atom `N` is the `N`th atom of the
 SMILES, which is index `N - 1` in RDKit's `Chem.MolFromSmiles`. For a MOL
-file, it is the atom's number in the file. A `.rsk` drawing keeps its stored
+file, it is the atom's position in the atom block, counting from 1: the V2000
+atom number (V3000 record numbers are not kept). A `.rsk` drawing keeps its stored
 IDs, which can have gaps. `clean()` keeps IDs.
 
 A drawing that is not one molecule, unsupported chemistry (such as metals,

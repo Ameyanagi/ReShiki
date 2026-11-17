@@ -273,7 +273,8 @@ class NmrShift:
     """One predicted NMR site, a row of the app's Predict NMR palette.
 
     ``atom`` is the drawing's atom ID: for SMILES, the atom's position counting from 1
-    (RDKit ``MolFromSmiles`` index ``atom - 1``); for MOL, its atom number. A ¹H row names
+    (RDKit ``MolFromSmiles`` index ``atom - 1``); for MOL, its position in the atom block,
+    counting from 1. A ¹H row names
     the heavy atom carrying the H; ``hydrogens`` lists the H drawn as atoms. The values are
     ``None`` for a site without data, and ``note`` says why.
     """
