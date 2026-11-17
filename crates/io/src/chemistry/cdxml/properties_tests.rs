@@ -211,6 +211,12 @@ fn the_name_line_exports_as_plain_text_above_linked_properties() {
             assert!(!line.format.at(0).bold);
         }
     }
+    // Grouped with its molecule, the name stays in the group in ChemDraw.
+    let ids = d.all_ids();
+    d.group_selection(&ids).unwrap();
+    let x = xml(&d);
+    let group = &x[x.find("<group").unwrap()..x.rfind("</group>").unwrap()];
+    assert!(group.contains("Compound 3a") && group.contains("Mol. Wt."), "{x}");
     // A name alone is plain text.
     toggle(
         &mut d,

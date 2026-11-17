@@ -854,45 +854,56 @@ impl Writer<'_> {
                     && link.properties.first() == Some(&Property::Name)
                     && chemdraw_types(link).is_some()
             });
-            let node = match a.text.find('\n').filter(|_| named) {
-                Some(end) => {
-                    let lines = a.text.split('\n').count() as f64;
-                    let (width, height) = measured.map_or_else(
-                        || estimate(&a.text, &a.format),
-                        |m| (real(m.width), real(m.height)),
-                    );
-                    let scale = self.scale;
-                    let center = a.position.x as f64 + width / scale / 2.;
-                    let part = |range: std::ops::Range<usize>, line: f64| {
-                        let text = &a.text[range.clone()];
-                        let mut format = a.format.clone();
-                        format.spans = a
-                            .format
-                            .spans
-                            .iter()
-                            .filter(|s| s.start < range.end && range.start < s.end)
-                            .map(|s| TextSpan {
-                                start: s.start.max(range.start) - range.start,
-                                end: s.end.min(range.end) - range.start,
-                                style: s.style.clone(),
-                            })
-                            .collect();
-                        let x = center - estimate(text, &format).0 / scale / 2.;
-                        let y = a.position.y as f64 + line * height / lines / scale;
-                        Annotation {
-                            position: Point::new(x as f32, y as f32),
-                            text: text.into(),
-                            format,
-                            ..a.clone()
-                        }
-                    };
-                    let (name, lines) = (part(0..end, 0.), part(end + 1..a.text.len(), 1.));
-                    self.annotation(&name, None)?;
-                    self.annotation(&lines, None)?
-                }
-                None => self.annotation(a, measured)?,
+            let Some(end) = a.text.find('\n').filter(|_| named) else {
+                let node = self.annotation(a, measured)?;
+                self.objects.push((a.id, node));
+                continue;
             };
-            self.objects.push((a.id, node));
+            let lines = a.text.split('\n').count() as f64;
+            let (width, height) = measured.map_or_else(
+                || estimate(&a.text, &a.format),
+                |m| (real(m.width), real(m.height)),
+            );
+            // Both parts keep the caption's alignment edge or center.
+            let factor = match a.format.alignment {
+                TextAlign::Center => 0.5,
+                TextAlign::Right => 1.,
+                _ => 0.,
+            };
+            let scale = self.scale;
+            let edge = a.position.x as f64 + width / scale * factor;
+            let part = |range: std::ops::Range<usize>, line: f64| {
+                let text = &a.text[range.clone()];
+                let mut format = a.format.clone();
+                // Its own first letter's style sets the part's line height.
+                format.style = a.format.at(range.start).clone();
+                format.spans = a
+                    .format
+                    .spans
+                    .iter()
+                    .filter(|s| s.start < range.end && range.start < s.end)
+                    .map(|s| TextSpan {
+                        start: s.start.max(range.start) - range.start,
+                        end: s.end.min(range.end) - range.start,
+                        style: s.style.clone(),
+                    })
+                    .collect();
+                let x = edge - estimate(text, &format).0 / scale * factor;
+                let y = a.position.y as f64 + line * height / lines / scale;
+                Annotation {
+                    position: Point::new(x as f32, y as f32),
+                    text: text.into(),
+                    format,
+                    ..a.clone()
+                }
+            };
+            let (name, properties) = (part(0..end, 0.), part(end + 1..a.text.len(), 1.));
+            let name = self.annotation(&name, None)?;
+            let properties = self.annotation(&properties, None)?;
+            // The property text first: the ChemDraw link looks it up. Both
+            // join the caption's drawing group.
+            self.objects.push((a.id, properties));
+            self.objects.push((a.id, name));
         }
         Ok(())
     }
