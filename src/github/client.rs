@@ -274,6 +274,10 @@ impl Client {
                 request = request
                     .header("Content-Type", "application/json")
                     .body(body.clone());
+            } else if [Method::PUT, Method::POST, Method::PATCH].contains(&method) {
+                // GitHub refuses a write that states no length (411), and an
+                // empty body states none.
+                request = request.header("Content-Length", "0");
             }
             let response = request.send().await.map_err(|_| Error::Offline)?;
             let status = response.status();
