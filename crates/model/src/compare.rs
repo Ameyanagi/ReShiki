@@ -89,6 +89,8 @@ pub enum Detail {
         /// Every stereocenter inverted and nothing else: the mirror image.
         mirror_image: bool,
         parts: Vec<Part>,
+        /// Matched by structure, its ids having changed.
+        by_structure: bool,
     },
     /// How far, in drawing units, and how much it turned, clockwise; how
     /// much larger it is drawn, and the mirror line, in degrees from the
@@ -1358,11 +1360,16 @@ pub fn compare(left: &Document, right: &Document) -> Report {
             let mut change = Change::new(Kind::Chemical, Subject::Molecule);
             change.left = marks(atoms_l);
             change.right = marks(atoms_r);
-            if *by == MatchedBy::Id {
-                let map: HashMap<u64, u64> = (a.atoms.keys())
+            // Atoms by their ids, or as constitution or structure paired them.
+            let map: HashMap<u64, u64> = if *by == MatchedBy::Id {
+                (a.atoms.keys())
                     .filter(|id| b.atoms.contains_key(id))
                     .map(|id| (*id, *id))
-                    .collect();
+                    .collect()
+            } else {
+                atom_pairs.get(&(*i, *j)).into_iter().flatten().copied().collect()
+            };
+            if !map.is_empty() {
                 let edit = chemistry::edit_mapped(a, b, &map);
                 change.left.atoms = edit.removed.clone();
                 change.right.atoms = edit.added.clone();
@@ -1384,6 +1391,7 @@ pub fn compare(left: &Document, right: &Document) -> Report {
                     stereo: edit.stereo,
                     mirror_image: edit.mirror_image,
                     parts,
+                    by_structure: *by == MatchedBy::Structure,
                 };
             } else {
                 change.left.atoms = atoms_l.to_vec();

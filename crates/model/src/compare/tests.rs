@@ -295,6 +295,7 @@ fn moving_everything_and_adding_a_nitro_group_is_one_move_and_one_local_change()
                 what: "NO₂".into(),
                 at: vec![],
             }],
+            by_structure: false,
         }
     );
     assert_eq!(change.before.as_deref(), Some("CCOC(=O)c1ccccc1"));

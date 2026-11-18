@@ -249,8 +249,12 @@ chemistry**.
 - A change to the drawing's style or settings is not painted. The compare
   lists **Style or settings changed** instead.
 - Compare matches molecules by ReShiki's own ids, then by SMILES. A molecule
-  both changed and given new ids, as after importing it again, shows as
-  removed and added. A shape flipped or scaled is told from a redraw only
+  both changed and given new ids, as after importing it again, is matched
+  by its structure when that is clear, and its chemical line says
+  **matched by structure (ids changed)**. Otherwise, such as a molecule
+  rewritten beyond half its bonds, a chain made a ring, molecules sharing
+  fewer than three bonds, two equally good candidates, or more than 32 such
+  molecules a side, it shows as removed and added. A shape flipped or scaled is told from a redraw only
   for molecules and graphics of three points or more off one line; an arrow
   drawn longer is redrawn. Atom numbers come from the drawing, never
   generated.
@@ -288,9 +292,25 @@ chemistry**.
   moves the branch only forward. If the head moved, it retries against the new
   head.
 - The compare (`reshiki::compare`) matches molecules (connected atoms) by
-  shared ids checked against a bond both sides keep, then by canonical
-  isomeric SMILES, duplicates by where they sit once the common move is
-  removed; text, arrows and graphics by id, then by content and place. Each
+  shared ids, which must keep, between atoms of the same elements, at least
+  half the bonds of the smaller; then by canonical isomeric SMILES,
+  duplicates by where they sit once the common move is removed; then by
+  SMILES without stereo or isotopes; then by structure. Text, arrows and
+  graphics match by id, then by content and place. Structure matching pairs
+  the atoms with the reaction mapper's bounded search, under Compare's own
+  rules: atoms pair by element, and a bond counts as kept only with the same
+  order and ring membership. Kept heavy-atom bonds over the bonds of either
+  molecule (the Tanimoto similarity) must be at least 0.5, with at least
+  three kept, and every ring system must pair with one on the other side. A
+  pair must be each molecule's clear best: similarities are compared in
+  steps of 0.05, an equal rival must be at least twice as far, and a rival
+  the budget skipped or cut short that could be as good leaves both
+  unmatched. The search counts work, not time (20,000 states and 2,000,000
+  work a pair, 40,000,000 a comparison), so the same two drawings always
+  give the same report. Of equally good atom pairings, the nearest once the
+  two molecules are laid over each other wins, so a ring substituted again
+  is marked at the same atom on both sides; the fit uses only the matched
+  atoms whose neighbours are matched too. Each
   matched molecule is compared as chemistry over its prepared, sanitized
   structure, and fitted onto its old self with a proper 2D rigid fit
   (Kabsch): within 0.01 bond lengths RMS and 0.03 at most it moved. Failing

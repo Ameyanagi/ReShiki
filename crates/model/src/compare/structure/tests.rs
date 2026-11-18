@@ -1,6 +1,6 @@
 use super::*;
 use crate::compare::tests::{chemical, drawn, edited, kinds, load, molecule, moved, nitrate};
-use crate::compare::{Kind, MatchedBy, Report, Subject, compare};
+use crate::compare::{Detail, Kind, MatchedBy, Part, PartKind, Report, Subject, compare};
 use crate::document::{Document, Point};
 
 /// `smiles` at `x` in a drawing numbered from `first` on, as a fresh import
@@ -52,15 +52,82 @@ fn removed_and_added(report: &Report) -> bool {
 #[test]
 fn a_reimported_scheme_with_a_nitro_group_added_is_one_chemical_change() {
     let (left, again) = (drawn(false), drawn(true));
+    let mut added = [0; 3];
     let right = edited(&again.doc, |doc| {
-        nitrate(doc, &again.ester);
+        added = nitrate(doc, &again.ester);
     });
     let report = compare(&left.doc, &right);
     assert_eq!(kinds(&report), [(Kind::Chemical, Subject::Molecule)]);
     assert_eq!(by(&report, &left.ester), Some(MatchedBy::Structure));
     assert_eq!(by(&report, &left.acid), Some(MatchedBy::Smiles));
     assert_eq!(by(&report, &left.ethanol), Some(MatchedBy::Smiles));
-    assert_eq!(chemical(&report)[0].before.as_deref(), Some("CCOC(=O)c1ccccc1"));
+    // Painted as when the ids were kept: the nitro group and its carbon.
+    let change = chemical(&report)[0];
+    assert_eq!(change.right.atoms.len(), 4, "{:?}", change.right.atoms);
+    assert!(added.iter().all(|id| change.right.atoms.contains(id)));
+    assert_eq!(change.left.atoms.len(), 1);
+    assert_eq!(change.right.bonds.len(), 3);
+    let Detail::Edit {
+        parts,
+        by_structure,
+        ..
+    } = &change.detail
+    else {
+        panic!("{:?}", change.detail);
+    };
+    assert!(by_structure);
+    assert_eq!(
+        parts,
+        &[Part {
+            kind: PartKind::Added,
+            what: "NO₂".into(),
+            at: vec![],
+        }]
+    );
+    assert_eq!(change.before.as_deref(), Some("CCOC(=O)c1ccccc1"));
+}
+
+#[test]
+fn a_reimported_toluene_made_m_cresol_marks_the_carbon_where_it_is() {
+    let left = alone("Cc1ccccc1", 1);
+    let again = alone("Cc1ccccc1", 40);
+    let bonded = |doc: &Document, id: u64| -> Vec<u64> {
+        doc.bonds
+            .iter()
+            .filter_map(|b| match (b.a == id, b.b == id) {
+                (true, _) => Some(b.b),
+                (_, true) => Some(b.a),
+                _ => None,
+            })
+            .collect()
+    };
+    // A carbon meta to the methyl: two bonds from the ring carbon bearing it.
+    let ipso = again
+        .atoms
+        .iter()
+        .find(|a| bonded(&again, a.id).len() == 3)
+        .unwrap()
+        .id;
+    let ortho = bonded(&again, ipso);
+    let meta = again
+        .atoms
+        .iter()
+        .map(|a| a.id)
+        .filter(|id| *id != ipso && !ortho.contains(id))
+        .filter(|id| ortho.iter().any(|o| bonded(&again, *o).contains(id)))
+        .max()
+        .unwrap();
+    let right = edited(&again, |doc| {
+        let at = doc.atom(meta).unwrap().position;
+        let oxygen = doc.add_atom("O", at.offset(0., -40.));
+        doc.add_bond(meta, oxygen, 1, "plain");
+    });
+    let report = compare(&left, &right);
+    let change = chemical(&report)[0];
+    let place = right.atom(meta).unwrap().position;
+    let carbon = left.atoms.iter().find(|a| a.position == place).unwrap().id;
+    assert_eq!(change.left.atoms, [carbon]);
+    assert!(change.right.atoms.contains(&meta));
 }
 
 #[test]
@@ -83,6 +150,16 @@ fn a_reimported_stereo_flip_matches_by_constitution() {
     let report = compare(&alone("C[C@H](O)CC", 1), &alone("C[C@@H](O)CC", 6));
     assert_eq!(kinds(&report), [(Kind::Chemical, Subject::Molecule)]);
     assert_eq!(report.molecules[0].by, MatchedBy::Constitution);
+    // The centre, by its own id on each side.
+    let change = chemical(&report)[0];
+    assert_eq!((&change.left.atoms[..], &change.right.atoms[..]), (&[2][..], &[7][..]));
+    assert!(matches!(
+        change.detail,
+        Detail::Edit {
+            by_structure: false,
+            ..
+        }
+    ));
 }
 
 #[test]
@@ -101,6 +178,7 @@ fn a_reimported_moved_and_edited_scheme_is_one_move_and_one_change() {
         ]
     );
     assert_eq!(by(&report, &left.ester), Some(MatchedBy::Structure));
+    assert_eq!(chemical(&report)[0].right.atoms.len(), 4);
 }
 
 #[test]

@@ -120,6 +120,35 @@ fn each_mode_counts_and_lists_its_own_changes() {
 }
 
 #[test]
+fn a_ring_drawn_again_and_edited_says_it_was_matched_by_structure() {
+    let (left, ring, _) = scheme();
+    // Deleted and drawn again, as an import does: new ids, and an oxygen.
+    let right = edited(&left, |doc| {
+        doc.delete(&ring);
+        let benzene = reshiki::rings::Preset::Benzene.document(42., false);
+        let ids = reshiki::editing::append(doc, &benzene, Point::new(300., 0.));
+        let carbon = ids.into_iter().find(|id| doc.atom(*id).is_some()).unwrap();
+        let at = doc.atom(carbon).unwrap().position;
+        let oxygen = doc.add_atom("O", at.offset(0., -40.));
+        doc.add_bond(carbon, oxygen, 1, "plain");
+    });
+    let compare = compared(&left, &right);
+    let rows = compare.listed();
+    assert_eq!(rows[0].tag, Tag::Chem);
+    assert_eq!(rows[0].title, "OH added");
+    assert_eq!(
+        rows[0].detail,
+        "Different chemistry · matched by structure (ids changed)"
+    );
+    let shown = compare.shown.as_ref().unwrap();
+    let painted = (shown.marks.lined.iter())
+        .filter(|m| m.paint == ComparePaint::Chemical)
+        .count();
+    // The oxygen, its carbon and their bond, not the whole ring.
+    assert_eq!(painted, 3);
+}
+
+#[test]
 fn lined_up_the_right_side_lies_on_the_left_and_unticked_it_is_where_it_is() {
     let (left, ..) = scheme();
     let right = edited(&left, |doc| doc.translate(&doc.all_ids(), 80., -40.));
