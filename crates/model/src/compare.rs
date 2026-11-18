@@ -1,17 +1,17 @@
 //! Two versions of a drawing compared as chemistry and as layout, for
 //! History's Compare and the changed-on-GitHub dialog. Molecules match by
 //! their ids, checked against the bonds they keep, then by canonical SMILES,
-//! duplicates by where they sit. Each matched pair is compared as chemistry
-//! (see [`chemistry`]) and fitted onto its old self with a rigid move, or
-//! failing that one that also reflects or scales: what the fit removes is a
-//! move, a mirror or a scale, what it leaves is a redraw. A move most of the
-//! scheme shares is one change. Style is compared once the right side is
-//! lined up, text on its own. One object can have several kinds of change.
-//!
-//! Matching by substructure when ids changed is left to a later version; it
-//! slots in as another [`MatchedBy`] with its own atom correspondence.
+//! duplicates by where they sit, then, for drawings whose ids changed, by
+//! SMILES without stereo and by structure (see [`structure`]). Each matched
+//! pair is compared as chemistry (see [`chemistry`]) and fitted onto its old
+//! self with a rigid move, or failing that one that also reflects or scales:
+//! what the fit removes is a move, a mirror or a scale, what it leaves is a
+//! redraw. A move most of the scheme shares is one change. Style is compared
+//! once the right side is lined up, text on its own. One object can have
+//! several kinds of change.
 mod chemistry;
 pub mod fit;
+mod structure;
 #[cfg(test)]
 mod tests;
 
@@ -89,6 +89,8 @@ pub enum Detail {
         /// Every stereocenter inverted and nothing else: the mirror image.
         mirror_image: bool,
         parts: Vec<Part>,
+        /// Matched by structure, its ids having changed.
+        by_structure: bool,
     },
     /// How far, in drawing units, and how much it turned, clockwise; how
     /// much larger it is drawn, and the mirror line, in degrees from the
@@ -171,6 +173,10 @@ impl Change {
 pub enum MatchedBy {
     Id,
     Smiles,
+    /// The same atoms and bonds; stereo or isotopes changed.
+    Constitution,
+    /// Most bonds in common, once ids changed.
+    Structure,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -394,10 +400,60 @@ fn nearest(left: &Side, mine: &[u64], right: &Side, theirs: &[u64]) -> Vec<(u64,
     if kept { pairs } else { Vec::new() }
 }
 
-/// Pairs molecules that share ids. Shared ids are evidence, not proof: a
-/// pair needs a bond both sides keep, or for single atoms the same element,
-/// so an id reused for another atom elsewhere is not a match.
-fn by_id(left: &Side, right: &Side) -> Vec<(usize, usize)> {
+/// Of atoms paired (left, right), those bonded to the same paired atoms on
+/// both sides: what rewiring nearby did not redraw. A group added or
+/// removed does not count.
+fn unchanged(left: &Side, right: &Side, atoms: &[(u64, u64)]) -> Vec<(u64, u64)> {
+    let map: HashMap<u64, u64> = atoms.iter().copied().collect();
+    let paired: HashSet<u64> = map.values().copied().collect();
+    let neighbors = |side: &Side, id: u64| -> Vec<u64> {
+        side.bonds
+            .iter()
+            .filter_map(|(a, b)| match (*a == id, *b == id) {
+                (true, _) => Some(*b),
+                (_, true) => Some(*a),
+                _ => None,
+            })
+            .collect()
+    };
+    atoms
+        .iter()
+        .filter(|(a, b)| {
+            let mine: BTreeSet<u64> = (neighbors(left, *a).iter())
+                .filter_map(|n| map.get(n).copied())
+                .collect();
+            let theirs: BTreeSet<u64> = (neighbors(right, *b).into_iter())
+                .filter(|n| paired.contains(n))
+                .collect();
+            mine == theirs
+        })
+        .copied()
+        .collect()
+}
+
+/// Molecule pairs, (left, right), by index.
+type Molecules = Vec<(usize, usize)>;
+
+/// Pairs molecules that share ids, as (strong, weak). Shared ids are
+/// evidence, not proof: a pair must keep, between atoms of the same
+/// elements, at least half the bonds of the smaller, or for single atoms the
+/// same element. Exactly half is weak, as when a re-import numbered atoms
+/// afresh and ethanol took ids of an ester, keeping one of its two bonds:
+/// equal content and structure come first.
+fn by_id(left: &Side, right: &Side) -> (Molecules, Molecules) {
+    let sizes = |side: &Side| {
+        let mut bonds = vec![0_usize; side.molecules.len()];
+        for bond in side.doc.bonds.iter().filter(|bond| bond.order != 0) {
+            if let Some(n) = side.owner.get(&bond.a).and_then(|i| bonds.get_mut(*i)) {
+                *n += 1;
+            }
+        }
+        bonds
+    };
+    let (sizes_l, sizes_r) = (sizes(left), sizes(right));
+    let same = |id: u64| {
+        left.doc.atom(id).map(|atom| &atom.element) == right.doc.atom(id).map(|atom| &atom.element)
+    };
     // (bonds kept, atoms shared) for each candidate pair.
     let mut score = HashMap::<(usize, usize), (usize, usize)>::new();
     for (i, atoms) in left.molecules.iter().enumerate() {
@@ -415,14 +471,15 @@ fn by_id(left: &Side, right: &Side) -> Vec<(usize, usize)> {
         ) else {
             continue;
         };
-        if j == k && right.bonds.contains(&key(bond.a, bond.b)) {
+        if j == k && right.bonds.contains(&key(bond.a, bond.b)) && same(bond.a) && same(bond.b) {
             score.entry((i, j)).or_default().0 += 1;
         }
     }
     let mut candidates: Vec<_> = score
         .into_iter()
         .filter(|((i, j), (kept, _))| {
-            *kept > 0
+            let smaller = sizes_l.get(*i).min(sizes_r.get(*j)).copied().unwrap_or(0);
+            (*kept > 0 && 2 * kept >= smaller)
                 || match (left.atoms(*i), right.atoms(*j)) {
                     ([a], [b]) => {
                         a == b
@@ -436,7 +493,15 @@ fn by_id(left: &Side, right: &Side) -> Vec<(usize, usize)> {
     candidates.sort_by(|(pair_a, score_a), (pair_b, score_b)| {
         score_b.cmp(score_a).then(pair_a.cmp(pair_b))
     });
+    let weak: HashSet<(usize, usize)> = (candidates.iter())
+        .filter(|((i, j), (kept, _))| {
+            *kept > 0 && 2 * kept == sizes_l.get(*i).min(sizes_r.get(*j)).copied().unwrap_or(0)
+        })
+        .map(|(pair, _)| *pair)
+        .collect();
     greedy(candidates.into_iter().map(|(pair, _)| pair))
+        .into_iter()
+        .partition(|pair| !weak.contains(pair))
 }
 
 /// Takes pairs in order, each side at most once.
@@ -1002,7 +1067,8 @@ pub fn compare(left: &Document, right: &Document) -> Report {
     };
 
     // Molecules by id, then texts, arrows and graphics by id.
-    let mut pairs: Vec<(usize, usize, MatchedBy)> = by_id(&l, &r)
+    let (strong, weak) = by_id(&l, &r);
+    let mut pairs: Vec<(usize, usize, MatchedBy)> = strong
         .into_iter()
         .map(|(i, j)| (i, j, MatchedBy::Id))
         .collect();
@@ -1026,7 +1092,9 @@ pub fn compare(left: &Document, right: &Document) -> Report {
         thing_pairs.insert(*object, found);
     }
 
-    let molecule_entity = |i: usize, j: usize, by: MatchedBy| -> Entity {
+    // Atoms paired by constitution or structure, (left, right), by pair.
+    let mut atom_pairs: HashMap<(usize, usize), Vec<(u64, u64)>> = HashMap::new();
+    let molecule_entity = |i: usize, j: usize, by: MatchedBy, atoms: &[(u64, u64)]| -> Entity {
         let (atoms_l, atoms_r) = (l.atoms(i).to_vec(), r.atoms(j).to_vec());
         let ordered: Option<Vec<(u64, u64)>> = match (l.signature(i), r.signature(j)) {
             (Some(Ok(a)), Some(Ok(b))) if by == MatchedBy::Smiles && a.drawn == b.drawn => Some(
@@ -1086,6 +1154,21 @@ pub fn compare(left: &Document, right: &Document) -> Report {
                     canonical
                 }
             }
+            // Unpaired when too large or out of budget: as drawn, if that
+            // keeps every bond.
+            MatchedBy::Constitution if atoms.is_empty() => {
+                points(&nearest(&l, &atoms_l, &r, &atoms_r))
+            }
+            MatchedBy::Constitution => {
+                points(&atoms.iter().map(|(a, b)| (*b, *a)).collect::<Vec<_>>())
+            }
+            // Atoms an edit nearby may have moved are left out.
+            MatchedBy::Structure => points(
+                &unchanged(&l, &r, atoms)
+                    .into_iter()
+                    .map(|(a, b)| (b, a))
+                    .collect::<Vec<_>>(),
+            ),
         };
         if points.is_empty() {
             let pairs = vec![(r.centroid(j), l.centroid(i))];
@@ -1117,10 +1200,14 @@ pub fn compare(left: &Document, right: &Document) -> Report {
         Some(entity)
     };
     let entities = |pairs: &[(usize, usize, MatchedBy)],
-                    thing_pairs: &HashMap<Object, Vec<(usize, usize)>>| {
+                    thing_pairs: &HashMap<Object, Vec<(usize, usize)>>,
+                    atom_pairs: &HashMap<(usize, usize), Vec<(u64, u64)>>| {
         let mut all: Vec<Entity> = pairs
             .iter()
-            .map(|(i, j, by)| molecule_entity(*i, *j, *by))
+            .map(|(i, j, by)| {
+                let atoms = atom_pairs.get(&(*i, *j)).map_or(&[][..], Vec::as_slice);
+                molecule_entity(*i, *j, *by, atoms)
+            })
             .collect();
         for object in objects {
             for (i, j) in thing_pairs.get(&object).into_iter().flatten() {
@@ -1133,7 +1220,8 @@ pub fn compare(left: &Document, right: &Document) -> Report {
     // What is left, by content: molecules by SMILES, nearest first after the
     // move the id matches share; texts by their words, arrows and graphics by
     // kind.
-    let guess = common(&entities(&pairs, &thing_pairs), unit).map_or(Fit::IDENTITY, |(f, _)| f);
+    let guess = common(&entities(&pairs, &thing_pairs, &atom_pairs), unit)
+        .map_or(Fit::IDENTITY, |(f, _)| f);
     let paired_l: HashSet<usize> = pairs.iter().map(|(i, ..)| *i).collect();
     let paired_r: HashSet<usize> = pairs.iter().map(|(_, j, _)| *j).collect();
     let open = |side: &Side, paired: &HashSet<usize>| -> Vec<(usize, (String, String), Xy)> {
@@ -1164,9 +1252,63 @@ pub fn compare(left: &Document, right: &Document) -> Report {
         let found = by_content(&open(mine, &used_l), &open(theirs, &used_r), &guess);
         taken.extend(found);
     }
+
+    // Drawn again with new ids, as a re-import does: by SMILES without
+    // stereo, then by structure, nearest first after the move all matches
+    // so far share.
+    let guess = common(&entities(&pairs, &thing_pairs, &atom_pairs), unit)
+        .map_or(Fit::IDENTITY, |(f, _)| f);
+    let mut work = structure::TOTAL;
+    let unpaired = |side: &Side, pairs: &[(usize, usize, MatchedBy)], mine: bool| -> Vec<usize> {
+        let paired: HashSet<usize> = pairs
+            .iter()
+            .map(|(i, j, _)| if mine { *i } else { *j })
+            .collect();
+        (0..side.molecules.len())
+            .filter(|i| !paired.contains(i) && matches!(side.signature(*i), Some(Ok(_))))
+            .collect()
+    };
+    let constitution = |side: &Side, open: &[usize]| -> Vec<(usize, String, Xy)> {
+        open.iter()
+            .filter_map(|i| match side.signature(*i) {
+                Some(Ok(sig)) => Some((*i, sig.constitution.clone(), side.centroid(*i))),
+                _ => None,
+            })
+            .collect()
+    };
+    let found = by_content(
+        &constitution(&l, &unpaired(&l, &pairs, true)),
+        &constitution(&r, &unpaired(&r, &pairs, false)),
+        &guess,
+    );
+    for (i, j) in found {
+        let atoms = structure::constitution((&l, i), (&r, j), &guess, unit, &mut work);
+        atom_pairs.insert((i, j), atoms);
+        pairs.push((i, j, MatchedBy::Constitution));
+    }
+    let guess = common(&entities(&pairs, &thing_pairs, &atom_pairs), unit)
+        .map_or(Fit::IDENTITY, |(f, _)| f);
+    let found = structure::matches(
+        (&l, &unpaired(&l, &pairs, true)),
+        (&r, &unpaired(&r, &pairs, false)),
+        &guess,
+        unit,
+        &mut work,
+    );
+    for (i, j, atoms) in found {
+        atom_pairs.insert((i, j), atoms);
+        pairs.push((i, j, MatchedBy::Structure));
+    }
+    let (taken_l, taken_r): (HashSet<usize>, HashSet<usize>) =
+        pairs.iter().map(|(i, j, _)| (*i, *j)).unzip();
+    pairs.extend(
+        weak.into_iter()
+            .filter(|(i, j)| !taken_l.contains(i) && !taken_r.contains(j))
+            .map(|(i, j)| (i, j, MatchedBy::Id)),
+    );
     pairs.sort_unstable_by_key(|(i, j, _)| (*i, *j));
 
-    let entities = entities(&pairs, &thing_pairs);
+    let entities = entities(&pairs, &thing_pairs, &atom_pairs);
     let common = common(&entities, unit);
     let shared = |n: usize| {
         common
@@ -1265,11 +1407,21 @@ pub fn compare(left: &Document, right: &Document) -> Report {
             let mut change = Change::new(Kind::Chemical, Subject::Molecule);
             change.left = marks(atoms_l);
             change.right = marks(atoms_r);
-            if *by == MatchedBy::Id {
-                let map: HashMap<u64, u64> = (a.atoms.keys())
+            // Atoms by their ids, or as constitution or structure paired them.
+            let map: HashMap<u64, u64> = if *by == MatchedBy::Id {
+                (a.atoms.keys())
                     .filter(|id| b.atoms.contains_key(id))
                     .map(|id| (*id, *id))
-                    .collect();
+                    .collect()
+            } else {
+                atom_pairs
+                    .get(&(*i, *j))
+                    .into_iter()
+                    .flatten()
+                    .copied()
+                    .collect()
+            };
+            if !map.is_empty() {
                 let edit = chemistry::edit_mapped(a, b, &map);
                 change.left.atoms = edit.removed.clone();
                 change.right.atoms = edit.added.clone();
@@ -1291,6 +1443,7 @@ pub fn compare(left: &Document, right: &Document) -> Report {
                     stereo: edit.stereo,
                     mirror_image: edit.mirror_image,
                     parts,
+                    by_structure: *by == MatchedBy::Structure,
                 };
             } else {
                 change.left.atoms = atoms_l.to_vec();

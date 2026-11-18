@@ -140,8 +140,10 @@ fn dative_direction_is_compared_after_endpoint_mapping() {
             BondClass {
                 order: 5,
                 donor: Some(0),
+                ring: false,
             },
         )]),
+        strict: false,
     };
     let target = Graph {
         atoms: vec![atom(3), atom(4)],
@@ -150,8 +152,10 @@ fn dative_direction_is_compared_after_endpoint_mapping() {
             BondClass {
                 order: 5,
                 donor: Some(1),
+                ring: false,
             },
         )]),
+        strict: false,
     };
     let fixed = HashMap::from([(0, 0), (1, 1)]);
     let changed = score(&source, &target, &fixed);
@@ -183,4 +187,68 @@ fn augment_budget_is_checked_before_scanning_domains() {
         .is_err()
     );
     assert_eq!(work, 1);
+}
+
+/// A chain, or with `ring` a ring, of `n` carbons drawn from x = `x`.
+fn carbons(doc: &mut Document, n: usize, ring: bool, x: f32) -> Vec<u64> {
+    let ids: Vec<u64> = (0..n)
+        .map(|i| doc.add_atom("C", Point::new(x + 40. * i as f32, 0.)))
+        .collect();
+    for pair in ids.windows(2) {
+        doc.add_bond(pair[0], pair[1], 1, "plain");
+    }
+    if ring {
+        doc.add_bond(ids[n - 1], ids[0], 1, "plain");
+    }
+    ids
+}
+
+#[test]
+fn compare_keeps_only_bonds_of_the_same_order_and_ring_membership() {
+    let mut doc = Document::default();
+    let chain = carbons(&mut doc, 4, false, 0.);
+    let ring = carbons(&mut doc, 4, true, 300.);
+    let other = carbons(&mut doc, 4, true, 600.);
+    let graph = |ids: &[u64]| Graph::compared(&doc, ids).unwrap();
+    let kept = |a: &[u64], b: &[u64]| correspond(&graph(a), &graph(b), Budget::default(), |_, _| 0);
+    assert_eq!(kept(&chain, &ring).kept, 0);
+    let rings = kept(&ring, &other);
+    assert_eq!(
+        (rings.kept, rings.complete, rings.pairs.len()),
+        (4, true, 4)
+    );
+}
+
+#[test]
+fn compare_breaks_ties_by_the_lowest_cost_not_by_id() {
+    let mut doc = Document::default();
+    let left = carbons(&mut doc, 6, true, 0.);
+    let right = carbons(&mut doc, 6, true, 300.);
+    let at = |ids: &[u64], id: u64| ids.iter().position(|x| *x == id).unwrap();
+    // Every rotation and reflection keeps all six bonds; the cheapest pairs
+    // each atom with the one three places on, reflected.
+    let wanted = |l: u64| right[(6 + 3 - at(&left, l)) % 6];
+    let found = correspond(
+        &Graph::compared(&doc, &left).unwrap(),
+        &Graph::compared(&doc, &right).unwrap(),
+        Budget::default(),
+        |l, r| u64::from(r != wanted(l)) * 100,
+    );
+    assert_eq!(found.kept, 6);
+    assert!(found.complete);
+    let expected: Vec<(u64, u64)> = left.iter().map(|l| (*l, wanted(*l))).collect();
+    assert_eq!(found.pairs, expected);
+    // Out of budget: unfinished, and no more work than allowed.
+    let budget = Budget {
+        states: 20_000,
+        work: 50,
+    };
+    let short = correspond(
+        &Graph::compared(&doc, &left).unwrap(),
+        &Graph::compared(&doc, &right).unwrap(),
+        budget,
+        |_, _| 0,
+    );
+    assert!(!short.complete);
+    assert!(short.work <= budget.work);
 }

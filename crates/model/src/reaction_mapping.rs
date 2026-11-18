@@ -10,6 +10,7 @@ use std::{
 };
 mod search;
 pub use search::{Budget, Proposal, Score, propose};
+pub(crate) use search::{Graph, correspond};
 
 pub const MAX_MAP: u32 = i32::MAX as u32;
 const COEFFICIENT_ERROR: &str = "Atom maps require one drawn molecule per participant; expand coefficients in the affected reaction first";

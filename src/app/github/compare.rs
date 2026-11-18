@@ -391,12 +391,18 @@ fn change_row(index: usize, change: &Change, left: &Document, right: &Document, 
                 Detail::Reason(reason) => reason.clone(),
                 _ => "Molecule changed".to_owned(),
             };
-            (
-                Tag::Chem,
-                title,
-                "Different chemistry".to_owned(),
-                Some(smiles),
-            )
+            let detail = if matches!(
+                change.detail,
+                Detail::Edit {
+                    by_structure: true,
+                    ..
+                }
+            ) {
+                "Different chemistry · matched by structure (ids changed)"
+            } else {
+                "Different chemistry"
+            };
+            (Tag::Chem, title, detail.to_owned(), Some(smiles))
         }
         Kind::Added if molecule => (
             Tag::Added,
