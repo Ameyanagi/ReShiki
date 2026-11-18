@@ -17,7 +17,9 @@ guide's file compatibility section. The npm packages take their version from
 and `packages/headless/package.json` are unchanged. The source is `main` at
 `f25ab7eb`, the merge of
 [PR #1234](https://github.com/Ameyanagi/ReShiki/pull/1234), 57 first-parent
-merges after v0.15.0.
+merges after v0.15.0. Fixes merged to `main` for this release after that were folded in
+the same way: [PR #1241](https://github.com/Ameyanagi/ReShiki/pull/1241)
+(rings join the atoms they land on), at `524ac765`.
 
 `VERSION` is 39 in `crates/model/src/document.rs`. `Document::file_version`
 saves each drawing at the version of the newest feature it uses: 39 for a

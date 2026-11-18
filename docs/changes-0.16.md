@@ -250,6 +250,14 @@ changes in this release are by @Ameyanagi.
   structures from SMILES or names, and the bundled templates, also stand
   six-membered rings upright
   ([#1207](https://github.com/Ameyanagi/ReShiki/pull/1207)).
+- **Rings join the atoms they land on.** A ring placed on an atom or bond now
+  shares an existing atom under one of its other corners instead of stopping
+  with “Overlaps an existing atom”, so a ring can be fused into the bay between
+  neighbouring rings. The shared atom still needs a free valence for each bond
+  the ring adds to it. A ring that is already drawn is refused with “The ring
+  already exists”
+  ([#1241](https://github.com/Ameyanagi/ReShiki/pull/1241)).
+  [Selection and ring placement](selection-and-ring-placement.md).
 - **Large rings stay round.** A ring of nine or more atoms that shares no atom
   with another ring, such as cyclododecane or 18-crown-6, is cleaned up as a
   regular polygon with its substituents pointing outward. A trans double bond
