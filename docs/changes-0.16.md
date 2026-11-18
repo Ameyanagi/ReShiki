@@ -185,6 +185,10 @@ changes in this release are by @Ameyanagi.
   to it with its whole molecule in view
   ([#1235](https://github.com/Ameyanagi/ReShiki/pull/1235),
   [#1237](https://github.com/Ameyanagi/ReShiki/pull/1237)).
+- Clicking a change on a small molecule no longer zooms out, the outline
+  around a changed atom goes around its label, such as Br, instead of through
+  it, and the SMILES of unchanged molecules wrap instead of running off the
+  edge ([#1245](https://github.com/Ameyanagi/ReShiki/pull/1245)).
 
 ## Captions, names and NMR
 
