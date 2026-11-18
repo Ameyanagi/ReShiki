@@ -57,6 +57,7 @@ pub mod pictures;
 mod polygon;
 pub mod projection;
 pub mod purpose;
+pub mod reaction_colors;
 pub mod reaction_mapping;
 pub mod reactions;
 pub mod rear_opacity;

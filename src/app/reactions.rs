@@ -11,6 +11,8 @@ pub struct State {
     epoch: u64,
     /// What takes part in a reaction, shown until the drawing changes.
     pub(super) preview: Option<(u64, Reaction)>,
+    /// Color this arrow's reaction once its reviewed atom maps are applied.
+    pub(super) color_after_maps: Option<u64>,
 }
 
 #[cfg(test)]
@@ -27,7 +29,41 @@ pub enum Action {
     Export(&'static str),
     /// Outline what takes part in the chosen arrow's reaction, or hide it.
     Preview,
+    /// Color the reaction by origin, mapping its atoms first if needed.
+    ColorByOrigin,
+    ColorSetting(ColorSetting),
+    ClearColors,
 }
+
+/// One color by origin setting of the chosen reaction.
+#[derive(Debug, Clone, Copy)]
+pub enum ColorSetting {
+    Reactant(usize, HueChoice),
+    Formed(HueChoice),
+    Bonds(bool),
+    Changes(bool),
+    Rings(bool),
+    Legend(bool),
+}
+
+/// A palette hue in a menu.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HueChoice(pub reshiki::palette::Hue);
+impl std::fmt::Display for HueChoice {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.0.name())
+    }
+}
+const HUES: [HueChoice; 8] = [
+    HueChoice(reshiki::palette::Hue::Red),
+    HueChoice(reshiki::palette::Hue::Orange),
+    HueChoice(reshiki::palette::Hue::Amber),
+    HueChoice(reshiki::palette::Hue::Green),
+    HueChoice(reshiki::palette::Hue::Teal),
+    HueChoice(reshiki::palette::Hue::Blue),
+    HueChoice(reshiki::palette::Hue::Indigo),
+    HueChoice(reshiki::palette::Hue::Purple),
+];
 impl App {
     pub(super) fn reaction_arrow(&self) -> Option<u64> {
         let selected: Vec<_> = self
@@ -97,9 +133,77 @@ impl App {
         }
         super::focus_drawing()
     }
+    /// Color `arrow`'s reaction by origin as one Undo step. Without atom
+    /// maps, run Auto-map first; applying its maps colors the reaction.
+    pub(super) fn color_by_origin(&mut self, arrow: u64) -> Task<Message> {
+        use reshiki::reaction_colors::{Refusal, paint};
+        let before = self.tab.doc.clone();
+        match paint(&mut self.tab.doc, arrow) {
+            Ok(()) => {
+                self.changed(before);
+                if !self.error {
+                    self.status = "Colored by origin".into();
+                }
+                Task::none()
+            }
+            Err(Refusal::Maps) => {
+                self.tab.doc = before;
+                self.tab.reactions.color_after_maps = Some(arrow);
+                self.inspector_open = true;
+                self.inspector_tab = InspectorTab::Reactions;
+                Task::done(Message::Mapping(super::reaction_mapping::Action::Auto))
+            }
+            Err(refusal) => {
+                self.tab.doc = before;
+                self.error = true;
+                self.status = refusal.message().into();
+                Task::none()
+            }
+        }
+    }
+    fn color_setting(&mut self, arrow: u64, setting: ColorSetting) {
+        use reshiki::reaction_colors::{set_legend, update};
+        let before = self.tab.doc.clone();
+        let result = match setting {
+            ColorSetting::Legend(shown) => set_legend(
+                &mut self.tab.doc,
+                arrow,
+                shown,
+                self.tab.caption_format.clone(),
+            ),
+            setting => update(&mut self.tab.doc, arrow, |colors| match setting {
+                ColorSetting::Reactant(index, hue) => {
+                    if let Some(slot) = colors.reactants.get_mut(index) {
+                        *slot = hue.0;
+                    }
+                }
+                ColorSetting::Formed(hue) => colors.formed = hue.0,
+                ColorSetting::Bonds(on) => colors.bonds = on,
+                ColorSetting::Changes(on) => colors.changes = on,
+                ColorSetting::Rings(on) => colors.rings = on,
+                ColorSetting::Legend(_) => {}
+            }),
+        };
+        match result {
+            Ok(()) => self.changed(before),
+            Err(refusal) => {
+                self.tab.doc = before;
+                self.error = true;
+                self.status = refusal.message().into();
+            }
+        }
+    }
     pub(super) fn reaction_action(&mut self, action: Action) -> Task<Message> {
         if let Action::Preview = action {
             return self.preview_reaction();
+        }
+        if let Action::ColorByOrigin = action {
+            let Some(arrow) = self.reaction_arrow() else {
+                self.error = true;
+                self.status = "Select a reaction arrow first.".into();
+                return Task::none();
+            };
+            return self.color_by_origin(arrow);
         }
         self.inspector_open = true;
         self.inspector_tab = InspectorTab::Reactions;
@@ -109,6 +213,7 @@ impl App {
                 arrow: Some(id),
                 epoch: self.tab.file_epoch,
                 preview: self.tab.reactions.preview.take(),
+                color_after_maps: self.tab.reactions.color_after_maps.take(),
             };
             self.tab.selected = vec![id];
             return Task::none();
@@ -120,6 +225,7 @@ impl App {
             arrow: Some(arrow),
             epoch: self.tab.file_epoch,
             preview: self.tab.reactions.preview.take(),
+            color_after_maps: self.tab.reactions.color_after_maps.take(),
         };
         if let Action::Export(format) = action {
             if self.tab.busy {
@@ -152,6 +258,20 @@ impl App {
                 }
             }
             Action::Unlink => self.tab.doc.reactions.retain(|r| r.arrow != arrow),
+            Action::ColorSetting(setting) => {
+                self.color_setting(arrow, setting);
+                return Task::none();
+            }
+            Action::ClearColors => {
+                if !reshiki::reaction_colors::clear_paint(&mut self.tab.doc, arrow) {
+                    return Task::none();
+                }
+                self.changed(before);
+                if !self.error {
+                    self.status = "Colors removed".into();
+                }
+                return Task::none();
+            }
             Action::SelectAll => {
                 if let Some(reaction) = self.tab.doc.reactions.iter().find(|r| r.arrow == arrow) {
                     self.tab.selected = reaction.ids();
@@ -382,6 +502,9 @@ impl App {
             ]
             .spacing(4),
         );
+        if reaction.ready() || reaction.colors.is_some() {
+            body = body.push(self.color_section(reaction));
+        }
         if !self.tab.doc.reactions.is_empty() {
             body = body.push(command(
                 "Remove reaction roles",
@@ -389,5 +512,88 @@ impl App {
             ));
         }
         body.into()
+    }
+
+    /// Color by origin: the command, then the settings once it has run.
+    fn color_section(&self, reaction: &Reaction) -> Element<'static, Message> {
+        use super::workspace::{accessible_checkbox, command, muted_text, section};
+        let send = |setting| Message::Reaction(Action::ColorSetting(setting));
+        let mut body = column![section("Color by origin")].spacing(6);
+        let Some(colors) = &reaction.colors else {
+            return body
+                .push(
+                    text("Color each reactant and carry it into the products along the atom maps.")
+                        .size(11)
+                        .style(muted_text),
+                )
+                .push(
+                    command("Color by origin", Message::Reaction(Action::ColorByOrigin))
+                        .width(Length::Fill),
+                )
+                .into();
+        };
+        for (index, hue) in colors.reactants.iter().enumerate() {
+            body = body.push(
+                row![
+                    text(format!("Reactant {}", index + 1))
+                        .size(12)
+                        .width(Length::Fill),
+                    crate::appearance::pick_list(HUES, Some(HueChoice(*hue)), move |h| {
+                        send(ColorSetting::Reactant(index, h))
+                    })
+                    .text_size(12)
+                    .width(120),
+                ]
+                .align_y(iced::Alignment::Center),
+            );
+        }
+        body = body.push(
+            row![
+                text("New bonds and rings").size(12).width(Length::Fill),
+                crate::appearance::pick_list(HUES, Some(HueChoice(colors.formed)), move |h| {
+                    send(ColorSetting::Formed(h))
+                })
+                .text_size(12)
+                .width(120),
+            ]
+            .align_y(iced::Alignment::Center),
+        );
+        for (id, label, on, setting) in [
+            (
+                "colors-bonds",
+                "Mark new bonds",
+                colors.bonds,
+                ColorSetting::Bonds(!colors.bonds),
+            ),
+            (
+                "colors-changes",
+                "Mark broken and changed bonds",
+                colors.changes,
+                ColorSetting::Changes(!colors.changes),
+            ),
+            (
+                "colors-rings",
+                "Fill new rings",
+                colors.rings,
+                ColorSetting::Rings(!colors.rings),
+            ),
+            (
+                "colors-legend",
+                "Legend",
+                colors.legend.is_some(),
+                ColorSetting::Legend(colors.legend.is_none()),
+            ),
+        ] {
+            body = body.push(accessible_checkbox(id, label, on, Some(send(setting))));
+        }
+        body.push(
+            row![
+                command("Update colors", Message::Reaction(Action::ColorByOrigin))
+                    .width(Length::Fill),
+                command("Clear colors", Message::Reaction(Action::ClearColors)).width(Length::Fill),
+            ]
+            .spacing(4),
+        )
+        .into()
     }
 }

@@ -267,6 +267,46 @@ motivates correspondence and coordinated drawing. Gaussian/TS export remains
 future work; this editor supplies persistent chemical atom maps and visible
 labels.
 
+## Color by origin
+
+**Color by origin** colors each reactant and carries its color into the
+products along the atom maps. The bonds and rings the reaction forms are
+highlighted, and an optional legend names each color.
+
+### Use it
+
+1. Assign reactants and products (see [Define a reaction](#define-a-reaction)).
+2. Right-click the arrow and choose **Color by origin**, or choose it in
+   **Reaction roles**. Without atom maps, ReShiki runs **Auto-map** first:
+   check the suggested maps and choose **Apply maps**. The reaction is then
+   colored.
+3. In **Reaction roles → Color by origin**, pick each reactant's color and
+   the color of new bonds and rings, and turn on **Mark new bonds**, **Mark
+   broken and changed bonds**, **Fill new rings** or **Legend**. Each change
+   repaints the reaction.
+4. After you edit a molecule or its maps, choose **Update colors**. **Clear
+   colors** removes the colors and the legend.
+
+Each command is one Undo step. Bonds take the reactant's palette color, and
+labeled atoms such as O take it too. A new bond keeps its ink and gets a
+highlight; a new ring gets a ring fill. Broken and changed bonds get an amber
+highlight, or orange when new bonds are amber. The legend is one text: edit the
+names, and they stay when you update the colors.
+
+In a scheme with several steps, a product colored by one step keeps those
+colors as a reactant of the next step, so a fragment stays one color from
+start to end. Each step keeps its own settings in the reaction.
+
+### Limits
+
+- Colors follow atom maps. An atom without a map partner stays in ink.
+- The colors are palette colors, so they follow the theme and the canvas.
+  Exports and CDX/CDXML files carry them as ordinary bond and label colors,
+  highlights and ring fills; the settings stay in `.rsk` files only
+  (document version 40).
+- Updating colors repaints the reaction's molecules: a bond you colored by hand
+  in one of the reaction's palette colors is repainted too.
+
 ## Current limits and verification
 
 Persistent reactions use explicit role assignment and chemical exchange. The bounded single-arrow inference above applies only to copying; broader reaction interpretation, whole-scheme cleanup, balancing, yields, quantities, and coefficient editing in the inspector remain future work. The existing cleanup command still operates only on your selected atoms or molecules and leaves the reaction arrow and unselected molecules fixed.

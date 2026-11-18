@@ -24,8 +24,8 @@ pub use reshiki_model::{
     attachments, bonds, canvas_theme, chains, color_contrast, common_groups, compare, crossings,
     depiction, depth_appearance, document, editing, erasing, fischer, generic, graphics, grouping,
     haworth, highlights, ionic, joining, ligands, linked_properties, models3d, molecule_names,
-    pages, palette, pictures, projection, purpose, reaction_mapping, reactions, rear_opacity,
-    ring_arcs, ring_fills, rings, scene, scientific, selection_region, stereo_groups,
+    pages, palette, pictures, projection, purpose, reaction_colors, reaction_mapping, reactions,
+    rear_opacity, ring_arcs, ring_fills, rings, scene, scientific, selection_region, stereo_groups,
     stereochemistry, storage, style, templates, theme_files, theme_generator, transaction,
     typography,
 };
