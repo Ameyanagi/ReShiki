@@ -19,6 +19,7 @@ fn open(app: &mut App, name: &str, format: &'static str) -> Key {
         Ok(Prepared::Import {
             format,
             contents: String::new(),
+            loss: Default::default(),
         }),
     ))));
     assert!(task.units() > 0);
@@ -138,6 +139,47 @@ fn chemdraw_and_mol_files_open_unchanged_and_ask_once_how_to_save() {
 }
 
 #[test]
+fn the_format_question_is_about_the_file_its_tab_opened_and_enter_saves_as_reshiki() {
+    let mut app = ready();
+    let loss = reshiki::formats::ChemdrawLoss {
+        schemes: 4,
+        steps: 12,
+        pages: 0,
+    };
+    let task = app.update(Message::FilePrepared(Some((
+        std::path::Path::new("imports").join("schemes.cdxml"),
+        Ok(Prepared::Import {
+            format: "cdxml",
+            contents: String::new(),
+            loss,
+        }),
+    ))));
+    assert!(task.units() > 0);
+    let key = app.tab.engine_job.as_ref().unwrap().key;
+    let _ = app.update(imported(key));
+    let asked = app.tab.id;
+    assert_eq!(app.tab.chemdraw_loss, loss);
+
+    // A file opened beside it has its own answer.
+    let other = open(&mut app, "caffeine.cdxml", "cdxml");
+    let _ = app.update(imported(other));
+    assert_eq!(app.tab.chemdraw_loss, Default::default());
+    let _ = app.update(Message::Tabs(tabs::Action::Select(asked)));
+    assert_eq!(app.tab.chemdraw_loss, loss);
+
+    // Enter takes the default, Save as ReShiki, which leaves the file alone.
+    let _ = app.update(Message::Save);
+    assert!(matches!(app.prompt, Some(Prompt::KeepFormat("cdxml"))));
+    let enter = crate::app::prompt::modal_key(
+        &iced::keyboard::Key::Named(iced::keyboard::key::Named::Enter),
+        iced::keyboard::Modifiers::empty(),
+    )
+    .unwrap();
+    assert!(app.update(enter).units() > 0);
+    assert!(app.prompt.is_none() && app.file_io.saving && !app.tab.keep_format);
+}
+
+#[test]
 fn a_file_opened_during_the_format_question_cancels_it() {
     let mut app = ready();
     let key = open(&mut app, "aspirin.mol", "mol");
@@ -220,6 +262,7 @@ fn opening_an_open_chemdraw_file_again_shows_its_tab() {
         Ok(Prepared::Import {
             format: "cdxml",
             contents: String::new(),
+            loss: Default::default(),
         }),
     ))));
     assert_eq!(app.tab.id, first);
