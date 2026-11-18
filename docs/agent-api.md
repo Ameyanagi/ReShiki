@@ -204,7 +204,7 @@ The result, with the image data shortened:
     "content": [
       {
         "type": "text",
-        "text": "{\"validation\":{\"status\":\"valid\"},\"value\":{\"byte_len\":4445,\"height\":85,\"width\":177},\"versions\":{\"app\":\"0.15.0\",\"document\":38,\"engine_protocol\":1,\"operation_api\":2},\"warnings\":[]}"
+        "text": "{\"validation\":{\"status\":\"valid\"},\"value\":{\"byte_len\":4445,\"height\":85,\"width\":177},\"versions\":{\"app\":\"0.15.0\",\"document\":39,\"engine_protocol\":1,\"operation_api\":2},\"warnings\":[]}"
       },
       {
         "type": "image",
@@ -223,7 +223,7 @@ The result, with the image data shortened:
       },
       "versions": {
         "app": "0.15.0",
-        "document": 38,
+        "document": 39,
         "engine_protocol": 1,
         "operation_api": 2
       },
@@ -271,7 +271,7 @@ Every successful `structuredContent` is one envelope,
   },
   "versions": {
     "app": "0.15.0",
-    "document": 38,
+    "document": 39,
     "engine_protocol": 1,
     "operation_api": 2
   },
@@ -316,7 +316,7 @@ an old `base_revision`:
   },
   "versions": {
     "app": "0.15.0",
-    "document": 38,
+    "document": 39,
     "engine_protocol": 1,
     "operation_api": 2
   }
@@ -440,7 +440,7 @@ changes independently.
 | `app`             | 0.15.0 | The ReShiki build                                |
 | `operation_api`   | 2      | The operation tools and their results            |
 | `engine_protocol` | 1      | The internal chemistry engine's request protocol |
-| `document`        | 38     | The `.rsk` drawing format                        |
+| `document`        | 39     | The `.rsk` drawing format                        |
 
 Run the `info` tool or `reshiki --cli info` for the live values. CLI JSON lines
 carry `api.operation_api` and `api.stability`.

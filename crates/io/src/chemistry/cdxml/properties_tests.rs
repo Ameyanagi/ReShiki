@@ -177,6 +177,90 @@ fn linked_captions_export_as_chemdraw_property_text_and_return() {
 }
 
 #[test]
+fn the_name_line_exports_as_plain_text_above_linked_properties() {
+    use crate::linked_properties::{named, rename};
+    let (mut d, atoms) = phenol();
+    for p in [Property::Weight, Property::Name] {
+        toggle(&mut d, &atoms, p, TextFormat::default(), true).unwrap();
+    }
+    let smiles = d.property_captions[0].smiles.clone();
+    named(&mut d, &smiles, "phenol");
+    for custom in [false, true] {
+        if custom {
+            rename(&mut d, &atoms, "Compound 3a", TextFormat::default(), true).unwrap();
+        }
+        let name = if custom { "Compound 3a" } else { "phenol" };
+        let x = xml(&d);
+        // Only the property line is linked; ChemDraw keeps no linked name.
+        assert!(x.contains(r#"ChemicalPropertyType="4""#), "{x}");
+        for back in [
+            import(&x),
+            import(&crate::exchange::from_cdx(&crate::exchange::to_cdx(&x).unwrap()).unwrap()),
+        ] {
+            assert_eq!(back.property_captions[0].properties, [Property::Weight]);
+            assert_eq!(caption(&back), "Mol. Wt.: 94.11");
+            // The name comes back as bold text of its own, above the line.
+            let text = back.annotations.iter().find(|a| a.text == name).unwrap();
+            assert!(text.format.at(0).bold);
+            let line = back
+                .annotations
+                .iter()
+                .find(|a| a.id == back.property_captions[0].annotation)
+                .unwrap();
+            assert!(text.position.y < line.position.y);
+            assert!(!line.format.at(0).bold);
+        }
+    }
+    // A name wrapped to several rows keeps the property lines below it.
+    let mut wrapped = d.clone();
+    rename(
+        &mut wrapped,
+        &atoms,
+        "Compound 3a from the second route",
+        TextFormat::default(),
+        true,
+    )
+    .unwrap();
+    wrapped.annotations[0].format.width_pt = Some(40.);
+    let x = xml(&wrapped);
+    let baseline = |text: &str| -> f64 {
+        let t = x.split("<t ").find(|t| t.contains(text)).unwrap();
+        let p = t
+            .split(r#" p=""#)
+            .nth(1)
+            .unwrap()
+            .split('"')
+            .next()
+            .unwrap();
+        p.split(' ').nth(1).unwrap().parse().unwrap()
+    };
+    // At 40 pt the name wraps to five 12 pt rows; the weight comes after them.
+    let rows = (baseline("Mol. Wt.") - baseline("Compound 3a")) / 12.;
+    assert!(rows > 4.99, "{rows} rows apart: {x}");
+    // Grouped with its molecule, the name stays in the group in ChemDraw.
+    let ids = d.all_ids();
+    d.group_selection(&ids).unwrap();
+    let x = xml(&d);
+    let group = &x[x.find("<group").unwrap()..x.rfind("</group>").unwrap()];
+    assert!(
+        group.contains("Compound 3a") && group.contains("Mol. Wt."),
+        "{x}"
+    );
+    // A name alone is plain text.
+    toggle(
+        &mut d,
+        &atoms,
+        Property::Weight,
+        TextFormat::default(),
+        true,
+    )
+    .unwrap();
+    let x = xml(&d);
+    assert!(!x.contains("chemicalproperty"), "{x}");
+    assert_eq!(import(&x).annotations[0].text, "Compound 3a");
+}
+
+#[test]
 fn captions_without_a_chemdraw_type_export_as_plain_text() {
     let (mut d, atoms) = phenol();
     toggle(&mut d, &atoms, Property::LogP, TextFormat::default(), true).unwrap();

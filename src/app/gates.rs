@@ -295,6 +295,7 @@ impl App {
                 | Message::Nmr(super::nmr::Action::RenderedSize(_))
                 | Message::Updates(_)
                 | Message::Imports(import::Action::Loaded(..))
+                | Message::Naming(super::naming::Action::CaptionNamed(..))
         ) {
             self.context_menu = None;
             self.tab.inspector_ui.close_menu();

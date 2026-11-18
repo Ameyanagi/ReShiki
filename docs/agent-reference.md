@@ -793,7 +793,7 @@ Extensions accepted by `file_open` and `file_save`; a dash means unsupported.
 | --- | --- |
 | `operation_api` | 2 |
 | `engine_protocol` | 1 |
-| `document` | 38 |
+| `document` | 39 |
 
 ## Proposal
 

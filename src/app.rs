@@ -1322,7 +1322,12 @@ impl App {
         if let Some(point) = release_point {
             self.keyboard_pointer_target(Some(point), true);
         }
-        let task = Task::batch([task, self.start_label_refresh(), self.start_autosave()]);
+        let task = Task::batch([
+            task,
+            self.start_label_refresh(),
+            self.start_caption_names(),
+            self.start_autosave(),
+        ]);
         self.tab.nmr.invalidate_if_changed_cached(
             &self.tab.doc,
             self.tab.file_epoch,

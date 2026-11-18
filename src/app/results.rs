@@ -38,7 +38,7 @@ enum Completion {
     Properties,
     /// Imports(Loaded).
     Imports,
-    /// Naming(Finished) and Labels(LocantsFinished).
+    /// Naming(Finished | CaptionNamed) and Labels(LocantsFinished).
     Naming,
     /// ClipboardRead, ClipboardWritten, CopyAsPrepared and CopyAsWritten.
     Clipboard,
@@ -619,8 +619,11 @@ fn completion(message: &Message) -> Option<Completion> {
             match action {
                 #[cfg(target_arch = "wasm32")]
                 Action::Refresh => None,
-                Action::Finished(..) => Some(Completion::Naming),
-                Action::Name(..)
+                Action::Finished(..) | Action::CaptionNamed(..) => Some(Completion::Naming),
+                Action::NameDraft(..)
+                | Action::Rename(..)
+                | Action::NameRow(..)
+                | Action::Name(..)
                 | Action::PeptideSequence(..)
                 | Action::ClearName
                 | Action::Cancel

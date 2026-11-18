@@ -107,6 +107,14 @@ pub enum Action {
     /// Selects this molecule and opens the Chemical names inspector.
     OpenPanel(Vec<u64>),
     Finished(Ticket, Box<Result<Outcome, naming::Error>>),
+    /// The Molecular properties Name field of this molecule, before Return.
+    NameDraft(Vec<u64>, String),
+    /// Name this molecule in its property caption; empty is automatic.
+    Rename(Vec<u64>, String),
+    /// Show or hide this molecule's name row (Show chemical name).
+    NameRow(Vec<u64>),
+    /// The automatic name of a property caption's structure.
+    CaptionNamed(String, Box<Result<Outcome, naming::Error>>),
 }
 
 #[derive(Debug, Clone)]
@@ -230,6 +238,13 @@ pub(super) struct State {
     details_open: bool,
     import_alias: Option<usize>,
     online_confirmation: Option<(u64, String)>,
+    /// The structure whose automatic caption name is being generated.
+    pub(super) caption_pending: Option<String>,
+    /// Structures the generator could not name, with the reason.
+    pub(super) caption_failed: HashMap<String, String>,
+    /// Generated names, so Undo and Redo do not ask again.
+    pub(super) caption_names: HashMap<String, String>,
+    pub(super) name_draft: Option<(Vec<u64>, String)>,
 }
 impl Default for State {
     fn default() -> Self {
@@ -256,6 +271,10 @@ impl Default for State {
             details_open: false,
             import_alias: None,
             online_confirmation: None,
+            caption_pending: None,
+            caption_failed: HashMap::new(),
+            caption_names: HashMap::new(),
+            name_draft: None,
         }
     }
 }
@@ -405,7 +424,7 @@ async fn resolve_preview(
     Ok(Outcome::Names(vec![record], Some(Box::new(preview))))
 }
 
-async fn generate_for_atoms(
+pub(super) async fn generate_for_atoms(
     document: Document,
     atoms: Vec<u64>,
     cancel: naming::Cancel,
@@ -710,6 +729,12 @@ impl App {
                 );
             }
             Action::Finished(ticket, result) => self.naming_finished(ticket, *result),
+            Action::NameDraft(atoms, name) => self.tab.naming.name_draft = Some((atoms, name)),
+            Action::Rename(atoms, name) => self.rename_molecule(&atoms, &name),
+            Action::NameRow(atoms) => {
+                self.toggle_property(&atoms, reshiki::linked_properties::Property::Name);
+            }
+            Action::CaptionNamed(smiles, result) => self.caption_named(&smiles, *result),
             Action::PreviewEdit(edit) => self.edit_name_preview(edit),
             Action::Acknowledge(value) => self.tab.naming.acknowledged = value,
             Action::Insert => self.insert_name_preview(),
@@ -1120,6 +1145,6 @@ impl App {
 }
 
 #[cfg(test)]
-mod test_support;
+pub(super) mod test_support;
 #[cfg(test)]
 mod tests;

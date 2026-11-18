@@ -230,9 +230,24 @@ impl App {
                 self.tab.caption_target = id;
                 self.tab.selected = id.into_iter().collect();
                 self.tab.caption_editor = text_editor::Content::with_text(&self.tab.caption);
-                self.tab
-                    .caption_editor
-                    .perform(text_editor::Action::Move(text_editor::Motion::DocumentEnd));
+                // A property caption's name line opens selected: typing renames
+                // the molecule and keeps the caption linked.
+                let name_line = id.is_some_and(|id| {
+                    self.tab.doc.property_captions.iter().any(|link| {
+                        link.annotation == id
+                            && link.properties.first()
+                                == Some(&reshiki::linked_properties::Property::Name)
+                    })
+                });
+                let editor = &mut self.tab.caption_editor;
+                if name_line {
+                    editor.perform(text_editor::Action::Move(
+                        text_editor::Motion::DocumentStart,
+                    ));
+                    editor.perform(text_editor::Action::Select(text_editor::Motion::End));
+                } else {
+                    editor.perform(text_editor::Action::Move(text_editor::Motion::DocumentEnd));
+                }
                 self.tab.inline_text = Some(State {
                     session: iced::widget::Id::unique(),
                     auto_formula: original.is_none()

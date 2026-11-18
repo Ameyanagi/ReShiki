@@ -240,7 +240,7 @@ pub fn include_annotations(doc: &Document, ids: &[u64]) -> Vec<u64> {
 thread_local! { pub(crate) static IDENTITY_ENTRIES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) }; }
 /// Exact native chemical identity for a complete component. This does not
 /// generate a name. Explicitly unknown units are compared as unspecified.
-fn identity(doc: &Document, atoms: &[u64]) -> Result<String, String> {
+pub(crate) fn identity(doc: &Document, atoms: &[u64]) -> Result<String, String> {
     #[cfg(test)]
     IDENTITY_ENTRIES.with(|v| v.set(v.get() + 1));
     if atoms.len() > MAX_NAMING_ATOMS || !complete_components(doc, atoms) {

@@ -48,13 +48,45 @@ The same confirmation flow is available in the Chemical names inspector.
 ### Show a molecule's name
 
 1. Right-click a molecule and choose **Show chemical name**. The name appears
-   centered below the molecule; for ethanol it is `ethanol`.
+   in bold, centered below the molecule; for ethanol it is `ethanol`.
 2. Choose **Hide chemical name** in the same menu to remove it.
 
-Show and Hide are each one Undo step. The clicked molecule is named even when
-other molecules are selected or grouped with it. The caption moves with the
-molecule. When the chemistry changes, the caption is removed in the same Undo
-step. Editing or dragging the caption turns it into ordinary text that stays.
+The name is the first line of the molecule's property caption: **Show
+chemical name** is the same as **Show properties › Name**, and the pin beside
+**Name** in **Molecular properties** does the same. Add Mol. Wt. or Exact Mass
+from the same list and they appear below the name, in one caption that moves
+with the molecule. Show and Hide are each one Undo step. The clicked molecule
+is named even when other molecules are selected or grouped with it.
+
+The automatic name is generated locally, so the line shows `–` for a moment
+first, and stays `–` when the structure cannot be named (the status bar says
+why). When the structure changes, the name is generated again and written into
+the same Undo step as the edit.
+
+To use your own name, such as `Compound 3a`:
+
+- type it in the **Name** field at the top of **Molecular properties** and
+  press Return. The field's placeholder shows the automatic name; or
+- double-click the name on the canvas. The name line opens selected; type the
+  new name and press ⌘Return (Ctrl+Enter), or click elsewhere.
+
+Both change the same name, and the caption stays linked. Choose ↺ beside the
+field, or clear the name, to go back to the automatic name. A custom name stays
+when the structure changes; the panel then notes "Structure changed since you
+named it." Editing a property line instead (Mol. Wt. and below) turns the
+caption into ordinary text.
+
+A salt's ions are separate molecules, so **Show chemical name** on a salt
+places one name caption under all of its ions instead, as before. That caption,
+and name captions in older drawings, are removed when the chemistry changes;
+editing or dragging one turns it into ordinary text that stays.
+
+CDXML and CDX save the name line as plain text of its own, just above the
+property lines, which stay linked so ChemDraw keeps them up to date. ChemDraw
+has no linked chemical name it keeps: its CDX documentation lists one, but
+ChemDraw 26 stops updating linked text that includes it. `.rsk` files keep the
+whole caption linked; drawings with a name line or a custom name are saved as
+document version 39.
 
 To see or copy a name without placing it, select one whole molecule and choose
 **Generate selected name** in **Import → Name → Details** or in the
