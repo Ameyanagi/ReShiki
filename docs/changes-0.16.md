@@ -33,8 +33,8 @@ version is **39**.
 ReShiki 0.15.0 and earlier say that a version 38 or 39 drawing was made with a
 newer version and ask you to update. Older drawings still open in 0.16.0,
 unless they are over its new limits: 64 KB of text in one text box, 1 MB of
-text in the drawing, or pictures stored in more than 64 MB or holding more than
-64 million pixels (see [Files, import and export](#files-import-and-export)).
+text in the drawing, or pictures stored in more than 64 MB (see
+[Files, import and export](#files-import-and-export)).
 
 NMR shift labels written by Python, the command line or the agent tools are
 atom numbers and do not raise the version. ReShiki 0.15.0 opens such a drawing
@@ -223,9 +223,9 @@ changes in this release are by @Ameyanagi.
   SVG, PNG, PDF, CDXML and CDX files keep them. By default a label is the bare
   shift journals print (`1.28`, with "δ (ppm)" stated once in the caption);
   `#3`, `1.28 ppm` and `#3 · 1.28 ppm`, as in **Show labels**, are also
-  offered. On the command line, and in Python for rows with their nucleus, ¹H
-  shifts get 2 decimal places and ¹³C 1; MCP `label_atoms` uses 2 unless you
-  pass `decimals` (0 to 4).
+  offered. The command line gives ¹H shifts 2 decimal places and ¹³C 1;
+  Python gives 1 only when every row is a ¹³C shift, and MCP `label_atoms`
+  gives 2. Pass `decimals` (0 to 4) to choose.
   Labels sit right beside their atoms, clear of bonds and other labels, with a
   thin leader line only when there is no room. `to_rdkit()` and `from_rdkit()`
   carry atom numbers as RDKit's `atomNote`. **Show labels** in the app stays
@@ -490,7 +490,7 @@ validation, versions}`. `info`, `document_new`, `document_list`,
   about a quarter faster
   ([#1191](https://github.com/Ameyanagi/ReShiki/pull/1191)).
 - When the structures a ring, template or bond preview changes stay clear of
-  the rest of the drawing, the preview redraws only those structures. Panning a
+  the rest of the drawing, the preview can redraw only those structures. Panning a
   zoomed-out drawing moves a prepared picture instead of redrawing every
   bond ([#1204](https://github.com/Ameyanagi/ReShiki/pull/1204)).
 - The executable is smaller: embedded data is compressed (2.66 MB to
@@ -553,7 +553,8 @@ validation, versions}`. `info`, `document_new`, `document_list`,
 - **Star ReShiki.** After five exports or copies, on a later day than the
   first launch, a small card asks whether you enjoy ReShiki; it waits until the
   window has been idle for 30 seconds. Without a star, it asks again at most
-  once, in a later feature release and at least 90 days later. Signed in to
+  once, in a later feature release and at least 90 days later. The first
+  GitHub sign-in can also ask, a few minutes later. Signed in to
   GitHub, ReShiki first asks GitHub whether you already starred it, and
   **★ Star on GitHub** stars ReShiki with your account; signed out,
   **★ Star on GitHub ↗** opens GitHub in your browser. A star is made only when
