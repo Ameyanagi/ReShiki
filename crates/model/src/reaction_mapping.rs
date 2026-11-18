@@ -9,6 +9,7 @@ use std::{
     collections::{BTreeMap, HashSet},
 };
 mod search;
+pub(crate) use search::{Graph, correspond};
 pub use search::{Budget, Proposal, Score, propose};
 
 pub const MAX_MAP: u32 = i32::MAX as u32;

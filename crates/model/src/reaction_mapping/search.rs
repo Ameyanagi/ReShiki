@@ -108,9 +108,9 @@ impl Proposal {
     }
 }
 #[derive(Debug)]
-struct Atom {
-    id: u64,
-    element: String,
+pub(crate) struct Atom {
+    pub(crate) id: u64,
+    pub(crate) element: String,
     isotope: u32,
     map: u32,
     charge: i32,
@@ -118,19 +118,63 @@ struct Atom {
     radical: u8,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct BondClass {
-    order: u8,
+pub(crate) struct BondClass {
+    pub(crate) order: u8,
     donor: Option<usize>,
+    /// Compare only; always false for reaction mapping.
+    pub(crate) ring: bool,
 }
 #[derive(Debug)]
-struct Graph {
-    atoms: Vec<Atom>,
-    edges: BTreeMap<(usize, usize), BondClass>,
+pub(crate) struct Graph {
+    pub(crate) atoms: Vec<Atom>,
+    pub(crate) edges: BTreeMap<(usize, usize), BondClass>,
+    /// Compare's graphs: a bond is kept only as one of the same order and
+    /// ring membership.
+    strict: bool,
 }
 fn edge(a: usize, b: usize) -> (usize, usize) {
     (a.min(b), a.max(b))
 }
 impl Graph {
+    /// Compare's graph of one drawn molecule: atom maps and isotopes are
+    /// ignored, as users edit them, and bonds know whether they are in a ring.
+    pub(crate) fn compared(doc: &Document, ids: &[u64]) -> Result<Self, String> {
+        let mut graph = Self::build(doc, ids)?;
+        for atom in &mut graph.atoms {
+            (atom.map, atom.isotope) = (0, 0);
+        }
+        let keys: Vec<(usize, usize)> = graph.edges.keys().copied().collect();
+        let mut next = vec![Vec::new(); graph.atoms.len()];
+        for &(a, b) in &keys {
+            for (x, y) in [(a, b), (b, a)] {
+                if let Some(list) = next.get_mut(x) {
+                    list.push(y);
+                }
+            }
+        }
+        for &(a, b) in &keys {
+            // In a ring when its ends stay joined without it.
+            let (mut seen, mut stack) = (HashSet::from([a]), vec![a]);
+            while let Some(at) = stack.pop() {
+                for &n in next.get(at).into_iter().flatten() {
+                    if edge(at, n) != (a, b) && seen.insert(n) {
+                        stack.push(n);
+                    }
+                }
+            }
+            if let Some(class) = graph.edges.get_mut(&(a, b)) {
+                class.ring = seen.contains(&b);
+            }
+        }
+        graph.strict = true;
+        Ok(graph)
+    }
+    /// The bond between `x` and `y` that a bond of `class` is kept as.
+    fn kept(&self, x: usize, y: usize, class: &BondClass) -> Option<&BondClass> {
+        self.edges
+            .get(&edge(x, y))
+            .filter(|other| !self.strict || (other.order, other.ring) == (class.order, class.ring))
+    }
     fn build(doc: &Document, ids: &[u64]) -> Result<Self, String> {
         let part = crate::editing::selection(doc, ids);
         if part.bonds.len() > 768 {
@@ -176,11 +220,16 @@ impl Graph {
                     BondClass {
                         order: if b.aromatic { 4 } else { b.order },
                         donor: (b.order == 5).then_some(b.a),
+                        ring: false,
                     },
                 )
             })
             .collect();
-        Ok(Self { atoms, edges })
+        Ok(Self {
+            atoms,
+            edges,
+            strict: false,
+        })
     }
     fn heavy(&self, a: usize, b: usize) -> bool {
         self.atoms
@@ -259,7 +308,7 @@ fn score(source: &Graph, target: &Graph, map: &HashMap<usize, usize>) -> Score {
     let mut result = Score::default();
     for (&(a, b), &order) in &source.edges {
         if let Some((x, y)) = map.get(&a).zip(map.get(&b))
-            && let Some(other) = target.edges.get(&edge(*x, *y))
+            && let Some(other) = target.kept(*x, *y, &order)
         {
             result.adjacency += 1;
             result.heavy_adjacency += u32::from(source.heavy(a, b));
@@ -310,6 +359,11 @@ struct Search<'a> {
     best: HashMap<usize, usize>,
     best_score: Score,
     multiple: bool,
+    /// Compare's tie-break: each pairing's cost, source by target. Equal
+    /// scores go to the lower total, then to the first found.
+    ties: Option<Vec<Vec<u64>>>,
+    cost: u64,
+    best_cost: u64,
     states: u64,
     work: u64,
     budget: Budget,
@@ -324,6 +378,12 @@ impl Search<'_> {
         } else {
             true
         }
+    }
+    fn pair_cost(&self, s: usize, t: usize) -> u64 {
+        self.ties
+            .as_ref()
+            .and_then(|costs| costs.get(s)?.get(t).copied())
+            .unwrap_or(0)
     }
     fn signature(map: &HashMap<usize, usize>) -> Vec<(usize, usize)> {
         let mut pairs: Vec<_> = map.iter().map(|(a, b)| (*a, *b)).collect();
@@ -344,7 +404,13 @@ impl Search<'_> {
                 return;
             }
             let value = score(self.source, self.target, &self.map);
-            if value > self.best_score {
+            if self.ties.is_some() {
+                if (value, Reverse(self.cost)) > (self.best_score, Reverse(self.best_cost)) {
+                    self.best_score = value;
+                    self.best_cost = self.cost;
+                    self.best = self.map.clone();
+                }
+            } else if value > self.best_score {
                 self.best_score = value;
                 self.best = self.map.clone();
                 self.multiple = false;
@@ -402,7 +468,7 @@ impl Search<'_> {
         let (mut open, mut heavy_open) = (0_u32, 0_u32);
         for (&(a, b), &order) in &self.source.edges {
             if let Some((x, y)) = self.map.get(&a).zip(self.map.get(&b)) {
-                if let Some(other) = self.target.edges.get(&edge(*x, *y)) {
+                if let Some(other) = self.target.kept(*x, *y, &order) {
                     upper.adjacency += 1;
                     upper.heavy_adjacency += u32::from(self.source.heavy(a, b));
                     upper.unchanged_bonds += u32::from(same_bond(&order, other, &self.map, None));
@@ -427,7 +493,13 @@ impl Search<'_> {
         upper.heavy_adjacency += heavy_open.min(heavy_available);
         upper.adjacency += open.min(available.len() as u32);
         upper.unchanged_bonds += open.min(available.len() as u32);
-        if upper < self.best_score || (upper == self.best_score && self.multiple) {
+        // Costs are never negative, so the cost so far bounds any completion.
+        let tied = if self.ties.is_some() {
+            self.cost >= self.best_cost
+        } else {
+            self.multiple
+        };
+        if upper < self.best_score || (upper == self.best_score && tied) {
             return;
         }
         let mut chosen = None;
@@ -499,7 +571,7 @@ impl Search<'_> {
                 if let Some(other) = self
                     .map
                     .get(&neighbor)
-                    .and_then(|mapped| self.target.edges.get(&edge(*t, *mapped)))
+                    .and_then(|mapped| self.target.kept(*t, *mapped, &order))
                 {
                     adjacency += 1;
                     bonds += u32::from(same_bond(&order, other, &self.map, Some((s, *t))));
@@ -519,14 +591,18 @@ impl Search<'_> {
                 Reverse(adjacency),
                 Reverse(bonds),
                 delta,
+                self.pair_cost(s, *t),
                 self.target.atoms.get(*t).map_or(0, |a| a.id),
             )
         });
         self.decided.insert(s);
         for t in candidates {
+            let cost = self.pair_cost(s, t);
             self.map.insert(s, t);
             self.used.insert(t);
+            self.cost += cost;
             self.visit();
+            self.cost -= cost;
             self.map.remove(&s);
             self.used.remove(&t);
             if self.stopped {
@@ -538,6 +614,147 @@ impl Search<'_> {
             self.visit();
         }
         self.decided.remove(&s);
+    }
+}
+
+/// Each source atom's possible targets: the same element and isotope, and
+/// no other atom map.
+fn domains(source: &Graph, target: &Graph) -> Vec<Vec<usize>> {
+    source
+        .atoms
+        .iter()
+        .map(|a| {
+            target
+                .atoms
+                .iter()
+                .enumerate()
+                .filter(|(_, b)| can_pair(a, b))
+                .map(|(i, _)| i)
+                .collect()
+        })
+        .collect()
+}
+
+/// Searches for the best correspondence that pairs as many atoms as their
+/// elements allow, `seeds` fixed, from `work` already charged.
+fn run<'a>(
+    source: &'a Graph,
+    target: &'a Graph,
+    domains: Vec<Vec<usize>>,
+    seeds: HashMap<usize, usize>,
+    budget: Budget,
+    mut work: u64,
+    ties: Option<Vec<Vec<u64>>>,
+) -> Result<Search<'a>, String> {
+    let used: HashSet<_> = seeds.values().copied().collect();
+    let mut maximum = HashMap::new();
+    for s in 0..source.atoms.len() {
+        if !seeds.contains_key(&s) {
+            charge(&mut work, budget, 1)?;
+            augment(
+                s,
+                &domains,
+                &used,
+                &mut HashSet::new(),
+                &mut maximum,
+                &mut work,
+                budget,
+            )?;
+        }
+    }
+    let mut incumbent = seeds.clone();
+    incumbent.extend(maximum.into_iter().map(|(t, s)| (s, t)));
+    let k = incumbent.len();
+    charge(&mut work, budget, score_work(source, target, k))?;
+    let mut search = Search {
+        source,
+        target,
+        domains,
+        k,
+        map: seeds.clone(),
+        used,
+        decided: seeds.keys().copied().collect(),
+        best: incumbent.clone(),
+        best_score: score(source, target, &incumbent),
+        multiple: false,
+        cost: 0,
+        best_cost: 0,
+        ties,
+        states: 0,
+        work,
+        budget,
+        stopped: false,
+    };
+    search.best_cost = incumbent.iter().map(|(s, t)| search.pair_cost(*s, *t)).sum();
+    search.visit();
+    Ok(search)
+}
+
+/// Compare's correspondence between two drawings of a molecule.
+#[derive(Debug)]
+pub(crate) struct Outcome {
+    /// (left id, right id), sorted.
+    pub(crate) pairs: Vec<(u64, u64)>,
+    /// Heavy-atom bonds kept, of the same order and ring membership.
+    pub(crate) kept: u32,
+    /// False when the budget ran out: `kept` is then only what was found.
+    pub(crate) complete: bool,
+    pub(crate) work: u64,
+}
+
+/// Pairs the atoms of two [`Graph::compared`] graphs, as many as their
+/// elements allow, keeping the most heavy-atom bonds of the same order and
+/// ring membership. Equally good correspondences go to the lowest total
+/// `cost` of (left id, right id), then to the first the search finds, which
+/// tries cheaper atoms first. Reaction mapping's own policy is untouched.
+pub(crate) fn correspond(
+    left: &Graph,
+    right: &Graph,
+    budget: Budget,
+    cost: impl Fn(u64, u64) -> u64,
+) -> Outcome {
+    let swapped = left.atoms.len() > right.atoms.len();
+    let (source, target) = if swapped {
+        (right, left)
+    } else {
+        (left, right)
+    };
+    let work = (2 * source.atoms.len() * target.atoms.len()) as u64;
+    let ties = source
+        .atoms
+        .iter()
+        .map(|a| {
+            target
+                .atoms
+                .iter()
+                .map(|b| if swapped { cost(b.id, a.id) } else { cost(a.id, b.id) })
+                .collect()
+        })
+        .collect();
+    let search = (work <= budget.work)
+        .then(|| run(source, target, domains(source, target), HashMap::new(), budget, work, Some(ties)).ok())
+        .flatten();
+    let Some(search) = search else {
+        return Outcome {
+            pairs: Vec::new(),
+            kept: 0,
+            complete: false,
+            work: budget.work,
+        };
+    };
+    let mut pairs: Vec<(u64, u64)> = Search::signature(&search.best)
+        .into_iter()
+        .filter_map(|(s, t)| {
+            let (a, b) = (source.atoms.get(s)?.id, target.atoms.get(t)?.id);
+            Some(if swapped { (b, a) } else { (a, b) })
+        })
+        .collect();
+    pairs.sort_unstable();
+    Outcome {
+        pairs,
+        kept: search.best_score.heavy_adjacency,
+        complete: !search.stopped,
+        work: search.work.min(budget.work),
     }
 }
 
@@ -611,19 +828,7 @@ pub fn propose(doc: &Document, arrow: u64, budget: Budget) -> Result<Proposal, S
         budget,
         (2 * source.atoms.len() * target.atoms.len()) as u64,
     )?;
-    let domains: Vec<Vec<_>> = source
-        .atoms
-        .iter()
-        .map(|a| {
-            target
-                .atoms
-                .iter()
-                .enumerate()
-                .filter(|(_, b)| can_pair(a, b))
-                .map(|(i, _)| i)
-                .collect()
-        })
-        .collect();
+    let domains = domains(source, target);
     if domains.iter().map(Vec::len).sum::<usize>() > 16_384 {
         return Err(
             "Auto-map exceeds the candidate limit; add manual atom-map anchors first".into(),
@@ -635,43 +840,7 @@ pub fn propose(doc: &Document, arrow: u64, budget: Budget) -> Result<Proposal, S
             seeds.insert(s, t);
         }
     }
-    let used: HashSet<_> = seeds.values().copied().collect();
-    let mut maximum = HashMap::new();
-    for s in 0..source.atoms.len() {
-        if !seeds.contains_key(&s) {
-            charge(&mut work, budget, 1)?;
-            augment(
-                s,
-                &domains,
-                &used,
-                &mut HashSet::new(),
-                &mut maximum,
-                &mut work,
-                budget,
-            )?;
-        }
-    }
-    let mut incumbent = seeds.clone();
-    incumbent.extend(maximum.into_iter().map(|(t, s)| (s, t)));
-    let k = incumbent.len();
-    charge(&mut work, budget, score_work(source, target, k))?;
-    let mut search = Search {
-        source,
-        target,
-        domains,
-        k,
-        map: seeds.clone(),
-        used,
-        decided: seeds.keys().copied().collect(),
-        best: incumbent.clone(),
-        best_score: score(source, target, &incumbent),
-        multiple: false,
-        states: 0,
-        work,
-        budget,
-        stopped: false,
-    };
-    search.visit();
+    let search = run(source, target, domains, seeds, budget, work, None)?;
     let mut pairs = Vec::new();
     let mut assignments = Vec::new();
     let mut numbers: HashSet<_> = doc.atoms.iter().map(|a| a.map_num).collect();
@@ -702,8 +871,8 @@ pub fn propose(doc: &Document, arrow: u64, budget: Budget) -> Result<Proposal, S
         source: snapshot(doc),
         assignments,
         pairs,
-        unmatched_reactants: left.atoms.len() - k,
-        unmatched_products: right.atoms.len() - k,
+        unmatched_reactants: left.atoms.len() - search.k,
+        unmatched_products: right.atoms.len() - search.k,
         complete: !search.stopped,
         multiple_best: search.multiple,
         score: search.best_score,

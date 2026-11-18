@@ -19,6 +19,8 @@ pub(super) struct Signature {
     pub smiles: String,
     /// Stereo beyond the plain SMILES, in canonical atom order.
     pub extra: String,
+    /// Canonical SMILES without stereo or isotopes: the same atoms and bonds.
+    pub constitution: String,
     /// Canonical SMILES as drawn, hydrogens included: equal text means
     /// `order` pairs atoms one to one.
     pub drawn: String,
@@ -122,10 +124,20 @@ pub(super) fn signature(doc: &Document, ids: &[u64]) -> Result<Signature, String
         .collect();
     let extra = extra(&molecule.state, &drawn.atom_order, &singlet)?;
     // Reading the SMILES back folds drawn hydrogens into their atoms.
-    let smiles = smiles::prepare(&drawn.text)
-        .ok()
+    let folded = smiles::prepare(&drawn.text).ok();
+    let smiles = (folded.as_ref())
         .and_then(|folded| write::write(&folded.state, options).ok())
         .map_or_else(|| drawn.text.clone(), |written| written.text);
+    let plain = write::Options {
+        symbols: smiles::symbols::Options {
+            isomeric: false,
+            ..Default::default()
+        },
+        ..options
+    };
+    let constitution = write::write(folded.as_ref().map_or(&molecule.state, |f| &f.state), plain)
+        .map_err(|error| error.to_string())?
+        .text;
     let state = &molecule.state;
     let atoms = state
         .graph
@@ -181,6 +193,7 @@ pub(super) fn signature(doc: &Document, ids: &[u64]) -> Result<Signature, String
     Ok(Signature {
         smiles,
         extra,
+        constitution,
         drawn: drawn.text,
         order,
         atoms,

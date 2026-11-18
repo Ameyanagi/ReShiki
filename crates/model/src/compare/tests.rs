@@ -3,12 +3,12 @@ use crate::document::Annotation;
 use crate::reactions::{Participant, Reaction};
 
 /// A drawing as read from a file, the way both sides of a compare are read.
-fn load(doc: &Document) -> Document {
+pub(super) fn load(doc: &Document) -> Document {
     Document::from_native_file(&doc.file_json().unwrap()).unwrap()
 }
 
 /// `smiles` laid out as ReShiki lays out an import.
-fn molecule(smiles: &str) -> Document {
+pub(super) fn molecule(smiles: &str) -> Document {
     use crate::chemistry::{depict, document, smiles as read};
     let state = read::prepare(smiles).unwrap().state;
     let ranks: Vec<_> = state.properties.atoms.iter().map(|a| a.cip_rank).collect();
@@ -37,20 +37,39 @@ fn text(doc: &mut Document, words: &str, x: f32, y: f32) -> u64 {
 
 /// The mock's scheme: benzoic acid + ethanol → ethyl benzoate, with the
 /// conditions over the arrow, as one reaction. Atom ids of each molecule.
-struct Scheme {
-    doc: Document,
-    acid: Vec<u64>,
-    ethanol: Vec<u64>,
-    ester: Vec<u64>,
+pub(super) struct Scheme {
+    pub(super) doc: Document,
+    pub(super) acid: Vec<u64>,
+    pub(super) ethanol: Vec<u64>,
+    pub(super) ester: Vec<u64>,
     conditions: u64,
 }
 
 fn scheme() -> Scheme {
+    drawn(false)
+}
+
+/// The scheme; with `ester_first`, drawn again from scratch with the ester
+/// first, as a re-import numbers it, so most ids name other atoms.
+pub(super) fn drawn(ester_first: bool) -> Scheme {
     let mut doc = Document::default();
     let atoms = |doc: &Document, ids: Vec<u64>| -> Vec<u64> {
         ids.into_iter()
             .filter(|id| doc.atom(*id).is_some())
             .collect()
+    };
+    let add_ester = |doc: &mut Document| {
+        let ids = crate::editing::append(
+            doc,
+            &molecule("CCOC(=O)c1ccccc1"),
+            Point::new(560., 0.),
+        );
+        atoms(doc, ids)
+    };
+    let mut ester = if ester_first {
+        add_ester(&mut doc)
+    } else {
+        Vec::new()
     };
     let ids = crate::editing::append(&mut doc, &molecule("OC(=O)c1ccccc1"), Point::new(0., 0.));
     let acid = atoms(&doc, ids);
@@ -71,12 +90,9 @@ fn scheme() -> Scheme {
         style: None,
     });
     let conditions = text(&mut doc, "H2SO4", 370., -20.);
-    let ids = crate::editing::append(
-        &mut doc,
-        &molecule("CCOC(=O)c1ccccc1"),
-        Point::new(560., 0.),
-    );
-    let ester = atoms(&doc, ids);
+    if !ester_first {
+        ester = add_ester(&mut doc);
+    }
     let mut reaction = Reaction::new(arrow);
     let part = |atoms: &Vec<u64>| Participant {
         atoms: atoms.clone(),
@@ -94,19 +110,19 @@ fn scheme() -> Scheme {
     }
 }
 
-fn edited(doc: &Document, edit: impl FnOnce(&mut Document)) -> Document {
+pub(super) fn edited(doc: &Document, edit: impl FnOnce(&mut Document)) -> Document {
     let mut doc = doc.clone();
     edit(&mut doc);
     load(&doc)
 }
 
 /// Turns `ids` about the origin, then moves them.
-fn moved(doc: &mut Document, ids: &[u64], dx: f32, dy: f32, degrees: f32) {
+pub(super) fn moved(doc: &mut Document, ids: &[u64], dx: f32, dy: f32, degrees: f32) {
     crate::editing::transform_about(doc, ids, Point::new(0., 0.), 1., degrees);
     doc.translate(ids, dx, dy);
 }
 
-fn kinds(report: &Report) -> Vec<(Kind, Subject)> {
+pub(super) fn kinds(report: &Report) -> Vec<(Kind, Subject)> {
     let mut found: Vec<_> = report
         .changes
         .iter()
@@ -116,7 +132,7 @@ fn kinds(report: &Report) -> Vec<(Kind, Subject)> {
     found
 }
 
-fn chemical(report: &Report) -> Vec<&Change> {
+pub(super) fn chemical(report: &Report) -> Vec<&Change> {
     report
         .changes
         .iter()
@@ -208,7 +224,7 @@ fn join(doc: &mut Document, at: u64, added: &[u64]) {
 
 /// Adds a nitro group at the ring CH of `molecule` furthest from its
 /// oxygens: para to an ester.
-fn nitrate(doc: &mut Document, molecule: &[u64]) -> [u64; 3] {
+pub(super) fn nitrate(doc: &mut Document, molecule: &[u64]) -> [u64; 3] {
     let bonds = |id: u64| doc.bonds.iter().filter(move |b| b.a == id || b.b == id);
     let oxygens: Vec<Point> = molecule
         .iter()
