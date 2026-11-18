@@ -160,9 +160,13 @@ fn with_labels(
             reshiki_io::nmr::write_labels(&mut document, &rows, format)?;
             // As the app and MCP reconcile an atom-number edit: reaction gaps
             // and their signs make room for wider labels.
+            // There is no history to commit to: the reconciled document is
+            // the result.
             if document != before {
-                reshiki_model::transaction::reconcile(&mut document, before)
-                    .map_err(|rejection| rejection.message().to_owned())?;
+                drop(
+                    reshiki_model::transaction::reconcile(&mut document, before)
+                        .map_err(|rejection| rejection.message().to_owned())?,
+                );
             }
             document.file_json()
         })
