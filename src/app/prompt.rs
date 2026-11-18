@@ -164,7 +164,7 @@ impl App {
                         .unwrap_or_default()
                         .to_string_lossy()
                 ),
-                super::files::format_keeps(format).to_owned(),
+                super::files::keep_format_text(format, self.tab.chemdraw_loss, &self.tab.doc),
                 row![
                     Space::new().width(Length::Fill),
                     button(
@@ -192,6 +192,14 @@ impl App {
                     button("prompt-ok", "OK", Answer::Save, true),
                 ],
             ),
+        };
+        let height = match prompt {
+            Prompt::Download { .. } => 225.,
+            // The list of what a ChemDraw save loses runs to three lines.
+            Prompt::KeepFormat(format) if description != super::files::format_keeps(format) => 190.,
+            Prompt::KeepFormat(_) => 150.,
+            Prompt::SaveAs => 330.,
+            _ => 180.,
         };
         let content = column![
             text(title).size(15),
@@ -226,12 +234,6 @@ impl App {
         let content = content
             .push(Space::new().height(Length::Fill))
             .push(buttons.spacing(8).align_y(Alignment::Center));
-        let height = match prompt {
-            Prompt::Download { .. } => 225.,
-            Prompt::KeepFormat(_) => 150.,
-            Prompt::SaveAs => 330.,
-            _ => 180.,
-        };
         modal(
             base,
             content.into(),

@@ -7,6 +7,32 @@ use std::collections::HashMap;
 
 pub(crate) const NOTICE: &str = "Drawing imported; external reaction roles and condition references are not retained. The molecules, captions, and arrows remain editable. Keep the original CDX/CDXML or native ReShiki document for reaction metadata.";
 
+/// What a ChemDraw file holds that its drawing does not: reaction schemes,
+/// their steps and the pages after the first. A save in ChemDraw format
+/// cannot write them back.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Loss {
+    pub schemes: usize,
+    pub steps: usize,
+    pub pages: usize,
+}
+
+pub(crate) fn loss(text: &str) -> Result<Loss> {
+    let tree = Tree::parse_import(text)?;
+    let mut loss = Loss {
+        pages: tree.children(0, "page")?.len().saturating_sub(1),
+        ..Loss::default()
+    };
+    for index in tree.descendants(0)? {
+        match tree.node(index)?.tag.as_str() {
+            "scheme" => loss.schemes += 1,
+            "step" => loss.steps += 1,
+            _ => {}
+        }
+    }
+    Ok(loss)
+}
+
 pub(crate) fn validate(text: &str) -> Result<bool> {
     // Serialized CDXML escapes literal '<' inside text and attribute values.
     // Avoid another tree allocation for the usual drawing without schemes.

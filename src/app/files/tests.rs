@@ -224,7 +224,7 @@ fn native_worker_rejects_invalid_drawing_and_preserves_import_format() {
         ))
         .unwrap();
     assert!(
-        matches!(imported.unwrap(), Prepared::Import { format: "cdxml", contents } if contents == "<CDXML/>")
+        matches!(imported.unwrap(), Prepared::Import { format: "cdxml", contents, .. } if contents == "<CDXML/>")
     );
     for (name, expected) in [
         ("nacl.cif", "cif"),
@@ -471,7 +471,7 @@ fn prepare_preserves_smiles_extensions() {
         assert!(
             matches!(
                 prepare(std::path::Path::new(name), b"C".to_vec()).unwrap(),
-                Prepared::Import { format: "smiles", contents } if contents == "C"
+                Prepared::Import { format: "smiles", contents, .. } if contents == "C"
             ),
             "{name}"
         );
@@ -608,4 +608,104 @@ fn an_sd_file_with_a_record_that_does_not_fit_opens_the_rest_and_says_so() {
     );
     assert!(!app.error);
     assert_eq!(app.github.amber.as_deref(), Some(app.status.as_str()));
+}
+
+#[test]
+fn the_first_save_of_a_chemdraw_file_names_what_keeping_the_format_loses() {
+    use reshiki::formats::ChemdrawLoss;
+    let corpus = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/chemdraw-import-corpus/supported");
+    let opened = |name: &str| {
+        let path = corpus.join(name);
+        match prepare(&path, std::fs::read(&path).unwrap()).unwrap() {
+            Prepared::Import { format, loss, .. } => {
+                keep_format_text(format, loss, &Document::default())
+            }
+            other => panic!("{name}: {other:?}"),
+        }
+    };
+    let unchanged = "Save as ReShiki leaves the ChemDraw file unchanged.";
+    assert_eq!(
+        opened("075-multischeme-4-schemes-3-steps-3.cdxml"),
+        format!("Keep as CDXML loses 4 reaction schemes and 12 steps. {unchanged}")
+    );
+    assert_eq!(
+        opened("105-freshmix-seeded-mixed-001.cdxml"),
+        format!("Keep as CDXML loses 9 reaction schemes, 18 steps and 2 pages. {unchanged}")
+    );
+    assert_eq!(
+        opened("105-freshmix-seeded-mixed-001.cdx"),
+        format!("Keep as CDX loses 9 reaction schemes, 18 steps and 2 pages. {unchanged}")
+    );
+    // A file the format keeps whole, and MOL, say what they said before.
+    assert_eq!(
+        opened("001-molecule-chain.cdxml"),
+        "ChemDraw keeps most of the drawing."
+    );
+    assert_eq!(
+        opened("001-molecule-chain.cdx"),
+        "ChemDraw keeps most of the drawing."
+    );
+    let one = ChemdrawLoss {
+        schemes: 1,
+        steps: 1,
+        pages: 1,
+    };
+    assert_eq!(
+        keep_format_text("cdxml", one, &Document::default()),
+        format!("Keep as CDXML loses 1 reaction scheme, 1 step and 1 page. {unchanged}")
+    );
+    assert_eq!(
+        keep_format_text("mol", one, &Document::default()),
+        "MOL keeps the structure only."
+    );
+
+    // Reaction roles and arrow links drawn in ReShiki are lost as well.
+    let mut doc = Document::default();
+    let arrow = doc.next_id();
+    doc.arrows.push(reshiki::document::Arrow::new(
+        arrow,
+        Point::new(0., 0.),
+        Point::new(120., 0.),
+        reshiki::arrows::Preset::Forward,
+        reshiki::arrows::ArrowStyle::preset(reshiki::arrows::Preset::Forward),
+    ));
+    let annotation = doc.next_id();
+    doc.annotations.push(reshiki::document::Annotation {
+        id: annotation,
+        position: Point::new(40., -40.),
+        text: "heat".into(),
+        format: Default::default(),
+    });
+    doc.arrow_labels.push(reshiki::arrow_labels::ArrowLabel {
+        arrow,
+        annotation,
+        side: reshiki::arrow_labels::Side::Above,
+        gap: None,
+    });
+    assert_eq!(
+        keep_format_text("cdx", ChemdrawLoss::default(), &doc),
+        format!("Keep as CDX loses arrow links. {unchanged}")
+    );
+    doc.reactions.push(reshiki::reactions::Reaction {
+        arrow,
+        reactants: vec![],
+        products: vec![],
+        agents: vec![],
+        annotations: vec![],
+    });
+    assert_eq!(
+        keep_format_text(
+            "cdxml",
+            ChemdrawLoss {
+                schemes: 4,
+                steps: 12,
+                pages: 0
+            },
+            &doc
+        ),
+        format!(
+            "Keep as CDXML loses 4 reaction schemes, 12 steps, reaction roles and arrow links. {unchanged}"
+        )
+    );
 }

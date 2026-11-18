@@ -748,7 +748,13 @@ async fn open_reads_binary_cdx() -> Result<(), String> {
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/native-ethyl-clipboard.cdx");
     let mut app = ready();
     let opened = super::super::files::read(path).await;
-    let Some((_, Ok(super::super::files::Prepared::Import { format, contents }))) = &opened else {
+    let Some((
+        _,
+        Ok(super::super::files::Prepared::Import {
+            format, contents, ..
+        }),
+    )) = &opened
+    else {
         return Err(format!("{opened:?}"));
     };
     assert_eq!(*format, "cdx");
