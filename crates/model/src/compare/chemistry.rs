@@ -554,8 +554,23 @@ pub(super) fn parts(
         .flat_map(|f| f.1.iter().copied())
         .collect();
     attached.extend((added.iter().chain(&drawn_r)).flat_map(|f| f.1.iter().filter_map(in_left)));
-    // A bond's new order takes hydrogens from its ends, as a group does.
-    attached.extend(edit.changed_bonds.iter().flat_map(|((a, b), _)| [*a, *b]));
+    // Bonds made or broken between kept atoms, by their left ids.
+    let made: Vec<(u64, u64)> = (edit.added_bonds.iter())
+        .filter_map(|(a, b)| Some(key(in_left(a)?, in_left(b)?)))
+        .collect();
+    let broken: Vec<(u64, u64)> = (edit.removed_bonds.iter())
+        .filter(|(a, b)| map.contains_key(a) && map.contains_key(b))
+        .copied()
+        .collect();
+    // A bond's new order, or a bond made or broken, takes hydrogens from its
+    // ends, as a group does.
+    let ends = edit
+        .changed_bonds
+        .iter()
+        .map(|(bond, _)| bond)
+        .chain(&made)
+        .chain(&broken);
+    attached.extend(ends.flat_map(|(a, b)| [*a, *b]));
     let place = |attachments: &[u64]| -> Vec<String> {
         attachments
             .iter()
@@ -647,6 +662,19 @@ pub(super) fn parts(
             what,
             at: ends.unwrap_or_default(),
         });
+    }
+    for (kind, bonds) in [
+        (PartKind::BondAdded, &made),
+        (PartKind::BondRemoved, &broken),
+    ] {
+        for (a, b) in bonds {
+            let ends: Option<Vec<String>> = [a, b].iter().map(|l| both(Some(**l), None)).collect();
+            parts.push(Part {
+                kind,
+                what: String::new(),
+                at: ends.unwrap_or_default(),
+            });
+        }
     }
     for &((l, r), inverted) in &edit.centres {
         // A centre a group was added to or taken from: the group says it.

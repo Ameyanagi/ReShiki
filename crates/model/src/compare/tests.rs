@@ -1766,3 +1766,52 @@ fn a_mirror_drawn_again_with_new_ids_is_mirrored_not_redrawn() {
         [(Kind::Mirrored, Subject::Molecule)]
     );
 }
+
+#[test]
+fn a_symmetric_drawing_turned_and_drawn_again_is_turned_not_mirrored() {
+    // Formic acid with its oxygens placed symmetrically, then drawn again
+    // with new ids, turned 180°: the nearest pairing swaps the oxygens and
+    // fits a reflection, the right pairing fits the turn.
+    let draw = |doc: &mut Document, turn: f32| {
+        let c = doc.add_atom("C", Point::new(0., 0.));
+        let carbonyl = doc.add_atom("O", Point::new(-30. * turn, -25. * turn));
+        let hydroxyl = doc.add_atom("O", Point::new(30. * turn, -25. * turn));
+        doc.add_bond(c, carbonyl, 2, "plain");
+        doc.add_bond(c, hydroxyl, 1, "plain");
+    };
+    let mut left = Document::default();
+    draw(&mut left, 1.);
+    let left = load(&left);
+    let right = edited(&left, |doc| {
+        let old = doc.all_ids();
+        draw(doc, -1.);
+        doc.delete(&old);
+    });
+    let report = compare(&left, &right);
+    assert!(
+        report.changes.iter().all(|c| c.kind != Kind::Mirrored),
+        "{:?}",
+        report.changes
+    );
+}
+
+#[test]
+fn a_bond_added_between_kept_atoms_is_worded() {
+    // Propane closed into cyclopropane, ids kept.
+    let mut doc = Document::default();
+    let ids: Vec<u64> = (0..3)
+        .map(|i| doc.add_atom("C", Point::new(36. * i as f32, 21. * (i % 2) as f32)))
+        .collect();
+    doc.add_bond(ids[0], ids[1], 1, "plain");
+    doc.add_bond(ids[1], ids[2], 1, "plain");
+    let left = load(&doc);
+    let right = edited(&left, |doc| doc.add_bond(ids[0], ids[2], 1, "plain"));
+    assert_eq!(
+        parts(&compare(&left, &right)),
+        [part(PartKind::BondAdded, "", &[])]
+    );
+    assert_eq!(
+        parts(&compare(&right, &left)),
+        [part(PartKind::BondRemoved, "", &[])]
+    );
+}

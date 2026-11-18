@@ -279,6 +279,18 @@ fn part_text(part: &Part) -> String {
         PartKind::Replaced | PartKind::Atom => format!("{}{}", part.what, place("at")),
         PartKind::Bond if part.at.is_empty() => format!("bond {}", part.what),
         PartKind::Bond => format!("{} {}", part.at.join("–"), part.what),
+        PartKind::BondAdded | PartKind::BondRemoved => {
+            let done = if part.kind == PartKind::BondAdded {
+                "added"
+            } else {
+                "removed"
+            };
+            if part.at.is_empty() {
+                format!("bond {done}")
+            } else {
+                format!("{} bond {done}", part.at.join("–"))
+            }
+        }
         PartKind::Inverted if part.at.is_empty() => "stereocenter inverted".into(),
         PartKind::Inverted => format!("inverted{}", place("at")),
         PartKind::Stereo if part.at.is_empty() => "stereo changed".into(),

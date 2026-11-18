@@ -557,6 +557,14 @@ fn parts_read_with_their_atom_numbers() {
     assert_eq!(part_text(&parts[2]), "C1–C2 single → double");
     assert_eq!(part_text(&parts[3]), "inverted at C3");
     assert_eq!(
+        part_text(&part(PartKind::BondAdded, "", &["C1", "C3"])),
+        "C1–C3 bond added"
+    );
+    assert_eq!(
+        parts_title(&[part(PartKind::BondRemoved, "", &[])]),
+        "Bond removed"
+    );
+    assert_eq!(
         parts_title(&[part(PartKind::Removed, "NO₂", &[])]),
         "NO₂ removed"
     );

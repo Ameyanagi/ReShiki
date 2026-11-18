@@ -124,6 +124,9 @@ pub enum PartKind {
     Atom,
     /// A bond's order, or a double bond's geometry.
     Bond,
+    /// A bond made or broken between atoms both sides have.
+    BondAdded,
+    BondRemoved,
     /// A stereocenter inverted.
     Inverted,
     /// A stereocenter's stereo set, cleared or otherwise changed.
@@ -1057,16 +1060,27 @@ pub fn compare(left: &Document, right: &Document) -> Report {
             MatchedBy::Smiles => {
                 let canonical = points(&ordered.unwrap_or_default());
                 let nearest = points(&nearest(&l, &atoms_l, &r, &atoms_r));
-                // The better fit by any model, so a mirror drawn anew pairs
-                // atoms as mirrored.
-                let rms = |pairs: &[(Xy, Xy)]| {
-                    [(false, false), (true, false), (false, true), (true, true)]
-                        .iter()
-                        .filter_map(|(mirror, scale)| Fit::similar(pairs, *mirror, *scale))
-                        .map(|fit| fit.rms)
-                        .fold(f64::INFINITY, f64::min)
+                // The first model that fits, then how well: a rigid fit wins
+                // over a mirror, and a mirror drawn anew pairs as mirrored.
+                let score = |pairs: &[(Xy, Xy)]| {
+                    let models = [(false, false), (true, false), (false, true), (true, true)];
+                    (models.iter().enumerate())
+                        .filter_map(|(n, (mirror, scale))| {
+                            Some((n, Fit::similar(pairs, *mirror, *scale)?))
+                        })
+                        .find(|(_, fit)| fit.rms <= RMS * unit && fit.max <= MAX * unit)
+                        .map_or_else(
+                            || {
+                                (
+                                    models.len(),
+                                    Fit::rigid(pairs).map_or(f64::INFINITY, |f| f.rms),
+                                )
+                            },
+                            |(n, fit)| (n, fit.rms),
+                        )
                 };
-                if nearest.len() == canonical.len() && rms(&nearest) <= rms(&canonical) + 1e-6 {
+                let (a, b) = (score(&nearest), score(&canonical));
+                if nearest.len() == canonical.len() && (a.0, a.1) <= (b.0, b.1 + 1e-6) {
                     nearest
                 } else {
                     canonical
