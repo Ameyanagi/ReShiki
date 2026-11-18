@@ -150,7 +150,7 @@ The camera never changes stored coordinates or export size, and history and
 camera are session state.
 
 Native documents are JSON. Each drawing is saved at the lowest format version
-that holds its features, and this build reads versions 1–39; a drawing from a
+that holds its features, and this build reads versions 1–40; a drawing from a
 newer ReShiki reports the version it needs instead of a parse error. New
 presentation fields raise the version so older editors reject documents they
 cannot keep. [Document format versions](#document-format-versions) lists what
@@ -165,7 +165,10 @@ Enhanced stereo groups are identified by `(kind, number)` across the whole drawi
 
 `VERSION` in `crates/model/src/document.rs` is the newest format this build
 reads. Its doc comment holds the table below; update both together.
-`Document::file_version` selects version 39 when a property caption has a name
+`Document::file_version` selects version 40 when a graphic has shading, a drop
+shadow, a wavy stroke or a set corner radius, a graphic line has arrowheads,
+or an arrow is wavy,
+version 39 when a property caption has a name
 line or a custom name, version 38 when a property caption is linked
 to a molecule, version 37 when an atom has three or four radical electrons, version 36 when an atom has an enhanced stereo
 group, version 35 when an arrow has interior nodes or the drawing has a custom
@@ -219,6 +222,7 @@ whose model was already discarded cannot recover that missing source context.
 | 37      | Three or four radical electrons on an atom.                                           |
 | 38      | Property captions linked to their molecules (#1175).                                  |
 | 39      | Names in property captions: a name line and custom names.                             |
+| 40      | Shading, drop shadows, wavy strokes, arrowheads on lines and corner radii.            |
 
 ## Chemistry requests
 

@@ -281,6 +281,47 @@ fn style_message_restyles_selected_graphics_and_defaults() {
 }
 
 #[test]
+fn shading_and_shadow_are_one_undo_step_each_and_shading_gains_a_fill() {
+    use reshiki::graphics::Effects;
+    let mut app = ready(vec![shape(1, GraphicKind::Ellipse)], vec![1]);
+    let before = app.tab.doc.clone();
+    let _ = app.update(Message::Graphics(Action::Style(GraphicChange::Shaded(
+        true,
+    ))));
+    let style = &app.tab.doc.graphics[0].style;
+    assert!(style.effects.shaded);
+    assert_eq!(
+        style.fill,
+        Some(style.stroke),
+        "an outline shades in its stroke color"
+    );
+    let _ = app.update(Message::Graphics(Action::Style(GraphicChange::Shadow(
+        Some(Effects::SHADOW_PT),
+    ))));
+    assert_eq!(app.tab.doc.graphics[0].style.effects.shadow_pt, Some(4.));
+    assert_eq!(
+        app.tab.graphic_style.effects,
+        app.tab.doc.graphics[0].style.effects
+    );
+    let _ = app.update(Message::Undo);
+    assert!(app.tab.doc.graphics[0].style.effects.shaded);
+    assert_eq!(app.tab.doc.graphics[0].style.effects.shadow_pt, None);
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+    assert!(!app.error, "{}", app.status);
+}
+
+#[test]
+fn graphic_lines_take_arrowheads() {
+    let mut app = ready(vec![shape(1, GraphicKind::Line)], vec![1]);
+    let _ = app.update(Message::Graphics(Action::Head(reshiki::arrows::Head::Full)));
+    assert!(!app.error, "{}", app.status);
+    let heads = app.tab.doc.graphics[0].heads.expect("the line has heads");
+    assert_eq!(heads.head, reshiki::arrows::Head::Full);
+    assert_eq!(app.tab.doc.graphics[0].parts().len(), 2);
+}
+
+#[test]
 fn orbital_snap_preference_and_free_node_history_preserve_the_drawing() {
     let mut app = ready(vec![], vec![]);
     let atom = app.tab.doc.add_atom("N", Point::default());

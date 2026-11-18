@@ -1737,7 +1737,7 @@ async fn unsupported_chemdraw_clipboard_keeps_its_diagnostic_instead_of_generati
             paste_representation(LocalEngine::in_process(), drawing.clone(), false)
                 .await
                 .unwrap_err();
-        assert!(original_error.contains("Shadowed/shaded rectangle styles are not supported yet"));
+        assert!(original_error.contains("Gradient-shaded CDXML orbitals are not supported yet"));
         for (kind, text) in [
             (
                 "org.opensmiles.smiles",

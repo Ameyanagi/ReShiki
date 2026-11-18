@@ -217,6 +217,8 @@ fn every_arrangement_preserves_explicit_geometry_and_stable_ties() {
                 } else {
                     LinePattern::Dotted
                 },
+                effects: Default::default(),
+                corner_pt: None,
             },
             BracketSides::Both,
             false,

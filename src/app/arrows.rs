@@ -413,11 +413,9 @@ impl App {
             ]
             .align_y(Alignment::Center),
             row![
-                crate::appearance::pick_list(
-                    [LinePattern::Solid, LinePattern::Dashed, LinePattern::Dotted],
-                    Some(s.pattern),
-                    |v| Message::ArrowAction(Action::Pattern(v))
-                )
+                crate::appearance::pick_list(LinePattern::ALL, Some(s.pattern), |v| {
+                    Message::ArrowAction(Action::Pattern(v))
+                })
                 .text_size(12)
                 .padding(5),
                 hover_hint(

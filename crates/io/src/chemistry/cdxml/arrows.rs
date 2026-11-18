@@ -327,8 +327,16 @@ impl ArrowReader {
                 "Filled or faded CDXML arrows are not supported yet",
             ));
         }
-        let line_type = node.attr("LineType").unwrap_or("Solid");
-        if !matches!(line_type, "Solid" | "Dashed" | "Bold") {
+        let line_type: HashSet<_> = node
+            .attr("LineType")
+            .unwrap_or("Solid")
+            .split_whitespace()
+            .collect();
+        if line_type.is_empty()
+            || line_type
+                .iter()
+                .any(|t| !matches!(*t, "Solid" | "Dashed" | "Bold" | "Wavy"))
+        {
             return Err(ArrowError::Invalid("Unsupported CDXML arrow stroke"));
         }
         let heads = path_heads(|key| node.attr(key))?;
@@ -342,7 +350,7 @@ impl ArrowReader {
         .and_then(|i| colors.get(i))
         .copied()
         .ok_or(ArrowError::Invalid("Invalid arrow color"))?;
-        let bold = line_type == "Bold" || flags(node.attr("CurveType").unwrap_or("0"))?.bold;
+        let bold = line_type.contains("Bold") || flags(node.attr("CurveType").unwrap_or("0"))?.bold;
         let width_key = if bold { "BoldWidth" } else { "LineWidth" };
         let line = numeric::float(
             node.attr(width_key)
@@ -362,7 +370,14 @@ impl ArrowReader {
             shape,
             color,
             width_pt: line,
-            pattern: if line_type == "Dashed" {
+            // ChemDraw waves only a straight line without heads.
+            pattern: if line_type.contains("Wavy")
+                && node.tag != "curve"
+                && head == Head::None
+                && tail == Head::None
+            {
+                LinePattern::Wavy
+            } else if line_type.contains("Dashed") {
                 LinePattern::Dashed
             } else {
                 LinePattern::Solid

@@ -41,7 +41,12 @@ impl PathHeads {
             head_notch: self.head_notch,
             color: style.stroke,
             width_pt: style.width_pt,
-            pattern: style.pattern,
+            // The whole path waves once its heads are placed.
+            pattern: if style.pattern == super::LinePattern::Wavy {
+                super::LinePattern::Solid
+            } else {
+                style.pattern
+            },
             ..ArrowStyle::DEFAULT
         }
     }

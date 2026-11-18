@@ -21,8 +21,8 @@ Editable export may represent the two stamps as three paths. The regression
 checks their six actual straight edges across that representation change,
 in addition to the source frames on initial import.
 
-`unsupported-graphic` adds a valid shadowed rectangle, a documented unsupported
-style in `graphics/shapes.rs`. It must reject the richer drawing atomically.
+`unsupported-graphic` adds a valid gradient-shaded p orbital, a documented
+unsupported style in `graphics/shapes.rs`. It must reject the richer drawing atomically.
 `misleading.smiles` describes the same molecular identities but loses the
 deliberate geometry and reaction stamps; it must not silently replace failed
 editable drawing clipboard data.

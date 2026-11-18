@@ -758,11 +758,22 @@ impl Arrow {
             fill: None,
             width_pt: s.width_pt,
             pattern: s.pattern,
+            effects: Default::default(),
+            corner_pt: None,
         };
-        let mut path = |commands: Vec<PathCommand>, filled: bool, head: bool| {
+        let mut path = |mut commands: Vec<PathCommand>, filled: bool, head: bool| {
             let mut style = stroke.clone();
             if head {
                 style.pattern = LinePattern::Solid;
+            } else if s.pattern == LinePattern::Wavy && !filled {
+                let radius = crate::graphics::wave_radius(s.width_pt);
+                // Run straight under each head and a little beyond it.
+                let lead = DEFAULT.world(s.head_length_pt) + radius;
+                commands = crate::graphics::wavy(
+                    &commands,
+                    radius,
+                    [s.tail, s.head].map(|h| if h == Head::None { 0. } else { lead }),
+                );
             }
             if filled {
                 style.fill = Some(s.color);
@@ -816,6 +827,8 @@ impl Arrow {
                 fill: filled.then_some(s.color),
                 width_pt: if filled { 0. } else { s.width_pt },
                 pattern: LinePattern::Solid,
+                effects: Default::default(),
+                corner_pt: None,
             },
             filled,
         })

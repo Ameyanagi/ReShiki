@@ -185,6 +185,7 @@ fn direct_original_graphics_and_actual_deferred_picture_wire_match() -> anyhow::
     assert_eq!(header["rdkit_version"], RDKIT_VERSION);
     let (mut accepted, mut rejected, mut converted, mut bounded, mut decoded) = (0, 0, 0, 0, 0);
     let mut arrowed = 0;
+    let mut effects = 0;
     let mut failures = Vec::new();
     for line in lines {
         // Preserve exact worker transport: JSON -> Value(f64) -> typed Case.
@@ -289,6 +290,18 @@ fn direct_original_graphics_and_actual_deferred_picture_wire_match() -> anyhow::
                 ));
                 continue;
             }
+            // Shading, shadows and wavy lines are no longer refused; the
+            // accepted graphic must carry the style the original refused.
+            (Ok(actual), None)
+                if serde_json::to_string(&actual.graphics).is_ok_and(|json| {
+                    json.contains("\"shaded\"")
+                        || json.contains("\"shadow_pt\"")
+                        || json.contains("\"wavy\"")
+                }) =>
+            {
+                effects += 1;
+                continue;
+            }
             (Ok(actual), None) => {
                 failures.push(format!(
                     "{}: Rust accepted {actual:?}; native {:?}",
@@ -377,9 +390,10 @@ fn direct_original_graphics_and_actual_deferred_picture_wire_match() -> anyhow::
             && bounded > 100
             && decoded >= 90
             && arrowed > 0
+            && effects > 0
     );
     eprintln!(
-        "{accepted} native successes, {rejected} exact errors, {arrowed} arrowed curves now accepted (#777), {converted} wire/document conversions, {bounded} separate document boundaries, {decoded} independent Pillow images"
+        "{accepted} native successes, {rejected} exact errors, {arrowed} arrowed curves now accepted (#777), {effects} shaded, shadowed or wavy graphics now accepted, {converted} wire/document conversions, {bounded} separate document boundaries, {decoded} independent Pillow images"
     );
     Ok(())
 }

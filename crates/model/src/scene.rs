@@ -2309,15 +2309,50 @@ fn graphic_primitive(
     if g.kind == crate::graphics::GraphicKind::Picture {
         vec![Primitive::Picture((*g).clone())]
     } else {
+        use crate::{graphics::GraphicStyle, palette::Color};
+        let flat = |commands, rgb| Primitive::Path {
+            commands,
+            style: GraphicStyle {
+                stroke: Color::Custom(rgb),
+                fill: Some(Color::Custom(rgb)),
+                width_pt: 0.,
+                ..Default::default()
+            },
+            filled: true,
+        };
         let mut parts: Vec<_> = g
-            .parts()
+            .shadow_commands()
+            .map(|commands| flat(commands, crate::graphics::SHADOW_RGB))
             .into_iter()
-            .map(|p| Primitive::Path {
-                commands: p.commands,
-                style: p.style,
-                filled: p.filled,
-            })
             .collect();
+        let bands = g.shading_bands();
+        let shade = g.style.fill.unwrap_or(g.style.stroke).rgb();
+        parts.extend(bands.iter().filter_map(|(band, t)| {
+            use crate::graphics::PathCommand::{Close, Line, Move};
+            let (first, rest) = band.split_first()?;
+            let commands = std::iter::once(Move(*first))
+                .chain(rest.iter().map(|p| Line(*p)))
+                .chain([Close])
+                .collect();
+            Some(flat(commands, crate::graphics::shade(shade, *t)))
+        }));
+        // ChemDraw paints a shadowed outline's inside with paper.
+        let paper = !parts.is_empty() && bands.is_empty() && g.style.fill.is_none();
+        parts.extend(g.parts().into_iter().enumerate().map(|(i, p)| {
+            let mut style = p.style;
+            if i == 0 && paper {
+                style.fill = Some(Color::Custom([255; 3]));
+            }
+            Primitive::Path {
+                commands: p.commands,
+                filled: if i == 0 && !bands.is_empty() {
+                    false
+                } else {
+                    p.filled || i == 0 && paper
+                },
+                style,
+            }
+        }));
         if let Some(label) = g.superscript_label(text_style) {
             parts.push(Primitive::Text {
                 position: label.position,

@@ -111,6 +111,7 @@ pub(super) struct DocumentTab {
     pub(super) attach_symbols: bool,
     pub(super) snap_orbitals: bool,
     pub(super) graphic_width_input: String,
+    pub(super) graphic_corner_input: String,
     pub(super) path_head_inputs: [String; 3],
     pub(super) graphic_stroke_input: String,
     pub(super) graphic_fill_input: String,
@@ -232,6 +233,7 @@ impl DocumentTab {
             attach_symbols: true,
             snap_orbitals: true,
             graphic_width_input: "0.6".into(),
+            graphic_corner_input: String::new(),
             path_head_inputs: graphics::HeadField::ALL
                 .map(|field| field.get(&Default::default()).to_string()),
             graphic_stroke_input: "#000000".into(),

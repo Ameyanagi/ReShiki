@@ -80,6 +80,19 @@ pub struct NativeStyle {
     pub fill: Option<presentation::NativeColor>,
     pub width_pt: f64,
     pub pattern: LinePattern,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub shaded: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub shadow_pt: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub corner_pt: Option<f64>,
+}
+impl NativeStyle {
+    /// ChemDraw's Shaded paints the shape in its one color.
+    fn shade(&mut self) {
+        self.shaded = true;
+        self.fill = Some(self.stroke);
+    }
 }
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct NativeGraphic {
@@ -123,6 +136,11 @@ impl NativeGraphic {
                     .transpose()?,
                 width_pt: s.width_pt as f32,
                 pattern: s.pattern,
+                effects: crate::graphics::Effects {
+                    shaded: s.shaded,
+                    shadow_pt: s.shadow_pt.map(|d| d as f32),
+                },
+                corner_pt: s.corner_pt.map(|c| c as f32),
             }
         } else {
             GraphicStyle::default()
@@ -274,7 +292,21 @@ impl Reader<'_, '_> {
             } else {
                 LinePattern::Solid
             },
+            shaded: false,
+            shadow_pt: None,
+            corner_pt: None,
         })
+    }
+    /// ChemDraw's ShadowSize, in hundredths of a point, when `shadowed`.
+    fn shadow(&self, el: Node<'_, '_>, shadowed: bool) -> Result<Option<f64>> {
+        if !shadowed {
+            return Ok(None);
+        }
+        let size = float(el, "ShadowSize", "400")? / 100.;
+        if !size.is_finite() || !(0.1..=36.).contains(&size) {
+            return Err(Error::Native("CDXML shadow size is outside 0.1–36 pt"));
+        }
+        Ok(Some(size))
     }
     fn base(
         &mut self,
@@ -413,8 +445,9 @@ pub fn read(
                     && b.style.as_ref().is_some_and(|s| s.fill.is_none())
                 {
                     let mut value = b.clone();
-                    if let Some(style) = &mut value.style {
-                        style.fill = a.style.as_ref().and_then(|s| s.fill);
+                    if let (Some(style), Some(fill)) = (&mut value.style, &a.style) {
+                        style.fill = fill.fill;
+                        style.shaded = fill.shaded;
                     }
                     value.layer = reader.layer(el)?;
                     value
