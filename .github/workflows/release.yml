@@ -193,7 +193,9 @@ jobs:
         run: uv run --no-project --python 3.12.15 python scripts/build_release.py --tag "$RELEASE_TAG" --check-tag-only
   build:
     needs: [validate, images]
-    timeout-minutes: 100
+    # The Intel macOS runner is slow and uneven: its dist build alone has taken
+    # 28 and 61 minutes, and the job was once cancelled at 100.
+    timeout-minutes: ${{ matrix.artifact == 'macos-x64' && 150 || 100 }}
     strategy:
       fail-fast: false
       matrix:
