@@ -21,7 +21,9 @@ merges after v0.15.0. Fixes merged to `main` for this release after that were fo
 the same way: [PR #1241](https://github.com/Ameyanagi/ReShiki/pull/1241)
 (rings join the atoms they land on), at `524ac765`, and
 [PR #1243](https://github.com/Ameyanagi/ReShiki/pull/1243) (live reference
-oracles, no user-facing change), at `077815e1`.
+oracles, no user-facing change), at `077815e1`, and
+[PR #1244](https://github.com/Ameyanagi/ReShiki/pull/1244) (keyboard drawing on
+molecules with a reaction role), at `40d75765`.
 
 `VERSION` is 39 in `crates/model/src/document.rs`. `Document::file_version`
 saves each drawing at the version of the newest feature it uses: 39 for a

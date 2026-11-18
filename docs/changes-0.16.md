@@ -281,6 +281,12 @@ changes in this release are by @Ameyanagi.
   The paste is one Undo step
   ([#1176](https://github.com/Ameyanagi/ReShiki/pull/1176); fixes
   [issue #1151](https://github.com/Ameyanagi/ReShiki/issues/1151)).
+- [Keyboard drawing](3d-keyboard-drawing.md) keys that add atoms (`1`, `2`,
+  `4`, `5`, `8`, `9`, `0`, `z`, `K`, `k` and group keys on an atom with two or
+  more bonds) now work on a molecule that has a reaction role. They were
+  refused with "Assign complete molecules to reaction roles". Clicking an
+  aromatic ring atom of such a molecule with the bond tool works again too
+  ([#1244](https://github.com/Ameyanagi/ReShiki/pull/1244)).
 - **Move & attach** no longer refuses a molecule with a name caption, a depth
   appearance or a 3D model, or an arrow with condition text; they move with
   the fragment. Dragging a ring onto a bond no longer fuses it when a ring atom
