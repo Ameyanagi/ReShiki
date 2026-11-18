@@ -155,7 +155,7 @@ fn with_labels(
 ) -> PyResult<Py<PyBytes>> {
     use reshiki_io::nmr::{LabelFormat, MAX_DECIMALS, Nucleus, default_decimals};
     let format = LabelFormat::from_code(format)
-        .ok_or_else(|| invalid(py)("format must be numbers, ppm or both".into()))?;
+        .ok_or_else(|| invalid(py)("format must be value, numbers, ppm or both".into()))?;
     let decimals = match decimals {
         None => default_decimals(nucleus.and_then(Nucleus::from_code)),
         Some(decimals) => u8::try_from(decimals)

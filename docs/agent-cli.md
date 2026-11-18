@@ -234,21 +234,24 @@ several lines:
 file is made:
 
 ```sh
-reshiki --cli convert --smiles 'CCOC(C)=O' --nucleus 13C --labels both -o assigned.svg
+reshiki --cli convert --smiles 'CCOC(C)=O' --nucleus 13C --labels value -o assigned.svg
 ```
 
 | `--labels` | Label on atom 3 (¹H) |
 | ---------- | -------------------- |
+| `value`    | `1.28`               |
 | `numbers`  | `#3`                 |
 | `ppm`      | `1.28 ppm`           |
 | `both`     | `#3 · 1.28 ppm`      |
 
-These are the formats of the app's **Show labels** menu. `--decimals N` sets
-the ppm decimal places, 0 to 4; by default ¹H labels get 2 (`7.26 ppm`) and
-¹³C labels 1 (`128.4 ppm`), as journals print them. The labels are written as
-atom numbers, at 65% of the drawing's atom-label size, and replace the numbers
-of the atoms that have a prediction. Each is placed clear of bonds and other
-labels, with a thin leader line to its atom when it has to sit away from it.
+`value` is the bare shift, as journals print it; they usually state
+"δ (ppm)" once in the figure caption. The others are the formats of the app's
+**Show labels** menu. `--decimals N` sets the ppm decimal places, 0 to 4; by
+default ¹H labels get 2 (`7.26`) and ¹³C labels 1 (`128.4`). The labels are
+written as atom numbers, at 65% of the drawing's atom-label size, and replace
+the numbers of the atoms that have a prediction. Each sits right beside its
+atom, clear of bonds and other labels, and gets a thin leader line only when
+no spot beside it is free.
 Sites without a ppm get no label. The input must be exactly one molecule.
 
 `--labels` is allowed only for outputs that keep atom numbers: `svg`, `png`,

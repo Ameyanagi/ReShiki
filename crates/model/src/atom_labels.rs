@@ -536,11 +536,19 @@ pub fn shift_label_style(doc: &Document) -> TextStyle {
         ..number_style()
     }
 }
-/// Predicted-shift labels, the atom numbers that end in ` ppm` (`1.28 ppm`,
-/// `#3 · 1.28 ppm`), get their own placement with leader lines. Every other
-/// number (`1`, `12a`, `#3`, `L (S)`, free text) keeps the indicator layout.
+/// Predicted-shift labels get their own placement: beside their atom when
+/// there is room, else with a leader line. They are the atom numbers that are
+/// a decimal shift (`1.28`, `128.4`) or end in ` ppm` (`1.28 ppm`,
+/// `#3 · 1.28 ppm`). Every other number (`1`, `12a`, `#3`, `L (S)`, free
+/// text) keeps the indicator layout, so whole numbers do too.
 pub fn is_shift_label(text: &str) -> bool {
-    text.ends_with(" ppm")
+    let decimal = text.split_once('.').is_some_and(|(whole, part)| {
+        let whole = whole.strip_prefix('-').unwrap_or(whole);
+        [whole, part]
+            .iter()
+            .all(|digits| !digits.is_empty() && digits.bytes().all(|b| b.is_ascii_digit()))
+    });
+    decimal || text.ends_with(" ppm")
 }
 pub fn stereo_style() -> TextStyle {
     TextStyle {
@@ -1362,7 +1370,27 @@ fn layout_indicators(doc: &Document, drawn: &Document) -> Vec<Indicator> {
                 rails: doc.drawing_style.bond_spacing_ratio * doc.drawing_style.bond_length_world
                     + doc.drawing_style.world(doc.drawing_style.bold_width_pt) / 2.
                     + 3.,
-                hull: hulls.get(&id).cloned().unwrap_or_else(|| Vec::new().into()),
+                kin: doc
+                    .bonds
+                    .iter()
+                    .filter(|b| b.is_covalent())
+                    .filter_map(|b| match (b.a == id, b.b == id) {
+                        (true, _) => Some(b.b),
+                        (_, true) => Some(b.a),
+                        _ => None,
+                    })
+                    .filter(|other| doc.atom(*other).is_some_and(|a| a.element == "H"))
+                    .filter_map(|other| positions.get(&other).copied())
+                    .collect(),
+                compact: !text.ends_with(" ppm"),
+                // A bare value is small enough to sit between the bonds next
+                // to its atom, as journals print shifts; a longer label stays
+                // outside the molecule.
+                hull: hulls
+                    .get(&id)
+                    .filter(|_| text.ends_with(" ppm"))
+                    .cloned()
+                    .unwrap_or_else(|| Vec::new().into()),
             };
             long.push((label, owner, text, offset, style, roman_parentheses));
             continue;
@@ -1502,6 +1530,43 @@ fn layout_indicators(doc: &Document, drawn: &Document) -> Vec<Indicator> {
             long_reach: None,
         });
     }
+    // The strokes each bond draws and how far each one's ink reaches beyond
+    // its centre line, as the scene draws them, for the long numbers.
+    let rails: Vec<Vec<(Point, Point, f32)>> = if long.is_empty() {
+        Vec::new()
+    } else {
+        let faces = crate::scene::projected_bonds::FaceIndex::new(doc);
+        let style = &doc.drawing_style;
+        doc.bonds
+            .iter()
+            .filter_map(|b| {
+                let (p, q) = (*positions.get(&b.a)?, *positions.get(&b.b)?);
+                let bold = matches!(
+                    b.display.as_str(),
+                    "bold" | "wedge" | "hash" | "hashed" | "hollow_wedge"
+                ) || b.secondary_display.as_deref() == Some("bold");
+                let ink = if bold {
+                    style.world(style.bold_width_pt) / 2.
+                } else if b.display == "wavy" && b.order != 2 {
+                    style.line_width() * 1.75
+                } else {
+                    style.line_width() / 2.
+                };
+                // As the scene draws them: a rail trimmed past its own length
+                // is not drawn.
+                Some(
+                    crate::scene::bond_rails(&faces, b)
+                        .iter()
+                        .map(|rail| rail.points(p, q))
+                        .filter(|(first, last)| {
+                            (last.x - first.x) * (q.x - p.x) + (last.y - first.y) * (q.y - p.y) > 0.
+                        })
+                        .map(|(first, last)| (first, last, ink))
+                        .collect(),
+                )
+            })
+            .collect()
+    };
     // Long numbers last: first every one that fits beside its atom, those
     // with the least room there first; then the rest wherever the search
     // finds room, with leaders.
@@ -1510,6 +1575,7 @@ fn layout_indicators(doc: &Document, drawn: &Document) -> Vec<Indicator> {
         let obstacles = Obstacles {
             boxes: &occupied,
             bonds: &segments,
+            rails: &rails,
             atoms: &visible,
             leaders: &leaders,
         };
@@ -1539,6 +1605,7 @@ fn layout_indicators(doc: &Document, drawn: &Document) -> Vec<Indicator> {
             let obstacles = Obstacles {
                 boxes: occupied,
                 bonds: &segments,
+                rails: &rails,
                 atoms: &visible,
                 leaders,
             };

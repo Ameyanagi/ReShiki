@@ -137,6 +137,20 @@ def test_the_issue_example_writes_labels_that_every_figure_keeps(tmp_path: Path)
     assert 'AtomNumber="#4 · 170.7 ppm"' in labelled.cdxml()
 
 
+def test_the_default_is_the_bare_value_as_journals_print_it() -> None:
+    molecule = reshiki.Molecule.from_smiles(ETHYL_ACETATE)
+    carbons = molecule.predict_nmr("13C")
+    protons = molecule.predict_nmr("1H")
+    # One decimal place for 13C and two for 1H; no "#N" and no unit.
+    assert _numbers(molecule.with_labels(carbons)) == {
+        row.atom: f"{row.ppm:.1f}" for row in carbons if row.ppm is not None
+    }
+    assert _numbers(molecule.with_labels(carbons))[4] == "170.7"
+    assert _numbers(molecule.with_labels(protons))[1] == "1.28"
+    assert _numbers(molecule.with_labels(carbons, format="value", decimals=3))[4] == "170.700"
+    assert _numbers(molecule.with_labels([(4, 170.66)], decimals=0)) == {4: "171"}
+
+
 def test_rows_can_be_shifts_mappings_or_pairs() -> None:
     molecule = reshiki.Molecule.from_smiles(ETHYL_ACETATE)
     protons = molecule.predict_nmr("1H")
@@ -162,12 +176,12 @@ def test_a_bad_row_writes_nothing() -> None:
         ([(1, 1e20)], "The label of atom 1 is longer than 32 characters"),
     ):
         with pytest.raises(reshiki.ReShikiError) as error:
-            molecule.with_labels(rows)
+            molecule.with_labels(rows, format="both")
         assert error.value.code == "invalid_arguments"
         assert str(error.value) == message
     with pytest.raises(reshiki.ReShikiError) as error:
         molecule.with_labels([], format="atom")  # type: ignore[arg-type]
-    assert str(error.value) == "format must be numbers, ppm or both"
+    assert str(error.value) == "format must be value, numbers, ppm or both"
 
 
 def test_wider_labels_make_room_in_a_reaction_as_the_app_does() -> None:

@@ -43,7 +43,7 @@ const RECIPES: &[&str] = &[
     "--cli help convert",
     "--cli analyze --smiles 'CC(=O)OCC'",
     "--cli predict-nmr --smiles 'CC(=O)OCC' --nucleus 13C",
-    "--cli convert --smiles 'CC(=O)OCC' --nucleus 13C --labels both -o assigned.svg",
+    "--cli convert --smiles 'CC(=O)OCC' --nucleus 13C --labels value -o assigned.svg",
     "--cli name --smiles 'CC(=O)O' --json",
     "--cli convert --smiles 'CC(=O)OCC' -o ethyl-acetate.mol",
     "--cli convert reaction.cdxml -o reaction.pdf",

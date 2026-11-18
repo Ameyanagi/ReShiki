@@ -541,14 +541,16 @@ class Drawing:
         self: _D,
         rows: NmrPrediction | Iterable[_LabelRow],
         *,
-        format: Literal["numbers", "ppm", "both"] = "both",
+        format: Literal["value", "numbers", "ppm", "both"] = "value",
         decimals: int | None = None,
     ) -> _D:
         """Return a drawing with predicted shifts written onto the atoms as atom numbers.
 
         ``rows`` is an :class:`NmrPrediction`, or :class:`NmrShift` rows, ``{"atom", "ppm"}``
-        mappings or ``(atom, ppm)`` tuples. The labels read ``#3``, ``1.28 ppm`` or
-        ``#3 · 1.28 ppm``, as the app's **Show labels** menu offers. ``decimals`` (0 to 4)
+        mappings or ``(atom, ppm)`` tuples. By default a label is the shift alone (``1.28``),
+        as journals print it with δ (ppm) stated once in the caption; ``format`` can instead
+        give ``#3``, ``1.28 ppm`` or ``#3 · 1.28 ppm``, as the app's **Show labels** menu
+        offers. ``decimals`` (0 to 4)
         defaults to 2 for ¹H rows and 1 for ¹³C rows, and to 2 for rows without a nucleus.
         They replace the listed atoms' numbers, keeping their style; rows without a ppm are
         skipped. The labels are static text: they do not change after later edits. An unknown

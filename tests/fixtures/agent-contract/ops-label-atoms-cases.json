@@ -22,11 +22,11 @@
     },
     {
       "id": "label_atoms.format",
-      "cite": "crates/agent/src/ops/label_atoms.rs:56,85,129-130; crates/io/src/nmr/labels.rs:22-30"
+      "cite": "crates/agent/src/ops/label_atoms.rs:56,85,129-130; crates/io/src/nmr/labels.rs:23-34"
     },
     {
       "id": "label_atoms.decimals",
-      "cite": "crates/agent/src/ops/label_atoms.rs:57,64,86-87,131-139; crates/io/src/nmr/labels.rs:33-42"
+      "cite": "crates/agent/src/ops/label_atoms.rs:57,64,86-87,131-139; crates/io/src/nmr/labels.rs:36-46"
     },
     {
       "id": "label_atoms.base_revision_required",
@@ -72,11 +72,12 @@
     {"name": "rows_at_max_ids", "rule": "label_atoms.rows_count", "base": "label", "patch": [{"op": "replace", "path": "/arguments/rows", "value": {"$repeat": {"atom": "7", "ppm": 1.5}, "count": 5000}}], "expect": "both_accept"},
     {"name": "rows_over_max_ids", "rule": "label_atoms.rows_count", "base": "label", "patch": [{"op": "replace", "path": "/arguments/rows", "value": {"$repeat": {"atom": "7", "ppm": 1.5}, "count": 5001}}], "expect": "both_reject", "message": "5001 rows were given; at most 5000 are allowed per request"},
 
+    {"name": "format_value", "rule": "label_atoms.format", "base": "label", "patch": [{"op": "replace", "path": "/arguments/format", "value": "value"}], "expect": "both_accept"},
     {"name": "format_numbers", "rule": "label_atoms.format", "base": "keyed", "expect": "both_accept"},
     {"name": "format_ppm", "rule": "label_atoms.format", "base": "label", "patch": [{"op": "replace", "path": "/arguments/format", "value": "ppm"}], "expect": "both_accept"},
     {"name": "format_both", "rule": "label_atoms.format", "base": "label", "expect": "both_accept"},
-    {"name": "format_capitalised", "rule": "label_atoms.format", "base": "label", "patch": [{"op": "replace", "path": "/arguments/format", "value": "Both"}], "expect": "both_reject", "message": "format must be numbers, ppm or both"},
-    {"name": "format_atom", "rule": "label_atoms.format", "base": "label", "patch": [{"op": "replace", "path": "/arguments/format", "value": "atom"}], "expect": "both_reject", "message": "format must be numbers, ppm or both"},
+    {"name": "format_capitalised", "rule": "label_atoms.format", "base": "label", "patch": [{"op": "replace", "path": "/arguments/format", "value": "Both"}], "expect": "both_reject", "message": "format must be value, numbers, ppm or both"},
+    {"name": "format_atom", "rule": "label_atoms.format", "base": "label", "patch": [{"op": "replace", "path": "/arguments/format", "value": "atom"}], "expect": "both_reject", "message": "format must be value, numbers, ppm or both"},
     {"name": "format_null", "rule": "label_atoms.format", "base": "label", "patch": [{"op": "replace", "path": "/arguments/format", "value": null}], "expect": "both_reject"},
     {"name": "format_omitted", "rule": "label_atoms.format", "base": "label", "patch": [{"op": "remove", "path": "/arguments/format"}], "expect": "both_reject", "message": "missing field `format`"},
 

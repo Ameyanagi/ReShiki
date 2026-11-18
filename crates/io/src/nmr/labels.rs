@@ -6,9 +6,12 @@ use crate::{
     document::Document,
 };
 
-/// What a label shows, as the menu next to **Show labels** offers it.
+/// What a label shows: the shift alone, as journals print it, or one of
+/// the formats the menu next to **Show labels** offers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LabelFormat {
+    /// `1.28`, the default for scripts; the caption states δ (ppm) once.
+    Value,
     /// `#3`
     Numbers,
     /// `1.28 ppm`
@@ -18,9 +21,10 @@ pub enum LabelFormat {
 }
 
 impl LabelFormat {
-    /// `numbers`, `ppm` or `both`, as scripts name the formats.
+    /// `value`, `numbers`, `ppm` or `both`, as scripts name the formats.
     pub fn from_code(code: &str) -> Option<Self> {
         match code {
+            "value" => Some(Self::Value),
             "numbers" => Some(Self::Numbers),
             "ppm" => Some(Self::Ppm),
             "both" => Some(Self::Both),
@@ -32,8 +36,8 @@ impl LabelFormat {
 /// The most decimal places a ppm label may have.
 pub const MAX_DECIMALS: u8 = 4;
 
-/// Journal-style decimal places: 2 for ¹H (`7.26 ppm`), 1 for ¹³C
-/// (`128.4 ppm`), and 2 when the rows do not say which nucleus.
+/// Journal-style decimal places: 2 for ¹H (`7.26`), 1 for ¹³C
+/// (`128.4`), and 2 when the rows do not say which nucleus.
 pub fn default_decimals(nucleus: Option<Nucleus>) -> u8 {
     match nucleus {
         Some(Nucleus::C13) => 1,
@@ -45,6 +49,7 @@ pub fn default_decimals(nucleus: Option<Nucleus>) -> u8 {
 pub fn label_text(format: LabelFormat, atom: u64, ppm: f64, decimals: u8) -> String {
     let decimals = usize::from(decimals);
     match format {
+        LabelFormat::Value => format!("{ppm:.decimals$}"),
         LabelFormat::Numbers => format!("#{atom}"),
         LabelFormat::Ppm => format!("{ppm:.decimals$} ppm"),
         LabelFormat::Both => format!("#{atom} · {ppm:.decimals$} ppm"),

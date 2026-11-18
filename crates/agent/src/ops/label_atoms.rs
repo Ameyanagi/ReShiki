@@ -53,7 +53,7 @@ fn schema() -> Value {
         "properties": {
             "document": handle_schema(),
             "rows": described(json!({"type": "array", "maxItems": Budgets::default().max_ids, "items": row}), "predict_nmr's rows; a null ppm is skipped."),
-            "format": {"type": "string", "enum": ["numbers", "ppm", "both"]},
+            "format": {"type": "string", "enum": ["value", "numbers", "ppm", "both"]},
             "decimals": described(nullable(json!({"type": "integer", "minimum": 0, "maximum": MAX_DECIMALS})), "ppm decimals; null for 2."),
             "base_revision": described(revision_schema(), "The revision predict_nmr returned."),
             "idempotency_key": described(nullable(json!({
@@ -126,8 +126,9 @@ pub(crate) fn decode(args: Value, budgets: &Budgets) -> Result<LabelAtoms, OpErr
         )
         .param("rows"));
     }
-    let format = LabelFormat::from_code(&format)
-        .ok_or_else(|| OpError::invalid("format must be numbers, ppm or both").param("format"))?;
+    let format = LabelFormat::from_code(&format).ok_or_else(|| {
+        OpError::invalid("format must be value, numbers, ppm or both").param("format")
+    })?;
     let decimals = match decimals {
         None => nmr::default_decimals(None),
         Some(decimals) => u8::try_from(decimals)

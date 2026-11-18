@@ -74,7 +74,7 @@ In a POSIX shell (sh, bash or zsh, and Git Bash on Windows):
 '/opt/reshiki/reshiki' --cli help convert
 '/opt/reshiki/reshiki' --cli analyze --smiles 'CC(=O)OCC'
 '/opt/reshiki/reshiki' --cli predict-nmr --smiles 'CC(=O)OCC' --nucleus 13C
-'/opt/reshiki/reshiki' --cli convert --smiles 'CC(=O)OCC' --nucleus 13C --labels both -o assigned.svg
+'/opt/reshiki/reshiki' --cli convert --smiles 'CC(=O)OCC' --nucleus 13C --labels value -o assigned.svg
 '/opt/reshiki/reshiki' --cli name --smiles 'CC(=O)O' --json
 '/opt/reshiki/reshiki' --cli convert --smiles 'CC(=O)OCC' -o ethyl-acetate.mol
 '/opt/reshiki/reshiki' --cli convert reaction.cdxml -o reaction.pdf
@@ -91,7 +91,7 @@ Windows release builds have no console, so their output and error messages appea
 & '/opt/reshiki/reshiki' --cli help convert 2>&1 | Write-Output
 & '/opt/reshiki/reshiki' --cli analyze --smiles 'CC(=O)OCC' 2>&1 | Write-Output
 & '/opt/reshiki/reshiki' --cli predict-nmr --smiles 'CC(=O)OCC' --nucleus 13C 2>&1 | Write-Output
-& '/opt/reshiki/reshiki' --cli convert --smiles 'CC(=O)OCC' --nucleus 13C --labels both -o assigned.svg 2>&1 | Write-Output
+& '/opt/reshiki/reshiki' --cli convert --smiles 'CC(=O)OCC' --nucleus 13C --labels value -o assigned.svg 2>&1 | Write-Output
 & '/opt/reshiki/reshiki' --cli name --smiles 'CC(=O)O' --json 2>&1 | Write-Output
 & '/opt/reshiki/reshiki' --cli convert --smiles 'CC(=O)OCC' -o ethyl-acetate.mol 2>&1 | Write-Output
 & '/opt/reshiki/reshiki' --cli convert reaction.cdxml -o reaction.pdf 2>&1 | Write-Output

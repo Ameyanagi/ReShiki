@@ -88,7 +88,7 @@ fn decode_checks_the_format_the_row_count_and_the_key() {
         decode(args, &budgets).map(drop)
     };
     let row = json!([{"atom": "1", "ppm": 14.2}, {"atom": "3", "ppm": null}]);
-    for format in ["numbers", "ppm", "both"] {
+    for format in ["value", "numbers", "ppm", "both"] {
         assert_eq!(decoded(row.clone(), format, Value::Null), Ok(()));
     }
     let format = decoded(row.clone(), "Both", Value::Null).unwrap_err();
@@ -127,6 +127,20 @@ fn decode_checks_the_format_the_row_count_and_the_key() {
         );
         assert_eq!(error.message, "decimals must be 0 to 4");
     }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn the_value_format_writes_the_shift_alone() {
+    let (host, handle) = hosting();
+    let (rows, base) = predicted(&host, &handle).await;
+    let mut arguments = label(&handle, &rows, &base, Value::Null);
+    arguments["format"] = json!("value");
+    arguments["decimals"] = json!(1);
+    let result = call(&host, "label_atoms", arguments).await;
+    assert!(!result.is_error, "{:?}", result.value);
+    let (labelled, _) = stored(&host, &handle);
+    let number = labelled.atom(4).unwrap().display.number.clone().unwrap();
+    assert_eq!(number.text, "170.7");
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

@@ -783,7 +783,7 @@ fn convert_labels_parse_with_their_nucleus() {
         "--nucleus",
         "13C",
         "--labels",
-        "both",
+        "value",
     ]) else {
         panic!("convert with labels did not parse");
     };
@@ -791,7 +791,7 @@ fn convert_labels_parse_with_their_nucleus() {
         convert.labels,
         Some(Labels {
             nucleus: "13C",
-            format: "both".into(),
+            format: "value".into(),
             decimals: 1,
         })
     );
@@ -819,6 +819,14 @@ async fn convert_writes_predicted_shifts_as_atom_numbers() {
     for label in ["#1 · 14.2 ppm", "#4 · 170.7 ppm", "#5 · 20.9 ppm"] {
         assert!(out.contains(&format!(">{label}</text>")), "{label}");
     }
+    // The journal style: the value alone.
+    let value_args = svg_args.map(|arg| if arg == "both" { "value" } else { arg });
+    let (code, out, err) = call(&value_args).await;
+    assert_eq!(code, SUCCESS, "{err}");
+    for label in ["14.2", "170.7", "20.9"] {
+        assert!(out.contains(&format!(">{label}</text>")), "{label}");
+    }
+    assert!(!out.contains(" ppm<"), "{out}");
     let cdxml_args = [
         "convert",
         "--smiles",
@@ -1778,7 +1786,7 @@ async fn usage_errors_exit_2_before_any_work() {
         ),
         (
             &["convert", "--smiles", "C", "--to", "svg", "--decimals", "2"],
-            "--decimals needs --labels numbers, ppm or both".into(),
+            "--decimals needs --labels value, numbers, ppm or both".into(),
         ),
         (
             &[
@@ -1814,7 +1822,7 @@ async fn usage_errors_exit_2_before_any_work() {
         ),
         (
             &["convert", "--smiles", "C", "--to", "svg", "--nucleus", "1H"],
-            "--nucleus needs --labels numbers, ppm or both".into(),
+            "--nucleus needs --labels value, numbers, ppm or both".into(),
         ),
         (
             &[
@@ -1828,7 +1836,7 @@ async fn usage_errors_exit_2_before_any_work() {
                 "--labels",
                 "atom",
             ],
-            "--labels must be numbers, ppm or both".into(),
+            "--labels must be value, numbers, ppm or both".into(),
         ),
         (
             &[

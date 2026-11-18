@@ -205,7 +205,7 @@ const LABEL_NUCLEUS: OptionSpec = OptionSpec {
 const LABELS: OptionSpec = OptionSpec {
     flag: "--labels",
     value: Some("FORMAT"),
-    help: "Write the predicted shifts onto the atoms: numbers, ppm or both.",
+    help: "Write the predicted shifts onto the atoms: value, numbers, ppm or both.",
     default: None,
     sets: Some("label_atoms.format"),
     equivalent: None,

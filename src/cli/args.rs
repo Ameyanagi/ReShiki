@@ -495,17 +495,17 @@ fn convert(options: &Options) -> Result<Command, String> {
     let input = input("convert", options)?;
     let export = export(options)?;
     if options.decimals.is_some() && options.labels.is_none() {
-        return Err("--decimals needs --labels numbers, ppm or both".into());
+        return Err("--decimals needs --labels value, numbers, ppm or both".into());
     }
     let labels = match (&options.nucleus, &options.labels) {
         (None, None) => None,
-        (_, None) => return Err("--nucleus needs --labels numbers, ppm or both".into()),
+        (_, None) => return Err("--nucleus needs --labels value, numbers, ppm or both".into()),
         (None, _) => return Err("--labels needs --nucleus 1H or 13C".into()),
         (Some(nucleus), Some(format)) => {
             let format = format
                 .to_str()
                 .filter(|format| crate::nmr::LabelFormat::from_code(format).is_some())
-                .ok_or("--labels must be numbers, ppm or both")?;
+                .ok_or("--labels must be value, numbers, ppm or both")?;
             if !LABEL_FORMATS.contains(&export.format.as_str()) {
                 return Err(format!(
                     "--labels needs an output that keeps atom numbers: {}",

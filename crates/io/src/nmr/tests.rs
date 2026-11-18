@@ -612,6 +612,7 @@ fn unsupported_chemistry_and_missing_sites_are_errors() {
 #[test]
 fn label_text_matches_the_show_labels_menu() {
     for (code, format, text) in [
+        ("value", LabelFormat::Value, "1.280"),
         ("numbers", LabelFormat::Numbers, "#3"),
         ("ppm", LabelFormat::Ppm, "1.280 ppm"),
         ("both", LabelFormat::Both, "#3 · 1.280 ppm"),
@@ -631,6 +632,9 @@ fn shift_labels_default_to_journal_decimals_per_nucleus() {
     assert_eq!(label_text(LabelFormat::Ppm, 1, 128.44, 1), "128.4 ppm");
     assert_eq!(label_text(LabelFormat::Both, 1, 128.44, 0), "#1 · 128 ppm");
     assert_eq!(label_text(LabelFormat::Ppm, 1, 1.2, 4), "1.2000 ppm");
+    assert_eq!(label_text(LabelFormat::Value, 1, 7.2649, 2), "7.26");
+    assert_eq!(label_text(LabelFormat::Value, 1, 128.44, 1), "128.4");
+    assert_eq!(label_text(LabelFormat::Value, 1, 128.44, 0), "128");
     let mut doc = ethyl_acetate();
     let before = doc.clone();
     let error = write_labels(&mut doc, &[(1, Some(14.2))], LabelFormat::Ppm, 5);

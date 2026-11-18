@@ -89,16 +89,20 @@ named, must be exactly one molecule.
 
 ### Labels from scripts
 
-Scripts can also write the shifts onto the drawing, in the formats of the
-**Show labels** menu: `numbers` (`#3`), `ppm` (`1.28 ppm`) or `both`
-(`#3 · 1.28 ppm`). The ppm has the decimal places journals print: 2 for ¹H
-(`7.26 ppm`) and 1 for ¹³C (`128.4 ppm`), or 0 to 4 when a script asks for
-them. The **Show labels** overlay keeps its three.
+Scripts can also write the shifts onto the drawing. The journal style is the
+`value` format, the bare shift (`7.26`, `128.4`); journals usually state
+"δ (ppm)" once in the figure caption. It is Python's default; the command line
+and MCP name the format each time. The formats of the **Show labels** menu are
+also offered: `numbers` (`#3`), `ppm` (`1.28 ppm`) or `both`
+(`#3 · 1.28 ppm`). The ppm has the decimal places journals print, 2 for ¹H and
+1 for ¹³C, when the nucleus is known (Python rows that name it, or the command
+line's `--nucleus`); MCP rows do not carry it, so pass `decimals: 1` for ¹³C.
+Any of them can ask for 0 to 4. The **Show labels** overlay keeps its three.
 
-- Python: `molecule.with_labels(shifts, format="both")`; see
+- Python: `molecule.with_labels(shifts)`; see
   [Python package](python.md#label-the-atoms).
 - Command line:
-  `reshiki --cli convert --smiles 'CCOC(C)=O' --nucleus 13C --labels both -o assigned.svg`;
+  `reshiki --cli convert --smiles 'CCOC(C)=O' --nucleus 13C --labels value -o assigned.svg`;
   see [command line](agent-cli.md#nmr-labels).
 - MCP: the `label_atoms` tool, with the `revision` that `predict_nmr`
   returned; see [agent API](agent-api.md#tools).
@@ -111,14 +115,17 @@ drawing as atom numbers:
   app like any atom number.
 - They use the drawing's atom-number style at 65% of the atom-label size, not
   the teal overlay.
-- Each label is placed on its own: in the first free spot around its atom,
-  outward first, clear of bonds, atom labels and other labels. When that spot
-  is more than 1.5 bond lengths away, or nearer another atom, a thin leader
-  line joins the label to its atom. Canvas, SVG, PNG and PDF place them the
-  same way; ChemDraw places the atom numbers of CDXML and CDX itself, without
-  leader lines. This placement is for atom numbers that end in ` ppm`, as every
-  `ppm` and `both` label does; other numbers, such as `3`, `12a` or `#3`, keep their
-  usual placement.
+- Each label is placed on its own: in the nearest free spot beside its atom,
+  outward from its bonds first, clear of every bond line, atom label and other
+  label, and nearer its own atom than any other. A bare value may sit between
+  the bonds, inside a ring; a longer `ppm` or `both` label stays outside the
+  molecule. Only when no such spot is within 1.5 bond lengths does a label
+  move further out, joined to its atom by a thin leader line. Canvas, SVG, PNG
+  and PDF place them the same way; ChemDraw places the atom numbers of CDXML
+  and CDX itself, without leader lines. This placement is for atom numbers
+  that are a decimal value (`7.26`) or end in ` ppm`; other numbers, such as
+  `3`, `12a` or `#3`, keep their usual placement, and so does a value written
+  with `decimals` 0, which reads as a whole number.
 - An atom inside a collapsed abbreviation shows its label only
   when the abbreviation is expanded, and CDXML and CDX export asks you to
   expand it first, as for any atom number there.

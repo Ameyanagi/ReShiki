@@ -6,11 +6,13 @@ use crate::document::{Document, Point};
 use std::collections::HashMap;
 
 /// What a long number must not touch: label boxes (atom labels, captions and
-/// earlier indicators), bonds as `(a, b, order, display)`, visible atom
-/// positions and earlier leaders.
+/// earlier indicators), bonds as `(a, b, order, display)` with their drawn
+/// lines, visible atom positions and earlier leaders.
 pub(super) struct Obstacles<'a> {
     pub boxes: &'a [(Point, Point)],
     pub bonds: &'a [(Point, Point, u8, &'a str)],
+    /// Each bond's drawn strokes, with how far each one's ink reaches.
+    pub rails: &'a [Vec<(Point, Point, f32)>],
     pub atoms: &'a [Point],
     pub leaders: &'a [(Point, Point)],
 }
@@ -30,8 +32,15 @@ pub(super) struct LongLabel {
     /// How far from a double, triple or styled bond's centre line its ink can
     /// reach, with a margin.
     pub rails: f32,
-    /// The convex hull of the atom's molecule, counterclockwise. Labels stay
-    /// outside it, so they never fill the space between the molecule's bonds.
+    /// The atom's explicit hydrogens, which read as part of it: a value may
+    /// sit beside one, as a ¹H shift often does.
+    pub kin: Vec<Point>,
+    /// A bare value, such as `6.26`, small enough to stay beside its atom
+    /// rather than take a far spot with a long leader.
+    pub compact: bool,
+    /// The convex hull of the atom's molecule, counterclockwise, or empty. A
+    /// label stays outside it, so it never fills the space between the
+    /// molecule's bonds.
     pub hull: std::rc::Rc<[Point]>,
 }
 
@@ -213,19 +222,30 @@ impl LongLabel {
         beside: bool,
     ) -> Option<(f32, Spot)> {
         let mut best: Option<(f32, Spot)> = None;
-        // Beyond 1.5 bond lengths every box needs a leader.
-        let max_gap = if beside { 1.5 } else { 8. } * self.bond_length;
-        for center in self.candidates(obstacles, positions, doc, max_gap) {
-            let leader = self.leader(center, obstacles);
-            if beside && leader.is_some() {
-                continue;
+        // Beyond 1.5 bond lengths every box needs a leader. A value without
+        // room beside its atom first takes the best spot within that reach,
+        // its short leader crossing a bond if need be, before going further.
+        let reaches: &[f32] = match (beside, self.compact) {
+            (true, _) => &[1.5],
+            (false, true) => &[1.5, 8.],
+            (false, false) => &[8.],
+        };
+        for reach in reaches {
+            for center in self.candidates(obstacles, positions, doc, reach * self.bond_length) {
+                let leader = self.leader(center, obstacles);
+                if beside && leader.is_some() {
+                    continue;
+                }
+                let hits = self.hits(center, leader, obstacles);
+                if hits == 0. {
+                    return Some((0., (center, leader)));
+                }
+                if best.as_ref().is_none_or(|(least, _)| hits < *least) {
+                    best = Some((hits, (center, leader)));
+                }
             }
-            let hits = self.hits(center, leader, obstacles);
-            if hits == 0. {
-                return Some((0., (center, leader)));
-            }
-            if best.as_ref().is_none_or(|(least, _)| hits < *least) {
-                best = Some((hits, (center, leader)));
+            if best.as_ref().is_some_and(|(least, _)| *least < MARK) {
+                break;
             }
         }
         if beside {
@@ -235,15 +255,18 @@ impl LongLabel {
     }
 
     /// Whether the box at `center` needs a leader: it is more than 1.5 bond
-    /// lengths from this atom, or another atom is as near to it.
+    /// lengths from this atom, or another atom is as near to it as this atom
+    /// or its explicit hydrogens.
     fn needs_leader(&self, center: Point, obstacles: &Obstacles<'_>) -> bool {
         let (lo, hi) = self.bounds(center, 0.);
-        let gap = self.anchor.distance(nearest(self.anchor, lo, hi));
-        gap > 1.5 * self.bond_length
+        let gap = |p: &Point| p.distance(nearest(*p, lo, hi));
+        let own = self.kin.iter().map(gap).fold(gap(&self.anchor), f32::min);
+        gap(&self.anchor) > 1.5 * self.bond_length
             || obstacles
                 .atoms
                 .iter()
-                .any(|p| p.distance(self.anchor) > 0.01 && p.distance(nearest(*p, lo, hi)) <= gap)
+                .filter(|p| p.distance(self.anchor) > 0.01 && !self.kin.contains(p))
+                .any(|p| gap(p) <= own)
     }
 
     /// The leader of the box at `center`, when it needs one: from the edge of
@@ -299,16 +322,19 @@ impl LongLabel {
         let bonds = obstacles
             .bonds
             .iter()
-            .filter(|&&(a, b, order, display)| {
-                // Double, triple and styled bonds draw rails and wedges beside
-                // their centre line.
-                let pad = if order == 1 && display == "plain" {
-                    3.
-                } else {
-                    self.rails.max(10.)
-                };
-                let (lo, hi) = self.bounds(center, pad);
-                segment_hits_rect(a, b, lo, hi)
+            .zip(obstacles.rails)
+            .filter(|&(&(a, b, ..), strokes)| {
+                // Each stroke where the drawing puts it (a ring's second line
+                // inside the ring), as wide as its ink, plus a gap. A bond
+                // without strokes keeps a margin as wide as a double bond.
+                if strokes.is_empty() {
+                    let (lo, hi) = self.bounds(center, self.rails.max(10.));
+                    return segment_hits_rect(a, b, lo, hi);
+                }
+                strokes.iter().any(|&(a, b, ink)| {
+                    let (lo, hi) = self.bounds(center, ink + 2.5);
+                    segment_hits_rect(a, b, lo, hi)
+                })
             })
             .count();
         let leaders = obstacles
@@ -327,9 +353,10 @@ impl LongLabel {
                     .boxes
                     .iter()
                     .filter(|&&(a, b)| {
-                        let p = self.anchor;
-                        let own = a.x <= p.x && p.x <= b.x && a.y <= p.y && p.y <= b.y;
-                        !own && segment_hits_rect(p, facing, a, b)
+                        let holds =
+                            |p: &Point| a.x <= p.x && p.x <= b.x && a.y <= p.y && p.y <= b.y;
+                        let own = holds(&self.anchor) || self.kin.iter().any(holds);
+                        !own && segment_hits_rect(self.anchor, facing, a, b)
                     })
                     .count()
             }
@@ -353,6 +380,8 @@ impl LongLabel {
                 .count();
         // Where the leader crosses each bond, as a distance from the nearer
         // end of the leader.
+        // Where the leader crosses each bond's centre line, as a distance
+        // from the nearer end of the leader.
         let crossings: Vec<f32> = obstacles
             .bonds
             .iter()
