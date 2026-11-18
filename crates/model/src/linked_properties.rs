@@ -710,7 +710,12 @@ pub fn reconcile(doc: &mut Document, before: &Document) {
             } else if link.properties.first() == Some(&Property::Name)
                 && (reshaped(before, doc, &link.atoms)
                     || before.annotations.iter().any(|old| {
-                        old.id == caption.id && old.format.style != caption.format.style
+                        old.id == caption.id
+                            && TextFormat {
+                                width_pt: caption.format.width_pt,
+                                name_breaks: caption.format.name_breaks,
+                                ..old.format.clone()
+                            } != caption.format
                     }))
             {
                 // Restyled text or a reshaped molecule wraps the name again;

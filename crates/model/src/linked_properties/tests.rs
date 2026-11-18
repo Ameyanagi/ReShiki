@@ -798,6 +798,18 @@ fn the_name_line_wraps_like_a_shown_chemical_name() {
             .apply(&text, None, &crate::typography::StyleChange::Size(20.));
     });
     assert_eq!(last(&doc), expected);
+    // So does a larger property line alone.
+    edit(&mut doc, &mut history, |doc| {
+        let caption = &mut doc.annotations[0];
+        let text = caption.text.clone();
+        let line = text.rfind('\n').unwrap() + 1..text.len();
+        caption.format.apply(
+            &text,
+            Some(line),
+            &crate::typography::StyleChange::Size(24.),
+        );
+    });
+    assert_eq!(last(&doc), expected);
     // Hiding the name unwraps the caption.
     toggle(
         &mut doc,
