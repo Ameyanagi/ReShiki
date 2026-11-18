@@ -186,7 +186,10 @@ changed marked by kind, and a list of the changes beside them. The version
 you compare with is on the left, in a dashed grey frame marked **COMPARED**
 (**Version · saved 14:02**, or **On GitHub · @alice · 14:05**); the drawing
 you have open is on the right, in a green frame marked **CURRENT** (**Your
-drawing · open now**, or **· not sent**). Changes read from left to right. A badge says
+drawing · open now**, or **· not sent**). Changes read from left to right. A
+drawing much wider than it is tall, such as a reaction scheme, stacks the two
+instead, the compared version on top, when that shows it at least 10% larger;
+the footer then reads top to bottom. A badge beside the title says
 **Chemically identical**, **2 chemical changes** or **Couldn't verify all
 chemistry**.
 
@@ -207,8 +210,11 @@ chemistry**.
   it off to see where they are.
 - Each line has a tag that reads without colour: **CHEM**, **MOVED**,
   **STYLE**, **TEXT**, **RXN**, **ADDED**, **REMOVED**, **SAME** and **?**.
-  A chemical change shows its SMILES before → after. Click a line to point at
-  it in both drawings; click it again to let go.
+  A chemical change shows its SMILES before, then → after on a line of its
+  own; a long SMILES wraps between atoms and bonds, never inside `[NH4+]`,
+  `Cl` or a ring bond. Click a line to point at it in both drawings and zoom
+  both to it, at one scale: a chemical change to its changed atoms and
+  bonds, anything else to its objects. Click it again to let go.
 - The comparison runs in the background (**Comparing…**), so a big drawing
   never stops the window.
 

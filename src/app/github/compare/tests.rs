@@ -223,15 +223,19 @@ fn the_compared_version_is_on_the_left_and_the_drawing_now_on_the_right() {
     let sides = history_sides("Esterification · @alice · 02:02");
     assert_eq!(sides[0].meta, "Esterification · @alice · 02:02");
     assert_eq!(
-        reading(&sides),
+        reading(&sides, false),
         "Changes read from version (left) to your drawing (right)"
+    );
+    assert_eq!(
+        reading(&sides, true),
+        "Changes read from version (top) to your drawing (bottom)"
     );
     let github = [
         Side::new("On GitHub", "@alice · 14:05 · add heat"),
         Side::new("Your drawing", "not sent"),
     ];
     assert_eq!(
-        reading(&github),
+        reading(&github, false),
         "Changes read from on GitHub (left) to your drawing (right)"
     );
     assert_eq!(
@@ -244,4 +248,208 @@ fn the_compared_version_is_on_the_left_and_the_drawing_now_on_the_right() {
     let compare = Compare::new(Ok(left.clone()), right.clone());
     assert_eq!(compare.left.as_ref(), Ok(&left));
     assert_eq!(compare.right, right);
+}
+
+/// Rings at each place: in a row, as wide as a reaction scheme, or a square.
+fn rings(at: &[(f32, f32)]) -> Document {
+    let ring = reshiki::rings::Preset::Benzene.document(42., false);
+    let mut doc = Document::default();
+    for (x, y) in at {
+        reshiki::editing::append(&mut doc, &ring, Point::new(*x, *y));
+    }
+    load(&doc)
+}
+
+fn wide() -> Document {
+    rings(&[(0., 0.), (400., 0.), (800., 0.), (1200., 0.)])
+}
+
+fn square() -> Document {
+    rings(&[(0., 0.), (300., 0.), (0., 300.), (300., 300.)])
+}
+
+/// An oxygen on the first atom.
+fn with_oxygen(doc: &Document) -> Document {
+    edited(doc, |doc| {
+        let carbon = doc.atoms[0].id;
+        let at = doc.atoms[0].position;
+        let oxygen = doc.add_atom("O", at.offset(0., -40.));
+        doc.add_bond(carbon, oxygen, 1, "plain");
+    })
+}
+
+#[test]
+fn a_wide_drawing_stacks_the_panes_when_that_draws_it_larger() {
+    let pane = |doc: &Document| extent(doc);
+    let area = Size::new(700., 420.);
+    assert!(stacks(area, pane(&wide()), HEADER));
+    assert!(!stacks(area, pane(&square()), HEADER));
+    // Small enough to draw at full size either way: nothing gained.
+    let ring = load(&reshiki::rings::Preset::Benzene.document(42., false));
+    assert!(!stacks(area, pane(&ring), HEADER));
+}
+
+#[test]
+fn a_selected_change_is_zoomed_to_in_both_panes_at_one_scale() {
+    let at = |x0, y0, x1, y1| Some((Point::new(x0, y0), Point::new(x1, y1)));
+    let [left, right] = zoomed([at(0., 0., 10., 10.), at(100., 0., 140., 4.)]).unwrap();
+    let size = |(lo, hi): (Point, Point)| (hi.x - lo.x, hi.y - lo.y);
+    assert_eq!(size(left), (40., 10.));
+    assert_eq!(size(left), size(right));
+    assert_eq!(left.0, Point::new(-15., 0.));
+    assert_eq!(right.0, Point::new(100., -3.));
+    // An added molecule: the left pane looks where the right has it.
+    let [left, right] = zoomed([None, at(5., 5., 15., 25.)]).unwrap();
+    assert_eq!(left, right);
+    assert_eq!(zoomed([None, None]), None);
+}
+
+#[test]
+fn a_chemical_change_is_where_its_painted_atoms_are_not_its_whole_molecule() {
+    let (left, ring, note) = scheme();
+    let right = changed(&left, &ring, note);
+    let compare = compared(&left, &right);
+    let shown = compare.shown.as_ref().unwrap();
+    let chem = (shown.report.changes.iter())
+        .position(|change| change.kind == Kind::Chemical)
+        .unwrap();
+    let carbon = right.atom(ring[0]).unwrap().position;
+    let oxygen = right.atoms.iter().find(|a| a.element == "O").unwrap();
+    let (lo, hi) = shown.spots[chem][1].unwrap();
+    // The oxygen and its carbon, not the ring of six.
+    for p in [carbon, oxygen.position] {
+        assert!(
+            lo.x <= p.x + 0.01 && p.x <= hi.x + 0.01 && lo.y <= p.y + 0.01 && p.y <= hi.y + 0.01
+        );
+    }
+    let (ring_lo, ring_hi) = reshiki::scene::selection_bounds(&right, &ring).unwrap();
+    assert!(hi.y - lo.y < ring_hi.y - ring_lo.y);
+    assert!(hi.x - lo.x < 1.);
+}
+
+#[test]
+fn smiles_breaks_only_between_tokens() {
+    let smiles = "C[C@@H](Cl)c1ccc(Br)cc1C%12CC%12N->[Cu]C%(123)";
+    let broken = breakable(smiles);
+    assert_eq!(broken.replace(['\u{200B}', '\u{2060}'], ""), smiles);
+    let tokens: Vec<String> = broken
+        .split('\u{200B}')
+        .map(|token| token.replace('\u{2060}', ""))
+        .collect();
+    assert_eq!(
+        tokens,
+        [
+            "C", "[C@@H]", "(", "Cl", ")", "c1", "c", "c", "c", "(", "Br", ")", "c", "c1", "C%12",
+            "C", "C%12", "N", "->", "[Cu]", "C%(123)"
+        ]
+    );
+}
+
+#[test]
+fn a_change_painted_on_one_side_only_is_found_on_the_other_by_its_atom() {
+    // A sulfide oxidised: on the left nothing changed, so the left looks at
+    // the sulfur the oxygen is on there, not the whole molecule.
+    let mut doc = Document::default();
+    let chain: Vec<u64> = (0..5)
+        .map(|i| {
+            let element = if i == 2 { "S" } else { "C" };
+            doc.add_atom(element, Point::new(36. * i as f32, 21. * (i % 2) as f32))
+        })
+        .collect();
+    for pair in chain.windows(2) {
+        doc.add_bond(pair[0], pair[1], 1, "plain");
+    }
+    let left = load(&doc);
+    let sulfur = chain[2];
+    let right = edited(&left, |doc| {
+        let at = doc.atom(sulfur).unwrap().position;
+        let oxygen = doc.add_atom("O", at.offset(0., -40.));
+        doc.add_bond(sulfur, oxygen, 2, "plain");
+    });
+    let compare = compared(&left, &right);
+    let shown = compare.shown.as_ref().unwrap();
+    let chem = (shown.report.changes.iter())
+        .position(|change| change.kind == Kind::Chemical)
+        .unwrap();
+    let at = left.atom(sulfur).unwrap().position;
+    let (lo, hi) = shown.spots[chem][0].unwrap();
+    assert!(
+        lo.distance(at) < 0.01 && hi.distance(at) < 0.01,
+        "{lo:?} {hi:?}"
+    );
+}
+
+/// A view laid out in a window of `size`, with its accessible controls.
+async fn laid_out(
+    mut view: Element<'_, Message>,
+    size: Size,
+) -> (
+    iced::advanced::layout::Node,
+    reshiki::accessibility::Snapshot,
+) {
+    use iced::advanced::{Layout, renderer::Headless, widget::Tree, widget::operation};
+    let renderer = <iced::Renderer as Headless>::new(
+        iced::Font::with_name(reshiki::style::ui_font_family()),
+        iced::Pixels(16.),
+        None,
+    )
+    .await
+    .unwrap();
+    let mut tree = Tree::new(view.as_widget());
+    let node = view.as_widget_mut().layout(
+        &mut tree,
+        &renderer,
+        &iced::advanced::layout::Limits::new(Size::ZERO, size),
+    );
+    let viewport = iced::Rectangle::with_size(size);
+    let mut collect = reshiki::accessibility::Collect::new(viewport);
+    view.as_widget_mut().operate(
+        &mut tree,
+        Layout::new(&node),
+        &renderer,
+        &mut operation::black_box(&mut collect),
+    );
+    (node, collect.snapshot().clone())
+}
+
+#[tokio::test]
+#[ignore = "Opt-in real renderer layout check"]
+async fn rendered_compare_stacks_a_wide_scheme_and_keeps_the_badge_by_the_title() {
+    let size = Size::new(1000., 560.);
+    let pane = |snapshot: &reshiki::accessibility::Snapshot, id: &str| {
+        (snapshot.nodes.iter())
+            .find(|node| node.id == id)
+            .unwrap()
+            .bounds
+    };
+    let doc = wide();
+    let right = edited(&doc, |doc| doc.translate(&doc.all_ids(), 0., 30.));
+    let compare = compared(&doc, &right);
+    let (node, snapshot) = laid_out(compare.dialog("Saved 14:02"), size).await;
+    let (top, bottom) = (
+        pane(&snapshot, "github-compare-compared"),
+        pane(&snapshot, "github-compare-current"),
+    );
+    assert!(bottom.y >= top.y + top.height, "{top:?} {bottom:?}");
+    assert!((top.x - bottom.x).abs() < 1.);
+    // The verdict sits by the title, not at the far edge.
+    let title = &node.children()[0];
+    let [words, badge] = [0, 1].map(|i| title.children()[i].bounds());
+    assert!(
+        badge.x - (words.x + words.width) < 12.,
+        "{words:?} {badge:?}"
+    );
+
+    let compare = compared(&square(), &with_oxygen(&square()));
+    let (_, snapshot) = laid_out(compare.dialog("Saved 14:02"), size).await;
+    let (left, right) = (
+        pane(&snapshot, "github-compare-compared"),
+        pane(&snapshot, "github-compare-current"),
+    );
+    assert!(right.x >= left.x + left.width, "{left:?} {right:?}");
+    // A row is named with its SMILES as written, no break marks in it.
+    let row = (snapshot.nodes.iter())
+        .find(|node| node.id == "github-compare-row-0")
+        .unwrap();
+    assert_eq!(row.name, "CHEM: O added, c1ccccc1 → Oc1ccccc1");
 }
