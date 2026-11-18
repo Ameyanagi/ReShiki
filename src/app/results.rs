@@ -761,6 +761,7 @@ fn completion(message: &Message) -> Option<Completion> {
         | Message::CaptionAction(..)
         | Message::TextStyle(..)
         | Message::FormatChemicalName
+        | Message::AddCallout
         | Message::ToggleProperty(..)
         | Message::FontSize(..)
         | Message::ApplyFontSize

@@ -67,6 +67,9 @@ pub(super) fn keep_format_text(
         {
             lost.push("arrow links".into());
         }
+        if reshiki::arrows::export_notice(doc).is_some() {
+            lost.push("editable arrow looks and callouts".into());
+        }
     }
     if reshiki::purpose::used(doc) {
         lost.push("object purpose".into());

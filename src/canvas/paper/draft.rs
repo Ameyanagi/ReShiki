@@ -236,13 +236,17 @@ impl MoleculeCanvas<'_> {
                     self.bond_drawing.fixed_angles && !state.modifiers.alt(),
                 );
                 let id = preview.next_id();
-                preview.to_mut().arrows.push(reshiki::document::Arrow::new(
+                let mut arrow = reshiki::document::Arrow::new(
                     id,
                     *start,
                     end,
                     self.arrows.preset,
                     self.arrows.style.clone(),
-                ));
+                );
+                if let Some(sweep) = self.arrows.arc {
+                    arrow.set_arc(sweep);
+                }
+                preview.to_mut().arrows.push(arrow);
             }
             if let Some(Gesture::AtomIndicator { owner }) = &state.gesture
                 && let Some(anchor) = owner.anchor(preview)

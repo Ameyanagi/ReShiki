@@ -18,6 +18,8 @@ fn drawing() -> Document {
         format: Default::default(),
     });
     d.arrows.push(Arrow {
+        arc: None,
+        badge: None,
         start_anchor: None,
         end_anchor: None,
         id: 4,
@@ -175,6 +177,8 @@ fn concave_lasso_encloses_whole_objects_and_supports_add_subtract() {
     d.add_atom("O", Point::new(70., 70.));
     d.add_atom("N", Point::new(10., 70.));
     d.arrows.push(Arrow {
+        arc: None,
+        badge: None,
         start_anchor: None,
         end_anchor: None,
         id: 4,

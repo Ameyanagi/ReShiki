@@ -555,6 +555,8 @@ pub struct ArrowOptions<'a> {
     pub style: &'a ArrowStyle,
     pub source: Option<&'a Pick>,
     pub attach_targets: bool,
+    /// The sweep of new arc arrows.
+    pub arc: Option<f32>,
 }
 
 impl Default for ArrowOptions<'_> {
@@ -564,6 +566,7 @@ impl Default for ArrowOptions<'_> {
             style: &ArrowStyle::DEFAULT,
             source: None,
             attach_targets: false,
+            arc: None,
         }
     }
 }

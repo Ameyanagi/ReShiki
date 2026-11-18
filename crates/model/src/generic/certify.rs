@@ -263,6 +263,13 @@ pub(super) fn certify_translation(
         }
         undo(&mut actual.id)?;
         actual.origin = old.origin;
+        if let Some(leader) = actual.leader.as_mut() {
+            for target in [&mut leader.start, &mut leader.end].into_iter().flatten() {
+                for id in target.ids_mut() {
+                    undo(id)?;
+                }
+            }
+        }
     }
     for g in groups {
         undo(&mut g.id)?;

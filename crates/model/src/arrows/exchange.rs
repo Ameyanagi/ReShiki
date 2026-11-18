@@ -1,0 +1,211 @@
+//! Arrow looks that ChemDraw cannot store, written as ordinary grouped shapes
+//! for editable exchange. Block, hollow and gradient bodies on straight arrows
+//! and circular arcs have native ChemDraw forms and stay arrows.
+use super::{Arrow, ArrowPath, Body};
+use crate::{
+    document::{Annotation, Document},
+    graphics::{Graphic, GraphicKind, GraphicStyle, PathCommand},
+    grouping::Group,
+};
+use std::borrow::Cow;
+
+/// What the exchange copy turns into shapes, for the export notice.
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct Lowered {
+    /// Chevron bodies and broad bodies on curved arrows.
+    pub bodies: usize,
+    pub badges: usize,
+}
+
+impl Arrow {
+    /// A broad body ChemDraw has no arrow for: chevrons, or a body on a curve.
+    fn shape_body(&self) -> bool {
+        let body = self.drawn_body();
+        body == Body::Chevron || !body.is_line() && self.bezier_controls().is_some()
+    }
+}
+
+/// How many arrow looks an editable exchange copy writes as shapes.
+pub fn lowered_count(doc: &Document) -> Lowered {
+    Lowered {
+        bodies: doc.arrows.iter().filter(|a| a.shape_body()).count(),
+        badges: doc
+            .arrows
+            .iter()
+            .filter(|a| a.badge.is_some() && !a.shape_body())
+            .count(),
+    }
+}
+
+/// What an editable CDXML/CDX copy writes as shapes instead of arrows.
+pub fn export_notice(doc: &Document) -> Option<String> {
+    let Lowered { bodies, badges } = lowered_count(doc);
+    let leaders = doc.graphics.iter().filter(|g| g.leader.is_some()).count();
+    let plural =
+        |n: usize, one: &str, many: &str| format!("{n} {}", if n == 1 { one } else { many });
+    let mut parts = Vec::new();
+    if bodies > 0 {
+        parts.push(plural(
+            bodies,
+            "chevron or curved block arrow",
+            "chevron or curved block arrows",
+        ));
+    }
+    if badges > 0 {
+        parts.push(plural(badges, "arrow badge", "arrow badges"));
+    }
+    if leaders > 0 {
+        parts.push(plural(leaders, "callout leader", "callout leaders"));
+    }
+    (!parts.is_empty()).then(|| {
+        format!(
+            "ChemDraw gets {} as grouped shapes that look the same. Save as a .rsk file to keep them editable as arrows and callouts.",
+            parts.join(", ")
+        )
+    })
+}
+
+/// One shape per subpath, so every stroke stays an ordinary open or closed path.
+fn shapes(paths: Vec<ArrowPath>, next: &mut u64) -> Vec<Graphic> {
+    let mut graphics = Vec::new();
+    for path in paths {
+        let mut pieces: Vec<Vec<PathCommand>> = Vec::new();
+        for command in path.commands {
+            if matches!(command, PathCommand::Move(_)) || pieces.is_empty() {
+                pieces.push(Vec::new());
+            }
+            if let Some(piece) = pieces.last_mut() {
+                piece.push(command);
+            }
+        }
+        for piece in pieces.into_iter().filter(|p| p.len() > 1) {
+            graphics.push(shape(*next, piece, &path.style, path.filled));
+            *next += 1;
+        }
+    }
+    graphics
+}
+
+fn shape(id: u64, commands: Vec<PathCommand>, style: &GraphicStyle, filled: bool) -> Graphic {
+    let mut style = style.clone();
+    if filled {
+        style.fill = Some(style.stroke);
+        style.width_pt = style.width_pt.max(0.1);
+    }
+    let mut graphic = Graphic::pen_curve(
+        id,
+        Default::default(),
+        crate::document::Point::new(1., 0.),
+        style,
+    );
+    graphic.path = commands;
+    graphic.node_types.clear();
+    graphic.layer = 1;
+    graphic
+}
+
+/// The drawing as ChemDraw can keep it: chevron and curved broad bodies
+/// become filled shapes, badges become a disc, strokes and text grouped with
+/// their arrow, and callout leaders become a line with a dot.
+pub fn lowered(doc: &Document) -> Cow<'_, Document> {
+    let leaders = doc.graphics.iter().any(|g| g.leader.is_some());
+    if !leaders
+        && doc
+            .arrows
+            .iter()
+            .all(|a| a.badge.is_none() && !a.shape_body())
+    {
+        return Cow::Borrowed(doc);
+    }
+    let mut out = doc.clone();
+    let mut next = doc.next_id();
+    let mut removed = Vec::new();
+    for arrow in &mut out.arrows {
+        let whole = arrow.shape_body();
+        if !whole && arrow.badge.is_none() {
+            continue;
+        }
+        let mut members = shapes(
+            if whole {
+                arrow.paths()
+            } else {
+                let style = Arrow::badge_style(&arrow.appearance());
+                arrow
+                    .badge_paths()
+                    .into_iter()
+                    .map(|commands| ArrowPath {
+                        commands,
+                        style: style.clone(),
+                        filled: false,
+                    })
+                    .collect()
+            },
+            &mut next,
+        );
+        // The disc covers the shaft in ChemDraw, which draws it unbroken.
+        if !whole && let Some(disc) = members.first_mut() {
+            disc.style.fill = Some(crate::palette::Color::Custom([255, 255, 255]));
+            disc.layer = 2;
+        }
+        let mut ids: Vec<u64> = members.iter().map(|g| g.id).collect();
+        if let Some((position, text, format)) = arrow.badge_text() {
+            out.annotations.push(Annotation {
+                id: next,
+                position,
+                text,
+                format,
+            });
+            ids.push(next);
+            next += 1;
+        }
+        out.graphics.extend(members);
+        arrow.badge = None;
+        if whole {
+            removed.push(arrow.id);
+        }
+        // Every group that holds the arrow holds its shapes, so nested
+        // groups stay nested.
+        let mut grouped = false;
+        for group in out
+            .groups
+            .iter_mut()
+            .filter(|g| g.members.contains(&arrow.id))
+        {
+            group.members.extend(ids.iter().copied());
+            grouped = true;
+        }
+        if !grouped {
+            if !whole {
+                ids.push(arrow.id);
+            }
+            out.groups.push(Group {
+                id: next,
+                members: ids,
+                integral: false,
+            });
+            next += 1;
+        }
+    }
+    out.arrows.retain(|a| !removed.contains(&a.id));
+    out.arrow_labels.retain(|l| !removed.contains(&l.arrow));
+    out.reactions.retain(|r| !removed.contains(&r.arrow));
+    for group in &mut out.groups {
+        group.members.retain(|id| !removed.contains(id));
+    }
+    out.groups.retain(|g| g.members.len() > 1);
+    let mut dots = Vec::new();
+    for g in &mut out.graphics {
+        if let Some((commands, style)) = g.leader_dot() {
+            dots.push(shape(next, commands, &style, true));
+            next += 1;
+        }
+        g.leader = None;
+    }
+    out.graphics.extend(dots);
+    debug_assert!(
+        out.graphics
+            .iter()
+            .all(|g| g.kind != GraphicKind::Line || g.leader.is_none())
+    );
+    Cow::Owned(out)
+}

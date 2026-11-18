@@ -1157,6 +1157,7 @@ pub(super) fn chain_canvas(doc: &Document, mode: ChainMode) -> MoleculeCanvas<'_
             style: &reshiki::arrows::ArrowStyle::DEFAULT,
             source: None,
             attach_targets: true,
+            arc: None,
         },
         graphics: GraphicOptions {
             constrain: false,

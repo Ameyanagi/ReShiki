@@ -2722,6 +2722,17 @@ fn push_arrows_and_annotations(out: &mut Vec<Primitive>, doc: &Document) {
             style: p.style,
             filled: p.filled,
         }));
+        if let Some((origin, text, format)) = a.badge_text() {
+            for fragment in crate::typography::layout(&text, &format).fragments {
+                out.push(Primitive::Text {
+                    position: origin.offset(fragment.position.x, fragment.position.y),
+                    text: fragment.text,
+                    size: fragment.style.size(),
+                    color: fragment.style.color.rgb(),
+                    style: fragment.style,
+                });
+            }
+        }
     }
     for a in &doc.annotations {
         for fragment in crate::typography::layout(&a.text, &a.format).fragments {

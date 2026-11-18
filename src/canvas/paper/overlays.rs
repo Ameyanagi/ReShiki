@@ -330,7 +330,12 @@ impl MoleculeCanvas<'_> {
         if selected.len() == 1
             && (self.tool.selects() || matches!(self.tool, Tool::Arrow | Tool::EditPoints))
         {
-            for a in preview.arrows.iter().filter(|a| selected.contains(&a.id)) {
+            // An arc's controls are derived from its sweep; only its diamond moves it.
+            for a in preview
+                .arrows
+                .iter()
+                .filter(|a| selected.contains(&a.id) && !a.is_arc())
+            {
                 if let Some([departure, arrival]) = a.bezier_controls() {
                     for (endpoint, control) in [(a.start, departure), (a.end, arrival)] {
                         draw_direction_line(

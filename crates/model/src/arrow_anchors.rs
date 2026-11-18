@@ -1180,12 +1180,14 @@ pub fn aim_end(doc: &mut Document, arrow: u64) {
 }
 /// Absolute resolution is idempotent: an already transformed endpoint has no
 /// displacement to apply twice. Missing targets detach at their cached position.
+/// Also settles callout leaders, which follow their targets the same way.
 pub fn reconcile(doc: &mut Document) {
     let resolved = {
         let drawn = doc.abbreviation_render_copy();
         resolved_endpoints(doc, &drawn)
     };
     apply_resolved_endpoints(doc, resolved);
+    crate::leaders::reconcile(doc);
 }
 
 type ResolvedEnd = Option<(Point, Point)>;
@@ -1356,6 +1358,7 @@ pub(crate) fn remap_for_join(
         arrow.start_anchor = start;
         arrow.end_anchor = end;
     }
+    crate::leaders::remap_join(doc, mapping);
 }
 
 /// Called after selected points and targets have received an affine transform.
@@ -1403,6 +1406,7 @@ pub(crate) fn transformed_units(
             arrow.end_anchor = end;
         }
     }
+    crate::leaders::transformed(doc, &selection);
     reconcile(doc);
 }
 pub const EXPORT_NOTICE: &str = "Arrow curves are preserved; editing attachment links are omitted from this external format. Chemistry is unchanged. Use a native ReShiki file to retain links.";

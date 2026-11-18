@@ -280,6 +280,9 @@ pub struct Graphic {
     /// Titles, corners and dividers that make a rectangle a figure panel.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub panel: Option<Panel>,
+    /// A callout leader's attached ends; only lines have one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub leader: Option<crate::leaders::Leader>,
 }
 fn back_layer() -> i32 {
     -1
@@ -377,6 +380,7 @@ impl Graphic {
                 node_types: vec![],
                 heads: None,
                 panel: None,
+                leader: None,
             };
         }
         let mut dx = end.x - start.x;
@@ -422,6 +426,7 @@ impl Graphic {
             node_types: vec![],
             heads: None,
             panel: None,
+            leader: None,
         }
     }
     /// A rounded rectangle's corner radius in drawing units, at most half its
@@ -662,6 +667,25 @@ impl Graphic {
 
     /// Edit one handle, preserving a connected path if its frame rejects the edit.
     pub fn edit_point(&mut self, index: usize, p: Point) -> Result<(), String> {
+        // Dragging a callout leader's end releases it from its target, and
+        // the leader stays a line.
+        if let Some(leader) = self.leader.as_mut() {
+            let mut ends = self.line_ends();
+            match index {
+                0 => leader.start = None,
+                1 => leader.end = None,
+                _ => return Ok(()),
+            }
+            if *leader == Default::default() {
+                self.leader = None;
+            }
+            if !p.is_finite() {
+                return Err("Non-finite graphic point".into());
+            }
+            ends[index] = p;
+            self.set_line_ends(ends);
+            return Ok(());
+        }
         if self.kind == GraphicKind::Arc {
             self.edit_arc_endpoint(index, p);
             return Ok(());

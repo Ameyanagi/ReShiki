@@ -215,6 +215,13 @@ pub struct Arrow {
     pub style: Option<crate::arrows::ArrowStyle>,
     #[serde(default, skip_serializing_if = "crate::purpose::Purpose::is_chemistry")]
     pub purpose: crate::purpose::Purpose,
+    /// Signed sweep in degrees of a circular arc through `start` and `end`,
+    /// clockwise positive; `cubic` and `nodes` hold its Bézier form.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub arc: Option<f32>,
+    /// An icon on the shaft that also names a condition.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub badge: Option<crate::arrows::Badge>,
 }
 fn forward() -> String {
     "forward".into()
@@ -278,8 +285,8 @@ pub const DRAWING_ELEMENTS: u32 = 40;
 /// property captions require version 38, a property caption with a name
 /// requires version 39, or shading, drop shadows, wavy strokes, arrowheads
 /// on lines, corner radii, a Reference or Illustration molecule or arrow,
-/// color by origin settings, figure panels or lasting layouts require
-/// version 40.
+/// color by origin settings, figure panels, lasting layouts, arrow bodies,
+/// badges, arcs or callout leaders require version 40.
 /// Optional atom-label settings, including steroid α/β display, retain this
 /// version; older readers may ignore those presentation preferences.
 ///
@@ -317,7 +324,7 @@ pub const DRAWING_ELEMENTS: u32 = 40;
 /// | 37 | Three or four radical electrons on an atom. |
 /// | 38 | Property captions linked to their molecules (#1175). |
 /// | 39 | Names in property captions: a name line and custom names. |
-/// | 40 | Shading, drop shadows, wavy strokes, arrowheads on lines and corner radii; object purpose (Reference, Illustration); color by origin; figure panels and lasting layouts. |
+/// | 40 | Drawing release: shading, drop shadows, wavy strokes, arrowheads on lines and corner radii; object purpose (Reference, Illustration); color by origin; figure panels and lasting layouts; arrow bodies, shaft badges, arc arrows and callout leaders. |
 pub const VERSION: u32 = 40;
 
 /// Bytes of text in one annotation. Layout time grows faster than the text.
@@ -501,11 +508,14 @@ impl Document {
                 || g.style.pattern == LinePattern::Wavy
                 || g.kind == GraphicKind::Line && g.heads.is_some()
                 || g.panel.is_some()
-        }) || self
-            .arrows
-            .iter()
-            .any(|a| a.appearance().pattern == LinePattern::Wavy)
-            || crate::purpose::used(self)
+                || g.leader.is_some()
+        }) || self.arrows.iter().any(|a| {
+            let style = a.appearance();
+            style.pattern == LinePattern::Wavy
+                || !style.body.is_line()
+                || a.arc.is_some()
+                || a.badge.is_some()
+        }) || crate::purpose::used(self)
             || self.reactions.iter().any(|r| r.colors.is_some())
             || self.groups.iter().any(|g| g.layout.is_some())
         {
@@ -1060,6 +1070,7 @@ impl Document {
             arrow.validate()?;
         }
         crate::arrow_anchors::validate(self)?;
+        crate::leaders::validate(self)?;
         Ok(())
     }
     pub fn bounds(&self) -> (Point, Point) {
