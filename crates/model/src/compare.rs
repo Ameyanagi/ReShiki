@@ -259,7 +259,10 @@ fn rounded(value: Value) -> Value {
             fields
                 .into_iter()
                 .map(|(key, value)| match value.as_f64() {
-                    Some(degrees) if key == "angle" => (key, json(&degrees.rem_euclid(360.))),
+                    Some(degrees) if key == "angle" => (
+                        key,
+                        json(&((degrees * 100.).round() / 100.).rem_euclid(360.)),
+                    ),
                     _ => (key, value),
                 })
                 .map(|(key, value)| (key, rounded(value)))
@@ -585,9 +588,15 @@ fn common(entities: &[Entity], unit: f64) -> Option<(Fit, Vec<bool>)> {
         .filter(|e| e.agrees(&fit, unit))
         .flat_map(|e| e.pairs.iter().copied())
         .collect();
-    let fit = Fit::similar(&pairs, fit.mirror, fit.scale != 1.).unwrap_or(fit);
-    let shared: Vec<bool> = entities.iter().map(|e| e.agrees(&fit, unit)).collect();
-    enough(shared.iter().filter(|s| **s).count()).then_some((fit, shared))
+    let shares = |fit: Fit| {
+        let shared: Vec<bool> = entities.iter().map(|e| e.agrees(&fit, unit)).collect();
+        enough(shared.iter().filter(|s| **s).count()).then_some((fit, shared))
+    };
+    // The refit, unless it is degenerate or loses the quorum the candidate had.
+    Fit::similar(&pairs, fit.mirror, fit.scale != 1.)
+        .filter(|refit| refit.scale.is_finite() && refit.scale > 1e-6)
+        .and_then(shares)
+        .or_else(|| shares(fit))
 }
 
 /// An atom's number as the drawings show it, such as `C4` for a bare `4`,
@@ -1048,7 +1057,15 @@ pub fn compare(left: &Document, right: &Document) -> Report {
             MatchedBy::Smiles => {
                 let canonical = points(&ordered.unwrap_or_default());
                 let nearest = points(&nearest(&l, &atoms_l, &r, &atoms_r));
-                let rms = |pairs: &[(Xy, Xy)]| Fit::rigid(pairs).map_or(f64::INFINITY, |f| f.rms);
+                // The better fit by any model, so a mirror drawn anew pairs
+                // atoms as mirrored.
+                let rms = |pairs: &[(Xy, Xy)]| {
+                    [(false, false), (true, false), (false, true), (true, true)]
+                        .iter()
+                        .filter_map(|(mirror, scale)| Fit::similar(pairs, *mirror, *scale))
+                        .map(|fit| fit.rms)
+                        .fold(f64::INFINITY, f64::min)
+                };
                 if nearest.len() == canonical.len() && rms(&nearest) <= rms(&canonical) + 1e-6 {
                     nearest
                 } else {

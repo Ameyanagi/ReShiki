@@ -1741,3 +1741,28 @@ fn a_bold_wedge_flipped_is_no_style_change() {
         report.changes
     );
 }
+
+#[test]
+fn a_mirror_drawn_again_with_new_ids_is_mirrored_not_redrawn() {
+    // Formic acid, then its mirror image drawn anew: the nearest atoms swap
+    // the oxygens, the canonical pairing reflects exactly.
+    let draw = |doc: &mut Document, sign: f32| {
+        let c = doc.add_atom("C", Point::new(0., 0.));
+        let carbonyl = doc.add_atom("O", Point::new(-30. * sign, -25.));
+        let hydroxyl = doc.add_atom("O", Point::new(38. * sign, -29.));
+        doc.add_bond(c, carbonyl, 2, "plain");
+        doc.add_bond(c, hydroxyl, 1, "plain");
+    };
+    let mut left = Document::default();
+    draw(&mut left, 1.);
+    let left = load(&left);
+    let right = edited(&left, |doc| {
+        let old = doc.all_ids();
+        draw(doc, -1.);
+        doc.delete(&old);
+    });
+    assert_eq!(
+        kinds(&compare(&left, &right)),
+        [(Kind::Mirrored, Subject::Molecule)]
+    );
+}

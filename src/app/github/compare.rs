@@ -462,6 +462,7 @@ fn change_row(index: usize, change: &Change, left: &Document, right: &Document, 
             // The Flip tool swaps wedges so the configuration stays.
             let wedged = right.bonds.iter().any(|bond| {
                 change.right.objects.contains(&bond.a)
+                    && !bond.projection
                     && matches!(
                         bond.display.as_str(),
                         "wedge" | "hash" | "hollow_wedge" | "hashed" | "bold"

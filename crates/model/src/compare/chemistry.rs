@@ -406,7 +406,13 @@ pub(super) fn edit_mapped(left: &Signature, right: &Signature, map: &HashMap<u64
             .chirality
             .get(&r)
             .map(|centre| carried(centre, to_left));
-        if mine.cloned() != theirs.clone().flatten() {
+        // A winding about a new neighbour cannot be carried: changed.
+        let changed = match (mine, &theirs) {
+            (None, None) => false,
+            (Some(a), Some(Some(b))) => a != b,
+            _ => true,
+        };
+        if changed {
             let inverted = matches!(
                 (mine, &theirs),
                 (Some((a, x)), Some(Some((b, y)))) if a == b && x != y
@@ -472,7 +478,11 @@ pub(super) fn edit_mapped(left: &Signature, right: &Signature, map: &HashMap<u64
             && edit.centres.len() == right.chirality.len()
             && doubles.is_empty()
             && grouped.is_empty()
-            && left.extra == right.extra;
+            && left.extra == right.extra
+            // Allene and other non-tetrahedral stereo are not compared here.
+            && ![&left.smiles, &right.smiles]
+                .iter()
+                .any(|smiles| ["@AL", "@SP", "@TB", "@OH"].iter().any(|s| smiles.contains(s)));
         if edit.centres.is_empty() && doubles.is_empty() && grouped.is_empty() {
             // Groups and the like: point at every stereo unit.
             edit.changed
