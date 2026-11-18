@@ -198,15 +198,3 @@ fn a_dragged_long_label_far_from_its_atom_gets_a_leader() {
         crate::scene::Primitive::Line(..)
     ));
 }
-
-#[test]
-#[ignore = "writes SVGs to look at"]
-fn debug_svgs() {
-    for (name, doc) in [("morphine", morphine()), ("anisaldehyde", anisaldehyde())] {
-        std::fs::write(
-            format!("/tmp/nmrl-{name}.svg"),
-            crate::scene::svg_with_background(&doc),
-        )
-        .unwrap();
-    }
-}
