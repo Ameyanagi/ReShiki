@@ -27,6 +27,9 @@ pub(super) struct LongLabel {
     /// The box the atom itself reserves, which a leader starts outside.
     pub own: Option<(Point, Point)>,
     pub bond_length: f32,
+    /// How far from a double, triple or styled bond's centre line its ink can
+    /// reach, with a margin.
+    pub rails: f32,
     /// The convex hull of the atom's molecule, counterclockwise. Labels stay
     /// outside it, so they never fill the space between the molecule's bonds.
     pub hull: std::rc::Rc<[Point]>,
@@ -291,7 +294,7 @@ impl LongLabel {
                 let pad = if order == 1 && display == "plain" {
                     3.
                 } else {
-                    10.
+                    self.rails.max(10.)
                 };
                 let (lo, hi) = self.bounds(center, pad);
                 segment_hits_rect(a, b, lo, hi)

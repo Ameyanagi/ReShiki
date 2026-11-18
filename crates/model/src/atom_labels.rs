@@ -1257,19 +1257,26 @@ fn layout_indicators(doc: &Document, drawn: &Document) -> Vec<Indicator> {
             _ => None,
         })
         .collect();
-    let hulls = molecule_hulls(doc, &shift_atoms);
+    let positions: std::collections::HashMap<_, _> =
+        doc.atoms.iter().map(|a| (a.id, a.position)).collect();
+    let hulls = molecule_hulls(doc, &positions, &shift_atoms);
     if !shift_atoms.is_empty() {
-        let order = |owner: &Owner, text: &str| match owner {
-            Owner::Number(id) if is_shift_label(text) => {
-                let p = doc.atom(*id)?.position;
+        // Each label's angle around its molecule's centre, worked out once.
+        let angles: std::collections::HashMap<u64, f32> = shift_atoms
+            .iter()
+            .filter_map(|id| {
+                let p = positions.get(id)?;
                 let hull = hulls.get(id)?;
                 let count = hull.len().max(1) as f32;
                 let (x, y) = (
                     hull.iter().map(|q| q.x).sum::<f32>() / count,
                     hull.iter().map(|q| q.y).sum::<f32>() / count,
                 );
-                Some((p.y - y).atan2(p.x - x))
-            }
+                Some((*id, (p.y - y).atan2(p.x - x)))
+            })
+            .collect();
+        let order = |owner: &Owner, text: &str| match owner {
+            Owner::Number(id) if is_shift_label(text) => angles.get(id).copied(),
             _ => None,
         };
         labels.sort_by(
@@ -1308,8 +1315,6 @@ fn layout_indicators(doc: &Document, drawn: &Document) -> Vec<Indicator> {
             ));
         }
     }
-    let positions: std::collections::HashMap<_, _> =
-        doc.atoms.iter().map(|a| (a.id, a.position)).collect();
     let segments: Vec<_> = doc
         .bonds
         .iter()
@@ -1352,6 +1357,11 @@ fn layout_indicators(doc: &Document, drawn: &Document) -> Vec<Indicator> {
                         .unwrap_or((a.position.offset(-3., -3.), a.position.offset(3., 3.)))
                 }),
                 bond_length: doc.drawing_style.bond_length_world,
+                // Rails of double and triple bonds sit one bond spacing from
+                // the centre line, plus half a stroke.
+                rails: doc.drawing_style.bond_spacing_ratio * doc.drawing_style.bond_length_world
+                    + doc.drawing_style.world(doc.drawing_style.bold_width_pt) / 2.
+                    + 3.,
                 hull: hulls.get(&id).cloned().unwrap_or_else(|| Vec::new().into()),
             };
             long.push((label, owner, text, offset, style, roman_parentheses));
@@ -1503,9 +1513,13 @@ fn layout_indicators(doc: &Document, drawn: &Document) -> Vec<Indicator> {
             atoms: &visible,
             leaders: &leaders,
         };
+        // A dragged label keeps its place, so it needs no count.
         let room: Vec<_> = long
             .iter()
-            .map(|(label, ..)| label.room(&obstacles, &positions, doc))
+            .map(|(label, _, _, offset, ..)| match offset {
+                Some(_) => 0,
+                None => label.room(&obstacles, &positions, doc),
+            })
             .collect();
         beside_order.sort_by_key(|i| room.get(*i).copied());
     }
@@ -1564,6 +1578,7 @@ fn layout_indicators(doc: &Document, drawn: &Document) -> Vec<Indicator> {
 /// visible atoms, bonded directly or not. Each molecule is walked once.
 fn molecule_hulls(
     doc: &Document,
+    positions: &std::collections::HashMap<u64, Point>,
     ids: &[u64],
 ) -> std::collections::HashMap<u64, std::rc::Rc<[Point]>> {
     let mut hulls = std::collections::HashMap::new();
@@ -1591,7 +1606,7 @@ fn molecule_hulls(
         let points = seen
             .iter()
             .filter(|id| doc.atom_visible(**id))
-            .filter_map(|id| Some(doc.atom(*id)?.position))
+            .filter_map(|id| positions.get(id).copied())
             .collect();
         let hull: std::rc::Rc<[Point]> = long_numbers::hull(points).into();
         for member in seen {
