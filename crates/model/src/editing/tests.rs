@@ -425,9 +425,156 @@ fn rejected_rings_name_the_blocking_atom_and_keep_their_outline() {
     );
     let rejection =
         ring_placement(&ring, middle, 6, false, 5., Some(Point::default())).unwrap_err();
+    // Every vertex is an atom of the ring already there, and so is every edge.
+    assert_eq!(rejection.label, "The ring already exists");
+    assert_eq!(rejection.outline.len(), 6);
+    assert_eq!(rejection.atom, None);
+}
+
+/// The owner's drawing: three hexagons fused in a row. A fourth fused onto
+/// the upper-left bond of the right ring has a vertex on the middle ring's
+/// top atom. Returns the drawing, that bond's midpoint and the top atom.
+fn three_rings_in_a_row() -> (Document, Point, u64) {
+    let mut doc = Document::default();
+    ring(&mut doc, Point::default(), 6, false, 5.);
+    for x in [36.373, 109.119] {
+        ring_oriented(
+            &mut doc,
+            Point::new(x, 0.),
+            6,
+            false,
+            5.,
+            Some(Point::new(x + 40., 0.)),
+        )
+        .unwrap();
+    }
+    assert_eq!((doc.atoms.len(), doc.bonds.len()), (14, 16));
+    let top = doc.nearest(Point::new(72.746, -42.), 1.).unwrap();
+    (doc, Point::new(127.3, -31.5), top)
+}
+
+#[test]
+fn fused_ring_shares_the_existing_atom_under_a_new_vertex() {
+    let (mut doc, bond, top) = three_rings_in_a_row();
+    let (placed, ids) = ring_placement(&doc, bond, 6, false, 5., None).unwrap();
+    // Three new atoms; the edge from the top atom to the fused bond exists.
+    assert_eq!((placed.atoms.len(), placed.bonds.len()), (17, 20));
+    assert_eq!(ids.len(), 6);
+    assert!(ids.contains(&top));
+    assert!(placed.validate().is_ok());
+    let mut expected = ids.clone();
+    expected.sort_unstable();
+    let mut perceived = ring_at(&placed, center(&placed, &ids)).unwrap();
+    perceived.sort_unstable();
+    assert_eq!(perceived, expected);
+    assert_eq!(
+        ring_oriented(&mut doc, bond, 6, false, 5., None),
+        Ok(ids.clone())
+    );
+    assert_eq!(doc, placed);
+    // The same ring again is a complete duplicate.
+    let again = ring_placement(&doc, bond, 6, false, 5., Some(Point::new(109., -84.)));
+    assert_eq!(again.unwrap_err().label, "The ring already exists");
+}
+
+/// A C–C bond with a ring of `n` dragged onto one side, and an atom `c` of
+/// `element` bonded to the bond's first atom where the ring's last vertex
+/// lands. Returns the drawing, `c` and the click and drag points.
+fn bond_with_an_atom_under_the_ring(n: u8, element: &str) -> (Document, u64, Point, Point) {
+    let mut doc = Document::default();
+    let a = doc.add_atom("C", Point::default());
+    let b = doc.add_atom("C", Point::new(42., 0.));
+    doc.add_bond(a, b, 1, "plain");
+    let (click, drag) = (Point::new(21., 0.), Point::new(21., -50.));
+    let (ring, ids) = ring_placement(&doc, click, n, false, 5., Some(drag)).unwrap();
+    let last = ring.atom(ids[n as usize - 1]).unwrap().position;
+    let c = doc.add_atom(element, last);
+    doc.add_bond(a, c, 1, "plain");
+    (doc, c, click, drag)
+}
+
+#[test]
+fn rings_of_every_size_share_an_atom_they_land_on() {
+    for n in 3..=8_u8 {
+        let (mut doc, c, click, drag) = bond_with_an_atom_under_the_ring(n, "C");
+        doc.bonds[1].order = 2;
+        let (placed, ids) = ring_placement(&doc, click, n, false, 5., Some(drag)).unwrap();
+        assert_eq!(ids.last(), Some(&c), "size {n}");
+        // The double bond from `c` to the fused bond is kept as drawn.
+        assert_eq!(placed.bonds[..2], doc.bonds[..], "size {n}");
+        let size = n as usize;
+        assert_eq!(
+            (placed.atoms.len(), placed.bonds.len()),
+            (size, size),
+            "size {n}"
+        );
+        assert!(placed.validate().is_ok());
+
+        // A ring attached at an atom shares a separate atom the same way.
+        let mut doc = Document::default();
+        let anchor = doc.add_atom("C", Point::default());
+        let drag = Some(Point::new(60., 20.));
+        let (ring, ids) = ring_placement(&doc, Point::default(), n, false, 5., drag).unwrap();
+        let other = doc.add_atom("C", ring.atom(ids[2]).unwrap().position);
+        let (placed, ids) = ring_placement(&doc, Point::default(), n, false, 5., drag).unwrap();
+        assert_eq!((ids[0], ids[2]), (anchor, other), "size {n}");
+        assert_eq!((placed.atoms.len(), placed.bonds.len()), (size, size));
+    }
+}
+
+#[test]
+fn rings_refuse_a_vertex_they_cannot_share() {
+    // Two atoms under one vertex: which to share is ambiguous.
+    let (mut doc, c, click, drag) = bond_with_an_atom_under_the_ring(6, "C");
+    let near = doc.atom(c).unwrap().position.offset(1., 0.);
+    let second = doc.add_atom("C", near);
+    doc.add_bond(c, second, 1, "plain");
+    let rejection = ring_placement(&doc, click, 6, false, 5., Some(drag)).unwrap_err();
     assert_eq!(rejection.label, "Overlaps an existing atom");
     assert_eq!(rejection.outline.len(), 6);
-    assert!(rejection.atom.is_some());
+
+    // Oxygen with two bonds has no valence left for the ring's new bond.
+    let (mut doc, c, click, drag) = bond_with_an_atom_under_the_ring(6, "O");
+    let methyl = doc.add_atom("C", Point::new(-60., -60.));
+    doc.add_bond(c, methyl, 1, "plain");
+    let before = doc.clone();
+    let rejection = ring_placement(&doc, click, 6, false, 5., Some(drag)).unwrap_err();
+    assert_eq!(rejection.label, "O would have 3 bonds");
+    assert_eq!(rejection.atom, Some(c));
+    assert_eq!(
+        ring_oriented(&mut doc, click, 6, false, 5., Some(drag)),
+        Err(rejection.message)
+    );
+    assert_eq!(doc, before);
+
+    // A contracted abbreviation is never opened by a ring.
+    let (mut doc, c, click, drag) = bond_with_an_atom_under_the_ring(6, "C");
+    doc.abbreviations.push(crate::abbreviations::Abbreviation {
+        label: "Me".into(),
+        reverse_label: String::new(),
+        anchor: c,
+        exit: None,
+        members: vec![c],
+        alignment: Default::default(),
+        label_style: None,
+        label_color_override: false,
+        highlight: None,
+    });
+    let rejection = ring_placement(&doc, click, 6, false, 5., Some(drag)).unwrap_err();
+    assert_eq!(rejection.label, "Expand the abbreviation first");
+    assert_eq!(rejection.atom, Some(c));
+
+    // A delocalized ring would rewrite the bonds between shared atoms.
+    let (doc, _, click, drag) = bond_with_an_atom_under_the_ring(5, "C");
+    let rejection = ring_placement(&doc, click, 5, true, 5., Some(drag)).unwrap_err();
+    assert_eq!(rejection.label, "Overlaps an existing atom");
+
+    // A ring dropped on empty canvas still never joins what it lands on.
+    let mut doc = Document::default();
+    let (ring, ids) = ring_placement(&doc, Point::default(), 6, false, 5., None).unwrap();
+    doc.add_atom("C", ring.atom(ids[0]).unwrap().position);
+    let rejection = ring_placement(&doc, Point::default(), 6, false, 5., None).unwrap_err();
+    assert_eq!(rejection.label, "Overlaps an existing atom");
 }
 
 #[test]

@@ -1406,12 +1406,13 @@ pub fn ring_oriented(
 
 const INVALID_RING_GEOMETRY: &str = "Invalid ring attachment geometry.";
 
-/// The clicked point, clamped ring size, hit radius and optional drag that
-/// every ring_placement stage reads.
+/// The clicked point, clamped ring size, bond style, hit radius and optional
+/// drag that every ring_placement stage reads.
 #[derive(Clone, Copy)]
 struct RingRequest {
     p: Point,
     n: usize,
+    aromatic: bool,
     radius: f32,
     direction: Option<Point>,
 }
@@ -1431,6 +1432,7 @@ pub fn ring_placement(
     let request = RingRequest {
         p,
         n,
+        aromatic,
         radius,
         direction,
     };
@@ -1447,18 +1449,20 @@ pub fn ring_placement(
     // written back until its attachment chemistry and vertices are checked.
     let mut result = doc.clone();
     let mut ids = vec![];
-    if let Some(index) = bond {
-        fused_ring_vertices(doc, request, index, &mut result, &mut ids)?;
+    let length = if let Some(index) = bond {
+        fused_ring_vertices(doc, request, index, &mut result, &mut ids)?
     } else {
-        attached_ring_vertices(doc, request, atom, &mut result, &mut ids);
-    }
-    for (i, (&a, &b)) in ids
-        .iter()
-        .zip(ids.iter().cycle().skip(1))
-        .take(n)
-        .enumerate()
-    {
-        if i == 0 && bond.is_some() && !aromatic {
+        attached_ring_vertices(doc, request, atom, &mut result, &mut ids)
+    };
+    for (&a, &b) in ids.iter().zip(ids.iter().cycle().skip(1)).take(n) {
+        // A plain ring keeps every bond that already joins two of its atoms:
+        // the fused bond and any edge between atoms it merged onto.
+        if !aromatic
+            && result
+                .bonds
+                .iter()
+                .any(|x| (x.a, x.b) == (a, b) || (x.a, x.b) == (b, a))
+        {
             continue;
         }
         result.add_bond(a, b, if aromatic { 4 } else { 1 }, "plain");
@@ -1470,7 +1474,7 @@ pub fn ring_placement(
             }
         }
     }
-    check_ring_candidate(doc, result, ids)
+    check_ring_candidate(doc, result, ids, ring_tolerance(length))
 }
 
 /// Reject non-finite or negative input before any geometry is built.
@@ -1533,17 +1537,48 @@ fn aromatic_hexagon(
     })
 }
 
+/// The ring atom at `p`: the one drawn atom already there, which a plain
+/// ring then shares, or a new carbon. Like the aromatic fusion planner,
+/// "there" is within 5/75 of the ring's edge `length`. A vertex near several
+/// atoms, a hidden atom or an atom the ring already uses stays new, and
+/// `check_ring_candidate` rejects it as an overlap. So does every vertex of
+/// a delocalized ring, which would rewrite the bonds between shared atoms.
+fn ring_vertex(
+    doc: &Document,
+    result: &mut Document,
+    ids: &[u64],
+    p: Point,
+    tolerance: f32,
+) -> u64 {
+    let mut nearby = doc
+        .atoms
+        .iter()
+        .filter(|a| a.position.distance(p) <= tolerance);
+    match (nearby.next(), nearby.next()) {
+        (Some(old), None) if doc.atom_drawn(old.id) && !ids.contains(&old.id) => old.id,
+        _ => result.add_atom("C", p),
+    }
+}
+
+/// How close a ring vertex must be to an existing atom to count as on it:
+/// the aromatic fusion planner's threshold, relative to the ring's edge
+/// length and independent of zoom and hit radius.
+fn ring_tolerance(length: f32) -> f32 {
+    (length * (5. / 75.)).max(0.01)
+}
+
 /// Add the new vertices of a ring fused to the bond at `index`, on the
-/// dragged side or the less crowded one.
+/// dragged side or the less crowded one. Returns the ring's edge length.
 fn fused_ring_vertices(
     doc: &Document,
     request: RingRequest,
     index: usize,
     result: &mut Document,
     ids: &mut Vec<u64>,
-) -> Result<(), RingRejection> {
+) -> Result<f32, RingRejection> {
     let RingRequest {
         n,
+        aromatic,
         radius,
         direction,
         ..
@@ -1608,23 +1643,30 @@ fn fused_ring_vertices(
         });
     }
     ids.extend([b.a, b.b]);
+    let length = a.distance(z);
     for p in points.iter().skip(2) {
-        ids.push(result.add_atom("C", *p));
+        ids.push(if aromatic {
+            result.add_atom("C", *p)
+        } else {
+            ring_vertex(doc, result, ids, *p, ring_tolerance(length))
+        });
     }
-    Ok(())
+    Ok(length)
 }
 
 /// Add the vertices of a ring attached at `atom`, or free-standing at `p`.
+/// Returns the ring's edge length.
 fn attached_ring_vertices(
     doc: &Document,
     request: RingRequest,
     atom: Option<u64>,
     result: &mut Document,
     ids: &mut Vec<u64>,
-) {
+) -> f32 {
     let RingRequest {
         p,
         n,
+        aromatic,
         radius,
         direction,
     } = request;
@@ -1663,7 +1705,7 @@ fn attached_ring_vertices(
             vertex = vertex.offset(length * angle.cos(), length * angle.sin());
             angle -= std::f32::consts::TAU / n as f32;
         }
-        return;
+        return length;
     }
     let r = length / (2.0 * (std::f32::consts::PI / n as f32).sin());
     // The center belongs in the open angular gap, opposite the substituent
@@ -1689,20 +1731,25 @@ fn attached_ring_vertices(
     };
     for i in 0..n {
         let angle = phase + i as f32 * std::f32::consts::TAU / n as f32;
-        ids.push(if let Some(id) = atom.filter(|_| i == 0) {
-            id
-        } else {
-            result.add_atom("C", center.offset(angle.cos() * r, angle.sin() * r))
+        let vertex = center.offset(angle.cos() * r, angle.sin() * r);
+        ids.push(match atom {
+            Some(id) if i == 0 => id,
+            Some(_) if !aromatic => ring_vertex(doc, result, ids, vertex, ring_tolerance(length)),
+            // A free-standing ring never joins the atoms it lands on.
+            _ => result.add_atom("C", vertex),
         });
     }
+    length
 }
 
 /// Check the candidate's shared atoms, edge length, overlaps, reactions
-/// and validity, rejecting with the ring's outline.
+/// and validity, rejecting with the ring's outline. `tolerance` is the one
+/// `ring_vertex` shared atoms with.
 fn check_ring_candidate(
     doc: &Document,
     mut result: Document,
     ids: Vec<u64>,
+    tolerance: f32,
 ) -> Result<(Document, Vec<u64>), RingRejection> {
     let outline: Vec<_> = ids
         .iter()
@@ -1714,6 +1761,13 @@ fn check_ring_candidate(
         outline: outline.clone(),
         atom,
     };
+    if result.atoms.len() == doc.atoms.len() && result.bonds.len() == doc.bonds.len() {
+        return Err(reject(
+            "This ring is already drawn here. Choose another position or side.",
+            "The ring already exists",
+            None,
+        ));
+    }
     for id in &ids {
         if let Some(target) = doc.atom(*id)
             && let Some(label) = shared_atom_label(doc, &result, target)
@@ -1749,10 +1803,7 @@ fn check_ring_candidate(
             None,
         ));
     }
-    // Use the aromatic fusion planner's scale-relative proximity threshold,
-    // independent of zoom/hit radius. Regular rings conservatively reject an
-    // unshared coincident vertex instead of merging arbitrary existing atoms.
-    let tolerance = (length * (5. / 75.)).max(0.01);
+    // `ring_vertex` already shared every vertex it could.
     for added in result.atoms.iter().skip(doc.atoms.len()) {
         if let Some(old) = doc
             .atoms
