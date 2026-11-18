@@ -23,7 +23,9 @@ the same way: [PR #1241](https://github.com/Ameyanagi/ReShiki/pull/1241)
 [PR #1243](https://github.com/Ameyanagi/ReShiki/pull/1243) (live reference
 oracles, no user-facing change), at `077815e1`, and
 [PR #1244](https://github.com/Ameyanagi/ReShiki/pull/1244) (keyboard drawing on
-molecules with a reaction role), at `40d75765`.
+molecules with a reaction role), at `40d75765`, and
+[PR #1242](https://github.com/Ameyanagi/ReShiki/pull/1242) (Intel macOS disk
+image size and build time limit, no user-facing change), at `fabd0682`.
 
 `VERSION` is 39 in `crates/model/src/document.rs`. `Document::file_version`
 saves each drawing at the version of the newest feature it uses: 39 for a
@@ -76,8 +78,9 @@ The maintainer runs these on a manual **Release builds** run of the merged
 
 - [ ] **Release build:** a manual **Release builds** run passes on all six
       platforms and does not publish; see [Release build](#release-build).
-- [ ] **Live reference suite:** the complete live RDKit reference tests pass
-      on macOS arm64, Linux x64 and Windows x64; see
+- [x] **Live reference suite:** the complete live RDKit reference tests pass
+      on macOS arm64, Linux x64 and Windows x64 (run 44300777149 at
+      `077815e1`); see
       [Live RDKit reference suite](#live-rdkit-reference-suite).
 - [x] **Focus after closing reviews:** run Clean up from the toolbar and
       close its ▾ menu with Esc, and close 3D preview, atom label, Name import
@@ -126,8 +129,8 @@ Manual **Release builds**
 [run 44269689222](https://github.com/Ameyanagi/ReShiki/actions/runs/44269689222)
 at `f25ab7eb`: **failed**. Every package passed except macOS x64 (Intel), where
 `hdiutil` failed while creating the disk image with "No space left on device".
-A fix is in progress (branch `fix/intel-dmg-space`). The confirmation run
-will be repeated on the final `main` before the tag.
+[PR #1242](https://github.com/Ameyanagi/ReShiki/pull/1242) fixes it. The
+confirmation run is still to run on the final `main` before the tag.
 
 ## Live RDKit reference suite
 
@@ -150,8 +153,12 @@ All six were reference oracles left behind by changes merged since 0.15.0;
 the application was right in each case.
 [PR #1243](https://github.com/Ameyanagi/ReShiki/pull/1243) updates them,
 changing only files under `reference/`, and the four macOS arm64 live shards
-pass locally with it. The confirmation run will be repeated on the final
-`main` before the tag.
+pass locally with it.
+
+Confirmation: **Checks** with `live_reference=true`
+[run 44300777149](https://github.com/Ameyanagi/ReShiki/actions/runs/44300777149)
+at `077815e1` (`main` with #1241 and #1243) **passed** on macOS arm64,
+Linux x64 and Windows x64.
 
 ## Focus after closing reviews
 
@@ -253,7 +260,11 @@ Moved from the [release notes](../changes-0.16.md).
 - **Packages.** macOS disk images use LZMA compression and are about 40%
   smaller. Release executables and the Python package carry no symbols; the
   Release builds workflow keeps a separate symbol file for crash reports
-  ([#1178](https://github.com/Ameyanagi/ReShiki/pull/1178)).
+  ([#1178](https://github.com/Ameyanagi/ReShiki/pull/1178)). The macOS disk
+  image is created with an explicit size, so the Intel build no longer stops
+  with "No space left on device", and the Intel macOS release build may run for
+  150 minutes instead of 100, after a slow runner had it cancelled
+  ([#1242](https://github.com/Ameyanagi/ReShiki/pull/1242)).
 - **Nightly builds** are no longer made for Intel Macs: that build kept
   reaching its 100-minute limit. Stable releases still include Intel Mac
   downloads, and the **Nightly** update channel on an Intel Mac says so
