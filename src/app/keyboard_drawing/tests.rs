@@ -1406,3 +1406,186 @@ fn repeated_marked_coordination_reports_duplicate_without_another_history_frame(
     let _ = app.update(Message::Undo);
     assert_eq!(app.tab.doc, original);
 }
+
+/// Propylbenzene: [chain end, chain middle, ring CH].
+fn propylbenzene(doc: &mut Document, x: f32) -> [u64; 3] {
+    let ring: Vec<_> = (0..6)
+        .map(|i| {
+            let angle = i as f32 * std::f32::consts::FRAC_PI_3;
+            doc.add_atom("C", Point::new(x + 42. * angle.cos(), 42. * angle.sin()))
+        })
+        .collect();
+    for i in 0..6 {
+        doc.add_bond(ring[i], ring[(i + 1) % 6], 1 + (i as u8 % 2), "plain");
+    }
+    let a = doc.add_atom("C", Point::new(x + 84., 0.));
+    let b = doc.add_atom("C", Point::new(x + 105., 36.));
+    let c = doc.add_atom("C", Point::new(x + 147., 36.));
+    doc.add_bond(ring[0], a, 1, "plain");
+    doc.add_bond(a, b, 1, "plain");
+    doc.add_bond(b, c, 1, "plain");
+    [c, b, ring[3]]
+}
+
+/// Growing a molecule that has a reaction role keeps the role on the whole
+/// molecule, for a reaction made by the shortcut or by hand, before and after
+/// a save and reopen.
+#[test]
+fn keys_edit_reaction_participants() {
+    enum Step {
+        Key(Target, &'static str),
+        Connect(u64, u64),
+        Click(u64),
+    }
+    let mut failures = Vec::new();
+    let mut grown = 0;
+    for variant in ["shortcut", "manual", "shortcut reopened", "manual reopened"] {
+        let mut app = app();
+        let reactant = propylbenzene(&mut app.tab.doc, 0.);
+        let product = if variant.starts_with("shortcut") {
+            app.tab.selected = vec![reactant[0]];
+            let _ = app.update(Message::Shortcut(
+                super::super::shortcuts::Action::ReactionCopy,
+            ));
+            assert!(!app.error, "{}", app.status);
+            // The copy follows the original atoms in the same order.
+            let ids: Vec<_> = app.tab.doc.atoms.iter().map(|a| a.id).collect();
+            reactant.map(|id| ids[ids.iter().position(|i| *i == id).unwrap() + ids.len() / 2])
+        } else {
+            let product = propylbenzene(&mut app.tab.doc, 400.);
+            let arrow = app.tab.doc.next_id();
+            app.tab.doc.arrows.push(reshiki::document::Arrow {
+                start_anchor: None,
+                end_anchor: None,
+                id: arrow,
+                start: Point::new(200., 0.),
+                end: Point::new(300., 0.),
+                kind: "forward".into(),
+                control: None,
+                cubic: None,
+                nodes: Vec::new(),
+                style: None,
+            });
+            for (ids, role) in [
+                (reactant, reshiki::reactions::Role::Reactant),
+                (product, reshiki::reactions::Role::Product),
+            ] {
+                reshiki::reactions::assign(&mut app.tab.doc, arrow, &ids[..1], role).unwrap();
+            }
+            product
+        };
+        if variant.ends_with("reopened") {
+            app.tab.doc = Document::from_json(&serde_json::to_vec(&app.tab.doc).unwrap()).unwrap();
+        }
+        app.tab.doc.validate().unwrap();
+        let base = app.tab.doc.clone();
+        // The same drawing without roles says what each edit must do.
+        let mut plain = base.clone();
+        plain.reactions.clear();
+        let mut cases = Vec::new();
+        for (side, atoms) in [("reactant", reactant), ("product", product)] {
+            for (place, id) in ["chain end", "chain middle", "ring"].into_iter().zip(atoms) {
+                for key in [
+                    "1", "2", "4", "5", "8", "9", "0", "z", "K", "k", "d", "+", "-", "3", "6", "7",
+                    "v", "u", "a", "j", "J", "o", "n", "m", "O", "P", "e", "A", "E", "F", "N", "y",
+                    "Z", "M", "H", "Q",
+                ] {
+                    cases.push((
+                        format!("key {key} on {side} {place}"),
+                        Step::Key(Target::Atom(id), key),
+                    ));
+                }
+            }
+            let bond = Target::Bond(atoms[0].min(atoms[1]), atoms[0].max(atoms[1]));
+            for key in [
+                "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "z", "v", "a", "w",
+            ] {
+                cases.push((format!("key {key} on {side} bond"), Step::Key(bond, key)));
+            }
+            cases.push((
+                format!("connect on {side}"),
+                Step::Connect(atoms[0], atoms[2]),
+            ));
+            cases.push((
+                format!("bond tool click on {side} ring"),
+                Step::Click(atoms[2]),
+            ));
+        }
+        let blank = Target::Blank(Point::new(0., 300.));
+        for key in ["1", "6", "n", "O", "j"] {
+            cases.push((
+                format!("key {key} on the empty hotspot"),
+                Step::Key(blank, key),
+            ));
+        }
+        let run = |app: &mut App, doc: &Document, step: &Step| {
+            app.tab.doc = doc.clone();
+            app.tab.selected.clear();
+            app.tab.keyboard_drawing.clear_mark();
+            app.error = false;
+            app.status.clear();
+            let target = |app: &mut App, target| {
+                app.tab.keyboard_drawing.set_target(target, &app.tab.doc);
+            };
+            match *step {
+                Step::Key(at, key) => {
+                    target(app, at);
+                    let _ = app.context_key(key);
+                }
+                Step::Connect(a, b) => {
+                    target(app, Target::Atom(a));
+                    let _ = app.context_key("[");
+                    target(app, Target::Atom(b));
+                    let _ = app.context_key("]");
+                }
+                // The bond tool's click on a ring atom shares this growth.
+                Step::Click(id) => {
+                    let end = reshiki::projection::growth::Plane::at(&app.tab.doc, id)
+                        .and_then(|plane| plane.outward(42.))
+                        .unwrap();
+                    match reshiki::projection::growth::place(
+                        &app.tab.doc,
+                        id,
+                        end,
+                        "C",
+                        reshiki::bonds::BondPreset::Single,
+                    ) {
+                        Ok((doc, _)) => app.tab.doc = doc,
+                        Err(error) => {
+                            app.error = true;
+                            app.status = error;
+                        }
+                    }
+                }
+            }
+            (app.error, app.status.clone(), app.tab.doc.clone())
+        };
+        for (what, step) in &cases {
+            let want = run(&mut app, &plain, step);
+            let (error, status, mut doc) = run(&mut app, &base, step);
+            grown += usize::from(doc.atoms.len() > base.atoms.len());
+            let assigned = doc.reactions[0]
+                .ids()
+                .iter()
+                .filter(|id| doc.atom(**id).is_some())
+                .count();
+            let outside = if matches!(step, Step::Key(Target::Blank(_), _)) {
+                doc.atoms.len() - base.atoms.len()
+            } else {
+                0
+            };
+            doc.reactions.clear();
+            if assigned + outside != doc.atoms.len() {
+                failures.push(format!("{variant}: {what} left atoms outside the reaction"));
+            } else if (error, &status, &doc) != (want.0, &want.1, &want.2) {
+                failures.push(format!(
+                    "{variant}: {what}: {status:?}, without roles {:?}",
+                    want.1
+                ));
+            }
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+    // Most of these edits add atoms; a run that refuses them all proves nothing.
+    assert!(grown > 400, "{grown} edits added atoms");
+}
