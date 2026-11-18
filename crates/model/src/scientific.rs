@@ -346,7 +346,31 @@ impl Graphic {
                 orbital_parts(kind, self.phase, self.phase_flipped, &self.style)
             }
             _ => {
-                return self.path_parts();
+                let mut parts = self.path_parts();
+                if self.style.pattern == crate::graphics::LinePattern::Wavy
+                    && let Some(shaft) = parts.first_mut()
+                {
+                    // Closed paths draw no heads, so they wave all round.
+                    let heads = self
+                        .heads
+                        .filter(|_| !self.closed_shape())
+                        .unwrap_or_default();
+                    let radius = crate::graphics::wave_radius(self.style.width_pt);
+                    // Run straight under each head and a little beyond it.
+                    let lead = crate::style::DEFAULT.world(heads.head_length_pt) + radius;
+                    shaft.commands = crate::graphics::wavy(
+                        &shaft.commands,
+                        radius,
+                        [heads.tail, heads.head].map(|h| {
+                            if h == crate::arrows::Head::None {
+                                0.
+                            } else {
+                                lead
+                            }
+                        }),
+                    );
+                }
+                return parts;
             }
         };
         for part in &mut parts {

@@ -14,8 +14,36 @@ geometry in `.rsk` files.
    and 360° sweeps.
 2. Drag to size the object. Shift makes a square or circle, or keeps a line or
    curve at 45° steps. Escape cancels.
-3. Set stroke color, fill color, line width and solid, dashed or dotted strokes
-   in **Properties**. Number and hex fields apply when you press Enter.
+3. Set stroke color, fill color, line width and solid, dashed, dotted or wavy
+   strokes in **Properties**. Number and hex fields apply when you press Enter.
+   A rounded rectangle also has **Corner (pt)**; leave it empty to round 18% of
+   the shorter side.
+
+### Shade or shadow a shape
+
+Select a rectangle, rounded rectangle, ellipse or closed path. In
+**Properties**, below the fill color:
+
+- **Shaded** fills the shape from white at the upper left to its fill color at
+  the far edge, as ChemDraw's Shaded style does. Rectangles shade toward their
+  right and bottom edges; ellipses and paths shade around a highlight. A shape
+  without a fill takes its stroke color.
+- **Shadow** adds a grey drop shadow 4 pt below and to the right. A tilted
+  rectangle or ellipse casts it along its own axes, as ChemDraw does. The
+  inside of a shadowed outline is painted white, so the shadow shows only at
+  the edge.
+
+Each change is one Undo step and applies to every selected shape. With nothing
+selected, the settings apply to the next shape you draw. Shading and shadows
+are drawn on the canvas and in PNG, SVG and PDF. Clicks and snapping use the
+shape itself, not its shadow.
+
+### Wavy lines
+
+Choose **Wavy** as the stroke pattern of a line, curve or path, or of an arrow
+in its **Properties**. The wave is a row of half circles, about 3.6 pt long
+for lines up to 1 pt wide, and longer for bolder lines. A wavy line runs
+straight under each arrowhead and into it, and the head stays solid.
 
 Select a graphic to move, copy, duplicate, rotate, reflect or resize it.
 **Send to back** and **Bring to front** place it behind or above the chemistry.
@@ -31,7 +59,7 @@ Select a graphic to move, copy, duplicate, rotate, reflect or resize it.
 **New path** and **Finish** show while the **Pen path** tool is active. Each
 segment is one Undo step; Escape cancels the segment you are drawing.
 
-Select an open pen path or Bézier curve and use **Properties → ARROWHEADS**
+Select a graphic line, open pen path or Bézier curve and use **Properties → ARROWHEADS**
 to set **End**, **Start**, shape and size. Number fields apply on Enter.
 The context row's **Start head** and **End head** add a full head; **No start
 head** and **No end head** remove it. Each change applies to all selected open
@@ -96,8 +124,13 @@ endpoints, attachments and arrowheads stay in place.
 - A single-segment curve with solid heads returns from CDXML as a curved
   arrow.
 - Dotted strokes cannot be exported to CDXML.
-- Freehand tracing, non-proportional resizing and per-shape corner radii are
-  not available.
+- ChemDraw draws waves only on straight lines without arrowheads. Other wavy
+  lines, curves and arrows open in ChemDraw as solid strokes.
+- ChemDraw has shadows only on rectangles and ovals, so a shadow on a rotated
+  rectangle or a path is not written to CDXML or CDX.
+- Shading paints each part of a compound path on its own, so a hole in it is
+  shaded over. A path too detailed to shade keeps a flat fill.
+- Freehand tracing and non-proportional resizing are not available.
 - Brackets are graphics. To define a repeating unit, see
   [generic structures](generic-structures.md).
 
@@ -133,6 +166,22 @@ also drives SVG, PDF and PNG export.
 CDXML exports solid/dashed graphics as editable Bézier paths. Separate fill and
 stroke colors use grouped paths. It imports supported plain curves, curve-only
 groups, basic rectangles/lines/bracket pairs, and ovals with explicit axes.
+
+Shaded or shadowed rectangles, rounded rectangles and ellipses are written as
+ChemDraw's own Rectangle and Oval graphics with their Shaded, Shadow or
+Shadowed flags and ShadowSize (hundredths of a point), so ChemDraw can restyle
+them. Upright rectangles only: a rotated one stays a path. A shaded path is a
+ChemDraw shaded curve (CurveType 256, FillType Shaded). A wavy line without
+heads is ChemDraw's line graphic with LineType Wavy, and a straight wavy arrow
+keeps LineType Wavy. On import, ChemDraw's Shaded paints the shape's one color
+and Shadow keeps its ShadowSize. ChemDraw shades an open curve as if closed,
+and draws a wavy curve or a wavy line with heads straight; ReShiki imports them
+the same way. ReShiki draws the shading as flat bands, as ChemDraw's own
+renders do, three bands per point of size (32 to 256), so canvas, PNG, SVG
+and PDF match and the steps stay invisible when zoomed in. Drawings with shading,
+shadows, wavy strokes, arrowheads on graphic lines or a set corner radius are
+document version 40. ChemDraw's CornerRadius (hundredths of a point) becomes
+**Corner (pt)** on import and is written back for native rounded rectangles.
 Curves nested in molecular fragments are also kept on import.
 
 CDXML does not keep ReShiki's parametric shape type. External saves may split
@@ -142,8 +191,8 @@ number of graphic objects. `.rsk` files keep ReShiki's exact model.
 
 `.rsk`/SVG/PDF/PNG keep dots. SVG/PDF/EMF/PNG draw path arrowheads, and
 CDXML/CDX keep their editable head settings on open curves.
-Unsupported legacy shapes, doubled/shaded curves, transparency, shadows and
-arbitrary external styling are not implemented. A bracket becomes a polymer
+Unsupported legacy shapes, doubled curves, transparency and arbitrary external
+styling are not implemented. A bracket becomes a polymer
 repeating unit, with a movable repeat label, through **Define repeating unit**;
 see [generic structures](generic-structures.md#define-a-repeating-unit).
 

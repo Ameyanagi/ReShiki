@@ -67,9 +67,10 @@ impl App {
             } => {
                 self.tab.arrows.cancel_source();
                 let closed_inspector = (!self.inspector_open).then_some(self.inspector_tab);
-                self.tab.selected = selected;
                 self.tool = Tool::Select;
-                self.sync_typography();
+                // Every Properties field follows the new selection, so Enter
+                // never applies a value typed for the previous one.
+                self.set_selection(selected);
                 if let Some(tab) = closed_inspector {
                     self.inspector_open = false;
                     self.inspector_tab = tab;

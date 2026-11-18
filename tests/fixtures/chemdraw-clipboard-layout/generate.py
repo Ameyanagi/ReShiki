@@ -70,8 +70,8 @@ for name, length in [
             "graphic",
             id="45",
             BoundingBox="77 64 53 52",
-            GraphicType="Rectangle",
-            RectangleType="Shadow",
+            GraphicType="Orbital",
+            OrbitalType="pShaded",
         )
     ET.indent(source, space="  ")
     xml = (

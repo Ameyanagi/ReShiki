@@ -229,7 +229,7 @@ async fn unsupported_rich_drawing_remains_an_atomic_rejection() {
         .unwrap_err();
         assert_eq!(
             error,
-            "Shadowed/shaded rectangle styles are not supported yet"
+            "Gradient-shaded CDXML orbitals are not supported yet"
         );
     }
 }

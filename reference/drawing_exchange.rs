@@ -807,6 +807,8 @@ fn editable_drawing_output_matches_original_writer() -> anyhow::Result<()> {
                             fill,
                             stroke: reshiki::palette::Color::Custom([74, 112, 239]),
                             width_pt: 0.83,
+                            effects: Default::default(),
+                            corner_pt: None,
                         },
                         Default::default(),
                         false,

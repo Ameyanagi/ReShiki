@@ -161,7 +161,10 @@ fn path_heads_validate_arrow_limits_and_supported_kinds() {
         graphic.kind = kind;
         assert_eq!(
             graphic.validate().is_ok(),
-            matches!(kind, GraphicKind::Curve | GraphicKind::Path),
+            matches!(
+                kind,
+                GraphicKind::Line | GraphicKind::Curve | GraphicKind::Path
+            ),
             "{kind:?}"
         );
     }

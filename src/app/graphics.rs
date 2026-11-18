@@ -99,6 +99,8 @@ pub enum Action {
     Style(GraphicChange),
     Width(String),
     ApplyWidth,
+    Corner(String),
+    ApplyCorner,
     Stroke(String),
     ApplyStroke,
     Fill(String),
@@ -121,6 +123,11 @@ pub enum Action {
     SnapOrbitals(bool),
 }
 
+/// Hundredths of a point, so an imported 0.99 pt reads "0.99".
+fn points(value: f32) -> String {
+    ((value * 100.).round() / 100.).to_string()
+}
+
 pub(super) fn parse_color(s: &str) -> Option<[u8; 3]> {
     let s = s.trim().trim_start_matches('#');
     if s.len() != 6 || !s.is_ascii() {
@@ -138,6 +145,8 @@ impl App {
             Action::Style(change) => self.apply_graphic_style(change),
             Action::Width(s) => self.tab.graphic_width_input = s,
             Action::ApplyWidth => self.apply_graphic_width(),
+            Action::Corner(s) => self.tab.graphic_corner_input = s,
+            Action::ApplyCorner => self.apply_graphic_corner(),
             Action::Stroke(s) => self.tab.graphic_stroke_input = s,
             Action::ApplyStroke => self.apply_graphic_color(ColorField::Stroke),
             Action::Fill(s) => self.tab.graphic_fill_input = s,
@@ -243,7 +252,12 @@ impl App {
                 .padding(5)
                 .width(48),
                 crate::appearance::pick_list(
-                    [LinePattern::Solid, LinePattern::Dashed, LinePattern::Dotted],
+                    // Symbols and orbitals draw no waves.
+                    if matches!(kind, GraphicKind::Symbol(_) | GraphicKind::Orbital(_)) {
+                        LinePattern::PLAIN.as_slice()
+                    } else {
+                        LinePattern::ALL.as_slice()
+                    },
                     Some(self.tab.graphic_style.pattern),
                     |p| Message::Graphics(Action::Style(GraphicChange::Pattern(p)))
                 )
@@ -384,7 +398,61 @@ impl App {
                         .on_submit(Message::Graphics(Action::ApplyFill))
                         .size(12)
                         .padding(6),
+                )
+                .push(
+                    row![
+                        hover_hint(
+                            checkbox(style.effects.shaded)
+                                .label("Shaded")
+                                .on_toggle(|on| {
+                                    Message::Graphics(Action::Style(GraphicChange::Shaded(on)))
+                                })
+                                .size(14)
+                                .text_size(12),
+                            "Fill from white at the upper left to the fill color, as ChemDraw shades",
+                            tooltip::Position::Top,
+                        ),
+                        hover_hint(
+                            checkbox(style.effects.shadow_pt.is_some())
+                                .label("Shadow")
+                                .on_toggle(|on| {
+                                    Message::Graphics(Action::Style(GraphicChange::Shadow(
+                                        on.then_some(reshiki::graphics::Effects::SHADOW_PT),
+                                    )))
+                                })
+                                .size(14)
+                                .text_size(12),
+                            "A grey drop shadow below and to the right",
+                            tooltip::Position::Top,
+                        ),
+                    ]
+                    .spacing(14),
                 );
+        }
+        if kind == GraphicKind::RoundedRectangle {
+            panel = panel.push(
+                row![
+                    text("Corner (pt)").size(11),
+                    hover_hint(
+                        reshiki::accessibility::text_input(
+                            "graphic-corner-radius",
+                            "Corner radius (pt)",
+                            "Auto",
+                            &self.tab.graphic_corner_input,
+                        )
+                        .style(crate::appearance::input_style)
+                        .on_input(|value| Message::Graphics(Action::Corner(value)))
+                        .on_submit(Message::Graphics(Action::ApplyCorner))
+                        .size(12)
+                        .padding(5)
+                        .width(56),
+                        "Enter applies · empty rounds to the shape",
+                        tooltip::Position::Top,
+                    ),
+                ]
+                .spacing(6)
+                .align_y(Alignment::Center),
+            );
         }
         if kind == GraphicKind::Arc {
             panel = panel.push(self.arc_controls());
@@ -514,7 +582,13 @@ impl App {
             self.tab.bracket_superscript = Superscript::of(bracket.superscript.as_deref());
             self.tab.bracket_superscript_input = bracket.superscript.clone().unwrap_or_default();
         }
-        self.tab.graphic_width_input = self.tab.graphic_style.width_pt.to_string();
+        self.tab.graphic_width_input = points(self.tab.graphic_style.width_pt);
+        self.tab.graphic_corner_input = self
+            .tab
+            .graphic_style
+            .corner_pt
+            .map(points)
+            .unwrap_or_default();
         let heads = self
             .selected_open_paths()
             .next()
@@ -532,6 +606,14 @@ impl App {
         change.apply(&mut self.tab.graphic_style);
         let before = self.tab.doc.clone();
         for g in self.selected_graphics_mut().filter(|g| g.picture.is_none()) {
+            // Symbols and orbitals draw no waves.
+            if matches!(
+                change,
+                GraphicChange::Pattern(reshiki::graphics::LinePattern::Wavy)
+            ) && matches!(g.kind, GraphicKind::Symbol(_) | GraphicKind::Orbital(_))
+            {
+                continue;
+            }
             change.apply(&mut g.style);
         }
         if let GraphicChange::Stroke(color) | GraphicChange::Fill(Some(color)) = change {
@@ -549,6 +631,23 @@ impl App {
             _ => {
                 self.error = true;
                 self.status = "Line width must be 0.1–12 pt".into();
+            }
+        }
+    }
+
+    pub(super) fn apply_graphic_corner(&mut self) {
+        let input = self.tab.graphic_corner_input.trim();
+        match input.parse::<f32>() {
+            _ if input.is_empty() => self.apply_graphic_style(GraphicChange::Corner(None)),
+            Ok(radius)
+                if radius.is_finite()
+                    && (0. ..=reshiki::graphics::MAX_CORNER_PT).contains(&radius) =>
+            {
+                self.apply_graphic_style(GraphicChange::Corner(Some(radius)))
+            }
+            _ => {
+                self.error = true;
+                self.status = "Corner radius must be 0–1000 pt".into();
             }
         }
     }
@@ -651,5 +750,5 @@ impl App {
 }
 
 fn is_open_path(graphic: &Graphic) -> bool {
-    graphic.path_summary().is_some_and(|path| !path.closed)
+    graphic.kind == GraphicKind::Line || graphic.path_summary().is_some_and(|path| !path.closed)
 }

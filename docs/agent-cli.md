@@ -394,7 +394,7 @@ to 9 decimal places to remove floating-point noise. This is
   },
   "versions": {
     "app": "0.15.0",
-    "document": 39,
+    "document": 40,
     "engine_protocol": 1,
     "operation_api": 2
   },
@@ -460,7 +460,7 @@ lines with the long text fields cut:
   },
   "versions": {
     "app": "0.15.0",
-    "document": 39,
+    "document": 40,
     "engine_protocol": 1,
     "operation_api": 2
   },
@@ -538,7 +538,7 @@ This is `name --smiles 'CC(=NN)C' --json`, shown on several lines:
   },
   "versions": {
     "app": "0.15.0",
-    "document": 39,
+    "document": 40,
     "engine_protocol": 1,
     "operation_api": 2
   },
@@ -689,7 +689,7 @@ window.
   },
   "versions": {
     "app": "0.15.0",
-    "document": 39,
+    "document": 40,
     "engine_protocol": 1,
     "operation_api": 2
   },

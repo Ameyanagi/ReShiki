@@ -703,6 +703,7 @@ explains how the crates and modules fit together.
 - `crates/model/src/generic/variable.rs`: Bounded variable-substituent placement and ink clearance.
 - `crates/model/src/graphics.rs`: Editable vector graphics in drawing coordinates.
 - `crates/model/src/graphics/arc.rs`: Elliptical arcs in an affine frame, shared by the editor and all exporters.
+- `crates/model/src/graphics/effects.rs`: ChemDraw's shape effects
 - `crates/model/src/graphics/heads.rs`
 - `crates/model/src/graphics/path.rs`: Connected path nodes and their editable Bézier constraints.
 - `crates/model/src/graphics/path/smooth.rs`

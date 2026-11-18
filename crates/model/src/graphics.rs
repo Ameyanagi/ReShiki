@@ -1,10 +1,12 @@
 //! Editable vector graphics in drawing coordinates. Shared by preview and export.
 mod arc;
+mod effects;
 mod heads;
 mod path;
 mod superscript;
 use crate::{document::Point, style};
 pub use arc::ArcGeometry;
+pub use effects::{Effects, SHADOW_RGB, shade, wave_radius, wavy};
 pub use heads::PathHeads;
 pub use path::{MIN_CLOSED_NODES, MIN_OPEN_NODES, PathHandle, PathNodeType, PathSummary};
 use serde::{Deserialize, Serialize};
@@ -76,6 +78,13 @@ pub enum LinePattern {
     Solid,
     Dashed,
     Dotted,
+    /// Half-circle waves along the line, as ChemDraw's wavy line.
+    Wavy,
+}
+impl LinePattern {
+    pub const ALL: [Self; 4] = [Self::Solid, Self::Dashed, Self::Dotted, Self::Wavy];
+    /// The patterns of strokes that cannot wave, such as symbols.
+    pub const PLAIN: [Self; 3] = [Self::Solid, Self::Dashed, Self::Dotted];
 }
 impl std::fmt::Display for LinePattern {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -83,6 +92,7 @@ impl std::fmt::Display for LinePattern {
             Self::Solid => "Solid",
             Self::Dashed => "Dashed",
             Self::Dotted => "Dotted",
+            Self::Wavy => "Wavy",
         })
     }
 }
@@ -110,6 +120,11 @@ pub struct GraphicStyle {
     pub fill: Option<crate::palette::Color>,
     pub width_pt: f32,
     pub pattern: LinePattern,
+    #[serde(skip_serializing_if = "Effects::is_plain")]
+    pub effects: Effects,
+    /// A rounded rectangle's corner radius; `None` rounds 18% of the shorter side.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub corner_pt: Option<f32>,
 }
 impl Default for GraphicStyle {
     fn default() -> Self {
@@ -118,9 +133,13 @@ impl Default for GraphicStyle {
             fill: None,
             width_pt: 0.6,
             pattern: LinePattern::Solid,
+            effects: Effects::default(),
+            corner_pt: None,
         }
     }
 }
+/// The largest corner radius, beyond any page ChemDraw draws.
+pub const MAX_CORNER_PT: f32 = 1000.;
 impl GraphicStyle {
     pub fn width(&self) -> f32 {
         style::DEFAULT.world(self.width_pt)
@@ -128,7 +147,7 @@ impl GraphicStyle {
     pub fn dashes(&self) -> Vec<f32> {
         let w = self.width();
         match self.pattern {
-            LinePattern::Solid => vec![],
+            LinePattern::Solid | LinePattern::Wavy => vec![],
             LinePattern::Dashed => vec![w * 5.0, w * 3.0],
             LinePattern::Dotted => vec![w * 0.1, w * 2.5],
         }
@@ -137,7 +156,13 @@ impl GraphicStyle {
         if !self.width_pt.is_finite() || !(0.1..=12.0).contains(&self.width_pt) {
             return Err("Graphic line width must be 0.1–12 pt".into());
         }
-        Ok(())
+        if self
+            .corner_pt
+            .is_some_and(|c| !c.is_finite() || !(0. ..=MAX_CORNER_PT).contains(&c))
+        {
+            return Err("Corner radius must be 0–1000 pt".into());
+        }
+        self.effects.validate()
     }
 }
 #[derive(Debug, Clone)]
@@ -146,14 +171,32 @@ pub enum GraphicChange {
     Fill(Option<crate::palette::Color>),
     Width(f32),
     Pattern(LinePattern),
+    Shaded(bool),
+    Shadow(Option<f32>),
+    Corner(Option<f32>),
 }
 impl GraphicChange {
     pub fn apply(&self, s: &mut GraphicStyle) {
         match self {
             Self::Stroke(v) => s.stroke = *v,
-            Self::Fill(v) => s.fill = *v,
+            Self::Fill(v) => {
+                s.fill = *v;
+                // Shading paints the fill, so no fill means no shading.
+                if v.is_none() {
+                    s.effects.shaded = false;
+                }
+            }
             Self::Width(v) => s.width_pt = *v,
             Self::Pattern(v) => s.pattern = *v,
+            Self::Shaded(v) => {
+                s.effects.shaded = *v;
+                // Shading paints the fill color, so an outline gains one.
+                if *v && s.fill.is_none() {
+                    s.fill = Some(s.stroke);
+                }
+            }
+            Self::Shadow(v) => s.effects.shadow_pt = *v,
+            Self::Corner(v) => s.corner_pt = *v,
         }
     }
 }
@@ -264,6 +307,21 @@ impl Graphic {
         sides: BracketSides,
         constrain: bool,
     ) -> Self {
+        let mut style = style;
+        if !kind.closed() {
+            // Shading and shadows stay with the drawing style for the next
+            // closed shape, not a line or bracket drawn in between.
+            style.effects = Effects::default();
+        }
+        if kind != GraphicKind::RoundedRectangle {
+            style.corner_pt = None;
+        }
+        // Symbols and orbitals draw no waves.
+        if matches!(kind, GraphicKind::Symbol(_) | GraphicKind::Orbital(_))
+            && style.pattern == LinePattern::Wavy
+        {
+            style.pattern = LinePattern::Solid;
+        }
         if kind == GraphicKind::Path {
             return Self::pen_curve(id, start, end, style);
         }
@@ -359,6 +417,18 @@ impl Graphic {
             heads: None,
         }
     }
+    /// A rounded rectangle's corner radius in drawing units, at most half its
+    /// shorter side.
+    pub fn corner_radius(&self) -> f32 {
+        let side = self
+            .axis_x
+            .distance(Point::default())
+            .min(self.axis_y.distance(Point::default()));
+        self.style
+            .corner_pt
+            .map_or(side * 0.18, |c| style::DEFAULT.world(c))
+            .min(side * 0.5)
+    }
     pub fn map_positions(&mut self, f: impl Fn(Point) -> Point) {
         let o = f(self.origin);
         let x = f(self.origin.offset(self.axis_x.x, self.axis_x.y));
@@ -383,11 +453,7 @@ impl Graphic {
                 Close,
             ],
             GraphicKind::RoundedRectangle => {
-                let radius = self
-                    .axis_x
-                    .distance(Point::default())
-                    .min(self.axis_y.distance(Point::default()))
-                    * 0.18;
+                let radius = self.corner_radius();
                 let rx = radius / self.axis_x.distance(Point::default()).max(0.001);
                 let ry = radius / self.axis_y.distance(Point::default()).max(0.001);
                 vec![
@@ -594,7 +660,10 @@ impl Graphic {
             return Err("A superscript requires a bracket graphic".into());
         }
         if let Some(heads) = self.heads {
-            if !matches!(self.kind, GraphicKind::Curve | GraphicKind::Path) {
+            if !matches!(
+                self.kind,
+                GraphicKind::Line | GraphicKind::Curve | GraphicKind::Path
+            ) {
                 return Err("Path arrowheads do not match the graphic kind".into());
             }
             heads.validate()?;

@@ -11,6 +11,8 @@ use std::collections::HashMap;
 #[cfg(test)]
 mod bracket_superscript_tests;
 mod clipboard;
+#[cfg(test)]
+mod effects_tests;
 mod generic;
 mod groups;
 mod labels;

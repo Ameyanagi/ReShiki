@@ -137,10 +137,11 @@ impl Writer<'_> {
                         ("LineWidth", number(style_real(s.width_pt))),
                         (
                             "LineType",
-                            if s.pattern == LinePattern::Dashed {
-                                "Dashed"
-                            } else {
-                                "Solid"
+                            // ChemDraw has no wavy curve; its curves stay solid.
+                            match s.pattern {
+                                LinePattern::Dashed => "Dashed",
+                                LinePattern::Wavy if !curved => "Wavy",
+                                _ => "Solid",
                             }
                             .into(),
                         ),
@@ -480,6 +481,10 @@ impl Writer<'_> {
                 self.objects.push((g.id, n));
                 continue;
             }
+            if let Some(n) = self.native_shape(g, z)? {
+                self.objects.push((g.id, n));
+                continue;
+            }
             if let GraphicKind::Symbol(kind) = g.kind
                 && let Some(text) = kind.partial_charge_text()
             {
@@ -575,6 +580,10 @@ impl Writer<'_> {
                     };
                     if let Some(fill) = paint.fill {
                         let n = self.curve(target, points, *closed, fill, true, 0., false, z)?;
+                        if paint.effects.shaded && *closed {
+                            self.tree.set(n, "CurveType", "257")?;
+                            self.tree.set(n, "FillType", "Shaded")?;
+                        }
                         object = Some(if parent != self.page { parent } else { n });
                     }
                     if paint.width_pt > 0. {
@@ -603,6 +612,143 @@ impl Writer<'_> {
             }
         }
         Ok(middle)
+    }
+    /// A shaded or shadowed rectangle or oval as ChemDraw's own shape, so
+    /// ChemDraw keeps its style editable. Its one color is the fill's; an
+    /// outline in another color follows as a curve in the same group. Rotated
+    /// rectangles and wavy or dotted outlines stay curves; a wavy line without
+    /// heads becomes ChemDraw's line, the one shape ChemDraw draws wavy.
+    fn native_shape(&mut self, g: &crate::graphics::Graphic, z: usize) -> Result<Option<Key>> {
+        let style = &g.style;
+        let (o, x, y) = (P::from(g.origin), P::from(g.axis_x), P::from(g.axis_y));
+        let ellipse = g.kind == GraphicKind::Ellipse;
+        let line = g.kind == GraphicKind::Line
+            && style.pattern == LinePattern::Wavy
+            && g.heads
+                .is_none_or(|h| h.head == Head::None && h.tail == Head::None);
+        if !line
+            && (style.effects.is_plain()
+                || !matches!(
+                    g.kind,
+                    GraphicKind::Rectangle | GraphicKind::RoundedRectangle | GraphicKind::Ellipse
+                )
+                || matches!(style.pattern, LinePattern::Dotted | LinePattern::Wavy)
+                || !ellipse && (x.y != 0. || y.x != 0.))
+        {
+            return Ok(None);
+        }
+        // ChemDraw paints a shadowed outline white inside, so white is no fill.
+        let fill = style
+            .fill
+            .filter(|f| style.effects.shaded || self.palette.rgb(*f) != [255; 3]);
+        // A line keeps any fill it inherited unused; it is drawn in its stroke.
+        let fill = fill.filter(|_| !line);
+        let outline = fill.is_some_and(|f| self.palette.rgb(f) != self.palette.rgb(style.stroke));
+        let color = self.color(fill.unwrap_or(style.stroke))?;
+        let parent = if outline {
+            let id = self.id()?;
+            self.tree
+                .add(Some(self.page), "group", [("id", id), ("Z", z.to_string())])?
+        } else {
+            self.page
+        };
+        let mut attributes: Vec<(&str, String)> = vec![
+            ("id", self.id()?),
+            ("Z", z.to_string()),
+            ("LineWidth", number(real(style.width_pt))),
+            ("color", color),
+        ];
+        if line {
+            // Start first, so the waves come back on the same side.
+            attributes.extend([
+                ("GraphicType", "Line".into()),
+                ("LineType", "Wavy".into()),
+                (
+                    "BoundingBox",
+                    format!("{} {}", self.position(o), self.position(o.add(x.x, x.y))),
+                ),
+            ]);
+            return Ok(Some(self.tree.add(Some(parent), "graphic", attributes)?));
+        }
+        let (width, height) = (x.x.hypot(x.y), y.x.hypot(y.y));
+        let mut flags = vec![];
+        if g.kind == GraphicKind::RoundedRectangle {
+            flags.push("RoundEdge");
+        }
+        if ellipse && (width - height).abs() < 1e-6 && (x.x * y.x + x.y * y.y).abs() < 1e-6 {
+            flags.push("Circle");
+        }
+        if fill.is_some() {
+            flags.push(if style.effects.shaded {
+                "Shaded"
+            } else {
+                "Filled"
+            });
+        }
+        if style.pattern == LinePattern::Dashed {
+            flags.push("Dashed");
+        }
+        if let Some(d) = style.effects.shadow_pt {
+            flags.push(if ellipse { "Shadowed" } else { "Shadow" });
+            attributes.push(("ShadowSize", format!("{:.0}", real(d) * 100.)));
+        }
+        if ellipse {
+            let center = o.add((x.x + y.x) / 2., (x.y + y.y) / 2.);
+            let major = center.add(x.x / 2., x.y / 2.);
+            let minor = center.add(y.x / 2., y.y / 2.);
+            attributes.extend([
+                ("GraphicType", "Oval".into()),
+                ("OvalType", flags.join(" ")),
+                (
+                    "BoundingBox",
+                    format!("{} {}", self.position(major), self.position(center)),
+                ),
+                ("Center3D", format!("{} 0", self.position(center))),
+                ("MajorAxisEnd3D", format!("{} 0", self.position(major))),
+                ("MinorAxisEnd3D", format!("{} 0", self.position(minor))),
+            ]);
+        } else {
+            if flags.is_empty() {
+                flags.push("Plain");
+            }
+            attributes.extend([
+                ("GraphicType", "Rectangle".into()),
+                ("RectangleType", flags.join(" ")),
+                // ChemDraw writes the far corner first; reversed, it casts the
+                // shadow and the shading toward the top left.
+                (
+                    "BoundingBox",
+                    format!("{} {}", self.position(o.add(x.x, y.y)), self.position(o)),
+                ),
+            ]);
+            if g.kind == GraphicKind::RoundedRectangle {
+                let radius = real(g.corner_radius()) * self.scale;
+                attributes.push(("CornerRadius", format!("{:.0}", radius * 100.)));
+            }
+        }
+        let shape = self.tree.add(Some(parent), "graphic", attributes)?;
+        if !outline {
+            return Ok(Some(shape));
+        }
+        let commands = self
+            .options
+            .graphic_paths
+            .and_then(|p| p.get(&g.id))
+            .ok_or_else(|| invalid("Graphic export requires vector geometry"))?
+            .clone();
+        for (points, closed) in curve_points(&commands)? {
+            self.curve(
+                parent,
+                &points,
+                closed,
+                style.stroke,
+                false,
+                real(style.width_pt),
+                style.pattern == LinePattern::Dashed,
+                z,
+            )?;
+        }
+        Ok(Some(parent))
     }
     pub(super) fn bracket_superscript(
         &mut self,
