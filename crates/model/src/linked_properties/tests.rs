@@ -35,7 +35,11 @@ fn shown_doc(properties: &[Property], two: bool) -> (Document, Vec<u64>) {
 
 fn text(doc: &Document) -> &str {
     let id = doc.property_captions[0].annotation;
-    &doc.annotations.iter().find(|a| a.id == id).unwrap().text
+    &doc.annotations
+        .iter()
+        .find(|a| Some(a.id) == id)
+        .unwrap()
+        .text
 }
 
 /// Apply an edit the way the editor does, with undo.
@@ -721,4 +725,240 @@ fn typing_over_the_bold_name_keeps_it_bold() {
     });
     assert_eq!(doc.property_captions[0].custom_name, "Compound 3a");
     assert_eq!(bold(&doc), "Compound 3a");
+}
+
+/// The caption's rows as laid out, after wrapping.
+fn rows(caption: &Annotation) -> Vec<String> {
+    let mut rows: Vec<(f32, String)> = vec![];
+    for fragment in crate::typography::layout(&caption.text, &caption.format).fragments {
+        // Subscripts sit lower on the same row.
+        let near = crate::style::DEFAULT.world(caption.format.style.size_pt) * 0.5;
+        match rows
+            .iter_mut()
+            .find(|(y, _)| (y - fragment.position.y).abs() < near)
+        {
+            Some((_, row)) => row.push_str(&fragment.text),
+            None => rows.push((fragment.position.y, fragment.text)),
+        }
+    }
+    rows.into_iter().map(|(_, row)| row).collect()
+}
+
+#[test]
+fn the_name_line_wraps_like_a_shown_chemical_name() {
+    const NAME: &str = "2-(acetyloxy)benzoic acid";
+    let (mut doc, atoms) = shown_doc(&[Property::Name, Property::Weight], true);
+    let smiles = doc.property_captions[0].smiles.clone();
+    named(&mut doc, &smiles, NAME);
+    // Show chemical name wrapped the name to the molecule this way before
+    // the name joined the property caption.
+    let mut shown = doc.clone();
+    shown.property_captions.clear();
+    shown.annotations.clear();
+    crate::molecule_names::show(
+        &mut shown,
+        &atoms,
+        NAME.into(),
+        smiles,
+        TextFormat::default(),
+        false,
+    )
+    .unwrap();
+    let name = rows(&shown.annotations[0]);
+    assert_eq!(name, ["2-(acetyloxy)", "benzoic acid"]);
+    assert_eq!(
+        rows(&doc.annotations[0]),
+        [&name[..], &["Mol. Wt.: 94.11".into()]].concat()
+    );
+    // A property line wider than the name widens the caption instead of wrapping.
+    toggle(
+        &mut doc,
+        &atoms,
+        Property::Analysis,
+        TextFormat::default(),
+        true,
+    )
+    .unwrap();
+    let last = |doc: &Document| {
+        let rows = rows(&doc.annotations[0]);
+        rows[rows.len() - 2..].to_vec()
+    };
+    let expected = [
+        "Mol. Wt.: 94.11",
+        "Anal. Calcd for C6H6O: C, 76.57; H, 6.43",
+    ];
+    assert_eq!(last(&doc), expected);
+    // Larger text widens it again.
+    let mut history = History::default();
+    edit(&mut doc, &mut history, |doc| {
+        let caption = &mut doc.annotations[0];
+        let text = caption.text.clone();
+        caption
+            .format
+            .apply(&text, None, &crate::typography::StyleChange::Size(20.));
+    });
+    assert_eq!(last(&doc), expected);
+    // So does a larger property line alone.
+    edit(&mut doc, &mut history, |doc| {
+        let caption = &mut doc.annotations[0];
+        let text = caption.text.clone();
+        let line = text.rfind('\n').unwrap() + 1..text.len();
+        caption.format.apply(
+            &text,
+            Some(line),
+            &crate::typography::StyleChange::Size(24.),
+        );
+    });
+    assert_eq!(last(&doc), expected);
+    // Hiding the name unwraps the caption.
+    toggle(
+        &mut doc,
+        &atoms,
+        Property::Name,
+        TextFormat::default(),
+        true,
+    )
+    .unwrap();
+    assert_eq!(doc.annotations[0].format.width_pt, None);
+    assert!(!doc.annotations[0].format.name_breaks);
+}
+
+#[test]
+fn hiding_every_row_keeps_a_custom_name() {
+    let mut doc = Document::default();
+    let atoms = phenol(&mut doc, 0.);
+    rename(&mut doc, &atoms, "Compound 3a", TextFormat::default(), true).unwrap();
+    assert_eq!(text(&doc), "Compound 3a");
+    toggle(
+        &mut doc,
+        &atoms,
+        Property::Name,
+        TextFormat::default(),
+        true,
+    )
+    .unwrap();
+    // No caption, but the molecule keeps its name, in files and copies too.
+    assert!(doc.annotations.is_empty());
+    let link = caption(&doc, &atoms).unwrap();
+    assert_eq!(
+        (link.annotation, &link.custom_name[..]),
+        (None, "Compound 3a")
+    );
+    assert!(!shown(&doc, &atoms, Property::Name));
+    validate(&doc).unwrap();
+    let loaded = Document::from_json(&doc.file_json().unwrap()).unwrap();
+    assert_eq!(loaded.property_captions, doc.property_captions);
+    assert_eq!(
+        editing::selection(&doc, &atoms).property_captions,
+        doc.property_captions
+    );
+    // A name generated meanwhile waits for the caption.
+    let smiles = doc.property_captions[0].smiles.clone();
+    assert!(!named(&mut doc, &smiles, "phenol"));
+    // Showing a row again shows the name.
+    toggle(
+        &mut doc,
+        &atoms,
+        Property::Name,
+        TextFormat::default(),
+        true,
+    )
+    .unwrap();
+    assert_eq!(text(&doc), "Compound 3a");
+    assert_eq!(bold(&doc), "Compound 3a");
+    // Deleting the caption keeps the name too; deleting the molecule does not.
+    let mut history = History::default();
+    edit(&mut doc, &mut history, |doc| {
+        let id = doc.annotations[0].id;
+        doc.delete(&[id]);
+    });
+    assert_eq!(doc.property_captions[0].custom_name, "Compound 3a");
+    toggle(
+        &mut doc,
+        &atoms,
+        Property::Weight,
+        TextFormat::default(),
+        true,
+    )
+    .unwrap();
+    assert_eq!(text(&doc), "Mol. Wt.: 94.11");
+    edit(&mut doc, &mut history, |doc| doc.delete(&atoms));
+    assert!(doc.property_captions.is_empty() && doc.annotations.is_empty());
+}
+
+#[test]
+fn editing_another_line_keeps_a_custom_name() {
+    let (mut doc, atoms) = shown_doc(&[Property::Weight], true);
+    rename(&mut doc, &atoms, "Compound 3a", TextFormat::default(), true).unwrap();
+    let mut history = History::default();
+    edit(&mut doc, &mut history, |doc| {
+        retype(doc, "Compound 3a\nMol. Wt.: 94.11 measured")
+    });
+    // The caption is plain text; the molecule keeps its name.
+    assert_eq!(
+        doc.annotations[0].text,
+        "Compound 3a\nMol. Wt.: 94.11 measured"
+    );
+    let link = caption(&doc, &atoms).unwrap();
+    assert_eq!(
+        (link.annotation, &link.custom_name[..]),
+        (None, "Compound 3a")
+    );
+    // It follows its molecule through edits.
+    edit(&mut doc, &mut history, |doc| {
+        let carbon = doc.add_atom("C", Point::new(-60., 0.));
+        doc.add_bond(atoms[3], carbon, 1, "plain");
+    });
+    let link = &doc.property_captions[0];
+    assert_eq!(
+        (link.atoms.len(), link.custom_name.as_str()),
+        (8, "Compound 3a")
+    );
+    assert!(link.renamed_structure_changed());
+    let atoms = link.atoms.clone();
+    toggle(
+        &mut doc,
+        &atoms,
+        Property::Name,
+        TextFormat::default(),
+        true,
+    )
+    .unwrap();
+    assert_eq!(text(&doc), "Compound 3a");
+    assert_eq!(
+        doc.annotations[0].text,
+        "Compound 3a\nMol. Wt.: 94.11 measured"
+    );
+}
+
+#[test]
+fn joining_a_hidden_name_onto_a_caption_keeps_the_caption() {
+    let mut doc = Document::default();
+    let named = phenol(&mut doc, 0.);
+    let other = phenol(&mut doc, 200.);
+    rename(&mut doc, &named, "3a", TextFormat::default(), true).unwrap();
+    toggle(
+        &mut doc,
+        &named,
+        Property::Name,
+        TextFormat::default(),
+        true,
+    )
+    .unwrap();
+    toggle(
+        &mut doc,
+        &other,
+        Property::Weight,
+        TextFormat::default(),
+        true,
+    )
+    .unwrap();
+    // The hidden name comes first, the shown caption second.
+    assert_eq!(doc.property_captions[0].annotation, None);
+    let mut history = History::default();
+    edit(&mut doc, &mut history, |doc| {
+        doc.add_bond(named[6], other[3], 1, "plain");
+    });
+    assert_eq!(doc.property_captions.len(), 1);
+    assert_eq!(text(&doc), "Mol. Wt.: 186.21");
 }

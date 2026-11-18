@@ -63,7 +63,7 @@ async fn passive_linked_property_import_keeps_source_text_and_position_until_edi
         assert!(warnings.is_empty(), "{format}: {warnings:?}");
         assert_eq!(doc.property_captions.len(), 1);
         let link = &doc.property_captions[0];
-        let caption = doc.annotations.iter().find(|a| a.id == link.annotation).unwrap();
+        let caption = doc.annotations.iter().find(|a| Some(a.id) == link.annotation).unwrap();
         assert_eq!(caption.text, "Formula: author positioned source text");
         assert_eq!(link.text, caption.text);
         assert!(caption.position.distance(Point::new(250. * (42. / 14.4), 300. * (42. / 14.4))) < 0.001, "{format}: {:?}", caption.position);
@@ -73,7 +73,7 @@ async fn passive_linked_property_import_keeps_source_text_and_position_until_edi
         doc.atom_mut(atom).unwrap().position.x -= 70.;
         doc.bonds[0].order = 2;
         transaction::apply(&mut doc, &mut History::default(), before, false).unwrap();
-        let caption = doc.annotations.iter().find(|a| a.id == annotation).unwrap();
+        let caption = doc.annotations.iter().find(|a| Some(a.id) == annotation).unwrap();
         assert_eq!(caption.text, "Formula: CH2O");
         assert_ne!(caption.position, Point::new(250. * (42. / 14.4), 300. * (42. / 14.4)));
         assert_eq!(doc.property_captions.len(), 1);

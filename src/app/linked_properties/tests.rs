@@ -17,7 +17,7 @@ fn caption(app: &App) -> Option<&str> {
         .doc
         .annotations
         .iter()
-        .find(|a| a.id == link.annotation)
+        .find(|a| Some(a.id) == link.annotation)
         .map(|a| a.text.as_str())
 }
 
@@ -62,19 +62,58 @@ fn weight_captions_follow_the_two_decimal_setting() {
     let _ = app.update(Message::ToggleProperty(atoms.clone(), Property::Weight));
     assert_eq!(caption(&app), Some("Mol. Wt.: 46.07"));
     // With the caption selected, its text box in Properties follows too.
-    let id = app.tab.doc.property_captions[0].annotation;
+    let id = app.tab.doc.property_captions[0].annotation.unwrap();
     app.tab.selected = vec![id];
     app.sync_typography();
     app.view_action(TwoDecimalWeight(false));
     assert_eq!(caption(&app), Some("Mol. Wt.: 46.069"));
     assert_eq!(app.tab.caption, "Mol. Wt.: 46.069");
-    // One Undo step, and the next edit follows the setting again.
+    // One Undo step. Other edits leave the caption's precision alone.
     let _ = app.update(Message::Undo);
     assert_eq!(caption(&app), Some("Mol. Wt.: 46.07"));
     let before = app.tab.doc.clone();
     app.tab.doc.translate(&atoms, 10., 0.);
     app.changed(before);
-    assert_eq!(caption(&app), Some("Mol. Wt.: 46.069"));
+    assert_eq!(caption(&app), Some("Mol. Wt.: 46.07"));
+}
+
+#[tokio::test]
+async fn selecting_an_atom_leaves_an_imported_caption_alone() {
+    use crate::app::files::{Prepared, read};
+    use reshiki::engine::{LocalEngine, Request};
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/chemdraw-properties/phenol-props.cdx");
+    let Some((
+        _,
+        Ok(Prepared::Import {
+            format, contents, ..
+        }),
+    )) = read(path).await
+    else {
+        panic!("phenol-props.cdx");
+    };
+    let opened = LocalEngine::default()
+        .request(Request::import(format, &contents))
+        .await
+        .unwrap()
+        .document
+        .unwrap();
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    app.tab.doc = opened.clone();
+    app.tab.saved = opened.clone();
+    // ChemDraw wrote two decimals; this setting writes three.
+    assert!(!app.appearance.two_decimal_weight);
+    let carbon = app.tab.doc.property_captions[0].atoms[0];
+    let _ = app.update(Message::Canvas(crate::canvas::Edit::Select(vec![carbon])));
+    assert_eq!(app.tab.selected, [carbon]);
+    assert!(!app.tab.dirty());
+    assert_eq!(
+        caption(&app),
+        Some(
+            "Chemical formula: C6H6O\nExact mass: 94.04\nMolecular weight: 94.11\nElemental analysis: C, 76.57; H, 6.43; O, 17.00"
+        )
+    );
 }
 
 #[test]
@@ -84,7 +123,7 @@ fn weight_captions_in_other_tabs_follow_the_setting() {
     let atoms = ethanol(&mut app);
     app.appearance.two_decimal_weight = true;
     let _ = app.update(Message::ToggleProperty(atoms, Property::Weight));
-    app.tab.selected = vec![app.tab.doc.property_captions[0].annotation];
+    app.tab.selected = vec![app.tab.doc.property_captions[0].annotation.unwrap()];
     app.sync_typography();
     app.add_tab();
     app.inspector_open = false;
@@ -174,7 +213,7 @@ fn the_name_field_and_the_canvas_edit_one_name() {
     assert_eq!(caption(&app), Some("3a\nMol. Wt.: 46.07"));
     assert!(app.tab.naming.name_draft.is_none());
     // A double-click opens the caption with the name line selected.
-    let id = link(&app).annotation;
+    let id = link(&app).annotation.unwrap();
     let _ = app.update(Message::InlineText(inline_text::Action::Begin(
         Some(id),
         Point::default(),

@@ -103,7 +103,8 @@ pub fn selection(doc: &Document, ids: &[u64]) -> Document {
         ids.contains(&name.annotation) && name.atoms.iter().all(|id| ids.contains(id))
     });
     part.property_captions.retain(|link| {
-        ids.contains(&link.annotation) && link.atoms.iter().all(|id| ids.contains(id))
+        link.annotation.is_none_or(|id| ids.contains(&id))
+            && link.atoms.iter().all(|id| ids.contains(id))
     });
     part.reactions
         .retain(|r| r.ids().iter().all(|id| ids.contains(id)));
@@ -144,18 +145,18 @@ pub fn preserved_expansion_selection(doc: &Document, selected: &[u64]) -> Result
     let links = doc
         .molecule_names
         .iter()
-        .map(|n| (n.annotation, &n.atoms))
+        .map(|n| (Some(n.annotation), &n.atoms))
         .chain(
             doc.property_captions
                 .iter()
                 .map(|l| (l.annotation, &l.atoms)),
         );
     for (annotation, atoms) in links {
-        if ids.contains(&annotation) {
+        if annotation.is_some_and(|id| ids.contains(&id)) {
             ids.extend(atoms.iter().copied());
         }
         if atoms.iter().all(|id| ids.contains(id)) {
-            ids.insert(annotation);
+            ids.extend(annotation);
         } else if atoms.iter().any(|id| ids.contains(id)) {
             return Err(unsupported());
         }
@@ -226,8 +227,9 @@ pub fn preserved_expansion_selection(doc: &Document, selected: &[u64]) -> Result
         .retain(|r| r.ids().iter().all(|id| ids.contains(id)));
     part.molecule_names
         .retain(|n| ids.contains(&n.annotation) && n.atoms.iter().all(|id| ids.contains(id)));
-    part.property_captions
-        .retain(|n| ids.contains(&n.annotation) && n.atoms.iter().all(|id| ids.contains(id)));
+    part.property_captions.retain(|n| {
+        n.annotation.is_none_or(|id| ids.contains(&id)) && n.atoms.iter().all(|id| ids.contains(id))
+    });
     part.arrow_labels
         .retain(|l| ids.contains(&l.arrow) && ids.contains(&l.annotation));
     part.models
@@ -566,7 +568,7 @@ pub(crate) fn remap_ids(doc: &mut Document, mapping: &HashMap<u64, u64>) -> Opti
         name.atoms.iter_mut().try_for_each(map)?;
     }
     for link in property_captions {
-        map(&mut link.annotation)?;
+        link.annotation.iter_mut().try_for_each(map)?;
         link.atoms.iter_mut().try_for_each(map)?;
     }
     for a in arrows {
@@ -1023,7 +1025,51 @@ pub fn arrange(doc: &mut Document, ids: &[u64], action: Arrange) {
         action,
         Arrange::DistributeHorizontal | Arrange::DistributeVertical
     );
-    let groups = groups(doc, ids);
+    // Distributing a whole reaction spaces its molecules, not its `+` signs.
+    // Each sign follows the gap between the two molecules it separates
+    // instead, and the gap widens to make room for it. A reaction with a
+    // grouped molecule or sign is spaced as plain objects, which keeps the
+    // group as it is. `authored` is the drawing before spacing, holding only
+    // the reactions spaced this way.
+    let mut authored = None;
+    let mut spaced = ids.to_vec();
+    if distribute {
+        let selected: HashSet<_> = ids.iter().collect();
+        let grouped: HashSet<_> = doc.groups.iter().flat_map(|g| &g.members).collect();
+        let sign = |id: &u64| {
+            doc.annotations
+                .iter()
+                .any(|a| a.id == *id && a.text.trim() == "+")
+        };
+        let reactions: Vec<_> = doc
+            .reactions
+            .iter()
+            .filter(|reaction| {
+                crate::reactions::Role::ALL
+                    .iter()
+                    .flat_map(|role| reaction.participants(*role))
+                    .flat_map(|participant| &participant.atoms)
+                    .all(|id| selected.contains(id) && !grouped.contains(id))
+                    && !reaction
+                        .annotations
+                        .iter()
+                        .any(|id| grouped.contains(id) && sign(id))
+            })
+            .cloned()
+            .collect();
+        let signs: HashSet<_> = reactions
+            .iter()
+            .flat_map(|reaction| &reaction.annotations)
+            .filter(|id| sign(id))
+            .collect();
+        if !signs.is_empty() {
+            spaced.retain(|id| !signs.contains(id));
+            let mut before = doc.clone();
+            before.reactions = reactions;
+            authored = Some(before);
+        }
+    }
+    let groups = groups(doc, &spaced);
     if groups.is_empty() {
         return;
     }
@@ -1071,6 +1117,9 @@ pub fn arrange(doc: &mut Document, ids: &[u64], action: Arrange) {
         target += coordinate(max) - coordinate(min) + gap;
     }
     doc.translate_units(&moves);
+    if let Some(authored) = authored {
+        crate::reaction_mapping::reflow_separators(&authored, doc);
+    }
 }
 
 pub fn nearest_bond(doc: &Document, p: Point, r: f32) -> Option<usize> {

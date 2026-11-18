@@ -790,7 +790,7 @@ impl Writer<'_> {
             let caption = self
                 .objects
                 .iter()
-                .find(|(id, _)| *id == link.annotation)
+                .find(|(id, _)| Some(*id) == link.annotation)
                 .map(|(_, key)| *key)
                 .ok_or_else(|| invalid("Missing property caption"))?;
             let atoms = link
@@ -850,7 +850,7 @@ impl Writer<'_> {
         for a in &doc.annotations {
             let measured = self.options.text_layout.and_then(|t| t.get(&a.id));
             let named = doc.property_captions.iter().any(|link| {
-                link.annotation == a.id
+                link.annotation == Some(a.id)
                     && link.properties.first() == Some(&Property::Name)
                     && chemdraw_types(link).is_some()
             });
@@ -875,6 +875,12 @@ impl Writer<'_> {
                 let mut format = a.format.clone();
                 // Its own first letter's style sets the part's line height.
                 format.style = a.format.at(range.start).clone();
+                // Only the name wraps; ChemDraw's own metrics must not wrap a
+                // property line.
+                if range.start > 0 {
+                    format.width_pt = None;
+                    format.name_breaks = false;
+                }
                 format.spans = a
                     .format
                     .spans

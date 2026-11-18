@@ -4,7 +4,8 @@
 //! The caption is an ordinary annotation, so every export keeps its text.
 //! Editing a property line makes it plain text, as with linked chemical names;
 //! editing the name line sets a custom name instead. Deleting the molecule
-//! removes it.
+//! removes it. A custom name stays with the molecule when its caption is
+//! hidden or becomes plain text.
 //!
 //! The name line shows a custom name, or the automatic name the app generates
 //! with the local name generator, which runs outside the transaction. An edit
@@ -75,7 +76,9 @@ impl Property {
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct PropertyCaption {
-    pub annotation: u64,
+    /// The caption; none when the link only keeps a custom name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub annotation: Option<u64>,
     /// Every atom of the molecule, in drawing order.
     pub atoms: Vec<u64>,
     /// In [`Property::ALL`] order.
@@ -122,6 +125,14 @@ impl PropertyCaption {
     /// A name line the app still has to generate.
     pub fn needs_name(&self) -> bool {
         self.properties.contains(&Property::Name) && self.name.is_empty() && !self.smiles.is_empty()
+    }
+
+    /// Hide the caption. Returns whether the link stays to keep a custom name.
+    fn detach(&mut self) -> bool {
+        self.annotation = None;
+        self.properties.clear();
+        self.text.clear();
+        !self.custom_name.is_empty()
     }
 
     /// Follow the molecule's identity. A new structure drops the automatic name.
@@ -267,8 +278,8 @@ fn refresh(
     shown: &[Property],
 ) {
     let (text, formulas) = write(values(doc, &link.atoms).as_ref(), link);
+    let width = caption.size().0;
     if text != caption.text {
-        let center = caption.position.x + caption.size().0 / 2.;
         let mut lines = HashMap::new();
         let mut start = 0;
         for (property, line) in shown.iter().zip(caption.text.split('\n')) {
@@ -283,18 +294,7 @@ fn refresh(
             // A new or emptied line takes the default style.
             let new = lines.get(property).is_none_or(|line| line.is_empty());
             let old = lines.get(property).cloned().unwrap_or_default();
-            let mut format = caption.format.clone();
-            format.spans = caption
-                .format
-                .spans
-                .iter()
-                .filter(|s| s.start < old.end && old.start < s.end)
-                .map(|s| TextSpan {
-                    start: s.start.max(old.start) - old.start,
-                    end: s.end.min(old.end) - old.start,
-                    style: s.style.clone(),
-                })
-                .collect();
+            let mut format = part(&caption.format, old.clone());
             let old = &caption.text[old];
             // An empty range at the end makes `edited` find the changed part.
             format.edited(old, line, old.len()..old.len());
@@ -314,7 +314,6 @@ fn refresh(
         }
         caption.format.pack(&text, styles);
         caption.text = text.clone();
-        caption.position.x = center - caption.size().0 / 2.;
     }
     // A new name, typed or generated, takes the style of its first letter
     // throughout, so typing over a bold name keeps it bold.
@@ -334,7 +333,63 @@ fn refresh(
             .collect();
         caption.format.pack(&text, styles);
     }
+    wrap(doc, link, caption);
+    // The caption stays centered under the molecule.
+    caption.position.x += (width - caption.size().0) / 2.;
     link.text = text;
+}
+
+/// The format of part of a caption, unwrapped.
+fn part(format: &TextFormat, range: Range<usize>) -> TextFormat {
+    TextFormat {
+        spans: format
+            .spans
+            .iter()
+            .filter(|s| s.start < range.end && range.start < s.end)
+            .map(|s| TextSpan {
+                start: s.start.max(range.start) - range.start,
+                end: s.end.min(range.end) - range.start,
+                style: s.style.clone(),
+            })
+            .collect(),
+        width_pt: None,
+        ..format.clone()
+    }
+}
+
+/// A name line wraps like a shown chemical name: to the molecule's width,
+/// between three and six bond lengths. Property lines never wrap. A caption
+/// without a name line keeps its own width, unless it is one this set.
+fn wrap(doc: &Document, link: &PropertyCaption, caption: &mut Annotation) {
+    let bounds = (link.properties.first() == Some(&Property::Name))
+        .then(|| crate::scene::selection_bounds(doc, &link.atoms))
+        .flatten();
+    let Some((lo, hi)) = bounds else {
+        if caption.format.name_breaks {
+            caption.format.width_pt = None;
+            caption.format.name_breaks = false;
+        }
+        return;
+    };
+    let text = &caption.text;
+    let natural = |range: Range<usize>| {
+        crate::typography::layout(&text[range.clone()], &part(&caption.format, range)).width
+    };
+    let end = text.find('\n').unwrap_or(text.len());
+    let bond = doc.drawing_style.bond_length_world;
+    let name = (hi.x - lo.x)
+        .max(bond * 3.)
+        .max(natural(0..end).min(bond * 6.));
+    let properties = if end < text.len() {
+        natural(end + 1..text.len())
+    } else {
+        0.
+    };
+    // Whole points, rounded up, so no property line wraps, within the
+    // widest text box.
+    let points = f64::from(name.max(properties)) * f64::from(doc.drawing_style.points_per_world());
+    caption.format.width_pt = Some(points.ceil().min(2000.) as f32);
+    caption.format.name_breaks = true;
 }
 
 /// The molecule's bottom center, which its caption follows.
@@ -345,7 +400,8 @@ fn anchor(doc: &Document, atoms: &[u64]) -> Option<Point> {
 
 /// Show or hide one property of the molecule made of `atoms`, which must be
 /// one whole connected component. The first property adds the caption below
-/// the molecule. Hiding the last removes it.
+/// the molecule. Hiding the last removes it, and the link stays only to keep a
+/// custom name.
 pub fn toggle(
     doc: &mut Document,
     atoms: &[u64],
@@ -364,34 +420,34 @@ pub fn toggle(
         .property_captions
         .iter()
         .position(|link| covers(link, &whole));
-    let mut link = match index {
-        Some(index) => doc.property_captions.remove(index),
-        None => {
-            let (_, hi) =
-                crate::scene::selection_bounds(doc, atoms).ok_or("The molecule has no bounds")?;
-            format.spans.clear();
-            format.style.formula = false;
-            format.style.script = Script::Normal;
-            format.style.size_pt = format.style.size_pt.max(doc.drawing_style.font_size_pt);
-            format.alignment = TextAlign::Center;
-            format.width_pt = None;
-            format.name_breaks = false;
-            let id = doc.next_id();
-            let gap = doc.drawing_style.font_size().max(12.) * 0.5;
-            let center = anchor(doc, atoms).map_or(0., |p| p.x);
-            doc.annotations.push(Annotation {
-                id,
-                position: Point::new(center, hi.y + gap),
-                text: String::new(),
-                format,
-            });
-            PropertyCaption {
-                annotation: id,
-                two_decimal_weight,
-                ..Default::default()
-            }
-        }
-    };
+    let mut link = index.map_or_else(
+        || PropertyCaption {
+            two_decimal_weight,
+            ..Default::default()
+        },
+        |index| doc.property_captions.remove(index),
+    );
+    if link.annotation.is_none() {
+        let (_, hi) =
+            crate::scene::selection_bounds(doc, atoms).ok_or("The molecule has no bounds")?;
+        format.spans.clear();
+        format.style.formula = false;
+        format.style.script = Script::Normal;
+        format.style.size_pt = format.style.size_pt.max(doc.drawing_style.font_size_pt);
+        format.alignment = TextAlign::Center;
+        format.width_pt = None;
+        format.name_breaks = false;
+        let id = doc.next_id();
+        let gap = doc.drawing_style.font_size().max(12.) * 0.5;
+        let center = anchor(doc, atoms).map_or(0., |p| p.x);
+        doc.annotations.push(Annotation {
+            id,
+            position: Point::new(center, hi.y + gap),
+            text: String::new(),
+            format,
+        });
+        link.annotation = Some(id);
+    }
     let shown = link.properties.clone();
     if link.properties.contains(&property) {
         link.properties.retain(|p| *p != property);
@@ -401,7 +457,10 @@ pub fn toggle(
             .sort_by_key(|p| Property::ALL.iter().position(|q| q == p));
     }
     if link.properties.is_empty() {
-        doc.delete(&[link.annotation]);
+        doc.delete(link.annotation.as_slice());
+        if link.detach() {
+            doc.property_captions.push(link);
+        }
         return Ok(());
     }
     link.atoms = whole;
@@ -426,11 +485,11 @@ fn rewrite(
     let mut caption = doc
         .annotations
         .iter()
-        .find(|a| a.id == link.annotation)
+        .find(|a| Some(a.id) == link.annotation)
         .cloned()
         .ok_or("The property caption is missing")?;
     refresh(doc, &mut link, &mut caption, shown);
-    if let Some(current) = doc.annotations.iter_mut().find(|a| a.id == link.annotation) {
+    if let Some(current) = doc.annotations.iter_mut().find(|a| a.id == caption.id) {
         *current = caption;
     }
     doc.property_captions.push(link);
@@ -488,19 +547,23 @@ fn set_custom(link: &mut PropertyCaption, name: &str) {
 pub fn named(doc: &mut Document, smiles: &str, name: &str) -> bool {
     let mut changed = false;
     for mut link in std::mem::take(&mut doc.property_captions) {
-        if link.smiles == smiles && link.name.is_empty() && link.tracks_name() {
+        // A link without a caption is named again when it shows one.
+        if link.smiles == smiles
+            && link.name.is_empty()
+            && link.tracks_name()
+            && link.annotation.is_some()
+        {
             link.name = name.into();
             changed = true;
             if let Some(mut caption) = doc
                 .annotations
                 .iter()
-                .find(|a| a.id == link.annotation)
+                .find(|a| Some(a.id) == link.annotation)
                 .cloned()
             {
                 let shown = link.properties.clone();
                 refresh(doc, &mut link, &mut caption, &shown);
-                if let Some(current) = doc.annotations.iter_mut().find(|a| a.id == link.annotation)
-                {
+                if let Some(current) = doc.annotations.iter_mut().find(|a| a.id == caption.id) {
                     *current = caption;
                 }
             }
@@ -552,32 +615,39 @@ fn chemistry(doc: &Document, atoms: &[u64]) -> (Vec<Atom>, Vec<Bond>) {
 }
 
 /// Called in the same transaction as the edit: each linked caption follows its
-/// molecule's atoms and position. Edited text unlinks it. A deleted molecule
-/// removes its caption. Molecules joined together keep the first caption, and
-/// a split molecule keeps its caption on the largest piece. Only a molecule
-/// whose atoms or bonds changed is recalculated; an empty `before`
-/// recalculates every caption.
+/// molecule's atoms and position. Edited text unlinks it, keeping only a
+/// custom name. A deleted molecule removes its caption. Molecules joined together keep the first caption, and
+/// a split molecule keeps its caption on the largest piece; a shown caption
+/// wins over a link that only keeps a name. Only a molecule whose atoms or
+/// bonds changed is recalculated; an empty `before` recalculates every caption.
 pub fn reconcile(doc: &mut Document, before: &Document) {
-    let links = std::mem::take(&mut doc.property_captions);
+    let mut links: Vec<_> = std::mem::take(&mut doc.property_captions)
+        .into_iter()
+        .enumerate()
+        .collect();
+    links.sort_by_key(|(_, link)| link.annotation.is_none());
+    let mut kept = vec![];
     let mut claimed = HashSet::new();
-    for mut link in links {
-        let Some(mut caption) = doc
+    for (index, mut link) in links {
+        let mut caption = doc
             .annotations
             .iter()
-            .find(|a| a.id == link.annotation)
-            .cloned()
-        else {
-            continue;
-        };
+            .find(|a| Some(a.id) == link.annotation)
+            .cloned();
         // Typing over the name line names the molecule; any other change to
         // the text makes it plain text.
-        let typed = if caption.text == link.text {
-            None
-        } else if let Some(name) = typed_name(&link, &caption.text) {
-            Some(name.to_owned())
-        } else {
+        let mut typed = None;
+        if let Some(text) = caption.as_ref().map(|c| &c.text)
+            && *text != link.text
+        {
+            typed = typed_name(&link, text).map(str::to_owned);
+            if typed.is_none() {
+                caption = None;
+            }
+        }
+        if caption.is_none() && link.annotation.is_some() && !link.detach() {
             continue;
-        };
+        }
         let mut seen = HashSet::new();
         let mut whole = vec![];
         for id in &link.atoms {
@@ -590,20 +660,23 @@ pub fn reconcile(doc: &mut Document, before: &Document) {
             }
         }
         if whole.is_empty() || whole.iter().any(|id| claimed.contains(id)) {
-            doc.delete(&[link.annotation]);
+            doc.delete(link.annotation.as_slice());
             continue;
         }
         claimed.extend(whole.iter().copied());
-        let previous = before
-            .property_captions
-            .iter()
-            .find(|old| old.annotation == link.annotation);
+        // A link without a caption is known by its atoms.
+        let previous = before.property_captions.iter().find(|old| {
+            old.annotation == link.annotation
+                && (link.annotation.is_some() || old.atoms == link.atoms)
+        });
         let shift = previous
             .filter(|_| {
-                before
-                    .annotations
-                    .iter()
-                    .any(|a| a.id == link.annotation && a.position == caption.position)
+                caption.as_ref().is_some_and(|caption| {
+                    before
+                        .annotations
+                        .iter()
+                        .any(|a| a.id == caption.id && a.position == caption.position)
+                })
             })
             .and_then(|old| anchor(before, &old.atoms));
         let same = previous.is_some_and(|old| {
@@ -630,32 +703,58 @@ pub fn reconcile(doc: &mut Document, before: &Document) {
         if let Some(name) = typed {
             set_custom(&mut link, &name);
         }
-        if !unchanged {
-            let shown = link.properties.clone();
-            refresh(doc, &mut link, &mut caption, &shown);
+        if let Some(mut caption) = caption {
+            if !unchanged {
+                let shown = link.properties.clone();
+                refresh(doc, &mut link, &mut caption, &shown);
+            } else if link.properties.first() == Some(&Property::Name)
+                && (reshaped(before, doc, &link.atoms)
+                    || before.annotations.iter().any(|old| {
+                        old.id == caption.id
+                            && TextFormat {
+                                width_pt: caption.format.width_pt,
+                                name_breaks: caption.format.name_breaks,
+                                ..old.format.clone()
+                            } != caption.format
+                    }))
+            {
+                // Restyled text or a reshaped molecule wraps the name again;
+                // a width set by hand stays until the values change.
+                let width = caption.size().0;
+                wrap(doc, &link, &mut caption);
+                caption.position.x += (width - caption.size().0) / 2.;
+            }
+            if let Some((from, to)) = shift.zip(anchor(doc, &link.atoms)) {
+                caption.position = caption.position.offset(to.x - from.x, to.y - from.y);
+            }
+            if let Some(current) = doc.annotations.iter_mut().find(|a| a.id == caption.id) {
+                *current = caption;
+            }
         }
-        if let Some((from, to)) = shift.zip(anchor(doc, &link.atoms)) {
-            caption.position = caption.position.offset(to.x - from.x, to.y - from.y);
-        }
-        if let Some(current) = doc.annotations.iter_mut().find(|a| a.id == link.annotation) {
-            *current = caption;
-        }
-        doc.property_captions.push(link);
+        kept.push((index, link));
     }
+    kept.sort_by_key(|(index, _)| *index);
+    doc.property_captions = kept.into_iter().map(|(_, link)| link).collect();
 }
 
 /// Prune links after explicit deletion: a caption whose molecule is gone goes
-/// with it, unless its text was edited.
+/// with it, unless its text was edited. A deleted caption keeps only a custom
+/// name.
 pub fn prune(doc: &mut Document) {
     let mut removed = Vec::new();
     let atoms: HashSet<_> = doc.atoms.iter().map(|a| a.id).collect();
     doc.property_captions.retain_mut(|link| {
         link.atoms.retain(|id| atoms.contains(id));
-        let caption = doc.annotations.iter().find(|a| a.id == link.annotation);
-        if link.atoms.is_empty() && caption.is_some_and(|a| a.text == link.text) {
-            removed.push(link.annotation);
+        let caption = doc
+            .annotations
+            .iter()
+            .find(|a| Some(a.id) == link.annotation);
+        if link.atoms.is_empty()
+            && let Some(caption) = caption.filter(|a| a.text == link.text)
+        {
+            removed.push(caption.id);
         }
-        !link.atoms.is_empty() && caption.is_some()
+        !link.atoms.is_empty() && (caption.is_some() || link.detach())
     });
     doc.annotations.retain(|a| !removed.contains(&a.id));
 }
@@ -665,20 +764,26 @@ pub fn validate(doc: &Document) -> Result<(), String> {
     let mut atoms = HashSet::new();
     for link in &doc.property_captions {
         let mut properties = HashSet::new();
-        if !captions.insert(link.annotation)
-            || !doc.annotations.iter().any(|a| a.id == link.annotation)
-            || doc
-                .molecule_names
-                .iter()
-                .any(|n| n.annotation == link.annotation)
+        let caption = match link.annotation {
+            Some(id) => {
+                captions.insert(id)
+                    && doc.annotations.iter().any(|a| a.id == id)
+                    && !doc.molecule_names.iter().any(|n| n.annotation == id)
+                    && !link.properties.is_empty()
+                    && !link.text.is_empty()
+            }
+            // Only a custom name is kept without a caption.
+            None => {
+                link.properties.is_empty() && link.text.is_empty() && !link.custom_name.is_empty()
+            }
+        };
+        if !caption
             || link.atoms.is_empty()
             || link
                 .atoms
                 .iter()
                 .any(|id| !atoms.insert(*id) || doc.atom(*id).is_none())
-            || link.properties.is_empty()
             || !link.properties.iter().all(|p| properties.insert(*p))
-            || link.text.is_empty()
             || link.name.contains('\n')
             || link.custom_name.contains('\n')
         {

@@ -1005,7 +1005,7 @@ fn look(doc: &Document, object: Object, id: u64) -> (Value, Value) {
             let caption = doc
                 .property_captions
                 .iter()
-                .find(|caption| caption.annotation == id)
+                .find(|caption| caption.annotation == Some(id))
                 .map(|caption| json(&caption.properties));
             (
                 style,

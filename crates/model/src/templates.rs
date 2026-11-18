@@ -1030,7 +1030,7 @@ impl Attachment<'_> {
         let repeated: Vec<_> = property_captions
             .iter()
             .filter(|link| link.atoms.is_empty())
-            .map(|link| link.annotation)
+            .filter_map(|link| link.annotation)
             .collect();
         annotations.retain(|a| !repeated.contains(&a.id));
         property_captions.retain(|link| !link.atoms.is_empty());

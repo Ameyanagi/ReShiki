@@ -15,7 +15,11 @@ fn xml(d: &Document) -> String {
 }
 fn caption(d: &Document) -> &str {
     let id = d.property_captions[0].annotation;
-    &d.annotations.iter().find(|a| a.id == id).unwrap().text
+    &d.annotations
+        .iter()
+        .find(|a| Some(a.id) == id)
+        .unwrap()
+        .text
 }
 
 #[test]
@@ -120,6 +124,12 @@ fn chemdraw_captions_on_parts_of_one_molecule_keep_the_second_as_text() {
     assert_eq!(caption(d), "Formula: C");
     assert!(d.annotations.iter().any(|a| a.text == "Formula: O"));
     assert_eq!(imported.notices.len(), 1);
+    // The link covers the molecule, so an edit that leaves it alone, such as
+    // a selection, keeps the text.
+    assert_eq!(d.property_captions[0].atoms.len(), 7);
+    let mut kept = d.clone();
+    assert!(crate::transaction::reconcile(&mut kept, d.clone()).is_ok());
+    assert_eq!(&kept, d);
 }
 
 fn phenol() -> (Document, Vec<u64>) {
@@ -205,7 +215,7 @@ fn the_name_line_exports_as_plain_text_above_linked_properties() {
             let line = back
                 .annotations
                 .iter()
-                .find(|a| a.id == back.property_captions[0].annotation)
+                .find(|a| Some(a.id) == back.property_captions[0].annotation)
                 .unwrap();
             assert!(text.position.y < line.position.y);
             assert!(!line.format.at(0).bold);
@@ -237,6 +247,12 @@ fn the_name_line_exports_as_plain_text_above_linked_properties() {
     // At 40 pt the name wraps to five 12 pt rows; the weight comes after them.
     let rows = (baseline("Mol. Wt.") - baseline("Compound 3a")) / 12.;
     assert!(rows > 4.99, "{rows} rows apart: {x}");
+    // Only the name wraps in ChemDraw too.
+    let wraps = |text: &str| {
+        let t = x.split("<t ").find(|t| t.contains(text)).unwrap();
+        t[..t.find('>').unwrap()].contains("WordWrapWidth")
+    };
+    assert!(wraps("Compound 3a") && !wraps("Mol. Wt."), "{x}");
     // Grouped with its molecule, the name stays in the group in ChemDraw.
     let ids = d.all_ids();
     d.group_selection(&ids).unwrap();

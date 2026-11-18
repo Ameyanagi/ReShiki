@@ -336,7 +336,7 @@ pub fn prune(doc: &mut Document) {
         .molecule_names
         .iter()
         .map(|n| n.annotation)
-        .chain(doc.property_captions.iter().map(|l| l.annotation))
+        .chain(doc.property_captions.iter().filter_map(|l| l.annotation))
         .collect();
     doc.arrow_labels.retain(|l| {
         arrows.contains(&l.arrow)
@@ -381,7 +381,7 @@ pub fn reconcile(doc: &mut Document, before: &Document) {
         .molecule_names
         .iter()
         .map(|n| n.annotation)
-        .chain(doc.property_captions.iter().map(|l| l.annotation))
+        .chain(doc.property_captions.iter().filter_map(|l| l.annotation))
         .collect();
     let candidates: Vec<u64> = doc
         .annotations

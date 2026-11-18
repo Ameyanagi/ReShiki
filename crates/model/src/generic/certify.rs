@@ -298,7 +298,9 @@ pub(super) fn certify_translation(
         }
     }
     for n in property_captions {
-        undo(&mut n.annotation)?;
+        if let Some(id) = &mut n.annotation {
+            undo(id)?;
+        }
         for id in &mut n.atoms {
             undo(id)?;
         }

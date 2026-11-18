@@ -234,7 +234,7 @@ impl App {
                 // the molecule and keeps the caption linked.
                 let name_line = id.is_some_and(|id| {
                     self.tab.doc.property_captions.iter().any(|link| {
-                        link.annotation == id
+                        link.annotation == Some(id)
                             && link.properties.first()
                                 == Some(&reshiki::linked_properties::Property::Name)
                     })
