@@ -486,9 +486,9 @@ DISK_IMAGE_DELAYS_SECONDS = (5, 10, 20, 40)
 
 
 def create_disk_image(staging, output, *, sleep=time.sleep):
-    # Compress to LZMA (ULMO) in a second step: straight from a folder it has
-    # failed with "No space left on device", and where it works the download
-    # is larger (about 2 MB of 26 MB on macOS 27).
+    # Creating an LZMA (ULMO) image straight from a folder has failed with "No
+    # space left on device", so compress in a second step. (On macOS 27 the
+    # direct image of the 0.16.0 app was also 27.5-28.5 MB against 25.7 MB.)
     # Left to size the image itself, hdiutil made it too small on the Intel
     # runner and the copy into it failed with "No space left on device" (a
     # sparse file does the same anywhere). Size it from file lengths with
@@ -508,9 +508,10 @@ def create_disk_image(staging, output, *, sleep=time.sleep):
                     command += ["-size", f"{megabytes}m", "-format", "UDZO", "-ov", zlib]
                 else:
                     # On hosted runners "convert" has failed at once with
-                    # "Resource temporarily unavailable", three times over 20 s,
-                    # as if the image just created were still held. Each attempt
-                    # reads a fresh copy, a new file that nothing else has open.
+                    # "Resource temporarily unavailable", three times over 20 s.
+                    # hdiutil reports that when it cannot lock an image file;
+                    # what held the lock is unknown. In case it is the image
+                    # just created, each attempt reads a fresh copy of it.
                     source = Path(temporary) / f"zlib copy {attempt}.dmg"
                     shutil.copyfile(zlib, source)
                     command = ["hdiutil", "convert", source, "-format", "ULMO", "-ov", "-o", output]

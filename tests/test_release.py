@@ -643,14 +643,26 @@ class TransientRetryTests(unittest.TestCase):
     def test_disk_image_creation_raises_after_the_last_attempt(self):
         import installers
 
+        # "create" writes the image; every "convert" then fails.
+        sources = []
+
+        def fake(command):
+            if command[1] == "create":
+                command[-1].write_bytes(b"zlib image")
+                return
+            sources.append((command[2], command[2].read_bytes()))
+            raise self.failure(["hdiutil"])
+
         waits = []
         with (
-            patch("installers.run", side_effect=self.failure(["hdiutil"])) as run,
+            patch("installers.run", side_effect=fake),
             redirect_stdout(io.StringIO()),
             self.assertRaises(subprocess.CalledProcessError),
         ):
             installers.create_disk_image(Path("contents"), Path("out.dmg"), sleep=waits.append)
-        self.assertEqual(run.call_count, 5)
+        # Five attempts, each on its own real copy of the created image.
+        self.assertEqual(len({source for source, _ in sources}), 5)
+        self.assertEqual([content for _, content in sources], [b"zlib image"] * 5)
         self.assertEqual(waits, [5, 10, 20, 40])
 
 
