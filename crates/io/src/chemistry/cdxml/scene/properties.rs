@@ -72,7 +72,7 @@ pub(super) fn read(
             continue;
         }
         links.push(PropertyCaption {
-            annotation: caption,
+            annotation: Some(caption),
             atoms: atoms.into_iter().collect(),
             properties,
             two_decimal_weight: true,

@@ -454,7 +454,8 @@ impl App {
     fn show_default_property(&mut self, page: Page) {
         if page == Page::Properties
             && let Some(target) = self.context_property_target()
-            && reshiki::linked_properties::caption(&self.tab.doc, &target).is_none()
+            && reshiki::linked_properties::caption(&self.tab.doc, &target)
+                .is_none_or(|link| link.properties.is_empty())
         {
             self.toggle_property(&target, reshiki::linked_properties::Property::Weight);
         }

@@ -130,7 +130,7 @@ pub fn is_caption(doc: &Document, id: u64) -> bool {
         || doc
             .property_captions
             .iter()
-            .any(|link| link.annotation == id)
+            .any(|link| link.annotation == Some(id))
 }
 
 /// A chemical connected component, independent of drawing groups and captions.
@@ -223,7 +223,7 @@ pub fn include_annotations(doc: &Document, ids: &[u64]) -> Vec<u64> {
         .chain(
             doc.property_captions
                 .iter()
-                .map(|l| (l.annotation, &l.atoms)),
+                .filter_map(|l| Some((l.annotation?, &l.atoms))),
         );
     for (annotation, atoms) in links {
         if atoms.iter().all(|id| selected.contains(id)) {

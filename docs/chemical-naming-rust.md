@@ -74,7 +74,12 @@ Both change the same name, and the caption stays linked. Choose ↺ beside the
 field, or clear the name, to go back to the automatic name. A custom name stays
 when the structure changes; the panel then notes "Structure changed since you
 named it." Editing a property line instead (Mol. Wt. and below) turns the
-caption into ordinary text.
+caption into ordinary text. The molecule keeps a custom name when its caption
+becomes ordinary text, is deleted, or loses its last row, and shows it again
+with the **Name** row.
+
+A long name wraps under its molecule, as **Show chemical name** did before the
+name joined the caption. The property lines below it stay on one line each.
 
 A salt's ions are separate molecules, so **Show chemical name** on a salt
 places one name caption under all of its ions instead, as before. That caption,
