@@ -19,7 +19,9 @@ and `packages/headless/package.json` are unchanged. The source is `main` at
 [PR #1234](https://github.com/Ameyanagi/ReShiki/pull/1234), 57 first-parent
 merges after v0.15.0. Fixes merged to `main` for this release after that were folded in
 the same way: [PR #1241](https://github.com/Ameyanagi/ReShiki/pull/1241)
-(rings join the atoms they land on), at `524ac765`.
+(rings join the atoms they land on), at `524ac765`, and
+[PR #1243](https://github.com/Ameyanagi/ReShiki/pull/1243) (live reference
+oracles, no user-facing change), at `077815e1`.
 
 `VERSION` is 39 in `crates/model/src/document.rs`. `Document::file_version`
 saves each drawing at the version of the newest feature it uses: 39 for a
@@ -122,8 +124,8 @@ Manual **Release builds**
 [run 44269689222](https://github.com/Ameyanagi/ReShiki/actions/runs/44269689222)
 at `f25ab7eb`: **failed**. Every package passed except macOS x64 (Intel), where
 `hdiutil` failed while creating the disk image with "No space left on device".
-A fix is in progress (branch `fix/intel-dmg-space`), and the run will be
-repeated after it merges.
+A fix is in progress (branch `fix/intel-dmg-space`). The confirmation run
+will be repeated on the final `main` before the tag.
 
 ## Live RDKit reference suite
 
@@ -142,8 +144,12 @@ The same 6 tests failed on all three platforms:
 | 2     | `engine_migration`: `native_drawings_match_the_original_python_importer`                   |
 | 3     | `native_import`: `drawing_and_coordinate_reactions_match_complete_original_responses`      |
 
-A fix is in progress (branch `fix/live-reference-016`), and the run will be
-repeated after it merges.
+All six were reference oracles left behind by changes merged since 0.15.0;
+the application was right in each case.
+[PR #1243](https://github.com/Ameyanagi/ReShiki/pull/1243) updates them,
+changing only files under `reference/`, and the four macOS arm64 live shards
+pass locally with it. The confirmation run will be repeated on the final
+`main` before the tag.
 
 ## Focus after closing reviews
 
@@ -300,7 +306,13 @@ Moved from the [release notes](../changes-0.16.md).
   [#1201](https://github.com/Ameyanagi/ReShiki/pull/1201);
   [CI](../development.md#ci)). The live reference shards are rebalanced from
   measured durations, cached, and run in their own concurrency group
-  ([#1174](https://github.com/Ameyanagi/ReShiki/pull/1174)).
+  ([#1174](https://github.com/Ameyanagi/ReShiki/pull/1174)). Six live
+  reference oracles left behind by
+  [#1184](https://github.com/Ameyanagi/ReShiki/pull/1184) and
+  [#1214](https://github.com/Ameyanagi/ReShiki/pull/1214) now expect the
+  error that names the 64-level nesting limit, CDX coordinates kept at their
+  exact 16.16 value, and CDXML without `BondLength` read at the 30 pt default
+  ([#1243](https://github.com/Ameyanagi/ReShiki/pull/1243)).
 - **0.15.0 release validation.** The preparation record of 0.15.0.
   [Validation record](release-0.15.0-validation.md) ·
   [PR #1170](https://github.com/Ameyanagi/ReShiki/pull/1170).
