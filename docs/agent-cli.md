@@ -420,7 +420,7 @@ lines with the long text fields cut:
   },
   "versions": {
     "app": "0.15.0",
-    "document": 38,
+    "document": 39,
     "engine_protocol": 1,
     "operation_api": 2
   },
