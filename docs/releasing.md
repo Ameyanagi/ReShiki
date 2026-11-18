@@ -205,7 +205,7 @@ After that, every version tag publishes to npm with no further steps.
 
 ## Configure PyPI publishing
 
-The **pypi** job publishes with [PyPI trusted publishing](https://docs.pypi.org/trusted-publishers/) (OIDC) from the `pypi` GitHub environment, which GitHub creates on its first run. It needs no token or secret. The project's pending publisher on pypi.org uses:
+The **pypi** job publishes with [PyPI trusted publishing](https://docs.pypi.org/trusted-publishers/) (OIDC) from the `pypi` GitHub environment, which GitHub creates on its first run. It needs no token or secret. The project's trusted publisher on pypi.org uses:
 
 | Field             | Value         |
 | ----------------- | ------------- |
@@ -215,7 +215,7 @@ The **pypi** job publishes with [PyPI trusted publishing](https://docs.pypi.org/
 | Workflow name     | `release.yml` |
 | Environment name  | `pypi`        |
 
-A pending publisher creates the project on its first upload. The first PyPI release is the next version tag, published like any release. Each version must match its tag's code, so the manual `pypi_only` run refuses to publish when `v<version>` is already tagged at another commit: once `v0.16.0` is tagged, later main commits cannot publish as 0.16.0. A `pypi_only` run is for publishing right after a version bump on main, before that version is tagged:
+PyPI has every release since 0.14.0, and each version tag publishes like any release. Each version must match its tag's code, so the manual `pypi_only` run refuses to publish when `v<version>` is already tagged at another commit: once `v0.16.0` is tagged, later main commits cannot publish as 0.16.0. A `pypi_only` run is for publishing right after a version bump on main, before that version is tagged:
 
 ```sh
 gh workflow run release.yml --ref main -f pypi_only=true

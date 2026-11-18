@@ -186,7 +186,8 @@ Moved from the [release notes](../changes-0.16.md).
   ([#1178](https://github.com/Ameyanagi/ReShiki/pull/1178)). The ruviz note,
   which described a library ReShiki never used, is removed
   ([#1224](https://github.com/Ameyanagi/ReShiki/pull/1224)).
-- **Tests.** The files under `tests/` build as one test binary, `it`; run one
+- **Tests.** The files under `tests/` build as one test binary, `it`, except
+  `agent_api_windows_pipes`, `metafile_worker` and `picture_memory`; run one
   file's tests with `cargo test -p reshiki --test it theme_reference::`. The
   integration tests built in 37 seconds instead of 334 on an Apple Silicon
   Mac. On Windows, CI runs every ignored application test not named

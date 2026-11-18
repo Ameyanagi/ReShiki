@@ -3,7 +3,7 @@
 This page lists the larger open directions after ReShiki 0.15.0, taken from
 the [open GitHub issues](https://github.com/Ameyanagi/ReShiki/issues). It is not
 a release commitment. See [feature status](feature-status.md) for what works
-today and the [latest release notes](changes-0.15.md) for what changed.
+today and the [latest release notes](changes-0.16.md) for what changed.
 
 JACS / ACS stays the default. New features keep physical drawing sizes,
 complete molecular graphs and editable originals.

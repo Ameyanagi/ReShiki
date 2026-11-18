@@ -31,17 +31,23 @@ version is **39**.
 | 39      | A property caption with a **Name** line, or a molecule name you typed                                 | 0.16.0   |
 
 ReShiki 0.15.0 and earlier say that a version 38 or 39 drawing was made with a
-newer version and ask you to update. Older drawings still open in 0.16.0.
+newer version and ask you to update. Older drawings still open in 0.16.0,
+unless they are over its new limits: 64 KB of text in one text box, 1 MB of
+text in the drawing, or pictures stored in more than 64 MB or holding more than
+64 million pixels (see [Files, import and export](#files-import-and-export)).
 
 NMR shift labels written by Python, the command line or the agent tools are
 atom numbers and do not raise the version. ReShiki 0.15.0 opens such a drawing
 and shows the shifts at its usual atom-number positions. A PNG from 0.16.0
-keeps its editable drawing after the image data; 0.15.0 still finds it there.
+that carries an editable drawing keeps it after the image data; 0.15.0 still
+finds it there and reopens it when its version is 37 or lower.
 
 On macOS and Linux, 0.16.0 moves its data folder to `~/.reshiki/` on the first
-launch (see [Desktop](#desktop)). An older version started afterwards looks in
-the old folder, so it starts with default settings and without your saved
-templates, themes and recovery drafts.
+launch (see [Desktop](#desktop)). After the move, an older version looks in the
+old folder, so it starts with default settings and without your saved
+templates, themes and recovery drafts. Where an older version shares the data
+folder, as on Windows, it keeps your settings but drops the new copy and export
+settings when it next saves them.
 
 If you share files with someone on an older version, keep a copy saved by
 that version.
@@ -50,8 +56,9 @@ that version.
 
 - **Drawings on GitHub.** Sign in from the GitHub button in the status bar,
   open drawings and other chemistry files with **Open from GitHub…**, and
-  **Send** every changed drawing as one commit with an SVG preview. A drawing
-  changed on GitHub meanwhile is never overwritten.
+  **Send** your changed drawings as one commit with an SVG preview each. A
+  drawing changed on GitHub meanwhile is not overwritten unless you choose
+  **Keep mine**.
 - **Compare that knows chemistry.** **History** and the **changed on GitHub**
   dialog tell chemical edits from moves, flips and rescaling, and name each
   change with the drawing's own atom numbers, such as **OH added at C4**.
@@ -84,8 +91,9 @@ changes in this release are by @Ameyanagi.
 
 - **Keep drawings on GitHub.** The desktop app signs in to GitHub with a code,
   opens drawings with **Open from GitHub…** and sends them with **Send**.
-  **Save** stays on this computer. **Send** makes one commit of every changed
-  drawing in the repository, with an SVG preview beside each. The status bar
+  **Save** stays on this computer. **Send** makes one commit of the changed
+  drawings in the repository, with an SVG preview beside each; a drawing that
+  also changed on GitHub waits for your choice. The status bar
   shows what is not on GitHub yet, and closing such a drawing asks **Send to
   GitHub** or **Later**. A drawing changed on GitHub meanwhile is a question,
   not an error: GitHub's and yours show side by side with the differences
@@ -110,12 +118,13 @@ changes in this release are by @Ameyanagi.
   drawings by name with who changed them, and makes a new repository, drawing
   or folder in place. It switches between **Tree** (the first time) and
   **Tiles**, then opens in the view you used last. The tree lists and searches
-  the whole repository and previews the selected file. It lists every
-  chemistry file ReShiki opens (`.mol`, `.sdf`, `.cdxml`, `.cdx`, `.rxn`,
-  `.smi`); those open read only, and **Save** makes a `.rsk` copy.
-  **Insert** (Shift+Enter, or right-click a file) puts a file's structures
-  into the drawing in front as one Undo step. Folders of more than 200 files
-  show the first 200, and the search finds the rest. Each repository row ends
+  the repository as GitHub returns it and previews the selected file. Besides
+  drawings it lists `.mol`, `.sdf`, `.cdxml`, `.cdx`, `.rxn` and `.smi` files;
+  those open read only, and **Save** makes a `.rsk` copy. **Insert**
+  (Shift+Enter, or **Insert into drawing** on a file's right-click menu) puts a
+  file's structures into the drawing in front as one Undo step. In **Tiles**,
+  folders of more than 200 files show the first 200, and the search finds the
+  rest. Each repository row ends
   in **↗**, which opens it on GitHub
   ([#1211](https://github.com/Ameyanagi/ReShiki/pull/1211),
   [#1215](https://github.com/Ameyanagi/ReShiki/pull/1215),
@@ -214,7 +223,9 @@ changes in this release are by @Ameyanagi.
   SVG, PNG, PDF, CDXML and CDX files keep them. By default a label is the bare
   shift journals print (`1.28`, with "δ (ppm)" stated once in the caption);
   `#3`, `1.28 ppm` and `#3 · 1.28 ppm`, as in **Show labels**, are also
-  offered. ¹H shifts get 2 decimal places and ¹³C 1, unless you choose 0 to 4.
+  offered. On the command line, and in Python for rows with their nucleus, ¹H
+  shifts get 2 decimal places and ¹³C 1; MCP `label_atoms` uses 2 unless you
+  pass `decimals` (0 to 4).
   Labels sit right beside their atoms, clear of bonds and other labels, with a
   thin leader line only when there is no room. `to_rdkit()` and `from_rdkit()`
   carry atom numbers as RDKit's `atomNote`. **Show labels** in the app stays
@@ -244,7 +255,7 @@ changes in this release are by @Ameyanagi.
   regular polygon with its substituents pointing outward. A trans double bond
   keeps its inward corner. Fused, spiro and bridged large rings are unchanged
   ([#1208](https://github.com/Ameyanagi/ReShiki/pull/1208)).
-- **Clean up…** with **Keep orientation** no longer mirrors the drawing
+- **Clean up** with **Keep orientation** no longer mirrors the drawing
   ([#1179](https://github.com/Ameyanagi/ReShiki/pull/1179); fixes
   [issue #1121](https://github.com/Ameyanagi/ReShiki/issues/1121)). With
   **Selected atoms**, it no longer folds the selected atoms onto the rest of
@@ -310,7 +321,9 @@ changes in this release are by @Ameyanagi.
   **Copy image** and **Copy as**. With it off, copied pictures carry no
   drawing, and on Windows **Copy** pastes into Office as a picture. Pasting
   between ReShiki windows still keeps the drawing, except in the browser
-  editor. A PNG's editable drawing now sits after the image data
+  editor. **Editable drawing** in **Copy image on** changes it for one copy,
+  and **Include editable drawing** on the **Export** tab for that tab's
+  exports. A PNG's editable drawing now sits after the image data
   ([#1192](https://github.com/Ameyanagi/ReShiki/pull/1192)).
 
 ## Files, import and export
@@ -321,8 +334,10 @@ changes in this release are by @Ameyanagi.
   ReShiki**. **Save as…** lists **ReShiki (.rsk)**, **ChemDraw (.cdxml)**,
   **ChemDraw (.cdx)** and **MOL**; the browser still saves `.rsk` only
   ([#1205](https://github.com/Ameyanagi/ReShiki/pull/1205)).
-- **Open** reads SD files (`.sdf`): every record's structure opens side by
-  side in one unsaved drawing named after the file
+- **Open** reads SD files (`.sdf`): the records' structures open side by side
+  in one unsaved drawing named after the file, and the status says how many
+  were left out when they do not all fit. **Save** keeps it as a `.rsk` and
+  leaves the SD file as it is
   ([#1212](https://github.com/Ameyanagi/ReShiki/pull/1212)).
 - **ChemDraw import.** Diagrams with several molecules open correctly when the
   document uses a non-default bond length, and pasting keeps the authored
@@ -330,7 +345,9 @@ changes in this release are by @Ameyanagi.
   notice about page settings that cannot be kept. Hidden ChemDraw objects stay
   hidden, atom labels keep inherited bold, italic, underline and color, and
   stationery files (`.cds`) with artwork open as drawings. A failed editable
-  copy no longer silently falls back to SMILES. Generic choices and polymer
+  copy no longer silently falls back to SMILES. Opening, copying, exporting,
+  recalculating properties and background label updates keep linked arrows and
+  captions where they are, in `.rsk` drawings too. Generic choices and polymer
   repeats save as editable CDXML/CDX without expanding them first
   ([#1214](https://github.com/Ameyanagi/ReShiki/pull/1214)).
   [Corpus and repair record](changes/chemdraw-import-corpus-2026-11-17.md).
@@ -343,7 +360,7 @@ changes in this release are by @Ameyanagi.
   permissions, and saving through a symbolic link writes to the linked file
   (macOS and Linux) ([#1179](https://github.com/Ameyanagi/ReShiki/pull/1179)).
 - **Limits that protect the app.** A text box holds at most 64 KB of text and
-  a drawing 1 MB. A CDXML or ChemDraw style file nested more than 64 levels
+  a drawing 1 MB of text in all; a file over these limits is refused. A CDXML or ChemDraw style file nested more than 64 levels
   deep, with more than 256 attributes on one element, or with entity or other
   DTD declarations is refused with a message. A `.rsk` file whose pictures
   exceed 64 MB or 64 million pixels is refused before any picture is decoded.
@@ -371,11 +388,12 @@ validation, versions}`. `info`, `document_new`, `document_list`,
   ([#1188](https://github.com/Ameyanagi/ReShiki/pull/1188)).
 - **Names and conversion.** `import` reads a chemical name with
   `format: "name"`, and the new `name` tool returns a drawing's systematic name
-  with its status, aliases and alternatives, offline. The new `convert` tool
-  reads structure text and returns a file or a PNG preview in one call. The
-  tool list every MCP client loads is 19,418 characters for 16 tools, down from
-  27,316 for 13; the new `schema` tool returns the sketch diagram fields when
-  an agent needs them
+  with its status, aliases and alternatives, offline. A name's axial
+  configuration is kept, so `(1M)-` and `(1P)-[1,1'-binaphthalene]-2,2'-diol`
+  import as two structures. The new `convert` tool reads structure text and
+  returns a file or a PNG preview in one call. The tool list every MCP client
+  loads is shorter: `compose` no longer lists the sketch diagram fields, which
+  the new `schema` tool returns when an agent needs them
   ([#1177](https://github.com/Ameyanagi/ReShiki/pull/1177),
   [#1188](https://github.com/Ameyanagi/ReShiki/pull/1188)).
 - **The same names everywhere.** `rsk` and `reshiki` both name a ReShiki
@@ -471,9 +489,10 @@ validation, versions}`. `info`, `document_new`, `document_list`,
   left** on 7,728 atoms is about 20 times faster. A long peptide redraws
   about a quarter faster
   ([#1191](https://github.com/Ameyanagi/ReShiki/pull/1191)).
-- Ring, template and bond previews redraw only the structures they change, and
-  panning a zoomed-out drawing moves a prepared picture instead of redrawing
-  every bond ([#1204](https://github.com/Ameyanagi/ReShiki/pull/1204)).
+- When the structures a ring, template or bond preview changes stay clear of
+  the rest of the drawing, the preview redraws only those structures. Panning a
+  zoomed-out drawing moves a prepared picture instead of redrawing every
+  bond ([#1204](https://github.com/Ameyanagi/ReShiki/pull/1204)).
 - The executable is smaller: embedded data is compressed (2.66 MB to
   0.50 MB), TLS uses ring instead of aws-lc, and the macOS arm64 executable
   goes from 81.4 MB to 72.6 MB. The update check and online name lookup no
@@ -532,11 +551,13 @@ validation, versions}`. `info`, `document_new`, `document_list`,
   or grows too long ([#1185](https://github.com/Ameyanagi/ReShiki/pull/1185)).
   [Assistant](assistant.md#applying-and-undoing).
 - **Star ReShiki.** After five exports or copies, on a later day than the
-  first launch, a small card asks once whether you enjoy ReShiki; it waits
-  until the window has been idle for 30 seconds. Signed in to GitHub, **★ Star
-  on GitHub** stars ReShiki with your account; signed out, it opens GitHub in
-  your browser. About shows **★ Starred on GitHub** once you have starred it.
-  Nothing is sent without your click
+  first launch, a small card asks whether you enjoy ReShiki; it waits until the
+  window has been idle for 30 seconds. Without a star, it asks again at most
+  once, in a later feature release and at least 90 days later. Signed in to
+  GitHub, ReShiki first asks GitHub whether you already starred it, and
+  **★ Star on GitHub** stars ReShiki with your account; signed out,
+  **★ Star on GitHub ↗** opens GitHub in your browser. A star is made only when
+  you click
   ([#1193](https://github.com/Ameyanagi/ReShiki/pull/1193),
   [#1206](https://github.com/Ameyanagi/ReShiki/pull/1206),
   [#1220](https://github.com/Ameyanagi/ReShiki/pull/1220)).
@@ -573,8 +594,8 @@ validation, versions}`. `info`, `document_new`, `document_list`,
   ([issue #1232](https://github.com/Ameyanagi/ReShiki/issues/1232)). Pictures
   written by Python and `reshiki --cli` carry no editable drawing
   ([issue #1183](https://github.com/Ameyanagi/ReShiki/issues/1183)).
-- **Browser editor:** opening a large file or exporting a figure still holds
-  the page while it works
+- **Browser editor:** opening a large file, exporting a figure, a long Clean
+  up and 3D calculations still hold the page while they work
   ([issue #430](https://github.com/Ameyanagi/ReShiki/issues/430)).
 - **Nightly builds:** there are no Intel Mac nightlies; stable releases still
   include Intel Mac downloads
