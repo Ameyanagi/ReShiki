@@ -859,20 +859,18 @@ impl Writer<'_> {
                 self.objects.push((a.id, node));
                 continue;
             };
-            let lines = a.text.split('\n').count() as f64;
-            let (width, height) = measured.map_or_else(
-                || estimate(&a.text, &a.format),
-                |m| (real(m.width), real(m.height)),
-            );
+            // Laid out like the canvas: each part's own width, and the
+            // property lines below the name however many rows it wraps to.
+            let scale = self.scale;
+            let width = measured.map_or(f64::from(a.size().0), |m| real(m.width) / scale);
             // Both parts keep the caption's alignment edge or center.
             let factor = match a.format.alignment {
                 TextAlign::Center => 0.5,
                 TextAlign::Right => 1.,
                 _ => 0.,
             };
-            let scale = self.scale;
-            let edge = a.position.x as f64 + width / scale * factor;
-            let part = |range: std::ops::Range<usize>, line: f64| {
+            let edge = f64::from(a.position.x) + width * factor;
+            let part = |range: std::ops::Range<usize>, y: f32| {
                 let text = &a.text[range.clone()];
                 let mut format = a.format.clone();
                 // Its own first letter's style sets the part's line height.
@@ -888,18 +886,24 @@ impl Writer<'_> {
                         style: s.style.clone(),
                     })
                     .collect();
-                let x = edge - estimate(text, &format).0 / scale * factor;
-                let y = a.position.y as f64 + line * height / lines / scale;
-                Annotation {
-                    position: Point::new(x as f32, y as f32),
+                let mut part = Annotation {
                     text: text.into(),
                     format,
                     ..a.clone()
-                }
+                };
+                let (w, h) = part.size();
+                part.position = Point::new((edge - f64::from(w) * factor) as f32, y);
+                let metrics = TextMetrics {
+                    width: (f64::from(w) * scale) as f32,
+                    height: (f64::from(h) * scale) as f32,
+                    baseline: part.format.style.size_pt * 0.9,
+                };
+                (part, metrics, h)
             };
-            let (name, properties) = (part(0..end, 0.), part(end + 1..a.text.len(), 1.));
-            let name = self.annotation(&name, None)?;
-            let properties = self.annotation(&properties, None)?;
+            let (name, name_metrics, name_height) = part(0..end, a.position.y);
+            let (properties, metrics, _) = part(end + 1..a.text.len(), a.position.y + name_height);
+            let name = self.annotation(&name, Some(&name_metrics))?;
+            let properties = self.annotation(&properties, Some(&metrics))?;
             // The property text first: the ChemDraw link looks it up. Both
             // join the caption's drawing group.
             self.objects.push((a.id, properties));
@@ -913,10 +917,19 @@ impl Writer<'_> {
         let s = &f.style;
         let (width, height, baseline) = match measured {
             Some(m) => (real(m.width), real(m.height), real(m.baseline)),
-            None => {
-                let (width, height) = estimate(&a.text, f);
-                (width, height, real(s.size_pt) * 0.9)
-            }
+            None => (
+                f.width_pt.map(real).unwrap_or_else(|| {
+                    a.text
+                        .split('\n')
+                        .map(|s| s.chars().count())
+                        .max()
+                        .unwrap_or(0) as f64
+                        * real(s.size_pt)
+                        * 0.6
+                }),
+                a.text.split('\n').count() as f64 * real(s.size_pt) * real(f.line_spacing),
+                real(s.size_pt) * 0.9,
+            ),
         };
         if [width, height, baseline]
             .iter()
@@ -987,22 +1000,6 @@ fn chemdraw_types(link: &crate::linked_properties::PropertyCaption) -> Option<St
         .map(|p| p.chemdraw().map(|code| code.to_string()))
         .collect::<Option<Vec<_>>>()?;
     (!types.is_empty()).then(|| types.join(" "))
-}
-
-/// Text size in points without measured metrics.
-fn estimate(text: &str, f: &TextFormat) -> (f64, f64) {
-    let size = real(f.style.size_pt);
-    (
-        f.width_pt.map(real).unwrap_or_else(|| {
-            text.split('\n')
-                .map(|s| s.chars().count())
-                .max()
-                .unwrap_or(0) as f64
-                * size
-                * 0.6
-        }),
-        text.split('\n').count() as f64 * size * real(f.line_spacing),
-    )
 }
 
 #[cfg(test)]

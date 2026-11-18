@@ -211,6 +211,32 @@ fn the_name_line_exports_as_plain_text_above_linked_properties() {
             assert!(!line.format.at(0).bold);
         }
     }
+    // A name wrapped to several rows keeps the property lines below it.
+    let mut wrapped = d.clone();
+    rename(
+        &mut wrapped,
+        &atoms,
+        "Compound 3a from the second route",
+        TextFormat::default(),
+        true,
+    )
+    .unwrap();
+    wrapped.annotations[0].format.width_pt = Some(40.);
+    let x = xml(&wrapped);
+    let baseline = |text: &str| -> f64 {
+        let t = x.split("<t ").find(|t| t.contains(text)).unwrap();
+        let p = t
+            .split(r#" p=""#)
+            .nth(1)
+            .unwrap()
+            .split('"')
+            .next()
+            .unwrap();
+        p.split(' ').nth(1).unwrap().parse().unwrap()
+    };
+    // At 40 pt the name wraps to five 12 pt rows; the weight comes after them.
+    let rows = (baseline("Mol. Wt.") - baseline("Compound 3a")) / 12.;
+    assert!(rows > 4.99, "{rows} rows apart: {x}");
     // Grouped with its molecule, the name stays in the group in ChemDraw.
     let ids = d.all_ids();
     d.group_selection(&ids).unwrap();
