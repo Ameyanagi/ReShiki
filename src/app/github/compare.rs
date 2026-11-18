@@ -710,7 +710,9 @@ fn marks(
             mark(ComparePlace::Box(lo, hi));
         }
         // Around their labels too, so the outline never crosses one.
-        let around = reshiki::scene::selection_bounds(doc, &painted);
+        let around = (!painted.is_empty())
+            .then(|| reshiki::scene::selection_bounds(doc, &painted))
+            .flatten();
         let outline = around.or(objects);
         // Half a bond around it, so labels at its edge are not cut.
         let pad = doc.drawing_style.bond_length_world / 2.;
