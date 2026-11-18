@@ -1,4 +1,4 @@
-//! Placement for long atom numbers, such as predicted shifts: the nearest box
+//! Placement for predicted-shift atom numbers: the nearest box
 //! around the atom that touches nothing, with a leader line when it is far
 //! away or nearer another atom. Canvas, SVG, PNG and PDF all draw it.
 use super::segment_hits_rect;
@@ -14,6 +14,9 @@ pub(super) struct Obstacles<'a> {
     pub atoms: &'a [Point],
     pub leaders: &'a [(Point, Point)],
 }
+
+/// A label's centre and its leader, when it has one.
+pub(super) type Spot = (Point, Option<(Point, Point)>);
 
 /// One long number to place.
 pub(super) struct LongLabel {
@@ -121,12 +124,13 @@ impl LongLabel {
 
     /// The boxes to try, nearest first and outward first at each distance:
     /// centres along directions from the atom, in steps of half the text
-    /// height up to 8 bond lengths.
+    /// height up to `max_gap`.
     fn candidates(
         &self,
         obstacles: &Obstacles<'_>,
         positions: &HashMap<u64, Point>,
         doc: &Document,
+        max_gap: f32,
     ) -> impl Iterator<Item = Point> {
         let neighbors: Vec<_> = doc
             .bonds
@@ -158,7 +162,7 @@ impl LongLabel {
         let step = (h / 2.).max(2.);
         let gaps = (0..)
             .map(move |i| 1.5 + i as f32 * step)
-            .take_while(move |gap| *gap <= 8. * self.bond_length);
+            .take_while(move |gap| *gap <= max_gap);
         gaps.flat_map(move |gap| {
             STEPS.into_iter().map(move |k| {
                 let angle = outward + f32::from(k) * std::f32::consts::PI / 24.;
@@ -178,7 +182,7 @@ impl LongLabel {
         positions: &HashMap<u64, Point>,
         doc: &Document,
     ) -> usize {
-        self.candidates(obstacles, positions, doc)
+        self.candidates(obstacles, positions, doc, 1.5 * self.bond_length)
             .filter(|center| {
                 self.leader(*center, obstacles).is_none()
                     && self.hits(*center, None, obstacles) == 0.
@@ -195,9 +199,11 @@ impl LongLabel {
         positions: &HashMap<u64, Point>,
         doc: &Document,
         beside: bool,
-    ) -> Option<(Point, Option<(Point, Point)>)> {
-        let mut best: Option<(f32, Point, Option<(Point, Point)>)> = None;
-        for center in self.candidates(obstacles, positions, doc) {
+    ) -> Option<Spot> {
+        let mut best: Option<(f32, Spot)> = None;
+        // Beyond 1.5 bond lengths every box needs a leader.
+        let max_gap = if beside { 1.5 } else { 8. } * self.bond_length;
+        for center in self.candidates(obstacles, positions, doc, max_gap) {
             let leader = self.leader(center, obstacles);
             if beside && leader.is_some() {
                 continue;
@@ -206,14 +212,14 @@ impl LongLabel {
             if hits == 0. {
                 return Some((center, leader));
             }
-            if best.as_ref().is_none_or(|(least, ..)| hits < *least) {
-                best = Some((hits, center, leader));
+            if best.as_ref().is_none_or(|(least, _)| hits < *least) {
+                best = Some((hits, (center, leader)));
             }
         }
         if beside {
             return None;
         }
-        best.map(|(_, center, leader)| (center, leader))
+        best.map(|(_, spot)| spot)
     }
 
     /// Whether the box at `center` needs a leader: it is more than 1.5 bond
@@ -280,11 +286,12 @@ impl LongLabel {
             .bonds
             .iter()
             .filter(|&&(a, b, order, display)| {
-                // Double bonds and styled bonds draw beside their centre line.
+                // Double, triple and styled bonds draw rails and wedges beside
+                // their centre line.
                 let pad = if order == 1 && display == "plain" {
                     3.
                 } else {
-                    7.
+                    10.
                 };
                 let (lo, hi) = self.bounds(center, pad);
                 segment_hits_rect(a, b, lo, hi)

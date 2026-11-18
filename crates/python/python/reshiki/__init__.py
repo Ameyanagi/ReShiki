@@ -556,18 +556,20 @@ class Drawing:
         raises :class:`ReShikiError` and writes nothing.
         """
         pairs: list[tuple[int, float | None]] = []
-        nuclei: set[str] = set()
+        # The journal default needs every row to name the same nucleus.
+        nuclei: set[str | None] = set()
         for row in rows:
             if isinstance(row, NmrShift):
                 pairs.append((row.atom, row.ppm))
                 nuclei.add(row.nucleus)
             elif isinstance(row, Mapping):
                 pairs.append((row["atom"], row["ppm"]))
+                nuclei.add(None)
             else:
                 atom, ppm = row
                 pairs.append((atom, ppm))
-        # The journal default needs one nucleus for every row.
-        nucleus = nuclei.pop() if len(nuclei) == 1 and len(pairs) > 0 else None
+                nuclei.add(None)
+        nucleus = nuclei.pop() if len(nuclei) == 1 else None
         return type(self)(_native.with_labels(self._data, pairs, format, decimals, nucleus))
 
     def _repr_svg_(self) -> str:

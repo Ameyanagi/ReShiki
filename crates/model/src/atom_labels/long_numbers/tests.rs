@@ -1,5 +1,5 @@
 use super::*;
-use crate::atom_labels::{Number, Owner, indicators, is_long_number, shift_label_style};
+use crate::atom_labels::{Number, Owner, indicators, is_shift_label, shift_label_style};
 
 /// `fixture` with `#N · ppm` labels, as scripts write predicted shifts.
 fn labelled(fixture: &[u8], shifts: &[(u64, f64)], decimals: usize) -> Document {
@@ -158,11 +158,19 @@ fn the_layout_is_deterministic_and_only_for_numbers_with_a_space() {
         .map(|i| (i.center, i.leader))
         .collect();
     assert_eq!(first, again);
-    for short in ["1", "12a", "Cα", "#19", "atom1"] {
-        assert!(!is_long_number(short), "{short}");
+    for short in [
+        "1",
+        "12a",
+        "Cα",
+        "#19",
+        "atom1",
+        "L (S)",
+        "attached caption text",
+    ] {
+        assert!(!is_shift_label(short), "{short}");
     }
     for long in ["#19 · 3.36 ppm", "3.36 ppm"] {
-        assert!(is_long_number(long), "{long}");
+        assert!(is_shift_label(long), "{long}");
     }
 }
 
@@ -197,4 +205,13 @@ fn a_dragged_long_label_far_from_its_atom_gets_a_leader() {
         label.primitives()[0],
         crate::scene::Primitive::Line(..)
     ));
+}
+
+#[test]
+fn shift_labels_never_go_below_the_smallest_text_size() {
+    let mut doc = anisaldehyde();
+    doc.drawing_style.font_size_pt = 6.;
+    let style = shift_label_style(&doc);
+    assert_eq!(style.size_pt, 4.);
+    style.validate().unwrap();
 }

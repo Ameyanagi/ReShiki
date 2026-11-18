@@ -193,6 +193,9 @@ def test_decimals_default_per_nucleus_and_can_be_chosen() -> None:
     assert _numbers(molecule.with_labels(carbons, format="ppm"))[4] == "170.7 ppm"
     pairs = [(row.atom, row.ppm) for row in carbons]
     assert _numbers(molecule.with_labels(pairs, format="ppm"))[4] == "170.70 ppm"
+    # A row without a nucleus makes the whole call use 2.
+    mixed = [*carbons.rows[:-1], (carbons.rows[-1].atom, carbons.rows[-1].ppm)]
+    assert _numbers(molecule.with_labels(mixed, format="ppm"))[4] == "170.70 ppm"
     for decimals, text in ((0, "171 ppm"), (3, "170.700 ppm"), (4, "170.7000 ppm")):
         labelled = molecule.with_labels(carbons, format="ppm", decimals=decimals)
         assert _numbers(labelled)[4] == text

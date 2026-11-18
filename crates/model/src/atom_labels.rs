@@ -531,15 +531,16 @@ pub fn number_style() -> TextStyle {
 /// row of shift labels stays clearly smaller than the atoms they name.
 pub fn shift_label_style(doc: &Document) -> TextStyle {
     TextStyle {
-        size_pt: doc.drawing_style.font_size_pt * 0.65,
+        // Never below the smallest text size a style allows.
+        size_pt: (doc.drawing_style.font_size_pt * 0.65).max(4.),
         ..number_style()
     }
 }
-/// Atom numbers with a space, such as predicted shifts (`#3 · 1.28 ppm`), get
-/// their own placement with leader lines. Numbers without one (`1`, `12a`,
-/// `Cα`, `atom1`) keep the indicator layout.
-pub fn is_long_number(text: &str) -> bool {
-    text.contains(char::is_whitespace)
+/// Predicted-shift labels, the atom numbers that end in ` ppm` (`1.28 ppm`,
+/// `#3 · 1.28 ppm`), get their own placement with leader lines. Every other
+/// number (`1`, `12a`, `#3`, `L (S)`, free text) keeps the indicator layout.
+pub fn is_shift_label(text: &str) -> bool {
+    text.ends_with(" ppm")
 }
 pub fn stereo_style() -> TextStyle {
     TextStyle {
@@ -1246,23 +1247,28 @@ fn layout_indicators(doc: &Document, drawn: &Document) -> Vec<Indicator> {
     if labels.is_empty() {
         return vec![];
     }
-    // Long numbers go last, around the centre of their atoms in turn, so
+    // Shift labels go last, around the centre of their molecule in turn, so
     // each takes the next free spot beside its neighbour's. Other indicators
     // keep their order and so their layout.
-    let long: Vec<_> = labels
+    let shift_atoms: Vec<_> = labels
         .iter()
-        .filter(|(owner, text, ..)| matches!(owner, Owner::Number(_)) && is_long_number(text))
-        .filter_map(|(owner, ..)| owner.anchor(doc))
+        .filter_map(|(owner, text, ..)| match owner {
+            Owner::Number(id) if is_shift_label(text) => Some(*id),
+            _ => None,
+        })
         .collect();
-    if !long.is_empty() {
-        let count = long.len() as f32;
-        let centre = Point::new(
-            long.iter().map(|p| p.x).sum::<f32>() / count,
-            long.iter().map(|p| p.y).sum::<f32>() / count,
-        );
-        let order = |owner: &Owner, text: &str| match owner.anchor(doc) {
-            Some(p) if matches!(owner, Owner::Number(_)) && is_long_number(text) => {
-                Some((p.y - centre.y).atan2(p.x - centre.x))
+    let hulls = molecule_hulls(doc, &shift_atoms);
+    if !shift_atoms.is_empty() {
+        let order = |owner: &Owner, text: &str| match owner {
+            Owner::Number(id) if is_shift_label(text) => {
+                let p = doc.atom(*id)?.position;
+                let hull = hulls.get(id)?;
+                let count = hull.len().max(1) as f32;
+                let (x, y) = (
+                    hull.iter().map(|q| q.x).sum::<f32>() / count,
+                    hull.iter().map(|q| q.y).sum::<f32>() / count,
+                );
+                Some((p.y - y).atan2(p.x - x))
             }
             _ => None,
         };
@@ -1326,7 +1332,6 @@ fn layout_indicators(doc: &Document, drawn: &Document) -> Vec<Indicator> {
     let mut result = Vec::new();
     let mut leaders = Vec::new();
     let mut long = Vec::new();
-    let mut hulls = std::collections::HashMap::new();
     for (owner, text, offset, style, roman_parentheses) in labels {
         let Some(anchor) = owner.anchor(doc) else {
             continue;
@@ -1335,7 +1340,7 @@ fn layout_indicators(doc: &Document, drawn: &Document) -> Vec<Indicator> {
         let format = owned_indicator_format(owner, &text, &style, roman_parentheses);
         let width = indicator_width(&text, height, &format);
         if let Owner::Number(id) = owner
-            && is_long_number(&text)
+            && is_shift_label(&text)
         {
             let label = LongLabel {
                 id,
@@ -1347,10 +1352,7 @@ fn layout_indicators(doc: &Document, drawn: &Document) -> Vec<Indicator> {
                         .unwrap_or((a.position.offset(-3., -3.), a.position.offset(3., 3.)))
                 }),
                 bond_length: doc.drawing_style.bond_length_world,
-                hull: hulls
-                    .entry(id)
-                    .or_insert_with(|| molecule_hull(doc, id))
-                    .clone(),
+                hull: hulls.get(&id).cloned().unwrap_or_else(|| Vec::new().into()),
             };
             long.push((label, owner, text, offset, style, roman_parentheses));
             continue;
@@ -1558,29 +1560,45 @@ fn layout_indicators(doc: &Document, drawn: &Document) -> Vec<Indicator> {
     result
 }
 
-/// The convex hull of the visible atoms bonded, directly or not, to `id`.
-fn molecule_hull(doc: &Document, id: u64) -> std::rc::Rc<[Point]> {
-    let mut seen = std::collections::HashSet::from([id]);
-    let mut queue = vec![id];
-    while let Some(current) = queue.pop() {
-        for b in doc
-            .bonds
-            .iter()
-            .filter(|b| b.a == current || b.b == current)
-        {
-            let other = if b.a == current { b.b } else { b.a };
-            if seen.insert(other) {
-                queue.push(other);
+/// The convex hull of each molecule holding one of `ids`, by atom ID: its
+/// visible atoms, bonded directly or not. Each molecule is walked once.
+fn molecule_hulls(
+    doc: &Document,
+    ids: &[u64],
+) -> std::collections::HashMap<u64, std::rc::Rc<[Point]>> {
+    let mut hulls = std::collections::HashMap::new();
+    if ids.is_empty() {
+        return hulls;
+    }
+    let mut bonded: std::collections::HashMap<u64, Vec<u64>> = std::collections::HashMap::new();
+    for b in &doc.bonds {
+        bonded.entry(b.a).or_default().push(b.b);
+        bonded.entry(b.b).or_default().push(b.a);
+    }
+    for &id in ids {
+        if hulls.contains_key(&id) {
+            continue;
+        }
+        let mut seen = std::collections::HashSet::from([id]);
+        let mut queue = vec![id];
+        while let Some(current) = queue.pop() {
+            for &other in bonded.get(&current).into_iter().flatten() {
+                if seen.insert(other) {
+                    queue.push(other);
+                }
             }
         }
+        let points = seen
+            .iter()
+            .filter(|id| doc.atom_visible(**id))
+            .filter_map(|id| Some(doc.atom(*id)?.position))
+            .collect();
+        let hull: std::rc::Rc<[Point]> = long_numbers::hull(points).into();
+        for member in seen {
+            hulls.insert(member, hull.clone());
+        }
     }
-    let points = doc
-        .atoms
-        .iter()
-        .filter(|a| seen.contains(&a.id) && doc.atom_visible(a.id))
-        .map(|a| a.position)
-        .collect();
-    long_numbers::hull(points).into()
+    hulls
 }
 pub fn clear_computed(doc: &mut Document) {
     for a in &mut doc.atoms {

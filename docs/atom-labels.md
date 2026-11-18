@@ -63,7 +63,7 @@ Numbers are owned by atoms, independent of reaction atom-map numbers.
 Scripts can write predicted NMR shifts as atom numbers, such as
 `#3 · 1.28 ppm`; they are ordinary numbers that can be moved, restyled or
 cleared here (see [NMR prediction](nmr-prediction.md#labels-from-scripts)).
-A number with a space is placed clear of bonds and other labels, with a thin
+A number ending in ` ppm` is placed clear of bonds and other labels, with a thin
 leader line to its atom when it sits away from it; numbers without one keep
 the usual placement.
 

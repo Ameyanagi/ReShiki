@@ -121,10 +121,10 @@ the drawing's atom-label size, so the labels read clearly but stay smaller
 than the atoms. Rows without a ppm are skipped. Labelling ¹H after ¹³C
 replaces the labels of the atoms the ¹H rows list and keeps the others.
 
-A label with a space, such as `1.28 ppm`, is placed on its own: in the first
+A label ending in ` ppm`, such as `1.28 ppm`, is placed on its own: in the first
 free spot around the atom, outward first, clear of bonds, atom labels and
 other labels. When that spot is more than 1.5 bond lengths away, or nearer
-another atom, a thin leader line joins it to its atom. Short atom numbers keep
+another atom, a thin leader line joins it to its atom. Other atom numbers keep
 their usual placement.
 
 The labels are plain text: they do not change when the drawing is edited

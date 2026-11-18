@@ -116,8 +116,8 @@ drawing as atom numbers:
   is more than 1.5 bond lengths away, or nearer another atom, a thin leader
   line joins the label to its atom. Canvas, SVG, PNG and PDF place them the
   same way; ChemDraw places the atom numbers of CDXML and CDX itself, without
-  leader lines. This placement is for atom numbers with a space, as every
-  `ppm` and `both` label has; short numbers such as `3` or `12a` keep their
+  leader lines. This placement is for atom numbers that end in ` ppm`, as every
+  `ppm` and `both` label does; other numbers, such as `3`, `12a` or `#3`, keep their
   usual placement.
 - An atom inside a collapsed abbreviation shows its label only
   when the abbreviation is expanded, and CDXML and CDX export asks you to
