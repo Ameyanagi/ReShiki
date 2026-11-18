@@ -198,19 +198,26 @@ changes in this release are by @Ameyanagi.
   analysis, one line each, and updates with every edit in the same Undo step.
   Editing its text makes it ordinary text; deleting the molecule deletes it.
   CDXML and CDX save it as ChemDraw linked property text, and ChemDraw files
-  with linked property text, which used to be refused, open with the link. A
-  caption with cLogP or TPSA is saved as plain text
-  ([#1197](https://github.com/Ameyanagi/ReShiki/pull/1197); fixes
+  with linked property text, which used to be refused, open with the link;
+  that text stays as ChemDraw wrote it until its molecule changes. A caption
+  with cLogP or TPSA is saved as plain text
+  ([#1197](https://github.com/Ameyanagi/ReShiki/pull/1197),
+  [#1247](https://github.com/Ameyanagi/ReShiki/pull/1247); fixes
   [issue #1175](https://github.com/Ameyanagi/ReShiki/issues/1175)).
 - **The name above the properties.** **Show properties** has a **Name** row,
   and **Show chemical name** shows the same row: the name in bold, with the
-  other properties below it in one caption. The automatic name follows
-  structure edits in the same Undo step. Type a name such as `Compound 3a` in
+  other properties below it in one caption. A long name wraps under its
+  molecule, as **Show chemical name** did in 0.15, while each property line
+  stays on one line. The automatic name follows structure edits in the same
+  Undo step. Type a name such as `Compound 3a` in
   the new **Name** field of **Molecular properties**, or double-click the name
   on the canvas; ↺ returns to the automatic name. A custom name stays when the
-  structure changes, and the panel notes that it changed. CDXML and CDX save
-  the name as plain text above the linked lines
-  ([#1230](https://github.com/Ameyanagi/ReShiki/pull/1230)).
+  structure changes, and the panel notes that it changed. It also stays with
+  its molecule when the caption's last row is hidden, the caption is deleted
+  or another caption line is edited, and showing the **Name** row brings it
+  back. CDXML and CDX save the name as plain text above the linked lines
+  ([#1230](https://github.com/Ameyanagi/ReShiki/pull/1230),
+  [#1247](https://github.com/Ameyanagi/ReShiki/pull/1247)).
 - **Predict NMR from scripts.** `Molecule.predict_nmr("13C")` in
   [Python](python.md#predict-nmr), `reshiki --cli predict-nmr` on the
   [command line](agent-cli.md#predict-nmr) and the `predict_nmr`
@@ -301,6 +308,13 @@ changes in this release are by @Ameyanagi.
   object, the arrow moves as drawn and that end detaches. Before, the result
   depended on which object was farther left or higher
   ([#1191](https://github.com/Ameyanagi/ReShiki/pull/1191)).
+- Distributing a whole reaction no longer leaves its molecules and `+` signs on
+  top of each other. Distribute spaces the molecules, and each `+` moves with
+  the gap between the two molecules it separates, which widens to make room
+  for it. Changing a dotted hydrogen bond to a real bond now works when one of
+  its molecules has a reaction role: the joined molecule keeps the role. It
+  was refused with "Assign complete molecules to reaction roles"
+  ([#1248](https://github.com/Ameyanagi/ReShiki/pull/1248)).
 - **ATOMS** has its own line for **\*** (dummy atom) and a new **R** button,
   which draws an R group: a `*` atom labeled R, even when your abbreviations
   define a group named R. **Fe** left the palette; type `Fe` in the Atom
@@ -602,6 +616,11 @@ validation, versions}`. `info`, `document_new`, `document_list`,
   drawing, with a warning.
 - **Layout:** layout can shorten an exocyclic bond, such as a C=O, to clear a
   clash ([issue #1122](https://github.com/Ameyanagi/ReShiki/issues/1122)).
+- **Names in captions:** joining two molecules that each have a custom name
+  keeps the first one's name. After **Undo** of **View → 2-decimal MW**,
+  captions keep the precision they show until the setting changes again or a
+  row is shown or hidden
+  ([#1247](https://github.com/Ameyanagi/ReShiki/pull/1247)).
 - **Arrows:** a multi-segment arrowed curve read from CDXML or CDX opens as a
   pen path with arrowheads, not as an arrow.
 - **Relaxed 3D:** like RDKit's UFF, it bends the trans ligands of square-planar

@@ -29,7 +29,12 @@ image size and build time limit, no user-facing change), at `fabd0682`, and
 [PR #1245](https://github.com/Ameyanagi/ReShiki/pull/1245) (Compare zoom,
 outline and SMILES wrapping), at `90a50b3a`, and
 [PR #1246](https://github.com/Ameyanagi/ReShiki/pull/1246) (**Keep as CDXML**
-lists what the file loses), at `ba34c8d8`.
+lists what the file loses), at `ba34c8d8`,
+[PR #1248](https://github.com/Ameyanagi/ReShiki/pull/1248) (Distribute on whole
+reactions, dotted hydrogen bonds on reaction roles), at `1c0bc3f4`, and
+[PR #1247](https://github.com/Ameyanagi/ReShiki/pull/1247) (name wrapping,
+imported caption text and kept custom names), at `96e5a14f`, the last fixes
+for 0.16.0.
 
 `VERSION` is 39 in `crates/model/src/document.rs`. `Document::file_version`
 saves each drawing at the version of the newest feature it uses: 39 for a
@@ -80,8 +85,10 @@ Python and documentation jobs again; its results are on the pull request.
 The maintainer runs these on a manual **Release builds** run of the merged
 `main` commit, or on its packages, and records the results here:
 
-- [ ] **Release build:** a manual **Release builds** run passes on all six
-      platforms and does not publish; see [Release build](#release-build).
+- [x] **Release build:** a manual **Release builds** run passes on all six
+      platforms and does not publish: run 44300363632 on the #1242 branch;
+      no separate rehearsal on the final `main`, by the maintainer's decision.
+      See [Release build](#release-build).
 - [x] **Live reference suite:** the complete live RDKit reference tests pass
       on macOS arm64, Linux x64 and Windows x64 (run 44300777149 at
       `077815e1`); see
@@ -133,8 +140,14 @@ Manual **Release builds**
 [run 44269689222](https://github.com/Ameyanagi/ReShiki/actions/runs/44269689222)
 at `f25ab7eb`: **failed**. Every package passed except macOS x64 (Intel), where
 `hdiutil` failed while creating the disk image with "No space left on device".
-[PR #1242](https://github.com/Ameyanagi/ReShiki/pull/1242) fixes it. The
-confirmation run is still to run on the final `main` before the tag.
+[PR #1242](https://github.com/Ameyanagi/ReShiki/pull/1242) fixes it: a full
+**Release builds**
+[run 44300363632](https://github.com/Ameyanagi/ReShiki/actions/runs/44300363632)
+on its branch passed on every platform.
+
+The maintainer decided not to repeat a separate release-build rehearsal on the
+final `main`: the tag build itself builds and checks every package and runs the
+complete live reference suite before it publishes.
 
 ## Live RDKit reference suite
 
