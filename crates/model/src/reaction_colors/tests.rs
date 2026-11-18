@@ -236,18 +236,22 @@ fn the_legend_keeps_edited_names_and_goes_away_with_the_colors() {
     set_legend(&mut doc, arrow, true, Default::default()).unwrap();
     let id = doc.reactions[0].colors.as_ref().unwrap().legend.unwrap();
     let text = |doc: &Document| doc.annotations.iter().find(|a| a.id == id).unwrap().clone();
+    // The colors of the swatch glyphs, in order.
+    let swatches = |doc: &Document| -> Vec<Color> {
+        let legend = text(doc);
+        legend
+            .text
+            .char_indices()
+            .filter(|(_, c)| *c == SWATCH || *c == RING)
+            .map(|(i, _)| legend.format.at(i).color)
+            .collect()
+    };
     assert_eq!(
         text(&doc).text,
         "■ Reactant 1   ■ Reactant 2   ■ New bond   ● New ring"
     );
-    let colors: Vec<_> = text(&doc)
-        .format
-        .spans
-        .iter()
-        .map(|s| s.style.color)
-        .collect();
     let red = Color::Palette(Hue::Red, Row::Strong);
-    assert_eq!(colors, vec![BLUE, GREEN, red, red]);
+    assert_eq!(swatches(&doc), vec![BLUE, GREEN, red, red]);
     assert!(doc.reactions[0].annotations.contains(&id));
 
     // Renamed entries survive a rerun.
@@ -261,20 +265,12 @@ fn the_legend_keeps_edited_names_and_goes_away_with_the_colors() {
     })
     .unwrap();
     assert_eq!(text(&doc).text, renamed);
-    assert_eq!(
-        text(&doc).format.spans[0].style.color,
-        Color::Palette(Hue::Purple, Row::Strong)
-    );
-
-    let colors: Vec<_> = text(&doc)
-        .format
-        .spans
-        .iter()
-        .map(|s| s.style.color)
-        .collect();
-    assert_eq!(colors.len(), 4);
+    let purple = Color::Palette(Hue::Purple, Row::Strong);
+    let teal = Color::Palette(Hue::Teal, Row::Strong);
+    assert_eq!(swatches(&doc), vec![purple, teal, red, red]);
     update(&mut doc, arrow, |colors| colors.bonds = false).unwrap();
     assert_eq!(text(&doc).text, "■ Reactant 1   ■ Reactant 2   ● New ring");
+    assert_eq!(swatches(&doc), vec![purple, teal, red]);
     doc.validate().unwrap();
 
     assert!(clear_paint(&mut doc, arrow));
