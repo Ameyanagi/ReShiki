@@ -275,9 +275,11 @@ fn association_is_bounded_atomic_and_handles_long_vertical_fragments() -> anyhow
         Err(cdxml::bonds::Error::Limit)
     ));
     let deep = format!("{}{}", "<group>".repeat(70), "</group>".repeat(70));
+    // Since #1184 the scan before the parser refuses nesting and names the limit.
     assert!(matches!(
         cdxml::bonds::read(&deep, &[], 1.0, &[]),
-        Err(cdxml::bonds::Error::Limit)
+        Err(cdxml::bonds::Error::Invalid(message))
+            if message == "XML elements are nested more than 64 levels deep"
     ));
     let (text, mut part) = points(2, false)?;
     part.positions.clear();

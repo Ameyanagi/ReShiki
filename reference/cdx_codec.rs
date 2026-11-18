@@ -85,7 +85,7 @@ fn xml_differences(
                 ));
                 continue;
             };
-            // Coordinate vectors may have different shortest decimal spellings
+            // Coordinate vectors may have different decimal spellings
             // in Python and Rust. Require exactly equal decoded f64 values,
             // retaining every signed 16.16 tick without a geometry tolerance.
             let equal = if coordinate_attributes.contains(key) {
