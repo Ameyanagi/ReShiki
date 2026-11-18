@@ -291,7 +291,7 @@ Result `value`: `{effect, document, revision, recorded, inserted, id_remap, dele
 
 **Label atoms**
 
-Write predict_nmr rows onto a session document as atom numbers, replacing those atoms' numbers, as one undo step.
+Write predict_nmr rows onto atoms as their atom numbers, as one undo step.
 
 | Hint | Value |
 | --- | --- |
@@ -303,8 +303,9 @@ Write predict_nmr rows onto a session document as atom numbers, replacing those 
 | Parameter | Type | Required | Nullable | Constraints | Description |
 | --- | --- | --- | --- | --- | --- |
 | `base_revision` | `string` | true | false | pattern: `"^(0\|[1-9][0-9]{0,19})$"` | The revision predict_nmr returned. |
+| `decimals` | `null or integer` | true | true | minimum: `0`; maximum: `4` | ppm decimals; null for 2. |
 | `document` | `string` | true | false | pattern: `"^[A-Za-z0-9_-]{1,64}$"` |  |
-| `format` | `string` | true | false | enum: `["numbers","ppm","both"]` | #3, 1.280 ppm or #3 · 1.280 ppm. |
+| `format` | `string` | true | false | enum: `["numbers","ppm","both"]` |  |
 | `idempotency_key` | `null or string` | true | true | maxLength: `128` | As in apply. |
 | `rows` | `array<object>` | true | false | maxItems: `5000` | predict_nmr's rows; a null ppm is skipped. |
 
