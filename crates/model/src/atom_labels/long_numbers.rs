@@ -111,7 +111,7 @@ const STEPS: [i8; 48] = [
 const BLOCKED: f32 = 1000.;
 
 /// The cost of a leader crossing a bond within half a bond length of either
-/// end, where the crossing reads as a mark on the bond.
+/// end of the leader, where the crossing reads as a mark on the bond.
 pub(super) const MARK: f32 = 100.;
 
 /// Space kept between a label and other text or leaders.
@@ -283,7 +283,7 @@ impl LongLabel {
     /// 2.5 bond lengths of leader; a box on anything, a box that cannot be
     /// attributed and a leader through text or another leader come last,
     /// after a leader crossing a bond within half a bond length of either
-    /// end, which reads as a mark on the bond.
+    /// end of the leader, which reads as a mark on the bond.
     fn hits(
         &self,
         center: Point,
@@ -351,7 +351,8 @@ impl LongLabel {
                 .iter()
                 .filter(|(a, b)| segments_cross(start, end, *a, *b))
                 .count();
-        // Where the leader crosses each bond, as a distance from its nearer end.
+        // Where the leader crosses each bond, as a distance from the nearer
+        // end of the leader.
         let crossings: Vec<f32> = obstacles
             .bonds
             .iter()
@@ -359,8 +360,8 @@ impl LongLabel {
             .filter_map(|(a, b, ..)| crossing(start, end, *a, *b))
             .map(|t| t.min(1. - t) * start.distance(end))
             .collect();
-        // A crossing near either end reads as a mark on the bond, not a
-        // leader passing over it.
+        // A crossing near either end of the leader reads as a mark on the
+        // bond, not a leader passing over it.
         let marks = crossings
             .iter()
             .filter(|&&d| d < 0.5 * self.bond_length)
@@ -372,7 +373,7 @@ impl LongLabel {
         // a mark on a bond is better than that but worse than any crossing.
         BLOCKED * (blocked + crossed_text) as f32
             + MARK * marks as f32
-            + 10. * crossings.len() as f32
+            + 10. * (crossings.len() - marks) as f32
             + 4. * start.distance(end) / self.bond_length
     }
 }

@@ -1564,11 +1564,13 @@ fn layout_indicators(doc: &Document, drawn: &Document) -> Vec<Indicator> {
     };
     let mut spots = vec![None; long.len()];
     place(&beside_order, true, &mut spots, &mut occupied, &mut leaders);
-    // The rest in order; a label left without a free box goes first on the
-    // next try, as long as that helps.
+    // The rest in order. A label left without a clear box goes first on the
+    // next try, each label at most once and for at most eight tries; the try
+    // with the fewest such labels wins.
     let mut order: Vec<_> = (0..long.len()).collect();
+    let mut promoted = Vec::new();
     let mut best: Option<(usize, Vec<Option<Spot>>)> = None;
-    for _ in 0..long.len().min(8) {
+    for _ in 0..8 {
         let mut tried = spots.clone();
         let stuck = place(
             &order,
@@ -1577,17 +1579,14 @@ fn layout_indicators(doc: &Document, drawn: &Document) -> Vec<Indicator> {
             &mut occupied.clone(),
             &mut leaders.clone(),
         );
-        let first = stuck.first().copied();
+        let next = stuck.iter().copied().find(|i| !promoted.contains(i));
         if best.as_ref().is_none_or(|(least, _)| stuck.len() < *least) {
             best = Some((stuck.len(), tried));
         }
-        match first {
-            Some(i) if order.first() != Some(&i) => {
-                order.retain(|&j| j != i);
-                order.insert(0, i);
-            }
-            _ => break,
-        }
+        let Some(i) = next else { break };
+        promoted.push(i);
+        order.retain(|&j| j != i);
+        order.insert(0, i);
     }
     let spots = best.map_or(spots, |(_, tried)| tried);
     for ((label, owner, text, _, style, roman_parentheses), spot) in long.into_iter().zip(spots) {

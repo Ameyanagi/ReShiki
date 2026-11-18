@@ -634,7 +634,7 @@ explains how the crates and modules fit together.
 - `crates/model/src/atom_labels/dl_descriptors.rs`: Conventional D/L names supplement CIP labels only for recognized structures.
 - `crates/model/src/atom_labels/hints.rs`
 - `crates/model/src/atom_labels/hydrogen_isotopes.rs`
-- `crates/model/src/atom_labels/long_numbers.rs`: Placement for long atom numbers, such as predicted shifts
+- `crates/model/src/atom_labels/long_numbers.rs`: Placement for predicted-shift atom numbers
 - `crates/model/src/atom_labels/refresh.rs`: Derived drawing labels without identifiers, descriptors or a helper process.
 - `crates/model/src/atom_labels/steroid.rs`: Gonane topology and OPSIN's steroid alpha/beta reference order.
 - `crates/model/src/atom_labels/test_support.rs`
