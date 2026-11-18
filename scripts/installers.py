@@ -488,11 +488,21 @@ DISK_IMAGE_DELAY_SECONDS = 10
 def create_disk_image(staging, output, *, sleep=time.sleep):
     # Creating an LZMA (ULMO) image straight from a folder fails with "No space
     # left on device" for some folder contents, so compress in a second step.
+    # Left to size the image itself, hdiutil made it too small on the Intel
+    # runner and the copy into it failed with "No space left on device" (a
+    # sparse file does the same anywhere). Size it from file lengths with
+    # headroom; compression drops the unused space.
+    length = sum(
+        (Path(folder) / name).lstat().st_size
+        for folder, _, names in os.walk(staging)
+        for name in names
+    )
+    megabytes = (length + length // 10) // 2**20 + 32
     with tempfile.TemporaryDirectory(prefix="ReShiki disk image ") as temporary:
         zlib = Path(temporary) / "zlib.dmg"
         for command in (
             ["hdiutil", "create", "-volname", "ReShiki", "-srcfolder", staging]
-            + ["-format", "UDZO", "-ov", zlib],
+            + ["-size", f"{megabytes}m", "-format", "UDZO", "-ov", zlib],
             ["hdiutil", "convert", zlib, "-format", "ULMO", "-ov", "-o", output],
         ):
             for attempt in range(1, DISK_IMAGE_ATTEMPTS + 1):

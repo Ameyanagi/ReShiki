@@ -604,14 +604,24 @@ class TransientRetryTests(unittest.TestCase):
             if isinstance(outcome, Exception):
                 raise outcome
 
-        with patch("installers.run", side_effect=fake) as run, redirect_stdout(io.StringIO()):
-            installers.create_disk_image(Path("contents"), Path("out.dmg"), sleep=lambda _: None)
+        with (
+            tempfile.TemporaryDirectory() as temporary,
+            patch("installers.run", side_effect=fake) as run,
+            redirect_stdout(io.StringIO()),
+        ):
+            contents = Path(temporary)
+            # A sparse file: 100 MiB long, almost no blocks on disk.
+            with (contents / "reshiki").open("wb") as file:
+                file.truncate(100 * 2**20)
+            installers.create_disk_image(contents, Path("out.dmg"), sleep=lambda _: None)
         commands = [call.args[0] for call in run.call_args_list]
         self.assertEqual(
             [command[1] for command in commands], ["create", "create", "convert", "convert"]
         )
         create, convert = commands[1], commands[3]
-        self.assertEqual(create[create.index("-srcfolder") + 1], Path("contents"))
+        self.assertEqual(create[create.index("-srcfolder") + 1], contents)
+        # Sized from file lengths with headroom, not from blocks on disk.
+        self.assertEqual(create[create.index("-size") + 1], "142m")
         self.assertEqual(create[create.index("-format") + 1], "UDZO")
         # LZMA compression; every supported macOS (14 and later) opens it.
         self.assertEqual(convert[2], create[-1])
