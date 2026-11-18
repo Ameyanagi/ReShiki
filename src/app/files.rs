@@ -37,6 +37,50 @@ pub(super) fn format_keeps(format: &str) -> &'static str {
         "ChemDraw keeps most of the drawing."
     }
 }
+
+/// What the first Save of a ChemDraw file says: what keeping the format loses
+/// from the file (`loss`) and from the drawing, or what the format keeps when
+/// that is nothing.
+pub(super) fn keep_format_text(
+    format: &str,
+    loss: reshiki::formats::ChemdrawLoss,
+    doc: &reshiki::document::Document,
+) -> String {
+    let mut lost = Vec::new();
+    if format != "mol" {
+        for (count, one, many) in [
+            (loss.schemes, "reaction scheme", "reaction schemes"),
+            (loss.steps, "step", "steps"),
+            (loss.pages, "page", "pages"),
+        ] {
+            match count {
+                0 => {}
+                1 => lost.push(format!("1 {one}")),
+                _ => lost.push(format!("{count} {many}")),
+            }
+        }
+        if !doc.reactions.is_empty() {
+            lost.push("reaction roles".into());
+        }
+        if reshiki::arrow_anchors::export_notice(doc).is_some()
+            || reshiki::arrow_labels::export_notice(doc).is_some()
+        {
+            lost.push("arrow links".into());
+        }
+    }
+    let Some(last) = lost.pop() else {
+        return format_keeps(format).into();
+    };
+    let lost = if lost.is_empty() {
+        last
+    } else {
+        format!("{} and {last}", lost.join(", "))
+    };
+    format!(
+        "Keep as {} loses {lost}. Save as ReShiki leaves the ChemDraw file unchanged.",
+        format.to_uppercase()
+    )
+}
 #[cfg(not(target_arch = "wasm32"))]
 const SAVE: &str = "Save";
 #[cfg(not(target_arch = "wasm32"))]
@@ -320,6 +364,8 @@ pub enum Prepared {
     Import {
         format: &'static str,
         contents: String,
+        /// What a save in ChemDraw format loses from this file.
+        loss: reshiki::formats::ChemdrawLoss,
     },
     /// An SD file's records, read.
     Records(Box<super::import::Batch>),
@@ -399,9 +445,16 @@ fn prepare(path: &std::path::Path, contents: Vec<u8>) -> Result<Prepared, String
         if contents.len() as u64 > super::import::limit(path) {
             return Err("File exceeds 16 MB".into());
         }
+        let contents = super::import::contents(format, contents)?;
         Ok(Prepared::Import {
             format,
-            contents: super::import::contents(format, contents)?,
+            // The browser has no file to write back.
+            loss: if cfg!(target_arch = "wasm32") {
+                Default::default()
+            } else {
+                reshiki::formats::chemdraw_loss(format, &contents)
+            },
+            contents,
         })
     }
 }
@@ -415,6 +468,7 @@ async fn records(
     let Ok(Prepared::Import {
         format: "sdf",
         contents,
+        ..
     }) = prepared
     else {
         return prepared;
@@ -785,13 +839,18 @@ impl super::App {
                     self.github.amber = Some(self.status.clone());
                 }
             }
-            Ok(Prepared::Import { format, contents }) => {
+            Ok(Prepared::Import {
+                format,
+                contents,
+                loss,
+            }) => {
                 // A ChemDraw or MOL file stays the tab's file, as a drawing does.
                 if !self
                     .open_target(Some(path.as_path()).filter(|path| kept_format(path).is_some()))
                 {
                     return Task::none();
                 }
+                self.tab.chemdraw_loss = loss;
                 let task = self.run(
                     super::Request::import(format, &contents),
                     super::Job::ImportFile(path),

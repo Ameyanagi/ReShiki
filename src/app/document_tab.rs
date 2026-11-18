@@ -42,6 +42,9 @@ pub(super) struct DocumentTab {
     /// Save keeps a ChemDraw or MOL file's format: the answer to the question
     /// the first Save asks, or a Save as in that format.
     pub(super) keep_format: bool,
+    /// What a save in ChemDraw format loses from the ChemDraw file this tab
+    /// opened; the first Save says so.
+    pub(super) chemdraw_loss: reshiki::formats::ChemdrawLoss,
     /// Browser file identity; imports keep it too, but only native drawings
     /// with a path can save back through it.
     #[cfg(target_arch = "wasm32")]
@@ -177,6 +180,7 @@ impl DocumentTab {
             recent_molecules: Default::default(),
             path: None,
             keep_format: false,
+            chemdraw_loss: Default::default(),
             #[cfg(target_arch = "wasm32")]
             file_handle: None,
             office: None,

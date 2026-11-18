@@ -59,6 +59,7 @@ fn admitted_foreign_import_holds_the_close_barrier_until_engine_result() {
             Ok(files::Prepared::Import {
                 format: "mol",
                 contents: "delayed test payload".into(),
+                loss: Default::default(),
             }),
         ))));
         let id = app.tab.id;

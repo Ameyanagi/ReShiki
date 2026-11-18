@@ -57,6 +57,25 @@ pub async fn read_with_warnings(
 }
 
 /// The engine's drawing as the editor keeps it, as the `import` tool stores it.
+pub use crate::chemistry::cdxml::schemes::Loss as ChemdrawLoss;
+
+/// What a save in ChemDraw format loses from the ChemDraw file `contents`
+/// (`cdxml`, or `cdx` as base64, as [`compatibility::import_text`] gives it).
+/// Nothing for another format or a file that cannot be read.
+pub fn chemdraw_loss(format: &str, contents: &str) -> ChemdrawLoss {
+    let xml = match format {
+        "cdxml" => Ok(contents.to_owned()),
+        "cdx" => STANDARD
+            .decode(contents)
+            .map_err(|error| error.to_string())
+            .and_then(|bytes| crate::exchange::from_cdx(&bytes)),
+        _ => return ChemdrawLoss::default(),
+    };
+    xml.ok()
+        .and_then(|xml| crate::chemistry::cdxml::schemes::loss(&xml).ok())
+        .unwrap_or_default()
+}
+
 fn finalize(response: &Document) -> Result<Document, String> {
     response.validate()?;
     let mut doc = Document::default();
