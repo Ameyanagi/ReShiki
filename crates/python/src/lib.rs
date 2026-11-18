@@ -155,8 +155,15 @@ fn with_labels(
         .ok_or_else(|| invalid(py)("format must be numbers, ppm or both".into()))?;
     let data = py
         .detach(|| {
-            let mut document = Document::from_native_file(&data)?;
+            let before = Document::from_native_file(&data)?;
+            let mut document = before.clone();
             reshiki_io::nmr::write_labels(&mut document, &rows, format)?;
+            // As the app and MCP reconcile an atom-number edit: reaction gaps
+            // and their signs make room for wider labels.
+            if document != before {
+                reshiki_model::transaction::reconcile(&mut document, before)
+                    .map_err(|rejection| rejection.message().to_owned())?;
+            }
             document.file_json()
         })
         .map_err(invalid(py))?;

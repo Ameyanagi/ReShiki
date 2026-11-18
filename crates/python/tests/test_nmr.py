@@ -168,3 +168,20 @@ def test_a_bad_row_writes_nothing() -> None:
     with pytest.raises(reshiki.ReShikiError) as error:
         molecule.with_labels([], format="atom")  # type: ignore[arg-type]
     assert str(error.value) == "format must be numbers, ppm or both"
+
+
+def test_wider_labels_make_room_in_a_reaction_as_the_app_does() -> None:
+    reaction = reshiki.Reaction.from_smiles("CC(=O)O.OCC>>CCOC(C)=O.O")
+
+    def layout(drawing: reshiki.Drawing) -> list[object]:
+        native = json.loads(drawing.rsk())
+        return [a["position"] for a in native["atoms"]] + [
+            a["position"] for a in native.get("annotations", [])
+        ]
+
+    # Acetic acid, the first reactant, is atoms 1-4, beside the tracked "+".
+    labelled = reaction.with_labels([(atom, 100.0) for atom in range(1, 5)], format="both")
+    assert len(_numbers(labelled)) == 4
+    assert layout(labelled) != layout(reaction)
+    # Rows that write nothing leave the drawing as it was.
+    assert layout(reaction.with_labels([(1, None)])) == layout(reaction)
