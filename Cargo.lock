@@ -3989,7 +3989,7 @@ dependencies = [
 
 [[package]]
 name = "reshiki"
-version = "0.15.0"
+version = "0.16.0"
 dependencies = [
  "accesskit",
  "accesskit_consumer",
@@ -4229,7 +4229,7 @@ dependencies = [
 
 [[package]]
 name = "reshiki-python"
-version = "0.15.0"
+version = "0.16.0"
 dependencies = [
  "nazuchem-n2s",
  "png 0.17.16",

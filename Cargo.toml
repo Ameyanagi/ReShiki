@@ -1,6 +1,6 @@
 [package]
 name = "reshiki"
-version = "0.15.0"
+version = "0.16.0"
 edition = "2024"
 default-run = "reshiki"
 # The [[test]] targets below list every integration test binary.
@@ -51,7 +51,7 @@ default-members = [
 
 # Public language packages follow the application release version.
 [workspace.package]
-version = "0.15.0"
+version = "0.16.0"
 
 [workspace.dependencies]
 nazuchem-ir = { git = "https://github.com/Ameyanagi/nazuchem", rev = "5dd39d8245b43d3437c9bb2ab881eeafca8221d7" }

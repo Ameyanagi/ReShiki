@@ -3,7 +3,7 @@
 This page lists the larger open directions after ReShiki 0.15.0, taken from
 the [open GitHub issues](https://github.com/Ameyanagi/ReShiki/issues). It is not
 a release commitment. See [feature status](feature-status.md) for what works
-today and the [latest release notes](changes-0.15.md) for what changed.
+today and the [latest release notes](changes-0.16.md) for what changed.
 
 JACS / ACS stays the default. New features keep physical drawing sizes,
 complete molecular graphs and editable originals.
@@ -12,17 +12,18 @@ complete molecular graphs and editable originals.
   ([#436](https://github.com/Ameyanagi/ReShiki/issues/436)), with heavy work off
   the main thread, NMR and names
   ([#430](https://github.com/Ameyanagi/ReShiki/issues/430)), an embedding API
-  ([#431](https://github.com/Ameyanagi/ReShiki/issues/431)) and a faster demo
-  page ([#433](https://github.com/Ameyanagi/ReShiki/issues/433)).
+  ([#431](https://github.com/Ameyanagi/ReShiki/issues/431)) and a demo that
+  works offline, installs and downloads less
+  ([#1226](https://github.com/Ameyanagi/ReShiki/issues/1226)).
 - **Office and other apps:** reopen ReShiki pictures as editable drawings in
   Office and other apps, and paste several items into one tab
   ([#462](https://github.com/Ameyanagi/ReShiki/issues/462)); finish the remaining
   Wayland, Windows focus and Office checks
   ([#1118](https://github.com/Ameyanagi/ReShiki/issues/1118)).
 - **Chemistry files:** open computational chemistry input and output files
-  ([#418](https://github.com/Ameyanagi/ReShiki/issues/418)) and crystal and
-  periodic structures with their unit cell
-  ([#417](https://github.com/Ameyanagi/ReShiki/issues/417)); import more inputs
+  ([#418](https://github.com/Ameyanagi/ReShiki/issues/418)) and show
+  coordination polyhedra on crystal structures
+  ([#1227](https://github.com/Ameyanagi/ReShiki/issues/1227)); import more inputs
   with a warning instead of refusing them
   ([#1138](https://github.com/Ameyanagi/ReShiki/issues/1138)).
 - **3D and layout:** 3D model objects beside structures

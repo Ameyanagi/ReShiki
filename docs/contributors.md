@@ -293,7 +293,7 @@ Nix flake for Linux and Apple Silicon Macs (released in 0.13.0): @Stefanomarton 
 
 Release preparation and documentation for 0.13.0: @Ameyanagi.
 
-The [GitHub contributor history](https://github.com/Ameyanagi/ReShiki/graphs/contributors) records merged commits. Individual [release notes](changes-0.15.md) credit contributors alongside their changes.
+The [GitHub contributor history](https://github.com/Ameyanagi/ReShiki/graphs/contributors) records merged commits. Individual [release notes](changes-0.16.md) credit contributors alongside their changes.
 
 Space-filling hydrogen visibility: @Ameyanagi in [PR #535](https://github.com/Ameyanagi/ReShiki/pull/535); [validation and reusable evidence](changes/qa-513.md).
 
@@ -307,9 +307,19 @@ Release preparation and documentation for 0.13.1: @Ameyanagi in [PR #583](https:
 
 Release preparation and documentation for 0.14.0: @Ameyanagi in [PR #1028](https://github.com/Ameyanagi/ReShiki/pull/1028).
 
-Release preparation and documentation for 0.15.0: @Ameyanagi.
+Release preparation and documentation for 0.15.0: @Ameyanagi in [PR #1170](https://github.com/Ameyanagi/ReShiki/pull/1170).
+
+Release preparation and documentation for 0.16.0: @Ameyanagi.
 
 @Ameyanagi — confirmed online chemical-name lookup in
 [PR #599](https://github.com/Ameyanagi/ReShiki/pull/599). @fusion809 reported
 the unsupported common names in [issue #596](https://github.com/Ameyanagi/ReShiki/issues/596).
 [Native and browser evidence](changes/online-name-lookup.md).
+
+@ssiddhantsharma — the design of scripted NMR prediction and shift labels for
+Python, `reshiki --cli` and MCP in
+[issue #1203](https://github.com/Ameyanagi/ReShiki/issues/1203): the
+**Predict NMR…** rows with their method and data credit, and the label formats.
+@Ameyanagi built it in [PR #1231](https://github.com/Ameyanagi/ReShiki/pull/1231)
+and [PR #1234](https://github.com/Ameyanagi/ReShiki/pull/1234). In
+[ReShiki 0.16.0](changes-0.16.md).

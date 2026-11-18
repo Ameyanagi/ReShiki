@@ -3,7 +3,7 @@
 This inventory retains earlier workflow checks. For current packages and setup, see [installation](https://reshiki.com/guide/install/) and [release signing](releasing.md).
 
 Workflow checks began on 2026-09-20 for version 0.2.0. This page describes
-ReShiki 0.15.0. Dated validation records describe their original milestones.
+ReShiki 0.16.0. Dated validation records describe their original milestones.
 This inventory records supported workflows, explicit limitations and planned work. A supported subset is not a claim of
 complete coverage for every chemical structure or document.
 
@@ -16,7 +16,7 @@ Evidence comes from ReShiki source, regression tests, saved interchange fixtures
 and desktop editing checks. Detailed feature documents record the tests and
 applicable boundaries.
 
-Which ReShiki versions open a saved drawing is listed in the [file compatibility table](changes-0.15.md#file-compatibility).
+Which ReShiki versions open a saved drawing is listed in the [file compatibility table](changes-0.16.md#file-compatibility).
 
 ## Agent API — experimental
 
@@ -210,7 +210,7 @@ The assistant shows immediate activity, elapsed time, cancellation, public plans
 
 - Japanese interface typography uses an installed Japanese sans-serif face; glyph fallback is measured consistently in drawing exports.
 - Tool-family palettes show readable previews and names. Direct tools select immediately; other families expose a remembered choice and corner indicator.
-- Assistant model search, per-model reasoning/service settings and saved explicit choices are available. The default is GPT-6-Astra when available, falling back to the connected account default. Initial settings are Low reasoning and Standard service.
+- Assistant model search, per-model reasoning/service settings and saved explicit choices are available. The default is GPT-6.2 Sol when the connected account offers it, otherwise the account default, otherwise the newest model in the catalog. Initial settings are Low reasoning and Standard service.
 - Review edits and Accept all edits support asynchronous generation and one-step Undo. Automatic acceptance requires a reviewed final draft with no unresolved findings.
 - Canvas inspection supplies live document data and a rendered image; proposal preview supplies a validated scheme image. Existing scheme objects can be replaced by ID while unrelated content is retained.
 - Scheme layout supports stoichiometric coefficients, readable R groups, disconnected component spacing, participant rotation and aligned captions.

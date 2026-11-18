@@ -67,7 +67,7 @@ await init(new URL("/assets/reshiki_web_bg.wasm", location.href));
 | `smiles(data, format)`                             | The canonical SMILES.                                                         |
 | `inchi(data, format)`                              | The standard InChI.                                                           |
 | `addFont(font)`                                    | Adds a font (a URL or bytes) that figures fall back to, such as for Japanese. |
-| `version()`                                        | The ReShiki release version, e.g. `0.15.0` (including any prerelease suffix). |
+| `version()`                                        | The ReShiki release version, e.g. `0.16.0` (including any prerelease suffix). |
 
 `data` is a string or a `Uint8Array`; `cdx` input must be bytes.
 

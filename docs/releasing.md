@@ -111,18 +111,18 @@ Extracted macOS archives and installed disk-image copies also run the actual app
 
 Before the native-runtime cutover, the [2026-09-20 release validation](https://github.com/Ameyanagi/ReShiki/actions/runs/35510386732) passed all five package checks, including native ARM Windows/Linux applications, fresh chemistry setup, and offline reuse. Apple Silicon also passed Developer ID signing, notarization, stapling, and Gatekeeper assessment. This manual run did not publish a release.
 
-Each release has a validation record, `docs/changes/release-<version>-validation.md`, with the release preparation, the checks run on it and its publication. The release notes link to it, and their **Build and verification** details go there, not in the notes. The [0.15.0 record](changes/release-0.15.0-validation.md) is the newest; [docs/changes](https://github.com/Ameyanagi/ReShiki/tree/main/docs/changes) has the older ones.
+Each release has a validation record, `docs/changes/release-<version>-validation.md`, with the release preparation, the checks run on it and its publication. The release notes link to it, and their **Build and verification** details go there, not in the notes. The [0.16.0 record](changes/release-0.16.0-validation.md) is the newest; [docs/changes](https://github.com/Ameyanagi/ReShiki/tree/main/docs/changes) has the older ones.
 
 ## Publish a version
 
 1. Update the package version in `Cargo.toml`, update `Cargo.lock`, and record release changes. Run `uv run --locked python scripts/assemble_changelog.py --release 0.16.0` (with the new version): it appends the [release-note fragments](changes/unreleased/README.md) to `docs/changes-0.16.md` by section, adds their `credit` lines to `docs/contributors.md` and deletes the fragments. Then edit the notes into the [release notes template](writing-style.md#release-notes), move their **Developer** items into the release validation record, and point `docs/changes-unreleased.md` at them. If the website color reference is marked as Nightly, set `NIGHTLY` to `false` in `examples/theme_colors.rs`, regenerate it as the [theme guide](../presets/themes/README.md) describes, and remove the Nightly note from `website/src/content/docs/guide/color-palettes.mdx`.
 2. Run the checks and a manual release build. Review the resulting packages.
 3. In the release build, run Clean up from the toolbar and close its ▾ menu with Esc, and close 3D preview, atom label, Name import preview, Structure import, reaction mapping proposal and assistant review with Enter and separately with Esc (use Apply/Discard buttons where those keys are unavailable). After each close, Delete or Cmd+Z must act on the drawing without a click. The automated `review_close_returns_focus_*` tests cover the keyboard paths except assistant review; local assistant button clicks are covered, but check live proposals manually.
-4. Merge the release preparation pull request to `main`, then create and push a matching tag on its tested commit, for example `v0.15.0` for version `0.15.0`.
+4. Merge the release preparation pull request to `main`, then create and push a matching tag on its tested commit, for example `v0.16.0` for version `0.16.0`.
 
 ```sh
-git tag -a v0.15.0 -m "ReShiki 0.15.0"
-git push origin v0.15.0
+git tag -a v0.16.0 -m "ReShiki 0.16.0"
+git push origin v0.16.0
 ```
 
 A `v*` tag triggers builds. A mismatched version or a tagged commit outside `main` fails before packaging. The macOS archive must be signed, notarized, stapled and verified before the release publishes; missing credentials fail the job instead of silently publishing an unsigned macOS download. All six packages and the complete live reference tests on macOS ARM64, Linux x64, and Windows x64 must pass before publication. With `SIGNPATH_ENABLED=true`, the Windows application and final setup program must also pass release-signature verification before publication; missing credentials, approval, or signature verification fail the release. Until activation, Windows packages are unsigned. Linux packages remain unsigned. Tags containing a prerelease suffix create a GitHub prerelease. Manual **Release builds** runs never publish a release; **Nightly builds** runs publish prereleases from `main`.
@@ -167,7 +167,7 @@ Both Mac builds use the fixed abbreviation drawing coordinates recorded on Apple
 
 The **npm** job runs in the `npm` GitHub environment, which GitHub creates on its first run. It publishes with npm trusted publishing (OIDC) when the repository variable `NPM_TRUSTED_PUBLISHING` is `true`, and otherwise with the `NPM_TOKEN` secret. The npm account `ameyanagi` owns the `@ameyanagi` scope.
 
-npm can only add a trusted publisher to a package that already exists, so the first version of each package is published with a token, and every later one through trusted publishing. With trusted publishing on, the job still uses `NPM_TOKEN`, when it is set, for a package npm does not have yet. `@ameyanagi/reshiki-headless` is new after 0.15.0, so the next tag publishes its first version with the token, if npm accepts it. Then add that package's trusted publisher (step 2) before the following release.
+npm can only add a trusted publisher to a package that already exists, so the first version of each package is published with a token, and every later one through trusted publishing. With trusted publishing on, the job still uses `NPM_TOKEN`, when it is set, for a package npm does not have yet. Both `@ameyanagi/reshiki` and `@ameyanagi/reshiki-headless` are on npm and publish through trusted publishing; the steps below apply to a new package.
 
 1. **First publish, with a token.** Create a [granular access token](https://docs.npmjs.com/creating-and-viewing-access-tokens) with **Packages and scopes: Read and write**, for all packages or the `@ameyanagi` scope, and a short expiry. Add it as the repository (or `npm` environment) secret `NPM_TOKEN`. Then publish main's version without a new tag:
 
@@ -205,7 +205,7 @@ After that, every version tag publishes to npm with no further steps.
 
 ## Configure PyPI publishing
 
-The **pypi** job publishes with [PyPI trusted publishing](https://docs.pypi.org/trusted-publishers/) (OIDC) from the `pypi` GitHub environment, which GitHub creates on its first run. It needs no token or secret. The project's pending publisher on pypi.org uses:
+The **pypi** job publishes with [PyPI trusted publishing](https://docs.pypi.org/trusted-publishers/) (OIDC) from the `pypi` GitHub environment, which GitHub creates on its first run. It needs no token or secret. The project's trusted publisher on pypi.org uses:
 
 | Field             | Value         |
 | ----------------- | ------------- |
@@ -215,7 +215,7 @@ The **pypi** job publishes with [PyPI trusted publishing](https://docs.pypi.org/
 | Workflow name     | `release.yml` |
 | Environment name  | `pypi`        |
 
-A pending publisher creates the project on its first upload. The first PyPI release is the next version tag, published like any release. Each version must match its tag's code, so the manual `pypi_only` run refuses to publish when `v<version>` is already tagged at another commit: once `v0.15.0` is tagged, later main commits cannot publish as 0.15.0. A `pypi_only` run is for publishing right after a version bump on main, before that version is tagged:
+PyPI has every release since 0.14.0, and each version tag publishes like any release. Each version must match its tag's code, so the manual `pypi_only` run refuses to publish when `v<version>` is already tagged at another commit: once `v0.16.0` is tagged, later main commits cannot publish as 0.16.0. A `pypi_only` run is for publishing right after a version bump on main, before that version is tagged:
 
 ```sh
 gh workflow run release.yml --ref main -f pypi_only=true
