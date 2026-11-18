@@ -67,6 +67,7 @@ pub mod host;
 mod ids;
 pub mod import;
 pub mod inspect;
+pub mod label_atoms;
 pub mod naming;
 pub mod policy;
 pub mod predict_nmr;

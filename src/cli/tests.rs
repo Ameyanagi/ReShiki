@@ -1,7 +1,7 @@
 use super::{
     args::{
-        Compose, Convert, Export, Input, Name, Output, PredictNmr, Render, Schema, Skill, Source,
-        SvgText, parse,
+        Compose, Convert, Export, Input, Labels, Name, Output, PredictNmr, Render, Schema, Skill,
+        Source, SvgText, parse,
     },
     *,
 };
@@ -51,6 +51,7 @@ fn convert(source: Source, from: &str, to: &str, output: Output) -> Command {
             format: from.into(),
         },
         export: export(to, output),
+        labels: None,
     })
 }
 
@@ -763,6 +764,112 @@ async fn predict_nmr_prints_the_mcp_value_with_smiles_atom_ids() {
         .collect();
     assert_eq!(atoms, ["1", "2", "5"]);
     let (code, out, err) = call(&["predict-nmr", "--smiles", "CCO.CC", "--nucleus", "13C"]).await;
+    assert_eq!(code, FAILURE);
+    assert!(out.is_empty(), "{out}");
+    assert_eq!(
+        err,
+        "reshiki: error[failed]: NMR prediction needs exactly one molecule; this drawing has 2\n"
+    );
+}
+
+#[test]
+fn convert_labels_parse_with_their_nucleus() {
+    let Ok(Command::Convert(convert)) = parsed(&[
+        "convert",
+        "--smiles",
+        "CCO",
+        "-o",
+        "a.svg",
+        "--nucleus",
+        "13C",
+        "--labels",
+        "value",
+    ]) else {
+        panic!("convert with labels did not parse");
+    };
+    assert_eq!(
+        convert.labels,
+        Some(Labels {
+            nucleus: "13C",
+            format: "value".into(),
+            decimals: 1,
+        })
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn convert_writes_predicted_shifts_as_atom_numbers() {
+    let svg_args = [
+        "convert",
+        "--smiles",
+        "CCOC(C)=O",
+        "--to",
+        "svg",
+        "--svg-text",
+        "live",
+        "--nucleus",
+        "13C",
+        "--labels",
+        "both",
+    ];
+    let (code, out, err) = call(&svg_args).await;
+    assert_eq!(code, SUCCESS, "{err}");
+    assert!(err.is_empty(), "{err}");
+    // 13C labels get one decimal place by default.
+    for label in ["#1 · 14.2 ppm", "#4 · 170.7 ppm", "#5 · 20.9 ppm"] {
+        assert!(out.contains(&format!(">{label}</text>")), "{label}");
+    }
+    // The journal style: the value alone.
+    let value_args = svg_args.map(|arg| if arg == "both" { "value" } else { arg });
+    let (code, out, err) = call(&value_args).await;
+    assert_eq!(code, SUCCESS, "{err}");
+    for label in ["14.2", "170.7", "20.9"] {
+        assert!(out.contains(&format!(">{label}</text>")), "{label}");
+    }
+    assert!(!out.contains(" ppm<"), "{out}");
+    let cdxml_args = [
+        "convert",
+        "--smiles",
+        "CCOC(C)=O",
+        "--to",
+        "cdxml",
+        "--nucleus",
+        "1H",
+        "--labels",
+        "ppm",
+    ];
+    let (code, out, err) = call(&cdxml_args).await;
+    assert_eq!(code, SUCCESS, "{err}");
+    // 1H labels get two.
+    assert!(out.contains("AtomNumber=\"1.28 ppm\""), "{out}");
+    let (code, out, err) = call(&[
+        "convert",
+        "--smiles",
+        "CCOC(C)=O",
+        "--to",
+        "cdxml",
+        "--nucleus",
+        "13C",
+        "--labels",
+        "ppm",
+        "--decimals",
+        "3",
+    ])
+    .await;
+    assert_eq!(code, SUCCESS, "{err}");
+    assert!(out.contains("AtomNumber=\"170.700 ppm\""), "{out}");
+    let (code, out, err) = call(&[
+        "convert",
+        "--smiles",
+        "CCO.CC",
+        "--to",
+        "svg",
+        "--nucleus",
+        "1H",
+        "--labels",
+        "numbers",
+    ])
+    .await;
     assert_eq!(code, FAILURE);
     assert!(out.is_empty(), "{out}");
     assert_eq!(
@@ -1666,6 +1773,98 @@ async fn usage_errors_exit_2_before_any_work() {
         (
             &["render", "--smiles", "C", "--to", "svg", "--nucleus", "1H"],
             "render does not take --nucleus".into(),
+        ),
+        (
+            &["render", "--smiles", "C", "--to", "svg", "--labels", "both"],
+            "render does not take --labels".into(),
+        ),
+        (
+            &[
+                "convert", "--smiles", "C", "--to", "svg", "--labels", "both",
+            ],
+            "--labels needs --nucleus 1H or 13C".into(),
+        ),
+        (
+            &["convert", "--smiles", "C", "--to", "svg", "--decimals", "2"],
+            "--decimals needs --labels value, numbers, ppm or both".into(),
+        ),
+        (
+            &[
+                "convert",
+                "--smiles",
+                "C",
+                "--to",
+                "svg",
+                "--nucleus",
+                "1H",
+                "--labels",
+                "ppm",
+                "--decimals",
+                "5",
+            ],
+            "--decimals must be a whole number from 0 to 4".into(),
+        ),
+        (
+            &[
+                "convert",
+                "--smiles",
+                "C",
+                "--to",
+                "svg",
+                "--nucleus",
+                "1H",
+                "--labels",
+                "ppm",
+                "--decimals",
+                "-1",
+            ],
+            "--decimals must be a whole number from 0 to 4".into(),
+        ),
+        (
+            &["convert", "--smiles", "C", "--to", "svg", "--nucleus", "1H"],
+            "--nucleus needs --labels value, numbers, ppm or both".into(),
+        ),
+        (
+            &[
+                "convert",
+                "--smiles",
+                "C",
+                "--to",
+                "svg",
+                "--nucleus",
+                "1H",
+                "--labels",
+                "atom",
+            ],
+            "--labels must be value, numbers, ppm or both".into(),
+        ),
+        (
+            &[
+                "convert",
+                "--smiles",
+                "C",
+                "--to",
+                "svg",
+                "--nucleus",
+                "H1",
+                "--labels",
+                "ppm",
+            ],
+            "--nucleus must be 1H or 13C".into(),
+        ),
+        (
+            &[
+                "convert",
+                "--smiles",
+                "C",
+                "--to",
+                "mol",
+                "--nucleus",
+                "1H",
+                "--labels",
+                "ppm",
+            ],
+            "--labels needs an output that keeps atom numbers: svg, png, pdf, cdxml, cdx".into(),
         ),
         (
             &["predict-nmr", "--smiles", "C"],

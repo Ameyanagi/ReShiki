@@ -38,6 +38,11 @@ The reference data comes from nmrshiftdb2 under the
 [nmrshiftdb2 Database License](https://github.com/Ameyanagi/ReShiki/blob/main/licenses/nmrshiftdb2/DATABASE-LICENSE.txt),
 which the wheel includes. Cite the prediction's `credit` with published values.
 
+`molecule.with_labels(shifts)` writes the shifts onto the atoms as atom
+numbers, by default the bare value journals print (`1.28`; `format` also
+offers `#3`, `1.28 ppm` or `#3 · 1.28 ppm`), which `.rsk`, SVG, PNG, PDF,
+CDXML and CDX output keep.
+
 ## Reuse a style
 
 Create a style context once and reuse its constructors and export functions:

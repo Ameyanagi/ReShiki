@@ -347,6 +347,7 @@ explains how the crates and modules fit together.
 - `crates/agent/src/ops/ids.rs`: Object IDs from a request
 - `crates/agent/src/ops/import.rs`: The `import` tool
 - `crates/agent/src/ops/inspect.rs`: The `inspect` tool
+- `crates/agent/src/ops/label_atoms.rs`: The `label_atoms` tool
 - `crates/agent/src/ops/naming.rs`: Chemical naming for the operation tools.
 - `crates/agent/src/ops/policy.rs`: Who may read or edit which document.
 - `crates/agent/src/ops/predict_nmr.rs`: The `predict_nmr` tool
@@ -596,6 +597,7 @@ explains how the crates and modules fit together.
 - `crates/io/src/native_windows.rs`: Windows print geometry is passed to the isolated Rust platform crate.
 - `crates/io/src/nmr.rs`: Complete drawing graph adapter and separately licensed offline NMR index.
 - `crates/io/src/nmr/dataset.rs`: Reproducible measured-only nmrshiftdb2 SDF transformation.
+- `crates/io/src/nmr/labels.rs`: Predicted shifts written onto a drawing as atom numbers, for scripts.
 - `crates/io/src/nmr/shifts.rs`: The NMR prediction that Python, the command line and MCP return.
 - `crates/io/src/payload.rs`: Editable drawing snapshots carried by ordinary PNG, SVG, and PDF figures.
 - `crates/io/src/preview.rs`: The editor's PNG preview of a drawing, shared by the assistant's canvas tools, the MCP `render` and `convert` tools, the CLI and the browser library, so every surface draws the same pixels.
@@ -632,6 +634,7 @@ explains how the crates and modules fit together.
 - `crates/model/src/atom_labels/dl_descriptors.rs`: Conventional D/L names supplement CIP labels only for recognized structures.
 - `crates/model/src/atom_labels/hints.rs`
 - `crates/model/src/atom_labels/hydrogen_isotopes.rs`
+- `crates/model/src/atom_labels/long_numbers.rs`: Placement for predicted-shift atom numbers
 - `crates/model/src/atom_labels/refresh.rs`: Derived drawing labels without identifiers, descriptors or a helper process.
 - `crates/model/src/atom_labels/steroid.rs`: Gonane topology and OPSIN's steroid alpha/beta reference order.
 - `crates/model/src/atom_labels/test_support.rs`

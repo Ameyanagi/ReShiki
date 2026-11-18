@@ -17,7 +17,7 @@
 > {"jsonrpc":"2.0","method":"notifications/initialized"}
 # Tools are listed in catalog order; each reduces to its name.
 > {"jsonrpc":"2.0","id":2,"method":"tools/list"}
-< {"id":2,"jsonrpc":"2.0","result":{"tools":["info","document_new","document_list","document_close","import","inspect","analyze","predict_nmr","render","export","file_open","file_save","compose","apply","convert","name","schema"]}}
+< {"id":2,"jsonrpc":"2.0","result":{"tools":["info","document_new","document_list","document_close","import","inspect","analyze","predict_nmr","render","export","file_open","file_save","compose","apply","label_atoms","convert","name","schema"]}}
 # import returns a new handle, its counts and analysis; the analysis values
 # are the same everywhere.
 > {"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"import","arguments":{"format":"smiles","text":"CCO"}}}
@@ -54,3 +54,10 @@
 # An unknown handle is an isError result with the ops code.
 > {"jsonrpc":"2.0","id":11,"method":"tools/call","params":{"name":"inspect","arguments":{"document":"doc_0","ids":null}}}
 < {"id":11,"jsonrpc":"2.0","result":{"content":[{"text":"<structuredContent>","type":"text"}],"isError":true,"structuredContent":{"error":{"code":"unknown_document","message":"Unknown or expired document handle; create a new document","retryable":false},"versions":{"app":"<app>","document":39,"engine_protocol":"<engine>","operation_api":2}}}}
+# label_atoms writes predicted shifts as atom numbers, bound to the
+# revision they were predicted at; a row without a ppm is skipped.
+> {"jsonrpc":"2.0","id":14,"method":"tools/call","params":{"name":"label_atoms","arguments":{"document":"<doc#1>","rows":[{"atom":"1","ppm":1.2},{"atom":"3","ppm":null}],"format":"ppm","base_revision":"1","idempotency_key":null}}}
+< {"id":14,"jsonrpc":"2.0","result":{"content":[{"text":"<structuredContent>","type":"text"}],"isError":false,"structuredContent":{"validation":{"status":"valid"},"value":{"document":"<doc#1>","effect":"applied","labeled":["1"],"recorded":true,"revision":"2"},"versions":{"app":"<app>","document":39,"engine_protocol":"<engine>","operation_api":2},"warnings":[]}}}
+# The same rows from that revision are stale once it has changed.
+> {"jsonrpc":"2.0","id":15,"method":"tools/call","params":{"name":"label_atoms","arguments":{"document":"<doc#1>","rows":[{"atom":"1","ppm":1.2},{"atom":"3","ppm":null}],"format":"ppm","base_revision":"1","idempotency_key":null}}}
+< {"id":15,"jsonrpc":"2.0","result":{"content":[{"text":"<structuredContent>","type":"text"}],"isError":true,"structuredContent":{"error":{"code":"stale","current_revision":"2","message":"base_revision 1 is not the current revision 2; inspect the document and retry with a new idempotency_key","param":"base_revision","retryable":false},"versions":{"app":"<app>","document":39,"engine_protocol":"<engine>","operation_api":2}}}}

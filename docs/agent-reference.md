@@ -65,6 +65,7 @@ Experimental: ReShiki's agent tools, schemas and results may change between rele
 Usage: reshiki --cli convert (INPUT | - | --smiles TEXT) [--from FORMAT] [--to FORMAT]
                              [-o OUTPUT|-] [--svg-text MODE] [--pages]
                              [--force] [--receipt]
+                             [--nucleus NUCLEUS --labels FORMAT [--decimals N]]
 
 Converts a structure or drawing, making the file as the app's Export does.
 
@@ -97,6 +98,14 @@ Options:
   --force        Replace OUTPUT if it exists; otherwise that is an error.
   --receipt      With -o OUTPUT, print one JSON line to stdout:
                  {"receipt": {"format", "byte_len", "detail"}, "api": {…}}.
+  --nucleus NUCLEUS --labels FORMAT
+                 Predict 1H or 13C shifts as predict-nmr does and write
+                 them onto the atoms as atom numbers: numbers (#3), ppm
+                 (1.28 ppm) or both (#3 · 1.28 ppm), replacing those
+                 atoms' numbers. Only for svg, png, pdf, cdxml, cdx. Cite
+                 predict-nmr's credit with published values.
+  --decimals N   With --labels, the ppm decimal places, 0 to 4: by default
+                 2 for 1H (7.26 ppm) and 1 for 13C (128.4 ppm).
 
 Inputs are at most 16777216 bytes (16777218 for cdx), so a ReShiki drawing with
 large embedded pictures that the app opens can be too large here. rsk and
@@ -636,6 +645,30 @@ Edit a session document as one undo step. Returns the new revision, recorded (fa
 | `source` | `null or string` | true | true | pattern: `"^[A-Za-z0-9_-]{1,64}$"` | The session document insert copies (made by import or compose, for example); null for delete, undo and redo. |
 
 Result `value`: `{effect, document, revision, recorded, inserted, id_remap, deleted}`. effect is "applied"; document and revision are the edited document's handle and revision. recorded is false when nothing changed. inserted and deleted list object IDs, which may overlap because deleted IDs can be reused; both are empty for undo and redo. id_remap is [{source, inserted}], mapping source IDs to inserted IDs. The label refresh's notice becomes a warning.
+
+### label_atoms
+
+**Label atoms**
+
+Write predict_nmr rows onto atoms as their atom numbers, as one undo step.
+
+| Hint | Value |
+| --- | --- |
+| `destructiveHint` | true |
+| `idempotentHint` | true |
+| `openWorldHint` | false |
+| `readOnlyHint` | false |
+
+| Parameter | Type | Required | Nullable | Constraints | Description |
+| --- | --- | --- | --- | --- | --- |
+| `base_revision` | `string` | true | false | pattern: `"^(0\|[1-9][0-9]{0,19})$"` | The revision predict_nmr returned. |
+| `decimals` | `null or integer` | true | true | minimum: `0`; maximum: `4` | ppm decimals; null for 2. |
+| `document` | `string` | true | false | pattern: `"^[A-Za-z0-9_-]{1,64}$"` |  |
+| `format` | `string` | true | false | enum: `["value","numbers","ppm","both"]` |  |
+| `idempotency_key` | `null or string` | true | true | maxLength: `128` | As in apply. |
+| `rows` | `array<object>` | true | false | maxItems: `5000` | predict_nmr's rows; a null ppm is skipped. |
+
+Result `value`: `{effect, document, revision, recorded, labeled}`. effect is "applied"; document and revision are the labelled document's handle and revision. recorded is false when nothing changed. labeled lists the atom IDs given a label, in row order. The label refresh's notice becomes a warning.
 
 ### convert
 

@@ -58,8 +58,9 @@ atom in the drawing.
 - Nearby sticks share one label. Clicking the label again selects its next
   atom.
 - Labels move with their atoms. An atom inside a collapsed abbreviation is
-  labeled at the abbreviation. Labels never appear in exports or the Undo
-  history.
+  labeled at the abbreviation. **Show labels** is an on-screen overlay: its
+  labels never appear in exports or the Undo history. To put labels in a
+  file, write them from a script (see [Labels from scripts](#labels-from-scripts)).
 - A soft teal halo marks a selected atom that has a prediction.
 
 ### When results update
@@ -84,7 +85,61 @@ The same prediction runs without the app:
 Each returns the rows the palette lists, with the broad-match flag as data and
 the method, data version, conditions, limitations and data credit that
 **Export…** writes. The nucleus is required, and the drawing, or the atoms
-named, must be exactly one molecule. **Show labels** stays in the app.
+named, must be exactly one molecule.
+
+### Labels from scripts
+
+Scripts can also write the shifts onto the drawing. The journal style is the
+`value` format, the bare shift (`7.26`, `128.4`); journals usually state
+"δ (ppm)" once in the figure caption. It is Python's default; the command line
+and MCP name the format each time. The formats of the **Show labels** menu are
+also offered: `numbers` (`#3`), `ppm` (`1.28 ppm`) or `both`
+(`#3 · 1.28 ppm`). The ppm has the decimal places journals print, 2 for ¹H and
+1 for ¹³C, when the nucleus is known (Python rows that name it, or the command
+line's `--nucleus`); MCP rows do not carry it, so pass `decimals: 1` for ¹³C.
+Any of them can ask for 0 to 4. The **Show labels** overlay keeps its three.
+
+- Python: `molecule.with_labels(shifts)`; see
+  [Python package](python.md#label-the-atoms).
+- Command line:
+  `reshiki --cli convert --smiles 'CCOC(C)=O' --nucleus 13C --labels value -o assigned.svg`;
+  see [command line](agent-cli.md#nmr-labels).
+- MCP: the `label_atoms` tool, with the `revision` that `predict_nmr`
+  returned; see [agent API](agent-api.md#tools).
+
+Unlike **Show labels**, which stays on screen, these labels are stored in the
+drawing as atom numbers:
+
+- They save in `.rsk` files, appear in SVG, PNG and PDF, and go to ChemDraw
+  (CDXML and CDX) as atom numbers. You can move, restyle or delete them in the
+  app like any atom number.
+- They use the drawing's atom-number style at 65% of the atom-label size, not
+  the teal overlay.
+- Each label is placed on its own: in the nearest free spot beside its atom,
+  outward from its bonds first, clear of every bond line, atom label and other
+  label, and nearer its own atom than any other. A bare value may sit between
+  the bonds, inside a ring; a longer `ppm` or `both` label stays outside the
+  molecule. Only when no such spot is within 1.5 bond lengths does a label
+  move further out, joined to its atom by a thin leader line. Canvas, SVG, PNG
+  and PDF place them the same way; ChemDraw places the atom numbers of CDXML
+  and CDX itself, without leader lines. This placement is for atom numbers
+  that are a decimal value (`7.26`) or end in ` ppm`; other numbers, such as
+  `3`, `12a` or `#3`, keep their usual placement, and so does a value written
+  with `decimals` 0, which reads as a whole number.
+- An atom inside a collapsed abbreviation shows its label only
+  when the abbreviation is expanded, and CDXML and CDX export asks you to
+  expand it first, as for any atom number there.
+- They replace the numbers of the listed atoms only. Each atom keeps its
+  number style, and its label returns to automatic placement. Sites without
+  a ppm get no label. Labelling ¹H after ¹³C replaces the labels on the atoms
+  the ¹H rows list and keeps the others.
+- They are plain text. Editing the structure later does not update or clear
+  them; predict and label again to refresh them.
+- If **Show labels** is on while a labelled drawing is open, both appear.
+
+No caption or credit line is added to the figure. When you publish a labelled
+figure, cite the prediction's `credit`, the nmrshiftdb2 attribution its
+licence asks for.
 
 ## Limits
 

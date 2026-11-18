@@ -287,6 +287,30 @@ Edit a session document as one undo step. Returns the new revision, recorded (fa
 
 Result `value`: `{effect, document, revision, recorded, inserted, id_remap, deleted}`. effect is "applied"; document and revision are the edited document's handle and revision. recorded is false when nothing changed. inserted and deleted list object IDs, which may overlap because deleted IDs can be reused; both are empty for undo and redo. id_remap is [{source, inserted}], mapping source IDs to inserted IDs. The label refresh's notice becomes a warning.
 
+## label_atoms
+
+**Label atoms**
+
+Write predict_nmr rows onto atoms as their atom numbers, as one undo step.
+
+| Hint | Value |
+| --- | --- |
+| `destructiveHint` | true |
+| `idempotentHint` | true |
+| `openWorldHint` | false |
+| `readOnlyHint` | false |
+
+| Parameter | Type | Required | Nullable | Constraints | Description |
+| --- | --- | --- | --- | --- | --- |
+| `base_revision` | `string` | true | false | pattern: `"^(0\|[1-9][0-9]{0,19})$"` | The revision predict_nmr returned. |
+| `decimals` | `null or integer` | true | true | minimum: `0`; maximum: `4` | ppm decimals; null for 2. |
+| `document` | `string` | true | false | pattern: `"^[A-Za-z0-9_-]{1,64}$"` |  |
+| `format` | `string` | true | false | enum: `["value","numbers","ppm","both"]` |  |
+| `idempotency_key` | `null or string` | true | true | maxLength: `128` | As in apply. |
+| `rows` | `array<object>` | true | false | maxItems: `5000` | predict_nmr's rows; a null ppm is skipped. |
+
+Result `value`: `{effect, document, revision, recorded, labeled}`. effect is "applied"; document and revision are the labelled document's handle and revision. recorded is false when nothing changed. labeled lists the atom IDs given a label, in row order. The label refresh's notice becomes a warning.
+
 ## convert
 
 **Convert structure**

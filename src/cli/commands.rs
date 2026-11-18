@@ -197,6 +197,29 @@ const NUCLEUS: OptionSpec = OptionSpec {
     equivalent: None,
 };
 
+const LABEL_NUCLEUS: OptionSpec = OptionSpec {
+    help: "With --labels, the nucleus to predict: 1H or 13C.",
+    ..NUCLEUS
+};
+
+const LABELS: OptionSpec = OptionSpec {
+    flag: "--labels",
+    value: Some("FORMAT"),
+    help: "Write the predicted shifts onto the atoms: value, numbers, ppm or both.",
+    default: None,
+    sets: Some("label_atoms.format"),
+    equivalent: None,
+};
+
+const DECIMALS: OptionSpec = OptionSpec {
+    flag: "--decimals",
+    value: Some("N"),
+    help: "With --labels, ppm decimal places, 0 to 4: 2 for 1H and 1 for 13C by default.",
+    default: None,
+    sets: Some("label_atoms.decimals"),
+    equivalent: None,
+};
+
 const INPUT: Operand = Operand {
     name: "INPUT",
     help: "Read a file, or standard input with -; --smiles TEXT supplies text instead.",
@@ -208,9 +231,22 @@ const CONVERT: CommandSpec = CommandSpec {
     summary: "Convert a structure or drawing to another file format",
     usage: "reshiki --cli convert (INPUT | - | --smiles TEXT) [--from FORMAT] [--to FORMAT]
                              [-o OUTPUT|-] [--svg-text MODE] [--pages]
-                             [--force] [--receipt]",
-    options: &[SMILES, FROM, TO, OUTPUT, SVG_TEXT, PAGES, FORCE, RECEIPT],
-    tools: &["import", "export"],
+                             [--force] [--receipt]
+                             [--nucleus NUCLEUS --labels FORMAT [--decimals N]]",
+    options: &[
+        SMILES,
+        FROM,
+        TO,
+        OUTPUT,
+        SVG_TEXT,
+        PAGES,
+        FORCE,
+        RECEIPT,
+        LABEL_NUCLEUS,
+        LABELS,
+        DECIMALS,
+    ],
+    tools: &["import", "predict_nmr", "label_atoms", "export"],
     operand: Some(INPUT),
     body: convert_help,
 };
@@ -592,6 +628,14 @@ Options:
   --force        Replace OUTPUT if it exists; otherwise that is an error.
   --receipt      With -o OUTPUT, print one JSON line to stdout:
                  {{\"receipt\": {{\"format\", \"byte_len\", \"detail\"}}, \"api\": {{…}}}}.
+  --nucleus NUCLEUS --labels FORMAT
+                 Predict 1H or 13C shifts as predict-nmr does and write
+                 them onto the atoms as atom numbers: numbers (#3), ppm
+                 (1.28 ppm) or both (#3 · 1.28 ppm), replacing those
+                 atoms' numbers. Only for {labels}. Cite
+                 predict-nmr's credit with published values.
+  --decimals N   With --labels, the ppm decimal places, 0 to 4: by default
+                 2 for 1H (7.26 ppm) and 1 for 13C (128.4 ppm).
 
 Inputs are at most {text} bytes ({cdx} for cdx), so a ReShiki drawing with
 large embedded pictures that the app opens can be too large here. rsk and
@@ -599,6 +643,7 @@ emf files cannot be written.
 
 {EXPORT_DETAIL_HELP}",
         usage = CONVERT.usage,
+        labels = super::args::LABEL_FORMATS.join(", "),
         inputs = input_formats().join(", "),
         outputs = output_formats().join(", "),
         text = budgets.max_text_bytes,

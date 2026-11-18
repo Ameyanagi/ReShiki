@@ -33,6 +33,7 @@ TOOLS = (
     "file_save",
     "compose",
     "apply",
+    "label_atoms",
     "convert",
     "name",
     "schema",

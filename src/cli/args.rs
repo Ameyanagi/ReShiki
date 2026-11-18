@@ -98,7 +98,20 @@ pub(crate) struct Export {
 pub(crate) struct Convert {
     pub(crate) input: Input,
     pub(crate) export: Export,
+    pub(crate) labels: Option<Labels>,
 }
+
+/// `convert --nucleus NUCLEUS --labels FORMAT`: the predicted shifts to
+/// write onto the atoms, and how.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct Labels {
+    pub(crate) nucleus: &'static str,
+    pub(crate) format: String,
+    pub(crate) decimals: u8,
+}
+
+/// The output formats that keep atom numbers, so `--labels` is allowed.
+pub(crate) const LABEL_FORMATS: &[&str] = &["svg", "png", "pdf", "cdxml", "cdx"];
 
 /// `render`: `format` is one of the ops render formats; `width` and
 /// `height` are `None` for the tool's default.
@@ -163,13 +176,9 @@ pub(crate) fn parse(name: &OsStr, rest: &[OsString]) -> Result<Command, String> 
                 .nucleus
                 .as_deref()
                 .ok_or("predict-nmr needs --nucleus 1H or 13C")?;
-            let nucleus = nucleus
-                .to_str()
-                .and_then(crate::nmr::Nucleus::from_code)
-                .ok_or("--nucleus must be 1H or 13C")?;
             Ok(Command::PredictNmr(PredictNmr {
                 input,
-                nucleus: nucleus.code(),
+                nucleus: nucleus_code(nucleus)?,
             }))
         }
         "name" => {
@@ -266,6 +275,8 @@ struct Options {
     executable: Option<OsString>,
     isotope_style: Option<OsString>,
     nucleus: Option<OsString>,
+    labels: Option<OsString>,
+    decimals: Option<OsString>,
     svg_text: SvgText,
     pages: bool,
     force: bool,
@@ -320,6 +331,8 @@ fn options(spec: &CommandSpec, tokens: &[OsString]) -> Result<Options, String> {
                 "--executable" => options.executable = Some(value),
                 "--isotope-style" => options.isotope_style = Some(value),
                 "--nucleus" => options.nucleus = Some(value),
+                "--labels" => options.labels = Some(value),
+                "--decimals" => options.decimals = Some(value),
                 "--svg-text" => {
                     options.svg_text = match value.to_str() {
                         Some("live") => SvgText::Live,
@@ -477,11 +490,58 @@ fn extension(path: &Path) -> String {
         .to_owned()
 }
 
-/// `convert`: the input, then the file to write.
+/// `convert`: the input, then the file to write and the labels.
 fn convert(options: &Options) -> Result<Command, String> {
     let input = input("convert", options)?;
     let export = export(options)?;
-    Ok(Command::Convert(Convert { input, export }))
+    if options.decimals.is_some() && options.labels.is_none() {
+        return Err("--decimals needs --labels value, numbers, ppm or both".into());
+    }
+    let labels = match (&options.nucleus, &options.labels) {
+        (None, None) => None,
+        (_, None) => return Err("--nucleus needs --labels value, numbers, ppm or both".into()),
+        (None, _) => return Err("--labels needs --nucleus 1H or 13C".into()),
+        (Some(nucleus), Some(format)) => {
+            let format = format
+                .to_str()
+                .filter(|format| crate::nmr::LabelFormat::from_code(format).is_some())
+                .ok_or("--labels must be value, numbers, ppm or both")?;
+            if !LABEL_FORMATS.contains(&export.format.as_str()) {
+                return Err(format!(
+                    "--labels needs an output that keeps atom numbers: {}",
+                    LABEL_FORMATS.join(", ")
+                ));
+            }
+            let nucleus = nucleus_code(nucleus)?;
+            let decimals = match &options.decimals {
+                None => crate::nmr::default_decimals(crate::nmr::Nucleus::from_code(nucleus)),
+                Some(value) => value
+                    .to_str()
+                    .and_then(|text| text.parse::<u8>().ok())
+                    .filter(|decimals| *decimals <= crate::nmr::MAX_DECIMALS)
+                    .ok_or("--decimals must be a whole number from 0 to 4")?,
+            };
+            Some(Labels {
+                nucleus,
+                format: format.to_owned(),
+                decimals,
+            })
+        }
+    };
+    Ok(Command::Convert(Convert {
+        input,
+        export,
+        labels,
+    }))
+}
+
+/// A `--nucleus` value: `1H` or `13C`, never Rust's `H1` or `C13`.
+fn nucleus_code(nucleus: &OsStr) -> Result<&'static str, String> {
+    nucleus
+        .to_str()
+        .and_then(crate::nmr::Nucleus::from_code)
+        .map(crate::nmr::Nucleus::code)
+        .ok_or_else(|| "--nucleus must be 1H or 13C".into())
 }
 
 /// `render`: the input, the image format and destination, then the size.

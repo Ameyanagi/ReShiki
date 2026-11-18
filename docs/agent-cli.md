@@ -151,7 +151,9 @@ EMF. To save an `.rsk` file, use the MCP server's `file_save` or the app.
 | ----------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------ |
 | `--smiles TEXT`         | convert, render, analyze, predict-nmr, name | Read SMILES text instead of a file or standard input                                       |
 | `--from FORMAT`         | convert, render, analyze, predict-nmr, name | Set the input format                                                                       |
-| `--nucleus NUCLEUS`     | predict-nmr                                 | The nucleus to predict: `1H` or `13C`; required                                            |
+| `--nucleus NUCLEUS`     | predict-nmr, convert                        | The nucleus to predict: `1H` or `13C`; required by predict-nmr, and by convert `--labels`  |
+| `--labels FORMAT`       | convert                                     | Write predicted shifts onto the atoms as `numbers`, `ppm` or `both`; needs `--nucleus`     |
+| `--decimals N`          | convert                                     | The ppm decimal places of `--labels`, 0 to 4: 2 for `1H` and 1 for `13C` by default        |
 | `--to FORMAT`           | convert, render, compose                    | Set the output format; `png` or `svg` for render                                           |
 | `-o OUTPUT`             | convert, render, compose                    | Write to OUTPUT, or to standard output with `-`                                            |
 | `--pages`               | convert, compose                            | Export every publication page as one PDF; PDF output only                                  |
@@ -180,6 +182,7 @@ in `reshiki: error[invalid_arguments]: max_width must be from 1 to 8192 pixels`.
 reshiki --cli convert (INPUT | - | --smiles TEXT) [--from FORMAT] [--to FORMAT]
                       [-o OUTPUT|-] [--svg-text MODE] [--pages]
                       [--force] [--receipt]
+                      [--nucleus NUCLEUS --labels FORMAT [--decimals N]]
 ```
 
 `reshiki --cli help convert` prints the [full help](agent-reference.md#reshiki---cli-convert).
@@ -223,6 +226,43 @@ several lines:
 ```
 
 `detail` is the PNG size line for PNG output and `null` otherwise.
+
+### NMR labels
+
+`--nucleus` with `--labels` predicts ¹H or ¹³C shifts, as
+[predict-nmr](#predict-nmr) does, and writes them onto the atoms before the
+file is made:
+
+```sh
+reshiki --cli convert --smiles 'CCOC(C)=O' --nucleus 13C --labels value -o assigned.svg
+```
+
+| `--labels` | Label on atom 3 (¹H) |
+| ---------- | -------------------- |
+| `value`    | `1.28`               |
+| `numbers`  | `#3`                 |
+| `ppm`      | `1.28 ppm`           |
+| `both`     | `#3 · 1.28 ppm`      |
+
+`value` is the bare shift, as journals print it; they usually state
+"δ (ppm)" once in the figure caption. The others are the formats of the app's
+**Show labels** menu. `--decimals N` sets the ppm decimal places, 0 to 4; by
+default ¹H labels get 2 (`7.26`) and ¹³C labels 1 (`128.4`). The labels are
+written as atom numbers, at 65% of the drawing's atom-label size, and replace
+the numbers of the atoms that have a prediction. Each sits right beside its
+atom, clear of bonds and other labels, and gets a thin leader line only when
+no spot beside it is free.
+Sites without a ppm get no label. The input must be exactly one molecule.
+
+`--labels` is allowed only for outputs that keep atom numbers: `svg`, `png`,
+`pdf`, `cdxml` and `cdx`. SVG, PNG and PDF draw them; CDXML and CDX write
+them as ChemDraw atom numbers, which ChemDraw places itself, without leader
+lines. `--labels` without `--nucleus`, `--nucleus` without `--labels`,
+`--decimals` without `--labels` or outside 0 to 4, or another output format is
+a usage error. The command runs the `import`, `predict_nmr`, `label_atoms` and
+`export` tools; see [NMR prediction](nmr-prediction.md#labels-from-scripts).
+When you publish a labelled figure, cite the prediction's `credit`, which
+`predict-nmr` prints; no caption is added for you.
 
 ## render
 

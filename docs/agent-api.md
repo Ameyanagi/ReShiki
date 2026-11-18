@@ -101,12 +101,12 @@ completions, sends no progress notifications and publishes no
 
 ## Tools
 
-The [generated tool reference](agent-reference.md#tools) lists the 17 tools in
+The [generated tool reference](agent-reference.md#tools) lists the 18 tools in
 `tools/list` order, with their annotation hints, parameters and result shapes.
 `reshiki --cli tools` prints the same catalog as JSON. Every tool sets all
 four annotation hints explicitly, with `openWorldHint: false`. `file_save`,
-`apply` and `document_close` are marked destructive, so a client can ask you
-before it runs them.
+`apply`, `label_atoms` and `document_close` are marked destructive, so a client
+can ask you before it runs them.
 
 `predict_nmr` predicts ¹H or ¹³C shifts offline for one molecule, as the
 app's **Predict NMR…** does. `ids: null` predicts the whole drawing, which must
@@ -114,6 +114,22 @@ be one molecule; atom IDs predict the molecule they belong to. Each row's
 `atom` is a drawing atom ID, as `inspect` reports it. The result names the
 `revision` it was predicted from and carries the data `credit` to cite with
 published values. See [NMR prediction](nmr-prediction.md#from-scripts).
+
+`label_atoms` writes those rows onto the document as atom numbers, in one undo
+step. Pass the rows as `[{atom, ppm}]`, a `format` of `value` (`1.28`, the bare
+shift journals print, with "δ (ppm)" stated once in the caption), `numbers`
+(`#3`), `ppm` (`1.28 ppm`) or `both` (`#3 · 1.28 ppm`), `decimals` (0 to 4, or
+`null` for 2; pass 1 for ¹³C, as journals print it) and the prediction's `revision` as
+`base_revision`. If the document has changed since the prediction, the call
+fails with `stale`, so labels never land on atoms an edit removed or
+renumbered. Rows with a `null` ppm are skipped. Only the listed atoms' numbers
+are replaced; each keeps its number style. Every row is checked first: an atom
+not in the drawing is `unknown_object`, and a label over 32 characters or
+`decimals` outside 0 to 4 is `invalid_arguments`; either way nothing changes. The result is
+`{effect, document, revision, recorded, labeled}`, with the labelled atom IDs
+in row order. The labels are plain text that later edits do not update, and
+`export` and `file_save` keep them. No caption is added; cite the prediction's
+`credit` with a published figure.
 
 `compose` takes a Proposal, the JSON that ReShiki's own assistant writes. Its
 `inputSchema` is a shorter form of the
@@ -152,8 +168,8 @@ instructions.
 - Object IDs are decimal strings such as `"7"`. `inspect` lists them, and
   `ids: null` means the whole drawing.
 - Revisions are decimal strings too. A new document starts at revision `"0"`.
-  The revision changes only when an `apply` is recorded; an `apply` that
-  changes nothing returns `recorded: false` and keeps it.
+  The revision changes only when an `apply` or `label_atoms` is recorded; a
+  call that changes nothing returns `recorded: false` and keeps it.
 - `apply` needs `base_revision`, the revision you last saw, for delete, for
   insert with `ids`, and for undo and redo. If the document has moved on, the
   call fails with `stale` and changes nothing. The error's `current_revision`
@@ -161,8 +177,8 @@ instructions.
   reconsider the edit before you retry: an object that was replaced can leave
   its ID to another object, so the same edit at the new revision can change
   something else.
-- An `idempotency_key` of up to 128 bytes makes a repeated `apply` return its
-  first result instead of editing again. The same key with different arguments
+- An `idempotency_key` of up to 128 bytes makes a repeated `apply` or
+  `label_atoms` return its first result instead of editing again. The same key with different arguments
   is `invalid_arguments`. After `stale`, retry with a new key. Each document
   keeps its last 32 keys and 20 undo steps.
 

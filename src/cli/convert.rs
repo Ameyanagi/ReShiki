@@ -1,6 +1,6 @@
 //! `reshiki --cli convert`: import, then export through the ops tools.
 use super::{
-    args::{Convert, Export, Output},
+    args::{Convert, Export, Labels, Output},
     host::{CliError, Session, labelled},
     io::write_output,
 };
@@ -21,11 +21,45 @@ pub(crate) async fn run(
     err: &mut dyn Write,
     terminal: bool,
 ) -> Result<(), CliError> {
-    let Convert { input, export } = convert;
+    let Convert {
+        input,
+        export,
+        labels,
+    } = convert;
     refuse_binary(&export.format, &export.output, terminal)?;
     let mut session = Session::new();
     let document = session.import(input, err).await?;
+    if let Some(labels) = labels {
+        label(&mut session, &document, labels, err).await?;
+    }
     write(&mut session, document, export, out, err).await
+}
+
+/// Predicts the whole drawing's shifts and writes them onto its atoms, at
+/// the revision predicted, as `predict_nmr` then `label_atoms`.
+async fn label(
+    session: &mut Session,
+    document: &Value,
+    labels: Labels,
+    err: &mut dyn Write,
+) -> Result<(), CliError> {
+    let arguments = json!({"document": document, "nucleus": labels.nucleus, "ids": null});
+    let predicted = session.call("predict_nmr", arguments, err).await?;
+    let value = predicted.value.get("value").cloned().unwrap_or_default();
+    let rows: Vec<Value> = value
+        .get("rows")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .map(|row| json!({"atom": row.get("atom"), "ppm": row.get("ppm")}))
+        .collect();
+    let arguments = json!({
+        "document": document, "rows": rows, "format": labels.format,
+        "decimals": labels.decimals, "base_revision": value.get("revision"),
+        "idempotency_key": null,
+    });
+    session.call("label_atoms", arguments, err).await?;
+    Ok(())
 }
 
 /// Refuses to write pdf, png or cdx to stdout when it is a terminal.

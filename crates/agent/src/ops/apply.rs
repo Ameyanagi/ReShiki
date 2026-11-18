@@ -142,7 +142,7 @@ pub(crate) struct Apply {
 /// The digest of an idempotent request: [`DefaultHasher`] over the canonical
 /// arguments, serde_json's compact text, whose object keys are sorted
 /// (serde_json without `preserve_order`).
-fn digest(args: &Value) -> u64 {
+pub(super) fn digest(args: &Value) -> u64 {
     let mut hasher = DefaultHasher::new();
     args.to_string().hash(&mut hasher);
     hasher.finish()
@@ -169,15 +169,7 @@ pub(crate) fn decode(args: Value, budgets: &Budgets) -> Result<Apply, OpError> {
         base_revision,
         idempotency_key,
     } = arguments(args)?;
-    let max_key = budgets.max_idempotency_key_bytes;
-    if let Some(key) = &idempotency_key
-        && key.len() > max_key
-    {
-        return Err(OpError::invalid(format!(
-            "idempotency_key is {} bytes; at most {max_key} are allowed",
-            key.len()
-        )));
-    }
+    let key = checked_key(idempotency_key, digest, budgets)?;
     if let Some(ids) = &ids {
         ids::check_count(ids, budgets)?;
     }
@@ -206,8 +198,27 @@ pub(crate) fn decode(args: Value, budgets: &Budgets) -> Result<Apply, OpError> {
         document,
         action,
         base_revision,
-        key: idempotency_key.map(|key| IdempotencyKey { key, digest }),
+        key,
     })
+}
+
+/// The request's key with its arguments' `digest`, at most
+/// [`Budgets::max_idempotency_key_bytes`].
+pub(super) fn checked_key(
+    key: Option<String>,
+    digest: u64,
+    budgets: &Budgets,
+) -> Result<Option<IdempotencyKey>, OpError> {
+    let max_key = budgets.max_idempotency_key_bytes;
+    if let Some(key) = &key
+        && key.len() > max_key
+    {
+        return Err(OpError::invalid(format!(
+            "idempotency_key is {} bytes; at most {max_key} are allowed",
+            key.len()
+        )));
+    }
+    Ok(key.map(|key| IdempotencyKey { key, digest }))
 }
 
 /// The envelope value of an apply.
@@ -275,7 +286,7 @@ impl Report {
     clippy::large_enum_variant,
     reason = "one Prepared is built per call and moved out once"
 )]
-enum Prepared {
+pub(super) enum Prepared {
     /// The result, with no commit: a replayed receipt, a rejection, or an
     /// unkeyed undo or redo with nothing to step.
     Done(ToolResult),
@@ -375,7 +386,7 @@ fn delete(base: &Document, ids: &[u64]) -> Edited {
 }
 
 /// The principal's document `handle` for editing, at `base` when given.
-fn current(
+pub(super) fn current(
     store: &dyn Documents,
     who: &Principal,
     handle: &DocHandle,
@@ -398,7 +409,7 @@ fn replay(
         .map(|receipt| Prepared::Done(Arc::unwrap_or_clone(receipt))))
 }
 
-/// Everything before the effect, on the blocking pool: [`edit`] between two
+/// Everything before the effect, on the blocking pool: `edit` between two
 /// receipt lookups for a keyed call.
 ///
 /// Both lookups are fast paths, as the commit checks the key again under its
@@ -406,26 +417,53 @@ fn replay(
 /// call with the same key may have committed since the first lookup, and its
 /// receipt (or the key's reuse) then wins over what this call made of the
 /// changed document, such as [`ErrorKind::Stale`], as it does in the commit.
-fn prepare(
+pub(super) fn prepare(
     store: &dyn Documents,
     who: &Principal,
-    versions: Versions,
-    apply: Apply,
+    document: &DocHandle,
+    key: Option<&IdempotencyKey>,
+    edit: impl FnOnce() -> Result<Prepared, OpError>,
 ) -> Result<Prepared, OpError> {
-    let Some(key) = apply.key.clone() else {
-        return edit(store, who, versions, apply);
+    let Some(key) = key else {
+        return edit();
     };
-    let document = apply.document.clone();
-    if let Some(replayed) = replay(store, who, &document, &key)? {
+    if let Some(replayed) = replay(store, who, document, key)? {
         return Ok(replayed);
     }
-    match edit(store, who, versions, apply) {
+    match edit() {
         Ok(Prepared::Commit(change)) => Ok(Prepared::Commit(change)),
-        outcome => match replay(store, who, &document, &key)? {
+        outcome => match replay(store, who, document, key)? {
             Some(replayed) => Ok(replayed),
             None => outcome,
         },
     }
+}
+
+/// Runs `prepare` on the blocking pool, then commits its change as the
+/// single effect: one history step, with the revision, owner and
+/// idempotency key checked again under the store's lock. Nothing runs after
+/// it. A cancel that arrives after it ends the call as
+/// [`ErrorKind::Cancelled`] (no response), and a retry with the same key
+/// replays the stored receipt.
+pub(super) async fn commit(
+    mut ctx: Context,
+    store: Arc<dyn Documents>,
+    who: Principal,
+    document: DocHandle,
+    prepare: impl FnOnce(&dyn Documents, &Principal) -> Result<Prepared, OpError> + Send + 'static,
+) -> Result<ToolResult, OpError> {
+    let prepared = {
+        let (store, who) = (Arc::clone(&store), who.clone());
+        ctx.blocking(move || prepare(store.as_ref(), &who)).await?
+    };
+    let change = match prepared {
+        Prepared::Done(result) => return Ok(result),
+        Prepared::Commit(change) => change,
+    };
+    let receipt = ctx
+        .effect(move || store.commit(&who, &document, change))
+        .await?;
+    Ok(Arc::unwrap_or_clone(receipt))
 }
 
 /// The revision and ID checks, the edit, its reconciliation and the label
@@ -492,80 +530,85 @@ fn edit(
         }
     };
     let Edited {
-        mut doc,
+        doc,
         inserted,
         id_remap,
         deleted,
     } = edited;
-    store.fits(who, &document, &snapshot.doc, &doc)?;
+    let report = Report {
+        document,
+        versions: versions.clone(),
+        inserted: object_ids(inserted),
+        id_remap: IdRemapJson::from(&id_remap),
+        deleted: object_ids(deleted),
+    };
+    replace(store, who, &snapshot, doc, key, &versions, report.receipt())
+}
+
+/// The commit that replaces the edit snapshot `snapshot` with `doc`:
+/// [`transaction::reconcile`] against it and the label precompute. A
+/// rejection is an `is_error` result with validation `rejected` and no
+/// commit.
+pub(super) fn replace(
+    store: &dyn Documents,
+    who: &Principal,
+    snapshot: &Snapshot,
+    mut doc: Document,
+    key: Option<IdempotencyKey>,
+    versions: &Versions,
+    receipt: Receipt,
+) -> Result<Prepared, OpError> {
+    store.fits(who, &snapshot.handle, &snapshot.doc, &doc)?;
     let reconciled = match transaction::reconcile(&mut doc, (*snapshot.doc).clone()) {
         Ok(reconciled) => reconciled,
         Err(rejection) => {
             return Ok(Prepared::Done(ToolResult::rejected(
                 rejection,
                 Vec::new(),
-                &versions,
+                versions,
             )));
         }
     };
     // The inputs `Reconciled::commit` decides with.
     let chemistry_changed = transaction::chemistry_changed(reconciled.before(), &doc);
     let labels = labels(&doc, chemistry_changed);
-    let report = Report {
-        document,
-        versions,
-        inserted: object_ids(inserted),
-        id_remap: IdRemapJson::from(&id_remap),
-        deleted: object_ids(deleted),
-    };
     Ok(Prepared::Commit(Change {
         base: snapshot.revision,
         edit: Edit::Replace { doc, reconciled },
         key,
         labels,
-        receipt: report.receipt(),
+        receipt,
     }))
 }
 
 /// Applies one edit to a session document.
 ///
-/// - Insert and delete: [`insert`] or [`delete`] on an edit snapshot,
-///   [`transaction::reconcile`] against it, and the label precompute, all on
-///   the blocking pool. A rejection is an `is_error` result with validation
-///   `rejected` and no commit.
+/// - Insert and delete: [`insert`] or [`delete`] on an edit snapshot, then
+///   [`replace`], all on the blocking pool.
 /// - Undo and redo: the store's step target, checked against
 ///   `base_revision`; nothing to step gives `recorded: false`, without a
 ///   commit unless the call is keyed.
 /// - A keyed call looks for its receipt before this stage and, when it ends
 ///   without a commit, again after it (see [`prepare`]).
-/// - The store's commit is the single effect: one history step, with the
-///   revision, owner and idempotency key checked again under its lock.
-///   Nothing runs after it. A cancel that arrives after it ends the call as
-///   [`ErrorKind::Cancelled`] (no response), and a retry with the same key
-///   replays the stored receipt.
+/// - The store's commit is the single effect (see [`commit`]).
 ///
 /// The successful result contract is in [`super::catalog::RESULTS`].
 pub(crate) async fn apply(
-    mut ctx: Context,
+    ctx: Context,
     store: Arc<dyn Documents>,
     who: Principal,
     versions: Versions,
     apply: Apply,
 ) -> Result<ToolResult, OpError> {
     let document = apply.document.clone();
-    let prepared = {
-        let (store, who) = (Arc::clone(&store), who.clone());
-        ctx.blocking(move || prepare(store.as_ref(), &who, versions, apply))
-            .await?
-    };
-    let change = match prepared {
-        Prepared::Done(result) => return Ok(result),
-        Prepared::Commit(change) => change,
-    };
-    let receipt = ctx
-        .effect(move || store.commit(&who, &document, change))
-        .await?;
-    Ok(Arc::unwrap_or_clone(receipt))
+    let key = apply.key.clone();
+    let handle = document.clone();
+    commit(ctx, store, who, document, move |store, who| {
+        prepare(store, who, &handle, key.as_ref(), || {
+            edit(store, who, versions, apply)
+        })
+    })
+    .await
 }
 
 #[cfg(test)]

@@ -15,6 +15,16 @@ pub enum LabelMode {
     Shift,
     Both,
 }
+impl LabelMode {
+    /// The label text scripts write with the same choice.
+    pub(crate) fn format(self) -> reshiki::nmr::LabelFormat {
+        match self {
+            Self::Atom => reshiki::nmr::LabelFormat::Numbers,
+            Self::Shift => reshiki::nmr::LabelFormat::Ppm,
+            Self::Both => reshiki::nmr::LabelFormat::Both,
+        }
+    }
+}
 #[derive(Clone, Copy)]
 pub(crate) struct Context<'a> {
     pub report: &'a Report,
@@ -225,11 +235,8 @@ fn placements_with_width(
         {
             continue;
         }
-        let text = match context.mode {
-            LabelMode::Atom => format!("#{}", row.atom_id),
-            LabelMode::Shift => format!("{shift:.3} ppm"),
-            LabelMode::Both => format!("#{} · {shift:.3} ppm", row.atom_id),
-        };
+        // The overlay keeps its three decimals.
+        let text = reshiki::nmr::label_text(context.mode.format(), row.atom_id, shift, 3);
         // The nucleus and unresolved-H/abbreviation ownership remain in the
         // report and accessible site descriptions, rather than every label.
         let size = Size::new(width(&text).min((bounds.width - 8.).max(1.)), TEXT_HEIGHT);

@@ -84,6 +84,61 @@ The reference data comes from nmrshiftdb2 under the
 When you publish predicted values, cite `credit` with them. See
 [NMR prediction](nmr-prediction.md) for the method and its limits.
 
+### Label the atoms
+
+`with_labels(rows)` returns a drawing with the shifts written onto the atoms,
+each as the bare value journals print (`6.26`, `128.4`):
+
+```python
+m = reshiki.Molecule.from_smiles("CCOC(C)=O").clean()
+shifts = m.predict_nmr("13C")
+m.with_labels(shifts).save("assigned.svg", style="JACS / ACS")
+```
+
+Journals usually state "δ (ppm)" once in the figure caption rather than on
+every label. `rows` is an `NmrPrediction`, or any iterable of `NmrShift` rows,
+`{"atom": ..., "ppm": ...}` mappings or `(atom, ppm)` tuples. `format` can
+instead give one of the app's **Show labels** formats:
+
+| `format`          | Label on atom 3 (¹H) |
+| ----------------- | -------------------- |
+| `value` (default) | `1.28`               |
+| `numbers`         | `#3`                 |
+| `ppm`             | `1.28 ppm`           |
+| `both`            | `#3 · 1.28 ppm`      |
+
+`decimals` sets the decimal places of the ppm, 0 to 4. By default, as
+journals print them, ¹H rows get 2 (`7.26`) and ¹³C rows 1 (`128.4`);
+mappings and tuples, which do not name a nucleus, get 2:
+
+```python
+m.with_labels(shifts, decimals=3)
+```
+
+The labels are stored as atom numbers, so `rsk()` keeps them and SVG, PNG,
+PDF, CDXML and CDX output shows them; ChemDraw reads them as atom numbers.
+They replace the numbers of the listed atoms only, keep each atom's number
+style and reset its position. An atom without a number gets a style at 65% of
+the drawing's atom-label size, so the labels read clearly but stay smaller
+than the atoms. Rows without a ppm are skipped. Labelling ¹H after ¹³C
+replaces the labels of the atoms the ¹H rows list and keeps the others.
+
+Shift labels, the atom numbers that are a decimal value (`1.28`) or end in
+` ppm`, get their own placement. Each sits in the nearest free spot beside its
+atom, outward from its bonds first, clear of every bond line, atom label and
+other label, and nearer its own atom than any other. A value may sit between
+the bonds, inside a ring; a longer label stays outside the molecule. Only when
+no such spot is within 1.5 bond lengths does a label move further out, joined
+to its atom by a thin leader line. Other atom numbers, whole numbers included,
+keep their usual placement.
+
+The labels are plain text: they do not change when the drawing is edited
+later. Run `predict_nmr` and `with_labels` again to refresh them. An atom that
+is not in the drawing, a ppm that is not a finite number, a label longer than
+32 characters or `decimals` outside 0 to 4 raises `ReShikiError` with code
+`invalid_arguments`, and nothing is written. No caption is added; cite
+`credit` with a published labelled figure.
+
 ## Inputs and outputs
 
 Use explicit constructors `from_smiles(text)`, `from_molfile(text)`,
@@ -298,7 +353,12 @@ The accessor provides `.png()`, `.svg()` and `.properties()`. `.png()` and
 reads each row on its own and issues `StructureWarning`s. Optional
 dependencies load when their integration is used. RDKit interoperability uses
 `Molecule.from_rdkit(mol)` and `molecule.to_rdkit()` through MOL blocks when
-RDKit is installed.
+RDKit is installed. Atom numbers, including NMR labels, travel as RDKit's
+`atomNote`: `to_rdkit()` sets it on each numbered atom, and `from_rdkit()`
+makes each note the number of the atom it came from. A note is skipped, with
+a `StructureWarning` saying how many, when its atom is not kept on import (such
+as an explicit H that ReShiki folds into its heavy atom) or its text is not 1
+to 32 printable characters.
 
 Editable Office pictures depend on
 [issue #462](https://github.com/Ameyanagi/ReShiki/issues/462). EMF export remains

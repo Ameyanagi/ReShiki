@@ -11,6 +11,7 @@ import importlib
 import json
 import math
 import sys
+import unicodedata
 import warnings
 from dataclasses import dataclass, field
 from os import PathLike
@@ -314,6 +315,9 @@ class NmrPrediction:
         return iter(self.rows)
 
 
+_LabelRow: TypeAlias = NmrShift | Mapping[str, Any] | tuple[int, float | None]
+
+
 @dataclass(frozen=True)
 class Drawing:
     """An immutable ReShiki document. Transforms return a new document."""
@@ -533,6 +537,43 @@ class Drawing:
             rows.append(NmrShift(**row))
         return NmrPrediction(rows=tuple(rows), **fields)
 
+    def with_labels(
+        self: _D,
+        rows: NmrPrediction | Iterable[_LabelRow],
+        *,
+        format: Literal["value", "numbers", "ppm", "both"] = "value",
+        decimals: int | None = None,
+    ) -> _D:
+        """Return a drawing with predicted shifts written onto the atoms as atom numbers.
+
+        ``rows`` is an :class:`NmrPrediction`, or :class:`NmrShift` rows, ``{"atom", "ppm"}``
+        mappings or ``(atom, ppm)`` tuples. By default a label is the shift alone (``1.28``),
+        as journals print it with δ (ppm) stated once in the caption; ``format`` can instead
+        give ``#3``, ``1.28 ppm`` or ``#3 · 1.28 ppm``, as the app's **Show labels** menu
+        offers. ``decimals`` (0 to 4)
+        defaults to 2 for ¹H rows and 1 for ¹³C rows, and to 2 for rows without a nucleus.
+        They replace the listed atoms' numbers, keeping their style; rows without a ppm are
+        skipped. The labels are static text: they do not change after later edits. An unknown
+        atom, a ppm that is not finite, a label over 32 characters or ``decimals`` out of range
+        raises :class:`ReShikiError` and writes nothing.
+        """
+        pairs: list[tuple[int, float | None]] = []
+        # The journal default needs every row to name the same nucleus.
+        nuclei: set[str | None] = set()
+        for row in rows:
+            if isinstance(row, NmrShift):
+                pairs.append((row.atom, row.ppm))
+                nuclei.add(row.nucleus)
+            elif isinstance(row, Mapping):
+                pairs.append((row["atom"], row["ppm"]))
+                nuclei.add(None)
+            else:
+                atom, ppm = row
+                pairs.append((atom, ppm))
+                nuclei.add(None)
+        nucleus = nuclei.pop() if len(nuclei) == 1 else None
+        return type(self)(_native.with_labels(self._data, pairs, format, decimals, nucleus))
+
     def _repr_svg_(self) -> str:
         return self.svg()
 
@@ -543,16 +584,50 @@ class Molecule(Drawing):
 
     @classmethod
     def from_rdkit(cls, molecule: Any) -> Molecule:
+        """Read an RDKit molecule; each ``atomNote`` becomes that atom's number.
+
+        A note is skipped, with a :class:`StructureWarning` saying how many, when its atom is
+        not kept on import (such as an explicit H that is folded) or its text is not 1 to 32
+        printable characters.
+        """
         chem = _rdkit()
         if molecule is None:
             raise ValueError("RDKit molecule must not be None")
-        return cls.from_molfile(chem.MolToMolBlock(molecule))
+        drawing = cls.from_molfile(chem.MolToMolBlock(molecule))
+        notes = [
+            (atom.GetIdx() + 1, atom.GetProp("atomNote"))
+            for atom in molecule.GetAtoms()
+            if atom.HasProp("atomNote")
+        ]
+        if not notes:
+            return drawing
+        # MOL import numbers atoms by their position in the atom block, from 1.
+        ids = {atom["id"] for atom in json.loads(drawing._data)["atoms"]}
+        kept = [(atom, text) for atom, text in notes if atom in ids and _valid_note(text)]
+        if len(kept) < len(notes):
+            warnings.warn(
+                f"{len(notes) - len(kept)} of {len(notes)} RDKit atom notes were skipped: "
+                "their atom was not kept on import or their text is not 1 to 32 printable "
+                "characters",
+                StructureWarning,
+                stacklevel=2,
+            )
+        if not kept:
+            return drawing
+        return cls(_native.with_atom_numbers(drawing._data, kept))
 
     def to_rdkit(self) -> Any:
+        """An RDKit molecule from the MOL block; each atom number becomes its ``atomNote``."""
         chem = _rdkit()
         result = chem.MolFromMolBlock(self.mol(), removeHs=False)
         if result is None:
             raise ValueError("RDKit could not read the exported MOL block")
+        # The MOL block lists the drawing's atoms in order.
+        atoms = json.loads(self._data)["atoms"]
+        for target, atom in zip(result.GetAtoms(), atoms):
+            number = atom.get("display", {}).get("number")
+            if number:
+                target.SetProp("atomNote", number["text"])
         return result
 
 
@@ -563,6 +638,11 @@ class Reaction(Drawing):
     @classmethod
     def from_rxn(cls, rxn: str | bytes) -> Reaction:
         return _from_constructor(cls, _native.parse(_data(rxn), "rxn"))
+
+
+def _valid_note(text: str) -> bool:
+    """1 to 32 characters without control characters, as ReShiki atom numbers allow."""
+    return 0 < len(text) <= 32 and not any(unicodedata.category(c) == "Cc" for c in text)
 
 
 def _rdkit() -> Any:

@@ -675,3 +675,33 @@ async fn assignment_ink_is_legible_on_light_and_dark_pages_and_independent_of_ch
         );
     }
 }
+
+#[test]
+fn overlay_labels_are_the_atom_numbers_scripts_write() {
+    use reshiki::nmr::LabelFormat;
+    let (doc, report) = fixture(Nucleus::C13);
+    let rows: Vec<_> = report
+        .rows
+        .iter()
+        .map(|row| (row.atom_id, row.shift()))
+        .collect();
+    for (mode, format) in [
+        (LabelMode::Atom, LabelFormat::Numbers),
+        (LabelMode::Shift, LabelFormat::Ppm),
+        (LabelMode::Both, LabelFormat::Both),
+    ] {
+        let mut written = doc.clone();
+        reshiki::nmr::write_labels(&mut written, &rows, format, 3).unwrap();
+        let context = Context {
+            report: &report,
+            supported: None,
+            mode,
+        };
+        let labels = placements(&doc, context, camera(), bounds());
+        assert_eq!(labels.len(), 4);
+        for label in labels {
+            let atom = written.atom(label.atom_id).unwrap();
+            assert_eq!(label.text, atom.display.number.as_ref().unwrap().text);
+        }
+    }
+}

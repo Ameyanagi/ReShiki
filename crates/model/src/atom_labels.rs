@@ -6,9 +6,11 @@ use crate::{
     document::{Atom, Bond, Document, Point},
     typography::{ScriptRun, TextFormat, TextSpan, TextStyle},
 };
+use long_numbers::{LongLabel, Obstacles, Spot};
 use serde::{Deserialize, Serialize};
 mod dl_descriptors;
 mod hints;
+mod long_numbers;
 pub use hints::{HiddenLabelNotes, hidden_label_notes};
 mod hydrogen_isotopes;
 pub use hydrogen_isotopes::HydrogenIsotopeLabels;
@@ -524,6 +526,30 @@ pub fn number_style() -> TextStyle {
         ..Default::default()
     }
 }
+/// The style scripts give predicted-shift labels without a style of their
+/// own: the atom-number style at 65% of the drawing's atom-label size, so a
+/// row of shift labels stays clearly smaller than the atoms they name.
+pub fn shift_label_style(doc: &Document) -> TextStyle {
+    TextStyle {
+        // Never below the smallest text size a style allows.
+        size_pt: (doc.drawing_style.font_size_pt * 0.65).max(4.),
+        ..number_style()
+    }
+}
+/// Predicted-shift labels get their own placement: beside their atom when
+/// there is room, else with a leader line. They are the atom numbers that are
+/// a decimal shift (`1.28`, `128.4`) or end in ` ppm` (`1.28 ppm`,
+/// `#3 · 1.28 ppm`). Every other number (`1`, `12a`, `#3`, `L (S)`, free
+/// text) keeps the indicator layout, so whole numbers do too.
+pub fn is_shift_label(text: &str) -> bool {
+    let decimal = text.split_once('.').is_some_and(|(whole, part)| {
+        let whole = whole.strip_prefix('-').unwrap_or(whole);
+        [whole, part]
+            .iter()
+            .all(|digits| !digits.is_empty() && digits.bytes().all(|b| b.is_ascii_digit()))
+    });
+    decimal || text.ends_with(" ppm")
+}
 pub fn stereo_style() -> TextStyle {
     TextStyle {
         italic: true,
@@ -929,6 +955,14 @@ pub struct Indicator {
     pub style: TextStyle,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub roman_parentheses: bool,
+    /// A thin line from the atom to a long number placed away from it:
+    /// start, end and width.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub leader: Option<(Point, Point, f32)>,
+    /// How far a long number's placement can reach, which its own search
+    /// decides rather than [`indicator_radii`].
+    #[serde(skip)]
+    long_reach: Option<f32>,
 }
 impl Indicator {
     /// How far from its center an atom, bond or text can change where
@@ -937,6 +971,9 @@ impl Indicator {
     /// the candidate than its anchor (1.3 times for stereo groups) counts too;
     /// the anchor lies within the outermost radius of the center.
     pub fn reach(&self) -> f32 {
+        if let Some(reach) = self.long_reach {
+            return reach;
+        }
         let radius = indicator_radii(self.height)[4] + outward_extent(self.width, self.height);
         1.3 * radius + self.width.max(self.height) / 2. + 10.
     }
@@ -945,8 +982,12 @@ impl Indicator {
         let format =
             owned_indicator_format(self.owner, &self.text, &self.style, self.roman_parentheses);
         let mut x = self.origin.x;
-        indicator_runs(&self.text, &format)
-            .map(|(text, style)| {
+        let leader = self
+            .leader
+            .map(|(a, b, width)| crate::scene::Primitive::Line(a, b, width));
+        leader
+            .into_iter()
+            .chain(indicator_runs(&self.text, &format).map(|(text, style)| {
                 let position = Point::new(x, self.origin.y);
                 x += crate::style::styled_text_width(text, self.height, style);
                 crate::scene::Primitive::Text {
@@ -956,7 +997,7 @@ impl Indicator {
                     color: style.color.rgb(),
                     style: style.clone(),
                 }
-            })
+            }))
             .collect()
     }
 }
@@ -1214,6 +1255,45 @@ fn layout_indicators(doc: &Document, drawn: &Document) -> Vec<Indicator> {
     if labels.is_empty() {
         return vec![];
     }
+    // Shift labels go last, around the centre of their molecule in turn, so
+    // each takes the next free spot beside its neighbour's. Other indicators
+    // keep their order and so their layout.
+    let shift_atoms: Vec<_> = labels
+        .iter()
+        .filter_map(|(owner, text, ..)| match owner {
+            Owner::Number(id) if is_shift_label(text) => Some(*id),
+            _ => None,
+        })
+        .collect();
+    let positions: std::collections::HashMap<_, _> =
+        doc.atoms.iter().map(|a| (a.id, a.position)).collect();
+    let hulls = molecule_hulls(doc, &positions, &shift_atoms);
+    if !shift_atoms.is_empty() {
+        // Each label's angle around its molecule's centre, worked out once.
+        let angles: std::collections::HashMap<u64, f32> = shift_atoms
+            .iter()
+            .filter_map(|id| {
+                let p = positions.get(id)?;
+                let hull = hulls.get(id)?;
+                let count = hull.len().max(1) as f32;
+                let (x, y) = (
+                    hull.iter().map(|q| q.x).sum::<f32>() / count,
+                    hull.iter().map(|q| q.y).sum::<f32>() / count,
+                );
+                Some((*id, (p.y - y).atan2(p.x - x)))
+            })
+            .collect();
+        let order = |owner: &Owner, text: &str| match owner {
+            Owner::Number(id) if is_shift_label(text) => angles.get(id).copied(),
+            _ => None,
+        };
+        labels.sort_by(
+            |(a, at, ..), (b, bt, ..)| match (order(a, at), order(b, bt)) {
+                (Some(x), Some(y)) => x.total_cmp(&y),
+                (x, y) => x.is_some().cmp(&y.is_some()),
+            },
+        );
+    }
     let mut occupied: Vec<_> = doc
         .atoms
         .iter()
@@ -1243,8 +1323,6 @@ fn layout_indicators(doc: &Document, drawn: &Document) -> Vec<Indicator> {
             ));
         }
     }
-    let positions: std::collections::HashMap<_, _> =
-        doc.atoms.iter().map(|a| (a.id, a.position)).collect();
     let segments: Vec<_> = doc
         .bonds
         .iter()
@@ -1265,6 +1343,8 @@ fn layout_indicators(doc: &Document, drawn: &Document) -> Vec<Indicator> {
         .map(|a| a.position)
         .collect();
     let mut result = Vec::new();
+    let mut leaders = Vec::new();
+    let mut long = Vec::new();
     for (owner, text, offset, style, roman_parentheses) in labels {
         let Some(anchor) = owner.anchor(doc) else {
             continue;
@@ -1272,6 +1352,49 @@ fn layout_indicators(doc: &Document, drawn: &Document) -> Vec<Indicator> {
         let height = crate::style::DEFAULT.world(style.size_pt);
         let format = owned_indicator_format(owner, &text, &style, roman_parentheses);
         let width = indicator_width(&text, height, &format);
+        if let Owner::Number(id) = owner
+            && is_shift_label(&text)
+        {
+            let label = LongLabel {
+                id,
+                anchor,
+                size: (width, height),
+                // The box this atom reserves, as `occupied` holds it.
+                own: doc.atom(id).map(|a| {
+                    crate::scene::atom_label_bounds(a, drawn)
+                        .unwrap_or((a.position.offset(-3., -3.), a.position.offset(3., 3.)))
+                }),
+                bond_length: doc.drawing_style.bond_length_world,
+                // Rails of double and triple bonds sit one bond spacing from
+                // the centre line, plus half a stroke.
+                rails: doc.drawing_style.bond_spacing_ratio * doc.drawing_style.bond_length_world
+                    + doc.drawing_style.world(doc.drawing_style.bold_width_pt) / 2.
+                    + 3.,
+                kin: doc
+                    .bonds
+                    .iter()
+                    .filter(|b| b.is_covalent())
+                    .filter_map(|b| match (b.a == id, b.b == id) {
+                        (true, _) => Some(b.b),
+                        (_, true) => Some(b.a),
+                        _ => None,
+                    })
+                    .filter(|other| doc.atom(*other).is_some_and(|a| a.element == "H"))
+                    .filter_map(|other| positions.get(&other).copied())
+                    .collect(),
+                compact: !text.ends_with(" ppm"),
+                // A bare value is small enough to sit between the bonds next
+                // to its atom, as journals print shifts; a longer label stays
+                // outside the molecule.
+                hull: hulls
+                    .get(&id)
+                    .filter(|_| text.ends_with(" ppm"))
+                    .cloned()
+                    .unwrap_or_else(|| Vec::new().into()),
+            };
+            long.push((label, owner, text, offset, style, roman_parentheses));
+            continue;
+        }
         let dl = matches!(owner, Owner::AtomStereo(_))
             && (text.starts_with("D (") || text.starts_with("L ("));
         let group = matches!(owner, Owner::StereoGroup(_));
@@ -1403,11 +1526,196 @@ fn layout_indicators(doc: &Document, drawn: &Document) -> Vec<Indicator> {
             text,
             style,
             roman_parentheses,
+            leader: None,
+            long_reach: None,
+        });
+    }
+    // The strokes each bond draws and how far each one's ink reaches beyond
+    // its centre line, as the scene draws them, for the long numbers.
+    let rails: Vec<Vec<(Point, Point, f32)>> = if long.is_empty() {
+        Vec::new()
+    } else {
+        let faces = crate::scene::projected_bonds::FaceIndex::new(doc);
+        let style = &doc.drawing_style;
+        doc.bonds
+            .iter()
+            .filter_map(|b| {
+                let (p, q) = (*positions.get(&b.a)?, *positions.get(&b.b)?);
+                let bold = matches!(
+                    b.display.as_str(),
+                    "bold" | "wedge" | "hash" | "hashed" | "hollow_wedge"
+                ) || b.secondary_display.as_deref() == Some("bold");
+                let ink = if bold {
+                    style.world(style.bold_width_pt) / 2.
+                } else if b.display == "wavy" && b.order != 2 {
+                    style.line_width() * 1.75
+                } else {
+                    style.line_width() / 2.
+                };
+                // As the scene draws them: a rail trimmed past its own length
+                // is not drawn.
+                Some(
+                    crate::scene::bond_rails(&faces, b)
+                        .iter()
+                        .map(|rail| rail.points(p, q))
+                        .filter(|(first, last)| {
+                            (last.x - first.x) * (q.x - p.x) + (last.y - first.y) * (q.y - p.y) > 0.
+                        })
+                        .map(|(first, last)| (first, last, ink))
+                        .collect(),
+                )
+            })
+            .collect()
+    };
+    // Long numbers last: first every one that fits beside its atom, those
+    // with the least room there first; then the rest wherever the search
+    // finds room, with leaders.
+    let mut beside_order: Vec<_> = (0..long.len()).collect();
+    {
+        let obstacles = Obstacles {
+            boxes: &occupied,
+            bonds: &segments,
+            rails: &rails,
+            atoms: &visible,
+            leaders: &leaders,
+        };
+        // A dragged label keeps its place, so it needs no count.
+        let room: Vec<_> = long
+            .iter()
+            .map(|(label, _, _, offset, ..)| match offset {
+                Some(_) => 0,
+                None => label.room(&obstacles, &positions, doc),
+            })
+            .collect();
+        beside_order.sort_by_key(|i| room.get(*i).copied());
+    }
+    // Place the labels in `order`, beside their atoms only with `beside`,
+    // skipping placed ones; returns those that found no box clear of text
+    // and with no mark on a bond.
+    let place = |order: &[usize],
+                 beside: bool,
+                 spots: &mut Vec<Option<Spot>>,
+                 occupied: &mut Vec<(Point, Point)>,
+                 leaders: &mut Vec<(Point, Point)>| {
+        let mut stuck = Vec::new();
+        for &i in order {
+            let (Some(None), Some((label, _, _, offset, ..))) = (spots.get(i), long.get(i)) else {
+                continue;
+            };
+            let obstacles = Obstacles {
+                boxes: occupied,
+                bonds: &segments,
+                rails: &rails,
+                atoms: &visible,
+                leaders,
+            };
+            let found = match offset {
+                Some(p) => {
+                    let center = label.anchor.offset(p.x, p.y);
+                    Some((0., (center, label.leader(center, &obstacles))))
+                }
+                None => label.place(&obstacles, &positions, doc, beside),
+            };
+            if let Some((cost, (center, leader))) = found {
+                if cost >= long_numbers::MARK {
+                    stuck.push(i);
+                }
+                occupied.push(label.bounds(center, 3.));
+                leaders.extend(leader);
+                if let Some(spot) = spots.get_mut(i) {
+                    *spot = Some((center, leader));
+                }
+            }
+        }
+        stuck
+    };
+    let mut spots = vec![None; long.len()];
+    place(&beside_order, true, &mut spots, &mut occupied, &mut leaders);
+    // The rest in order. A label left without a clear box goes first on the
+    // next try, each label at most once and for at most eight tries; the try
+    // with the fewest such labels wins.
+    let mut order: Vec<_> = (0..long.len()).collect();
+    let mut promoted = Vec::new();
+    let mut best: Option<(usize, Vec<Option<Spot>>)> = None;
+    for _ in 0..8 {
+        let mut tried = spots.clone();
+        let stuck = place(
+            &order,
+            false,
+            &mut tried,
+            &mut occupied.clone(),
+            &mut leaders.clone(),
+        );
+        let next = stuck.iter().copied().find(|i| !promoted.contains(i));
+        if best.as_ref().is_none_or(|(least, _)| stuck.len() < *least) {
+            best = Some((stuck.len(), tried));
+        }
+        let Some(i) = next else { break };
+        promoted.push(i);
+        order.retain(|&j| j != i);
+        order.insert(0, i);
+    }
+    let spots = best.map_or(spots, |(_, tried)| tried);
+    for ((label, owner, text, _, style, roman_parentheses), spot) in long.into_iter().zip(spots) {
+        let (center, leader) = spot.unwrap_or((label.anchor, None));
+        let (width, height) = label.size;
+        result.push(Indicator {
+            owner,
+            center,
+            origin: center.offset(-width / 2., -height / 2.),
+            width,
+            height,
+            text,
+            style,
+            roman_parentheses,
+            leader: leader.map(|(a, b)| (a, b, doc.drawing_style.line_width() * 0.5)),
+            long_reach: Some(center.distance(label.anchor) + label.reach()),
         });
     }
     result
 }
 
+/// The convex hull of each molecule holding one of `ids`, by atom ID: its
+/// visible atoms, bonded directly or not. Each molecule is walked once.
+fn molecule_hulls(
+    doc: &Document,
+    positions: &std::collections::HashMap<u64, Point>,
+    ids: &[u64],
+) -> std::collections::HashMap<u64, std::rc::Rc<[Point]>> {
+    let mut hulls = std::collections::HashMap::new();
+    if ids.is_empty() {
+        return hulls;
+    }
+    let mut bonded: std::collections::HashMap<u64, Vec<u64>> = std::collections::HashMap::new();
+    for b in &doc.bonds {
+        bonded.entry(b.a).or_default().push(b.b);
+        bonded.entry(b.b).or_default().push(b.a);
+    }
+    for &id in ids {
+        if hulls.contains_key(&id) {
+            continue;
+        }
+        let mut seen = std::collections::HashSet::from([id]);
+        let mut queue = vec![id];
+        while let Some(current) = queue.pop() {
+            for &other in bonded.get(&current).into_iter().flatten() {
+                if seen.insert(other) {
+                    queue.push(other);
+                }
+            }
+        }
+        let points = seen
+            .iter()
+            .filter(|id| doc.atom_visible(**id))
+            .filter_map(|id| positions.get(id).copied())
+            .collect();
+        let hull: std::rc::Rc<[Point]> = long_numbers::hull(points).into();
+        for member in seen {
+            hulls.insert(member, hull.clone());
+        }
+    }
+    hulls
+}
 pub fn clear_computed(doc: &mut Document) {
     for a in &mut doc.atoms {
         a.cip_label = None;

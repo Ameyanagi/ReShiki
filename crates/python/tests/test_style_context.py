@@ -104,7 +104,8 @@ def test_bound_molecular_constructors(fixtures: Path, monkeypatch: pytest.Monkey
         custom.Molecule.from_cdxml(cdxml),
         custom.Molecule.from_inchi(ETHANOL_INCHI),
         custom.Molecule.from_name("ethanol"),
-        custom.Molecule.from_rdkit(object()),
+        # A stand-in RDKit molecule: the fake MolToMolBlock above, and no atom notes.
+        custom.Molecule.from_rdkit(SimpleNamespace(GetAtoms=lambda: [])),
         custom.Drawing.from_smiles("CCO"),
         custom.Drawing.open(fixtures / "ethanol.mol"),
     )
