@@ -398,6 +398,8 @@ pub fn atom_edit(
             }
         }
         result.invalidate_chemistry(&[id, focus]);
+        // The new atoms join the grown molecule's reaction participant.
+        crate::reactions::reconcile(&mut result)?;
         result.validate()?;
         Ok((result, focus))
     })())

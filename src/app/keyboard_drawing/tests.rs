@@ -1406,3 +1406,170 @@ fn repeated_marked_coordination_reports_duplicate_without_another_history_frame(
     let _ = app.update(Message::Undo);
     assert_eq!(app.tab.doc, original);
 }
+
+/// Propylbenzene: [chain end, chain middle, ring CH].
+fn propylbenzene(doc: &mut Document, x: f32) -> [u64; 3] {
+    let ring: Vec<_> = (0..6)
+        .map(|i| {
+            let angle = i as f32 * std::f32::consts::FRAC_PI_3;
+            doc.add_atom("C", Point::new(x + 42. * angle.cos(), 42. * angle.sin()))
+        })
+        .collect();
+    for i in 0..6 {
+        doc.add_bond(ring[i], ring[(i + 1) % 6], 1 + (i as u8 % 2), "plain");
+    }
+    let a = doc.add_atom("C", Point::new(x + 84., 0.));
+    let b = doc.add_atom("C", Point::new(x + 105., 36.));
+    let c = doc.add_atom("C", Point::new(x + 147., 36.));
+    doc.add_bond(ring[0], a, 1, "plain");
+    doc.add_bond(a, b, 1, "plain");
+    doc.add_bond(b, c, 1, "plain");
+    [c, b, ring[3]]
+}
+
+/// Growing a molecule that has a reaction role keeps the role on the whole
+/// molecule, for a reaction made by the shortcut or by hand, before and after
+/// a save and reopen.
+#[test]
+fn keys_edit_reaction_participants() {
+    const REFUSAL: &str = "Assign complete molecules to reaction roles";
+    let mut failures = Vec::new();
+    for variant in ["shortcut", "manual", "shortcut reopened", "manual reopened"] {
+        let mut app = app();
+        let reactant = propylbenzene(&mut app.tab.doc, 0.);
+        let product = if variant.starts_with("shortcut") {
+            app.tab.selected = vec![reactant[0]];
+            let _ = app.update(Message::Shortcut(
+                super::super::shortcuts::Action::ReactionCopy,
+            ));
+            assert!(!app.error, "{}", app.status);
+            // The copy follows the original atoms in the same order.
+            let ids: Vec<_> = app.tab.doc.atoms.iter().map(|a| a.id).collect();
+            reactant.map(|id| ids[ids.iter().position(|i| *i == id).unwrap() + ids.len() / 2])
+        } else {
+            let product = propylbenzene(&mut app.tab.doc, 400.);
+            let arrow = app.tab.doc.next_id();
+            app.tab.doc.arrows.push(reshiki::document::Arrow {
+                start_anchor: None,
+                end_anchor: None,
+                id: arrow,
+                start: Point::new(200., 0.),
+                end: Point::new(300., 0.),
+                kind: "forward".into(),
+                control: None,
+                cubic: None,
+                nodes: Vec::new(),
+                style: None,
+            });
+            for (ids, role) in [
+                (reactant, reshiki::reactions::Role::Reactant),
+                (product, reshiki::reactions::Role::Product),
+            ] {
+                reshiki::reactions::assign(&mut app.tab.doc, arrow, &ids[..1], role).unwrap();
+            }
+            product
+        };
+        if variant.ends_with("reopened") {
+            app.tab.doc = Document::from_json(&serde_json::to_vec(&app.tab.doc).unwrap()).unwrap();
+        }
+        app.tab.doc.validate().unwrap();
+        let base = app.tab.doc.clone();
+        // `added` is the number of atoms the edit must add, where it is known.
+        let mut check =
+            |app: &mut App, assigned_target: bool, added: Option<usize>, what: String| {
+                let assigned: usize = app.tab.doc.reactions[0]
+                    .ids()
+                    .iter()
+                    .filter(|id| app.tab.doc.atom(**id).is_some())
+                    .count();
+                if app.error && app.status.contains(REFUSAL) {
+                    failures.push(format!("{variant}: {what}"));
+                } else if assigned_target && assigned != app.tab.doc.atoms.len() {
+                    failures.push(format!("{variant}: {what} left atoms outside the reaction"));
+                } else if added.is_some_and(|n| app.tab.doc.atoms.len() != base.atoms.len() + n) {
+                    failures.push(format!("{variant}: {what} did not grow: {}", app.status));
+                }
+                app.tab.doc = base.clone();
+                app.error = false;
+            };
+        for (side, atoms) in [("reactant", reactant), ("product", product)] {
+            for (place, id) in ["chain end", "chain middle", "ring"].into_iter().zip(atoms) {
+                for key in [
+                    "1", "2", "4", "5", "8", "9", "0", "z", "K", "k", "d", "+", "-", "3", "6", "7",
+                    "v", "u", "a", "j", "J", "o", "n", "m", "O", "P", "e", "A", "E", "F", "N", "y",
+                    "Z", "M", "H", "Q",
+                ] {
+                    app.tab
+                        .keyboard_drawing
+                        .set_target(Target::Atom(id), &app.tab.doc);
+                    let _ = app.context_key(key);
+                    let added = match key {
+                        "1" | "0" => Some(1),
+                        _ => None,
+                    };
+                    check(
+                        &mut app,
+                        true,
+                        added,
+                        format!("key {key} on {side} {place}"),
+                    );
+                }
+            }
+            let (a, b) = (atoms[0].min(atoms[1]), atoms[0].max(atoms[1]));
+            for key in [
+                "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "z", "v", "a", "w",
+            ] {
+                app.tab
+                    .keyboard_drawing
+                    .set_target(Target::Bond(a, b), &app.tab.doc);
+                let _ = app.context_key(key);
+                check(&mut app, true, None, format!("key {key} on {side} bond"));
+            }
+            app.tab
+                .keyboard_drawing
+                .set_target(Target::Atom(atoms[0]), &app.tab.doc);
+            let _ = app.context_key("[");
+            app.tab
+                .keyboard_drawing
+                .set_target(Target::Atom(atoms[2]), &app.tab.doc);
+            let _ = app.context_key("]");
+            check(&mut app, true, None, format!("connect on {side}"));
+            // The bond tool's click on a ring atom shares this growth.
+            let end = reshiki::projection::growth::Plane::at(&app.tab.doc, atoms[2])
+                .and_then(|plane| plane.outward(42.))
+                .unwrap();
+            match reshiki::projection::growth::place(
+                &app.tab.doc,
+                atoms[2],
+                end,
+                "C",
+                reshiki::bonds::BondPreset::Single,
+            ) {
+                Ok((doc, _)) => app.tab.doc = doc,
+                Err(error) => {
+                    app.error = true;
+                    app.status = error;
+                }
+            }
+            check(
+                &mut app,
+                true,
+                Some(1),
+                format!("bond tool click on {side} ring"),
+            );
+        }
+        for key in ["1", "6", "n", "O", "j"] {
+            app.tab
+                .keyboard_drawing
+                .set_target(Target::Blank(Point::new(0., 300.)), &app.tab.doc);
+            let _ = app.context_key(key);
+            check(
+                &mut app,
+                false,
+                None,
+                format!("key {key} on the empty hotspot"),
+            );
+        }
+    }
+    assert!(failures.is_empty(), "{REFUSAL}:\n{}", failures.join("\n"));
+}

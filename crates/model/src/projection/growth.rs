@@ -204,6 +204,8 @@ pub fn place(
     doc.atom_mut(id).ok_or("Missing new atom")?.depth = end.depth;
     doc.invalidate_chemistry(&[start, id]);
     preset.place(&mut doc, start, id);
+    // The new atom joins the grown molecule's reaction participant.
+    crate::reactions::reconcile(&mut doc)?;
     doc.validate()?;
     Ok((doc, id))
 }
