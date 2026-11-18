@@ -108,6 +108,8 @@ pub fn bond_edit(doc: &Document, a: u64, b: u64, preset: BondPreset) -> Result<D
         }
         straighten_alkyne(&mut result, a, b)?;
     }
+    // A bond across a hydrogen bond joins its molecules' reaction participants.
+    crate::reactions::reconcile(&mut result)?;
     result.validate()?;
     Ok(result)
 }

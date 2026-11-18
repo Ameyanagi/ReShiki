@@ -210,3 +210,43 @@ fn expanded_azide_and_magnesium_bromide_keep_visible_bonds() -> Result<(), Strin
     }
     Ok(())
 }
+
+/// Turning a hydrogen bond into a real bond joins its two molecules. One with
+/// a reaction role takes the other in; two with roles are refused by name.
+#[test]
+fn bonding_across_a_hydrogen_bond_keeps_reaction_roles_whole() -> Result<(), String> {
+    use crate::reactions::{Role, assign};
+    let mut doc = Document::default();
+    let donor = doc.add_atom("O", Point::default());
+    let h = doc.add_atom("H", Point::new(42., 0.));
+    let acceptor = doc.add_atom("O", Point::new(84., 0.));
+    let carbon = doc.add_atom("C", Point::new(126., 0.));
+    doc.add_bond(donor, h, 1, "plain");
+    doc.add_bond(acceptor, carbon, 1, "plain");
+    doc.add_bond(h, acceptor, 0, "dotted");
+    let arrow = doc.next_id();
+    doc.arrows.push(crate::document::Arrow {
+        start_anchor: None,
+        end_anchor: None,
+        id: arrow,
+        start: Point::new(200., 0.),
+        end: Point::new(300., 0.),
+        kind: "forward".into(),
+        control: None,
+        cubic: None,
+        nodes: Vec::new(),
+        style: None,
+    });
+    assign(&mut doc, arrow, &[donor], Role::Reactant)?;
+    let joined = bond_edit(&doc, h, acceptor, BondPreset::Single)?;
+    assert_eq!(
+        joined.reactions[0].reactants[0].atoms,
+        [donor, h, acceptor, carbon]
+    );
+    assign(&mut doc, arrow, &[acceptor], Role::Product)?;
+    assert_eq!(
+        bond_edit(&doc, h, acceptor, BondPreset::Single).unwrap_err(),
+        "This joins separate reaction participants. Clear their reaction roles before joining them."
+    );
+    Ok(())
+}

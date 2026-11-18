@@ -1023,7 +1023,51 @@ pub fn arrange(doc: &mut Document, ids: &[u64], action: Arrange) {
         action,
         Arrange::DistributeHorizontal | Arrange::DistributeVertical
     );
-    let groups = groups(doc, ids);
+    // Distributing a whole reaction spaces its molecules, not its `+` signs.
+    // Each sign follows the gap between the two molecules it separates
+    // instead, and the gap widens to make room for it. A reaction with a
+    // grouped molecule or sign is spaced as plain objects, which keeps the
+    // group as it is. `authored` is the drawing before spacing, holding only
+    // the reactions spaced this way.
+    let mut authored = None;
+    let mut spaced = ids.to_vec();
+    if distribute {
+        let selected: HashSet<_> = ids.iter().collect();
+        let grouped: HashSet<_> = doc.groups.iter().flat_map(|g| &g.members).collect();
+        let sign = |id: &u64| {
+            doc.annotations
+                .iter()
+                .any(|a| a.id == *id && a.text.trim() == "+")
+        };
+        let reactions: Vec<_> = doc
+            .reactions
+            .iter()
+            .filter(|reaction| {
+                crate::reactions::Role::ALL
+                    .iter()
+                    .flat_map(|role| reaction.participants(*role))
+                    .flat_map(|participant| &participant.atoms)
+                    .all(|id| selected.contains(id) && !grouped.contains(id))
+                    && !reaction
+                        .annotations
+                        .iter()
+                        .any(|id| grouped.contains(id) && sign(id))
+            })
+            .cloned()
+            .collect();
+        let signs: HashSet<_> = reactions
+            .iter()
+            .flat_map(|reaction| &reaction.annotations)
+            .filter(|id| sign(id))
+            .collect();
+        if !signs.is_empty() {
+            spaced.retain(|id| !signs.contains(id));
+            let mut before = doc.clone();
+            before.reactions = reactions;
+            authored = Some(before);
+        }
+    }
+    let groups = groups(doc, &spaced);
     if groups.is_empty() {
         return;
     }
@@ -1071,6 +1115,9 @@ pub fn arrange(doc: &mut Document, ids: &[u64], action: Arrange) {
         target += coordinate(max) - coordinate(min) + gap;
     }
     doc.translate_units(&moves);
+    if let Some(authored) = authored {
+        crate::reaction_mapping::reflow_separators(&authored, doc);
+    }
 }
 
 pub fn nearest_bond(doc: &Document, p: Point, r: f32) -> Option<usize> {
