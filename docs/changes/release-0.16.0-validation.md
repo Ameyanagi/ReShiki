@@ -105,9 +105,8 @@ The maintainer runs these on a manual **Release builds** run of the merged
       `scripts/package_web_demo.sh` loads in Chrome, Safari and Firefox,
       draws, and converts a name with **Import → Name**.
 - [ ] **npm packages:** the packages built by the release workflow pass their
-      tests; after publication `@ameyanagi/reshiki@0.16.0` is `latest`, and
-      `@ameyanagi/reshiki-headless@0.16.0`, the first version of that package,
-      is published (see
+      tests; after publication `@ameyanagi/reshiki@0.16.0` and
+      `@ameyanagi/reshiki-headless@0.16.0` are `latest` (see
       [Configure npm publishing](../releasing.md#configure-npm-publishing)).
 - [ ] **PyPI:** after publication `uv add reshiki` installs 0.16.0 on each
       platform, and `Molecule.from_smiles("CCO").predict_nmr("13C")` returns

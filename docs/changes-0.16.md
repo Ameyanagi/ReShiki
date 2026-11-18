@@ -598,6 +598,10 @@ validation, versions}`. `info`, `document_new`, `document_list`,
 - **Browser editor:** opening a large file, exporting a figure, a long Clean
   up and 3D calculations still hold the page while they work
   ([issue #430](https://github.com/Ameyanagi/ReShiki/issues/430)).
+- **Browser demo:** it does not work offline and cannot be installed
+  ([issue #1226](https://github.com/Ameyanagi/ReShiki/issues/1226)).
+- **Linux:** toolbar icons were reported blank under Xvfb software rendering
+  ([issue #1120](https://github.com/Ameyanagi/ReShiki/issues/1120)).
 - **Updates on macOS:** while a Keychain prompt for the GitHub sign-in is
   unanswered, **Update and restart** cannot quit ReShiki and ends with
   "Application did not exit; nothing installed." Answer the prompt, then

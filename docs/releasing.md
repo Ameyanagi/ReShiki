@@ -167,7 +167,7 @@ Both Mac builds use the fixed abbreviation drawing coordinates recorded on Apple
 
 The **npm** job runs in the `npm` GitHub environment, which GitHub creates on its first run. It publishes with npm trusted publishing (OIDC) when the repository variable `NPM_TRUSTED_PUBLISHING` is `true`, and otherwise with the `NPM_TOKEN` secret. The npm account `ameyanagi` owns the `@ameyanagi` scope.
 
-npm can only add a trusted publisher to a package that already exists, so the first version of each package is published with a token, and every later one through trusted publishing. With trusted publishing on, the job still uses `NPM_TOKEN`, when it is set, for a package npm does not have yet. `@ameyanagi/reshiki-headless` is new in 0.16.0, so the `v0.16.0` tag publishes its first version with the token, if npm accepts it. Then add that package's trusted publisher (step 2) before the following release.
+npm can only add a trusted publisher to a package that already exists, so the first version of each package is published with a token, and every later one through trusted publishing. With trusted publishing on, the job still uses `NPM_TOKEN`, when it is set, for a package npm does not have yet. Both `@ameyanagi/reshiki` and `@ameyanagi/reshiki-headless` are on npm and publish through trusted publishing; the steps below apply to a new package.
 
 1. **First publish, with a token.** Create a [granular access token](https://docs.npmjs.com/creating-and-viewing-access-tokens) with **Packages and scopes: Read and write**, for all packages or the `@ameyanagi` scope, and a short expiry. Add it as the repository (or `npm` environment) secret `NPM_TOKEN`. Then publish main's version without a new tag:
 
