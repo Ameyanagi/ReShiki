@@ -710,30 +710,8 @@ pub fn transform(doc: &mut Document, ids: &[u64], transform: Transform) {
         let p = vector(Point::new(p.x - center.x, p.y - center.y));
         center.offset(p.x, p.y)
     };
-    transform_hydrogen_positions(doc, ids, vector);
+    transform_display(doc, ids, vector);
     map_positions(doc, ids, convert, vector);
-    if matches!(
-        transform,
-        Transform::FlipHorizontal | Transform::FlipVertical
-    ) {
-        // Reflect the projection while preserving the molecule's stereochemistry.
-        for b in &mut doc.bonds {
-            if ids.contains(&b.a) && ids.contains(&b.b) {
-                b.double_position = b.double_position.reversed();
-                if b.projection {
-                    continue;
-                }
-                b.display = match (b.order, b.display.as_str()) {
-                    (1, "wedge") => "hash",
-                    (1, "hash") => "wedge",
-                    (1, "hollow_wedge" | "bold") => "hashed",
-                    (1, "hashed") => "hollow_wedge",
-                    (_, other) => other,
-                }
-                .into();
-            }
-        }
-    }
 }
 
 /// Uniform, orientation-preserving transform used by the selection handles.
@@ -760,7 +738,7 @@ pub fn transform_about(doc: &mut Document, ids: &[u64], pivot: Point, scale: f32
         let (x, y) = (p.x * scale, p.y * scale);
         Point::new(x * c - y * s, x * s + y * c)
     };
-    transform_hydrogen_positions(doc, ids, vector);
+    transform_display(doc, ids, vector);
     map_positions(
         doc,
         ids,
@@ -770,6 +748,79 @@ pub fn transform_about(doc: &mut Document, ids: &[u64], pivot: Point, scale: f32
         },
         vector,
     );
+}
+
+/// What a planar transform does to the drawing beyond moving atoms, given
+/// its linear part `vector`: fixed hydrogens, the offsets of atom numbers,
+/// stereo and map labels, marks and bond indicators turn with it, and a
+/// reflection swaps wedges and hashes and puts each double bond's second
+/// line on the other side, so the configuration stays as drawn. The Flip
+/// tool and Compare's lined-up view both use it.
+pub fn transform_display(doc: &mut Document, ids: &[u64], vector: impl Fn(Point) -> Point) {
+    transform_hydrogen_positions(doc, ids, &vector);
+    let (x, y) = (vector(Point::new(1., 0.)), vector(Point::new(0., 1.)));
+    let mirrored = x.x * y.y - x.y * y.x < 0.;
+    let ids: HashSet<_> = doc.expand_abbreviation_selection(ids).into_iter().collect();
+    for a in &mut doc.atoms {
+        if !ids.contains(&a.id) {
+            continue;
+        }
+        for offset in [
+            a.display.number.as_mut().and_then(|n| n.offset.as_mut()),
+            a.display.stereo.offset.as_mut(),
+            a.display.stereo_group.offset.as_mut(),
+            a.display.mapping.offset.as_mut(),
+        ]
+        .into_iter()
+        .flatten()
+        {
+            *offset = vector(*offset);
+        }
+        for mark in &mut a.marks {
+            let before = mark.offset;
+            mark.offset = vector(mark.offset);
+            // Lone pairs turn with the molecule; charges stay upright.
+            if matches!(
+                mark.kind,
+                crate::scientific::MarkKind::LonePair | crate::scientific::MarkKind::LonePairBar
+            ) {
+                let direction = |p: Point| p.y.atan2(p.x).to_degrees();
+                mark.angle = if before.x.hypot(before.y) > 1e-6
+                    && mark.offset.x.hypot(mark.offset.y) > 1e-6
+                {
+                    // Keep the pair's turn from its atom-to-mark direction,
+                    // so unequal stretching leaves it across that direction.
+                    let turn = mark.angle - direction(before);
+                    direction(mark.offset) + if mirrored { -turn } else { turn }
+                } else {
+                    let (s, c) = mark.angle.to_radians().sin_cos();
+                    direction(vector(Point::new(c, s)))
+                }
+                .rem_euclid(360.);
+            }
+        }
+    }
+    for b in &mut doc.bonds {
+        if !(ids.contains(&b.a) && ids.contains(&b.b)) {
+            continue;
+        }
+        if let Some(offset) = &mut b.indicator.offset {
+            *offset = vector(*offset);
+        }
+        if mirrored {
+            b.double_position = b.double_position.reversed();
+            if !b.projection {
+                b.display = match (b.order, b.display.as_str()) {
+                    (1, "wedge") => "hash",
+                    (1, "hash") => "wedge",
+                    (1, "hollow_wedge" | "bold") => "hashed",
+                    (1, "hashed") => "hollow_wedge",
+                    (_, other) => other,
+                }
+                .into();
+            }
+        }
+    }
 }
 
 /// Fixed appendages follow planar rotation/reflection while text stays upright.
@@ -817,6 +868,7 @@ pub fn scale_axes_about(doc: &mut Document, ids: &[u64], pivot: Point, x: f32, y
         return;
     }
     let vector = |p: Point| Point::new(p.x * x, p.y * y);
+    transform_display(doc, ids, vector);
     map_positions(
         doc,
         ids,
@@ -854,59 +906,10 @@ fn map_positions(
     if !boundary.is_empty() {
         doc.invalidate_chemistry(&boundary);
     }
+    // Offsets and the like follow `transform_display`.
     for a in &mut doc.atoms {
         if ids.contains(&a.id) {
-            let position = convert(a.position);
-            for offset in [
-                a.display.number.as_mut().and_then(|n| n.offset.as_mut()),
-                a.display.stereo.offset.as_mut(),
-                a.display.stereo_group.offset.as_mut(),
-                a.display.mapping.offset.as_mut(),
-            ]
-            .into_iter()
-            .flatten()
-            {
-                let moved = convert(a.position.offset(offset.x, offset.y));
-                *offset = Point::new(moved.x - position.x, moved.y - position.y);
-            }
-            for mark in &mut a.marks {
-                let before = mark.offset;
-                let moved = convert(a.position.offset(mark.offset.x, mark.offset.y));
-                mark.offset = Point::new(moved.x - position.x, moved.y - position.y);
-                // Lone pairs turn with the molecule; charges stay upright.
-                if matches!(
-                    mark.kind,
-                    crate::scientific::MarkKind::LonePair
-                        | crate::scientific::MarkKind::LonePairBar
-                ) {
-                    let direction = |p: Point| p.y.atan2(p.x).to_degrees();
-                    mark.angle = if before.x.hypot(before.y) > 1e-6
-                        && mark.offset.x.hypot(mark.offset.y) > 1e-6
-                    {
-                        // Keep the pair's turn from its atom-to-mark direction,
-                        // so unequal stretching leaves it across that direction.
-                        let (x, y) = (vector(Point::new(1., 0.)), vector(Point::new(0., 1.)));
-                        let mirrored = x.x * y.y - x.y * y.x < 0.;
-                        let turn = mark.angle - direction(before);
-                        direction(mark.offset) + if mirrored { -turn } else { turn }
-                    } else {
-                        let (s, c) = mark.angle.to_radians().sin_cos();
-                        direction(vector(Point::new(c, s)))
-                    }
-                    .rem_euclid(360.);
-                }
-            }
-            a.position = position;
-        }
-    }
-    for b in &mut doc.bonds {
-        if ids.contains(&b.a)
-            && ids.contains(&b.b)
-            && let Some(offset) = &mut b.indicator.offset
-        {
-            let zero = convert(Point::default());
-            let moved = convert(*offset);
-            *offset = Point::new(moved.x - zero.x, moved.y - zero.y);
+            a.position = convert(a.position);
         }
     }
     for a in &mut doc.annotations {

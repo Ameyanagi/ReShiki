@@ -302,8 +302,14 @@ fn selection_membership_keeps_collapsed_groups_boundary_stereo_and_object_order(
     let mut actual = doc.clone();
     let convert = |p: Point| Point::new(-p.y + 0.125, p.x - 0.75);
     let vector = |p: Point| Point::new(-p.y, p.x);
-    map_positions(&mut expected, &selected, convert, vector);
-    map_positions(&mut actual, &duplicated, convert, vector);
+    // Positions, then what turns with them, as every transform applies them.
+    for (doc, ids) in [
+        (&mut expected, &selected[..]),
+        (&mut actual, &duplicated[..]),
+    ] {
+        transform_display(doc, ids, vector);
+        map_positions(doc, ids, convert, vector);
+    }
     assert_eq!(actual, expected);
     assert_eq!(actual.atom(a), doc.atom(a));
     assert_eq!(actual.bonds[0].stereo, None);

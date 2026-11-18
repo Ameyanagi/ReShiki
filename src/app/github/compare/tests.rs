@@ -90,7 +90,7 @@ fn each_mode_counts_and_lists_its_own_changes() {
         [Tag::Chem, Tag::Text, Tag::Moved, Tag::Same]
     );
     let rows = compare.listed();
-    assert_eq!(rows[0].title, "O added");
+    assert_eq!(rows[0].title, "OH added");
     assert_eq!(rows[0].smiles.as_deref(), Some("c1ccccc1 → Oc1ccccc1"));
     assert_eq!(rows[1].title, "Text: “H2SO4” → “H2SO4, heat”");
     assert_eq!(rows[2].title, "Whole scheme moved");
@@ -484,5 +484,125 @@ async fn rendered_compare_stacks_a_wide_scheme_and_keeps_the_badge_by_the_title(
     let row = (snapshot.nodes.iter())
         .find(|node| node.id == "github-compare-row-0")
         .unwrap();
-    assert_eq!(row.name, "CHEM: O added, c1ccccc1 → Oc1ccccc1");
+    assert_eq!(row.name, "CHEM: OH added, c1ccccc1 → Oc1ccccc1");
+}
+
+/// A chiral molecule drawn by hand: the wedge carries the stereo.
+fn chiral() -> Document {
+    let mut doc = Document::default();
+    let c = doc.add_atom("C", Point::new(0., 0.));
+    let ends = [("C", -36., 21.), ("O", 36., 21.), ("C", 0., -42.)];
+    let mut ids = vec![];
+    for (element, x, y) in ends {
+        let id = doc.add_atom(element, Point::new(x, y));
+        ids.push(id);
+    }
+    doc.add_bond(c, ids[0], 1, "plain");
+    doc.add_bond(c, ids[1], 1, "plain");
+    doc.add_bond(c, ids[2], 1, "wedge");
+    let end = doc.add_atom("C", Point::new(36., -63.));
+    doc.add_bond(ids[2], end, 1, "plain");
+    load(&doc)
+}
+
+#[test]
+fn a_flipped_molecule_reads_flipped_and_keeps_its_configuration() {
+    let left = chiral();
+    let right = edited(&left, |doc| {
+        reshiki::editing::transform(
+            doc,
+            &doc.all_ids(),
+            reshiki::editing::Transform::FlipHorizontal,
+        )
+    });
+    let compare = compared(&left, &right);
+    assert_eq!(compare.verdict(), Some(Verdict::Same));
+    let rows = compare.listed();
+    assert_eq!(rows[0].tag, Tag::Mirrored);
+    assert_eq!(rows[0].title, "Molecule flipped left–right");
+    assert_eq!(rows[0].detail, "Wedges swapped; same configuration");
+    assert_eq!(Tag::Mirrored.label(), "MIRRORED");
+    assert_eq!(Tag::Mirrored.colors(false), Tag::Moved.colors(false));
+    // Positions mirrored, wedge kept: the mirror image.
+    let mirrored = edited(&left, |doc| {
+        for atom in &mut doc.atoms {
+            atom.position.x = -atom.position.x;
+        }
+    });
+    let compare = compared(&left, &mirrored);
+    let titles: Vec<&str> = compare.listed().iter().map(|r| r.title.as_str()).collect();
+    assert_eq!(
+        titles[..2],
+        [
+            "Mirror image: every stereocenter inverted",
+            "Molecule flipped left–right"
+        ]
+    );
+}
+
+#[test]
+fn a_scaled_scheme_reads_as_one_line_with_its_scale() {
+    let (left, ..) = scheme();
+    let right = edited(&left, |doc| {
+        reshiki::editing::transform_about(doc, &doc.all_ids(), Point::new(0., 0.), 1.2, 0.)
+    });
+    let compare = compared(&left, &right);
+    let rows = compare.listed();
+    assert_eq!(rows[0].title, "Whole scheme moved");
+    assert!(
+        rows[0].detail.contains("scaled to 120%"),
+        "{}",
+        rows[0].detail
+    );
+    // One molecule scaled about itself.
+    let ring: Vec<u64> = left.atoms.iter().take(6).map(|a| a.id).collect();
+    let right = edited(&left, |doc| {
+        let at = doc.atom(ring[0]).unwrap().position;
+        reshiki::editing::transform_about(doc, &ring, at, 0.8, 0.)
+    });
+    let compare = compared(&left, &right);
+    let row = &compare.listed()[0];
+    assert_eq!(
+        (row.tag, row.title.as_str()),
+        (Tag::Scaled, "Molecule scaled to 80%")
+    );
+}
+
+#[test]
+fn parts_read_with_their_atom_numbers() {
+    let part = |kind, what: &str, at: &[&str]| Part {
+        kind,
+        what: what.into(),
+        at: at.iter().map(|s| (*s).to_owned()).collect(),
+    };
+    let parts = [
+        part(PartKind::Added, "OH", &["C4"]),
+        part(PartKind::Replaced, "Cl → Br", &["C2"]),
+        part(PartKind::Bond, "single → double", &["C1", "C2"]),
+        part(PartKind::Inverted, "", &["C3"]),
+    ];
+    assert_eq!(parts_title(&parts[..1]), "OH added at C4");
+    assert_eq!(parts_title(&parts[..2]), "OH added at C4, Cl → Br at C2");
+    assert_eq!(
+        parts_title(&parts),
+        "OH added at C4, Cl → Br at C2, +2 more"
+    );
+    assert_eq!(part_text(&parts[2]), "C1–C2 single → double");
+    assert_eq!(part_text(&parts[3]), "inverted at C3");
+    assert_eq!(
+        part_text(&part(PartKind::BondAdded, "", &["C1", "C3"])),
+        "C1–C3 bond added"
+    );
+    assert_eq!(
+        parts_title(&[part(PartKind::BondRemoved, "", &[])]),
+        "Bond removed"
+    );
+    assert_eq!(
+        parts_title(&[part(PartKind::Removed, "NO₂", &[])]),
+        "NO₂ removed"
+    );
+    assert_eq!(
+        parts_title(&[part(PartKind::Inverted, "", &[])]),
+        "Stereocenter inverted"
+    );
 }
