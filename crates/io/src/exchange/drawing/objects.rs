@@ -633,7 +633,10 @@ impl Writer<'_> {
                     GraphicKind::Rectangle | GraphicKind::RoundedRectangle | GraphicKind::Ellipse
                 )
                 || matches!(style.pattern, LinePattern::Dotted | LinePattern::Wavy)
-                || !ellipse && (x.y != 0. || y.x != 0.))
+                || !ellipse && (x.y != 0. || y.x != 0.)
+                // CDX keeps CornerRadius in a signed 16-bit field.
+                || g.kind == GraphicKind::RoundedRectangle
+                    && real(g.corner_radius()) * self.scale * 100. > f64::from(i16::MAX))
         {
             return Ok(None);
         }

@@ -22,6 +22,8 @@ const FALLOFF: f32 = 2.5;
 const MAX_BAND_POINTS: usize = 400_000;
 /// Half-waves one wavy path may produce; longer paths get longer waves.
 const MAX_WAVES: f32 = 10_000.;
+/// Half-waves around the smallest closed wavy outline.
+const MIN_CLOSED_WAVES: usize = 8;
 
 /// Effects on a closed shape, written to ChemDraw as Shaded and Shadow.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
@@ -298,8 +300,9 @@ pub fn wavy(commands: &[PathCommand], radius: f32, straight: [f32; 2]) -> Vec<Pa
         }
         let span = total - lead0 - lead1;
         let mut n = (span / (2. * radius)).round().clamp(1., MAX_WAVES) as usize;
-        if closed && n % 2 == 1 {
-            n += 1;
+        if closed {
+            // Too few waves would retrace each other and close nothing.
+            n = (n + n % 2).max(MIN_CLOSED_WAVES);
         }
         let at = |s: f32| {
             let i = lengths.partition_point(|&l| l < s).clamp(1, path.len() - 1);

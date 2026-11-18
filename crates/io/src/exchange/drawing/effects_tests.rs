@@ -293,3 +293,29 @@ async fn an_outline_in_another_color_follows_the_native_shape_and_wavy_lines_kee
     let direction = |g: &Graphic| g.axis_x.x.signum();
     assert_eq!(direction(wavy), direction(&line));
 }
+
+#[tokio::test]
+async fn a_corner_too_large_for_cdx_exports_as_curves() {
+    let mut big = shape(
+        1,
+        GraphicKind::RoundedRectangle,
+        (2400., 2400.),
+        GraphicStyle {
+            corner_pt: Some(400.),
+            effects: Effects {
+                shaded: false,
+                shadow_pt: Some(4.),
+            },
+            ..Default::default()
+        },
+    );
+    big.style.fill = None;
+    let document = Document {
+        graphics: vec![big],
+        ..Default::default()
+    };
+    let bytes = crate::formats::write(document, "cdx").await.unwrap();
+    let xml = crate::exchange::from_cdx(&bytes).unwrap();
+    assert!(!xml.contains("CornerRadius"));
+    assert!(xml.contains("<curve"));
+}

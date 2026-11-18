@@ -411,3 +411,27 @@ fn waves_budget_short_headed_lines_and_symbols() {
     );
     assert_eq!(symbol.style.pattern, LinePattern::Solid);
 }
+
+#[test]
+fn a_small_wavy_outline_still_encloses_its_area() {
+    // 32 pt round, waves of 7.2 pt radius: two would retrace each other.
+    let w = crate::style::DEFAULT.world(10.);
+    let h = crate::style::DEFAULT.world(6.);
+    let square = vec![
+        PathCommand::Move(Point::new(0., 0.)),
+        PathCommand::Line(Point::new(w, 0.)),
+        PathCommand::Line(Point::new(w, h)),
+        PathCommand::Line(Point::new(0., h)),
+        PathCommand::Close,
+    ];
+    let waved = wavy(&square, wave_radius(4.), [0.; 2]);
+    let outline = flattened(&waved).concat();
+    let area: f32 = outline
+        .iter()
+        .zip(outline.iter().skip(1))
+        .map(|(a, b)| a.x * b.y - b.x * a.y)
+        .sum::<f32>()
+        .abs()
+        / 2.;
+    assert!(area > w * h * 0.5, "{area} of {}", w * h);
+}
