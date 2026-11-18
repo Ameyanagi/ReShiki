@@ -307,6 +307,7 @@ pub fn reconcile(doc: &mut Document, before: Document) -> Result<Reconciled, Rej
             return Err(Rejection::Invalid(error));
         }
         doc.reconcile_molecule_groups();
+        crate::layouts::reconcile(doc, &before);
     }
     Ok(Reconciled { before })
 }

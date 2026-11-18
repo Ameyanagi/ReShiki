@@ -924,6 +924,21 @@ pub(super) fn commits_draft(message: &Message) -> bool {
             | Message::ReverseBonds
             | Message::Purpose(_)
             | Message::BondDepth(_)
+            | Message::Figure(
+                super::figure_panels::Action::Wrap
+                    | super::figure_panels::Action::ApplyTitles
+                    | super::figure_panels::Action::Place(_)
+                    | super::figure_panels::Action::Rounded(_)
+                    | super::figure_panels::Action::Border(_)
+                    | super::figure_panels::Action::AddDivider(_)
+                    | super::figure_panels::Action::ApplyDivider(_)
+                    | super::figure_panels::Action::RemoveDivider(_)
+                    | super::figure_panels::Action::Fit
+                    | super::figure_panels::Action::Arrange(_)
+                    | super::figure_panels::Action::ApplyColumns
+                    | super::figure_panels::Action::ApplyGutter
+                    | super::figure_panels::Action::Align(_)
+            )
             | Message::Graphics(
                 super::graphics::Action::Style(_)
                     | super::graphics::Action::Superscript(_)

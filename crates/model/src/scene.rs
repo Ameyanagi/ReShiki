@@ -2358,7 +2358,21 @@ fn graphic_primitive(g: &&crate::graphics::Graphic, doc: &Document) -> Vec<Primi
                 style,
             }
         }));
-        if let Some(label) = g.superscript_label(&doc.drawing_style.text_style()) {
+        let text_style = &doc.drawing_style.text_style();
+        parts.extend(
+            g.panel_parts(text_style)
+                .into_iter()
+                .map(|p| Primitive::Path {
+                    commands: p.commands,
+                    style: p.style,
+                    filled: p.filled,
+                }),
+        );
+        for label in g
+            .superscript_label(text_style)
+            .into_iter()
+            .chain(g.panel_titles(text_style))
+        {
             parts.push(Primitive::Text {
                 position: label.position,
                 text: label.text.into(),

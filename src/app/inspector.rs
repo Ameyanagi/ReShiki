@@ -1122,7 +1122,14 @@ impl App {
                 .iter()
                 .any(|g| selected.contains(&g.id) && g.picture.is_none())
         {
+            // A panel's titles and dividers come before its colors.
+            if let Some(panel) = self.figure_panel_card() {
+                body = body.push(card(container(panel).padding(12)));
+            }
             body = body.push(card(container(self.graphic_panel()).padding(12)));
+        }
+        if let Some(layout) = self.layout_card() {
+            body = body.push(card(container(layout).padding(12)));
         }
         if let Some(section) = self.repeating_unit_section() {
             body = body.push(section);
@@ -2267,6 +2274,26 @@ impl App {
             row![
                 panel_action("Invert selection", Message::InvertSelection),
                 panel_action("Bracket ion", Message::BracketIon),
+            ]
+            .spacing(6),
+            row![
+                panel_action(
+                    "Wrap in panel",
+                    Message::Figure(super::figure_panels::Action::Wrap)
+                ),
+                crate::appearance::pick_list(
+                    [
+                        reshiki::layouts::Flow::Row,
+                        reshiki::layouts::Flow::Column,
+                        reshiki::layouts::Flow::Grid(2),
+                    ],
+                    None::<reshiki::layouts::Flow>,
+                    |flow| Message::Figure(super::figure_panels::Action::Arrange(flow)),
+                )
+                .placeholder("Lasting layout…")
+                .text_size(12)
+                .padding(6)
+                .width(Length::Fill),
             ]
             .spacing(6),
             crate::appearance::pick_list(

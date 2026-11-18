@@ -742,6 +742,7 @@ fn completion(message: &Message) -> Option<Completion> {
         | Message::ApplyBondColor
         | Message::Arc(..)
         | Message::Graphics(..)
+        | Message::Figure(..)
         | Message::RemoveMark(..)
         | Message::RotateMark(..)
         | Message::AtomRadical(..)

@@ -114,6 +114,51 @@ endpoints, attachments and arrowheads stay in place.
    Each type change or drag is one Undo step.
 5. Choose **Done** in the context row to finish.
 
+### Put a figure on a panel
+
+1. Select what the panel should hold, such as a scheme and its captions.
+2. Choose **Wrap in panel** from the canvas menu, the command palette or
+   **Properties → Grouping & frames**. A tinted, rounded panel appears behind
+   the selection with 10 pt of padding, grouped with it so they move together.
+   Option/Alt-click edits one object inside.
+3. In **Properties → Panel**, type a title and press Enter. **Title bar**
+   puts it on a band in the outline color; **In border** sets it into the top
+   edge. A title band grows the panel upward, so it never covers the contents.
+4. **Split columns** and **Split rows** add a divider in the widest gap
+   between the contents. Each column between vertical dividers takes its own
+   title. Type a position in percent to move a divider; **×** removes it.
+5. **Rounded** or **Square** sets the corners (a rounded panel's radius is
+   under **Graphic style**) and **Outline** turns the border on or off. Fill and outline colors and dashes are under **Graphic
+   style**. **Fit to contents** refits the panel around what it is grouped with.
+
+Each change is one Undo step. Panels are artwork: reaction detection, atom
+mapping and analysis never read them.
+
+### Keep rows, columns and grids
+
+1. Select two or more molecules, groups or reactions.
+2. Choose **Lasting layout…** in **Properties → Grouping & frames**, or
+   **Row with even gutters**, **Column with even gutters** or **Grid with even
+   gutters** in the **Distribute** menu. A whole reaction (its arrow,
+   participants and conditions) moves as one item.
+3. **Properties → Layout** switches between **Row**, **Column** and **Grid**,
+   and sets **Gutter (pt)**, **Columns** and **Start**, **Center** or **End**
+   alignment. Switching keeps the reading order.
+
+Items only move: bond lengths, labels and reaction roles stay as drawn. When an
+item changes size, for example after adding a bond, its neighbors move to keep
+the gutters. Moving one item by itself leaves it where you put it.
+**Ungroup** ends the layout.
+
+### Start from a figure layout
+
+**Templates → Figure layouts** has a single-row TOC with a title bar, previous
+work beside this work, a scheme beside an evidence panel, and two matched
+scheme rows. Their benzene rings are placeholders to draw over or replace. To
+see a TOC graphic at its printed size, choose **ACS TOC graphic · 8.25 × 4.45
+cm**, **RSC graphical abstract · 8 × 4 cm** or **Elsevier graphical abstract ·
+13 × 5 cm** in [Page setup](publication-pages.md).
+
 ## Limits
 
 - Node editing and continued drawing work on one continuous path. Imported
@@ -132,6 +177,14 @@ endpoints, attachments and arrowheads stay in place.
 - Shading paints each part of a compound path on its own, so a hole in it is
   shaded over. A path too detailed to shade keeps a flat fill.
 - Freehand tracing and non-proportional resizing are not available.
+- ChemDraw has no panel object. CDXML and CDX get a group of filled curves,
+  lines and text; opening it again gives those shapes, not a panel. A panel's
+  shadow or shading is not written there. Layouts are not written to ChemDraw
+  files.
+- A panel's title uses the drawing's font and size in bold. Title text is
+  edited in **Properties**, not on the canvas.
+- Rotating a whole layout changes its items' sizes, so the next size change
+  lays them out upright again.
 - Brackets are graphics. To define a repeating unit, see
   [generic structures](generic-structures.md).
 
@@ -161,6 +214,14 @@ graphics by default. Cleanup and analysis preserve graphic objects. Undo of
 graphic or typography changes keeps the current chemistry analysis. The tool
 palette scrolls when the window is short. The scene used for canvas preview
 also drives SVG, PDF and PNG export.
+
+Panels are rectangles or rounded rectangles with a `panel` entry: titles,
+title place, outline and dividers at fractions of the width or height. A lasting
+layout is a `layout` entry on a group: flow, gutter and alignment. Its items
+are the group's connected molecules, nested groups and whole reactions. After
+each edit the layout is laid out again if an item changed size or number.
+`graphics::panel::contents` lists what lies wholly inside a panel. Both entries
+need document version 40.
 
 ### Interchange boundary
 

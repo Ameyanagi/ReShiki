@@ -68,6 +68,7 @@ explains how the crates and modules fit together.
 - `src/app/engine_jobs.rs`: Chemistry engine jobs
 - `src/app/event_slot.rs`: Native event receivers are installed before their subscription takes ownership.
 - `src/app/figure_export.rs`: Figure export preserves drawable content independently of molecular validation.
+- `src/app/figure_panels.rs`: Figure panels (Wrap in panel, titles, dividers) and lasting row, column and grid layouts.
 - `src/app/file_shortcuts.rs`
 - `src/app/files.rs`
 - `src/app/files/performance.rs`
@@ -706,6 +707,7 @@ explains how the crates and modules fit together.
 - `crates/model/src/graphics/arc.rs`: Elliptical arcs in an affine frame, shared by the editor and all exporters.
 - `crates/model/src/graphics/effects.rs`: ChemDraw's shape effects
 - `crates/model/src/graphics/heads.rs`
+- `crates/model/src/graphics/panel.rs`: Figure panels, rectangles with a tint, rounded corners, titles and dividers.
 - `crates/model/src/graphics/path.rs`: Connected path nodes and their editable Bézier constraints.
 - `crates/model/src/graphics/path/smooth.rs`
 - `crates/model/src/graphics/path/symmetry.rs`: Reflection fitting for a connected path, including its Bézier controls.
@@ -719,6 +721,7 @@ explains how the crates and modules fit together.
 - `crates/model/src/joining/atom_merge.rs`: Join three or more selected atoms without moving the surrounding fragments.
 - `crates/model/src/joining/coordination.rs`: In-place donor-to-metal contacts preserve both endpoint atoms.
 - `crates/model/src/joining/plan.rs`: Route classification shared by Join admission and shortcut execution.
+- `crates/model/src/layouts.rs`: Lasting rows, columns and grids.
 - `crates/model/src/lib.rs`
 - `crates/model/src/ligands.rs`: Defined haptic abbreviations
 - `crates/model/src/linked_properties.rs`: Property captions linked to a molecule
@@ -786,6 +789,7 @@ explains how the crates and modules fit together.
 - `crates/model/src/templates.rs`: Built-in molecules and attachment geometry, shared by preview and placement.
 - `crates/model/src/templates/aromatic.rs`: Bounded aromatic fusion planning.
 - `crates/model/src/templates/coordination.rs`: Depiction-only coordination frames; projected wedges do not assign R/S.
+- `crates/model/src/templates/layouts.rs`: Figure layout templates with panels and placeholder rings to replace.
 - `crates/model/src/templates/nucleosides.rs`: β-D-ribofuranosyl nucleobases, using the carbohydrate projection builder.
 - `crates/model/src/templates/porphine.rs`: Own equal-length geometry for the chemically defined 21H,23H free base.
 - `crates/model/src/templates/steroids.rs`: Own regular-ring geometry in steroid orientation 2a (IUPAC 3S-1.4).

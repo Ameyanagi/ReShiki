@@ -506,6 +506,7 @@ async fn styles_high_ids_groups_abbreviations_and_reaction_warnings_survive() ->
         id: id + 1,
         members: document.atoms.iter().map(|a| a.id).chain([id]).collect(),
         integral: true,
+        layout: None,
     });
     all_operations(&reference, &config, &document, "styled high IDs").await?;
     Ok(())

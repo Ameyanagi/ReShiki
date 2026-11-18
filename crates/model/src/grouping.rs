@@ -9,6 +9,9 @@ pub struct Group {
     pub members: Vec<u64>,
     #[serde(default)]
     pub integral: bool,
+    /// A lasting row, column or grid of the group's units.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub layout: Option<crate::layouts::Layout>,
 }
 
 impl Document {
@@ -55,6 +58,7 @@ impl Document {
                 break;
             };
             group.integral |= other.integral;
+            group.layout = group.layout.or(other.layout);
             for id in other.members {
                 if !group.members.contains(&id) {
                     group.members.push(id);
@@ -141,6 +145,7 @@ impl Document {
             id: self.next_id(),
             members: members.clone(),
             integral: false,
+            layout: None,
         });
         Ok(members)
     }
@@ -178,6 +183,7 @@ impl Document {
             }
             if let Some(existing) = merged.iter_mut().find(|g| g.members == *members) {
                 existing.integral |= group.integral;
+                existing.layout = existing.layout.or(group.layout);
             } else {
                 merged.push(group);
             }
@@ -199,6 +205,9 @@ impl Document {
                 || g.members.iter().collect::<HashSet<_>>().len() != g.members.len()
             {
                 return Err("Invalid group ID or membership".into());
+            }
+            if let Some(layout) = g.layout {
+                layout.validate()?;
             }
         }
         #[cfg(test)]

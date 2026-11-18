@@ -241,12 +241,25 @@ impl App {
                 .collect(),
             Page::Align => self.align_entries(atoms, multiple),
             Page::Bonds => self.bond_entries(bonds),
-            Page::AlignObjects => self.arrange_entries(&[&Command::HORIZONTAL, &Command::VERTICAL]),
-            Page::Distribute => self.arrange_entries(&[&Command::DISTRIBUTE]),
+            // Two objects can already make a lasting row or column.
+            Page::AlignObjects => [
+                self.arrange_entries(&[&Command::HORIZONTAL, &Command::VERTICAL]),
+                self.layout_entries(),
+            ]
+            .concat(),
+            Page::Distribute => {
+                let mut entries = self.arrange_entries(&[&Command::DISTRIBUTE]);
+                entries.extend(self.layout_entries());
+                entries
+            }
             Page::Order => self.arrange_entries(&[&Command::ORDER]),
             Page::Arrange => [
                 self.arrange_entries(&[&Command::HORIZONTAL, &Command::VERTICAL]),
-                self.arrange_entries(&[&Command::DISTRIBUTE]),
+                [
+                    self.arrange_entries(&[&Command::DISTRIBUTE]),
+                    self.layout_entries(),
+                ]
+                .concat(),
                 self.arrange_entries(&[&Command::ORDER]),
                 self.arrange_entries(&[&Command::TRANSFORM]),
             ]
@@ -930,6 +943,13 @@ impl App {
                 entries.push(command("Ungroup", Message::Ungroup, true));
             }
         }
+        if !self.tab.selected.is_empty() {
+            entries.push(command(
+                "Wrap in panel",
+                Message::Figure(super::figure_panels::Action::Wrap),
+                true,
+            ));
+        }
         entries
     }
 
@@ -985,6 +1005,28 @@ impl App {
                 .into_iter()
                 .map(|preset| command(preset.name(), Message::ApplyBondPreset(preset), bonds)),
         );
+        entries
+    }
+
+    /// Lasting layouts: rows, columns and grids that keep their gutters.
+    fn layout_entries(&self) -> Vec<Entry> {
+        use reshiki::layouts::Flow;
+        // Like Align, a layout needs two objects.
+        if self.alignment_count() < 2 {
+            return vec![];
+        }
+        let mut entries = vec![Entry::Separator, Entry::Hint("Lasting layout")];
+        for (label, flow) in [
+            ("Row with even gutters", Flow::Row),
+            ("Column with even gutters", Flow::Column),
+            ("Grid with even gutters", Flow::Grid(2)),
+        ] {
+            entries.push(Entry::command(
+                label,
+                Message::Figure(super::figure_panels::Action::Arrange(flow)),
+                true,
+            ));
+        }
         entries
     }
 

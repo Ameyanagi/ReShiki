@@ -61,6 +61,9 @@ impl Graphic {
             style: self.style.clone(),
             filled: self.filled(),
         };
+        if self.panel.as_ref().is_some_and(|panel| !panel.border) {
+            shaft.style.width_pt = 0.;
+        }
         let Some(heads) = self.heads else {
             return vec![shaft];
         };

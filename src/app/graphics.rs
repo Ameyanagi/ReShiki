@@ -236,7 +236,12 @@ impl App {
             } else {
                 "Graphic style"
             }),
-            text(kind.to_string()).size(14),
+            text(if selected.iter().any(|g| g.panel.is_some()) {
+                "Panel".to_owned()
+            } else {
+                kind.to_string()
+            })
+            .size(14),
             row![
                 text("Line (pt)").size(11),
                 reshiki::accessibility::text_input(
@@ -601,6 +606,7 @@ impl App {
         if let Some(c) = self.tab.graphic_style.fill {
             self.tab.graphic_fill_input = hex(c);
         }
+        self.sync_figure();
     }
     pub(super) fn apply_graphic_style(&mut self, change: GraphicChange) {
         change.apply(&mut self.tab.graphic_style);

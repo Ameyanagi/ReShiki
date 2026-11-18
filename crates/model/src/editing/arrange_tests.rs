@@ -90,11 +90,13 @@ fn fixtures() -> Vec<(&'static str, Document)> {
             id: 10,
             members: vec![1, 2, 7],
             integral: false,
+            layout: None,
         },
         Group {
             id: 11,
             members: vec![2, 7, 8],
             integral: false,
+            layout: None,
         },
     ];
     let mut ties = Document::default();
@@ -233,11 +235,13 @@ fn every_arrangement_preserves_explicit_geometry_and_stable_ties() {
             id: 8,
             members: vec![1, 2],
             integral: false,
+            layout: None,
         },
         Group {
             id: 9,
             members: vec![3, 2, 1],
             integral: true,
+            layout: None,
         },
     ];
     original.validate().unwrap();
@@ -412,6 +416,7 @@ fn units_translated_together_match_one_translate_per_unit() {
         id: 10,
         members: vec![1, 2, 8],
         integral: false,
+        layout: None,
     }];
     let anchor = |target| {
         Some(Anchor {

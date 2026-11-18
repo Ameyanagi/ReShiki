@@ -251,6 +251,7 @@ impl App {
             Ok((document, selected)) => {
                 self.tab.doc = document;
                 self.tab.selected = selected;
+                self.sync_figure();
                 if !self.templates.repeat {
                     self.tool = Tool::Select;
                 }

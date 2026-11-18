@@ -351,6 +351,7 @@ fn generated_layout_preserves_manual_presentation_and_packs_ink_bounds() {
         id: source.next_id(),
         members: vec![first, middle, last, annotation],
         integral: false,
+        layout: None,
     });
     let before = source.clone();
     let products = reshiki::generic::expand_drawings(&source, Limits::default()).unwrap();

@@ -168,6 +168,7 @@ impl NativeGraphic {
                 .map(NativeCommand::into_document)
                 .collect(),
             picture,
+            panel: None,
         };
         graphic.validate().map_err(Error::Document)?;
         Ok(graphic)

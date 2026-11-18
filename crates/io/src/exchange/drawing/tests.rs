@@ -216,6 +216,7 @@ async fn retrosynthesis_arrows_roundtrip_through_cdxml_and_cdx() {
             id: 3,
             members: vec![1, 2],
             integral: true,
+            layout: None,
         });
         for format in ["cdxml", "cdx"] {
             let bytes = crate::formats::write(document.clone(), format)

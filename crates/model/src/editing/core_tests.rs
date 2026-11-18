@@ -194,6 +194,7 @@ fn snap_target_cache_preserves_baseline_documents_ids_ties_and_float_bits() {
                         id: doc.next_id(),
                         members: moving.clone(),
                         integral: false,
+                        layout: None,
                     }),
                     11 => doc
                         .bonds

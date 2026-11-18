@@ -513,12 +513,48 @@ impl Writer<'_> {
                     .and_then(|p| p.get(&g.id))
                     .ok_or_else(|| invalid("Graphic export requires vector geometry"))?
                     .clone();
+                // A borderless panel keeps only its fill.
+                let borderless = g.panel.as_ref().is_some_and(|p| !p.border);
+                let mut style = g.style.clone();
+                if borderless {
+                    style.width_pt = 0.;
+                }
                 vec![crate::scientific::Part {
                     commands,
-                    style: g.style.clone(),
-                    filled: false,
+                    style,
+                    filled: borderless,
                 }]
             };
+            let text_style = doc.drawing_style.text_style();
+            // Title backings take the page color, and titles on a band the
+            // color that reads on the band as exported, on either canvas.
+            let border = g
+                .panel
+                .as_ref()
+                .is_some_and(|p| p.place == crate::graphics::TitlePlace::Border);
+            let page = crate::palette::Color::Custom(doc.canvas_theme.background());
+            let panel_parts: Vec<_> = g
+                .panel_parts(&text_style)
+                .into_iter()
+                .map(|mut part| {
+                    if border && part.filled {
+                        part.style.fill = Some(page);
+                    }
+                    part
+                })
+                .collect();
+            let mut panel_titles = g.panel_titles(&text_style);
+            if !border {
+                let band = crate::palette::Palette::of(doc).rgb(g.style.stroke);
+                let ink = if crate::color_contrast::luminance(band) > 0.45 {
+                    [0; 3]
+                } else {
+                    [255; 3]
+                };
+                for label in &mut panel_titles {
+                    label.style.color = crate::palette::Color::Custom(ink);
+                }
+            }
             let mut parsed = Vec::new();
             for part in parts {
                 // Scene-created fill pieces have no stroke. Their original
@@ -557,6 +593,8 @@ impl Writer<'_> {
             let parent = if g
                 .superscript_label(&doc.drawing_style.text_style())
                 .is_some()
+                || !panel_parts.is_empty()
+                || !panel_titles.is_empty()
                 || parsed.len() > 1
                 || parsed
                     .iter()
@@ -607,6 +645,10 @@ impl Writer<'_> {
                 }
             }
             self.bracket_superscript(g, parent, z)?;
+            if !panel_parts.is_empty() || !panel_titles.is_empty() {
+                self.panel(panel_parts, &panel_titles, parent, z)?;
+                object = Some(parent);
+            }
             if let Some(n) = object {
                 self.objects.push((g.id, n));
             }
@@ -628,6 +670,8 @@ impl Writer<'_> {
                 .is_none_or(|h| h.head == Head::None && h.tail == Head::None);
         if !line
             && (style.effects.is_plain()
+                // A panel's titles and dividers go with its curves in one group.
+                || g.panel.is_some()
                 || !matches!(
                     g.kind,
                     GraphicKind::Rectangle | GraphicKind::RoundedRectangle | GraphicKind::Ellipse
@@ -792,6 +836,67 @@ impl Writer<'_> {
                 ),
             ],
         )?;
+        Ok(())
+    }
+    /// A panel's title band, title backings, dividers and titles, as plain
+    /// filled curves, lines and text inside the panel's group.
+    fn panel(
+        &mut self,
+        parts: Vec<crate::scientific::Part>,
+        titles: &[crate::graphics::GraphicLabel<'_>],
+        parent: Key,
+        z: usize,
+    ) -> Result<()> {
+        for part in parts {
+            self.spend(part.commands.len())?;
+            for (points, closed) in curve_points(&part.commands)? {
+                if part.filled
+                    && let Some(fill) = part.style.fill
+                {
+                    self.curve(parent, &points, closed, fill, true, 0., false, z)?;
+                } else {
+                    self.curve(
+                        parent,
+                        &points,
+                        closed,
+                        part.style.stroke,
+                        false,
+                        real(part.style.width_pt),
+                        part.style.pattern == LinePattern::Dashed,
+                        z,
+                    )?;
+                }
+            }
+        }
+        for label in titles {
+            let baseline = label
+                .position
+                .offset(0., crate::style::text_ascent(&label.style));
+            let far = label.position.offset(
+                crate::style::styled_text_width(label.text, label.size, &label.style),
+                label.size,
+            );
+            let id = self.id()?;
+            self.text(
+                parent,
+                label.text,
+                &TextFormat {
+                    style: label.style.clone(),
+                    ..Default::default()
+                },
+                [
+                    ("id", id),
+                    ("Z", z.to_string()),
+                    ("InterpretChemically", "no".into()),
+                    ("CaptionJustification", "Left".into()),
+                    ("p", self.position(baseline)),
+                    (
+                        "BoundingBox",
+                        format!("{} {}", self.position(label.position), self.position(far)),
+                    ),
+                ],
+            )?;
+        }
         Ok(())
     }
     #[allow(clippy::too_many_arguments)]

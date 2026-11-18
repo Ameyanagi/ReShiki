@@ -1,6 +1,7 @@
 //! Built-in molecules and attachment geometry, shared by preview and placement.
 mod aromatic;
 mod coordination;
+mod layouts;
 mod nucleosides;
 #[cfg(test)]
 mod placement_parity_tests;
@@ -461,6 +462,7 @@ static BUNDLED: LazyLock<Result<Vec<Template>, String>> = LazyLock::new(|| {
     templates.extend(nucleosides::templates(&templates)?);
     templates.extend(steroids::templates()?);
     templates.extend(coordination::templates()?);
+    templates.extend(layouts::templates()?);
     Ok(templates)
 });
 pub fn builtin_error() -> Option<&'static str> {

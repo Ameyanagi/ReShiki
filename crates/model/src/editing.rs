@@ -895,6 +895,7 @@ fn map_positions(
             graphic.origin = convert(graphic.origin);
             graphic.axis_x = vector(graphic.axis_x);
             graphic.axis_y = vector(graphic.axis_y);
+            graphic.normalize_panel();
         }
     }
     let boundary: Vec<_> = doc

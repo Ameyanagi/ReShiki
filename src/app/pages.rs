@@ -227,6 +227,28 @@ impl App {
                     let landscape = e.layout.width_pt > e.layout.height_pt;
                     e.layout.width_pt = if landscape { h } else { w };
                     e.layout.height_pt = if landscape { w } else { h };
+                    if preset.graphic() {
+                        // A TOC graphic is wide and fills its box: the
+                        // page edge is the final crop.
+                        e.layout.width_pt = w;
+                        e.layout.height_pt = h;
+                        e.layout.margins = reshiki::pages::Margins {
+                            top: 0.,
+                            right: 0.,
+                            bottom: 0.,
+                            left: 0.,
+                        };
+                        // Frame the figure: center the sheet on the drawing.
+                        if let Some((lo, hi)) =
+                            reshiki::scene::selection_bounds(&self.tab.doc, &self.tab.doc.all_ids())
+                        {
+                            let style = &reshiki::style::DEFAULT;
+                            e.layout.origin = reshiki::document::Point::new(
+                                (lo.x + hi.x - style.world(w)) / 2.,
+                                (lo.y + hi.y - style.world(h)) / 2.,
+                            );
+                        }
+                    }
                     e.reset_inputs();
                 }
             }

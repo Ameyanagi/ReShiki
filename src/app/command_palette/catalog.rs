@@ -790,6 +790,36 @@ fn edits() -> Vec<Command> {
         ),
         selection("Ungroup", "Split a group", "split", Message::Ungroup),
         selection(
+            "Wrap in panel",
+            "Put the selection on a tinted panel that can take a title and dividers",
+            "panel box frame card background title figure toc",
+            Message::Figure(crate::app::figure_panels::Action::Wrap),
+        ),
+        selection(
+            "Arrange in a row",
+            "Line the selection up left to right with even gutters that last",
+            "layout row gutter align distribute figure toc",
+            Message::Figure(crate::app::figure_panels::Action::Arrange(
+                reshiki::layouts::Flow::Row,
+            )),
+        ),
+        selection(
+            "Arrange in a column",
+            "Stack the selection top to bottom with even gutters that last",
+            "layout column stack gutter align distribute figure",
+            Message::Figure(crate::app::figure_panels::Action::Arrange(
+                reshiki::layouts::Flow::Column,
+            )),
+        ),
+        selection(
+            "Arrange in a grid",
+            "Place the selection in rows of two with even gutters that last",
+            "layout grid table gutter align distribute figure",
+            Message::Figure(crate::app::figure_panels::Action::Arrange(
+                reshiki::layouts::Flow::Grid(2),
+            )),
+        ),
+        selection(
             "Flip horizontal",
             "Mirror the selection left to right",
             "mirror reflect",
