@@ -118,14 +118,30 @@ The maintainer runs these on a manual **Release builds** run of the merged
 
 Manual **Release builds**
 [run 44269689222](https://github.com/Ameyanagi/ReShiki/actions/runs/44269689222)
-at `f25ab7eb`: **running**.
+at `f25ab7eb`: **failed**. Every package passed except macOS x64 (Intel), where
+`hdiutil` failed while creating the disk image with "No space left on device".
+A fix is in progress (branch `fix/intel-dmg-space`), and the run will be
+repeated after it merges.
 
 ## Live RDKit reference suite
 
 The complete live reference tests gate publication in `release.yml`.
 **Checks** with `live_reference=true`
 [run 44269684105](https://github.com/Ameyanagi/ReShiki/actions/runs/44269684105)
-at `f25ab7eb` runs them on macOS arm64, Linux x64 and Windows x64: **running**.
+at `f25ab7eb` ran them on macOS arm64, Linux x64 and Windows x64: **failed**.
+The same 6 tests failed on all three platforms:
+
+| Shard | Test                                                                                       |
+| ----- | ------------------------------------------------------------------------------------------ |
+| 0     | `reshiki-io` library: `native_inchikey_is_never_called_for_any_analysis_path`              |
+| 0     | `cdxml_molecular`: `malformed_and_excessive_inputs_fail_atomically`                        |
+| 2     | `cdxml_bonds`: `association_is_bounded_atomic_and_handles_long_vertical_fragments`         |
+| 2     | `engine_migration`: `exports_and_reimports_preserve_rdkit_chemistry_and_document_metadata` |
+| 2     | `engine_migration`: `native_drawings_match_the_original_python_importer`                   |
+| 3     | `native_import`: `drawing_and_coordinate_reactions_match_complete_original_responses`      |
+
+A fix is in progress (branch `fix/live-reference-016`), and the run will be
+repeated after it merges.
 
 ## Focus after closing reviews
 
