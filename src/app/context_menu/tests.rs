@@ -292,6 +292,7 @@ fn atom_menu_groups_editing_naming_connecting_and_clipboard_commands() -> Result
             "Chemical names…",
             "Show properties",
             "Select molecule",
+            "Purpose",
             "—",
             "Join selected atoms or bonds",
             "Merge selected atoms",

@@ -140,6 +140,7 @@ fn only_selected_arrows_seed_atom_lone_pair_and_bond_anchor_components() {
                 cubic: None,
                 nodes: Vec::new(),
                 style: None,
+                purpose: Default::default(),
             });
             assert!(!super::intersects(&doc, &[id]));
             assert!(
@@ -190,6 +191,7 @@ fn selected_bond_anchor_seeds_both_endpoints_without_a_target_bond() {
             cubic: None,
             nodes: Vec::new(),
             style: None,
+            purpose: Default::default(),
         });
         assert!(!super::component_intersects(&doc, &[2]));
         assert!(super::component_intersects(&doc, &[id]), "{a}, {b}");

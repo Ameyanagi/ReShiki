@@ -270,6 +270,7 @@ fn sections() -> anyhow::Result<Vec<Section>> {
         cubic: None,
         nodes: Vec::new(),
         style: None,
+        purpose: Default::default(),
     });
     tools.push(sample("a / e · Reaction arrow tool", arrow));
     let (base, ids) = chain(2);

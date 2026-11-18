@@ -232,6 +232,7 @@ fn variable_pose_is_local_rigid_and_preserves_unrelated_native_associations() {
         cubic: Some([Point::new(-300., 10.), Point::new(-350., 150.)]),
         nodes: Vec::new(),
         style: None,
+        purpose: Default::default(),
     });
     source.validate().unwrap();
     let original = source.clone();

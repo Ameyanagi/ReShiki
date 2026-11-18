@@ -216,6 +216,7 @@ explains how the crates and modules fit together.
 - `src/canvas/performance.rs`: Opt-in release-mode measurements of the actual canvas Program path.
 - `src/canvas/pick.rs`: Zoom-independent pointer tolerances in screen pixels, converted to world units with `Camera::world_len`.
 - `src/canvas/previews.rs`: Thumbnail, inspector, palette and proposal canvas programs; they render through the same scene path as the paper.
+- `src/canvas/purpose.rs`: Editing marks for object purpose and the reaction preview.
 - `src/canvas/render.rs`: Tessellates scene primitives into a layered frame; shared by the paper and every preview program.
 - `src/canvas/selection.rs`
 - `src/canvas/smart_guides.rs`: Smart guides
@@ -741,6 +742,7 @@ explains how the crates and modules fit together.
 - `crates/model/src/projection.rs`: Editable orthographic projections and nonchemical ring-centre anchors.
 - `crates/model/src/projection/growth.rs`: Bond growth in a Cp/aromatic ring's retained plane.
 - `crates/model/src/projection/vector.rs`: f32 3D vector helpers over retained XYZ (position x/y plus depth).
+- `crates/model/src/purpose.rs`: What a molecule or arrow is for.
 - `crates/model/src/reaction_mapping.rs`: Chemical atom correspondence, independent of printed custom atom numbers.
 - `crates/model/src/reaction_mapping/search.rs`: Bounded maximum-cardinality graph matching.
 - `crates/model/src/reactions.rs`: Explicit reaction membership, independent of where a scheme is drawn.

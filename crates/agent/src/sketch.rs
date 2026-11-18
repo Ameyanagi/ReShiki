@@ -399,6 +399,7 @@ impl Sketch {
                 cubic: None,
                 nodes: Vec::new(),
                 style: None,
+                purpose: Default::default(),
             });
         }
         for c in &self.captions {

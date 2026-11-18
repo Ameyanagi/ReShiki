@@ -313,7 +313,10 @@ fn unpaired_electrons(doc: &Document, analysis: &Analysis, selected: Option<&Has
     let singlets = doc
         .atoms
         .iter()
-        .filter(|atom| atom.singlet && selected.is_none_or(|ids| ids.contains(&atom.id)))
+        .filter(|atom| {
+            atom.singlet
+                && selected.map_or(atom.purpose.is_chemical(), |ids| ids.contains(&atom.id))
+        })
         .count() as u32;
     analysis.unpaired_electrons - 2 * singlets
 }
@@ -563,7 +566,15 @@ impl App {
         PropertyKey {
             revision: self.tab.revision,
             epoch: self.tab.file_epoch,
-            atoms: self.tab.doc.atoms.iter().map(|a| a.id).collect(),
+            // Illustration molecules are pictures, not part of the chemistry.
+            atoms: self
+                .tab
+                .doc
+                .atoms
+                .iter()
+                .filter(|a| a.purpose.is_chemical())
+                .map(|a| a.id)
+                .collect(),
         }
     }
 
@@ -1047,6 +1058,10 @@ impl App {
                 "Against the canvas or a ring fill · Change the label or fill color",
                 tooltip::Position::Bottom,
             ));
+        }
+        // What the selection is for comes first: it decides what else applies.
+        if let Some(row) = self.purpose_row(&selected) {
+            body = body.push(row);
         }
         let molecular_first = self.tab.selected.is_empty()
             || self.property_key().is_some_and(|key| !key.atoms.is_empty());
@@ -1796,6 +1811,65 @@ impl App {
         self.inspector_section_lazy(Section::Transform, "Transform", "", false, || {
             self.numeric_transform_panel()
         })
+    }
+
+    /// Chemistry, Reference or Illustration for the selected molecules and
+    /// arrows; none is marked when they differ.
+    fn purpose_row(&self, selected: &HashSet<u64>) -> Option<Element<'_, Message>> {
+        use reshiki::purpose::Purpose;
+        let doc = &self.tab.doc;
+        let purposes: Vec<_> = doc
+            .atoms
+            .iter()
+            .filter(|a| selected.contains(&a.id))
+            .map(|a| a.purpose)
+            .chain(
+                doc.arrows
+                    .iter()
+                    .filter(|a| selected.contains(&a.id))
+                    .map(|a| a.purpose),
+            )
+            .collect();
+        let first = *purposes.first()?;
+        let current = purposes.iter().all(|p| *p == first).then_some(first);
+        let mut choices = row![].spacing(2);
+        for purpose in Purpose::ALL {
+            let on = current == Some(purpose);
+            choices = choices.push(
+                reshiki::accessibility::button(
+                    format!("purpose-{}", purpose.label().to_lowercase()),
+                    purpose.label(),
+                    text(purpose.label()).size(12).width(Length::Fill).center(),
+                )
+                .checked(on)
+                .padding([4, 6])
+                .width(Length::Fill)
+                .style(super::workspace::segment(on))
+                .on_press(Message::Purpose(purpose)),
+            );
+        }
+        Some(
+            column![
+                row![
+                    text("Purpose").size(12).width(Length::Fill),
+                    text(match current {
+                        Some(Purpose::Chemistry) => "Takes part in reactions",
+                        Some(Purpose::Reference) => "Shown for context",
+                        Some(Purpose::Illustration) => "Picture only",
+                        None => "Mixed",
+                    })
+                    .size(11)
+                    .style(muted_text),
+                ]
+                .align_y(iced::Alignment::Center),
+                container(choices)
+                    .padding(2)
+                    .width(Length::Fill)
+                    .style(super::workspace::segment_track),
+            ]
+            .spacing(5)
+            .into(),
+        )
     }
 
     fn selection_panel(

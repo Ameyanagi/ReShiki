@@ -9,6 +9,8 @@ use reshiki::reactions::{Reaction, Role};
 pub struct State {
     arrow: Option<u64>,
     epoch: u64,
+    /// What takes part in a reaction, shown until the drawing changes.
+    pub(super) preview: Option<(u64, Reaction)>,
 }
 
 #[cfg(test)]
@@ -23,6 +25,8 @@ pub enum Action {
     SelectAll,
     SelectParticipant(Role, usize),
     Export(&'static str),
+    /// Outline what takes part in the chosen arrow's reaction, or hide it.
+    Preview,
 }
 impl App {
     pub(super) fn reaction_arrow(&self) -> Option<u64> {
@@ -50,7 +54,53 @@ impl App {
         }
         None
     }
+    /// The reaction preview, while the drawing is unchanged since it was made.
+    pub(super) fn reaction_preview(&self) -> Option<&Reaction> {
+        self.tab
+            .reactions
+            .preview
+            .as_ref()
+            .filter(|(revision, _)| *revision == self.tab.revision)
+            .map(|(_, reaction)| reaction)
+    }
+    fn preview_reaction(&mut self) -> Task<Message> {
+        let shown = self.reaction_preview().map(|r| r.arrow);
+        self.tab.reactions.preview = None;
+        let Some(arrow) = self.reaction_arrow() else {
+            self.error = true;
+            self.status = "Select a reaction arrow first.".into();
+            return Task::none();
+        };
+        if shown == Some(arrow) {
+            self.status = "Reaction preview hidden".into();
+            return super::focus_drawing();
+        }
+        match reshiki::reactions::preview(&self.tab.doc, arrow) {
+            Ok(reaction) => {
+                let agents = match reaction.agents.len() {
+                    0 => String::new(),
+                    1 => " + 1 reagent".into(),
+                    n => format!(" + {n} reagents"),
+                };
+                self.error = false;
+                self.status = format!(
+                    "Preview · {} → {}{agents} · Esc hides it",
+                    reaction.reactants.len(),
+                    reaction.products.len()
+                );
+                self.tab.reactions.preview = Some((self.tab.revision, reaction));
+            }
+            Err(reason) => {
+                self.error = true;
+                self.status = reason.into();
+            }
+        }
+        super::focus_drawing()
+    }
     pub(super) fn reaction_action(&mut self, action: Action) -> Task<Message> {
+        if let Action::Preview = action {
+            return self.preview_reaction();
+        }
         self.inspector_open = true;
         self.inspector_tab = InspectorTab::Reactions;
         self.tool = Tool::Select;
@@ -58,6 +108,7 @@ impl App {
             self.tab.reactions = State {
                 arrow: Some(id),
                 epoch: self.tab.file_epoch,
+                preview: self.tab.reactions.preview.take(),
             };
             self.tab.selected = vec![id];
             return Task::none();
@@ -68,6 +119,7 @@ impl App {
         self.tab.reactions = State {
             arrow: Some(arrow),
             epoch: self.tab.file_epoch,
+            preview: self.tab.reactions.preview.take(),
         };
         if let Action::Export(format) = action {
             if self.tab.busy {
@@ -196,7 +248,9 @@ impl App {
             let summary = reaction
                 .map(|r| format!("{} → {}", r.reactants.len(), r.products.len()))
                 .unwrap_or_else(|| {
-                    if preset.reaction_role_refusal().is_some() {
+                    if !arrow.purpose.is_chemistry() {
+                        arrow.purpose.label()
+                    } else if preset.reaction_role_refusal().is_some() {
                         "Roles unavailable"
                     } else {
                         "Assign roles"
@@ -318,6 +372,7 @@ impl App {
         }
         body = body.push(
             row![
+                command("Preview", Message::Reaction(Action::Preview)),
                 command("Select reaction", Message::Reaction(Action::SelectAll)),
                 command(
                     "Clear selected roles",

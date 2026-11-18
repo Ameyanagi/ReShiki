@@ -18,7 +18,11 @@ impl App {
             hit
         };
         let atoms: Vec<_> = if ids.is_empty() {
-            doc.atoms.iter().map(|a| a.id).collect()
+            doc.atoms
+                .iter()
+                .filter(|a| a.purpose.is_chemical())
+                .map(|a| a.id)
+                .collect()
         } else {
             ids.iter()
                 .copied()

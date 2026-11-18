@@ -299,6 +299,7 @@ impl App {
             locant_highlight: self
                 .pulse_atoms()
                 .unwrap_or_else(|| self.naming_canvas_highlight()),
+            reaction_preview: self.reaction_preview(),
             optimizer: self.optimization_canvas(),
             keyboard_target: if self.keyboard_drawing_active() {
                 self.tab.keyboard_drawing.point(self.display_document())

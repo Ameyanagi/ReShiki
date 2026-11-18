@@ -84,6 +84,7 @@ pub(super) fn drawn(ester_first: bool) -> Scheme {
         cubic: None,
         nodes: vec![],
         style: None,
+        purpose: Default::default(),
     });
     let conditions = text(&mut doc, "H2SO4", 370., -20.);
     if !ester_first {
@@ -1625,6 +1626,7 @@ fn two_molecules_and_a_straight_arrow_scaled_together_are_one_line() {
         cubic: None,
         nodes: vec![],
         style: None,
+        purpose: Default::default(),
     });
     let left = load(&doc);
     let right = edited(&left, |doc| {

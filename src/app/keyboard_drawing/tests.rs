@@ -1465,6 +1465,7 @@ fn keys_edit_reaction_participants() {
                 cubic: None,
                 nodes: Vec::new(),
                 style: None,
+                purpose: Default::default(),
             });
             for (ids, role) in [
                 (reactant, reshiki::reactions::Role::Reactant),

@@ -415,6 +415,7 @@ impl Imported {
             cubic: None,
             nodes: Vec::new(),
             style: None,
+            purpose: Default::default(),
         };
         builder.row(
             &self.products,

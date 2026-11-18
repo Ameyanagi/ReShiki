@@ -107,6 +107,9 @@ pub struct Atom {
     pub label_h: u32,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub text_style: Option<TextStyle>,
+    /// What the atom's molecule is for; the same for all its atoms.
+    #[serde(default, skip_serializing_if = "crate::purpose::Purpose::is_chemistry")]
+    pub purpose: crate::purpose::Purpose,
 }
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Bond {
@@ -210,6 +213,8 @@ pub struct Arrow {
     pub nodes: Vec<ArrowNode>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub style: Option<crate::arrows::ArrowStyle>,
+    #[serde(default, skip_serializing_if = "crate::purpose::Purpose::is_chemistry")]
+    pub purpose: crate::purpose::Purpose,
 }
 fn forward() -> String {
     "forward".into()
@@ -259,7 +264,8 @@ pub const PROPERTY_CAPTIONS: u32 = 38;
 /// A name line or a custom name in a property caption.
 pub const CAPTION_NAMES: u32 = 39;
 /// ChemDraw drawing-element styles: shading, drop shadows, wavy strokes,
-/// arrowheads on lines and corner radii.
+/// arrowheads on lines and corner radii; Reference and Illustration
+/// molecules and arrows.
 pub const DRAWING_ELEMENTS: u32 = 40;
 
 /// The newest document format this build reads. Native output uses version 30
@@ -270,7 +276,8 @@ pub const DRAWING_ELEMENTS: u32 = 40;
 /// with three or four radical electrons require version 37, linked
 /// property captions require version 38, a property caption with a name
 /// requires version 39, or shading, drop shadows, wavy strokes, arrowheads
-/// on lines or corner radii require version 40.
+/// on lines, corner radii or a Reference or Illustration molecule or arrow
+/// require version 40.
 /// Optional atom-label settings, including steroid α/β display, retain this
 /// version; older readers may ignore those presentation preferences.
 ///
@@ -308,7 +315,7 @@ pub const DRAWING_ELEMENTS: u32 = 40;
 /// | 37 | Three or four radical electrons on an atom. |
 /// | 38 | Property captions linked to their molecules (#1175). |
 /// | 39 | Names in property captions: a name line and custom names. |
-/// | 40 | Shading, drop shadows, wavy strokes, arrowheads on lines and corner radii. |
+/// | 40 | Shading, drop shadows, wavy strokes, arrowheads on lines and corner radii; object purpose (Reference, Illustration). |
 pub const VERSION: u32 = 40;
 
 /// Bytes of text in one annotation. Layout time grows faster than the text.
@@ -441,6 +448,7 @@ impl Document {
         let mut doc: Self = serde_json::from_slice(bytes).map_err(|e| e.to_string())?;
         doc.validate()?;
         doc.migrate();
+        crate::purpose::repair(&mut doc);
         crate::models3d::retain_whole(&mut doc);
         doc.validate()?;
         Ok(doc)
@@ -494,6 +502,7 @@ impl Document {
             .arrows
             .iter()
             .any(|a| a.appearance().pattern == LinePattern::Wavy)
+            || crate::purpose::used(self)
         {
             DRAWING_ELEMENTS
         } else if self.property_captions.iter().any(|link| {
@@ -547,6 +556,7 @@ impl Document {
             steroid_label: None,
             undefined_stereo: false,
             undefined_pseudoasymmetric: false,
+            purpose: Default::default(),
             stereo_group: None,
             id,
             element: element.into(),

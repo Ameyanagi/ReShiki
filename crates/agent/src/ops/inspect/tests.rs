@@ -111,6 +111,7 @@ fn everything() -> (Document, Ids) {
         cubic: None,
         nodes: Vec::new(),
         style: None,
+        purpose: Default::default(),
     });
     let png: Picture = serde_json::from_value(json!(PNG_BASE64)).unwrap();
     let picture = doc.next_id();

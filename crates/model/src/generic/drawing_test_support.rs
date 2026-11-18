@@ -221,6 +221,7 @@ pub(super) fn union_source() -> Document {
         cubic: Some([Point::new(-500., -190.), Point::new(-500., 300.)]),
         nodes: Vec::new(),
         style: None,
+        purpose: Default::default(),
     });
     source.validate().unwrap();
     source

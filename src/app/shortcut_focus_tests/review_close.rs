@@ -756,3 +756,29 @@ async fn check_findings_scroll_to_the_last_one_at_the_minimum_window_size() {
         "{sent:?}"
     );
 }
+
+#[tokio::test]
+#[ignore = "Opt-in renderer input check"]
+async fn review_close_returns_focus_reaction_preview() {
+    let mut ui = Ui::new().await;
+    let mut app = drawing_app();
+    let arrow = app.tab.doc.next_id();
+    app.tab.doc.arrows.push(reshiki::document::Arrow::new(
+        arrow,
+        Point::new(120., 0.),
+        Point::new(220., 0.),
+        Default::default(),
+        Default::default(),
+    ));
+    let product = app.tab.doc.add_atom("C", Point::new(300., 0.));
+    let other = app.tab.doc.add_atom("O", Point::new(340., 0.));
+    app.tab.doc.add_bond(product, other, 1, "plain");
+    app.tab.selected = vec![arrow];
+    let task = app.update(Message::Reaction(crate::app::reactions::Action::Preview));
+    ui.run_task(&mut app, task).await;
+    assert!(app.reaction_preview().is_some(), "{}", app.status);
+    close(&mut ui, &mut app, false).await;
+    assert!(app.reaction_preview().is_none());
+    assert_eq!(app.tab.selected, vec![arrow]);
+    assert_canvas_delete(&mut ui, &mut app).await;
+}

@@ -68,6 +68,9 @@ pub(super) fn keep_format_text(
             lost.push("arrow links".into());
         }
     }
+    if reshiki::purpose::used(doc) {
+        lost.push("object purpose".into());
+    }
     let Some(last) = lost.pop() else {
         return format_keeps(format).into();
     };

@@ -167,7 +167,7 @@ Enhanced stereo groups are identified by `(kind, number)` across the whole drawi
 reads. Its doc comment holds the table below; update both together.
 `Document::file_version` selects version 40 when a graphic has shading, a drop
 shadow, a wavy stroke or a set corner radius, a graphic line has arrowheads,
-or an arrow is wavy,
+an arrow is wavy, or a molecule or arrow is a Reference or Illustration,
 version 39 when a property caption has a name
 line or a custom name, version 38 when a property caption is linked
 to a molecule, version 37 when an atom has three or four radical electrons, version 36 when an atom has an enhanced stereo

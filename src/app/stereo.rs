@@ -97,8 +97,10 @@ impl App {
     }
 
     pub(super) fn checked_stereo(&mut self, mut warnings: Vec<String>) {
-        self.tab.stereo_notes =
-            stereo_lint::check(&self.tab.doc, self.appearance.iupac_style_notes);
+        // Check drawing leaves out Illustration molecules; IDs stay the same.
+        let chemical =
+            reshiki::purpose::only(&self.tab.doc, reshiki::purpose::Purpose::is_chemical);
+        self.tab.stereo_notes = stereo_lint::check(&chemical, self.appearance.iupac_style_notes);
         if self.tab.stereo_notes.is_empty() {
             // A list left open for the previous findings must not reopen later.
             self.check_results = false;

@@ -816,6 +816,7 @@ fn completion(message: &Message) -> Option<Completion> {
         | Message::Transform(..)
         | Message::Arrange(..)
         | Message::ReverseBonds
+        | Message::Purpose(..)
         | Message::BondDepth(..)
         | Message::RingSize(..)
         | Message::AromaticRing(..)

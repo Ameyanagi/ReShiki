@@ -534,6 +534,7 @@ fn union_publication_source() -> Document {
         cubic: Some([Point::new(-470., -160.), Point::new(-470., 280.)]),
         nodes: Vec::new(),
         style: None,
+        purpose: Default::default(),
     });
     source.validate().unwrap();
     source

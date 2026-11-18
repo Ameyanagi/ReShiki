@@ -28,6 +28,7 @@ fn drawing() -> Document {
         cubic: None,
         nodes: Vec::new(),
         style: None,
+        purpose: Default::default(),
     });
     d.graphics.push(Graphic::dragged(
         5,
@@ -179,6 +180,7 @@ fn concave_lasso_encloses_whole_objects_and_supports_add_subtract() {
         cubic: None,
         nodes: Vec::new(),
         style: None,
+        purpose: Default::default(),
     });
     let region = [
         Point::new(0., 0.),
