@@ -295,19 +295,24 @@ chemistry**.
   shared ids, which must keep, between atoms of the same elements, at least
   half the bonds of the smaller; then by canonical isomeric SMILES,
   duplicates by where they sit once the common move is removed; then by
-  SMILES without stereo or isotopes; then by structure. Text, arrows and
+  SMILES without stereo or isotopes; then by structure. Shared ids keeping
+  less than half the bonds of the larger molecule, as when a fresh import
+  reuses a large molecule's ids for a small one, count only for molecules
+  nothing else matched. Text, arrows and
   graphics match by id, then by content and place. Structure matching pairs
   the atoms with the reaction mapper's bounded search, under Compare's own
   rules: atoms pair by element, and a bond counts as kept only with the same
   order and ring membership. Kept heavy-atom bonds over the bonds of either
   molecule (the Tanimoto similarity) must be at least 0.5, with at least
-  three kept, and every ring system must pair with one on the other side. A
-  pair must be each molecule's clear best: similarities are compared in
-  steps of 0.05, an equal rival must be at least twice as far, and a rival
-  the budget skipped or cut short that could be as good leaves both
-  unmatched. The search counts work, not time (20,000 states and 2,000,000
-  work a pair, 40,000,000 a comparison), so the same two drawings always
-  give the same report. Of equally good atom pairings, the nearest once the
+  three kept, and every ring system must pair with exactly one on the other
+  side through ring bonds kept between them. A pair must be each molecule's
+  clear best: similarities are compared in steps of 0.05, an equal rival
+  must be at least twice as far, and a rival of unknown worth that could be
+  as good leaves both unmatched: one the budget skipped or cut short, one
+  over 128 atoms, or one whose best pairing splits its ring systems. The
+  search counts work, not time (20,000 states and 10,000,000 work a pair,
+  40,000,000 a comparison), so the same two drawings always give the same
+  report. Of equally good atom pairings, the nearest once the
   two molecules are laid over each other wins, so a ring substituted again
   is marked at the same atom on both sides; the fit uses only the matched
   atoms whose neighbours are matched too. Each

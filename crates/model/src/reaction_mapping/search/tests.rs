@@ -140,8 +140,10 @@ fn dative_direction_is_compared_after_endpoint_mapping() {
             BondClass {
                 order: 5,
                 donor: Some(0),
+                ring: false,
             },
         )]),
+        strict: false,
     };
     let target = Graph {
         atoms: vec![atom(3), atom(4)],
@@ -150,8 +152,10 @@ fn dative_direction_is_compared_after_endpoint_mapping() {
             BondClass {
                 order: 5,
                 donor: Some(1),
+                ring: false,
             },
         )]),
+        strict: false,
     };
     let fixed = HashMap::from([(0, 0), (1, 1)]);
     let changed = score(&source, &target, &fixed);

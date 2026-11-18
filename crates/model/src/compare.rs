@@ -422,12 +422,16 @@ fn unchanged(left: &Side, right: &Side, atoms: &[(u64, u64)]) -> Vec<(u64, u64)>
         .collect()
 }
 
-/// Pairs molecules that share ids. Shared ids are evidence, not proof: a
-/// pair must keep, between atoms of the same elements, at least half the
-/// bonds of the smaller, or for single atoms the same element, so ids
-/// reused for other atoms, as by a re-import numbering atoms afresh, are
-/// not a match.
-fn by_id(left: &Side, right: &Side) -> Vec<(usize, usize)> {
+/// Molecule pairs, (left, right), by index.
+type Molecules = Vec<(usize, usize)>;
+
+/// Pairs molecules that share ids, as (strong, weak). Shared ids are
+/// evidence, not proof: a pair must keep, between atoms of the same
+/// elements, at least half the bonds of the smaller, or for single atoms the
+/// same element. Keeping less than half the bonds of the larger is weak, as
+/// when a re-import numbered atoms afresh and a small molecule took ids of
+/// a large one: equal content and structure come first.
+fn by_id(left: &Side, right: &Side) -> (Molecules, Molecules) {
     let sizes = |side: &Side| {
         let mut bonds = vec![0_usize; side.molecules.len()];
         for bond in side.doc.bonds.iter().filter(|bond| bond.order != 0) {
@@ -480,7 +484,15 @@ fn by_id(left: &Side, right: &Side) -> Vec<(usize, usize)> {
     candidates.sort_by(|(pair_a, score_a), (pair_b, score_b)| {
         score_b.cmp(score_a).then(pair_a.cmp(pair_b))
     });
+    let weak: HashSet<(usize, usize)> = (candidates.iter())
+        .filter(|((i, j), (kept, _))| {
+            2 * kept < sizes_l.get(*i).max(sizes_r.get(*j)).copied().unwrap_or(0)
+        })
+        .map(|(pair, _)| *pair)
+        .collect();
     greedy(candidates.into_iter().map(|(pair, _)| pair))
+        .into_iter()
+        .partition(|pair| !weak.contains(pair))
 }
 
 /// Takes pairs in order, each side at most once.
@@ -1046,7 +1058,8 @@ pub fn compare(left: &Document, right: &Document) -> Report {
     };
 
     // Molecules by id, then texts, arrows and graphics by id.
-    let mut pairs: Vec<(usize, usize, MatchedBy)> = by_id(&l, &r)
+    let (strong, weak) = by_id(&l, &r);
+    let mut pairs: Vec<(usize, usize, MatchedBy)> = strong
         .into_iter()
         .map(|(i, j)| (i, j, MatchedBy::Id))
         .collect();
@@ -1120,6 +1133,11 @@ pub fn compare(left: &Document, right: &Document) -> Report {
                 } else {
                     canonical
                 }
+            }
+            // Unpaired when too large or out of budget: as drawn, if that
+            // keeps every bond.
+            MatchedBy::Constitution if atoms.is_empty() => {
+                points(&nearest(&l, &atoms_l, &r, &atoms_r))
             }
             MatchedBy::Constitution => {
                 points(&atoms.iter().map(|(a, b)| (*b, *a)).collect::<Vec<_>>())
@@ -1248,6 +1266,8 @@ pub fn compare(left: &Document, right: &Document) -> Report {
         atom_pairs.insert((i, j), atoms);
         pairs.push((i, j, MatchedBy::Constitution));
     }
+    let guess = common(&entities(&pairs, &thing_pairs, &atom_pairs), unit)
+        .map_or(Fit::IDENTITY, |(f, _)| f);
     let found = structure::matches(
         (&l, &unpaired(&l, &pairs, true)),
         (&r, &unpaired(&r, &pairs, false)),
@@ -1259,6 +1279,13 @@ pub fn compare(left: &Document, right: &Document) -> Report {
         atom_pairs.insert((i, j), atoms);
         pairs.push((i, j, MatchedBy::Structure));
     }
+    let (taken_l, taken_r): (HashSet<usize>, HashSet<usize>) =
+        pairs.iter().map(|(i, j, _)| (*i, *j)).unzip();
+    pairs.extend(
+        weak.into_iter()
+            .filter(|(i, j)| !taken_l.contains(i) && !taken_r.contains(j))
+            .map(|(i, j)| (i, j, MatchedBy::Id)),
+    );
     pairs.sort_unstable_by_key(|(i, j, _)| (*i, *j));
 
     let entities = entities(&pairs, &thing_pairs, &atom_pairs);

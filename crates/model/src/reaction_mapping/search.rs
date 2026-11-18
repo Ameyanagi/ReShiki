@@ -379,6 +379,19 @@ impl Search<'_> {
             true
         }
     }
+    /// Compare ranks by bonds kept, then cost: the reaction mapper's finer
+    /// preferences, fewest changed atoms first, do not count.
+    fn ranked(&self, score: Score) -> Score {
+        if self.ties.is_some() {
+            Score {
+                heavy_adjacency: score.heavy_adjacency,
+                adjacency: score.adjacency,
+                ..Score::default()
+            }
+        } else {
+            score
+        }
+    }
     fn pair_cost(&self, s: usize, t: usize) -> u64 {
         self.ties
             .as_ref()
@@ -403,7 +416,7 @@ impl Search<'_> {
             if !self.spend(score_work(self.source, self.target, self.map.len())) {
                 return;
             }
-            let value = score(self.source, self.target, &self.map);
+            let value = self.ranked(score(self.source, self.target, &self.map));
             if self.ties.is_some() {
                 if (value, Reverse(self.cost)) > (self.best_score, Reverse(self.best_cost)) {
                     self.best_score = value;
@@ -493,6 +506,7 @@ impl Search<'_> {
         upper.heavy_adjacency += heavy_open.min(heavy_available);
         upper.adjacency += open.min(available.len() as u32);
         upper.unchanged_bonds += open.min(available.len() as u32);
+        let upper = self.ranked(upper);
         // Costs are never negative, so the cost so far bounds any completion.
         let tied = if self.ties.is_some() {
             self.cost >= self.best_cost
@@ -685,6 +699,7 @@ fn run<'a>(
         budget,
         stopped: false,
     };
+    search.best_score = search.ranked(search.best_score);
     search.best_cost = incumbent.iter().map(|(s, t)| search.pair_cost(*s, *t)).sum();
     search.visit();
     Ok(search)
@@ -720,6 +735,15 @@ pub(crate) fn correspond(
         (left, right)
     };
     let work = (2 * source.atoms.len() * target.atoms.len()) as u64;
+    let unfinished = Outcome {
+        pairs: Vec::new(),
+        kept: 0,
+        complete: false,
+        work: budget.work,
+    };
+    if work > budget.work {
+        return unfinished;
+    }
     let ties = source
         .atoms
         .iter()
@@ -731,16 +755,9 @@ pub(crate) fn correspond(
                 .collect()
         })
         .collect();
-    let search = (work <= budget.work)
-        .then(|| run(source, target, domains(source, target), HashMap::new(), budget, work, Some(ties)).ok())
-        .flatten();
-    let Some(search) = search else {
-        return Outcome {
-            pairs: Vec::new(),
-            kept: 0,
-            complete: false,
-            work: budget.work,
-        };
+    let domains = domains(source, target);
+    let Ok(search) = run(source, target, domains, HashMap::new(), budget, work, Some(ties)) else {
+        return unfinished;
     };
     let mut pairs: Vec<(u64, u64)> = Search::signature(&search.best)
         .into_iter()

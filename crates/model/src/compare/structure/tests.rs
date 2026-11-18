@@ -146,6 +146,16 @@ fn a_reimport_with_colliding_ids_is_matched_again_by_content() {
 }
 
 #[test]
+fn a_molecule_cut_to_under_half_keeping_its_ids_is_still_one_change() {
+    let left = alone("CCCCCCCCCC", 1);
+    // Six of ten carbons deleted: three of nine bonds kept.
+    let right = edited(&left, |doc| doc.delete(&[5, 6, 7, 8, 9, 10]));
+    let report = compare(&left, &right);
+    assert_eq!(kinds(&report), [(Kind::Chemical, Subject::Molecule)]);
+    assert_eq!(report.molecules[0].by, MatchedBy::Id);
+}
+
+#[test]
 fn a_reimported_stereo_flip_matches_by_constitution() {
     let report = compare(&alone("C[C@H](O)CC", 1), &alone("C[C@@H](O)CC", 6));
     assert_eq!(kinds(&report), [(Kind::Chemical, Subject::Molecule)]);
@@ -191,6 +201,8 @@ fn unrelated_molecules_are_never_matched_by_structure() {
         // Fewer than three bonds in common.
         ("O", "CO"),
         ("CCO", "CCCO"),
+        // The tail alone: a ring system needs a ring bond kept with it.
+        ("CCCCCCC1CC1", "CCCCCCC1NN1"),
     ] {
         for (x, y) in [(a, b), (b, a)] {
             let report = compare(&alone(x, 1), &alone(y, 40));
@@ -229,6 +241,38 @@ fn of_two_candidates_only_a_clearly_nearer_one_matches() {
     let mut right = report.molecules[0].right.clone();
     right.sort_unstable();
     assert_eq!(right, atoms[0]);
+}
+
+#[test]
+fn a_rival_too_large_to_search_leaves_an_equal_candidate_unmatched() {
+    // 32 of 64 bonds kept, or perhaps 64 of 128: both a half.
+    let left = alone(&"C".repeat(65), 1);
+    let (right, _) = at(&[(&"C".repeat(33), 0.), (&"C".repeat(129), 0.)], 100);
+    let report = compare(&left, &right);
+    assert!(report.molecules.is_empty(), "{:?}", kinds(&report));
+}
+
+#[test]
+fn a_structure_tie_is_broken_after_the_move_constitution_matches_share() {
+    let (left, _) = at(&[("CO", -2000.), ("CCCC", 0.), ("CN", 2000.)], 1);
+    // Everything 300 to the right, the methyls labelled, and a second butane
+    // where the first was.
+    let (right, atoms) = at(
+        &[
+            ("[13CH3]O", -1700.),
+            ("CCCCC", 0.),
+            ("CCCCC", 300.),
+            ("[13CH3]N", 2300.),
+        ],
+        40,
+    );
+    let report = compare(&left, &right);
+    let pair = (report.molecules.iter())
+        .find(|pair| pair.by == MatchedBy::Structure)
+        .unwrap();
+    let mut matched = pair.right.clone();
+    matched.sort_unstable();
+    assert_eq!(matched, atoms[2]);
 }
 
 #[test]
