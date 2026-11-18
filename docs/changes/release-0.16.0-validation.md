@@ -73,12 +73,17 @@ The maintainer runs these on a manual **Release builds** run of the merged
 - [ ] **Live reference suite:** the complete live RDKit reference tests pass
       on macOS arm64, Linux x64 and Windows x64; see
       [Live RDKit reference suite](#live-rdkit-reference-suite).
-- [ ] **Focus after closing reviews:** in the release build, run Clean up from
-      the toolbar and close its ▾ menu with Esc, and close 3D preview, atom
-      label, Name import preview, Structure import, reaction mapping proposal
-      and assistant review with Enter and separately with Esc (Apply/Discard
-      where those keys are unavailable). After each close, Delete or Cmd+Z
-      acts on the drawing without a click. **Pending.**
+- [x] **Focus after closing reviews:** run Clean up from the toolbar and
+      close its ▾ menu with Esc, and close 3D preview, atom label, Name import
+      preview, Structure import, reaction mapping proposal and assistant review
+      with Enter and separately with Esc (Apply/Discard where those keys are
+      unavailable). After each close, Delete or Cmd+Z acts on the drawing
+      without a click. Passed for every panel except assistant review, which
+      was not checked; see
+      [Focus after closing reviews](#focus-after-closing-reviews).
+- [x] **Updater:** the Nightly channel from an older to a newer nightly on
+      macOS arm64 and Arch Linux x64, and **Update and restart** to Stable
+      0.15.0 on both; see [Updater](#updater). Ubuntu arm64 was not run.
 - [ ] **macOS app (Apple Silicon and Intel):** the DMG opens, the app reports
       0.16.0 and moves an existing data folder to `~/.reshiki/`, opens
       **Settings** with Cmd+, and copies a drawing on a white background at
@@ -87,8 +92,12 @@ The maintainer runs these on a manual **Release builds** run of the merged
       on **Save**. **Pending.**
 - [ ] **Windows x64:** setup installs over 0.15.0, the app starts, keeps its
       data folder, names a molecule and edits an embedded drawing in
-      PowerPoint. Windows ARM64 is covered by the CI package checks only.
-      Downloads remain unsigned. **Pending.**
+      PowerPoint. **Not run:** the maintainer chose to tag 0.16.0 with Windows
+      covered by CI only. The in-app update, the unsigned-download wording, the
+      Office task pane and the OLE preview were not checked on a Windows
+      desktop. Windows ARM64 is covered by the CI package checks only.
+      Downloads remain unsigned; see [Updater](#updater) for the publisher
+      check.
 - [ ] **Linux (Arch Linux x64 and Ubuntu arm64):** the portable archive starts,
       moves an existing data folder to `~/.reshiki/`, opens a drawing and an SD
       file, and names a molecule. **Pending.**
@@ -118,6 +127,64 @@ The complete live reference tests gate publication in `release.yml`.
 **Checks** with `live_reference=true`
 [run 44269684105](https://github.com/Ameyanagi/ReShiki/actions/runs/44269684105)
 at `f25ab7eb` runs them on macOS arm64, Linux x64 and Windows x64: **running**.
+
+## Focus after closing reviews
+
+Checked on 18 November 2026 on macOS arm64 (Apple M4) with the Nightly build
+`0.15.0-nightly.20261118.44254050020.1`, built from `main` at `f25ab7eb`, the
+source of this release. It ran with `RESHIKI_DATA_DIR` set to an empty folder.
+Each case started with part of the drawing selected. After the panel closed,
+the next keys were Delete and then Cmd+Z, with no click in between. Each pair
+of screenshots shows the drawing after Delete and after Cmd+Z.
+
+| Panel                     | Closed with                             | Delete acted | Cmd+Z acted | Screenshots                                                                                                                                                           |
+| ------------------------- | --------------------------------------- | ------------ | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Clean up                  | The toolbar button (it applies at once) | yes          | yes         | [Delete](../images/release-0.16.0/focus-restore/01-cleanup-enter-delete.jpg) · [Cmd+Z](../images/release-0.16.0/focus-restore/01-cleanup-enter.jpg)                   |
+| Clean up options (▾ menu) | Esc                                     | yes          | yes         | [Delete](../images/release-0.16.0/focus-restore/01-cleanup-esc-delete.jpg) · [Cmd+Z](../images/release-0.16.0/focus-restore/01-cleanup-esc.jpg)                       |
+| 3D preview                | Enter                                   | yes          | yes         | [Delete](../images/release-0.16.0/focus-restore/02-3d-enter-delete.jpg) · [Cmd+Z](../images/release-0.16.0/focus-restore/02-3d-enter.jpg)                             |
+| 3D preview                | Esc                                     | yes          | yes         | [Delete](../images/release-0.16.0/focus-restore/02-3d-esc-delete.jpg) · [Cmd+Z](../images/release-0.16.0/focus-restore/02-3d-esc.jpg)                                 |
+| Atom label editor         | Enter                                   | yes          | yes         | [Delete](../images/release-0.16.0/focus-restore/03-atom-label-enter-delete.jpg) · [Cmd+Z](../images/release-0.16.0/focus-restore/03-atom-label-enter.jpg)             |
+| Atom label editor         | Esc                                     | yes          | yes         | [Delete](../images/release-0.16.0/focus-restore/03-atom-label-esc-delete.jpg) · [Cmd+Z](../images/release-0.16.0/focus-restore/03-atom-label-esc.jpg)                 |
+| Name import preview       | Enter in the name field                 | yes          | yes         | [Delete](../images/release-0.16.0/focus-restore/04-name-import-enter-delete.jpg) · [Cmd+Z](../images/release-0.16.0/focus-restore/04-name-import-enter.jpg)           |
+| Name import preview       | Esc in the name field                   | yes          | yes         | [Delete](../images/release-0.16.0/focus-restore/04-name-import-esc-delete.jpg) · [Cmd+Z](../images/release-0.16.0/focus-restore/04-name-import-esc.jpg)               |
+| Structure import          | **Insert** (Enter adds a line)          | yes          | yes         | [Delete](../images/release-0.16.0/focus-restore/05-structure-import-enter-delete.jpg) · [Cmd+Z](../images/release-0.16.0/focus-restore/05-structure-import-enter.jpg) |
+| Structure import          | Esc in the structure field              | yes          | yes         | [Delete](../images/release-0.16.0/focus-restore/05-structure-import-esc-delete.jpg) · [Cmd+Z](../images/release-0.16.0/focus-restore/05-structure-import-esc.jpg)     |
+| Reaction mapping proposal | Shift+Tab to **Apply maps**, then Enter | yes          | yes         | [Delete](../images/release-0.16.0/focus-restore/06-reaction-mapping-enter-delete.jpg) · [Cmd+Z](../images/release-0.16.0/focus-restore/06-reaction-mapping-enter.jpg) |
+| Reaction mapping proposal | **Discard** (no Esc shortcut)           | yes          | yes         | [Delete](../images/release-0.16.0/focus-restore/06-reaction-mapping-esc-delete.jpg) · [Cmd+Z](../images/release-0.16.0/focus-restore/06-reaction-mapping-esc.jpg)     |
+
+Clean up has no preview since
+[PR #1207](https://github.com/Ameyanagi/ReShiki/pull/1207), so its rows are
+the toolbar button and its ▾ options menu. Name and Structure import are
+sidebar panels: Enter, **Insert** and Esc return keyboard focus to the drawing
+and leave the sidebar open with its draft. Assistant review was not checked
+because it needs a live assistant; the automated
+`review_close_returns_focus_*` tests cover its local buttons.
+
+![After closing the Clean up options menu with Esc, Delete removed the selection](../images/release-0.16.0/focus-restore/01-cleanup-esc-delete.jpg)
+
+![After discarding the atom-map proposal, Cmd+Z restored the reactant](../images/release-0.16.0/focus-restore/06-reaction-mapping-esc.jpg)
+
+## Updater
+
+Checked on 18 November 2026 with fresh data folders:
+
+| Check                                                                                                          | macOS arm64            | Arch Linux x64 |
+| -------------------------------------------------------------------------------------------------------------- | ---------------------- | -------------- |
+| Nightly channel, from nightly run 44213908870 to run 44254050020 (offered as **Download nightly ↗**, by hand)  | Pass                   | Pass           |
+| The newer nightly's first start removes leftovers (`updates/9.9.9/`, `update-cache.json`, `.reshiki-update-*`) | Pass                   | Pass           |
+| A drawing saved by the older nightly reopens in the newer one                                                  | Pass                   | Pass           |
+| **Update and restart** from that nightly to Stable 0.15.0                                                      | Pass on the second run | Pass           |
+
+On Arch Linux x64 the installed binary is byte-identical to the official
+0.15.0 archive. On macOS arm64, `codesign` and `spctl` accept the installed
+app and the updates folder is pruned. The first macOS run hung because a
+pending Keychain prompt for the GitHub sign-in kept the app from quitting
+([issue #1240](https://github.com/Ameyanagi/ReShiki/issues/1240), to be fixed
+after 0.16.0). Ubuntu arm64 was not run: the test machine has no display.
+
+On Windows x64, only the updater's publisher check was run, from the command
+line: on the unsigned setup programs it returns `NotSigned` and the updater
+falls back to the checksum, as designed.
 
 ## Compatibility
 

@@ -598,6 +598,10 @@ validation, versions}`. `info`, `document_new`, `document_list`,
 - **Browser editor:** opening a large file, exporting a figure, a long Clean
   up and 3D calculations still hold the page while they work
   ([issue #430](https://github.com/Ameyanagi/ReShiki/issues/430)).
+- **Updates on macOS:** while a Keychain prompt for the GitHub sign-in is
+  unanswered, **Update and restart** cannot quit ReShiki and ends with
+  "Application did not exit; nothing installed." Answer the prompt, then
+  update again ([issue #1240](https://github.com/Ameyanagi/ReShiki/issues/1240)).
 - **Nightly builds:** there are no Intel Mac nightlies; stable releases still
   include Intel Mac downloads
   ([#1218](https://github.com/Ameyanagi/ReShiki/pull/1218)).
