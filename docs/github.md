@@ -212,9 +212,10 @@ chemistry**.
   **STYLE**, **TEXT**, **RXN**, **ADDED**, **REMOVED**, **SAME** and **?**.
   A chemical change shows its SMILES before, then → after on a line of its
   own; a long SMILES wraps between atoms and bonds, never inside `[NH4+]`,
-  `Cl` or a ring bond. Click a line to point at it in both drawings and zoom
-  both to it, at one scale: a chemical change to its changed atoms and
-  bonds, anything else to its objects. Click it again to let go.
+  `Cl` or a ring bond. Click a line to point at it in both drawings: an
+  outline marks a chemical change's changed atoms and bonds, and both
+  drawings zoom, at one scale, to show it with its whole molecule around
+  it, at most twice as large as the full view. Click it again to let go.
 - The comparison runs in the background (**Comparing…**), so a big drawing
   never stops the window.
 

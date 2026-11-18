@@ -150,9 +150,9 @@ fn a_clicked_line_points_at_its_objects_in_both_drawings() {
     assert_eq!(compare.selected, Some(text));
     let shown = compare.shown.clone().unwrap();
     let [on_left, on_right, lined] = shown.spots[text];
-    let (at_left, at_right) = (on_left.unwrap(), on_right.unwrap());
+    let (at_left, at_right) = (on_left.unwrap().outline, on_right.unwrap().outline);
     // Lined up, the condition is pointed at where the left side has it.
-    assert!(at_left.0.distance(lined.unwrap().0) < 0.5);
+    assert!(at_left.0.distance(lined.unwrap().outline.0) < 0.5);
     assert!(at_left.0.distance(at_right.0) > 50.);
     // Again lets go; another mode starts with nothing pointed at.
     compare.update(Action::Select(text));
@@ -291,17 +291,50 @@ fn a_wide_drawing_stacks_the_panes_when_that_draws_it_larger() {
 
 #[test]
 fn a_selected_change_is_zoomed_to_in_both_panes_at_one_scale() {
-    let at = |x0, y0, x1, y1| Some((Point::new(x0, y0), Point::new(x1, y1)));
-    let [left, right] = zoomed([at(0., 0., 10., 10.), at(100., 0., 140., 4.)]).unwrap();
+    let at = |x0, y0, x1, y1| (Point::new(x0, y0), Point::new(x1, y1));
+    let spot = |context| {
+        Some(Spot {
+            outline: context,
+            context,
+        })
+    };
+    let frame = at(0., 0., 60., 20.);
+    let [left, right] = zoomed(
+        [spot(at(0., 0., 10., 10.)), spot(at(30., 0., 70., 4.))],
+        frame,
+    )
+    .unwrap();
     let size = |(lo, hi): (Point, Point)| (hi.x - lo.x, hi.y - lo.y);
     assert_eq!(size(left), (40., 10.));
     assert_eq!(size(left), size(right));
     assert_eq!(left.0, Point::new(-15., 0.));
-    assert_eq!(right.0, Point::new(100., -3.));
+    assert_eq!(right.0, Point::new(30., -3.));
+    // At most twice as large as the whole drawing: a lone atom keeps half
+    // the drawing around it.
+    let [left, _] = zoomed([spot(at(5., 5., 5., 5.)), None], at(0., 0., 400., 100.)).unwrap();
+    assert_eq!(size(left), (200., 50.));
     // An added molecule: the left pane looks where the right has it.
-    let [left, right] = zoomed([None, at(5., 5., 15., 25.)]).unwrap();
+    let [left, right] = zoomed([None, spot(at(5., 5., 15., 25.))], frame).unwrap();
     assert_eq!(left, right);
-    assert_eq!(zoomed([None, None]), None);
+    assert_eq!(zoomed([None, None], frame), None);
+}
+
+#[test]
+fn a_selected_chemical_change_zooms_to_its_molecule_and_outlines_its_atoms() {
+    let (left, ring, note) = scheme();
+    let right = changed(&left, &ring, note);
+    let compare = compared(&left, &right);
+    let shown = compare.shown.as_ref().unwrap();
+    let chem = (shown.report.changes.iter())
+        .position(|change| change.kind == Kind::Chemical)
+        .unwrap();
+    let spot = shown.spots[chem][1].unwrap();
+    let (ring_lo, ring_hi) = reshiki::scene::selection_bounds(&right, &ring).unwrap();
+    // The outline is the oxygen and its carbon; the zoom keeps the ring.
+    assert!(spot.outline.1.x - spot.outline.0.x < 1.);
+    let pad = right.drawing_style.bond_length_world / 2.;
+    assert!(spot.context.0.x <= ring_lo.x - pad + 0.01);
+    assert!(spot.context.1.x >= ring_hi.x + pad - 0.01);
 }
 
 #[test]
@@ -315,7 +348,7 @@ fn a_chemical_change_is_where_its_painted_atoms_are_not_its_whole_molecule() {
         .unwrap();
     let carbon = right.atom(ring[0]).unwrap().position;
     let oxygen = right.atoms.iter().find(|a| a.element == "O").unwrap();
-    let (lo, hi) = shown.spots[chem][1].unwrap();
+    let (lo, hi) = shown.spots[chem][1].unwrap().outline;
     // The oxygen and its carbon, not the ring of six.
     for p in [carbon, oxygen.position] {
         assert!(
@@ -372,7 +405,7 @@ fn a_change_painted_on_one_side_only_is_found_on_the_other_by_its_atom() {
         .position(|change| change.kind == Kind::Chemical)
         .unwrap();
     let at = left.atom(sulfur).unwrap().position;
-    let (lo, hi) = shown.spots[chem][0].unwrap();
+    let (lo, hi) = shown.spots[chem][0].unwrap().outline;
     assert!(
         lo.distance(at) < 0.01 && hi.distance(at) < 0.01,
         "{lo:?} {hi:?}"
