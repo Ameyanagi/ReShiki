@@ -700,7 +700,10 @@ fn run<'a>(
         stopped: false,
     };
     search.best_score = search.ranked(search.best_score);
-    search.best_cost = incumbent.iter().map(|(s, t)| search.pair_cost(*s, *t)).sum();
+    search.best_cost = incumbent
+        .iter()
+        .map(|(s, t)| search.pair_cost(*s, *t))
+        .sum();
     search.visit();
     Ok(search)
 }
@@ -751,12 +754,26 @@ pub(crate) fn correspond(
             target
                 .atoms
                 .iter()
-                .map(|b| if swapped { cost(b.id, a.id) } else { cost(a.id, b.id) })
+                .map(|b| {
+                    if swapped {
+                        cost(b.id, a.id)
+                    } else {
+                        cost(a.id, b.id)
+                    }
+                })
                 .collect()
         })
         .collect();
     let domains = domains(source, target);
-    let Ok(search) = run(source, target, domains, HashMap::new(), budget, work, Some(ties)) else {
+    let Ok(search) = run(
+        source,
+        target,
+        domains,
+        HashMap::new(),
+        budget,
+        work,
+        Some(ties),
+    ) else {
         return unfinished;
     };
     let mut pairs: Vec<(u64, u64)> = Search::signature(&search.best)

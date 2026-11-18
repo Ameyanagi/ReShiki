@@ -414,8 +414,10 @@ fn unchanged(left: &Side, right: &Side, atoms: &[(u64, u64)]) -> Vec<(u64, u64)>
     atoms
         .iter()
         .filter(|(a, b)| {
-            let mine: Option<BTreeSet<u64>> =
-                neighbors(left, *a).iter().map(|n| map.get(n).copied()).collect();
+            let mine: Option<BTreeSet<u64>> = neighbors(left, *a)
+                .iter()
+                .map(|n| map.get(n).copied())
+                .collect();
             mine == Some(neighbors(right, *b))
         })
         .copied()
@@ -1394,7 +1396,12 @@ pub fn compare(left: &Document, right: &Document) -> Report {
                     .map(|id| (*id, *id))
                     .collect()
             } else {
-                atom_pairs.get(&(*i, *j)).into_iter().flatten().copied().collect()
+                atom_pairs
+                    .get(&(*i, *j))
+                    .into_iter()
+                    .flatten()
+                    .copied()
+                    .collect()
             };
             if !map.is_empty() {
                 let edit = chemistry::edit_mapped(a, b, &map);

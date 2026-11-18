@@ -116,7 +116,12 @@ fn similar(kept: u32, a: u32, b: u32) -> bool {
 /// by ring bonds kept between them.
 fn rings_correspond(left: &Molecule, right: &Molecule, pairs: &[(u64, u64)]) -> bool {
     let map: HashMap<u64, u64> = pairs.iter().copied().collect();
-    let to_right = |i: usize| right.at.get(map.get(&left.graph.atoms.get(i)?.id)?).copied();
+    let to_right = |i: usize| {
+        right
+            .at
+            .get(map.get(&left.graph.atoms.get(i)?.id)?)
+            .copied()
+    };
     let mut links = BTreeSet::new();
     for (&(a, b), class) in left.graph.edges.iter().filter(|(_, class)| class.ring) {
         let (Some(x), Some(y)) = (to_right(a), to_right(b)) else {
@@ -124,7 +129,9 @@ fn rings_correspond(left: &Molecule, right: &Molecule, pairs: &[(u64, u64)]) -> 
         };
         let kept = (right.graph.edges.get(&(x.min(y), x.max(y))))
             .is_some_and(|other| (other.order, other.ring) == (class.order, class.ring));
-        if let (true, Some(Some(s)), Some(Some(t))) = (kept, left.system.get(a), right.system.get(x)) {
+        if let (true, Some(Some(s)), Some(Some(t))) =
+            (kept, left.system.get(a), right.system.get(x))
+        {
             links.insert((*s, *t));
         }
     }
@@ -223,8 +230,14 @@ pub(super) fn matches(
     if open_l.len() > MOLECULES || open_r.len() > MOLECULES {
         return Vec::new();
     }
-    let mine: Vec<Molecule> = open_l.iter().filter_map(|i| Molecule::new(left, *i)).collect();
-    let theirs: Vec<Molecule> = open_r.iter().filter_map(|j| Molecule::new(right, *j)).collect();
+    let mine: Vec<Molecule> = open_l
+        .iter()
+        .filter_map(|i| Molecule::new(left, *i))
+        .collect();
+    let theirs: Vec<Molecule> = open_r
+        .iter()
+        .filter_map(|j| Molecule::new(right, *j))
+        .collect();
     let mut candidates = Vec::new();
     for a in &mine {
         for b in &theirs {
@@ -274,7 +287,10 @@ pub(super) fn matches(
     let best = |side: fn(&Candidate) -> usize| -> HashMap<usize, usize> {
         let mut groups = BTreeMap::<usize, Vec<(usize, &Candidate)>>::new();
         for (n, candidate) in candidates.iter().enumerate() {
-            groups.entry(side(candidate)).or_default().push((n, candidate));
+            groups
+                .entry(side(candidate))
+                .or_default()
+                .push((n, candidate));
         }
         groups
             .into_iter()
@@ -301,9 +317,7 @@ fn clear_best(group: &[(usize, &Candidate)]) -> Option<usize> {
     let (n, best) = group
         .iter()
         .filter(|(_, c)| c.found.is_some())
-        .max_by(|(_, a), (_, b)| {
-            (a.found.cmp(&b.found)).then(b.distance.total_cmp(&a.distance))
-        })?;
+        .max_by(|(_, a), (_, b)| (a.found.cmp(&b.found)).then(b.distance.total_cmp(&a.distance)))?;
     let similarity = best.found?;
     let clear = group.iter().filter(|(m, _)| m != n).all(|(_, rival)| {
         if !rival.complete {

@@ -59,11 +59,7 @@ pub(super) fn drawn(ester_first: bool) -> Scheme {
             .collect()
     };
     let add_ester = |doc: &mut Document| {
-        let ids = crate::editing::append(
-            doc,
-            &molecule("CCOC(=O)c1ccccc1"),
-            Point::new(560., 0.),
-        );
+        let ids = crate::editing::append(doc, &molecule("CCOC(=O)c1ccccc1"), Point::new(560., 0.));
         atoms(doc, ids)
     };
     let mut ester = if ester_first {

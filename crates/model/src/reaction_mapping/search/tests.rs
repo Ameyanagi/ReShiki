@@ -213,7 +213,10 @@ fn compare_keeps_only_bonds_of_the_same_order_and_ring_membership() {
     let kept = |a: &[u64], b: &[u64]| correspond(&graph(a), &graph(b), Budget::default(), |_, _| 0);
     assert_eq!(kept(&chain, &ring).kept, 0);
     let rings = kept(&ring, &other);
-    assert_eq!((rings.kept, rings.complete, rings.pairs.len()), (4, true, 4));
+    assert_eq!(
+        (rings.kept, rings.complete, rings.pairs.len()),
+        (4, true, 4)
+    );
 }
 
 #[test]

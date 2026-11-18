@@ -142,7 +142,12 @@ fn a_reimport_with_colliding_ids_is_matched_again_by_content() {
     assert!(shared > 5, "{shared}");
     let report = compare(&left.doc, &again.doc);
     assert_eq!(report.changes, vec![]);
-    assert!(report.molecules.iter().all(|pair| pair.by == MatchedBy::Smiles));
+    assert!(
+        report
+            .molecules
+            .iter()
+            .all(|pair| pair.by == MatchedBy::Smiles)
+    );
 }
 
 #[test]
@@ -162,7 +167,10 @@ fn a_reimported_stereo_flip_matches_by_constitution() {
     assert_eq!(report.molecules[0].by, MatchedBy::Constitution);
     // The centre, by its own id on each side.
     let change = chemical(&report)[0];
-    assert_eq!((&change.left.atoms[..], &change.right.atoms[..]), (&[2][..], &[7][..]));
+    assert_eq!(
+        (&change.left.atoms[..], &change.right.atoms[..]),
+        (&[2][..], &[7][..])
+    );
     assert!(matches!(
         change.detail,
         Detail::Edit {
@@ -206,7 +214,11 @@ fn unrelated_molecules_are_never_matched_by_structure() {
     ] {
         for (x, y) in [(a, b), (b, a)] {
             let report = compare(&alone(x, 1), &alone(y, 40));
-            assert!(removed_and_added(&report), "{x} → {y}: {:?}", kinds(&report));
+            assert!(
+                removed_and_added(&report),
+                "{x} → {y}: {:?}",
+                kinds(&report)
+            );
         }
     }
 }
@@ -233,7 +245,11 @@ fn of_two_candidates_only_a_clearly_nearer_one_matches() {
     // At the same place, or not twice as near: neither.
     for (near, far) in [(0., 0.), (-300., 300.), (200., 300.)] {
         let (report, _) = pair(near, far);
-        assert!(report.molecules.is_empty(), "{near}, {far}: {:?}", kinds(&report));
+        assert!(
+            report.molecules.is_empty(),
+            "{near}, {far}: {:?}",
+            kinds(&report)
+        );
     }
     let (report, atoms) = pair(100., 400.);
     assert_eq!(report.molecules.len(), 1);
@@ -338,5 +354,9 @@ fn an_unknown_rival_that_could_be_as_good_leaves_the_best_unmatched() {
     let rival = candidate(Some(15), 15, true, 10.);
     assert_eq!(clear_best(&[(0, &short), (1, &rival)]), Some(0));
     let zero = candidate(Some(16), 16, true, 0.);
-    assert_eq!(clear_best(&[(0, &zero), (1, &zero)]), None, "0 ≤ 0 / 2 is a tie");
+    assert_eq!(
+        clear_best(&[(0, &zero), (1, &zero)]),
+        None,
+        "0 ≤ 0 / 2 is a tie"
+    );
 }
