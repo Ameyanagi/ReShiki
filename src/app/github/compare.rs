@@ -619,16 +619,17 @@ fn rows(report: &Report, left: &Document, right: &Document) -> Vec<Row> {
         } else {
             format!("{} of {} molecules match by SMILES", same.len(), all)
         };
-        let mut detail = same.iter().take(3).copied().collect::<Vec<_>>().join(" · ");
+        // As SMILES, so a long one wraps between its tokens.
+        let mut smiles = same.iter().take(3).copied().collect::<Vec<_>>().join(" · ");
         if same.len() > 3 {
-            detail.push_str(" · …");
+            smiles.push_str(" · …");
         }
         rows.push(Row {
             change: None,
             tag: Tag::Same,
             title,
-            detail,
-            smiles: None,
+            detail: String::new(),
+            smiles: Some(smiles),
             category: None,
         });
     }
@@ -665,10 +666,8 @@ fn marks(
         .iter()
         .flat_map(|group| group.members.iter().map(|id| (*id, group.anchor)))
         .collect();
-    let at = |id: &u64| {
-        let id = shown_at.get(id).unwrap_or(id);
-        doc.atom(*id).map(|atom| atom.position)
-    };
+    let shown = |id: &u64| *shown_at.get(id).unwrap_or(id);
+    let at = |id: &u64| doc.atom(shown(id)).map(|atom| atom.position);
     let (mut found, mut spots) = (Vec::new(), Vec::new());
     for change in &report.changes {
         let [marks, other] = side(change);
@@ -683,11 +682,13 @@ fn marks(
         };
         // A chemical change is where its painted atoms and bonds are, not
         // its whole molecule.
-        let mut painted: Vec<World> = Vec::new();
+        let mut painted: Vec<u64> = Vec::new();
         if paint == ComparePaint::Chemical {
-            for position in marks.atoms.iter().filter_map(at) {
-                mark(ComparePlace::Atom(position));
-                painted.push(position);
+            for id in &marks.atoms {
+                if let Some(position) = at(id) {
+                    mark(ComparePlace::Atom(position));
+                    painted.push(shown(id));
+                }
             }
             for (a, b) in &marks.bonds {
                 // Inside a collapsed label, the label's mark shows it.
@@ -696,22 +697,20 @@ fn marks(
                     (Some(a), Some(_)) => mark(ComparePlace::Atom(a)),
                     _ => continue,
                 }
-                painted.extend(at(a).into_iter().chain(at(b)));
+                painted.extend([shown(a), shown(b)]);
             }
             // Nothing painted here, as for an atom only added: where the
             // other side's painted atoms are here, such as the one it is on.
             if painted.is_empty() {
                 let ends = other.bonds.iter().flat_map(|(a, b)| [a, b]);
-                painted.extend(other.atoms.iter().chain(ends).filter_map(at));
+                let here = other.atoms.iter().chain(ends).filter(|id| at(id).is_some());
+                painted.extend(here.map(shown));
             }
         } else if let Some((lo, hi)) = objects {
             mark(ComparePlace::Box(lo, hi));
         }
-        let around = painted
-            .iter()
-            .fold(None, |bounds: Option<(World, World)>, p| {
-                Some(bounds.map_or((*p, *p), |bounds| union(bounds, (*p, *p))))
-            });
+        // Around their labels too, so the outline never crosses one.
+        let around = reshiki::scene::selection_bounds(doc, &painted);
         let outline = around.or(objects);
         // Half a bond around it, so labels at its edge are not cut.
         let pad = doc.drawing_style.bond_length_world / 2.;
@@ -1241,13 +1240,14 @@ fn stacks(size: Size, frame: (World, World), chrome: f32) -> bool {
 }
 
 /// Both panes zoomed to a change in its context: each centred where the
-/// change is there, both one size so they keep one scale, and at most twice
-/// as large as `frame`, the whole drawing, shows. A side without it looks
-/// where the other has it.
+/// change is there, both one size so they keep one scale, at most twice as
+/// large as `frame`, the whole drawing, shows, and never smaller. A side
+/// without it looks where the other has it.
 fn zoomed([a, b]: [Option<Spot>; 2], (lo, hi): (World, World)) -> Option<[(World, World); 2]> {
     let (a, b) = (a.or(b)?.context, b.or(a)?.context);
-    let w = (a.1.x - a.0.x).max(b.1.x - b.0.x).max((hi.x - lo.x) / 2.) / 2.;
-    let h = (a.1.y - a.0.y).max(b.1.y - b.0.y).max((hi.y - lo.y) / 2.) / 2.;
+    let (fw, fh) = (hi.x - lo.x, hi.y - lo.y);
+    let w = (a.1.x - a.0.x).max(b.1.x - b.0.x).clamp(fw / 2., fw) / 2.;
+    let h = (a.1.y - a.0.y).max(b.1.y - b.0.y).clamp(fh / 2., fh) / 2.;
     Some([a, b].map(|(lo, hi)| {
         let (x, y) = ((lo.x + hi.x) / 2., (lo.y + hi.y) / 2.);
         (World::new(x - w, y - h), World::new(x + w, y + h))

@@ -342,6 +342,10 @@ fn a_selected_change_is_zoomed_to_in_both_panes_at_one_scale() {
     // the drawing around it.
     let [left, _] = zoomed([spot(at(5., 5., 5., 5.)), None], at(0., 0., 400., 100.)).unwrap();
     assert_eq!(size(left), (200., 50.));
+    // Never smaller than the whole drawing: a padded molecule that fills
+    // it keeps its size.
+    let [left, _] = zoomed([spot(at(-10., -10., 70., 30.)), None], frame).unwrap();
+    assert_eq!(size(left), size(frame));
     // An added molecule: the left pane looks where the right has it.
     let [left, right] = zoomed([None, spot(at(5., 5., 15., 25.))], frame).unwrap();
     assert_eq!(left, right);
@@ -360,7 +364,7 @@ fn a_selected_chemical_change_zooms_to_its_molecule_and_outlines_its_atoms() {
     let spot = shown.spots[chem][1].unwrap();
     let (ring_lo, ring_hi) = reshiki::scene::selection_bounds(&right, &ring).unwrap();
     // The outline is the oxygen and its carbon; the zoom keeps the ring.
-    assert!(spot.outline.1.x - spot.outline.0.x < 1.);
+    assert!(spot.outline.1.x - spot.outline.0.x < ring_hi.x - ring_lo.x);
     let pad = right.drawing_style.bond_length_world / 2.;
     assert!(spot.context.0.x <= ring_lo.x - pad + 0.01);
     assert!(spot.context.1.x >= ring_hi.x + pad - 0.01);
@@ -386,7 +390,7 @@ fn a_chemical_change_is_where_its_painted_atoms_are_not_its_whole_molecule() {
     }
     let (ring_lo, ring_hi) = reshiki::scene::selection_bounds(&right, &ring).unwrap();
     assert!(hi.y - lo.y < ring_hi.y - ring_lo.y);
-    assert!(hi.x - lo.x < 1.);
+    assert!(hi.x - lo.x < ring_hi.x - ring_lo.x);
 }
 
 #[test]
@@ -433,11 +437,11 @@ fn a_change_painted_on_one_side_only_is_found_on_the_other_by_its_atom() {
     let chem = (shown.report.changes.iter())
         .position(|change| change.kind == Kind::Chemical)
         .unwrap();
-    let at = left.atom(sulfur).unwrap().position;
+    // The sulfur's label, not the chain.
     let (lo, hi) = shown.spots[chem][0].unwrap().outline;
-    assert!(
-        lo.distance(at) < 0.01 && hi.distance(at) < 0.01,
-        "{lo:?} {hi:?}"
+    assert_eq!(
+        (lo, hi),
+        reshiki::scene::selection_bounds(&left, &[sulfur]).unwrap()
     );
 }
 
@@ -634,4 +638,74 @@ fn parts_read_with_their_atom_numbers() {
         parts_title(&[part(PartKind::Inverted, "", &[])]),
         "Stereocenter inverted"
     );
+}
+
+/// A benzene ring with a halogen on its first atom.
+fn halide(element: &str) -> Document {
+    let ring = reshiki::rings::Preset::Benzene.document(42., false);
+    let mut doc = Document::default();
+    reshiki::editing::append(&mut doc, &ring, Point::new(0., 0.));
+    let carbon = doc.atoms[0].id;
+    let at = doc.atoms[0].position;
+    let halogen = doc.add_atom(element, at.offset(0., -42.));
+    doc.add_bond(carbon, halogen, 1, "plain");
+    load(&doc)
+}
+
+#[test]
+fn a_change_on_a_small_molecule_never_zooms_out_and_outlines_its_whole_label() {
+    let left = halide("Cl");
+    let halogen = left.atoms.iter().find(|a| a.element == "Cl").unwrap().id;
+    let right = edited(&left, |doc| {
+        doc.atoms
+            .iter_mut()
+            .find(|a| a.id == halogen)
+            .unwrap()
+            .element = "Br".into();
+    });
+    let compare = compared(&left, &right);
+    let shown = compare.shown.as_ref().unwrap();
+    let chem = (shown.report.changes.iter())
+        .position(|change| change.kind == Kind::Chemical)
+        .unwrap();
+    let spots = &shown.spots[chem];
+    let frame = shown.lined_frame;
+    let [left_frame, right_frame] = zoomed([spots[0], spots[2]], frame).unwrap();
+    // A narrow pane draws the whole molecule below full size: the change
+    // must not draw it smaller still.
+    let pane = Size::new(150., 300.);
+    for zoom in [left_frame, right_frame].map(|frame| compare_zoom(pane, frame)) {
+        assert!(zoom >= compare_zoom(pane, frame) - 1e-4, "{zoom}");
+    }
+    // The outline goes around the Br label, not through it.
+    let (lo, hi) = spots[1].unwrap().outline;
+    let (label_lo, label_hi) = reshiki::scene::selection_bounds(&right, &[halogen]).unwrap();
+    assert!(label_hi.x - label_lo.x > 5.);
+    assert!(
+        lo.x <= label_lo.x && lo.y <= label_lo.y,
+        "{lo:?} {label_lo:?}"
+    );
+    assert!(
+        hi.x >= label_hi.x && hi.y >= label_hi.y,
+        "{hi:?} {label_hi:?}"
+    );
+}
+
+#[test]
+fn the_same_row_wraps_its_smiles_like_a_chemical_change() {
+    let left = chiral();
+    let right = edited(&left, |doc| {
+        reshiki::editing::transform(
+            doc,
+            &doc.all_ids(),
+            reshiki::editing::Transform::FlipHorizontal,
+        )
+    });
+    let compare = compared(&left, &right);
+    let same = (compare.listed().into_iter())
+        .find(|row| row.tag == Tag::Same)
+        .unwrap();
+    // As SMILES, so it breaks between tokens instead of running off the edge.
+    assert!(same.detail.is_empty(), "{}", same.detail);
+    assert!(same.smiles.as_deref().is_some_and(|s| s.contains("C")));
 }
