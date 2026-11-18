@@ -221,6 +221,7 @@ async fn reference_cases(format: &str, script: &str) -> anyhow::Result<()> {
     let mut categories = std::collections::BTreeMap::<String, usize>::new();
     let mut restrictions = std::collections::BTreeMap::<String, usize>::new();
     let (mut folded, mut generic, mut extensions) = (0, 0, 0);
+    let (mut omitted_default, mut explicit_default) = (None, None);
     for line in lines {
         let record: Value = serde_json::from_str(&line?)?;
         if record.get("name").is_none() {
@@ -284,6 +285,23 @@ async fn reference_cases(format: &str, script: &str) -> anyhow::Result<()> {
             );
             restricted += 1;
             continue;
+        }
+        if case.name == "preparation/single-scale/None" {
+            // An omitted BondLength is the drawing default of 30pt since
+            // #1214, where the original worker fails bond association. Keep
+            // that recorded refusal; the response is compared after the loop
+            // with the worker's response to the explicit 30pt control.
+            anyhow::ensure!(
+                case.expected.is_none()
+                    && case.failure.as_deref()
+                        == Some("Could not safely associate CDXML bond appearance with its atoms"),
+                "The original worker no longer refuses an omitted BondLength"
+            );
+            omitted_default = Some((case.text, actual));
+            continue;
+        }
+        if case.name == "preparation/single-scale/30" {
+            explicit_default = Some((case.text.clone(), case.expected.clone()));
         }
         let projected = if format == "cdxml" {
             case.expected.as_ref().and_then(|legacy| {
@@ -575,6 +593,29 @@ async fn reference_cases(format: &str, script: &str) -> anyhow::Result<()> {
         }
     }
     anyhow::ensure!(process.wait()?.success(), "Reference capture failed");
+    if format == "cdxml" {
+        let (omitted, actual) = omitted_default.context("Missing omitted-BondLength case")?;
+        let (explicit, expected) = explicit_default.context("Missing explicit-30pt control")?;
+        // Only the root's explicit 30pt attribute differs between the inputs.
+        assert_eq!(explicit.matches(" BondLength=\"30\"").count(), 1);
+        assert_eq!(omitted, explicit.replacen(" BondLength=\"30\"", "", 1));
+        let result = match actual {
+            Ok(Outcome::Complete(a)) => {
+                accepted += 1;
+                expected
+                    .context("Missing explicit-30pt response")
+                    .and_then(wire_response)
+                    .and_then(|b| compare_response(*a, b, Some("cdxml")))
+            }
+            other => Err(anyhow::anyhow!("Outcome changed: {other:?}")),
+        };
+        match result {
+            Ok(()) => println!(
+                "Omitted-BondLength extension: 1 response equal to the explicit 30pt control"
+            ),
+            Err(error) => failures.push(format!("omitted-BondLength extension: {error:#}")),
+        }
+    }
     if !failures.is_empty() {
         std::fs::write(
             root.join(format!("artifacts/native-import-{format}-failures.log")),
