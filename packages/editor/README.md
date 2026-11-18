@@ -18,7 +18,7 @@ pnpm add @ameyanagi/reshiki
 ```
 
 Each ReShiki release publishes the package with the app's version, so
-`@ameyanagi/reshiki@0.15.0` is the editor of ReShiki 0.15.0. Prereleases are
+`@ameyanagi/reshiki@0.16.0` is the editor of ReShiki 0.16.0. Prereleases are
 under the `next` tag (`bun add @ameyanagi/reshiki@next`). The package carries
 the license texts and third-party notices in `dist/licenses`.
 

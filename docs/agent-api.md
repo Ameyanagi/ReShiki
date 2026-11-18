@@ -60,7 +60,7 @@ MCP messages on stdin.
 `agent-access.json`.
 
 Stdout carries MCP messages only. Stderr carries a bounded, content-free log
-in lines such as `reshiki-mcp: info: ReShiki agent API (experimental) 0.15.0;
+in lines such as `reshiki-mcp: info: ReShiki agent API (experimental) 0.16.0;
 granted folders: 0 read, 1 write`. That startup banner is logged at every
 level; only `--log-level debug` lists the granted folders themselves.
 
@@ -220,7 +220,7 @@ The result, with the image data shortened:
     "content": [
       {
         "type": "text",
-        "text": "{\"validation\":{\"status\":\"valid\"},\"value\":{\"byte_len\":4445,\"height\":85,\"width\":177},\"versions\":{\"app\":\"0.15.0\",\"document\":39,\"engine_protocol\":1,\"operation_api\":2},\"warnings\":[]}"
+        "text": "{\"validation\":{\"status\":\"valid\"},\"value\":{\"byte_len\":4445,\"height\":85,\"width\":177},\"versions\":{\"app\":\"0.16.0\",\"document\":39,\"engine_protocol\":1,\"operation_api\":2},\"warnings\":[]}"
       },
       {
         "type": "image",
@@ -238,7 +238,7 @@ The result, with the image data shortened:
         "width": 177
       },
       "versions": {
-        "app": "0.15.0",
+        "app": "0.16.0",
         "document": 39,
         "engine_protocol": 1,
         "operation_api": 2
@@ -286,7 +286,7 @@ Every successful `structuredContent` is one envelope,
     "revision": "0"
   },
   "versions": {
-    "app": "0.15.0",
+    "app": "0.16.0",
     "document": 39,
     "engine_protocol": 1,
     "operation_api": 2
@@ -331,7 +331,7 @@ an old `base_revision`:
     "retryable": false
   },
   "versions": {
-    "app": "0.15.0",
+    "app": "0.16.0",
     "document": 39,
     "engine_protocol": 1,
     "operation_api": 2
@@ -453,7 +453,7 @@ changes independently.
 
 | Field             | Now    | Identifies                                       |
 | ----------------- | ------ | ------------------------------------------------ |
-| `app`             | 0.15.0 | The ReShiki build                                |
+| `app`             | 0.16.0 | The ReShiki build                                |
 | `operation_api`   | 2      | The operation tools and their results            |
 | `engine_protocol` | 1      | The internal chemistry engine's request protocol |
 | `document`        | 39     | The `.rsk` drawing format                        |
