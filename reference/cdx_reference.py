@@ -3,9 +3,9 @@
 Invoked by reference/cdx_codec.rs. This script never regenerates expected results
 with Rust, so a migration cannot make both sides agree by accident. Arrow/fill
 compatibility corrections are grounded by GUI-captured ChemDraw binary/XML
-pairs in fixtures/chemdraw-captions and fixtures/chemdraw-arrows. Coordinate
-precision follows the signed 16.16 representation; UTF8Text supplies an explicit
-charset for UTF-8 payloads. The historical Python codec source remains unchanged.
+pairs in fixtures/chemdraw-captions and fixtures/chemdraw-arrows. UTF8Text
+supplies an explicit charset for UTF-8 payloads. The worker's codec decodes
+every point, rectangle and curve point as exact signed 16.16 values.
 """
 
 from __future__ import annotations
@@ -20,7 +20,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import engine.cdx_exchange as legacy_codec
 from engine.cdx_exchange import BY_NAME, INTS, OBJECTS, PROPERTIES, property_bytes
-from engine.cdx_exchange import coordinates as legacy_coordinates
 from engine.cdx_exchange import encode_text as legacy_encode_text
 from engine.cdx_exchange import from_cdx as legacy_from_cdx
 from engine.cdx_exchange import to_cdx as legacy_to_cdx
@@ -48,21 +47,6 @@ COORDINATE_ATTRIBUTES = sorted(
 BY_NAME["_NonchemicalCaption"] = (0x0708, "CDXBoolean", {})
 
 
-def coordinate_adapter(value, kind: str, encode: bool = True) -> bytes | str:
-    if encode:
-        return legacy_coordinates(value, kind)
-    count = {"CDXPoint2D": 2, "CDXPoint3D": 3, "CDXRectangle": 4}[kind]
-    if len(value) != count * 4:
-        raise ValueError("Invalid binary coordinates")
-    ticks = struct.unpack("<" + "i" * count, value)
-    order = {2: (1, 0), 3: (0, 1, 2), 4: (1, 0, 3, 2)}[count]
-    # Signed 16.16 coordinates are exactly representable in binary64. The
-    # historical decoder's eight significant digits can lose an integer tick
-    # when the molecular reader truncates XYZ. Preserve the actual fixed-point
-    # values independently of Rust's decimal spelling and formatting algorithm.
-    return " ".join(str(ticks[index] / 65536) for index in order)
-
-
 class Utf8TextPayload(bytes):
     """Distinguish styled text from metadata aliases sharing the Text tag."""
 
@@ -84,9 +68,8 @@ def text_property_adapter(code: int, data: bytes) -> bytes:
     return property_bytes(code, data)
 
 
-# Keep these intentional interchange corrections in the independent adapter;
-# reference/engine/cdx_exchange.py remains the immutable historical worker.
-setattr(legacy_codec, "coordinates", coordinate_adapter)
+# Keep these intentional interchange corrections in the independent adapter,
+# outside the worker's codec in reference/engine/cdx_exchange.py.
 setattr(legacy_codec, "encode_text", text_adapter)
 setattr(legacy_codec, "property_bytes", text_property_adapter)
 

@@ -162,7 +162,12 @@ def coordinates(value, kind, encode=True):
         values = [values[1], values[0]]
     if count == 4:
         values = [values[1], values[0], values[3], values[2]]
-    return packed("i" * count, *values) if encode else " ".join(f"{v:.8g}" for v in values)
+    if encode:
+        return packed("i" * count, *values)
+    # Every signed 16.16 coordinate is an exact binary64 value, and seventeen
+    # digits read back as that value. Eight digits rounded it off its tick;
+    # the native reader has kept the exact value since #1214.
+    return " ".join(f"{v:.17g}" for v in values)
 
 
 def numeric(name, kind, enum, value, encode=True):
