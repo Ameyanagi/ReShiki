@@ -309,7 +309,12 @@ fn malformed_and_excessive_inputs_fail_atomically() {
         "<group>".repeat(70),
         "</group>".repeat(70)
     );
-    assert!(matches!(cdxml::read(&deep), Err(cdxml::Error::Limit)));
+    // Since #1184 the scan before the parser refuses nesting and names the limit.
+    assert!(matches!(
+        cdxml::read(&deep),
+        Err(cdxml::Error::Invalid(message))
+            if message == "XML elements are nested more than 64 levels deep"
+    ));
 }
 
 #[test]
