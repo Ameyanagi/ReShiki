@@ -1432,8 +1432,13 @@ fn propylbenzene(doc: &mut Document, x: f32) -> [u64; 3] {
 /// a save and reopen.
 #[test]
 fn keys_edit_reaction_participants() {
-    const REFUSAL: &str = "Assign complete molecules to reaction roles";
+    enum Step {
+        Key(Target, &'static str),
+        Connect(u64, u64),
+        Click(u64),
+    }
     let mut failures = Vec::new();
+    let mut grown = 0;
     for variant in ["shortcut", "manual", "shortcut reopened", "manual reopened"] {
         let mut app = app();
         let reactant = propylbenzene(&mut app.tab.doc, 0.);
@@ -1474,24 +1479,10 @@ fn keys_edit_reaction_participants() {
         }
         app.tab.doc.validate().unwrap();
         let base = app.tab.doc.clone();
-        // `added` is the number of atoms the edit must add, where it is known.
-        let mut check =
-            |app: &mut App, assigned_target: bool, added: Option<usize>, what: String| {
-                let assigned: usize = app.tab.doc.reactions[0]
-                    .ids()
-                    .iter()
-                    .filter(|id| app.tab.doc.atom(**id).is_some())
-                    .count();
-                if app.error && app.status.contains(REFUSAL) {
-                    failures.push(format!("{variant}: {what}"));
-                } else if assigned_target && assigned != app.tab.doc.atoms.len() {
-                    failures.push(format!("{variant}: {what} left atoms outside the reaction"));
-                } else if added.is_some_and(|n| app.tab.doc.atoms.len() != base.atoms.len() + n) {
-                    failures.push(format!("{variant}: {what} did not grow: {}", app.status));
-                }
-                app.tab.doc = base.clone();
-                app.error = false;
-            };
+        // The same drawing without roles says what each edit must do.
+        let mut plain = base.clone();
+        plain.reactions.clear();
+        let mut cases = Vec::new();
         for (side, atoms) in [("reactant", reactant), ("product", product)] {
             for (place, id) in ["chain end", "chain middle", "ring"].into_iter().zip(atoms) {
                 for key in [
@@ -1499,77 +1490,102 @@ fn keys_edit_reaction_participants() {
                     "v", "u", "a", "j", "J", "o", "n", "m", "O", "P", "e", "A", "E", "F", "N", "y",
                     "Z", "M", "H", "Q",
                 ] {
-                    app.tab
-                        .keyboard_drawing
-                        .set_target(Target::Atom(id), &app.tab.doc);
-                    let _ = app.context_key(key);
-                    let added = match key {
-                        "1" | "0" => Some(1),
-                        _ => None,
-                    };
-                    check(
-                        &mut app,
-                        true,
-                        added,
+                    cases.push((
                         format!("key {key} on {side} {place}"),
-                    );
+                        Step::Key(Target::Atom(id), key),
+                    ));
                 }
             }
-            let (a, b) = (atoms[0].min(atoms[1]), atoms[0].max(atoms[1]));
+            let bond = Target::Bond(atoms[0].min(atoms[1]), atoms[0].max(atoms[1]));
             for key in [
                 "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "z", "v", "a", "w",
             ] {
-                app.tab
-                    .keyboard_drawing
-                    .set_target(Target::Bond(a, b), &app.tab.doc);
-                let _ = app.context_key(key);
-                check(&mut app, true, None, format!("key {key} on {side} bond"));
+                cases.push((format!("key {key} on {side} bond"), Step::Key(bond, key)));
             }
-            app.tab
-                .keyboard_drawing
-                .set_target(Target::Atom(atoms[0]), &app.tab.doc);
-            let _ = app.context_key("[");
-            app.tab
-                .keyboard_drawing
-                .set_target(Target::Atom(atoms[2]), &app.tab.doc);
-            let _ = app.context_key("]");
-            check(&mut app, true, None, format!("connect on {side}"));
-            // The bond tool's click on a ring atom shares this growth.
-            let end = reshiki::projection::growth::Plane::at(&app.tab.doc, atoms[2])
-                .and_then(|plane| plane.outward(42.))
-                .unwrap();
-            match reshiki::projection::growth::place(
-                &app.tab.doc,
-                atoms[2],
-                end,
-                "C",
-                reshiki::bonds::BondPreset::Single,
-            ) {
-                Ok((doc, _)) => app.tab.doc = doc,
-                Err(error) => {
-                    app.error = true;
-                    app.status = error;
+            cases.push((
+                format!("connect on {side}"),
+                Step::Connect(atoms[0], atoms[2]),
+            ));
+            cases.push((
+                format!("bond tool click on {side} ring"),
+                Step::Click(atoms[2]),
+            ));
+        }
+        let blank = Target::Blank(Point::new(0., 300.));
+        for key in ["1", "6", "n", "O", "j"] {
+            cases.push((
+                format!("key {key} on the empty hotspot"),
+                Step::Key(blank, key),
+            ));
+        }
+        let run = |app: &mut App, doc: &Document, step: &Step| {
+            app.tab.doc = doc.clone();
+            app.tab.selected.clear();
+            app.tab.keyboard_drawing.clear_mark();
+            app.error = false;
+            app.status.clear();
+            let target = |app: &mut App, target| {
+                app.tab.keyboard_drawing.set_target(target, &app.tab.doc);
+            };
+            match *step {
+                Step::Key(at, key) => {
+                    target(app, at);
+                    let _ = app.context_key(key);
+                }
+                Step::Connect(a, b) => {
+                    target(app, Target::Atom(a));
+                    let _ = app.context_key("[");
+                    target(app, Target::Atom(b));
+                    let _ = app.context_key("]");
+                }
+                // The bond tool's click on a ring atom shares this growth.
+                Step::Click(id) => {
+                    let end = reshiki::projection::growth::Plane::at(&app.tab.doc, id)
+                        .and_then(|plane| plane.outward(42.))
+                        .unwrap();
+                    match reshiki::projection::growth::place(
+                        &app.tab.doc,
+                        id,
+                        end,
+                        "C",
+                        reshiki::bonds::BondPreset::Single,
+                    ) {
+                        Ok((doc, _)) => app.tab.doc = doc,
+                        Err(error) => {
+                            app.error = true;
+                            app.status = error;
+                        }
+                    }
                 }
             }
-            check(
-                &mut app,
-                true,
-                Some(1),
-                format!("bond tool click on {side} ring"),
-            );
-        }
-        for key in ["1", "6", "n", "O", "j"] {
-            app.tab
-                .keyboard_drawing
-                .set_target(Target::Blank(Point::new(0., 300.)), &app.tab.doc);
-            let _ = app.context_key(key);
-            check(
-                &mut app,
-                false,
-                None,
-                format!("key {key} on the empty hotspot"),
-            );
+            (app.error, app.status.clone(), app.tab.doc.clone())
+        };
+        for (what, step) in &cases {
+            let want = run(&mut app, &plain, step);
+            let (error, status, mut doc) = run(&mut app, &base, step);
+            grown += usize::from(doc.atoms.len() > base.atoms.len());
+            let assigned = doc.reactions[0]
+                .ids()
+                .iter()
+                .filter(|id| doc.atom(**id).is_some())
+                .count();
+            let outside = if matches!(step, Step::Key(Target::Blank(_), _)) {
+                doc.atoms.len() - base.atoms.len()
+            } else {
+                0
+            };
+            doc.reactions.clear();
+            if assigned + outside != doc.atoms.len() {
+                failures.push(format!("{variant}: {what} left atoms outside the reaction"));
+            } else if (error, &status, &doc) != (want.0, &want.1, &want.2) {
+                failures.push(format!(
+                    "{variant}: {what}: {status:?}, without roles {:?}",
+                    want.1
+                ));
+            }
         }
     }
-    assert!(failures.is_empty(), "{REFUSAL}:\n{}", failures.join("\n"));
+    // Most of these edits add atoms; a run that refuses them all proves nothing.
+    assert!(grown > 400, "{grown} edits added atoms");
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
