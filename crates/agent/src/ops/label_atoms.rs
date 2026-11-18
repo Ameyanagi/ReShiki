@@ -23,7 +23,7 @@ use crate::{
     tool_spec::{Hints, ToolSpec},
     transaction,
 };
-use reshiki_io::nmr::{self, LabelFormat};
+use reshiki_io::nmr::{self, LabelFormat, MAX_DECIMALS};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::sync::Arc;
@@ -31,7 +31,7 @@ use std::sync::Arc;
 pub const LABEL_ATOMS: ToolSpec = ToolSpec {
     name: "label_atoms",
     title: Some("Label atoms"),
-    description: "Write predict_nmr rows onto a session document as atom numbers, replacing those atoms' numbers, as one undo step.",
+    description: "Write predict_nmr rows onto atoms as their atom numbers, as one undo step.",
     input_schema: schema,
     hints: Some(Hints {
         read_only: false,
@@ -53,14 +53,15 @@ fn schema() -> Value {
         "properties": {
             "document": handle_schema(),
             "rows": described(json!({"type": "array", "maxItems": Budgets::default().max_ids, "items": row}), "predict_nmr's rows; a null ppm is skipped."),
-            "format": described(json!({"type": "string", "enum": ["numbers", "ppm", "both"]}), "#3, 1.280 ppm or #3 · 1.280 ppm."),
+            "format": {"type": "string", "enum": ["numbers", "ppm", "both"]},
+            "decimals": described(nullable(json!({"type": "integer", "minimum": 0, "maximum": MAX_DECIMALS})), "ppm decimals; null for 2."),
             "base_revision": described(revision_schema(), "The revision predict_nmr returned."),
             "idempotency_key": described(nullable(json!({
                 "type": "string",
                 "maxLength": Budgets::default().max_idempotency_key_bytes,
             })), "As in apply."),
         },
-        "required": ["document", "rows", "format", "base_revision", "idempotency_key"],
+        "required": ["document", "rows", "format", "decimals", "base_revision", "idempotency_key"],
         "additionalProperties": false,
     })
 }
@@ -82,6 +83,8 @@ struct Arguments {
     document: DocHandle,
     rows: Vec<Row>,
     format: String,
+    #[serde(default)]
+    decimals: Option<u64>,
     base_revision: Revision,
     #[serde(default)]
     idempotency_key: Option<String>,
@@ -93,18 +96,21 @@ pub(crate) struct LabelAtoms {
     document: DocHandle,
     rows: Vec<(u64, Option<f64>)>,
     format: LabelFormat,
+    decimals: u8,
     base_revision: Revision,
     key: Option<IdempotencyKey>,
 }
 
 /// Decodes the arguments before any work runs: the shape, the idempotency
-/// key, the row count, then the format.
+/// key, the row count, the format, then the decimals: 0 to [`MAX_DECIMALS`],
+/// and 2 for null, as for rows that do not name their nucleus.
 pub(crate) fn decode(args: Value, budgets: &Budgets) -> Result<LabelAtoms, OpError> {
     let digest = apply::digest(&args);
     let Arguments {
         document,
         rows,
         format,
+        decimals,
         base_revision,
         idempotency_key,
     } = arguments(args)?;
@@ -122,10 +128,20 @@ pub(crate) fn decode(args: Value, budgets: &Budgets) -> Result<LabelAtoms, OpErr
     }
     let format = LabelFormat::from_code(&format)
         .ok_or_else(|| OpError::invalid("format must be numbers, ppm or both").param("format"))?;
+    let decimals = match decimals {
+        None => nmr::default_decimals(None),
+        Some(decimals) => u8::try_from(decimals)
+            .ok()
+            .filter(|decimals| *decimals <= MAX_DECIMALS)
+            .ok_or_else(|| {
+                OpError::invalid(format!("decimals must be 0 to {MAX_DECIMALS}")).param("decimals")
+            })?,
+    };
     Ok(LabelAtoms {
         document,
         rows: rows.into_iter().map(|row| (row.atom.0, row.ppm)).collect(),
         format,
+        decimals,
         base_revision,
         key,
     })
@@ -157,6 +173,7 @@ fn edit(
         document,
         rows,
         format,
+        decimals,
         base_revision,
         key,
     } = args;
@@ -172,7 +189,7 @@ fn edit(
         .param("rows"));
     }
     let mut labelled = (*snapshot.doc).clone();
-    let labeled = nmr::write_labels(&mut labelled, &rows, format)
+    let labeled = nmr::write_labels(&mut labelled, &rows, format, decimals)
         .map_err(|error| OpError::invalid(error).param("rows"))?;
     let labeled: Vec<ObjectId> = labeled.into_iter().map(ObjectId).collect();
     let result = versions.clone();

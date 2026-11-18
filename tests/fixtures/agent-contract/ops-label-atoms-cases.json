@@ -2,44 +2,48 @@
   "rules": [
     {
       "id": "arguments.object",
-      "cite": "crates/agent/src/ops/catalog.rs:335-344; crates/agent/src/ops/label_atoms.rs:102-110"
+      "cite": "crates/agent/src/ops/catalog.rs:335-344; crates/agent/src/ops/label_atoms.rs:107-116"
     },
     {
       "id": "label_atoms.document_required",
-      "cite": "crates/agent/src/ops/label_atoms.rs:54,63,82"
+      "cite": "crates/agent/src/ops/label_atoms.rs:54,64,83"
     },
     {
       "id": "label_atoms.rows",
-      "cite": "crates/agent/src/ops/label_atoms.rs:55,63,83"
+      "cite": "crates/agent/src/ops/label_atoms.rs:55,64,84"
     },
     {
       "id": "label_atoms.row_items",
-      "cite": "crates/agent/src/ops/label_atoms.rs:44-49,70-76; crates/agent/src/ops/wire.rs:59-70,172-175"
+      "cite": "crates/agent/src/ops/label_atoms.rs:44-49,71-77; crates/agent/src/ops/wire.rs:59-70,172-175"
     },
     {
       "id": "label_atoms.rows_count",
-      "cite": "crates/agent/src/ops/label_atoms.rs:112-121; crates/agent/src/ops/budget.rs:26-27,84"
+      "cite": "crates/agent/src/ops/label_atoms.rs:118-127; crates/agent/src/ops/budget.rs:26-27,84"
     },
     {
       "id": "label_atoms.format",
-      "cite": "crates/agent/src/ops/label_atoms.rs:56,84,123-124; crates/io/src/nmr/labels.rs:21-28"
+      "cite": "crates/agent/src/ops/label_atoms.rs:56,85,129-130; crates/io/src/nmr/labels.rs:22-30"
+    },
+    {
+      "id": "label_atoms.decimals",
+      "cite": "crates/agent/src/ops/label_atoms.rs:57,64,86-87,131-139; crates/io/src/nmr/labels.rs:33-42"
     },
     {
       "id": "label_atoms.base_revision_required",
-      "cite": "crates/agent/src/ops/label_atoms.rs:57,85; crates/agent/src/ops/wire.rs:177-180"
+      "cite": "crates/agent/src/ops/label_atoms.rs:58,88; crates/agent/src/ops/wire.rs:177-180"
     },
     {
       "id": "label_atoms.idempotency_key_bytes",
-      "cite": "crates/agent/src/ops/label_atoms.rs:58-62,111; crates/agent/src/ops/apply.rs:207-222"
+      "cite": "crates/agent/src/ops/label_atoms.rs:59-63,117; crates/agent/src/ops/apply.rs:207-222"
     },
     {
       "id": "label_atoms.no_unknown_fields",
-      "cite": "crates/agent/src/ops/label_atoms.rs:70,80"
+      "cite": "crates/agent/src/ops/label_atoms.rs:71,81"
     }
   ],
   "bases": {
-    "label": {"tool": "label_atoms", "arguments": {"document": "doc_0123456789abcdef0123456789abcdef", "rows": [{"atom": "1", "ppm": 14.2}, {"atom": "3", "ppm": null}], "format": "both", "base_revision": "0", "idempotency_key": null}},
-    "keyed": {"tool": "label_atoms", "arguments": {"document": "doc_0123456789abcdef0123456789abcdef", "rows": [{"atom": "12", "ppm": -0.5}], "format": "numbers", "base_revision": "7", "idempotency_key": "label-1"}}
+    "label": {"tool": "label_atoms", "arguments": {"document": "doc_0123456789abcdef0123456789abcdef", "rows": [{"atom": "1", "ppm": 14.2}, {"atom": "3", "ppm": null}], "format": "both", "decimals": null, "base_revision": "0", "idempotency_key": null}},
+    "keyed": {"tool": "label_atoms", "arguments": {"document": "doc_0123456789abcdef0123456789abcdef", "rows": [{"atom": "12", "ppm": -0.5}], "format": "numbers", "decimals": 3, "base_revision": "7", "idempotency_key": "label-1"}}
   },
   "cases": [
     {"name": "arguments_object", "rule": "arguments.object", "base": "label", "expect": "both_accept"},
@@ -76,6 +80,16 @@
     {"name": "format_null", "rule": "label_atoms.format", "base": "label", "patch": [{"op": "replace", "path": "/arguments/format", "value": null}], "expect": "both_reject"},
     {"name": "format_omitted", "rule": "label_atoms.format", "base": "label", "patch": [{"op": "remove", "path": "/arguments/format"}], "expect": "both_reject", "message": "missing field `format`"},
 
+    {"name": "decimals_null", "rule": "label_atoms.decimals", "base": "label", "expect": "both_accept"},
+    {"name": "decimals_given", "rule": "label_atoms.decimals", "base": "keyed", "expect": "both_accept"},
+    {"name": "decimals_zero", "rule": "label_atoms.decimals", "base": "label", "patch": [{"op": "replace", "path": "/arguments/decimals", "value": 0}], "expect": "both_accept"},
+    {"name": "decimals_four", "rule": "label_atoms.decimals", "base": "label", "patch": [{"op": "replace", "path": "/arguments/decimals", "value": 4}], "expect": "both_accept"},
+    {"name": "decimals_five", "rule": "label_atoms.decimals", "base": "label", "patch": [{"op": "replace", "path": "/arguments/decimals", "value": 5}], "expect": "both_reject", "message": "decimals must be 0 to 4"},
+    {"name": "decimals_negative", "rule": "label_atoms.decimals", "base": "label", "patch": [{"op": "replace", "path": "/arguments/decimals", "value": -1}], "expect": "both_reject"},
+    {"name": "decimals_fraction", "rule": "label_atoms.decimals", "base": "label", "patch": [{"op": "replace", "path": "/arguments/decimals", "value": 1.5}], "expect": "both_reject"},
+    {"name": "decimals_string", "rule": "label_atoms.decimals", "base": "label", "patch": [{"op": "replace", "path": "/arguments/decimals", "value": "2"}], "expect": "both_reject"},
+    {"name": "decimals_omitted", "rule": "label_atoms.decimals", "base": "label", "patch": [{"op": "remove", "path": "/arguments/decimals"}], "expect": "schema_rejects_only"},
+
     {"name": "base_revision_zero", "rule": "label_atoms.base_revision_required", "base": "label", "expect": "both_accept"},
     {"name": "base_revision_null", "rule": "label_atoms.base_revision_required", "base": "label", "patch": [{"op": "replace", "path": "/arguments/base_revision", "value": null}], "expect": "both_reject"},
     {"name": "base_revision_omitted", "rule": "label_atoms.base_revision_required", "base": "label", "patch": [{"op": "remove", "path": "/arguments/base_revision"}], "expect": "both_reject", "message": "missing field `base_revision`"},
@@ -88,6 +102,6 @@
     {"name": "idempotency_key_65_two_byte_characters", "rule": "label_atoms.idempotency_key_bytes", "base": "keyed", "patch": [{"op": "replace", "path": "/arguments/idempotency_key", "value": {"$text": "é", "count": 65}}], "expect": "decoder_rejects_only", "message": "idempotency_key is 130 bytes; at most 128 are allowed"},
 
     {"name": "known_fields_only", "rule": "label_atoms.no_unknown_fields", "base": "keyed", "expect": "both_accept"},
-    {"name": "unknown_null_field", "rule": "label_atoms.no_unknown_fields", "base": "label", "patch": [{"op": "add", "path": "/arguments/nucleus", "value": null}], "expect": "both_reject", "message": "unknown field `nucleus`, expected one of `document`, `rows`, `format`, `base_revision`, `idempotency_key`"}
+    {"name": "unknown_null_field", "rule": "label_atoms.no_unknown_fields", "base": "label", "patch": [{"op": "add", "path": "/arguments/nucleus", "value": null}], "expect": "both_reject", "message": "unknown field `nucleus`, expected one of `document`, `rows`, `format`, `decimals`, `base_revision`, `idempotency_key`"}
   ]
 }

@@ -150,24 +150,66 @@ fn with_labels(
     data: Vec<u8>,
     rows: Vec<(u64, Option<f64>)>,
     format: &str,
+    decimals: Option<i64>,
+    nucleus: Option<&str>,
 ) -> PyResult<Py<PyBytes>> {
-    let format = reshiki_io::nmr::LabelFormat::from_code(format)
+    use reshiki_io::nmr::{LabelFormat, MAX_DECIMALS, Nucleus, default_decimals};
+    let format = LabelFormat::from_code(format)
         .ok_or_else(|| invalid(py)("format must be numbers, ppm or both".into()))?;
+    let decimals = match decimals {
+        None => default_decimals(nucleus.and_then(Nucleus::from_code)),
+        Some(decimals) => u8::try_from(decimals)
+            .ok()
+            .filter(|decimals| *decimals <= MAX_DECIMALS)
+            .ok_or_else(|| invalid(py)(format!("decimals must be 0 to {MAX_DECIMALS}")))?,
+    };
     let data = py
         .detach(|| {
             let before = Document::from_native_file(&data)?;
             let mut document = before.clone();
-            reshiki_io::nmr::write_labels(&mut document, &rows, format)?;
-            // As the app and MCP reconcile an atom-number edit: reaction gaps
-            // and their signs make room for wider labels.
+            reshiki_io::nmr::write_labels(&mut document, &rows, format, decimals)?;
             // There is no history to commit to: the reconciled document is
-            // the result.
+            // the result. As the app and MCP reconcile an atom-number edit,
+            // reaction gaps and their signs make room for wider labels.
             if document != before {
                 drop(
                     reshiki_model::transaction::reconcile(&mut document, before)
                         .map_err(|rejection| rejection.message().to_owned())?,
                 );
             }
+            document.file_json()
+        })
+        .map_err(invalid(py))?;
+    Ok(bytes(py, data))
+}
+
+/// Sets each `(atom, text)` as that atom's number, keeping its style, for
+/// RDKit atom notes; the caller has checked the atoms and texts.
+#[pyfunction]
+fn with_atom_numbers(
+    py: Python<'_>,
+    data: Vec<u8>,
+    numbers: Vec<(u64, String)>,
+) -> PyResult<Py<PyBytes>> {
+    use reshiki_model::atom_labels::{Number, number_style};
+    let data = py
+        .detach(|| {
+            let mut document = Document::from_native_file(&data)?;
+            for (id, text) in numbers {
+                if let Some(atom) = document.atom_mut(id) {
+                    let style = atom
+                        .display
+                        .number
+                        .take()
+                        .map_or_else(number_style, |number| number.style);
+                    atom.display.number = Some(Number {
+                        text,
+                        offset: None,
+                        style,
+                    });
+                }
+            }
+            document.validate()?;
             document.file_json()
         })
         .map_err(invalid(py))?;
@@ -242,6 +284,7 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(properties, module)?)?;
     module.add_function(wrap_pyfunction!(predict_nmr, module)?)?;
     module.add_function(wrap_pyfunction!(with_labels, module)?)?;
+    module.add_function(wrap_pyfunction!(with_atom_numbers, module)?)?;
     module.add_function(wrap_pyfunction!(render_many, module)?)?;
     Ok(())
 }

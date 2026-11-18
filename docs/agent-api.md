@@ -117,13 +117,14 @@ published values. See [NMR prediction](nmr-prediction.md#from-scripts).
 
 `label_atoms` writes those rows onto the document as atom numbers, in one undo
 step. Pass the rows as `[{atom, ppm}]`, a `format` of `numbers` (`#3`), `ppm`
-(`1.280 ppm`) or `both` (`#3 · 1.280 ppm`), and the prediction's `revision` as
+(`1.28 ppm`) or `both` (`#3 · 1.28 ppm`), `decimals` (0 to 4, or `null` for 2;
+pass 1 for ¹³C, as journals print it) and the prediction's `revision` as
 `base_revision`. If the document has changed since the prediction, the call
 fails with `stale`, so labels never land on atoms an edit removed or
 renumbered. Rows with a `null` ppm are skipped. Only the listed atoms' numbers
 are replaced; each keeps its number style. Every row is checked first: an atom
-not in the drawing is `unknown_object`, and a label over 32 characters is
-`invalid_arguments`; either way nothing changes. The result is
+not in the drawing is `unknown_object`, and a label over 32 characters or
+`decimals` outside 0 to 4 is `invalid_arguments`; either way nothing changes. The result is
 `{effect, document, revision, recorded, labeled}`, with the labelled atom IDs
 in row order. The labels are plain text that later edits do not update, and
 `export` and `file_save` keep them. No caption is added; cite the prediction's

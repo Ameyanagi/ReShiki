@@ -55,7 +55,8 @@ async fn label(
         .collect();
     let arguments = json!({
         "document": document, "rows": rows, "format": labels.format,
-        "base_revision": value.get("revision"), "idempotency_key": null,
+        "decimals": labels.decimals, "base_revision": value.get("revision"),
+        "idempotency_key": null,
     });
     session.call("label_atoms", arguments, err).await?;
     Ok(())

@@ -24,3 +24,8 @@ Full provenance, pinned source download and transformation are in
 `ethyl-acetate.rsk` is an original ReShiki drawing under MIT OR Apache-2.0,
 for native GUI review of the fully supported three-H-group/four-carbon
 acceptance example. It contains no experimental shifts.
+
+`morphine.rsk` and `anisaldehyde.rsk` are the cleaned drawings of
+`CN1CC[C@]23c4c5ccc(O)c4O[C@H]2[C@@H](O)C=C[C@H]3[C@H]1C5` and
+`COc1ccc(C=O)cc1` from `reshiki.Molecule.from_smiles(...).clean()`, without
+labels. The long atom-number layout tests label them with predicted shifts.

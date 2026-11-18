@@ -90,8 +90,10 @@ named, must be exactly one molecule.
 ### Labels from scripts
 
 Scripts can also write the shifts onto the drawing, in the formats of the
-**Show labels** menu: `numbers` (`#3`), `ppm` (`1.280 ppm`) or `both`
-(`#3 · 1.280 ppm`).
+**Show labels** menu: `numbers` (`#3`), `ppm` (`1.28 ppm`) or `both`
+(`#3 · 1.28 ppm`). The ppm has the decimal places journals print: 2 for ¹H
+(`7.26 ppm`) and 1 for ¹³C (`128.4 ppm`), or 0 to 4 when a script asks for
+them. The **Show labels** overlay keeps its three.
 
 - Python: `molecule.with_labels(shifts, format="both")`; see
   [Python package](python.md#label-the-atoms).
@@ -107,12 +109,21 @@ drawing as atom numbers:
 - They save in `.rsk` files, appear in SVG, PNG and PDF, and go to ChemDraw
   (CDXML and CDX) as atom numbers. You can move, restyle or delete them in the
   app like any atom number.
-- They use the drawing's atom-number style, not the teal overlay, and have no
-  leader lines. An atom inside a collapsed abbreviation shows its label only
+- They use the drawing's atom-number style at 65% of the atom-label size, not
+  the teal overlay.
+- Each label is placed on its own: in the first free spot around its atom,
+  outward first, clear of bonds, atom labels and other labels. When that spot
+  is more than 1.5 bond lengths away, or nearer another atom, a thin leader
+  line joins the label to its atom. Canvas, SVG, PNG and PDF place them the
+  same way; ChemDraw places the atom numbers of CDXML and CDX itself, without
+  leader lines. This placement is for atom numbers with a space, as every
+  `ppm` and `both` label has; short numbers such as `3` or `12a` keep their
+  usual placement.
+- An atom inside a collapsed abbreviation shows its label only
   when the abbreviation is expanded, and CDXML and CDX export asks you to
   expand it first, as for any atom number there.
 - They replace the numbers of the listed atoms only. Each atom keeps its
-  number style, and its label returns to the default position. Sites without
+  number style, and its label returns to automatic placement. Sites without
   a ppm get no label. Labelling ¹H after ¹³C replaces the labels on the atoms
   the ¹H rows list and keeps the others.
 - They are plain text. Editing the structure later does not update or clear

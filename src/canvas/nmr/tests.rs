@@ -691,7 +691,7 @@ fn overlay_labels_are_the_atom_numbers_scripts_write() {
         (LabelMode::Both, LabelFormat::Both),
     ] {
         let mut written = doc.clone();
-        reshiki::nmr::write_labels(&mut written, &rows, format).unwrap();
+        reshiki::nmr::write_labels(&mut written, &rows, format, 3).unwrap();
         let context = Context {
             report: &report,
             supported: None,

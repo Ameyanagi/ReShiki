@@ -235,7 +235,8 @@ fn placements_with_width(
         {
             continue;
         }
-        let text = reshiki::nmr::label_text(context.mode.format(), row.atom_id, shift);
+        // The overlay keeps its three decimals.
+        let text = reshiki::nmr::label_text(context.mode.format(), row.atom_id, shift, 3);
         // The nucleus and unresolved-H/abbreviation ownership remain in the
         // report and accessible site descriptions, rather than every label.
         let size = Size::new(width(&text).min((bounds.width - 8.).max(1.)), TEXT_HEIGHT);

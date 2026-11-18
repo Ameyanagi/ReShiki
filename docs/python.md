@@ -99,25 +99,40 @@ m.with_labels(shifts, format="both").save("assigned.svg", style="JACS / ACS")
 `{"atom": ..., "ppm": ...}` mappings or `(atom, ppm)` tuples. `format` is one of
 the app's **Show labels** formats:
 
-| `format`         | Label on atom 3  |
-| ---------------- | ---------------- |
-| `numbers`        | `#3`             |
-| `ppm`            | `1.280 ppm`      |
-| `both` (default) | `#3 · 1.280 ppm` |
+| `format`         | Label on atom 3 (¹H) |
+| ---------------- | -------------------- |
+| `numbers`        | `#3`                 |
+| `ppm`            | `1.28 ppm`           |
+| `both` (default) | `#3 · 1.28 ppm`      |
+
+`decimals` sets the decimal places of the ppm, 0 to 4. By default, as
+journals print them, ¹H rows get 2 (`7.26 ppm`) and ¹³C rows 1
+(`128.4 ppm`); mappings and tuples, which do not name a nucleus, get 2:
+
+```python
+m.with_labels(shifts, format="ppm", decimals=3)
+```
 
 The labels are stored as atom numbers, so `rsk()` keeps them and SVG, PNG,
 PDF, CDXML and CDX output shows them; ChemDraw reads them as atom numbers.
 They replace the numbers of the listed atoms only, keep each atom's number
-style (the drawing's atom-number style when it had none) and reset its
-position. Rows without a ppm are skipped. Labelling ¹H after ¹³C replaces the
-labels of the atoms the ¹H rows list and keeps the others.
+style and reset its position. An atom without a number gets a style at 65% of
+the drawing's atom-label size, so the labels read clearly but stay smaller
+than the atoms. Rows without a ppm are skipped. Labelling ¹H after ¹³C
+replaces the labels of the atoms the ¹H rows list and keeps the others.
+
+A label with a space, such as `1.28 ppm`, is placed on its own: in the first
+free spot around the atom, outward first, clear of bonds, atom labels and
+other labels. When that spot is more than 1.5 bond lengths away, or nearer
+another atom, a thin leader line joins it to its atom. Short atom numbers keep
+their usual placement.
 
 The labels are plain text: they do not change when the drawing is edited
 later. Run `predict_nmr` and `with_labels` again to refresh them. An atom that
-is not in the drawing, a ppm that is not a finite number or a label longer
-than 32 characters raises `ReShikiError` with code `invalid_arguments`, and
-nothing is written. No caption is added; cite `credit` with a published
-labelled figure.
+is not in the drawing, a ppm that is not a finite number, a label longer than
+32 characters or `decimals` outside 0 to 4 raises `ReShikiError` with code
+`invalid_arguments`, and nothing is written. No caption is added; cite
+`credit` with a published labelled figure.
 
 ## Inputs and outputs
 
@@ -333,7 +348,12 @@ The accessor provides `.png()`, `.svg()` and `.properties()`. `.png()` and
 reads each row on its own and issues `StructureWarning`s. Optional
 dependencies load when their integration is used. RDKit interoperability uses
 `Molecule.from_rdkit(mol)` and `molecule.to_rdkit()` through MOL blocks when
-RDKit is installed.
+RDKit is installed. Atom numbers, including NMR labels, travel as RDKit's
+`atomNote`: `to_rdkit()` sets it on each numbered atom, and `from_rdkit()`
+makes each note the number of the atom it came from. A note is skipped, with
+a `StructureWarning` saying how many, when its atom is not kept on import (such
+as an explicit H that ReShiki folds into its heavy atom) or its text is not 1
+to 32 printable characters.
 
 Editable Office pictures depend on
 [issue #462](https://github.com/Ameyanagi/ReShiki/issues/462). EMF export remains

@@ -792,6 +792,7 @@ fn convert_labels_parse_with_their_nucleus() {
         Some(Labels {
             nucleus: "13C",
             format: "both".into(),
+            decimals: 1,
         })
     );
 }
@@ -814,12 +815,8 @@ async fn convert_writes_predicted_shifts_as_atom_numbers() {
     let (code, out, err) = call(&svg_args).await;
     assert_eq!(code, SUCCESS, "{err}");
     assert!(err.is_empty(), "{err}");
-    for label in [
-        "#1 · 14.200 ppm",
-        "#2 · 61.050 ppm",
-        "#4 · 170.700 ppm",
-        "#5 · 20.900 ppm",
-    ] {
+    // 13C labels get one decimal place by default.
+    for label in ["#1 · 14.2 ppm", "#4 · 170.7 ppm", "#5 · 20.9 ppm"] {
         assert!(out.contains(&format!(">{label}</text>")), "{label}");
     }
     let cdxml_args = [
@@ -835,7 +832,24 @@ async fn convert_writes_predicted_shifts_as_atom_numbers() {
     ];
     let (code, out, err) = call(&cdxml_args).await;
     assert_eq!(code, SUCCESS, "{err}");
-    assert!(out.contains("AtomNumber=\"1.280 ppm\""), "{out}");
+    // 1H labels get two.
+    assert!(out.contains("AtomNumber=\"1.28 ppm\""), "{out}");
+    let (code, out, err) = call(&[
+        "convert",
+        "--smiles",
+        "CCOC(C)=O",
+        "--to",
+        "cdxml",
+        "--nucleus",
+        "13C",
+        "--labels",
+        "ppm",
+        "--decimals",
+        "3",
+    ])
+    .await;
+    assert_eq!(code, SUCCESS, "{err}");
+    assert!(out.contains("AtomNumber=\"170.700 ppm\""), "{out}");
     let (code, out, err) = call(&[
         "convert",
         "--smiles",
@@ -1761,6 +1775,42 @@ async fn usage_errors_exit_2_before_any_work() {
                 "convert", "--smiles", "C", "--to", "svg", "--labels", "both",
             ],
             "--labels needs --nucleus 1H or 13C".into(),
+        ),
+        (
+            &["convert", "--smiles", "C", "--to", "svg", "--decimals", "2"],
+            "--decimals needs --labels numbers, ppm or both".into(),
+        ),
+        (
+            &[
+                "convert",
+                "--smiles",
+                "C",
+                "--to",
+                "svg",
+                "--nucleus",
+                "1H",
+                "--labels",
+                "ppm",
+                "--decimals",
+                "5",
+            ],
+            "--decimals must be a whole number from 0 to 4".into(),
+        ),
+        (
+            &[
+                "convert",
+                "--smiles",
+                "C",
+                "--to",
+                "svg",
+                "--nucleus",
+                "1H",
+                "--labels",
+                "ppm",
+                "--decimals",
+                "-1",
+            ],
+            "--decimals must be a whole number from 0 to 4".into(),
         ),
         (
             &["convert", "--smiles", "C", "--to", "svg", "--nucleus", "1H"],

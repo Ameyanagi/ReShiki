@@ -39,7 +39,7 @@ The reference data comes from nmrshiftdb2 under the
 which the wheel includes. Cite the prediction's `credit` with published values.
 
 `molecule.with_labels(shifts, format="both")` writes the shifts onto the atoms
-as atom numbers (`#3`, `1.280 ppm` or `#3 · 1.280 ppm`), which `.rsk`, SVG,
+as atom numbers (`#3`, `1.28 ppm` or `#3 · 1.28 ppm`), which `.rsk`, SVG,
 PNG, PDF, CDXML and CDX output keep.
 
 ## Reuse a style

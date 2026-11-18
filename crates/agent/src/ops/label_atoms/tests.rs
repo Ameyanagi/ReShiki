@@ -108,6 +108,25 @@ fn decode_checks_the_format_the_row_count_and_the_key() {
         json!({"document": "doc_1", "rows": row, "format": "both", "idempotency_key": null});
     let error = decode(unbound, &budgets).unwrap_err();
     assert_eq!(error.message, "missing field `base_revision`");
+    let with_decimals = |decimals: Value| {
+        let args = json!({
+            "document": "doc_1", "rows": row, "format": "ppm", "decimals": decimals,
+            "base_revision": "0", "idempotency_key": null,
+        });
+        decode(args, &budgets).map(|decoded| decoded.decimals)
+    };
+    assert_eq!(with_decimals(Value::Null), Ok(2));
+    for decimals in 0..=4 {
+        assert_eq!(with_decimals(json!(decimals)), Ok(decimals));
+    }
+    for decimals in [json!(5), json!(256)] {
+        let error = with_decimals(decimals).unwrap_err();
+        assert_eq!(
+            (error.kind, error.param),
+            (ErrorKind::InvalidArguments, Some("decimals"))
+        );
+        assert_eq!(error.message, "decimals must be 0 to 4");
+    }
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -141,7 +160,8 @@ async fn labels_land_at_the_predicted_revision_as_one_undo_step() {
             .unwrap()
             .text
     };
-    assert_eq!(number(4), "#4 · 170.700 ppm");
+    // Rows without a nucleus get 2 decimals unless the call says otherwise.
+    assert_eq!(number(4), "#4 · 170.70 ppm");
     assert_eq!(labelled.atom(3).unwrap().display.number, None);
     // The same rows again change nothing.
     let again = call(

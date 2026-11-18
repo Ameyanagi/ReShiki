@@ -617,9 +617,25 @@ fn label_text_matches_the_show_labels_menu() {
         ("both", LabelFormat::Both, "#3 · 1.280 ppm"),
     ] {
         assert_eq!(LabelFormat::from_code(code), Some(format));
-        assert_eq!(label_text(format, 3, 1.28), text);
+        assert_eq!(label_text(format, 3, 1.28, 3), text);
     }
     assert_eq!(LabelFormat::from_code("Both"), None);
+}
+
+#[test]
+fn shift_labels_default_to_journal_decimals_per_nucleus() {
+    assert_eq!(default_decimals(Some(Nucleus::H1)), 2);
+    assert_eq!(default_decimals(Some(Nucleus::C13)), 1);
+    assert_eq!(default_decimals(None), 2);
+    assert_eq!(label_text(LabelFormat::Ppm, 1, 7.2649, 2), "7.26 ppm");
+    assert_eq!(label_text(LabelFormat::Ppm, 1, 128.44, 1), "128.4 ppm");
+    assert_eq!(label_text(LabelFormat::Both, 1, 128.44, 0), "#1 · 128 ppm");
+    assert_eq!(label_text(LabelFormat::Ppm, 1, 1.2, 4), "1.2000 ppm");
+    let mut doc = ethyl_acetate();
+    let before = doc.clone();
+    let error = write_labels(&mut doc, &[(1, Some(14.2))], LabelFormat::Ppm, 5);
+    assert_eq!(error.unwrap_err(), "decimals must be 0 to 4");
+    assert_eq!(doc, before);
 }
 
 /// Ethyl acetate's ¹³C rows as scripts pass them.
@@ -630,7 +646,7 @@ fn carbon_rows(doc: &Document) -> Vec<(u64, Option<f64>)> {
 
 #[test]
 fn labels_replace_the_numbers_of_the_listed_atoms_only() {
-    use crate::atom_labels::{Number, number_style};
+    use crate::atom_labels::{Number, number_style, shift_label_style};
     let mut doc = ethyl_acetate();
     let rows = carbon_rows(&doc);
     let mut styled = number_style();
@@ -647,24 +663,32 @@ fn labels_replace_the_numbers_of_the_listed_atoms_only() {
         style: number_style(),
     });
     doc.atom_mut(3).unwrap().display.number = unlisted.clone();
-    let labelled = write_labels(&mut doc, &rows, LabelFormat::Both).unwrap();
+    let labelled = write_labels(&mut doc, &rows, LabelFormat::Both, 1).unwrap();
     assert_eq!(labelled, [1, 2, 4, 5]);
     let number = |id| doc.atom(id).unwrap().display.number.clone().unwrap();
-    assert_eq!(number(1).text, "#1 · 14.200 ppm");
+    assert_eq!(number(1).text, "#1 · 14.2 ppm");
     assert_eq!((number(1).offset, number(1).style), (None, styled));
-    assert_eq!(number(4).text, "#4 · 170.700 ppm");
-    assert_eq!(number(4).style, number_style());
+    assert_eq!(number(4).text, "#4 · 170.7 ppm");
+    // Without a style of its own, a label is smaller than the atom labels.
+    assert_eq!(number(4).style, shift_label_style(&doc));
+    assert!(number(4).style.size_pt < doc.drawing_style.font_size_pt * 0.7);
     assert_eq!(doc.atom(3).unwrap().display.number, unlisted);
     doc.validate().unwrap();
-    assert!(crate::scene::svg(&doc).contains(">#4 · 170.700 ppm</text>"));
+    assert!(crate::scene::svg(&doc).contains(">#4 · 170.7 ppm</text>"));
+    // CDXML keeps plain atom numbers: ChemDraw places them, without leaders.
     let cdxml = crate::exchange::drawing::write(&doc, Default::default()).unwrap();
-    assert!(cdxml.contains("AtomNumber=\"#4 · 170.700 ppm\""), "{cdxml}");
+    assert!(cdxml.contains("AtomNumber=\"#4 · 170.7 ppm\""), "{cdxml}");
 }
 
 #[test]
 fn rows_without_a_shift_are_skipped() {
     let mut doc = ethyl_acetate();
-    let labelled = write_labels(&mut doc, &[(1, None), (2, Some(61.05))], LabelFormat::Ppm);
+    let labelled = write_labels(
+        &mut doc,
+        &[(1, None), (2, Some(61.05))],
+        LabelFormat::Ppm,
+        3,
+    );
     assert_eq!(labelled.unwrap(), [2]);
     assert_eq!(doc.atom(1).unwrap().display.number, None);
     let number = doc.atom(2).unwrap().display.number.clone().unwrap();
@@ -686,14 +710,14 @@ fn a_bad_row_anywhere_changes_nothing() {
             (2, Some(f64::INFINITY)),
             "The ppm of atom 2 is not a finite number",
         ),
-        // "#2 · 100000000000000000000.000 ppm" is 34 characters.
+        // "#2 · 100000000000000000000.00 ppm" is 33 characters.
         (
             (2, Some(1e20)),
             "The label of atom 2 is longer than 32 characters",
         ),
     ] {
         let mut copy = doc.clone();
-        let result = write_labels(&mut copy, &[first, row], LabelFormat::Both);
+        let result = write_labels(&mut copy, &[first, row], LabelFormat::Both, 2);
         assert_eq!(result.unwrap_err(), error);
         assert_eq!(copy, doc);
     }
@@ -706,7 +730,7 @@ fn labelled_drawings_keep_their_version_floor_through_rsk() {
     assert!(raised.file_version() > crate::document::DISTANCE_BONDS);
     for doc in [ethyl_acetate(), raised] {
         let mut labelled = doc.clone();
-        write_labels(&mut labelled, &carbon_rows(&doc), LabelFormat::Numbers).unwrap();
+        write_labels(&mut labelled, &carbon_rows(&doc), LabelFormat::Numbers, 1).unwrap();
         assert_eq!(labelled.file_version(), doc.file_version());
         let reopened = Document::from_native_file(&labelled.file_json().unwrap()).unwrap();
         assert_eq!(reopened.version, doc.file_version());

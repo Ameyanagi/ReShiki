@@ -107,6 +107,7 @@ pub(crate) struct Convert {
 pub(crate) struct Labels {
     pub(crate) nucleus: &'static str,
     pub(crate) format: String,
+    pub(crate) decimals: u8,
 }
 
 /// The output formats that keep atom numbers, so `--labels` is allowed.
@@ -275,6 +276,7 @@ struct Options {
     isotope_style: Option<OsString>,
     nucleus: Option<OsString>,
     labels: Option<OsString>,
+    decimals: Option<OsString>,
     svg_text: SvgText,
     pages: bool,
     force: bool,
@@ -330,6 +332,7 @@ fn options(spec: &CommandSpec, tokens: &[OsString]) -> Result<Options, String> {
                 "--isotope-style" => options.isotope_style = Some(value),
                 "--nucleus" => options.nucleus = Some(value),
                 "--labels" => options.labels = Some(value),
+                "--decimals" => options.decimals = Some(value),
                 "--svg-text" => {
                     options.svg_text = match value.to_str() {
                         Some("live") => SvgText::Live,
@@ -491,6 +494,9 @@ fn extension(path: &Path) -> String {
 fn convert(options: &Options) -> Result<Command, String> {
     let input = input("convert", options)?;
     let export = export(options)?;
+    if options.decimals.is_some() && options.labels.is_none() {
+        return Err("--decimals needs --labels numbers, ppm or both".into());
+    }
     let labels = match (&options.nucleus, &options.labels) {
         (None, None) => None,
         (_, None) => return Err("--nucleus needs --labels numbers, ppm or both".into()),
@@ -506,9 +512,19 @@ fn convert(options: &Options) -> Result<Command, String> {
                     LABEL_FORMATS.join(", ")
                 ));
             }
+            let nucleus = nucleus_code(nucleus)?;
+            let decimals = match &options.decimals {
+                None => crate::nmr::default_decimals(crate::nmr::Nucleus::from_code(nucleus)),
+                Some(value) => value
+                    .to_str()
+                    .and_then(|text| text.parse::<u8>().ok())
+                    .filter(|decimals| *decimals <= crate::nmr::MAX_DECIMALS)
+                    .ok_or("--decimals must be a whole number from 0 to 4")?,
+            };
             Some(Labels {
-                nucleus: nucleus_code(nucleus)?,
+                nucleus,
                 format: format.to_owned(),
+                decimals,
             })
         }
     };

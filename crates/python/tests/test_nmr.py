@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import warnings
 from pathlib import Path
 
 import pytest
@@ -121,12 +122,9 @@ def test_the_issue_example_writes_labels_that_every_figure_keeps(tmp_path: Path)
     shifts = molecule.predict_nmr("13C")
     labelled = molecule.with_labels(shifts, format="both")
     assert isinstance(labelled, reshiki.Molecule)
-    expected = {
-        1: "#1 · 14.200 ppm",
-        2: "#2 · 61.050 ppm",
-        4: "#4 · 170.700 ppm",
-        5: "#5 · 20.900 ppm",
-    }
+    # 13C labels get one decimal place by default.
+    expected = {row.atom: f"#{row.atom} · {row.ppm:.1f} ppm" for row in shifts}
+    assert expected[4] == "#4 · 170.7 ppm"
     assert _numbers(labelled) == expected
     assert _numbers(molecule) == {}
     path = labelled.save(tmp_path / "assigned.svg", style="JACS / ACS", svg_text="live")
@@ -136,13 +134,15 @@ def test_the_issue_example_writes_labels_that_every_figure_keeps(tmp_path: Path)
     for format in ("svg", "png", "pdf"):
         assert labelled.render(format) != molecule.render(format), format
     assert _numbers(reshiki.parse(labelled.rsk())) == expected
-    assert 'AtomNumber="#4 · 170.700 ppm"' in labelled.cdxml()
+    assert 'AtomNumber="#4 · 170.7 ppm"' in labelled.cdxml()
 
 
 def test_rows_can_be_shifts_mappings_or_pairs() -> None:
     molecule = reshiki.Molecule.from_smiles(ETHYL_ACETATE)
     protons = molecule.predict_nmr("1H")
-    expected = {1: "1.280 ppm", 2: "4.160 ppm", 5: "2.095 ppm"}
+    # 1H rows and rows without a nucleus both get two decimal places.
+    expected = {row.atom: f"{row.ppm:.2f} ppm" for row in protons}
+    assert expected[1] == "1.28 ppm"
     mappings = [{"atom": row.atom, "ppm": row.ppm} for row in protons]
     pairs = [(row.atom, row.ppm) for row in protons]
     for rows in (protons, list(protons), mappings, pairs):
@@ -185,3 +185,67 @@ def test_wider_labels_make_room_in_a_reaction_as_the_app_does() -> None:
     assert layout(labelled) != layout(reaction)
     # Rows that write nothing leave the drawing as it was.
     assert layout(reaction.with_labels([(1, None)])) == layout(reaction)
+
+
+def test_decimals_default_per_nucleus_and_can_be_chosen() -> None:
+    molecule = reshiki.Molecule.from_smiles(ETHYL_ACETATE)
+    carbons = molecule.predict_nmr("13C")
+    assert _numbers(molecule.with_labels(carbons, format="ppm"))[4] == "170.7 ppm"
+    pairs = [(row.atom, row.ppm) for row in carbons]
+    assert _numbers(molecule.with_labels(pairs, format="ppm"))[4] == "170.70 ppm"
+    for decimals, text in ((0, "171 ppm"), (3, "170.700 ppm"), (4, "170.7000 ppm")):
+        labelled = molecule.with_labels(carbons, format="ppm", decimals=decimals)
+        assert _numbers(labelled)[4] == text
+    for decimals in (5, -1, 300):
+        with pytest.raises(reshiki.ReShikiError) as error:
+            molecule.with_labels(carbons, decimals=decimals)
+        assert error.value.code == "invalid_arguments"
+        assert str(error.value) == "decimals must be 0 to 4"
+
+
+def test_atom_numbers_round_trip_through_rdkit_atom_notes() -> None:
+    pytest.importorskip("rdkit.Chem")
+    molecule = reshiki.Molecule.from_smiles(ETHYL_ACETATE)
+    labelled = molecule.with_labels(molecule.predict_nmr("13C"), format="both")
+    rdkit = labelled.to_rdkit()
+    notes = {a.GetIdx() + 1: a.GetProp("atomNote") for a in rdkit.GetAtoms() if a.HasProp("atomNote")}
+    assert notes == _numbers(labelled)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", reshiki.StructureWarning)
+        assert _numbers(reshiki.Molecule.from_rdkit(rdkit)) == _numbers(labelled)
+
+
+def test_rdkit_notes_land_on_the_atoms_import_keeps() -> None:
+    chem = pytest.importorskip("rdkit.Chem")
+    params = chem.SmilesParserParams()
+    params.removeHs = False
+    # [H]CO keeps its H in RDKit: indices H 0, C 1, O 2. Import folds the H,
+    # so the drawing keeps C as atom 2 and O as atom 3.
+    rdkit = chem.MolFromSmiles("[H]CO", params)
+    rdkit.GetAtomWithIdx(1).SetProp("atomNote", "C note")
+    rdkit.GetAtomWithIdx(2).SetProp("atomNote", "O note")
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", reshiki.StructureWarning)
+        drawing = reshiki.Molecule.from_rdkit(rdkit)
+    elements = {a["id"]: a["element"] for a in json.loads(drawing.rsk())["atoms"]}
+    assert {elements[atom]: text for atom, text in _numbers(drawing).items()} == {
+        "C": "C note",
+        "O": "O note",
+    }
+    rdkit.GetAtomWithIdx(0).SetProp("atomNote", "H note")
+    with pytest.warns(reshiki.StructureWarning, match="1 of 3 RDKit atom notes were skipped"):
+        drawing = reshiki.Molecule.from_rdkit(rdkit)
+    assert sorted(_numbers(drawing).values()) == ["C note", "O note"]
+
+
+def test_invalid_rdkit_notes_are_skipped_with_a_warning() -> None:
+    chem = pytest.importorskip("rdkit.Chem")
+    rdkit = chem.MolFromSmiles("CCO")
+    for index, text in enumerate(("", "x" * 33, "a\tb")):
+        rdkit.GetAtomWithIdx(index).SetProp("atomNote", text)
+    with pytest.warns(reshiki.StructureWarning, match="3 of 3 RDKit atom notes were skipped"):
+        drawing = reshiki.Molecule.from_rdkit(rdkit)
+    assert _numbers(drawing) == {}
+    rdkit.GetAtomWithIdx(0).SetProp("atomNote", "x" * 32)
+    with pytest.warns(reshiki.StructureWarning, match="2 of 3"):
+        assert _numbers(reshiki.Molecule.from_rdkit(rdkit)) == {1: "x" * 32}
