@@ -161,6 +161,69 @@ fn a_molecule_cut_to_under_half_keeping_its_ids_is_still_one_change() {
 }
 
 #[test]
+fn a_molecule_cut_down_keeps_its_ids_even_beside_a_new_copy() {
+    let left = alone("CCCCCCCCCC", 1);
+    let right = edited(&left, |doc| {
+        doc.delete(&[5, 6, 7, 8, 9, 10]);
+        // A new decane, numbered from 101.
+        let spacer = doc.add_atom("C", Point::new(0., 900.));
+        doc.atom_mut(spacer).unwrap().id = 100;
+        crate::editing::append(doc, &molecule("CCCCCCCCCC"), Point::new(1000., 0.));
+        doc.delete(&[100]);
+    });
+    let report = compare(&left, &right);
+    assert_eq!(report.molecules.len(), 1);
+    assert_eq!(report.molecules[0].by, MatchedBy::Id);
+    assert_eq!(report.molecules[0].right, [1, 2, 3, 4]);
+}
+
+#[test]
+fn groups_added_all_round_a_ring_drawn_again_are_not_a_redraw() {
+    let left = alone("c1ccccc1", 1);
+    let right = edited(&alone("c1ccccc1", 40), |doc| {
+        let ring: Vec<(u64, Point)> = doc.atoms.iter().map(|a| (a.id, a.position)).collect();
+        let n = ring.len() as f32;
+        let (cx, cy) = ring
+            .iter()
+            .fold((0., 0.), |(x, y), (_, p)| (x + p.x / n, y + p.y / n));
+        for (id, p) in ring {
+            let f = doc.add_atom("F", Point::new(2. * p.x - cx, 2. * p.y - cy));
+            doc.add_bond(id, f, 1, "plain");
+        }
+    });
+    let report = compare(&left, &right);
+    assert_eq!(report.molecules[0].by, MatchedBy::Structure);
+    assert_eq!(kinds(&report), [(Kind::Chemical, Subject::Molecule)]);
+}
+
+#[test]
+fn a_constitution_pairing_must_keep_bonds_to_drawn_hydrogens() {
+    let methanol = |first: u64, hydrogen_on_oxygen: bool| {
+        let mut doc = Document::default();
+        let c = doc.add_atom("C", Point::new(0., 0.));
+        doc.atom_mut(c).unwrap().id = first;
+        let o = doc.add_atom("O", Point::new(40., 0.));
+        let at = if hydrogen_on_oxygen {
+            (40., 40.)
+        } else {
+            (0., 40.)
+        };
+        let h = doc.add_atom("H", Point::new(at.0, at.1));
+        doc.add_bond(first, o, 1, "plain");
+        doc.add_bond(if hydrogen_on_oxygen { o } else { first }, h, 1, "plain");
+        if hydrogen_on_oxygen {
+            doc.atom_mut(first).unwrap().isotope = 13;
+        }
+        load(&doc)
+    };
+    let report = compare(&methanol(1, false), &methanol(40, true));
+    assert_eq!(report.molecules[0].by, MatchedBy::Constitution);
+    // No bond to a hydrogen moved from carbon to oxygen.
+    let change = chemical(&report)[0];
+    assert!(change.left.bonds.is_empty(), "{:?}", change.left.bonds);
+}
+
+#[test]
 fn a_reimported_stereo_flip_matches_by_constitution() {
     let report = compare(&alone("C[C@H](O)CC", 1), &alone("C[C@@H](O)CC", 6));
     assert_eq!(kinds(&report), [(Kind::Chemical, Subject::Molecule)]);

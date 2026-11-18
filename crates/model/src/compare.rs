@@ -397,11 +397,13 @@ fn nearest(left: &Side, mine: &[u64], right: &Side, theirs: &[u64]) -> Vec<(u64,
     if kept { pairs } else { Vec::new() }
 }
 
-/// Of atoms paired (left, right), those whose bonded neighbours are paired
-/// with each other too: what an edit nearby did not redraw.
+/// Of atoms paired (left, right), those bonded to the same paired atoms on
+/// both sides: what rewiring nearby did not redraw. A group added or
+/// removed does not count.
 fn unchanged(left: &Side, right: &Side, atoms: &[(u64, u64)]) -> Vec<(u64, u64)> {
     let map: HashMap<u64, u64> = atoms.iter().copied().collect();
-    let neighbors = |side: &Side, id: u64| -> BTreeSet<u64> {
+    let paired: HashSet<u64> = map.values().copied().collect();
+    let neighbors = |side: &Side, id: u64| -> Vec<u64> {
         side.bonds
             .iter()
             .filter_map(|(a, b)| match (*a == id, *b == id) {
@@ -414,11 +416,13 @@ fn unchanged(left: &Side, right: &Side, atoms: &[(u64, u64)]) -> Vec<(u64, u64)>
     atoms
         .iter()
         .filter(|(a, b)| {
-            let mine: Option<BTreeSet<u64>> = neighbors(left, *a)
-                .iter()
-                .map(|n| map.get(n).copied())
+            let mine: BTreeSet<u64> = (neighbors(left, *a).iter())
+                .filter_map(|n| map.get(n).copied())
                 .collect();
-            mine == Some(neighbors(right, *b))
+            let theirs: BTreeSet<u64> = (neighbors(right, *b).into_iter())
+                .filter(|n| paired.contains(n))
+                .collect();
+            mine == theirs
         })
         .copied()
         .collect()
@@ -430,9 +434,9 @@ type Molecules = Vec<(usize, usize)>;
 /// Pairs molecules that share ids, as (strong, weak). Shared ids are
 /// evidence, not proof: a pair must keep, between atoms of the same
 /// elements, at least half the bonds of the smaller, or for single atoms the
-/// same element. Keeping less than half the bonds of the larger is weak, as
-/// when a re-import numbered atoms afresh and a small molecule took ids of
-/// a large one: equal content and structure come first.
+/// same element. Exactly half is weak, as when a re-import numbered atoms
+/// afresh and ethanol took ids of an ester, keeping one of its two bonds:
+/// equal content and structure come first.
 fn by_id(left: &Side, right: &Side) -> (Molecules, Molecules) {
     let sizes = |side: &Side| {
         let mut bonds = vec![0_usize; side.molecules.len()];
@@ -488,7 +492,7 @@ fn by_id(left: &Side, right: &Side) -> (Molecules, Molecules) {
     });
     let weak: HashSet<(usize, usize)> = (candidates.iter())
         .filter(|((i, j), (kept, _))| {
-            2 * kept < sizes_l.get(*i).max(sizes_r.get(*j)).copied().unwrap_or(0)
+            *kept > 0 && 2 * kept == sizes_l.get(*i).min(sizes_r.get(*j)).copied().unwrap_or(0)
         })
         .map(|(pair, _)| *pair)
         .collect();

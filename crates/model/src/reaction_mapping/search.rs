@@ -715,6 +715,8 @@ pub(crate) struct Outcome {
     pub(crate) pairs: Vec<(u64, u64)>,
     /// Heavy-atom bonds kept, of the same order and ring membership.
     pub(crate) kept: u32,
+    /// All bonds kept so, those to drawn hydrogens included.
+    pub(crate) bonds: u32,
     /// False when the budget ran out: `kept` is then only what was found.
     pub(crate) complete: bool,
     pub(crate) work: u64,
@@ -741,6 +743,7 @@ pub(crate) fn correspond(
     let unfinished = Outcome {
         pairs: Vec::new(),
         kept: 0,
+        bonds: 0,
         complete: false,
         work: budget.work,
     };
@@ -787,6 +790,7 @@ pub(crate) fn correspond(
     Outcome {
         pairs,
         kept: search.best_score.heavy_adjacency,
+        bonds: search.best_score.adjacency,
         complete: !search.stopped,
         work: search.work.min(budget.work),
     }

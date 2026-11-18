@@ -296,9 +296,9 @@ chemistry**.
   half the bonds of the smaller; then by canonical isomeric SMILES,
   duplicates by where they sit once the common move is removed; then by
   SMILES without stereo or isotopes; then by structure. Shared ids keeping
-  less than half the bonds of the larger molecule, as when a fresh import
-  reuses a large molecule's ids for a small one, count only for molecules
-  nothing else matched. Text, arrows and
+  exactly half the smaller molecule's bonds, as when a fresh import gives
+  ethanol ids an ester had and one of its two bonds lines up, count only for
+  molecules nothing else matched. Text, arrows and
   graphics match by id, then by content and place. Structure matching pairs
   the atoms with the reaction mapper's bounded search, under Compare's own
   rules: atoms pair by element, and a bond counts as kept only with the same
@@ -314,8 +314,8 @@ chemistry**.
   40,000,000 a comparison), so the same two drawings always give the same
   report. Of equally good atom pairings, the nearest once the
   two molecules are laid over each other wins, so a ring substituted again
-  is marked at the same atom on both sides; the fit uses only the matched
-  atoms whose neighbours are matched too. Each
+  is marked at the same atom on both sides; the fit leaves out matched atoms
+  whose bonds to other matched atoms changed. Each
   matched molecule is compared as chemistry over its prepared, sanitized
   structure, and fitted onto its old self with a proper 2D rigid fit
   (Kabsch): within 0.01 bond lengths RMS and 0.03 at most it moved. Failing

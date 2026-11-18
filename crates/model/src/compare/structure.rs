@@ -5,7 +5,10 @@
 //! rival as good, or one the budget left unknown that could be, leaves both
 //! unmatched. Distance only breaks a tie. The searches are bounded by work,
 //! not time, so the same drawings always match the same way.
-use super::{Side, fit::Fit};
+use super::{
+    Side,
+    fit::{Fit, Xy},
+};
 use crate::reaction_mapping::{Budget, Graph, correspond};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
@@ -167,11 +170,17 @@ pub(super) fn cost<'a>(
     unit: f64,
 ) -> impl Fn(u64, u64) -> u64 + 'a {
     let (to, from) = (left.centroid(i), guess.apply(right.centroid(j)));
+    let places = |side: &Side, i: usize| -> HashMap<u64, Xy> {
+        (side.atoms(i).iter())
+            .filter_map(|id| Some((*id, side.position(*id)?)))
+            .collect()
+    };
+    let (mine, theirs) = (places(left, i), places(right, j));
     move |l, r| {
-        let (Some(a), Some(b)) = (left.position(l), right.position(r)) else {
+        let (Some(a), Some(b)) = (mine.get(&l), theirs.get(&r)) else {
             return 0;
         };
-        let b = guess.apply(b);
+        let b = guess.apply(*b);
         let d = (a.0 - (b.0 - from.0 + to.0)).hypot(a.1 - (b.1 - from.1 + to.1));
         // Bounded, so 128 of them always add up.
         (d / unit * 100.).round().min(1e12) as u64
@@ -207,7 +216,8 @@ pub(super) fn constitution(
         cost((left, i), (right, j), guess, unit),
     );
     *work = work.saturating_sub(outcome.work);
-    if outcome.kept == a.bonds && a.bonds == b.bonds {
+    let bonds = a.graph.edges.len();
+    if outcome.bonds as usize == bonds && bonds == b.graph.edges.len() {
         outcome.pairs
     } else {
         Vec::new()
@@ -230,14 +240,21 @@ pub(super) fn matches(
     if open_l.len() > MOLECULES || open_r.len() > MOLECULES {
         return Vec::new();
     }
-    let mine: Vec<Molecule> = open_l
+    // One the mapper cannot read would be a rival of unknown worth to all.
+    let Some(mine) = open_l
         .iter()
-        .filter_map(|i| Molecule::new(left, *i))
-        .collect();
-    let theirs: Vec<Molecule> = open_r
+        .map(|i| Molecule::new(left, *i))
+        .collect::<Option<Vec<_>>>()
+    else {
+        return Vec::new();
+    };
+    let Some(theirs) = open_r
         .iter()
-        .filter_map(|j| Molecule::new(right, *j))
-        .collect();
+        .map(|j| Molecule::new(right, *j))
+        .collect::<Option<Vec<_>>>()
+    else {
+        return Vec::new();
+    };
     let mut candidates = Vec::new();
     for a in &mine {
         for b in &theirs {
