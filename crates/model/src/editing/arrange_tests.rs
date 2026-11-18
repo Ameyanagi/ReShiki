@@ -677,3 +677,29 @@ fn distributing_part_of_a_reaction_moves_only_the_selection() {
         }
     }
 }
+
+/// A molecule grouped with its caption, or with a `+`, is spaced as one
+/// object: the group keeps its shape and the reaction's signs are spaced as
+/// plain objects.
+#[test]
+fn distributing_a_reaction_keeps_its_groups_together() {
+    for members in [vec![1, 2, 3, 4, 15], vec![5, 6, 7, 16]] {
+        let mut doc = esterification();
+        let id = doc.next_id();
+        doc.groups.push(Group {
+            id,
+            members,
+            integral: false,
+        });
+        let all = doc.all_ids();
+        let before = doc.clone();
+        arrange(&mut doc, &all, Arrange::DistributeHorizontal);
+        assert_ne!(doc, before);
+        // The same spacing a drawing without reaction roles gets.
+        let mut plain = before.clone();
+        plain.reactions.clear();
+        arrange(&mut plain, &all, Arrange::DistributeHorizontal);
+        plain.reactions = doc.reactions.clone();
+        assert_eq!(doc, plain);
+    }
+}
