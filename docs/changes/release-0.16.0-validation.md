@@ -27,7 +27,9 @@ molecules with a reaction role), at `40d75765`, and
 [PR #1242](https://github.com/Ameyanagi/ReShiki/pull/1242) (Intel macOS disk
 image size and build time limit, no user-facing change), at `fabd0682`, and
 [PR #1245](https://github.com/Ameyanagi/ReShiki/pull/1245) (Compare zoom,
-outline and SMILES wrapping), at `90a50b3a`.
+outline and SMILES wrapping), at `90a50b3a`, and
+[PR #1246](https://github.com/Ameyanagi/ReShiki/pull/1246) (**Keep as CDXML**
+lists what the file loses), at `ba34c8d8`.
 
 `VERSION` is 39 in `crates/model/src/document.rs`. `Document::file_version`
 saves each drawing at the version of the newest feature it uses: 39 for a

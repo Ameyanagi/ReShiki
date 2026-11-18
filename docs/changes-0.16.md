@@ -351,7 +351,11 @@ changes in this release are by @Ameyanagi.
   asks once whether to **Keep as MOL** (or CDXML, CDX) or **Save as
   ReShiki**. **Save as…** lists **ReShiki (.rsk)**, **ChemDraw (.cdxml)**,
   **ChemDraw (.cdx)** and **MOL**; the browser still saves `.rsk` only
-  ([#1205](https://github.com/Ameyanagi/ReShiki/pull/1205)).
+  ([#1205](https://github.com/Ameyanagi/ReShiki/pull/1205)). For a ChemDraw
+  file, that first **Save** lists what **Keep as CDXML** (or **Keep as CDX**)
+  loses from the file, such as "4 reaction schemes and 12 steps" or extra
+  pages. **Save as ReShiki** stays the default and leaves the file unchanged
+  ([#1246](https://github.com/Ameyanagi/ReShiki/pull/1246)).
 - **Open** reads SD files (`.sdf`): the records' structures open side by side
   in one unsaved drawing named after the file, and the status says how many
   were left out when they do not all fit. **Save** keeps it as a `.rsk` and
