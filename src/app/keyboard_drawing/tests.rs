@@ -1585,7 +1585,7 @@ fn keys_edit_reaction_participants() {
             }
         }
     }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
     // Most of these edits add atoms; a run that refuses them all proves nothing.
     assert!(grown > 400, "{grown} edits added atoms");
-    assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
