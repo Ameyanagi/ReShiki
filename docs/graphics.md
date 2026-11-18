@@ -128,7 +128,8 @@ endpoints, attachments and arrowheads stay in place.
    between the contents. Each column between vertical dividers takes its own
    title. Type a position in percent to move a divider; **×** removes it.
 5. **Rounded** or **Square** sets the corners (a rounded panel's radius is
-   under **Graphic style**) and **Outline** turns the border on or off. Fill and outline colors and dashes are under **Graphic
+   **Corner (pt)** under **Graphic style**) and **Outline** turns the border
+   on or off. Fill and outline colors and dashes are under **Graphic
    style**. **Fit to contents** refits the panel around what it is grouped with.
 
 Each change is one Undo step. Panels are artwork: reaction detection, atom
