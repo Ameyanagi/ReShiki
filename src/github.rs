@@ -6,6 +6,7 @@ use std::time::Duration;
 
 pub mod api;
 pub mod auth;
+mod cache;
 pub mod client;
 pub mod config;
 pub mod credentials;

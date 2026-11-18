@@ -258,6 +258,7 @@ explains how the crates and modules fit together.
 - `src/github.rs`: Drawings kept in the user's GitHub repositories, through GitHub's REST API.
 - `src/github/api.rs`: GitHub's REST API, one function per call.
 - `src/github/auth.rs`: Sign-in with a device code, and token refresh.
+- `src/github/cache.rs`: GitHub's replies kept on disk between runs, one folder per account.
 - `src/github/client.rs`: Requests to GitHub's API, signed in or, for public repositories, not
 - `src/github/config.rs`: Which GitHub App this build signs in to, and where GitHub is.
 - `src/github/credentials.rs`: The GitHub sign-in, kept in the operating system's credential store and nowhere else

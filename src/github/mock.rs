@@ -204,6 +204,8 @@ pub struct Model {
     /// Requests being answered now, and the most there ever were at once.
     busy: usize,
     pub most_busy: usize,
+    /// GETs answered 304: unchanged since the ETag they carried.
+    pub unchanged: usize,
 }
 
 /// Someone else's push to `file` that lands just before the next
@@ -868,11 +870,25 @@ async fn serve(mut stream: TcpStream, model: Arc<Mutex<Model>>, base: String) {
             body,
         };
     };
+    let asked = (request.method == "GET").then(|| request.headers.get("if-none-match").cloned());
     let (reply, delay) = {
         let mut model = model.lock().unwrap();
         model.busy += 1;
         model.most_busy = model.most_busy.max(model.busy);
-        (respond(&mut model, &base, request), model.delay)
+        let mut reply = respond(&mut model, &base, request);
+        // As GitHub does: a GET's reply carries an ETag, and one asked with
+        // that ETag is answered 304 with no body.
+        if let Some(asked) = asked
+            && reply.status == 200
+        {
+            let etag = format!("\"{}\"", sha(&reply.body));
+            if asked.as_ref() == Some(&etag) {
+                model.unchanged += 1;
+                (reply.status, reply.body) = (304, Vec::new());
+            }
+            reply.headers.push(("ETag", etag));
+        }
+        (reply, model.delay)
     };
     tokio::time::sleep(delay).await;
     model.lock().unwrap().busy -= 1;
