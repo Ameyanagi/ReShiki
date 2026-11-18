@@ -30,10 +30,36 @@ fn regular_ring_rejects_full_valence_atoms_and_shared_edge_endpoints() {
             let id = doc.add_atom("C", Point::new(42. * angle.cos(), 42. * angle.sin()));
             doc.add_bond(center, id, 1, "plain");
         }
+        let points = if degree == 4 {
+            vec![Point::default(), midpoint(&doc)]
+        } else {
+            vec![Point::default()]
+        };
         for size in 3..=8 {
-            reject_unchanged(&doc, Point::default(), size, None);
-            if degree == 4 {
-                reject_unchanged(&doc, midpoint(&doc), size, None);
+            for &point in &points {
+                // A hexagon between substituents 120° apart, or a square between
+                // ones 90° apart, lands its corners on two of them and shares
+                // them and their bonds, so the full atom gains no bond.
+                if (degree, size) != (3, 6) && (degree, size) != (4, 4) {
+                    reject_unchanged(&doc, point, size, None);
+                    continue;
+                }
+                let mut result = doc.clone();
+                let ring =
+                    editing::ring_oriented(&mut result, point, size, false, 5., None).unwrap();
+                // The ring runs through the full atom and two of its substituents.
+                let size = size as usize;
+                assert_eq!(ring.len(), size);
+                assert!(ring.contains(&center));
+                assert_eq!(result.atoms.len(), doc.atoms.len() + size - 3);
+                assert_eq!(result.bonds.len(), doc.bonds.len() + size - 2);
+                assert_eq!(&result.bonds[..doc.bonds.len()], doc.bonds.as_slice());
+                let bonds = result.bonds.iter();
+                assert_eq!(
+                    bonds.filter(|b| b.a == center || b.b == center).count(),
+                    degree
+                );
+                reshiki::chemistry::document::prepare(&result).unwrap();
             }
         }
     }
