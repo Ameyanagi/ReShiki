@@ -829,6 +829,7 @@ fn a_structure_file_opened_beside_a_drawing_is_imported_into_its_new_tab() {
         Ok(super::super::files::Prepared::Import {
             format: "mol",
             contents: String::new(),
+            loss: Default::default(),
         }),
     ));
     assert!(app.update(Message::FilePrepared(opened)).units() > 0);
