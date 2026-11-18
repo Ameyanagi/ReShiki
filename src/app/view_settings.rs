@@ -78,22 +78,28 @@ impl App {
         self.save_preference(super::settings_page::Section::Drawing, "smart guides");
     }
     fn set_two_decimal_weight(&mut self, enabled: bool) {
+        use reshiki::linked_properties::Property;
         self.appearance.two_decimal_weight = enabled;
-        // Mol. Wt. captions in every tab change at once, in one Undo step each.
-        // During a preview or a text draft they change with the next edit.
+        // Mol. Wt. captions in every tab change at once, in one Undo step each,
+        // except during a preview or a text draft. Other edits leave a
+        // caption's precision alone, so an imported caption keeps its text.
         // Syncing a selected caption's text box leaves the inspector as shown.
         let inspector = (self.inspector_open, self.inspector_tab);
         self.each_tab(|app| {
             let tab = &app.tab;
             if !tab.busy
                 && !tab.drawing_edit_active()
-                && tab
-                    .doc
-                    .property_captions
-                    .iter()
-                    .any(|link| link.two_decimal_weight != enabled)
+                && tab.doc.property_captions.iter().any(|link| {
+                    link.properties.contains(&Property::Weight)
+                        && link.two_decimal_weight != enabled
+                })
             {
                 let before = app.tab.doc.clone();
+                for link in &mut app.tab.doc.property_captions {
+                    if link.properties.contains(&Property::Weight) {
+                        link.two_decimal_weight = enabled;
+                    }
+                }
                 app.changed(before);
                 app.sync_typography();
             }

@@ -329,17 +329,23 @@ impl CdxmlScene {
         // molecule, so text over several molecules, or a second caption on
         // one, stays plain text with its ChemDraw values.
         let mut claimed = HashSet::new();
+        // A link over part of a molecule covers all of it, so the first edit
+        // elsewhere does not recalculate the text.
         let links: Vec<_> = self
             .base
             .property_captions
             .into_iter()
-            .filter(|link| {
+            .filter_map(|mut link| {
                 let whole = link
                     .atoms
                     .first()
                     .map_or(vec![], |id| crate::molecule_names::component(document, *id));
-                link.atoms.iter().all(|id| whole.contains(id))
-                    && whole.first().is_some_and(|first| claimed.insert(*first))
+                (link.atoms.iter().all(|id| whole.contains(id))
+                    && whole.first().is_some_and(|first| claimed.insert(*first)))
+                .then(|| {
+                    link.atoms = whole;
+                    link
+                })
             })
             .collect();
         // Source captions and positions stay authoritative during import.
@@ -349,7 +355,7 @@ impl CdxmlScene {
             if let Some(caption) = document
                 .annotations
                 .iter()
-                .find(|a| a.id == link.annotation)
+                .find(|a| Some(a.id) == link.annotation)
             {
                 link.text = caption.text.clone();
             }
