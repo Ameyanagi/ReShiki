@@ -106,6 +106,14 @@ const STEPS: [i8; 48] = [
     -23, 24,
 ];
 
+/// The cost of a box on text, bonds or other labels, or of a leader through
+/// text.
+const BLOCKED: f32 = 1000.;
+
+/// The cost of a leader crossing a bond within half a bond length of either
+/// end, where the crossing reads as a mark on the bond.
+pub(super) const MARK: f32 = 100.;
+
 /// Space kept between a label and other text or leaders.
 const TEXT_GAP: f32 = 2.;
 
@@ -193,16 +201,17 @@ impl LongLabel {
             .count()
     }
 
-    /// The first free box from [`Self::candidates`] and its leader. With
-    /// `beside`, only a box that needs no leader, or `None`. Otherwise, when
-    /// none is free, the box that costs least.
+    /// The first free box from [`Self::candidates`], its leader and its
+    /// cost (zero when free). With `beside`, only a free box that needs no
+    /// leader, or `None`. Otherwise, when none is free, the box that costs
+    /// least.
     pub fn place(
         &self,
         obstacles: &Obstacles<'_>,
         positions: &HashMap<u64, Point>,
         doc: &Document,
         beside: bool,
-    ) -> Option<Spot> {
+    ) -> Option<(f32, Spot)> {
         let mut best: Option<(f32, Spot)> = None;
         // Beyond 1.5 bond lengths every box needs a leader.
         let max_gap = if beside { 1.5 } else { 8. } * self.bond_length;
@@ -213,7 +222,7 @@ impl LongLabel {
             }
             let hits = self.hits(center, leader, obstacles);
             if hits == 0. {
-                return Some((center, leader));
+                return Some((0., (center, leader)));
             }
             if best.as_ref().is_none_or(|(least, _)| hits < *least) {
                 best = Some((hits, (center, leader)));
@@ -222,7 +231,7 @@ impl LongLabel {
         if beside {
             return None;
         }
-        best.map(|(_, spot)| spot)
+        best
     }
 
     /// Whether the box at `center` needs a leader: it is more than 1.5 bond
@@ -272,7 +281,9 @@ impl LongLabel {
     /// What the box at `center` and its leader run into. Zero is a free
     /// spot. Otherwise the fallback weighs a bond a leader crosses as much as
     /// 2.5 bond lengths of leader; a box on anything, a box that cannot be
-    /// attributed and a leader through text or another leader come last.
+    /// attributed and a leader through text or another leader come last,
+    /// after a leader crossing a bond within half a bond length of either
+    /// end, which reads as a mark on the bond.
     fn hits(
         &self,
         center: Point,
@@ -328,7 +339,7 @@ impl LongLabel {
         let inside = usize::from(inside_hull(box_lo, box_hi, &self.hull, 2.));
         let blocked = boxes + bonds + leaders + unattributed + inside;
         let Some((start, end)) = leader else {
-            return 1000. * blocked as f32;
+            return BLOCKED * blocked as f32;
         };
         let crossed_text = obstacles
             .boxes
@@ -340,21 +351,28 @@ impl LongLabel {
                 .iter()
                 .filter(|(a, b)| segments_cross(start, end, *a, *b))
                 .count();
-        let crossed_bonds = obstacles
+        // Where the leader crosses each bond, as a distance from its nearer end.
+        let crossings: Vec<f32> = obstacles
             .bonds
             .iter()
-            .filter(|(a, b, ..)| {
-                a.distance(self.anchor) > 0.01
-                    && b.distance(self.anchor) > 0.01
-                    && segments_cross(start, end, *a, *b)
-            })
+            .filter(|(a, b, ..)| a.distance(self.anchor) > 0.01 && b.distance(self.anchor) > 0.01)
+            .filter_map(|(a, b, ..)| crossing(start, end, *a, *b))
+            .map(|t| t.min(1. - t) * start.distance(end))
+            .collect();
+        // A crossing near either end reads as a mark on the bond, not a
+        // leader passing over it.
+        let marks = crossings
+            .iter()
+            .filter(|&&d| d < 0.5 * self.bond_length)
             .count();
-        if crossed_text + crossed_bonds + blocked == 0 {
+        if crossed_text + crossings.len() + blocked == 0 {
             return 0.;
         }
-        // A leader through text or another leader is as bad as a box on it.
-        1000. * (blocked + crossed_text) as f32
-            + 10. * crossed_bonds as f32
+        // A leader through text or another leader is as bad as a box on it;
+        // a mark on a bond is better than that but worse than any crossing.
+        BLOCKED * (blocked + crossed_text) as f32
+            + MARK * marks as f32
+            + 10. * crossings.len() as f32
             + 4. * start.distance(end) / self.bond_length
     }
 }
@@ -384,10 +402,15 @@ fn exit(p: Point, ux: f32, uy: f32, lo: Point, hi: Point) -> f32 {
 
 /// Whether the segments `a`–`b` and `c`–`d` cross.
 fn segments_cross(a: Point, b: Point, c: Point, d: Point) -> bool {
+    crossing(a, b, c, d).is_some()
+}
+
+/// Where `a`–`b` crosses `c`–`d`, as a fraction of the way from `a` to `b`.
+fn crossing(a: Point, b: Point, c: Point, d: Point) -> Option<f32> {
     let side = |p: Point, q: Point, r: Point| (q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x);
     let (d1, d2) = (side(c, d, a), side(c, d, b));
     let (d3, d4) = (side(a, b, c), side(a, b, d));
-    d1 * d2 < 0. && d3 * d4 < 0.
+    (d1 * d2 < 0. && d3 * d4 < 0.).then(|| d1 / (d1 - d2))
 }
 
 #[cfg(test)]

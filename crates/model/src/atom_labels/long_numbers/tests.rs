@@ -119,7 +119,8 @@ fn assert_clear(doc: &Document, labels: usize) {
             attributed,
             "{text} is not clearly its atom's and has no leader"
         );
-        // A leader crosses no other label's text.
+        // A leader crosses no other label's text, nor any atom label but its
+        // own atom's.
         if let Some((a, b, _)) = label.leader {
             for (other, &(olo, ohi)) in boxes.iter().enumerate().filter(|(j, _)| *j != index) {
                 assert!(
@@ -127,6 +128,33 @@ fn assert_clear(doc: &Document, labels: usize) {
                     "{text}'s leader crosses {}",
                     placed[other].text
                 );
+            }
+            for atom in doc.atoms.iter().filter(|atom| atom.id != id) {
+                if let Some((olo, ohi)) = crate::scene::atom_label_bounds(atom, doc) {
+                    assert!(
+                        !segment_hits_rect(a, b, olo, ohi),
+                        "{text}'s leader crosses atom {}'s label",
+                        atom.id
+                    );
+                }
+            }
+        }
+        // A leader crosses a bond only well clear of its ends, where it
+        // would read as a mark on the bond.
+        if let Some((a, b, _)) = label.leader {
+            for bond in doc.bonds.iter().filter(|bond| bond.a != id && bond.b != id) {
+                let (c, d) = (
+                    doc.atom(bond.a).unwrap().position,
+                    doc.atom(bond.b).unwrap().position,
+                );
+                if let Some(t) = crossing(a, b, c, d) {
+                    assert!(
+                        t.min(1. - t) * a.distance(b) >= 0.5 * doc.drawing_style.bond_length_world,
+                        "{text}'s leader crosses bond {}-{} near its end",
+                        bond.a,
+                        bond.b
+                    );
+                }
             }
         }
         if let Some((a, _, width)) = label.leader {
@@ -139,6 +167,13 @@ fn assert_clear(doc: &Document, labels: usize) {
 #[test]
 fn morphine_1h_shift_labels_are_clear_and_attributable() {
     assert_clear(&morphine(), 12);
+}
+
+#[test]
+fn morphine_13c_shift_labels_are_clear_and_attributable() {
+    let shifts = [(1, 41.8), (8, 127.4), (9, 114.3), (10, 149.0), (18, 126.8)];
+    let fixture = include_bytes!("../../../../../tests/fixtures/nmr/morphine.rsk");
+    assert_clear(&labelled(fixture, &shifts, 1), 5);
 }
 
 #[test]

@@ -6,7 +6,7 @@ use crate::{
     document::{Atom, Bond, Document, Point},
     typography::{ScriptRun, TextFormat, TextSpan, TextStyle},
 };
-use long_numbers::{LongLabel, Obstacles};
+use long_numbers::{LongLabel, Obstacles, Spot};
 use serde::{Deserialize, Serialize};
 mod dl_descriptors;
 mod hints;
@@ -1523,30 +1523,36 @@ fn layout_indicators(doc: &Document, drawn: &Document) -> Vec<Indicator> {
             .collect();
         beside_order.sort_by_key(|i| room.get(*i).copied());
     }
-    let passes = [(beside_order, true), ((0..long.len()).collect(), false)];
-    let mut spots = vec![None; long.len()];
-    for (order, beside) in passes {
-        for i in order {
-            let (Some(spot), Some((label, _, _, offset, ..))) = (spots.get(i), long.get(i)) else {
+    // Place the labels in `order`, beside their atoms only with `beside`,
+    // skipping placed ones; returns those that found no box clear of text
+    // and with no mark on a bond.
+    let place = |order: &[usize],
+                 beside: bool,
+                 spots: &mut Vec<Option<Spot>>,
+                 occupied: &mut Vec<(Point, Point)>,
+                 leaders: &mut Vec<(Point, Point)>| {
+        let mut stuck = Vec::new();
+        for &i in order {
+            let (Some(None), Some((label, _, _, offset, ..))) = (spots.get(i), long.get(i)) else {
                 continue;
             };
-            if spot.is_some() {
-                continue;
-            }
             let obstacles = Obstacles {
-                boxes: &occupied,
+                boxes: occupied,
                 bonds: &segments,
                 atoms: &visible,
-                leaders: &leaders,
+                leaders,
             };
             let found = match offset {
                 Some(p) => {
                     let center = label.anchor.offset(p.x, p.y);
-                    Some((center, label.leader(center, &obstacles)))
+                    Some((0., (center, label.leader(center, &obstacles))))
                 }
                 None => label.place(&obstacles, &positions, doc, beside),
             };
-            if let Some((center, leader)) = found {
+            if let Some((cost, (center, leader))) = found {
+                if cost >= long_numbers::MARK {
+                    stuck.push(i);
+                }
                 occupied.push(label.bounds(center, 3.));
                 leaders.extend(leader);
                 if let Some(spot) = spots.get_mut(i) {
@@ -1554,7 +1560,36 @@ fn layout_indicators(doc: &Document, drawn: &Document) -> Vec<Indicator> {
                 }
             }
         }
+        stuck
+    };
+    let mut spots = vec![None; long.len()];
+    place(&beside_order, true, &mut spots, &mut occupied, &mut leaders);
+    // The rest in order; a label left without a free box goes first on the
+    // next try, as long as that helps.
+    let mut order: Vec<_> = (0..long.len()).collect();
+    let mut best: Option<(usize, Vec<Option<Spot>>)> = None;
+    for _ in 0..long.len().min(8) {
+        let mut tried = spots.clone();
+        let stuck = place(
+            &order,
+            false,
+            &mut tried,
+            &mut occupied.clone(),
+            &mut leaders.clone(),
+        );
+        let first = stuck.first().copied();
+        if best.as_ref().is_none_or(|(least, _)| stuck.len() < *least) {
+            best = Some((stuck.len(), tried));
+        }
+        match first {
+            Some(i) if order.first() != Some(&i) => {
+                order.retain(|&j| j != i);
+                order.insert(0, i);
+            }
+            _ => break,
+        }
     }
+    let spots = best.map_or(spots, |(_, tried)| tried);
     for ((label, owner, text, _, style, roman_parentheses), spot) in long.into_iter().zip(spots) {
         let (center, leader) = spot.unwrap_or((label.anchor, None));
         let (width, height) = label.size;
