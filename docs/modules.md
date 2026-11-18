@@ -662,7 +662,7 @@ explains how the crates and modules fit together.
 - `crates/model/src/common_groups.rs`: Additional complete groups, built from the established endpoint replacement.
 - `crates/model/src/compare.rs`: Two versions of a drawing compared as chemistry and as layout, for History's Compare and the changed-on-GitHub dialog.
 - `crates/model/src/compare/chemistry.rs`: One molecule as chemistry, for comparing
-- `crates/model/src/compare/fit.rs`: The proper 2D rigid fit (Kabsch)
+- `crates/model/src/compare/fit.rs`: The 2D fit (Kabsch) that best carries one set of points onto another, with what is left over
 - `crates/model/src/crossings.rs`: Drawing depth at crossings; never changes chemical connectivity.
 - `crates/model/src/crossings/depth.rs`: Resolve crossings at their actual XYZ intersection, with explicit layers taking precedence over automatic depth.
 - `crates/model/src/crossings/ring_strokes.rs`: Crossing clearance for cubic aromatic circles and partial ring curves.

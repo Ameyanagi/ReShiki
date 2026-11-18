@@ -501,7 +501,7 @@ fn a_flipped_molecule_reads_flipped_and_keeps_its_configuration() {
     assert_eq!(
         titles[..2],
         [
-            "Mirror image: every stereocentre inverted",
+            "Mirror image: every stereocenter inverted",
             "Molecule flipped left–right"
         ]
     );
@@ -562,6 +562,6 @@ fn parts_read_with_their_atom_numbers() {
     );
     assert_eq!(
         parts_title(&[part(PartKind::Inverted, "", &[])]),
-        "Stereocentre inverted"
+        "Stereocenter inverted"
     );
 }

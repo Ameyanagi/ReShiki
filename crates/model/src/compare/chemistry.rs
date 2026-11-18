@@ -348,7 +348,7 @@ fn carried(
         .collect::<Option<_>>()?;
     let odd = (0..ids.len())
         .flat_map(|x| (x + 1..ids.len()).map(move |y| (x, y)))
-        .filter(|&(x, y)| ids[x] > ids[y])
+        .filter(|&(x, y)| ids.get(x) > ids.get(y))
         .count()
         % 2
         == 1;
@@ -439,7 +439,7 @@ pub(super) fn edit_mapped(left: &Signature, right: &Signature, map: &HashMap<u64
         edit.changed
             .extend([a, b].iter().filter_map(|r| Some((to_left(*r)?, *r))));
     }
-    for (bond, _) in &left.bonds {
+    for bond in left.bonds.keys() {
         let Some(r) = bond_right(*bond) else {
             continue;
         };
@@ -556,17 +556,17 @@ pub(super) fn parts(
     let mut used = vec![false; added.len()];
     for (atoms, attachments, first) in &removed {
         let formula = fragment_formula(left, atoms, *first);
-        let into = added.iter().enumerate().position(|(n, (_, theirs, _))| {
-            !used[n] && !attachments.is_empty() && {
+        // An added group on the same atoms takes this one's place.
+        let into = (added.iter().zip(used.iter_mut())).find(|((_, theirs, _), used)| {
+            !**used && !attachments.is_empty() && {
                 let mut theirs: Vec<u64> = theirs.iter().filter_map(in_left).collect();
                 theirs.sort_unstable();
                 theirs == *attachments
             }
         });
         let (kind, what) = match into {
-            Some(n) => {
-                used[n] = true;
-                let (atoms, _, first) = &added[n];
+            Some(((atoms, _, first), used)) => {
+                *used = true;
                 (
                     PartKind::Replaced,
                     format!("{formula} → {}", fragment_formula(right, atoms, *first)),
@@ -685,7 +685,7 @@ fn fragments(signature: &Signature, atoms: &[u64]) -> Vec<(Vec<u64>, Vec<u64>, u
         }
         group.sort_unstable();
         attachments.sort_unstable();
-        let first = attachments.first().map_or(group[0], |(_, id)| *id);
+        let first = attachments.first().map_or(*start, |(_, id)| *id);
         let mut attachments: Vec<u64> = attachments.into_iter().map(|(at, _)| at).collect();
         attachments.dedup();
         found.push((group, attachments, first));

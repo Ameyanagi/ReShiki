@@ -86,7 +86,7 @@ pub enum Detail {
         removed: String,
         changed: usize,
         stereo: bool,
-        /// Every stereocentre inverted and nothing else: the mirror image.
+        /// Every stereocenter inverted and nothing else: the mirror image.
         mirror_image: bool,
         parts: Vec<Part>,
     },
@@ -124,9 +124,9 @@ pub enum PartKind {
     Atom,
     /// A bond's order, or a double bond's geometry.
     Bond,
-    /// A stereocentre inverted.
+    /// A stereocenter inverted.
     Inverted,
-    /// A stereocentre's stereo set, cleared or otherwise changed.
+    /// A stereocenter's stereo set, cleared or otherwise changed.
     Stereo,
 }
 

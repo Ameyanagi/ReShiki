@@ -279,7 +279,7 @@ fn part_text(part: &Part) -> String {
         PartKind::Replaced | PartKind::Atom => format!("{}{}", part.what, place("at")),
         PartKind::Bond if part.at.is_empty() => format!("bond {}", part.what),
         PartKind::Bond => format!("{} {}", part.at.join("–"), part.what),
-        PartKind::Inverted if part.at.is_empty() => "stereocentre inverted".into(),
+        PartKind::Inverted if part.at.is_empty() => "stereocenter inverted".into(),
         PartKind::Inverted => format!("inverted{}", place("at")),
         PartKind::Stereo if part.at.is_empty() => "stereo changed".into(),
         PartKind::Stereo => format!("stereo changed{}", place("at")),
@@ -341,7 +341,7 @@ fn change_row(index: usize, change: &Change, left: &Document, right: &Document, 
             let title = match &change.detail {
                 Detail::Edit {
                     mirror_image: true, ..
-                } => "Mirror image: every stereocentre inverted".to_owned(),
+                } => "Mirror image: every stereocenter inverted".to_owned(),
                 Detail::Edit { parts, .. } if !parts.is_empty() => parts_title(parts),
                 Detail::Edit { stereo: true, .. } => "Stereo changed".to_owned(),
                 Detail::Edit {

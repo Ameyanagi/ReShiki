@@ -210,8 +210,8 @@ chemistry**.
   molecule whose shape changed, as Clean Up does, is **Molecule redrawn**.
 - The Flip tool swaps wedges and hashes, so a flipped chiral molecule keeps
   its configuration: **Wedges swapped; same configuration**, no chemical
-  change. Mirrored without that swap, every stereocentre is inverted, and the
-  chemical line says **Mirror image: every stereocentre inverted**.
+  change. Mirrored without that swap, every stereocenter is inverted, and the
+  chemical line says **Mirror image: every stereocenter inverted**.
 - A chemical line says what changed, with the drawing's own atom numbers
   where it has them: **OH added at C4**, **Cl → Br at C2**, **NO₂ removed**,
   **C1–C2 single → double**, **inverted at C3**, the first two then **+N
