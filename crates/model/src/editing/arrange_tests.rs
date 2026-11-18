@@ -604,3 +604,76 @@ fn a_fully_selected_collapsed_group_moves_as_one() {
         );
     }
 }
+
+/// Extents along x of the unit `id` belongs to.
+fn span(doc: &Document, id: u64) -> (f32, f32) {
+    let unit = groups(doc, &doc.all_ids())
+        .into_iter()
+        .find(|unit| unit.contains(&id))
+        .unwrap();
+    let (lo, hi) = crate::scene::selection_bounds(doc, &unit).unwrap();
+    (lo.x, hi.x)
+}
+
+/// Acetic acid (1) + (16) ethanol (5) -> ethyl acetate (8) + (20) water (14),
+/// with a caption under each molecule and a condition over the arrow.
+fn esterification() -> Document {
+    Document::from_json(include_bytes!(
+        "../../../../tests/fixtures/esterification-scheme.rsk"
+    ))
+    .unwrap()
+}
+
+/// The captions make the scheme wider than its span, so distributing it
+/// overlaps its units. Each `+` is not spaced with them: it stays between
+/// the two molecules it separates, which move apart to clear it.
+#[test]
+fn distributing_a_reaction_keeps_each_plus_between_its_molecules() {
+    let mut doc = esterification();
+    let all = doc.all_ids();
+    arrange(&mut doc, &all, Arrange::DistributeHorizontal);
+    for [left, plus, right] in [[1, 16, 5], [8, 20, 14]] {
+        let (left, plus, right) = (span(&doc, left), span(&doc, plus), span(&doc, right));
+        assert!(
+            left.1 < plus.0 && plus.1 < right.0,
+            "{left:?} {plus:?} {right:?}"
+        );
+    }
+    doc.validate().unwrap();
+}
+
+/// Distributing other objects, even with one caption or one molecule of a
+/// reaction, moves nothing that is not selected and leaves the reaction's
+/// signs as drawn, including a `+` that touches a molecule.
+#[test]
+fn distributing_part_of_a_reaction_moves_only_the_selection() {
+    let mut doc = esterification();
+    doc.annotations[1].position.x += 20.;
+    let condition = doc.annotations[3].id;
+    let ethanol = vec![5, 6, 7];
+    let notes: Vec<_> = [0., 50., 300.]
+        .into_iter()
+        .map(|x| {
+            let id = doc.next_id();
+            doc.annotations.push(Annotation {
+                id,
+                position: Point::new(x, 400.),
+                text: "note".into(),
+                format: Default::default(),
+            });
+            id
+        })
+        .collect();
+    for part in [vec![], vec![condition], ethanol] {
+        let selected = [notes.clone(), part].concat();
+        let mut spaced = doc.clone();
+        arrange(&mut spaced, &selected, Arrange::DistributeHorizontal);
+        assert_ne!(spaced, doc);
+        for (after, before) in spaced.atoms.iter().zip(&doc.atoms) {
+            assert!(after == before || selected.contains(&after.id));
+        }
+        for (after, before) in spaced.annotations.iter().zip(&doc.annotations) {
+            assert!(after == before || selected.contains(&after.id));
+        }
+    }
+}
