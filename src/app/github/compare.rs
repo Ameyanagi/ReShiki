@@ -160,11 +160,21 @@ pub struct Shown {
     pub(super) rows: Vec<Row>,
     pub(super) marks: Marks,
     /// Where each change is: on the left, the right where it is, and lined
-    /// up. A chemical change is its painted atoms and bonds.
-    pub(super) spots: Vec<[Option<(World, World)>; 3]>,
+    /// up.
+    pub(super) spots: Vec<[Option<Spot>; 3]>,
     /// Both sides where they are, and lined up.
     frame: (World, World),
     lined_frame: (World, World),
+}
+
+/// Where a change is on one side.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(super) struct Spot {
+    /// Outlined when selected: a chemical change's painted atoms and bonds,
+    /// anything else its objects.
+    pub(super) outline: (World, World),
+    /// Zoomed to: its objects, such as the whole molecule, around it.
+    pub(super) context: (World, World),
 }
 
 /// The marks on the left side, the right side where it is, and lined up.
@@ -495,7 +505,7 @@ fn marks(
     doc: &Document,
     report: &Report,
     side: impl Fn(&Change) -> [&reshiki::compare::Marks; 2],
-) -> (Vec<CompareMark>, Vec<Option<(World, World)>>) {
+) -> (Vec<CompareMark>, Vec<Option<Spot>>) {
     // A collapsed label's hidden atoms are marked on the label.
     let shown_at: HashMap<u64, u64> = doc
         .abbreviations
@@ -549,7 +559,16 @@ fn marks(
             .fold(None, |bounds: Option<(World, World)>, p| {
                 Some(bounds.map_or((*p, *p), |bounds| union(bounds, (*p, *p))))
             });
-        spots.push(around.or(objects));
+        let outline = around.or(objects);
+        // Half a bond around it, so labels at its edge are not cut.
+        let pad = doc.drawing_style.bond_length_world / 2.;
+        spots.push(outline.map(|outline| {
+            let (lo, hi) = objects.map_or(outline, |objects| union(objects, outline));
+            Spot {
+                outline,
+                context: (lo.offset(-pad, -pad), hi.offset(pad, pad)),
+            }
+        }));
     }
     (found, spots)
 }
@@ -774,7 +793,8 @@ impl Compare {
                 .flatten()
         };
         let spots = [spot(0), spot(if lined { 2 } else { 1 })];
-        let [left_frame, right_frame] = zoomed(spots).unwrap_or([frame; 2]);
+        let [left_frame, right_frame] = zoomed(spots, frame).unwrap_or([frame; 2]);
+        let spots = spots.map(|spot| spot.map(|spot| spot.outline));
         let none: &[CompareMark] = &[];
         let preview = move |doc: &'a Document, marks: &'a [CompareMark], selected, frame| {
             crate::canvas::layered::canvas(ComparePreview {
@@ -1067,13 +1087,14 @@ fn stacks(size: Size, frame: (World, World), chrome: f32) -> bool {
     compare_zoom(stacked, frame) >= 1.1 * compare_zoom(beside, frame)
 }
 
-/// Both panes zoomed to a change: each centred where the change is there,
-/// both one size so they keep one scale. A side without it looks where the
-/// other has it.
-fn zoomed([a, b]: [Option<(World, World)>; 2]) -> Option<[(World, World); 2]> {
-    let (a, b) = (a.or(b)?, b.or(a)?);
-    let w = (a.1.x - a.0.x).max(b.1.x - b.0.x) / 2.;
-    let h = (a.1.y - a.0.y).max(b.1.y - b.0.y) / 2.;
+/// Both panes zoomed to a change in its context: each centred where the
+/// change is there, both one size so they keep one scale, and at most twice
+/// as large as `frame`, the whole drawing, shows. A side without it looks
+/// where the other has it.
+fn zoomed([a, b]: [Option<Spot>; 2], (lo, hi): (World, World)) -> Option<[(World, World); 2]> {
+    let (a, b) = (a.or(b)?.context, b.or(a)?.context);
+    let w = (a.1.x - a.0.x).max(b.1.x - b.0.x).max((hi.x - lo.x) / 2.) / 2.;
+    let h = (a.1.y - a.0.y).max(b.1.y - b.0.y).max((hi.y - lo.y) / 2.) / 2.;
     Some([a, b].map(|(lo, hi)| {
         let (x, y) = ((lo.x + hi.x) / 2., (lo.y + hi.y) / 2.);
         (World::new(x - w, y - h), World::new(x + w, y + h))
