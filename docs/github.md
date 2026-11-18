@@ -249,15 +249,15 @@ chemistry**.
 - A change to the drawing's style or settings is not painted. The compare
   lists **Style or settings changed** instead.
 - Compare matches molecules by ReShiki's own ids, then by SMILES. A molecule
-  both changed and given new ids, as after importing it again, is matched
-  by its structure when that is clear, and its chemical line says
-  **matched by structure (ids changed)**. Otherwise, such as a molecule
-  rewritten beyond half its bonds, a chain made a ring, molecules sharing
-  fewer than three bonds, two equally good candidates, or more than 32 such
-  molecules a side, it shows as removed and added. A shape flipped or scaled is told from a redraw only
-  for molecules and graphics of three points or more off one line; an arrow
-  drawn longer is redrawn. Atom numbers come from the drawing, never
-  generated.
+  both changed and given new ids, as after importing it again, is matched by
+  its structure when that is clear, and its chemical line says **matched by
+  structure (ids changed)**. Otherwise, such as a molecule rewritten beyond
+  half its bonds, a chain made a ring, molecules sharing fewer than three
+  bonds, two equally good candidates, or more than 32 such molecules a side,
+  it shows as removed and added. A shape flipped or scaled is told from a
+  redraw only for molecules and graphics of three points or more off one
+  line; an arrow drawn longer is redrawn. Atom numbers come from the
+  drawing, never generated.
 - Send sends saved files. It first saves every open drawing of that
   repository; a drawing that is not open is sent as last saved.
 - On Linux without a keyring, the sign-in lasts until ReShiki quits:
@@ -298,38 +298,38 @@ chemistry**.
   SMILES without stereo or isotopes; then by structure. Shared ids keeping
   exactly half the smaller molecule's bonds, as when a fresh import gives
   ethanol ids an ester had and one of its two bonds lines up, count only for
-  molecules nothing else matched. Text, arrows and
-  graphics match by id, then by content and place. Structure matching pairs
-  the atoms with the reaction mapper's bounded search, under Compare's own
-  rules: atoms pair by element, and a bond counts as kept only with the same
-  order and ring membership. Kept heavy-atom bonds over the bonds of either
-  molecule (the Tanimoto similarity) must be at least 0.5, with at least
-  three kept, and every ring system must pair with exactly one on the other
-  side through ring bonds kept between them. A pair must be each molecule's
-  clear best: similarities are compared in steps of 0.05, an equal rival
-  must be at least twice as far, and a rival of unknown worth that could be
-  as good leaves both unmatched: one the budget skipped or cut short, one
-  over 128 atoms, or one whose best pairing splits its ring systems. The
-  search counts work, not time (20,000 states and 10,000,000 work a pair,
+  molecules nothing else matched. Text, arrows and graphics match by id,
+  then by content and place. Structure matching pairs the atoms with the
+  reaction mapper's bounded search, under Compare's own rules: atoms pair by
+  element, and a bond counts as kept only with the same order and ring
+  membership. Kept heavy-atom bonds over the bonds of either molecule (the
+  Tanimoto similarity) must be at least 0.5, with at least three kept, and
+  every ring system must pair with exactly one on the other side through
+  ring bonds kept between them. A pair must be each molecule's clear best:
+  similarities are compared in steps of 0.05, an equal rival must be at
+  least twice as far, and a rival of unknown worth that could be as good
+  leaves both unmatched: one the budget skipped or cut short, one over 128
+  atoms, or one whose best pairing splits its ring systems. The search
+  counts work, not time (20,000 states and 10,000,000 work a pair,
   40,000,000 a comparison), so the same two drawings always give the same
-  report. Of equally good atom pairings, the nearest once the
-  two molecules are laid over each other wins, so a ring substituted again
-  is marked at the same atom on both sides; the fit leaves out matched atoms
-  whose bonds to other matched atoms changed. Each
-  matched molecule is compared as chemistry over its prepared, sanitized
-  structure, and fitted onto its old self with a proper 2D rigid fit
-  (Kabsch): within 0.01 bond lengths RMS and 0.03 at most it moved. Failing
-  that, a molecule or graphic of three points off one line is fitted
-  reflected, then scaled (by at least 1%), then both, at the same
-  tolerances; beyond that, with the same chemistry, it was redrawn. A move
-  at least two objects and three in four share is **Whole scheme moved**,
-  refitted with its reflection and scale; an object it carries within the
-  tolerances, such as a straight arrow under a scale, has no line of its
-  own. Lined up, a reflection's display is undone with the Flip tool's own
-  transform (wedges, double-bond sides, hydrogen sides and number offsets),
-  and style is compared on those lined-up values. Everything else in the
-  file is compared as a whole for **Style or settings changed**. The marks are
-  drawn as a layer over the drawings; neither drawing is changed.
+  report. Of equally good atom pairings, the nearest once the two molecules
+  are laid over each other wins, so a ring substituted again is marked at
+  the same atom on both sides; the fit leaves out matched atoms whose bonds
+  to other matched atoms changed. Each matched molecule is compared as
+  chemistry over its prepared, sanitized structure, and fitted onto its old
+  self with a proper 2D rigid fit (Kabsch): within 0.01 bond lengths RMS and
+  0.03 at most it moved. Failing that, a molecule or graphic of three points
+  off one line is fitted reflected, then scaled (by at least 1%), then both,
+  at the same tolerances; beyond that, with the same chemistry, it was
+  redrawn. A move at least two objects and three in four share is **Whole
+  scheme moved**, refitted with its reflection and scale; an object it
+  carries within the tolerances, such as a straight arrow under a scale, has
+  no line of its own. Lined up, a reflection's display is undone with the
+  Flip tool's own transform (wedges, double-bond sides, hydrogen sides and
+  number offsets), and style is compared on those lined-up values.
+  Everything else in the file is compared as a whole for **Style or settings
+  changed**. The marks are drawn as a layer over the drawings; neither
+  drawing is changed.
 - Tiles list one folder at a time, at most 200 matching the search. They
   render the file itself, the way an opened file renders (an SD file's first
   record); no preview file from the repository is parsed. A folder's names
