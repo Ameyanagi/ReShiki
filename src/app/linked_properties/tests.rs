@@ -83,7 +83,13 @@ async fn selecting_an_atom_leaves_an_imported_caption_alone() {
     use reshiki::engine::{LocalEngine, Request};
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests/fixtures/chemdraw-properties/phenol-props.cdx");
-    let Some((_, Ok(Prepared::Import { format, contents }))) = read(path).await else {
+    let Some((
+        _,
+        Ok(Prepared::Import {
+            format, contents, ..
+        }),
+    )) = read(path).await
+    else {
         panic!("phenol-props.cdx");
     };
     let opened = LocalEngine::default()
