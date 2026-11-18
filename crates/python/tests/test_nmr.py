@@ -211,7 +211,9 @@ def test_atom_numbers_round_trip_through_rdkit_atom_notes() -> None:
     molecule = reshiki.Molecule.from_smiles(ETHYL_ACETATE)
     labelled = molecule.with_labels(molecule.predict_nmr("13C"), format="both")
     rdkit = labelled.to_rdkit()
-    notes = {a.GetIdx() + 1: a.GetProp("atomNote") for a in rdkit.GetAtoms() if a.HasProp("atomNote")}
+    notes = {
+        a.GetIdx() + 1: a.GetProp("atomNote") for a in rdkit.GetAtoms() if a.HasProp("atomNote")
+    }
     assert notes == _numbers(labelled)
     with warnings.catch_warnings():
         warnings.simplefilter("error", reshiki.StructureWarning)
