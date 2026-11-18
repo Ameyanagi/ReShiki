@@ -2210,7 +2210,7 @@ pub fn primitives_with_opacity(
     out.extend(crate::models3d::primitives(raw));
     push_arrows_and_annotations(&mut out, doc);
     for graphic in graphics.iter().filter(|g| g.layer >= 0) {
-        out.extend(graphic_primitive(graphic, &doc.drawing_style.text_style()));
+        out.extend(graphic_primitive(graphic, doc));
         if halos.front.contains(&graphic.id) {
             push_label_halo(&mut out, doc, runs, opacity, &halos.above(Some(graphic.id)));
         }
@@ -2302,10 +2302,7 @@ fn paint_rear_before_front(out: &mut Vec<Primitive>, start: usize) {
     out.extend(front);
 }
 
-fn graphic_primitive(
-    g: &&crate::graphics::Graphic,
-    text_style: &crate::typography::TextStyle,
-) -> Vec<Primitive> {
+fn graphic_primitive(g: &&crate::graphics::Graphic, doc: &Document) -> Vec<Primitive> {
     if g.kind == crate::graphics::GraphicKind::Picture {
         vec![Primitive::Picture((*g).clone())]
     } else {
@@ -2334,7 +2331,10 @@ fn graphic_primitive(
                 .chain(rest.iter().map(|p| Line(*p)))
                 .chain([Close])
                 .collect();
-            Some(flat(commands, crate::graphics::shade(shade, *t)))
+            // Light on either canvas, so a shaded ball still reads as a ball:
+            // the canvas flips every color, so flip the shade first.
+            let rgb = crate::graphics::shade(shade, *t);
+            Some(flat(commands, doc.canvas_theme.color(rgb)))
         }));
         // ChemDraw paints a shadowed outline's inside with paper.
         let paper = !parts.is_empty() && bands.is_empty() && g.style.fill.is_none();
@@ -2353,7 +2353,7 @@ fn graphic_primitive(
                 style,
             }
         }));
-        if let Some(label) = g.superscript_label(text_style) {
+        if let Some(label) = g.superscript_label(&doc.drawing_style.text_style()) {
             parts.push(Primitive::Text {
                 position: label.position,
                 text: label.text.into(),
@@ -2375,7 +2375,7 @@ fn push_underlays(
         graphics
             .iter()
             .filter(|g| g.layer < 0)
-            .flat_map(|g| graphic_primitive(g, &doc.drawing_style.text_style())),
+            .flat_map(|g| graphic_primitive(g, doc)),
     );
     for fill in &doc.ring_fills {
         out.extend(opacity.owned_parts(

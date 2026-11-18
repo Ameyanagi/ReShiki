@@ -435,3 +435,40 @@ fn a_small_wavy_outline_still_encloses_its_area() {
         / 2.;
     assert!(area > w * h * 0.5, "{area} of {}", w * h);
 }
+
+#[test]
+fn shading_keeps_its_light_highlight_on_the_dark_canvas() {
+    use crate::{document::Document, scene::Primitive};
+    let mut doc = Document {
+        graphics: vec![shape(
+            GraphicKind::Ellipse,
+            Effects {
+                shaded: true,
+                shadow_pt: None,
+            },
+        )],
+        ..Default::default()
+    };
+    let shown = |doc: &Document| -> Vec<[u8; 3]> {
+        crate::scene::primitives(doc)
+            .iter()
+            .filter_map(|p| match p {
+                Primitive::Path {
+                    style,
+                    filled: true,
+                    ..
+                } => style.fill.map(|c| doc.canvas_theme.color(c.rgb())),
+                _ => None,
+            })
+            .collect()
+    };
+    let light = shown(&doc);
+    doc.canvas_theme = crate::canvas_theme::CanvasTheme::Dark;
+    assert!(doc.canvas_theme.is_dark());
+    // The bands look the same on both canvases: white at the highlight.
+    assert_eq!(shown(&doc), light);
+    assert_eq!(
+        light.last(),
+        Some(&shade([0; 3], 0.5 / (light.len() as f32)))
+    );
+}

@@ -25,7 +25,8 @@ Select a rectangle, rounded rectangle, ellipse or closed path. In
 **Properties**, below the fill color:
 
 - **Shaded** fills the shape from white at the upper left to its fill color at
-  the far edge, as ChemDraw's Shaded style does. Rectangles shade toward their
+  the far edge, as ChemDraw's Shaded style does. The highlight stays light on
+  the dark canvas too, so a shaded ball still looks like a ball. Rectangles shade toward their
   right and bottom edges; ellipses and paths shade around a highlight. A shape
   without a fill takes its stroke color.
 - **Shadow** adds a grey drop shadow 4 pt below and to the right. A tilted
