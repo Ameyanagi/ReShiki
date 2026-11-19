@@ -227,11 +227,13 @@ fn rewrite(xml: &str) -> Result<(String, Option<String>, usize)> {
             let ends = ["B", "E"].map(|key| node.attr(key).map(str::to_owned));
             pass.bonded.extend(ends.into_iter().flatten());
         }
+        // The reader may read a curve twice, inside a group of curves.
         if node.tag == "curve" {
-            let count = node
-                .attr("CurvePoints")
-                .map_or(0, |text| text.split_whitespace().count());
-            curve_points += count / 2;
+            let count = |key: &str| {
+                node.attr(key)
+                    .map_or(0, |text| text.split_whitespace().count())
+            };
+            curve_points += 2 * (count("CurvePoints") / 2 + count("CurvePoints3D") / 3);
         }
     }
     pass.next_id = pass
@@ -801,7 +803,9 @@ impl Pass {
     /// before it. A lone atom moves so its label covers the same place.
     fn hydrogens_first(&mut self, index: usize) -> Result<()> {
         let node = self.node(index)?;
+        // Not an atom with a 3D position, which would have to move as well.
         if node.attr("id").is_none_or(|id| self.bonded.contains(id))
+            || node.attr("xyz").is_some()
             || !super::labels::hydrogens_first(&self.tree, node)?
         {
             return Ok(());
@@ -821,16 +825,11 @@ impl Pass {
         else {
             return Ok(());
         };
-        // The 3D position moves with it, so both still name one place.
-        let shift = right - (x - left) - x;
-        if let Some(mut xyz) = node.attr("xyz").and_then(numbers)
-            && let Some(first) = xyz.first_mut()
-        {
-            *first += shift;
-            let text = xyz.iter().map(|v| spell(*v)).collect::<Vec<_>>().join(" ");
-            self.set(index, "xyz", text)?;
-        }
-        self.set(index, "p", format!("{} {}", spell(x + shift), spell(y)))
+        self.set(
+            index,
+            "p",
+            format!("{} {}", spell(right - (x - left)), spell(y)),
+        )
     }
     /// ChemDraw's alpha makes the object see-through; ReShiki draws it opaque.
     fn fade(&mut self, index: usize) -> Result<()> {
