@@ -77,9 +77,14 @@ impl App {
                 self.sync_graphics();
             }
             Action::Border(border) => self.edit_panels(|panel| panel.border = border),
-            Action::Fill(fill) => self.restyle_panel(|style| style.fill = fill),
+            // As Graphic style changes them, so No fill also drops a gradient.
+            Action::Fill(fill) => self
+                .restyle_panel(|style| reshiki::graphics::GraphicChange::Fill(fill).apply(style)),
             Action::Shadow(on) => self.restyle_panel(|style| {
-                style.effects.shadow_pt = on.then_some(reshiki::graphics::Effects::SHADOW_PT);
+                reshiki::graphics::GraphicChange::Shadow(
+                    on.then_some(reshiki::graphics::Effects::SHADOW_PT),
+                )
+                .apply(style)
             }),
             Action::AddDivider(vertical) => {
                 let doc = self.tab.doc.clone();
@@ -598,7 +603,7 @@ impl App {
                 tooltip::Position::Top,
             ))
             .push(
-                text("Enter applies titles and positions. Line and gradient are under Graphic style.")
+                text("Enter applies titles and positions.")
                     .size(11)
                     .style(muted_text),
             )

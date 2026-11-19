@@ -182,4 +182,15 @@ fn wrap_opens_the_panel_card_whose_fill_and_shadow_change_only_the_panel() {
     let _ = app.update(Message::Undo);
     let _ = app.update(Message::Undo);
     assert_eq!(app.tab.doc, wrapped, "each is one Undo step");
+    // No fill also drops a gradient, which needs a fill.
+    let _ = app.update(Message::Graphics(crate::app::graphics::Action::Style(
+        reshiki::graphics::GraphicChange::Gradient(Some(reshiki::graphics::Gradient {
+            from: reshiki::graphics::Gradient::PAPER,
+            kind: reshiki::graphics::GradientKind::Radial,
+        })),
+    )));
+    let _ = app.update(Message::Figure(Action::Fill(None)));
+    assert!(!app.error, "{}", app.status);
+    assert_eq!(shape(&app, id).fill, None);
+    assert_eq!(shape(&app, id).effects.gradient, None);
 }
