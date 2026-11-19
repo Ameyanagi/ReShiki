@@ -383,6 +383,8 @@ impl MoleculeCanvas<'_> {
         if self.tool.selects() && hit.is_empty() {
             hit = reshiki::editing::ring_at(self.doc, p).unwrap_or_default();
         }
+        // Text in a shape drags its shape, and the shape's group.
+        hit = reshiki::shape_text::with_holders(self.doc, &hit);
         // What was clicked before groups widen it: a part picked out of its
         // group with Option/Alt drags on its own.
         let picked = hit.clone();

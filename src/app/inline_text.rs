@@ -147,12 +147,13 @@ impl App {
                 }
                 if let Some(shape) = doc.graphics.iter_mut().find(|g| Some(g.id) == state.shape) {
                     shape.text = Some(id);
-                    // Centred as it is drawn, also in a save made mid-draft.
-                    reshiki::shape_text::reconcile(&mut doc);
                 }
             }
             (None, true) => {}
         }
+        // Text in a shape is centred as it is drawn, also in a save made
+        // mid-draft.
+        reshiki::shape_text::reconcile(&mut doc);
         if validate {
             doc.validate()?;
         }

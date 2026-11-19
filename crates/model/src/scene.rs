@@ -2259,12 +2259,20 @@ pub fn primitives_with_opacity(
     out.extend(cells.above);
     out.extend(crate::models3d::primitives(raw));
     push_arrows_and_annotations(&mut out, doc);
+    let held: std::collections::HashMap<_, _> = doc
+        .graphics
+        .iter()
+        .filter(|g| g.layer >= 0 && g.text.is_some())
+        .filter_map(|g| {
+            Some((
+                g.text?,
+                doc.annotations.iter().find(|a| Some(a.id) == g.text)?,
+            ))
+        })
+        .collect();
     for graphic in graphics.iter().filter(|g| g.layer >= 0) {
         out.extend(graphic_primitive(graphic, doc, shaded));
-        if let Some(text) = graphic
-            .text
-            .and_then(|t| doc.annotations.iter().find(|a| a.id == t))
-        {
+        if let Some(text) = graphic.text.and_then(|t| held.get(&t)) {
             push_annotation(&mut out, text);
         }
         if halos.front.contains(&graphic.id) {

@@ -1001,6 +1001,11 @@ pub fn groups(doc: &Document, ids: &[u64]) -> Vec<Vec<u64>> {
         .arrow_labels
         .iter()
         .map(|l| vec![l.arrow, l.annotation])
+        .chain(
+            doc.graphics
+                .iter()
+                .filter_map(|g| Some(vec![g.id, g.text?])),
+        )
         .collect();
     let memberships: Vec<&[u64]> = attachments
         .iter()

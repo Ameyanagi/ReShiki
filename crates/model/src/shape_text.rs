@@ -18,7 +18,7 @@ pub fn export_notice(doc: &Document) -> Option<String> {
 
 /// Rectangles, rounded rectangles, ellipses and circles that are plain shapes.
 pub fn supports(g: &Graphic) -> bool {
-    g.kind.closed() && g.panel.is_none() && g.cycle.is_none() && g.frame_determinant().abs() > 1e-6
+    g.kind.closed() && g.panel.is_none() && g.cycle.is_none()
 }
 
 /// The shape's centre and the width its text wraps to, in world units: the
@@ -28,8 +28,12 @@ pub fn inner(g: &Graphic) -> (Point, f32) {
         (g.axis_x.x + g.axis_y.x) / 2.,
         (g.axis_x.y + g.axis_y.y) / 2.,
     );
-    // One world unit along x, in the shape's unit-square frame.
+    // One world unit along x, in the shape's unit-square frame. A shape
+    // tilted edge-on has no width.
     let d = g.frame_determinant();
+    if d.abs() <= 1e-6 {
+        return (centre, 0.);
+    }
     let v = Point::new(g.axis_y.y / d, -g.axis_x.y / d);
     let width = if g.kind == crate::graphics::GraphicKind::Ellipse {
         // The square inscribed in the ellipse's horizontal chord.
