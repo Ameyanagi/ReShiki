@@ -34,14 +34,36 @@ fn pending_proposal(app: &mut App) -> (u64, u64, Arc<Proposal>) {
 
 fn live_review(app: &App) -> (bool, Option<Document>) {
     let proposal = app.tab.mapping.proposal.as_ref().unwrap();
-    let document = proposal.apply(&app.tab.doc, true).ok().map(|mut doc| {
-        doc.atom_labels.maps = true;
-        for atom in &mut doc.atoms {
-            atom.display.mapping.show = Some(true);
-        }
-        doc
-    });
-    (proposal.current(&app.tab.doc), document)
+    let fresh = Preview::new((0, 0), proposal, &app.tab.doc);
+    (fresh.current, fresh.document)
+}
+
+#[test]
+fn review_thumbnail_shows_only_the_reaction_under_review() {
+    let mut app = app();
+    // A second reaction far away stays out of the thumbnail.
+    let r = app.tab.doc.add_atom("N", Point::new(0., 900.));
+    let p = app.tab.doc.add_atom("N", Point::new(250., 900.));
+    let other = app.tab.doc.next_id();
+    app.tab.doc.arrows.push(Arrow::new(
+        other,
+        Point::new(80., 900.),
+        Point::new(180., 900.),
+        Default::default(),
+        Default::default(),
+    ));
+    reactions::assign(&mut app.tab.doc, other, &[r], Role::Reactant).unwrap();
+    reactions::assign(&mut app.tab.doc, other, &[p], Role::Product).unwrap();
+    let (epoch, serial, proposal) = pending_proposal(&mut app);
+    let _ = app.update(Message::Mapping(Action::Ready(epoch, serial, Ok(proposal))));
+    let thumbnail = review(&app).1.unwrap();
+    let mut atoms: Vec<_> = thumbnail.atoms.iter().map(|a| a.id).collect();
+    atoms.sort_unstable();
+    assert_eq!(atoms, vec![1, 2]);
+    assert_eq!(
+        thumbnail.arrows.iter().map(|a| a.id).collect::<Vec<_>>(),
+        vec![3]
+    );
 }
 
 fn review(app: &App) -> (bool, Option<Document>) {

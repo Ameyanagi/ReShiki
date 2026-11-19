@@ -145,6 +145,19 @@ pub(super) fn draw_cues(
     }
 }
 
+/// The reaction's condition texts. A "+" between participants and the colour
+/// legend are annotations too, but outlining them with the arrow would cover
+/// the reactants.
+fn conditions(doc: &Document, reaction: &Reaction) -> Vec<u64> {
+    let legend = reaction.colors.as_ref().and_then(|c| c.legend);
+    doc.annotations
+        .iter()
+        .filter(|a| reaction.annotations.contains(&a.id))
+        .filter(|a| a.text.trim() != "+" && Some(a.id) != legend)
+        .map(|a| a.id)
+        .collect()
+}
+
 /// Outline what takes part in a reaction, with each part's role.
 pub(super) fn draw_preview(
     doc: &Document,
@@ -174,11 +187,12 @@ pub(super) fn draw_preview(
         }
     }
     let arrow = doc.arrows.iter().find(|a| a.id == reaction.arrow);
-    if let Some(area) = bounds(doc, &index, &[], arrow, &reaction.annotations) {
+    let conditions = conditions(doc, reaction);
+    if let Some(area) = bounds(doc, &index, &[], arrow, &conditions) {
         let (lo, hi) = outline(frame, camera, paper, area, overlay::ACCENT, 1.6);
         caption(
             frame,
-            if reaction.annotations.is_empty() {
+            if conditions.is_empty() {
                 "arrow"
             } else {
                 "conditions"
@@ -187,5 +201,27 @@ pub(super) fn draw_preview(
             overlay::ACCENT_STRONG,
             true,
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use reshiki::document::Annotation;
+
+    #[test]
+    fn a_plus_sign_is_not_a_condition() {
+        let mut doc = Document::default();
+        for (id, text) in [(1, " + "), (2, "heat")] {
+            doc.annotations.push(Annotation {
+                id,
+                position: World::new(0., 0.),
+                text: text.into(),
+                format: Default::default(),
+            });
+        }
+        let mut reaction = Reaction::new(9);
+        reaction.annotations = vec![1, 2];
+        assert_eq!(conditions(&doc, &reaction), vec![2]);
     }
 }

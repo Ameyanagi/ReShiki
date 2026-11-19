@@ -9,6 +9,7 @@ use iced::{Alignment, Element, Length, Task};
 use reshiki::{
     document::Document,
     reaction_mapping::{self as mapping, Budget, Proposal},
+    reactions::Role,
 };
 use std::{borrow::Cow, sync::Arc};
 
@@ -51,7 +52,26 @@ impl Preview {
             for atom in &mut document.atoms {
                 atom.display.mapping.show = Some(true);
             }
-            document
+            // Only the reaction under review, so the thumbnail shows it large:
+            // its molecules, and its arrow with the arrow's labels.
+            let atoms: Vec<u64> = proposal.pairs.iter().flat_map(|(a, b)| [*a, *b]).collect();
+            let mut ids: Vec<u64> = reshiki::reactions::molecules(&document, &atoms)
+                .into_iter()
+                .flatten()
+                .collect();
+            ids.extend(
+                document
+                    .reactions
+                    .iter()
+                    .filter(|r| {
+                        Role::ALL
+                            .iter()
+                            .flat_map(|role| r.participants(*role))
+                            .any(|p| p.atoms.iter().any(|id| atoms.contains(id)))
+                    })
+                    .map(|r| r.arrow),
+            );
+            reshiki::editing::selection(&document, &ids)
         });
         Self {
             key,
@@ -353,11 +373,12 @@ impl App {
                     && self.inspector_open
                     && self.inspector_tab == InspectorTab::Reactions
                 {
-                    // The proposal ends the section; keep Apply and Discard in view.
-                    return iced::widget::operation::snap_to(
-                        "inspector-content",
-                        iced::widget::operation::RelativeOffset::END,
-                    );
+                    // Apply and Discard follow the summary and preview, so
+                    // revealing Apply shows all three; the pair list follows.
+                    return iced::advanced::widget::operate(
+                        reshiki::accessibility::FocusControl::reveal("mapping.apply"),
+                    )
+                    .discard();
                 }
             }
             Ok(_) => {
@@ -654,22 +675,10 @@ impl App {
                     .height(120),
             );
         }
-        let atom = |id: u64| {
-            let element = self.tab.doc.atom(id).map_or("?", |a| a.element.as_str());
-            format!("{element} #{id}")
-        };
-        for (index, (a, b)) in proposal.pairs.iter().enumerate() {
-            let number = proposal.number(*a).unwrap_or_default();
-            let label = format!("Map {number} · {} → {}", atom(*a), atom(*b));
-            body = body.push(
-                accessible_command(format!("mapping.review.{index}"), label.clone(), label)
-                    .on_press_maybe(current.then_some(Message::Mapping(Action::ReviewPair(index)))),
-            );
-        }
         if !current {
             body = body.push(text("Drawing changed · Run Auto-map again").size(11));
         }
-        body.push(
+        body = body.push(
             row![
                 hover_hint(
                     reshiki::accessibility::button(
@@ -688,7 +697,20 @@ impl App {
             ]
             .spacing(4)
             .align_y(Alignment::Center),
-        )
+        );
+        let atom = |id: u64| {
+            let element = self.tab.doc.atom(id).map_or("?", |a| a.element.as_str());
+            format!("{element} #{id}")
+        };
+        for (index, (a, b)) in proposal.pairs.iter().enumerate() {
+            let number = proposal.number(*a).unwrap_or_default();
+            let label = format!("Map {number} · {} → {}", atom(*a), atom(*b));
+            body = body.push(
+                accessible_command(format!("mapping.review.{index}"), label.clone(), label)
+                    .on_press_maybe(current.then_some(Message::Mapping(Action::ReviewPair(index)))),
+            );
+        }
+        body
     }
 }
 
