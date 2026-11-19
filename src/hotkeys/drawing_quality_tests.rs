@@ -27,6 +27,21 @@ fn triple_edits_reject_overvalence_and_leave_cyclic_geometry_intact() -> Result<
 }
 
 #[test]
+fn triple_edit_counts_boron_radical_electrons() -> Result<(), String> {
+    let mut doc = Document::default();
+    let c = doc.add_atom("C", Point::default());
+    let b = doc.add_atom("B", Point::new(42., 0.));
+    doc.add_bond(c, b, 1, "plain");
+
+    let edited = bond_edit(&doc, c, b, BondPreset::Triple)?;
+    assert_eq!(edited.bonds[0].order, 3);
+
+    doc.atom_mut(b).unwrap().radical_electrons = 1;
+    assert!(bond_edit(&doc, c, b, BondPreset::Triple).is_err());
+    Ok(())
+}
+
+#[test]
 fn straightening_keeps_a_remote_group_and_wedge_together() -> Result<(), String> {
     let mut doc = Document::default();
     let a = doc.add_atom("C", Point::new(0., 0.));
