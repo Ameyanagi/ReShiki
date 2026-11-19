@@ -194,6 +194,11 @@ fn library_pieces_join_the_browser_once_each_and_name_their_library_on_a_clash()
         .map(|e| e.source)
         .collect();
     assert_eq!(lab, [Source::Mine, Source::Lab(0)]);
+    // The lab's own list still shows the piece My pieces also holds.
+    let in_lab = (entries.iter())
+        .filter(|e| e.definition.id == "lab/flask" && e.in_library(Source::Lab(0)))
+        .count();
+    assert_eq!(in_lab, 2);
     assert_eq!(libraries.name(Source::Lab(0)), "Tanaka lab");
     assert_eq!(libraries.newer(&lab_flask(0, "old")).unwrap().0, mine);
     assert!(libraries.newer(&mine).is_none());

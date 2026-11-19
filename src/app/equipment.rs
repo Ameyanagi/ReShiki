@@ -456,7 +456,7 @@ impl App {
             out
         };
         let shown: Vec<&Entry> = (entries.iter())
-            .filter(|e| state.shelf.is_none_or(|s| s == e.source))
+            .filter(|e| state.shelf.is_none_or(|s| e.in_library(s)))
             .collect();
         let mut categories = vec![Filter(None)];
         for e in &shown {

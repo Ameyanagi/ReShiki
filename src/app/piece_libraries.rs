@@ -26,6 +26,15 @@ pub struct Entry {
     pub source: Source,
     /// `id@revision#hash`, worked out once when the libraries are read.
     pub key: String,
+    /// Other libraries that hold the same piece.
+    pub also: Vec<Source>,
+}
+
+impl Entry {
+    /// The piece is in this library.
+    pub fn in_library(&self, source: Source) -> bool {
+        self.source == source || self.also.contains(&source)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -103,12 +112,15 @@ impl Libraries {
         for (source, pieces) in sources {
             for d in pieces {
                 let k = key(d);
-                if !out.iter().any(|e| e.key == k) {
-                    out.push(Entry {
+                match out.iter_mut().find(|e| e.key == k) {
+                    Some(e) if !e.in_library(source) => e.also.push(source),
+                    Some(_) => {}
+                    None => out.push(Entry {
                         definition: d.clone(),
                         source,
                         key: k,
-                    });
+                        also: Vec::new(),
+                    }),
                 }
             }
         }

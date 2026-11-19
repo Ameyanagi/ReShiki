@@ -304,16 +304,24 @@ pub fn add(dir: &Path, pieces: &[Definition]) -> Result<Change, String> {
         }
         let bytes = piece_bytes(d);
         if bytes.len() > crate::equipment::validate::MAX_FILE_BYTES {
-            let _ = archive(dir, &change.added);
+            remove_added(&change.added);
             return Err(format!("{}: the piece is larger than 1 MB.", d.id));
         }
         if let Err(e) = crate::storage::write_atomic(&path, &bytes) {
-            let _ = archive(dir, &change.added);
+            remove_added(&change.added);
             return Err(e);
         }
         change.added.push(path);
     }
     Ok(change)
+}
+
+/// Take back files this call wrote: they are new, so deleting them needs no
+/// space, and an Undo record is not needed for them.
+fn remove_added(paths: &[PathBuf]) {
+    for path in paths {
+        let _ = crate::storage::remove_file(path);
+    }
 }
 
 /// Move the files in `dir` that hold the piece with this key into the
