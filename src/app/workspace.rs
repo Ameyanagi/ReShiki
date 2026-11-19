@@ -224,6 +224,7 @@ impl App {
                     Script::Superscript
                 })
             ),
+            self.symbol_button(),
             divider(),
         ]
         .spacing(4)

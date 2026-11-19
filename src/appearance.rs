@@ -128,6 +128,8 @@ pub struct Settings {
     pub copy_dpi: Dpi,
     /// PNG resolution of exported files (1200 dpi by default).
     pub export_dpi: Dpi,
+    /// Symbols inserted from the picker, newest first.
+    pub recent_symbols: Vec<String>,
 }
 impl Default for Settings {
     fn default() -> Self {
@@ -149,6 +151,7 @@ impl Default for Settings {
             background_colors: Vec::new(),
             copy_dpi: Dpi(300),
             export_dpi: Dpi(1200),
+            recent_symbols: Vec::new(),
         }
     }
 }

@@ -634,7 +634,7 @@ pub(super) fn script_key(
     }
 }
 
-fn editor_offset(text: &str, position: text_editor::Position) -> usize {
+pub(super) fn editor_offset(text: &str, position: text_editor::Position) -> usize {
     (text
         .split_inclusive('\n')
         .take(position.line)
