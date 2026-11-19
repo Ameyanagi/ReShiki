@@ -100,8 +100,8 @@ impl Editor {
         self.columns = self.layout.columns.to_string();
         self.rows = self.layout.rows.to_string();
     }
-    /// Width and height as typed, or the applied size while either does not
-    /// read as millimetres.
+    /// Width and height as typed, or the applied size while either is not a
+    /// paper size Layout::validate accepts (12.7–1016 mm).
     fn typed_size(&self) -> (f32, f32) {
         let typed = |s: &str, old: f32| {
             if s == format!("{:.2}", old * 25.4 / 72.) {
@@ -110,8 +110,8 @@ impl Editor {
             s.trim()
                 .parse::<f32>()
                 .ok()
-                .filter(|mm| *mm > 0.)
                 .map(|mm| mm * 72. / 25.4)
+                .filter(|pt| (36. ..=2880.).contains(pt))
         };
         typed(&self.width, self.layout.width_pt)
             .zip(typed(&self.height, self.layout.height_pt))

@@ -276,10 +276,54 @@ fn landscape_with_a_mistyped_width_turns_the_applied_size() {
     let mut app = ready();
     let _ = app.update(Message::Pages(Action::Open));
     let _ = app.update(Message::Pages(Action::Preset(Preset::A4)));
-    let _ = app.update(Message::Pages(Action::Input(Field::Width, "x".into())));
-    let _ = app.update(Message::Pages(Action::Input(Field::Height, "100".into())));
-    let _ = app.update(Message::Pages(Action::Landscape(true)));
-    let layout = app.tab.doc.page_layout.as_ref().unwrap();
     let mm = |pt: f32| (pt * 25.4 / 72.).round();
-    assert_eq!((mm(layout.width_pt), mm(layout.height_pt)), (297., 210.));
+    // Not a number, or out of the supported 12.7–1016 mm range.
+    for (width, turned) in [("x", true), ("2000", false), ("inf", true)] {
+        let _ = app.update(Message::Pages(Action::Input(Field::Width, width.into())));
+        let _ = app.update(Message::Pages(Action::Input(Field::Height, "100".into())));
+        let _ = app.update(Message::Pages(Action::Landscape(turned)));
+        let layout = app.tab.doc.page_layout.as_ref().unwrap();
+        let expected = if turned { (297., 210.) } else { (210., 297.) };
+        assert_eq!(
+            (mm(layout.width_pt), mm(layout.height_pt)),
+            expected,
+            "{width}"
+        );
+    }
+}
+
+#[cfg(any(target_os = "macos", windows))]
+#[test]
+fn printing_uses_the_applied_pages_and_keeps_typed_page_settings() {
+    use crate::app::{InspectorTab, printing::Action as Print};
+    use reshiki::printing::Scope;
+    let mut app = ready();
+    let _ = app.update(Message::Pages(Action::Open));
+    let _ = app.update(Message::Pages(Action::Input(
+        Field::Width,
+        "invalid".into(),
+    )));
+    let _ = app.update(Message::Pages(Action::Input(Field::Columns, "3".into())));
+    let before = app.tab.doc.clone();
+    // A mistyped, unapplied width neither blocks nor changes the print.
+    let _ = app.print_action(Print::Start(Scope::Document));
+    assert!(app.printing.active.is_some(), "{}", app.status);
+    assert_eq!(app.tab.doc, before);
+    assert!(!app.tab.history.can_undo());
+    assert_eq!(app.tab.pages.editor.as_ref().unwrap().columns, "3");
+
+    // An unpaged drawing wider than A4 brings Page setup back, as typed.
+    app.printing.active = None;
+    app.tab.doc.add_atom("N", Point::new(5000., 0.));
+    app.inspector_tab = InspectorTab::Properties;
+    let _ = app.print_action(Print::Start(Scope::Document));
+    assert!(app.printing.active.is_none());
+    assert!(app.error, "{}", app.status);
+    assert!(app.inspector_open);
+    assert_eq!(app.inspector_tab, InspectorTab::Pages);
+    let editor = app.tab.pages.editor.as_ref().unwrap();
+    assert_eq!(
+        (editor.width.as_str(), editor.columns.as_str()),
+        ("invalid", "3")
+    );
 }
