@@ -238,8 +238,8 @@ its conditions.
    - **Auto-map step** proposes atom maps for the step. Review them under
      **Properties → Atom maps** and choose **Apply maps**. New map numbers
      stay clear of the cycle's other steps, and maps that would clash with a
-     neighboring step are refused. Atoms inside an abbreviation such as
-     PPh₃ get no maps, so the label stays contracted.
+     neighboring step are refused. As for any reaction, atoms inside an
+     abbreviation such as PPh₃ get maps too, which expands the label.
    - **Color cycle by origin** colors each reactant and carries its color
      into the products along the atom maps, as for a scheme of several steps.
      Every step whose two sides share atom maps takes color, so an

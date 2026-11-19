@@ -432,18 +432,20 @@ fn colors_go_back_on_their_rings_in_place() {
 }
 
 #[test]
-fn applied_maps_keep_abbreviations_contracted() {
+fn every_step_maps_in_turn_and_the_maps_agree_around_the_cycle() {
     let t = toy(false);
     let mut doc = t.doc.clone();
-    doc.contract(&[t.oa[0]], "Me", "Me").unwrap();
-    doc.contract(&[t.mebr[0]], "Me", "Me").unwrap();
-    let before = doc.clone();
-    let (copy, arrows) = reactions(&doc, t.id).unwrap();
-    let proposal = propose(&copy, arrows[0], Budget::default()).unwrap();
-    copy_maps(&mut doc, &proposal.apply(&copy, true).unwrap());
-    let map = |doc: &Document, id: u64| doc.atom(id).unwrap().map_num;
-    assert!(map(&doc, t.oa[1]) != 0 && map(&doc, t.oa[2]) != 0);
-    assert_eq!((map(&doc, t.oa[0]), map(&doc, t.mebr[0])), (0, 0));
-    let _ = crate::transaction::reconcile(&mut doc, before).unwrap();
-    assert_eq!(doc.abbreviations.len(), 2);
+    for s in 0..3 {
+        let (copy, arrows) = reactions(&doc, t.id).unwrap();
+        let proposal = propose(&copy, arrows[s], Budget::default()).unwrap();
+        copy_maps(&mut doc, &proposal.apply(&copy, true).unwrap());
+    }
+    let map = |id: u64| doc.atom(id).unwrap().map_num;
+    // Pd keeps one number through every intermediate.
+    assert!(map(t.pd[0]) != 0);
+    assert_eq!(map(t.oa[1]), map(t.pd[0]));
+    assert_eq!(map(t.tm[1]), map(t.pd[0]));
+    // Each methyl ends up in ethane.
+    let ethane = [map(t.ethane[0]), map(t.ethane[1])];
+    assert!(ethane.contains(&map(t.mebr[0])) && ethane.contains(&map(t.meli[0])));
 }
