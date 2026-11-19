@@ -142,6 +142,8 @@ fn delete_and_backspace_reset_hovered_atoms_before_deleting_them() {
             (atom.element.as_str(), atom.charge, atom.isotope),
             ("C", 0, 0)
         );
+        assert_eq!(atom.display.carbons, None);
+        assert_eq!(atom.display.hydrogens, None);
         assert_eq!(app.tab.doc.atoms.len(), before.atoms.len());
         assert_eq!(app.tab.doc.bonds, before.bonds);
         assert_eq!(app.tab.selected, [target]);

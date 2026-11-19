@@ -426,6 +426,8 @@ impl App {
                         if let Some(atom) = doc.atom_mut(id) {
                             atom.charge = charge;
                             atom.isotope = 0;
+                            atom.display.carbons = None;
+                            atom.display.hydrogens = None;
                         }
                         (doc, vec![id])
                     });
