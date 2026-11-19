@@ -65,6 +65,9 @@ pub(super) struct Proposal {
     reversed: bool,
 }
 
+/// Part names keyed by part, at a drawing revision and computed-label generation.
+type PartNames = ((u64, u64), std::collections::HashMap<Vec<u64>, String>);
+
 /// The cycle card's text fields and disclosures.
 #[derive(Debug, Clone, Default)]
 pub(super) struct Inputs {
@@ -78,7 +81,7 @@ pub(super) struct Inputs {
     layout_open: bool,
     pub(super) purpose_open: bool,
     /// Part names at a drawing revision: a formula costs a chemistry pass.
-    names: std::cell::RefCell<((u64, u64), std::collections::HashMap<Vec<u64>, String>)>,
+    names: std::cell::RefCell<PartNames>,
     radius: String,
     gap: String,
     label: String,
