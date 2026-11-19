@@ -37,9 +37,10 @@ pub struct Template {
     pub anchor: Anchor,
 }
 impl Template {
-    /// A whole figure layout: placed free, once, never attached to an atom.
+    /// A built-in figure layout: placed free, once, never attached to an
+    /// atom. A saved template keeps its own placement in any collection.
     pub fn is_layout(&self) -> bool {
-        self.group == layouts::GROUP
+        self.group == layouts::GROUP && self.id.starts_with("builtin:")
     }
     /// Places the template centered on `point`, joined to nothing.
     pub fn place_layout(

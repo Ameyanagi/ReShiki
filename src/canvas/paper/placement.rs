@@ -278,6 +278,8 @@ impl MoleculeCanvas<'_> {
                     *template_notice = Some((
                         if self.joining.is_some() {
                             "Move & attach preview · Click or release to join · Esc cancels".into()
+                        } else if self.template.is_some_and(|(t, _)| t.is_layout()) {
+                            "Preview · Click to place the layout · Esc cancels".into()
                         } else {
                             format!(
                                 "Preview · {} new objects ({} atoms) · Shift/Ctrl drag snaps 15° · Esc cancels",

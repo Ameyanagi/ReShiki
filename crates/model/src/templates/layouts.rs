@@ -149,6 +149,7 @@ fn template(
 pub(super) fn templates() -> Result<Vec<Template>, String> {
     let r = crate::style::DEFAULT.bond_length_world;
     let note = "The rings and arrows are illustrations, so they never form a reaction. Select a panel and choose Clear contents, then paste or draw your scheme.";
+    let rows_note = "The rings and arrows are illustrations, so they never form a reaction. Drag a box around a row and press Delete, then paste or draw your scheme.";
 
     let mut toc = Document::default();
     let row = scheme(&mut toc, Point::default(), 2);
@@ -273,6 +274,12 @@ pub(super) fn templates() -> Result<Vec<Template>, String> {
             crate::purpose::set(&mut document, &ids, crate::purpose::Purpose::Illustration);
             document.require_version(crate::document::DRAWING_ELEMENTS);
             document.validate()?;
+            // Only a layout with panels offers Clear contents.
+            let note = if document.graphics.iter().any(|g| g.panel.is_some()) {
+                note
+            } else {
+                rows_note
+            };
             Ok(template(name, keywords, note, rings, document))
         })
         .collect()

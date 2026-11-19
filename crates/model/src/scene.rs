@@ -1387,7 +1387,7 @@ pub fn selection_bounds_in_axes(
         .flatten()
 }
 
-fn selections_bounds_in_axes(
+pub(crate) fn selections_bounds_in_axes(
     doc: &Document,
     selections: &[Vec<u64>],
     axes: Option<(Point, f32)>,
@@ -2408,6 +2408,9 @@ fn graphic_primitive(
             && g.style.fill.is_none();
         // A see-through fill fades only the fill; without one, the lines fade.
         let fades_fill = g.style.fill.is_some() && g.closed_shape();
+        let text_style = &doc.drawing_style.text_style();
+        // Border titles break the outline, never the fill or what is behind.
+        let breaks = g.outline_breaks(text_style);
         for (i, p) in g.parts().into_iter().enumerate() {
             let mut style = p.style;
             if i == 0 && paper {
@@ -2423,6 +2426,23 @@ fn graphic_primitive(
                 style,
                 filled,
             };
+            if i == 0 && !breaks.is_empty() {
+                let fade = effects.opacity;
+                if filled {
+                    let mut fill = style.clone();
+                    fill.width_pt = 0.;
+                    let body = path(fill, true);
+                    parts.push(see_through(body, fade.filter(|_| fades_fill)));
+                }
+                style.fill = None;
+                let outline = Primitive::Path {
+                    commands: crate::graphics::panel::broken_outline(&p.commands, &breaks),
+                    style,
+                    filled: false,
+                };
+                parts.push(see_through(outline, fade.filter(|_| !fades_fill)));
+                continue;
+            }
             match effects.opacity {
                 Some(alpha) if i == 0 && filled && fades_fill => {
                     let mut fill = style.clone();
@@ -2436,9 +2456,8 @@ fn graphic_primitive(
                 _ => parts.push(path(style, filled)),
             }
         }
-        let text_style = &doc.drawing_style.text_style();
-        // A title set into the border is backed by the panel's own fill as
-        // the canvas shows it, so it never shows a box of another color.
+        // A border title reads on the panel's fill as the canvas shows it and
+        // on the page around it.
         let canvas = doc.canvas_theme;
         let paper = canvas.background();
         let backing = g.backing(|c| canvas.color(c.rgb()), paper).unwrap_or(paper);
@@ -2446,18 +2465,15 @@ fn graphic_primitive(
             .panel
             .as_ref()
             .is_some_and(|p| p.place == crate::graphics::TitlePlace::Bar);
-        parts.extend(g.panel_parts(text_style).into_iter().map(|mut p| {
-            if p.filled && !on_band {
-                let knockout = Color::Custom(canvas.color(backing));
-                p.style.stroke = knockout;
-                p.style.fill = Some(knockout);
-            }
-            Primitive::Path {
-                commands: p.commands,
-                style: p.style,
-                filled: p.filled,
-            }
-        }));
+        parts.extend(
+            g.panel_parts(text_style)
+                .into_iter()
+                .map(|p| Primitive::Path {
+                    commands: p.commands,
+                    style: p.style,
+                    filled: p.filled,
+                }),
+        );
         // A title on a band reads against the band as the canvas shows it;
         // the renderer then converts the chosen ink back for that canvas.
         let band_ink = || {
@@ -2474,7 +2490,7 @@ fn graphic_primitive(
         } else {
             canvas.color(crate::graphics::panel::border_title_rgb(
                 canvas.color(g.style.stroke.rgb()),
-                backing,
+                [backing, paper],
             ))
         };
         let superscript = g

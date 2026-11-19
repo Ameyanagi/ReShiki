@@ -619,19 +619,36 @@ impl App {
     /// One wider than a quarter of the view would cover what is there, so it
     /// lands one bond length right of the drawing and is revealed, as an
     /// inserted structure is. Pages keep the small offset: right of the
-    /// drawing may be off the page.
+    /// drawing may be off the page. Into one selected empty panel, such as
+    /// a cleared one, the part lands in the panel's middle.
     pub(super) fn append_pasted(&mut self, part: &Document) -> bool {
         let before = self.tab.doc.clone();
         let center = editing::center(part, &part.all_ids());
         let view = self.guides.paper(iced::Rectangle::with_size(self.viewport));
         let edges = reshiki::scene::selection_bounds;
-        let wide = self.tab.doc.page_layout.is_none()
+        let panel = match self.tab.selected.as_slice() {
+            [id] => before
+                .graphics
+                .iter()
+                .find(|g| g.id == *id && g.panel.is_some())
+                .filter(|g| reshiki::graphics::panel::contents(&before, g.id).is_empty())
+                .map(|g| {
+                    let (lo, hi) = g.shape_bounds();
+                    Point::new((lo.x + hi.x) / 2., (lo.y + hi.y) / 2.)
+                }),
+            _ => None,
+        };
+        let wide = panel.is_none()
+            && self.tab.doc.page_layout.is_none()
             && edges(part, &part.all_ids())
                 .is_some_and(|(lo, hi)| (hi.x - lo.x) * self.tab.camera.zoom > view.width / 4.);
-        let mut offset = Point::new(
-            self.tab.camera.center.x - center.x + 24.,
-            self.tab.camera.center.y - center.y + 24.,
-        );
+        let mut offset = match panel {
+            Some(middle) => Point::new(middle.x - center.x, middle.y - center.y),
+            None => Point::new(
+                self.tab.camera.center.x - center.x + 24.,
+                self.tab.camera.center.y - center.y + 24.,
+            ),
+        };
         // A wide part is measured on its own in this drawing's settings, with
         // the hydrogens it will be drawn with, so that the visible edges end
         // one bond length apart. `Document::bounds` would pad them for framing.

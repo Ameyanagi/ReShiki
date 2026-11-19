@@ -250,3 +250,71 @@ fn a_figure_layout_places_once_free_and_clear_contents_empties_one_panel() {
     assert!(app.error);
     assert_eq!(app.tab.doc, cleared);
 }
+
+#[test]
+fn clear_on_a_rotated_panel_keeps_artwork_outside_its_frame() {
+    let (mut app, _) = App::new();
+    let ids = molecules(&mut app, &[0.]);
+    app.tab.selected = ids.clone();
+    let _ = app.update(Message::Figure(Action::Wrap));
+    let id = panel(&app).id;
+    // Turn the panel and its molecule a quarter of the way round.
+    let all = app.tab.doc.all_ids();
+    let (lo, hi) = reshiki::scene::selection_bounds(&app.tab.doc, &all).unwrap();
+    let middle = Point::new((lo.x + hi.x) / 2., (lo.y + hi.y) / 2.);
+    let (s, c) = 45f32.to_radians().sin_cos();
+    let turn = |p: Point| {
+        let (x, y) = (p.x - middle.x, p.y - middle.y);
+        Point::new(middle.x + x * c - y * s, middle.y + x * s + y * c)
+    };
+    for atom in &mut app.tab.doc.atoms {
+        atom.position = turn(atom.position);
+    }
+    for g in &mut app.tab.doc.graphics {
+        g.map_positions(turn);
+    }
+    // An unrelated line in a corner of the panel's upright bounds, outside
+    // the turned frame.
+    let (corner, _) = panel(&app).shape_bounds();
+    let line = app.tab.doc.next_id();
+    app.tab.doc.graphics.push(Graphic::dragged(
+        line,
+        reshiki::graphics::GraphicKind::Line,
+        corner.offset(1., 1.),
+        corner.offset(4., 2.),
+        Default::default(),
+        reshiki::graphics::BracketSides::Both,
+        false,
+    ));
+    app.tab.selected = vec![id];
+    let _ = app.update(Message::Figure(Action::Clear));
+    assert!(!app.error, "{}", app.status);
+    let has = |app: &App, id: u64| app.tab.doc.graphics.iter().any(|g| g.id == id);
+    assert!(
+        app.tab.doc.atoms.is_empty(),
+        "the molecule inside is cleared"
+    );
+    assert!(has(&app, line) && has(&app, id));
+    let _ = app.update(Message::Undo);
+    assert!(has(&app, line) && app.tab.doc.atom(ids[0]).is_some());
+    let _ = app.update(Message::Redo);
+    assert!(has(&app, line) && app.tab.doc.atoms.is_empty());
+}
+
+#[test]
+fn a_paste_into_a_cleared_panel_lands_in_its_middle() {
+    let (mut app, _) = App::new();
+    let ids = molecules(&mut app, &[400.]);
+    app.tab.selected = ids;
+    let _ = app.update(Message::Figure(Action::Wrap));
+    let id = panel(&app).id;
+    app.tab.selected = vec![id];
+    let _ = app.update(Message::Figure(Action::Clear));
+    let mut part = reshiki::document::Document::default();
+    let a = part.add_atom("C", Point::new(-900., -900.));
+    let b = part.add_atom("O", Point::new(-858., -900.));
+    part.add_bond(a, b, 1, "plain");
+    assert!(app.append_pasted(&part));
+    let held = reshiki::graphics::panel::contents(&app.tab.doc, id);
+    assert_eq!(held.len(), 2, "the pasted molecule is in the panel");
+}
