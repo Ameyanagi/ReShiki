@@ -539,17 +539,55 @@ fn imported_labels_prefer_a_user_group_spelled_like_a_reversed_label() {
     assert!(errors.is_empty(), "{errors:?}");
     catalog.extend(user.into_iter().map(std::sync::Arc::new));
     assert_eq!(
-        group_names(&catalog, "MeO".into()),
+        group_names(&catalog, "MeO".into(), Some("O")),
         ("MeO".into(), String::new())
     );
     // Without the user group, the bundled reversed spelling still maps back.
     let bundled = crate::chemistry::abbreviations::presets().unwrap();
     assert_eq!(
-        group_names(&bundled, "MeO".into()),
+        group_names(&bundled, "MeO".into(), Some("O")),
         ("OMe".into(), "MeO".into())
     );
     assert_eq!(
-        group_names(&bundled, "Xyz".into()),
+        group_names(&bundled, "Xyz".into(), Some("C")),
         ("Xyz".into(), String::new())
+    );
+}
+
+#[test]
+fn formula_labels_outside_the_catalog_read_from_either_side() {
+    let bundled = crate::chemistry::abbreviations::presets().unwrap();
+    for (text, anchor, label, reverse) in [
+        // ReShiki writes the label; ChemDraw lays it out reversed on the left.
+        ("PPh3", "P", "PPh3", "Ph3P"),
+        // Written as it reads left of its bond.
+        ("Ph3P", "P", "PPh3", "Ph3P"),
+        ("PCy3", "P", "PCy3", "Cy3P"),
+        // The attachment atom decides, not the first letters.
+        ("PtBu3", "P", "PtBu3", "tBu3P"),
+        ("Cl3Si", "Si", "SiCl3", "Cl3Si"),
+        ("PrCl2", "Pr", "PrCl2", "Cl2Pr"),
+        // Hydrogens stay beside their atom.
+        ("CH2SiMe2Ph", "C", "CH2SiMe2Ph", "PhMe2SiH2C"),
+        ("HOH2CH2C", "C", "CH2CH2OH", "HOH2CH2C"),
+        // Not a formula, one unit, charged, or not meeting the bond.
+        ("Xyz", "C", "Xyz", ""),
+        ("CH(CH3)2", "C", "CH(CH3)2", ""),
+        ("NH2", "N", "NH2", ""),
+        ("PMe3+", "P", "PMe3+", ""),
+        ("PPh3", "C", "PPh3", ""),
+        // The attachment element at both ends: which one meets the bond?
+        ("NCHN", "N", "NCHN", ""),
+    ] {
+        assert_eq!(
+            group_names(&bundled, text.into(), Some(anchor)),
+            (label.into(), reverse.into()),
+            "{text}"
+        );
+    }
+    // A label between two bonds is laid out centred, never reversed.
+    assert_eq!(
+        group_names(&bundled, "PPh3".into(), None),
+        ("PPh3".into(), String::new())
     );
 }
