@@ -1684,7 +1684,7 @@ fn centered_double_rails(
             // Label picking owns the unpadded boxes, both at the rail and at
             // its backbone projection. Do not paint into those owned corners.
             for point in [origin, base] {
-                let guard = label_box_end(point, dx, dy, lo, hi, length, [0.; 2]);
+                let guard = label_box_end(point, dx, dy, (lo, hi), length, [0.; 2], None);
                 far = far.max((guard.x - point.x) * dx + (guard.y - point.y) * dy);
             }
         }
@@ -1782,7 +1782,7 @@ fn rounded_label_end(
     let mut far = 0f32;
     for &((lo, hi), radius) in shapes {
         if radius <= 0. || !radius.is_finite() {
-            let end = label_box_end(origin, ux, uy, lo, hi, max, [margin; 2]);
+            let end = label_box_end(origin, ux, uy, (lo, hi), max, [margin; 2], None);
             far = far.max(along(end));
             continue;
         }
@@ -1803,7 +1803,8 @@ fn rounded_label_end(
                 Point::new(inner_high.x, high.y),
             ),
         ] {
-            far = far.max(along(label_box_end(origin, ux, uy, a, b, max, [0.; 2])));
+            let end = label_box_end(origin, ux, uy, (a, b), max, [0.; 2], None);
+            far = far.max(along(end));
         }
         // Two central rectangles plus four discs exactly cover the rounded
         // rectangle. Intersect the finite ray with each convex piece.
@@ -1860,7 +1861,7 @@ pub(crate) fn label_end(
     max: f32,
     margin: f32,
 ) -> Point {
-    label_end_padded(origin, ux, uy, bounds, max, [margin; 2])
+    label_end_padded(origin, ux, uy, bounds, max, [margin; 2], None)
 }
 
 fn label_end_padded(
@@ -1870,10 +1871,11 @@ fn label_end_padded(
     bounds: &[(Point, Point)],
     max: f32,
     padding: [f32; 2],
+    slab: Option<f32>,
 ) -> Point {
     bounds
         .iter()
-        .map(|&(lo, hi)| label_box_end(origin, ux, uy, lo, hi, max, padding))
+        .map(|&ink| label_box_end(origin, ux, uy, ink, max, padding, slab))
         .max_by(|a, b| {
             let along = |p: &Point| (p.x - origin.x) * ux + (p.y - origin.y) * uy;
             along(a).total_cmp(&along(b))
@@ -1885,11 +1887,21 @@ fn label_box_end(
     origin: Point,
     ux: f32,
     uy: f32,
-    lo: Point,
-    hi: Point,
+    (lo, hi): (Point, Point),
     max: f32,
     [pad_x, pad_y]: [f32; 2],
+    slab: Option<f32>,
 ) -> Point {
+    let slab = slab.map(|gap| {
+        let [x0, x1] = [lo.x, hi.x].map(|x| (x - origin.x) * ux);
+        let [y0, y1] = [lo.y, hi.y].map(|y| (y - origin.y) * uy);
+        (
+            0.,
+            1.,
+            x0.min(x1) + y0.min(y1) - gap,
+            x0.max(x1) + y0.max(y1) + gap,
+        )
+    });
     // Intersect the whole segment with the padded label box. A label can
     // extend past the bond midpoint, or sit above its attachment position.
     let mut enter: f32 = 0.;
@@ -1897,7 +1909,10 @@ fn label_box_end(
     for (position, direction, low, high) in [
         (origin.x, ux, lo.x - pad_x, hi.x + pad_x),
         (origin.y, uy, lo.y - pad_y, hi.y + pad_y),
-    ] {
+    ]
+    .into_iter()
+    .chain(slab)
+    {
         if direction.abs() < 1e-6 {
             if position < low || position > high {
                 return origin;
@@ -2746,6 +2761,8 @@ fn dative_needs_core(b: &Bond, span: &TrimmedSpan) -> bool {
 /// the bold width trims to the labels' ink instead of the full margin (#1287),
 /// when that gives a longer span at least as long as the bold width. Shorter
 /// spans cannot read as a taper and could swing the wide end into a label.
+/// The bond-axis slab captures the exact end-segment envelope at ink-box
+/// corners, with extra padding for the clearance gap.
 fn recover_stereo_span(
     span: TrimmedSpan,
     b: &Bond,
@@ -2781,8 +2798,8 @@ fn recover_stereo_span(
             [narrow, wide]
         };
         let length = a.distance(z);
-        let start = label_end_padded(a, ux, uy, a_boxes, length, a_pad);
-        let end = label_end_padded(z, -ux, -uy, z_boxes, length, z_pad);
+        let start = label_end_padded(a, ux, uy, a_boxes, length, a_pad, Some(gap));
+        let end = label_end_padded(z, -ux, -uy, z_boxes, length, z_pad, Some(gap));
         let along = (end.x - start.x) * ux + (end.y - start.y) * uy;
         if along > span.along && along >= bold_width {
             return TrimmedSpan {

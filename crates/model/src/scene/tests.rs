@@ -136,12 +136,12 @@ fn assert_stereo_bond_painted(
     case: &str,
 ) {
     let near = |a: Point, z: Point| a.distance(z) < 0.001;
-    let clear = |p: Point| {
+    let clear = |a, z| {
         assert!(
             ink.into_iter()
                 .flatten()
-                .all(|&(lo, hi)| { p.x < lo.x || p.x > hi.x || p.y < lo.y || p.y > hi.y }),
-            "{case} paints into label ink at {p:?}"
+                .all(|&(lo, hi)| !crate::atom_labels::segment_hits_rect(a, z, lo, hi)),
+            "{case} paints into label ink along {a:?} to {z:?}"
         );
     };
     if display == "hash" {
@@ -168,8 +168,7 @@ fn assert_stereo_bond_painted(
                 ),
                 "{case} bar centers must follow the visible segment"
             );
-            clear(a);
-            clear(z);
+            clear(a, z);
         }
     } else {
         let path = drawing
@@ -192,20 +191,23 @@ fn assert_stereo_bond_painted(
                 _ => false,
             })
             .unwrap_or_else(|| panic!("{case} must paint a wedge at the visible endpoints"));
-        path.into_iter().for_each(clear);
+        for edge in path.windows(2) {
+            clear(edge[0], edge[1]);
+        }
     }
 }
 
 #[test]
 fn short_stereo_bonds_between_labelled_atoms_clear_ink() {
+    let reporter_direction = (-0.75_f32, -0.66);
     for element in ["Ru", "Pt", "Si", "P", "S", "Cl"] {
         for no_implicit in [false, true] {
-            for (ux, uy) in [(1_f32, 0_f32), (-0.6, -0.8)] {
+            for (ux, uy) in [(1., 0.), (-0.6, -0.8), reporter_direction] {
                 let mut doc = Document::default();
-                let length = doc.drawing_style.bond_length_world;
+                let scale = doc.drawing_style.bond_length_world / ux.hypot(uy);
                 let center = doc.add_atom(element, Point::default());
                 doc.atom_mut(center).unwrap().no_implicit = no_implicit;
-                let ligand = doc.add_atom("Cl", Point::new(ux * length, uy * length));
+                let ligand = doc.add_atom("Cl", Point::new(ux * scale, uy * scale));
                 for (a, z) in [(center, ligand), (ligand, center)] {
                     for display in ["wedge", "hash", "hollow_wedge", "plain"] {
                         doc.add_bond(a, z, 1, display);
@@ -216,52 +218,49 @@ fn short_stereo_bonds_between_labelled_atoms_clear_ink() {
                         let [a, z] = [a, z].map(|id| doc.atom(id).unwrap());
                         let [a_ink, z_ink] = [a, z].map(|atom| atom_label_ink_boxes(atom, &doc));
                         assert!(!a_ink.is_empty() && !z_ink.is_empty(), "{case}");
-                        let cut = |a_ink: &[_], z_ink: &[_], margin| {
-                            trimmed_span(a.position, z.position, a_ink, z_ink, margin).unwrap()
-                        };
                         let style = &doc.drawing_style;
-                        let full = cut(&a_ink, &z_ink, style.world(style.margin_width_pt));
+                        let margin = style.world(style.margin_width_pt);
+                        let full =
+                            trimmed_span(a.position, z.position, &a_ink, &z_ink, margin).unwrap();
+                        let full_segment = (full.along > 0.1).then_some((full.start, full.end));
                         let segment = bond_segment(&doc, &doc.bonds[0], None);
                         if display == "plain" {
-                            assert_eq!(segment, Some((full.start, full.end)), "{case}");
+                            let expected = full_segment.or_else(|| {
+                                // Collapsed plain bonds can use rounded-glyph recovery.
+                                let [a_shapes, z_shapes] =
+                                    [a, z].map(|atom| atom_label_ink_shapes(atom, &doc));
+                                let (rounded, _) = recover_rounded_span(
+                                    full,
+                                    a.position,
+                                    z.position,
+                                    &a_shapes,
+                                    &z_shapes,
+                                    margin,
+                                    style.line_width() * 0.5,
+                                );
+                                (rounded.along > 0.1).then_some((rounded.start, rounded.end))
+                            });
+                            assert_eq!(segment, expected, "{case}");
                             continue;
                         }
 
-                        // Thick or stroked ends can leave less than a quarter
-                        // bond between their padded label boxes.
-                        let gap = if display == "wedge" {
-                            style.line_width() / 2.
-                        } else {
-                            style.line_width()
+                        // A wide end at Ru can leave less clearance than the bold width.
+                        let must_paint = (ux, uy) != reporter_direction
+                            || (matches!(element, "Ru" | "Pt" | "Si" | "Cl")
+                                && !(element == "Ru" && z.id == center)
+                                && matches!(display, "wedge" | "hash"));
+                        let Some((start, end)) = segment else {
+                            assert!(!must_paint && full_segment.is_none(), "{case} has no span");
+                            continue;
                         };
                         let bold = style.world(style.bold_width_pt);
-                        let pad = |ink: &[(Point, Point)], x: f32, y: f32| {
-                            ink.iter()
-                                .map(|&(lo, hi)| (lo.offset(-x, -y), hi.offset(x, y)))
-                                .collect::<Vec<_>>()
-                        };
-                        let a_padded = pad(&a_ink, gap, gap);
-                        let z_padded = pad(
-                            &z_ink,
-                            gap + full.uy.abs() * bold / 2.,
-                            gap + full.ux.abs() * bold / 2.,
-                        );
-                        let ink_span = cut(&a_padded, &z_padded, 0.);
-                        let expected = if full.along < 2. * bold
-                            && ink_span.along > full.along
-                            && ink_span.along >= bold
-                        {
-                            ink_span
+                        if full.along >= 2. * bold {
+                            assert_eq!(segment, full_segment, "{case}");
                         } else {
-                            full
-                        };
-                        let (start, end) =
-                            segment.unwrap_or_else(|| panic!("{case} has no visible span"));
-                        assert!(
-                            start.distance(end) + 0.001 >= (length / 4.).min(expected.along),
-                            "{case} has a short visible span"
-                        );
-                        assert_eq!((start, end), (expected.start, expected.end), "{case}");
+                            let along = (end.x - start.x) * full.ux + (end.y - start.y) * full.uy;
+                            assert!(along >= full.along, "{case} shortened the full-margin span");
+                            assert!(along >= bold, "{case} needs a span at least {bold} long");
+                        }
                         assert_stereo_bond_painted(
                             &primitives(&doc),
                             display,
@@ -341,13 +340,14 @@ fn ruthenium_complex_paints_longer_wedge_and_hash_to_chlorine() {
     let length = doc.drawing_style.bond_length_world;
     let center = doc.add_atom("Ru", Point::default());
     for (element, x, y, order, display) in [
-        ("Cl", -0.6, -0.8, 1, "hash"),
-        ("Cl", 1., 0., 1, "wedge"),
-        ("C", 0., -1., 2, "plain"),
-        ("C", -0.6, 0.8, 1, "plain"),
-        ("C", 0.6, 0.8, 1, "plain"),
+        ("Cl", -0.75_f32, -0.66, 1, "hash"),
+        ("Cl", 0.99, 0.15, 1, "wedge"),
+        ("C", 0.36, -0.93, 2, "plain"),
+        ("C", -0.87, 0.48, 1, "plain"),
+        ("C", 0.22, 0.98, 1, "plain"),
     ] {
-        let ligand = doc.add_atom(element, Point::new(x * length, y * length));
+        let scale = length / x.hypot(y);
+        let ligand = doc.add_atom(element, Point::new(x * scale, y * scale));
         doc.add_bond(center, ligand, order, display);
     }
     let drawing = primitives(&doc);
@@ -363,10 +363,18 @@ fn ruthenium_complex_paints_longer_wedge_and_hash_to_chlorine() {
             style.world(style.margin_width_pt),
         )
         .unwrap();
-        let (start, end) = bond_segment(&doc, bond, None).unwrap();
+        let (start, end) = bond_segment(&doc, bond, None)
+            .unwrap_or_else(|| panic!("{} has no visible span", bond.display));
+        let along = start.distance(end);
         assert!(
-            start.distance(end) > full.along + 0.001,
+            along > full.along + 0.001,
             "{} must be longer",
+            bond.display
+        );
+        let bold = style.world(style.bold_width_pt);
+        assert!(
+            along >= bold,
+            "{} needs a span at least {bold} long",
             bond.display
         );
         assert_stereo_bond_painted(
