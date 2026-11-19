@@ -26,6 +26,7 @@ pub enum Action {
     ApplyDivider(usize),
     RemoveDivider(usize),
     Fit,
+    Clear,
     Arrange(Flow),
     Columns(String),
     ApplyColumns,
@@ -38,6 +39,7 @@ impl App {
     pub(super) fn figure_action(&mut self, action: Action) {
         match action {
             Action::Wrap => self.wrap_in_panel(),
+            Action::Clear => self.clear_panels(),
             Action::Title(i, value) => {
                 let titles = &mut self.tab.panel_titles;
                 if titles.len() <= i {
@@ -334,6 +336,32 @@ impl App {
         }
     }
 
+    /// Delete what the selected panels hold, such as a layout's placeholder
+    /// rings, keeping the frames, titles and dividers selected.
+    fn clear_panels(&mut self) {
+        let panels: Vec<u64> = self.selected_panels().map(|g| g.id).collect();
+        let doc = &self.tab.doc;
+        let ids: Vec<u64> = panels
+            .iter()
+            .flat_map(|&id| reshiki::graphics::panel::contents(doc, id))
+            .filter(|id| {
+                !doc.graphics
+                    .iter()
+                    .any(|g| g.id == *id && g.panel.is_some())
+            })
+            .collect();
+        if ids.is_empty() {
+            self.error = true;
+            self.status = "The panel holds nothing to clear".into();
+            return;
+        }
+        let before = self.tab.doc.clone();
+        self.tab.doc.delete(&ids);
+        self.tab.selected = panels;
+        self.changed(before);
+        self.status = "Panel cleared · Paste or draw its new contents".into();
+    }
+
     /// Refit each selected panel around what it is grouped with, or else
     /// around what lies inside it.
     fn fit_panels(&mut self) {
@@ -597,11 +625,21 @@ impl App {
             );
         }
         Some(
-            body.push(hover_hint(
-                panel_action("Fit to contents", send(Action::Fit)),
-                "Fit the panel around what it is grouped with",
-                tooltip::Position::Top,
-            ))
+            body.push(
+                row![
+                    hover_hint(
+                        panel_action("Fit to contents", send(Action::Fit)),
+                        "Fit the panel around what it is grouped with",
+                        tooltip::Position::Top,
+                    ),
+                    hover_hint(
+                        panel_action("Clear contents", send(Action::Clear)),
+                        "Delete what the panel holds, such as placeholder rings · Keeps the frame and titles",
+                        tooltip::Position::Top,
+                    ),
+                ]
+                .spacing(6),
+            )
             .push(
                 text("Enter applies titles and positions.")
                     .size(11)

@@ -240,19 +240,26 @@ impl App {
         let Some(template) = self.templates.library.get(self.template_index) else {
             return;
         };
-        match template.place(
-            &self.tab.doc,
-            anchor,
-            direction,
-            self.tab.camera.world_len(PICK_RADIUS_PX),
-            self.templates.anchor,
-            self.templates.connection,
-        ) {
+        // A figure layout lands where it is clicked, once, joined to nothing.
+        let layout = template.is_layout();
+        let placed = if layout {
+            template.place_layout(&self.tab.doc, anchor)
+        } else {
+            template.place(
+                &self.tab.doc,
+                anchor,
+                direction,
+                self.tab.camera.world_len(PICK_RADIUS_PX),
+                self.templates.anchor,
+                self.templates.connection,
+            )
+        };
+        match placed {
             Ok((document, selected)) => {
                 self.tab.doc = document;
                 self.tab.selected = selected;
                 self.sync_figure();
-                if !self.templates.repeat {
+                if !self.templates.repeat || layout {
                     self.tool = Tool::Select;
                 }
             }

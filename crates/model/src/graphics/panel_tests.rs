@@ -93,19 +93,95 @@ fn a_title_bar_draws_a_band_in_the_outline_color_with_page_colored_text() {
     assert!(lo.y >= -1.);
 }
 
+/// The scene of a drawing holding only `g`, on the given canvas.
+fn drawn(g: &Graphic, theme: crate::canvas_theme::CanvasTheme) -> Vec<crate::scene::Primitive> {
+    let doc = Document {
+        canvas_theme: theme,
+        graphics: vec![g.clone()],
+        ..Default::default()
+    };
+    crate::scene::primitives(&doc)
+}
+
+/// Points of the stroked (unfilled) paths in `parts`, flattened.
+fn stroked(parts: &[crate::scene::Primitive]) -> Vec<Point> {
+    use crate::scene::Primitive;
+    let mut points = vec![];
+    for part in parts {
+        let part = match part {
+            Primitive::Opacity { primitive, .. } => primitive.as_ref(),
+            part => part,
+        };
+        if let Primitive::Path {
+            commands,
+            filled: false,
+            ..
+        } = part
+        {
+            points.extend(crate::graphics::flattened(commands).into_iter().flatten());
+        }
+    }
+    points
+}
+
 #[test]
-fn a_border_title_sits_on_the_top_edge_over_a_page_colored_backing() {
+fn a_border_title_sits_on_the_top_edge_in_a_break_of_the_outline() {
     let text = TextStyle::default();
-    let g = panel(&["Previous work"], TitlePlace::Border);
-    let parts = g.panel_parts(&text);
-    assert_eq!(parts.len(), 1);
-    assert_eq!(parts[0].style.fill, Some(Color::Custom([255; 3])));
+    let g = panel(&["Ours"], TitlePlace::Border);
+    // Nothing is painted over the edge: no box covers what is behind.
+    assert!(g.panel_parts(&text).is_empty());
     let [title] = g.panel_titles(&text).try_into().ok().unwrap();
     assert_eq!(title.style.color, g.style.stroke);
     assert!(title.position.y < 0. && title.position.y + title.size > 0.);
+    let [(lo, hi)] = g.outline_breaks(&text).try_into().ok().unwrap();
+    assert!(lo.x < title.position.x && lo.y <= title.position.y);
+    assert!(hi.y >= title.position.y + title.size);
+    // The outline runs on either side of the title but not under it.
+    let points = stroked(&drawn(&g, Default::default()));
+    let under = |p: &Point| p.x > lo.x + 0.01 && p.x < hi.x - 0.01 && p.y.abs() < 1.;
+    assert!(!points.iter().any(under), "{points:?}");
+    assert!(points.iter().any(|p| p.y.abs() < 0.01 && p.x < lo.x));
+    assert!(points.iter().any(|p| p.y.abs() < 0.01 && p.x > hi.x));
+    // A panel without its outline has nothing to break.
+    let mut open = g.clone();
+    open.panel.as_mut().unwrap().border = false;
+    assert!(open.outline_breaks(&text).is_empty());
+    // The bounds reach the title's ink above the edge.
     let (lo, _) = g.bounds_with_text_style(&text);
-    assert!(lo.y < -text.size() * 0.4);
-    assert!(g.hit_with_text_style(title.position.offset(2., 1.), 0.5, &text));
+    let ink = title
+        .ink_boxes()
+        .into_iter()
+        .map(|(a, _)| a.y)
+        .fold(f32::MAX, f32::min);
+    assert!(ink < 0. && lo.y <= ink);
+    // A click on the title's letters picks the panel.
+    let (a, b) = title.ink_boxes()[0];
+    let middle = Point::new((a.x + b.x) / 2., (a.y + b.y) / 2.);
+    assert!(g.hit_with_text_style(middle, 0.5, &text));
+}
+
+#[test]
+fn wavy_and_rotated_outlines_stay_out_of_a_border_title() {
+    let text = TextStyle::default();
+    let mut wavy = panel(&["This work"], TitlePlace::Border);
+    wavy.style.pattern = crate::graphics::LinePattern::Wavy;
+    // Nearly a quarter turn either way: an edge runs down through the
+    // upright title, and its path may start inside the title's box.
+    let turned = [88f32, -85.].map(|degrees| {
+        let mut g = panel(&["This work"], TitlePlace::Border);
+        let (s, c) = degrees.to_radians().sin_cos();
+        g.map_positions(|p| Point::new(p.x * c - p.y * s, p.x * s + p.y * c));
+        g
+    });
+    for g in std::iter::once(wavy).chain(turned) {
+        let [(lo, hi)] = g.outline_breaks(&text).try_into().ok().unwrap();
+        let points = stroked(&drawn(&g, Default::default()));
+        assert!(points.len() > 4);
+        let inside = |p: &Point| {
+            p.x > lo.x + 0.01 && p.x < hi.x - 0.01 && p.y > lo.y + 0.01 && p.y < hi.y - 0.01
+        };
+        assert!(!points.iter().any(inside), "{:?}", g.style.pattern);
+    }
 }
 
 #[test]
@@ -160,6 +236,95 @@ fn contents_are_the_objects_wholly_inside_the_panel() {
     assert!(!outside.iter().any(|a| found.contains(a)));
     assert!(!found.contains(&id));
     assert!(contents(&doc, inside[0]).is_empty());
+}
+
+#[test]
+fn a_rotated_panel_holds_only_what_its_frame_shows() {
+    let mut doc = Document::default();
+    // A molecule in the middle and a line in a corner of the turned panel's
+    // upright bounding box, outside the frame itself.
+    let inside = molecule(&mut doc, 90.);
+    let mut g = panel(&[], TitlePlace::Bar);
+    let (s, c) = 45f32.to_radians().sin_cos();
+    let middle = Point::new(100., 50.);
+    g.map_positions(|p| {
+        let (x, y) = (p.x - middle.x, p.y - middle.y);
+        Point::new(middle.x + x * c - y * s, middle.y + x * s + y * c)
+    });
+    let (lo, _) = g.shape_bounds();
+    let corner = doc.next_id();
+    doc.graphics.push(Graphic::dragged(
+        corner,
+        GraphicKind::Line,
+        lo.offset(2., 2.),
+        lo.offset(8., 4.),
+        GraphicStyle::default(),
+        BracketSides::Both,
+        false,
+    ));
+    g.id = doc.next_id();
+    let id = g.id;
+    doc.graphics.push(g);
+    let found = contents(&doc, id);
+    assert!(inside.iter().all(|a| found.contains(a)), "{found:?}");
+    assert!(!found.contains(&corner));
+}
+
+#[test]
+fn a_turned_panel_squeezed_from_a_side_holds_nothing_beyond_its_slanted_edge() {
+    let mut doc = Document::default();
+    let mut g = panel(&[], TitlePlace::Bar);
+    let (s, c) = 45f32.to_radians().sin_cos();
+    let middle = Point::new(100., 50.);
+    // Turned, then squeezed along the page's x: a parallelogram.
+    g.map_positions(|p| {
+        let (x, y) = (p.x - middle.x, p.y - middle.y);
+        Point::new(middle.x + (x * c - y * s) * 0.5, middle.y + x * s + y * c)
+    });
+    let (o, ax, ay) = (g.origin, g.axis_x, g.axis_y);
+    // Just outside the edge along the second axis.
+    let length = ay.x.hypot(ay.y);
+    let mut n = Point::new(ay.y / length, -ay.x / length);
+    if n.x * ax.x + n.y * ax.y > 0. {
+        n = Point::new(-n.x, -n.y);
+    }
+    let q = Point::new(o.x + ay.x * 0.5 + n.x * 2., o.y + ay.y * 0.5 + n.y * 2.);
+    let outside = doc.next_id();
+    doc.graphics.push(Graphic::dragged(
+        outside,
+        GraphicKind::Line,
+        q,
+        q.offset(n.x, n.y),
+        GraphicStyle::default(),
+        BracketSides::Both,
+        false,
+    ));
+    g.id = doc.next_id();
+    let id = g.id;
+    doc.graphics.push(g);
+    assert!(!contents(&doc, id).contains(&outside));
+}
+
+#[test]
+fn a_rounded_panel_does_not_hold_what_sits_in_its_cut_corner() {
+    let mut doc = Document::default();
+    let mut g = panel(&[], TitlePlace::Bar);
+    g.kind = GraphicKind::RoundedRectangle;
+    g.style.corner_pt = Some(20.);
+    let corner = doc.next_id();
+    doc.graphics.push(Graphic::dragged(
+        corner,
+        GraphicKind::Line,
+        Point::new(0.5, 0.5),
+        Point::new(1.5, 1.5),
+        GraphicStyle::default(),
+        BracketSides::Both,
+        false,
+    ));
+    g.id = doc.next_id();
+    let id = g.id;
+    doc.graphics.push(g);
+    assert!(!contents(&doc, id).contains(&corner));
 }
 
 #[test]
@@ -232,48 +397,36 @@ fn a_click_on_a_divider_picks_an_unfilled_panel() {
 }
 
 #[test]
-fn a_border_title_backing_takes_the_panel_fill_on_both_canvases() {
-    use crate::{canvas_theme::CanvasTheme, palette::Palette, scene::Primitive};
+fn a_border_title_reads_on_the_fill_and_the_page_on_both_canvases() {
+    use crate::{canvas_theme::CanvasTheme, color_contrast::contrast, scene::Primitive};
     let tinted = panel(&["Previous work"], TitlePlace::Border);
     let mut faint = tinted.clone();
     faint.style.fill = Some(Color::Ink);
     faint.style.effects.opacity = Some(0.08);
     let mut open = tinted.clone();
     open.style.fill = None;
+    // Ink on Ink: neither black nor white reads on both the panel and the page.
+    let mut ink = tinted.clone();
+    ink.style.stroke = Color::Ink;
+    ink.style.fill = Some(Color::Ink);
     for theme in CanvasTheme::ALL {
-        let backing = |g: &Graphic| {
-            let doc = Document {
-                canvas_theme: theme,
-                graphics: vec![g.clone()],
-                ..Default::default()
-            };
-            let parts = crate::scene::primitives(&doc);
-            // The backing is the last filled path, drawn over the outline.
-            let fill = parts
+        for g in [&tinted, &faint, &open, &ink] {
+            let parts = drawn(g, theme);
+            let title = parts
                 .iter()
-                .rev()
                 .find_map(|p| match p {
-                    Primitive::Path {
-                        style,
-                        filled: true,
-                        ..
-                    } => style.fill,
+                    Primitive::Text { color, .. } => Some(theme.color(*color)),
                     _ => None,
                 })
                 .unwrap();
-            // Scene colors are canonical; the canvas shows them flipped once.
-            (theme.color(fill.rgb()), Palette::of(&doc))
-        };
-        let (shown, palette) = backing(&tinted);
-        assert_eq!(shown, palette.rgb(tinted.style.fill.unwrap()), "{theme}");
-        let (shown, _) = backing(&faint);
-        let paper = theme.background();
-        assert!(
-            shown.iter().zip(paper).all(|(a, b)| a.abs_diff(b) <= 21),
-            "{theme}: a faint fill backs the title in a faint grey, {shown:?}"
-        );
-        assert_ne!(shown, paper, "{theme}");
-        let (shown, _) = backing(&open);
-        assert_eq!(shown, paper, "{theme}: an unfilled panel shows the paper");
+            let paper = theme.background();
+            let fill = g.backing(|c| theme.color(c.rgb()), paper).unwrap_or(paper);
+            for surface in [fill, paper] {
+                assert!(
+                    contrast(title, surface) >= 3.,
+                    "{theme}: {title:?} on {surface:?}"
+                );
+            }
+        }
     }
 }

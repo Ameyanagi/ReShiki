@@ -68,11 +68,15 @@ fn panels_export_as_one_group_of_curves_and_uninterpreted_titles() {
                     .children()
                     .filter(|node| node.has_tag_name("curve"))
                     .collect();
-                // Fill and outline (or fill alone), the band or two title
-                // backings, and the divider.
-                let body = if border { 2 } else { 1 };
-                let extras = if place == TitlePlace::Bar { 1 } else { 2 };
-                assert_eq!(curves.len(), body + extras + 1, "{place:?} {border}");
+                // Fill and outline (or fill alone) and the band, or the fill
+                // and an outline broken by two titles into two lines; and the
+                // divider.
+                let body = match (place, border) {
+                    (TitlePlace::Bar, true) | (TitlePlace::Border, true) => 3,
+                    (TitlePlace::Bar, false) => 2,
+                    (TitlePlace::Border, false) => 1,
+                };
+                assert_eq!(curves.len(), body + 1, "{place:?} {border}");
                 let imported = cdxml::import_cdxml(xml).unwrap().document;
                 if groups[0].has_attribute(crate::exchange::PANEL) {
                     // ReShiki reads its own CDXML back as the panel.

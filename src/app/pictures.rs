@@ -142,18 +142,6 @@ impl App {
         self.sync_bonds();
         self.status = "Picture replaced".into();
     }
-    pub(super) fn reveal_picture(&mut self, id: u64) {
-        if let Some(g) = self
-            .tab
-            .doc
-            .graphics
-            .iter()
-            .find(|g| g.id == id && g.picture.is_some())
-        {
-            let (lo, hi) = g.bounds();
-            self.reveal_bounds(lo, hi);
-        }
-    }
     /// Preserve the camera when these explicit bounds are already on the paper.
     pub(super) fn reveal_if_clipped(&mut self, lo: Point, hi: Point) {
         let paper = self.guides.paper(iced::Rectangle::with_size(self.viewport));

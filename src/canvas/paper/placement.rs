@@ -258,8 +258,10 @@ impl MoleculeCanvas<'_> {
                 })
                 .or_else(|| {
                     self.template.map(|(template, source_anchor)| {
-                        template
-                            .place(
+                        if template.is_layout() {
+                            template.place_layout(self.doc, anchor)
+                        } else {
+                            template.place(
                                 self.doc,
                                 anchor,
                                 direction,
@@ -267,7 +269,8 @@ impl MoleculeCanvas<'_> {
                                 source_anchor,
                                 self.template_connection,
                             )
-                            .map_err(str::to_owned)
+                        }
+                        .map_err(str::to_owned)
                     })
                 });
             match placement {
@@ -275,6 +278,8 @@ impl MoleculeCanvas<'_> {
                     *template_notice = Some((
                         if self.joining.is_some() {
                             "Move & attach preview · Click or release to join · Esc cancels".into()
+                        } else if self.template.is_some_and(|(t, _)| t.is_layout()) {
+                            "Preview · Click to place the layout · Esc cancels".into()
                         } else {
                             format!(
                                 "Preview · {} new objects ({} atoms) · Shift/Ctrl drag snaps 15° · Esc cancels",

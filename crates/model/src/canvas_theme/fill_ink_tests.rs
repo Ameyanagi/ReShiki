@@ -164,11 +164,13 @@ fn a_stored_paper_color_saves_as_the_drawing_release() {
 fn a_border_title_reads_on_an_ink_panel() {
     use crate::graphics::panel::border_title_rgb;
     // An Ink outline on an Ink fill: the title takes the other ink.
-    assert_eq!(border_title_rgb([0; 3], [0; 3]), [255; 3]);
-    assert_eq!(border_title_rgb([255; 3], [255; 3]), [0; 3]);
-    // A colored outline that reads on its tint keeps its color.
+    assert_eq!(border_title_rgb([0; 3], &[[0; 3]; 2]), [255; 3]);
+    assert_eq!(border_title_rgb([255; 3], &[[255; 3]; 2]), [0; 3]);
+    // On a black panel on a white page, grey reads on both.
+    assert_eq!(border_title_rgb([0; 3], &[[0; 3], [255; 3]]), [118; 3]);
+    // A colored outline that reads on its tint and the page keeps its color.
     assert_eq!(
-        border_title_rgb([32, 80, 145], [221, 232, 248]),
+        border_title_rgb([32, 80, 145], &[[221, 232, 248], [255; 3]]),
         [32, 80, 145]
     );
 }

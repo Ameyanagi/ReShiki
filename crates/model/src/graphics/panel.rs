@@ -169,8 +169,7 @@ impl Graphic {
             _ => 0.,
         }
     }
-    /// Title band, page-colored title backings and dividers, drawn over the
-    /// panel's body in this order.
+    /// Title band and dividers, drawn over the panel's body in this order.
     pub fn panel_parts(&self, text_style: &TextStyle) -> Vec<Part> {
         let Some(panel) = &self.panel else {
             return vec![];
@@ -206,28 +205,6 @@ impl Graphic {
                 ],
                 self.style.stroke,
             ));
-        }
-        if panel.place == TitlePlace::Border {
-            for label in self.panel_titles(text_style) {
-                let gap = size * 0.3;
-                let (lo, hi) = (
-                    label.position.offset(-gap, 0.),
-                    label.position.offset(
-                        style::styled_text_width(label.text, size, &label.style) + gap,
-                        size,
-                    ),
-                );
-                parts.push(flat(
-                    vec![
-                        PathCommand::Move(lo),
-                        PathCommand::Line(Point::new(hi.x, lo.y)),
-                        PathCommand::Line(hi),
-                        PathCommand::Line(Point::new(lo.x, hi.y)),
-                        PathCommand::Close,
-                    ],
-                    Color::Custom([255; 3]),
-                ));
-            }
         }
         let inset = size * 0.8;
         let top = if bar > 0. { bar } else { band * 0.5 };
@@ -304,14 +281,122 @@ impl Graphic {
     }
 }
 
-/// A border title's color on its backing, as the canvas shows both: the
-/// outline color, or black or white where the outline would not read.
-pub fn border_title_rgb(outline: [u8; 3], backing: [u8; 3]) -> [u8; 3] {
-    if crate::color_contrast::contrast(outline, backing) >= 3. {
-        outline
-    } else {
-        crate::canvas_theme::ink_canvas(backing).color([0; 3])
+/// A border title's color, as the canvas shows it, on the surfaces it
+/// straddles: the panel's fill (each end of a gradient) and the page. The outline color where it
+/// reads on both, or else black, white or grey, whichever reads best.
+pub fn border_title_rgb(outline: [u8; 3], surfaces: &[[u8; 3]]) -> [u8; 3] {
+    let reads = |ink: [u8; 3]| {
+        surfaces
+            .iter()
+            .map(|s| crate::color_contrast::contrast(ink, *s))
+            .fold(f64::MAX, f64::min)
+    };
+    if reads(outline) >= 3. {
+        return outline;
     }
+    [[0; 3], [255; 3], [118; 3]]
+        .into_iter()
+        .max_by(|a, b| reads(*a).total_cmp(&reads(*b)))
+        .unwrap_or(outline)
+}
+
+impl Graphic {
+    /// Upright boxes around border titles, where the panel's outline breaks
+    /// so the title reads. Empty unless titles sit in a drawn border.
+    pub fn outline_breaks(&self, text_style: &TextStyle) -> Vec<(Point, Point)> {
+        match &self.panel {
+            Some(panel) if panel.place == TitlePlace::Border && panel.border => {}
+            _ => return vec![],
+        }
+        self.panel_titles(text_style)
+            .into_iter()
+            .map(|label| {
+                let gap = label.size * 0.3;
+                let width = style::styled_text_width(label.text, label.size, &label.style);
+                (
+                    label.position.offset(-gap, 0.),
+                    label.position.offset(width + gap, label.size),
+                )
+            })
+            .collect()
+    }
+}
+
+/// `commands` as open lines that leave out what lies inside `breaks`.
+pub fn broken_outline(commands: &[PathCommand], breaks: &[(Point, Point)]) -> Vec<PathCommand> {
+    // The part of segment a→b inside the box lo..hi, as a parameter range.
+    let inside = |a: Point, b: Point, (lo, hi): (Point, Point)| {
+        let (mut t0, mut t1) = (0f32, 1f32);
+        for (p, d, min, max) in [(a.x, b.x - a.x, lo.x, hi.x), (a.y, b.y - a.y, lo.y, hi.y)] {
+            if d == 0. {
+                if p < min || p > max {
+                    return None;
+                }
+                continue;
+            }
+            let (s0, s1) = ((min - p) / d, (max - p) / d);
+            t0 = t0.max(s0.min(s1));
+            t1 = t1.min(s0.max(s1));
+        }
+        (t0 < t1).then_some((t0, t1))
+    };
+    let mut out = vec![];
+    for line in super::flattened(commands) {
+        // The shown pieces of this line, each a run of points.
+        let mut pieces: Vec<Vec<Point>> = vec![];
+        let mut joined = false;
+        let mut cut = false;
+        for (&a, &b) in line.iter().zip(line.iter().skip(1)) {
+            let at = |t: f32| Point::new(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t);
+            let mut hidden: Vec<(f32, f32)> =
+                breaks.iter().filter_map(|r| inside(a, b, *r)).collect();
+            hidden.sort_by(|x, y| x.0.total_cmp(&y.0));
+            let mut from = 0f32;
+            let mut shown = vec![];
+            for (s, e) in hidden {
+                cut = true;
+                if s > from {
+                    shown.push((from, s));
+                }
+                from = from.max(e);
+            }
+            if from < 1. {
+                shown.push((from, 1.));
+            }
+            joined = joined && shown.first().is_some_and(|(s, _)| *s == 0.);
+            for (s, e) in shown {
+                match pieces.last_mut() {
+                    Some(piece) if joined && s == 0. => piece.push(at(e)),
+                    _ => pieces.push(vec![at(s), at(e)]),
+                }
+                joined = e == 1.;
+            }
+        }
+        // A closed line cut somewhere rejoins across its start, so its first
+        // corner keeps its join.
+        let closed = line.len() > 2 && line.first() == line.last();
+        if closed
+            && pieces.len() > 1
+            && pieces.first().and_then(|p| p.first()) == line.first()
+            && joined
+        {
+            let first = pieces.remove(0);
+            if let Some(last) = pieces.last_mut() {
+                last.extend(first.into_iter().skip(1));
+            }
+        }
+        let whole = closed && !cut;
+        for piece in pieces {
+            if let Some((first, rest)) = piece.split_first() {
+                out.push(PathCommand::Move(*first));
+                out.extend(rest.iter().map(|p| PathCommand::Line(*p)));
+            }
+        }
+        if whole {
+            out.push(PathCommand::Close);
+        }
+    }
+    out
 }
 
 /// Space between a panel's edge and what it holds, in points.
@@ -391,7 +476,9 @@ pub fn contents(doc: &Document, panel: u64) -> Vec<u64> {
         .collect()
 }
 
-/// What the panel holds, each whole molecule or other object with its bounds.
+/// What the panel holds, each whole molecule or other object with its
+/// extent along the panel's own axes, measured from its top left corner.
+/// Measured in those axes, a rotated panel holds only what its frame shows.
 fn content_units(doc: &Document, panel: u64) -> Vec<(Vec<u64>, (Point, Point))> {
     let Some(frame) = doc
         .graphics
@@ -400,7 +487,27 @@ fn content_units(doc: &Document, panel: u64) -> Vec<(Vec<u64>, (Point, Point))> 
     else {
         return vec![];
     };
-    let (lo, hi) = frame.shape_bounds();
+    let (o, ex, ey, w, h) = frame.panel_frame();
+    // A turned panel stretched from a side is a parallelogram, which no one
+    // rotation describes: its contents' world boxes are measured instead,
+    // through the inverse of its axes.
+    let square = (ex.x * ey.x + ex.y * ey.y).abs() < 1e-3;
+    let degrees = if square {
+        ex.y.atan2(ex.x).to_degrees()
+    } else {
+        0.
+    };
+    let det = ex.x * ey.y - ex.y * ey.x;
+    let local = |d: Point| {
+        if square {
+            d
+        } else {
+            Point::new(
+                (d.x * ey.y - d.y * ey.x) / det,
+                (ex.x * d.y - ex.y * d.x) / det,
+            )
+        }
+    };
     let atoms: Vec<u64> = doc.atoms.iter().map(|a| a.id).collect();
     let mut units = crate::reactions::molecules(doc, &atoms);
     units.extend(
@@ -408,13 +515,36 @@ fn content_units(doc: &Document, panel: u64) -> Vec<(Vec<u64>, (Point, Point))> 
             .filter(|id| *id != panel && doc.atom(*id).is_none())
             .map(|id| vec![id]),
     );
-    let bounds = crate::scene::selections_bounds(doc, &units);
+    let bounds = crate::scene::selections_bounds_in_axes(doc, &units, Some((o, degrees)));
+    // Inside the frame, rounded corners included: the shape is convex, so a
+    // box whose four corners are inside lies wholly inside.
+    let (slack, r) = (0.01, frame.panel_radius());
+    let inside = |p: Point| {
+        let corner = |v: f32, size: f32| v.clamp(r, (size - r).max(r));
+        let (cx, cy) = (corner(p.x, w), corner(p.y, h));
+        p.x >= -slack
+            && p.y >= -slack
+            && p.x <= w + slack
+            && p.y <= h + slack
+            && (p.x - cx).hypot(p.y - cy) <= r + slack
+    };
     units
         .into_iter()
         .zip(bounds)
         .filter_map(|(unit, bounds)| {
             let (a, b) = bounds?;
-            (a.x >= lo.x && a.y >= lo.y && b.x <= hi.x && b.y <= hi.y).then_some((unit, (a, b)))
+            let (a, b) = (a.offset(-o.x, -o.y), b.offset(-o.x, -o.y));
+            let corners = [a, Point::new(b.x, a.y), b, Point::new(a.x, b.y)].map(local);
+            let low = corners
+                .iter()
+                .fold(corners[0], |m, p| Point::new(m.x.min(p.x), m.y.min(p.y)));
+            let high = corners
+                .iter()
+                .fold(corners[0], |m, p| Point::new(m.x.max(p.x), m.y.max(p.y)));
+            corners
+                .into_iter()
+                .all(inside)
+                .then_some((unit, (low, high)))
         })
         .collect()
 }
@@ -426,22 +556,14 @@ pub fn divider_position(doc: &Document, panel: u64, vertical: bool) -> f32 {
     let Some(frame) = doc.graphics.iter().find(|g| g.id == panel) else {
         return 0.5;
     };
-    // Measured along the panel's own axis, so a rotated panel splits right.
-    let (o, ex, ey, w, h) = frame.panel_frame();
-    let along = if vertical { ex } else { ey };
-    let axis = |p: Point| (p.x - o.x) * along.x + (p.y - o.y) * along.y;
+    // Contents are measured along the panel's own axes, so a rotated panel
+    // splits right.
+    let (_, _, _, w, h) = frame.panel_frame();
     let (start, end) = (0., if vertical { w } else { h });
     // Each object on its own: the panel's group would join them all.
     let mut spans: Vec<(f32, f32)> = content_units(doc, panel)
         .into_iter()
-        .map(|(_, (a, b))| {
-            let corners = [a, Point::new(b.x, a.y), b, Point::new(a.x, b.y)].map(axis);
-            corners
-                .iter()
-                .fold((f32::INFINITY, f32::NEG_INFINITY), |(lo, hi), v| {
-                    (lo.min(*v), hi.max(*v))
-                })
-        })
+        .map(|(_, (a, b))| if vertical { (a.x, b.x) } else { (a.y, b.y) })
         .collect();
     spans.sort_by(|a, b| a.0.total_cmp(&b.0));
     let taken: Vec<f32> = frame

@@ -12,6 +12,8 @@ use crate::{
 };
 use std::collections::HashMap;
 
+/// The template group of figure layouts.
+pub const GROUP: &str = "Figure layouts";
 const GUTTER_PT: f32 = 10.;
 
 /// A Kekulé benzene ring centered on `center`, as a placeholder structure.
@@ -132,7 +134,7 @@ fn template(
 ) -> Template {
     Template {
         id: String::new(),
-        group: "Figure layouts".into(),
+        group: GROUP.into(),
         name: name.into(),
         smiles: vec!["c1ccccc1"; rings].join("."),
         keywords: keywords.iter().map(|k| (*k).into()).collect(),
@@ -146,7 +148,7 @@ fn template(
 
 pub(super) fn templates() -> Result<Vec<Template>, String> {
     let r = crate::style::DEFAULT.bond_length_world;
-    let note = "The rings and arrows are illustrations, so they never form a reaction. Replace them with your structures. Option-click edits one object inside the panel.";
+    let note = "The rings and arrows are illustrations, so they never form a reaction. Select a panel (Option- or Alt-click picks one row) and choose Clear contents, then paste or draw your scheme.";
 
     let mut toc = Document::default();
     let row = scheme(&mut toc, Point::default(), 2);
@@ -227,7 +229,11 @@ pub(super) fn templates() -> Result<Vec<Template>, String> {
     let mut rows = Document::default();
     let first = scheme(&mut rows, Point::default(), 1);
     let second = scheme(&mut rows, Point::new(0., 4. * r), 1);
-    let both: Vec<u64> = first.iter().chain(&second).copied().collect();
+    // Each row sits on a plain panel, so Clear contents empties one row.
+    for row in [first, second] {
+        panel(&mut rows, &row, Hue::Blue, titled(&[], TitlePlace::Bar));
+    }
+    let both = rows.all_ids();
     layout(&mut rows, &both, Flow::Column);
 
     let documents = [

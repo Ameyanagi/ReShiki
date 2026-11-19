@@ -592,11 +592,42 @@ impl Writer<'_> {
                     if borderless {
                         style.width_pt = 0.;
                     }
-                    vec![crate::scientific::Part {
-                        commands,
-                        style,
-                        filled: borderless,
-                    }]
+                    // Border titles break the outline, never the fill.
+                    let breaks = g.outline_breaks(&doc.drawing_style.text_style());
+                    if breaks.is_empty() {
+                        vec![crate::scientific::Part {
+                            commands,
+                            style,
+                            filled: borderless,
+                        }]
+                    } else {
+                        let outline = crate::scientific::Part {
+                            commands: crate::graphics::panel::broken_outline(&commands, &breaks),
+                            // A filled panel's effects belong to its body; an
+                            // unfilled panel's are its outline's.
+                            style: crate::graphics::GraphicStyle {
+                                fill: None,
+                                effects: if style.fill.is_some() {
+                                    Default::default()
+                                } else {
+                                    style.effects
+                                },
+                                ..style.clone()
+                            },
+                            filled: false,
+                        };
+                        // A shadow fills an unfilled body with the page below.
+                        let body = (style.fill.is_some() || g.shadow_commands().is_some())
+                            .then_some(crate::scientific::Part {
+                                commands,
+                                style: crate::graphics::GraphicStyle {
+                                    width_pt: 0.,
+                                    ..style
+                                },
+                                filled: true,
+                            });
+                        body.into_iter().chain([outline]).collect()
+                    }
                 };
             let page = crate::palette::Color::Custom(doc.canvas_theme.background());
             // ChemDraw draws no shadow on curves: it goes first as a grey
@@ -631,31 +662,20 @@ impl Writer<'_> {
                 );
             }
             let text_style = doc.drawing_style.text_style();
-            // Title backings take the panel's fill, and titles on a band the
-            // color that reads on the band as exported.
+            // Border titles take the color that reads on the panel's fill and
+            // the page, and titles on a band the color that reads on the band.
             let border = g
                 .panel
                 .as_ref()
                 .is_some_and(|p| p.place == crate::graphics::TitlePlace::Border);
             let palette = crate::palette::Palette::of(doc);
             let paper = doc.canvas_theme.background();
-            let backing = crate::palette::Color::Custom(
-                g.backing(|c| palette.rgb(c), paper).unwrap_or(paper),
-            );
-            let panel_parts: Vec<_> = g
-                .panel_parts(&text_style)
-                .into_iter()
-                .map(|mut part| {
-                    if border && part.filled {
-                        part.style.fill = Some(backing);
-                    }
-                    part
-                })
-                .collect();
+            let backing = g.backing(|c| palette.rgb(c), paper).unwrap_or(paper);
+            let panel_parts = g.panel_parts(&text_style);
             let mut panel_titles = g.panel_titles(&text_style);
             if border {
                 let outline = palette.rgb(g.style.stroke);
-                let rgb = crate::graphics::panel::border_title_rgb(outline, palette.rgb(backing));
+                let rgb = crate::graphics::panel::border_title_rgb(outline, &[backing, paper]);
                 if rgb != outline {
                     for label in &mut panel_titles {
                         label.style.color = crate::palette::Color::Custom(rgb);
@@ -728,7 +748,8 @@ impl Writer<'_> {
             let mut object = None;
             for (paint, paths) in &parsed {
                 for (points, closed) in paths {
-                    let target = if parsed.len() > 1 && paint.fill.is_some() {
+                    // A panel's fill and its broken outline share its group.
+                    let target = if parsed.len() > 1 && paint.fill.is_some() && g.panel.is_none() {
                         let id = self.id()?;
                         self.tree
                             .add(Some(parent), "group", [("id", id), ("Z", z.to_string())])?
