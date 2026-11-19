@@ -1047,7 +1047,7 @@ impl App {
         // An assembly: each seat in it, with Detach.
         if self.tab.selected.len() > 1 {
             body = body.push(
-                text("Option-click a piece for its own joints and library actions.")
+                text("Click a piece again for its own joints and library actions.")
                     .size(11)
                     .style(muted_text),
             );
