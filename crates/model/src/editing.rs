@@ -583,6 +583,14 @@ pub(crate) fn remap_ids(doc: &mut Document, mapping: &HashMap<u64, u64>) -> Opti
     for g in groups {
         map(&mut g.id)?;
         g.members.iter_mut().try_for_each(map)?;
+        // A layout's order names its units; ones not copied drop out.
+        if let Some(layout) = &mut g.layout {
+            layout.order = layout
+                .order
+                .iter()
+                .filter_map(|id| mapping.get(id).copied())
+                .collect();
+        }
     }
     for group in abbreviations {
         map(&mut group.anchor)?;

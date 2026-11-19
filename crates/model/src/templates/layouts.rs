@@ -66,6 +66,7 @@ fn layout(doc: &mut Document, ids: &[u64], flow: Flow) -> u64 {
             flow,
             gutter_pt: GUTTER_PT,
             align: Align::Center,
+            order: vec![],
         }),
     });
     crate::layouts::reflow(doc, id, None, None);

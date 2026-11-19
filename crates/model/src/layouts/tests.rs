@@ -62,13 +62,22 @@ fn a_row_keeps_shared_gutters_and_centers_units_without_resizing_them() {
     ids.extend(&b);
     ids.extend(&c);
     let group = arrange(&mut doc, &ids, Flow::Row, GUTTER).unwrap();
+    let layout = doc
+        .groups
+        .iter()
+        .find(|g| g.id == group)
+        .unwrap()
+        .layout
+        .clone()
+        .unwrap();
     assert_eq!(
-        doc.groups.iter().find(|g| g.id == group).unwrap().layout,
-        Some(Layout {
-            flow: Flow::Row,
-            gutter_pt: GUTTER,
-            align: Align::Center
-        })
+        (
+            layout.flow,
+            layout.gutter_pt,
+            layout.align,
+            layout.order.len()
+        ),
+        (Flow::Row, GUTTER, Align::Center, 3)
     );
     assert_eq!(bond_lengths(&doc), lengths);
     // Left to right in their old order: a, c, b.
@@ -181,6 +190,7 @@ fn a_layout_needs_two_units_and_is_stored_from_version_40() {
         flow: Flow::Grid(0),
         gutter_pt: GUTTER,
         align: Align::Center,
+        order: vec![],
     });
     assert!(bad.validate().is_err());
 }

@@ -326,7 +326,7 @@ impl App {
         let ids = self.tab.selected.clone();
         let gutter = self
             .selected_layout()
-            .and_then(|g| g.layout)
+            .and_then(|g| g.layout.as_ref())
             .map_or(self.tab.doc.drawing_style.bond_length_pt, |l| l.gutter_pt);
         match reshiki::layouts::arrange(&mut self.tab.doc, &ids, flow, gutter) {
             Ok(group) => {
@@ -399,7 +399,7 @@ impl App {
                 .map(|d| format!("{}", (d.at * 100.).round()))
                 .collect();
         }
-        let layout = self.selected_layout().and_then(|g| g.layout);
+        let layout = self.selected_layout().and_then(|g| g.layout.clone());
         if let Some(layout) = layout {
             self.tab.layout_gutter = format!("{}", layout.gutter_pt);
             if let Flow::Grid(columns) = layout.flow {
@@ -542,7 +542,7 @@ impl App {
 
     /// Properties for the selected lasting layout.
     pub(super) fn layout_card(&self) -> Option<Element<'_, Message>> {
-        let layout = self.selected_layout()?.layout?;
+        let layout = self.selected_layout()?.layout.clone()?;
         let send = |action| Message::Figure(action);
         let toggle = |label, active: bool, action| {
             button(text(label).size(12).width(Length::Fill).center())

@@ -58,7 +58,7 @@ impl Document {
                 break;
             };
             group.integral |= other.integral;
-            group.layout = group.layout.or(other.layout);
+            group.layout = group.layout.take().or(other.layout);
             for id in other.members {
                 if !group.members.contains(&id) {
                     group.members.push(id);
@@ -183,7 +183,7 @@ impl Document {
             }
             if let Some(existing) = merged.iter_mut().find(|g| g.members == *members) {
                 existing.integral |= group.integral;
-                existing.layout = existing.layout.or(group.layout);
+                existing.layout = existing.layout.take().or(group.layout);
             } else {
                 merged.push(group);
             }
@@ -206,7 +206,7 @@ impl Document {
             {
                 return Err("Invalid group ID or membership".into());
             }
-            if let Some(layout) = g.layout {
+            if let Some(layout) = &g.layout {
                 layout.validate()?;
             }
         }

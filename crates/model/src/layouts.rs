@@ -63,13 +63,17 @@ impl std::fmt::Display for Align {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Layout {
     pub flow: Flow,
     /// Space between neighbouring units, in points.
     pub gutter_pt: f32,
     #[serde(default)]
     pub align: Align,
+    /// One object ID per unit, in reading order. Units keep this order when
+    /// they grow, move or change flow; new units follow, read by position.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub order: Vec<u64>,
 }
 impl Layout {
     pub fn validate(&self) -> Result<(), String> {
@@ -205,7 +209,7 @@ pub fn reflow(
         .groups
         .iter()
         .find(|g| g.id == group)
-        .and_then(|g| g.layout)
+        .and_then(|g| g.layout.clone())
     else {
         return;
     };
@@ -282,6 +286,22 @@ pub fn reflow(
                 .collect();
         }
     }
+    // The stored order wins; units it does not know keep their reading order
+    // after the known ones.
+    let rank: HashMap<u64, usize> = layout
+        .order
+        .iter()
+        .enumerate()
+        .map(|(i, id)| (*id, i))
+        .collect();
+    cells.sort_by_key(|cell| {
+        cell.0
+            .iter()
+            .filter_map(|id| rank.get(id))
+            .min()
+            .copied()
+            .unwrap_or(usize::MAX)
+    });
     let columns = layout.flow.columns(cells.len());
     let rows = cells.len().div_ceil(columns);
     let size = |(lo, hi): (Point, Point)| (hi.x - lo.x, hi.y - lo.y);
@@ -313,6 +333,10 @@ pub fn reflow(
             .collect::<Vec<f32>>()
     };
     let (lefts, tops) = (starts(&widths), starts(&heights));
+    let order: Vec<u64> = cells
+        .iter()
+        .filter_map(|cell| cell.0.iter().min().copied())
+        .collect();
     let moves: Vec<_> = cells
         .into_iter()
         .enumerate()
@@ -330,6 +354,14 @@ pub fn reflow(
         })
         .collect();
     doc.translate_units(&moves);
+    if let Some(layout) = doc
+        .groups
+        .iter_mut()
+        .find(|g| g.id == group)
+        .and_then(|g| g.layout.as_mut())
+    {
+        layout.order = order;
+    }
     // A panel wrapped around the layout follows its new extent.
     let members = doc
         .groups
@@ -412,7 +444,7 @@ pub fn arrange(doc: &mut Document, ids: &[u64], flow: Flow, gutter_pt: f32) -> R
         .groups
         .iter()
         .find(|g| same(g, &members))
-        .map(|g| (g.id, g.layout.map(|l| l.flow)));
+        .map(|g| (g.id, g.layout.as_ref().map(|l| l.flow)));
     let (group, previous) = match existing {
         Some(found) => found,
         None => {
@@ -435,11 +467,16 @@ pub fn arrange(doc: &mut Document, ids: &[u64], flow: Flow, gutter_pt: f32) -> R
     let Some(entry) = doc.groups.iter_mut().find(|g| g.id == group) else {
         return Err("The layout group was not found".into());
     };
-    let align = entry.layout.map(|l| l.align).unwrap_or_default();
+    let (align, order) = entry
+        .layout
+        .take()
+        .map(|l| (l.align, l.order))
+        .unwrap_or_default();
     entry.layout = Some(Layout {
         flow,
         gutter_pt,
         align,
+        order,
     });
     reflow(doc, group, previous, None);
     Ok(group)

@@ -218,7 +218,7 @@ also drives SVG, PDF and PNG export.
 
 Panels are rectangles or rounded rectangles with a `panel` entry: titles,
 title place, outline and dividers at fractions of the width or height. A lasting
-layout is a `layout` entry on a group: flow, gutter and alignment. Its items
+layout is a `layout` entry on a group: flow, gutter, alignment and the order of its items. Its items
 are the group's connected molecules, nested groups and whole reactions. After
 each edit the layout is laid out again if an item changed size or number.
 `graphics::panel::contents` lists what lies wholly inside a panel. Both entries
