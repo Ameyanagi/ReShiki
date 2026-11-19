@@ -31,6 +31,9 @@ pub struct State {
     past: Vec<Revision>,
     future: Vec<Revision>,
     auto_formula: bool,
+    /// What a new callout's text points at; its leader is added with the
+    /// text, so one Undo removes both.
+    pub(super) callout: Option<reshiki::leaders::Target>,
 }
 impl super::DocumentTab {
     /// A caption draft that differs from the text it started with.
@@ -129,12 +132,18 @@ impl App {
                     label.format = format;
                 }
             }
-            (None, false) => doc.annotations.push(Annotation {
-                id: doc.next_id(),
-                position: state.position,
-                text,
-                format,
-            }),
+            (None, false) => {
+                let id = doc.next_id();
+                doc.annotations.push(Annotation {
+                    id,
+                    position: state.position,
+                    text,
+                    format,
+                });
+                if let Some(target) = &state.callout {
+                    reshiki::leaders::attach(&mut doc, id, target.clone())?;
+                }
+            }
             (None, true) => {}
         }
         if validate {
@@ -258,6 +267,7 @@ impl App {
                     epoch: self.tab.file_epoch,
                     past: vec![],
                     future: vec![],
+                    callout: None,
                 });
                 self.palette = None;
                 self.tab.hover = None;
@@ -859,6 +869,7 @@ pub(super) fn commits_draft(message: &Message) -> bool {
             | Message::CopyAnalysis
             | Message::CopyChemicalText
             | Message::FormatChemicalName
+            | Message::AddCallout
             | Message::ToggleProperty(..)
             | Message::Paste
             | Message::PastePicture

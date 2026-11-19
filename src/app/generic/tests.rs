@@ -520,6 +520,8 @@ fn union_publication_source() -> Document {
     };
     let start = target.center(&source).unwrap().offset(-100., 0.);
     source.arrows.push(reshiki::document::Arrow {
+        arc: None,
+        badge: None,
         id: source.next_id(),
         start,
         end: Point::new(-580., 80.),

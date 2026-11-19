@@ -130,6 +130,8 @@ fn only_selected_arrows_seed_atom_lone_pair_and_bond_anchor_components() {
                 (ordinary_anchor, unresolved_anchor)
             };
             doc.arrows.push(Arrow {
+                arc: None,
+                badge: None,
                 id,
                 start: Point::new(0., -30.),
                 end: Point::new(168., -30.),
@@ -177,6 +179,8 @@ fn selected_bond_anchor_seeds_both_endpoints_without_a_target_bond() {
         });
         let id = doc.next_id();
         doc.arrows.push(Arrow {
+            arc: None,
+            badge: None,
             id,
             start: Point::new(0., -30.),
             end: Point::new(84., -30.),

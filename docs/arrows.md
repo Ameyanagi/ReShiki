@@ -135,6 +135,58 @@ Custom spacing is stored in native `.rsk` format version 31. Drawings using only
 **Auto** continue to save as version 30. Older builds that cannot read the file's
 version report that an update is required.
 
+### Give an arrow a body
+
+1. Select an arrow, or choose the arrow tool.
+2. In **Properties → Body**, or in the arrow tool's context row, choose
+   **Block**, **Hollow**, **Chevron** or **Gradient**. **Line** is the usual
+   thin arrow.
+3. **Body width (pt)** sets the width of the shaft. **Head length (pt)** and
+   **Head half-width (pt)** under **Arrowhead & markers** set the head.
+
+The body changes only the look. A block reaction arrow keeps its reaction
+roles and condition text, and switching back to **Line** restores line-sized
+heads. Equilibrium, retrosynthesis and elbow arrows keep line bodies. The
+arrow palette also offers **Block**, **Hollow block**, **Chevron** and
+**Gradient** presets. A **Gradient** body is shaded like ChemDraw's Shaded fill.
+
+### Add a badge
+
+1. Select an arrow.
+2. In **Properties → Badge**, choose **Light (hν)**, **Electrode (e⁻)**,
+   **Heat (Δ)**, **Metal** or **Enzyme**. For **Metal**, type the symbol and
+   press Enter.
+
+The badge sits in a gap in the middle of a line arrow, or beside a broad body.
+It moves and rotates with the arrow and names a condition: a straight forward
+arrow with a badge still copies as reaction SMILES. Choose **No badge** to
+remove it.
+
+### Draw an arc arrow
+
+1. Open the arrow palette and choose **Arc**, then drag from where the arrow
+   starts to where it ends. Or select a free arrow and choose **Make arc** in
+   **Properties**. Both start as a half circle.
+2. Drag the diamond to change how far the arc bows; it stays a circular arc.
+   Type a sweep in **Sweep (°)** and press Enter for an exact angle. A minus
+   sign turns the arc the other way.
+
+**Flip bend** and **Reverse** keep the arc. **Straighten** or adding a node
+with **Edit points** turns it into an ordinary curved arrow. Arc arrows have
+free ends; they do not attach to atoms.
+
+### Add a callout
+
+1. Select an atom, a bond, a whole molecule or a text.
+2. Right-click it and choose **Add callout**.
+3. Type the callout's text and press ⌘/Ctrl+Enter. The text and its leader
+   are one Undo step; Esc adds neither.
+
+A leader runs from the text to what it points at, with a dot on an atom or
+bond. Move the molecule or the text and the leader follows. Dragging one end
+of the leader releases it. Deleting the text deletes its leader. A callout is
+a drawing, never a reaction arrow.
+
 ### Style an arrow
 
 **Properties** shows a preview and sets each end's head (full, half or none),
@@ -148,8 +200,9 @@ Equilibrium arrows also set **Reverse length (0.2–1)** and **Shaft separation
 - **Recalculate** adds informational hints for a resonance or equilibrium arrow with one complete molecule at each end: a resonance arrow between structures whose atoms or H differ suggests ⇌ for tautomers, and an equilibrium arrow between structures that differ only in π bonds or charge placement suggests ↔. Abbreviations, partial structures and multi-molecule sides are skipped.
 - Only `.rsk` files keep the links between an arrow and its targets. Other
   formats keep the arrow's shape.
-- Circular or elliptical arcs, broad hollow arrow bodies and automatic routing
-  are not available.
+- Arcs are circular. Automatic routing is not available.
+- ChemDraw draws an arrow above its badge shapes, so there the shaft runs
+  through the badge disc.
 - A multi-segment arrowed curve read from CDXML/CDX opens as a pen path with
   arrowheads, not as an arrow.
 - Some arrow styles cannot be exported to CDXML and give an export error; see
@@ -270,6 +323,30 @@ external saves can remove a dipole tail head or convert an angled Bézier head
 to solid; those combinations therefore return an explicit export error. Head
 dimensions are quantized to CDXML's hundredths of a point; external
 applications can render strokes differently.
+
+### Bodies, badges, arcs and callouts
+
+An arrow style's `body` is `line`, `block`, `hollow`, `chevron` or `gradient`;
+`gap_pt` is the body width. A broad body is one closed outline from the tail
+to the tip, with the head notch. Chevrons are filled shapes spaced along the
+shaft. The arrow's `badge` holds its icon and, for a metal, its symbol. `arc`
+is the signed sweep in degrees, clockwise positive; `cubic` and `nodes` hold
+its Bézier form, refitted after every edit, so every path, hit test and export
+draws it. A line graphic's `leader` names the atom, bond, molecule or object
+each end follows. Editing reconciles leaders after arrow attachments.
+
+These fields save as `.rsk` version 40. Drawings without them keep their
+earlier version.
+
+CDXML/CDX export writes a straight block, hollow or gradient arrow as a
+ChemDraw arrow with a hollow head, `ArrowShaftSpacing` for the body width and
+`FillType` Solid, None or Shaded. ChemDraw measures `ArrowheadWidth` from the
+shaft edge. A circular arc arrow is written with `AngularSize`, `Center3D` and
+its axis ends. ChemDraw runs an arc from the tail through `-AngularSize`
+degrees, so a clockwise arc has a negative size; it ignores which way the
+minor axis points.
+Chevrons, broad bodies on curves, badges and callout leaders are written as
+grouped shapes and text, and the export names them in a notice.
 
 ### Records
 

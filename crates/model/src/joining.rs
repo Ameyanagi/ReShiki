@@ -354,6 +354,14 @@ impl Prepared {
                 arrow.end_anchor = original.end_anchor.clone();
             }
         }
+        // So does an unselected callout leader.
+        for graphic in &mut placed.graphics {
+            if !self.moving.contains(&graphic.id)
+                && let Some(original) = self.original.graphics.iter().find(|g| g.id == graphic.id)
+            {
+                graphic.leader = original.leader.clone();
+            }
+        }
         let joined_mapping: HashMap<_, _> = self
             .original
             .atoms

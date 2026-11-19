@@ -1015,7 +1015,10 @@ fn look(doc: &Document, object: Object, id: u64) -> (Value, Value) {
         Object::Arrow => {
             let arrow = doc.arrows.iter().find(|arrow| arrow.id == id);
             (
-                arrow.map(|arrow| json(&arrow.style)).unwrap_or_default(),
+                // Its look, including a badge, which names a condition.
+                arrow
+                    .map(|arrow| json(&(&arrow.style, &arrow.badge)))
+                    .unwrap_or_default(),
                 // What its ends hold on to.
                 // Its targets only: offsets turn with the drawing.
                 arrow

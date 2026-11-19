@@ -7,7 +7,7 @@ use iced::widget::{
 };
 use iced::{Alignment, Border, Color, Element, Length};
 use reshiki::{
-    arrows::{ArrowStyle, Preset as ArrowPreset},
+    arrows::{ArrowStyle, Body, Preset as ArrowPreset},
     bonds::BondPreset,
     document::{Arrow, Document, Point},
     graphics::{BracketSides, Graphic, GraphicKind, GraphicStyle, LinePattern},
@@ -36,6 +36,8 @@ pub enum Action {
     RingPreset(RingPreset),
     Arrow(ArrowPreset),
     ArrowVariant(ArrowPreset, ArrowStyle),
+    /// An arc arrow with this sweep.
+    ArcArrow(ArrowPreset, ArrowStyle, f32),
     Graphic(GraphicOption),
     Tool(Tool),
 }
@@ -329,7 +331,13 @@ impl App {
                 return self
                     .palette_action(Action::ArrowVariant(preset, ArrowStyle::preset(preset)));
             }
+            Action::ArcArrow(preset, style, sweep) => {
+                let task = self.palette_action(Action::ArrowVariant(preset, style));
+                self.tab.arrows.arc = Some(sweep);
+                return task;
+            }
             Action::ArrowVariant(preset, style) => {
+                self.tab.arrows.arc = None;
                 self.tab.selected.clear();
                 self.palette = None;
                 self.tab.arrow_style = preset;
@@ -576,7 +584,7 @@ impl App {
     ) -> iced::widget::Column<'a, Message> {
         let mut options: Vec<_> = ArrowPreset::ALL
             .iter()
-            .map(|&preset| (preset.to_string(), preset, ArrowStyle::preset(preset)))
+            .map(|&preset| (preset.to_string(), preset, ArrowStyle::preset(preset), None))
             .collect();
         for (label, preset, style) in [
             (
@@ -632,18 +640,46 @@ impl App {
                 },
             ),
         ] {
-            options.push((label.into(), preset, style));
+            options.push((label.into(), preset, style, None));
         }
+        for body in [Body::Block, Body::Hollow, Body::Chevron, Body::Gradient] {
+            let mut style = ArrowStyle::default();
+            style.set_body(body);
+            // The Hollow head preset is already in the list above.
+            let label = if body == Body::Hollow {
+                "Hollow block".into()
+            } else {
+                body.to_string()
+            };
+            options.push((label, ArrowPreset::Forward, style, None));
+        }
+        // One arc preset keeps the palette on screen; Sweep (°) sets any angle.
+        options.push((
+            "Arc".into(),
+            ArrowPreset::Forward,
+            ArrowStyle::default(),
+            Some(180.),
+        ));
         for presets in options.chunks(3) {
             let mut line = row![].spacing(8);
-            for (label, preset, style) in presets {
-                let arrow = Arrow::new(
+            for (label, preset, style, arc) in presets {
+                let mut arrow = Arrow::new(
                     1,
                     Point::new(0., 0.),
                     Point::new(80., 0.),
                     *preset,
                     style.clone(),
                 );
+                if let Some(sweep) = arc {
+                    arrow = Arrow::new(
+                        1,
+                        Point::new(20., 0.),
+                        Point::new(60., 0.),
+                        *preset,
+                        style.clone(),
+                    );
+                    arrow.set_arc(*sweep);
+                }
                 line = line.push(super::workspace::hover_hint(
                     button(
                         column![
@@ -659,15 +695,17 @@ impl App {
                     )
                     .padding(6)
                     .style(super::workspace::control(
-                        self.tab.arrow_style == *preset && self.tab.arrows.style == *style,
+                        self.tab.arrow_style == *preset
+                            && self.tab.arrows.style == *style
+                            && self.tab.arrows.arc == *arc,
                     ))
-                    .on_press(Message::Palette(
-                        if style == &ArrowStyle::preset(*preset) {
-                            Action::Arrow(*preset)
-                        } else {
-                            Action::ArrowVariant(*preset, style.clone())
-                        },
-                    )),
+                    .on_press(Message::Palette(if let Some(sweep) = arc {
+                        Action::ArcArrow(*preset, style.clone(), *sweep)
+                    } else if style == &ArrowStyle::preset(*preset) {
+                        Action::Arrow(*preset)
+                    } else {
+                        Action::ArrowVariant(*preset, style.clone())
+                    })),
                     format!("{label}\n{}", preset.meaning()),
                     tooltip::Position::Bottom,
                 ));

@@ -111,6 +111,8 @@ fn routing_document() -> Document {
     });
     doc.annotations[0].format.style.underline = true;
     doc.arrows.push(Arrow {
+        arc: None,
+        badge: None,
         start_anchor: None,
         end_anchor: None,
         id: doc.next_id(),
@@ -154,6 +156,8 @@ fn paper_document() -> (Document, Vec<u64>, [u64; 4]) {
     doc.add_bond(n, o, 1, "plain");
     let arrow = doc.next_id();
     doc.arrows.push(Arrow {
+        arc: None,
+        badge: None,
         start_anchor: None,
         end_anchor: None,
         id: arrow,

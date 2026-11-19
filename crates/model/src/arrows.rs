@@ -7,9 +7,6 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 
-mod nodes;
-pub use nodes::{FIRST_NODE_HANDLE, NodePart, node_handle};
-
 macro_rules! choices {
     ($name:ident { $first:ident => $label:literal $(, $variant:ident => $text:literal)* $(,)? }) => {
         #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -23,6 +20,15 @@ macro_rules! choices {
         }
     }
 }
+mod arc;
+mod body;
+mod exchange;
+mod nodes;
+pub use arc::{MAX_SWEEP, MIN_SWEEP, sweep_through};
+pub use body::{Badge, BadgeIcon, Body};
+pub(crate) use exchange::shape;
+pub use exchange::{Lowered, export_notice, lowered, lowered_count};
+pub use nodes::{FIRST_NODE_HANDLE, NodePart, node_handle};
 choices!(Head { Full => "Full", None => "None", Left => "Half left", Right => "Half right" });
 choices!(HeadShape { Solid => "Solid", Hollow => "Hollow", Open => "Angled" });
 choices!(NoGo { None => "None", Cross => "Cross", Hash => "Hash" });
@@ -174,6 +180,9 @@ pub struct ArrowStyle {
     pub gap_pt: f32,
     pub no_go: NoGo,
     pub dipole: bool,
+    /// Block, hollow, chevron or gradient bodies; `gap_pt` is their width.
+    #[serde(skip_serializing_if = "Body::is_line")]
+    pub body: Body,
 }
 impl Default for ArrowStyle {
     fn default() -> Self {
@@ -198,6 +207,7 @@ impl ArrowStyle {
         gap_pt: 2.0,
         no_go: NoGo::None,
         dipole: false,
+        body: Body::Line,
     };
 }
 impl ArrowStyle {
@@ -266,6 +276,25 @@ pub struct ArrowPath {
 fn unit(a: Point, b: Point) -> Point {
     let d = a.distance(b).max(0.0001);
     Point::new((b.x - a.x) / d, (b.y - a.y) / d)
+}
+/// Even-odd point-in-polygon test over closed flattened outlines.
+fn inside(p: Point, polygons: &[Vec<Point>]) -> bool {
+    let mut odd = false;
+    for polygon in polygons {
+        let Some(&last) = polygon.last() else {
+            continue;
+        };
+        let mut previous = last;
+        for &q in polygon {
+            if (q.y > p.y) != (previous.y > p.y)
+                && p.x < (previous.x - q.x) * (p.y - q.y) / (previous.y - q.y) + q.x
+            {
+                odd = !odd;
+            }
+            previous = q;
+        }
+    }
+    odd
 }
 fn segment_distance(p: Point, a: Point, b: Point) -> f32 {
     let d = a.distance(b).powi(2);
@@ -347,6 +376,8 @@ impl Arrow {
             nodes: Vec::new(),
             style: Some(style),
             purpose: Default::default(),
+            arc: None,
+            badge: None,
         }
     }
     /// Returns whether either endpoint has an attachment anchor.
@@ -502,7 +533,7 @@ impl Arrow {
     }
     pub fn handles(&self) -> ArrowHandles {
         let bend = self.point(0.5);
-        let (points, len) = match self.bezier_controls() {
+        let (points, len) = match self.bezier_controls().filter(|_| self.arc.is_none()) {
             Some([departure, arrival]) => ([self.start, self.end, bend, departure, arrival], 5),
             None => (
                 [
@@ -542,6 +573,24 @@ impl Arrow {
         }
         let control = self.control_point();
         match ArrowHandle::from_index(index) {
+            Some(ArrowHandle::Start | ArrowHandle::End) if self.arc.is_some() => {
+                let (start, end) = if index == ArrowHandle::Start.index() {
+                    (p, self.end)
+                } else {
+                    (self.start, p)
+                };
+                // An end dropped on the other end has no circle; stay put.
+                if self.arc.and_then(|s| arc::circle(start, end, s)).is_some() {
+                    (self.start, self.end) = (start, end);
+                    self.fit_arc();
+                }
+            }
+            Some(ArrowHandle::Bend) if self.arc.is_some() => {
+                if let Some(sweep) = arc::sweep_through(self.start, p, self.end) {
+                    self.arc = Some(sweep);
+                    self.fit_arc();
+                }
+            }
             Some(ArrowHandle::Start) => {
                 self.start_anchor = None;
                 if let Some([a, _]) = self.cubic.as_mut() {
@@ -590,6 +639,8 @@ impl Arrow {
         }
     }
     pub fn map_points(&mut self, mut f: impl FnMut(Point) -> Point) {
+        // An arc stays circular: refit it through its mapped ends and middle.
+        let middle = self.arc.map(|_| f(self.point(0.5)));
         // Materialize the legacy default bend before reflecting or transforming it.
         self.control = self.control_point().map(&mut f);
         self.cubic = self.cubic.map(|[a, b]| [f(a), f(b)]);
@@ -599,6 +650,10 @@ impl Arrow {
         }
         self.start = f(self.start);
         self.end = f(self.end);
+        if let Some(middle) = middle {
+            self.arc = arc::sweep_through(self.start, middle, self.end).or(self.arc);
+            self.fit_arc();
+        }
     }
     pub fn reverse(&mut self) {
         self.control = self.control_point();
@@ -609,6 +664,7 @@ impl Arrow {
         }
         std::mem::swap(&mut self.start, &mut self.end);
         std::mem::swap(&mut self.start_anchor, &mut self.end_anchor);
+        self.arc = self.arc.map(|sweep| -sweep);
     }
     /// Apply an arrow tool, or cycle its direction/half-head on another click.
     /// Returns whether the reaction direction was reversed.
@@ -642,8 +698,14 @@ impl Arrow {
         }
         self.kind = preset.kind().into();
         self.style = Some(style.clone());
+        // An arc keeps its sweep through a change of meaning; an elbow cannot.
+        if self.kind == "bent" {
+            self.arc = None;
+        }
+        self.fit_arc();
     }
     pub fn straighten(&mut self) {
+        self.arc = None;
         self.nodes.clear();
         if self.is_attached() {
             self.cubic = Some([
@@ -657,6 +719,11 @@ impl Arrow {
         self.control = Some(self.start.lerp(self.end, 0.5));
     }
     pub fn flip_bend(&mut self) {
+        if let Some(sweep) = self.arc {
+            self.arc = Some(-sweep);
+            self.fit_arc();
+            return;
+        }
         let start = self.start;
         let u = unit(start, self.end);
         let reflect = |c: Point| {
@@ -679,6 +746,9 @@ impl Arrow {
     /// Even out a bow's tangent angles and lengths when its directions differ
     /// by less than 20 degrees. More deliberate shapes are left untouched.
     pub fn smooth_bow(&mut self) -> Result<bool, String> {
+        if self.arc.is_some() {
+            return Ok(false);
+        }
         if !self.nodes.is_empty() {
             return self.smooth_nodes();
         }
@@ -700,6 +770,9 @@ impl Arrow {
     /// Mirror a modestly lopsided bow across the endpoints' perpendicular
     /// bisector, preserving both endpoints and their attachments.
     pub fn symmetrise(&mut self) -> Result<bool, String> {
+        if self.arc.is_some() {
+            return Ok(false);
+        }
         if !self.nodes.is_empty() {
             return self.symmetrise_nodes();
         }
@@ -746,6 +819,18 @@ impl Arrow {
         {
             return Err("Non-finite arrow position".into());
         }
+        if let Some(sweep) = self.arc
+            && (!sweep.is_finite()
+                || !(MIN_SWEEP..=MAX_SWEEP).contains(&sweep.abs())
+                || self.kind == "bent"
+                || self.is_attached()
+                || self.cubic.is_none())
+        {
+            return Err("Arc arrows need a 1–359° sweep, free ends and no elbow".into());
+        }
+        if let Some(badge) = &self.badge {
+            badge.validate()?;
+        }
         self.appearance().validate()
     }
     pub fn paths(&self) -> Vec<ArrowPath> {
@@ -762,11 +847,12 @@ impl Arrow {
             effects: Default::default(),
             corner_pt: None,
         };
+        let body = self.drawn_body();
         let mut path = |mut commands: Vec<PathCommand>, filled: bool, head: bool| {
             let mut style = stroke.clone();
             if head {
                 style.pattern = LinePattern::Solid;
-            } else if s.pattern == LinePattern::Wavy && !filled {
+            } else if s.pattern == LinePattern::Wavy && !filled && body.is_line() {
                 let radius = crate::graphics::wave_radius(s.width_pt);
                 // Run straight under each head and a little beyond it.
                 let lead = DEFAULT.world(s.head_length_pt) + radius;
@@ -779,6 +865,8 @@ impl Arrow {
             if filled {
                 style.fill = Some(s.color);
                 style.width_pt = 0.;
+                // A gradient body shades like a ChemDraw Shaded fill.
+                style.effects.shaded = body == Body::Gradient;
             }
             result.push(ArrowPath {
                 commands,
@@ -786,13 +874,30 @@ impl Arrow {
                 filled,
             });
         };
-        self.shafts(&s, n, gap, &mut path);
+        match body {
+            Body::Line => self.shafts(&s, n, gap, &mut path),
+            Body::Chevron => {
+                for chevron in self.chevrons(&s) {
+                    path(chevron, true, true);
+                }
+            }
+            _ => match self.block_outline(&s) {
+                Some(outline) => path(outline, body != Body::Hollow, false),
+                None => self.shafts(&s, n, gap, &mut path),
+            },
+        }
         if s.dipole {
             self.dipole_mark(&s, &mut path);
         }
         if s.no_go != NoGo::None {
             self.no_go_mark(&s, &mut path);
         }
+        let badge = Self::badge_style(&s);
+        result.extend(self.badge_paths().into_iter().map(|commands| ArrowPath {
+            commands,
+            style: badge.clone(),
+            filled: false,
+        }));
         result
     }
     /// The arriving electron-flow head, using the drawn shaft's geometry.
@@ -1193,7 +1298,9 @@ impl Arrow {
                 .as_ref()
                 .map(|(_, at)| *at)
                 .unwrap_or_else(|| to - sign * self.head_trim(s, head_kind, to, from));
-            path(self.shaft_body(n, start, end, offset), false, false);
+            for piece in self.gapped_body(n, start, end, offset) {
+                path(piece, false, false);
+            }
             if let Some((commands, _)) = end_head {
                 path(commands, true, true);
             } else {
@@ -1239,12 +1346,18 @@ impl Arrow {
             let head_width = DEFAULT.world(s.head_width_pt).max(0.001);
             if self.nodes.is_empty() {
                 let inset = (head_length * gap / head_width / length).min(0.4);
-                path(self.shaft_body(n, 0., 1. - inset, -gap), false, false);
-                path(self.shaft_body(n, 0., 1. - inset, gap), false, false);
+                for offset in [-gap, gap] {
+                    for piece in self.gapped_body(n, 0., 1. - inset, offset) {
+                        path(piece, false, false);
+                    }
+                }
             } else {
                 let to = self.cubic_inset(1., 0., head_length * gap / head_width, 0.4, 0.);
-                path(self.shaft_body(n, 0., to, -gap), false, false);
-                path(self.shaft_body(n, 0., to, gap), false, false);
+                for offset in [-gap, gap] {
+                    for piece in self.gapped_body(n, 0., to, offset) {
+                        path(piece, false, false);
+                    }
+                }
             }
             self.head_path(
                 s,
@@ -1305,11 +1418,12 @@ impl Arrow {
     }
     pub fn hit(&self, point: Point, radius: f32) -> bool {
         self.paths().iter().any(|p| {
-            flattened(&p.commands).iter().any(|points| {
+            let lines = flattened(&p.commands);
+            lines.iter().any(|points| {
                 points
                     .windows(2)
                     .any(|p| matches!(p,[a,b] if segment_distance(point,*a,*b)<=radius))
-            })
+            }) || (p.filled || self.drawn_body() == Body::Hollow) && inside(point, &lines)
         })
     }
     pub fn bounds(&self) -> (Point, Point) {
@@ -1332,6 +1446,8 @@ impl Arrow {
 mod cleanup_tests;
 #[cfg(test)]
 mod curve_tests;
+#[cfg(test)]
+mod looks_tests;
 #[cfg(test)]
 mod node_tests;
 #[cfg(test)]

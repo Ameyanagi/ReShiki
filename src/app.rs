@@ -249,6 +249,8 @@ pub enum Message {
     CaptionAction(iced::widget::text_editor::Action),
     TextStyle(reshiki::typography::StyleChange),
     FormatChemicalName,
+    /// A callout card beside the selected atom, bond, molecule or object.
+    AddCallout,
     /// Show or hide one property line under a whole molecule.
     ToggleProperty(Vec<u64>, reshiki::linked_properties::Property),
     FontSize(String),

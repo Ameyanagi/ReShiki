@@ -74,6 +74,8 @@ pub(super) fn drawn(ester_first: bool) -> Scheme {
     let ethanol = atoms(&doc, ids);
     let arrow = doc.next_id();
     doc.arrows.push(crate::document::Arrow {
+        arc: None,
+        badge: None,
         id: arrow,
         start: Point::new(320., 0.),
         end: Point::new(420., 0.),
@@ -1616,6 +1618,8 @@ fn two_molecules_and_a_straight_arrow_scaled_together_are_one_line() {
         crate::editing::append(&mut doc, &molecule("OC(=O)c1ccccc1"), Point::new(x, 0.));
     }
     doc.arrows.push(crate::document::Arrow {
+        arc: None,
+        badge: None,
         id: doc.next_id(),
         start: Point::new(150., 0.),
         end: Point::new(260., 0.),

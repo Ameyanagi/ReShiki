@@ -2717,11 +2717,30 @@ fn push_arrows_and_annotations(out: &mut Vec<Primitive>, doc: &Document) {
         }
     }
     for a in &doc.arrows {
-        out.extend(a.paths().into_iter().map(|p| Primitive::Path {
-            commands: p.commands,
-            style: p.style,
-            filled: p.filled,
-        }));
+        for p in a.paths() {
+            // A gradient body shades exactly as a shaded shape does.
+            if p.style.effects.shaded {
+                let shape = crate::arrows::shape(a.id, p.commands, &p.style, p.filled);
+                out.extend(graphic_primitive(&&shape, doc));
+            } else {
+                out.push(Primitive::Path {
+                    commands: p.commands,
+                    style: p.style,
+                    filled: p.filled,
+                });
+            }
+        }
+        if let Some((origin, text, format)) = a.badge_text() {
+            for fragment in crate::typography::layout(&text, &format).fragments {
+                out.push(Primitive::Text {
+                    position: origin.offset(fragment.position.x, fragment.position.y),
+                    text: fragment.text,
+                    size: fragment.style.size(),
+                    color: fragment.style.color.rgb(),
+                    style: fragment.style,
+                });
+            }
+        }
     }
     for a in &doc.annotations {
         for fragment in crate::typography::layout(&a.text, &a.format).fragments {

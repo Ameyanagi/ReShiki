@@ -31,14 +31,18 @@ async fn constructed_chemdraw_retrosynthesis_and_hollow_arrows_keep_their_kinds(
     assert_eq!(retro.appearance().head_length_pt, 6.);
     assert_eq!(retro.appearance().head_width_pt, 1.5);
     assert_eq!(retro.appearance().gap_pt, 2.);
+    // A hollow head on a spaced shaft is ChemDraw's hollow block arrow,
+    // sized in hundredths of its 0.6 pt line.
     let hollow = &document.arrows[1];
+    let style = hollow.appearance();
     assert_eq!(hollow.kind, "forward");
-    assert_eq!(hollow.appearance().head, Head::Full);
-    assert_eq!(hollow.appearance().tail, Head::None);
-    assert_eq!(hollow.appearance().shape, HeadShape::Hollow);
-    assert_eq!(hollow.appearance().head_length_pt, 6.);
-    assert_eq!(hollow.appearance().head_width_pt, 1.5);
-    assert_eq!(hollow.appearance().gap_pt, 6.);
+    assert_eq!(style.body, reshiki::arrows::Body::Hollow);
+    assert_eq!(style.head, Head::Full);
+    assert_eq!(style.tail, Head::None);
+    assert_eq!(style.shape, HeadShape::Hollow);
+    assert!((style.head_length_pt - 3.6).abs() < 1e-5);
+    assert!((style.head_width_pt - 4.5).abs() < 1e-5);
+    assert!((style.gap_pt - 3.6).abs() < 1e-5);
     Ok(())
 }
 
@@ -129,8 +133,7 @@ fn genuine_chemdraw_file_retains_arrow_geometry_style_and_references() -> anyhow
 }
 
 #[tokio::test]
-async fn native_fill_codes_preserve_unfilled_arrows_and_reject_unsupported_fills()
--> anyhow::Result<()> {
+async fn native_fill_codes_preserve_unfilled_arrows_and_read_block_fills() -> anyhow::Result<()> {
     let engine = LocalEngine::default();
     for (fill, code) in [
         ("Unspecified", 0u8),
@@ -153,19 +156,21 @@ async fn native_fill_codes_preserve_unfilled_arrows_and_reject_unsupported_fills
         let result = engine
             .request(Request::import("cdx", &STANDARD.encode(binary)))
             .await;
-        if code <= 1 {
-            assert_eq!(
-                result
-                    .map_err(anyhow::Error::msg)?
-                    .document
-                    .context("Missing document")?
-                    .arrows
-                    .len(),
-                1
-            );
-        } else {
-            assert!(result.unwrap_err().contains("Filled or faded CDXML arrows"));
-        }
+        let arrows = result
+            .map_err(anyhow::Error::msg)?
+            .document
+            .context("Missing document")?
+            .arrows;
+        assert_eq!(arrows.len(), 1);
+        // Solid and Shaded are ChemDraw block arrows.
+        assert_eq!(
+            arrows[0].appearance().body,
+            match code {
+                2 => reshiki::arrows::Body::Block,
+                4 => reshiki::arrows::Body::Gradient,
+                _ => reshiki::arrows::Body::Line,
+            }
+        );
         if code == 0 {
             let mut legacy = to_cdx(&xml).map_err(anyhow::Error::msg)?;
             legacy[34] = 0x27;

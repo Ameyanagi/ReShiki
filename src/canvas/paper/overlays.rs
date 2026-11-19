@@ -331,7 +331,8 @@ impl MoleculeCanvas<'_> {
             && (self.tool.selects() || matches!(self.tool, Tool::Arrow | Tool::EditPoints))
         {
             for a in preview.arrows.iter().filter(|a| selected.contains(&a.id)) {
-                if let Some([departure, arrival]) = a.bezier_controls() {
+                // An arc's controls follow its sweep; only its diamond moves it.
+                if let Some([departure, arrival]) = a.bezier_controls().filter(|_| !a.is_arc()) {
                     for (endpoint, control) in [(a.start, departure), (a.end, arrival)] {
                         draw_direction_line(
                             frame,
@@ -340,7 +341,7 @@ impl MoleculeCanvas<'_> {
                         );
                     }
                 }
-                for node in &a.nodes {
+                for node in a.nodes.iter().filter(|_| !a.is_arc()) {
                     let anchor = self.camera.screen(node.point, bounds);
                     for control in node.controls {
                         draw_direction_line(frame, anchor, self.camera.screen(control, bounds));

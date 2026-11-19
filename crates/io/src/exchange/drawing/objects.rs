@@ -1,6 +1,6 @@
 use super::*;
 use crate::{
-    arrows::{Head, HeadShape, NoGo},
+    arrows::{Body, Head, HeadShape, NoGo},
     graphics::{GraphicKind, LinePattern, PathHeads},
     scientific::MarkKind,
 };
@@ -79,7 +79,12 @@ impl Writer<'_> {
                         y: (start.y + end.y + end.x - start.x) / 2.,
                     })
                 });
-            let curved = !a.nodes.is_empty() || control.is_some() || cubic.is_some();
+            // ChemDraw draws a circular arc arrow from its centre and sweep.
+            let native_arc = a
+                .arc_circle()
+                .filter(|_| !matches!(a.kind.as_str(), "equilibrium" | "retro"));
+            let curved = native_arc.is_none()
+                && (!a.nodes.is_empty() || control.is_some() || cubic.is_some());
             if s.pattern == LinePattern::Dotted {
                 return Err(invalid("Dotted arrows require native or image export"));
             }
@@ -163,6 +168,51 @@ impl Writer<'_> {
             if s.dipole {
                 self.tree.set(n, "Dipole", "yes")?;
             }
+            // ChemDraw's block arrows: a hollow head on a shaft as wide as
+            // the shaft spacing, filled, outlined or shaded, all sized in
+            // hundredths of the line width.
+            let body = a.drawn_body();
+            if !body.is_line() {
+                let length = style_real(s.head_length_pt);
+                let (gap, width) = (style_real(s.gap_pt), style_real(s.head_width_pt));
+                // A filled body has no visible outline, so a 1 pt line keeps
+                // the sizes in points. An outline keeps its width while every
+                // size stays within what ChemDraw files allow.
+                let outline = style_real(s.width_pt);
+                let fits = |pt: f64, lo: f64, hi: f64| (lo..=hi).contains(&(pt / outline));
+                let line = if body == Body::Hollow
+                    && fits(length, 0.5, 24.)
+                    && fits((width - gap).max(0.25), 0.25, 16.)
+                    && fits(gap, 0.5, 16.)
+                {
+                    outline
+                } else {
+                    1.
+                };
+                self.tree.set(n, "LineWidth", number(line))?;
+                let size = |pt: f64| integer(pt / line * 100.);
+                // Round the length first and keep the center within the
+                // reader's notch range, as for line arrows.
+                let head = (length / line * 100.).round_ties_even();
+                let center = (head * (1. - style_real(s.head_notch)))
+                    .round_ties_even()
+                    .clamp((head / 10.).ceil(), head);
+                self.tree.set(n, "HeadSize", integer(head))?;
+                self.tree.set(n, "ArrowheadCenterSize", integer(center))?;
+                self.tree.set(
+                    n,
+                    "FillType",
+                    match body {
+                        Body::Hollow => "None",
+                        Body::Gradient => "Shaded",
+                        _ => "Solid",
+                    },
+                )?;
+                self.tree.set(n, "ArrowheadType", "Hollow")?;
+                self.tree.set(n, "ArrowShaftSpacing", size(gap))?;
+                self.tree
+                    .set(n, "ArrowheadWidth", size((width - gap).max(0.25)))?;
+            }
             if matches!(a.kind.as_str(), "equilibrium" | "retro") {
                 self.tree
                     .set(n, "ArrowShaftSpacing", integer(style_real(s.gap_pt) * 100.))?;
@@ -234,6 +284,19 @@ impl Writer<'_> {
                     .set(n, "Tail3D", format!("{} 0", self.position(start)))?;
                 self.tree
                     .set(n, "Head3D", format!("{} 0", self.position(end)))?;
+                if let (Some((center, radius, _)), Some(sweep)) = (native_arc, a.arc) {
+                    // ChemDraw runs from the tail through -AngularSize degrees:
+                    // the sign alone sets the direction, so a clockwise arc
+                    // has a negative size.
+                    for (key, p) in [
+                        ("Center3D", center),
+                        ("MajorAxisEnd3D", center.offset(radius, 0.)),
+                        ("MinorAxisEnd3D", center.offset(0., radius)),
+                    ] {
+                        self.tree.set(n, key, format!("{} 0", self.position(p)))?;
+                    }
+                    self.tree.set(n, "AngularSize", number(f64::from(-sweep)))?;
+                }
             }
             if a.kind == "retro" {
                 let id = self.id()?;

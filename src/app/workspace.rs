@@ -337,6 +337,7 @@ impl App {
                 style: &self.tab.arrows.style,
                 source: self.tab.arrows.source(),
                 attach_targets: self.tab.arrows.attach_targets,
+                arc: self.tab.arrows.arc,
             },
             doc: self.display_document(),
             reviewing_pair: self.tab.mapping.review_pair.is_some() && self.tool.selects(),
@@ -978,6 +979,28 @@ impl App {
                     .sum::<f32>()
                     + 3. * CONTEXT_GAP
             }
+            Tool::Arrow => {
+                let widest = |labels: Vec<String>| {
+                    labels
+                        .iter()
+                        .map(|label| text_width(label, 12.))
+                        .fold(0., f32::max)
+                        + 12.
+                        + 15.
+                };
+                lead + widest(
+                    reshiki::arrows::Preset::ALL
+                        .iter()
+                        .map(|p| p.to_string())
+                        .collect(),
+                ) + CONTEXT_GAP
+                    + widest(
+                        reshiki::arrows::Body::ALL
+                            .iter()
+                            .map(|b| b.to_string())
+                            .collect(),
+                    )
+            }
             _ if self.moving_bonded_selection() => lead + Self::constraints_width(),
             _ => 0.,
         }
@@ -1483,6 +1506,18 @@ impl App {
                     )
                     .text_size(12)
                     .padding(5)
+                    .into(),
+                    hover_hint(
+                        crate::appearance::pick_list(
+                            reshiki::arrows::Body::ALL,
+                            Some(self.tab.arrows.style.body),
+                            |body| Message::ArrowAction(super::arrows::Action::Body(body)),
+                        )
+                        .text_size(12)
+                        .padding(5),
+                        "Body · The look only; the arrow keeps its meaning",
+                        tooltip::Position::Bottom,
+                    )
                     .into(),
                 ]
             }

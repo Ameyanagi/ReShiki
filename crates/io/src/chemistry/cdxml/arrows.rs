@@ -7,7 +7,7 @@ use super::{
     tree::{Element, Tree},
 };
 use crate::{
-    arrows::{ArrowStyle, Head, HeadShape, NoGo, Preset},
+    arrows::{ArrowStyle, Body, Head, HeadShape, NoGo, Preset},
     document::{Arrow, Point},
     graphics::{LinePattern, PathHeads},
 };
@@ -83,13 +83,27 @@ pub struct NativeArrow {
     pub control: Option<ImportPoint>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cubic: Option<[ImportPoint; 2]>,
+    /// A ChemDraw block arrow's body; the reference reader has none.
+    #[serde(skip)]
+    pub body: Body,
+    #[serde(skip)]
+    pub arc: Option<NativeArc>,
+}
+/// A ChemDraw arc arrow: its centre, axis ends and sweep in degrees.
+#[derive(Clone, Copy, Debug)]
+pub struct NativeArc {
+    pub center: ImportPoint,
+    pub major: ImportPoint,
+    pub minor: ImportPoint,
+    pub degrees: f64,
 }
 impl NativeArrow {
     /// Explicit narrowing after native helper acceptance. Palette channels and
     /// coordinates may be accepted by the helper but not fit document types.
     pub fn into_document(self) -> Result<Arrow> {
         let s = self.style;
-        Ok(Arrow {
+        let arc = self.arc;
+        let mut arrow = Arrow {
             start_anchor: None,
             end_anchor: None,
             id: self.id,
@@ -116,10 +130,83 @@ impl NativeArrow {
                 gap_pt: s.gap_pt as f32,
                 no_go: s.no_go,
                 dipole: s.dipole,
+                body: self.body,
             }),
             purpose: Default::default(),
-        })
+            arc: None,
+            badge: None,
+        };
+        if let Some(arc) = arc {
+            arc_geometry(&mut arrow, arc)?;
+        }
+        Ok(arrow)
     }
+}
+/// ChemDraw runs an arc from the tail through `-AngularSize` degrees in a
+/// frame whose minor axis is its major axis turned a quarter clockwise on the
+/// page, whatever way the stored minor axis points: the sign of AngularSize
+/// alone sets the direction. A circle becomes an arc arrow; an ellipse keeps
+/// its exact shape as a curve through quarter-turn nodes.
+fn arc_geometry(arrow: &mut Arrow, arc: NativeArc) -> Result<()> {
+    let c = drawing_point(arc.center)?;
+    let (m, n) = (drawing_point(arc.major)?, drawing_point(arc.minor)?);
+    let u = (f64::from(m.x - c.x), f64::from(m.y - c.y));
+    let (ru, rv) = (
+        u.0.hypot(u.1),
+        f64::from(n.x - c.x).hypot(f64::from(n.y - c.y)),
+    );
+    if !(ru > 1e-9 && rv > 1e-9 && arc.degrees.is_finite() && arc.degrees.abs() <= 360.) {
+        return Err(ArrowError::Invalid("Invalid CDXML arc arrow"));
+    }
+    let v = (-u.1 * rv / ru, u.0 * rv / ru);
+    let w = (
+        f64::from(arrow.start.x - c.x),
+        f64::from(arrow.start.y - c.y),
+    );
+    let start = ((w.1 * u.0 - w.0 * u.1) / (ru * rv)).atan2((w.0 * u.0 + w.1 * u.1) / (ru * ru));
+    let degrees = arc.degrees.abs().min(f64::from(crate::arrows::MAX_SWEEP));
+    let sweep = -arc.degrees.signum() * degrees.to_radians();
+    let at = |angle: f64, k: f64| {
+        let (sin, cos) = angle.sin_cos();
+        let p = Point::new(
+            (f64::from(c.x) + u.0 * cos + v.0 * sin) as f32,
+            (f64::from(c.y) + u.1 * cos + v.1 * sin) as f32,
+        );
+        let d = ((-u.0 * sin + v.0 * cos) * k, (-u.1 * sin + v.1 * cos) * k);
+        (p, d)
+    };
+    if (ru - rv).abs() <= ru.max(rv) * 0.01 {
+        let middle = at(start + sweep * 0.5, 0.).0;
+        match crate::arrows::sweep_through(arrow.start, middle, arrow.end) {
+            Some(through) => arrow.set_arc(through),
+            None => arrow.set_arc(sweep.to_degrees() as f32),
+        }
+        return Ok(());
+    }
+    let count = (degrees / 90.).ceil().max(1.);
+    let step = sweep / count;
+    let k = 4. / 3. * (step / 4.).tan();
+    let leaving = |angle: f64| {
+        let (p, d) = at(angle, k);
+        p.offset(d.0 as f32, d.1 as f32)
+    };
+    let arriving = |angle: f64| {
+        let (p, d) = at(angle, k);
+        p.offset(-d.0 as f32, -d.1 as f32)
+    };
+    let last = start + step * count;
+    arrow.cubic = Some([leaving(start), arriving(last)]);
+    arrow.nodes = (1..count as usize)
+        .map(|i| {
+            let angle = start + step * i as f64;
+            crate::document::ArrowNode {
+                point: at(angle, k).0,
+                controls: [arriving(angle), leaving(angle)],
+                kind: crate::graphics::PathNodeType::Symmetric,
+            }
+        })
+        .collect();
+    Ok(())
 }
 fn drawing_point(value: ImportPoint) -> Result<Point> {
     let point = Point {
@@ -292,12 +379,34 @@ impl ArrowReader {
             _ => Ok(false),
         }
     }
+    /// The reference reader's arrows: no ChemDraw block or arc arrows.
     pub fn read(
         &self,
         source: usize,
         source_scale: f64,
         colors: &[NativeColor],
         identifier: u64,
+    ) -> Result<NativeArrow> {
+        self.read_with(source, source_scale, colors, identifier, false)
+    }
+    /// Drawing import: also ChemDraw's block arrows (a hollow head on a broad
+    /// shaft, filled, outlined or shaded) and circular or elliptical arcs.
+    pub fn read_drawing(
+        &self,
+        source: usize,
+        source_scale: f64,
+        colors: &[NativeColor],
+        identifier: u64,
+    ) -> Result<NativeArrow> {
+        self.read_with(source, source_scale, colors, identifier, true)
+    }
+    fn read_with(
+        &self,
+        source: usize,
+        source_scale: f64,
+        colors: &[NativeColor],
+        identifier: u64,
+        drawing: bool,
     ) -> Result<NativeArrow> {
         if colors.len() > 100_000 {
             return Err(XmlError::Limit.into());
@@ -314,15 +423,16 @@ impl ArrowReader {
         for (key, value) in node.attributes.iter().chain(&root.attributes) {
             self.tree.spend(key.len().saturating_add(value.len()))?;
         }
-        if scalar(node, "AngularSize", "0")? != 0. {
+        let angular = scalar(node, "AngularSize", "0")?;
+        if angular != 0. && !drawing {
             return Err(ArrowError::Invalid(
                 "Circular/elliptical CDXML arrows are not supported yet; use a Bézier arrow",
             ));
         }
-        if !matches!(
-            node.attr("FillType").unwrap_or("None"),
-            "None" | "Unspecified"
-        ) || scalar(node, "FadePercent", "100")? != 100.
+        let fill = node.attr("FillType").unwrap_or("None");
+        if !matches!(fill, "None" | "Unspecified")
+            && !(drawing && matches!(fill, "Solid" | "Shaded"))
+            || scalar(node, "FadePercent", "100")? != 100.
         {
             return Err(ArrowError::Invalid(
                 "Filled or faded CDXML arrows are not supported yet",
@@ -402,7 +512,16 @@ impl ArrowReader {
         let legacy_retro = node
             .attr("id")
             .is_some_and(|id| self.legacy_retro_ids.contains(id));
-        let kind = if legacy_retro
+        // A filled or shaded ChemDraw block arrow is a forward arrow, whatever
+        // its heads: only line arrows carry equilibrium or retro meaning.
+        let filled_block = drawing && matches!(fill, "Solid" | "Shaded");
+        let kind = if filled_block {
+            if head != Head::None && tail != Head::None {
+                Preset::Resonance
+            } else {
+                Preset::Forward
+            }
+        } else if legacy_retro
             || (gap != 0. && head == Head::Full && tail == Head::None && shape == HeadShape::Open)
         {
             Preset::Retro
@@ -416,8 +535,45 @@ impl ArrowReader {
         } else {
             Preset::Forward
         };
+        // ChemDraw measures a block head's width from the shaft edge.
+        let body = match fill {
+            _ if !drawing
+                || node.tag == "curve"
+                || kind != Preset::Forward && kind != Preset::Resonance =>
+            {
+                Body::Line
+            }
+            "Solid" => Body::Block,
+            "Shaded" => Body::Gradient,
+            _ if gap != 0. && shape == HeadShape::Hollow => Body::Hollow,
+            _ => Body::Line,
+        };
+        // ChemDraw sizes a block arrow in hundredths of its line width.
+        if !body.is_line() {
+            style.head_length_pt = (style.head_length_pt * line).clamp(0.5, 24.);
+            style.head_width_pt = ((style.head_width_pt + style.gap_pt) * line).clamp(0.25, 16.);
+            style.gap_pt = (style.gap_pt * line).clamp(0.5, 16.);
+        }
+        let arc = if angular != 0. && node.tag != "curve" {
+            let at = |key: &'static str| {
+                point(
+                    node.attr(key).ok_or(ArrowError::Missing(key))?,
+                    source_scale,
+                )
+            };
+            Some(NativeArc {
+                center: at("Center3D")?,
+                major: at("MajorAxisEnd3D")?,
+                minor: at("MinorAxisEnd3D")?,
+                degrees: angular,
+            })
+        } else {
+            None
+        };
         if node.tag != "curve" {
             return Ok(NativeArrow {
+                body,
+                arc,
                 id: identifier,
                 kind,
                 style,
@@ -472,6 +628,8 @@ impl ArrowReader {
                 end: *end,
                 control: Some(*corner),
                 cubic: None,
+                body: Body::Line,
+                arc: None,
             });
         }
         let [_, start, a, b, end, _] = points.as_slice() else {
@@ -506,6 +664,8 @@ impl ArrowReader {
                 y: (c1.y + c2.y) / 2.,
             }),
             cubic: (!quadratic).then_some([*a, *b]),
+            body: Body::Line,
+            arc: None,
         })
     }
 }

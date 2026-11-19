@@ -56,6 +56,17 @@ impl PathHeads {
 }
 impl Graphic {
     pub(crate) fn path_parts(&self) -> Vec<Part> {
+        let mut parts = self.stroke_parts();
+        if let Some((commands, style)) = self.leader_dot() {
+            parts.push(Part {
+                commands,
+                style,
+                filled: true,
+            });
+        }
+        parts
+    }
+    fn stroke_parts(&self) -> Vec<Part> {
         let mut shaft = Part {
             commands: self.commands(),
             style: self.style.clone(),

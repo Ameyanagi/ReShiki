@@ -298,6 +298,7 @@ fn atom_menu_groups_editing_naming_connecting_and_clipboard_commands() -> Result
             "Merge selected atoms",
             "Show as",
             "Arrange & transform",
+            "Add callout",
             "—",
             "Cut",
             "Copy",

@@ -201,6 +201,17 @@ impl App {
                     self.tab.path_point = Some((id, index));
                 }
                 reshiki::arrow_anchors::edit_handle(&mut self.tab.doc, id, index, p);
+                // The diamond changes an arc's sweep; keep its field in step.
+                if let Some(sweep) = self
+                    .tab
+                    .doc
+                    .arrows
+                    .iter()
+                    .find(|a| a.id == id)
+                    .and_then(|a| a.arc)
+                {
+                    self.tab.arrows.sweep = format!("{sweep:.0}");
+                }
             }
             Edit::ArrowControlFree(id, index, p) => {
                 self.tab.path_point = Some((id, index));
@@ -364,13 +375,17 @@ impl App {
     }
     pub(super) fn place_arrow(&mut self, start: Point, end: Point) {
         let id = self.tab.doc.next_id();
-        self.tab.doc.arrows.push(Arrow::new(
+        let mut arrow = Arrow::new(
             id,
             start,
             end,
             self.tab.arrow_style,
             self.tab.arrows.style.clone(),
-        ));
+        );
+        if let Some(sweep) = self.tab.arrows.arc {
+            arrow.set_arc(sweep);
+        }
+        self.tab.doc.arrows.push(arrow);
         self.tab.selected = vec![id];
     }
     fn erase_segment(&mut self, from: Point, to: Point) {

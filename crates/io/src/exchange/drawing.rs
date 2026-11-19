@@ -198,6 +198,23 @@ fn write_impl(
     let document = depth_painted.as_ref();
     let resolved = crate::canvas_theme::resolved_exchange_document(document);
     let document = resolved.as_ref();
+    // Arrow looks without a ChemDraw form travel as grouped shapes.
+    let lowered = crate::arrows::lowered(document);
+    let document = lowered.as_ref();
+    let shape_paths: HashMap<u64, Vec<PathCommand>>;
+    let options = if matches!(lowered, std::borrow::Cow::Owned(_)) {
+        let mut paths = options.graphic_paths.cloned().unwrap_or_default();
+        for g in &document.graphics {
+            paths.entry(g.id).or_insert_with(|| g.commands());
+        }
+        shape_paths = paths;
+        Options {
+            graphic_paths: Some(&shape_paths),
+            ..options
+        }
+    } else {
+        options
+    };
     document.validate().map_err(invalid)?;
     if document
         .atoms
@@ -445,6 +462,8 @@ fn write_impl(
     w.tree.serialize()
 }
 
+#[cfg(test)]
+mod looks_tests;
 #[cfg(test)]
 mod tests;
 

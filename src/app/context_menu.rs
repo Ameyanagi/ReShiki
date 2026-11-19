@@ -682,6 +682,9 @@ impl App {
             ));
         }
         entries.push(submenu("Arrange & transform", Page::Align));
+        if self.callout_target().is_some() {
+            entries.push(command("Add callout", Message::AddCallout, true));
+        }
         if bonds {
             entries.push(submenu("Bond appearance", Page::Bonds));
         }

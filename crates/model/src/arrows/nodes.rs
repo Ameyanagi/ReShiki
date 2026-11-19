@@ -271,6 +271,9 @@ impl Arrow {
     }
     /// Interior node handles in pick order: (index, point, part).
     pub fn node_handles(&self) -> Vec<(usize, Point, NodePart)> {
+        if self.arc.is_some() {
+            return vec![];
+        }
         self.nodes
             .iter()
             .enumerate()
@@ -301,7 +304,7 @@ impl Arrow {
     }
     /// Whether the Bend handle is offered (false when `nodes` is non-empty).
     pub fn has_bend_handle(&self) -> bool {
-        self.nodes.is_empty()
+        self.nodes.is_empty() || self.arc.is_some()
     }
 
     /// Nearest point on the shaft centerline: (global t, point, distance).
@@ -374,6 +377,8 @@ impl Arrow {
         if !p.is_finite() {
             return Err("Non-finite arrow position".into());
         }
+        // An arc given a node becomes a free path with the same shape.
+        self.arc = None;
         let (t, _, _) = self.nearest_shaft_point(p);
         let n = (self.nodes.len() + 1) as f32;
         let scaled = scaled_parameter(t, n);
@@ -421,6 +426,9 @@ impl Arrow {
     /// Remove the node addressed by any of its handles, keeping outer controls.
     /// Removing the last node leaves an ordinary single-cubic arrow.
     pub fn delete_node(&mut self, index: usize) -> Result<(), String> {
+        if self.arc.is_some() {
+            return Err("An arc has no nodes to delete".into());
+        }
         let (node, _) = node_handle(index)
             .filter(|(node, _)| *node < self.nodes.len())
             .ok_or("Select an interior arrow node or control")?;
@@ -432,6 +440,9 @@ impl Arrow {
     }
     /// Set a node's type, aligning its controls like a pen path.
     pub fn set_node_type(&mut self, index: usize, kind: PathNodeType) -> Result<(), String> {
+        if self.arc.is_some() {
+            return Err("An arc has no nodes to change".into());
+        }
         let (node, _) = node_handle(index)
             .filter(|(node, _)| *node < self.nodes.len())
             .ok_or("Select an interior arrow node or control")?;
@@ -449,6 +460,9 @@ impl Arrow {
         }
     }
     pub(super) fn edit_node_handle(&mut self, index: usize, p: Point, free: bool) {
+        if self.arc.is_some() {
+            return;
+        }
         let Some((node, part)) = node_handle(index).filter(|(node, _)| *node < self.nodes.len())
         else {
             return;

@@ -650,7 +650,7 @@ fn read_captions_and_arrows(
                     })
                     && arrows.legacy_curve(ordinal, prepared.source_scale)?
             {
-                base.arrows.push(arrows.read(
+                base.arrows.push(arrows.read_drawing(
                     ordinal,
                     prepared.source_scale,
                     &prepared.palette.colors,

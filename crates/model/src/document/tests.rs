@@ -207,6 +207,8 @@ fn drawable_id_order_excludes_groups_but_next_id_includes_them() {
         format: Default::default(),
     });
     doc.arrows.push(Arrow {
+        arc: None,
+        badge: None,
         start_anchor: None,
         end_anchor: None,
         id: 6,

@@ -86,6 +86,11 @@ fn drawing_losses(
     {
         notices.push(notice);
     }
+    if matches!(format, "cdxml" | "cdx")
+        && let Some(notice) = crate::arrows::export_notice(document)
+    {
+        notices.push(notice);
+    }
     // Preparation can change appearance, so rear opacity reads the source document.
     // CDXML/CDX rejects rear opacity in the writer before returning any notices.
     if matches!(format, "mol" | "smiles" | "inchi") && crate::rear_opacity::present(appearance) {

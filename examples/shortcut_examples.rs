@@ -260,6 +260,8 @@ fn sections() -> anyhow::Result<Vec<Section>> {
     ));
     let mut arrow = Document::default();
     arrow.arrows.push(reshiki::document::Arrow {
+        arc: None,
+        badge: None,
         start_anchor: None,
         end_anchor: None,
         id: 1,
