@@ -110,8 +110,9 @@ Any of them can ask for 0 to 4. The **Show labels** overlay keeps its three.
 Unlike **Show labels**, which stays on screen, these labels are stored in the
 drawing as atom numbers:
 
-- They save in `.rsk` files, appear in SVG, PNG and PDF, and go to ChemDraw
-  (CDXML and CDX) as atom numbers. You can move, restyle or delete them in the
+- They save in `.rsk` files from Python (`rsk()`) or MCP (`file_save`); the
+  command line writes SVG, PNG, PDF, CDXML and CDX only. They appear in SVG,
+  PNG and PDF, and go to ChemDraw (CDXML and CDX) as atom numbers. You can move, restyle or delete them in the
   app like any atom number.
 - They use the drawing's atom-number style at 65% of the atom-label size, not
   the teal overlay.

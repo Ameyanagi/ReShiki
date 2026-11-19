@@ -630,10 +630,10 @@ Options:
                  {{\"receipt\": {{\"format\", \"byte_len\", \"detail\"}}, \"api\": {{…}}}}.
   --nucleus NUCLEUS --labels FORMAT
                  Predict 1H or 13C shifts as predict-nmr does and write
-                 them onto the atoms as atom numbers: numbers (#3), ppm
-                 (1.28 ppm) or both (#3 · 1.28 ppm), replacing those
-                 atoms' numbers. Only for {labels}. Cite
-                 predict-nmr's credit with published values.
+                 them as atom numbers, replacing any on those atoms.
+                 Choose value (1.28), numbers (#3), ppm (1.28 ppm)
+                 or both (#3 · 1.28 ppm). Only for {labels}.
+                 Cite predict-nmr's credit with published values.
   --decimals N   With --labels, the ppm decimal places, 0 to 4: by default
                  2 for 1H (7.26 ppm) and 1 for 13C (128.4 ppm).
 
