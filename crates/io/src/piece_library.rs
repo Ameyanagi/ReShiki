@@ -266,10 +266,21 @@ impl Change {
 
     /// Put the library back as it was before the change. Added files go to
     /// the archive rather than away, so an undo loses nothing either.
+    /// On a failure nothing has moved, so the same undo can be tried again.
     pub fn undo(&self, dir: &Path) -> Result<Change, String> {
         let mut undone = archive(dir, &self.added)?;
         for (was, now) in &self.archived {
-            crate::storage::rename(now, was).map_err(|e| e.to_string())?;
+            if let Err(e) = crate::storage::rename(now, was) {
+                for put in &undone.added {
+                    if let Some((_, back)) = self.archived.iter().find(|(w, _)| w == put) {
+                        let _ = crate::storage::rename(put, back);
+                    }
+                }
+                for (w, n) in undone.archived.iter().rev() {
+                    let _ = crate::storage::rename(n, w);
+                }
+                return Err(format!("Could not restore {}: {e}", was.display()));
+            }
             undone.added.push(was.clone());
         }
         Ok(undone)

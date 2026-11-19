@@ -4,7 +4,7 @@ use super::{
     eval::{self, Values},
     format::Definition,
     placed::key,
-    solve::{self, JointRef, Seat},
+    solve::{self, Seat},
 };
 use crate::document::Document;
 use std::sync::Arc;
@@ -24,47 +24,19 @@ fn keeps(next: &Definition, k: &str, v: &eval::Value) -> bool {
     eval::resolve(next, &one).is_ok_and(|r| r.get(k) == Some(v))
 }
 
-/// What [`update`] would take away, without changing the drawing: seats on
-/// joints `next` moves or drops, and values it cannot take.
-pub fn preview(doc: &Document, ids: &[u64], next: &Definition) -> Outcome {
-    // A joint where it sits with the piece's values, as the seat check sees it.
-    let posed = |d: &Definition, values: &Values, id: &str| {
-        (eval::joints(d, values).into_iter())
-            .find(|j| j.joint.id() == id)
-            .map(|j| (j.joint.clone(), j.at, j.dir))
-    };
-    let pieces = || {
-        (doc.graphics.iter())
-            .filter(|g| ids.contains(&g.id))
-            .filter_map(|g| Some((g.id, g.piece.as_ref()?)))
-    };
-    let moved = |j: &JointRef| {
-        pieces().any(|(id, p)| {
-            let kept: Values = (p.params.iter())
-                .filter(|(k, v)| keeps(next, k, v))
-                .map(|(k, v)| (k.clone(), v.clone()))
-                .collect();
-            id == j.piece
-                && p.linked
-                    .as_ref()
-                    .is_none_or(|d| posed(d, &p.params, &j.joint) != posed(next, &kept, &j.joint))
-        })
-    };
-    let mut reset = Vec::new();
-    for (_, p) in pieces() {
-        for (k, v) in &p.params {
-            if !keeps(next, k, v) && !reset.contains(k) {
-                reset.push(k.clone());
-            }
-        }
-    }
-    Outcome {
-        released: (doc.seats.iter())
-            .filter(|s| moved(&s.a) || moved(&s.b))
+/// What [`update`] would take away, without changing the drawing: the
+/// update itself, on a copy of the drawing's equipment.
+pub fn preview(doc: &Document, ids: &[u64], next: &Arc<Definition>) -> Outcome {
+    let mut copy = Document {
+        drawing_style: doc.drawing_style.clone(),
+        graphics: (doc.graphics.iter())
+            .filter(|g| g.piece.is_some())
             .cloned()
             .collect(),
-        reset,
-    }
+        seats: doc.seats.clone(),
+        ..Document::default()
+    };
+    update(&mut copy, ids, next)
 }
 
 /// Point the pieces `ids` at `next`. A value `next` cannot take goes back to
@@ -99,7 +71,7 @@ pub fn update(doc: &mut Document, ids: &[u64], next: &Arc<Definition>) -> Outcom
 mod tests {
     use super::*;
     use crate::document::Point;
-    use crate::equipment::{builtin, eval::Value, format, placed};
+    use crate::equipment::{builtin, eval::Value, format, placed, solve::JointRef};
 
     fn place(doc: &mut Document, d: Arc<Definition>, at: Point) -> u64 {
         let n = doc.next_id();

@@ -258,3 +258,21 @@ fn a_failed_import_leaves_nothing_added() {
     assert!(add(dir.path(), &[a, b]).is_err());
     assert!(scan(dir.path()).pieces.is_empty());
 }
+
+#[test]
+fn a_failed_undo_moves_nothing_and_can_be_tried_again() {
+    let dir = tempfile::tempdir().unwrap();
+    let d = lab("lab/a", 1);
+    add(dir.path(), std::slice::from_ref(&d)).unwrap();
+    std::fs::write(dir.path().join("copy.reshiki-piece"), piece_bytes(&d)).unwrap();
+    let removed = remove(dir.path(), &key(&d)).unwrap();
+    assert_eq!(removed.archived.len(), 2);
+    // A folder where the last file goes back makes the restore fail.
+    let blocker = &removed.archived[1].0;
+    std::fs::create_dir(blocker).unwrap();
+    assert!(removed.undo(dir.path()).is_err());
+    assert!(scan(dir.path()).pieces.is_empty());
+    std::fs::remove_dir(blocker).unwrap();
+    removed.undo(dir.path()).unwrap();
+    assert_eq!(scan(dir.path()).pieces.len(), 2);
+}
