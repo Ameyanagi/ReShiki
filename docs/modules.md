@@ -164,6 +164,7 @@ explains how the crates and modules fit together.
 - `src/app/tabs.rs`: Document tabs
 - `src/app/template_library.rs`
 - `src/app/template_style_evidence.rs`: Opt-in renderer snapshots through the real editor dispatch, usable on baseline too.
+- `src/app/piece_libraries.rs`: Equipment libraries in the Equipment browser.
 - `src/app/theme_files.rs`: Theme picker and portable library, independent of journal drawing styles.
 - `src/app/theme_generator.rs`: A draft-only theme workbench
 - `src/app/tool_button.rs`: Direct selection with a delayed flyout and an explicit corner target.
@@ -611,6 +612,7 @@ explains how the crates and modules fit together.
 - `crates/io/src/preview.rs`: The editor's PNG preview of a drawing, shared by the assistant's canvas tools, the MCP `render` and `convert` tools, the CLI and the browser library, so every surface draws the same pixels.
 - `crates/io/src/recovery.rs`
 - `crates/io/src/task.rs`: Blocking chemistry and rendering work off the async executor.
+- `crates/io/src/piece_library.rs`: Libraries of equipment pieces: My pieces, linked lab folders and piece files.
 - `crates/io/src/template_library.rs`: User-authored templates and portable collections.
 
 ## reshiki-mcp
@@ -696,6 +698,7 @@ explains how the crates and modules fit together.
 - `crates/model/src/equipment/geometry.rs`: Path data and plane geometry for pieces, in f64 millimetres.
 - `crates/model/src/equipment/placed.rs`: Pieces placed in a drawing.
 - `crates/model/src/equipment/plan.rs`: The paint plan
+- `crates/model/src/equipment/revise.rs`: Moving placed pieces to another revision of their definition.
 - `crates/model/src/equipment/solve.rs`: Seats join the joints of placed pieces.
 - `crates/model/src/equipment/validate.rs`: Checks the schema cannot express
 - `crates/model/src/erasing.rs`: Erase the geometry crossed by a pointer stroke, including between motion events.

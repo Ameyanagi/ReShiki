@@ -30,7 +30,7 @@ has every help text as the program prints it.
 | [analyze](#analyze)         | Print molecular properties as one JSON line                       |
 | [predict-nmr](#predict-nmr) | Print predicted NMR shifts as one JSON line                       |
 | [name](#name)               | Print the systematic name of a structure                          |
-| [pieces](#pieces)           | Check lab equipment piece files                                   |
+| [pieces](#pieces)           | Check or render equipment piece files                             |
 | [info](#info)               | Print versions, limits and formats as one JSON line               |
 | [tools](#tools)             | Print the agent tool catalog as one JSON line                     |
 | [schema](#schema)           | Print the Proposal JSON Schema                                    |
@@ -115,14 +115,14 @@ be too large here. Files are read with your own permissions: the
 
 ## Output
 
-`convert`, `render` and `compose` write one file.
+`convert`, `render`, `compose` and `pieces render` write one file.
 
-- `-o OUTPUT` writes the file to OUTPUT. Without `--to`, the extension of
-  OUTPUT picks the format (below). Another extension, or none, is a usage
-  error: pass `--to`.
-- Without `-o`, or with `-o -`, the file goes to standard output and needs
-  `--to`. PDF, PNG and CDX are never written to a terminal: redirect the
-  output or use `-o`.
+- `-o OUTPUT` writes the file to OUTPUT. Without `--to`, `pieces render`
+  writes SVG. The other commands use the extension of OUTPUT (below) and
+  need `--to` when the extension is missing or unsupported.
+- Without `-o`, or with `-o -`, the file goes to standard output. `convert`,
+  `render` and `compose` require `--to` for standard output. Redirect PDF,
+  PNG and CDX output or use `-o` to write those formats.
 - An existing OUTPUT is kept and the command fails, with
   `reshiki: error: OUTPUT exists; pass --force to replace`. `--force` replaces
   it.
@@ -143,8 +143,9 @@ be too large here. Files are read with your own permissions: the
 | `.inchi`          | `inchi`  |
 
 `rxn` and `rsmi` (reaction SMILES) need a drawing with a reaction. `render`
-writes only `png` or `svg`. The command line cannot write `.rsk` drawings or
-EMF. To save an `.rsk` file, use the MCP server's `file_save` or the app.
+and `pieces render` write only `png` or `svg`. The command line cannot write
+`.rsk` drawings or EMF. To save an `.rsk` file, use the MCP server's
+`file_save` or the app.
 
 ## Options
 
@@ -155,13 +156,14 @@ EMF. To save an `.rsk` file, use the MCP server's `file_save` or the app.
 | `--nucleus NUCLEUS`     | predict-nmr, convert                        | The nucleus to predict: `1H` or `13C`; required by predict-nmr, and by convert `--labels`  |
 | `--labels FORMAT`       | convert                                     | Write predicted shifts onto the atoms as `numbers`, `ppm` or `both`; needs `--nucleus`     |
 | `--decimals N`          | convert                                     | The ppm decimal places of `--labels`, 0 to 4: 2 for `1H` and 1 for `13C` by default        |
-| `--to FORMAT`           | convert, render, compose                    | Set the output format; `png` or `svg` for render                                           |
-| `-o OUTPUT`             | convert, render, compose                    | Write to OUTPUT, or to standard output with `-`                                            |
+| `--to FORMAT`           | convert, render, compose, pieces            | Set the output format. Use `png` or `svg` for `render` and `pieces render`                 |
+| `-o OUTPUT`             | convert, render, compose, pieces            | Write to OUTPUT, or to standard output with `-`                                            |
+| `--dark`                | pieces                                      | Use dark canvas colors with `pieces render`                                                |
 | `--pages`               | convert, compose                            | Export every publication page as one PDF; PDF output only                                  |
 | `--svg-text MODE`       | convert, render, compose                    | SVG text as `outline` (default) or `live` `<text>` elements; other formats ignore it       |
 | `--width N`             | render                                      | The widest the PNG may be, in pixels: 1 to 8192, default 1600                              |
 | `--height N`            | render                                      | The tallest the PNG may be, in pixels: 1 to 8192, default 1000                             |
-| `--force`               | convert, render, compose                    | Replace OUTPUT if it exists                                                                |
+| `--force`               | convert, render, compose, pieces            | Replace OUTPUT if it exists                                                                |
 | `--receipt`             | convert, compose                            | Print one receipt JSON line after writing OUTPUT; needs `-o OUTPUT`                        |
 | `-o FOLDER`             | skill                                       | The existing folder that receives the skill folder                                         |
 | `--name NAME`           | skill                                       | The skill's name and folder name; default `reshiki`                                        |
@@ -564,21 +566,27 @@ This is `name --smiles 'CC(=NN)C' --json`, shown on several lines:
 ## pieces
 
 ```text
-reshiki --cli pieces check FILE...
+reshiki --cli pieces (check FILE...
+                    | render FILE [--to svg|png] [-o OUTPUT|-] [--dark] [--force])
 ```
 
 `reshiki --cli help pieces` prints the [full help](agent-reference.md#reshiki---cli-pieces).
 
-Checks one or more lab equipment piece files (`.reshiki-piece`): the format,
-the limits, every reference between shapes, joints, parts and parameters, and
-that each joint sits on the rim of its opening. Prints one JSON line with an
-entry per file, `{"file", "ok", "id", "revision", "hash"}` or
+`check` validates one or more lab equipment piece files (`.reshiki-piece`). It
+checks the format, limits, references between shapes, joints, parts and
+parameters, and whether each joint sits on the rim of its opening. It prints
+one JSON line with an entry per file, `{"file", "ok", "id", "revision", "hash"}` or
 `{"file", "ok": false, "error"}`, and exits 1 when any file fails. `hash` is
-the piece's content identity. Nothing is installed or changed. The format is
-described in [presets/pieces/README.md](../presets/pieces/README.md).
+the piece's content identity. See the [piece file format](../presets/pieces/README.md).
+
+`render` runs the same checks on one file, then draws the piece by itself in
+the default line style. It writes SVG by default. Use `--to png` for PNG,
+`--dark` for dark canvas colors, and `-o OUTPUT` to save the preview to a file.
+SVG has a transparent surround and PNG uses the white background of `render`.
 
 ```sh
 reshiki --cli pieces check my-flask.reshiki-piece
+reshiki --cli pieces render my-flask.reshiki-piece --to png -o my-flask.png
 ```
 
 ## info

@@ -1,5 +1,6 @@
 //! The Equipment browser: lab apparatus to place on the drawing. Choosing a
 //! size arms it, and each click on the drawing places one copy.
+use super::piece_libraries::{Entry, Libraries, Shelf, Source};
 use super::workspace::{command, control, horizontal_line, hover_hint, muted_text, section};
 use super::{App, InspectorTab, Message};
 use crate::canvas::Tool;
@@ -8,12 +9,11 @@ use iced::widget::{checkbox, column, container, row, text, tooltip};
 use iced::{Alignment, Element, Length, Task};
 use reshiki::document::{Document, Point};
 use reshiki::equipment::{
-    builtin,
     format::{Category, Definition, Gender},
     placed,
     solve::{self, JointRef, Offer, Snap},
 };
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct Filter(pub Option<Category>);
@@ -44,7 +44,7 @@ impl std::fmt::Display for Filter {
 pub enum Action {
     Search(String),
     Category(Filter),
-    /// Arm the built-in piece with this ID.
+    /// Arm the piece with this key (`id@revision#hash`).
     Arm(String),
     Repeat(bool),
     Close,
@@ -57,6 +57,27 @@ pub enum Action {
     Cancel,
     /// Release the seat at this joint and pull the pieces apart.
     Detach(JointRef),
+    /// Show one library, or all.
+    Shelf(Shelf),
+    Import,
+    Imported(Result<Vec<Definition>, String>),
+    ExportMine,
+    /// Export the piece with this key as a file.
+    ExportPiece(String),
+    Exported(Result<Option<PathBuf>, String>),
+    /// Add the drawing's piece with this key to My pieces.
+    Keep(String),
+    Remove(String),
+    UndoLibrary,
+    Link,
+    Linked(Option<PathBuf>),
+    Unlink(usize),
+    Reload,
+    /// Move these pieces to the definition with this key.
+    Update {
+        ids: Vec<u64>,
+        key: String,
+    },
 }
 
 /// Keyboard Connect in progress: the pieces, and each target joint with
@@ -81,6 +102,9 @@ pub struct State {
     pub category: Filter,
     pub armed: Option<Arc<Definition>>,
     pub repeat: bool,
+    /// The library shown; all when none.
+    pub shelf: Option<Source>,
+    pub libraries: Libraries,
 }
 impl Default for State {
     fn default() -> Self {
@@ -89,6 +113,8 @@ impl Default for State {
             category: Filter::default(),
             armed: None,
             repeat: true,
+            shelf: None,
+            libraries: Libraries::load(),
         }
     }
 }
@@ -204,8 +230,11 @@ impl App {
             Action::Search(query) => self.equipment.query = query,
             Action::Category(filter) => self.equipment.category = filter,
             Action::Repeat(on) => self.equipment.repeat = on,
-            Action::Arm(id) => {
-                let Some(definition) = builtin::find(&id) else {
+            Action::Arm(k) => {
+                let Some(definition) = (self.equipment.libraries.entries().into_iter())
+                    .map(|e| e.definition)
+                    .find(|d| placed::key(d) == k)
+                else {
                     return Task::none();
                 };
                 self.status = format!(
@@ -284,6 +313,7 @@ impl App {
                 }
                 return super::focus_drawing();
             }
+            other => return self.library_action(other),
         }
         Task::none()
     }
@@ -378,14 +408,33 @@ impl App {
 
     pub(super) fn equipment_panel(&self) -> Element<'_, Message> {
         let state = &self.equipment;
-        let arm = |d: &Definition| Message::Equipment(Action::Arm(d.id.clone()));
-        let armed = |d: &Definition| self.armed_piece().is_some_and(|a| a.id == d.id);
+        let libraries = &state.libraries;
+        let entries = libraries.entries();
+        let arm = |d: &Definition| Message::Equipment(Action::Arm(placed::key(d)));
+        let armed = |d: &Definition| self.armed_piece().is_some_and(|a| **a == *d);
+        // A piece whose ID another library uses for something else says
+        // which library it is from.
+        let label = |e: &Entry| {
+            let d = &e.definition;
+            let clash = (entries.iter())
+                .any(|o| o.definition.id == d.id && placed::key(&o.definition) != placed::key(d));
+            if clash {
+                format!("{} ({})", title(d), libraries.name(e.source))
+            } else {
+                title(d).to_owned()
+            }
+        };
+        let shown: Vec<&Entry> = (entries.iter())
+            .filter(|e| state.shelf.is_none_or(|s| s == e.source))
+            .collect();
         let mut categories = vec![Filter(None)];
-        for d in builtin::catalogue() {
-            if !categories.contains(&Filter(Some(d.category))) {
-                categories.push(Filter(Some(d.category)));
+        for e in &shown {
+            if !categories.contains(&Filter(Some(e.definition.category))) {
+                categories.push(Filter(Some(e.definition.category)));
             }
         }
+        let shelves = libraries.shelves();
+        let shelf = shelves.iter().find(|s| s.source == state.shelf).cloned();
         let mut body = column![
             row![
                 section("Equipment").width(Length::Fill),
@@ -396,49 +445,77 @@ impl App {
                 .on_input(|s| Message::Equipment(Action::Search(s)))
                 .size(12)
                 .padding(8),
-            crate::appearance::pick_list(categories, Some(state.category), |f| {
-                Message::Equipment(Action::Category(f))
-            })
-            .text_size(12)
-            .padding(6)
-            .width(Length::Fill),
+            row![
+                crate::appearance::pick_list(categories, Some(state.category), |f| {
+                    Message::Equipment(Action::Category(f))
+                })
+                .text_size(12)
+                .padding(6)
+                .width(Length::Fill),
+                crate::appearance::pick_list(shelves, shelf, |s| {
+                    Message::Equipment(Action::Shelf(s))
+                })
+                .text_size(12)
+                .padding(6)
+                .width(Length::Fill),
+            ]
+            .spacing(6),
         ]
         .spacing(8);
         if let Some(d) = self.armed_piece() {
-            body = body.push(super::inspector::card(
-                container(
-                    column![
-                        text(format!("{} · {}", title(d), size(d))).size(14),
-                        checkbox(state.repeat)
-                            .label("Keep placing")
-                            .text_size(12)
-                            .size(14)
-                            .on_toggle(|v| Message::Equipment(Action::Repeat(v))),
-                        text(if state.repeat {
-                            "Click again to add another copy. Esc stops."
-                        } else {
-                            "Returns to Select after one placement."
-                        })
-                        .size(11)
-                        .style(muted_text),
-                    ]
-                    .spacing(6),
-                )
-                .padding(12),
-            ));
+            let source = (entries.iter())
+                .find(|e| e.definition == *d)
+                .map_or(Source::BuiltIn, |e| e.source);
+            let mut card = column![
+                text(format!("{} · {}", title(d), size(d))).size(14),
+                checkbox(state.repeat)
+                    .label("Keep placing")
+                    .text_size(12)
+                    .size(14)
+                    .on_toggle(|v| Message::Equipment(Action::Repeat(v))),
+                text(if state.repeat {
+                    "Click again to add another copy. Esc stops."
+                } else {
+                    "Returns to Select after one placement."
+                })
+                .size(11)
+                .style(muted_text),
+            ]
+            .spacing(6);
+            if source != Source::BuiltIn {
+                let mut line = row![
+                    text(format!(
+                        "{} · revision {}",
+                        libraries.name(source),
+                        d.revision
+                    ))
+                    .size(11)
+                    .style(muted_text)
+                    .width(Length::Fill)
+                ]
+                .spacing(6)
+                .align_y(Alignment::Center);
+                if source == Source::Mine {
+                    line = line.push(command(
+                        "Remove",
+                        Message::Equipment(Action::Remove(placed::key(d))),
+                    ));
+                }
+                card = card.push(line);
+            }
+            body = body.push(super::inspector::card(container(card).padding(12)));
         }
-        // Each family once, with its sizes as chips.
-        let mut families: Vec<(&'static Arc<Definition>, Vec<&'static Arc<Definition>>)> =
-            Vec::new();
-        for d in builtin::catalogue().iter().filter(|d| {
-            state.category.0.is_none_or(|c| c == d.category) && matches(d, &state.query)
+        // Each family of each library once, with its sizes as chips.
+        let mut families: Vec<(&Entry, Vec<&Entry>)> = Vec::new();
+        for e in shown.into_iter().filter(|e| {
+            state.category.0.is_none_or(|c| c == e.definition.category)
+                && matches(&e.definition, &state.query)
         }) {
-            match families
-                .iter_mut()
-                .find(|(first, _)| first.family == d.family)
-            {
-                Some((_, sizes)) => sizes.push(d),
-                None => families.push((d, vec![d])),
+            match families.iter_mut().find(|(first, _)| {
+                first.source == e.source && first.definition.family == e.definition.family
+            }) {
+                Some((_, sizes)) => sizes.push(e),
+                None => families.push((e, vec![e])),
             }
         }
         let count: usize = families.iter().map(|(_, sizes)| sizes.len()).sum();
@@ -452,30 +529,36 @@ impl App {
             .style(muted_text),
         );
         let theme = self.tab.doc.canvas_theme;
-        for &(first, ref sizes) in &families {
-            let shown = sizes.iter().copied().find(|d| armed(d)).unwrap_or(first);
+        for (first, sizes) in &families {
+            let shown = sizes
+                .iter()
+                .copied()
+                .find(|e| armed(&e.definition))
+                .unwrap_or(*first);
+            let d = &shown.definition;
             let preview: Element<'_, Message> =
-                canvas(crate::canvas::DrawingThumbnail(thumbnail(shown, theme)))
+                canvas(crate::canvas::DrawingThumbnail(thumbnail(d, theme)))
                     .width(44)
                     .height(44)
                     .into();
             let tile = hover_hint(
                 reshiki::accessibility::button(
-                    format!("equipment-{}", shown.id),
-                    name(shown).to_owned(),
+                    format!("equipment-{}", d.id),
+                    name(d).to_owned(),
                     preview,
                 )
-                .checked(armed(shown))
+                .checked(armed(d))
                 .padding(4)
                 .width(52)
                 .height(52)
-                .style(control(armed(shown)))
-                .on_press(arm(shown)),
-                name(shown),
+                .style(control(armed(d)))
+                .on_press(arm(d)),
+                name(d).to_owned(),
                 tooltip::Position::Left,
             );
             let mut chips = row![].spacing(4);
-            for &d in sizes {
+            for e in sizes {
+                let d = &e.definition;
                 chips = chips.push(
                     reshiki::accessibility::button(
                         format!("equipment-size-{}", d.id),
@@ -492,7 +575,7 @@ impl App {
                 row![
                     tile,
                     column![
-                        text(title(shown)).size(12),
+                        text(label(shown)).size(12),
                         chips.wrap().vertical_spacing(4)
                     ]
                     .spacing(4)
@@ -504,12 +587,12 @@ impl App {
         }
         if families.is_empty() {
             body = body.push(
-                text("No matching equipment. Try another search or category.")
+                text("No matching equipment. Try another search, category or library.")
                     .size(12)
                     .style(muted_text),
             );
         }
-        body.into()
+        body.push(self.libraries_section()).into()
     }
 
     /// The selected pieces' name and size. Pieces are always illustration.
@@ -597,6 +680,12 @@ impl App {
                     .align_y(Alignment::Center),
                 );
             }
+        }
+        // One kind of piece: keep it, export it, or update it.
+        if let [d, rest @ ..] = pieces.as_slice()
+            && rest.iter().all(|o| placed::key(o) == placed::key(d))
+        {
+            body = body.push(self.piece_library_rows(d));
         }
         if self.pieces_selected() {
             body = body.push(hover_hint(

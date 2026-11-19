@@ -36,7 +36,7 @@ pub use reshiki_agent::envelope;
 use reshiki_io::native_windows;
 pub use reshiki_io::{
     chemistry, cleanup, compatibility, crystal, document_styles, engine, exchange, export, formats,
-    geometry, nmr, payload, recovery, task, template_library,
+    geometry, nmr, payload, piece_library, recovery, task, template_library,
 };
 
 pub mod accessibility;
