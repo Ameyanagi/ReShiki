@@ -28,6 +28,8 @@ mod panel_tests;
 mod partial_charges;
 #[cfg(test)]
 mod piece_tests;
+#[cfg(test)]
+mod purpose_tests;
 mod tree;
 pub use clipboard::write as write_clipboard;
 use tree::{Key, Tree};
@@ -409,6 +411,7 @@ fn write_impl(
     // created beside their final bond owners.
     w.ring_fills()?;
     w.property_captions()?;
+    w.purposes()?;
     if !document.ring_fills.is_empty() {
         // Editable readers need a distinct stacking ordinal for every object.
         // Equal Z values on atoms/bonds can make an opaque fill cover them.
@@ -775,6 +778,31 @@ impl<'a> Writer<'a> {
                     .map_err(|_| invalid("Invalid stacking order"))
             })
             .transpose()
+    }
+    /// Mark each atom of a Reference or Illustration molecule, and each such
+    /// arrow, with its purpose, so ReShiki reads it back.
+    fn purposes(&mut self) -> Result<()> {
+        let mut marked: Vec<_> = self
+            .atom_nodes
+            .iter()
+            .zip(&self.doc.atoms)
+            .filter(|(_, atom)| !atom.purpose.is_chemistry())
+            .map(|(n, atom)| (*n, atom.purpose))
+            .collect();
+        // A retrosynthesis arrow also has a superseded legacy graphic.
+        for arrow in self.doc.arrows.iter().filter(|a| !a.purpose.is_chemistry()) {
+            marked.extend(
+                self.objects
+                    .iter()
+                    .filter(|(id, _)| *id == arrow.id)
+                    .map(|(_, n)| (*n, arrow.purpose)),
+            );
+        }
+        for (key, purpose) in marked {
+            self.tree
+                .set(key, crate::exchange::PURPOSE, purpose.label())?;
+        }
+        Ok(())
     }
     fn atom_node(&self, id: u64) -> Result<Key> {
         self.atom_indices

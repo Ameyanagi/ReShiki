@@ -120,6 +120,9 @@ pub struct CdxmlScene {
     /// after owned circles are excluded from subsequent readers.
     pub objects: Vec<ObjectMapEntry>,
     pub removed_sources: Vec<usize>,
+    /// Purposes ReShiki wrote, with the atom or arrow each applies to.
+    #[serde(skip)]
+    pub purposes: Vec<(crate::purpose::Purpose, u64)>,
 }
 #[derive(Clone, Debug)]
 pub struct ImportedCdxml {
@@ -454,6 +457,31 @@ pub fn assemble_cdxml(prepared: &PreparedCdxml) -> Result<CdxmlScene> {
         &mut slots,
         &mut objects,
     )?;
+    let mut purposes = Vec::new();
+    for (ordinal, node) in nodes.iter().enumerate() {
+        let Some(text) = node.attribute(crate::exchange::PURPOSE) else {
+            continue;
+        };
+        let Some(purpose) = crate::purpose::Purpose::ALL
+            .into_iter()
+            .find(|p| p.label() == text)
+        else {
+            continue;
+        };
+        if node.has_tag_name("n") {
+            let p = point(
+                node.attribute("p").ok_or(SceneError::Missing("p"))?,
+                prepared.source_scale,
+            )?;
+            let index = *order.get(ordinal).ok_or(SceneError::Limit)?;
+            // The purpose goes to the atom's whole molecule.
+            if let Ok(id) = association.identify(&tree, index, p, "") {
+                purposes.push((purpose, id));
+            }
+        } else if let Some(ids) = objects.get(ordinal) {
+            purposes.extend(ids.iter().map(|id| (purpose, *id)));
+        }
+    }
     let Remap {
         removed,
         old_to_new,
@@ -490,6 +518,7 @@ pub fn assemble_cdxml(prepared: &PreparedCdxml) -> Result<CdxmlScene> {
     )?;
     restore_abbreviation_presentations(prepared, root, &reader, &mut base)?;
     let mut scene = scene_result(prepared, base, objects, removed, &source_by_index)?;
+    scene.purposes = purposes;
     if !hidden.is_empty() {
         scene.notices.push(HIDDEN_DRAWING_NOTICE.into());
     }
@@ -639,11 +668,20 @@ fn read_captions_and_arrows(
     mut next_id: u64,
 ) -> Result<u64> {
     let arrows = super::ArrowReader::new(&prepared.expanded_xml)?;
+    let panels: HashSet<_> = nodes
+        .iter()
+        .filter(|n| graphics::panel_record(**n).is_some())
+        .map(|n| n.id())
+        .collect();
     for page in nodes.iter().filter(|n| n.has_tag_name("page")) {
         let defaults = attributes(*page);
         for node in page.descendants().filter(Node::is_element) {
             let ordinal = *ordinals.get(&node.id()).ok_or(SceneError::Limit)?;
             if matches!(objects.get(ordinal), Some([])) {
+                continue;
+            }
+            // A panel's titles come back with the panel.
+            if node.ancestors().any(|a| panels.contains(&a.id())) {
                 continue;
             }
             if node.has_tag_name("t")
@@ -1124,5 +1162,6 @@ fn scene_result(
                     .ok_or(SceneError::Limit)
             })
             .collect::<Result<_>>()?,
+        purposes: Vec::new(),
     })
 }

@@ -354,8 +354,10 @@ cm**, **RSC graphical abstract · 8 × 4 cm** or **Elsevier graphical abstract �
 - Dotted strokes cannot be exported to CDXML.
 - ChemDraw draws waves only on straight lines without arrowheads. Other wavy
   lines, curves and arrows open in ChemDraw as solid strokes.
-- ChemDraw has shadows only on rectangles and ovals, so a shadow on a rotated
-  rectangle or a path is not written to CDXML or CDX.
+- ChemDraw has shadows only on upright rectangles and ovals. A shadow on a
+  rotated rectangle, a single closed path or a panel is written to CDXML and
+  CDX as a grey shape behind it, which opens as a separate shape. Other paths
+  lose their shadow there.
 - ChemDraw has no glows or discs. Highlights export as ChemDraw's flat
   highlight and glowing or disc ring fills as flat ring fills, with a notice.
 - ChemDraw has no gradient or see-through fills. A gradient is written as the
@@ -367,9 +369,9 @@ cm**, **RSC graphical abstract · 8 × 4 cm** or **Elsevier graphical abstract �
   shaded over. A path too detailed to shade keeps a flat fill.
 - Freehand tracing and non-proportional resizing are not available.
 - ChemDraw has no panel object. CDXML and CDX get a group of filled curves,
-  lines and text; opening it again gives those shapes, not a panel. A panel's
-  shadow or shading is not written there. Layouts are not written to ChemDraw
-  files.
+  lines and text, and export says so. ReShiki opens a CDXML file it wrote with
+  the panels whole; a CDX file gives those shapes. Layouts are not written to
+  ChemDraw files.
 - A panel's title uses the drawing's font and size in bold. Title text is
   edited in **Properties**, not on the canvas.
 - A catalytic cycle is a circle. ChemDraw has no cycle object: CDXML and CDX
@@ -425,7 +427,10 @@ layout is a `layout` entry on a group: flow, gutter, alignment and the order of 
 are the group's connected molecules, nested groups and whole reactions. After
 each edit the layout is laid out again if an item changed size or number.
 `graphics::panel::contents` lists what lies wholly inside a panel. Both entries
-need document version 40.
+need document version 40. In CDXML a panel's group carries a `ReShikiPanel`
+attribute: the panel as JSON, its frame in page points and its colors as
+written. ReShiki reads that group back as the one panel; ChemDraw ignores the
+attribute, and CDX has no place for it.
 
 A catalytic cycle is an ellipse graphic with a `cycle` entry
 (`crates/model/src/cycles.rs`): direction, gap, center text, intermediates
@@ -514,7 +519,10 @@ groups, basic rectangles/lines/bracket pairs, and ovals with explicit axes.
 Shaded or shadowed rectangles, rounded rectangles and ellipses are written as
 ChemDraw's own Rectangle and Oval graphics with their Shaded, Shadow or
 Shadowed flags and ShadowSize (hundredths of a point), so ChemDraw can restyle
-them. Upright rectangles only: a rotated one stays a path. A shaded path is a
+them. Upright rectangles only: a rotated one stays a path. ChemDraw paints a
+shadowed outline's inside with the page color. ReShiki opens an unfilled one on
+a colored page, such as a ChemDraw file with a black background, filled with
+that color. A shaded path is a
 ChemDraw shaded curve (CurveType 256, FillType Shaded). A wavy line without
 heads is ChemDraw's line graphic with LineType Wavy, and a straight wavy arrow
 keeps LineType Wavy. On import, ChemDraw's Shaded paints the shape's one color

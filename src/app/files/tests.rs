@@ -712,3 +712,38 @@ fn the_first_save_of_a_chemdraw_file_names_what_keeping_the_format_loses() {
         )
     );
 }
+
+#[test]
+fn keeping_cdxml_keeps_panels_and_purpose_for_reshiki() {
+    use reshiki::formats::ChemdrawLoss;
+    let unchanged = "Save as ReShiki leaves the ChemDraw file unchanged.";
+    let mut doc = Document::default();
+    let mut arrow = reshiki::document::Arrow::new(
+        1,
+        Point::new(0., 0.),
+        Point::new(120., 0.),
+        reshiki::arrows::Preset::Forward,
+        reshiki::arrows::ArrowStyle::preset(reshiki::arrows::Preset::Forward),
+    );
+    arrow.purpose = reshiki::purpose::Purpose::Reference;
+    doc.arrows.push(arrow);
+    let mut panel = reshiki::graphics::Graphic::dragged(
+        2,
+        reshiki::graphics::GraphicKind::RoundedRectangle,
+        Point::new(0., 0.),
+        Point::new(200., 100.),
+        Default::default(),
+        Default::default(),
+        false,
+    );
+    panel.panel = Some(Default::default());
+    doc.graphics.push(panel);
+    assert_eq!(
+        keep_format_text("cdxml", ChemdrawLoss::default(), &doc),
+        "ChemDraw keeps most of the drawing."
+    );
+    assert_eq!(
+        keep_format_text("cdx", ChemdrawLoss::default(), &doc),
+        format!("Keep as CDX loses panels and object purpose. {unchanged}")
+    );
+}

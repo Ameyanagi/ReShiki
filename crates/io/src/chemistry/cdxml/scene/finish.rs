@@ -2,6 +2,7 @@ use super::*;
 use crate::{
     atom_labels::{AtomDisplay, MappingDisplay, Number, StereoDisplay},
     bonds::dative_projects,
+    purpose::Purpose,
 };
 
 fn narrow(point: ImportPoint) -> Point {
@@ -370,6 +371,17 @@ impl CdxmlScene {
                 .ok_or(SceneError::Invalid("Missing generic label atom"))?;
             atom.display.set_variable(Some(label));
             atom.cip_label = None;
+        }
+        for purpose in [Purpose::Reference, Purpose::Illustration] {
+            let ids: Vec<_> = self
+                .purposes
+                .iter()
+                .filter(|(p, _)| *p == purpose)
+                .map(|(_, id)| *id)
+                .collect();
+            if !ids.is_empty() {
+                crate::purpose::set(document, &ids, purpose);
+            }
         }
         for attachment in self.attachments {
             let atom = document

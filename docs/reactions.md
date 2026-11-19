@@ -58,13 +58,16 @@ preview.
 
 ### Limits
 
-- Purpose is kept in `.rsk` files only (document version 40). CDX, CDXML, SVG,
-  PDF and PNG keep the appearance; reopened in ReShiki, everything is
-  Chemistry.
+- Purpose is kept in `.rsk` files (document version 40) and in CDXML files
+  that ReShiki writes. ChemDraw has no purpose, so it opens every molecule and
+  arrow as chemistry, and export says so. CDX, SVG, PDF and PNG keep the
+  appearance only; reopened in ReShiki, everything is Chemistry. CDXML marks
+  each Reference or Illustration atom and arrow with a `ReShikiPurpose`
+  attribute, which ChemDraw ignores.
 - Text, shapes and pictures have no purpose; they are never chemistry.
 - Commands you run on a selected Illustration molecule, such as its name,
   NMR prediction or formula, still work. Only drawing-wide tools skip it.
-- Keeping a ChemDraw file's format on Save warns that it loses the purpose.
+- Keeping a CDX or MOL file's format on Save warns that it loses the purpose.
 - Preview reaction does not assign roles. Use **Reaction roles** to keep them.
 
 ## Copy a drawn reaction

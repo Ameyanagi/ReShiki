@@ -93,6 +93,7 @@ fn drawing_losses(
     }
     if matches!(format, "cdxml" | "cdx") {
         notices.extend(crate::graphics::export_notice(appearance));
+        notices.extend(chemdraw_lacks(appearance, format));
     }
     // Preparation can change appearance, so rear opacity reads the source document.
     // CDXML/CDX rejects rear opacity in the writer before returning any notices.
@@ -107,6 +108,57 @@ fn drawing_losses(
         }
     }
     notices
+}
+
+/// What ChemDraw has no place for: panels and object purpose. ReShiki keeps
+/// them in CDXML for itself; CDX drops them.
+fn chemdraw_lacks(document: &Document, format: &str) -> Option<String> {
+    use crate::purpose::Purpose;
+    let panels = document
+        .graphics
+        .iter()
+        .filter(|g| g.panel.is_some())
+        .count();
+    // Arrows ChemDraw gets as shapes have their own notice.
+    let document = crate::arrows::lowered(document);
+    let purposes: Vec<_> = [Purpose::Reference, Purpose::Illustration]
+        .into_iter()
+        .filter(|p| {
+            document.atoms.iter().any(|a| a.purpose == *p)
+                // An arrow through nodes opens again as a path.
+                || document
+                    .arrows
+                    .iter()
+                    .any(|a| a.purpose == *p && a.nodes.is_empty())
+        })
+        .map(Purpose::label)
+        .collect();
+    let mut lacks = Vec::new();
+    let mut opens = Vec::new();
+    if panels > 0 {
+        lacks.push("panels");
+        opens.push(match panels {
+            1 => "1 panel as grouped shapes and text".to_owned(),
+            n => format!("{n} panels as grouped shapes and text"),
+        });
+    }
+    if !purposes.is_empty() {
+        lacks.push("object purpose");
+        opens.push(format!("{} objects as Chemistry", purposes.join(" and ")));
+    }
+    if lacks.is_empty() {
+        return None;
+    }
+    let keep = if format == "cdxml" {
+        "ReShiki reads them back from this CDXML file."
+    } else {
+        "Save a .rsk file to keep them."
+    };
+    Some(format!(
+        "ChemDraw has no {}. It opens {}. {keep}",
+        lacks.join(" or "),
+        opens.join(", and ")
+    ))
 }
 
 #[cfg(test)]
@@ -152,5 +204,51 @@ mod tests {
         // The writer keeps the text and the arrow.
         let xml = crate::exchange::drawing::write(&doc, Default::default()).unwrap();
         assert!(xml.contains("<arrow") && xml.contains("heat"));
+    }
+
+    #[test]
+    fn chemdraw_exports_name_panels_and_purpose() {
+        use crate::{
+            graphics::{Graphic, GraphicKind, Panel},
+            purpose::Purpose,
+        };
+        let mut doc = Document::default();
+        let mut arrow = Arrow::new(
+            1,
+            Point::new(0., 0.),
+            Point::new(120., 0.),
+            Preset::Forward,
+            ArrowStyle::preset(Preset::Forward),
+        );
+        arrow.purpose = Purpose::Reference;
+        doc.arrows.push(arrow);
+        let mut panel = Graphic::dragged(
+            2,
+            GraphicKind::RoundedRectangle,
+            Point::new(0., 0.),
+            Point::new(200., 100.),
+            Default::default(),
+            Default::default(),
+            false,
+        );
+        panel.panel = Some(Panel::default());
+        doc.graphics.push(panel);
+        let route = || Route::Prepared {
+            source: &doc,
+            figure_only: false,
+        };
+        let lacks = "ChemDraw has no panels or object purpose. It opens 1 panel as grouped shapes and text, and Reference objects as Chemistry.";
+        assert!(notices(&doc, "cdxml", route()).contains(&format!(
+            "{lacks} ReShiki reads them back from this CDXML file."
+        )));
+        assert!(
+            notices(&doc, "cdx", route())
+                .contains(&format!("{lacks} Save a .rsk file to keep them."))
+        );
+        assert!(
+            !notices(&doc, "mol", route())
+                .iter()
+                .any(|n| n.starts_with("ChemDraw has no panels"))
+        );
     }
 }
