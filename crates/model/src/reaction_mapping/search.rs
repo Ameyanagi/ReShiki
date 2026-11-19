@@ -33,21 +33,25 @@ pub struct Score {
     pub changed_atoms: u32,
     pub property_delta: u64,
 }
+/// Most bonds kept first, then fewest hydrogen, charge and radical changes,
+/// then most bond orders kept. Hydrogens rank above bond orders: a map that
+/// keeps an order by moving hydrogens is wrong for pericyclic steps, where
+/// the π bonds shift and no hydrogen moves (Diels–Alder).
 impl Ord for Score {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         (
             self.heavy_adjacency,
             self.adjacency,
+            Reverse(self.property_delta),
             self.unchanged_bonds,
             Reverse(self.changed_atoms),
-            Reverse(self.property_delta),
         )
             .cmp(&(
                 other.heavy_adjacency,
                 other.adjacency,
+                Reverse(other.property_delta),
                 other.unchanged_bonds,
                 Reverse(other.changed_atoms),
-                Reverse(other.property_delta),
             ))
     }
 }
@@ -304,6 +308,12 @@ fn augment(
     }
     Ok(false)
 }
+/// Hydrogen, charge and radical changes between two paired atoms.
+fn delta(a: &Atom, b: &Atom) -> u64 {
+    u64::from(a.charge.abs_diff(b.charge))
+        + u64::from(a.h.abs_diff(b.h))
+        + u64::from(a.radical.abs_diff(b.radical))
+}
 fn score(source: &Graph, target: &Graph, map: &HashMap<usize, usize>) -> Score {
     let mut result = Score::default();
     for (&(a, b), &order) in &source.edges {
@@ -320,9 +330,7 @@ fn score(source: &Graph, target: &Graph, map: &HashMap<usize, usize>) -> Score {
         let Some((left, right)) = source.atoms.get(a).zip(target.atoms.get(b)) else {
             continue;
         };
-        let delta = u64::from(left.charge.abs_diff(right.charge))
-            + u64::from(left.h.abs_diff(right.h))
-            + u64::from(left.radical.abs_diff(right.radical));
+        let delta = delta(left, right);
         result.property_delta += delta;
         let source_incident = source.edges.iter().filter(|((i, j), _)| *i == a || *j == a);
         let target_incident = target.edges.iter().filter(|((i, j), _)| *i == b || *j == b);
@@ -503,6 +511,17 @@ impl Search<'_> {
             .iter()
             .filter(|&&(a, b)| self.target.heavy(*a, *b))
             .count() as u32;
+        // Pairs only add changes, so those made so far bound any completion.
+        upper.property_delta = self
+            .map
+            .iter()
+            .filter_map(|(a, b)| {
+                Some(delta(
+                    self.source.atoms.get(*a)?,
+                    self.target.atoms.get(*b)?,
+                ))
+            })
+            .sum();
         upper.heavy_adjacency += heavy_open.min(heavy_available);
         upper.adjacency += open.min(available.len() as u32);
         upper.unchanged_bonds += open.min(available.len() as u32);
@@ -596,15 +615,11 @@ impl Search<'_> {
                 .atoms
                 .get(s)
                 .zip(self.target.atoms.get(*t))
-                .map_or(u64::MAX, |(a, b)| {
-                    u64::from(a.charge.abs_diff(b.charge))
-                        + u64::from(a.h.abs_diff(b.h))
-                        + u64::from(a.radical.abs_diff(b.radical))
-                });
+                .map_or(u64::MAX, |(a, b)| delta(a, b));
             (
                 Reverse(adjacency),
-                Reverse(bonds),
                 delta,
+                Reverse(bonds),
                 self.pair_cost(s, *t),
                 self.target.atoms.get(*t).map_or(0, |a| a.id),
             )
