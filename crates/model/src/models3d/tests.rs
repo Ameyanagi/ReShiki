@@ -872,10 +872,6 @@ fn sphere_svg_writes_the_prototype_gradient() {
     assert!(radial.contains(" fr=\""));
     assert_eq!(radial.matches("<stop ").count(), 3);
     assert!(radial.contains("offset=\"0.6\""));
-    // Each bond half outlines only its two long sides.
-    let quad = svg.split("<linearGradient ").nth(1).unwrap();
-    let outline = quad.split("<path d=\"").nth(1).unwrap();
-    assert_eq!(outline.split('"').next().unwrap().matches('M').count(), 2);
 }
 
 #[test]
@@ -904,44 +900,498 @@ fn chemistry_and_reaction_roles_keep_a_drawing_with_a_model_valid() {
 }
 
 #[test]
-fn each_ball_covers_its_own_half_bonds_but_not_a_farther_atom() {
+fn a_half_bond_toward_the_viewer_is_drawn_over_its_own_ball() {
     let (mut doc, ..) = shown(Display::ThreeD);
     doc.models[0].rotation = [1., 0., 0., 0.];
     doc.models[0].hydrogens.clear();
     // C1 sits behind C2, whose half-bond to O points toward the viewer; O is
-    // in front of both. C1 and its half are drawn first, behind everything.
+    // in front of both.
     doc.models[0].atoms[0].xyz = [-1.2, 0., -1.5];
     doc.models[0].atoms[1].xyz = [0., 0., 0.];
     doc.models[0].atoms[2].xyz = [1.2, 0., 1.];
-    let order: Vec<_> = primitives(&doc)
-        .into_iter()
-        .map(|p| match p {
-            Primitive::Sphere { center, .. } => (true, center.x),
-            Primitive::ShadedQuad { corners, .. } => (false, (corners[0].x + corners[3].x) / 2.),
-            _ => unreachable!(),
+    let view = View::new(&doc, &doc.models[0]).unwrap();
+    let parts = primitives(&doc);
+    let (balls, halves) = paint_order(&view, &parts);
+    assert_eq!(balls.len(), 3);
+    assert_eq!(halves.len(), 4);
+
+    for (s, o) in [(1, 0), (2, 1)] {
+        let half = &halves[&(s, o)];
+        let [a, _, _, d] = *half.corners.unwrap();
+        assert!(
+            half.order < balls[&s],
+            "half {s}→{o} must be behind its own ball"
+        );
+        assert!(half.cap.is_empty(), "half {s}→{o} must have a flat start");
+        assert!(a.lerp(d, 0.5).distance(view.project(view.rotated[s]).0) < 1e-3);
+    }
+
+    let half = &halves[&(1, 2)];
+    assert!(
+        half.order > balls[&1],
+        "C2→O must be drawn after C2's ball (half at {}, ball at {})",
+        half.order,
+        balls[&1]
+    );
+    let [a, _, _, d] = *half.corners.unwrap();
+    let start = a.lerp(d, 0.5);
+    let (carbon, oxygen) = (view.rotated[1], view.rotated[2]);
+    let radius = Style::BallStick.atom_radius("C");
+    let t = (radius * radius - BOND_RADIUS * BOND_RADIUS).sqrt();
+    let exit = view
+        .project(mix(carbon, oxygen, t / length(sub(oxygen, carbon))))
+        .0;
+    assert!(
+        start.distance(exit) < 1e-3,
+        "start {start:?}, exit {exit:?}"
+    );
+    let middle = view.project(mix(carbon, oxygen, 0.5)).0;
+    assert!(!half.cap.is_empty());
+    assert!(
+        half.cap
+            .iter()
+            .all(|p| screen_dot(screen_sub(*p, start), screen_sub(middle, start)) < 0.)
+    );
+    assert!(
+        halves[&(2, 1)].order > balls[&0],
+        "O→C2 must be in front of C1"
+    );
+}
+
+struct PaintedHalf<'a> {
+    order: usize,
+    corners: Option<&'a [Point; 4]>,
+    cap: &'a [Point],
+}
+
+type PaintedHalves<'a> = HashMap<(usize, usize), PaintedHalf<'a>>;
+
+fn paint_order<'a>(
+    view: &View<'_>,
+    parts: &'a [Primitive],
+) -> (HashMap<usize, usize>, PaintedHalves<'a>) {
+    let centers: Vec<_> = view.rotated.iter().map(|&p| view.project(p).0).collect();
+    let middles: Vec<_> = view
+        .bonds
+        .iter()
+        .map(|&(s, o)| {
+            (
+                (s, o),
+                view.project(mix(view.rotated[s], view.rotated[o], 0.5)).0,
+            )
         })
         .collect();
-    let model = &doc.models[0];
-    let points = model.points(&doc).unwrap();
-    let view = View::new(&doc, model).unwrap();
-    let x = |i: usize| view.project(view.rotated[i]).0.x;
-    let sphere = |i| order.iter().position(|&(s, px)| s && px == x(i)).unwrap();
-    let halves = |i| -> Vec<usize> {
-        order
+    let mut balls = HashMap::new();
+    let mut halves = HashMap::new();
+    for (order, part) in parts.iter().enumerate() {
+        let (middle, corners, cap, vertices) = match part {
+            Primitive::Sphere { center, .. } => {
+                let i = centers
+                    .iter()
+                    .position(|p| p.distance(*center) < 1e-3)
+                    .unwrap();
+                assert!(balls.insert(i, order).is_none(), "duplicate ball {i}");
+                continue;
+            }
+            Primitive::ShadedQuad {
+                corners,
+                cap,
+                from,
+                to,
+                ..
+            } => (from.lerp(*to, 0.5), Some(corners), cap.as_slice(), &[][..]),
+            Primitive::ShadedPolygon {
+                points, from, to, ..
+            } => (from.lerp(*to, 0.5), None, &[][..], points.as_slice()),
+            Primitive::Contour { .. } | Primitive::Text { .. } | Primitive::Card { .. } => continue,
+            _ => panic!("unexpected primitive {part:?}"),
+        };
+        let &((s, o), expected) = middles
             .iter()
-            .enumerate()
-            .filter(|(_, (s, px))| !s && (*px - x(i)).abs() < 1e-3)
-            .map(|(n, _)| n)
-            .collect()
-    };
-    assert_eq!(points.len(), 3);
-    // Every half-bond, including C2's half toward the nearer O, comes before
-    // its own ball.
-    for i in 0..3 {
-        assert!(halves(i).iter().all(|&h| h < sphere(i)), "{i}: {order:?}");
+            .min_by(|(_, a), (_, b)| a.distance(middle).total_cmp(&b.distance(middle)))
+            .unwrap();
+        assert!(
+            middle.distance(expected) < 1e-3,
+            "unmapped bond middle {middle:?}"
+        );
+        let to_start = |center: Point| match corners {
+            Some([a, _, _, d]) => a.lerp(*d, 0.5).distance(center),
+            None => vertices
+                .iter()
+                .map(|p| p.distance(center))
+                .fold(f32::INFINITY, f32::min),
+        };
+        let key = if to_start(centers[s]) < to_start(centers[o]) {
+            (s, o)
+        } else {
+            (o, s)
+        };
+        let half = PaintedHalf {
+            order,
+            corners,
+            cap,
+        };
+        assert!(halves.insert(key, half).is_none(), "duplicate half {key:?}");
     }
-    // The halves of the front oxygen still pass in front of the far C1.
-    assert!(halves(2).iter().all(|&h| h > sphere(0)), "{order:?}");
+    (balls, halves)
+}
+
+fn screen_sub(a: Point, b: Point) -> Point {
+    Point::new(a.x - b.x, a.y - b.y)
+}
+
+fn screen_dot(a: Point, b: Point) -> f32 {
+    a.x * b.x + a.y * b.y
+}
+
+// C16H26
+const CARBONS: [[f32; 3]; 16] = [
+    [3.405, -0.304, -0.393],
+    [2.459, -1.039, -1.336],
+    [1.006, -1.152, -0.849],
+    [0.723, -2.358, 0.041],
+    [-0.794, -2.569, 0.173],
+    [-1.626, -1.275, 0.339],
+    [-2.521, -0.983, -0.868],
+    [-3.367, 0.263, -0.616],
+    [-2.496, 1.485, -0.349],
+    [-1.498, 1.278, 0.806],
+    [-0.508, 2.474, 0.859],
+    [0.907, 2.127, 1.352],
+    [1.507, 0.841, 0.735],
+    [2.841, 1.052, 0.028],
+    [0.490, 0.132, -0.183],
+    [-0.755, -0.070, 0.707],
+];
+const CC_BONDS: [(usize, usize); 19] = [
+    (0, 1),
+    (1, 2),
+    (2, 3),
+    (3, 4),
+    (4, 5),
+    (5, 6),
+    (6, 7),
+    (7, 8),
+    (8, 9),
+    (9, 10),
+    (10, 11),
+    (11, 12),
+    (12, 13),
+    (12, 14),
+    (14, 15),
+    (13, 0),
+    (14, 2),
+    (15, 5),
+    (15, 9),
+];
+/// Each hydrogen's carbon (index into CARBONS) and position.
+const HYDROGENS: [(usize, [f32; 3]); 26] = [
+    (0, [3.591, -0.922, 0.494]),
+    (0, [4.372, -0.159, -0.887]),
+    (1, [2.451, -0.490, -2.288]),
+    (1, [2.863, -2.032, -1.566]),
+    (2, [0.413, -1.312, -1.761]),
+    (3, [1.170, -2.217, 1.033]),
+    (3, [1.171, -3.267, -0.378]),
+    (4, [-0.969, -3.222, 1.038]),
+    (4, [-1.153, -3.132, -0.699]),
+    (5, [-2.309, -1.453, 1.184]),
+    (6, [-3.186, -1.834, -1.054]),
+    (6, [-1.920, -0.844, -1.774]),
+    (7, [-4.006, 0.453, -1.486]),
+    (7, [-4.034, 0.093, 0.238]),
+    (8, [-3.136, 2.348, -0.129]),
+    (8, [-1.957, 1.728, -1.274]),
+    (9, [-2.072, 1.265, 1.743]),
+    (10, [-0.404, 2.918, -0.140]),
+    (10, [-0.931, 3.265, 1.489]),
+    (11, [1.567, 2.986, 1.182]),
+    (11, [0.863, 1.996, 2.441]),
+    (12, [1.727, 0.176, 1.584]),
+    (13, [3.552, 1.545, 0.701]),
+    (13, [2.715, 1.701, -0.847]),
+    (14, [0.254, 0.808, -1.017]),
+    (15, [-0.407, -0.299, 1.727]),
+];
+
+fn perhydropyrene() -> Document {
+    let mut doc = Document::default();
+    let atoms: Vec<_> = CARBONS
+        .into_iter()
+        .map(|xyz| Placed {
+            id: doc.add_atom("C", Point::new(36. * xyz[0], 36. * xyz[1])),
+            xyz,
+        })
+        .collect();
+    for (s, o) in CC_BONDS {
+        doc.add_bond(atoms[s].id, atoms[o].id, 1, "plain");
+    }
+    let hydrogens = HYDROGENS
+        .into_iter()
+        .map(|(s, xyz)| Hydrogen {
+            parent: atoms[s].id,
+            xyz,
+        })
+        .collect();
+    let model = Model3d::new(&doc, atoms, hydrogens, ForceField::Mmff94s);
+    doc.models.push(model);
+    require_version(&mut doc);
+    assert!(set_display(&mut doc, 0, Display::ThreeD));
+    doc
+}
+
+struct HalfAxis {
+    atoms: (usize, usize),
+    start: Point,
+    middle: Point,
+    factors: [f32; 2],
+    start_z: f32,
+    delta: f32,
+}
+
+impl HalfAxis {
+    fn new(view: &View<'_>, atoms: (usize, usize)) -> Self {
+        let (a, b) = (view.rotated[atoms.0], view.rotated[atoms.1]);
+        let (start, fa) = view.project(a);
+        let (middle, fm) = view.project(mix(a, b, 0.5));
+        Self {
+            atoms,
+            start,
+            middle,
+            factors: [fa, fm],
+            start_z: a[2],
+            delta: b[2] - a[2],
+        }
+    }
+
+    fn depth_at(&self, p: f32) -> f32 {
+        // Undo perspective's stretch along the projected line before interpolating depth.
+        let [fa, fm] = self.factors;
+        let t = p * fm / ((1. - p) * fa + p * fm);
+        self.start_z + t * self.delta / 2.
+    }
+}
+
+fn axis_crossing(a: &HalfAxis, b: &HalfAxis) -> Option<(f32, f32)> {
+    let cross = |a: Point, b: Point| a.x * b.y - a.y * b.x;
+    let x = screen_sub(a.middle, a.start);
+    let y = screen_sub(b.middle, b.start);
+    let d = screen_sub(b.start, a.start);
+    let det = cross(x, y);
+    let (p, q) = (cross(d, y) / det, cross(d, x) / det);
+    ((0. ..1.).contains(&p) && (0. ..1.).contains(&q)).then_some((p, q))
+}
+
+fn check_half_crossings(axes: &[HalfAxis], halves: &PaintedHalves<'_>, case: &str) -> usize {
+    let mut checked = 0;
+    for (i, a) in axes.iter().enumerate() {
+        for b in &axes[i + 1..] {
+            let (s, o) = b.atoms;
+            if [a.atoms.0, a.atoms.1].iter().any(|&j| j == s || j == o) {
+                continue;
+            }
+            let Some((p, q)) = axis_crossing(a, b) else {
+                continue;
+            };
+            let gap = a.depth_at(p) - b.depth_at(q);
+            // Each half's centre is at most a quarter of its bond's depth span
+            // from any point on its axis. The two depth biases cancel.
+            let slack = (a.delta.abs() + b.delta.abs()) / 4. + 1e-3;
+            if gap.abs() > slack {
+                let (x, y) = (halves[&a.atoms].order, halves[&b.atoms].order);
+                assert!(
+                    (x > y) == (gap > 0.),
+                    "{case}: crossed halves {:?} and {:?} out of depth order (gap {gap:.4}, slack {slack:.4}, paint indices {x} and {y})",
+                    a.atoms,
+                    b.atoms
+                );
+                checked += 1;
+            }
+        }
+    }
+    checked
+}
+
+fn check_ball_crossings(
+    view: &View<'_>,
+    axes: &[HalfAxis],
+    balls: &HashMap<usize, usize>,
+    halves: &PaintedHalves<'_>,
+    case: &str,
+) -> usize {
+    let mut checked = 0;
+    for (i, center, radius) in view.balls() {
+        let z = view.rotated[i][2];
+        let (_, factor) = view.project(view.rotated[i]);
+        let r = radius / (view.scale * factor);
+        for axis in axes.iter().filter(|a| a.atoms.0 != i && a.atoms.1 != i) {
+            for k in 0..=8 {
+                let p = k as f32 / 8.;
+                let point = axis.start.lerp(axis.middle, p);
+                let rho = center.distance(point) / (view.scale * factor);
+                if rho >= r {
+                    continue;
+                }
+                let depth = axis.depth_at(p);
+                let slack = axis.delta.abs() / 4. + 1e-3;
+                let surface = if view.perspective == 0. {
+                    z + (r * r - rho * rho).sqrt()
+                } else {
+                    // Intersect the viewing ray with the sphere. Its screen
+                    // offset at the ball's depth is rho in model units.
+                    let offset = screen_sub(point, center);
+                    let offset = Point::new(
+                        offset.x / (view.scale * factor),
+                        offset.y / (view.scale * factor),
+                    );
+                    let slope = screen_sub(point, view.origin);
+                    let slope = Point::new(
+                        slope.x / (view.scale * view.camera),
+                        slope.y / (view.scale * view.camera),
+                    );
+                    let a = 1. + screen_dot(slope, slope);
+                    let b = screen_dot(offset, slope);
+                    z + (b + (b * b + a * (r * r - rho * rho)).sqrt()) / a
+                };
+                let (half, ball) = (halves[&axis.atoms].order, balls[&i]);
+                if z - depth > slack {
+                    assert!(
+                        half < ball,
+                        "{case}: half {:?} must be behind ball {i} at sample {k}",
+                        axis.atoms
+                    );
+                    checked += 1;
+                } else if depth - surface > slack {
+                    assert!(
+                        half > ball,
+                        "{case}: half {:?} must be in front of ball {i} at sample {k}",
+                        axis.atoms
+                    );
+                    checked += 1;
+                }
+            }
+        }
+    }
+    checked
+}
+
+#[test]
+fn draw_order_follows_depth_in_a_saturated_polycycle() {
+    let mut doc = perhydropyrene();
+    let default_perspective = doc.models[0].perspective;
+    let bond_count = CC_BONDS.len() + HYDROGENS.len();
+    let ball_count = CARBONS.len() + HYDROGENS.len();
+    for style in [Style::BallStick, Style::Stick] {
+        for perspective in [0., default_perspective] {
+            let (mut rotations, mut half_checks, mut ball_checks) = (0, 0, 0);
+            for rotation in 0..128 {
+                // Evenly spaced viewing directions on a Fibonacci sphere.
+                let yaw = (2. * (rotation as f32 + 0.5) / 128. - 1.).asin();
+                let pitch = (rotation as f32 * 2.3999631).rem_euclid(std::f32::consts::TAU);
+                let model = &mut doc.models[0];
+                model.rotation = turn([1., 0., 0., 0.], yaw * 100., pitch * 100., false);
+                model.style = style;
+                model.perspective = perspective;
+                let model = &doc.models[0];
+                let view = View::new(&doc, model).unwrap();
+                assert_eq!(view.bonds.len(), bond_count);
+                let axes: Vec<_> = view
+                    .bonds
+                    .iter()
+                    .flat_map(|&(s, o)| [(s, o), (o, s)])
+                    .map(|atoms| HalfAxis::new(&view, atoms))
+                    .collect();
+                // Leave out views where a half can disappear end-on. For
+                // these bonds even the largest trim stays within 30%.
+                let line = (model.size / 400.).clamp(0.6, 1.1);
+                if axes.iter().any(|axis| {
+                    let (s, o) = axis.atoms;
+                    let past_trim = view.project(mix(view.rotated[s], view.rotated[o], 0.3)).0;
+                    axis.middle.distance(past_trim) < line * 0.5
+                        || axis.middle.distance(axis.start)
+                            < STICK_RADIUS * view.scale * axis.factors[0] * END_ON
+                }) {
+                    continue;
+                }
+                rotations += 1;
+                let case = format!("{style:?}, perspective {perspective}, rotation {rotation}");
+                let parts = primitives(&doc);
+                let (balls, halves) = paint_order(&view, &parts);
+                assert_eq!(halves.len(), 2 * bond_count, "{case}");
+                half_checks += check_half_crossings(&axes, &halves, &case);
+                if style == Style::BallStick {
+                    assert_eq!(balls.len(), ball_count, "{case}");
+                    ball_checks += check_ball_crossings(&view, &axes, &balls, &halves, &case);
+                    for axis in axes.iter().filter(|a| a.delta.abs() > 0.2) {
+                        let half = &halves[&axis.atoms];
+                        let front = axis.delta > 0.;
+                        assert_eq!(
+                            half.order > balls[&axis.atoms.0],
+                            front,
+                            "{case}: half {:?} has the wrong order relative to its own ball",
+                            axis.atoms
+                        );
+                        assert_eq!(
+                            !half.cap.is_empty(),
+                            front,
+                            "{case}: half {:?} has the wrong cap",
+                            axis.atoms
+                        );
+                    }
+                } else {
+                    let mut last_joint = HashMap::<usize, usize>::new();
+                    for axis in &axes {
+                        let half = &halves[&axis.atoms];
+                        if axis.delta > 0.2 {
+                            assert!(
+                                matches!(&parts[half.order], Primitive::ShadedQuad { cap, outline: Some(_), .. } if !cap.is_empty()),
+                                "{case}: {:?} should be a capped quad",
+                                axis.atoms
+                            );
+                        } else {
+                            assert!(
+                                matches!(
+                                    &parts[half.order],
+                                    Primitive::ShadedPolygon {
+                                        outline: Some(_),
+                                        ..
+                                    }
+                                ),
+                                "{case}: {:?} should be an outlined joint half",
+                                axis.atoms
+                            );
+                            let last = last_joint.entry(axis.atoms.0).or_default();
+                            *last = (*last).max(half.order);
+                        }
+                    }
+                    for i in 0..ball_count {
+                        assert_ne!(
+                            balls.contains_key(&i),
+                            last_joint.contains_key(&i),
+                            "{case}: atom {i} should have a disc exactly when it has no joint"
+                        );
+                    }
+                    for axis in axes.iter().filter(|axis| axis.delta > 0.2) {
+                        let s = axis.atoms.0;
+                        let last = last_joint.get(&s).or_else(|| balls.get(&s)).unwrap();
+                        assert!(
+                            halves[&axis.atoms].order > *last,
+                            "{case}: {:?} should be drawn after its joint or disc",
+                            axis.atoms
+                        );
+                    }
+                }
+            }
+            assert!(
+                rotations >= 48,
+                "{style:?}, perspective {perspective}: only {rotations} rotations"
+            );
+            assert!(half_checks > 0);
+            if style == Style::BallStick {
+                assert!(ball_checks > 0);
+            }
+        }
+    }
 }
 
 #[test]
@@ -1154,10 +1604,10 @@ fn counts(parts: &[Primitive]) -> (usize, usize, usize) {
 
 #[test]
 fn each_style_draws_the_prototype_shapes() {
-    // Stick: every half-bond is its share of the joints, without balls.
+    // Stick: three front halves, five joint halves, and one disc.
     let (_, stick) = styled(|m| m.style = Style::Stick);
-    assert_eq!(counts(&stick), (0, 0, 0));
-    assert_eq!(polygons(&stick).len(), 8);
+    assert_eq!(counts(&stick), (1, 3, 0));
+    assert_eq!(polygons(&stick).len(), 5);
 
     let (doc, wire) = styled(|m| m.style = Style::Wireframe);
     assert_eq!(counts(&wire), (0, 0, 8));
@@ -1600,6 +2050,75 @@ fn trigonal(edit: impl Fn(&mut Model3d)) -> Document {
     )
 }
 
+#[test]
+fn a_front_stick_half_leaves_its_joint_unclipped() {
+    // The first front half passes close to an in-plane neighbour on screen.
+    let doc = lone(
+        &[("C", [0., 0., 0.])],
+        &[
+            [1.1, 0.2, 0.],
+            [-1.1, 0.6, 0.],
+            [0.72, 0., 1.],
+            [0.15, -0.9, 1.25],
+        ],
+        |m| {
+            m.style = Style::Stick;
+            m.rotation = [1., 0., 0., 0.];
+            m.perspective = 0.;
+        },
+    );
+    let view = View::new(&doc, &doc.models[0]).unwrap();
+    let parts = primitives(&doc);
+    let (_, halves) = paint_order(&view, &parts);
+    let half = halves[&(0, 3)].order;
+    let center = view.project(view.rotated[0]).0;
+    let probe = center.offset(0.1 * view.scale, -0.1 * view.scale);
+    let covers_probe = |points: &[Point]| {
+        !points
+            .iter()
+            .zip(points.iter().cycle().skip(1))
+            .filter(|&(a, b)| {
+                (a.y > probe.y) != (b.y > probe.y)
+                    && probe.x < a.x + (b.x - a.x) * (probe.y - a.y) / (b.y - a.y)
+            })
+            .count()
+            .is_multiple_of(2)
+    };
+    let part = &parts[half];
+    if let Primitive::ShadedPolygon { points, .. } = part {
+        panic!(
+            "front half is still a joint sector (covers probe: {}, paint index: {half}, next sector: {})",
+            covers_probe(points),
+            halves[&(0, 4)].order
+        );
+    }
+    let Primitive::ShadedQuad {
+        corners,
+        cap,
+        from,
+        to,
+        ..
+    } = part
+    else {
+        panic!("expected a capped quad, got {part:?}");
+    };
+    assert!(!cap.is_empty());
+    assert!(corners[0].lerp(corners[3], 0.5).distance(center) < 1e-3);
+    assert!((corners[0].distance(corners[3]) / 2. - STICK_RADIUS * view.scale).abs() < 1e-3);
+    assert!(corners[1].lerp(corners[2], 0.5).x > from.lerp(*to, 0.5).x);
+    for o in [1, 2] {
+        let joint = halves[&(0, o)].order;
+        assert!(matches!(parts[joint], Primitive::ShadedPolygon { .. }));
+        assert!(half > joint);
+    }
+    let filled: Vec<_> = corners.iter().chain(cap).copied().collect();
+    assert!(covers_probe(&filled));
+    let Some(Primitive::Contour { polygons, .. }) = parts.first() else {
+        panic!("the sticks share a contour");
+    };
+    assert!(polygons.contains(&filled));
+}
+
 /// Neighbouring sticks share one border on their bisector, so three bonds
 /// make a joint with exactly three borders that tile the turn around the
 /// atom; each half reaches only a sliver past a border, under its neighbour,
@@ -1666,7 +2185,7 @@ fn stick_joints_share_borders_and_nothing_overlaps() {
 fn a_short_neighbour_leaves_a_long_stick_straight() {
     let doc = lone(
         &[("C", [0., 0., 0.])],
-        &[[1.5, 0., 0.], [0.12, 0.2, 1.]],
+        &[[1.5, 0., 0.], [0.12, 0.2, -1.]],
         |m| {
             m.style = Style::Stick;
             m.rotation = [1., 0., 0., 0.];
@@ -1696,10 +2215,9 @@ fn view_point(doc: &Document, i: usize) -> Point {
     view.project(view.rotated[i]).0
 }
 
-/// Flat sticks have one outline: a single stroke of every shape behind all
-/// fills, so only the outer edge of the tube shows. Glossy has none.
+/// The shared contour frames the fills. Flat halves also stroke their sides.
 #[test]
-fn stick_outline_is_one_stroke_behind_every_shape() {
+fn stick_contour_frames_the_fills() {
     let doc = trigonal(|_| {});
     let parts = primitives(&doc);
     let Some(Primitive::Contour {
@@ -1712,6 +2230,11 @@ fn stick_outline_is_one_stroke_behind_every_shape() {
     assert_eq!(*rims, polygons(&parts));
     let line = (doc.models[0].size / 400.).clamp(0.6, 1.1);
     assert_eq!((outline.width, outline.alpha), (line * 2., 0.85));
+    assert!(parts[1..].iter().all(|p| matches!(
+        p,
+        Primitive::ShadedPolygon { outline: Some(outline), .. }
+            if (outline.width, outline.alpha) == (line, 0.85)
+    )));
     assert_eq!(
         parts
             .iter()
@@ -1727,21 +2250,27 @@ fn stick_outline_is_one_stroke_behind_every_shape() {
         m.style = Style::Stick;
         m.look = Look::Glossy;
     });
-    assert!(
-        !glossy
-            .iter()
-            .any(|p| matches!(p, Primitive::Contour { .. }))
-    );
+    assert!(!glossy.iter().any(|p| matches!(
+        p,
+        Primitive::Contour { .. }
+            | Primitive::ShadedPolygon {
+                outline: Some(_),
+                ..
+            }
+            | Primitive::ShadedQuad {
+                outline: Some(_),
+                ..
+            }
+    )));
     // The outline counts toward the drawing's bounds.
     let (lo, _) = scene::bounds(&parts);
     let leftmost = rims.iter().flatten().map(|p| p.x).fold(f32::MAX, f32::min);
     assert!(lo.x <= leftmost - line + 1e-4);
 }
 
-/// An atom without a stick on screen is a round disc: one with its bonds
-/// hidden, or two atoms seen along their bond.
+/// An atom without a joint is a disc, even at the rear end of a tilted stick.
 #[test]
-fn stick_atoms_without_sticks_on_screen_are_discs() {
+fn stick_atoms_without_joints_are_discs() {
     let water = lone(
         &[("O", [0., 0., 0.])],
         &[[0.76, 0.59, 0.], [-0.76, 0.59, 0.]],
@@ -1771,23 +2300,29 @@ fn stick_atoms_without_sticks_on_screen_are_discs() {
     let parts = primitives(&end_on);
     assert_eq!(counts(&parts), (2, 0, 0));
     assert!(polygons(&parts).is_empty());
-    // Turned a little, the bond shows again as two short halves.
+    // Tilted, the bond shows both halves and the rear atom supplies its disc.
     let tilted = lone(&[("C", [0., 0., -0.7]), ("O", [0.3, 0., 0.7])], &[], |m| {
         m.style = Style::Stick;
         m.rotation = [1., 0., 0., 0.];
     });
     let parts = primitives(&tilted);
-    assert_eq!((counts(&parts), polygons(&parts).len()), ((0, 0, 0), 2));
+    assert_eq!((counts(&parts), polygons(&parts).len()), ((1, 1, 0), 1));
 }
 
 /// Under full perspective each stick's round cap is as wide as the stick at
 /// its own atom, near the middle's width.
 #[test]
 fn sticks_taper_to_their_joints_under_perspective() {
-    let (doc, parts) = styled(|m| {
-        m.style = Style::Stick;
-        m.perspective = 1.;
-    });
+    let doc = lone(
+        &[("C", [0., 0., 0.])],
+        &[[-1.2, 0.13, 0.3], [1.2, 0.21, 0.55]],
+        |m| {
+            m.style = Style::Stick;
+            m.rotation = [1., 0., 0., 0.];
+            m.perspective = 1.;
+        },
+    );
+    let parts = primitives(&doc);
     let mut caps = vec![];
     for shape in polygons(&parts) {
         let atom = at_atom(&doc, &shape);
@@ -1830,6 +2365,34 @@ fn stick_hydrogens_fade_in_with_their_outline() {
     assert_eq!(faded.len(), 3);
     assert!(matches!(faded[0], Primitive::Contour { polygons, .. } if polygons.len() == 2));
     assert!(matches!(parts[0], Primitive::Contour { ref polygons, .. } if polygons.len() == 6));
+
+    // A later morph shows the front hydrogen half, its disc, and their rim.
+    let doc = lone(&[("C", [0., 0., 0.])], &[[0.8, 0., -1.]], |m| {
+        m.style = Style::Stick;
+        m.rotation = [1., 0., 0., 0.];
+        m.morph = Some(0.65);
+    });
+    let parts = primitives(&doc);
+    let faded: Vec<_> = parts
+        .iter()
+        .filter_map(|p| match p {
+            Primitive::Opacity { alpha, primitive } => Some((*alpha, primitive.as_ref())),
+            _ => None,
+        })
+        .collect();
+    let [
+        (rim_alpha, Primitive::Contour { polygons, .. }),
+        (disc_alpha, Primitive::Sphere { .. }),
+        (half_alpha, Primitive::ShadedQuad { corners, cap, .. }),
+    ] = faded.as_slice()
+    else {
+        panic!("expected the fading contour, disc, and front half: {faded:?}");
+    };
+    assert!(*rim_alpha > 0. && *rim_alpha < 1.);
+    assert_eq!((disc_alpha, half_alpha), (rim_alpha, rim_alpha));
+    let filled: Vec<_> = corners.iter().chain(cap).copied().collect();
+    assert_eq!(polygons.len(), 2);
+    assert!(polygons.contains(&filled));
 }
 
 #[test]

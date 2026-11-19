@@ -361,6 +361,7 @@ fn push_svg(s: &mut String, drawing: Vec<Primitive>, frame: &Frame, halos: &mut 
             }
             Primitive::ShadedQuad {
                 corners,
+                cap,
                 from,
                 to,
                 stops,
@@ -375,24 +376,28 @@ fn push_svg(s: &mut String, drawing: Vec<Primitive>, frame: &Frame, halos: &mut 
                     ),
                     &stops,
                 );
-                let [a, b, c, d] = corners;
-                s.push_str(&format!(
-                    "{defs}<polygon points=\"{},{} {},{} {},{} {},{}\" fill=\"url(#{id})\"/>",
-                    a.x, a.y, b.x, b.y, c.x, c.y, d.x, d.y
-                ));
+                use std::fmt::Write as _;
+                let [a, b, c, d] = &corners;
+                let _ = write!(s, "{defs}<polygon points=\"{},{}", a.x, a.y);
+                for p in [b, c, d].into_iter().chain(&cap) {
+                    let _ = write!(s, " {},{}", p.x, p.y);
+                }
+                let _ = write!(s, "\" fill=\"url(#{id})\"/>");
                 if outline.is_some() {
-                    s.push_str(&format!(
-                        "<path d=\"M{} {} L{} {} M{} {} L{} {}\" fill=\"none\"{}/>",
-                        a.x,
-                        a.y,
-                        b.x,
-                        b.y,
-                        d.x,
-                        d.y,
-                        c.x,
-                        c.y,
-                        outline_paint(outline)
-                    ));
+                    let paint = outline_paint(outline);
+                    if cap.is_empty() {
+                        let _ = write!(
+                            s,
+                            "<path d=\"M{} {} L{} {} M{} {} L{} {}\" fill=\"none\"{paint}/>",
+                            a.x, a.y, b.x, b.y, d.x, d.y, c.x, c.y
+                        );
+                    } else {
+                        let _ = write!(s, "<path d=\"M{} {}", c.x, c.y);
+                        for p in std::iter::once(d).chain(&cap).chain([a, b]) {
+                            let _ = write!(s, " L{} {}", p.x, p.y);
+                        }
+                        let _ = write!(s, "\" fill=\"none\" stroke-linejoin=\"round\"{paint}/>");
+                    }
                 }
             }
             Primitive::ShadedPolygon {
@@ -400,6 +405,7 @@ fn push_svg(s: &mut String, drawing: Vec<Primitive>, frame: &Frame, halos: &mut 
                 from,
                 to,
                 stops,
+                outline,
             } => {
                 let (defs, id) = gradient(
                     frame,
@@ -418,6 +424,13 @@ fn push_svg(s: &mut String, drawing: Vec<Primitive>, frame: &Frame, halos: &mut 
                         .collect::<Vec<_>>()
                         .join(" ")
                 ));
+                if let (Some(_), [a, b, .., c, d]) = (outline, points.as_slice()) {
+                    let paint = outline_paint(outline);
+                    s.push_str(&format!(
+                        "<path d=\"M{} {} L{} {} M{} {} L{} {}\" fill=\"none\"{paint}/>",
+                        b.x, b.y, a.x, a.y, c.x, c.y, d.x, d.y
+                    ));
+                }
             }
             Primitive::Contour { polygons, outline } => {
                 let path: String = polygons
@@ -594,5 +607,116 @@ fn push_halo(s: &mut String, primitives: &[Primitive], radius: f32, color: &str)
             | Primitive::Wire { .. }
             | Primitive::Card { .. } => {}
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::render_part;
+    use crate::{
+        document::Point,
+        scene::{Outline, Primitive},
+    };
+
+    fn shaded_quad_svg(cap: Vec<Point>) -> String {
+        render_part(
+            vec![Primitive::ShadedQuad {
+                corners: [
+                    Point::new(1., 2.),
+                    Point::new(9., 2.),
+                    Point::new(9., 6.),
+                    Point::new(1., 6.),
+                ],
+                cap,
+                from: Point::new(5., 2.),
+                to: Point::new(5., 6.),
+                stops: vec![(0., [10, 20, 30]), (1., [40, 50, 60])],
+                outline: Some(Outline {
+                    color: [70, 80, 90],
+                    alpha: 0.75,
+                    width: 0.5,
+                }),
+            }],
+            Point::new(-3., 0.),
+            Point::new(12., 8.),
+        )
+    }
+
+    #[test]
+    fn shaded_quad_cap_extends_fill_and_outlines_the_exposed_end() {
+        let svg = shaded_quad_svg(vec![
+            Point::new(-1., 5.),
+            Point::new(-2., 4.),
+            Point::new(-1., 3.),
+        ]);
+        assert_eq!(
+            svg,
+            concat!(
+                r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="-3 0 15 8" width="15" height="8">"#,
+                r#"<defs><linearGradient id="reshiki-3d-1" gradientUnits="userSpaceOnUse" x1="5" y1="2" x2="5" y2="6">"#,
+                r#"<stop offset="0" stop-color="rgb(10,20,30)"/><stop offset="1" stop-color="rgb(40,50,60)"/>"#,
+                r#"</linearGradient></defs>"#,
+                r#"<polygon points="1,2 9,2 9,6 1,6 -1,5 -2,4 -1,3" fill="url(#reshiki-3d-1)"/>"#,
+                r#"<path d="M9 6 L1 6 L-1 5 L-2 4 L-1 3 L1 2 L9 2" fill="none" stroke-linejoin="round" stroke="rgb(70,80,90)" stroke-opacity="0.75" stroke-width="0.5"/>"#,
+                "</svg>",
+            )
+        );
+    }
+
+    #[test]
+    fn shaded_quad_without_cap_keeps_the_existing_svg_markup() {
+        let svg = shaded_quad_svg(Vec::new());
+        assert_eq!(
+            svg,
+            concat!(
+                r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="-3 0 15 8" width="15" height="8">"#,
+                r#"<defs><linearGradient id="reshiki-3d-1" gradientUnits="userSpaceOnUse" x1="5" y1="2" x2="5" y2="6">"#,
+                r#"<stop offset="0" stop-color="rgb(10,20,30)"/><stop offset="1" stop-color="rgb(40,50,60)"/>"#,
+                r#"</linearGradient></defs>"#,
+                r#"<polygon points="1,2 9,2 9,6 1,6" fill="url(#reshiki-3d-1)"/>"#,
+                r#"<path d="M1 2 L9 2 M1 6 L9 6" fill="none" stroke="rgb(70,80,90)" stroke-opacity="0.75" stroke-width="0.5"/>"#,
+                "</svg>",
+            )
+        );
+    }
+
+    #[test]
+    fn shaded_polygon_outlines_only_the_long_sides() {
+        let svg = |outline| {
+            render_part(
+                vec![Primitive::ShadedPolygon {
+                    points: vec![
+                        Point::new(9., 2.),
+                        Point::new(2., 2.),
+                        Point::new(1., 4.),
+                        Point::new(2., 6.),
+                        Point::new(9., 6.),
+                    ],
+                    from: Point::new(9., 2.),
+                    to: Point::new(9., 6.),
+                    stops: vec![(0., [10, 20, 30]), (1., [40, 50, 60])],
+                    outline,
+                }],
+                Point::new(0., 0.),
+                Point::new(12., 8.),
+            )
+        };
+        let fill = concat!(
+            r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 8" width="12" height="8">"#,
+            r#"<defs><linearGradient id="reshiki-3d-1" gradientUnits="userSpaceOnUse" x1="9" y1="2" x2="9" y2="6">"#,
+            r#"<stop offset="0" stop-color="rgb(10,20,30)"/><stop offset="1" stop-color="rgb(40,50,60)"/>"#,
+            r#"</linearGradient></defs>"#,
+            r#"<polygon points="9,2 2,2 1,4 2,6 9,6" fill="url(#reshiki-3d-1)"/>"#,
+        );
+        assert_eq!(svg(None), format!("{fill}</svg>"));
+        let sides = r#"<path d="M2 2 L9 2 M2 6 L9 6" fill="none" stroke="rgb(70,80,90)" stroke-opacity="0.75" stroke-width="0.5"/>"#;
+        assert_eq!(
+            svg(Some(Outline {
+                color: [70, 80, 90],
+                alpha: 0.75,
+                width: 0.5,
+            })),
+            format!("{fill}{sides}</svg>")
+        );
     }
 }

@@ -76,18 +76,24 @@ pub enum Primitive {
     /// sides, corners 0–1 and 3–2.
     ShadedQuad {
         corners: [Point; 4],
+        /// The rounded start of a front half, from corner 3 to corner 0.
+        /// Filled with the quad and stroked with the long sides when outlined.
+        cap: Vec<Point>,
         from: Point,
         to: Point,
         stops: Vec<(f32, [u8; 3])>,
         outline: Option<Outline>,
     },
-    /// A mitered 3D-model stick half: `points` filled with a linear gradient
-    /// from `from` to `to`, in exact colors, without an outline.
+    /// A mitered 3D-model stick half filled with a gradient from `from` to `to`.
     ShadedPolygon {
         points: Vec<Point>,
         from: Point,
         to: Point,
         stops: Vec<(f32, [u8; 3])>,
+        /// Strokes only the two long sides, the first and last edge of
+        /// `points`. Shared borders stay unstroked and the contour behind
+        /// supplies the joint's outer edge.
+        outline: Option<Outline>,
     },
     /// The outer edge of the 3D-model sticks drawn after it: every polygon
     /// stroked as one shape with round joins, so where strokes overlap they
@@ -3390,7 +3396,10 @@ pub fn bounds(drawing: &[Primitive]) -> (Point, Point) {
                     }
                 }
             }
-            Primitive::ShadedQuad { corners, .. } => points.extend(corners),
+            Primitive::ShadedQuad { corners, cap, .. } => {
+                points.extend(corners);
+                points.extend(cap);
+            }
             Primitive::Ellipsoid {
                 center,
                 axes,
