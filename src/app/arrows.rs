@@ -6,6 +6,7 @@ use reshiki::graphics::LinePattern;
 
 /// The arrow card's one line of gesture help; the full text is in the guide.
 const GESTURE_HINT: &str = "Drag the diamond to bend, the squares to aim each end";
+const ARC_HINT: &str = "Drag the diamond to change the sweep";
 const ATTACH_LABEL: &str = "Attach ends to atoms and bonds";
 
 #[derive(Debug, Clone, Copy)]
@@ -866,7 +867,15 @@ impl App {
                 false,
                 geometry,
             ))
-            .push(text(GESTURE_HINT).size(11).style(muted_text))
+            .push(
+                text(if selected.iter().any(|a| a.is_arc()) {
+                    ARC_HINT
+                } else {
+                    GESTURE_HINT
+                })
+                .size(11)
+                .style(muted_text),
+            )
             .into()
     }
     pub(super) fn set_arrow_style(&mut self, style: Preset) {
