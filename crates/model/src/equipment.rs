@@ -6,9 +6,12 @@ pub mod format;
 pub mod geometry;
 pub mod placed;
 pub mod plan;
+pub mod solve;
 pub mod validate;
 
 #[cfg(test)]
 mod placed_tests;
+#[cfg(test)]
+mod solve_tests;
 #[cfg(test)]
 mod tests;

@@ -9,8 +9,9 @@ use iced::{Alignment, Element, Length, Task};
 use reshiki::document::{Document, Point};
 use reshiki::equipment::{
     builtin,
-    format::{Category, Definition},
+    format::{Category, Definition, Gender},
     placed,
+    solve::{self, JointRef, Offer, Snap},
 };
 use std::sync::Arc;
 
@@ -47,6 +48,32 @@ pub enum Action {
     Arm(String),
     Repeat(bool),
     Close,
+    /// Keyboard Connect: list joints the selected pieces fit …
+    Connect,
+    /// … move through them …
+    Step(i32),
+    /// … seat the shown one, or stop.
+    Seat,
+    Cancel,
+    /// Release the seat at this joint and pull the pieces apart.
+    Detach(JointRef),
+}
+
+/// Keyboard Connect in progress: the pieces, and each target joint with
+/// the selected piece's joint that goes into it.
+pub struct Connect {
+    pub ids: Vec<u64>,
+    pub options: Vec<(JointRef, JointRef)>,
+    pub index: usize,
+    /// The drawing the options were found in; any other edit ends Connect.
+    pub base: Document,
+}
+
+impl Connect {
+    /// The target joint shown now, and the selected piece's joint for it.
+    pub fn shown(&self) -> Option<&(JointRef, JointRef)> {
+        self.options.get(self.index)
+    }
 }
 
 pub struct State {
@@ -82,6 +109,46 @@ fn title(d: &Definition) -> &str {
 pub(crate) fn noun(d: &Definition) -> String {
     let title = title(d);
     title.rsplit(' ').next().unwrap_or(title).to_lowercase()
+}
+
+/// "flask neck": the piece and one of its joints, as snapping names them.
+pub(crate) fn joint_name(doc: &Document, j: &JointRef) -> String {
+    let piece = (doc.graphics.iter())
+        .find(|g| g.id == j.piece)
+        .and_then(|g| g.piece.as_ref()?.linked.as_ref())
+        .map_or_else(|| "piece".to_owned(), |d| noun(d));
+    format!("{piece} {}", j.joint.replace('-', " "))
+}
+
+/// What a snap does, for the pill beside the joint and the status bar.
+pub(crate) fn snap_text(doc: &Document, snap: &Snap) -> String {
+    let target = joint_name(doc, &snap.target.at);
+    let mut text = match &snap.offer {
+        Offer::Seat => format!("Seat on {target} · {}", snap.target.size()),
+        Offer::Adapter(d) => format!("Insert {} on {target}", name(d).replace(" to ", " → ")),
+        Offer::Mismatch if snap.target.gender == snap.moving.gender => format!(
+            "Two {} do not seat · no adapter fits",
+            if snap.target.gender == Gender::F {
+                "sockets"
+            } else {
+                "cones"
+            }
+        ),
+        Offer::Mismatch => format!(
+            "No adapter joins {} to {target} {}",
+            snap.moving.size(),
+            snap.target.size()
+        ),
+    };
+    if snap.scaled {
+        text.push_str(" · Scaled to match");
+    }
+    match snap.behind {
+        Some(true) => text.push_str(" · Goes behind the structures"),
+        Some(false) => text.push_str(" · Comes in front of the structures"),
+        None => {}
+    }
+    text
 }
 
 /// The size fields, volume first: "100 mL · 15/25".
@@ -147,6 +214,7 @@ impl App {
                     size(&definition)
                 );
                 self.error = false;
+                self.tab.connect = None;
                 self.equipment.armed = Some(definition);
                 self.tool = Tool::Equipment;
                 return super::focus_drawing();
@@ -156,8 +224,102 @@ impl App {
                 self.inspector_tab = InspectorTab::Properties;
                 return super::focus_drawing();
             }
+            Action::Connect => {
+                if self.tool != Tool::Select {
+                    self.select_tool(Tool::Select);
+                }
+                let ids = self.tab.selected.clone();
+                let options: Vec<_> = solve::options(&self.tab.doc, &ids)
+                    .into_iter()
+                    .map(|(s, m, _)| (s.at, m.at))
+                    .collect();
+                self.tab.connect = (!options.is_empty()).then(|| Connect {
+                    ids,
+                    options,
+                    index: 0,
+                    base: self.tab.doc.clone(),
+                });
+                self.connect_status();
+                return super::focus_drawing();
+            }
+            Action::Step(by) => {
+                if let Some(c) = &mut self.tab.connect {
+                    let n = c.options.len() as i32;
+                    c.index = (c.index as i32 + by).rem_euclid(n) as usize;
+                }
+                self.connect_status();
+            }
+            Action::Seat => {
+                if self.connecting().is_none() {
+                    return Task::none();
+                }
+                let Some(c) = self.tab.connect.take() else {
+                    return Task::none();
+                };
+                let Some((s, m)) = c.shown() else {
+                    return Task::none();
+                };
+                let before = self.tab.doc.clone();
+                if let Some(snap) = solve::connect(&mut self.tab.doc, &c.ids, s, m) {
+                    self.tab.selected = solve::closure(&self.tab.doc, &c.ids);
+                    self.changed(before);
+                    if !self.error {
+                        self.snapped(&snap);
+                    }
+                }
+            }
+            Action::Cancel => {
+                self.tab.connect = None;
+                self.status = "Connect canceled".into();
+                self.error = false;
+            }
+            Action::Detach(joint) => {
+                let before = self.tab.doc.clone();
+                let name = joint_name(&self.tab.doc, &joint);
+                if solve::detach(&mut self.tab.doc, &joint) {
+                    self.changed(before);
+                    if !self.error {
+                        self.status = format!("Detached the {name}");
+                    }
+                }
+                return super::focus_drawing();
+            }
         }
         Task::none()
+    }
+
+    /// Keyboard Connect, while it still applies: Select is the tool and the
+    /// drawing is the one its joints were found in.
+    pub(super) fn connecting(&self) -> Option<&Connect> {
+        (self.tab.connect.as_ref()).filter(|c| self.tool == Tool::Select && c.base == self.tab.doc)
+    }
+
+    /// The selection holds an equipment piece.
+    pub(super) fn pieces_selected(&self) -> bool {
+        (self.tab.doc.graphics.iter())
+            .any(|g| g.piece.is_some() && self.tab.selected.contains(&g.id))
+    }
+
+    /// Keyboard Connect's status line: the joint shown and how to go on.
+    fn connect_status(&mut self) {
+        self.error = false;
+        self.status = match &self.tab.connect {
+            None => {
+                self.error = true;
+                "No free joint fits the selected pieces".into()
+            }
+            Some(c) => {
+                let Some((s, _)) = c.shown() else {
+                    return;
+                };
+                format!(
+                    "Connect to the {} ({} of {}) · ↑↓ · Return · Esc",
+                    joint_name(&self.tab.doc, s),
+                    c.index + 1,
+                    c.options.len()
+                )
+            }
+        };
     }
 
     /// One click places one piece, centred on the pointer, as one Undo step.
@@ -177,10 +339,41 @@ impl App {
             .graphics
             .push(placed::graphic(id, definition, at, scale));
         self.tab.selected = vec![id];
+        let reach = solve::REACH_PX / self.tab.camera.zoom;
+        let snap = solve::snap(&mut self.tab.doc, &[id], reach, true);
         if !self.equipment.repeat {
             self.tool = Tool::Select;
         }
+        if snap
+            .as_ref()
+            .is_some_and(|s| !matches!(s.offer, Offer::Mismatch))
+        {
+            self.tab.selected = solve::closure(&self.tab.doc, &[id]);
+        }
         self.changed(before);
+        if let Some(snap) = snap.filter(|_| !self.error) {
+            self.snapped(&snap);
+        }
+    }
+
+    /// Say what a snap did once it is committed.
+    pub(super) fn snapped(&mut self, snap: &Snap) {
+        let doc = &self.tab.doc;
+        let moving = joint_name(doc, &snap.moving.at);
+        let target = joint_name(doc, &snap.target.at);
+        let kept = solve::partner(doc, &snap.moving.at).is_some();
+        self.status = match &snap.offer {
+            // A lasting layout can move a piece away again as it settles.
+            Offer::Seat | Offer::Adapter(_) if !kept => {
+                format!("The layout moved the {moving}, so it is not seated")
+            }
+            Offer::Seat => format!("Seated the {moving} on the {target}"),
+            Offer::Adapter(d) => {
+                format!("Inserted the {}", title(d).to_lowercase())
+            }
+            Offer::Mismatch => snap_text(doc, snap),
+        };
+        self.error = false;
     }
 
     pub(super) fn equipment_panel(&self) -> Element<'_, Message> {
@@ -330,24 +523,89 @@ impl App {
             [d] => (title(d).to_owned(), size(d)),
             many => (format!("{} equipment pieces", many.len()), String::new()),
         };
-        Some(super::inspector::card(
-            container(
-                column![
-                    section("Equipment"),
-                    text(heading).size(14),
-                    text(detail).size(12).style(muted_text),
+        let mut body = column![
+            section("Equipment"),
+            text(heading).size(14),
+            text(detail).size(12).style(muted_text),
+            row![
+                text("Purpose").size(12).width(Length::Fill),
+                text("Illustration · Picture only")
+                    .size(11)
+                    .style(muted_text),
+            ]
+            .align_y(Alignment::Center),
+        ]
+        .spacing(6);
+        // One piece: each joint, what is seated in it, and Detach.
+        if let [id] = self.tab.selected.as_slice()
+            && let Some(g) = self.tab.doc.graphics.iter().find(|g| g.id == *id)
+        {
+            let doc = &self.tab.doc;
+            for port in solve::ports(g) {
+                let partner = solve::partner(doc, &port.at);
+                let state = partner.as_ref().map_or_else(
+                    || "Free".to_owned(),
+                    |p| {
+                        // A socket holds a cone; a cone sits in a socket.
+                        let verb = if port.gender == Gender::F {
+                            "Holds"
+                        } else {
+                            "Seated in"
+                        };
+                        format!("{verb} the {}", joint_name(doc, p))
+                    },
+                );
+                let mut line = row![
+                    column![
+                        text(format!(
+                            "{} · {}",
+                            port.at.joint.replace('-', " "),
+                            port.size()
+                        ))
+                        .size(12),
+                        text(state).size(11).style(muted_text),
+                    ]
+                    .width(Length::Fill),
+                ]
+                .align_y(Alignment::Center);
+                if partner.is_some() {
+                    line = line.push(command(
+                        "Detach",
+                        Message::Equipment(Action::Detach(port.at.clone())),
+                    ));
+                }
+                body = body.push(line);
+            }
+        }
+        // An assembly: each seat in it, with Detach.
+        if self.tab.selected.len() > 1 {
+            let doc = &self.tab.doc;
+            for seat in (doc.seats.iter()).filter(|s| {
+                self.tab.selected.contains(&s.a.piece) && self.tab.selected.contains(&s.b.piece)
+            }) {
+                body = body.push(
                     row![
-                        text("Purpose").size(12).width(Length::Fill),
-                        text("Illustration · Picture only")
-                            .size(11)
-                            .style(muted_text),
+                        text(format!(
+                            "{} · {}",
+                            joint_name(doc, &seat.a),
+                            joint_name(doc, &seat.b)
+                        ))
+                        .size(12)
+                        .width(Length::Fill),
+                        command("Detach", Message::Equipment(Action::Detach(seat.a.clone()))),
                     ]
                     .align_y(Alignment::Center),
-                ]
-                .spacing(6),
-            )
-            .padding(12),
-        ))
+                );
+            }
+        }
+        if self.pieces_selected() {
+            body = body.push(hover_hint(
+                command("Connect…", Message::Equipment(Action::Connect)),
+                "Seat on a free joint nearby (J)",
+                tooltip::Position::Left,
+            ));
+        }
+        Some(super::inspector::card(container(body).padding(12)))
     }
 }
 

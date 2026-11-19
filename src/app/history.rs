@@ -48,6 +48,9 @@ impl App {
             if selected_group || restored_group {
                 self.tab.selected = self.tab.doc.expand_groups(&self.tab.selected);
             }
+            // A restored seat brings its assembly into the selection.
+            self.tab.selected =
+                reshiki::equipment::solve::closure(&self.tab.doc, &self.tab.selected);
             if self.tab.selected.is_empty()
                 && let Some(id) = self.tab.caption_target.filter(|id| ids.contains(id))
             {

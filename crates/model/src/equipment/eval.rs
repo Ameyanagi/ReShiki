@@ -155,6 +155,39 @@ fn part_transforms<'a>(def: &'a Definition, values: &Values) -> BTreeMap<&'a str
     out
 }
 
+/// The joints of `def` posed at `values` (already resolved), without drawing
+/// its shapes: snapping asks for them on every pointer move.
+pub fn joints<'a>(def: &'a Definition, values: &Values) -> Vec<PosedJoint<'a>> {
+    posed(def, values, &part_transforms(def, values))
+}
+
+fn posed<'a>(
+    def: &'a Definition,
+    values: &Values,
+    parts: &BTreeMap<&str, Affine>,
+) -> Vec<PosedJoint<'a>> {
+    def.joints
+        .iter()
+        .map(|j| {
+            let (mut at, mut dir) = (j.at(), j.dir());
+            for (k, poses) in j.poses() {
+                if let Some(p) = state(values, k).and_then(|s| poses.get(s)) {
+                    (at, dir) = (p.at, p.dir);
+                }
+            }
+            let m = j
+                .part()
+                .and_then(|k| parts.get(k).copied())
+                .unwrap_or(Affine::IDENTITY);
+            PosedJoint {
+                joint: j,
+                at: m.apply(at),
+                dir: m.apply_dir(dir),
+            }
+        })
+        .collect()
+}
+
 /// Evaluate `def` at `values` (already resolved with `resolve`).
 pub fn evaluate<'a>(def: &'a Definition, values: &Values) -> Result<Evaluated<'a>, String> {
     let parts = part_transforms(def, values);
@@ -177,27 +210,7 @@ pub fn evaluate<'a>(def: &'a Definition, values: &Values) -> Result<Evaluated<'a
             });
         }
     }
-    let joints = def
-        .joints
-        .iter()
-        .map(|j| {
-            let (mut at, mut dir) = (j.at(), j.dir());
-            for (k, poses) in j.poses() {
-                if let Some(p) = state(values, k).and_then(|s| poses.get(s)) {
-                    (at, dir) = (p.at, p.dir);
-                }
-            }
-            let m = j
-                .part()
-                .and_then(|k| parts.get(k).copied())
-                .unwrap_or(Affine::IDENTITY);
-            PosedJoint {
-                joint: j,
-                at: m.apply(at),
-                dir: m.apply_dir(dir),
-            }
-        })
-        .collect();
+    let joints = posed(def, values, &parts);
     let holds = def
         .holds
         .iter()

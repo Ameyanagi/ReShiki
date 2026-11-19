@@ -423,6 +423,9 @@ pub struct Document {
     /// that card's paper. Never stored.
     #[serde(skip)]
     pub on_other_canvas: std::collections::BTreeSet<u64>,
+    /// Which joints of placed equipment pieces are seated in each other.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub seats: Vec<crate::equipment::solve::Seat>,
 }
 /// Every drawing writes the definitions its pieces use, and every drawing read
 /// links its pieces to them, wherever it is written or read: files, the
@@ -452,6 +455,8 @@ impl<'de> Deserialize<'de> for Document {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let mut doc = Document::deserialize(deserializer)?;
         crate::equipment::placed::link(&mut doc).map_err(serde::de::Error::custom)?;
+        // A seat that does not fit is released; both pieces keep their poses.
+        crate::equipment::solve::check(&mut doc, None);
         Ok(doc)
     }
 }
@@ -484,6 +489,7 @@ impl Default for Document {
             recent_colors: vec![],
             piece_definitions: vec![],
             on_other_canvas: Default::default(),
+            seats: vec![],
         }
     }
 }
@@ -783,6 +789,7 @@ impl Document {
         crate::models3d::prune(self);
         self.arrows.retain(|a| !ids.contains(&a.id));
         self.graphics.retain(|a| !ids.contains(&a.id));
+        crate::equipment::solve::prune(self);
         crate::arrow_labels::prune(self);
         crate::projection::prune_centroids(self);
         crate::ring_fills::prune(self);
@@ -903,6 +910,7 @@ impl Document {
             recent_colors: _,
             piece_definitions,
             on_other_canvas: _,
+            seats,
         } = self;
         atoms.clear();
         models.clear();
@@ -912,6 +920,7 @@ impl Document {
         arrows.clear();
         graphics.clear();
         piece_definitions.clear();
+        seats.clear();
         groups.clear();
         abbreviations.clear();
         reactions.clear();
@@ -950,6 +959,7 @@ impl Document {
             recent_colors: _,
             piece_definitions: _,
             on_other_canvas: _,
+            seats: _,
         } = self;
         !atoms.is_empty()
             || !models.is_empty()

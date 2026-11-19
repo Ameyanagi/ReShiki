@@ -391,21 +391,28 @@ impl MoleculeCanvas<'_> {
                 return Some(Action::publish(Edit::Select(hit)).and_capture());
             }
             Tool::Select | Tool::Lasso => Some(if !hit.is_empty() {
+                let ids = reshiki::attachments::movement_selection(
+                    self.doc,
+                    &if state.modifiers.shift() {
+                        reshiki::selection_region::combine(self.selected, &hit, true, false)
+                    } else if !state.modifiers.alt()
+                        && !picked.is_empty()
+                        && picked.iter().all(|id| self.selected.contains(id))
+                    {
+                        self.selected.to_vec()
+                    } else {
+                        hit.clone()
+                    },
+                );
+                // A drag moves a piece's whole assembly; Alt pulls it out.
+                let ids = if state.modifiers.alt() {
+                    reshiki::equipment::solve::detached(self.doc, &ids)
+                } else {
+                    reshiki::equipment::solve::closure(self.doc, &ids)
+                };
                 Gesture::Move {
                     start: p,
-                    ids: reshiki::attachments::movement_selection(
-                        self.doc,
-                        &if state.modifiers.shift() {
-                            reshiki::selection_region::combine(self.selected, &hit, true, false)
-                        } else if !state.modifiers.alt()
-                            && !picked.is_empty()
-                            && picked.iter().all(|id| self.selected.contains(id))
-                        {
-                            self.selected.to_vec()
-                        } else {
-                            hit.clone()
-                        },
-                    ),
+                    ids,
                     clicked: hit,
                 }
             } else if self.tool == Tool::Lasso {

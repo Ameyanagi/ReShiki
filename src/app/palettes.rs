@@ -801,6 +801,7 @@ impl App {
         body
     }
     pub(super) fn select_tool(&mut self, tool: Tool) {
+        self.tab.connect = None;
         self.clear_bond_text_hint();
         self.last_label = None;
         self.tab.arrows.cancel_source();

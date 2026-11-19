@@ -364,10 +364,19 @@ impl MoleculeCanvas<'_> {
             .world(Point::new(p.x - bounds.x, p.y - bounds.y), bounds);
         let doc = draft.preview.to_mut();
         let scale = placed::world_per_mm(doc, placed::DEFAULT_PT_PER_MM);
-        let mut ghost = placed::graphic(doc.next_id(), definition.clone(), at, scale);
+        let id = doc.next_id();
+        let mut ghost = placed::graphic(id, definition.clone(), at, scale);
         // Half strength, so the ghost never passes for a placed piece.
         ghost.style.effects.opacity = Some(0.5);
         doc.graphics.push(ghost);
+        let reach = self.camera.world_len(reshiki::equipment::solve::REACH_PX);
+        // Snapped, the ghost shows the seated pose a click makes.
+        if let Some(snap) = reshiki::equipment::solve::snap(doc, &[id], reach, true) {
+            if let Some(adapter) = (doc.graphics.iter_mut()).find(|g| Some(g.id) == snap.added) {
+                adapter.style.effects.opacity = Some(0.5);
+            }
+            draft.seat_hint = Some(super::SeatHint::new(doc, &snap));
+        }
         draft.template_notice = Some((
             format!(
                 "Click to place the {} · Esc cancels",
@@ -375,6 +384,18 @@ impl MoleculeCanvas<'_> {
             ),
             true,
         ));
+    }
+
+    /// Keyboard Connect shows the offered joint seated, as Return makes it.
+    pub(super) fn preview_connect(&self, draft: &mut Draft<'_>, state: &State) {
+        // A pointer gesture works on the drawing as it is; Connect waits.
+        let (Some((ids, target, moving)), None) = (self.connect, &state.gesture) else {
+            return;
+        };
+        let doc = draft.preview.to_mut();
+        if let Some(snap) = reshiki::equipment::solve::connect(doc, ids, target, moving) {
+            draft.seat_hint = Some(super::SeatHint::new(doc, &snap));
+        }
     }
 
     pub(super) fn preview_delocalized_ring(

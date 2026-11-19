@@ -157,6 +157,7 @@ fn changed_atoms(base: &Document, preview: &Document) -> Option<HashSet<u64>> {
         recent_colors,
         piece_definitions,
         on_other_canvas: _,
+        seats,
     } = preview;
     let same = depth_appearance.is_empty()
         && base.depth_appearance.is_empty()
@@ -176,6 +177,7 @@ fn changed_atoms(base: &Document, preview: &Document) -> Option<HashSet<u64>> {
         && *molecule_names == base.molecule_names
         && *property_captions == base.property_captions
         && *piece_definitions == base.piece_definitions
+        && *seats == base.seats
         && *arrows == base.arrows
         && *arrow_labels == base.arrow_labels
         && *graphics == base.graphics

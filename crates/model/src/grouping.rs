@@ -68,8 +68,8 @@ impl Document {
         self.prune_groups();
     }
 
-    /// Expand abbreviations, then every group with a selected member until
-    /// nothing changes. The result is in [`Document::all_ids`] order.
+    /// Expand abbreviations, then every group and equipment assembly with a
+    /// selected member until nothing changes. The result is in [`Document::all_ids`] order.
     pub fn expand_groups(&self, ids: &[u64]) -> Vec<u64> {
         let mut selected: HashSet<_> = self
             .expand_abbreviation_selection(ids)
@@ -80,6 +80,12 @@ impl Document {
             for group in &self.groups {
                 if group.members.iter().any(|id| selected.contains(id)) {
                     selected.extend(&group.members);
+                }
+            }
+            // Seated pieces are picked as one assembly, like a group.
+            for seat in &self.seats {
+                if selected.contains(&seat.a.piece) || selected.contains(&seat.b.piece) {
+                    selected.extend([seat.a.piece, seat.b.piece]);
                 }
             }
             if count == selected.len() {

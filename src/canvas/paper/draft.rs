@@ -327,6 +327,7 @@ impl MoleculeCanvas<'_> {
             smart,
             chain_badge,
             drop_ink,
+            seat_hint,
             ..
         } = draft;
         if let (Some(Gesture::StretchBond { start, plan }), Some(p)) =
@@ -377,7 +378,12 @@ impl MoleculeCanvas<'_> {
             } else {
                 preview.to_mut().translate(ids, delta.x, delta.y);
                 *ring_selection = Some(ids.clone());
-                *smart = guides;
+                let reach = self.camera.world_len(reshiki::equipment::solve::REACH_PX);
+                // The snapped pose shows what releasing makes; guides would mislead.
+                match reshiki::equipment::solve::snap(preview.to_mut(), ids, reach, false) {
+                    Some(snap) => *seat_hint = Some(super::SeatHint::new(preview, &snap)),
+                    None => *smart = guides,
+                }
                 // Say what a drop here would make the part in a cycle.
                 if let Some(target) = reshiki::cycles::drop_target(preview, ids) {
                     *chain_badge = Some((p, target.role.to_string(), true));

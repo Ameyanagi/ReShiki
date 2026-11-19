@@ -56,6 +56,8 @@ pub(super) struct DocumentTab {
     pub(super) selected: Vec<u64>,
     pub(super) hover: Option<(Point, u64)>,
     pub(super) keyboard_drawing: reshiki::keyboard_drawing::State,
+    /// Keyboard Connect for equipment, in progress in this drawing.
+    pub(super) connect: Option<super::equipment::Connect>,
     pub(super) camera: Camera,
     pub(super) fit_to_view: bool,
     pub(super) pages: pages::State,
@@ -197,6 +199,7 @@ impl DocumentTab {
             selected: vec![],
             hover: None,
             keyboard_drawing: Default::default(),
+            connect: None,
             camera: Camera::default(),
             fit_to_view: false,
             pages: pages::State::default(),

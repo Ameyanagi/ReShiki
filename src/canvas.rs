@@ -659,6 +659,12 @@ pub struct MoleculeCanvas<'a> {
     pub template: Option<(&'a reshiki::templates::Template, reshiki::templates::Anchor)>,
     /// The equipment piece a click places, shown under the pointer.
     pub piece: Option<&'a std::sync::Arc<reshiki::equipment::format::Definition>>,
+    /// Keyboard Connect: the selected pieces, the joint offered and theirs.
+    pub connect: Option<(
+        &'a [u64],
+        &'a reshiki::equipment::solve::JointRef,
+        &'a reshiki::equipment::solve::JointRef,
+    )>,
     pub arrows: ArrowOptions<'a>,
     pub graphics: GraphicOptions<'a>,
 }
@@ -709,6 +715,7 @@ impl<'a> MoleculeCanvas<'a> {
             template_connection: Default::default(),
             template: None,
             piece: None,
+            connect: None,
             arrows: ArrowOptions {
                 preset: styles.arrow_preset,
                 style: styles.arrow_style,

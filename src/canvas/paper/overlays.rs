@@ -321,6 +321,115 @@ impl MoleculeCanvas<'_> {
         );
     }
 
+    /// A ring round the joint a moving piece snaps to, and what releasing
+    /// does: green where it seats, dashed amber where it needs an adapter or
+    /// nothing fits.
+    pub(super) fn draw_seat_hint(
+        &self,
+        frame: &mut layered::Frame<'_>,
+        hint: Option<&super::SeatHint>,
+        bounds: Rectangle,
+    ) {
+        let Some(hint) = hint else {
+            return;
+        };
+        let (ring, tint, ink) = if hint.fits {
+            ([34, 139, 84], [226, 244, 233], [22, 96, 56])
+        } else {
+            ([214, 140, 20], [253, 241, 214], [122, 76, 0])
+        };
+        let center = self.camera.screen(hint.at, bounds);
+        let radius = (hint.radius * self.camera.zoom).max(8.) + 5.;
+        let dash = [5., 3.];
+        frame.stroke(
+            &Path::circle(center, radius),
+            Stroke {
+                line_dash: canvas::LineDash {
+                    segments: if hint.fits { &[] } else { &dash },
+                    offset: 0,
+                },
+                ..Stroke::default().with_width(2.).with_color(rgb(ring))
+            },
+        );
+        let width = crate::app::text_width(&hint.text, 12.) + 12.;
+        let position = Point::new(
+            (center.x + radius + 8.).clamp(4., (bounds.width - width - 4.).max(4.)),
+            (center.y - 10.).clamp(4., (bounds.height - 30.).max(4.)),
+        );
+        let pill = Path::rounded_rectangle(position, iced::Size::new(width, 22.), 11.0.into());
+        frame.fill(&pill, rgb(tint));
+        frame.stroke(
+            &pill,
+            Stroke::default().with_width(1.).with_color(rgb(ring)),
+        );
+        frame.fill_text(canvas::Text {
+            content: hint.text.clone(),
+            position: position + Vector::new(6., 4.),
+            color: rgb(ink),
+            size: 12.into(),
+            font: iced::Font::with_name(reshiki::style::ui_font_family()),
+            ..Default::default()
+        });
+    }
+
+    /// With Option held over a seated piece, outline what an Option-drag
+    /// would pull out of its assembly, before the button goes down.
+    pub(super) fn draw_pull_out(
+        &self,
+        frame: &mut layered::Frame<'_>,
+        state: &State,
+        bounds: Rectangle,
+    ) {
+        if !self.tool.selects() || state.gesture.is_some() || !state.modifiers.alt() {
+            return;
+        }
+        let Some(p) = state.cursor.filter(|p| bounds.contains(*p)) else {
+            return;
+        };
+        let at = self
+            .camera
+            .world(Point::new(p.x - bounds.x, p.y - bounds.y), bounds);
+        let seated =
+            |id: &u64| (self.doc.seats.iter()).any(|s| s.a.piece == *id || s.b.piece == *id);
+        let hit: Vec<u64> = crate::canvas::hit::hit_selection(
+            self.doc,
+            at,
+            self.camera.world_len(pick::PICK_RADIUS_PX),
+        )
+        .into_iter()
+        .filter(seated)
+        .collect();
+        if hit.is_empty() {
+            return;
+        }
+        // As the press resolves it: integral groups first, then the pull-out.
+        let hit = self.doc.expand_integral_groups(&hit);
+        let out = reshiki::equipment::solve::detached(self.doc, &hit);
+        let Some((lo, hi)) = reshiki::scene::selection_bounds(self.doc, &out) else {
+            return;
+        };
+        let (a, b) = (
+            self.camera.screen(lo, bounds),
+            self.camera.screen(hi, bounds),
+        );
+        let path = Path::rounded_rectangle(
+            Point::new(a.x - 6., a.y - 6.),
+            iced::Size::new(b.x - a.x + 12., b.y - a.y + 12.),
+            6.0.into(),
+        );
+        frame.fill(&path, Color { a: 0.08, ..ACCENT });
+        frame.stroke(
+            &path,
+            Stroke {
+                line_dash: canvas::LineDash {
+                    segments: &[5., 3.],
+                    offset: 0,
+                },
+                ..Stroke::default().with_width(1.6).with_color(ACCENT)
+            },
+        );
+    }
+
     pub(super) fn draw_editor_markers(
         &self,
         frame: &mut layered::Frame<'_>,
