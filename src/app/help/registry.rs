@@ -613,7 +613,7 @@ pub(crate) fn entries() -> Vec<Entry> {
         entry(
             format!("{} / {}", keys(command, "="), keys(command, "-")),
             "Zoom in / out",
-            "Magnify or shrink the view around its middle; ⌘+ also zooms in. In a text field these keys type.",
+            "Magnify or shrink the view around its middle. The + key also zooms in. While you edit a caption or label, these keys format the text instead.",
             Anywhere,
             &["zoom", "view", "magnify", "plus", "minus"],
         ),

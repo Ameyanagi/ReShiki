@@ -422,4 +422,10 @@ fn command_equals_and_minus_zoom_the_view() {
         command | Modifiers::SHIFT,
     );
     assert!(matches!(jis, Some(Message::Zoom(z)) if z > 1.));
+    let jis = key_message(
+        &Key::Character("-".into()),
+        &Key::Character("=".into()),
+        command | Modifiers::SHIFT,
+    );
+    assert!(matches!(jis, Some(Message::Zoom(z)) if z > 1.));
 }
