@@ -838,12 +838,13 @@ async fn unbalanced_equilibria_keep_their_lengths_and_retro_heads_take_both_shaf
             assert!(text.contains(value), "{value}");
         }
         let (again, _) = open(saved, "cdxml").await.unwrap();
-        let again: Vec<_> = again
+        let ratios_again: Vec<_> = again
             .arrows
             .iter()
             .map(|a| a.style.as_ref().unwrap().equilibrium_ratio)
             .collect();
-        assert_eq!(again[..4], ratios);
+        assert_eq!(ratios_again[..4], ratios);
+        assert_eq!(again.arrows[4].style.as_ref().unwrap().head_width_pt, 8.75);
     }
 }
 
@@ -1499,13 +1500,14 @@ async fn a_local_chemdraw_corpus_imports_every_file() {
 async fn a_label_written_hydrogens_first_keeps_them_on_the_left() {
     // As in ChemDraw's citric acid cycle sample: water written H2O.
     for (document, notices) in sheet(
-        "<fragment id='10'><n id='11' p='245.59 363.45' Element='8' NumHydrogens='2'><t p='240.8 367.82' LabelJustification='Left' LabelAlignment='Left'>\
+        "<fragment id='10'><n id='11' p='245.59 363.45' Element='8' NumHydrogens='2'><t p='240.8 367.82' BoundingBox='240.8 359.07 263.81 370.42' LabelJustification='Left' LabelAlignment='Left'>\
          <s size='12'>H</s><s size='12' face='32'>2</s><s size='12'>O</s></t></n></fragment>\
          <fragment id='20'><n id='21' p='300 363' Element='8' NumHydrogens='2'><t p='296 367'>\
          <s size='12'>OH</s><s size='12' face='32'>2</s></t></n></fragment>\
          <fragment id='30'><n id='31' p='350 363' Element='8' NumHydrogens='3' Charge='1'>\
          <t p='340 367'><s size='12'>H</s><s size='12' face='32'>3</s><s size='12'>O</s>\
-         <s size='12' face='64'>+</s></t></n></fragment>",
+         <s size='12' face='64'>+</s></t></n></fragment>\
+         <fragment id='40'><n id='41' p='400 363' Element='8'/></fragment>",
     )
     .await
     {
@@ -1516,7 +1518,11 @@ async fn a_label_written_hydrogens_first_keeps_them_on_the_left() {
             .map(|atom| atom.display.hydrogen_position)
             .collect();
         use reshiki_model::atom_labels::HydrogenPosition::{Auto, Left};
-        assert_eq!(sides, [Left, Auto, Left]);
+        assert_eq!(sides, [Left, Auto, Left, Auto]);
+        // ChemDraw anchors the lone H2O on its H; its O moves to where
+        // ChemDraw draws it, 263.81 - (245.59 - 240.8) = 259.02.
+        let x: Vec<_> = document.atoms.iter().map(|atom| atom.position.x).collect();
+        assert!(((x[1] - x[0]) / (x[3] - x[1]) - (300. - 259.02) / 100.).abs() < 1e-3);
     }
 }
 

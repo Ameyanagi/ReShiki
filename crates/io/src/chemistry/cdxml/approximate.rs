@@ -214,9 +214,10 @@ fn rewrite(xml: &str) -> Result<(String, Option<String>, usize)> {
         headless: HashSet::new(),
         resized: HashSet::new(),
         affected: HashSet::new(),
-        doubled: 0,
+        budget: 0,
         bonded: HashSet::new(),
     };
+    let mut curve_points = 0;
     for index in pass.tree.descendants(0)? {
         let node = pass.tree.node(index)?;
         if let Some(id) = node.attr("id") {
@@ -226,6 +227,12 @@ fn rewrite(xml: &str) -> Result<(String, Option<String>, usize)> {
             let ends = ["B", "E"].map(|key| node.attr(key).map(str::to_owned));
             pass.bonded.extend(ends.into_iter().flatten());
         }
+        if node.tag == "curve" {
+            let count = node
+                .attr("CurvePoints")
+                .map_or(0, |text| text.split_whitespace().count());
+            curve_points += count / 2;
+        }
     }
     pass.next_id = pass
         .original
@@ -233,6 +240,7 @@ fn rewrite(xml: &str) -> Result<(String, Option<String>, usize)> {
         .filter_map(|id| id.parse::<u32>().ok())
         .max()
         .map_or(1, |id| id.saturating_add(1));
+    pass.budget = 900_000usize.saturating_sub(curve_points);
     pass.objects(0)?;
     pass.brackets()?;
     for index in pass.tree.descendants(0)? {
@@ -278,9 +286,9 @@ struct Pass {
     /// Objects drawn differently or left out, each once however many of
     /// their styles changed.
     affected: HashSet<usize>,
-    /// Segments the doubled curves' lines take so far; the reader reads
-    /// each twice, against one point budget for the file.
-    doubled: usize,
+    /// Curve points the doubled curves' lines may still add: the reader
+    /// counts every curve point against one budget, these lines twice.
+    budget: usize,
     /// Atoms at either end of a bond.
     bonded: HashSet<String>,
 }
@@ -813,11 +821,16 @@ impl Pass {
         else {
             return Ok(());
         };
-        self.set(
-            index,
-            "p",
-            format!("{} {}", spell(right - (x - left)), spell(y)),
-        )
+        // The 3D position moves with it, so both still name one place.
+        let shift = right - (x - left) - x;
+        if let Some(mut xyz) = node.attr("xyz").and_then(numbers)
+            && let Some(first) = xyz.first_mut()
+        {
+            *first += shift;
+            let text = xyz.iter().map(|v| spell(*v)).collect::<Vec<_>>().join(" ");
+            self.set(index, "xyz", text)?;
+        }
+        self.set(index, "p", format!("{} {}", spell(x + shift), spell(y)))
     }
     /// ChemDraw's alpha makes the object see-through; ReShiki draws it opaque.
     fn fade(&mut self, index: usize) -> Result<()> {
@@ -1096,19 +1109,19 @@ impl Pass {
         if closed && segments.last().is_some_and(|[.., end]| *end != start) {
             segments.push([last, first, start]);
         }
-        // A drawn path holds 20,000 commands at most, and all doubled curves
-        // together stay well inside the file's point budget.
+        // A drawn path holds 20,000 commands at most, and the file's curves
+        // stay inside the reader's point budget.
         let rails =
             [1., -1.].map(|side| parallel(start, &segments, side * (bold + line) / 2., closed));
-        let added: usize = rails.iter().map(|(_, path)| path.len()).sum();
+        let added: usize = rails.iter().map(|(_, path)| 2 * (3 * path.len() + 3)).sum();
         if rails
             .iter()
             .any(|(_, path)| path.is_empty() || path.len() > 19_000)
-            || self.doubled + added > 50_000
+            || added > self.budget
         {
             return Ok(false);
         }
-        self.doubled += added;
+        self.budget -= added;
         let twin = self.tree.clone_subtree(index)?;
         self.tree
             .node_mut(twin)?
@@ -1455,6 +1468,10 @@ impl Pass {
         // The label's baseline, and its box, which places it on import.
         let left = spell(x - text_width * size / 2.);
         node.set("p", format!("{left} {}", spell(y + 0.35 * size)));
+        // One left-aligned line, whatever the page sets for captions.
+        node.set("CaptionJustification", "Left".into());
+        node.set("CaptionLineHeight", "auto".into());
+        node.set("WordWrapWidth", "0".into());
         node.set(
             "BoundingBox",
             format!(
