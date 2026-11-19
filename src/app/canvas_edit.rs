@@ -379,7 +379,7 @@ impl App {
             Edit::Click(p) | Edit::RepeatLabel(p) => return self.canvas_click(p, before),
         }
         self.changed(before);
-        if let Some(joined) = joined {
+        if let Some(joined) = joined.filter(|_| !self.error) {
             self.status = joined;
         }
     }

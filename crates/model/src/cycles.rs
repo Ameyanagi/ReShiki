@@ -145,6 +145,10 @@ impl Cycle {
         });
         intermediates.chain(sides)
     }
+    /// Every part ID, for code that renumbers objects.
+    pub(crate) fn ids_mut(&mut self) -> impl Iterator<Item = &mut u64> {
+        self.parts_mut().flatten()
+    }
     fn parts_mut(&mut self) -> impl Iterator<Item = &mut Vec<u64>> {
         self.intermediates.iter_mut().chain(
             self.steps
@@ -187,6 +191,13 @@ impl Graphic {
             + self.axis_y.distance(Point::default()))
             * 0.25;
         (center, radius)
+    }
+    /// Whether the cycle's steps run counterclockwise on the page; a
+    /// mirrored cycle runs the other way round.
+    pub fn cycle_counterclockwise(&self) -> bool {
+        self.cycle
+            .as_ref()
+            .is_some_and(|c| c.counterclockwise != (self.frame_determinant() < 0.))
     }
 }
 
@@ -283,7 +294,10 @@ pub fn drawn(doc: &Document, g: &Graphic) -> Drawn {
     };
     let mut out = Drawn::default();
     let (center, radius) = g.cycle_circle();
-    let dir = if cycle.counterclockwise { -1. } else { 1. };
+    if !(center.is_finite() && radius.is_finite() && radius > 1e-3) {
+        return out;
+    }
+    let dir = if g.cycle_counterclockwise() { -1. } else { 1. };
     let bond = doc.drawing_style.bond_length_world;
     let gap = DEFAULT.world(cycle.gap_pt);
     let style = ArrowStyle {
@@ -337,10 +351,12 @@ pub fn drawn(doc: &Document, g: &Graphic) -> Drawn {
             .fold(0., f32::max)
     };
     let mut names = vec![];
+    let ends: Vec<((Point, Point), f32)> = boxes.into_iter().zip(angles).collect();
     for (s, step) in cycle.steps.iter().enumerate().take(n) {
-        let j = (s + 1) % n;
-        let a0 = angles[s];
-        let mut span = (dir * (angles[j] - a0)).rem_euclid(TAU);
+        let (Some(&(first, a0)), Some(&(next, a1))) = (ends.get(s), ends.get((s + 1) % n)) else {
+            continue;
+        };
+        let mut span = (dir * (a1 - a0)).rem_euclid(TAU);
         if span < 1e-4 {
             span = TAU;
         }
@@ -349,18 +365,25 @@ pub fn drawn(doc: &Document, g: &Graphic) -> Drawn {
         // An intermediate moved off the circle keeps an opening as wide as
         // it looks from the center, so the arcs still point at it.
         let mut from = 0.;
-        while from < span * 0.5 && contains(clear(boxes[s]), at(a0 + dir * from)) {
+        while from < span * 0.5 && contains(clear(first), at(a0 + dir * from)) {
             from += walk;
         }
         if from == 0. {
-            from = seen(clear(boxes[s]), angles[s]).min(span * 0.5);
+            from = seen(clear(first), a0).min(span * 0.5);
         }
         let mut to = span;
-        while to > span * 0.5 && contains(clear(boxes[j]), at(a0 + dir * to)) {
+        while to > span * 0.5 && contains(clear(next), at(a0 + dir * to)) {
             to -= walk;
         }
         if to == span {
-            to = span - seen(clear(boxes[j]), angles[j]).min(span * 0.5);
+            to = span - seen(clear(next), a1).min(span * 0.5);
+        }
+        // A lone intermediate's arc stays short of a whole circle.
+        let most = 358_f32.to_radians();
+        if to - from > most {
+            let extra = (to - from - most) * 0.5;
+            from += extra;
+            to -= extra;
         }
         if to - from > 0.02 {
             // Extra space never runs into the ink, and the arc keeps most of
@@ -601,7 +624,14 @@ fn wrapped(name: &str, format: &TextFormat, width: f32) -> String {
 pub fn hit(doc: &Document, g: &Graphic, p: Point, r: f32) -> bool {
     // Side arrows and names stay within a few bond lengths of the circle.
     let (center, radius) = g.cycle_circle();
-    if p.distance(center) > radius + 8. * doc.drawing_style.bond_length_world {
+    let bow = g
+        .cycle
+        .iter()
+        .flat_map(|c| &c.steps)
+        .map(|s| s.bow_pt.abs())
+        .fold(0., f32::max);
+    let reach = 8. * doc.drawing_style.bond_length_world + DEFAULT.world(bow);
+    if p.distance(center) > radius + reach {
         return false;
     }
     let drawn = drawn(doc, g);
@@ -676,16 +706,18 @@ pub fn make(doc: &mut Document, ids: &[u64]) -> Result<u64, String> {
     let radius = (centers.iter().map(|p| p.distance(center)).sum::<f32>() / count).max(bond);
     // Clockwise, starting from the one nearest the top.
     let angle = |p: &Point| ((p.y - center.y).atan2(p.x - center.x) + FRAC_PI_2).rem_euclid(TAU);
-    let mut order: Vec<usize> = (0..units.len()).collect();
-    order.sort_by(|a, b| angle(&centers[*a]).total_cmp(&angle(&centers[*b])));
-    let top = |i: &usize| {
-        let a = angle(&centers[*i]);
-        a.min(TAU - a)
-    };
-    if let Some(first) = (0..order.len()).min_by(|a, b| top(&order[*a]).total_cmp(&top(&order[*b])))
+    let mut order: Vec<(f32, &Vec<u64>)> = centers.iter().map(angle).zip(&units).collect();
+    order.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let top = |a: f32| a.min(TAU - a);
+    if let Some(first) = order
+        .iter()
+        .enumerate()
+        .min_by(|a, b| top(a.1.0).total_cmp(&top(b.1.0)))
+        .map(|(i, _)| i)
     {
         order.rotate_left(first);
     }
+    let intermediates: Vec<Vec<u64>> = order.into_iter().map(|(_, u)| u.clone()).collect();
     for (unit, p) in units.iter().zip(&centers) {
         let d = p.distance(center);
         if d > 1e-3 {
@@ -706,7 +738,6 @@ pub fn make(doc: &mut Document, ids: &[u64]) -> Result<u64, String> {
         crate::graphics::BracketSides::Both,
         false,
     );
-    let intermediates: Vec<_> = order.iter().map(|i| units[*i].clone()).collect();
     g.cycle = Some(Cycle {
         steps: vec![Step::default(); intermediates.len()],
         intermediates,
@@ -774,7 +805,7 @@ pub fn drop_target(doc: &Document, moved: &[u64]) -> Option<Target> {
         let (center, radius) = g.cycle_circle();
         let d = p.distance(center);
         let ring = 0.6 * bond;
-        let dir = if cycle.counterclockwise { -1. } else { 1. };
+        let dir = if g.cycle_counterclockwise() { -1. } else { 1. };
         let angle = (p.y - center.y).atan2(p.x - center.x);
         let n = cycle.intermediates.len();
         // The step whose stretch of the circle holds the point, and how far
@@ -790,8 +821,8 @@ pub fn drop_target(doc: &Document, moved: &[u64]) -> Option<Target> {
             })
             .collect();
         let within = (0..n).find_map(|s| {
-            let a0 = centers[s]?;
-            let a1 = centers[(s + 1) % n]?;
+            let a0 = centers.get(s).copied().flatten()?;
+            let a1 = centers.get((s + 1) % n).copied().flatten()?;
             let mut span = (dir * (a1 - a0)).rem_euclid(TAU);
             if span < 1e-4 {
                 span = TAU;
@@ -811,6 +842,15 @@ pub fn drop_target(doc: &Document, moved: &[u64]) -> Option<Target> {
         } else {
             return None;
         };
+        // A full list takes no more.
+        let full = match role {
+            Role::Intermediate(_) => n,
+            Role::Reagent(s) => cycle.steps.get(s).map_or(0, |s| s.reagents.len()),
+            Role::Product(s) => cycle.steps.get(s).map_or(0, |s| s.products.len()),
+        } >= MAX_PARTS;
+        if full {
+            return None;
+        }
         Some(Target {
             cycle: g.id,
             role,
@@ -850,19 +890,23 @@ pub fn assign(doc: &mut Document, target: &Target) {
             }
         }
     }
-    let mut members = vec![target.cycle];
-    members.extend(&target.part);
-    if let Some(group) = doc
+    // Every group holding the cycle, nested ones too, takes the part.
+    let mut grouped = false;
+    for group in doc
         .groups
         .iter_mut()
-        .find(|g| g.members.contains(&target.cycle))
+        .filter(|g| g.members.contains(&target.cycle))
     {
+        grouped = true;
         for id in &target.part {
             if !group.members.contains(id) {
                 group.members.push(*id);
             }
         }
-    } else {
+    }
+    if !grouped {
+        let mut members = vec![target.cycle];
+        members.extend(&target.part);
         let _ = doc.group_selection(&members);
     }
 }
@@ -870,29 +914,30 @@ pub fn assign(doc: &mut Document, target: &Target) {
 /// Take the parts holding any of `ids` out of their cycles and their groups;
 /// they stay in the drawing. Returns how many parts left.
 pub fn remove(doc: &mut Document, ids: &[u64]) -> usize {
-    let mut freed: Vec<u64> = vec![];
+    let held = part_ids(doc);
+    let hit = |part: &Vec<u64>| part.iter().any(|id| ids.contains(id));
     for g in &mut doc.graphics {
         let Some(cycle) = &mut g.cycle else {
             continue;
         };
-        for i in (0..cycle.intermediates.len()).rev() {
-            if cycle.intermediates[i].iter().any(|id| ids.contains(id)) {
-                freed.extend(&cycle.intermediates[i]);
-                cycle.remove_intermediate(i);
-            }
+        let gone: Vec<usize> = cycle
+            .intermediates
+            .iter()
+            .enumerate()
+            .filter(|(_, part)| hit(part))
+            .map(|(i, _)| i)
+            .collect();
+        for i in gone.into_iter().rev() {
+            cycle.remove_intermediate(i);
         }
         for step in &mut cycle.steps {
-            for list in [&mut step.reagents, &mut step.products] {
-                list.retain(|part| {
-                    let hit = part.iter().any(|id| ids.contains(id));
-                    if hit {
-                        freed.extend(part);
-                    }
-                    !hit
-                });
-            }
+            step.reagents.retain(|part| !hit(part));
+            step.products.retain(|part| !hit(part));
         }
     }
+    // Side parts of a cycle left with no steps go too.
+    let kept = part_ids(doc);
+    let freed: HashSet<u64> = held.difference(&kept).copied().collect();
     let count = freed.len();
     if count > 0 {
         for group in &mut doc.groups {
@@ -906,26 +951,15 @@ pub fn remove(doc: &mut Document, ids: &[u64]) -> usize {
 /// Run the cycle the other way round: the order reverses and what came in
 /// now goes out.
 pub fn reverse(cycle: &mut Cycle) {
-    let n = cycle.intermediates.len();
-    if n == 0 {
-        cycle.counterclockwise = !cycle.counterclockwise;
-        return;
+    // The first intermediate stays first and the rest come in reverse;
+    // each step then runs between the same two, the other way.
+    cycle.intermediates.reverse();
+    cycle.intermediates.rotate_right(1);
+    cycle.steps.reverse();
+    for step in &mut cycle.steps {
+        std::mem::swap(&mut step.reagents, &mut step.products);
+        std::mem::swap(&mut step.lead_pt, &mut step.trail_pt);
     }
-    // Intermediate i moves to (n - i) % n; step i (i to i + 1) becomes the
-    // step from i + 1's new place to i's.
-    let intermediates = (0..n)
-        .map(|k| cycle.intermediates[(n - k) % n].clone())
-        .collect();
-    let steps = (0..n)
-        .map(|k| {
-            let mut step = cycle.steps[(2 * n - k - 1) % n].clone();
-            std::mem::swap(&mut step.reagents, &mut step.products);
-            std::mem::swap(&mut step.lead_pt, &mut step.trail_pt);
-            step
-        })
-        .collect();
-    cycle.intermediates = intermediates;
-    cycle.steps = steps;
     cycle.counterclockwise = !cycle.counterclockwise;
 }
 
@@ -958,9 +992,11 @@ pub fn set_radius(doc: &mut Document, id: u64, radius: f32) {
         }
     }
     if let Some(g) = doc.graphics.iter_mut().find(|g| g.id == id) {
-        g.origin = center.offset(-radius, -radius);
+        // A mirrored cycle stays mirrored, so it keeps running its way.
+        let mirrored = g.frame_determinant() < 0.;
+        g.origin = center.offset(-radius, if mirrored { radius } else { -radius });
         g.axis_x = Point::new(2. * radius, 0.);
-        g.axis_y = Point::new(0., 2. * radius);
+        g.axis_y = Point::new(0., if mirrored { -2. } else { 2. } * radius);
     }
 }
 
@@ -976,6 +1012,21 @@ pub fn materialized(doc: &Document) -> std::borrow::Cow<'_, Document> {
         let drawn = drawn(doc, g);
         let mut ids = vec![];
         for mut arrow in drawn.arrows {
+            let style = arrow.appearance();
+            if style.head == Head::None && style.tail == Head::None {
+                // ChemDraw keeps a headless curve as a plain path.
+                for path in arrow.paths() {
+                    ids.push(next);
+                    out.graphics.push(crate::arrows::shape(
+                        next,
+                        path.commands,
+                        &path.style,
+                        path.filled,
+                    ));
+                    next += 1;
+                }
+                continue;
+            }
             arrow.id = next;
             ids.push(next);
             next += 1;
@@ -991,10 +1042,10 @@ pub fn materialized(doc: &Document) -> std::borrow::Cow<'_, Document> {
             });
             next += 1;
         }
-        if let Some(group) = out
+        for group in out
             .groups
             .iter_mut()
-            .find(|group| group.members.contains(&g.id))
+            .filter(|group| group.members.contains(&g.id))
         {
             group.members.extend(&ids);
         }
@@ -1011,6 +1062,37 @@ pub fn materialized(doc: &Document) -> std::borrow::Cow<'_, Document> {
     }
     out.prune_groups();
     std::borrow::Cow::Owned(out)
+}
+
+/// `ids` with every cycle part any of them belongs to, whole.
+pub fn whole_parts(doc: &Document, ids: &[u64]) -> Vec<u64> {
+    let mut out = ids.to_vec();
+    for cycle in doc.graphics.iter().filter_map(|g| g.cycle.as_ref()) {
+        for (_, part) in cycle.parts() {
+            if part.iter().any(|id| ids.contains(id)) {
+                out.extend(part.iter().filter(|id| !ids.contains(id)));
+            }
+        }
+    }
+    out
+}
+
+/// Follow atoms merged by a join: a part's atom becomes the atom that
+/// remains. `mapping` holds every atom before the join.
+pub(crate) fn remap_join(doc: &mut Document, mapping: &HashMap<u64, u64>) {
+    for g in &mut doc.graphics {
+        if let Some(cycle) = &mut g.cycle {
+            for part in cycle.parts_mut() {
+                for id in part.iter_mut() {
+                    if let Some(new) = mapping.get(id) {
+                        *id = *new;
+                    }
+                }
+                part.sort_unstable();
+                part.dedup();
+            }
+        }
+    }
 }
 
 /// Keep cycle parts through an ID change; ones left behind drop out.
@@ -1065,7 +1147,7 @@ pub fn reconcile(doc: &mut Document) {
                 *part = fix(part);
             }
             for i in (0..cycle.intermediates.len()).rev() {
-                if cycle.intermediates[i].is_empty() {
+                if cycle.intermediates.get(i).is_some_and(Vec::is_empty) {
                     cycle.remove_intermediate(i);
                 }
             }

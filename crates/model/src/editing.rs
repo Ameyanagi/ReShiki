@@ -123,6 +123,8 @@ pub fn selection(doc: &Document, ids: &[u64]) -> Document {
         .collect();
     part.depth_appearance =
         crate::depth_appearance::selection(doc, &ids.iter().copied().collect::<Vec<_>>());
+    // A cycle copied without some parts draws only the ones it holds.
+    crate::cycles::reconcile(&mut part);
     part
 }
 

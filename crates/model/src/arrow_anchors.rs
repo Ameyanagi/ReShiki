@@ -1359,6 +1359,7 @@ pub(crate) fn remap_for_join(
         arrow.end_anchor = end;
     }
     crate::leaders::remap_join(doc, mapping);
+    crate::cycles::remap_join(doc, mapping);
 }
 
 /// Called after selected points and targets have received an affine transform.

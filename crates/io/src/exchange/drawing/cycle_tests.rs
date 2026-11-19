@@ -31,6 +31,33 @@ fn cycle_document() -> Document {
     {
         c.steps[0].name = "Oxidative addition".into();
     }
+    // A reagent coming in (a headless curve) and a product going out.
+    for (role, text, x, y) in [
+        (crate::cycles::Role::Reagent(0), "ArX", 250., -200.),
+        (crate::cycles::Role::Product(2), "ArAr", -250., -200.),
+    ] {
+        let id = document.next_id();
+        document.annotations.push(Annotation {
+            id,
+            position: Point::new(x, y),
+            text: text.into(),
+            format: TextFormat {
+                style: document.drawing_style.text_style(),
+                ..Default::default()
+            },
+        });
+        let ink = crate::scene::selection_bounds(&document, &[id]).unwrap();
+        crate::cycles::assign(
+            &mut document,
+            &crate::cycles::Target {
+                cycle,
+                role,
+                part: vec![id],
+                ink,
+            },
+        );
+    }
+    document.validate().unwrap();
     document
 }
 
@@ -42,20 +69,28 @@ fn a_cycle_exports_as_its_arrows_and_text_grouped_with_its_parts() {
     let decoded = crate::exchange::from_cdx(&crate::exchange::to_cdx(&xml).unwrap()).unwrap();
     for xml in [&xml, &decoded] {
         let tree = roxmltree::Document::parse(xml).unwrap();
-        // Three arc arrows and no oval for the circle itself.
-        let arrows = tree
-            .descendants()
-            .filter(|n| n.has_tag_name("arrow"))
-            .count();
-        assert_eq!(arrows, 3);
+        // No oval for the circle itself.
         assert!(
             !tree
                 .descendants()
                 .any(|n| n.has_tag_name("graphic") && n.attribute("GraphicType") == Some("Oval"))
         );
         let imported = cdxml::import_cdxml(xml).unwrap().document;
-        assert_eq!(imported.arrows.len(), 3);
-        assert!(imported.arrows.iter().all(|a| a.arc.is_some()));
+        // Three arc arrows and the product's; the reagent's headless curve
+        // goes as a plain path.
+        assert_eq!(imported.arrows.len(), 4);
+        assert_eq!(
+            imported.arrows.iter().filter(|a| a.arc.is_some()).count(),
+            3
+        );
+        // Everything the cycle drew stays grouped with its parts.
+        assert!(imported.groups.iter().any(|g| {
+            imported
+                .annotations
+                .iter()
+                .all(|a| g.members.contains(&a.id))
+                && imported.arrows.iter().all(|a| g.members.contains(&a.id))
+        }));
         assert!(
             imported
                 .annotations

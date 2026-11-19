@@ -813,8 +813,11 @@ impl Graphic {
             panel.validate()?;
         }
         if let Some(cycle) = &self.cycle {
-            if self.kind != GraphicKind::Ellipse {
-                return Err("A catalytic cycle must be an ellipse".into());
+            let (center, radius) = self.cycle_circle();
+            if self.kind != GraphicKind::Ellipse
+                || !(center.is_finite() && radius.is_finite() && radius > 1e-3)
+            {
+                return Err("A catalytic cycle must be a circle of some size".into());
             }
             cycle.validate()?;
         }

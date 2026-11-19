@@ -27,8 +27,10 @@ impl MoleculeCanvas<'_> {
         let inside_selection = hit.is_empty()
             && reshiki::scene::selection_bounds(self.doc, self.selected)
                 .is_some_and(|(lo, hi)| p.x >= lo.x && p.x <= hi.x && p.y >= lo.y && p.y <= hi.y);
+        // A part picked out of its group keeps that selection too.
         let selected = if inside_selection
             || (!hit.is_empty() && hit.iter().all(|id| self.selected.contains(id)))
+            || (!target.is_empty() && target.iter().all(|id| self.selected.contains(id)))
         {
             self.selected.to_vec()
         } else {
@@ -337,7 +339,8 @@ impl MoleculeCanvas<'_> {
         let picked = hit.clone();
         if self.tool.selects() {
             hit = if state.modifiers.alt() {
-                self.doc.expand_integral_groups(&hit)
+                // A cycle part is picked whole: its molecule or its text.
+                reshiki::cycles::whole_parts(self.doc, &self.doc.expand_integral_groups(&hit))
             } else {
                 self.doc.expand_groups(&hit)
             };

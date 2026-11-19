@@ -112,11 +112,14 @@ impl App {
                 self.changed(before);
                 self.status = "Removed from the cycle · it stays in the drawing".into();
             }
-            Action::Clockwise(clockwise) => self.edit_cycle(|cycle| {
-                if cycle.counterclockwise == clockwise {
-                    reshiki::cycles::reverse(cycle);
+            Action::Clockwise(clockwise) => {
+                if self
+                    .selected_cycle_graphic()
+                    .is_some_and(|g| g.cycle_counterclockwise() == clockwise)
+                {
+                    self.edit_cycle(reshiki::cycles::reverse);
                 }
-            }),
+            }
             Action::Edit(field, value) => *self.tab.cycle_inputs.get_mut(field) = value,
             Action::Apply(field) => self.apply_cycle_field(field),
             Action::Step(choice) => {
@@ -147,7 +150,7 @@ impl App {
                 self.set_selection(members);
                 self.tool = crate::canvas::Tool::Select;
                 self.status = format!(
-                    "Made a cycle · {}-click moves one part · drag structures onto it to add",
+                    "Made a cycle · {}-click moves one part",
                     crate::platform::alt_key()
                 );
             }
@@ -167,6 +170,11 @@ impl App {
             .iter()
             .filter(|g| self.tab.selected.contains(&g.id))
             .find_map(|g| Some((g.id, g.cycle.as_ref()?)))
+    }
+
+    fn selected_cycle_graphic(&self) -> Option<&reshiki::graphics::Graphic> {
+        let (id, _) = self.selected_cycle()?;
+        self.tab.doc.graphics.iter().find(|g| g.id == id)
     }
 
     fn edit_cycle(&mut self, edit: impl FnOnce(&mut Cycle)) {
@@ -286,6 +294,7 @@ impl App {
     /// Properties of the selected cycle.
     pub(super) fn cycle_card(&self) -> Option<Element<'_, Message>> {
         let (_, cycle) = self.selected_cycle()?;
+        let counterclockwise = self.selected_cycle_graphic()?.cycle_counterclockwise();
         let inputs = &self.tab.cycle_inputs;
         let send = |action| Message::Cycle(action);
         let toggle = |label, active: bool, action| {
@@ -319,12 +328,12 @@ impl App {
                 row![
                     toggle(
                         "Clockwise",
-                        !cycle.counterclockwise,
+                        !counterclockwise,
                         Action::Clockwise(true)
                     ),
                     toggle(
                         "Counterclockwise",
-                        cycle.counterclockwise,
+                        counterclockwise,
                         Action::Clockwise(false)
                     ),
                 ]
@@ -457,7 +466,9 @@ impl App {
 
     /// The role of a selected part that is not its whole cycle.
     pub(super) fn cycle_part_card(&self) -> Option<Element<'_, Message>> {
-        if self.selected_cycle().is_some() {
+        if self.selected_cycle().is_some()
+            || !self.tab.doc.graphics.iter().any(|g| g.cycle.is_some())
+        {
             return None;
         }
         let roles: Vec<Role> = self

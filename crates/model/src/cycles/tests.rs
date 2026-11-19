@@ -498,3 +498,52 @@ fn an_intermediate_moved_off_the_circle_keeps_an_opening() {
     // Step 1 ends and step 2 starts either side of the moved intermediate.
     assert!(arrows[0].end.distance(arrows[1].start) > bond);
 }
+
+#[test]
+fn a_flipped_cycle_runs_the_other_way_and_keeps_its_steps() {
+    let (mut doc, id, _) = suzuki();
+    let before = cycle(&doc, id).clone();
+    let (center, _) = graphic(&doc, id).cycle_circle();
+    let mirror = |p: Point| Point::new(2. * center.x - p.x, p.y);
+    for a in &mut doc.annotations {
+        let (w, _) = a.size();
+        let p = mirror(a.position);
+        a.position = Point::new(p.x - w, p.y);
+    }
+    if let Some(g) = doc.graphics.iter_mut().find(|g| g.id == id) {
+        g.map_positions(mirror);
+    }
+    assert!(graphic(&doc, id).cycle_counterclockwise());
+    assert_eq!(cycle(&doc, id), &before);
+    // Three short arcs, not three that run the long way round.
+    let arrows = drawn(&doc, graphic(&doc, id)).arrows;
+    assert!(
+        arrows
+            .iter()
+            .all(|a| a.arc.unwrap() < 0. && a.arc.unwrap() > -150.)
+    );
+    // Resizing keeps the mirror.
+    let (_, radius) = graphic(&doc, id).cycle_circle();
+    set_radius(&mut doc, id, radius * 1.2);
+    assert!(graphic(&doc, id).cycle_counterclockwise());
+}
+
+#[test]
+fn copying_the_circle_alone_keeps_no_phantom_parts() {
+    let (doc, id, _) = suzuki();
+    let part = crate::editing::selection(&doc, &[id]);
+    let c = part.graphics.iter().find_map(|g| g.cycle.as_ref()).unwrap();
+    assert!(c.intermediates.is_empty() && c.steps.is_empty());
+    part.validate().unwrap();
+}
+
+#[test]
+fn a_degenerate_circle_draws_nothing_and_does_not_validate() {
+    let (mut doc, id, _) = suzuki();
+    if let Some(g) = doc.graphics.iter_mut().find(|g| g.id == id) {
+        g.axis_x = Point::default();
+        g.axis_y = Point::default();
+    }
+    assert!(doc.validate().is_err());
+    assert!(drawn(&doc, graphic(&doc, id)).arrows.is_empty());
+}

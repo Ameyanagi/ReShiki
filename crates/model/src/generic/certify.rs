@@ -271,6 +271,11 @@ pub(super) fn certify_translation(
                 }
             }
         }
+        if let Some(cycle) = actual.cycle.as_mut() {
+            for id in cycle.ids_mut() {
+                undo(id)?;
+            }
+        }
     }
     for g in groups {
         undo(&mut g.id)?;

@@ -2532,6 +2532,7 @@ pub(crate) fn gradient_primitive(
 /// A cycle draws only its derived arrows and labels.
 fn cycle_primitives(g: &crate::graphics::Graphic, doc: &Document) -> Vec<Primitive> {
     let drawn = crate::cycles::drawn(doc, g);
+    let opacity = g.style.effects.opacity;
     let mut out: Vec<Primitive> = drawn
         .arrows
         .iter()
@@ -2553,7 +2554,7 @@ fn cycle_primitives(g: &crate::graphics::Graphic, doc: &Document) -> Vec<Primiti
             });
         }
     }
-    out
+    out.into_iter().map(|p| see_through(p, opacity)).collect()
 }
 fn push_underlays(
     out: &mut Vec<Primitive>,

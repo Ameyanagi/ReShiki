@@ -209,7 +209,9 @@ fn write_impl(
     let lowered = crate::arrows::lowered(document);
     let document = lowered.as_ref();
     let shape_paths: HashMap<u64, Vec<PathCommand>>;
-    let options = if matches!(lowered, std::borrow::Cow::Owned(_)) {
+    let options = if matches!(lowered, std::borrow::Cow::Owned(_))
+        || matches!(cycles, std::borrow::Cow::Owned(_))
+    {
         let mut paths = options.graphic_paths.cloned().unwrap_or_default();
         for g in &document.graphics {
             paths.entry(g.id).or_insert_with(|| g.commands());
