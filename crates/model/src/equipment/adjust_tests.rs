@@ -43,6 +43,21 @@ fn hold(doc: &mut Document, piece: u64, name: &str, at: [f64; 2]) {
     solve::snap(doc, &ids, 14., false).unwrap();
 }
 
+/// Bring `piece`'s joint near `onto`'s joint and seat it through snapping.
+fn seat(doc: &mut Document, piece: u64, name: &str, onto: u64, joint: &str) {
+    let (m, s) = (port(doc, piece, name), port(doc, onto, joint));
+    let ids = solve::closure(doc, &[piece]);
+    doc.translate(
+        &ids,
+        (s.point[0] - m.point[0]) as f32 + 3.,
+        (s.point[1] - m.point[1]) as f32 - 2.,
+    );
+    let snap = solve::snap(doc, &ids, 14., false).unwrap();
+    assert!(matches!(snap.offer, solve::Offer::Seat));
+    assert_eq!(snap.target.at, s.at);
+    assert_eq!(snap.moving.at, m.at);
+}
+
 /// A 100 mL flask held by a clamp.
 fn clamped() -> (Document, u64, u64) {
     let mut doc = Document::default();
@@ -248,4 +263,117 @@ fn dragging_a_clamps_tilt_handle_turns_it_to_the_pointer() {
     assert!(adjust::set(&mut doc, clamp, "nope", Value::Number(1.)).is_err());
     assert!(adjust::set(&mut doc, clamp, "tilt", Value::State("x".into())).is_err());
     assert_eq!(param(&doc, clamp, "tilt"), None);
+}
+
+#[test]
+fn turning_a_cow_moves_the_side_receiver_and_keeps_the_largest_receiver_anchored() {
+    let mut doc = Document::default();
+    let cow = add(&mut doc, "reshiki/cow-15", Point::new(0., 0.));
+    let large = add(&mut doc, "reshiki/rbf-100-15", Point::new(100., 100.));
+    let small = add(&mut doc, "reshiki/rbf-50-15", Point::new(-100., 100.));
+    seat(&mut doc, large, "neck", cow, "o2");
+    seat(&mut doc, small, "neck", cow, "o1");
+    assert_eq!(doc.seats.len(), 2);
+    seated(&doc);
+    let seats = doc.seats.clone();
+    let frame = |doc: &Document, id| {
+        let g = graphic(doc, id);
+        (g.origin, g.axis_x, g.axis_y)
+    };
+    let (large_frame, cow_frame, small_frame) =
+        (frame(&doc, large), frame(&doc, cow), frame(&doc, small));
+
+    // The middle outlet stays on the largest flask; the side outlet moves.
+    for state in ["r1", "r3", "r2"] {
+        let released = adjust::set(&mut doc, cow, "turn", Value::State(state.into())).unwrap();
+        assert!(released.is_empty(), "{state}: {released:?}");
+        assert_eq!(doc.seats, seats, "{state}");
+        seated(&doc);
+        assert_eq!(frame(&doc, large), large_frame, "{state}");
+        assert_eq!(frame(&doc, cow), cow_frame, "{state}");
+        if state == "r1" {
+            assert!(graphic(&doc, small).origin.distance(small_frame.0) > 1e-3);
+        }
+    }
+    let (at, x, y) = frame(&doc, small);
+    assert!(at.distance(small_frame.0) < 1e-6, "{at:?} {small_frame:?}");
+    assert!(x.distance(small_frame.1) < 1e-6);
+    assert!(y.distance(small_frame.2) < 1e-6);
+}
+
+#[test]
+fn a_seated_thermometers_depth_handle_moves_its_glass_without_moving_the_assembly() {
+    let mut doc = Document::default();
+    let flask = add(&mut doc, "reshiki/rbf-100-15", Point::new(0., 0.));
+    let adapter = add(
+        &mut doc,
+        "reshiki/thermometer-adapter-15",
+        Point::new(100., -100.),
+    );
+    let thermometer = add(&mut doc, "reshiki/thermometer", Point::new(-100., -100.));
+    seat(&mut doc, adapter, "bottom", flask, "neck");
+    seat(&mut doc, thermometer, "stem", adapter, "thermo");
+    assert_eq!(doc.seats.len(), 2);
+    seated(&doc);
+    let seats = doc.seats.clone();
+    let origins = [flask, adapter, thermometer].map(|id| graphic(&doc, id).origin);
+    let stem = port(&doc, thermometer, "stem").point;
+    let before = graphic(&doc, thermometer).shape_bounds().0;
+    let mm = placed::world_per_mm(&doc, placed::DEFAULT_PT_PER_MM);
+
+    let handles = adjust::handles(graphic(&doc, thermometer));
+    let depth = handles.iter().find(|h| h.param == "depth").unwrap();
+    assert!(!depth.toggle);
+    assert_eq!(depth.part.as_deref(), Some("glass"));
+    let to = [depth.at[0], depth.at[1] + f64::from(mm) * 10.];
+    let v = adjust::dragged(graphic(&doc, thermometer), depth, to).unwrap();
+    let Value::Number(dragged) = v else { panic!() };
+    // Depth drags round to half a millimetre: 190 + 10 = 200.
+    assert!((dragged - 200.).abs() <= 0.5, "{dragged}");
+
+    let released = adjust::set(&mut doc, thermometer, "depth", Value::Number(120.)).unwrap();
+    assert!(released.is_empty());
+    assert_eq!(param(&doc, thermometer, "depth"), Some(Value::Number(120.)));
+    assert_eq!(doc.seats, seats);
+    seated(&doc);
+    assert_eq!(
+        [flask, adapter, thermometer].map(|id| graphic(&doc, id).origin),
+        origins
+    );
+    assert_eq!(port(&doc, thermometer, "stem").point, stem);
+    let after = graphic(&doc, thermometer).shape_bounds().0;
+    assert!((after.x - before.x).abs() < 1e-3);
+    assert!(
+        (before.y - after.y - mm * 70.).abs() < 1e-3,
+        "{before:?} {after:?}"
+    );
+}
+
+#[test]
+fn inflating_a_balloon_grows_its_bounds_without_moving_its_needle_or_septum() {
+    let mut doc = Document::default();
+    let septum = add(&mut doc, "reshiki/septum-15", Point::new(0., 0.));
+    let balloon = add(&mut doc, "reshiki/balloon", Point::new(100., -100.));
+    seat(&mut doc, balloon, "needle", septum, "needle");
+    assert_eq!(doc.seats.len(), 1);
+    seated(&doc);
+    let seats = doc.seats.clone();
+    let origins = [septum, balloon].map(|id| graphic(&doc, id).origin);
+    let needle = port(&doc, balloon, "needle").point;
+    let bounds = [0.2, 1.].map(|inflate| {
+        let released = adjust::set(&mut doc, balloon, "inflate", Value::Number(inflate)).unwrap();
+        assert!(released.is_empty());
+        assert_eq!(doc.seats, seats);
+        seated(&doc);
+        assert_eq!(
+            [septum, balloon].map(|id| graphic(&doc, id).origin),
+            origins
+        );
+        assert_eq!(port(&doc, balloon, "needle").point, needle);
+        graphic(&doc, balloon).shape_bounds()
+    });
+    let [(small_lo, small_hi), (full_lo, full_hi)] = bounds;
+    assert!(full_hi.x - full_lo.x > small_hi.x - small_lo.x);
+    assert!(full_hi.y - full_lo.y > small_hi.y - small_lo.y);
+    assert!(full_lo.y < small_lo.y);
 }
