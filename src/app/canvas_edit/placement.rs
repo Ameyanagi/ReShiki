@@ -242,27 +242,19 @@ impl App {
         };
         // A figure layout lands where it is clicked, once, joined to nothing.
         let layout = template.is_layout();
-        match template.place(
-            &self.tab.doc,
-            anchor,
-            direction,
-            if layout {
-                // Too small to reach an atom: the layout never attaches.
-                1e-3
-            } else {
-                self.tab.camera.world_len(PICK_RADIUS_PX)
-            },
-            if layout {
-                reshiki::templates::Anchor::Auto
-            } else {
-                self.templates.anchor
-            },
-            if layout {
-                reshiki::templates::Connection::Auto
-            } else {
-                self.templates.connection
-            },
-        ) {
+        let placed = if layout {
+            template.place_layout(&self.tab.doc, anchor)
+        } else {
+            template.place(
+                &self.tab.doc,
+                anchor,
+                direction,
+                self.tab.camera.world_len(PICK_RADIUS_PX),
+                self.templates.anchor,
+                self.templates.connection,
+            )
+        };
+        match placed {
             Ok((document, selected)) => {
                 self.tab.doc = document;
                 self.tab.selected = selected;

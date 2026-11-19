@@ -41,6 +41,31 @@ impl Template {
     pub fn is_layout(&self) -> bool {
         self.group == layouts::GROUP
     }
+    /// Places the template centered on `point`, joined to nothing.
+    pub fn place_layout(
+        &self,
+        doc: &Document,
+        point: Point,
+    ) -> Result<(Document, Vec<u64>), &'static str> {
+        check_connect_inputs(doc, &self.document, point, None, 1., Anchor::Auto)?;
+        place_free(
+            doc,
+            &self.document,
+            point,
+            None,
+            0.,
+            Anchor::Auto,
+            self.free_scale(doc),
+        )
+    }
+    /// Built-in free placements follow the journal size; saved artwork keeps its size.
+    fn free_scale(&self, doc: &Document) -> f32 {
+        if self.id.starts_with("builtin:") {
+            doc.drawing_style.bond_length_pt / self.document.drawing_style.bond_length_pt
+        } else {
+            1.
+        }
+    }
     /// Built-in free placements follow the journal size; saved artwork keeps its size.
     pub fn place(
         &self,
@@ -51,14 +76,9 @@ impl Template {
         anchor: Anchor,
         mode: Connection,
     ) -> Result<(Document, Vec<u64>), &'static str> {
-        let free_scale = if self.id.starts_with("builtin:") {
-            doc.drawing_style.bond_length_pt / self.document.drawing_style.bond_length_pt
-        } else {
-            1.
-        };
         place_with_mode_scaled(
             doc,
-            (&self.document, free_scale),
+            (&self.document, self.free_scale(doc)),
             point,
             direction,
             radius,

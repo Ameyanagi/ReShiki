@@ -258,8 +258,10 @@ impl MoleculeCanvas<'_> {
                 })
                 .or_else(|| {
                     self.template.map(|(template, source_anchor)| {
-                        template
-                            .place(
+                        if template.is_layout() {
+                            template.place_layout(self.doc, anchor)
+                        } else {
+                            template.place(
                                 self.doc,
                                 anchor,
                                 direction,
@@ -267,7 +269,8 @@ impl MoleculeCanvas<'_> {
                                 source_anchor,
                                 self.template_connection,
                             )
-                            .map_err(str::to_owned)
+                        }
+                        .map_err(str::to_owned)
                     })
                 });
             match placement {

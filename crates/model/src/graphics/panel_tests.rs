@@ -114,8 +114,14 @@ fn a_border_title_sits_on_the_top_edge_over_a_page_colored_backing() {
     let [title] = g.panel_titles(&text).try_into().ok().unwrap();
     assert_eq!(title.style.color, g.style.stroke);
     assert!(title.position.y < 0. && title.position.y + title.size > 0.);
+    // The bounds reach the title's ink above the edge.
     let (lo, _) = g.bounds_with_text_style(&text);
-    assert!(lo.y < -text.size() * 0.4);
+    let ink = title
+        .ink_boxes()
+        .into_iter()
+        .map(|(a, _)| a.y)
+        .fold(f32::MAX, f32::min);
+    assert!(ink < 0. && lo.y <= ink);
     assert!(g.hit_with_text_style(title.position.offset(2., 1.), 0.5, &text));
 }
 
