@@ -160,6 +160,7 @@ fn select(app: &mut App, ids: Vec<u64>) {
 /// Opens the right-click menu at a canvas point for this selection and hit.
 fn context_menu(app: &mut App, at: iced::Point, selected: Vec<u64>, hit: Vec<u64>) {
     let _ = app.update(Message::Canvas(Edit::ContextMenu {
+        at: Default::default(),
         position: at,
         selected,
         hit,

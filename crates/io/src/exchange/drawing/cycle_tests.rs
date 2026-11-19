@@ -22,7 +22,7 @@ fn cycle_document() -> Document {
         });
         ids.push(id);
     }
-    let cycle = crate::cycles::make(&mut document, &ids).unwrap();
+    let (cycle, _) = crate::cycles::make(&mut document, &ids).unwrap();
     if let Some(c) = document
         .graphics
         .iter_mut()

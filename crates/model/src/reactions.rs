@@ -457,11 +457,22 @@ pub fn copy_reaction(
         return Err("Automatic reaction copy needs one straight forward arrow.");
     }
     let sides = EndSides::new(arrow)?;
+    // A catalytic cycle's parts belong to its own steps.
+    let cycled = crate::cycles::part_ids(source);
+    let parts: Vec<_> = parts
+        .into_iter()
+        .filter(|members| !members.iter().any(|id| cycled.contains(id)))
+        .collect();
     if source.reactions.iter().any(|reaction| {
         Role::ALL
             .into_iter()
             .flat_map(|role| reaction.participants(role))
-            .any(|participant| participant.atoms.iter().any(|id| atoms.contains_key(id)))
+            .any(|participant| {
+                participant
+                    .atoms
+                    .iter()
+                    .any(|id| parts.iter().any(|m| m.contains(id)))
+            })
     }) {
         return Err(
             "Copied molecules have roles on another arrow; select that complete reaction or unassigned molecules.",
@@ -483,7 +494,12 @@ pub fn copy_reaction(
     if !reaction.ready() {
         return Err("Select starting materials at the arrow start and products at its end.");
     }
-    reaction.annotations = snapshot.annotations.iter().map(|a| a.id).collect();
+    reaction.annotations = snapshot
+        .annotations
+        .iter()
+        .map(|a| a.id)
+        .filter(|id| !cycled.contains(id))
+        .collect();
     Ok(Some(reaction))
 }
 

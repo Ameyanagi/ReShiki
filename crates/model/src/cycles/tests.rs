@@ -29,7 +29,7 @@ fn suzuki() -> (Document, u64, [u64; 3]) {
     let pd0 = text(&mut doc, Point::new(0., -200.), "Pd(0)L2");
     let oa = text(&mut doc, Point::new(170., 90.), "Ar–Pd(II)L2–X");
     let tm = text(&mut doc, Point::new(-230., 90.), "Ar–Pd(II)L2–Ar′");
-    let id = make(&mut doc, &[tm, oa, pd0]).unwrap();
+    let (id, _) = make(&mut doc, &[tm, oa, pd0]).unwrap();
     doc.validate().unwrap();
     (doc, id, [pd0, oa, tm])
 }
@@ -248,7 +248,7 @@ fn a_molecule_intermediate_grows_with_its_molecule() {
     doc.add_bond(a, b, 1, "plain");
     let t1 = text(&mut doc, Point::new(100., 80.), "B");
     let t2 = text(&mut doc, Point::new(-140., 80.), "C");
-    let id = make(&mut doc, &[a, b, t1, t2]).unwrap();
+    let (id, _) = make(&mut doc, &[a, b, t1, t2]).unwrap();
     let before = doc.clone();
     let c = doc.add_atom("O", Point::new(60., -150.));
     let b_now = doc.atoms.iter().find(|x| x.id == b).unwrap().id;
@@ -350,7 +350,7 @@ fn a_scheme_beside_a_cycle_never_takes_its_parts() {
     let left = atom(&mut doc, -200., 0.);
     let right = atom(&mut doc, 200., 0.);
     let top = atom(&mut doc, 0., -200.);
-    let id = make(&mut doc, &[left, right, top]).unwrap();
+    let (id, _) = make(&mut doc, &[left, right, top]).unwrap();
     // A plain reaction to the right of the cycle, on the same row.
     let reactant = atom(&mut doc, 600., 0.);
     let product = atom(&mut doc, 900., 0.);
@@ -376,6 +376,21 @@ fn a_scheme_beside_a_cycle_never_takes_its_parts() {
     );
     assert!(reaction.products.iter().any(|p| p.atoms.contains(&product)));
     assert!(drawn(&doc, graphic(&doc, id)).arrows.len() == 3);
+    // Copying the scheme with a cycle part selected too leaves that part out.
+    let whole = |doc: &Document, ids: &[u64]| crate::reactions::molecules(doc, ids).concat();
+    let mut picked = whole(&doc, &[top, reactant, product]);
+    picked.push(arrow);
+    if let Some(a) = doc.arrows.iter_mut().find(|a| a.id == arrow) {
+        a.style = Some(crate::arrows::ArrowStyle::preset(
+            crate::arrows::Preset::Forward,
+        ));
+    }
+    let snapshot = crate::editing::selection(&doc, &picked);
+    let copied = crate::reactions::copy_reaction(&doc, &snapshot)
+        .unwrap()
+        .unwrap();
+    assert!(copied.ids().iter().all(|a| !held.contains(a)));
+    assert_eq!((copied.reactants.len(), copied.products.len()), (1, 1));
 }
 
 #[test]
@@ -629,7 +644,7 @@ fn a_part_in_its_own_group_can_leave_and_full_steps_can_join() {
     let b = text(&mut doc, Point::new(170., 90.), "B");
     let c = text(&mut doc, Point::new(-230., 90.), "C");
     doc.group_selection(&[a, b]).unwrap();
-    let id = make(&mut doc, &[a, b, c]).unwrap();
+    let (id, _) = make(&mut doc, &[a, b, c]).unwrap();
     doc.validate().unwrap();
     let before = doc.clone();
     remove(&mut doc, &[a]);

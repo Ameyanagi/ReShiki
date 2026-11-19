@@ -1641,7 +1641,7 @@ fn secondary_click_selects_its_target_and_preserves_an_existing_multi_selection(
             )
             .unwrap();
         assert!(
-            matches!(action.into_inner().0, Some(Edit::ContextMenu { selected, position, hit }) if selected == expected && position == point && hit == expected_hit)
+            matches!(action.into_inner().0, Some(Edit::ContextMenu { selected, position, hit, .. }) if selected == expected && position == point && hit == expected_hit)
         );
         assert!(state.gesture.is_none());
     }

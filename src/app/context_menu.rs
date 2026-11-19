@@ -305,7 +305,16 @@ impl App {
     /// then Properties and Delete, pinned in the footer.
     fn main_entries(&self, atoms: bool, bonds: bool, tilt: bool) -> Vec<Entry> {
         let command = Entry::command;
+        // A selected cycle's step commands come first.
+        let cycle_first = self.selected_cycle().is_some();
+        let cycle = self.cycle_entries();
+        let (first, later) = if cycle_first {
+            (cycle, vec![])
+        } else {
+            (vec![], cycle)
+        };
         [
+            first,
             self.atom_entries(atoms),
             self.molecule_entries(atoms),
             self.structure_entries(atoms, bonds, tilt),
@@ -320,7 +329,7 @@ impl App {
                 vec![]
             },
             self.purpose_entries(atoms),
-            self.cycle_entries(),
+            later,
             [
                 command("Cut", Message::Copy(true), true),
                 command("Copy", Message::Copy(false), true),
@@ -347,11 +356,22 @@ impl App {
         .join(&Entry::Separator)
     }
 
-    /// A part of a cycle leaves it; two or more free parts make one.
+    /// A cycle's step, the one right-clicked, as a reaction; a part of a
+    /// cycle leaves it; two or more free parts make one.
     fn cycle_entries(&self) -> Vec<Entry> {
+        use super::cycles::Action;
         let doc = &self.tab.doc;
         if self.selected_cycle().is_some() {
-            return vec![];
+            let steps = self.cycle_step().is_some();
+            return [
+                ("Copy step as reaction SMILES", Action::CopySmiles),
+                ("Auto-map step", Action::AutoMap),
+                ("Check step balance", Action::Check),
+                ("Color cycle by origin", Action::Color),
+            ]
+            .into_iter()
+            .map(|(label, action)| Entry::command(label, Message::Cycle(action), steps))
+            .collect();
         }
         if self
             .tab

@@ -19,6 +19,8 @@ pub struct CopyAsKey {
     pub revision: u64,
     pub format: CopyFormat,
     pub selected: Vec<u64>,
+    /// What was copied, when it is not the selection or drawing.
+    pub what: Option<String>,
 }
 
 #[derive(Default)]
@@ -123,6 +125,28 @@ impl App {
         self.copy_as_snapshot(snapshot, format, true)
     }
 
+    /// Copy a drawing made for one purpose, such as a cycle step's
+    /// reaction, as `format`; `what` names it in the status.
+    pub(super) fn copy_made(
+        &mut self,
+        snapshot: Document,
+        format: CopyFormat,
+        what: String,
+    ) -> Task<Message> {
+        if self.clipboard_working() {
+            self.status = "A clipboard operation is already in progress".into();
+            return Task::none();
+        }
+        if let Some(reason) = format.unavailable_reason(&snapshot) {
+            self.status = reason.into();
+            self.error = true;
+            return Task::none();
+        }
+        let mut key = self.start_copy_as(format);
+        key.what = Some(what);
+        self.queue_copy_as(key, snapshot, false)
+    }
+
     fn copy_as_snapshot(
         &mut self,
         snapshot: Document,
@@ -177,6 +201,7 @@ impl App {
             revision: self.tab.revision,
             format,
             selected: self.tab.selected.clone(),
+            what: None,
         }
     }
 
@@ -356,15 +381,17 @@ impl App {
         }
         match result {
             Ok(notices) => {
-                let scope = match (
-                    !key.selected.is_empty(),
-                    key.revision == self.tab.revision && key.selected == self.tab.selected,
-                ) {
-                    (true, true) => "Selection",
-                    (false, true) => "Drawing",
-                    (true, false) => "Previous selection",
-                    (false, false) => "Previous drawing snapshot",
-                };
+                let scope = key.what.as_deref().unwrap_or(
+                    match (
+                        !key.selected.is_empty(),
+                        key.revision == self.tab.revision && key.selected == self.tab.selected,
+                    ) {
+                        (true, true) => "Selection",
+                        (false, true) => "Drawing",
+                        (true, false) => "Previous selection",
+                        (false, false) => "Previous drawing snapshot",
+                    },
+                );
                 self.status = format!("{scope} copied as {}", key.format.label());
                 if !notices.is_empty() {
                     self.status.push_str(" · Review details\n");

@@ -281,6 +281,7 @@ fn caption_context_menu_keeps_a_closed_inspector_closed() {
         let viewport = app.viewport;
         let position = iced::Point::new(300., 200.);
         let _ = app.update(Message::Canvas(Edit::ContextMenu {
+            at: Default::default(),
             position,
             selected: vec![1],
             hit: vec![1],

@@ -880,3 +880,104 @@ async fn reaction_payload_retains_participants_and_export_warnings() {
     assert_eq!(smiles.text(), Some("CO>>O"));
     assert_eq!(rxn.notices, smiles.notices);
 }
+
+/// A catalytic cycle's step copies as its own reaction: the step's first
+/// intermediate and reagents, then the next intermediate and products.
+#[tokio::test]
+async fn a_cycle_step_copies_as_its_own_reaction_smiles() {
+    let mut doc = Document::default();
+    let mut molecule = |atoms: &[(&str, f32, f32)]| {
+        let ids: Vec<u64> = atoms
+            .iter()
+            .map(|&(element, x, y)| {
+                let id = doc.add_atom(element, Point::new(x, y));
+                doc.atom_mut(id).unwrap().no_implicit = element != "C";
+                id
+            })
+            .collect();
+        for pair in ids.windows(2) {
+            doc.add_bond(pair[0], pair[1], 1, "plain");
+        }
+        ids
+    };
+    let pd = molecule(&[("Pd", 0., -200.)]);
+    let oa = molecule(&[("C", 150., 90.), ("Pd", 180., 90.), ("Br", 210., 90.)]);
+    let tm = molecule(&[("C", -250., 90.), ("Pd", -220., 90.), ("C", -190., 90.)]);
+    let mebr = molecule(&[("C", 260., -160.), ("Br", 290., -160.)]);
+    let ids: Vec<u64> = [&pd, &oa, &tm].into_iter().flatten().copied().collect();
+    let (cycle, _) = crate::cycles::make(&mut doc, &ids).unwrap();
+    let ink = crate::scene::selection_bounds(&doc, &mebr).unwrap();
+    crate::cycles::assign(
+        &mut doc,
+        &crate::cycles::Target {
+            cycle,
+            role: crate::cycles::Role::Reagent(0),
+            part: mebr,
+            ink,
+        },
+    );
+    let engine = LocalEngine::in_process();
+    let mut lines = vec![];
+    for s in 0..3 {
+        let (copy, _) = crate::cycles::steps::step(&doc, cycle, s).unwrap();
+        let smiles = prepare_as(
+            engine.clone(),
+            copy,
+            CopyFormat::ReactionSmiles,
+            Default::default(),
+        )
+        .await
+        .unwrap();
+        lines.push(smiles.text().unwrap().to_owned());
+    }
+    assert_eq!(
+        lines,
+        ["CBr.[Pd]>>C[Pd]Br", "C[Pd]Br>>C[Pd]C", "C[Pd]C>>[Pd]"]
+    );
+}
+
+/// A scheme copied with a catalytic cycle's part selected too is still its
+/// own reaction: the part stays out of it and the copy.
+#[test]
+fn a_scheme_copies_without_a_selected_cycle_part() {
+    let mut doc = Document::default();
+    let mut pair = |x: f32, y: f32| {
+        let a = doc.add_atom("C", Point::new(x, y));
+        let b = doc.add_atom("O", Point::new(x + 40., y));
+        doc.add_bond(a, b, 1, "plain");
+        vec![a, b]
+    };
+    let left = pair(-200., 0.);
+    let right = pair(200., 0.);
+    let top = pair(0., -200.);
+    let reactant = pair(600., 0.);
+    let product = pair(900., 0.);
+    let ids: Vec<u64> = [&left, &right, &top]
+        .into_iter()
+        .flatten()
+        .copied()
+        .collect();
+    crate::cycles::make(&mut doc, &ids).unwrap();
+    let arrow = doc.next_id();
+    doc.arrows.push(crate::document::Arrow::new(
+        arrow,
+        Point::new(700., 20.),
+        Point::new(860., 20.),
+        crate::arrows::Preset::Forward,
+        crate::arrows::ArrowStyle::preset(crate::arrows::Preset::Forward),
+    ));
+    let mut picked: Vec<u64> = [&top, &reactant, &product]
+        .into_iter()
+        .flatten()
+        .copied()
+        .collect();
+    picked.push(arrow);
+    let snapshot = crate::editing::selection(&doc, &picked);
+    let chemical = chemical_snapshot(&doc, &snapshot).unwrap();
+    assert!(top.iter().all(|id| chemical.atom(*id).is_none()));
+    assert_eq!(chemical.reactions.len(), 1);
+    assert_eq!(
+        CopyFormat::ReactionSmiles.unavailable_reason(&chemical),
+        None
+    );
+}

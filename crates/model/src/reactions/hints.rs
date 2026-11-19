@@ -32,11 +32,13 @@ pub fn arrow_semantics_hints(doc: &Document) -> Vec<ArrowSemanticsHint> {
     if doc.validate().is_err() {
         return vec![];
     }
-    // Only Chemistry molecules and arrows make up a scheme row.
+    // Only Chemistry molecules and arrows make up a scheme row; a catalytic
+    // cycle's parts belong to its own steps.
+    let cycled = crate::cycles::part_ids(doc);
     let ids: Vec<_> = doc
         .atoms
         .iter()
-        .filter(|atom| atom.purpose.is_chemistry())
+        .filter(|atom| atom.purpose.is_chemistry() && !cycled.contains(&atom.id))
         .map(|atom| atom.id)
         .collect();
     let parts = molecules(doc, &ids);

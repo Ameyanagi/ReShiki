@@ -1067,6 +1067,9 @@ impl App {
         if let Some(cycle) = self.cycle_card().or_else(|| self.cycle_part_card()) {
             body = body.push(card(container(cycle).padding(12)));
         }
+        if let Some(review) = self.step_review_card() {
+            body = body.push(card(container(review).padding(12)));
+        }
         let molecular_first = self.tab.selected.is_empty()
             || self.property_key().is_some_and(|key| !key.atoms.is_empty());
         // Keep the active ring tool's placement card visible above the expanded values.

@@ -143,6 +143,8 @@ pub enum Edit {
     Touch(Vec<Edit>),
     ContextMenu {
         position: Point,
+        /// Where the press was, on the paper.
+        at: World,
         selected: Vec<u64>,
         /// The exact secondary-click hit before logical groups or the current
         /// selection expand it. Object-specific commands must use this target.

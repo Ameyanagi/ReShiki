@@ -2,8 +2,8 @@
 use super::workspace::{control, hover_hint, muted_text, panel_action, section};
 use super::{App, Message};
 use iced::widget::{button, checkbox, column, row, text};
-use iced::{Alignment, Element, Length};
-use reshiki::cycles::{Cycle, Role};
+use iced::{Alignment, Element, Length, Task};
+use reshiki::cycles::{Cycle, Role, steps};
 
 #[derive(Debug, Clone)]
 pub enum Action {
@@ -16,6 +16,14 @@ pub enum Action {
     Step(StepChoice),
     Reversible(bool),
     Hidden(bool),
+    /// The chosen step as a reaction: copy its reaction SMILES.
+    CopySmiles,
+    /// Propose atom maps for the chosen step.
+    AutoMap,
+    /// Color the cycle by origin from the chosen step.
+    Color,
+    /// Check that the chosen step keeps its atoms and charge.
+    Check,
 }
 
 /// A text field of the cycle card.
@@ -77,13 +85,54 @@ fn labelled<'a>(
         .align_y(Alignment::Center)
 }
 
+/// What Check step balance found for step `s`, in one line.
+fn balance_status(s: usize, balance: &steps::Balance) -> String {
+    if balance.balanced() {
+        return format!("Step {} is balanced", s + 1);
+    }
+    let list = |counts: &[(String, u32)]| {
+        counts
+            .iter()
+            .map(|(symbol, n)| match n {
+                1 => symbol.clone(),
+                n => format!("{n} {symbol}"),
+            })
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+    let mut parts = vec![format!("Step {} not balanced", s + 1)];
+    if !balance.before.is_empty() {
+        parts.push(format!("extra on the left: {}", list(&balance.before)));
+    }
+    if !balance.after.is_empty() {
+        parts.push(format!("extra on the right: {}", list(&balance.after)));
+    }
+    let [before, after] = balance.charge;
+    if before != after {
+        parts.push(format!("charge {before:+} → {after:+}"));
+    }
+    parts.join(" · ")
+}
+
 fn points(world: f32, doc: &reshiki::document::Document) -> String {
     let pt = world * doc.drawing_style.points_per_world();
     format!("{}", (pt * 10.).round() / 10.)
 }
 
 impl App {
-    pub(super) fn cycle_action(&mut self, action: Action) {
+    pub(super) fn cycle_action(&mut self, action: Action) -> Task<Message> {
+        let step_action = matches!(
+            action,
+            Action::CopySmiles | Action::AutoMap | Action::Color | Action::Check
+        );
+        if step_action {
+            let Some((id, s)) = self.cycle_step() else {
+                self.error = true;
+                self.status = "Select a catalytic cycle first".into();
+                return Task::none();
+            };
+            return self.step_action(action, id, s);
+        }
         match action {
             Action::Make => self.make_cycle(),
             Action::Insert => {
@@ -107,7 +156,7 @@ impl App {
                 if freed == 0 {
                     self.error = true;
                     self.status = "Select a part of a cycle first".into();
-                    return;
+                    return Task::none();
                 }
                 self.changed(before);
                 self.status = "Removed from the cycle · it stays in the drawing".into();
@@ -128,6 +177,81 @@ impl App {
             }
             Action::Reversible(on) => self.edit_step(|step| step.reversible = on),
             Action::Hidden(on) => self.edit_step(|step| step.hidden = on),
+            Action::CopySmiles | Action::AutoMap | Action::Color | Action::Check => {}
+        }
+        Task::none()
+    }
+
+    /// The selected cycle and its chosen step.
+    pub(super) fn cycle_step(&self) -> Option<(u64, usize)> {
+        let (id, cycle) = self.selected_cycle()?;
+        let last = cycle.steps.len().checked_sub(1)?;
+        Some((id, self.tab.cycle_inputs.step.min(last)))
+    }
+
+    /// Choose the step of the selected cycle that lies toward `p`, as a
+    /// right-click on its arc does.
+    pub(super) fn choose_step_at(&mut self, p: reshiki::document::Point) {
+        if let Some(step) = self
+            .selected_cycle_graphic()
+            .and_then(|g| reshiki::cycles::step_at(&self.tab.doc, g, p))
+        {
+            self.tab.cycle_inputs.step = step;
+            self.sync_cycle();
+        }
+    }
+
+    /// Run a reaction tool on step `s` of cycle `id`.
+    fn step_action(&mut self, action: Action, id: u64, s: usize) -> Task<Message> {
+        let fail = |app: &mut Self, error: String| {
+            app.error = true;
+            app.status = error;
+            Task::none()
+        };
+        match action {
+            Action::CopySmiles => match steps::step(&self.tab.doc, id, s) {
+                Ok((copy, _)) => self.copy_made(
+                    copy,
+                    reshiki::clipboard::CopyFormat::ReactionSmiles,
+                    format!("Step {}", s + 1),
+                ),
+                Err(error) => fail(self, error),
+            },
+            Action::AutoMap | Action::Color => {
+                if let Err(error) = steps::step(&self.tab.doc, id, s) {
+                    return fail(self, error);
+                }
+                if matches!(action, Action::Color) {
+                    let before = self.tab.doc.clone();
+                    match steps::color(&mut self.tab.doc, id, s) {
+                        Ok(()) => {
+                            self.changed(before);
+                            if !self.error {
+                                self.status = "Colored by origin".into();
+                            }
+                            return Task::none();
+                        }
+                        // Map the step first; applying its maps colors it.
+                        Err(reshiki::reaction_colors::Refusal::Maps) => {}
+                        Err(refusal) => return fail(self, refusal.message().into()),
+                    }
+                }
+                // The proposal to review shows in Properties.
+                self.inspector_open = true;
+                self.inspector_tab = super::InspectorTab::Properties;
+                self.start_step_auto_map(id, s, matches!(action, Action::Color))
+            }
+            Action::Check => {
+                match steps::balance(&self.tab.doc, id, s) {
+                    Ok(balance) => {
+                        self.error = false;
+                        self.status = balance_status(s, &balance);
+                    }
+                    Err(error) => return fail(self, error),
+                }
+                Task::none()
+            }
+            _ => Task::none(),
         }
     }
 
@@ -135,7 +259,7 @@ impl App {
         let before = self.tab.doc.clone();
         let selected = self.tab.selected.clone();
         match reshiki::cycles::make(&mut self.tab.doc, &selected) {
-            Ok(id) => {
+            Ok((id, left)) => {
                 let members = self
                     .tab
                     .doc
@@ -149,10 +273,14 @@ impl App {
                 }
                 self.set_selection(members);
                 self.tool = crate::canvas::Tool::Select;
-                self.status = format!(
-                    "Made a cycle · {}-click moves one part",
-                    crate::platform::alt_key()
-                );
+                self.status = if left {
+                    "Made a cycle · its parts left their reactions".into()
+                } else {
+                    format!(
+                        "Made a cycle · {}-click moves one part",
+                        crate::platform::alt_key()
+                    )
+                };
             }
             Err(error) => {
                 self.tab.doc = before;
@@ -441,7 +569,8 @@ impl App {
                         ),
                     ]
                     .spacing(8),
-                );
+                )
+                .push(self.step_reaction_controls());
         }
         let mut parts = column![text("Parts").size(11).style(muted_text)].spacing(3);
         for (role, ids) in cycle.parts() {
@@ -463,6 +592,45 @@ impl App {
             .style(muted_text),
         );
         Some(body.into())
+    }
+
+    /// The chosen step's reaction tools.
+    fn step_reaction_controls(&self) -> Element<'_, Message> {
+        let send = |action| Message::Cycle(action);
+        let mapping = self.tab.mapping.is_pending();
+        let auto = if mapping {
+            "Mapping…"
+        } else {
+            "Auto-map step"
+        };
+        let free = !mapping && !self.tab.busy;
+        column![
+            text("Step as a reaction").size(11).style(muted_text),
+            panel_action("Copy step as reaction SMILES", send(Action::CopySmiles)),
+            row![
+                panel_action(auto, send(Action::AutoMap))
+                    .on_press_maybe(free.then_some(send(Action::AutoMap))),
+                panel_action("Check step balance", send(Action::Check)),
+            ]
+            .spacing(4),
+            panel_action("Color cycle by origin", send(Action::Color))
+                .on_press_maybe(free.then_some(send(Action::Color))),
+        ]
+        .spacing(4)
+        .into()
+    }
+
+    /// The atom maps proposed for a cycle step, to review and apply. It
+    /// stays while a reviewed pair of atoms is selected.
+    pub(super) fn step_review_card(&self) -> Option<Element<'_, Message>> {
+        let (_, s) = self.tab.mapping.step?;
+        let proposal = self.tab.mapping.proposal.as_ref()?;
+        let body = column![
+            section("Atom maps"),
+            text(format!("Step {}", s + 1)).size(13)
+        ]
+        .spacing(6);
+        Some(self.proposal_review(body, proposal).into())
     }
 
     /// The role of a selected part that is not its whole cycle.

@@ -218,7 +218,35 @@ the gutters. Moving one item by itself leaves it where you put it.
 
 Each change is one Undo step. A reagent's side arrow joins the arc without a
 head; a product's leaves it with one. Reaction detection never takes a
-cycle's parts, so a scheme drawn beside the cycle is read on its own.
+cycle's parts, so a scheme drawn beside the cycle is read on its own. A
+structure or text that already has a role in an ordinary reaction leaves that
+reaction when it joins a cycle, and the status line says so. Taking it out of
+the cycle again does not bring the role back.
+
+### Use a cycle's steps as reactions
+
+Each step is a reaction: its reactants are the step's first intermediate and
+its reagents, its products the next intermediate and its products. Texts are
+its conditions.
+
+1. Select the cycle and pick the step in **Properties → Catalytic cycle**, or
+   right-click the step's arc.
+2. Under **Step as a reaction**, or in the right-click menu:
+   - **Copy step as reaction SMILES** copies that step's reaction.
+   - **Check step balance** says whether the step keeps every atom,
+     hydrogens included, and the charge, and what one side has more of.
+   - **Auto-map step** proposes atom maps for the step. Review them under
+     **Properties → Atom maps** and choose **Apply maps**. New map numbers
+     stay clear of the cycle's other steps, and maps that would clash with a
+     neighboring step are refused.
+   - **Color cycle by origin** colors each reactant and carries its color
+     into the products along the atom maps, as for a scheme of several steps.
+     Every step whose two sides share atom maps takes color, so an
+     intermediate keeps its colors from one step into the next. Without maps
+     it runs **Auto-map step** first, and applying the maps colors the cycle.
+3. The same commands are in the command palette.
+
+Atom maps and colors are one Undo step each and are saved with the drawing.
 
 ### Place lab equipment
 
@@ -289,8 +317,11 @@ cm**, **RSC graphical abstract · 8 × 4 cm** or **Elsevier graphical abstract �
 - A catalytic cycle is a circle. ChemDraw has no cycle object: CDXML and CDX
   get its arrows and text, grouped with its parts, and opening that file
   again gives those arrows, not a cycle.
-- A cycle's steps are not yet reactions: they have no atom maps, reaction
-  SMILES or color by origin.
+- A step's tools need a structure as each of its two intermediates. A step
+  next to a text intermediate has no reaction SMILES, atom maps or balance
+  check.
+- Color by origin on a cycle uses the default hues and has no legend; its
+  settings are not kept. Undo removes it.
 - Equipment pieces do not snap together, and their liquid level and other
   parameters cannot be changed yet. ChemDraw gets each piece as a group of
   curves; opening that file again gives those curves, not a piece.
@@ -350,9 +381,23 @@ along from the part. Step names try the inside and outside of the arc's
 middle, then points along it and further from it, and take the place covering
 the least ink without crossing the arc. After each edit the parts grow to whole
 molecules, parts that went are dropped, and the steps on both sides of a
-dropped intermediate join. Reaction preview skips every cycle part. CDXML and
+dropped intermediate join. Reaction preview, automatic reaction copy and the
+arrow hints skip every cycle part, and a part that joins a cycle leaves its
+ordinary reaction roles, condition lists and arrow labels. CDXML and
 CDX export write the drawn arrows and text in the cycle's group
 (`cycles::materialized`). A cycle needs document version 40.
+
+Steps as reactions (`cycles::steps`) are never stored. For a step, or every
+step for the atom-map search and color by origin, a throwaway drawing holds
+only the steps' parts, one forward arrow per step with an ID the drawing does
+not use, and a `Reaction` per step; Reference and Illustration structures are
+left out, and a step's tools need structures as both intermediates. Reaction
+SMILES, the atom-map search and `reaction_colors::paint` run on that copy, and
+`steps::copy_back` writes atom maps, label and bond colors, highlights and ring
+fills back onto the reaction participants' atom IDs as one Undo step, with
+changed ring fills replaced in place. An atom-map proposal for a step
+remembers its cycle and step, and the review compares it with a fresh copy. The balance check counts the elements of each side from the chemistry
+graph, with explicit and implicit hydrogens, and the formal charges.
 
 ### Interchange boundary
 

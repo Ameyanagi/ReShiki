@@ -8,6 +8,7 @@ fn copy_key(app: &App) -> CopyAsKey {
         revision: app.tab.revision,
         selected: app.tab.selected.clone(),
         format: CopyFormat::Smiles,
+        what: None,
     }
 }
 
