@@ -450,6 +450,13 @@ fn on_fills(doc: &crate::document::Document) -> std::borrow::Cow<'_, crate::docu
         }
         let palette = if mode.is_dark() { dark } else { light };
         if let Some(rgb) = g.backing(|c| palette.rgb(c), mode.background()) {
+            // Shading is white at its highlight and mostly light; ink reads
+            // on its middle band.
+            let rgb = if g.style.effects.shaded {
+                crate::graphics::shade(rgb, 0.5)
+            } else {
+                rgb
+            };
             cards.push(Card {
                 outline: flattened(&g.commands()),
                 bounds,

@@ -88,6 +88,19 @@ fn a_dark_card_takes_light_ink_on_the_light_canvas() {
 }
 
 #[test]
+fn a_shaded_dark_card_reads_light_and_keeps_dark_ink() {
+    // Shading is white at its highlight and looks the same on both
+    // canvases, so a curve over a shaded orbital lobe reopened from ChemDraw
+    // stays black.
+    for canvas in CanvasTheme::ALL {
+        let (mut doc, [a, ..]) = figure(canvas, Color::Ink);
+        doc.graphics[0].style.effects.shaded = true;
+        let resolved = resolved_document(&doc);
+        assert_eq!(label(&resolved, a), [0; 3], "{canvas:?}");
+    }
+}
+
+#[test]
 fn palette_tints_and_see_through_ink_follow_the_canvas_unchanged() {
     for canvas in CanvasTheme::ALL {
         let (doc, _) = figure(canvas, Color::Palette(Hue::Blue, Row::Tint));
