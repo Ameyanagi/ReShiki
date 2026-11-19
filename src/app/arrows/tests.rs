@@ -320,14 +320,30 @@ fn a_canvas_switch_keeps_the_metal_step_but_a_save_ends_it() {
         "the older save does not split it"
     );
 
-    // A symbol typed while a save is being written is its own step.
+    // Starting a save (or a browser download, which leaves the drawing
+    // unsaved) ends the step: the symbol is its own step.
+    app.arrow_action(arrows::Action::Badge(Some(BadgeIcon::Metal)));
+    let _ = app.save_drawing(None);
+    app.file_io.saving = false;
+    app.tab.arrows.badge_text = "Cu".into();
+    app.arrow_action(arrows::Action::ApplyBadgeText);
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc.arrows[0].badge.as_ref().unwrap().text, "Pd");
+
+    // Another tab's save in progress does not split this tab's step.
+    app.arrow_action(arrows::Action::Badge(Some(BadgeIcon::Light)));
+    let light = app.tab.doc.arrows.clone();
     app.arrow_action(arrows::Action::Badge(Some(BadgeIcon::Metal)));
     app.file_io.saving = true;
+    app.file_io.saving_tab = None;
     app.tab.arrows.badge_text = "Cu".into();
     app.arrow_action(arrows::Action::ApplyBadgeText);
     app.file_io.saving = false;
     let _ = app.update(Message::Undo);
-    assert_eq!(app.tab.doc.arrows[0].badge.as_ref().unwrap().text, "Pd");
+    assert_eq!(
+        app.tab.doc.arrows, light,
+        "one step during another tab's save"
+    );
 }
 
 #[test]

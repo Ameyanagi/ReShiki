@@ -455,9 +455,8 @@ impl App {
                         && *selected == self.tab.selected
                         && self.tab.history.peek(false) == Some(pre)
                         && before.arrows == *arrows
-                        // Not saved since the pick, nor being saved.
+                        // Not saved since the pick; starting a save also ends it.
                         && !super::same_drawing(&before, &self.tab.saved)
-                        && !self.file_io.saving
                 });
         let pre = matches!(action, Action::Badge(Some(BadgeIcon::Metal))).then(|| before.clone());
         if joins {

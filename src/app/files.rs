@@ -1073,6 +1073,8 @@ impl super::App {
         }
         self.file_io.saving = true;
         self.file_io.saving_tab = Some(self.tab.id);
+        // A save or download ends a Metal pick's Undo step, so Undo returns to what was written.
+        self.tab.arrows.metal_pick = None;
         #[cfg(not(target_arch = "wasm32"))]
         if office_host == Some(Host::Microsoft365) {
             self.status = ADDIN_SAVE_STATUS.into();
