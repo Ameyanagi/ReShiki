@@ -14,10 +14,15 @@ fn page_setup_is_an_explicit_atomic_edit_and_does_not_scale_objects() {
     let before = app.tab.doc.clone();
     app.tab.saved = before.clone();
     let _ = app.update(Message::Pages(Action::Open));
+    // A size applies at once and keeps the editor open.
     let _ = app.update(Message::Pages(Action::Preset(Preset::Letter)));
+    let letter = app.tab.doc.clone();
+    assert_eq!(letter.page_layout.as_ref().unwrap().width_pt, 612.);
+    assert!(app.tab.pages.editor.is_some());
     let _ = app.update(Message::Pages(Action::Input(Field::Columns, "2".into())));
-    assert_eq!(app.tab.doc, before);
+    assert_eq!(app.tab.doc, letter, "typing alone changes nothing");
     let _ = app.update(Message::Pages(Action::Apply));
+    assert!(app.tab.pages.editor.is_none());
     let expected = app.tab.doc.clone();
     assert!(app.dirty());
     assert_eq!(app.recovery_document().page_layout, expected.page_layout);
@@ -26,8 +31,11 @@ fn page_setup_is_an_explicit_atomic_edit_and_does_not_scale_objects() {
     assert_eq!(expected.bonds, before.bonds);
     assert_eq!(expected.page_layout.as_ref().unwrap().width_pt, 612.);
     let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, letter);
+    let _ = app.update(Message::Undo);
     assert_eq!(app.tab.doc, before);
     assert!(!app.dirty());
+    let _ = app.update(Message::Redo);
     let _ = app.update(Message::Redo);
     assert_eq!(app.tab.doc, expected);
     let _ = app.update(Message::Pages(Action::Open));
@@ -163,4 +171,159 @@ fn selecting_page_artwork_keeps_page_controls_and_centers_only_the_selection() {
     assert_eq!(app.tab.doc, before);
     assert_eq!(app.inspector_tab, InspectorTab::Pages);
     assert!(!app.tab.history.can_undo());
+}
+
+#[test]
+fn page_setup_closes_the_view_strip_and_landscape_applies_at_once() {
+    let mut app = ready();
+    app.view_open = true;
+    let _ = app.update(Message::Pages(Action::Show));
+    assert!(!app.view_open, "the strip's Done would be a second way out");
+    let _ = app.update(Message::Pages(Action::Preset(Preset::A4)));
+    let _ = app.update(Message::Pages(Action::Landscape(false)));
+    let portrait = app.tab.doc.clone();
+    let _ = app.update(Message::Pages(Action::Landscape(true)));
+    let layout = app.tab.doc.page_layout.as_ref().unwrap();
+    assert!(layout.width_pt > layout.height_pt);
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, portrait);
+}
+
+#[test]
+fn a_size_choice_keeps_typed_margins_and_grid_typed() {
+    let mut app = ready();
+    let _ = app.update(Message::Pages(Action::Open));
+    let _ = app.update(Message::Pages(Action::Preset(Preset::A4)));
+    let _ = app.update(Message::Pages(Action::Input(Field::Columns, "2".into())));
+    let _ = app.update(Message::Pages(Action::Input(Field::Rows, "x".into())));
+    let _ = app.update(Message::Pages(Action::Landscape(true)));
+    let layout = app.tab.doc.page_layout.clone().unwrap();
+    assert!(layout.width_pt > layout.height_pt);
+    assert_eq!(
+        (layout.columns, layout.rows),
+        (1, 1),
+        "the grid is not applied"
+    );
+    let editor = app.tab.pages.editor.as_ref().unwrap();
+    assert_eq!((editor.columns.as_str(), editor.rows.as_str()), ("2", "x"));
+    assert!(!app.error, "{}", app.status);
+}
+
+#[test]
+fn margins_too_wide_for_a_smaller_size_fall_back_to_the_defaults() {
+    let mut app = ready();
+    let _ = app.update(Message::Pages(Action::Open));
+    let _ = app.update(Message::Pages(Action::Preset(Preset::A4)));
+    let _ = app.update(Message::Pages(Action::Input(Field::Left, "80".into())));
+    let _ = app.update(Message::Pages(Action::Input(Field::Right, "80".into())));
+    let _ = app.update(Message::Pages(Action::Apply));
+    let _ = app.update(Message::Pages(Action::Show));
+    let _ = app.update(Message::Pages(Action::Open));
+    let _ = app.update(Message::Pages(Action::Preset(Preset::A5)));
+    assert!(!app.error, "{}", app.status);
+    let layout = app.tab.doc.page_layout.as_ref().unwrap();
+    assert_eq!(layout.preset(), Preset::A5);
+    assert_eq!(layout.margins, reshiki::pages::Margins::default());
+}
+
+#[test]
+fn a_toc_preset_is_one_sheet_framing_page_one() {
+    let mut app = ready();
+    app.tab.doc.add_atom("C", Point::new(0., 0.));
+    let _ = app.update(Message::Pages(Action::Open));
+    let _ = app.update(Message::Pages(Action::Input(Field::Columns, "2".into())));
+    let _ = app.update(Message::Pages(Action::Apply));
+    let _ = app.update(Message::Pages(Action::Navigate(1)));
+    let _ = app.update(Message::Pages(Action::Open));
+    let _ = app.update(Message::Pages(Action::Preset(Preset::AcsToc)));
+    let layout = app.tab.doc.page_layout.as_ref().unwrap();
+    assert_eq!(layout.count(), 1);
+    assert_eq!(app.tab.pages.active, 0);
+    let _ = app.update(Message::Undo);
+    assert_eq!(
+        app.tab.doc.page_layout.as_ref().unwrap().count(),
+        2,
+        "one Undo step"
+    );
+}
+
+#[test]
+fn page_setup_on_a_paged_drawing_also_closes_the_view_strip() {
+    let mut app = ready();
+    let _ = app.update(Message::Pages(Action::Open));
+    let _ = app.update(Message::Pages(Action::Apply));
+    assert!(app.tab.doc.page_layout.is_some());
+    app.view_open = true;
+    let _ = app.update(Message::Pages(Action::Show));
+    assert!(!app.view_open);
+}
+
+#[test]
+fn landscape_turns_a_typed_custom_size() {
+    let mut app = ready();
+    let _ = app.update(Message::Pages(Action::Open));
+    let _ = app.update(Message::Pages(Action::Preset(Preset::A4)));
+    let _ = app.update(Message::Pages(Action::Input(Field::Width, "100".into())));
+    let _ = app.update(Message::Pages(Action::Input(Field::Height, "200".into())));
+    let _ = app.update(Message::Pages(Action::Landscape(true)));
+    let layout = app.tab.doc.page_layout.as_ref().unwrap();
+    let mm = |pt: f32| (pt * 25.4 / 72.).round();
+    assert_eq!((mm(layout.width_pt), mm(layout.height_pt)), (200., 100.));
+}
+
+#[test]
+fn landscape_with_a_mistyped_width_turns_the_applied_size() {
+    let mut app = ready();
+    let _ = app.update(Message::Pages(Action::Open));
+    let _ = app.update(Message::Pages(Action::Preset(Preset::A4)));
+    let mm = |pt: f32| (pt * 25.4 / 72.).round();
+    // Not a number, or out of the supported 12.7–1016 mm range.
+    for (width, turned) in [("x", true), ("2000", false), ("inf", true)] {
+        let _ = app.update(Message::Pages(Action::Input(Field::Width, width.into())));
+        let _ = app.update(Message::Pages(Action::Input(Field::Height, "100".into())));
+        let _ = app.update(Message::Pages(Action::Landscape(turned)));
+        let layout = app.tab.doc.page_layout.as_ref().unwrap();
+        let expected = if turned { (297., 210.) } else { (210., 297.) };
+        assert_eq!(
+            (mm(layout.width_pt), mm(layout.height_pt)),
+            expected,
+            "{width}"
+        );
+    }
+}
+
+#[cfg(any(target_os = "macos", windows))]
+#[test]
+fn printing_uses_the_applied_pages_and_keeps_typed_page_settings() {
+    use crate::app::{InspectorTab, printing::Action as Print};
+    use reshiki::printing::Scope;
+    let mut app = ready();
+    let _ = app.update(Message::Pages(Action::Open));
+    let _ = app.update(Message::Pages(Action::Input(
+        Field::Width,
+        "invalid".into(),
+    )));
+    let _ = app.update(Message::Pages(Action::Input(Field::Columns, "3".into())));
+    let before = app.tab.doc.clone();
+    // A mistyped, unapplied width neither blocks nor changes the print.
+    let _ = app.print_action(Print::Start(Scope::Document));
+    assert!(app.printing.active.is_some(), "{}", app.status);
+    assert_eq!(app.tab.doc, before);
+    assert!(!app.tab.history.can_undo());
+    assert_eq!(app.tab.pages.editor.as_ref().unwrap().columns, "3");
+
+    // An unpaged drawing wider than A4 brings Page setup back, as typed.
+    app.printing.active = None;
+    app.tab.doc.add_atom("N", Point::new(5000., 0.));
+    app.inspector_tab = InspectorTab::Properties;
+    let _ = app.print_action(Print::Start(Scope::Document));
+    assert!(app.printing.active.is_none());
+    assert!(app.error, "{}", app.status);
+    assert!(app.inspector_open);
+    assert_eq!(app.inspector_tab, InspectorTab::Pages);
+    let editor = app.tab.pages.editor.as_ref().unwrap();
+    assert_eq!(
+        (editor.width.as_str(), editor.columns.as_str()),
+        ("invalid", "3")
+    );
 }

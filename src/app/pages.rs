@@ -7,6 +7,9 @@ use reshiki::{
     pages::{Layout, Preset},
 };
 
+/// The page width field, focused when Custom is chosen.
+const WIDTH_INPUT: &str = "page-width";
+
 fn print() -> Message {
     Message::Printing(super::printing::Action::Start(
         reshiki::printing::Scope::Document,
@@ -97,6 +100,23 @@ impl Editor {
         self.columns = self.layout.columns.to_string();
         self.rows = self.layout.rows.to_string();
     }
+    /// Width and height as typed, or the applied size while either is not a
+    /// paper size Layout::validate accepts (12.7–1016 mm).
+    fn typed_size(&self) -> (f32, f32) {
+        let typed = |s: &str, old: f32| {
+            if s == format!("{:.2}", old * 25.4 / 72.) {
+                return Some(old);
+            }
+            s.trim()
+                .parse::<f32>()
+                .ok()
+                .map(|mm| mm * 72. / 25.4)
+                .filter(|pt| (36. ..=2880.).contains(pt))
+        };
+        typed(&self.width, self.layout.width_pt)
+            .zip(typed(&self.height, self.layout.height_pt))
+            .unwrap_or((self.layout.width_pt, self.layout.height_pt))
+    }
     fn candidate(&self) -> Result<Layout, String> {
         let number = |s: &str| {
             s.trim()
@@ -134,16 +154,6 @@ impl Editor {
     }
 }
 impl App {
-    pub(super) fn print_document(&self) -> Result<reshiki::document::Document, String> {
-        let mut snapshot = self.tab.doc.clone();
-        if let Some(editor) = &self.tab.pages.editor {
-            if editor.epoch != self.tab.file_epoch || editor.original != self.tab.doc.page_layout {
-                return Err("Reopen Page setup before printing changed page settings.".into());
-            }
-            snapshot.page_layout = Some(editor.candidate()?);
-        }
-        Ok(snapshot)
-    }
     pub(super) fn fit_pages(&mut self, index: Option<usize>) {
         let Some(layout) = &self.tab.doc.page_layout else {
             return;
@@ -166,6 +176,135 @@ impl App {
             self.tab.pages.active = i;
         }
     }
+    /// Applies the edited page setup as one Undo step and closes the editor.
+    fn apply_pages(&mut self) -> Task<Message> {
+        let Some(editor) = &self.tab.pages.editor else {
+            return Task::none();
+        };
+        if editor.epoch != self.tab.file_epoch || editor.original != self.tab.doc.page_layout {
+            self.error = true;
+            self.status = "Page settings changed. Reopen Page setup to continue.".into();
+            return Task::none();
+        }
+        match editor.candidate() {
+            Ok(layout) => {
+                let before = self.tab.doc.clone();
+                self.tab.doc.page_layout = Some(layout);
+                self.tab
+                    .doc
+                    .require_version(reshiki::document::EDITOR_BASELINE);
+                self.changed(before);
+                self.tab.pages.editor = None;
+                self.tab.pages.active = self.tab.pages.active.min(
+                    self.tab
+                        .doc
+                        .page_layout
+                        .as_ref()
+                        .map(|l| l.count().saturating_sub(1))
+                        .unwrap_or(0),
+                );
+                self.fit_pages(Some(self.tab.pages.active));
+                self.status = "Page setup applied · Drawing scale and positions preserved".into();
+            }
+            Err(error) => {
+                self.error = true;
+                self.status = error;
+            }
+        }
+        Task::none()
+    }
+    /// Applies a size or orientation choice at once as one Undo step. Only
+    /// the size changes: margins and grid typed but not applied stay typed.
+    /// Margins too wide for the new size fall back to the defaults.
+    fn apply_size(
+        &mut self,
+        graphic: bool,
+        change: impl FnOnce(&mut Layout, &reshiki::document::Document),
+    ) -> Task<Message> {
+        // An open caption edit is committed first, so the sheet frames it.
+        if !self.finish_inline(true) {
+            return Task::none();
+        }
+        let Some(editor) = &self.tab.pages.editor else {
+            return Task::none();
+        };
+        if editor.epoch != self.tab.file_epoch || editor.original != self.tab.doc.page_layout {
+            self.error = true;
+            self.status = "Page settings changed. Reopen Page setup to continue.".into();
+            return Task::none();
+        }
+        let mut layout = editor
+            .original
+            .clone()
+            .unwrap_or_else(|| editor.layout.clone());
+        let drafts = [
+            editor.top.clone(),
+            editor.right.clone(),
+            editor.bottom.clone(),
+            editor.left.clone(),
+            editor.columns.clone(),
+            editor.rows.clone(),
+        ];
+        change(&mut layout, &self.tab.doc);
+        let mut status = "Page size applied · Drawing scale and positions preserved";
+        if layout.validate().is_err() {
+            layout.margins = Default::default();
+            status = "Page size applied · Margins too wide, reset to defaults";
+        }
+        if let Err(error) = layout.validate() {
+            self.error = true;
+            self.status = error;
+            return Task::none();
+        }
+        let before = self.tab.doc.clone();
+        self.tab.doc.page_layout = Some(layout);
+        self.tab
+            .doc
+            .require_version(reshiki::document::EDITOR_BASELINE);
+        self.changed(before.clone());
+        // Carry forward what was typed and not yet applied.
+        let shown = Editor::new(&before, self.tab.file_epoch);
+        let mut fresh = Editor::new(&self.tab.doc, self.tab.file_epoch);
+        if !graphic {
+            let shown = [
+                &shown.top,
+                &shown.right,
+                &shown.bottom,
+                &shown.left,
+                &shown.columns,
+                &shown.rows,
+            ];
+            let fields = [
+                &mut fresh.top,
+                &mut fresh.right,
+                &mut fresh.bottom,
+                &mut fresh.left,
+                &mut fresh.columns,
+                &mut fresh.rows,
+            ];
+            for ((draft, shown), field) in drafts.into_iter().zip(shown).zip(fields) {
+                if draft != *shown {
+                    *field = draft;
+                }
+            }
+        }
+        self.tab.pages.editor = Some(fresh);
+        let last = self
+            .tab
+            .doc
+            .page_layout
+            .as_ref()
+            .map_or(0, |l| l.count().saturating_sub(1));
+        // A single-sheet graphic fits its one sheet.
+        self.tab.pages.active = if graphic {
+            0
+        } else {
+            self.tab.pages.active.min(last)
+        };
+        self.fit_pages(Some(self.tab.pages.active));
+        self.status = status.into();
+        Task::none()
+    }
     pub(super) fn page_action(&mut self, action: Action) -> Task<Message> {
         match action {
             Action::Show => {
@@ -180,6 +319,9 @@ impl App {
                 self.inspector_open = true;
                 self.inspector_tab = InspectorTab::Pages;
                 self.palette = None;
+                // Page setup lives in the sidebar now; the View strip's Done
+                // would be a second way to finish it.
+                self.view_open = false;
             }
             Action::Open => {
                 self.cancel_join();
@@ -198,6 +340,7 @@ impl App {
                 self.inspector_open = true;
                 self.inspector_tab = InspectorTab::Pages;
                 self.palette = None;
+                self.view_open = false;
             }
             Action::Cancel => {
                 self.tab.pages.editor = None;
@@ -218,89 +361,55 @@ impl App {
                 }
             }
             Action::Preset(preset) => {
-                if let Some(e) = &mut self.tab.pages.editor
-                    && let Some((w, h)) = preset.size()
-                {
-                    if let Ok(candidate) = e.candidate() {
-                        e.layout = candidate;
-                    }
-                    let landscape = e.layout.width_pt > e.layout.height_pt;
-                    e.layout.width_pt = if landscape { h } else { w };
-                    e.layout.height_pt = if landscape { w } else { h };
-                    if preset.graphic() {
-                        // A TOC graphic is wide and fills its box: the
-                        // page edge is the final crop.
-                        e.layout.width_pt = w;
-                        e.layout.height_pt = h;
-                        e.layout.margins = reshiki::pages::Margins {
+                let Some((w, h)) = preset.size() else {
+                    self.status = "Type the width and height, then Apply page setup".into();
+                    return iced::widget::operation::focus(WIDTH_INPUT);
+                };
+                let graphic = preset.graphic();
+                return self.apply_size(graphic, move |layout, doc| {
+                    if graphic {
+                        // A TOC graphic is one wide sheet that fills its box:
+                        // the page edge is the final crop, centered on the
+                        // drawing.
+                        layout.width_pt = w;
+                        layout.height_pt = h;
+                        layout.margins = reshiki::pages::Margins {
                             top: 0.,
                             right: 0.,
                             bottom: 0.,
                             left: 0.,
                         };
-                        // Frame the figure: center the sheet on the drawing.
+                        layout.columns = 1;
+                        layout.rows = 1;
                         if let Some((lo, hi)) =
-                            reshiki::scene::selection_bounds(&self.tab.doc, &self.tab.doc.all_ids())
+                            reshiki::scene::selection_bounds(doc, &doc.all_ids())
                         {
                             let style = &reshiki::style::DEFAULT;
-                            e.layout.origin = reshiki::document::Point::new(
+                            layout.origin = Point::new(
                                 (lo.x + hi.x - style.world(w)) / 2.,
                                 (lo.y + hi.y - style.world(h)) / 2.,
                             );
                         }
+                    } else if layout.width_pt > layout.height_pt {
+                        (layout.width_pt, layout.height_pt) = (h, w);
+                    } else {
+                        (layout.width_pt, layout.height_pt) = (w, h);
                     }
-                    e.reset_inputs();
-                }
+                });
             }
             Action::Landscape(landscape) => {
-                if let Some(e) = &mut self.tab.pages.editor {
-                    if let Ok(candidate) = e.candidate() {
-                        e.layout = candidate;
+                // Turns the size as typed, so a typed custom size is kept.
+                let typed = self.tab.pages.editor.as_ref().map(Editor::typed_size);
+                return self.apply_size(false, move |layout, _| {
+                    if let Some((w, h)) = typed {
+                        (layout.width_pt, layout.height_pt) = (w, h);
                     }
-                    if landscape != (e.layout.width_pt > e.layout.height_pt) {
-                        std::mem::swap(&mut e.layout.width_pt, &mut e.layout.height_pt);
+                    if landscape != (layout.width_pt > layout.height_pt) {
+                        std::mem::swap(&mut layout.width_pt, &mut layout.height_pt);
                     }
-                    e.reset_inputs();
-                }
+                });
             }
-            Action::Apply => {
-                let Some(editor) = &self.tab.pages.editor else {
-                    return Task::none();
-                };
-                if editor.epoch != self.tab.file_epoch
-                    || editor.original != self.tab.doc.page_layout
-                {
-                    self.error = true;
-                    self.status = "Page settings changed. Reopen Page setup to continue.".into();
-                    return Task::none();
-                }
-                match editor.candidate() {
-                    Ok(layout) => {
-                        let before = self.tab.doc.clone();
-                        self.tab.doc.page_layout = Some(layout);
-                        self.tab
-                            .doc
-                            .require_version(reshiki::document::EDITOR_BASELINE);
-                        self.changed(before);
-                        self.tab.pages.editor = None;
-                        self.tab.pages.active = self.tab.pages.active.min(
-                            self.tab
-                                .doc
-                                .page_layout
-                                .as_ref()
-                                .map(|l| l.count().saturating_sub(1))
-                                .unwrap_or(0),
-                        );
-                        self.fit_pages(Some(self.tab.pages.active));
-                        self.status =
-                            "Page setup applied · Drawing scale and positions preserved".into();
-                    }
-                    Err(error) => {
-                        self.error = true;
-                        self.status = error;
-                    }
-                }
-            }
+            Action::Apply => return self.apply_pages(),
             Action::Remove => {
                 let before = self.tab.doc.clone();
                 self.tab.doc.page_layout = None;
@@ -447,9 +556,13 @@ impl App {
             return self.pages_overview();
         };
         let input = |label: &'static str, value: &str, field| {
+            let mut input = crate::appearance::text_input("", value);
+            if matches!(field, Field::Width) {
+                input = input.id(WIDTH_INPUT);
+            }
             column![
                 text(label).size(11).style(super::workspace::muted_text),
-                crate::appearance::text_input("", value)
+                input
                     .on_input(move |v| Message::Pages(Action::Input(field, v)))
                     .on_submit(Message::Pages(Action::Apply))
                     .size(12)
@@ -462,8 +575,18 @@ impl App {
             .as_ref()
             .map(|l| l.preset())
             .unwrap_or(Preset::Custom);
-        let landscape = candidate.as_ref().unwrap_or(&editor.layout).width_pt
-            > candidate.as_ref().unwrap_or(&editor.layout).height_pt;
+        // The typed size, or the applied one while a field holds a mistake.
+        let (width, height) = editor.typed_size();
+        let preset = match &candidate {
+            Ok(_) => preset,
+            Err(_) => Layout {
+                width_pt: width,
+                height_pt: height,
+                ..editor.layout.clone()
+            }
+            .preset(),
+        };
+        let landscape = width > height;
         let mut body = column![
             row![
                 text("Publication pages").size(17),
@@ -475,22 +598,7 @@ impl App {
             text("Physical size · Document drawing scale")
                 .size(11)
                 .style(super::workspace::muted_text),
-            text("Canvas theme").size(11),
-            crate::appearance::pick_list(
-                self.theme_choices().0,
-                Some(self.theme_choices().1),
-                |choice| Message::ThemeFile(super::theme_files::Action::Choose(choice)),
-            )
-            .width(Length::Fill)
-            .text_size(12),
-            text("Canvas brightness · copies have transparent backgrounds").size(11),
-            crate::appearance::pick_list(
-                reshiki::canvas_theme::CanvasTheme::ALL,
-                Some(self.tab.doc.canvas_theme),
-                Message::CanvasTheme
-            )
-            .width(Length::Fill)
-            .text_size(12),
+            text("Size").size(11),
             crate::appearance::pick_list(Preset::ALL, Some(preset), |p| Message::Pages(
                 Action::Preset(p)
             ))
@@ -533,13 +641,31 @@ impl App {
                 .style(crate::appearance::primary)
                 .on_press_maybe(candidate.is_ok().then_some(Message::Pages(Action::Apply)))
                 .width(Length::Fill),
+            // A typed mistake shows beside Apply, which it blocks.
+            text(candidate.as_ref().err().cloned().unwrap_or_default())
+                .size(11)
+                .style(crate::appearance::text_color(iced::Color::from_rgb8(
+                    168, 52, 47
+                ))),
+            horizontal_line(),
+            text("Canvas theme").size(11),
+            crate::appearance::pick_list(
+                self.theme_choices().0,
+                Some(self.theme_choices().1),
+                |choice| Message::ThemeFile(super::theme_files::Action::Choose(choice)),
+            )
+            .width(Length::Fill)
+            .text_size(12),
+            text("Canvas brightness · copies have transparent backgrounds").size(11),
+            crate::appearance::pick_list(
+                reshiki::canvas_theme::CanvasTheme::ALL,
+                Some(self.tab.doc.canvas_theme),
+                Message::CanvasTheme
+            )
+            .width(Length::Fill)
+            .text_size(12),
         ]
         .spacing(12);
-        if let Err(error) = candidate {
-            body = body.push(text(error).size(11).style(crate::appearance::text_color(
-                iced::Color::from_rgb8(168, 52, 47),
-            )));
-        }
         if let Some(layout) = &self.tab.doc.page_layout {
             let active = self.tab.pages.active.min(layout.count().saturating_sub(1));
             body = body
