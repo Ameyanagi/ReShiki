@@ -29,6 +29,7 @@ fn add_reaction(doc: &mut Document, reactants: &[u64], products: &[u64]) {
 fn proposal(doc: &Document, assignments: Vec<(u64, u32)>) -> Proposal {
     Proposal {
         source: snapshot(doc),
+        arrow: 0,
         assignments,
         pairs: vec![],
         unmatched_reactants: 0,

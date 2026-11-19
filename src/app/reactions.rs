@@ -15,6 +15,43 @@ pub struct State {
     pub(super) color_after_maps: Option<u64>,
 }
 
+/// The title of the panel column around `arrow`, in the smallest titled
+/// panel that holds it, such as "This work". Columns follow the panel's own
+/// axes, so a turned panel names its arrows as drawn.
+fn panel_title<'a>(
+    doc: &'a reshiki::document::Document,
+    arrow: &reshiki::document::Arrow,
+) -> Option<&'a str> {
+    doc.graphics
+        .iter()
+        .filter_map(|g| {
+            let panel = g.panel.as_ref()?;
+            let (x, y) = (g.axis_x, g.axis_y);
+            let det = x.x * y.y - x.y * y.x;
+            // Where a point sits across (0 to 1) and down the panel.
+            let local = |p: reshiki::document::Point| {
+                let (dx, dy) = (p.x - g.origin.x, p.y - g.origin.y);
+                ((dx * y.y - dy * y.x) / det, (x.x * dy - x.y * dx) / det)
+            };
+            let ends = [local(arrow.start), local(arrow.end)];
+            if !ends
+                .iter()
+                .all(|(u, v)| (0. ..=1.).contains(u) && (0. ..=1.).contains(v))
+            {
+                return None;
+            }
+            let at = (ends[0].0 + ends[1].0) / 2.;
+            let column = panel
+                .columns()
+                .iter()
+                .position(|(l, r)| (*l..=*r).contains(&at))?;
+            let title = panel.titles.get(column)?.trim();
+            (!title.is_empty()).then_some((title, det.abs()))
+        })
+        .min_by(|(_, x), (_, y)| x.total_cmp(y))
+        .map(|(title, _)| title)
+}
+
 #[cfg(test)]
 mod tests;
 #[derive(Debug, Clone)]
@@ -401,9 +438,12 @@ impl App {
                     }
                     .into()
                 });
+            // Two "Arrow · Forward" rows read alike: a panel title names it.
+            let place =
+                panel_title(&self.tab.doc, arrow).map_or_else(|| preset.to_string(), str::to_owned);
             body = body.push(
                 button(row![
-                    text(format!("Arrow {} · {preset}", index + 1))
+                    text(format!("Arrow {} · {place}", index + 1))
                         .size(13)
                         .width(Length::Fill),
                     text(summary).size(12)

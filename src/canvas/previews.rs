@@ -6,7 +6,9 @@ use iced::widget::canvas::{self, Action, Geometry, Path, Stroke};
 use iced::{Color, Event, Point, Rectangle, Renderer, Theme, mouse};
 
 /// Noninteractive thumbnail rendered from the same molecule and scene as placement.
-pub struct TemplateThumbnail<'a>(pub &'a Document);
+/// With a focus, it frames that part of the document, such as the reaction
+/// under review, and clips the rest.
+pub struct TemplateThumbnail<'a>(pub &'a Document, pub Option<(World, World)>);
 impl<Message> canvas::Program<Message> for TemplateThumbnail<'_> {
     type State = PreviewState;
     fn draw(
@@ -17,12 +19,14 @@ impl<Message> canvas::Program<Message> for TemplateThumbnail<'_> {
         bounds: Rectangle,
         _: mouse::Cursor,
     ) -> Vec<Geometry> {
-        state.draw(self.0, bounds.size(), || {
+        state.draw(self.0, self.1, bounds.size(), || {
             let mut frame =
                 layered::Frame::new(renderer, bounds.size()).with_canvas(self.0.canvas_theme);
             frame.fill_rectangle(Point::ORIGIN, bounds.size(), Color::WHITE);
-            let (lo, hi) = reshiki::scene::selection_bounds(self.0, &self.0.all_ids())
-                .unwrap_or_else(|| self.0.bounds());
+            let (lo, hi) = self.1.unwrap_or_else(|| {
+                reshiki::scene::selection_bounds(self.0, &self.0.all_ids())
+                    .unwrap_or_else(|| self.0.bounds())
+            });
             let camera = Camera {
                 center: World::new((lo.x + hi.x) * 0.5, (lo.y + hi.y) * 0.5),
                 zoom: ((bounds.width - (bounds.width * 0.16).min(24.0)) / (hi.x - lo.x).max(60.0))
@@ -51,7 +55,7 @@ impl<Message> canvas::Program<Message> for DrawingThumbnail {
         cursor: mouse::Cursor,
     ) -> Vec<Geometry> {
         <TemplateThumbnail<'_> as canvas::Program<Message>>::draw(
-            &TemplateThumbnail(&self.0),
+            &TemplateThumbnail(&self.0, None),
             state,
             renderer,
             theme,
@@ -323,6 +327,7 @@ impl canvas::Program<crate::app::Message> for ScientificPreview {
 pub struct PreviewState(std::cell::RefCell<Option<PreviewCache>>);
 struct PreviewCache {
     document: Document,
+    focus: Option<(World, World)>,
     size: iced::Size,
     fonts: usize,
     geometry: Vec<<Geometry as iced::advanced::graphics::cache::Cached>::Cache>,
@@ -331,6 +336,7 @@ impl PreviewState {
     fn draw(
         &self,
         document: &Document,
+        focus: Option<(World, World)>,
         size: iced::Size,
         build: impl FnOnce() -> Vec<Geometry>,
     ) -> Vec<Geometry> {
@@ -340,6 +346,7 @@ impl PreviewState {
         if let Some(cached) = cache.as_ref()
             && cached.size == size
             && cached.fonts == fonts
+            && cached.focus == focus
             && &cached.document == document
         {
             return cached.geometry.iter().map(Cached::load).collect();
@@ -353,6 +360,7 @@ impl PreviewState {
         let result = geometry.iter().map(Cached::load).collect();
         *cache = Some(PreviewCache {
             document: document.clone(),
+            focus,
             size,
             fonts,
             geometry,
@@ -378,7 +386,7 @@ impl canvas::Program<crate::app::Message> for DrawingPreview<'_> {
         bounds: Rectangle,
         _: mouse::Cursor,
     ) -> Vec<Geometry> {
-        state.draw(self.0, bounds.size(), || {
+        state.draw(self.0, None, bounds.size(), || {
             let mut frame =
                 layered::Frame::new(renderer, bounds.size()).with_canvas(self.0.canvas_theme);
             frame.fill_rectangle(Point::ORIGIN, bounds.size(), Color::WHITE);

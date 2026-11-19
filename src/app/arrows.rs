@@ -397,7 +397,7 @@ impl App {
     }
     pub(super) fn arrow_panel(&self) -> Element<'_, Message> {
         use super::workspace::{accessible_command, command, hover_hint, muted_text};
-        use iced::widget::{Space, checkbox, column, row, text, tooltip};
+        use iced::widget::{Space, checkbox, column, container, row, text, tooltip};
         use iced::{Alignment, Length};
         let s = &self.tab.arrows.style;
         let selected_arrows = self
@@ -452,8 +452,32 @@ impl App {
             .spacing(6)
             .align_y(Alignment::Center)
         };
+        // One chemistry arrow: its roles, colours by origin and atom maps are
+        // one click away instead of under Labels & chemistry.
+        let roles = matches!(
+            self.tab
+                .doc
+                .arrows
+                .iter()
+                .filter(|a| self.tab.selected.contains(&a.id))
+                .collect::<Vec<_>>()
+                .as_slice(),
+            [arrow] if arrow.purpose.is_chemistry()
+                && Preset::from_kind(&arrow.kind).reaction_role_refusal().is_none()
+        );
+        let header: Element<'_, Message> = if roles {
+            row![
+                container(super::workspace::section(&heading)).width(Length::Fill),
+                accessible_command("arrow.reaction-roles", "Reaction roles", "Reaction roles…")
+                    .on_press(Message::Reaction(super::reactions::Action::Open)),
+            ]
+            .align_y(Alignment::Center)
+            .into()
+        } else {
+            super::workspace::section(&heading).into()
+        };
         let mut panel = column![
-            super::workspace::section(&heading),
+            header,
             canvas(crate::canvas::ArrowPreview {
                 arrow: self
                     .tab

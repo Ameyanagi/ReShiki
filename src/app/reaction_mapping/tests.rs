@@ -44,6 +44,76 @@ fn live_review(app: &App) -> (bool, Option<Document>) {
     (proposal.current(&app.tab.doc), document)
 }
 
+fn ready(app: &mut App, arrow: u64) {
+    let proposal = Arc::new(mapping::propose(&app.tab.doc, arrow, Budget::default()).unwrap());
+    app.tab.mapping.serial = app.tab.mapping.serial.wrapping_add(1);
+    let (epoch, serial) = (app.tab.file_epoch, app.tab.mapping.serial);
+    app.tab.mapping.pending = Some((epoch, serial));
+    let _ = app.update(Message::Mapping(Action::Ready(epoch, serial, Ok(proposal))));
+}
+
+fn inside((lo, hi): (Point, Point), p: Point) -> bool {
+    (lo.x..=hi.x).contains(&p.x) && (lo.y..=hi.y).contains(&p.y)
+}
+
+#[test]
+fn review_thumbnail_frames_the_whole_reaction_under_review_only() {
+    let mut app = app();
+    // An unmatched reactant and a reagent belong to the reaction; a next
+    // step from the shared product, further right, does not.
+    let o = app.tab.doc.add_atom("O", Point::new(0., 120.));
+    let agent = app.tab.doc.add_atom("N", Point::new(130., -120.));
+    reactions::assign(&mut app.tab.doc, 3, &[o], Role::Reactant).unwrap();
+    reactions::assign(&mut app.tab.doc, 3, &[agent], Role::Agent).unwrap();
+    let next = app.tab.doc.next_id();
+    app.tab.doc.arrows.push(Arrow::new(
+        next,
+        Point::new(330., 0.),
+        Point::new(700., 0.),
+        Default::default(),
+        Default::default(),
+    ));
+    let far = app.tab.doc.add_atom("C", Point::new(800., 0.));
+    reactions::assign(&mut app.tab.doc, next, &[2], Role::Reactant).unwrap();
+    reactions::assign(&mut app.tab.doc, next, &[far], Role::Product).unwrap();
+    ready(&mut app, 3);
+    let preview = app.tab.mapping.preview.as_ref().unwrap();
+    let focus = preview.focus.unwrap();
+    for p in [
+        Point::default(),
+        Point::new(250., 0.),
+        Point::new(0., 120.),
+        Point::new(130., -120.),
+    ] {
+        assert!(inside(focus, p), "{p:?} outside {focus:?}");
+    }
+    assert!(!inside(focus, Point::new(700., 0.)));
+    // The whole drawing is kept, so nothing about the molecules is lost.
+    assert_eq!(preview.document.as_ref().unwrap().atoms.len(), 5);
+}
+
+#[test]
+fn a_review_without_pairs_still_frames_its_reaction() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let r = app.tab.doc.add_atom("C", Point::default());
+    let p = app.tab.doc.add_atom("N", Point::new(250., 0.));
+    let arrow = app.tab.doc.next_id();
+    app.tab.doc.arrows.push(Arrow::new(
+        arrow,
+        Point::new(80., 0.),
+        Point::new(180., 0.),
+        Default::default(),
+        Default::default(),
+    ));
+    reactions::assign(&mut app.tab.doc, arrow, &[r], Role::Reactant).unwrap();
+    reactions::assign(&mut app.tab.doc, arrow, &[p], Role::Product).unwrap();
+    ready(&mut app, arrow);
+    assert!(app.tab.mapping.proposal().unwrap().pairs.is_empty());
+    let focus = app.tab.mapping.preview.as_ref().unwrap().focus.unwrap();
+    assert!(inside(focus, Point::default()) && inside(focus, Point::new(250., 0.)));
+}
+
 fn review(app: &App) -> (bool, Option<Document>) {
     let preview = app.tab.mapping.preview.as_ref().unwrap();
     assert_eq!(preview.key, (app.tab.revision, app.tab.label_generation));
@@ -852,6 +922,102 @@ async fn edit_atom_map_reveals_its_field_above_a_long_review() -> Result<(), Str
         steps,
         [false, true],
         "The end of the page leaves the field above the view; the reveal shows it"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+#[ignore = "Opt-in real renderer map review reveal check"]
+async fn a_replacement_review_shows_its_summary_above_apply() -> Result<(), String> {
+    use iced::advanced::{
+        renderer::Headless,
+        widget::operation::{self, Outcome},
+    };
+    use iced::futures::StreamExt;
+    use reshiki::accessibility::Collect;
+    type Ui<'a> = iced_runtime::UserInterface<'a, Message, iced::Theme, iced::Renderer>;
+    async fn run(ui: &mut Ui<'_>, renderer: &iced::Renderer, task: Task<Message>) {
+        let Some(mut stream) = iced_runtime::task::into_stream(task) else {
+            return;
+        };
+        while let Some(action) = stream.next().await {
+            let iced_runtime::Action::Widget(operation) = action else {
+                continue;
+            };
+            let mut current = Some(operation);
+            while let Some(mut operation) = current.take() {
+                ui.operate(renderer, operation.as_mut());
+                if let Outcome::Chain(next) = operation.finish() {
+                    current = Some(next);
+                }
+            }
+        }
+    }
+    let mut renderer = <iced::Renderer as Headless>::new(
+        iced::Font::with_name(reshiki::style::ui_font_family()),
+        iced::Pixels(16.),
+        None,
+    )
+    .await
+    .ok_or("No renderer")?;
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let reactant = carbon_chain(&mut app.tab.doc, 0.);
+    let product = carbon_chain(&mut app.tab.doc, 600.);
+    let arrow = app.tab.doc.next_id();
+    app.tab.doc.arrows.push(Arrow::new(
+        arrow,
+        Point::new(360., 0.),
+        Point::new(540., 0.),
+        Default::default(),
+        Default::default(),
+    ));
+    reactions::assign(&mut app.tab.doc, arrow, &reactant, Role::Reactant)?;
+    reactions::assign(&mut app.tab.doc, arrow, &product, Role::Product)?;
+    app.tab.saved = app.tab.doc.clone();
+    app.inspector_open = true;
+    app.inspector_tab = InspectorTab::Reactions;
+    let ready = |app: &mut App| -> Result<Task<Message>, String> {
+        let proposal = Arc::new(mapping::propose(&app.tab.doc, arrow, Budget::default())?);
+        app.tab.mapping.serial = app.tab.mapping.serial.wrapping_add(1);
+        let (epoch, serial) = (app.tab.file_epoch, app.tab.mapping.serial);
+        app.tab.mapping.pending = Some((epoch, serial));
+        // Through update, which refreshes the review it reveals.
+        Ok(app.update(Message::Mapping(Action::Ready(epoch, serial, Ok(proposal)))))
+    };
+    let _ = ready(&mut app)?;
+    let size = iced::Size::new(1040., 680.);
+    let mut ui = Ui::build(
+        app.view(),
+        size,
+        iced_runtime::user_interface::Cache::new(),
+        &mut renderer,
+    );
+    // The first review's pair list is scrolled to its end, below Apply, when
+    // a replacement proposal arrives.
+    let end = iced::widget::operation::snap_to(
+        "inspector-content",
+        iced::widget::operation::RelativeOffset::END,
+    );
+    run(&mut ui, &renderer, end).await;
+    let cache = ui.into_cache();
+    let task = ready(&mut app)?;
+    let mut ui = Ui::build(app.view(), size, cache, &mut renderer);
+    run(&mut ui, &renderer, task).await;
+    let mut collect = Collect::new(iced::Rectangle::with_size(size));
+    ui.operate(&renderer, &mut operation::black_box(&mut collect));
+    let apply = collect
+        .snapshot()
+        .nodes
+        .iter()
+        .find(|node| node.id == "mapping.apply")
+        .ok_or("Apply maps")?;
+    // Apply is wholly in view and low in it, so the heading, summary and
+    // preview above it show too.
+    let visible = apply.visible_bounds.ok_or("Apply maps is out of view")?;
+    assert!(
+        (visible.height - apply.bounds.height).abs() < 0.5 && visible.y > size.height / 2.,
+        "{visible:?}"
     );
     Ok(())
 }

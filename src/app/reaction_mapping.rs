@@ -7,7 +7,7 @@ use super::{App, InspectorTab, Message, Tool};
 use iced::widget::{Column, column, row, text, tooltip};
 use iced::{Alignment, Element, Length, Task};
 use reshiki::{
-    document::Document,
+    document::{Document, Point},
     reaction_mapping::{self as mapping, Budget, Proposal},
 };
 use std::{borrow::Cow, sync::Arc};
@@ -38,6 +38,7 @@ struct Preview {
     key: (u64, u64),
     current: bool,
     document: Option<Document>,
+    focus: Option<(Point, Point)>,
     // Hue previews and Cancel write these without recording history/revision.
     version: u32,
     theme: Option<Box<reshiki::theme_files::ThemeFile>>,
@@ -53,10 +54,17 @@ impl Preview {
             }
             document
         });
+        // The thumbnail frames the reaction under review, all its parts and
+        // its arrow's labels, so it shows large; neighbours are clipped.
+        let focus = document.as_ref().and_then(|document| {
+            let reaction = reshiki::reactions::preview(document, proposal.arrow).ok()?;
+            reshiki::scene::selection_bounds(document, &reaction.ids())
+        });
         Self {
             key,
             current,
             document,
+            focus,
             version: doc.version,
             theme: doc.custom_theme.clone(),
         }
@@ -141,6 +149,7 @@ impl App {
                 key,
                 current: false,
                 document: None,
+                focus: None,
                 version: self.tab.doc.version,
                 theme: self.tab.doc.custom_theme.clone(),
             },
@@ -349,15 +358,23 @@ impl App {
                 self.tab
                     .inspector_ui
                     .update(super::inspector::Action::Section(Section::AtomMaps, true));
+                // A cycle step's review is in Properties.
+                let tab = if self.tab.mapping.step.is_some() {
+                    InspectorTab::Properties
+                } else {
+                    InspectorTab::Reactions
+                };
                 if self.tabs.temporary_depth == 0
                     && self.inspector_open
-                    && self.inspector_tab == InspectorTab::Reactions
+                    && self.inspector_tab == tab
                 {
-                    // The proposal ends the section; keep Apply and Discard in view.
-                    return iced::widget::operation::snap_to(
-                        "inspector-content",
-                        iced::widget::operation::RelativeOffset::END,
-                    );
+                    // Apply and Discard follow the heading, summary and
+                    // preview: with Apply at the bottom of the view, all of
+                    // them show. The pair list follows.
+                    return iced::advanced::widget::operate(
+                        reshiki::accessibility::FocusControl::reveal_bottom("mapping.apply"),
+                    )
+                    .discard();
                 }
             }
             Ok(_) => {
@@ -641,35 +658,22 @@ impl App {
                 ))
                 .size(11),
             );
-        if let Some(document) = self
-            .tab
-            .mapping
-            .preview
-            .as_ref()
-            .and_then(|preview| preview.document.as_ref())
+        if let Some(preview) = &self.tab.mapping.preview
+            && let Some(document) = &preview.document
         {
             body = body.push(
-                crate::canvas::layered::canvas(crate::canvas::TemplateThumbnail(document))
-                    .width(Length::Fill)
-                    .height(120),
-            );
-        }
-        let atom = |id: u64| {
-            let element = self.tab.doc.atom(id).map_or("?", |a| a.element.as_str());
-            format!("{element} #{id}")
-        };
-        for (index, (a, b)) in proposal.pairs.iter().enumerate() {
-            let number = proposal.number(*a).unwrap_or_default();
-            let label = format!("Map {number} · {} → {}", atom(*a), atom(*b));
-            body = body.push(
-                accessible_command(format!("mapping.review.{index}"), label.clone(), label)
-                    .on_press_maybe(current.then_some(Message::Mapping(Action::ReviewPair(index)))),
+                crate::canvas::layered::canvas(crate::canvas::TemplateThumbnail(
+                    document,
+                    preview.focus,
+                ))
+                .width(Length::Fill)
+                .height(120),
             );
         }
         if !current {
             body = body.push(text("Drawing changed · Run Auto-map again").size(11));
         }
-        body.push(
+        body = body.push(
             row![
                 hover_hint(
                     reshiki::accessibility::button(
@@ -688,7 +692,20 @@ impl App {
             ]
             .spacing(4)
             .align_y(Alignment::Center),
-        )
+        );
+        let atom = |id: u64| {
+            let element = self.tab.doc.atom(id).map_or("?", |a| a.element.as_str());
+            format!("{element} #{id}")
+        };
+        for (index, (a, b)) in proposal.pairs.iter().enumerate() {
+            let number = proposal.number(*a).unwrap_or_default();
+            let label = format!("Map {number} · {} → {}", atom(*a), atom(*b));
+            body = body.push(
+                accessible_command(format!("mapping.review.{index}"), label.clone(), label)
+                    .on_press_maybe(current.then_some(Message::Mapping(Action::ReviewPair(index)))),
+            );
+        }
+        body
     }
 }
 

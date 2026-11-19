@@ -63,6 +63,8 @@ impl PartialOrd for Score {
 #[derive(Debug, Clone)]
 pub struct Proposal {
     source: Document,
+    /// The arrow of the reaction mapped.
+    pub arrow: u64,
     assignments: Vec<(u64, u32)>,
     pub pairs: Vec<(u64, u64)>,
     pub unmatched_reactants: usize,
@@ -1006,6 +1008,7 @@ pub fn propose(doc: &Document, arrow: u64, budget: Budget) -> Result<Proposal, S
     pairs.sort_unstable();
     let proposal = Proposal {
         source: snapshot(doc),
+        arrow,
         assignments,
         pairs,
         unmatched_reactants: left.atoms.len() - search.k,
