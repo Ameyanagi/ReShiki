@@ -553,8 +553,14 @@ impl App {
         })
     }
 
+    /// The molecule Properties describes. Atom maps belong to a reaction, so
+    /// its SMILES (shown and copied there) leaves them out.
     pub(super) fn property_document(&self, key: &PropertyKey) -> Document {
-        reshiki::editing::analysis_document(&self.tab.doc, &key.atoms)
+        let mut doc = reshiki::editing::analysis_document(&self.tab.doc, &key.atoms);
+        for atom in &mut doc.atoms {
+            atom.map_num = 0;
+        }
+        doc
     }
 
     pub(super) fn property_request_key(&self) -> PropertyKey {

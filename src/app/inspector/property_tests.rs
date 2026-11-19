@@ -196,3 +196,26 @@ async fn copy_analysis_routes_the_displayed_text_to_the_clipboard() {
     assert_eq!(app.copy_analysis().units(), 0);
     assert_eq!(app.status, "A clipboard operation is already in progress");
 }
+
+#[tokio::test]
+async fn properties_leave_atom_maps_out_of_the_molecule_smiles() {
+    use reshiki::engine::{LocalEngine, Request};
+    let engine = LocalEngine::in_process();
+    let response = engine
+        .request(Request::import_smiles("[CH3:1][CH2:2][OH:3]"))
+        .await
+        .unwrap();
+    let (mut app, _) = App::new();
+    app.tab.doc = response.document.unwrap();
+    // The engine's mapped analysis is not shown: Properties works out its own.
+    assert!(super::super::engine_jobs::whole_analysis(&app.tab.doc, response.analysis).is_none());
+    let document = app.property_document(&app.property_request_key());
+    assert!(document.atoms.iter().all(|a| a.map_num == 0));
+    let analysis = engine
+        .request(Request::molecule("analyze", document))
+        .await
+        .unwrap()
+        .analysis
+        .unwrap();
+    assert_eq!(analysis.smiles, "CCO");
+}

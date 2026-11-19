@@ -10,8 +10,9 @@ issues: []
   bonds** or another entry on or off keeps the names you gave the others.
 - **Copy as → Reaction SMILES** no longer needs the color legend in the
   selection.
-- A molecule's SMILES in **Properties** and **Copy SMILES** no longer carries
-  atom-map numbers; reaction SMILES still do.
+- **Properties** no longer shows atom-map numbers in a molecule's Canonical
+  SMILES, and its **Copy SMILES** copies it without them; reaction SMILES still
+  carry the maps.
 - A new ring's fill is see-through, so it no longer merges with the new bonds'
   highlight.
 - **Figure layouts** placeholder rings and arrows are illustrations, so they

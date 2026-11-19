@@ -431,7 +431,9 @@ impl App {
             reshiki::atom_labels::copy_computed(&mut self.tab.doc, &document);
             self.tab.label_generation = self.tab.label_generation.wrapping_add(1);
         }
-        self.tab.analysis = response.analysis;
+        self.tab.analysis = response
+            .analysis
+            .filter(|_| self.tab.doc.atoms.iter().all(|a| a.map_num == 0));
         self.tab.chemistry_notice = None;
         self.checked_stereo(response.warnings);
         self.error = false;
@@ -513,6 +515,9 @@ mod import_file_tests;
 
 /// A job's analysis of the whole drawing, which counts Illustration
 /// molecules; Properties then asks for the chemical part instead.
-fn whole_analysis(doc: &Document, analysis: Option<Analysis>) -> Option<Analysis> {
-    analysis.filter(|_| !reshiki::purpose::used(doc))
+/// An engine analysis of the whole drawing, unless Properties must work it
+/// out itself: without pictures, and without atom maps, which belong to a
+/// reaction and not to a molecule's SMILES.
+pub(super) fn whole_analysis(doc: &Document, analysis: Option<Analysis>) -> Option<Analysis> {
+    analysis.filter(|_| !reshiki::purpose::used(doc) && doc.atoms.iter().all(|a| a.map_num == 0))
 }
