@@ -217,3 +217,36 @@ fn condition_icons_need_the_drawing_release_file_version() {
     assert_eq!(back.version, crate::document::DRAWING_ELEMENTS);
     assert_eq!(back.graphics, doc.graphics);
 }
+
+#[test]
+fn a_radical_ion_keeps_an_upright_square_sign_when_turned_or_stretched() {
+    let mut ion = Graphic::dragged(
+        1,
+        GraphicKind::Symbol(SymbolKind::RadicalCation),
+        Point::new(0., 0.),
+        Point::new(10., 0.),
+        GraphicStyle::default(),
+        Default::default(),
+        false,
+    );
+    // A quarter turn, then stretched across: the dot moves, the plus stays
+    // upright with arms of the frame's mean size.
+    ion.axis_x = Point::new(0., 10.);
+    ion.axis_y = Point::new(-40., 0.);
+    let parts = ion.parts();
+    let ends: Vec<_> = parts[0]
+        .commands
+        .iter()
+        .filter_map(|c| match c {
+            PathCommand::Move(p) | PathCommand::Line(p) => Some(*p),
+            _ => None,
+        })
+        .collect();
+    let [a, b, c, d] = ends.as_slice() else {
+        panic!("{ends:?}");
+    };
+    assert!((a.y - b.y).abs() < 1e-4 && (c.x - d.x).abs() < 1e-4);
+    let arm = SIGN_ARM * 20.;
+    assert!((a.distance(*b) - 2. * arm).abs() < 1e-3);
+    assert!((c.distance(*d) - 2. * arm).abs() < 1e-3);
+}

@@ -568,6 +568,7 @@ impl Document {
                 || g.cycle.is_some()
                 || g.piece.is_some()
                 || matches!(g.kind, GraphicKind::Symbol(kind) if kind.is_condition())
+                || g.phase == crate::scientific::Phase::Gradient
         }) || self.arrows.iter().any(|a| {
             let style = a.appearance();
             style.pattern == LinePattern::Wavy || !style.body.is_line() || a.arc.is_some()

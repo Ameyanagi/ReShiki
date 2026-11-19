@@ -706,7 +706,6 @@ lists what changed and how many, such as "2 doubled curves as single lines;
 
 | In the ChemDraw file                                                       | In ReShiki                                                   |
 | -------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| Shaded orbital                                                             | The orbital in flat grey                                     |
 | Doubled curve                                                              | A single line                                                |
 | See-through object (alpha)                                                 | Opaque                                                       |
 | Arc from an older ChemDraw file                                            | The same arc as a curve or curved arrow, without a message   |
@@ -714,7 +713,7 @@ lists what changed and how many, such as "2 doubled curves as single lines;
 | Curved arrow with a double shaft; longer curve with a no-go or dipole mark | The curve without the mark                                   |
 | Two upright single brackets of one style that face each other              | One bracket pair, without a message                          |
 | Any other single bracket                                                   | A curve of the same shape                                    |
-| Dagger, double dagger, lone pair bar; hybrid and filled orbitals           | The matching ReShiki symbol or orbital, without a message    |
+| Dagger, double dagger, lone pair bar; plain, shaded and filled orbitals    | The matching ReShiki symbol or orbital, without a message    |
 | Rac, Abs and Rel stereo flags                                              | Text                                                         |
 | Rotated caption; outlined or shadowed text                                 | Upright; plain face                                          |
 | Atom or abbreviation label with more than one font, size or weight         | The style of its first character; colours are kept           |

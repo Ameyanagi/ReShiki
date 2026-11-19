@@ -834,3 +834,77 @@ fn many_shaded_shapes_share_one_band_budget() {
     let points: usize = shared.iter().map(|(band, _)| band.len()).sum();
     assert!(points * 900 <= DRAWING_BAND_POINTS, "{points}");
 }
+
+#[test]
+fn a_shaded_orbital_phase_shades_each_lobe_on_both_canvases_and_needs_version_40() {
+    use crate::{
+        canvas_theme::CanvasTheme,
+        document::{DRAWING_ELEMENTS, Document},
+        scene::Primitive,
+        scientific::{OrbitalKind, Phase},
+    };
+    let mut orbital = Graphic::dragged(
+        1,
+        GraphicKind::Orbital(OrbitalKind::P),
+        Point::new(0., 0.),
+        Point::new(0., 40.),
+        GraphicStyle::default(),
+        Default::default(),
+        false,
+    );
+    orbital.phase = Phase::Gradient;
+    let mut doc = Document {
+        graphics: vec![orbital],
+        ..Default::default()
+    };
+    assert_eq!(doc.file_version(), DRAWING_ELEMENTS);
+    let shown = |doc: &Document| -> Vec<(Option<[u8; 3]>, bool)> {
+        crate::scene::primitives(doc)
+            .iter()
+            .filter_map(|p| match p {
+                Primitive::Path { style, filled, .. } => {
+                    Some((style.fill.map(|c| doc.canvas_theme.color(c.rgb())), *filled))
+                }
+                _ => None,
+            })
+            .collect()
+    };
+    // The filled lobe in bands from its color at the edge to white at its
+    // highlight, its outline over them, then the other lobe's outline.
+    let light = shown(&doc);
+    let n = light.len() - 2;
+    assert!(n >= MIN_BANDS, "{light:?}");
+    assert_eq!(
+        light[0],
+        (Some(shade([0; 3], (n as f32 - 0.5) / n as f32)), true)
+    );
+    assert_eq!(light[n - 1], (Some(shade([0; 3], 0.5 / n as f32)), true));
+    assert_eq!((light[n], light[n + 1]), ((None, false), (None, false)));
+    doc.canvas_theme = CanvasTheme::Dark;
+    assert_eq!(shown(&doc), light);
+    // The flat phases keep one fill and the older file version.
+    doc.graphics[0].phase = Phase::Solid;
+    assert_eq!(shown(&doc).iter().filter(|(_, filled)| *filled).count(), 1);
+    assert!(doc.file_version() < DRAWING_ELEMENTS);
+    // A see-through orbital fills its phase flat: bands would darken.
+    doc.graphics[0].phase = Phase::Gradient;
+    doc.graphics[0].style.effects.opacity = Some(0.5);
+    assert!(
+        doc.graphics[0]
+            .parts()
+            .iter()
+            .all(|p| !p.style.effects.shaded)
+    );
+    doc.graphics[0].style.effects.opacity = None;
+    // The phase is saved for any graphic, so any shaded one needs version 40.
+    let mut symbol = doc.graphics[0].clone();
+    symbol.kind = GraphicKind::Symbol(crate::scientific::SymbolKind::Plus);
+    let symbols = Document {
+        graphics: vec![symbol],
+        ..Default::default()
+    };
+    assert_eq!(symbols.file_version(), DRAWING_ELEMENTS);
+    // Saved and opened again, the phase stays shaded.
+    let reopened = Document::from_json(&doc.file_json().unwrap()).unwrap();
+    assert_eq!(reopened.graphics[0].phase, Phase::Gradient);
+}

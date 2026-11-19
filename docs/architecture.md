@@ -165,7 +165,7 @@ Enhanced stereo groups are identified by `(kind, number)` across the whole drawi
 
 `VERSION` in `crates/model/src/document.rs` is the newest format this build
 reads. Its doc comment holds the table below; update both together.
-`Document::file_version` selects version 40 when a graphic has shading, a drop
+`Document::file_version` selects version 40 when a graphic or orbital phase has shading, a drop
 shadow, a wavy stroke or a set corner radius, a graphic line has arrowheads,
 an arrow is wavy, a molecule or arrow is a Reference or Illustration, or a
 reaction has color by origin settings,

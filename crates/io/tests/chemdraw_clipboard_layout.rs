@@ -16,9 +16,11 @@ const PAPER_POINTS: [(f32, f32); 16] = [
     (94., 27.),
     (62., 9.),
     (68., 42.),
+    // The upright plus on its first point, as large as the distance to its
+    // second: 3√2 pt.
     (49., 20.),
-    (52., 23.),
-    (46., 23.),
+    (53.242_64, 20.),
+    (49., 24.242_64),
     (11., 35.),
     (18., 35.),
     (11., 40.),
@@ -234,8 +236,9 @@ async fn a_style_reshiki_cannot_draw_imports_the_whole_drawing_with_a_notice() {
         assert_eq!(
             warnings,
             [
-                "Nearest style used: 1 shaded orbital in flat grey. ReShiki cannot draw \
-                 these yet. Keep the original ChemDraw file if you need them."
+                "Nearest style used: 1 line, arrowhead or shadow size at the nearest size \
+                 ReShiki draws. ReShiki cannot draw these yet. Keep the original ChemDraw \
+                 file if you need them."
             ],
             "{format}"
         );

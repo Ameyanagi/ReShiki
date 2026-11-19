@@ -98,8 +98,10 @@ fn assert_haloed_label(scene: &[Primitive], lobes: &[Part], label: &str) {
             scene
                 .iter()
                 .position(|primitive| {
+                    // A shaded lobe is its bands under its outline.
                     matches!(primitive, Primitive::Path { commands, filled, .. }
-                        if *commands == lobe.commands && *filled == lobe.filled)
+                        if *commands == lobe.commands
+                            && *filled == (lobe.filled && !lobe.style.effects.shaded))
                 })
                 .expect("Every lobe is drawn complete, without a label cut")
         })
@@ -176,8 +178,9 @@ fn all_orbital_shapes_phases_layers_and_colors_keep_complete_lobes_under_haloed_
                         assert!(figure.contains(&paper), "Figures paint a paper halo");
                         assert!(!figure.contains("<mask"));
                         let svg = crate::scene::svg(&doc);
+                        // A shaded lobe is paper-colored at its highlight.
                         assert!(
-                            !svg.contains(&paper),
+                            *phase == Phase::Gradient || !svg.contains(&paper),
                             "Transparent SVG must not paint a paper-colored halo"
                         );
                         let mask = svg.find("mask=\"url(#reshiki-label-halo-1)\"").unwrap();

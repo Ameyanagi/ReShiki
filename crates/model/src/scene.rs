@@ -2201,7 +2201,17 @@ pub fn primitives_with_opacity(
     let mut graphics: Vec<_> = doc.graphics.iter().collect();
     graphics.sort_by_key(|g| g.layer);
     // All shadings of the drawing share one band budget.
-    let shaded = graphics.iter().filter(|g| g.style.effects.shaded).count();
+    let shaded = graphics
+        .iter()
+        .map(|g| match g.kind {
+            crate::graphics::GraphicKind::Orbital(_) => g
+                .parts()
+                .iter()
+                .filter(|part| part.style.effects.shaded)
+                .count(),
+            _ => usize::from(g.style.effects.shaded),
+        })
+        .sum();
     let mut halos = orbital_halos(doc, &graphics, &inputs.labels().runs, opacity);
     let cells = crate::models3d::flat_cells(&raw.models, doc);
     for id in cells.haloed {
@@ -2379,18 +2389,24 @@ fn graphic_primitive(
             Color::Custom(rgb) => doc.canvas_theme.color(rgb),
             color => color.rgb(),
         };
-        parts.extend(bands.iter().filter_map(|(band, t)| {
-            use crate::graphics::PathCommand::{Close, Line, Move};
-            let (first, rest) = band.split_first()?;
-            let commands = std::iter::once(Move(*first))
-                .chain(rest.iter().map(|p| Line(*p)))
-                .chain([Close])
-                .collect();
-            // Light on either canvas, so a shaded ball still reads as a ball:
-            // the canvas flips every color, so flip the shade first.
-            let rgb = crate::graphics::shade(shade, *t);
-            Some(flat(commands, doc.canvas_theme.color(rgb)))
-        }));
+        let shading = |bands: &[(Vec<Point>, f32)]| -> Vec<Primitive> {
+            bands
+                .iter()
+                .filter_map(|(band, t)| {
+                    use crate::graphics::PathCommand::{Close, Line, Move};
+                    let (first, rest) = band.split_first()?;
+                    let commands = std::iter::once(Move(*first))
+                        .chain(rest.iter().map(|p| Line(*p)))
+                        .chain([Close])
+                        .collect();
+                    // Light on either canvas, so a shaded ball still reads as a ball:
+                    // the canvas flips every color, so flip the shade first.
+                    let rgb = crate::graphics::shade(shade, *t);
+                    Some(flat(commands, doc.canvas_theme.color(rgb)))
+                })
+                .collect()
+        };
+        parts.extend(shading(&bands));
         let effects = g.style.effects;
         let gradient = g.gradient_area().zip(effects.gradient.zip(g.style.fill));
         if let Some(((commands, frame), (gradient, fill))) = gradient.clone() {
@@ -2411,7 +2427,32 @@ fn graphic_primitive(
         let text_style = &doc.drawing_style.text_style();
         // Border titles break the outline, never the fill or what is behind.
         let breaks = g.outline_breaks(text_style);
+        let orbital = match g.kind {
+            crate::graphics::GraphicKind::Orbital(kind) => Some(matches!(
+                kind,
+                crate::scientific::OrbitalKind::S | crate::scientific::OrbitalKind::Sigma
+            )),
+            _ => None,
+        };
         for (i, p) in g.parts().into_iter().enumerate() {
+            // A shaded orbital phase shades each of its lobes, then outlines
+            // it; a lobe too detailed for the band budget keeps a flat fill.
+            let lobe = orbital
+                .filter(|_| p.filled && p.style.effects.shaded)
+                .map(|oval| crate::graphics::lobe_shading(&p.commands, oval, shaded))
+                .unwrap_or_default();
+            if !lobe.is_empty() {
+                parts.extend(shading(&lobe));
+                parts.push(Primitive::Path {
+                    commands: p.commands,
+                    style: GraphicStyle {
+                        fill: None,
+                        ..p.style
+                    },
+                    filled: false,
+                });
+                continue;
+            }
             let mut style = p.style;
             if i == 0 && paper {
                 style.fill = Some(Color::Custom([255; 3]));

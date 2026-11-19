@@ -286,88 +286,112 @@ impl Graphic {
             return vec![];
         }
         let commands = self.outline();
-        let boxes = matches!(
-            self.kind,
-            GraphicKind::Rectangle | GraphicKind::RoundedRectangle
-        );
-        let Some((origin, x, y)) = self.upright_frame().or_else(|| bounding_frame(&commands))
-        else {
+        let Some(frame) = self.upright_frame().or_else(|| bounding_frame(&commands)) else {
             return vec![];
         };
-        let world = |u: f32, v: f32| origin.offset(x.x * u + y.x * v, x.y * u + y.y * v);
-        let determinant = x.x * y.y - x.y * y.x;
-        if determinant.abs() < 1e-6 {
-            return vec![];
-        }
-        let shapes = flattened(&commands);
-        // About three bands per point of size, so steps stay invisible when
-        // zoomed in, within a bounded number of vertices for huge paths.
-        let size = crate::style::DEFAULT.points_per_world()
-            * x.distance(Point::default())
-                .max(y.distance(Point::default()));
-        let points: usize = shapes.iter().map(Vec::len).sum();
-        let count = ((size * 3.).ceil() as usize)
-            .clamp(MIN_BANDS, MAX_BANDS)
-            .min(MAX_BAND_POINTS.min(DRAWING_BAND_POINTS / shaded.max(1)) / points.max(1));
-        // A path too detailed to shade within the budget keeps a flat fill.
-        if count < 2 {
-            return vec![];
-        }
-        let [hx, hy] = if self.kind == GraphicKind::Ellipse {
+        let highlight = if self.kind == GraphicKind::Ellipse {
             OVAL_HIGHLIGHT
         } else {
             CURVE_HIGHLIGHT
         };
-        let highlight = world(hx, hy);
-        // The highlight sees every edge from inside, so shrunk copies nest.
-        let star = !boxes
-            && shapes.iter().all(|shape| {
-                let edges = || shape.iter().zip(shape.iter().skip(1));
-                let area: f32 = edges().map(|(a, b)| a.x * b.y - b.x * a.y).sum();
-                // A self-crossing outline such as a bow tie has no area.
-                area.abs() > 1e-6
-                    && edges().all(|(a, b)| {
-                        ((b.x - a.x) * (highlight.y - a.y) - (b.y - a.y) * (highlight.x - a.x))
-                            * area
-                            >= 0.
-                    })
-            });
-        let mut bands = Vec::with_capacity(count * shapes.len());
-        for k in (1..=count).rev() {
-            let t = k as f32 / count as f32;
-            let region: Vec<Point> = if k == count || star {
-                // The outermost band is the whole shape.
-                vec![]
-            } else if boxes {
-                let b = BOX_HIGHLIGHT + t * (1. - BOX_HIGHLIGHT);
-                vec![world(-1., -1.), world(b, -1.), world(b, b), world(-1., b)]
+        let boxes = matches!(
+            self.kind,
+            GraphicKind::Rectangle | GraphicKind::RoundedRectangle
+        );
+        bands(&commands, frame, highlight, boxes, shaded)
+    }
+}
+
+/// The shading of one lobe of a shaded orbital phase, as
+/// [`Graphic::shading_bands`] shades a closed curve, or an ellipse when `oval`.
+pub fn lobe_shading(commands: &[PathCommand], oval: bool, shaded: usize) -> Vec<(Vec<Point>, f32)> {
+    let Some(frame) = bounding_frame(commands) else {
+        return vec![];
+    };
+    let highlight = if oval {
+        OVAL_HIGHLIGHT
+    } else {
+        CURVE_HIGHLIGHT
+    };
+    bands(commands, frame, highlight, false, shaded)
+}
+
+/// ChemDraw-style shading of `commands` in `frame` from `highlight`, or in
+/// boxes for a rectangle, as [`Graphic::shading_bands`] describes.
+fn bands(
+    commands: &[PathCommand],
+    (origin, x, y): (Point, Point, Point),
+    [hx, hy]: [f32; 2],
+    boxes: bool,
+    shaded: usize,
+) -> Vec<(Vec<Point>, f32)> {
+    let world = |u: f32, v: f32| origin.offset(x.x * u + y.x * v, x.y * u + y.y * v);
+    let determinant = x.x * y.y - x.y * y.x;
+    if determinant.abs() < 1e-6 {
+        return vec![];
+    }
+    let shapes = flattened(commands);
+    // About three bands per point of size, so steps stay invisible when
+    // zoomed in, within a bounded number of vertices for huge paths.
+    let size = crate::style::DEFAULT.points_per_world()
+        * x.distance(Point::default())
+            .max(y.distance(Point::default()));
+    let points: usize = shapes.iter().map(Vec::len).sum();
+    let count = ((size * 3.).ceil() as usize)
+        .clamp(MIN_BANDS, MAX_BANDS)
+        .min(MAX_BAND_POINTS.min(DRAWING_BAND_POINTS / shaded.max(1)) / points.max(1));
+    // A path too detailed to shade within the budget keeps a flat fill.
+    if count < 2 {
+        return vec![];
+    }
+    let highlight = world(hx, hy);
+    // The highlight sees every edge from inside, so shrunk copies nest.
+    let star = !boxes
+        && shapes.iter().all(|shape| {
+            let edges = || shape.iter().zip(shape.iter().skip(1));
+            let area: f32 = edges().map(|(a, b)| a.x * b.y - b.x * a.y).sum();
+            // A self-crossing outline such as a bow tie has no area.
+            area.abs() > 1e-6
+                && edges().all(|(a, b)| {
+                    ((b.x - a.x) * (highlight.y - a.y) - (b.y - a.y) * (highlight.x - a.x)) * area
+                        >= 0.
+                })
+        });
+    let mut bands = Vec::with_capacity(count * shapes.len());
+    for k in (1..=count).rev() {
+        let t = k as f32 / count as f32;
+        let region: Vec<Point> = if k == count || star {
+            // The outermost band is the whole shape.
+            vec![]
+        } else if boxes {
+            let b = BOX_HIGHLIGHT + t * (1. - BOX_HIGHLIGHT);
+            vec![world(-1., -1.), world(b, -1.), world(b, b), world(-1., b)]
+        } else {
+            let (cx, cy) = (hx + t * (0.5 - hx), hy + t * (0.5 - hy));
+            // Circumscribe the circle so the band reaches its radius.
+            let r = t * 0.5 / (std::f32::consts::PI / 64.).cos();
+            (0..64)
+                .map(|i| {
+                    let a = i as f32 * std::f32::consts::TAU / 64.;
+                    world(cx + r * a.cos(), cy + r * a.sin())
+                })
+                .collect()
+        };
+        let color = (k as f32 - 0.5) / count as f32;
+        for shape in &shapes {
+            let band = if star {
+                shape.iter().map(|p| highlight.lerp(*p, t)).collect()
+            } else if region.is_empty() {
+                shape.clone()
             } else {
-                let (cx, cy) = (hx + t * (0.5 - hx), hy + t * (0.5 - hy));
-                // Circumscribe the circle so the band reaches its radius.
-                let r = t * 0.5 / (std::f32::consts::PI / 64.).cos();
-                (0..64)
-                    .map(|i| {
-                        let a = i as f32 * std::f32::consts::TAU / 64.;
-                        world(cx + r * a.cos(), cy + r * a.sin())
-                    })
-                    .collect()
+                clip(shape, &region)
             };
-            let color = (k as f32 - 0.5) / count as f32;
-            for shape in &shapes {
-                let band = if star {
-                    shape.iter().map(|p| highlight.lerp(*p, t)).collect()
-                } else if region.is_empty() {
-                    shape.clone()
-                } else {
-                    clip(shape, &region)
-                };
-                if band.len() >= 3 {
-                    bands.push((band, color));
-                }
+            if band.len() >= 3 {
+                bands.push((band, color));
             }
         }
-        bands
     }
+    bands
 }
 
 /// The bounding box of `commands` as a frame: its corner and two sides.
