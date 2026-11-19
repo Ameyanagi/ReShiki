@@ -578,21 +578,33 @@ fn legend(doc: &mut Document, id: u64, entries: &[(char, Color, String)]) {
         } else {
             "   "
         };
-        // Each name goes to one entry, in order, when swatches share a color.
-        let mut names = names;
+        // Each old name goes to one entry: first an entry it still names
+        // as generated, then, in order, one whose swatch matches.
+        let mut names: Vec<_> = names.into_iter().map(Some).collect();
+        let mut take = |entry: &(char, Color, String), exact: bool| {
+            names
+                .iter_mut()
+                .find(|old| {
+                    old.as_ref().is_some_and(|(key, name)| {
+                        *key == (entry.0, entry.1) && (!exact || *name == entry.2)
+                    })
+                })
+                .and_then(Option::take)
+                .map(|(_, name)| name)
+        };
+        let exact: Vec<_> = entries.iter().map(|e| take(e, true)).collect();
         text.text = entries
             .iter()
-            .map(|(glyph, color, name)| {
-                let kept = names
-                    .iter()
-                    .position(|(key, _)| *key == (*glyph, *color))
-                    .map(|i| names.remove(i).1);
-                format!("{glyph} {}", kept.as_deref().unwrap_or(name))
+            .zip(exact)
+            .map(|(entry, kept)| {
+                let name = kept.or_else(|| take(entry, false));
+                format!("{} {}", entry.0, name.as_deref().unwrap_or(&entry.2))
             })
             .collect::<Vec<_>>()
             .join(separator);
         text.format.spans.clear();
     }
+    let rebuilt = !same;
     let starts: Vec<_> = text
         .text
         .char_indices()
@@ -603,6 +615,13 @@ fn legend(doc: &mut Document, id: u64, entries: &[(char, Color, String)]) {
     for ((start, end), (_, color, _)) in starts.into_iter().zip(entries) {
         let change = crate::typography::StyleChange::Color(*color);
         text.format.apply(&text.text, Some(start..end), &change);
+    }
+    // A legend that gained an entry may now run past its page.
+    if rebuilt
+        && let Some((l, _)) = crate::scene::selection_bounds(doc, &[id])
+        && let Some(page) = page_at(doc, l)
+    {
+        fit(doc, id, page);
     }
 }
 
@@ -624,9 +643,12 @@ pub(crate) fn reconcile(doc: &mut Document, before: &Document) {
         ) else {
             continue;
         };
-        if old.text == new.text {
+        if *old == *new {
             continue;
         }
+        // With the same text only the swatches are restored: a name's new
+        // color is then a style you chose.
+        let retyped = old.text != new.text;
         let (mut swatches, mut named) = (Vec::new(), HashSet::new());
         for (i, c) in old.text.char_indices() {
             let color = old.format.at(i).color;
@@ -649,7 +671,10 @@ pub(crate) fn reconcile(doc: &mut Document, before: &Document) {
                     if let Some(color) = order.as_mut().and_then(Iterator::next) {
                         style.color = *color;
                     }
-                } else if swatches.contains(&style.color) && !named.contains(&style.color) {
+                } else if retyped
+                    && swatches.contains(&style.color)
+                    && !named.contains(&style.color)
+                {
                     style.color = base;
                 }
                 style
@@ -727,24 +752,15 @@ fn place(doc: &mut Document, arrow: u64, legend: u64) {
         .map_or(Point::new((lo.x + hi.x) / 2., (lo.y + hi.y) / 2.), |a| {
             Point::new((a.start.x + a.end.x) / 2., (a.start.y + a.end.y) / 2.)
         });
-    let page = doc.page_layout.as_ref().and_then(|layout| {
-        (0..layout.count())
-            .filter_map(|i| layout.bounds(i))
-            .find(|(a, b)| (a.x..=b.x).contains(&middle.x) && (a.y..=b.y).contains(&middle.y))
-    });
-    let ink = |doc: &Document| crate::scene::selection_bounds(doc, &[legend]);
-    if let (Some((a, b)), Some((l, h))) = (page, ink(doc))
-        && h.x - l.x > b.x - a.x - 2. * gap
-        && let Some(text) = doc.annotations.iter_mut().find(|t| t.id == legend)
-    {
-        // Same length, so the swatch colors stay on their glyphs.
-        text.text = text.text.replace("   ", "  \n");
+    let page = page_at(doc, middle);
+    if let Some(page) = page {
+        fit(doc, legend, page);
     }
-    let Some((l, h)) = ink(doc) else {
+    let Some((l, h)) = crate::scene::selection_bounds(doc, &[legend]) else {
         return;
     };
     let (w, height) = (h.x - l.x, h.y - l.y);
-    // Everything else, a molecule at a time.
+    // Everything else, a molecule at a time; shapes come last.
     let mut objects: Vec<Vec<u64>> =
         crate::reactions::molecules(doc, &doc.atoms.iter().map(|a| a.id).collect::<Vec<_>>());
     objects.extend(
@@ -752,10 +768,11 @@ fn place(doc: &mut Document, arrow: u64, legend: u64) {
             .iter()
             .map(|a| a.id)
             .chain(doc.arrows.iter().map(|a| a.id))
-            .chain(doc.graphics.iter().map(|g| g.id))
             .filter(|id| *id != legend)
             .map(|id| vec![id]),
     );
+    let shapes = objects.len();
+    objects.extend(doc.graphics.iter().map(|g| vec![g.id]));
     let below = Point::new(lo.x, hi.y + gap);
     let (from, to) = page.unwrap_or((
         Point::new(lo.x - w, lo.y - 4. * height),
@@ -764,24 +781,25 @@ fn place(doc: &mut Document, arrow: u64, legend: u64) {
     // Only objects in reach of a spot the legend may take.
     let boxes: Vec<_> = crate::scene::selections_bounds(doc, &objects)
         .into_iter()
-        .flatten()
-        .filter(|(p, q)| {
+        .enumerate()
+        .filter_map(|(i, b)| Some((b?, i >= shapes)))
+        .filter(|((p, q), _)| {
             q.x >= from.x.min(below.x)
                 && p.x <= to.x.max(below.x + w)
                 && q.y >= from.y.min(below.y)
                 && p.y <= to.y.max(below.y + height)
         })
         .collect();
-    // An object crosses the legend unless it lies clear of it or holds it
-    // whole, as a page background or a panel does.
+    // An object crosses the legend unless it lies clear of it, or is a
+    // shape that holds it whole, as a page background or a panel does.
     let hits = |at: Point| {
         let (a, b) = (at, at.offset(w, height));
         boxes
             .iter()
-            .filter(|(p, q)| {
+            .filter(|((p, q), shape)| {
                 let apart = q.x < a.x || p.x > b.x || q.y < a.y || p.y > b.y;
                 let holds = p.x <= a.x && p.y <= a.y && q.x >= b.x && q.y >= b.y;
-                !apart && !holds
+                !apart && !(*shape && holds)
             })
             .count()
     };
@@ -813,6 +831,36 @@ fn place(doc: &mut Document, arrow: u64, legend: u64) {
     if let Some(text) = doc.annotations.iter_mut().find(|t| t.id == legend) {
         text.position = text.position.offset(best.x - l.x, best.y - l.y);
     }
+}
+
+/// Keep a legend on `page`: one entry per line when it is wider than the
+/// page, and moved back inside when it runs past an edge.
+fn fit(doc: &mut Document, legend: u64, (a, b): (Point, Point)) {
+    let ink = |doc: &Document| crate::scene::selection_bounds(doc, &[legend]);
+    let gap = doc.drawing_style.bond_length_world * 0.5;
+    if let Some((l, h)) = ink(doc)
+        && h.x - l.x > b.x - a.x - 2. * gap
+        && let Some(text) = doc.annotations.iter_mut().find(|t| t.id == legend)
+    {
+        // Same length, so the swatch colors stay on their glyphs.
+        text.text = text.text.replace("   ", "  \n");
+    }
+    if let Some((l, h)) = ink(doc)
+        && let Some(text) = doc.annotations.iter_mut().find(|t| t.id == legend)
+    {
+        let shift = |lo: f32, hi: f32, min: f32, max: f32| (max - hi).min(0.).max(min - lo);
+        text.position = text
+            .position
+            .offset(shift(l.x, h.x, a.x, b.x), shift(l.y, h.y, a.y, b.y));
+    }
+}
+
+/// The page that holds `at`, if the drawing has pages.
+fn page_at(doc: &Document, at: Point) -> Option<(Point, Point)> {
+    let layout = doc.page_layout.as_ref()?;
+    (0..layout.count())
+        .filter_map(|i| layout.bounds(i))
+        .find(|(a, b)| (a.x..=b.x).contains(&at.x) && (a.y..=b.y).contains(&at.y))
 }
 
 /// Remove the paint of `arrow`'s reaction and its chain, keeping settings.

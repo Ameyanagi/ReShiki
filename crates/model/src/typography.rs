@@ -413,7 +413,14 @@ impl TextFormat {
         } else {
             kept(old, new)
         };
-        let inherited = self.at(prefix.min(old.len().saturating_sub(1))).clone();
+        // New text takes the style of the replaced text it follows, never of
+        // text outside the selection.
+        let from = if exact && replaced.end > replaced.start {
+            prefix.min(replaced.end - 1)
+        } else {
+            prefix
+        };
+        let inherited = self.at(from.min(old.len().saturating_sub(1))).clone();
         let styles = new
             .char_indices()
             .map(|(i, _)| {

@@ -433,4 +433,15 @@ fn replacing_text_keeps_the_style_of_what_stays_the_same() {
     format.edited(text, retyped, 0..text.len());
     assert_eq!(format.at(0).color, blue);
     assert_eq!(format.at('■'.len_utf8() + 1).color, Color::Ink);
+
+    // Never the style of text outside the selection: CO₂ with "CO" → "COO".
+    let mut formula = TextFormat::default();
+    formula.apply(
+        "CO2",
+        Some(2..3),
+        &StyleChange::Script(super::Script::Subscript),
+    );
+    formula.edited("CO2", "COO2", 0..2);
+    assert_eq!(formula.at(2), formula.at(0));
+    assert_ne!(formula.at(3), formula.at(0));
 }

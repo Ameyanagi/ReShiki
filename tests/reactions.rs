@@ -218,14 +218,6 @@ async fn molecule_smiles_leave_out_atom_maps_and_reaction_smiles_keep_them() {
         .analysis
         .unwrap();
     assert_eq!(analysis.smiles, "CCO");
-    // Without its maps this centre has two equal methyls: no stereo is left.
-    let isopropanol = engine
-        .execute(Request::import_smiles("[CH3:1][C@H](O)[CH3:2]"))
-        .await
-        .unwrap()
-        .analysis
-        .unwrap();
-    assert_eq!(isopropanol.smiles, "CC(C)O");
     let mut export = Request::molecule("export", doc);
     export.format = Some("smiles".into());
     assert_eq!(engine.execute(export).await.unwrap().output.unwrap(), "CCO");

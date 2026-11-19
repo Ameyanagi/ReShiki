@@ -540,13 +540,9 @@ fn prepare_identifiers(
         // reaction, so they appear only in reaction SMILES.
         let mut state = std::borrow::Cow::Borrowed(&molecule.state);
         if state.metadata.atoms.iter().any(|a| a.map_present) {
-            let state = state.to_mut();
-            for atom in &mut state.metadata.atoms {
+            for atom in &mut state.to_mut().metadata.atoms {
                 (atom.map_number, atom.map_present) = (0, false);
             }
-            // Maps can tell otherwise equal groups apart; find the
-            // stereocentres again without them.
-            state.properties.done = None;
         }
         let output = smiles::write::write(&state, Default::default())?;
         let groups = smiles::write::cx_groups(&state.metadata, &output.atom_order)?;

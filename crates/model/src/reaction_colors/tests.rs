@@ -500,6 +500,14 @@ fn a_new_legend_stays_on_the_reactions_page() {
     );
     assert!(others.iter().all(|b| apart(legend, *b)), "{legend:?}");
     assert_eq!(doc.page_layout.as_ref().unwrap().overflow(&doc), 0);
+    // A new entry keeps it on the page.
+    update(&mut doc, arrow, |colors| colors.changes = true).unwrap();
+    let (legend, _) = legend_and_others(&doc);
+    assert!(
+        legend.1.x <= page_hi.x && legend.1.y <= page_hi.y,
+        "{legend:?}"
+    );
+    assert_eq!(doc.page_layout.as_ref().unwrap().overflow(&doc), 0);
 }
 
 #[test]
@@ -542,4 +550,16 @@ fn names_stay_with_their_entries_when_swatches_share_a_color() {
     update(&mut doc, arrow, |colors| colors.rings = false).unwrap();
     let legend = doc.annotations.iter().find(|a| a.id == id).unwrap();
     assert_eq!(legend.text, "■ Diene   ■ Reactant 2   ■ New bond");
+
+    // A name still as generated finds its own entry first.
+    let legend = doc.annotations.iter_mut().find(|a| a.id == id).unwrap();
+    let renamed = "■ Reactant 1   ■ Reactant 2   ■ Formed C–C".to_string();
+    let old = std::mem::replace(&mut legend.text, renamed.clone());
+    legend.format.edited(&old, &renamed, 0..old.len());
+    update(&mut doc, arrow, |colors| colors.rings = true).unwrap();
+    let legend = doc.annotations.iter().find(|a| a.id == id).unwrap();
+    assert_eq!(
+        legend.text,
+        "■ Reactant 1   ■ Reactant 2   ■ Formed C–C   ● New ring"
+    );
 }
