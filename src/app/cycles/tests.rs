@@ -433,3 +433,17 @@ fn make_shows_the_cycle_for_review_before_it_changes_the_drawing() {
     let _ = app.update(Message::Undo);
     assert_eq!(app.tab.doc, initial);
 }
+
+#[test]
+fn make_waits_while_a_task_runs() {
+    let (mut app, _) = App::new();
+    let parts = [
+        text(&mut app, 0., -200., "A"),
+        text(&mut app, 170., 90., "B"),
+    ];
+    app.tab.selected = parts.to_vec();
+    app.tab.busy = true;
+    let _ = app.update(Message::Cycle(Action::Make));
+    assert!(app.tab.cycle_inputs.proposal.is_none());
+    assert!(app.error);
+}

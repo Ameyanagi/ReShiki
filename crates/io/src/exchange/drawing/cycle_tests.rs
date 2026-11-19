@@ -470,3 +470,28 @@ async fn a_part_split_in_two_opens_as_drawn() {
     let doc = response.document.unwrap();
     assert!(doc.graphics.iter().all(|g| g.cycle.is_none()));
 }
+
+#[test]
+fn only_the_cycles_that_come_back_count_as_kept_on_save() {
+    let (mut document, _) = structure_cycle();
+    // A second cycle whose part is split in two writes steps but no data.
+    let mut parts = vec![];
+    for x in [600., 900.] {
+        parts.push(chain(&mut document, x, 0., 3));
+    }
+    let (second, _) = crate::cycles::make(&mut document, &parts.concat()).unwrap();
+    let split = document
+        .graphics
+        .iter()
+        .find(|g| g.id == second)
+        .and_then(|g| g.cycle.as_deref())
+        .unwrap()
+        .intermediates[0]
+        .clone();
+    document
+        .bonds
+        .retain(|b| !(split.contains(&b.a) && split.contains(&b.b) && b.a == split[1]));
+    let xml = write(&document, Default::default()).unwrap();
+    let loss = crate::formats::chemdraw_loss("cdxml", &xml);
+    assert_eq!((loss.schemes, loss.steps), (1, 2));
+}

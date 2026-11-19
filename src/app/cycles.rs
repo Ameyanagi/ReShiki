@@ -336,6 +336,12 @@ impl App {
 
     /// Make a cycle of the selection on a copy, to review before applying.
     fn propose_cycle(&mut self) -> Task<Message> {
+        // A job still running would finish into a drawing under review.
+        if self.tab.busy || self.tab.drawing_edit_active() {
+            self.error = true;
+            self.status = "Wait for the current task to finish".into();
+            return Task::none();
+        }
         let selected = self.tab.selected.clone();
         match proposed(&self.tab.doc, &selected, false) {
             Ok((doc, cycle, left)) => {
@@ -425,6 +431,9 @@ impl App {
                 | Message::SaveAs
                 | Message::SaveFormat(_)
                 | Message::KeepFormat
+                // An import already running finishes; Apply makes the cycle
+                // from the drawing as it is then.
+                | Message::Imports(super::import::Action::Loaded(..))
                 | Message::Saved(..)
         ) || super::gates::preview_passthrough(message)
             || self.answers_save_dialog(message);

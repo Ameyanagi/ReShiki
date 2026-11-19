@@ -82,10 +82,18 @@ pub fn chemdraw_loss(format: &str, contents: &str) -> ChemdrawLoss {
         return ChemdrawLoss::default();
     };
     let mut loss = crate::chemistry::cdxml::schemes::loss(&xml).unwrap_or_default();
-    // A file's cycles write their own steps again.
-    if matches!(found, Some(Found::Fresh(_))) {
-        loss.schemes = 0;
-        loss.steps = 0;
+    // The cycles that come back write their own scheme and steps again.
+    if let Some(Found::Fresh(payload)) = found {
+        for n in payload
+            .cycles
+            .iter()
+            .filter_map(|saved| saved.graphic.cycle.as_deref())
+            .map(|c| c.intermediates.len())
+            .filter(|n| *n > 0)
+        {
+            loss.schemes = loss.schemes.saturating_sub(1);
+            loss.steps = loss.steps.saturating_sub(n);
+        }
     }
     loss
 }
