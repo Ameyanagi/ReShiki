@@ -151,6 +151,7 @@ impl Document {
             .chain(base.iter().copied())
             .collect();
         let mut levels = vec![
+            self.expand_integral_groups(picked),
             crate::cycles::whole_parts(self, &self.expand_integral_groups(&molecule)),
             self.expand_integral_groups(&crate::equipment::solve::closure(self, &base)),
             base.clone(),
@@ -188,10 +189,13 @@ impl Document {
             .iter()
             .flat_map(|g| g.members.iter().copied())
             .collect();
+        let linked: HashSet<u64> = (self.molecule_names.iter().map(|n| n.annotation))
+            .chain(self.property_captions.iter().map(|c| c.annotation))
+            .collect();
         let set: HashSet<u64> = moved
             .iter()
             .copied()
-            .filter(|id| grouped.contains(id))
+            .filter(|id| grouped.contains(id) || !linked.contains(id))
             .collect();
         let mut around: Vec<&Group> = self
             .groups
@@ -247,8 +251,9 @@ impl Document {
                 .iter()
                 .filter(|p| p.panel.is_some() && !set.contains(&p.id) && owns(p.id))
                 .max_by(|a, b| area(a).total_cmp(&area(b)));
+            // A cycle sharing the panel's group keeps a part in its reach.
             let outside = if let Some(frame) = frame {
-                !crate::graphics::panel::holds(self, frame.id, moved)
+                !crate::graphics::panel::holds(self, frame.id, moved) && (!runs || out_of_cycle)
             } else if runs {
                 out_of_cycle
             } else {

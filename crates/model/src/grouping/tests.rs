@@ -205,3 +205,53 @@ fn a_selection_that_cuts_across_groups_never_leaves_them() {
     assert!(move_by(&mut doc, &[a, c], 0., 900.).is_empty());
     doc.validate().unwrap();
 }
+
+#[test]
+fn a_part_within_its_cycle_stays_even_outside_a_panel_sharing_the_group() {
+    let mut doc = Document::default();
+    let (id, [a, ..]) = cycle(&mut doc);
+    // A small panel in the cycle's own group, nowhere near the part.
+    let frame = doc.next_id();
+    let mut g = Graphic::dragged(
+        frame,
+        GraphicKind::Rectangle,
+        Point::new(-20., -20.),
+        Point::new(20., 20.),
+        GraphicStyle::default(),
+        BracketSides::Both,
+        false,
+    );
+    g.panel = Some(Panel::default());
+    doc.graphics.push(g);
+    let group = doc
+        .groups
+        .iter_mut()
+        .find(|g| g.members.contains(&id))
+        .unwrap();
+    group.members.push(frame);
+    assert!(move_by(&mut doc, &[a], 10., 0.).is_empty());
+    assert!(crate::cycles::role_of(&doc, a).is_some());
+    assert!(doc.groups.iter().any(|g| g.members.contains(&a)));
+}
+
+#[test]
+fn a_grouped_piece_dragged_with_a_loose_object_stays() {
+    let mut doc = Document::default();
+    let [a, b, loose] = [0., 100., 600.].map(|x| text(&mut doc, Point::new(x, 0.), "x"));
+    doc.group_selection(&[a, b]).unwrap();
+    assert!(move_by(&mut doc, &[a, loose], 0., 900.).is_empty());
+    assert!(doc.groups.iter().any(|g| g.members.contains(&a)));
+}
+
+#[test]
+fn clicks_reach_an_atom_of_a_cycle_part() {
+    let mut doc = Document::default();
+    let m = molecule(&mut doc, 0., -200.);
+    let b = text(&mut doc, Point::new(170., 90.), "B");
+    let c = text(&mut doc, Point::new(-230., 90.), "C");
+    crate::cycles::make(&mut doc, &[m[0], m[1], b, c]).unwrap();
+    let whole = doc.click_selection(&[], &[m[0]]);
+    let part = doc.click_selection(&whole, &[m[0]]);
+    assert_eq!(sorted(part.clone()), sorted(m.clone()));
+    assert_eq!(doc.click_selection(&part, &[m[0]]), vec![m[0]]);
+}

@@ -947,7 +947,11 @@ impl MoleculeCanvas<'_> {
                     // The hover shows what a click selects: the whole object,
                     // or inside a selected one the piece under the pointer.
                     if self.tool.selects() && !state.modifiers.alt() {
-                        hit = self.doc.click_selection(self.selected, &hit);
+                        hit = if state.modifiers.shift() {
+                            self.doc.expand_groups(&hit)
+                        } else {
+                            self.doc.click_selection(self.selected, &hit)
+                        };
                     }
                     markers::Markers::hover(self.doc, &hit).draw(frame, self.camera, bounds, false);
                 }
