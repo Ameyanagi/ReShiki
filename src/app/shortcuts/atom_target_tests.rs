@@ -215,8 +215,7 @@ fn aniline_and_toluene_dimethyl_shortcut_grows_on_the_hovered_center() {
 fn dimethyl_rejects_insufficient_heteroatom_valence_without_adding_a_carbon() {
     // Aniline is the native ChemDraw parity oracle above. These are ReShiki
     // chemistry/transaction contracts, not claims about ChemDraw's warnings.
-    // Neutral P takes three bonds, so P–R grows PMe2 like N.
-    for element in ["O", "S", "N"] {
+    for element in ["O", "S", "P", "N"] {
         let (mut app, target, unrelated) = fixture(element);
         if element == "N" {
             let other = app.tab.doc.add_atom(
