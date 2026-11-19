@@ -222,8 +222,12 @@ counterpart. Existing different labels must be cleared before pairing.
 **Auto-map** runs in Rust and stays detached from the document until applied.
 It keeps existing maps as anchors, matches exact elements/isotopes, and excludes
 agents. It maximizes the number of corresponding atoms, then favors conserved
-heavy-atom adjacency, all adjacency, unchanged bond classes, fewer changed atom
-environments, and smaller charge/H/radical differences. Bond order, charge,
+heavy-atom adjacency, all adjacency, smaller charge/H/radical differences,
+unchanged bond classes, and fewer changed atom environments. Hydrogen counts
+rank above bond orders: in a Diels–Alder reaction the double bond moves to the
+inner diene carbons and no hydrogen moves, so keeping a diene double bond by
+moving hydrogens is the wrong map. A hydrogen drawn as an atom counts like one
+in a label. Bond order, charge,
 attached hydrogens, degree and ring membership can change in a reaction and
 never exclude candidate pairs. Coordinates and stereochemistry are preserved;
 they are not used to infer a reaction mechanism.
