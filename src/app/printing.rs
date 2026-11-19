@@ -64,20 +64,21 @@ impl App {
                     self.status = "Export a page PDF to print on this system".into();
                     return Task::none();
                 }
-                let source = match self.print_document() {
-                    Ok(doc) => doc,
-                    Err(error) => {
-                        self.error = true;
-                        self.status = error;
-                        return Task::none();
-                    }
-                };
+                // The applied pages, as the canvas shows them: typed page
+                // settings print once applied, as page PDFs do.
+                let source = self.tab.doc.clone();
                 let snapshot = match reshiki::printing::snapshot(&source, &self.tab.selected, scope)
                 {
                     Ok(doc) => doc,
                     Err(error) => {
+                        // Page setup opens to fix it, keeping what is typed there.
                         if source.page_layout.is_none() && !source.all_ids().is_empty() {
-                            let _ = self.page_action(super::pages::Action::Open);
+                            if self.tab.pages.editor.is_some() {
+                                self.inspector_open = true;
+                                self.inspector_tab = super::InspectorTab::Pages;
+                            } else {
+                                let _ = self.page_action(super::pages::Action::Open);
+                            }
                         }
                         self.error = true;
                         self.status = error;

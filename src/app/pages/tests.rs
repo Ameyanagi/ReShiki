@@ -257,3 +257,29 @@ fn page_setup_on_a_paged_drawing_also_closes_the_view_strip() {
     let _ = app.update(Message::Pages(Action::Show));
     assert!(!app.view_open);
 }
+
+#[test]
+fn landscape_turns_a_typed_custom_size() {
+    let mut app = ready();
+    let _ = app.update(Message::Pages(Action::Open));
+    let _ = app.update(Message::Pages(Action::Preset(Preset::A4)));
+    let _ = app.update(Message::Pages(Action::Input(Field::Width, "100".into())));
+    let _ = app.update(Message::Pages(Action::Input(Field::Height, "200".into())));
+    let _ = app.update(Message::Pages(Action::Landscape(true)));
+    let layout = app.tab.doc.page_layout.as_ref().unwrap();
+    let mm = |pt: f32| (pt * 25.4 / 72.).round();
+    assert_eq!((mm(layout.width_pt), mm(layout.height_pt)), (200., 100.));
+}
+
+#[test]
+fn landscape_with_a_mistyped_width_turns_the_applied_size() {
+    let mut app = ready();
+    let _ = app.update(Message::Pages(Action::Open));
+    let _ = app.update(Message::Pages(Action::Preset(Preset::A4)));
+    let _ = app.update(Message::Pages(Action::Input(Field::Width, "x".into())));
+    let _ = app.update(Message::Pages(Action::Input(Field::Height, "100".into())));
+    let _ = app.update(Message::Pages(Action::Landscape(true)));
+    let layout = app.tab.doc.page_layout.as_ref().unwrap();
+    let mm = |pt: f32| (pt * 25.4 / 72.).round();
+    assert_eq!((mm(layout.width_pt), mm(layout.height_pt)), (297., 210.));
+}

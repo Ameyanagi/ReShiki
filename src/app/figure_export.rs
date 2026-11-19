@@ -145,15 +145,7 @@ impl App {
         } else {
             format
         };
-        // Page PDFs show the same pages as Print, valid page drafts included.
-        let doc = if pages {
-            match self.print_document() {
-                Ok(doc) => doc,
-                Err(error) => return Task::done(Err(error)),
-            }
-        } else {
-            self.tab.doc.clone()
-        };
+        let doc = self.tab.doc.clone();
         let engine = self.engine.clone();
         let stem = self.export_stem();
         let background = self

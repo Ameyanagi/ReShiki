@@ -100,6 +100,23 @@ impl Editor {
         self.columns = self.layout.columns.to_string();
         self.rows = self.layout.rows.to_string();
     }
+    /// Width and height as typed, or the applied size while either does not
+    /// read as millimetres.
+    fn typed_size(&self) -> (f32, f32) {
+        let typed = |s: &str, old: f32| {
+            if s == format!("{:.2}", old * 25.4 / 72.) {
+                return Some(old);
+            }
+            s.trim()
+                .parse::<f32>()
+                .ok()
+                .filter(|mm| *mm > 0.)
+                .map(|mm| mm * 72. / 25.4)
+        };
+        typed(&self.width, self.layout.width_pt)
+            .zip(typed(&self.height, self.layout.height_pt))
+            .unwrap_or((self.layout.width_pt, self.layout.height_pt))
+    }
     fn candidate(&self) -> Result<Layout, String> {
         let number = |s: &str| {
             s.trim()
@@ -137,17 +154,6 @@ impl Editor {
     }
 }
 impl App {
-    /// The drawing as Print and page PDFs show it: with valid page drafts.
-    pub(super) fn print_document(&self) -> Result<reshiki::document::Document, String> {
-        let mut snapshot = self.tab.doc.clone();
-        if let Some(editor) = &self.tab.pages.editor {
-            if editor.epoch != self.tab.file_epoch || editor.original != self.tab.doc.page_layout {
-                return Err("Reopen Page setup before printing changed page settings.".into());
-            }
-            snapshot.page_layout = Some(editor.candidate()?);
-        }
-        Ok(snapshot)
-    }
     pub(super) fn fit_pages(&mut self, index: Option<usize>) {
         let Some(layout) = &self.tab.doc.page_layout else {
             return;
@@ -240,7 +246,7 @@ impl App {
             editor.rows.clone(),
         ];
         change(&mut layout, &self.tab.doc);
-        let mut status = "Page setup applied · Drawing scale and positions preserved";
+        let mut status = "Page size applied · Drawing scale and positions preserved";
         if layout.validate().is_err() {
             layout.margins = Default::default();
             status =
@@ -393,7 +399,12 @@ impl App {
                 });
             }
             Action::Landscape(landscape) => {
+                // Turns the size as typed, so a typed custom size is kept.
+                let typed = self.tab.pages.editor.as_ref().map(Editor::typed_size);
                 return self.apply_size(false, move |layout, _| {
+                    if let Some((w, h)) = typed {
+                        (layout.width_pt, layout.height_pt) = (w, h);
+                    }
                     if landscape != (layout.width_pt > layout.height_pt) {
                         std::mem::swap(&mut layout.width_pt, &mut layout.height_pt);
                     }
@@ -565,8 +576,18 @@ impl App {
             .as_ref()
             .map(|l| l.preset())
             .unwrap_or(Preset::Custom);
-        let landscape = candidate.as_ref().unwrap_or(&editor.layout).width_pt
-            > candidate.as_ref().unwrap_or(&editor.layout).height_pt;
+        // The typed size, or the applied one while a field holds a mistake.
+        let (width, height) = editor.typed_size();
+        let preset = match &candidate {
+            Ok(_) => preset,
+            Err(_) => Layout {
+                width_pt: width,
+                height_pt: height,
+                ..editor.layout.clone()
+            }
+            .preset(),
+        };
+        let landscape = width > height;
         let mut body = column![
             row![
                 text("Publication pages").size(17),
@@ -578,7 +599,7 @@ impl App {
             text("Physical size · Document drawing scale")
                 .size(11)
                 .style(super::workspace::muted_text),
-            text("Size · applies at once").size(11),
+            text("Size").size(11),
             crate::appearance::pick_list(Preset::ALL, Some(preset), |p| Message::Pages(
                 Action::Preset(p)
             ))
@@ -621,6 +642,12 @@ impl App {
                 .style(crate::appearance::primary)
                 .on_press_maybe(candidate.is_ok().then_some(Message::Pages(Action::Apply)))
                 .width(Length::Fill),
+            // A typed mistake shows beside Apply, which it blocks.
+            text(candidate.as_ref().err().cloned().unwrap_or_default())
+                .size(11)
+                .style(crate::appearance::text_color(iced::Color::from_rgb8(
+                    168, 52, 47
+                ))),
             horizontal_line(),
             text("Canvas theme").size(11),
             crate::appearance::pick_list(
@@ -640,11 +667,6 @@ impl App {
             .text_size(12),
         ]
         .spacing(12);
-        if let Err(error) = candidate {
-            body = body.push(text(error).size(11).style(crate::appearance::text_color(
-                iced::Color::from_rgb8(168, 52, 47),
-            )));
-        }
         if let Some(layout) = &self.tab.doc.page_layout {
             let active = self.tab.pages.active.min(layout.count().saturating_sub(1));
             body = body
