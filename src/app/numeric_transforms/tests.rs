@@ -536,6 +536,35 @@ fn sizes_held_by_fixed_parts_keep_the_drawing_and_say_why() {
 }
 
 #[test]
+fn apply_button_keeps_the_fixed_height_note_after_changing_width() {
+    let (mut app, _) = App::new();
+    let a = app.tab.doc.add_atom("C", Point::default());
+    let b = app.tab.doc.add_atom("C", Point::new(42., 0.));
+    app.tab.doc.add_bond(a, b, 1, "plain");
+    app.tab.selected = vec![a, b];
+    app.sync_numeric_transforms();
+    let original = app.tab.doc.clone();
+    let height = extent(&original, &app.tab.selected, Field::Height).unwrap();
+
+    let _ = app.update(Message::NumericTransform(Action::Proportional(false)));
+    input(&mut app, Field::Width, "30");
+    input(&mut app, Field::Height, "50");
+    let _ = app.update(Message::NumericTransform(Action::ApplyAll));
+
+    assert!(!app.error, "{}", app.status);
+    let width = extent(&app.tab.doc, &app.tab.selected, Field::Width).unwrap();
+    assert!((width - 30.).abs() < 0.005, "{width}");
+    assert_eq!(
+        app.status,
+        format!("Line widths keep their size, so the height stays {height:.2} pt")
+    );
+    assert!(app.tab.history.can_undo());
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, original);
+    assert!(!app.tab.history.can_undo());
+}
+
+#[test]
 fn a_size_below_the_fixed_text_names_the_smallest_size() {
     let mut app = fixture();
     // The ring with its N label, without the other objects.
