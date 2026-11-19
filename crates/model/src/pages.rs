@@ -253,16 +253,35 @@ impl Layout {
                 {
                     primitive = inner.as_ref();
                 }
-                let crate::scene::Primitive::Path {
-                    commands,
-                    style,
-                    filled,
-                } = primitive
-                else {
-                    return outside(primitive);
-                };
-                // Rendering batches disconnected bond polygons into one path. Each
-                // subpath must fit on a page; the batch can span several pages.
+                // Rendering batches disconnected bond polygons, and glows of
+                // one color, into one path. Each subpath must fit on a page;
+                // the batch can span several pages.
+                let (commands, part): (_, &dyn Fn(Vec<_>) -> crate::scene::Primitive) =
+                    match primitive {
+                        crate::scene::Primitive::Path {
+                            commands,
+                            style,
+                            filled,
+                        } => (commands, &|commands| crate::scene::Primitive::Path {
+                            commands,
+                            style: style.clone(),
+                            filled: *filled,
+                        }),
+                        crate::scene::Primitive::Glow {
+                            commands,
+                            color,
+                            alpha,
+                            spread,
+                            blur,
+                        } => (commands, &|commands| crate::scene::Primitive::Glow {
+                            commands,
+                            color: *color,
+                            alpha: *alpha,
+                            spread: *spread,
+                            blur: *blur,
+                        }),
+                        _ => return outside(primitive),
+                    };
                 let mut start = 0;
                 commands
                     .iter()
@@ -276,13 +295,8 @@ impl Layout {
                         let Some(part_commands) = commands.get(start..end) else {
                             return true;
                         };
-                        let part = crate::scene::Primitive::Path {
-                            commands: part_commands.to_vec(),
-                            style: style.clone(),
-                            filled: *filled,
-                        };
                         start = end;
-                        outside(&part)
+                        outside(&part(part_commands.to_vec()))
                     })
             })
             .count()

@@ -125,5 +125,8 @@ fn a_ring_glows_or_sits_on_a_disc_past_its_bonds() {
         "{} {ring_radius}",
         reach(&disc)
     );
+    // Selecting the ring frames its disc, so Align uses what is drawn.
+    let (lo, hi) = crate::scene::selection_bounds(&doc, &ring).unwrap();
+    assert!((hi.x - lo.x) / 2. >= reach(&disc) * 0.99);
     assert_eq!(doc.file_version(), crate::document::DRAWING_ELEMENTS);
 }

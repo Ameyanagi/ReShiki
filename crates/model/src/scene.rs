@@ -1547,6 +1547,23 @@ fn selections_bounds_in_axes(
             grow(bond.a, &mut [lo, hi].into_iter());
         }
     }
+    // A glow or disc reaches past its ring's atoms.
+    for fill in doc.ring_fills.iter().filter(|f| {
+        matches!(
+            f.effect,
+            crate::ring_fills::RingEffect::Glow | crate::ring_fills::RingEffect::Disc
+        )
+    }) {
+        let owner = fill.atoms.first().and_then(|id| owners.get(id));
+        if owner.is_some()
+            && fill.atoms.iter().all(|id| owners.get(id) == owner)
+            && let Some(paint) = fill.primitive(doc)
+            && let Some(&first) = fill.atoms.first()
+        {
+            let (lo, hi) = crate::scene::bounds(std::slice::from_ref(&paint));
+            grow(first, &mut [lo, hi].into_iter());
+        }
+    }
     for a in doc
         .annotations
         .iter()
