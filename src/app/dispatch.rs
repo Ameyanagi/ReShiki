@@ -9,7 +9,9 @@ impl App {
             message,
             Message::Inspector(_)
                 | Message::InsertTemplate(_)
-                | Message::Tool(Tool::Arrow | Tool::Graphic(_) | Tool::RingPreset(_))
+                | Message::Tool(
+                    Tool::Arrow | Tool::Graphic(_) | Tool::RingPreset(_) | Tool::Equipment
+                )
         ) || (matches!(message, Message::Tool(Tool::EditPoints))
             && !(self.inspector_open && self.inspector_tab == InspectorTab::Properties))
             || (self.inspector_tab != InspectorTab::Templates
@@ -69,6 +71,7 @@ impl App {
             Message::Reaction(action) => return Some(self.reaction_action(action)),
             Message::Mapping(action) => return Some(self.mapping_action(action)),
             Message::Templates(action) => return Some(self.template_message(action)),
+            Message::Equipment(action) => return Some(self.equipment_action(action)),
             Message::ResetBondDrawing => self.reset_bond_drawing(),
             Message::FixedLength(on) => self.tab.bond_drawing.fixed_length = on,
             Message::FixedAngles(on) => self.tab.bond_drawing.fixed_angles = on,

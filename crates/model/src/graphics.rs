@@ -22,6 +22,8 @@ pub use superscript::GraphicLabel;
 #[serde(rename_all = "snake_case")]
 pub enum GraphicKind {
     Picture,
+    /// Lab equipment drawn from a piece definition; see [`crate::equipment`].
+    Piece,
     Symbol(crate::scientific::SymbolKind),
     Orbital(crate::scientific::OrbitalKind),
     Rectangle,
@@ -74,6 +76,7 @@ impl std::fmt::Display for GraphicKind {
             Self::Curve => "Bézier curve",
             Self::Path => "Pen path",
             Self::Picture => "Picture",
+            Self::Piece => "Equipment piece",
         })
     }
 }
@@ -315,6 +318,9 @@ pub struct Graphic {
     pub arc: Option<ArcGeometry>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub picture: Option<crate::pictures::Picture>,
+    /// The definition and parameter values of a piece of lab equipment.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub piece: Option<Box<crate::equipment::placed::PieceRef>>,
     pub id: u64,
     pub kind: GraphicKind,
     pub origin: Point,
@@ -434,6 +440,7 @@ impl Graphic {
                 depth: [0.; 3],
                 arc: None,
                 picture: None,
+                piece: None,
                 id,
                 kind,
                 origin: start,
@@ -485,6 +492,7 @@ impl Graphic {
             depth: [0.; 3],
             arc: None,
             picture: None,
+            piece: None,
             id,
             kind,
             origin,
@@ -526,7 +534,10 @@ impl Graphic {
         self.normalize_panel();
     }
     pub fn commands(&self) -> Vec<PathCommand> {
-        if matches!(self.kind, GraphicKind::Symbol(_) | GraphicKind::Orbital(_)) {
+        if matches!(
+            self.kind,
+            GraphicKind::Symbol(_) | GraphicKind::Orbital(_) | GraphicKind::Piece
+        ) {
             return self.parts().into_iter().flat_map(|p| p.commands).collect();
         }
         use PathCommand::*;
@@ -677,10 +688,11 @@ impl Graphic {
             hi.x = hi.x.max(p.x);
             hi.y = hi.y.max(p.y);
         }
-        let pad = if self.kind == GraphicKind::Picture {
-            0.
-        } else {
-            self.style.width() * 0.5
+        let pad = match self.kind {
+            GraphicKind::Picture => 0.,
+            // A piece's outline is painted twice as wide as its style says.
+            GraphicKind::Piece => self.style.width(),
+            _ => self.style.width() * 0.5,
         };
         (lo.offset(-pad, -pad), hi.offset(pad, pad))
     }
@@ -733,9 +745,18 @@ impl Graphic {
                         .any(|pair| matches!(pair,[a,b] if segment_distance(p,*a,*b)<r))
             });
         }
+        // A piece's parts carry their own stroke widths.
+        let piece = self.kind == GraphicKind::Piece;
         self.parts().iter().any(|part| {
+            let half = if piece {
+                part.style.width()
+            } else {
+                self.style.width()
+            } * 0.5;
             flattened(&part.commands).iter().any(|path| {
-                path.windows(2).any(|pair| matches!(pair,[a,b] if segment_distance(p,*a,*b)<r+self.style.width()*0.5)) || (part.filled && inside_polygon(p, path))
+                path.windows(2)
+                    .any(|pair| matches!(pair,[a,b] if segment_distance(p,*a,*b)<r+half))
+                    || (part.filled && inside_polygon(p, path))
             })
         })
     }
@@ -769,6 +790,9 @@ impl Graphic {
         }
         if self.kind == GraphicKind::Picture {
             return Ok(());
+        }
+        if self.kind == GraphicKind::Piece {
+            return Err("An equipment piece keeps its shape: move, turn or scale it".into());
         }
         if self.panel.is_some() {
             return Err("A panel keeps its shape: resize it with its handles".into());
@@ -830,6 +854,10 @@ impl Graphic {
         if (self.kind == GraphicKind::Picture) != self.picture.is_some() {
             return Err("Picture data does not match the graphic kind".into());
         }
+        if (self.kind == GraphicKind::Piece) != self.piece.is_some() {
+            return Err("Equipment piece data does not match the graphic kind".into());
+        }
+        crate::equipment::placed::validate(self)?;
         if self.picture.is_some() {
             let x = self.axis_x.distance(Point::default());
             let y = self.axis_y.distance(Point::default());

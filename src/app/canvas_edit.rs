@@ -281,6 +281,7 @@ impl App {
             Edit::Template(anchor, direction) => {
                 return self.place_template(anchor, direction, before);
             }
+            Edit::Piece(at) => return self.place_piece(at, before),
             Edit::Transform {
                 ids,
                 pivot,

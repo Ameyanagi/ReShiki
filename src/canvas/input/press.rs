@@ -64,6 +64,9 @@ impl MoleculeCanvas<'_> {
             state.gesture = Some(Gesture::Erase { last: p });
             return Some(Action::publish(Edit::EraseStart(p)).and_capture());
         }
+        if self.tool == Tool::Equipment {
+            return Some(Action::publish(Edit::Piece(p)).and_capture());
+        }
         if self.tool == Tool::Tilt {
             return self.press_tilt(state, p, point);
         }
@@ -238,8 +241,13 @@ impl MoleculeCanvas<'_> {
                 .graphics
                 .iter()
                 // A panel keeps its shape; its frame handles resize it. A
-                // cycle's shape comes from its parts.
-                .filter(|g| self.selected.contains(&g.id) && g.panel.is_none() && g.cycle.is_none())
+                // cycle's shape comes from its parts; a piece's from its definition.
+                .filter(|g| {
+                    self.selected.contains(&g.id)
+                        && g.panel.is_none()
+                        && g.cycle.is_none()
+                        && g.kind != reshiki::graphics::GraphicKind::Piece
+                })
             {
                 if let Some(handles) = g.path_handles() {
                     if let Some(handle) = handles

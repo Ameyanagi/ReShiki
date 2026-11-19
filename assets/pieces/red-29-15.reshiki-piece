@@ -1,0 +1,97 @@
+{
+ "format": "reshiki-piece",
+ "format_version": 0,
+ "id": "reshiki/red-29-15",
+ "revision": 1,
+ "family": "reducing-adapter",
+ "variant": {
+  "cone": "29/42",
+  "socket": "15/25"
+ },
+ "names": {
+  "en": "Reducing adapter, 29/42 to 15/25",
+  "ja": "変換アダプター 29/42 → 15/25"
+ },
+ "category": "adapter",
+ "keywords": [
+  "adapter",
+  "reducing",
+  "変換",
+  "アダプター"
+ ],
+ "credits": {
+  "author": "ReShiki",
+  "license": "CC0-1.0"
+ },
+ "units": "mm",
+ "shapes": [
+  {
+   "id": "s0",
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "path": "M-13 -11.6L-13 -3.4L13 -3.4L13 -11.6Z"
+  },
+  {
+   "id": "s1",
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "path": "M13 -3L13 -12L6.5 -20L6.5 -24L-6.5 -24L-6.5 -20L-13 -12L-13 -3Z"
+  },
+  {
+   "id": "s2",
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "path": "M-6.5 -22L-6.5 -20L6.5 -20L6.5 -22Z"
+  }
+ ],
+ "joints": [
+  {
+   "id": "bottom",
+   "kind": "taper",
+   "size": "29/42",
+   "gender": "M",
+   "at": [
+    0,
+    0
+   ],
+   "dir": [
+    0,
+    1
+   ],
+   "draw": "standard"
+  },
+  {
+   "id": "top",
+   "kind": "taper",
+   "size": "15/25",
+   "gender": "F",
+   "at": [
+    0,
+    -51
+   ],
+   "dir": [
+    0,
+    -1
+   ],
+   "draw": "standard"
+  }
+ ],
+ "holds": [
+  {
+   "id": "top-neck",
+   "kind": "grip",
+   "from": [
+    0,
+    -22
+   ],
+   "to": [
+    0,
+    -20
+   ],
+   "diameter_mm": 13
+  }
+ ]
+}

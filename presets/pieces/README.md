@@ -2,7 +2,7 @@
 
 A piece is one item of lab equipment: a flask, a condenser, a clamp, a hose. Built-in pieces and pieces you make share one file type, `.reshiki-piece`. The file holds data only: outlines, joints, holds, parameters, movable parts and liquid regions. It has no scripts, no formulas and no links to other files, so a piece someone emails you cannot run anything.
 
-The format is a **preview** (`"format_version": 0`). ReShiki can check pieces now; placing them in a drawing comes in a later release. Release builds that know only format 1 refuse format 0, so nothing written before the format is frozen is read wrongly later.
+The format is a **preview** (`"format_version": 0`). ReShiki can check pieces now, and the built-in pieces can be placed in a drawing; placing your own pieces comes in a later release. Release builds that know only format 1 refuse format 0, so nothing written before the format is frozen is read wrongly later.
 
 ## Check a piece
 
@@ -48,7 +48,7 @@ Each shape has an `id`, a `layer`, a `material`, a `role` and a `path` in SVG pa
 
 ### Joints
 
-- **Taper** (ground glass): `size` is one of `10/18`, `14/20`, `14/23`, `15/25`, `19/22`, `19/28`, `19/38`, `24/29`, `29/42`; `gender` is `M` or `F`. ReShiki draws the socket or cone itself, so every 15/25 joint looks and seats alike. For a socket (`F`), `at` is the centre of the mouth and `dir` points out of it; draw your neck so that it meets the socket's base, L + 4 mm inside the mouth, at the size's neck diameter (13 mm for 15/25). For a cone (`M`), `at` is the shoulder centre and `dir` points to the tip; your tube ends 3.6 mm behind the shoulder.
+- **Taper** (ground glass): `size` is one of `10/18`, `14/20`, `14/23`, `15/25`, `19/22`, `19/28`, `19/38`, `24/29`, `29/42`; `gender` is `M` or `F`. ReShiki draws the socket or cone itself, so every 15/25 joint looks and seats alike. For a socket (`F`), `at` is the centre of the mouth and `dir` points out of it; draw your neck so that it meets the socket's base, L + 4 mm inside the mouth, at the size's neck diameter (13 mm for 15/25). For a cone (`M`), `at` is the shoulder centre and `dir` points to the tip; your tube ends 3.6 mm behind the shoulder. A cone that is not ground glass, such as a rubber septum or a PTFE sleeve, sets `"draw": "none"` and draws its own end; its `at` must sit on that drawing.
 - **Plug**: `family` is `hose`, `stopper`, `septum`, `thermometer`, `nmr` or `stir`, with `size_mm`. `at` sits on the end of the barb, stem or opening.
 - `part` moves the joint with a part. `poses` gives it another position in a state: `{"turn": {"r1": {"at": [..], "dir": [..]}}}`.
 

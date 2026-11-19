@@ -434,3 +434,30 @@ fn rotating_rolls_a_model_shown_only_in_3d_and_turns_the_drawing() {
     assert_ne!(alone.models[0].rotation, doc.models[0].rotation);
     assert_eq!(alone.atoms, doc.atoms);
 }
+
+#[test]
+fn an_equipment_piece_keeps_corners_and_rotation_but_not_edges() {
+    use reshiki::equipment::{builtin, placed};
+    let mut doc = Document::default();
+    let id = doc.next_id();
+    let scale = placed::world_per_mm(&doc, placed::DEFAULT_PT_PER_MM);
+    let flask = builtin::find("reshiki/rbf-100-15").unwrap();
+    doc.graphics
+        .push(placed::graphic(id, flask, World::new(0., 0.), scale));
+    let a = doc.add_atom("C", World::new(80., 0.));
+    let b = doc.add_atom("C", World::new(120., 0.));
+    doc.add_bond(a, b, 1, "plain");
+    let bounds = Rectangle::new(Point::ORIGIN, Size::new(400., 300.));
+    // With a molecule beside it the piece still decides: no stretching.
+    for ids in [&[id][..], &[id, a, b][..]] {
+        let selection = SelectionBox::new(&doc, ids, Camera::default(), bounds).unwrap();
+        assert_eq!(selection.hit(selection.grips()[0]), Some(Handle::Resize(0)));
+        assert!((0..4).all(|i| !selection.edge_enabled(i)));
+        assert_eq!(
+            selection.hit(selection.rotation_grip()),
+            Some(Handle::Rotate)
+        );
+    }
+    let selection = SelectionBox::new(&doc, &[a, b], Camera::default(), bounds).unwrap();
+    assert!((0..4).any(|i| selection.edge_enabled(i)));
+}

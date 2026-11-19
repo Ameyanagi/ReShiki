@@ -340,6 +340,9 @@ impl Part {
 }
 impl Graphic {
     pub fn parts(&self) -> Vec<Part> {
+        if self.kind == GraphicKind::Piece {
+            return crate::equipment::placed::parts(self);
+        }
         let mut parts = match self.kind {
             GraphicKind::Symbol(kind) => symbol_parts(kind, 1, &self.style),
             GraphicKind::Orbital(kind) => {

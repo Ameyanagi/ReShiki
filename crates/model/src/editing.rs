@@ -543,6 +543,7 @@ pub(crate) fn remap_ids(doc: &mut Document, mapping: &HashMap<u64, u64>) -> Opti
         reactions,
         models,
         recent_colors: _,
+        piece_definitions: _,
     } = doc;
     let map = |id: &mut u64| {
         *id = *mapping.get(id)?;
@@ -902,6 +903,7 @@ fn map_positions(
     let ids: HashSet<_> = doc.expand_abbreviation_selection(ids).into_iter().collect();
     for graphic in &mut doc.graphics {
         if ids.contains(&graphic.id) {
+            let before = graphic.clone();
             // Axes are displacements, not translated points. Subtracting two
             // transformed world endpoints loses precision when imported paths
             // have small axes and large local control coordinates.
@@ -909,6 +911,11 @@ fn map_positions(
             graphic.axis_x = vector(graphic.axis_x);
             graphic.axis_y = vector(graphic.axis_y);
             graphic.normalize_panel();
+            if graphic.kind == crate::graphics::GraphicKind::Piece
+                && crate::equipment::placed::validate(graphic).is_err()
+            {
+                crate::equipment::placed::settle(graphic, before, &convert);
+            }
         }
     }
     let boundary: Vec<_> = doc

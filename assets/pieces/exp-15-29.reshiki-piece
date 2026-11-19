@@ -1,0 +1,97 @@
+{
+ "format": "reshiki-piece",
+ "format_version": 0,
+ "id": "reshiki/exp-15-29",
+ "revision": 1,
+ "family": "expansion-adapter",
+ "variant": {
+  "cone": "15/25",
+  "socket": "29/42"
+ },
+ "names": {
+  "en": "Expansion adapter, 15/25 to 29/42",
+  "ja": "変換アダプター 15/25 → 29/42"
+ },
+ "category": "adapter",
+ "keywords": [
+  "adapter",
+  "expansion",
+  "変換",
+  "アダプター"
+ ],
+ "credits": {
+  "author": "ReShiki",
+  "license": "CC0-1.0"
+ },
+ "units": "mm",
+ "shapes": [
+  {
+   "id": "s0",
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "path": "M-6.5 -11.6L-6.5 -3.4L6.5 -3.4L6.5 -11.6Z"
+  },
+  {
+   "id": "s1",
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "path": "M6.5 -3L6.5 -12L13 -20L13 -24L-13 -24L-13 -20L-6.5 -12L-6.5 -3Z"
+  },
+  {
+   "id": "s2",
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "path": "M-13 -22L-13 -20L13 -20L13 -22Z"
+  }
+ ],
+ "joints": [
+  {
+   "id": "bottom",
+   "kind": "taper",
+   "size": "15/25",
+   "gender": "M",
+   "at": [
+    0,
+    0
+   ],
+   "dir": [
+    0,
+    1
+   ],
+   "draw": "standard"
+  },
+  {
+   "id": "top",
+   "kind": "taper",
+   "size": "29/42",
+   "gender": "F",
+   "at": [
+    0,
+    -68
+   ],
+   "dir": [
+    0,
+    -1
+   ],
+   "draw": "standard"
+  }
+ ],
+ "holds": [
+  {
+   "id": "top-neck",
+   "kind": "grip",
+   "from": [
+    0,
+    -22
+   ],
+   "to": [
+    0,
+    -20
+   ],
+   "diameter_mm": 26
+  }
+ ]
+}

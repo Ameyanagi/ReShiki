@@ -541,6 +541,7 @@ fn same_except_bonds(a: &Document, b: &Document) -> bool {
         reactions,
         models,
         recent_colors,
+        piece_definitions,
         property_captions,
     } = a;
     *atoms == b.atoms
@@ -565,6 +566,7 @@ fn same_except_bonds(a: &Document, b: &Document) -> bool {
         && *reactions == b.reactions
         && *models == b.models
         && *recent_colors == b.recent_colors
+        && *piece_definitions == b.piece_definitions
         && *property_captions == b.property_captions
 }
 

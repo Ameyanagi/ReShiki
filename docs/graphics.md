@@ -220,6 +220,32 @@ Each change is one Undo step. A reagent's side arrow joins the arc without a
 head; a product's leaves it with one. Reaction detection never takes a
 cycle's parts, so a scheme drawn beside the cycle is read on its own.
 
+### Place lab equipment
+
+Lab equipment is a preview in this build. The catalogue has round-bottom
+flasks (50 and 100 mL with 15/25 joints; 100, 300 and 500 mL with 29/42),
+Liebig condensers, glass stoppers, rubber septa and a reducing and an
+expansion adapter.
+
+1. Click **Equipment** (the flask in the last row of the tools palette), or
+   choose **Insert equipment…** in the command palette. The side panel lists
+   the pieces.
+2. Search by name or keyword in English or Japanese (`round`, `Liebig`,
+   `ナス`, `丸底`, `29/42`), or pick a category.
+3. Click a size such as **100 mL · 15/25**. The piece follows the pointer;
+   click to place it. With **Keep placing** on, each click adds another copy;
+   press Esc to stop. **Done** returns to Properties.
+
+A placed piece is one object. Drag it to move it, turn it with the rotation
+handle, and scale it from a corner; it never stretches, so there are no side
+handles. Copy, paste, Undo and saving work as for any shape. **Properties →
+Equipment** shows its name and size. Equipment is always an illustration: it
+is never part of a reaction.
+
+Pieces are drawn in line style at 0.4 pt per mm with 0.6 pt outlines,
+whatever their size: white glass, hatched ground-glass joints and an open
+socket mouth. Flasks start empty. Joints do not snap together yet.
+
 ### Start from a figure layout
 
 **Templates → Figure layouts** has a single-row TOC with a title bar, previous
@@ -265,6 +291,12 @@ cm**, **RSC graphical abstract · 8 × 4 cm** or **Elsevier graphical abstract �
   again gives those arrows, not a cycle.
 - A cycle's steps are not yet reactions: they have no atom maps, reaction
   SMILES or color by origin.
+- Equipment pieces do not snap together, and their liquid level and other
+  parameters cannot be changed yet. ChemDraw gets each piece as a group of
+  curves; opening that file again gives those curves, not a piece.
+- A drawing with equipment saves as document version 40 and carries the
+  definition of every piece it uses, so it opens the same way on another
+  computer.
 - Rotating a whole layout changes its items' sizes, so the next size change
   lays them out upright again.
 - Brackets are graphics. To define a repeating unit, see

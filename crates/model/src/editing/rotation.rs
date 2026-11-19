@@ -86,6 +86,11 @@ fn graphic_anchor(graphic: &Graphic) -> (f64, f64) {
                 })
                 .unwrap_or_default()
         }
+        // A piece's frame starts at its millimetre origin; it turns about its middle.
+        GraphicKind::Piece => {
+            let mid = crate::equipment::placed::middle(graphic);
+            return (f64::from(mid.x), f64::from(mid.y));
+        }
         GraphicKind::Picture
         | GraphicKind::Rectangle
         | GraphicKind::RoundedRectangle

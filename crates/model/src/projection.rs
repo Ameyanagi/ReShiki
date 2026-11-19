@@ -153,7 +153,8 @@ pub fn tilt(doc: &mut Document, ids: &[u64], degrees: f32, around_x: bool) {
         }
     }
     for g in &mut doc.graphics {
-        if !ids.contains(&g.id) {
+        // Equipment is drawn as seen; it does not tilt in 3D.
+        if !ids.contains(&g.id) || g.kind == crate::graphics::GraphicKind::Piece {
             continue;
         }
         let [oz, xz, yz] = g.depth;

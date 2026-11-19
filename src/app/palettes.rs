@@ -830,6 +830,9 @@ impl App {
         if matches!(tool, Tool::Graphic(_)) {
             self.sync_graphics();
         }
+        if tool == Tool::Equipment {
+            let _ = self.show_inspector_tab(InspectorTab::Equipment);
+        }
     }
 }
 

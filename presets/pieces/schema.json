@@ -408,7 +408,8 @@
               ]
             },
             "draw": {
-              "const": "standard"
+              "enum": ["standard", "none"],
+              "description": "standard: ReShiki draws the ground joint. none: a cone that is not ground glass (a septum, a sleeve) draws its own end; sockets are always standard."
             }
           }
         },

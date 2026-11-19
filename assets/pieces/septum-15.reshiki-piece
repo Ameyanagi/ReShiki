@@ -1,0 +1,131 @@
+{
+ "format": "reshiki-piece",
+ "format_version": 0,
+ "id": "reshiki/septum-15",
+ "revision": 1,
+ "family": "septum",
+ "variant": {
+  "joint": "15/25"
+ },
+ "names": {
+  "en": "Rubber septum, 15/25",
+  "ja": "セプタム 15/25"
+ },
+ "category": "addition",
+ "keywords": [
+  "septum",
+  "rubber",
+  "セプタム",
+  "ゴム栓"
+ ],
+ "credits": {
+  "author": "ReShiki",
+  "license": "CC0-1.0"
+ },
+ "units": "mm",
+ "shapes": [
+  {
+   "id": "s0",
+   "layer": "body",
+   "material": "rubber",
+   "role": "solid",
+   "color": [
+    138,
+    47,
+    42
+   ],
+   "path": "M-7.2 0L-6.5 12L6.5 12L7.2 0Z"
+  },
+  {
+   "id": "s1",
+   "layer": "front",
+   "material": "rubber",
+   "role": "solid",
+   "color": [
+    138,
+    47,
+    42
+   ],
+   "path": "M-11.2 1L-11.2 -4Q-11.2 -8 -7.8 -8Q0 -9.6 7.8 -8Q11.2 -8 11.2 -4L11.2 1Z"
+  },
+  {
+   "id": "s2",
+   "layer": "front",
+   "material": "rubber",
+   "role": "solid",
+   "color": [
+    138,
+    47,
+    42
+   ],
+   "path": "M-11.8 0L11.8 0L13.4 12Q0 13.6 -13.4 12Z"
+  },
+  {
+   "id": "s3",
+   "layer": "front",
+   "material": "glass",
+   "role": "detail",
+   "path": "M-10.8 0.4Q0 2 10.8 0.4"
+  },
+  {
+   "id": "s4",
+   "layer": "front",
+   "material": "glass",
+   "role": "detail",
+   "path": "M-6.49 3.5L-6.75 11.5"
+  },
+  {
+   "id": "s5",
+   "layer": "front",
+   "material": "glass",
+   "role": "detail",
+   "path": "M0 3.5L0 11.5"
+  },
+  {
+   "id": "s6",
+   "layer": "front",
+   "material": "glass",
+   "role": "detail",
+   "path": "M6.49 3.5L6.75 11.5"
+  },
+  {
+   "id": "s7",
+   "layer": "front",
+   "material": "rubber",
+   "role": "solid",
+   "path": "M-8.3 -8.2A8.3 1.6 0 0 1 8.3 -8.2A8.3 1.6 0 0 1 -8.3 -8.2Z"
+  }
+ ],
+ "joints": [
+  {
+   "id": "bottom",
+   "kind": "taper",
+   "size": "15/25",
+   "gender": "M",
+   "at": [
+    0,
+    -1.5
+   ],
+   "dir": [
+    0,
+    1
+   ],
+   "draw": "none"
+  },
+  {
+   "id": "needle",
+   "kind": "plug",
+   "family": "septum",
+   "gender": "F",
+   "size_mm": 1,
+   "at": [
+    0,
+    -9
+   ],
+   "dir": [
+    0,
+    -1
+   ]
+  }
+ ]
+}

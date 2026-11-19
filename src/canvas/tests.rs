@@ -1152,6 +1152,7 @@ pub(super) fn chain_canvas(doc: &Document, mode: ChainMode) -> MoleculeCanvas<'_
         aromatic_ring: false,
         template_connection: reshiki::templates::Connection::Auto,
         template: None,
+        piece: None,
         arrows: ArrowOptions {
             preset: Default::default(),
             style: &reshiki::arrows::ArrowStyle::DEFAULT,

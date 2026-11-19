@@ -26,7 +26,7 @@ pub enum Primitive {
         alpha: f32,
         primitive: Box<Primitive>,
     },
-    Picture(crate::graphics::Graphic),
+    Picture(Box<crate::graphics::Graphic>),
     Path {
         commands: Vec<crate::graphics::PathCommand>,
         style: crate::graphics::GraphicStyle,
@@ -2344,8 +2344,11 @@ fn graphic_primitive(g: &&crate::graphics::Graphic, doc: &Document) -> Vec<Primi
     if g.cycle.is_some() {
         return cycle_primitives(g, doc);
     }
+    if g.kind == crate::graphics::GraphicKind::Piece {
+        return crate::equipment::placed::primitives(g, doc.canvas_theme);
+    }
     if g.kind == crate::graphics::GraphicKind::Picture {
-        vec![Primitive::Picture((*g).clone())]
+        vec![Primitive::Picture(Box::new((*g).clone()))]
     } else {
         use crate::{graphics::GraphicStyle, palette::Color};
         let flat = |commands, rgb| Primitive::Path {

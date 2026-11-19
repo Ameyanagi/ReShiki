@@ -67,6 +67,7 @@ explains how the crates and modules fit together.
 - `src/app/drawing_panel_capture.rs`: Opt-in real-renderer evidence for the drawing-panel state transitions.
 - `src/app/drawing_polish_qa.rs`: Focused native-renderer and interaction evidence for drawing polish.
 - `src/app/engine_jobs.rs`: Chemistry engine jobs
+- `src/app/equipment.rs`: The Equipment browser
 - `src/app/event_slot.rs`: Native event receivers are installed before their subscription takes ownership.
 - `src/app/figure_export.rs`: Figure export preserves drawable content independently of molecular validation.
 - `src/app/figure_panels.rs`: Figure panels (Wrap in panel, titles, dividers) and lasting row, column and grid layouts.
@@ -686,9 +687,11 @@ explains how the crates and modules fit together.
 - `crates/model/src/editing/reference.rs`: Exact drawing orientation and single-bond stretching.
 - `crates/model/src/editing/rotation.rs`: Reference sites that follow rotation, unlike axis-aligned drawing bounds.
 - `crates/model/src/equipment.rs`: Lab apparatus
+- `crates/model/src/equipment/builtin.rs`: The built-in catalogue
 - `crates/model/src/equipment/eval.rs`: Evaluates a definition at parameter values
 - `crates/model/src/equipment/format.rs`: The `.reshiki-piece` format
 - `crates/model/src/equipment/geometry.rs`: Path data and plane geometry for pieces, in f64 millimetres.
+- `crates/model/src/equipment/placed.rs`: Pieces placed in a drawing.
 - `crates/model/src/equipment/plan.rs`: The paint plan
 - `crates/model/src/equipment/validate.rs`: Checks the schema cannot express
 - `crates/model/src/erasing.rs`: Erase the geometry crossed by a pointer stroke, including between motion events.
