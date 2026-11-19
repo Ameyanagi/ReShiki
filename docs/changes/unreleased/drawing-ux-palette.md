@@ -3,12 +3,11 @@ section: Changes
 issues: []
 ---
 
-- Open or close the command palette with **⌘K** (**Ctrl+K** on Windows and
-  Linux). **:** still opens it.
-- Find the new drawing commands in the palette, including cycle, equipment,
-  callout, panel, layout and style commands.
-- Palette labels show their section where needed, as in **Panel: Outline** and
-  **Purpose: Chemistry**. Look for **Opacity**, **Hollow block**, **Preview
-  reaction**, **Color by origin**, **Insert equipment…**, **Rounded corners**,
-  **Square corners**, **Row with even gutters**, **Column with even gutters** and
-  **Grid with even gutters**.
+- **⌘K opens the command palette** (**Ctrl+K** on Windows and Linux); press it
+  again to close. **:** still opens it.
+- The palette has the new drawing commands: cycles, equipment, callouts,
+  panels, layouts, arrow bodies, highlight styles and fill effects. A label
+  that needs its section shows it, as in **Panel: Outline**.
+- One name per feature: **Hollow block** for the outlined arrow body,
+  **Opacity** for see-through ring fills, **Rounded corners** for panels.
+  Palette search also accepts British spellings such as "colour".

@@ -21,7 +21,6 @@ use reshiki::{
     rings::Preset as RingPreset,
     typography::{Script, StyleChange, TextAlign},
 };
-use std::collections::HashSet;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Category {
@@ -443,41 +442,7 @@ pub(crate) fn build(app: &App) -> Vec<Command> {
             _ => true,
         });
     }
-    distinguish_insert_names(&mut list);
     list
-}
-
-/// Keep direct command names and distinguish any templates or examples that share one.
-fn distinguish_insert_names(list: &mut [Command]) {
-    fn kind(command: &Command) -> Option<&'static str> {
-        match &command.run {
-            Run::Template(_, id) if !id.starts_with("builtin:") => Some("saved template"),
-            Run::Template(..) => Some("template"),
-            Run::Send(messages) if matches!(messages.as_slice(), [Message::Example(_)]) => {
-                Some("example")
-            }
-            _ => None,
-        }
-    }
-    let mut used: HashSet<_> = list
-        .iter()
-        .filter(|c| kind(c).is_none())
-        .map(|c| c.name.clone())
-        .collect();
-    for command in list {
-        if let Some(kind) = kind(command)
-            && !used.insert(command.name.clone())
-        {
-            let original = &command.name;
-            let mut name = format!("{original} ({kind})");
-            let mut number = 2;
-            while !used.insert(name.clone()) {
-                name = format!("{original} ({kind} {number})");
-                number += 1;
-            }
-            command.name = name;
-        }
-    }
 }
 
 /// A row that opens a drawing or repository known here, or a link.

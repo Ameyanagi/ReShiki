@@ -677,6 +677,17 @@ impl App {
                 })
                 .collect()
         };
+        // Catalog order puts direct actions before templates and examples, so
+        // a repeated built-in title keeps the direct action. Saved templates
+        // always stay: they may hold a different structure under the same
+        // name, and their rows name the collection.
+        let mut names = std::collections::HashSet::new();
+        scored.retain(|(_, i, _)| {
+            catalog.get(*i).is_some_and(|c| {
+                matches!(&c.run, Run::Template(_, id) if !id.starts_with("builtin:"))
+                    || names.insert(c.name.clone())
+            })
+        });
         let blocked = |i: usize| blocked.get(i).copied().unwrap_or(false);
         // An exact alias ranks first even when it cannot run, to say why.
         // Recent commands stay above the rest, with available ones first.
@@ -730,11 +741,7 @@ impl App {
             .collect();
         let state = &mut self.commands;
         for (first, blocked, command) in rows {
-            if state
-                .hits
-                .iter()
-                .any(|&index| state.items[index].name == command.name)
-            {
+            if !names.insert(command.name.clone()) {
                 continue;
             }
             let index = state.items.len();

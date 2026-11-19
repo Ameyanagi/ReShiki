@@ -50,7 +50,11 @@ fn top(app: &App) -> &Command {
 fn drawing_commands_have_unique_palette_names() {
     let list = catalog::build(&app());
     let mut seen = HashSet::new();
-    for command in &list {
+    // Templates and examples may repeat a direct insert's name; search keeps the direct one.
+    for command in list.iter().filter(|c| {
+        !matches!(&c.run, Run::Template(..))
+            && !matches!(&c.run, Run::Send(m) if matches!(m.as_slice(), [Message::Example(_)]))
+    }) {
         assert!(
             seen.insert(command.name.as_str()),
             "Duplicate palette name: {}",
@@ -995,7 +999,7 @@ fn colon_opens_the_palette_and_benzene_inserts_one_undo_step() {
 }
 
 #[test]
-fn colliding_insert_names_keep_the_direct_command_and_distinguish_templates() {
+fn duplicate_titles_prefer_the_direct_insert() {
     let mut app = app();
     app.templates.library.templates = vec![reshiki::templates::Template {
         id: "test:benzene".into(),
@@ -1010,15 +1014,23 @@ fn colliding_insert_names_keep_the_direct_command_and_distinguish_templates() {
         anchor: Default::default(),
     }];
     search(&mut app, "benzene");
+    assert!(
+        app.commands
+            .catalog()
+            .iter()
+            .filter(|command| command.name == "Benzene")
+            .count()
+            > 1,
+        "the catalog lists Benzene as a direct insert, template and example"
+    );
     let ranked = app.commands.ranked();
-    assert_eq!(ranked.iter().filter(|c| c.name == "Benzene").count(), 1);
-    assert!(ranked.iter().any(|c| matches!(
-        &c.run, Run::Template(_, id) if id == "test:benzene" && c.name == "Benzene (saved template)"
-    )));
-    assert!(ranked.iter().any(|c| matches!(
-        &c.run, Run::Send(messages) if matches!(messages.as_slice(), [Message::Example(_)])
-            && c.name == "Benzene (example)"
-    )));
+    let benzene: Vec<_> = ranked.iter().filter(|c| c.name == "Benzene").collect();
+    assert!(
+        matches!(benzene.as_slice(), [direct, saved]
+            if matches!(direct.run, Run::Ring(_))
+                && matches!(&saved.run, Run::Template(_, id) if id == "test:benzene")),
+        "the built-in template and example repeat the direct insert; the saved template stays"
+    );
     assert_eq!(top(&app).name, "Benzene");
     assert!(matches!(
         top(&app).run,

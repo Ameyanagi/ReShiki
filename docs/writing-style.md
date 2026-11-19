@@ -70,25 +70,24 @@ link it.
 
 ## One name per feature
 
-| Use                                                                                                      | Not                                                               |
-| -------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| Opacity                                                                                                  | See-through (ring fill effect)                                    |
-| Hollow block (Arrow body: Hollow block in the command palette)                                           | Hollow (arrow body)                                               |
-| Purpose: Chemistry / Purpose: Reference / Purpose: Illustration (command palette)                        | Bare purpose labels in the command palette                        |
-| Preview reaction                                                                                         | Preview (in Reaction roles)                                       |
-| Color by origin                                                                                          | Update colors                                                     |
-| Insert equipment…                                                                                        | Equipment (toolbar action)                                        |
-| Row / Column / Grid with even gutters                                                                    | Arrange in a row / column / grid, Grid of 2 columns (new layouts) |
-| Rounded corners / Square corners (Panel: Rounded corners / Panel: Square corners in the command palette) | Rounded / Square (panel controls)                                 |
-| Rear opacity                                                                                             | rear-side opacity, rear visibility, cage opacity                  |
-| Chemical names                                                                                           | local Rust chemical naming, OPSIN backend, local naming           |
-| NMR prediction                                                                                           | NMR estimate, predicted spectrum                                  |
-| Generic structures                                                                                       | Generic Structures, generic expansion feature                     |
-| Atom maps                                                                                                | atom mapping proposal, map classes (in user text)                 |
-| Pen path                                                                                                 | tunable pen line, connected path                                  |
-| Reference align/stretch                                                                                  | exact reference geometry                                          |
-| Coordinate in place                                                                                      | coordination attachment, Coordinate…                              |
-| `.rsk` file                                                                                              | native file, native format, ReShiki native                        |
+| Use                       | Not                                                     |
+| ------------------------- | ------------------------------------------------------- |
+| Rear opacity              | rear-side opacity, rear visibility, cage opacity        |
+| Chemical names            | local Rust chemical naming, OPSIN backend, local naming |
+| NMR prediction            | NMR estimate, predicted spectrum                        |
+| Generic structures        | Generic Structures, generic expansion feature           |
+| Atom maps                 | atom mapping proposal, map classes (in user text)       |
+| Pen path                  | tunable pen line, connected path                        |
+| Reference align/stretch   | exact reference geometry                                |
+| Coordinate in place       | coordination attachment, Coordinate…                    |
+| `.rsk` file               | native file, native format, ReShiki native              |
+| Opacity                   | see-through (ring fill effect)                          |
+| Hollow block (arrow body) | Hollow                                                  |
+| Preview reaction          | Preview (in Reaction roles)                             |
+| Color by origin           | Update colors                                           |
+| Insert equipment…         | Equipment (toolbar)                                     |
+| Row with even gutters     | Arrange in a row, Row (new layout)                      |
+| Rounded corners           | Rounded (panel)                                         |
 
 ## App text
 
