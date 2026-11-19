@@ -586,8 +586,6 @@ impl App {
             part.atom_labels = self.tab.doc.atom_labels.clone();
             part
         };
-        let known: std::collections::HashSet<u64> =
-            self.tab.doc.graphics.iter().map(|g| g.id).collect();
         if !self.append_pasted(&part) {
             self.status = "Could not insert the clipboard drawing".into();
             self.error = true;
@@ -603,24 +601,6 @@ impl App {
             && part.arrows.is_empty()
             && part.graphics.iter().all(|g| g.picture.is_some())
         {
-            // Only the pictures just pasted: pasted into a panel, the
-            // selection is the panel's whole group.
-            if let Some((lo, hi)) = self
-                .tab
-                .doc
-                .graphics
-                .iter()
-                .filter(|g| g.picture.is_some() && !known.contains(&g.id))
-                .map(|g| g.bounds())
-                .reduce(|(a, b), (c, d)| {
-                    (
-                        Point::new(a.x.min(c.x), a.y.min(c.y)),
-                        Point::new(b.x.max(d.x), b.y.max(d.y)),
-                    )
-                })
-            {
-                self.reveal_bounds(lo, hi);
-            }
             self.status = "Picture pasted · Drag the corner handles to resize".into();
         } else {
             self.status = "Editable drawing pasted".into();
@@ -637,7 +617,7 @@ impl App {
     /// lands one bond length right of the drawing. Pages keep the small offset:
     /// right of the drawing may be off the page. Into one selected empty panel,
     /// such as a cleared one, the part lands in the panel's middle. The view
-    /// pans if the selection is clipped and keeps its zoom.
+    /// pans if the pasted items are clipped and keeps its zoom.
     pub(super) fn append_pasted(&mut self, part: &Document) -> bool {
         let before = self.tab.doc.clone();
         let center = editing::center(part, &part.all_ids());
@@ -682,12 +662,13 @@ impl App {
                 );
             }
         }
-        let mut selected = editing::append_preserving_layout(&mut self.tab.doc, part, offset);
-        if selected.is_empty() || self.tab.doc.validate().is_err() {
+        let pasted = editing::append_preserving_layout(&mut self.tab.doc, part, offset);
+        if pasted.is_empty() || self.tab.doc.validate().is_err() {
             self.tab.doc = before;
             return false;
         }
         // What fills a panel moves with it, as wrapped contents do.
+        let mut selected = pasted.clone();
         if let Some((id, _)) = panel {
             selected.push(id);
             if let Ok(grouped) = self.tab.doc.group_selection(&selected) {
@@ -698,7 +679,7 @@ impl App {
         if !self.adopt_changed_document(before) {
             return false;
         }
-        if let Some((lo, hi)) = edges(&self.tab.doc, &self.tab.selected) {
+        if let Some((lo, hi)) = edges(&self.tab.doc, &pasted) {
             self.pan_to_show(lo, hi);
         }
         true

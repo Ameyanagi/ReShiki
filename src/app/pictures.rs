@@ -158,21 +158,20 @@ impl App {
     /// Scrolls clipped bounds into view at the current zoom.
     pub(super) fn pan_to_show(&mut self, lo: Point, hi: Point) {
         let paper = self.guides.paper(iced::Rectangle::with_size(self.viewport));
-        let visible = iced::Rectangle::with_size(paper.size());
         let camera = self.tab.camera;
         let (lo, hi) = (camera.screen(lo, paper), camera.screen(hi, paper));
-        if visible.contains(lo) && visible.contains(hi) {
+        if lo.x >= 0. && lo.y >= 0. && hi.x <= paper.width && hi.y <= paper.height {
             return;
         }
-        let margin = 40.;
         let scroll = |lo: f32, hi: f32, size: f32| {
-            let to_start = lo - margin;
-            let to_end = hi + margin - size;
-            if to_end > to_start {
-                to_start
-            } else {
-                0.0_f32.clamp(to_end, to_start)
+            let spare = size - (hi - lo);
+            if spare < 0. {
+                return lo - 40.;
             }
+            let margin = 40.0_f32.min(spare / 2.);
+            let to_start = lo - margin;
+            let to_end = to_start - (spare - 2. * margin);
+            0.0_f32.clamp(to_end, to_start)
         };
         let center = camera.center.offset(
             scroll(lo.x, hi.x, paper.width) / camera.zoom,
