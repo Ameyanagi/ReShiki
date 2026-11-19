@@ -328,6 +328,12 @@ pub fn fit(doc: &mut Document, panel: u64) {
                     .iter()
                     .map(|link| (&link.atoms, link.annotation)),
             )
+            .map(|(atoms, annotation)| (atoms.as_slice(), annotation))
+            .chain(
+                doc.arrow_labels
+                    .iter()
+                    .map(|label| (std::slice::from_ref(&label.arrow), label.annotation)),
+            )
             .filter(|(atoms, annotation)| {
                 !atoms.is_empty()
                     && !held.contains(annotation)

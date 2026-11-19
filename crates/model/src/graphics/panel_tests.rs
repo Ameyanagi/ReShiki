@@ -197,3 +197,23 @@ fn a_flipped_panel_keeps_upright_titles_and_mirrors_its_dividers() {
     assert_eq!(p.titles, vec!["Evidence".to_string(), "Scheme".to_string()]);
     g.validate().unwrap();
 }
+
+#[test]
+fn a_band_title_reads_on_the_band_as_the_dark_canvas_shows_it() {
+    let mut doc = Document {
+        canvas_theme: crate::canvas_theme::CanvasTheme::Dark,
+        ..Default::default()
+    };
+    let mut g = panel(&["This work"], TitlePlace::Bar);
+    g.style.stroke = Color::Custom([0, 0, 255]);
+    doc.graphics.push(g);
+    let title = crate::scene::primitives(&doc)
+        .into_iter()
+        .find_map(|p| match p {
+            crate::scene::Primitive::Text { text, color, .. } if text == "This work" => Some(color),
+            _ => None,
+        })
+        .unwrap();
+    // Pure blue stays dark blue on the dark canvas, so the title shows white.
+    assert_eq!(doc.canvas_theme.color(title), [255; 3]);
+}

@@ -113,6 +113,11 @@ pub fn units(doc: &Document, group: u64) -> Vec<Vec<u64>> {
                 .iter()
                 .map(|link| (link.atoms.as_slice(), link.annotation)),
         )
+        .chain(
+            doc.arrow_labels
+                .iter()
+                .map(|label| (std::slice::from_ref(&label.arrow), label.annotation)),
+        )
         .collect();
     for (atoms, annotation) in &links {
         if !atoms.is_empty() && atoms.iter().all(|id| inside.contains(id)) {
