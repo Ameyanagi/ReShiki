@@ -195,7 +195,9 @@ impl Drawing {
         let angle = direction
             .filter(|p| p.distance(target.position) > radius)
             .map(|p| (p.y - target.position.y).atan2(p.x - target.position.x))
-            .unwrap_or_else(|| editing::open_angle(target.position, &neighbors));
+            .unwrap_or_else(|| {
+                editing::exocyclic_angle(doc, target_id, target.position, &neighbors)
+            });
         let length = if neighbors.is_empty() {
             self.length
         } else {

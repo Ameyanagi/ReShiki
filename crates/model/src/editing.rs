@@ -1833,7 +1833,10 @@ fn attached_ring_vertices(
     let angle = direction
         .filter(|p| p.distance(anchor) > radius)
         .map(|p| (p.y - anchor.y).atan2(p.x - anchor.x))
-        .unwrap_or_else(|| open_angle(anchor, &neighbors));
+        .unwrap_or_else(|| match atom {
+            Some(id) => exocyclic_angle(doc, id, anchor, &neighbors),
+            None => open_angle(anchor, &neighbors),
+        });
     let center = if atom.is_some() {
         anchor.offset(r * angle.cos(), r * angle.sin())
     } else {
@@ -1952,33 +1955,70 @@ fn check_ring_candidate(
 }
 
 pub fn open_angle(anchor: Point, neighbors: &[Point]) -> f32 {
-    use std::f32::consts::{PI, TAU};
-    if neighbors.is_empty() {
-        return PI;
-    }
+    open_gaps(anchor, neighbors)
+        .into_iter()
+        .max_by(|a, b| a.1.total_cmp(&b.1))
+        .map_or(std::f32::consts::PI, |(angle, _)| angle)
+}
+
+/// Each angular gap between `neighbors` as (bisector, width), in angle order.
+fn open_gaps(anchor: Point, neighbors: &[Point]) -> Vec<(f32, f32)> {
+    use std::f32::consts::TAU;
     let mut angles: Vec<_> = neighbors
         .iter()
         .map(|p| (p.y - anchor.y).atan2(p.x - anchor.x).rem_euclid(TAU))
         .collect();
     angles.sort_by(f32::total_cmp);
-    let (start, gap) = angles
+    angles
         .iter()
         .zip(angles.iter().cycle().skip(1))
         .take(angles.len())
         .enumerate()
         .map(|(i, (&start, &end))| {
-            (
-                start,
-                if i + 1 == angles.len() {
-                    end + TAU - start
-                } else {
-                    end - start
-                },
-            )
+            let gap = if i + 1 == angles.len() {
+                end + TAU - start
+            } else {
+                end - start
+            };
+            (start + gap / 2.0, gap)
+        })
+        .collect()
+}
+
+/// Choose the widest angular gap whose bisector leaves the atom's rings.
+pub fn exocyclic_angle(doc: &Document, id: u64, anchor: Point, neighbors: &[Point]) -> f32 {
+    let covalent: Vec<_> = doc
+        .bonds
+        .iter()
+        .filter(|b| !matches!(b.order, 0 | 5))
+        .filter_map(|b| {
+            let other = if b.a == id {
+                b.b
+            } else if b.b == id {
+                b.a
+            } else {
+                return None;
+            };
+            let p = doc.atom(other)?.position;
+            (anchor.distance(p) > 0.001).then_some((other, p, b.order))
+        })
+        .collect();
+    if covalent.len() < 2 {
+        return open_angle(anchor, neighbors);
+    }
+    let rings = ring_outlines(doc, id, &covalent);
+    if rings.is_empty() {
+        return open_angle(anchor, neighbors);
+    }
+    let step = 0.001 * crate::style::DEFAULT.bond_length_world;
+    open_gaps(anchor, neighbors)
+        .into_iter()
+        .filter(|&(angle, _)| {
+            let probe = anchor.offset(step * angle.cos(), step * angle.sin());
+            !rings.iter().any(|ring| encloses(ring, probe))
         })
         .max_by(|a, b| a.1.total_cmp(&b.1))
-        .unwrap_or((0., TAU));
-    start + gap / 2.0
+        .map_or_else(|| open_angle(anchor, neighbors), |(angle, _)| angle)
 }
 
 /// A standalone, unlabelled saturated ring can be grabbed by its interior.

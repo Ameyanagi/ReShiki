@@ -623,6 +623,35 @@ fn rings_dragged_from_an_atom_aim_exactly_at_the_pointer() {
 }
 
 #[test]
+fn ring_shared_at_a_fusion_atom_is_centered_outside_both_rings() {
+    let mut doc = Document::default();
+    let hexagon = ring(&mut doc, Point::default(), 6, false, 5.);
+    let id = hexagon[5];
+    let anchor = doc.atom(id).unwrap().position;
+    let edge = center(&doc, &[id, hexagon[0]]);
+    let heptagon = ring(&mut doc, edge, 7, false, 5.);
+    assert_eq!(heptagon.len(), 7);
+    // A shared ring needs two more bonds at the three-coordinate junction.
+    doc.atom_mut(id).unwrap().element = "P".into();
+
+    let (placed, ids) = ring_placement(&doc, anchor, 3, false, 5., None).unwrap();
+    assert_eq!(ids.len(), 3);
+    assert_eq!(ids[0], id);
+    let sum = ids.iter().fold(Point::default(), |sum, &id| {
+        let p = placed.atom(id).unwrap().position;
+        sum.offset(p.x, p.y)
+    });
+    let centroid = Point::new(sum.x / 3., sum.y / 3.);
+    for ring in [hexagon, heptagon] {
+        let outline: Vec<_> = ring
+            .iter()
+            .map(|&id| doc.atom(id).unwrap().position)
+            .collect();
+        assert!(!encloses(&outline, centroid), "ring center {centroid:?}");
+    }
+}
+
+#[test]
 fn ring_drag_chooses_the_requested_side_and_matches_the_target_edge() {
     for side in [-1.0, 1.0] {
         let mut doc = Document::default();
@@ -777,6 +806,28 @@ fn growth_uses_open_space_at_either_end_and_at_a_branch() {
     let alternate = bond_extension(&doc, doc.atom(c).unwrap().position, Some(c), 1);
     assert!(alternate.distance(right) > 60.0);
     assert!((alternate.x - 72.74613).abs() < 0.01 && (alternate.y - 42.0).abs() < 0.01);
+}
+
+#[test]
+fn exocyclic_angle_keeps_the_widest_gap_off_rings() {
+    let mut doc = Document::default();
+    let anchor = Point::default();
+    let id = doc.add_atom("C", anchor);
+    let neighbors = [
+        Point::new(14., -40.),
+        Point::new(14., 40.),
+        Point::new(-42., 0.),
+    ];
+    for p in neighbors {
+        let other = doc.add_atom("C", p);
+        doc.add_bond(id, other, 1, "plain");
+    }
+    doc.add_atom("O", Point::new(40., 1.));
+
+    assert_eq!(
+        exocyclic_angle(&doc, id, anchor, &neighbors).to_bits(),
+        open_angle(anchor, &neighbors).to_bits()
+    );
 }
 
 /// The new bond at `id` must leave every ring outline, and its midpoint too.

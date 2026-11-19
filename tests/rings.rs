@@ -1,5 +1,6 @@
 use reshiki::{
     document::{Document, Point},
+    editing,
     engine::{LocalEngine, Request},
     rings::{Drawing, Preset},
     templates,
@@ -135,6 +136,29 @@ async fn connecting_by_a_bond_keeps_the_whole_ring_and_rejects_full_valence() {
     assert!(tool.place(&doc, p(42., 0.), None, 5.).is_err());
     assert!(tool.place(&host, p(21., 0.), None, 5.).is_err());
     assert_eq!(host.atoms.len(), 2);
+}
+
+#[test]
+fn connecting_a_ring_at_a_fusion_atom_puts_it_outside_both_rings() {
+    let mut host = Document::default();
+    let hexagon = editing::ring(&mut host, Point::default(), 6, false, 5.);
+    let id = hexagon[5];
+    let anchor = host.atom(id).unwrap().position;
+    let edge = editing::center(&host, &[id, hexagon[0]]);
+    assert_eq!(editing::ring(&mut host, edge, 7, false, 5.).len(), 7);
+
+    let mut tool = drawing(Preset::Regular);
+    tool.connect = true;
+    let (placed, ids) = tool.place(&host, anchor, None, 5.).unwrap();
+    assert_eq!(ids.len(), 7);
+    assert_eq!(ids.last(), Some(&id));
+    for atom in &placed.atoms[host.atoms.len()..] {
+        assert!(
+            editing::ring_at(&host, atom.position).is_none(),
+            "{:?}",
+            atom.position
+        );
+    }
 }
 
 #[tokio::test]
