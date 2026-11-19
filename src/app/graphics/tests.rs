@@ -600,6 +600,11 @@ fn a_condition_icon_keeps_its_disc_and_lends_it_to_no_other_shape() {
         app.tab.doc.graphics[1].style.fill, paper,
         "the icon keeps its disc"
     );
+    let icon_style = app.tab.doc.graphics[1].style.clone();
+    let _ = app.update(Message::Graphics(Action::Style(GraphicChange::Shaded(
+        true,
+    ))));
+    assert_eq!(app.tab.doc.graphics[1].style, icon_style);
     // The style bar's color recolors the icon's lines, never its disc.
     app.tab.selected = vec![2];
     let blue = reshiki::palette::Color::Custom([30, 60, 200]);

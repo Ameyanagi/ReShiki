@@ -333,7 +333,7 @@ impl MoleculeCanvas<'_> {
                     for graphic in &mut preview.to_mut().graphics {
                         if !existing.contains(&graphic.id) {
                             graphic.style.stroke = tint;
-                            if graphic.style.fill.is_some() {
+                            if graphic.style.fill.is_some() && !graphic.is_condition_icon() {
                                 graphic.style.fill = Some(Paint::Palette(Hue::Teal, Row::Tint));
                             }
                         }

@@ -779,8 +779,10 @@ impl App {
             {
                 continue;
             }
-            // A condition icon keeps its disc when a fill is set for a selection.
-            if matches!(change, GraphicChange::Fill(_)) && g.is_condition_icon() {
+            // A condition icon keeps its disc when a selection's fill or shading changes.
+            if matches!(change, GraphicChange::Fill(_) | GraphicChange::Shaded(_))
+                && g.is_condition_icon()
+            {
                 continue;
             }
             // Only a closed shape has an inside for a gradient to fill.

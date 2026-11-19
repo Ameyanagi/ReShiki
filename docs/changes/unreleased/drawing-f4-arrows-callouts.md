@@ -13,6 +13,9 @@ issues: []
   and enzyme icons. Click one onto an arrow and group them, and the icon moves
   with the arrow. It is an ordinary shape, so the reaction and its condition
   text are unchanged.
+- An image exported on a black or custom background paints shapes filled with
+  the paper color in that background color, so a condition icon's disc
+  matches the page.
 - **Arc arrows**: **Make arc** in **Properties** and the **Arc** preset draw
   circular arc arrows. Drag the diamond to change the sweep, or type it in
   **Sweep (°)**. ChemDraw arc arrows open as arc arrows and export as ChemDraw

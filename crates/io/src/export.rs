@@ -1,4 +1,4 @@
-use crate::{document::Document, scene};
+use crate::{document::Document, palette::Color, scene};
 use std::borrow::Cow;
 
 /// The paper behind a copied or exported picture.
@@ -18,22 +18,28 @@ impl Background {
     /// better on it. Only Ink follows it: palette, element and custom colors
     /// keep how the drawing's own canvas shows them. 3D models keep the
     /// drawing's theme and take its colors for the new canvas.
+    /// Paper takes the background color.
     pub fn apply(self, doc: &Document) -> (Cow<'_, Document>, Option<[u8; 3]>) {
         match self {
             Self::Transparent => (Cow::Borrowed(doc), None),
             Self::Canvas => (Cow::Borrowed(doc), Some(doc.canvas_theme.background())),
             Self::Color(paper) => {
                 let canvas = crate::canvas_theme::ink_canvas(paper);
-                let doc = if doc.canvas_theme == canvas {
-                    Cow::Borrowed(doc)
-                } else {
-                    let mut flipped = crate::canvas_theme::resolved_document(doc).into_owned();
-                    flipped.canvas_theme = canvas;
-                    flipped.color_theme = doc.color_theme;
-                    flipped.custom_theme.clone_from(&doc.custom_theme);
-                    Cow::Owned(flipped)
-                };
-                (doc, Some(paper))
+                let mut drawing = doc.clone();
+                crate::palette::for_each_color_mut(&mut drawing, |color| {
+                    if *color == Color::Paper {
+                        *color = Color::Custom(paper);
+                    }
+                });
+                if drawing.canvas_theme != canvas {
+                    if let Cow::Owned(resolved) = crate::canvas_theme::resolved_document(&drawing) {
+                        drawing = resolved;
+                    }
+                    drawing.canvas_theme = canvas;
+                    drawing.color_theme = doc.color_theme;
+                    drawing.custom_theme.clone_from(&doc.custom_theme);
+                }
+                (Cow::Owned(drawing), Some(paper))
             }
         }
     }
