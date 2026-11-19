@@ -230,9 +230,11 @@ changes in this release are by @Ameyanagi.
 - **NMR shifts on the atoms.** `with_labels(shifts)` in
   [Python](python.md#label-the-atoms), `convert --nucleus 13C --labels value`
   on the [command line](agent-cli.md#nmr-labels) and the `label_atoms`
-  [MCP tool](agent-api.md#tools) write the shifts as atom numbers, so `.rsk`,
-  SVG, PNG, PDF, CDXML and CDX files keep them. By default a label is the bare
-  shift journals print (`1.28`, with "δ (ppm)" stated once in the caption);
+  [MCP tool](agent-api.md#tools) write the shifts as atom numbers. The command
+  line writes labelled SVG, PNG, PDF, CDXML and CDX files. For an editable
+  `.rsk` drawing with labels, use Python `rsk()` or
+  [MCP `file_save`](agent-api.md#folder-grants). The `value` format, Python's
+  default, is the bare shift journals print (`1.28`, with "δ (ppm)" stated once in the caption);
   `#3`, `1.28 ppm` and `#3 · 1.28 ppm`, as in **Show labels**, are also
   offered. The command line gives ¹H shifts 2 decimal places and ¹³C 1;
   Python gives 1 only when every row is a ¹³C shift, and MCP `label_atoms`

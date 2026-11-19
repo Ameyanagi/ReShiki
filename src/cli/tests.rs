@@ -2231,6 +2231,21 @@ fn assert_help_golden(actual: &str, golden: &str, case: &str) {
 }
 
 #[test]
+fn convert_help_lists_all_label_formats() {
+    let help = help(commands::find("convert"));
+    let (_, labels) = help
+        .split_once("  --nucleus NUCLEUS --labels FORMAT\n")
+        .unwrap();
+    let (labels, _) = labels.split_once("\n  --").unwrap();
+    for format in ["value", "numbers", "ppm", "both"] {
+        assert!(
+            labels.split_whitespace().any(|word| word == format),
+            "missing {format} in --labels help"
+        );
+    }
+}
+
+#[test]
 fn help_builders_match_golden_text() {
     assert_help_golden(
         &help(None),
