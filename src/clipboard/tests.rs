@@ -1725,19 +1725,19 @@ async fn failed_native_cdx_and_cdxml_fall_through_and_newer_drawing_error_is_ret
 
 #[tokio::test]
 async fn unsupported_chemdraw_clipboard_keeps_its_diagnostic_instead_of_generating_a_new_layout() {
-    let xml =
-        include_bytes!("../../tests/fixtures/chemdraw-clipboard-layout/unsupported-graphic.cdxml");
-    let binary =
-        include_bytes!("../../tests/fixtures/chemdraw-clipboard-layout/unsupported-graphic.cdx");
+    // A bond to an atom the drawing does not have: broken, so still refused.
+    let xml = "<CDXML><page id='1'><fragment id='2'><n id='3' p='10 10'/>\
+               <n id='4' p='24 10'/><b id='5' B='3' E='4'/><b id='6' B='4' E='9'/>\
+               </fragment></page></CDXML>";
+    let binary = crate::exchange::to_cdx(xml).unwrap();
     for drawing in [
-        Representation::new("chemical/x-cdxml", xml),
-        Representation::new("com.revvity.chemdraw.cdx-clipboard", binary),
+        Representation::new("chemical/x-cdxml", xml.as_bytes()),
+        Representation::new("com.revvity.chemdraw.cdx-clipboard", &binary),
     ] {
         let original_error =
             paste_representation(LocalEngine::in_process(), drawing.clone(), false)
                 .await
                 .unwrap_err();
-        assert!(original_error.contains("Gradient-shaded CDXML orbitals are not supported yet"));
         for (kind, text) in [
             (
                 "org.opensmiles.smiles",

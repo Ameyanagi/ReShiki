@@ -650,6 +650,7 @@ fn the_first_save_of_a_chemdraw_file_names_what_keeping_the_format_loses() {
         schemes: 1,
         steps: 1,
         pages: 1,
+        unsupported: 0,
     };
     assert_eq!(
         keep_format_text("cdxml", one, &Document::default()),
@@ -701,12 +702,13 @@ fn the_first_save_of_a_chemdraw_file_names_what_keeping_the_format_loses() {
             ChemdrawLoss {
                 schemes: 4,
                 steps: 12,
-                pages: 0
+                pages: 0,
+                unsupported: 3,
             },
             &doc
         ),
         format!(
-            "Keep as CDXML loses 4 reaction schemes, 12 steps, reaction roles and arrow links. {unchanged}"
+            "Keep as CDXML loses 4 reaction schemes, 12 steps, 3 objects ReShiki draws differently or leaves out, reaction roles and arrow links. {unchanged}"
         )
     );
 }

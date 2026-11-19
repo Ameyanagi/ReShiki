@@ -68,7 +68,7 @@ pub fn chemdraw_loss(format: &str, contents: &str) -> ChemdrawLoss {
         "cdx" => STANDARD
             .decode(contents)
             .map_err(|error| error.to_string())
-            .and_then(|bytes| crate::exchange::from_cdx(&bytes)),
+            .and_then(|bytes| crate::exchange::from_cdx_tolerant(&bytes)),
         _ => return ChemdrawLoss::default(),
     };
     xml.ok()

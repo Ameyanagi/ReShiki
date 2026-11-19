@@ -44,7 +44,10 @@ for code, enum in {
     # Keep the existing native Rust correction when regenerating its schema:
     # ChemDraw-written arrows use 1 for None; zero is Unspecified.
     0xA37: {"Unspecified": 0, "None": 1, "Solid": 2, "Shaded": 4},
-    0xA3B: {"None": 0, "Cross": 1, "Hash": 2},
+    # ChemDraw 26 writes 2 for the cross and 3 for the hash.
+    0xA3B: {"None": 0, "Cross": 2, "Hash": 3},
+    # ChemDraw 26 writes zero for the lone pair and 13 for the bar.
+    0xA07: {**PUBLISHED[0xA07][2], "LonePair": 0, "LonePairBar": 13},
 }.items():
     name, kind, _ = PROPERTIES[code]
     PROPERTIES[code] = name, kind, enum

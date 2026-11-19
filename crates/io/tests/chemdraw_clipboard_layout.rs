@@ -217,19 +217,33 @@ async fn foreign_drawings_keep_one_common_geometry_frame_through_editable_roundt
 }
 
 #[tokio::test]
-async fn unsupported_rich_drawing_remains_an_atomic_rejection() {
+async fn a_style_reshiki_cannot_draw_imports_the_whole_drawing_with_a_notice() {
     let engine = LocalEngine::in_process();
+    let (plain, _) =
+        formats::read_with_warnings(fixture("valid-layout", "cdxml"), "cdxml", &engine)
+            .await
+            .unwrap();
     for format in ["cdxml", "cdx", "cds"] {
-        let error = formats::read_with_engine(
+        let (document, warnings) = formats::read_with_warnings(
             fixture("unsupported-graphic", format),
             if format == "cds" { "cdx" } else { format },
             &engine,
         )
         .await
-        .unwrap_err();
+        .unwrap();
         assert_eq!(
-            error,
-            "Gradient-shaded CDXML orbitals are not supported yet"
+            warnings,
+            [
+                "Nearest style used: 1 shaded orbital in flat grey. ReShiki cannot draw \
+                 these yet. Keep the original ChemDraw file if you need them."
+            ],
+            "{format}"
+        );
+        assert_eq!(document.atoms.len(), plain.atoms.len(), "{format}");
+        assert_eq!(
+            document.graphics.len(),
+            plain.graphics.len() + 1,
+            "{format}"
         );
     }
 }

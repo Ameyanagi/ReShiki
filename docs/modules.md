@@ -495,6 +495,7 @@ explains how the crates and modules fit together.
 
 - `crates/io/src/chemistry/cdxml.rs`: Bounded molecular CDXML reader for the pinned ChemDraw-enabled RDKit reader.
 - `crates/io/src/chemistry/cdxml/abbreviations.rs`: Explicit chemical abbreviation expansion, ported from reference/engine/abbreviations_exchange.py::flatten.
+- `crates/io/src/chemistry/cdxml/approximate.rs`: ChemDraw styles and objects that ReShiki cannot draw yet.
 - `crates/io/src/chemistry/cdxml/arrows.rs`: Native-precision arrows from reference/engine/arrows_exchange.py::read_arrow.
 - `crates/io/src/chemistry/cdxml/association.rs`: Shared bounded association of source nodes with prepared, scaled atoms.
 - `crates/io/src/chemistry/cdxml/attachments.rs`: ChemDraw NodeType 10/11

@@ -93,7 +93,9 @@ for name, length in [
         {
             "id": name,
             "bond_length": length,
-            "expected": "reject" if name == "unsupported-graphic" else "preserve-layout",
+            "expected": "import-with-notice"
+            if name == "unsupported-graphic"
+            else "preserve-layout",
             "files": {format_: filename for format_, (filename, _) in files.items()},
             "sha256": {
                 format_: hashlib.sha256(data).hexdigest() for format_, (_, data) in files.items()

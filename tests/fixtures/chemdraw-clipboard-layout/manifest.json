@@ -50,7 +50,7 @@
     {
       "id": "unsupported-graphic",
       "bond_length": "14.4",
-      "expected": "reject",
+      "expected": "import-with-notice",
       "files": {
         "cdxml": "unsupported-graphic.cdxml",
         "cdx": "unsupported-graphic.cdx",

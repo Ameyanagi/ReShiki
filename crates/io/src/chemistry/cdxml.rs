@@ -13,6 +13,7 @@
 //! stereo sequence. Scene assembly, final CIP labels and identifiers remain
 //! separate. Unsupported queries and malformed fragments fail atomically.
 mod abbreviations;
+mod approximate;
 mod arrows;
 pub(crate) use arrows::native_hypot;
 mod association;
@@ -43,6 +44,7 @@ mod coordination_tests;
 mod residue_tests;
 #[cfg(test)]
 mod tests;
+pub use approximate::approximate;
 pub(crate) use variables::drawing_variables;
 
 pub use abbreviations::{

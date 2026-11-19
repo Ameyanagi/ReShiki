@@ -322,10 +322,56 @@ number of graphic objects. `.rsk` files keep ReShiki's exact model.
 
 `.rsk`/SVG/PDF/PNG keep dots. SVG/PDF/EMF/PNG draw path arrowheads, and
 CDXML/CDX keep their editable head settings on open curves.
-Unsupported legacy shapes, doubled curves, ChemDraw `alpha` transparency and arbitrary external
-styling are not implemented. A bracket becomes a polymer
+ReShiki has no doubled curve or ChemDraw `alpha` transparency yet, and draws
+only some of ChemDraw's other objects. A ChemDraw file that uses them still
+opens: see
+[ChemDraw styles ReShiki cannot draw yet](#chemdraw-styles-reshiki-cannot-draw-yet).
+A bracket becomes a polymer
 repeating unit, with a movable repeat label, through **Define repeating unit**;
 see [generic structures](generic-structures.md#define-a-repeating-unit).
+
+### ChemDraw styles ReShiki cannot draw yet
+
+Opening or pasting a CDX or CDXML file never fails because of one style or
+object. ReShiki imports the nearest thing it draws and shows one message that
+lists what changed and how many, such as "2 doubled curves as single lines;
+1 rotated caption upright".
+
+| In the ChemDraw file                                                       | In ReShiki                                                   |
+| -------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| Shaded orbital                                                             | The orbital in flat grey                                     |
+| Doubled curve                                                              | A single line                                                |
+| See-through object (alpha)                                                 | Opaque                                                       |
+| Arc from an older ChemDraw file                                            | The same arc as a curve or curved arrow, without a message   |
+| Arc arrow without its centre or axes                                       | A straight arrow                                             |
+| Curved arrow with a double shaft; longer curve with a no-go or dipole mark | The curve without the mark                                   |
+| Two upright single brackets of one style that face each other              | One bracket pair, without a message                          |
+| Any other single bracket                                                   | A curve of the same shape                                    |
+| Dagger, double dagger, lone pair bar; hybrid and filled orbitals           | The matching ReShiki symbol or orbital, without a message    |
+| Rac, Abs and Rel stereo flags                                              | Text                                                         |
+| Rotated caption; outlined or shadowed text                                 | Upright; plain face                                          |
+| Atom label with more than one font, size or weight                         | The style of its first character; colours are kept           |
+| Line, arrowhead, shadow or text size outside ReShiki's range               | The nearest size in range                                    |
+| BioDraw shape, gel plate, TLC plate, other unknown object                  | Left out and named; captions and drawings inside it are kept |
+| Table                                                                      | The cell contents without the frame                          |
+| Plasmid map in a CDXML file                                                | Its ring, regions as arcs, and labels                        |
+| Picture without a PNG, TIFF, JPEG, GIF or BMP copy                         | Left out and named                                           |
+
+In a CDX file, a table, plasmid map, gel plate or TLC plate is named as "other
+ChemDraw object", and the captions and drawings inside it are kept. A CDX
+property or value ReShiki does not know is skipped on a drawing object. On an
+atom or bond, an unknown property is skipped and named in the message, and an
+unknown value still refuses the file.
+
+Saving such a file back in ChemDraw's format writes ReShiki's drawing, not the
+original objects. The first **Save** of the opened file counts them: "Keep as
+CDXML loses 3 objects ReShiki draws differently or leaves out."
+
+A file is still refused when it is cut off or otherwise broken, exceeds a size
+limit, has nothing ReShiki can draw, or holds chemistry ReShiki cannot read,
+such as a biopolymer sequence. A CDX file that an earlier ReShiki version saved
+with a hash no-go mark or a lone pair symbol now shows a cross or a lone pair
+bar, because earlier versions wrote them with other values than ChemDraw.
 
 Format references: the
 [published CDXML DTD](https://static.chemistry.revvitycloud.com/cdxml/CDXML.dtd),
