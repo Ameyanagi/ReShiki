@@ -1271,7 +1271,8 @@ fn arrange_commands_have_one_name_on_every_surface() {
         assert!(
             palette.iter().any(|c| {
                 matches!(&c.run, super::super::command_palette::catalog::Run::Send(messages)
-                    if format!("{:?}", messages[0]) == message && c.name == command.name())
+                    if messages.first().is_some_and(|m| format!("{m:?}") == message)
+                        && c.name == command.name())
             }),
             "{message} is {} in the palette",
             command.name()
