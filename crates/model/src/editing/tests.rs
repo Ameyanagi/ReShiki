@@ -866,8 +866,30 @@ fn a_narrow_ring_counts_and_a_hydrogen_bond_closes_no_ring() {
         doc.add_bond(s, id, 1, "plain");
     }
     doc.add_bond(a, h, 1, "plain");
-    doc.add_bond(h, b, 0, "plain");
+    doc.add_bond(h, b, 0, "dotted");
     assert!(bond_extension(&doc, Point::default(), Some(s), 1).x > 30.0);
+}
+
+#[test]
+fn a_hydrogen_or_dative_link_at_the_atom_closes_no_ring() {
+    for (order, display) in [(0, "dotted"), (crate::bonds::DATIVE, "plain")] {
+        let mut doc = Document::default();
+        let s = doc.add_atom("C", Point::default());
+        let a = doc.add_atom("O", Point::new(14.0, -40.0));
+        let w = doc.add_atom("C", Point::new(-42.0, 0.0));
+        let b = doc.add_atom("O", Point::new(14.0, 40.0));
+        let bridge = doc.add_atom("C", Point::new(84.0, 0.0));
+        doc.add_bond(s, a, 1, "plain");
+        doc.add_bond(s, w, 1, "plain");
+        doc.add_bond(s, b, order, display);
+        doc.add_bond(b, bridge, 1, "plain");
+        doc.add_bond(bridge, a, 1, "plain");
+
+        // The widest gap points east, inside the outline s–b–bridge–a.
+        // The link from s to b cannot close that ring.
+        let end = bond_extension(&doc, Point::default(), Some(s), 1);
+        assert!(end.x > 30.0, "bond order {order} gave endpoint {end:?}");
+    }
 }
 
 #[test]

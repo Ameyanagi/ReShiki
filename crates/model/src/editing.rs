@@ -1243,8 +1243,13 @@ pub fn bond_extension(doc: &Document, start: Point, atom: Option<u64>, order: u8
         }
     };
     let point = |angle: f32| start.offset(length * angle.cos(), length * angle.sin());
-    let rings = match (atom, neighbors.as_slice()) {
-        (Some(id), [_, _, ..]) => ring_outlines(doc, id, &neighbors),
+    let covalent: Vec<_> = neighbors
+        .iter()
+        .copied()
+        .filter(|n| !matches!(n.2, 0 | 5))
+        .collect();
+    let rings = match (atom, covalent.as_slice()) {
+        (Some(id), [_, _, ..]) => ring_outlines(doc, id, &covalent),
         _ => vec![],
     };
     let score = |angle: f32, gap: f32| {
@@ -1294,9 +1299,9 @@ pub fn bond_extension(doc: &Document, start: Point, atom: Option<u64>, order: u8
     point(best.0)
 }
 
-/// The outline of the smallest ring through `atom` and each pair of its
-/// `neighbors` that a covalent path avoiding `atom` joins. Hydrogen bonds and
-/// dative links close no ring.
+/// The outline of the smallest ring through `atom` for each pair of its
+/// covalently bonded `neighbors` joined by a covalent path avoiding `atom`.
+/// Hydrogen bonds and dative links close no ring at `atom` or along the path.
 fn ring_outlines(doc: &Document, atom: u64, neighbors: &[(u64, Point, u8)]) -> Vec<Vec<Point>> {
     let positions: HashMap<_, _> = doc.atoms.iter().map(|a| (a.id, a.position)).collect();
     let mut adjacent = HashMap::<u64, Vec<u64>>::new();
