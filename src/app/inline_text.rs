@@ -811,7 +811,8 @@ pub(super) fn commits_draft(message: &Message) -> bool {
     if matches!(
         message,
         Message::Labels(super::atom_labels::Action::LocantsFinished(..))
-    ) {
+    ) || matches!(message, Message::Equipment(a) if a.completes())
+    {
         return false;
     }
     matches!(

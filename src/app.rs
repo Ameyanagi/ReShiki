@@ -87,6 +87,7 @@ mod palettes;
 #[cfg(test)]
 mod performance;
 mod pictures;
+mod piece_libraries;
 mod popover;
 mod printing;
 mod prompt;

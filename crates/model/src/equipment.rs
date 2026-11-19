@@ -6,6 +6,7 @@ pub mod format;
 pub mod geometry;
 pub mod placed;
 pub mod plan;
+pub mod revise;
 pub mod solve;
 pub mod validate;
 

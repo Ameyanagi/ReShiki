@@ -1,12 +1,25 @@
-//! `reshiki --cli pieces check FILE…`: validate equipment piece files, the
-//! check authors and CI run before sharing a piece.
-use super::host::{CliError, labelled};
-use reshiki_model::equipment::{
-    format::{self, Definition},
-    validate::MAX_FILE_BYTES,
+//! `reshiki --cli pieces`: validate equipment piece files and render previews.
+use super::{
+    args::PieceRender,
+    convert::refuse_binary,
+    host::{CliError, Session, labelled},
+    render,
+};
+use reshiki_model::{
+    canvas_theme::CanvasTheme,
+    document::{Document, Point},
+    equipment::{
+        format::{self, Definition},
+        placed,
+        validate::MAX_FILE_BYTES,
+    },
 };
 use serde_json::{Map, Value, json};
-use std::{io::Write, path::Path, path::PathBuf};
+use std::{
+    io::Write,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 /// Prints one JSON line with a result per file; fails when any file fails.
 pub(crate) fn check(files: &[PathBuf], out: &mut dyn Write) -> Result<(), CliError> {
@@ -30,6 +43,44 @@ pub(crate) fn check(files: &[PathBuf], out: &mut dyn Write) -> Result<(), CliErr
             files.len()
         ))),
     }
+}
+
+/// Renders one checked piece in a drawing of its own.
+pub(crate) async fn render(
+    PieceRender {
+        file,
+        dark,
+        preview,
+    }: PieceRender,
+    out: &mut dyn Write,
+    err: &mut dyn Write,
+    terminal: bool,
+) -> Result<(), CliError> {
+    refuse_binary(&preview.format, &preview.output, terminal)?;
+    if dark && preview.format == "png" {
+        return Err(CliError::Failed(
+            "--dark needs --to svg: PNG previews are drawn on white".into(),
+        ));
+    }
+    let definition = read(&file).map_err(CliError::Failed)?;
+    let mut doc = Document {
+        canvas_theme: if dark {
+            CanvasTheme::Dark
+        } else {
+            CanvasTheme::Light
+        },
+        ..Document::default()
+    };
+    let scale = placed::world_per_mm(&doc, placed::DEFAULT_PT_PER_MM);
+    doc.graphics.push(placed::graphic(
+        1,
+        Arc::new(definition),
+        Point::default(),
+        scale,
+    ));
+    let mut session = Session::new();
+    let document = session.store_document(doc)?;
+    render::write(&mut session, document, preview, out, err).await
 }
 
 fn read(path: &Path) -> Result<Definition, String> {

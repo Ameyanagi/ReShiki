@@ -13,7 +13,7 @@ Commands:
   analyze      Print molecular properties as one JSON line
   predict-nmr  Print predicted NMR shifts as one JSON line
   name         Print the systematic name of a structure
-  pieces       Check equipment piece files: reshiki --cli pieces check FILE…
+  pieces       Check or render equipment piece files
   info         Print versions, limits and formats as one JSON line
   tools        Print the agent tool catalog as one JSON line
   schema       Print a JSON Schema: reshiki --cli schema proposal
@@ -248,14 +248,22 @@ atom, in input atom order. Atoms outside the principal parent have null.
 
 ```text
 Experimental: ReShiki's agent tools, schemas and results may change between releases.
-Usage: reshiki --cli pieces check FILE...
+Usage: reshiki --cli pieces (check FILE...
+                           | render FILE [--to svg|png] [-o OUTPUT|-] [--dark] [--force])
 
-Checks lab equipment piece files (.reshiki-piece): the format, the limits,
-every reference between shapes, joints, parts and parameters, and that each
-joint sits on the rim of its opening. Prints one JSON line,
+check validates lab equipment piece files (.reshiki-piece). It checks the
+format, limits, references between shapes, joints, parts and parameters,
+and whether each joint sits on the rim of its opening. It prints one JSON line,
 {"pieces": [{"file", "ok", "id", "revision", "hash"} or
 {"file", "ok": false, "error"}]}, and exits 1 when any file fails. The
-hash is the piece's content identity. Nothing is installed or changed.
+hash is the piece's content identity.
+
+render validates one piece and draws it alone in the default line style.
+  --to FORMAT    Choose svg (default) or png.
+  -o OUTPUT      Write to OUTPUT. Omit -o or use -o - for stdout.
+                 PNG output to a terminal is refused.
+  --dark         Use dark canvas colors.
+  --force        Replace OUTPUT if it exists.
 ```
 
 ## reshiki --cli info

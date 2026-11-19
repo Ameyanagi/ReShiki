@@ -144,6 +144,7 @@ explains how the crates and modules fit together.
 - `src/app/performance/hover.rs`: Hover profiling through the application update and the real widget renderer.
 - `src/app/performance/redraw.rs`: Redraw and memory workloads
 - `src/app/pictures.rs`: Asynchronous picture replacement and selection-aware size controls.
+- `src/app/piece_libraries.rs`: Equipment libraries in the Equipment browser
 - `src/app/popover.rs`: A menu or panel anchored to a toolbar button, drawn over the surrounding rows so that nothing moves.
 - `src/app/printing.rs`
 - `src/app/prompt.rs`: Questions the app asks in its own dialog
@@ -239,7 +240,7 @@ explains how the crates and modules fit together.
 - `src/cli/io.rs`: The CLI's file and standard-input access
 - `src/cli/mcp_usage.rs`: Shared MCP help and heap limits for headless entry points.
 - `src/cli/name.rs`: `reshiki --cli name`
-- `src/cli/pieces.rs`: `reshiki --cli pieces check FILE…`
+- `src/cli/pieces.rs`: `reshiki --cli pieces`
 - `src/cli/predict_nmr.rs`: `reshiki --cli predict-nmr`
 - `src/cli/reference.rs`: Deterministic agent documentation from the live CLI and operation contracts.
 - `src/cli/render.rs`: `reshiki --cli render`
@@ -608,6 +609,7 @@ explains how the crates and modules fit together.
 - `crates/io/src/nmr/labels.rs`: Predicted shifts written onto a drawing as atom numbers, for scripts.
 - `crates/io/src/nmr/shifts.rs`: The NMR prediction that Python, the command line and MCP return.
 - `crates/io/src/payload.rs`: Editable drawing snapshots carried by ordinary PNG, SVG, and PDF figures.
+- `crates/io/src/piece_library.rs`: Libraries of equipment pieces
 - `crates/io/src/preview.rs`: The editor's PNG preview of a drawing, shared by the assistant's canvas tools, the MCP `render` and `convert` tools, the CLI and the browser library, so every surface draws the same pixels.
 - `crates/io/src/recovery.rs`
 - `crates/io/src/task.rs`: Blocking chemistry and rendering work off the async executor.
@@ -696,6 +698,7 @@ explains how the crates and modules fit together.
 - `crates/model/src/equipment/geometry.rs`: Path data and plane geometry for pieces, in f64 millimetres.
 - `crates/model/src/equipment/placed.rs`: Pieces placed in a drawing.
 - `crates/model/src/equipment/plan.rs`: The paint plan
+- `crates/model/src/equipment/revise.rs`: Moving placed pieces to another revision of their definition, as a library offers it.
 - `crates/model/src/equipment/solve.rs`: Seats join the joints of placed pieces.
 - `crates/model/src/equipment/validate.rs`: Checks the schema cannot express
 - `crates/model/src/erasing.rs`: Erase the geometry crossed by a pointer stroke, including between motion events.

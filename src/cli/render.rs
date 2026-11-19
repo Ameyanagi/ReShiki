@@ -1,11 +1,11 @@
 //! `reshiki --cli render`: import, then render a preview through the ops
 //! tools.
 use super::{
-    args::Render,
+    args::{Preview, Render},
     convert::{emit, refuse_binary},
     host::{CliError, Session},
 };
-use serde_json::json;
+use serde_json::{Value, json};
 use std::io::Write;
 
 /// Renders as `render` says. `terminal` tells whether stdout is one.
@@ -18,18 +18,29 @@ pub(crate) async fn run(
     err: &mut dyn Write,
     terminal: bool,
 ) -> Result<(), CliError> {
-    let Render {
-        input,
+    let Render { input, preview } = render;
+    refuse_binary(&preview.format, &preview.output, terminal)?;
+    let mut session = Session::new();
+    let document = session.import(input, err).await?;
+    write(&mut session, document, preview, out, err).await
+}
+
+/// Renders a session document and writes the image to its destination.
+pub(crate) async fn write(
+    session: &mut Session,
+    document: Value,
+    preview: Preview,
+    out: &mut dyn Write,
+    err: &mut dyn Write,
+) -> Result<(), CliError> {
+    let Preview {
         format,
         svg_text,
         output,
         width,
         height,
         force,
-    } = render;
-    refuse_binary(&format, &output, terminal)?;
-    let mut session = Session::new();
-    let document = session.import(input, err).await?;
+    } = preview;
     let arguments = json!({
         "document": document,
         "format": format,

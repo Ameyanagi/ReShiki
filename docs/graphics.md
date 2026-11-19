@@ -330,6 +330,44 @@ structures goes behind them too, and the label says **Goes behind the
 structures**. Undo reverses a snap, an inserted adapter and a pull-out in one
 step.
 
+### Keep and share equipment pieces
+
+The Equipment panel shows pieces from three places: the built-in catalogue,
+**My pieces**, and lab folders you link. The second menu under the search box
+shows one library or all of them.
+
+- **Libraries → Import…** adds `.reshiki-piece` files (one piece) and
+  `.reshiki-pieces` files (a lab's set) to My pieces. Every piece in the file
+  is checked first; one bad piece refuses the whole file. Importing the same
+  file again adds nothing.
+- **Export…** writes My pieces as one `.reshiki-pieces` file to send to
+  someone.
+- **Link lab folder…** reads the pieces in a folder, such as a shared drive or
+  a git checkout, and its subfolders. ReShiki never writes there. A file it
+  cannot use is listed under the library; hover to see why. **Reload** reads
+  the libraries again after someone changed them, and **Unlink** stops using
+  a folder.
+- With a piece armed from My pieces, **Remove** takes it out of the library.
+  Drawings that use it keep it. **Undo library change** puts back the last
+  import or removal.
+
+Every drawing carries the pieces it uses. When you open a drawing from
+someone else, **Properties → Equipment** offers **Add to My pieces** for a
+piece you do not have, and **Export this piece…** for any piece. In an
+assembly, Option-click the piece first.
+
+A piece is known by its ID, revision and content. When a library has a newer
+revision of a piece in your drawing, Properties says so, for example
+**Revision 3 is in Tanaka lab (this drawing uses 2)**, and lists what the
+update would release or reset. **Update** changes the selected pieces and
+**Update all in drawing** every copy; either is one Undo step. Nothing updates
+by itself. Two libraries with different pieces under one ID both stay; the
+browser adds the library's name to tell them apart.
+
+To make a review image of a piece file, run
+`reshiki --cli pieces render FILE --to svg` (or `--to png -o FILE.png`; add
+`--dark` for the dark canvas).
+
 ### Start from a figure layout
 
 **Templates → Figure layouts** has a single-row TOC with a title bar, previous
@@ -389,6 +427,10 @@ cm**, **RSC graphical abstract · 8 × 4 cm** or **Elsevier graphical abstract �
 - A drawing with equipment saves as document version 40 and carries the
   definition of every piece it uses, so it opens the same way on another
   computer.
+- Linked lab folders are read up to 4 folders deep and 5,000 files. Symbolic
+  links and hidden folders are skipped. A piece file may be up to 1 MB and a
+  library file up to 32 MB with 2,048 pieces. IDs starting with `reshiki/`
+  belong to the built-in catalogue, so library files cannot use them.
 - Rotating a whole layout changes its items' sizes, so the next size change
   lays them out upright again.
 - Brackets are graphics. To define a repeating unit, see
@@ -488,6 +530,18 @@ fill in place. Each is one Undo step. An atom-map proposal for a step
 remembers its cycle and step, and the review compares it with a fresh copy.
 The balance check counts the elements of each side from the chemistry
 graph, with explicit and implicit hydrogens, and the formal charges.
+
+Piece libraries (`crates/io/src/piece_library.rs`) are folders of files.
+My pieces is `pieces/` in the data folder; the linked folders are listed in
+`piece-libraries.json` beside it. Each piece file is named after its key
+(`id@revision#hash`), so two windows saving the same piece write the same
+bytes and no lock is needed, and an edited piece with an unchanged revision
+lands beside the old one. Removing moves the file to `pieces/.deleted/<time>/`;
+undoing an import moves the added files there too. The browser lists each
+key once: built-in first, then My pieces, then the linked folders in order.
+`equipment::revise::update` moves placed pieces to another revision: a
+parameter value the new revision cannot take is dropped (its default
+applies), and `solve::check` releases seats whose joints moved.
 
 Equipment seats are stored in the drawing's `seats` list as pairs of
 `{piece, joint}` (`crates/model/src/equipment/solve.rs`). Poses are stored,

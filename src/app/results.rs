@@ -64,6 +64,8 @@ enum Completion {
     FilePrepared,
     /// ThemeFile(Loaded | Saved).
     ThemeFile,
+    /// Equipment(Imported | Exported | Linked).
+    PieceLibrary,
     /// Opened, the legacy file-open receipt.
     Opened,
     /// OfficePrepared.
@@ -111,6 +113,7 @@ impl Completion {
             | Self::Save
             | Self::FilePrepared
             | Self::ThemeFile
+            | Self::PieceLibrary
             | Self::Opened
             | Self::OfficePrepared
             | Self::Updates
@@ -192,6 +195,13 @@ fn admission(completion: Completion) -> Admission {
         | Completion::ThemeFile => Admission {
             atom_text: false,
             preview: false,
+            optimization: true,
+            updates_dialog: true,
+        },
+        // Library files and folders never touch the drawing.
+        Completion::PieceLibrary => Admission {
+            atom_text: true,
+            preview: true,
             optimization: true,
             updates_dialog: true,
         },
@@ -655,6 +665,7 @@ fn completion(message: &Message) -> Option<Completion> {
                 | Action::WriteUnknownStereo(_) => None,
             }
         }
+        Message::Equipment(action) if action.completes() => Some(Completion::PieceLibrary),
         Message::ThemeFile(action) => {
             use super::theme_files::Action;
             match action {
