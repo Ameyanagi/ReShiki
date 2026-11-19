@@ -29,8 +29,8 @@
     "settings": {
       "font_family": "Arial",
       "font_size_pt": 10.0,
-      "bond_length_pt": 14.4,
-      "line_width_pt": 0.6,
+      "bond_length_pt": 14.399994,
+      "line_width_pt": 0.59999084,
       "bold_width_pt": 2.0125885,
       "margin_width_pt": 1.5873871,
       "hash_spacing_pt": 2.4944763,
@@ -38,7 +38,7 @@
     },
     "source_file": "ACS Document 1996.cds",
     "sha256": "516ae7f93bb08018d73df8f2eac0df3718f8a01316fad7c305c283d550044702",
-    "notes": "Bundled with ChemDraw 26.1 (Stationery folder). Bold width, margin and hash spacing are 0.071, 0.056 and 0.088 cm as ChemDraw stores them; bond length and line width are 14.4 and 0.6 pt."
+    "notes": "Bundled with ChemDraw 26.1 (Stationery folder). Values are the file's own, stored in 1/65536 pt: 14.4 pt bonds, 0.6 pt lines, and bold width, margin and hash spacing of about 0.071, 0.056 and 0.088 cm."
   },
   {
     "variant": "Nature",

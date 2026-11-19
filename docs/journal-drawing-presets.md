@@ -2,7 +2,7 @@
 
 Choose a journal directly from the preset selector beside the color theme selector and sun/moon canvas toggle. Selecting a journal applies its dimensions and scales the drawing in one Undo step. Choose **Manage styles…** at the bottom for a preview and detailed settings. The selector lists **JACS / ACS**, **ACS Document 1996**, **Nature**, **RSC**, **Angewandte** and **SYNLETT / SYNTHESIS**. When the current settings match none of them, the selector shows **Custom**. Each journal choice has a **Publisher instructions ↗** link in the panel.
 
-These six presets use publisher recommendations or publisher downloads. The ChemDraw standard baseline and bundled variants are excluded. Publisher guidance takes precedence where written dimensions differ from older downloads.
+These six presets use publisher recommendations, publisher downloads, or, for **ACS Document 1996**, the stylesheet bundled with ChemDraw. ChemDraw's other bundled variants are excluded. Publisher guidance takes precedence where written dimensions differ from older downloads.
 
 ## Publisher settings and sources
 
@@ -18,7 +18,7 @@ Reviewed 26 September 2026. Dimensions are publication points; values below are 
 | [SYNLETT / SYNTHESIS](https://www.thieme.de/statics/dokumente/thieme/final/de/dokumente/zw_synthesis/Instr_SS_26_feb.pdf) | Arial | 6 | 10.12 | 0.5669 | 1.389 | 0.9071 | 1.757 | 18% |
 
 - **ACS:** Published ACS-1996 dimensions. The ACS graphics page was last updated in 2006; it permits Helvetica on Mac and Arial on PC. ReShiki retains Arial for cross-platform compatibility and its existing default.
-- **ACS Document 1996:** Uses the stationery bundled with ChemDraw, at the precision ChemDraw stores. ChemDraw keeps the bold width, margin and hash spacing as 0.071, 0.056 and 0.088 cm, so they differ from the rounded **JACS / ACS** values by less than 0.02 pt. Choose it to match drawings made with ChemDraw's **ACS Document 1996** style exactly.
+- **ACS Document 1996:** Uses the bond and label settings of the ACS Document 1996 stylesheet bundled with ChemDraw, at the precision that file stores. Its bold width, margin and hash spacing differ from the rounded **JACS / ACS** values by less than 0.02 pt. Importing that stylesheet in the style editor selects this preset.
 - **Nature:** Uses the publisher’s [ChemDraw stylesheet](https://www.nature.com/documents/nr-chemdraw-stylesheet.cds), including Helvetica 6 pt. See also the [chemical structure style guide](https://www.nature.com/documents/nr-chemical-structures-guide.pdf).
 - **RSC:** Uses the explicit point values in the publisher’s author instructions, including 12.2 pt bonds and 0.5 pt lines. The 1.25 pt label margin, unspecified in the written guidance, comes from the publisher’s [structure template download](https://www.rsc.org/publishing/publish-with-us/publish-a-journal-article/article-templates).
 - **Angewandte:** Uses the publisher’s [stationery download](https://wol-prod-cdn.literatumonline.com/pb-assets/assets/15213773/angew-cds.zip), a legacy ChemDraw 4.5 CDS file dated 2003 in the archive.
