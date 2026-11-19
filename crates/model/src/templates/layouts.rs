@@ -148,7 +148,7 @@ fn template(
 
 pub(super) fn templates() -> Result<Vec<Template>, String> {
     let r = crate::style::DEFAULT.bond_length_world;
-    let note = "The rings and arrows are illustrations, so they never form a reaction. Select a panel and choose Clear contents, then paste or draw your scheme.";
+    let note = "The rings and arrows are illustrations, so they never form a reaction. Select a panel (Option- or Alt-click picks one row) and choose Clear contents, then paste or draw your scheme.";
 
     let mut toc = Document::default();
     let row = scheme(&mut toc, Point::default(), 2);

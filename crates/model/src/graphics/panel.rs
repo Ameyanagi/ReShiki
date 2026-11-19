@@ -487,8 +487,27 @@ fn content_units(doc: &Document, panel: u64) -> Vec<(Vec<u64>, (Point, Point))> 
     else {
         return vec![];
     };
-    let (o, ex, _, w, h) = frame.panel_frame();
-    let degrees = ex.y.atan2(ex.x).to_degrees();
+    let (o, ex, ey, w, h) = frame.panel_frame();
+    // A turned panel stretched from a side is a parallelogram, which no one
+    // rotation describes: its contents' world boxes are measured instead,
+    // through the inverse of its axes.
+    let square = (ex.x * ey.x + ex.y * ey.y).abs() < 1e-3;
+    let degrees = if square {
+        ex.y.atan2(ex.x).to_degrees()
+    } else {
+        0.
+    };
+    let det = ex.x * ey.y - ex.y * ey.x;
+    let local = |d: Point| {
+        if square {
+            d
+        } else {
+            Point::new(
+                (d.x * ey.y - d.y * ey.x) / det,
+                (ex.x * d.y - ex.y * d.x) / det,
+            )
+        }
+    };
     let atoms: Vec<u64> = doc.atoms.iter().map(|a| a.id).collect();
     let mut units = crate::reactions::molecules(doc, &atoms);
     units.extend(
@@ -515,10 +534,17 @@ fn content_units(doc: &Document, panel: u64) -> Vec<(Vec<u64>, (Point, Point))> 
         .filter_map(|(unit, bounds)| {
             let (a, b) = bounds?;
             let (a, b) = (a.offset(-o.x, -o.y), b.offset(-o.x, -o.y));
-            [a, Point::new(b.x, a.y), b, Point::new(a.x, b.y)]
+            let corners = [a, Point::new(b.x, a.y), b, Point::new(a.x, b.y)].map(local);
+            let low = corners
+                .iter()
+                .fold(corners[0], |m, p| Point::new(m.x.min(p.x), m.y.min(p.y)));
+            let high = corners
+                .iter()
+                .fold(corners[0], |m, p| Point::new(m.x.max(p.x), m.y.max(p.y)));
+            corners
                 .into_iter()
                 .all(inside)
-                .then_some((unit, (a, b)))
+                .then_some((unit, (low, high)))
         })
         .collect()
 }

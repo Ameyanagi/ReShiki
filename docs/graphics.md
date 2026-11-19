@@ -378,8 +378,9 @@ work beside this work, a scheme beside an evidence panel, and two matched
 scheme rows, each listed by name. Choose one, then click **Place** and click
 the canvas: a layout is placed once and never joins an atom. Its benzene rings
 and arrows are placeholders with the **Illustration** purpose, so they never
-form a reaction. Select a panel and choose **Clear contents** in **Properties →
-Panel** to delete them in one Undo step, keeping the frame and title, then
+form a reaction. Select a panel (in the matched rows, Option- or Alt-click
+picks one row) and choose **Clear contents** in **Properties → Panel** to
+delete them in one Undo step, keeping the frame and title, then
 paste or draw your scheme: a paste lands in the middle of the selected empty
 panel. A border title breaks only the panel's outline, so a page
 gradient or border behind it stays whole, and it takes a color that reads on

@@ -271,6 +271,41 @@ fn a_rotated_panel_holds_only_what_its_frame_shows() {
 }
 
 #[test]
+fn a_turned_panel_squeezed_from_a_side_holds_nothing_beyond_its_slanted_edge() {
+    let mut doc = Document::default();
+    let mut g = panel(&[], TitlePlace::Bar);
+    let (s, c) = 45f32.to_radians().sin_cos();
+    let middle = Point::new(100., 50.);
+    // Turned, then squeezed along the page's x: a parallelogram.
+    g.map_positions(|p| {
+        let (x, y) = (p.x - middle.x, p.y - middle.y);
+        Point::new(middle.x + (x * c - y * s) * 0.5, middle.y + x * s + y * c)
+    });
+    let (o, ax, ay) = (g.origin, g.axis_x, g.axis_y);
+    // Just outside the edge along the second axis.
+    let length = ay.x.hypot(ay.y);
+    let mut n = Point::new(ay.y / length, -ay.x / length);
+    if n.x * ax.x + n.y * ax.y > 0. {
+        n = Point::new(-n.x, -n.y);
+    }
+    let q = Point::new(o.x + ay.x * 0.5 + n.x * 2., o.y + ay.y * 0.5 + n.y * 2.);
+    let outside = doc.next_id();
+    doc.graphics.push(Graphic::dragged(
+        outside,
+        GraphicKind::Line,
+        q,
+        q.offset(n.x, n.y),
+        GraphicStyle::default(),
+        BracketSides::Both,
+        false,
+    ));
+    g.id = doc.next_id();
+    let id = g.id;
+    doc.graphics.push(g);
+    assert!(!contents(&doc, id).contains(&outside));
+}
+
+#[test]
 fn a_rounded_panel_does_not_hold_what_sits_in_its_cut_corner() {
     let mut doc = Document::default();
     let mut g = panel(&[], TitlePlace::Bar);
