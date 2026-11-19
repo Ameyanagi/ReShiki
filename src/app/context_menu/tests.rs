@@ -1750,7 +1750,7 @@ fn show_formula_and_masses_below_adds_the_missing_lines_in_one_step() -> Result<
     let open = |app: &mut App| {
         app.edit(Edit::ContextMenu {
             position: Point::new(30., 40.),
-            selected: vec![],
+            selected: vec![ethanol[0]],
             hit: vec![ethanol[0]],
         })
     };

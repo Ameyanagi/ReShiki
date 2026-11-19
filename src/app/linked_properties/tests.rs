@@ -306,7 +306,9 @@ fn mass_decimals_change_one_caption_in_one_undo_step() {
     assert_eq!(app.tab.doc, masses);
     // A caption's own Mol. Wt. places win over the Settings choice.
     let _ = app.update(Message::PropertyPlaces(atoms, Property::Weight, 1));
+    let chosen = app.tab.doc.clone();
     app.view_action(TwoDecimalWeight(false));
+    assert_eq!(app.tab.doc, chosen);
     assert_eq!(
         caption(&app),
         Some("Formula: C2H6O\nMol. Wt.: 46.1\nExact Mass: 46.0419")

@@ -81,7 +81,8 @@ impl App {
         use reshiki::linked_properties::Property;
         self.appearance.two_decimal_weight = enabled;
         // Mol. Wt. captions in every tab change at once, in one Undo step each,
-        // except during a preview or a text draft. Other edits leave a
+        // except during a preview or a text draft, and except those with
+        // their own decimal places. Other edits leave a
         // caption's precision alone, so an imported caption keeps its text.
         // Syncing a selected caption's text box leaves the inspector as shown.
         let inspector = (self.inspector_open, self.inspector_tab);
@@ -91,6 +92,7 @@ impl App {
                 && !tab.drawing_edit_active()
                 && tab.doc.property_captions.iter().any(|link| {
                     link.properties.contains(&Property::Weight)
+                        && link.weight_places.is_none()
                         && link.two_decimal_weight != enabled
                 })
             {

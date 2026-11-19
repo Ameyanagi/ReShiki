@@ -1003,10 +1003,14 @@ fn chosen_places_save_as_version_40_only_when_set() {
         Document::from_json(&file).unwrap().version,
         crate::document::PROPERTY_CAPTIONS
     );
-    doc.property_captions[0].set_places(Property::ExactMass, 5);
+    edit(&mut doc, &mut History::default(), |doc| {
+        doc.property_captions[0].set_places(Property::ExactMass, 5);
+    });
+    assert_eq!(text(&doc), "Exact Mass: 94.04186");
     let loaded = Document::from_json(&doc.file_json().unwrap()).unwrap();
     assert_eq!(loaded.version, crate::document::CAPTION_PLACES);
     assert_eq!(loaded.property_captions, doc.property_captions);
+    assert_eq!(text(&loaded), "Exact Mass: 94.04186");
     // A copy keeps the choice.
     let copy = editing::selection(&doc, &doc.all_ids());
     assert_eq!(copy.property_captions, doc.property_captions);
