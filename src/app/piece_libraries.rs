@@ -24,6 +24,8 @@ pub enum Source {
 pub struct Entry {
     pub definition: Arc<Definition>,
     pub source: Source,
+    /// `id@revision#hash`, worked out once when the libraries are read.
+    pub key: String,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -43,18 +45,23 @@ pub struct Libraries {
     pub labs: Vec<(PathBuf, Folder)>,
     /// The last library change, while it can still be undone.
     pub undo: Option<Change>,
+    /// Every piece once, by key: built-in pieces first, then My pieces,
+    /// then each lab in the order linked.
+    pub entries: Vec<Entry>,
 }
 
 impl Libraries {
     pub fn load() -> Self {
         let mut libraries = Self::default();
-        if !cfg!(test) {
+        if cfg!(test) {
+            libraries.index();
+        } else {
             libraries.reload(library::linked());
         }
         libraries
     }
 
-    fn reload(&mut self, labs: Vec<PathBuf>) {
+    pub fn reload(&mut self, labs: Vec<PathBuf>) {
         if let Ok(dir) = library::my_pieces() {
             self.mine = library::scan(&dir);
             // A missing My pieces folder is simply empty.
@@ -69,6 +76,7 @@ impl Libraries {
                 (root, folder)
             })
             .collect();
+        self.index();
     }
 
     pub fn name(&self, source: Source) -> String {
@@ -84,11 +92,9 @@ impl Libraries {
         }
     }
 
-    /// Every piece once, by full identity: built-in pieces first, then My
-    /// pieces, then each lab in the order linked.
-    pub fn entries(&self) -> Vec<Entry> {
+    /// Rebuild [`Self::entries`] after the folders changed.
+    pub fn index(&mut self) {
         let mut out: Vec<Entry> = Vec::new();
-        let mut keys = Vec::new();
         let sources = std::iter::once((Source::BuiltIn, builtin::catalogue()))
             .chain(std::iter::once((Source::Mine, &self.mine.pieces[..])))
             .chain(
@@ -97,25 +103,26 @@ impl Libraries {
         for (source, pieces) in sources {
             for d in pieces {
                 let k = key(d);
-                if !keys.contains(&k) {
-                    keys.push(k);
+                if !out.iter().any(|e| e.key == k) {
                     out.push(Entry {
                         definition: d.clone(),
                         source,
+                        key: k,
                     });
                 }
             }
         }
-        out
+        self.entries = out;
     }
 
     /// The highest revision of `d` the libraries hold, if it is newer, and
     /// where it is.
     pub fn newer(&self, d: &Definition) -> Option<(Arc<Definition>, Source)> {
-        (self.entries().into_iter())
+        // On a tie the first library wins: max_by_key keeps the last.
+        (self.entries.iter().rev())
             .filter(|e| e.definition.id == d.id && e.definition.revision > d.revision)
             .max_by_key(|e| e.definition.revision)
-            .map(|e| (e.definition, e.source))
+            .map(|e| (e.definition.clone(), e.source))
     }
 
     /// The shelves the browser can show.
@@ -167,7 +174,20 @@ impl App {
             }
         }
         let labs = self.lab_roots();
-        self.equipment.libraries.reload(labs);
+        self.reload_libraries(labs);
+    }
+
+    /// Read the libraries again; a piece armed from one that no longer
+    /// offers it is disarmed.
+    fn reload_libraries(&mut self, labs: Vec<PathBuf>) {
+        let libraries = &mut self.equipment.libraries;
+        libraries.reload(labs);
+        if let Some(armed) = &self.equipment.armed {
+            let k = key(armed);
+            if !libraries.entries.iter().any(|e| e.key == k) {
+                self.equipment.armed = None;
+            }
+        }
     }
 
     fn lab_roots(&self) -> Vec<PathBuf> {
@@ -176,13 +196,19 @@ impl App {
             .collect()
     }
 
-    fn set_labs(&mut self, labs: Vec<PathBuf>) {
+    /// Change the saved list of linked folders, starting from what is saved
+    /// now, as another window may have changed it.
+    fn set_labs(&mut self, change: impl FnOnce(&mut Vec<PathBuf>)) -> bool {
+        let mut labs = library::linked();
+        change(&mut labs);
         if let Err(e) = library::set_linked(&labs) {
             self.status = e;
             self.error = true;
+            return false;
         }
         self.equipment.shelf = None;
-        self.equipment.libraries.reload(labs);
+        self.reload_libraries(labs);
+        true
     }
 
     pub(super) fn library_action(&mut self, action: Action) -> Task<Message> {
@@ -239,6 +265,15 @@ impl App {
                     self.error = false;
                     return Task::none();
                 }
+                if pieces.len() > library::MAX_PIECES {
+                    self.status = format!(
+                        "A library file holds at most {} pieces; My pieces has {}",
+                        library::MAX_PIECES,
+                        pieces.len()
+                    );
+                    self.error = true;
+                    return Task::none();
+                }
                 let about = library::About {
                     id: "my-pieces".into(),
                     names: [("en".to_owned(), "My pieces".to_owned())].into(),
@@ -293,10 +328,13 @@ impl App {
                 });
             }
             Action::UndoLibrary => {
-                let Some(change) = self.equipment.libraries.undo.take() else {
+                let Some(change) = self.equipment.libraries.undo.clone() else {
                     return Task::none();
                 };
                 let result = library::my_pieces().and_then(|dir| change.undo(&dir));
+                if result.is_ok() {
+                    self.equipment.libraries.undo = None;
+                }
                 self.library_done(result.map(|_| Change::default()), |_| {
                     "Library change undone".into()
                 });
@@ -307,33 +345,39 @@ impl App {
                 });
             }
             Action::Linked(Some(root)) => {
-                let mut labs = self.lab_roots();
-                if !labs.contains(&root) {
-                    labs.push(root);
-                }
-                self.set_labs(labs);
-                if let Some((_, folder)) = self.equipment.libraries.labs.last() {
-                    self.status = format!(
-                        "Linked {} · {}",
-                        self.equipment
-                            .libraries
-                            .name(Source::Lab(self.equipment.libraries.labs.len() - 1)),
-                        count(folder.pieces.len())
-                    );
-                    self.error = false;
+                let linked = root.clone();
+                if self.set_labs(|labs| {
+                    if !labs.contains(&linked) {
+                        labs.push(linked);
+                    }
+                }) {
+                    let libraries = &self.equipment.libraries;
+                    if let Some((i, (_, folder))) =
+                        (libraries.labs.iter().enumerate()).find(|(_, (r, _))| *r == root)
+                    {
+                        self.status = format!(
+                            "Linked {} · {}",
+                            libraries.name(Source::Lab(i)),
+                            count(folder.pieces.len())
+                        );
+                        self.error = false;
+                    }
                 }
             }
             Action::Linked(None) => {}
             Action::Unlink(i) => {
-                let mut labs = self.lab_roots();
-                if i < labs.len() {
-                    labs.remove(i);
-                    self.set_labs(labs);
+                let Some((root, _)) = self.equipment.libraries.labs.get(i) else {
+                    return Task::none();
+                };
+                let root = root.clone();
+                let name = self.equipment.libraries.name(Source::Lab(i));
+                if self.set_labs(|labs| labs.retain(|r| *r != root)) {
+                    self.status = format!("Unlinked {name}");
+                    self.error = false;
                 }
             }
             Action::Reload => {
-                let labs = self.lab_roots();
-                self.equipment.libraries.reload(labs);
+                self.reload_libraries(library::linked());
                 self.status = "Libraries reloaded".into();
                 self.error = false;
             }
@@ -361,8 +405,9 @@ impl App {
 
     /// A definition by key: a library's, or one the drawing embeds.
     fn piece_by_key(&self, k: &str) -> Option<Arc<Definition>> {
-        (self.equipment.libraries.entries().into_iter())
-            .map(|e| e.definition)
+        (self.equipment.libraries.entries.iter())
+            .filter(|e| e.key == k)
+            .map(|e| e.definition.clone())
             .chain((self.tab.doc.graphics.iter()).filter_map(|g| g.piece.as_ref()?.linked.clone()))
             .find(|d| key(d) == k)
     }
@@ -443,7 +488,7 @@ impl App {
     pub(super) fn piece_library_rows(&self, d: &Arc<Definition>) -> Element<'_, Message> {
         let libraries = &self.equipment.libraries;
         let k = key(d);
-        let in_library = libraries.entries().iter().any(|e| key(&e.definition) == k);
+        let in_library = libraries.entries.iter().any(|e| e.key == k);
         let mut body = column![].spacing(6);
         if let Some((next, source)) = libraries.newer(d) {
             let ids: Vec<u64> = (self.tab.doc.graphics.iter())
@@ -453,8 +498,7 @@ impl App {
             let selected: Vec<u64> = (ids.iter().copied())
                 .filter(|id| self.tab.selected.contains(id))
                 .collect();
-            let mut preview = self.tab.doc.clone();
-            let outcome = revise::update(&mut preview, &ids, &next);
+            let outcome = revise::preview(&self.tab.doc, &selected, &next);
             body = body.push(
                 text(format!(
                     "Revision {} is in {} (this drawing uses {})",

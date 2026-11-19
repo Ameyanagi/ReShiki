@@ -4,7 +4,7 @@ use super::{
     eval::{self, Values},
     format::Definition,
     placed::key,
-    solve::{self, Seat},
+    solve::{self, JointRef, Seat},
 };
 use crate::document::Document;
 use std::sync::Arc;
@@ -18,6 +18,46 @@ pub struct Outcome {
     pub reset: Vec<String>,
 }
 
+/// A value `next` takes as it is.
+fn keeps(next: &Definition, k: &str, v: &eval::Value) -> bool {
+    let one = Values::from([(k.to_owned(), v.clone())]);
+    eval::resolve(next, &one).is_ok_and(|r| r.get(k) == Some(v))
+}
+
+/// What [`update`] would take away, without changing the drawing: seats on
+/// joints `next` moves or drops, and values it cannot take.
+pub fn preview(doc: &Document, ids: &[u64], next: &Definition) -> Outcome {
+    let joint = |d: &Definition, id: &str| d.joints.iter().find(|j| j.id() == id).cloned();
+    let pieces = || {
+        (doc.graphics.iter())
+            .filter(|g| ids.contains(&g.id))
+            .filter_map(|g| Some((g.id, g.piece.as_ref()?)))
+    };
+    let moved = |j: &JointRef| {
+        pieces().any(|(id, p)| {
+            id == j.piece
+                && p.linked
+                    .as_ref()
+                    .is_none_or(|d| joint(d, &j.joint) != joint(next, &j.joint))
+        })
+    };
+    let mut reset = Vec::new();
+    for (_, p) in pieces() {
+        for (k, v) in &p.params {
+            if !keeps(next, k, v) && !reset.contains(k) {
+                reset.push(k.clone());
+            }
+        }
+    }
+    Outcome {
+        released: (doc.seats.iter())
+            .filter(|s| moved(&s.a) || moved(&s.b))
+            .cloned()
+            .collect(),
+        reset,
+    }
+}
+
 /// Point the pieces `ids` at `next`. A value `next` cannot take goes back to
 /// its default, and a seat whose joints no longer fit is released; the
 /// pieces stay where they are.
@@ -28,8 +68,7 @@ pub fn update(doc: &mut Document, ids: &[u64], next: &Arc<Definition>) -> Outcom
             continue;
         };
         piece.params.retain(|k, v| {
-            let one = Values::from([(k.clone(), v.clone())]);
-            let keep = eval::resolve(next, &one).is_ok_and(|r| r.get(k) == Some(v));
+            let keep = keeps(next, k, v);
             if !keep && !reset.contains(k) {
                 reset.push(k.clone());
             }
@@ -51,7 +90,7 @@ pub fn update(doc: &mut Document, ids: &[u64], next: &Arc<Definition>) -> Outcom
 mod tests {
     use super::*;
     use crate::document::Point;
-    use crate::equipment::{builtin, eval::Value, format, placed, solve::JointRef};
+    use crate::equipment::{builtin, eval::Value, format, placed};
 
     fn place(doc: &mut Document, d: Arc<Definition>, at: Point) -> u64 {
         let n = doc.next_id();
@@ -94,6 +133,7 @@ mod tests {
         let mut next_def = (*next).clone();
         next_def.keywords.push("new".into());
         let next = Arc::new(next_def);
+        assert_eq!(preview(&doc, &[flask], &next), Outcome::default());
         assert_eq!(update(&mut doc, &[flask], &next), Outcome::default());
         assert_eq!(doc.seats.len(), 1);
         let piece = doc.graphics[0].piece.as_ref().unwrap();
@@ -112,7 +152,9 @@ mod tests {
             other => panic!("{other:?}"),
         }
         let next = Arc::new(next_def);
+        let expected = preview(&doc, &[flask], &next);
         let outcome = update(&mut doc, &[flask], &next);
+        assert_eq!(expected, outcome);
         assert_eq!(outcome.released.len(), 1);
         assert_eq!(outcome.reset, ["fill"]);
         assert!(doc.seats.is_empty());

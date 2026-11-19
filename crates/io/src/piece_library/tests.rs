@@ -215,3 +215,46 @@ fn two_writers_saving_the_same_piece_leave_one_good_file() {
     assert_eq!(folder.pieces.len(), 1);
     assert!(folder.problems.is_empty());
 }
+
+#[test]
+fn a_duplicate_field_inside_a_collection_is_refused() {
+    let pieces = [Arc::new(lab("lab/a", 1))];
+    let text = String::from_utf8(collection_bytes(&about(), &pieces)).unwrap();
+    let doubled = text.replacen("\"revision\": 1,", "\"revision\": 1,\n\"revision\": 2,", 1);
+    assert_ne!(doubled, text);
+    let error = read(doubled.as_bytes()).unwrap_err();
+    assert!(error.contains("duplicate field"), "{error}");
+}
+
+#[test]
+fn a_piece_too_big_for_its_own_file_is_refused_inside_a_collection() {
+    let mut d = lab("lab/a", 1);
+    for i in 0..6000 {
+        d.names.insert(format!("x-{i}"), "n".repeat(180));
+    }
+    let error = read(&collection_bytes(&about(), &[Arc::new(d)])).unwrap_err();
+    assert!(error.contains("larger than 1 MB"), "{error}");
+}
+
+#[test]
+fn removing_a_piece_saved_by_someone_else_says_so() {
+    let dir = tempfile::tempdir().unwrap();
+    let d = lab("lab/a", 1);
+    std::fs::write(
+        dir.path().join("set.reshiki-pieces"),
+        collection_bytes(&about(), &[Arc::new(d.clone())]),
+    )
+    .unwrap();
+    assert_eq!(scan(dir.path()).pieces.len(), 1);
+    assert!(remove(dir.path(), &key(&d)).is_err());
+}
+
+#[test]
+fn a_failed_import_leaves_nothing_added() {
+    let dir = tempfile::tempdir().unwrap();
+    let (a, b) = (lab("lab/a", 1), lab("lab/b", 1));
+    // A folder where the second piece's file goes makes its write fail.
+    std::fs::create_dir(dir.path().join(file_name(&b))).unwrap();
+    assert!(add(dir.path(), &[a, b]).is_err());
+    assert!(scan(dir.path()).pieces.is_empty());
+}

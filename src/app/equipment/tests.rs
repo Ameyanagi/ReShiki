@@ -187,7 +187,8 @@ fn library_pieces_join_the_browser_once_each_and_name_their_library_on_a_clash()
             problems: vec![],
         },
     )];
-    let entries = libraries.entries();
+    libraries.index();
+    let entries = &libraries.entries;
     let lab: Vec<_> = (entries.iter())
         .filter(|e| e.definition.id == "lab/flask")
         .map(|e| e.source)
@@ -209,6 +210,7 @@ fn updating_to_a_newer_revision_is_one_undo_step_and_keeps_the_seat() {
     let old = lab_flask(1, "old");
     let new = lab_flask(2, "new");
     app.equipment.libraries.mine.pieces = vec![old.clone(), new.clone()];
+    app.equipment.libraries.index();
     let _ = app.update(Message::Equipment(Action::Arm(placed::key(&old))));
     let _ = app.update(Message::Canvas(Edit::Piece(Point::new(200., 300.))));
     let flask = app.tab.selected[0];

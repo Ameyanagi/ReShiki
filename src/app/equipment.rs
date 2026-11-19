@@ -90,6 +90,17 @@ pub struct Connect {
     pub base: Document,
 }
 
+impl Action {
+    /// A file dialog or library read finished: app work that leaves the
+    /// drawing and its text drafts alone.
+    pub fn completes(&self) -> bool {
+        matches!(
+            self,
+            Self::Imported(_) | Self::Exported(_) | Self::Linked(_)
+        )
+    }
+}
+
 impl Connect {
     /// The target joint shown now, and the selected piece's joint for it.
     pub fn shown(&self) -> Option<&(JointRef, JointRef)> {
@@ -231,9 +242,9 @@ impl App {
             Action::Category(filter) => self.equipment.category = filter,
             Action::Repeat(on) => self.equipment.repeat = on,
             Action::Arm(k) => {
-                let Some(definition) = (self.equipment.libraries.entries().into_iter())
-                    .map(|e| e.definition)
-                    .find(|d| placed::key(d) == k)
+                let Some(definition) = (self.equipment.libraries.entries.iter())
+                    .find(|e| e.key == k)
+                    .map(|e| e.definition.clone())
                 else {
                     return Task::none();
                 };
@@ -409,20 +420,35 @@ impl App {
     pub(super) fn equipment_panel(&self) -> Element<'_, Message> {
         let state = &self.equipment;
         let libraries = &state.libraries;
-        let entries = libraries.entries();
-        let arm = |d: &Definition| Message::Equipment(Action::Arm(placed::key(d)));
-        let armed = |d: &Definition| self.armed_piece().is_some_and(|a| **a == *d);
-        // A piece whose ID another library uses for something else says
-        // which library it is from.
+        let entries = &libraries.entries;
+        let arm = |e: &Entry| Message::Equipment(Action::Arm(e.key.clone()));
+        let armed = |e: &Entry| {
+            self.armed_piece()
+                .is_some_and(|a| Arc::ptr_eq(a, &e.definition))
+        };
+        // A piece shown beside another revision names its revision; one
+        // that shares its ID and revision with a different piece names its
+        // library, and its content when the library is the same.
         let label = |e: &Entry| {
             let d = &e.definition;
-            let clash = (entries.iter())
-                .any(|o| o.definition.id == d.id && placed::key(&o.definition) != placed::key(d));
-            if clash {
-                format!("{} ({})", title(d), libraries.name(e.source))
-            } else {
-                title(d).to_owned()
+            let mut out = title(d).to_owned();
+            let same_id = || {
+                entries
+                    .iter()
+                    .filter(|o| o.definition.id == d.id && o.key != e.key)
+            };
+            if same_id().any(|o| o.definition.revision != d.revision) {
+                out.push_str(&format!(" · revision {}", d.revision));
             }
+            if let Some(o) = same_id().find(|o| o.definition.revision == d.revision) {
+                let library = libraries.name(e.source);
+                out.push_str(&if o.source == e.source {
+                    format!(" ({library} · {})", &e.key[e.key.len().saturating_sub(6)..])
+                } else {
+                    format!(" ({library})")
+                });
+            }
+            out
         };
         let shown: Vec<&Entry> = (entries.iter())
             .filter(|e| state.shelf.is_none_or(|s| s == e.source))
@@ -464,7 +490,7 @@ impl App {
         .spacing(8);
         if let Some(d) = self.armed_piece() {
             let source = (entries.iter())
-                .find(|e| e.definition == *d)
+                .find(|e| Arc::ptr_eq(&e.definition, d))
                 .map_or(Source::BuiltIn, |e| e.source);
             let mut card = column![
                 text(format!("{} · {}", title(d), size(d))).size(14),
@@ -530,11 +556,7 @@ impl App {
         );
         let theme = self.tab.doc.canvas_theme;
         for (first, sizes) in &families {
-            let shown = sizes
-                .iter()
-                .copied()
-                .find(|e| armed(&e.definition))
-                .unwrap_or(*first);
+            let shown = sizes.iter().copied().find(|e| armed(e)).unwrap_or(*first);
             let d = &shown.definition;
             let preview: Element<'_, Message> =
                 canvas(crate::canvas::DrawingThumbnail(thumbnail(d, theme)))
@@ -543,16 +565,16 @@ impl App {
                     .into();
             let tile = hover_hint(
                 reshiki::accessibility::button(
-                    format!("equipment-{}", d.id),
-                    name(d).to_owned(),
+                    format!("equipment-{}", shown.key),
+                    label(shown),
                     preview,
                 )
-                .checked(armed(d))
+                .checked(armed(shown))
                 .padding(4)
                 .width(52)
                 .height(52)
-                .style(control(armed(d)))
-                .on_press(arm(d)),
+                .style(control(armed(shown)))
+                .on_press(arm(shown)),
                 name(d).to_owned(),
                 tooltip::Position::Left,
             );
@@ -561,14 +583,14 @@ impl App {
                 let d = &e.definition;
                 chips = chips.push(
                     reshiki::accessibility::button(
-                        format!("equipment-size-{}", d.id),
-                        format!("{} · {}", title(d), size(d)),
+                        format!("equipment-size-{}", e.key),
+                        format!("{} · {}", label(e), size(d)),
                         text(size(d)).size(11),
                     )
-                    .checked(armed(d))
+                    .checked(armed(e))
                     .padding([3, 7])
-                    .style(control(armed(d)))
-                    .on_press(arm(d)),
+                    .style(control(armed(e)))
+                    .on_press(arm(e)),
                 );
             }
             body = body.push(
