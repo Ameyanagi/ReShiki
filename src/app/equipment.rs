@@ -482,10 +482,9 @@ impl App {
                 // else has been committed.
                 let at = (self.tab.revision, id, param.clone());
                 // What the drag has let go of so far stays in the status.
-                let carried = match self.tab.piece_sliding.take() {
-                    Some((r, i, p, note)) if (r, i, p) == at => Some(note),
-                    _ => None,
-                };
+                let carried = (self.tab.piece_sliding.take())
+                    .filter(|(r, i, p, _)| (*r, *i, p) == (at.0, at.1, &at.2))
+                    .map(|(.., note)| note);
                 let before = self.tab.doc.clone();
                 let note = carried.clone().unwrap_or_default()
                     + &self.set_piece_param_continuing(
