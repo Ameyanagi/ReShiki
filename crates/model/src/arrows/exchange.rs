@@ -102,8 +102,10 @@ pub(crate) fn shape(
         id,
         Default::default(),
         crate::document::Point::new(1., 0.),
-        style,
+        style.clone(),
     );
+    // A new pen path starts plain; keep the part's own look.
+    graphic.style = style;
     graphic.path = commands;
     graphic.node_types.clear();
     graphic.layer = 1;
