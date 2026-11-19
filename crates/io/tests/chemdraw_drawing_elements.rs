@@ -1001,6 +1001,10 @@ async fn chemdraw_lines_are_graphic_lines_and_reaction_arrows_stay_arrows() {
             [1, 1]
         );
     }
+    // A lone page, without its CDXML document, keeps a line as an arrow.
+    let page = "<page><arrow id='2' Tail3D='0 0 0' Head3D='20 0 0'/></page>";
+    let (document, _) = open(page.into(), "cdxml").await.unwrap();
+    assert_eq!((document.arrows.len(), document.graphics.len()), (1, 0));
 }
 
 #[tokio::test]

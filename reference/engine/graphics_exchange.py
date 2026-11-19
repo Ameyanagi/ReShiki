@@ -28,7 +28,8 @@ def read_graphics(root, scale, first_id, object_map: dict | None = None, *, loca
         for el in root.iter()
         if el.tag in ("fragment", "n", "b", "t", "arrow") and "Z" in el.attrib
     ]
-    middle = min(chemistry_z, default=32767)
+    # Only a graphic above every structure, text and arrow goes in front.
+    top = max(chemistry_z, default=32767)
 
     def point(value):
         values = [float(v) for v in value.split()]
@@ -66,7 +67,7 @@ def read_graphics(root, scale, first_id, object_map: dict | None = None, *, loca
             "axis_y": y,
             "style": paint,
             "sides": sides,
-            "layer": z - middle if z < middle else z - middle + 1,
+            "layer": z - top if z > top else z - top - 1,
             "path": path or [],
         }
 
@@ -248,7 +249,7 @@ def read_graphics(root, scale, first_id, object_map: dict | None = None, *, loca
         else:
             return None
         z = int(el.get("Z", "0"))
-        result["layer"] = z - middle if z < middle else z - middle + 1
+        result["layer"] = z - top if z > top else z - top - 1
         return result
 
     result = []
@@ -271,7 +272,7 @@ def read_graphics(root, scale, first_id, object_map: dict | None = None, *, loca
                 elif el.tag == "embeddedobject":
                     value = read_picture(el, scale, picture_budget, defer=local_pictures)
                     z = int(el.get("Z", "0"))
-                    value["layer"] = z - middle if z < middle else z - middle + 1
+                    value["layer"] = z - top if z > top else z - top - 1
                 else:
                     value = {"curve": curve, "graphic": graphic}[el.tag](el)
                 value["id"] = first_id + len(result)

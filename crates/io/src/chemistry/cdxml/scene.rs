@@ -669,6 +669,9 @@ fn read_captions_and_arrows(
 ) -> Result<u64> {
     let arrows = super::ArrowReader::new(&prepared.expanded_xml)?;
     let stepped = stepped_arrows(nodes);
+    // The graphics reader reads the pages of a CDXML document; on a lone
+    // page a line stays an arrow, as before.
+    let document = nodes.first().is_some_and(|root| root.has_tag_name("CDXML"));
     let panels: HashSet<_> = nodes
         .iter()
         .filter(|n| graphics::panel_record(**n).is_some())
@@ -704,7 +707,8 @@ fn read_captions_and_arrows(
                     format: text.format,
                 });
             } else if node.has_tag_name("arrow")
-                && !(graphics::bare_stroke(node)
+                && !(document
+                    && graphics::bare_stroke(node)
                     && !node.attribute("id").is_some_and(|id| stepped.contains(id)))
                 || node.has_tag_name("curve")
                     && ["ArrowheadHead", "ArrowheadTail"].iter().any(|key| {

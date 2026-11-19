@@ -217,12 +217,7 @@ fn named(node: Node<'_, '_>, name: &str) -> bool {
 /// an arrow.
 pub(super) fn bare_stroke(node: Node<'_, '_>) -> bool {
     named(node, "arrow")
-        && ["ArrowheadHead", "ArrowheadTail"].iter().all(|key| {
-            matches!(
-                node.attribute(*key).unwrap_or("None"),
-                "None" | "Unspecified"
-            )
-        })
+        && headless(node)
         && matches!(
             node.attribute("FillType").unwrap_or("None"),
             "None" | "Unspecified"
@@ -234,6 +229,15 @@ pub(super) fn bare_stroke(node: Node<'_, '_>) -> bool {
         && node
             .attribute("ArrowShaftSpacing")
             .is_none_or(|v| numeric::float(v).is_ok_and(|v| v == 0.))
+}
+/// Neither end of a ChemDraw arrow or curve has a head.
+fn headless(node: Node<'_, '_>) -> bool {
+    ["ArrowheadHead", "ArrowheadTail"].iter().all(|key| {
+        matches!(
+            node.attribute(*key).unwrap_or("None"),
+            "None" | "Unspecified"
+        )
+    })
 }
 /// A bare stroke no other reader claimed is a graphic here.
 fn read_as_graphic(
@@ -554,12 +558,14 @@ pub fn read(
     let mut top = None;
     for el in root.descendants().filter(|n| {
         visible(*n)
-            && (["fragment", "n", "b", "t"].iter().any(|k| named(*n, k))
-                || named(*n, "arrow") && !read_as_graphic(*n, &identities, claimed))
+            && (["fragment", "n", "b", "t", "arrow"].iter().any(|k| named(*n, k))
+                // A curve with heads opens as an arrow or an arrowed path.
+                || named(*n, "curve") && !headless(*n))
     }) {
         if let Some(text) = el.attribute("Z") {
             let z = NativeLayer::parse(text)?;
-            if top.as_ref().is_none_or(|m| &z > m) {
+            // A line or arc read here is a graphic, not something to stay under.
+            if !read_as_graphic(el, &identities, claimed) && top.as_ref().is_none_or(|m| &z > m) {
                 top = Some(z);
             }
         }
