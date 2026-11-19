@@ -408,7 +408,8 @@ fn numeric_apply_preserves_caption_drafts_until_a_valid_change() {
     for (field, input, invalid) in [
         (Field::Width, "NaN", true),
         (Field::Width, "0", true),
-        (Field::Width, "1000", true),
+        // Text keeps its width: a note, and the draft stays open.
+        (Field::Width, "1000", false),
         (Field::Scale, "100", false),
         (Field::Rotation, "360", false),
     ] {
@@ -484,50 +485,107 @@ fn numeric_apply_preserves_caption_drafts_until_a_valid_change() {
 }
 
 #[test]
-fn degenerate_sizes_and_fixed_text_report_unreachable_targets_without_changes() {
-    for vertical in [true, false] {
-        let (mut app, _) = App::new();
-        let a = app.tab.doc.add_atom("C", Point::default());
-        let b = app.tab.doc.add_atom(
-            "C",
-            if vertical {
-                Point::new(0., 42.)
-            } else {
-                Point::new(42., 0.)
-            },
-        );
-        app.tab.doc.add_bond(a, b, 1, "plain");
-        app.tab.selected = vec![a, b];
-        app.sync_numeric_transforms();
-        let original = app.tab.doc.clone();
-        apply(
-            &mut app,
-            if vertical {
-                Field::Width
-            } else {
-                Field::Height
-            },
-            "10",
-        );
-        assert!(app.error);
-        assert_eq!(app.tab.doc, original);
-        assert!(!app.tab.history.can_undo());
-    }
+fn sizes_held_by_fixed_parts_keep_the_drawing_and_say_why() {
+    // (selection, field, status): nothing in it can stretch along the field.
     let mut app = fixture();
-    app.tab.selected = vec![app.tab.doc.annotations[0].id];
-    app.sync_numeric_transforms();
+    let annotation = app.tab.doc.annotations[0].id;
+    let arrow = app.tab.doc.arrows[0].id;
+    let a = app.tab.doc.add_atom("C", Point::new(0., 300.));
+    let b = app.tab.doc.add_atom("C", Point::new(42., 300.));
+    app.tab.doc.add_bond(a, b, 1, "plain");
     let original = app.tab.doc.clone();
-    for field in [Field::Width, Field::Height] {
-        apply(&mut app, field, "100");
-        assert!(app.error);
-        assert_eq!(app.tab.doc, original);
-        assert!(!app.tab.history.can_undo());
+    for (selected, field, says) in [
+        (
+            vec![a, b],
+            Field::Height,
+            "Line widths keep their size, so the height stays",
+        ),
+        (
+            vec![arrow],
+            Field::Height,
+            "Arrowheads and line widths keep their size, so the height stays",
+        ),
+        (
+            vec![annotation],
+            Field::Width,
+            "Text keeps its size, so the width stays",
+        ),
+        (
+            vec![annotation],
+            Field::Height,
+            "Text keeps its size, so the height stays",
+        ),
+    ] {
+        for lock in [true, false] {
+            app.tab.selected = selected.clone();
+            app.sync_numeric_transforms();
+            let _ = app.update(Message::NumericTransform(Action::Proportional(lock)));
+            apply(&mut app, field, "50");
+            assert!(!app.error, "{}", app.status);
+            assert!(app.status.starts_with(says), "{}", app.status);
+            assert!(app.status.ends_with(" pt"), "{}", app.status);
+            assert_eq!(app.tab.doc, original);
+            assert!(!app.tab.history.can_undo());
+        }
     }
     app.tab.selected.clear();
     app.sync_numeric_transforms();
     apply(&mut app, Field::Rotation, "72");
     assert!(app.error);
     assert_eq!(app.tab.doc, original);
+}
+
+#[test]
+fn apply_button_keeps_the_fixed_height_note_after_changing_width() {
+    let (mut app, _) = App::new();
+    let a = app.tab.doc.add_atom("C", Point::default());
+    let b = app.tab.doc.add_atom("C", Point::new(42., 0.));
+    app.tab.doc.add_bond(a, b, 1, "plain");
+    app.tab.selected = vec![a, b];
+    app.sync_numeric_transforms();
+    let original = app.tab.doc.clone();
+    let height = extent(&original, &app.tab.selected, Field::Height).unwrap();
+
+    let _ = app.update(Message::NumericTransform(Action::Proportional(false)));
+    input(&mut app, Field::Width, "30");
+    input(&mut app, Field::Height, "50");
+    let _ = app.update(Message::NumericTransform(Action::ApplyAll));
+
+    assert!(!app.error, "{}", app.status);
+    let width = extent(&app.tab.doc, &app.tab.selected, Field::Width).unwrap();
+    assert!((width - 30.).abs() < 0.005, "{width}");
+    assert_eq!(
+        app.status,
+        format!("Line widths keep their size, so the height stays {height:.2} pt")
+    );
+    assert!(app.tab.history.can_undo());
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, original);
+    assert!(!app.tab.history.can_undo());
+}
+
+#[test]
+fn a_size_below_the_fixed_text_names_the_smallest_size() {
+    let mut app = fixture();
+    // The ring with its N label, without the other objects.
+    app.tab.selected = app.tab.doc.atoms[..6].iter().map(|a| a.id).collect();
+    app.sync_numeric_transforms();
+    let original = app.tab.doc.clone();
+    let _ = app.update(Message::NumericTransform(Action::Proportional(false)));
+    apply(&mut app, Field::Height, "1");
+    assert!(app.error);
+    assert!(
+        app.status
+            .starts_with("Text keeps its size, so the height cannot go below "),
+        "{}",
+        app.status
+    );
+    assert_eq!(app.tab.doc, original);
+    // A reachable height still applies exactly.
+    apply(&mut app, Field::Height, "50");
+    assert!(!app.error, "{}", app.status);
+    let height = extent(&app.tab.doc, &app.tab.selected, Field::Height).unwrap();
+    assert!((height - 50.).abs() < 0.005);
 }
 
 #[test]

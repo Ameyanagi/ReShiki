@@ -229,8 +229,26 @@ fn scale(doc: &mut Document, ids: &[u64], pivot: Point, field: Field, factor: f3
     }
 }
 
+/// Why a size cannot follow the coordinates: the fixed-size part that sets it.
+fn fixed_part(doc: &Document, ids: &[u64]) -> &'static str {
+    let has = |id: &u64| ids.contains(id);
+    if doc.annotations.iter().any(|a| has(&a.id))
+        || doc
+            .atoms
+            .iter()
+            .any(|a| has(&a.id) && reshiki::atom_labels::visible(a, doc))
+    {
+        "Text keeps its size"
+    } else if doc.arrows.iter().any(|a| has(&a.id)) {
+        "Arrowheads and line widths keep their size"
+    } else {
+        "Line widths keep their size"
+    }
+}
+
 /// Fonts and strokes do not scale, so target/current is not generally the
 /// required coordinate scale. Solve against the same bounds as the canvas box.
+/// A size the coordinates cannot change keeps the drawing and explains why.
 fn size_factor(
     doc: &Document,
     ids: &[u64],
@@ -238,7 +256,7 @@ fn size_factor(
     field: Field,
     target: f32,
     lock: bool,
-) -> Result<f32, String> {
+) -> Result<(f32, Option<String>), String> {
     let measure = |factor| {
         let mut trial = doc.clone();
         scale(&mut trial, ids, pivot, field, factor, lock);
@@ -248,7 +266,7 @@ fn size_factor(
     // Applying an unchanged displayed value must not round the drawing or
     // create a history entry. The fields display two decimal places in pt.
     if (target - current).abs() <= 0.0051 {
-        return Ok(1.);
+        return Ok((1., None));
     }
     let (mut low, mut high) = if target < current {
         (0.0001, 1.)
@@ -276,13 +294,30 @@ fn size_factor(
         lo_size = measure(low);
         hi_size = measure(high);
     }
-    if !lo_size.is_finite()
-        || !hi_size.is_finite()
-        || target < lo_size
-        || target > hi_size
-        || hi_size - lo_size < 0.0001
-    {
-        return Err("This size cannot be reached while keeping text and line widths fixed".into());
+    let name = field.name().to_lowercase();
+    if !lo_size.is_finite() || !hi_size.is_finite() {
+        return Err("This size cannot be reached; choose another value".into());
+    }
+    // Below the fields' 0.01 pt resolution, fixed parts set the size.
+    if hi_size - lo_size < 0.005 {
+        return Ok((
+            1.,
+            Some(format!(
+                "{}, so the {name} stays {current:.2} pt",
+                fixed_part(doc, ids)
+            )),
+        ));
+    }
+    // The smallest size squeezes every coordinate onto the fixed parts, so it
+    // is a limit to state, not a size to apply.
+    if target < lo_size {
+        return Err(format!(
+            "{}, so the {name} cannot go below {lo_size:.2} pt",
+            fixed_part(doc, ids)
+        ));
+    }
+    if target > hi_size {
+        return Err(format!("The {name} cannot go above {hi_size:.2} pt"));
     }
     for iteration in 0..40 {
         // Extents are usually affine in coordinate scale. Interpolation gets
@@ -296,7 +331,7 @@ fn size_factor(
         };
         let measured = measure(middle);
         if (measured - target).abs() < 0.0001 {
-            return Ok(middle);
+            return Ok((middle, None));
         }
         if measured < target {
             low = middle;
@@ -310,19 +345,20 @@ fn size_factor(
     if (measure(factor) - target).abs() > 0.005 {
         return Err("This size cannot be reached accurately; choose another value".into());
     }
-    Ok(factor)
+    Ok((factor, None))
 }
 
 /// Why sizes refuse a selection holding a molecule shown only as a 3D model.
 pub(crate) const RESIZE_SHOWN_IN_3D: &str = "Switch to 2D to resize the drawing";
 
+/// Applies one field. Returns a note when the size kept its value.
 fn transform_candidate(
     document: &mut Document,
     selected: &[u64],
     field: Field,
     input: &str,
     lock: bool,
-) -> Result<(), String> {
+) -> Result<Option<String>, String> {
     let ids = document.expand_abbreviation_selection(selected);
     if reshiki::scene::selection_bounds(document, &ids).is_none() {
         return Err("Select objects to transform".into());
@@ -379,18 +415,22 @@ fn transform_candidate(
             let (lo, hi) = reshiki::scene::selection_bounds(document, &ids)
                 .ok_or("Select objects to resize")?;
             let pivot = Point::new((lo.x + hi.x) / 2., (lo.y + hi.y) / 2.);
-            let factor = if field == Field::Scale {
-                value / 100.
+            let (factor, note) = if field == Field::Scale {
+                (value / 100., None)
             } else {
                 size_factor(document, &ids, pivot, field, value, lock)?
             };
             if !(0.0001..=10_000.).contains(&factor) {
                 return Err("Use a scale from 0.01% to 1000000% per change".into());
             }
-            scale(document, &ids, pivot, field, factor, lock);
+            if note.is_none() {
+                scale(document, &ids, pivot, field, factor, lock);
+            }
+            document.validate()?;
+            return Ok(note);
         }
     }
-    document.validate()
+    document.validate().map(|()| None)
 }
 
 /// A field's input, shared by the inspector and the context row so both edit
@@ -506,7 +546,11 @@ impl App {
 
     // Validate against the caption that would be committed, without ending its
     // draft or consuming history for invalid and unchanged transforms.
-    fn numeric_transform_candidate(&self, fields: &[Field]) -> Result<Option<Document>, String> {
+    /// The transformed drawing, if it changed, and notes on sizes that stayed.
+    fn numeric_transform_candidate(
+        &self,
+        fields: &[Field],
+    ) -> Result<(Option<Document>, Vec<String>), String> {
         let source = self.inline_candidate()?;
         let selected = if self.tab.inline_text.is_some() {
             let id = self
@@ -522,8 +566,9 @@ impl App {
             self.tab.selected.clone()
         };
         let mut document = source.clone();
+        let mut notes = vec![];
         for &field in fields {
-            transform_candidate(
+            let note = transform_candidate(
                 &mut document,
                 &selected,
                 field,
@@ -537,8 +582,9 @@ impl App {
                     error
                 }
             })?;
+            notes.extend(note);
         }
-        Ok((document != source).then_some(document))
+        Ok(((document != source).then_some(document), notes))
     }
 
     pub(super) fn numeric_transform_action(&mut self, action: Action) -> Task<Message> {
@@ -565,7 +611,7 @@ impl App {
     /// their own Enter or Apply.
     fn apply_numeric_transforms(&mut self, fields: &[Field], keep: bool) {
         match self.numeric_transform_candidate(fields) {
-            Ok(document) => {
+            Ok((document, notes)) => {
                 if document.is_some() && !self.finish_inline(true) {
                     return;
                 }
@@ -587,6 +633,10 @@ impl App {
                 if let Some(document) = document {
                     let before = std::mem::replace(&mut self.tab.doc, document);
                     self.changed(before);
+                }
+                // A size that stayed says why, after the commit's own status.
+                if !notes.is_empty() && !self.error {
+                    self.status = notes.join(" · ");
                 }
                 self.sync_numeric_transforms();
                 for (field, value) in pending {
