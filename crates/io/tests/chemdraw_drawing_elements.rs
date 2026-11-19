@@ -3,7 +3,7 @@
 use base64::{Engine, engine::general_purpose::STANDARD};
 use reshiki_io::{engine::LocalEngine, exchange, formats};
 use reshiki_model::{
-    arrows::{Head, HeadShape, NoGo},
+    arrows::{Body, Head, NoGo},
     document::{Document, Point},
     graphics::{Graphic, GraphicKind, LinePattern, PathCommand},
     palette::Color,
@@ -104,7 +104,6 @@ async fn the_owners_drawing_opens_whole_without_a_notice() {
 
 #[tokio::test]
 async fn every_probe_sheet_opens_and_names_what_it_approximated() {
-    let arrows = "2 block arrows as line arrows";
     let curves = "2 doubled curves as single lines";
     for (sheet, saved, source) in [
         ("p1-shapes-enum", String::new(), String::new()),
@@ -123,7 +122,8 @@ async fn every_probe_sheet_opens_and_names_what_it_approximated() {
             "3 single brackets as curves".into(),
             "3 single brackets as curves".into(),
         ),
-        ("p5-arrows-enum", arrows.to_owned(), arrows.to_owned()),
+        // Block and arc arrows are read as they are.
+        ("p5-arrows-enum", String::new(), String::new()),
         ("p6-curves-enum", curves.to_owned(), curves.to_owned()),
     ] {
         for (name, expected) in [
@@ -183,11 +183,18 @@ async fn the_binary_file_reads_what_the_text_file_reads() {
                 .arrows
                 .iter()
                 .map(|arrow| {
-                    // The control tells which way a curved arrow bows.
-                    let bow = arrow
-                        .control
-                        .or(arrow.cubic.map(|[first, _]| first))
-                        .unwrap_or(arrow.start);
+                    // The control tells which way a curved arrow bows; an
+                    // arc's middle, however many segments draw it.
+                    let bow = match (arrow.arc, arrow.arc_circle()) {
+                        (Some(sweep), Some((center, radius, first))) => {
+                            let middle = (first + sweep * 0.5).to_radians();
+                            center.offset(middle.cos() * radius, middle.sin() * radius)
+                        }
+                        _ => arrow
+                            .control
+                            .or(arrow.cubic.map(|[first, _]| first))
+                            .unwrap_or(arrow.start),
+                    };
                     [arrow.start, arrow.end, bow]
                 })
                 .chain(document.graphics.iter().map(|graphic| {
@@ -269,7 +276,7 @@ async fn a_curve_keeps_dashed_and_bold_together_and_a_shadow_takes_the_nearest_s
 }
 
 #[tokio::test]
-async fn faded_graphics_and_block_arrows_import_plain() {
+async fn faded_graphics_import_opaque_and_block_arrows_keep_their_body() {
     // ReShiki's own binary writer has no fade, so this one is read as text.
     let faded = "<CDXML><page id='1'>\
          <graphic id='2' GraphicType='Rectangle' BoundingBox='10 10 60 40' FadePercent='50'/>\
@@ -289,18 +296,12 @@ async fn faded_graphics_and_block_arrows_import_plain() {
     )
     .await
     {
+        // The block arrow is read as one; only the head out of range changes.
         assert_eq!(
             notices,
-            nearest(
-                "1 block arrow as a line arrow; \
-                 1 line, arrowhead or shadow size at the nearest size ReShiki draws"
-            )
+            nearest("1 line, arrowhead or shadow size at the nearest size ReShiki draws")
         );
-        let block = document.arrows[0].style.clone().unwrap();
-        assert_eq!(
-            (block.shape, block.head_length_pt),
-            (HeadShape::Hollow, 20.)
-        );
+        assert_eq!(document.arrows[0].appearance().body, Body::Block);
         assert_eq!(
             document.arrows[1].style.clone().unwrap().head_length_pt,
             24.
@@ -309,9 +310,9 @@ async fn faded_graphics_and_block_arrows_import_plain() {
 }
 
 #[tokio::test]
-async fn arcs_and_arc_arrows_import_as_the_same_curve() {
-    // ChemDraw's 90° arc arrow, its 270° arc arrow, its headless Arc tool
-    // and an arc from an older file.
+async fn arc_arrows_are_arcs_and_older_arcs_are_curves() {
+    // ChemDraw's 90° arc arrow, its 270° arc arrow, its headless Arc tool,
+    // an arc arrow without its axes, and two arcs from an older file.
     for (document, notices) in sheet(
         "<arrow id='2' ArrowheadHead='Full' ArrowheadType='Solid' AngularSize='90' \
          Head3D='375.61 301.39 0' Tail3D='375.61 322.61 0' Center3D='365 312 0' \
@@ -321,50 +322,35 @@ async fn arcs_and_arc_arrows_import_as_the_same_curve() {
          MajorAxisEnd3D='80 354 0' MinorAxisEnd3D='65 369 0'/>\
          <arrow id='4' AngularSize='-180' Head3D='83 340 0' Tail3D='47 340 0' \
          Center3D='65 340 0' MajorAxisEnd3D='83 340 0' MinorAxisEnd3D='65 358 0'/>\
+         <arrow id='7' ArrowheadHead='Full' AngularSize='90' Head3D='10 400 0' \
+         Tail3D='60 400 0'/>\
          <graphic id='5' GraphicType='Arc' BoundingBox='183 285 165 285' AngularSize='90'/>\
          <graphic id='6' GraphicType='Arc' BoundingBox='475.61 301.39 465 312' AngularSize='90' \
          ArrowType='FullHead'/>",
     )
     .await
     {
-        assert_eq!(notices, Vec::<String>::new());
-        // The arc arrow of an older file ends where ChemDraw's own arrow for
-        // it does: both run up the right of their centres.
-        let [modern, legacy] = document.arrows.as_slice() else {
+        assert_eq!(notices, nearest("1 arc arrow straight"));
+        let [quarter, long, headless, straight, legacy] = document.arrows.as_slice() else {
             panic!("{:?}", document.arrows);
         };
+        // The arrow reader draws ChemDraw's arcs as arcs.
+        assert!(
+            [quarter, long, headless]
+                .iter()
+                .all(|arrow| arrow.arc.is_some())
+        );
+        assert!(straight.arc.is_none() && straight.cubic.is_none());
+        // The arc arrow of an older file ends where ChemDraw's own arrow for
+        // it does: both run up the right of their centres.
         assert!((legacy.start.x - legacy.end.x).abs() < 0.01 && legacy.start.y > legacy.end.y);
-        assert!((legacy.start.y - modern.start.y).abs() < 0.01);
-        assert!((legacy.end.y - modern.end.y).abs() < 0.01);
-        // One quarter turn is a curved arrow; longer arcs are paths.
-        let arrow = &document.arrows[0];
-        assert!(arrow.control.is_some() || arrow.cubic.is_some());
-        assert!((arrow.start.x - arrow.end.x).abs() < 0.01);
-        assert!(arrow.start.y > arrow.end.y);
-        let [headed, half, quarter] = document.graphics.as_slice() else {
+        assert!((legacy.start.y - quarter.start.y).abs() < 0.01);
+        assert!((legacy.end.y - quarter.end.y).abs() < 0.01);
+        // An older headless arc is a path of one quarter turn.
+        let [arc] = document.graphics.as_slice() else {
             panic!("{:?}", document.graphics);
         };
-        assert!(
-            [headed, half, quarter]
-                .iter()
-                .all(|graphic| graphic.kind == GraphicKind::Path)
-        );
-        assert!(headed.heads.is_some());
-        // Three quarter turns, two and one.
-        assert_eq!(
-            [headed.path.len(), half.path.len(), quarter.path.len()],
-            [4, 3, 2]
-        );
-        // The 270° arc runs the long way round, to the left of its ends.
-        let (low, high) = extent(headed);
-        assert!(high.x - low.x > 0.8 * (high.y - low.y));
-        // The half turn rises above its ends, as ChemDraw draws it.
-        let (low, high) = extent(half);
-        let PathCommand::Move(start) = half.path[0] else {
-            panic!("{:?}", half.path);
-        };
-        assert!((start.y - high.y).abs() < 0.01);
-        assert!(((high.x - low.x) / (high.y - low.y) - 2.).abs() < 0.01);
+        assert_eq!((arc.kind, arc.path.len()), (GraphicKind::Path, 2));
     }
 }
 
@@ -593,7 +579,9 @@ async fn objects_without_an_equivalent_are_left_out_and_named() {
     texts.sort_unstable();
     assert_eq!(texts, ["cell", "ori"]);
     let kinds: Vec<_> = document.graphics.iter().map(|g| g.kind).collect();
-    assert_eq!(kinds, [GraphicKind::Ellipse, GraphicKind::Path]);
+    assert_eq!(kinds, [GraphicKind::Ellipse]);
+    // A region is an arc arrow around the ring.
+    assert!(document.arrows[0].arc.is_some());
     // A template file's grid, a picture without a bitmap and an oval without
     // its axes.
     let (document, notices) = read(
@@ -735,9 +723,9 @@ async fn an_older_half_arrow_takes_its_side_from_the_sign_of_its_size() {
 
 #[test]
 fn a_save_counts_each_changed_object_once() {
-    // A block arrow out of size, and a rotated caption in a tiny outlined face.
+    // An arrowhead out of size, and a rotated caption in a tiny outlined face.
     let xml = "<CDXML><page id='1'><arrow id='2' Tail3D='10 20 0' Head3D='70 20 0' \
-               ArrowheadHead='Full' FillType='Solid' HeadSize='9000'/>\
+               ArrowheadHead='Full' HeadSize='9000'/>\
                <t id='3' p='10 60' RotationAngle='5898240'><s size='3' face='9'>turned</s></t>\
                </page></CDXML>";
     assert_eq!(formats::chemdraw_loss("cdxml", xml).unsupported, 2);

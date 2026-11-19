@@ -342,8 +342,8 @@ lists what changed and how many, such as "2 doubled curves as single lines;
 | Shaded orbital                                                             | The orbital in flat grey                                     |
 | Doubled curve                                                              | A single line                                                |
 | See-through object (alpha)                                                 | Opaque                                                       |
-| Block arrow (filled hollow arrow)                                          | A line arrow with the same head                              |
-| Arc and arc arrow                                                          | The same arc as a curve or curved arrow, without a message   |
+| Arc from an older ChemDraw file                                            | The same arc as a curve or curved arrow, without a message   |
+| Arc arrow without its centre or axes                                       | A straight arrow                                             |
 | Curved arrow with a double shaft; longer curve with a no-go or dipole mark | The curve without the mark                                   |
 | Two upright single brackets of one style that face each other              | One bracket pair, without a message                          |
 | Any other single bracket                                                   | A curve of the same shape                                    |

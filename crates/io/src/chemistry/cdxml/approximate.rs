@@ -54,7 +54,6 @@ enum Kind {
     ShadedOrbital,
     DoubledCurve,
     Faded,
-    BlockArrow,
     ArcStraight,
     CurvedArrowMark,
     ClosedCurveHead,
@@ -90,11 +89,6 @@ impl Kind {
                 Some(["as a single line", "as single lines"]),
             ),
             Self::Faded => ("see-through object", "see-through objects", same("opaque")),
-            Self::BlockArrow => (
-                "block arrow",
-                "block arrows",
-                Some(["as a line arrow", "as line arrows"]),
-            ),
             Self::ArcStraight => ("arc arrow", "arc arrows", same("straight")),
             Self::CurvedArrowMark => (
                 "curved arrow",
@@ -524,9 +518,21 @@ impl Pass {
             }
         }
         // What a hidden object holds stays hidden with it.
+        // A hidden group is refused, so its drawings are hidden one by one.
         if hidden {
             for &part in &kept {
-                self.tree.node_mut(part)?.set("Visible", "no".into());
+                for leaf in self.tree.descendants(part)? {
+                    let node = self.node(leaf)?;
+                    // An atom's label shows with its atom.
+                    let label = node
+                        .parent
+                        .map(|parent| self.node(parent))
+                        .transpose()?
+                        .is_some_and(|parent| parent.tag == "n");
+                    if matches!(node.tag.as_str(), "t" | "graphic" | "arrow" | "curve") && !label {
+                        self.tree.node_mut(leaf)?.set("Visible", "no".into());
+                    }
+                }
             }
         }
         Ok(kept)
@@ -584,9 +590,10 @@ impl Pass {
         // What the binary file held that the CDX decoder skipped.
         if let Some(count) = self.attr(index, crate::exchange::SKIPPED)? {
             self.remove(index, &[crate::exchange::SKIPPED])?;
-            for _ in 0..count.parse::<usize>().unwrap_or(1).min(64) {
-                self.count(index, Kind::ChemistrySetting);
-            }
+            self.count(index, Kind::ChemistrySetting);
+            // The notice counts every setting, the save question the object.
+            let more = count.parse::<usize>().unwrap_or(1).saturating_sub(1);
+            *self.log.entry(Kind::ChemistrySetting).or_default() += more;
         }
         self.text(index)?;
         // Hidden artwork is not drawn, and still marks out its page.
@@ -711,13 +718,6 @@ impl Pass {
 
     fn arrow(&mut self, index: usize) -> Result<()> {
         self.fade(index)?;
-        if self
-            .attr(index, "FillType")?
-            .is_some_and(|fill| matches!(fill.as_str(), "Solid" | "Shaded"))
-        {
-            self.set(index, "FillType", "None")?;
-            self.count(index, Kind::BlockArrow);
-        }
         self.head_sizes(index)?;
         self.clamp(index, "LineWidth", 0.1, 12.)?;
         self.clamp(index, "BoldWidth", 0.1, 12.)?;
@@ -729,13 +729,26 @@ impl Pass {
         {
             self.clamp(index, "ArrowShaftSpacing", 50., 1600.)?;
         }
-        if self
-            .attr(index, "AngularSize")?
-            .as_deref()
-            .and_then(number)
-            .is_some_and(|angle| angle != 0.)
+        // The arrow reader draws an arc around its centre; without a centre
+        // and both axes, or with a sweep past a full turn, the arrow runs
+        // straight from its tail to its head.
+        let node = self.node(index)?;
+        if let Some(angle) = node.attr("AngularSize").and_then(number)
+            && angle != 0.
         {
-            return self.arc_arrow(index);
+            let radius = |key: &str| {
+                let center = node.attr("Center3D").and_then(point)?;
+                let end = node.attr(key).and_then(point)?;
+                Some((end[0] - center[0]).hypot(end[1] - center[1]))
+            };
+            let drawn = angle.abs() <= 360.
+                && [radius("MajorAxisEnd3D"), radius("MinorAxisEnd3D")]
+                    .iter()
+                    .all(|radius| radius.is_some_and(|r| r > 1e-6));
+            if !drawn {
+                self.set(index, "AngularSize", "0")?;
+                self.count(index, Kind::ArcStraight);
+            }
         }
         let node = self.node(index)?;
         if node.attr("Head3D").is_none() || node.attr("Tail3D").is_none() {
@@ -744,73 +757,6 @@ impl Pass {
             self.count(index, Kind::UnknownGraphic);
         }
         Ok(())
-    }
-    /// ChemDraw stores its Arc tool and its arc arrows as an arrow around a
-    /// centre. The same curve is a Bézier path, which the readers know.
-    fn arc_arrow(&mut self, index: usize) -> Result<()> {
-        let node = self.node(index)?;
-        let pair = |key: &str| node.attr(key).and_then(point);
-        let geometry = (|| {
-            let angle = node.attr("AngularSize").and_then(number)?;
-            let (center, tail, head) = (pair("Center3D")?, pair("Tail3D")?, pair("Head3D")?);
-            let (major, minor) = (pair("MajorAxisEnd3D")?, pair("MinorAxisEnd3D")?);
-            let u = [major[0] - center[0], major[1] - center[1]];
-            let v = [minor[0] - center[0], minor[1] - center[1]];
-            let determinant = u[0] * v[1] - u[1] * v[0];
-            let w = [tail[0] - center[0], tail[1] - center[1]];
-            let a = (w[0] * v[1] - w[1] * v[0]) / determinant;
-            let b = (u[0] * w[1] - u[1] * w[0]) / determinant;
-            let scale = a.hypot(b);
-            if !scale.is_finite() || scale == 0. || angle.abs() > 360. {
-                return None;
-            }
-            let (u, v) = ([u[0] * scale, u[1] * scale], [v[0] * scale, v[1] * scale]);
-            let start = b.atan2(a);
-            // The sweep runs against the angle in a right-handed frame. When
-            // both directions are possible, the stored head decides.
-            let end = |sweep: f64| {
-                let (first, segments) = arc(center, u, v, start, sweep);
-                let last = segments.last().map_or(first, |segment| segment[2]);
-                (last[0] - head[0]).hypot(last[1] - head[1])
-            };
-            let sweep = -angle.to_radians() * determinant.signum();
-            let sweep = if end(-sweep) + 1e-6 < end(sweep) {
-                -sweep
-            } else {
-                sweep
-            };
-            Some(arc(center, u, v, start, sweep))
-        })();
-        let Some((first, segments)) = geometry else {
-            self.set(index, "AngularSize", "0")?;
-            self.count(index, Kind::ArcStraight);
-            return Ok(());
-        };
-        let node = self.tree.node_mut(index)?;
-        node.tag = "curve".into();
-        node.set("CurvePoints", curve_points(first, &segments));
-        if !["ArrowheadHead", "ArrowheadTail"]
-            .iter()
-            .any(|key| matches!(node.attr(key), Some("Full" | "HalfLeft" | "HalfRight")))
-            && let Some(id) = node.attr("id")
-        {
-            self.headless.insert(id.to_owned());
-        }
-        self.remove(
-            index,
-            &[
-                "AngularSize",
-                "Center3D",
-                "MajorAxisEnd3D",
-                "MinorAxisEnd3D",
-                "Head3D",
-                "Tail3D",
-                "FillType",
-                "BoundingBox",
-            ],
-        )?;
-        self.changed = true;
-        self.curve(index)
     }
 
     fn curve(&mut self, index: usize) -> Result<()> {
@@ -950,6 +896,11 @@ impl Pass {
     }
 
     fn graphic(&mut self, index: usize) -> Result<()> {
+        let node = self.node(index)?;
+        // A mark on an atom is the mark reader's to judge.
+        if node.attr("GraphicType") != Some("Symbol") && self.marks_atom(node) {
+            return Ok(());
+        }
         self.fade(index)?;
         self.clamp(index, "LineWidth", 0., 12.)?;
         self.clamp(index, "BoldWidth", 0., 12.)?;
@@ -971,8 +922,6 @@ impl Pass {
             Some("Symbol") => self.symbol(index),
             Some("Arc") => self.arc_graphic(index),
             Some("Bracket") => Ok(()),
-            // A mark on an atom is the mark reader's to judge.
-            _ if self.marks_atom(node) => Ok(()),
             _ => {
                 self.drop_element(index)?;
                 self.count(index, Kind::UnknownGraphic);
