@@ -331,6 +331,29 @@ pub const MAX_ANNOTATION_TEXT: usize = 64 * 1024;
 /// Bytes of annotation text in one drawing.
 pub const MAX_DRAWING_TEXT: usize = 1024 * 1024;
 
+/// The canvas centre and zoom a native file was saved at. It sits beside the
+/// drawing, not in it: panning never edits the drawing, it raises no document
+/// version, and older ReShiki ignores it.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct View {
+    pub center: Point,
+    pub zoom: f32,
+}
+impl View {
+    /// The view stored in native file contents; a missing or unusable one is
+    /// none, never an error, since the drawing opens without it.
+    pub fn read(bytes: &[u8]) -> Option<Self> {
+        #[derive(Deserialize)]
+        struct Probe {
+            view: Option<View>,
+        }
+        serde_json::from_slice::<Probe>(bytes)
+            .ok()?
+            .view
+            .filter(|view| view.center.is_finite() && view.zoom.is_finite() && view.zoom > 0.)
+    }
+}
+
 fn newer_version(version: u64) -> String {
     format!(
         "This drawing was made with a newer version of ReShiki (document version {version}). Update ReShiki to open it."
@@ -545,7 +568,22 @@ impl Document {
     }
     /// Native file contents, marked with the version their fields require.
     pub fn file_json(&self) -> Result<Vec<u8>, String> {
-        serde_json::to_vec_pretty(&self.current()).map_err(|e| e.to_string())
+        self.file_json_with_view(None)
+    }
+    /// [`Self::file_json`] with the view the drawing was saved in.
+    pub fn file_json_with_view(&self, view: Option<View>) -> Result<Vec<u8>, String> {
+        #[derive(Serialize)]
+        struct File<'a> {
+            #[serde(flatten)]
+            doc: &'a Document,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            view: Option<View>,
+        }
+        serde_json::to_vec_pretty(&File {
+            doc: &self.current(),
+            view,
+        })
+        .map_err(|e| e.to_string())
     }
     /// A copy marked with its required native version, for files, clipboard
     /// data and recovery drafts, so reading them back never migrates again.

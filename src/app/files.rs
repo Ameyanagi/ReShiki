@@ -372,7 +372,11 @@ pub(super) struct State {
 
 #[derive(Debug, Clone)]
 pub enum Prepared {
-    Native(Box<reshiki::document::Document>),
+    /// A native drawing and the view it was saved in.
+    Native(
+        Box<reshiki::document::Document>,
+        Option<reshiki::document::View>,
+    ),
     /// A picture's embedded drawing, or the picture itself with the reason
     /// its drawing could not be read.
     Picture(Box<reshiki::document::Document>, Option<String>),
@@ -448,7 +452,10 @@ fn prepare(path: &std::path::Path, contents: Vec<u8>) -> Result<Prepared, String
     } else if reshiki::compatibility::is_native_extension(&extension) {
         let doc = reshiki::document::Document::from_native_file(&contents)
             .map_err(|e| format!("Could not open document: {e}"))?;
-        Ok(Prepared::Native(Box::new(doc)))
+        Ok(Prepared::Native(
+            Box::new(doc),
+            reshiki::document::View::read(&contents),
+        ))
     } else {
         // An SD file's records are read next, in `records`. Its extension
         // comes first, as for Insert: POSCAR is told by its name.
@@ -878,13 +885,19 @@ impl super::App {
                 self.desktop_import_started();
                 return task;
             }
-            Ok(Prepared::Native(doc)) => {
+            Ok(Prepared::Native(doc, view)) => {
                 #[cfg(not(target_arch = "wasm32"))]
                 let kept = self.github_opened(&path);
                 #[cfg(target_arch = "wasm32")]
                 let kept = iced::Task::none();
                 if self.open_target(Some(&path)) {
                     self.show_opened(*doc, Some(path));
+                    if let Some(view) = view {
+                        self.tab.camera.center = iced::Point::new(view.center.x, view.center.y);
+                        self.tab.camera.zoom = view.zoom.clamp(super::MIN_ZOOM, 5.);
+                        self.tab.pages.fit = None;
+                        self.tab.fit_to_view = false;
+                    }
                 }
                 return kept;
             }
@@ -1080,6 +1093,13 @@ impl super::App {
         }
         let snapshot = std::sync::Arc::new(self.tab.doc.clone());
         let save_snapshot = std::sync::Arc::clone(&snapshot);
+        let view = Some(reshiki::document::View {
+            center: reshiki::document::Point::new(
+                self.tab.camera.center.x,
+                self.tab.camera.center.y,
+            ),
+            zoom: self.tab.camera.zoom,
+        });
         let epoch = self.tab.file_epoch;
         #[cfg(target_arch = "wasm32")]
         let handle = if !save_as && path.is_some() {
@@ -1117,10 +1137,11 @@ impl super::App {
                             reshiki::compatibility::NATIVE_EXTENSION,
                         )
                     };
+                    let bytes = save_snapshot.file_json_with_view(view)?;
                     if let Some(handle) = &handle {
-                        crate::web::write_file(handle, &save_snapshot).await?;
+                        crate::web::write_file(handle, &bytes).await?;
                     } else {
-                        write(&path, &save_snapshot.file_json()?)?;
+                        write(&path, &bytes)?;
                     }
                     Ok(Some(Saved { path, handle }))
                 }
@@ -1157,7 +1178,7 @@ impl super::App {
                     reshiki::task::spawn_blocking(move || {
                         let bytes = match exported {
                             Some(bytes) => bytes,
-                            None => save_snapshot.file_json()?,
+                            None => save_snapshot.file_json_with_view(view)?,
                         };
                         #[cfg(any(windows, target_os = "linux"))]
                         let _target_owner = if office.as_ref().is_some_and(|binding| {
