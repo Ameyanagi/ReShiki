@@ -545,7 +545,8 @@ impl App {
                         .padding([5, 8])
                         .width(Length::Fill),
                         "Gradient: paper color at the middle · See-through: shows what lies behind",
-                        tooltip::Position::Bottom,
+                        // Above, so it never covers the list's choices.
+                        tooltip::Position::Top,
                     ),
                 ]
                 .spacing(8)
