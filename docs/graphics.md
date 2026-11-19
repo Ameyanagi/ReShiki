@@ -283,7 +283,9 @@ socket mouth. Flasks start empty. Joints do not snap together yet.
 
 **Templates → Figure layouts** has a single-row TOC with a title bar, previous
 work beside this work, a scheme beside an evidence panel, and two matched
-scheme rows. Their benzene rings are placeholders to draw over or replace. To
+scheme rows. Their benzene rings and arrows are placeholders with the
+**Illustration** purpose, so they never form a reaction; replace them with
+your structures. To
 see a TOC graphic at its printed size, choose **ACS TOC graphic · 8.25 × 4.45
 cm**, **RSC graphical abstract · 8 × 4 cm** or **Elsevier graphical abstract ·
 13 × 5 cm** in [Page setup](publication-pages.md).

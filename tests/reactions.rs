@@ -200,3 +200,44 @@ async fn reaction_bridge_preserves_roles_stereo_mapping_and_cleanup() {
         Some("smiles")
     );
 }
+
+#[tokio::test]
+async fn molecule_smiles_leave_out_atom_maps_and_reaction_smiles_keep_them() {
+    let engine = LocalEngine::default();
+    let doc = engine
+        .execute(Request::import_smiles("[CH3:1][CH2:2][OH:3]"))
+        .await
+        .unwrap()
+        .document
+        .unwrap();
+    assert!(doc.atoms.iter().all(|a| a.map_num != 0));
+    let analysis = engine
+        .execute(Request::molecule("analyze", doc.clone()))
+        .await
+        .unwrap()
+        .analysis
+        .unwrap();
+    assert_eq!(analysis.smiles, "CCO");
+    // Without its maps this centre has two equal methyls: no stereo is left.
+    let isopropanol = engine
+        .execute(Request::import_smiles("[CH3:1][C@H](O)[CH3:2]"))
+        .await
+        .unwrap()
+        .analysis
+        .unwrap();
+    assert_eq!(isopropanol.smiles, "CC(C)O");
+    let mut export = Request::molecule("export", doc);
+    export.format = Some("smiles".into());
+    assert_eq!(engine.execute(export).await.unwrap().output.unwrap(), "CCO");
+
+    let reaction = engine
+        .execute(Request::import("rsmi", "[CH3:1][OH:2]>>[CH2:1]=[O:2]"))
+        .await
+        .unwrap()
+        .document
+        .unwrap();
+    let mut export = Request::molecule("export", reaction);
+    export.format = Some("rsmi".into());
+    let output = engine.execute(export).await.unwrap().output.unwrap();
+    assert!(output.contains(":1]") && output.contains(":2]"), "{output}");
+}

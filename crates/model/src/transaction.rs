@@ -296,6 +296,7 @@ pub fn reconcile(doc: &mut Document, before: Document) -> Result<Reconciled, Rej
         return Err(Rejection::Reactions(error));
     }
     crate::reaction_mapping::reconcile_label_changes(&before, doc);
+    crate::reaction_colors::reconcile(doc, &before);
     crate::arrow_anchors::reconcile(doc);
     crate::molecule_names::reconcile(doc, &before);
     crate::linked_properties::reconcile(doc, &before);

@@ -536,8 +536,20 @@ fn prepare_identifiers(
     let bonds = &molecule.state.graph.bonds;
     let identifiers = !bonds.iter().any(|b| matches!(b.order, 0 | 7));
     let smiles = if identifiers {
-        let output = smiles::write::write(&molecule.state, Default::default())?;
-        let groups = smiles::write::cx_groups(&molecule.state.metadata, &output.atom_order)?;
+        // A molecule's SMILES names the molecule. Atom maps belong to a
+        // reaction, so they appear only in reaction SMILES.
+        let mut state = std::borrow::Cow::Borrowed(&molecule.state);
+        if state.metadata.atoms.iter().any(|a| a.map_present) {
+            let state = state.to_mut();
+            for atom in &mut state.metadata.atoms {
+                (atom.map_number, atom.map_present) = (0, false);
+            }
+            // Maps can tell otherwise equal groups apart; find the
+            // stereocentres again without them.
+            state.properties.done = None;
+        }
+        let output = smiles::write::write(&state, Default::default())?;
+        let groups = smiles::write::cx_groups(&state.metadata, &output.atom_order)?;
         output.text + &groups
     } else {
         String::new()

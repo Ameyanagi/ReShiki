@@ -167,6 +167,11 @@ fn diels_alder_carries_fragment_colors_and_marks_new_bonds_and_ring() {
     assert_eq!(doc.ring_fills.len(), 1);
     assert_eq!(doc.ring_fills[0].color, NEW);
     assert_eq!(doc.ring_fills[0].atoms.len(), 6);
+    // Lighter than the new bonds' highlight, so the two stay apart.
+    assert_eq!(
+        doc.ring_fills[0].effect,
+        crate::ring_fills::RingEffect::SeeThrough
+    );
     let colors = doc.reactions[0].colors.as_ref().unwrap();
     assert_eq!(colors.reactants, vec![Hue::Blue, Hue::Green]);
     assert_eq!(doc.file_version(), crate::document::DRAWING_ELEMENTS);
@@ -268,9 +273,15 @@ fn the_legend_keeps_edited_names_and_goes_away_with_the_colors() {
     let purple = Color::Palette(Hue::Purple, Row::Strong);
     let teal = Color::Palette(Hue::Teal, Row::Strong);
     assert_eq!(swatches(&doc), vec![purple, teal, red, red]);
+    // Turning an entry off keeps the other names.
     update(&mut doc, arrow, |colors| colors.bonds = false).unwrap();
-    assert_eq!(text(&doc).text, "■ Reactant 1   ■ Reactant 2   ● New ring");
+    assert_eq!(text(&doc).text, "■ Diene   ■ Dienophile   ● New ring");
     assert_eq!(swatches(&doc), vec![purple, teal, red]);
+    update(&mut doc, arrow, |colors| colors.bonds = true).unwrap();
+    assert_eq!(
+        text(&doc).text,
+        "■ Diene   ■ Dienophile   ■ New bond   ● New ring"
+    );
     doc.validate().unwrap();
 
     assert!(clear_paint(&mut doc, arrow));
@@ -346,4 +357,189 @@ fn a_later_step_carries_the_colors_it_receives() {
         assert!(legend.text.starts_with("■ Reactant 1"));
         assert_eq!(legend.format.at(0).color, purple);
     }
+}
+
+/// The legend's id and the colors of its swatch glyphs, in order.
+fn legend_swatches(doc: &Document) -> (u64, Vec<Color>) {
+    let id = doc.reactions[0].colors.as_ref().unwrap().legend.unwrap();
+    let legend = doc.annotations.iter().find(|a| a.id == id).unwrap();
+    let colors = legend
+        .text
+        .char_indices()
+        .filter(|(_, c)| *c == SWATCH || *c == RING)
+        .map(|(i, _)| legend.format.at(i).color)
+        .collect();
+    (id, colors)
+}
+
+#[test]
+fn retyping_the_whole_legend_keeps_swatch_colors_and_leaves_names_in_ink() {
+    let DielsAlder { mut doc, arrow, .. } = diels_alder(true);
+    set_legend(&mut doc, arrow, true, Default::default()).unwrap();
+    let (id, colors) = legend_swatches(&doc);
+    let before = doc.clone();
+    // The text editor gives replacing text the style of the first replaced
+    // character: here, the first reactant's blue swatch.
+    let typed = "■ diene   ■ dienophile   ■ New bond   ● New ring";
+    let legend = doc.annotations.iter_mut().find(|a| a.id == id).unwrap();
+    let old = std::mem::replace(&mut legend.text, typed.into());
+    legend.format.edited(&old, typed, 0..old.len());
+    let _ = crate::transaction::reconcile(&mut doc, before).unwrap();
+    assert_eq!(legend_swatches(&doc).1, colors);
+    let legend = doc.annotations.iter().find(|a| a.id == id).unwrap();
+    for (i, c) in legend.text.char_indices() {
+        if c != SWATCH && c != RING {
+            assert_eq!(legend.format.at(i).color, Color::Ink, "{c:?} at {i}");
+        }
+    }
+}
+
+#[test]
+fn a_name_colored_before_the_edit_keeps_its_color() {
+    let DielsAlder { mut doc, arrow, .. } = diels_alder(true);
+    set_legend(&mut doc, arrow, true, Default::default()).unwrap();
+    let (id, colors) = legend_swatches(&doc);
+    let legend = doc.annotations.iter_mut().find(|a| a.id == id).unwrap();
+    // Color the first name like its swatch, then add a letter to it.
+    let end = legend.text.find("   ").unwrap();
+    legend.format.apply(
+        &legend.text,
+        Some(0..end),
+        &crate::typography::StyleChange::Color(BLUE),
+    );
+    let before = doc.clone();
+    let legend = doc.annotations.iter_mut().find(|a| a.id == id).unwrap();
+    let old = legend.text.clone();
+    legend.text.insert(end, 's');
+    let new = legend.text.clone();
+    legend.format.edited(&old, &new, end..end);
+    let _ = crate::transaction::reconcile(&mut doc, before).unwrap();
+    assert_eq!(legend_swatches(&doc).1, colors);
+    let legend = doc.annotations.iter().find(|a| a.id == id).unwrap();
+    let name = SWATCH.len_utf8() + 1;
+    assert_eq!(legend.format.at(name).color, BLUE);
+}
+
+/// Ink extents of the legend and of each molecule and arrow of the drawing.
+fn legend_and_others(doc: &Document) -> ((Point, Point), Vec<(Point, Point)>) {
+    let (id, _) = legend_swatches(doc);
+    let legend = crate::scene::selection_bounds(doc, &[id]).unwrap();
+    let mut objects =
+        crate::reactions::molecules(doc, &doc.atoms.iter().map(|a| a.id).collect::<Vec<_>>());
+    objects.extend(
+        doc.arrows.iter().map(|a| vec![a.id]).chain(
+            doc.annotations
+                .iter()
+                .filter(|a| a.id != id)
+                .map(|a| vec![a.id]),
+        ),
+    );
+    let boxes = crate::scene::selections_bounds(doc, &objects)
+        .into_iter()
+        .flatten()
+        .collect();
+    (legend, boxes)
+}
+fn apart((a, b): (Point, Point), (p, q): (Point, Point)) -> bool {
+    q.x < a.x || p.x > b.x || q.y < a.y || p.y > b.y
+}
+
+#[test]
+fn a_new_legend_sits_below_its_reaction_clear_of_other_text() {
+    let DielsAlder { mut doc, arrow, .. } = diels_alder(true);
+    let mut free = doc.clone();
+    set_legend(&mut free, arrow, true, Default::default()).unwrap();
+    // Below the reaction when that is free.
+    let ((lo, _), others) = legend_and_others(&free);
+    let bottom = others.iter().map(|b| b.1.y).fold(f32::MIN, f32::max);
+    assert!(lo.y > bottom);
+
+    // A caption already there pushes the legend to a free spot.
+    let id = doc.next_id();
+    doc.annotations.push(Annotation {
+        id,
+        position: Point::new(0., bottom + 30.),
+        text: "Diels–Alder, 80 °C, 12 h, toluene".into(),
+        format: Default::default(),
+    });
+    set_legend(&mut doc, arrow, true, Default::default()).unwrap();
+    let (legend, others) = legend_and_others(&doc);
+    assert!(others.iter().all(|b| apart(legend, *b)), "{legend:?}");
+}
+
+#[test]
+fn a_new_legend_stays_on_the_reactions_page() {
+    let DielsAlder { mut doc, arrow, .. } = diels_alder(true);
+    let (lo, hi) = crate::scene::selection_bounds(&doc, &doc.all_ids()).unwrap();
+    // A page that leaves no room below the reaction, but room above it.
+    let pt = crate::style::DEFAULT.points_per_world();
+    let pad = 10.;
+    doc.page_layout = Some(crate::pages::Layout {
+        width_pt: (hi.x - lo.x + 2. * pad) * pt,
+        height_pt: (hi.y - lo.y + 310.) * pt,
+        margins: crate::pages::Margins {
+            top: 0.,
+            right: 0.,
+            bottom: 0.,
+            left: 0.,
+        },
+        columns: 1,
+        rows: 1,
+        origin: Point::new(lo.x - pad, lo.y - 300.),
+    });
+    doc.validate().unwrap();
+    set_legend(&mut doc, arrow, true, Default::default()).unwrap();
+    let (page_lo, page_hi) = doc.page_layout.as_ref().unwrap().bounds(0).unwrap();
+    let (legend, others) = legend_and_others(&doc);
+    assert!(
+        legend.0.x >= page_lo.x
+            && legend.0.y >= page_lo.y
+            && legend.1.x <= page_hi.x
+            && legend.1.y <= page_hi.y,
+        "{legend:?} on {page_lo:?}–{page_hi:?}"
+    );
+    assert!(others.iter().all(|b| apart(legend, *b)), "{legend:?}");
+    assert_eq!(doc.page_layout.as_ref().unwrap().overflow(&doc), 0);
+}
+
+#[test]
+fn the_reaction_copies_without_its_legend() {
+    let DielsAlder { mut doc, arrow, .. } = diels_alder(true);
+    set_legend(&mut doc, arrow, true, Default::default()).unwrap();
+    let (legend, _) = legend_swatches(&doc);
+    let ids: Vec<u64> = doc
+        .all_ids()
+        .into_iter()
+        .filter(|id| *id != legend)
+        .collect();
+    let selection = crate::editing::selection(&doc, &ids);
+    let copied = crate::reactions::copy_reaction(&doc, &selection)
+        .unwrap()
+        .unwrap();
+    assert!(!copied.annotations.contains(&legend));
+    assert_eq!(copied.colors.and_then(|c| c.legend), None);
+    // With the legend selected too, it still copies.
+    let all = crate::editing::selection(&doc, &doc.all_ids());
+    assert!(
+        crate::reactions::copy_reaction(&doc, &all)
+            .unwrap()
+            .is_some()
+    );
+}
+
+#[test]
+fn names_stay_with_their_entries_when_swatches_share_a_color() {
+    let DielsAlder { mut doc, arrow, .. } = diels_alder(true);
+    paint(&mut doc, arrow).unwrap();
+    // New bonds and rings in the first reactant's blue.
+    update(&mut doc, arrow, |colors| colors.formed = Hue::Blue).unwrap();
+    set_legend(&mut doc, arrow, true, Default::default()).unwrap();
+    let (id, _) = legend_swatches(&doc);
+    let legend = doc.annotations.iter_mut().find(|a| a.id == id).unwrap();
+    let renamed = legend.text.replacen("Reactant 1", "Diene", 1);
+    let old = std::mem::replace(&mut legend.text, renamed.clone());
+    legend.format.edited(&old, &renamed, 0..old.len());
+    update(&mut doc, arrow, |colors| colors.rings = false).unwrap();
+    let legend = doc.annotations.iter().find(|a| a.id == id).unwrap();
+    assert_eq!(legend.text, "■ Diene   ■ Reactant 2   ■ New bond");
 }
