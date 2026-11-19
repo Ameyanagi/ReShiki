@@ -9,8 +9,8 @@ use crate::{document::Point, style};
 pub use arc::ArcGeometry;
 pub(crate) use effects::bounding_frame;
 pub use effects::{
-    EXPORT_NOTICE, Effects, GLOW_NOTICE, Gradient, GradientKind, SHADOW_RGB, export_notice, shade,
-    tiled, wave_radius, wavy,
+    EXPORT_NOTICE, Effects, GLOW_NOTICE, Gradient, GradientKind, SHADOW_RGB, export_notice,
+    lobe_shading, shade, tiled, wave_radius, wavy,
 };
 pub use heads::PathHeads;
 pub use panel::{Divider, Panel, TitlePlace};

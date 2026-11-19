@@ -107,11 +107,8 @@ async fn every_probe_sheet_opens_and_names_what_it_approximated() {
     let curves = "2 doubled curves as single lines";
     for (sheet, saved, source) in [
         ("p1-shapes-enum", String::new(), String::new()),
-        (
-            "p2-orbitals-enum",
-            "3 shaded orbitals in flat grey".into(),
-            "9 shaded orbitals in flat grey".into(),
-        ),
+        // Shaded orbitals are read as they are.
+        ("p2-orbitals-enum", String::new(), String::new()),
         (
             "p3-symbols-enum",
             "3 stereo flags as text".into(),
@@ -357,18 +354,22 @@ async fn arc_arrows_are_arcs_and_older_arcs_are_curves() {
 }
 
 #[tokio::test]
-async fn orbitals_take_chemdraws_names() {
+async fn orbitals_take_chemdraws_names_and_shaded_phases() {
     for (document, notices) in sheet(
         "<graphic id='2' GraphicType='Orbital' BoundingBox='20 40 20 10' OrbitalType='hybridPlus'/>\
          <graphic id='3' GraphicType='Orbital' BoundingBox='50 40 50 10' OrbitalType='hybridMinus'/>\
          <graphic id='4' GraphicType='Orbital' BoundingBox='80 40 80 10' OrbitalType='sFilled'/>\
          <graphic id='5' GraphicType='Orbital' BoundingBox='110 40 110 10' OrbitalType='lobeShaded'/>\
          <graphic id='6' GraphicType='Orbital' BoundingBox='140 40 140 10' OrbitalType='pFilled'/>\
-         <graphic id='7' GraphicType='Orbital' BoundingBox='170 40 170 10' OrbitalType='dz2MinusFilled'/>",
+         <graphic id='7' GraphicType='Orbital' BoundingBox='170 40 170 10' OrbitalType='dz2MinusFilled'/>\
+         <graphic id='8' GraphicType='Orbital' BoundingBox='200 40 200 10' OrbitalType='p'/>\
+         <graphic id='9' GraphicType='Orbital' BoundingBox='230 40 230 10' OrbitalType='dz2Plus'/>\
+         <graphic id='10' GraphicType='Orbital' BoundingBox='260 40 260 10' OrbitalType='s'/>\
+         <graphic id='11' GraphicType='Orbital' BoundingBox='290 40 290 10' OrbitalType='sShaded'/>",
     )
     .await
     {
-        assert_eq!(notices, nearest("1 shaded orbital in flat grey"));
+        assert_eq!(notices, nearest(""));
         let read: Vec<_> = document
             .graphics
             .iter()
@@ -378,14 +379,226 @@ async fn orbitals_take_chemdraws_names() {
         assert_eq!(
             read,
             [
-                (Orbital(OrbitalKind::Hybrid), Phase::Open, true),
-                (Orbital(OrbitalKind::Hybrid), Phase::Open, false),
+                (Orbital(OrbitalKind::Hybrid), Phase::Gradient, true),
+                (Orbital(OrbitalKind::Hybrid), Phase::Gradient, false),
                 (Orbital(OrbitalKind::S), Phase::Solid, false),
-                (Orbital(OrbitalKind::Lobe), Phase::Shaded, false),
+                (Orbital(OrbitalKind::Lobe), Phase::Gradient, false),
                 (Orbital(OrbitalKind::P), Phase::Solid, false),
                 (Orbital(OrbitalKind::Dz2), Phase::Solid, false),
+                (Orbital(OrbitalKind::P), Phase::Gradient, false),
+                (Orbital(OrbitalKind::Dz2), Phase::Gradient, true),
+                (Orbital(OrbitalKind::S), Phase::Open, false),
+                (Orbital(OrbitalKind::S), Phase::Gradient, false),
             ]
         );
+        // ChemDraw's p shades its lower lobe, toward the first point.
+        let p = &document.graphics[6];
+        let shaded: Vec<_> = p.parts().into_iter().filter(|part| part.filled).collect();
+        let [lobe] = shaded.as_slice() else {
+            panic!("{shaded:?}");
+        };
+        assert!(lobe.style.effects.shaded);
+        let (lo, hi) = extent(&Graphic {
+            path: lobe.commands.clone(),
+            ..p.clone()
+        });
+        assert!(lo.y >= p.origin.y - 0.001 && hi.y > p.origin.y, "{lo:?} {hi:?}");
+    }
+}
+
+#[tokio::test]
+async fn shaded_orbitals_and_upright_signs_keep_their_look_through_reshikis_cdxml() {
+    let engine = LocalEngine::in_process();
+    for sheet in ["p2-orbitals-enum", "p3-symbols-enum"] {
+        let (document, _) = fixture(&format!("{sheet}.chemdraw.cdxml")).await;
+        let shaded = |document: &Document| {
+            document
+                .graphics
+                .iter()
+                .filter(|g| g.style.effects.shaded || g.phase == Phase::Gradient)
+                .count()
+        };
+        for target in ["cdxml", "cdx"] {
+            let bytes = formats::write_with_engine(document.clone(), target, &engine)
+                .await
+                .unwrap();
+            let (restored, _) = open(bytes, target).await.unwrap();
+            // Written as curves: each shaded lobe a ChemDraw shaded curve.
+            let lobes: usize = document
+                .graphics
+                .iter()
+                .map(|g| {
+                    g.parts()
+                        .iter()
+                        .filter(|part| part.style.effects.shaded)
+                        .count()
+                })
+                .sum();
+            assert_eq!(shaded(&restored), lobes, "{sheet} {target}");
+            assert_eq!(lobes > 0, sheet == "p2-orbitals-enum");
+            // Every curve stands where the drawing drew it.
+            let ink = |document: &Document| {
+                let mut boxes: Vec<_> = document
+                    .graphics
+                    .iter()
+                    .flat_map(|g| g.parts())
+                    .map(|part| {
+                        let (lo, hi) = extent(&Graphic {
+                            path: part.commands,
+                            ..document.graphics[0].clone()
+                        });
+                        [hi.x - lo.x, hi.y - lo.y].map(|v| (v * 10.).round() as i32)
+                    })
+                    .collect();
+                boxes.sort_unstable();
+                boxes
+            };
+            if sheet == "p3-symbols-enum" {
+                // The upright plus keeps a vertical and a horizontal arm.
+                let arms = ink(&restored);
+                assert!(arms.iter().any(|[w, h]| *w == 0 && *h > 0), "{arms:?}");
+                assert!(arms.iter().any(|[w, h]| *h == 0 && *w > 0), "{arms:?}");
+            }
+        }
+    }
+}
+
+#[tokio::test]
+async fn a_dxy_orbital_has_its_lobes_along_and_across_its_axis() {
+    for (document, notices) in sheet(
+        "<graphic id='2' GraphicType='Orbital' BoundingBox='20 40 20 10' OrbitalType='dxyFilled'/>\
+         <graphic id='3' GraphicType='Orbital' BoundingBox='60 40 60 10' OrbitalType='dxy'/>",
+    )
+    .await
+    {
+        assert_eq!(notices, nearest(""));
+        for (dxy, phase) in document
+            .graphics
+            .iter()
+            .zip([Phase::Solid, Phase::Gradient])
+        {
+            assert_eq!(
+                (dxy.kind, dxy.phase),
+                (GraphicKind::Orbital(OrbitalKind::Dxy), phase)
+            );
+            // As ChemDraw draws it: the filled lobes above and below the
+            // middle, the open ones left and right of it.
+            let middle = |part: &reshiki_model::scientific::Part| {
+                let (lo, hi) = extent(&Graphic {
+                    path: part.commands.clone(),
+                    ..dxy.clone()
+                });
+                Point::new(
+                    (lo.x + hi.x) / 2. - dxy.origin.x,
+                    (lo.y + hi.y) / 2. - dxy.origin.y,
+                )
+            };
+            for part in dxy.parts() {
+                let at = middle(&part);
+                let (along, across) = if part.filled {
+                    (at.y.abs(), at.x.abs())
+                } else {
+                    (at.x.abs(), at.y.abs())
+                };
+                assert!(across < 0.01 * along, "{at:?} {}", part.filled);
+            }
+        }
+    }
+}
+
+/// Where a part's anchors sit on average, from the symbol's middle.
+fn part_middle(graphic: &Graphic, part: &reshiki_model::scientific::Part) -> Point {
+    let (lo, hi) = extent(&Graphic {
+        path: part.commands.clone(),
+        ..graphic.clone()
+    });
+    Point::new(
+        (lo.x + hi.x) / 2. - graphic.origin.x,
+        (lo.y + hi.y) / 2. - graphic.origin.y,
+    )
+}
+
+#[tokio::test]
+async fn signs_stand_upright_and_dots_sit_where_chemdraw_draws_them() {
+    // As in ChemDraw's symbol sheet: each second point 6 pt up and left.
+    for (document, notices) in sheet(
+        "<graphic id='2' GraphicType='Symbol' BoundingBox='55 55 49 49' SymbolType='Plus'/>\
+         <graphic id='3' GraphicType='Symbol' BoundingBox='85 55 79 49' SymbolType='Minus'/>\
+         <graphic id='4' GraphicType='Symbol' BoundingBox='115 55 109 49' SymbolType='CirclePlus'/>\
+         <graphic id='5' GraphicType='Symbol' BoundingBox='145 55 139 49' SymbolType='CircleMinus'/>\
+         <graphic id='6' GraphicType='Symbol' BoundingBox='175 55 169 49' SymbolType='Dagger'/>\
+         <graphic id='7' GraphicType='Symbol' BoundingBox='205 55 199 49' SymbolType='DoubleDagger'/>\
+         <graphic id='8' GraphicType='Symbol' BoundingBox='235 55 229 49' SymbolType='Electron'/>\
+         <graphic id='9' GraphicType='Symbol' BoundingBox='265 55 259 49' SymbolType='LonePair'/>\
+         <graphic id='10' GraphicType='Symbol' BoundingBox='295 55 289 49' SymbolType='RadicalCation'/>\
+         <graphic id='11' GraphicType='Symbol' BoundingBox='325 55 319 49' SymbolType='RadicalAnion'/>\
+         <graphic id='12' GraphicType='Symbol' BoundingBox='355 55 349 49' SymbolType='LonePairBar'/>\
+         <graphic id='13' GraphicType='Symbol' BoundingBox='385 40 391 46' SymbolType='RadicalCation'/>\
+         <graphic id='14' GraphicType='Symbol' BoundingBox='415 40 415 46' SymbolType='RadicalAnion'/>",
+    )
+    .await
+    {
+        assert_eq!(notices, nearest(""));
+        let g = &document.graphics;
+        // Points 30 pt apart in the file, in the drawing's units.
+        let pt = (g[1].origin.x - g[0].origin.x) / 30.;
+        let size = 6. * std::f32::consts::SQRT_2 * pt;
+        let near = |a: f32, b: f32| (a - b).abs() < 0.01 * size;
+        // Signs and daggers: upright on the first point, as large as the
+        // distance between the points.
+        for (i, sign) in g[..6].iter().enumerate() {
+            assert!(near(sign.origin.x, g[0].origin.x + 30. * pt * i as f32));
+            assert!(near(sign.origin.y, g[0].origin.y));
+            assert!(near(sign.axis_x.x, size) && near(sign.axis_x.y, 0.), "{i}");
+            assert!(near(sign.axis_y.x, 0.) && near(sign.axis_y.y, size), "{i}");
+        }
+        // A lone electron is a small dot on its point.
+        let [dot] = g[6].parts().try_into().unwrap();
+        let (lo, hi) = extent(&Graphic {
+            path: dot.commands.clone(),
+            ..g[6].clone()
+        });
+        assert!(near(g[6].origin.y, g[0].origin.y));
+        assert!((hi.x - lo.x) < 0.25 * size, "{lo:?} {hi:?}");
+        // A lone pair has a dot on each point.
+        let [first, second] = g[7].parts().try_into().unwrap();
+        let (first, second) = (part_middle(&g[7], &first), part_middle(&g[7], &second));
+        let (dx, dy) = (second.x - first.x, second.y - first.y);
+        assert!(near(dx.abs(), 6. * pt) && near(dy.abs(), 6. * pt), "{dx} {dy}");
+        assert!(near(g[7].origin.x, g[0].origin.x + 207. * pt));
+        // A radical ion: the dot on the first point and the upright sign on
+        // the second, whichever way the second lies.
+        let at = |x: f32, y: f32, ion: &Graphic| {
+            Point::new(
+                g[0].origin.x + (x - 55.) * pt - ion.origin.x,
+                g[0].origin.y + (y - 55.) * pt - ion.origin.y,
+            )
+        };
+        for (ion, first, second) in [
+            (&g[8], (295., 55.), (289., 49.)),
+            (&g[9], (325., 55.), (319., 49.)),
+            (&g[11], (385., 40.), (391., 46.)),
+            (&g[12], (415., 40.), (415., 46.)),
+        ] {
+            let parts = ion.parts();
+            let dot = part_middle(ion, parts.iter().find(|part| part.filled).unwrap());
+            let arms = parts.iter().find(|part| !part.filled).unwrap();
+            let sign = part_middle(ion, arms);
+            let (a, b) = (at(first.0, first.1, ion), at(second.0, second.1, ion));
+            assert!(near(dot.x, a.x) && near(dot.y, a.y), "{dot:?} {a:?}");
+            assert!(near(sign.x, b.x) && near(sign.y, b.y), "{sign:?} {b:?}");
+            // Each arm end lies level with the sign's middle or straight
+            // above or below it.
+            let middle = Point::new(sign.x + ion.origin.x, sign.y + ion.origin.y);
+            for command in &arms.commands {
+                if let PathCommand::Move(p) | PathCommand::Line(p) = command {
+                    assert!(near(p.x, middle.x) || near(p.y, middle.y), "{p:?} {middle:?}");
+                }
+            }
+        }
+        // The bar lies between its points, along the line through them.
+        assert!(near(g[10].origin.x, g[0].origin.x + 297. * pt));
+        assert!(near(g[10].axis_x.x, g[10].axis_x.y));
     }
 }
 

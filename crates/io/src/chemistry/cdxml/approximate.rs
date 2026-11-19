@@ -12,11 +12,11 @@ use super::{
 };
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
-    f64::consts::PI,
+    f64::consts::{FRAC_1_SQRT_2, PI},
 };
 
-/// Orbital name part for the grey phase. Only this pass writes it.
-pub(super) const GREY: &str = "Grey";
+/// Orbital name part for ChemDraw's shaded phase. Only this pass writes it.
+pub(super) const GRADIENT: &str = "Gradient";
 
 const ALLOWED: &[&str] = &[
     "CDXML",
@@ -51,7 +51,6 @@ const SALVAGED: &[&str] = &["t", "graphic", "arrow", "curve", "fragment", "group
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 enum Kind {
-    ShadedOrbital,
     DoubledCurve,
     Faded,
     ArcStraight,
@@ -82,7 +81,6 @@ impl Kind {
     fn words(self) -> (&'static str, &'static str, Option<[&'static str; 2]>) {
         let same = |how| Some([how, how]);
         match self {
-            Self::ShadedOrbital => ("shaded orbital", "shaded orbitals", same("in flat grey")),
             Self::DoubledCurve => (
                 "doubled curve",
                 "doubled curves",
@@ -957,7 +955,10 @@ impl Pass {
             // A shadow of 0.1 to 36 pt, in hundredths.
             Some("Rectangle" | "Oval") => self.clamp(index, "ShadowSize", 10., 3600.),
             Some("Orbital") => self.orbital(index),
-            Some("Symbol") => self.symbol(index),
+            Some("Symbol") => {
+                self.symbol_frame(index)?;
+                self.symbol(index)
+            }
             Some("Arc") => self.arc_graphic(index),
             Some("Bracket") => Ok(()),
             _ => {
@@ -993,7 +994,8 @@ impl Pass {
         }
     }
     /// ChemDraw's orbital names in the spelling the reader knows: the shape,
-    /// its phase, then `2` for the mirrored one.
+    /// its phase, then `2` for the mirrored one. ChemDraw shades one phase of
+    /// a plain orbital of more than one part, and the whole of a Shaded one.
     fn orbital(&mut self, index: usize) -> Result<()> {
         let Some(name) = self.attr(index, "OrbitalType")? else {
             return Ok(());
@@ -1001,12 +1003,13 @@ impl Pass {
         let (base, phase) = if let Some(base) = name.strip_suffix("Filled") {
             (base, "Solid")
         } else if let Some(base) = name.strip_suffix("Shaded") {
-            (base, GREY)
+            (base, GRADIENT)
         } else {
             (name.as_str(), "")
         };
         let (shape, mirrored) = match base {
-            "s" | "oval" | "lobe" | "p" | "dxy" => (base, false),
+            "s" | "oval" | "lobe" => (base, false),
+            "p" | "dxy" => (base, false),
             // ChemDraw's plus fills the small lobe or the ring, where
             // ReShiki's mirrored phase is.
             "hybridPlus" => ("sp3", true),
@@ -1015,17 +1018,89 @@ impl Pass {
             "dz2Minus" => ("dz2", false),
             _ => return Ok(()),
         };
-        // Plain names the reader already knows keep their present reading.
-        if phase.is_empty() && shape != "sp3" {
+        // A plain s, oval or lobe is an outline, as the reader reads it.
+        let single = matches!(shape, "s" | "oval" | "lobe");
+        if phase.is_empty() && single {
             return Ok(());
         }
-        if phase == GREY {
-            self.count(index, Kind::ShadedOrbital);
+        let phase = if phase.is_empty() { GRADIENT } else { phase };
+        // ChemDraw's dxy has its lobes along its axis and across it, the
+        // reader's between them: turn the axis back an eighth of a turn.
+        if shape == "dxy"
+            && let Some(&[x1, y1, x2, y2]) = self
+                .attr(index, "BoundingBox")?
+                .as_deref()
+                .and_then(numbers)
+                .as_deref()
+        {
+            let (x, y) = ((x1 - x2) * FRAC_1_SQRT_2, (y1 - y2) * FRAC_1_SQRT_2);
+            let end = [x2 + x + y, y2 + y - x];
+            self.set(
+                index,
+                "BoundingBox",
+                format!(
+                    "{} {} {} {}",
+                    spell(end[0]),
+                    spell(end[1]),
+                    spell(x2),
+                    spell(y2)
+                ),
+            )?;
         }
         self.set(
             index,
             "OrbitalType",
             format!("{shape}{phase}{}", if mirrored { "2" } else { "" }),
+        )
+    }
+    /// ChemDraw draws a sign, dagger or dot upright on a free symbol's first
+    /// point, as large as the distance to its second, and a lone pair with a
+    /// dot on each point. The reader turns a symbol to the line from its
+    /// second point to its first, so that line is laid out here as ChemDraw
+    /// draws the symbol. A symbol on an atom is the mark reader's to place.
+    fn symbol_frame(&mut self, index: usize) -> Result<()> {
+        let node = self.node(index)?;
+        if self.marks_atom(node) {
+            return Ok(());
+        }
+        let Some(&[ax, ay, bx, by]) = node.attr("BoundingBox").and_then(numbers).as_deref() else {
+            return Ok(());
+        };
+        let (dx, dy) = (ax - bx, ay - by);
+        let size = dx.hypot(dy);
+        let middle = [(ax + bx) / 2., (ay + by) / 2.];
+        // The symbol's middle and the axis the reader turns it to.
+        let (origin, axis) = match node.attr("SymbolType") {
+            Some(
+                "Plus" | "Minus" | "CirclePlus" | "CircleMinus" | "Dagger" | "DoubleDagger"
+                | "HDot" | "HDash" | "Attachment",
+            ) => ([ax, ay], [size, 0.]),
+            // The reader doubles a dot's axis.
+            Some("Electron" | "Radical") => ([ax, ay], [size / 2., 0.]),
+            // Its dots stand 0.4 of the doubled axis either side of the middle.
+            Some("LonePair" | "ElectronPair") => (middle, [dx * 1.25, dy * 1.25]),
+            // A bar 1.4 times as long as the distance, between the points.
+            Some("LonePairBar") => (middle, [dx * 2., dy * 2.]),
+            // The dot on the first point and the upright sign on the second:
+            // the reader's dot is 0.45 of its axis behind the middle and the
+            // sign 0.22 ahead, so the axis runs from the first point toward
+            // the second, 1/0.67 times as long.
+            Some("RadicalCation" | "RadicalAnion") => {
+                let axis = [-dx / 0.67, -dy / 0.67];
+                ([ax + 0.45 * axis[0], ay + 0.45 * axis[1]], axis)
+            }
+            _ => return Ok(()),
+        };
+        self.set(
+            index,
+            "BoundingBox",
+            format!(
+                "{} {} {} {}",
+                spell(origin[0]),
+                spell(origin[1]),
+                spell(origin[0] - axis[0]),
+                spell(origin[1] - axis[1])
+            ),
         )
     }
     fn marks_atom(&self, node: &Element) -> bool {

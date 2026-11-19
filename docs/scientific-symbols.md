@@ -27,7 +27,8 @@ to the page. Orbitals are editable drawing shapes that can snap to an atom.
 
 A lone pair or bar always turns across the line from the atom, so its two
 dots sit side by side around the label, also when placed freely. Charges and
-radicals stay upright.
+radicals stay upright. A free radical cation or anion keeps its sign upright
+when turned; only the dot's side changes.
 
 Charges and radicals change the atom's chemistry, and ReShiki refreshes its
 hydrogen label and unpaired electrons. Lone pairs, bars and partial charges are
@@ -44,7 +45,9 @@ dots have a wider separation than lone-pair dots.
    sp³ hybrid, dxy or dz².
 2. Drag from the node to set size and direction; Shift keeps the direction at
    15° steps. A click uses one default bond length.
-3. Choose outline, solid or flat-gray phases in **Properties**. Multi-lobe
+3. Choose **Solid phase**, **Outline**, **Gray phase** or **Shaded phase** in
+   **Properties**. A shaded phase runs from white at the upper left of each
+   lobe to the line color at its edge, as ChemDraw shades orbitals. Multi-lobe
    orbitals can reverse their phases.
 
 **Snap to atoms** in the context row snaps the orbital's node to the nearest
@@ -61,8 +64,7 @@ color, so the label stays readable over filled lobes.
   hydrogen stereo, R-groups, polymers or reaction attachment points. Draw an
   explicit H atom and a stereo bond for hydrogen stereochemistry.
 - Very crowded drawings may still need lone pairs placed by hand.
-- Gray fill is flat, not gradient shading. Gradient-shaded orbitals cannot be
-  imported.
+- A drawing with a shaded phase saves as document version 40.
 - Some marks need a `.rsk` file or SVG, PDF or PNG; CDXML export rejects them.
   See [Persistence and exchange](#persistence-and-exchange).
 
@@ -166,8 +168,16 @@ the whole lobe without a halo.
   the curves behind the molecule too. No halo shapes are written: they would
   become stray editable objects. Importing those vectors keeps their
   appearance, but not their parametric orbital/symbol controls or the halo.
-- CDXML plain/solid orbital and supported free-symbol objects import as
-  editable ReShiki objects. Gradient-shaded orbitals are rejected explicitly.
+- ChemDraw orbitals and supported free symbols import as editable ReShiki
+  objects. ChemDraw's Filled orbitals take the solid phase. Its plain p,
+  hybrid, dz² and dxy orbitals and its Shaded s, oval and lobe take the shaded
+  phase; a plain s, oval or lobe is an outline. ChemDraw's dxy has its lobes
+  along and across its axis, so it imports turned an eighth of a turn from
+  ReShiki's own dxy. Signs, daggers and single dots stand upright on the
+  symbol's first point, sized by the distance to its second; a lone pair puts
+  a dot on each point, and a radical ion its dot on the first point and its
+  upright sign on the second. A shaded phase exports to CDXML/CDX as ChemDraw
+  shaded curves.
 - CDXML atom-owned single charges, radical dots and supported lone pairs use
   `represent` ownership links. Carbon lone-pair annotation export is rejected
   because an external drawing application interprets it as diradical

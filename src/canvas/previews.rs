@@ -304,7 +304,14 @@ impl canvas::Program<crate::app::Message> for ScientificPreview {
         bounds: Rectangle,
         _: mouse::Cursor,
     ) -> Vec<Geometry> {
-        let mut frame = layered::Frame::new(renderer, bounds.size()).with_theme(theme);
+        // The preview's canvas follows the interface, so a shaded phase keeps
+        // its light highlight there as on the drawing.
+        let canvas_theme = if crate::appearance::is_dark(theme) {
+            reshiki::canvas_theme::CanvasTheme::Dark
+        } else {
+            reshiki::canvas_theme::CanvasTheme::Light
+        };
+        let mut frame = layered::Frame::new(renderer, bounds.size()).with_canvas(canvas_theme);
         let (lo, hi) = self.0.bounds();
         let camera = Camera {
             center: World::new((lo.x + hi.x) * 0.5, (lo.y + hi.y) * 0.5),
@@ -314,6 +321,7 @@ impl canvas::Program<crate::app::Message> for ScientificPreview {
         };
         let doc = Document {
             graphics: vec![self.0.clone()],
+            canvas_theme,
             ..Document::default()
         };
         draw_document(&mut frame, &doc, camera, bounds);
