@@ -643,12 +643,9 @@ pub(crate) fn reconcile(doc: &mut Document, before: &Document) {
         ) else {
             continue;
         };
-        if *old == *new {
+        if old.text == new.text {
             continue;
         }
-        // With the same text only the swatches are restored: a name's new
-        // color is then a style you chose.
-        let retyped = old.text != new.text;
         let (mut swatches, mut named) = (Vec::new(), HashSet::new());
         for (i, c) in old.text.char_indices() {
             let color = old.format.at(i).color;
@@ -671,10 +668,7 @@ pub(crate) fn reconcile(doc: &mut Document, before: &Document) {
                     if let Some(color) = order.as_mut().and_then(Iterator::next) {
                         style.color = *color;
                     }
-                } else if retyped
-                    && swatches.contains(&style.color)
-                    && !named.contains(&style.color)
-                {
+                } else if swatches.contains(&style.color) && !named.contains(&style.color) {
                     style.color = base;
                 }
                 style
@@ -837,13 +831,24 @@ fn place(doc: &mut Document, arrow: u64, legend: u64) {
 /// page, and moved back inside when it runs past an edge.
 fn fit(doc: &mut Document, legend: u64, (a, b): (Point, Point)) {
     let ink = |doc: &Document| crate::scene::selection_bounds(doc, &[legend]);
-    let gap = doc.drawing_style.bond_length_world * 0.5;
     if let Some((l, h)) = ink(doc)
-        && h.x - l.x > b.x - a.x - 2. * gap
+        && h.x - l.x > b.x - a.x
         && let Some(text) = doc.annotations.iter_mut().find(|t| t.id == legend)
     {
-        // Same length, so the swatch colors stay on their glyphs.
-        text.text = text.text.replace("   ", "  \n");
+        // Break before each later swatch, in place of the separator's last
+        // space: the same length, so the swatch colors stay on their glyphs.
+        let breaks: Vec<usize> = text
+            .text
+            .char_indices()
+            .filter(|(i, c)| {
+                (*c == SWATCH || *c == RING)
+                    && text.text.get(..*i).is_some_and(|s| s.ends_with("   "))
+            })
+            .map(|(i, _)| i - 1)
+            .collect();
+        for i in breaks {
+            text.text.replace_range(i..i + 1, "\n");
+        }
     }
     if let Some((l, h)) = ink(doc)
         && let Some(text) = doc.annotations.iter_mut().find(|t| t.id == legend)

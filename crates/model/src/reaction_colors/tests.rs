@@ -552,14 +552,27 @@ fn names_stay_with_their_entries_when_swatches_share_a_color() {
     assert_eq!(legend.text, "■ Diene   ■ Reactant 2   ■ New bond");
 
     // A name still as generated finds its own entry first.
+    let before = doc.clone();
     let legend = doc.annotations.iter_mut().find(|a| a.id == id).unwrap();
     let renamed = "■ Reactant 1   ■ Reactant 2   ■ Formed C–C".to_string();
     let old = std::mem::replace(&mut legend.text, renamed.clone());
     legend.format.edited(&old, &renamed, 0..old.len());
+    let _ = crate::transaction::reconcile(&mut doc, before).unwrap();
     update(&mut doc, arrow, |colors| colors.rings = true).unwrap();
     let legend = doc.annotations.iter().find(|a| a.id == id).unwrap();
     assert_eq!(
         legend.text,
         "■ Reactant 1   ■ Reactant 2   ■ Formed C–C   ● New ring"
     );
+}
+
+#[test]
+fn a_hue_change_recolors_the_legend_through_the_edit_reconcile() {
+    let DielsAlder { mut doc, arrow, .. } = diels_alder(true);
+    set_legend(&mut doc, arrow, true, Default::default()).unwrap();
+    let before = doc.clone();
+    update(&mut doc, arrow, |colors| colors.reactants[0] = Hue::Purple).unwrap();
+    let _ = crate::transaction::reconcile(&mut doc, before).unwrap();
+    let (_, swatches) = legend_swatches(&doc);
+    assert_eq!(swatches[0], Color::Palette(Hue::Purple, Row::Strong));
 }
