@@ -5,8 +5,8 @@ Reaction roles connect editable molecules to a drawing arrow. They stay attached
 ## Define a reaction
 
 1. Draw or import the molecules and a reaction arrow.
-2. Open **Properties → Labels & chemistry → Reaction roles…**, or **Export → Reaction roles & export…**.
-3. Choose the arrow for this step. For several steps, each arrow has its own roles.
+2. Select the arrow and choose **Reaction roles…** at the top of its properties. **Properties → Labels & chemistry → Reaction roles…** and **Export → Reaction roles & export…** open it too.
+3. Choose the arrow for this step. For several steps, each arrow has its own roles. An arrow inside a titled panel is listed by that title, for example `Arrow 2 · This work`.
 4. Select a molecule on the canvas and choose **Assign selected molecules** under Reactants, Products, or Reagents / catalysts. Selecting one atom assigns its complete connected molecule. You can assign several selected molecules together.
 5. Click a structure thumbnail in the inspector to select that participant on the canvas. Reassigning it moves it to the chosen role. **Clear selected roles** removes its membership without deleting the molecule.
 
@@ -49,7 +49,7 @@ molecule gives Chemistry.
 Right-click a Chemistry reaction or equilibrium arrow and choose **Preview
 reaction**, or choose
 **Preview** in **Reaction roles**. Dashed outlines show each reactant, product
-and reagent, and the arrow with its conditions. An arrow with assigned roles
+and reagent, and the arrow with the conditions written along it. An arrow with assigned roles
 shows them. Otherwise ReShiki reads the arrow's row: Chemistry molecules before
 the arrow are reactants, molecules after it are products, and molecules above
 or below its middle are reagents. The next arrow in the row ends each side.
@@ -184,9 +184,9 @@ and align the products to the reactants.
    **Edit atom map…** or **Clear atom map**.
 3. To pair two atoms, select one reactant atom and one product atom and choose
    **Pair selected atoms**.
-4. To map the rest, choose **Auto-map**. **Review atom maps** lists each
-   suggested pair, for example `Map 1 · C #1 → C #5`. Click a row to select the
-   pair in the drawing.
+4. To map the rest, choose **Auto-map**. **Review atom maps** shows the
+   reaction with the suggested numbers, then lists each suggested pair, for
+   example `Map 1 · C #1 → C #5`. Click a row to select the pair in the drawing.
 5. Choose **Apply maps** to keep the suggestion, or **Discard**.
 6. Choose **Align mapped structures** to turn and move each product so that its
    mapped atoms line up with the reactants.

@@ -145,15 +145,48 @@ pub(super) fn draw_cues(
     }
 }
 
-/// The reaction's condition texts. A "+" between participants and the colour
-/// legend are annotations too, but outlining them with the arrow would cover
-/// the reactants.
-fn conditions(doc: &Document, reaction: &Reaction) -> Vec<u64> {
+/// The reaction's condition texts: those linked to its arrow, and those set
+/// along it, within a bond of it. A "+", a molecule's caption or coefficient,
+/// a scheme title and the colour legend are reaction texts too, but outlining
+/// them with the arrow would cover the reactants.
+fn conditions(doc: &Document, reaction: &Reaction, arrow: &Arrow) -> Vec<u64> {
     let legend = reaction.colors.as_ref().and_then(|c| c.legend);
+    let bond = doc.drawing_style.bond_length_world;
+    let (dx, dy) = (arrow.end.x - arrow.start.x, arrow.end.y - arrow.start.y);
+    let length = dx.hypot(dy);
+    let (ux, uy) = (dx / length, dy / length);
+    let along = |text: &reshiki::document::Annotation| {
+        let (w, h) = text.size();
+        let p = text.position;
+        let corners = [
+            (p.x, p.y),
+            (p.x + w, p.y),
+            (p.x, p.y + h),
+            (p.x + w, p.y + h),
+        ]
+        .map(|(x, y)| (x - arrow.start.x, y - arrow.start.y));
+        let t = corners.map(|(x, y)| x * ux + y * uy);
+        let n = corners.map(|(x, y)| y * ux - x * uy);
+        let (n_lo, n_hi) = (
+            n.iter().copied().fold(f32::MAX, f32::min),
+            n.iter().copied().fold(f32::MIN, f32::max),
+        );
+        let gap = if n_lo > 0. {
+            n_lo
+        } else if n_hi < 0. {
+            -n_hi
+        } else {
+            0.
+        };
+        let pad = bond * 0.5;
+        t.iter().all(|t| (-pad..=length + pad).contains(t)) && gap <= bond
+    };
     doc.annotations
         .iter()
-        .filter(|a| reaction.annotations.contains(&a.id))
-        .filter(|a| a.text.trim() != "+" && Some(a.id) != legend)
+        .filter(|a| reaction.annotations.contains(&a.id) && Some(a.id) != legend)
+        .filter(|a| {
+            reshiki::arrow_labels::of(doc, arrow.id).any(|l| l.annotation == a.id) || along(a)
+        })
         .map(|a| a.id)
         .collect()
 }
@@ -187,7 +220,7 @@ pub(super) fn draw_preview(
         }
     }
     let arrow = doc.arrows.iter().find(|a| a.id == reaction.arrow);
-    let conditions = conditions(doc, reaction);
+    let conditions = arrow.map_or_else(Vec::new, |arrow| conditions(doc, reaction, arrow));
     if let Some(area) = bounds(doc, &index, &[], arrow, &conditions) {
         let (lo, hi) = outline(frame, camera, paper, area, overlay::ACCENT, 1.6);
         caption(
@@ -210,18 +243,40 @@ mod tests {
     use reshiki::document::Annotation;
 
     #[test]
-    fn a_plus_sign_is_not_a_condition() {
+    fn only_texts_along_the_arrow_are_conditions() {
         let mut doc = Document::default();
-        for (id, text) in [(1, " + "), (2, "heat")] {
+        let bond = doc.drawing_style.bond_length_world;
+        let arrow = Arrow::new(
+            9,
+            World::new(0., 0.),
+            World::new(3. * bond, 0.),
+            reshiki::arrows::Preset::Forward,
+            Default::default(),
+        );
+        // Above the arrow, a "+" and a caption beside it, a title far above,
+        // and text linked to the arrow from afar.
+        for (id, x, y, text) in [
+            (1, 0.5 * bond, -0.8 * bond, "heat"),
+            (2, -2. * bond, -0.2 * bond, " + "),
+            (3, -3. * bond, 1.5 * bond, "benzene"),
+            (4, 0.5 * bond, -3. * bond, "Scheme 1"),
+            (5, 0.5 * bond, 4. * bond, "cat."),
+        ] {
             doc.annotations.push(Annotation {
                 id,
-                position: World::new(0., 0.),
+                position: World::new(x, y),
                 text: text.into(),
                 format: Default::default(),
             });
         }
+        doc.arrow_labels.push(reshiki::arrow_labels::ArrowLabel {
+            arrow: 9,
+            annotation: 5,
+            side: reshiki::arrow_labels::Side::Below,
+            gap: None,
+        });
         let mut reaction = Reaction::new(9);
-        reaction.annotations = vec![1, 2];
-        assert_eq!(conditions(&doc, &reaction), vec![2]);
+        reaction.annotations = vec![1, 2, 3, 4, 5];
+        assert_eq!(conditions(&doc, &reaction, &arrow), vec![1, 5]);
     }
 }

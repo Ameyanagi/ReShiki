@@ -2221,7 +2221,7 @@ impl App {
             body = body.push(horizontal_line()).push(section("Categories"));
             for (name, (count, sample)) in categories {
                 let preview: Element<'_, Message> =
-                    canvas(crate::canvas::TemplateThumbnail(&sample.document))
+                    canvas(crate::canvas::TemplateThumbnail(&sample.document, None))
                         .width(26)
                         .height(26)
                         .into();
@@ -2296,7 +2296,7 @@ impl App {
             let mut line = row![].spacing(4);
             for (index, template) in tiles {
                 let preview: Element<'_, Message> =
-                    canvas(crate::canvas::TemplateThumbnail(&template.document))
+                    canvas(crate::canvas::TemplateThumbnail(&template.document, None))
                         .width(44)
                         .height(44)
                         .into();

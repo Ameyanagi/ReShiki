@@ -7,9 +7,8 @@ use super::{App, InspectorTab, Message, Tool};
 use iced::widget::{Column, column, row, text, tooltip};
 use iced::{Alignment, Element, Length, Task};
 use reshiki::{
-    document::Document,
+    document::{Document, Point},
     reaction_mapping::{self as mapping, Budget, Proposal},
-    reactions::Role,
 };
 use std::{borrow::Cow, sync::Arc};
 
@@ -39,6 +38,7 @@ struct Preview {
     key: (u64, u64),
     current: bool,
     document: Option<Document>,
+    focus: Option<(Point, Point)>,
     // Hue previews and Cancel write these without recording history/revision.
     version: u32,
     theme: Option<Box<reshiki::theme_files::ThemeFile>>,
@@ -52,31 +52,19 @@ impl Preview {
             for atom in &mut document.atoms {
                 atom.display.mapping.show = Some(true);
             }
-            // Only the reaction under review, so the thumbnail shows it large:
-            // its molecules, and its arrow with the arrow's labels.
-            let atoms: Vec<u64> = proposal.pairs.iter().flat_map(|(a, b)| [*a, *b]).collect();
-            let mut ids: Vec<u64> = reshiki::reactions::molecules(&document, &atoms)
-                .into_iter()
-                .flatten()
-                .collect();
-            ids.extend(
-                document
-                    .reactions
-                    .iter()
-                    .filter(|r| {
-                        Role::ALL
-                            .iter()
-                            .flat_map(|role| r.participants(*role))
-                            .any(|p| p.atoms.iter().any(|id| atoms.contains(id)))
-                    })
-                    .map(|r| r.arrow),
-            );
-            reshiki::editing::selection(&document, &ids)
+            document
+        });
+        // The thumbnail frames the reaction under review, all its parts and
+        // its arrow's labels, so it shows large; neighbours are clipped.
+        let focus = document.as_ref().and_then(|document| {
+            let reaction = reshiki::reactions::preview(document, proposal.arrow).ok()?;
+            reshiki::scene::selection_bounds(document, &reaction.ids())
         });
         Self {
             key,
             current,
             document,
+            focus,
             version: doc.version,
             theme: doc.custom_theme.clone(),
         }
@@ -161,6 +149,7 @@ impl App {
                 key,
                 current: false,
                 document: None,
+                focus: None,
                 version: self.tab.doc.version,
                 theme: self.tab.doc.custom_theme.clone(),
             },
@@ -369,14 +358,21 @@ impl App {
                 self.tab
                     .inspector_ui
                     .update(super::inspector::Action::Section(Section::AtomMaps, true));
+                // A cycle step's review is in Properties.
+                let tab = if self.tab.mapping.step.is_some() {
+                    InspectorTab::Properties
+                } else {
+                    InspectorTab::Reactions
+                };
                 if self.tabs.temporary_depth == 0
                     && self.inspector_open
-                    && self.inspector_tab == InspectorTab::Reactions
+                    && self.inspector_tab == tab
                 {
-                    // Apply and Discard follow the summary and preview, so
-                    // revealing Apply shows all three; the pair list follows.
+                    // Apply and Discard follow the heading, summary and
+                    // preview: with Apply at the bottom of the view, all of
+                    // them show. The pair list follows.
                     return iced::advanced::widget::operate(
-                        reshiki::accessibility::FocusControl::reveal("mapping.apply"),
+                        reshiki::accessibility::FocusControl::reveal_bottom("mapping.apply"),
                     )
                     .discard();
                 }
@@ -662,17 +658,16 @@ impl App {
                 ))
                 .size(11),
             );
-        if let Some(document) = self
-            .tab
-            .mapping
-            .preview
-            .as_ref()
-            .and_then(|preview| preview.document.as_ref())
+        if let Some(preview) = &self.tab.mapping.preview
+            && let Some(document) = &preview.document
         {
             body = body.push(
-                crate::canvas::layered::canvas(crate::canvas::TemplateThumbnail(document))
-                    .width(Length::Fill)
-                    .height(120),
+                crate::canvas::layered::canvas(crate::canvas::TemplateThumbnail(
+                    document,
+                    preview.focus,
+                ))
+                .width(Length::Fill)
+                .height(120),
             );
         }
         if !current {

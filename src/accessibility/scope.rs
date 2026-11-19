@@ -113,7 +113,8 @@ impl Targets {
 
     /// Reveal from the innermost scroll viewport outward. Adjusted inner
     /// translations are included when calculating the next ancestor's offset.
-    fn reveal(&mut self, target: usize) {
+    /// With `bottom`, the target ends each viewport, so what precedes it shows.
+    fn reveal(&mut self, target: usize, bottom: bool) {
         let Some(target) = self.targets.get(target).cloned() else {
             return;
         };
@@ -124,12 +125,16 @@ impl Targets {
             };
             let bounds = target.bounds - translation - scroll.translation;
             let dx = reveal_delta(bounds.x, bounds.width, scroll.bounds.x, scroll.bounds.width);
-            let dy = reveal_delta(
-                bounds.y,
-                bounds.height,
-                scroll.bounds.y,
-                scroll.bounds.height,
-            );
+            let dy = if bottom {
+                bounds.y + bounds.height - scroll.bounds.y - scroll.bounds.height
+            } else {
+                reveal_delta(
+                    bounds.y,
+                    bounds.height,
+                    scroll.bounds.y,
+                    scroll.bounds.height,
+                )
+            };
             scroll.translation = Vector::new(
                 (scroll.translation.x + dx)
                     .clamp(0., (scroll.content.width - scroll.bounds.width).max(0.)),
@@ -224,7 +229,7 @@ fn traverse_key(event: &Event, mut operate: impl FnMut(&mut dyn Operation)) -> b
         // Let their own handling and then the base widget see the key.
         return false;
     };
-    targets.reveal(target);
+    targets.reveal(target, false);
     operate(&mut Focus {
         target,
         wait_foreground: targets.foreground,
@@ -245,6 +250,7 @@ fn traverse_key(event: &Event, mut operate: impl FnMut(&mut dyn Operation)) -> b
 pub struct FocusControl {
     target: Id,
     change_focus: bool,
+    bottom: bool,
     targets: Targets,
 }
 impl FocusControl {
@@ -252,6 +258,7 @@ impl FocusControl {
         Self {
             target: Id::from(target.into()),
             change_focus: true,
+            bottom: false,
             targets: Targets::default(),
         }
     }
@@ -259,6 +266,14 @@ impl FocusControl {
         Self {
             change_focus: false,
             ..Self::new(target)
+        }
+    }
+    /// As `reveal`, with the control at the bottom of the view, so the
+    /// content leading up to it, such as a review's summary, shows too.
+    pub fn reveal_bottom(target: impl Into<String>) -> Self {
+        Self {
+            bottom: true,
+            ..Self::reveal(target)
         }
     }
 }
@@ -304,7 +319,7 @@ impl Operation for FocusControl {
             return Outcome::None;
         }
         let mut targets = self.targets.clone();
-        targets.reveal(target);
+        targets.reveal(target, self.bottom);
         Outcome::Chain(Box::new(Focus {
             target,
             wait_foreground: targets.foreground,
