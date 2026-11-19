@@ -404,7 +404,7 @@ fn write_impl(
     // created beside their final bond owners.
     w.ring_fills()?;
     w.property_captions()?;
-    if !document.ring_fills.is_empty() || document.canvas_theme.is_dark() {
+    if !document.ring_fills.is_empty() {
         // Editable readers need a distinct stacking ordinal for every object.
         // Equal Z values on atoms/bonds can make an opaque fill cover them.
         let mut layers = Vec::new();
@@ -421,45 +421,6 @@ fn write_impl(
         for (rank, (_, key)) in layers.into_iter().enumerate() {
             w.tree.set(key, "Z", (rank + 1).to_string())?;
         }
-    }
-    if document.canvas_theme.is_dark() {
-        // A real filled object survives paste into another ChemDraw document;
-        // a document background setting alone does not travel with a selection.
-        // The scene resolves colors itself; pass the unresolved document.
-        let (lo, hi) = crate::scene::bounds(&crate::scene::primitives(original));
-        let background = w.raw_color(document.canvas_theme.background())?;
-        w.tree.set(0, "bgcolor", background.clone())?;
-        let id = w.id()?;
-        // ChemDraw treats Z=0 as unspecified. Reserve a positive backmost rank.
-        for key in w.tree.descendants(w.page)? {
-            if let Some(z) = w.tree.get(key, "Z")? {
-                let z = z
-                    .parse::<usize>()
-                    .map_err(|_| invalid("Invalid stacking order"))?;
-                w.tree.set(key, "Z", (z + 1).to_string())?;
-            }
-        }
-        let rectangle = w.tree.add(
-            Some(w.page),
-            "graphic",
-            [
-                ("id", id),
-                ("Z", "1".into()),
-                ("GraphicType", "Rectangle".into()),
-                ("RectangleType", "Filled".into()),
-                ("FillType", "Solid".into()),
-                ("LineType", "Solid".into()),
-                ("LineWidth", "0".into()),
-                ("color", background),
-                (
-                    "BoundingBox",
-                    format!("{} {}", w.position(lo), w.position(hi)),
-                ),
-            ],
-        )?;
-        let children = &mut w.tree.node_mut(w.page)?.children;
-        children.retain(|key| *key != rectangle);
-        children.insert(0, rectangle);
     }
     let (_, hi) = w.painted_bounds;
     let right = (hi.x * w.scale + w.shift.x + 30.).ceil().max(612.);

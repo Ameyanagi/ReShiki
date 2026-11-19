@@ -352,15 +352,18 @@ async fn filled_abbreviations_expand_for_editable_exchange()
                     .iter()
                     .all(|id| !restored.abbreviations[0].members.contains(id))
             );
+            // ChemDraw files take the light canvas's tint; a copy keeps the
+            // tint it shows. Neither adds a page rectangle.
+            let shown = if transparent_copy {
+                Palette::of(&doc)
+            } else {
+                Palette::in_mode(&doc, CanvasTheme::Light)
+            };
             assert_eq!(
                 fill.color,
-                Color::Custom(Palette::of(&doc).swatch(Hue::Teal, Row::Tint))
+                Color::Custom(shown.swatch(Hue::Teal, Row::Tint))
             );
-            // File exports retain the dark page; clipboard copies contain no background.
-            assert_eq!(
-                restored.graphics.len(),
-                usize::from(mode.is_dark() && !transparent_copy)
-            );
+            assert!(restored.graphics.is_empty());
             let mut expanded = restored.clone();
             let before = expanded.ring_fills[0].commands(&expanded);
             expanded.translate(&[expanded.ring_fills[0].atoms[0]], 10., 5.);

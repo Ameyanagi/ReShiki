@@ -200,7 +200,7 @@ impl RingFill {
                     commands,
                     [origin, x, y],
                     crate::graphics::Gradient {
-                        from: crate::graphics::Gradient::WHITE,
+                        from: crate::graphics::Gradient::PAPER,
                         kind: crate::graphics::GradientKind::Radial,
                     },
                     self.color,

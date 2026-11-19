@@ -1,4 +1,4 @@
-use crate::{canvas_theme::CanvasTheme, document::Document, scene};
+use crate::{document::Document, scene};
 use std::borrow::Cow;
 
 /// The paper behind a copied or exported picture.
@@ -19,16 +19,11 @@ impl Background {
     /// keep how the drawing's own canvas shows them. 3D models keep the
     /// drawing's theme and take its colors for the new canvas.
     pub fn apply(self, doc: &Document) -> (Cow<'_, Document>, Option<[u8; 3]>) {
-        use crate::color_contrast::contrast;
         match self {
             Self::Transparent => (Cow::Borrowed(doc), None),
             Self::Canvas => (Cow::Borrowed(doc), Some(doc.canvas_theme.background())),
             Self::Color(paper) => {
-                let canvas = if contrast([0; 3], paper) >= contrast([255; 3], paper) {
-                    CanvasTheme::Light
-                } else {
-                    CanvasTheme::Dark
-                };
+                let canvas = crate::canvas_theme::ink_canvas(paper);
                 let doc = if doc.canvas_theme == canvas {
                     Cow::Borrowed(doc)
                 } else {

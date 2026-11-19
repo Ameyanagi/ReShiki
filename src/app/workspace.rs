@@ -3182,9 +3182,9 @@ impl App {
                 .checked(dark)
                 .on_press(Message::CanvasTheme(self.tab.doc.canvas_theme.toggled())),
                 if dark {
-                    "Dark canvas · Switch to light · Remembered for new drawings"
+                    "Dark canvas · Switch to light · Remembered for new drawings and imports"
                 } else {
-                    "Light canvas · Switch to dark · Remembered for new drawings"
+                    "Light canvas · Switch to dark · Remembered for new drawings and imports"
                 },
                 tooltip::Position::Top,
             )

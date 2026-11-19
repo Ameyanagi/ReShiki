@@ -234,7 +234,13 @@ impl GraphicChange {
                 s.effects.gradient = *v;
                 if v.is_some() {
                     s.effects.shaded = false;
-                    s.fill = s.fill.or(Some(s.stroke));
+                    // Paper into the line's tint, so the default reads on
+                    // both canvases; Ink and custom lines fill with themselves.
+                    use crate::palette::{Color, Row};
+                    s.fill = s.fill.or(Some(match s.stroke {
+                        Color::Palette(hue, _) => Color::Palette(hue, Row::Tint),
+                        stroke => stroke,
+                    }));
                 }
             }
             Self::GradientKind(None) => s.effects.gradient = None,
@@ -248,7 +254,7 @@ impl GraphicChange {
                     ) if matches!(kind, GradientKind::Linear { .. }) => g,
                     Some(g) => Gradient { kind: *kind, ..g },
                     None => Gradient {
-                        from: Gradient::WHITE,
+                        from: Gradient::PAPER,
                         kind: *kind,
                     },
                 };
@@ -906,7 +912,7 @@ pub fn segment_distance(p: Point, a: Point, b: Point) -> f32 {
 }
 // windows(2): an unclosed contour has no closing edge, unlike the closed-contour tests in
 // scientific/label_halo.rs `contains` and mark_placement.rs `intersects`.
-fn inside_polygon(p: Point, path: &[Point]) -> bool {
+pub(crate) fn inside_polygon(p: Point, path: &[Point]) -> bool {
     let mut inside = false;
     for pair in path.windows(2) {
         let [a, b] = pair else {

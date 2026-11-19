@@ -281,7 +281,15 @@ impl App {
             self.tab.doc.canvas_theme = theme;
             self.drawing_revised(false);
             self.sync_color_input();
-            self.status = format!("{theme} canvas · Copies: ink colors, transparent background");
+            let background = |b: crate::appearance::Background| match b {
+                crate::appearance::Background::Canvas => "canvas colors".into(),
+                b => b.label().to_lowercase(),
+            };
+            self.status = format!(
+                "{theme} canvas · Exports: {} · Copies: {}",
+                background(self.appearance.export_background),
+                background(self.appearance.copy_background),
+            );
         }
         // An explicit choice also sets the starting canvas for future drawings.
         // Opening a file and Undo/Redo never pass through this preference update.

@@ -295,7 +295,7 @@ fn windows_print_draws_a_gradient_fill_in_its_average_color() {
                 fill: Some(crate::palette::Color::Custom([0, 0, 255])),
                 effects: Effects {
                     gradient: Some(Gradient {
-                        from: Gradient::WHITE,
+                        from: Gradient::PAPER,
                         kind: GradientKind::Linear { angle: 0. },
                     }),
                     ..Default::default()

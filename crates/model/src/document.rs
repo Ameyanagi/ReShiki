@@ -572,6 +572,7 @@ impl Document {
                 .iter()
                 .any(|f| f.effect != crate::ring_fills::RingEffect::Flat)
             || !self.highlight_style.is_flat()
+            || crate::palette::any_color(self, |c| c == crate::palette::Color::Paper)
         {
             DRAWING_ELEMENTS
         } else if self.property_captions.iter().any(|link| {
