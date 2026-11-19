@@ -277,7 +277,42 @@ is never part of a reaction.
 
 Pieces are drawn in line style at 0.4 pt per mm with 0.6 pt outlines,
 whatever their size: white glass, hatched ground-glass joints and an open
-socket mouth. Flasks start empty. Joints do not snap together yet.
+socket mouth. Flasks start empty.
+
+### Connect equipment by its joints
+
+Pieces snap together by their ground-glass joints.
+
+1. Drag a piece, or a new piece from the Equipment panel, so that its joint
+   comes near a free joint of another piece. A green ring marks the joint it
+   will seat on, and a label says what releasing does, for example **Seat on
+   flask neck · 15/25**. The piece turns and scales to fit, and the preview
+   shows it seated. A dragged piece snaps when its joint points within 40° of
+   the other; a new piece turns to any joint.
+2. Release, or click to place. The cone is drawn inside the socket, cut at the
+   mouth.
+
+Joints that do not fit get a dashed amber ring. When an adapter in the
+catalogue joins them, the label says **Insert Expansion adapter, 15/25 →
+29/42 on flask neck** and releasing puts the adapter between the two pieces.
+Two sockets, two cones, or sizes no adapter joins only show why they do not
+seat.
+
+Seated pieces form an assembly. A click selects the whole assembly and a drag
+moves it; turning, scaling, copying and **Bring to Front** act on all of it.
+To take a piece out, Option-drag (Alt-drag on Windows and Linux) it: the
+pieces held only through it come along, and the rest stays. **Properties →
+Equipment** lists each joint of the selected piece, what is seated in it and
+**Detach**, which pulls the pieces apart along the joint.
+
+From the keyboard, select a piece and press J (or choose **Connect…** in
+Properties). The drawing shows the nearest joint that fits, seated. The arrow
+keys move through the others, Return connects and Esc cancels.
+
+An assembly keeps one layer. A piece that seats onto an assembly behind the
+structures goes behind them too, and the label says **Goes behind the
+structures**. Undo reverses a snap, an inserted adapter and a pull-out in one
+step.
 
 ### Start from a figure layout
 
@@ -327,9 +362,10 @@ cm**, **RSC graphical abstract · 8 × 4 cm** or **Elsevier graphical abstract �
   check.
 - Color by origin on a cycle uses the default hues and has no legend; its
   settings are not kept. Undo removes it.
-- Equipment pieces do not snap together, and their liquid level and other
-  parameters cannot be changed yet. ChemDraw gets each piece as a group of
-  curves; opening that file again gives those curves, not a piece.
+- Equipment pieces snap only by their joints. Clamps, stands and clips come
+  later, and the liquid level and other parameters cannot be changed yet.
+  ChemDraw gets each piece as a group of curves; opening that file again
+  gives those curves, not a piece.
 - A drawing with equipment saves as document version 40 and carries the
   definition of every piece it uses, so it opens the same way on another
   computer.
@@ -406,6 +442,26 @@ fill in place. Each is one Undo step. An atom-map proposal for a step
 remembers its cycle and step, and the review compares it with a fresh copy.
 The balance check counts the elements of each side from the chemistry
 graph, with explicit and implicit hydrogens, and the formal charges.
+
+Equipment seats are stored in the drawing's `seats` list as pairs of
+`{piece, joint}` (`crates/model/src/equipment/solve.rs`). Poses are stored,
+never solved again: after every edit and when a drawing is read,
+`solve::check` keeps a seat only while the male shoulder is within 0.05 mm of
+its place, 0.06 L outside the female mouth, the axes are opposite within
+0.2° and both pieces have one scale. A seat that fails is released and both
+pieces stay where they are. Snapping (`solve::snap`) compares the moving
+pieces' free joints with every other free joint: reach is 14 screen px or the
+joint's diameter, whichever is larger, and the score is 12 × the distance
+divided by the reach plus 0.3 × the angle in degrees. A joint that fits
+wins over a closer one that does not. The seat transform turns the moving
+assembly so the axes oppose, scales it to the target's scale and puts the
+male shoulder 0.06 L outside the female mouth, whichever piece moves; every other pair of free joints that then fits within
+the tolerance is seated too. An inserted adapter is the first catalogue
+adapter with one joint that mates each side. A merged assembly takes the
+target's layer and follows it in the drawing order, so painting, hit testing
+and export agree; a layer change on one piece moves its assembly with it. The
+anchor that stays when a piece is pulled out is the biggest vessel (a piece
+with a liquid region), else the biggest piece.
 
 ### Interchange boundary
 

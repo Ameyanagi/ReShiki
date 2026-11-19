@@ -370,6 +370,10 @@ impl App {
                 .armed
                 .as_ref()
                 .filter(|_| self.tool == Tool::Equipment),
+            connect: self.tab.connect.as_ref().and_then(|c| {
+                let (s, m) = c.shown()?;
+                Some((c.ids.as_slice(), s, m))
+            }),
         })
         .shifted(crate::canvas::State::shifts)
         .width(Length::Fill)

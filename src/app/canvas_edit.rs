@@ -334,7 +334,7 @@ impl App {
                 self.tab.camera.center.x += width_change / (2. * self.tab.camera.zoom);
                 self.viewport.width += width_change;
             }
-            Edit::Move(ids, dx, dy) => {
+            Edit::Move(mut ids, dx, dy) => {
                 if let Some(snapped) = editing::snap_ring(
                     &mut self.tab.doc,
                     &ids,
@@ -344,6 +344,17 @@ impl App {
                     self.tab.selected = snapped;
                 } else {
                     self.tab.doc.translate(&ids, dx, dy);
+                    let seats = self.tab.doc.seats.len();
+                    let reach = reshiki::equipment::solve::REACH_PX / self.tab.camera.zoom;
+                    if let Some(snap) =
+                        reshiki::equipment::solve::snap(&mut self.tab.doc, &ids, reach, false)
+                    {
+                        self.snapped(&snap);
+                        joined = Some(self.status.clone());
+                        ids = reshiki::equipment::solve::closure(&self.tab.doc, &ids);
+                    } else if self.tab.doc.seats.len() < seats {
+                        joined = Some("Pulled out of its assembly".into());
+                    }
                     // The drop target the drag showed gives the part its role.
                     if let Some(target) = reshiki::cycles::drop_target(&self.tab.doc, &ids) {
                         let left = reshiki::cycles::assign(&mut self.tab.doc, &target);

@@ -283,6 +283,8 @@ pub struct Committed {
 /// 5. Only a changed document is validated. Molecule groups are reconciled after
 ///    validation, because their final prune would repair a stale member that
 ///    validation rejects.
+/// 6. Equipment seats are checked last, after layouts have moved their items;
+///    a seat that no longer fits is released.
 pub fn reconcile(doc: &mut Document, before: Document) -> Result<Reconciled, Rejection> {
     recount_radicals(&before, doc);
     crate::fischer::reconcile(doc, &before);
@@ -312,6 +314,8 @@ pub fn reconcile(doc: &mut Document, before: Document) -> Result<Reconciled, Rej
         }
         doc.reconcile_molecule_groups();
         crate::layouts::reconcile(doc, &before);
+        // Last, after layouts have moved things: seats that no longer fit go.
+        crate::equipment::solve::check(doc, Some(&before));
     }
     Ok(Reconciled { before })
 }

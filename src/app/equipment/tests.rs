@@ -85,3 +85,74 @@ fn without_keep_placing_one_click_returns_to_select() {
     assert_eq!(app.tab.doc.graphics.len(), 1);
     assert_eq!(app.tool, Tool::Select);
 }
+
+/// A flask placed at `at`, and where a piece's joint seats on its neck.
+fn flask_neck(app: &mut App, at: Point) -> Point {
+    let _ = app.update(Message::Equipment(Action::Arm("reshiki/rbf-100-15".into())));
+    let _ = app.update(Message::Canvas(Edit::Piece(at)));
+    let neck = solve::ports(&app.tab.doc.graphics[0]).remove(0);
+    Point::new(neck.point[0] as f32, neck.point[1] as f32)
+}
+
+#[test]
+fn a_stopper_placed_by_the_neck_seats_and_undo_takes_it_off_in_one_step() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let neck = flask_neck(&mut app, Point::new(200., 300.));
+    let _ = app.update(Message::Equipment(Action::Arm("reshiki/stopper-15".into())));
+    let before = app.tab.doc.clone();
+    // A click centres the stopper: aim its shoulder a few points off the neck.
+    let scale = placed::world_per_mm(&app.tab.doc, placed::DEFAULT_PT_PER_MM);
+    let probe = placed::graphic(
+        0,
+        builtin::find("reshiki/stopper-15").unwrap(),
+        Point::default(),
+        scale,
+    );
+    let shoulder = solve::ports(&probe)[0].point;
+    let click = Point::new(
+        neck.x - shoulder[0] as f32 + 3.,
+        neck.y - shoulder[1] as f32 - 4.,
+    );
+    let _ = app.update(Message::Canvas(Edit::Piece(click)));
+    assert_eq!(app.tab.doc.seats.len(), 1, "{}", app.status);
+    assert_eq!(app.status, "Seated the stopper bottom on the flask neck");
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+}
+
+#[test]
+fn keyboard_connect_offers_joints_in_turn_and_return_seats_the_shown_one() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    flask_neck(&mut app, Point::new(200., 300.));
+    let _ = app.update(Message::Equipment(Action::Arm("reshiki/rbf-100-29".into())));
+    let _ = app.update(Message::Canvas(Edit::Piece(Point::new(600., 300.))));
+    let _ = app.update(Message::Equipment(Action::Arm("reshiki/stopper-15".into())));
+    let _ = app.update(Message::Canvas(Edit::Piece(Point::new(260., 100.))));
+    let stopper = app.tab.doc.graphics[2].id;
+    let _ = app.update(Message::Tool(Tool::Select));
+    app.set_selection(vec![stopper]);
+    let _ = app.update(Message::ContextKey("j".into()));
+    assert!(
+        app.status.starts_with("Connect to the flask neck (1 of 2)"),
+        "{}",
+        app.status
+    );
+    let _ = app.update(Message::Shortcut(crate::app::shortcuts::Action::Nudge(
+        0., 1.,
+    )));
+    assert!(app.status.contains("(2 of 2)"), "{}", app.status);
+    let _ = app.update(Message::ContextKey("Enter".into()));
+    assert!(
+        app.status.starts_with("Inserted the reducing adapter"),
+        "{}",
+        app.status
+    );
+    assert_eq!(app.tab.doc.seats.len(), 2);
+    assert!(app.tab.connect.is_none());
+    // Detach from Properties pulls the adapter and stopper off the neck.
+    let neck = app.tab.doc.seats[0].a.clone();
+    let _ = app.update(Message::Equipment(Action::Detach(neck)));
+    assert_eq!(app.tab.doc.seats.len(), 1);
+}

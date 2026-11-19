@@ -42,6 +42,29 @@ struct Draft<'d> {
     smart: Vec<Guide>,
     /// The ink of a part that would join a catalytic cycle if dropped now.
     drop_ink: Option<(World, World)>,
+    /// The joint a moving equipment piece would snap to.
+    seat_hint: Option<SeatHint>,
+}
+
+/// A joint a drag or placement snaps to: its mouth, its radius in world
+/// units, whether it seats as is, and what releasing does.
+struct SeatHint {
+    at: World,
+    radius: f32,
+    fits: bool,
+    text: String,
+}
+
+impl SeatHint {
+    fn new(doc: &Document, snap: &reshiki::equipment::solve::Snap) -> Self {
+        let p = snap.target.point;
+        Self {
+            at: World::new(p[0] as f32, p[1] as f32),
+            radius: (snap.target.diameter() / 2.) as f32,
+            fits: matches!(snap.offer, reshiki::equipment::solve::Offer::Seat),
+            text: crate::app::equipment::snap_text(doc, snap),
+        }
+    }
 }
 
 struct SelectionPreview<'a> {
@@ -63,6 +86,7 @@ impl<'d> Draft<'d> {
             translation: None,
             smart: Vec::new(),
             drop_ink: None,
+            seat_hint: None,
         }
     }
 }
@@ -117,6 +141,7 @@ impl MoleculeCanvas<'_> {
         self.preview_ring_preset(&mut draft, state, bounds);
         self.preview_template(&mut draft, frame, state, bounds);
         self.preview_piece(&mut draft, state, bounds);
+        self.preview_connect(&mut draft);
         self.preview_move(&mut draft, state, bounds);
         self.preview_region(&mut draft, state, bounds);
         self.preview_delocalized_ring(&mut draft, state, bounds);
@@ -137,6 +162,7 @@ impl MoleculeCanvas<'_> {
             translation,
             smart,
             drop_ink,
+            seat_hint,
         } = draft;
         if let Some(id) = self.hidden_annotation {
             preview.to_mut().annotations.retain(|a| a.id != id);
@@ -232,6 +258,7 @@ impl MoleculeCanvas<'_> {
         self.draw_nmr_assignments(frame, &preview, selected, bounds, nmr_cache);
         self.draw_editor_markers(frame, &preview, bounds);
         self.draw_drop_ink(frame, drop_ink, bounds);
+        self.draw_seat_hint(frame, seat_hint.as_ref(), bounds);
         self.draw_orbital_target(frame, state, bounds);
         self.draw_mark_orbit(frame, state, &preview, bounds);
         self.draw_arrow_handles(frame, &preview, selected, bounds);

@@ -545,6 +545,7 @@ pub(crate) fn remap_ids(doc: &mut Document, mapping: &HashMap<u64, u64>) -> Opti
         recent_colors: _,
         piece_definitions: _,
         on_other_canvas: _,
+        seats,
     } = doc;
     let map = |id: &mut u64| {
         *id = *mapping.get(id)?;
@@ -587,6 +588,10 @@ pub(crate) fn remap_ids(doc: &mut Document, mapping: &HashMap<u64, u64>) -> Opti
         crate::leaders::remap(g, mapping);
         crate::cycles::remap(g, mapping);
     }
+    for seat in seats {
+        map(&mut seat.a.piece)?;
+        map(&mut seat.b.piece)?;
+    }
     for g in groups {
         map(&mut g.id)?;
         g.members.iter_mut().try_for_each(map)?;
@@ -628,6 +633,7 @@ pub(crate) fn extend_append_part(doc: &mut Document, part: Document) {
         doc.require_version(crate::document::ARROW_LABEL_GAPS);
     }
     doc.graphics.extend(part.graphics);
+    doc.seats.extend(part.seats);
     doc.groups.extend(part.groups);
     doc.abbreviations.extend(part.abbreviations);
     doc.reactions.extend(part.reactions);

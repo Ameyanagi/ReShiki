@@ -321,6 +321,57 @@ impl MoleculeCanvas<'_> {
         );
     }
 
+    /// A ring round the joint a moving piece snaps to, and what releasing
+    /// does: green where it seats, dashed amber where it needs an adapter or
+    /// nothing fits.
+    pub(super) fn draw_seat_hint(
+        &self,
+        frame: &mut layered::Frame<'_>,
+        hint: Option<&super::SeatHint>,
+        bounds: Rectangle,
+    ) {
+        let Some(hint) = hint else {
+            return;
+        };
+        let (ring, tint, ink) = if hint.fits {
+            ([34, 139, 84], [226, 244, 233], [22, 96, 56])
+        } else {
+            ([214, 140, 20], [253, 241, 214], [122, 76, 0])
+        };
+        let center = self.camera.screen(hint.at, bounds);
+        let radius = (hint.radius * self.camera.zoom).max(8.) + 5.;
+        let dash = [5., 3.];
+        frame.stroke(
+            &Path::circle(center, radius),
+            Stroke {
+                line_dash: canvas::LineDash {
+                    segments: if hint.fits { &[] } else { &dash },
+                    offset: 0,
+                },
+                ..Stroke::default().with_width(2.).with_color(rgb(ring))
+            },
+        );
+        let width = crate::app::text_width(&hint.text, 12.) + 12.;
+        let position = Point::new(
+            (center.x + radius + 8.).clamp(4., (bounds.width - width - 4.).max(4.)),
+            (center.y - 10.).clamp(4., (bounds.height - 30.).max(4.)),
+        );
+        let pill = Path::rounded_rectangle(position, iced::Size::new(width, 22.), 11.0.into());
+        frame.fill(&pill, rgb(tint));
+        frame.stroke(
+            &pill,
+            Stroke::default().with_width(1.).with_color(rgb(ring)),
+        );
+        frame.fill_text(canvas::Text {
+            content: hint.text.clone(),
+            position: position + Vector::new(6., 4.),
+            color: rgb(ink),
+            size: 12.into(),
+            font: iced::Font::with_name(reshiki::style::ui_font_family()),
+            ..Default::default()
+        });
+    }
+
     pub(super) fn draw_editor_markers(
         &self,
         frame: &mut layered::Frame<'_>,
@@ -784,6 +835,9 @@ impl MoleculeCanvas<'_> {
                     }
                     if self.tool.selects() && !state.modifiers.alt() {
                         hit = self.doc.expand_groups(&hit);
+                    } else if self.tool.selects() {
+                        // What an Alt-drag would pull out of its assembly.
+                        hit = reshiki::equipment::solve::detached(self.doc, &hit);
                     }
                     markers::Markers::hover(self.doc, &hit).draw(frame, self.camera, bounds, false);
                 }

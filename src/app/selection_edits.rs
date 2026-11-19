@@ -10,6 +10,7 @@ use reshiki::{
 impl App {
     /// Replaces the selection and refreshes its cached inspector controls.
     pub(super) fn set_selection(&mut self, ids: Vec<u64>) {
+        self.tab.connect = None;
         self.tab.selected = ids;
         self.sync_typography();
         self.sync_graphics();

@@ -14,6 +14,7 @@ use crate::scene::Primitive;
 use crate::scientific::Part;
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
+use std::collections::BTreeSet;
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -36,9 +37,13 @@ pub struct PieceRef {
     /// piece is placed.
     #[serde(skip)]
     pub linked: Option<Arc<Definition>>,
+    /// Joints with a partner seated in them, kept from the drawing's seats.
+    #[serde(skip)]
+    pub seated: BTreeSet<String>,
 }
 
-/// The key names the definition completely, so the link adds nothing.
+/// The key names the definition completely, so the link adds nothing; the
+/// drawing's seats say which joints are seated.
 impl PartialEq for PieceRef {
     fn eq(&self, other: &Self) -> bool {
         self.definition == other.definition && self.params == other.params
@@ -51,6 +56,7 @@ impl PieceRef {
             definition: key(&definition),
             params: Values::new(),
             linked: Some(definition),
+            seated: BTreeSet::new(),
         }
     }
 }
@@ -224,7 +230,7 @@ fn transform(g: &Graphic) -> Affine {
     ])
 }
 
-type CacheKey = (String, String, [u32; 6]);
+type CacheKey = (String, String, [u32; 6], BTreeSet<String>);
 const CACHE_SIZE: usize = 256;
 thread_local! {
     /// Recent paint plans: hovering and hit testing ask for the same pieces again and again.
@@ -241,6 +247,7 @@ pub fn plan(g: &Graphic) -> Rc<Vec<PlanPath>> {
         piece.definition.clone(),
         serde_json::to_string(&piece.params).unwrap_or_default(),
         [x.x, x.y, y.x, y.y, o.x, o.y].map(f32::to_bits),
+        piece.seated.clone(),
     );
     if let Some(hit) = PLANS.with_borrow_mut(|cache| {
         let i = cache.iter().position(|(k, _)| *k == key)?;
@@ -253,6 +260,7 @@ pub fn plan(g: &Graphic) -> Rc<Vec<PlanPath>> {
     }
     let mut instance = Instance::new(d, transform(g));
     instance.values = piece.params.clone();
+    instance.seated = piece.seated.clone();
     let plan: Vec<PlanPath> = paint_plan(&[instance], Settings::default())
         .unwrap_or_default()
         .into_iter()
