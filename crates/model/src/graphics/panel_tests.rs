@@ -165,11 +165,15 @@ fn wavy_and_rotated_outlines_stay_out_of_a_border_title() {
     let text = TextStyle::default();
     let mut wavy = panel(&["This work"], TitlePlace::Border);
     wavy.style.pattern = crate::graphics::LinePattern::Wavy;
-    let mut turned = panel(&["This work"], TitlePlace::Border);
-    // Nearly a quarter turn: the edge runs down through the upright title.
-    let (s, c) = 88f32.to_radians().sin_cos();
-    turned.map_positions(|p| Point::new(p.x * c - p.y * s, p.x * s + p.y * c));
-    for g in [wavy, turned] {
+    // Nearly a quarter turn either way: an edge runs down through the
+    // upright title, and its path may start inside the title's box.
+    let turned = [88f32, -85.].map(|degrees| {
+        let mut g = panel(&["This work"], TitlePlace::Border);
+        let (s, c) = degrees.to_radians().sin_cos();
+        g.map_positions(|p| Point::new(p.x * c - p.y * s, p.x * s + p.y * c));
+        g
+    });
+    for g in std::iter::once(wavy).chain(turned) {
         let [(lo, hi)] = g.outline_breaks(&text).try_into().ok().unwrap();
         let points = stroked(&drawn(&g, Default::default()));
         assert!(points.len() > 4);
@@ -264,6 +268,28 @@ fn a_rotated_panel_holds_only_what_its_frame_shows() {
     let found = contents(&doc, id);
     assert!(inside.iter().all(|a| found.contains(a)), "{found:?}");
     assert!(!found.contains(&corner));
+}
+
+#[test]
+fn a_rounded_panel_does_not_hold_what_sits_in_its_cut_corner() {
+    let mut doc = Document::default();
+    let mut g = panel(&[], TitlePlace::Bar);
+    g.kind = GraphicKind::RoundedRectangle;
+    g.style.corner_pt = Some(20.);
+    let corner = doc.next_id();
+    doc.graphics.push(Graphic::dragged(
+        corner,
+        GraphicKind::Line,
+        Point::new(0.5, 0.5),
+        Point::new(1.5, 1.5),
+        GraphicStyle::default(),
+        BracketSides::Both,
+        false,
+    ));
+    g.id = doc.next_id();
+    let id = g.id;
+    doc.graphics.push(g);
+    assert!(!contents(&doc, id).contains(&corner));
 }
 
 #[test]

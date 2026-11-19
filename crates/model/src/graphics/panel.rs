@@ -281,10 +281,10 @@ impl Graphic {
     }
 }
 
-/// A border title's color, as the canvas shows it, on the two surfaces it
-/// straddles: the panel's fill and the page. The outline color where it
+/// A border title's color, as the canvas shows it, on the surfaces it
+/// straddles: the panel's fill (each end of a gradient) and the page. The outline color where it
 /// reads on both, or else black, white or grey, whichever reads best.
-pub fn border_title_rgb(outline: [u8; 3], surfaces: [[u8; 3]; 2]) -> [u8; 3] {
+pub fn border_title_rgb(outline: [u8; 3], surfaces: &[[u8; 3]]) -> [u8; 3] {
     let reads = |ink: [u8; 3]| {
         surfaces
             .iter()
@@ -345,6 +345,7 @@ pub fn broken_outline(commands: &[PathCommand], breaks: &[(Point, Point)]) -> Ve
         // The shown pieces of this line, each a run of points.
         let mut pieces: Vec<Vec<Point>> = vec![];
         let mut joined = false;
+        let mut cut = false;
         for (&a, &b) in line.iter().zip(line.iter().skip(1)) {
             let at = |t: f32| Point::new(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t);
             let mut hidden: Vec<(f32, f32)> =
@@ -353,6 +354,7 @@ pub fn broken_outline(commands: &[PathCommand], breaks: &[(Point, Point)]) -> Ve
             let mut from = 0f32;
             let mut shown = vec![];
             for (s, e) in hidden {
+                cut = true;
                 if s > from {
                     shown.push((from, s));
                 }
@@ -383,7 +385,7 @@ pub fn broken_outline(commands: &[PathCommand], breaks: &[(Point, Point)]) -> Ve
                 last.extend(first.into_iter().skip(1));
             }
         }
-        let whole = closed && pieces.len() == 1 && pieces.first().map(Vec::len) == Some(line.len());
+        let whole = closed && !cut;
         for piece in pieces {
             if let Some((first, rest)) = piece.split_first() {
                 out.push(PathCommand::Move(*first));
@@ -495,14 +497,27 @@ fn content_units(doc: &Document, panel: u64) -> Vec<(Vec<u64>, (Point, Point))> 
             .map(|id| vec![id]),
     );
     let bounds = crate::scene::selections_bounds_in_axes(doc, &units, Some((o, degrees)));
-    let slack = 0.01;
+    // Inside the frame, rounded corners included: the shape is convex, so a
+    // box whose four corners are inside lies wholly inside.
+    let (slack, r) = (0.01, frame.panel_radius());
+    let inside = |p: Point| {
+        let corner = |v: f32, size: f32| v.clamp(r, (size - r).max(r));
+        let (cx, cy) = (corner(p.x, w), corner(p.y, h));
+        p.x >= -slack
+            && p.y >= -slack
+            && p.x <= w + slack
+            && p.y <= h + slack
+            && (p.x - cx).hypot(p.y - cy) <= r + slack
+    };
     units
         .into_iter()
         .zip(bounds)
         .filter_map(|(unit, bounds)| {
             let (a, b) = bounds?;
             let (a, b) = (a.offset(-o.x, -o.y), b.offset(-o.x, -o.y));
-            (a.x >= -slack && a.y >= -slack && b.x <= w + slack && b.y <= h + slack)
+            [a, Point::new(b.x, a.y), b, Point::new(a.x, b.y)]
+                .into_iter()
+                .all(inside)
                 .then_some((unit, (a, b)))
         })
         .collect()

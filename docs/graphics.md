@@ -381,8 +381,7 @@ and arrows are placeholders with the **Illustration** purpose, so they never
 form a reaction. Select a panel and choose **Clear contents** in **Properties →
 Panel** to delete them in one Undo step, keeping the frame and title, then
 paste or draw your scheme: a paste lands in the middle of the selected empty
-panel. In **Two matched scheme rows**, drag a box around a row and press
-Delete instead. A border title breaks only the panel's outline, so a page
+panel. A border title breaks only the panel's outline, so a page
 gradient or border behind it stays whole, and it takes a color that reads on
 both the panel and the page. To
 see a TOC graphic at its printed size, choose **ACS TOC graphic · 8.25 × 4.45

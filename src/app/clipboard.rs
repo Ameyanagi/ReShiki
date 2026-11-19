@@ -634,7 +634,7 @@ impl App {
                 .filter(|g| reshiki::graphics::panel::contents(&before, g.id).is_empty())
                 .map(|g| {
                     let (lo, hi) = g.shape_bounds();
-                    Point::new((lo.x + hi.x) / 2., (lo.y + hi.y) / 2.)
+                    (g.id, Point::new((lo.x + hi.x) / 2., (lo.y + hi.y) / 2.))
                 }),
             _ => None,
         };
@@ -643,7 +643,7 @@ impl App {
             && edges(part, &part.all_ids())
                 .is_some_and(|(lo, hi)| (hi.x - lo.x) * self.tab.camera.zoom > view.width / 4.);
         let mut offset = match panel {
-            Some(middle) => Point::new(middle.x - center.x, middle.y - center.y),
+            Some((_, middle)) => Point::new(middle.x - center.x, middle.y - center.y),
             None => Point::new(
                 self.tab.camera.center.x - center.x + 24.,
                 self.tab.camera.center.y - center.y + 24.,
@@ -667,10 +667,17 @@ impl App {
                 beside = true;
             }
         }
-        let selected = editing::append_preserving_layout(&mut self.tab.doc, part, offset);
+        let mut selected = editing::append_preserving_layout(&mut self.tab.doc, part, offset);
         if selected.is_empty() || self.tab.doc.validate().is_err() {
             self.tab.doc = before;
             return false;
+        }
+        // What fills a panel moves with it, as wrapped contents do.
+        if let Some((id, _)) = panel {
+            selected.push(id);
+            if let Ok(grouped) = self.tab.doc.group_selection(&selected) {
+                selected = grouped;
+            }
         }
         if beside {
             self.commit_structure_insert(before, selected);

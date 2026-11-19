@@ -603,8 +603,15 @@ impl Writer<'_> {
                     } else {
                         let outline = crate::scientific::Part {
                             commands: crate::graphics::panel::broken_outline(&commands, &breaks),
+                            // A filled panel's effects belong to its body; an
+                            // unfilled panel's are its outline's.
                             style: crate::graphics::GraphicStyle {
                                 fill: None,
+                                effects: if style.fill.is_some() {
+                                    Default::default()
+                                } else {
+                                    style.effects
+                                },
                                 ..style.clone()
                             },
                             filled: false,
@@ -668,7 +675,7 @@ impl Writer<'_> {
             let mut panel_titles = g.panel_titles(&text_style);
             if border {
                 let outline = palette.rgb(g.style.stroke);
-                let rgb = crate::graphics::panel::border_title_rgb(outline, [backing, paper]);
+                let rgb = crate::graphics::panel::border_title_rgb(outline, &[backing, paper]);
                 if rgb != outline {
                     for label in &mut panel_titles {
                         label.style.color = crate::palette::Color::Custom(rgb);

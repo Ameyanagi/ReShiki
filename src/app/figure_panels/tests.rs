@@ -317,4 +317,12 @@ fn a_paste_into_a_cleared_panel_lands_in_its_middle() {
     assert!(app.append_pasted(&part));
     let held = reshiki::graphics::panel::contents(&app.tab.doc, id);
     assert_eq!(held.len(), 2, "the pasted molecule is in the panel");
+    // Grouped with the panel, so the two move together.
+    assert!(
+        app.tab
+            .doc
+            .groups
+            .iter()
+            .any(|g| g.members.contains(&id) && held.iter().all(|a| g.members.contains(a)))
+    );
 }

@@ -2488,9 +2488,14 @@ fn graphic_primitive(
         let title = if on_band {
             band_ink()
         } else {
+            // Each end of a gradient fill is a surface of its own.
+            let mut surfaces = vec![backing, paper];
+            if let (Some(gradient), Some(fill)) = (g.style.effects.gradient, g.style.fill) {
+                surfaces.extend([gradient.from, fill].map(|c| canvas.color(c.rgb())));
+            }
             canvas.color(crate::graphics::panel::border_title_rgb(
                 canvas.color(g.style.stroke.rgb()),
-                [backing, paper],
+                &surfaces,
             ))
         };
         let superscript = g
