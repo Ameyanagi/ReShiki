@@ -4081,6 +4081,7 @@ fn ghosts(
         custom_theme: doc.custom_theme.clone(),
         drawing_style: doc.drawing_style.clone(),
         atom_labels: doc.atom_labels.clone(),
+        highlight_style: doc.highlight_style,
         ..Default::default()
     };
     let origin = fit.place([0.; 3]);

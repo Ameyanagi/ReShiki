@@ -365,7 +365,12 @@ pub async fn copy(
     )
     .await?;
     // Office's embedded object is the drawing, so it follows the switch too.
-    let operation = if cfg!(windows) && !image_only && pictures.editable {
+    // It needs the Office preview, which a see-through or glowing drawing
+    // cannot have; that copy is written without the embedded object.
+    let preview = representations
+        .iter()
+        .any(|r| r.kind == "dev.reshiki.office-metafile");
+    let operation = if cfg!(windows) && !image_only && pictures.editable && preview {
         "write_embedded"
     } else {
         "write"

@@ -27,7 +27,7 @@ roxmltree = "0.20"
 serde = { version = "1", features = ["derive", "rc"] }
 serde_json = { version = "1", features = ["float_roundtrip"] }
 sha2 = { version = "0.10.9", default-features = false, features = ["force-soft"] }
-svg2pdf = { version = "0.13", default-features = false, features = ["text", "image"] }
+svg2pdf = { version = "0.13", default-features = false, features = ["text", "image", "filters"] }
 tempfile = "3"
 thiserror = "2"
 
