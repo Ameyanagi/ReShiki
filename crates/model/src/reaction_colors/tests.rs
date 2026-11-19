@@ -612,3 +612,26 @@ fn a_panel_title_below_the_reaction_is_not_free_space() {
         "{legend:?}"
     );
 }
+
+#[test]
+fn a_name_colored_in_the_same_edit_keeps_its_color() {
+    let DielsAlder { mut doc, arrow, .. } = diels_alder(true);
+    set_legend(&mut doc, arrow, true, Default::default()).unwrap();
+    let (id, colors) = legend_swatches(&doc);
+    let before = doc.clone();
+    let legend = doc.annotations.iter_mut().find(|a| a.id == id).unwrap();
+    let old = legend.text.clone();
+    let renamed = old.replacen("Reactant 1", "diene", 1);
+    legend.text = renamed.clone();
+    legend.format.edited(&old, &renamed, 0..old.len());
+    let name = SWATCH.len_utf8() + 1;
+    legend.format.apply(
+        &renamed,
+        Some(name..name + "diene".len()),
+        &crate::typography::StyleChange::Color(BLUE),
+    );
+    let _ = crate::transaction::reconcile(&mut doc, before).unwrap();
+    assert_eq!(legend_swatches(&doc).1, colors);
+    let legend = doc.annotations.iter().find(|a| a.id == id).unwrap();
+    assert_eq!(legend.format.at(name).color, BLUE);
+}

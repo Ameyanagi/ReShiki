@@ -625,10 +625,9 @@ fn legend(doc: &mut Document, id: u64, entries: &[(char, Color, String)]) {
     }
 }
 
-/// Keep each legend's swatch colors through a text edit. Typed text takes
-/// the style of the text it replaces, and a legend begins with a swatch, so
-/// retyping a whole legend would paint every swatch and name in its first
-/// swatch's color. Names keep any color they had before the edit.
+/// Keep each legend's swatch colors through a text edit: retyped text takes
+/// the style of the text it replaces, so a retyped swatch would lose its
+/// color. Names keep whatever style the edit gave them.
 pub(crate) fn reconcile(doc: &mut Document, before: &Document) {
     let legends: Vec<u64> = doc
         .reactions
@@ -646,30 +645,24 @@ pub(crate) fn reconcile(doc: &mut Document, before: &Document) {
         if old.text == new.text {
             continue;
         }
-        let (mut swatches, mut named) = (Vec::new(), HashSet::new());
-        for (i, c) in old.text.char_indices() {
-            let color = old.format.at(i).color;
-            if glyph(c) {
-                swatches.push(color);
-            } else {
-                named.insert(color);
-            }
-        }
+        let swatches: Vec<Color> = old
+            .text
+            .char_indices()
+            .filter(|(_, c)| glyph(*c))
+            .map(|(i, _)| old.format.at(i).color)
+            .collect();
         let kinds = |text: &str| text.chars().filter(|c| glyph(*c)).collect::<Vec<_>>();
         // Swatches keep their colors in order while the entries stay the same.
         let mut order = (kinds(&old.text) == kinds(&new.text)).then(|| swatches.iter());
-        let base = new.format.style.color;
         let styles = new
             .text
             .char_indices()
             .map(|(i, c)| {
                 let mut style = new.format.at(i).clone();
-                if glyph(c) {
-                    if let Some(color) = order.as_mut().and_then(Iterator::next) {
-                        style.color = *color;
-                    }
-                } else if swatches.contains(&style.color) && !named.contains(&style.color) {
-                    style.color = base;
+                if glyph(c)
+                    && let Some(color) = order.as_mut().and_then(Iterator::next)
+                {
+                    style.color = *color;
                 }
                 style
             })
