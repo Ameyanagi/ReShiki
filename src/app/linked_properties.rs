@@ -62,9 +62,9 @@ impl App {
 
     /// The decimal places of a mass line under the molecule.
     pub(super) fn set_property_places(&mut self, atoms: &[u64], property: Property, places: u8) {
-        if self
-            .edit_captions(|doc, _, _| linked_properties::set_places(doc, atoms, property, places))
-        {
+        if self.edit_captions(|doc, _, two| {
+            linked_properties::set_places(doc, atoms, property, places, two)
+        }) {
             self.status = format!("{} decimals: {places}", property.name());
         }
     }

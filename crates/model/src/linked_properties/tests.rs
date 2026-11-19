@@ -970,8 +970,8 @@ fn mass_lines_use_the_decimal_places_chosen_for_the_caption() {
     let mut history = History::default();
     let before = doc.clone();
     edit(&mut doc, &mut history, |doc| {
-        doc.property_captions[0].set_places(Property::ExactMass, 5);
-        doc.property_captions[0].set_places(Property::Weight, 0);
+        doc.property_captions[0].set_places(Property::ExactMass, 5, true);
+        doc.property_captions[0].set_places(Property::Weight, 0, true);
     });
     assert_eq!(text(&doc), "Mol. Wt.: 94\nExact Mass: 94.04186");
     // One Undo step restores both lines.
@@ -985,8 +985,8 @@ fn mass_lines_use_the_decimal_places_chosen_for_the_caption() {
     assert_eq!(text(&doc), "Mol. Wt.: 94\nExact Mass: 94.04186");
     // Choosing the default again keeps no choice.
     edit(&mut doc, &mut history, |doc| {
-        doc.property_captions[0].set_places(Property::ExactMass, 4);
-        doc.property_captions[0].set_places(Property::Weight, 3);
+        doc.property_captions[0].set_places(Property::ExactMass, 4, false);
+        doc.property_captions[0].set_places(Property::Weight, 3, false);
     });
     assert_eq!(text(&doc), "Mol. Wt.: 94.113\nExact Mass: 94.0419");
     let link = &doc.property_captions[0];
@@ -996,7 +996,7 @@ fn mass_lines_use_the_decimal_places_chosen_for_the_caption() {
 #[test]
 fn chosen_places_save_as_version_40_only_when_set() {
     let (mut doc, atoms) = shown_doc(&[Property::ExactMass], true);
-    doc.property_captions[0].set_places(Property::ExactMass, 4);
+    doc.property_captions[0].set_places(Property::ExactMass, 4, false);
     let file = doc.file_json().unwrap();
     assert!(!String::from_utf8_lossy(&file).contains("places"));
     assert_eq!(
@@ -1004,7 +1004,7 @@ fn chosen_places_save_as_version_40_only_when_set() {
         crate::document::PROPERTY_CAPTIONS
     );
     edit(&mut doc, &mut History::default(), |doc| {
-        doc.property_captions[0].set_places(Property::ExactMass, 5);
+        doc.property_captions[0].set_places(Property::ExactMass, 5, true);
     });
     assert_eq!(text(&doc), "Exact Mass: 94.04186");
     let loaded = Document::from_json(&doc.file_json().unwrap()).unwrap();

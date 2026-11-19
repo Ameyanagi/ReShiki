@@ -293,24 +293,41 @@ fn mass_decimals_change_one_caption_in_one_undo_step() {
     app.appearance.two_decimal_weight = true;
     let _ = app.update(Message::ShowMasses(atoms.clone()));
     let masses = app.tab.doc.clone();
-    let _ = app.update(Message::PropertyPlaces(
-        atoms.clone(),
-        Property::ExactMass,
-        5,
-    ));
+    // A caption whose Mol. Wt. differs from Settings keeps it when Exact
+    // Mass changes.
+    app.appearance.two_decimal_weight = false;
+    let five = Message::PropertyPlaces(atoms.clone(), Property::ExactMass, 5);
+    let _ = app.update(five);
     assert_eq!(
         caption(&app),
         Some("Formula: C2H6O\nMol. Wt.: 46.07\nExact Mass: 46.04186")
     );
     let _ = app.update(Message::Undo);
     assert_eq!(app.tab.doc, masses);
-    // A caption's own Mol. Wt. places win over the Settings choice.
-    let _ = app.update(Message::PropertyPlaces(atoms, Property::Weight, 1));
+    app.appearance.two_decimal_weight = true;
+    // A caption's own Mol. Wt. places win over the Settings choice, and
+    // choosing them again changes nothing.
+    let one = Message::PropertyPlaces(atoms.clone(), Property::Weight, 1);
+    let _ = app.update(one.clone());
     let chosen = app.tab.doc.clone();
     app.view_action(TwoDecimalWeight(false));
+    assert_eq!(app.tab.doc, chosen);
+    let _ = app.update(one);
     assert_eq!(app.tab.doc, chosen);
     assert_eq!(
         caption(&app),
         Some("Formula: C2H6O\nMol. Wt.: 46.1\nExact Mass: 46.0419")
+    );
+    // Choosing the Settings default again follows Settings from then on.
+    let _ = app.update(Message::PropertyPlaces(atoms, Property::Weight, 3));
+    assert_eq!(app.tab.doc.property_captions[0].weight_places, None);
+    assert_eq!(
+        caption(&app),
+        Some("Formula: C2H6O\nMol. Wt.: 46.069\nExact Mass: 46.0419")
+    );
+    app.view_action(TwoDecimalWeight(true));
+    assert_eq!(
+        caption(&app),
+        Some("Formula: C2H6O\nMol. Wt.: 46.07\nExact Mass: 46.0419")
     );
 }

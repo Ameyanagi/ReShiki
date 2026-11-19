@@ -134,16 +134,28 @@ impl PropertyCaption {
     }
 
     /// Choose the decimal places of Mol. Wt. or Exact Mass, from 0 to
-    /// [`Self::MAX_PLACES`]. The default is kept as no choice, so the file
-    /// stays readable by older versions.
-    pub fn set_places(&mut self, property: Property, places: u8) {
-        let default = self.default_places(property);
-        let chosen = match property {
-            Property::Weight => &mut self.weight_places,
-            Property::ExactMass => &mut self.exact_mass_places,
-            _ => return,
-        };
-        *chosen = (places != default).then_some(places);
+    /// [`Self::MAX_PLACES`]. The default (Mol. Wt.: `two_decimal_weight`, the
+    /// current Settings choice; Exact Mass: four) is kept as no choice, so the
+    /// file stays readable by older versions and Mol. Wt. follows Settings.
+    /// Choosing the places already shown changes nothing.
+    pub fn set_places(&mut self, property: Property, places: u8, two_decimal_weight: bool) {
+        if places == self.places(property) {
+            return;
+        }
+        match property {
+            Property::Weight => {
+                let default = if two_decimal_weight { 2 } else { 3 };
+                if places == default {
+                    self.two_decimal_weight = two_decimal_weight;
+                }
+                self.weight_places = (places != default).then_some(places);
+            }
+            Property::ExactMass => {
+                self.exact_mass_places =
+                    (places != self.default_places(property)).then_some(places);
+            }
+            _ => {}
+        }
     }
 
     /// Whether the molecule's name is tracked: shown, or typed.
@@ -561,19 +573,20 @@ pub fn show(
     Ok(())
 }
 
-/// Choose the decimal places of a mass line in this molecule's caption; the
-/// edit's transaction rewrites the text.
+/// Choose the decimal places of a mass line in this molecule's caption;
+/// the edit's transaction rewrites the text.
 pub fn set_places(
     doc: &mut Document,
     atoms: &[u64],
     property: Property,
     places: u8,
+    two_decimal_weight: bool,
 ) -> Result<(), String> {
     doc.property_captions
         .iter_mut()
         .find(|link| covers(link, atoms))
         .ok_or("The property caption is missing")?
-        .set_places(property, places);
+        .set_places(property, places, two_decimal_weight);
     Ok(())
 }
 
