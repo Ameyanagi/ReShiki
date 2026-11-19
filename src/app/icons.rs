@@ -138,6 +138,13 @@ impl Glyph {
             Icon::Tool(Tool::Atom) => tools::atom(f, ink),
             Icon::Tool(Tool::Erase) => tools::erase(f, ink),
             Icon::Tool(Tool::Equipment) => tools::equipment(f, ink),
+            Icon::Tool(Tool::Icons) => {
+                if let Ok(icon) =
+                    reshiki::line_icons::Icon::parse("icons", super::icon_browser::TOOL_GLYPH)
+                {
+                    super::icon_browser::paint(f, ink, &icon, 1.);
+                }
+            }
             Icon::New => commands::new_document(f, ink),
             Icon::Open => commands::open(f, ink),
             Icon::Save => commands::save(f, ink),

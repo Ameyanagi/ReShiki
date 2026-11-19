@@ -297,6 +297,7 @@ impl App {
             Message::Canvas(Edit::Hover(_) | Edit::PointerHover(_))
                 | Message::Tick
                 | Message::InspectorScroll(_)
+                | Message::Icons(super::icon_browser::Action::Scrolled { .. })
                 | Message::EngineDone { .. }
                 | Message::EngineFinished { .. }
                 | Message::InspectorAction(_)
@@ -383,6 +384,9 @@ impl App {
                 Task::none()
             } else if self.cancel_model_generation() {
                 Task::none()
+            } else if self.inspector_tab == InspectorTab::Icons {
+                // Esc closes the Icons browser, even from its search.
+                self.icon_action(super::icon_browser::Action::Close)
             } else {
                 self.update(Message::Tool(Tool::Select))
             });

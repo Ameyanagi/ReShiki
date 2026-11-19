@@ -272,6 +272,32 @@ Atom maps and colors are one Undo step each and are saved with the drawing.
    the intermediates and choose **Make catalytic cycle** to make the cycle
    again, then drag the reagents and products back beside their steps.
 
+### Place an icon
+
+The **Icons** tool holds the seven reaction condition icons and the whole
+outline set of [Tabler Icons](https://tabler.io/icons) 3.50.0: about 5,200
+line icons for labs, devices, weather, arrows, charts and more.
+
+1. Click **Icons** in the tools palette (next to **Equipment**), or choose
+   **Icons…** in the command palette. The side panel lists the icons:
+   the ones you placed last under **Recent**, then **Reaction conditions**,
+   then each category.
+2. Search in English or Japanese (`flask`, `heat`, `フラスコ`, `加熱`), or
+   pick a category. A search lists names first, then tags.
+3. Click an icon. It follows the pointer; click the drawing to place a copy
+   one bond length across. Each click adds another. Clicking the icon in the
+   panel again puts a copy in the middle of the view. Esc or **Done** closes
+   the panel and returns to Select.
+
+A placed icon is one shape in the drawing's line width and the current
+shape color. It sits on a disc of the paper color, so on an arrow it covers
+the shaft; group it with the arrow (⌘/Ctrl+G) and they move together. Change
+its color and line width in **Properties**, and scale or turn it with its
+handles; its points cannot be edited. Each placement is one Undo step. The
+drawing keeps the icon's paths, so the file opens the same anywhere. PNG,
+SVG and PDF export draw it, the dark canvas shows it in the canvas colors,
+and ChemDraw gets it as curves.
+
 ### Place lab equipment
 
 Lab equipment is a preview in this build. The catalogue has round-bottom

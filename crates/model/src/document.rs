@@ -567,7 +567,7 @@ impl Document {
                 || g.leader.is_some()
                 || g.cycle.is_some()
                 || g.piece.is_some()
-                || matches!(g.kind, GraphicKind::Symbol(kind) if kind.is_condition())
+                || g.is_icon()
         }) || self.arrows.iter().any(|a| {
             let style = a.appearance();
             style.pattern == LinePattern::Wavy || !style.body.is_line() || a.arc.is_some()

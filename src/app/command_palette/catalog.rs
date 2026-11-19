@@ -589,6 +589,13 @@ fn inserts(app: &App) -> Vec<Command> {
         Message::Tool(Tool::Equipment),
     ));
     list.push(send(
+        "Icons…",
+        Insert,
+        "Search over 5,000 line icons and the reaction condition icons, then click to place one",
+        "icons icon symbol pictogram clip art tabler condition light heat flask アイコン",
+        Message::Tool(Tool::Icons),
+    ));
+    list.push(send(
         "Catalytic cycle",
         Insert,
         "Add an empty cycle at the center of the view, then drag structures or text onto its circle",
@@ -1859,31 +1866,26 @@ fn tools() -> Vec<Command> {
         }
     }
     for kind in reshiki::scientific::SymbolKind::ALL {
+        // Condition icons are chosen in the Icons tool.
+        if kind.is_condition() {
+            list.push(send(
+                kind.to_string(),
+                T,
+                "Choose this condition icon in the Icons tool, then click to place it",
+                &format!(
+                    "icon reaction condition {}",
+                    crate::app::icon_browser::condition_words(*kind)
+                ),
+                Message::Icons(crate::app::icon_browser::Action::Arm(
+                    crate::app::icon_browser::Choice::Condition(*kind),
+                )),
+            ));
+            continue;
+        }
         let synonyms = match kind {
             reshiki::scientific::SymbolKind::PartialPositive
             | reshiki::scientific::SymbolKind::PartialNegative => {
                 "symbol graphic partial charge delta δ"
-            }
-            reshiki::scientific::SymbolKind::Light => {
-                "symbol graphic reaction condition icon lamp bulb hv photochemistry"
-            }
-            reshiki::scientific::SymbolKind::Electrode => {
-                "symbol graphic reaction condition icon electrochemistry electrolysis"
-            }
-            reshiki::scientific::SymbolKind::Heat => {
-                "symbol graphic reaction condition icon flame reflux Δ"
-            }
-            reshiki::scientific::SymbolKind::Microwave => {
-                "symbol graphic reaction condition icon oven µw"
-            }
-            reshiki::scientific::SymbolKind::Ultrasound => {
-                "symbol graphic reaction condition icon sonication"
-            }
-            reshiki::scientific::SymbolKind::Cold => {
-                "symbol graphic reaction condition icon snowflake cooling ice"
-            }
-            reshiki::scientific::SymbolKind::Enzyme => {
-                "symbol graphic reaction condition icon biocatalysis"
             }
             _ => "symbol graphic",
         };

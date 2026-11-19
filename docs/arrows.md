@@ -154,18 +154,18 @@ files keep it as ChemDraw's Shaded fill.
 
 ### Put a condition icon on an arrow
 
-1. Hold the **Chemical symbols** toolbar button and choose an icon under
-   **Reaction conditions**: **Light**, **Electrode**, **Heat**, **Microwave**,
-   **Ultrasound**, **Cold** or **Enzyme**.
-2. Click the middle of the arrow, or drag to set the icon's size. The icon
-   sits on a disc of the paper color, so it covers the shaft behind it.
+1. Click **Icons** in the tools palette. **Reaction conditions** comes first:
+   **Light**, **Electrode**, **Heat**, **Microwave**, **Ultrasound**, **Cold**
+   and **Enzyme**. Click one; any other icon of the panel works the same way.
+2. Click the middle of the arrow. The icon sits on a disc of the paper color,
+   so it covers the shaft behind it.
 3. Press V for Select, click the icon, Shift-click the arrow's shaft and
    press ⌘/Ctrl+G to group them. Clicking either one now selects both, and
    they move together.
    Option/Alt-click selects only the icon, for example to change its color.
 
 An icon is an ordinary shape: **Properties** sets its color and line width,
-and it resizes like any symbol. It never takes part in the reaction. Type the
+and it scales from a corner handle. It never takes part in the reaction. Type the
 condition itself, such as "blue LEDs", as text beside the arrow; the text
 snaps to the arrow as usual, and the arrow still copies as reaction SMILES.
 

@@ -333,7 +333,7 @@ impl MoleculeCanvas<'_> {
                     for graphic in &mut preview.to_mut().graphics {
                         if !existing.contains(&graphic.id) {
                             graphic.style.stroke = tint;
-                            if graphic.style.fill.is_some() && !graphic.is_condition_icon() {
+                            if graphic.style.fill.is_some() && !graphic.is_icon() {
                                 graphic.style.fill = Some(Paint::Palette(Hue::Teal, Row::Tint));
                             }
                         }
@@ -389,6 +389,26 @@ impl MoleculeCanvas<'_> {
             ),
             true,
         ));
+    }
+
+    /// The armed icon follows the pointer at half strength.
+    pub(super) fn preview_icon(&self, draft: &mut Draft<'_>, state: &State, bounds: Rectangle) {
+        let (Tool::Icons, Some(icon), Some(p)) = (
+            self.tool,
+            &self.icon,
+            state.cursor.filter(|p| bounds.contains(*p)),
+        ) else {
+            return;
+        };
+        let at = self
+            .camera
+            .world(Point::new(p.x - bounds.x, p.y - bounds.y), bounds);
+        let doc = draft.preview.to_mut();
+        let mut ghost = icon.clone();
+        ghost.id = doc.next_id();
+        ghost.origin = at;
+        ghost.style.effects.opacity = Some(0.5);
+        doc.graphics.push(ghost);
     }
 
     /// Keyboard Connect shows the offered joint seated, as Return makes it.

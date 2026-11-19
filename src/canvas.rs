@@ -286,6 +286,8 @@ pub enum Edit {
     Template(World, Option<World>),
     /// Place the armed equipment piece centred here.
     Piece(World),
+    /// Place the icon armed in the Icons browser centred here.
+    Icon(World),
     Click(World),
     /// Legacy/programmatic camera edits use world coordinates.
     Pan(f32, f32),
@@ -675,6 +677,8 @@ pub struct MoleculeCanvas<'a> {
     pub template: Option<(&'a reshiki::templates::Template, reshiki::templates::Anchor)>,
     /// The equipment piece a click places, shown under the pointer.
     pub piece: Option<&'a std::sync::Arc<reshiki::equipment::format::Definition>>,
+    /// The icon a click places, centred on the origin, shown under the pointer.
+    pub icon: Option<reshiki::graphics::Graphic>,
     /// Keyboard Connect: the selected pieces, the joint offered and theirs.
     pub connect: Option<(
         &'a [u64],
@@ -731,6 +735,7 @@ impl<'a> MoleculeCanvas<'a> {
             template_connection: Default::default(),
             template: None,
             piece: None,
+            icon: None,
             connect: None,
             arrows: ArrowOptions {
                 preset: styles.arrow_preset,

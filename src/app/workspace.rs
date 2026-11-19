@@ -371,6 +371,7 @@ impl App {
                 .armed
                 .as_ref()
                 .filter(|_| self.tool == Tool::Equipment),
+            icon: self.armed_icon(),
             connect: self.connecting().and_then(|c| {
                 let (s, m) = c.shown()?;
                 Some((c.ids.as_slice(), s, m))
@@ -763,6 +764,7 @@ impl App {
             (self.toolbar.symbol, symbols.as_str()),
             (self.toolbar.orbital, orbitals.as_str()),
             (Tool::Equipment, "Equipment"),
+            (Tool::Icons, "Icons"),
         ];
         let mut grid = column![].spacing(TOOL_GAP);
         for pair in tools.chunks(2) {
@@ -1520,6 +1522,18 @@ impl App {
                     done("Cancel"),
                 ]
             }
+            Tool::Icons => {
+                vec![
+                    text(
+                        self.icons
+                            .armed
+                            .map_or_else(|| "Choose an icon".into(), |c| c.name()),
+                    )
+                    .size(12)
+                    .into(),
+                    done("Cancel"),
+                ]
+            }
             Tool::Ring | Tool::RingPreset(_) => self.ring_tool_options(),
             Tool::Arrow => {
                 vec![
@@ -1845,6 +1859,10 @@ impl App {
         if self.inspector_tab == InspectorTab::Assistant {
             return self.inspector_frame(self.assistant_panel());
         }
+        // The icon grid scrolls under a fixed search.
+        if self.inspector_tab == InspectorTab::Icons {
+            return self.inspector_frame(self.icons_panel());
+        }
         let mut tabs = row![];
         for (label, tab) in INSPECTOR_TABS {
             let selected = self.inspector_tab == tab
@@ -1919,6 +1937,7 @@ impl App {
             InspectorTab::Abbreviations => self.abbreviations_panel(),
             InspectorTab::Templates => self.templates_panel(),
             InspectorTab::Equipment => self.equipment_panel(),
+            InspectorTab::Icons => self.icons_panel(),
             InspectorTab::Import => self.import_panel(),
             InspectorTab::Names => self.naming_panel(),
             InspectorTab::Export => self.export_panel(),
@@ -4043,6 +4062,7 @@ fn tool_name(tool: Tool) -> (&'static str, &'static str) {
         Tool::Ring | Tool::RingPreset(_) => "Ring",
         Tool::Template => "Template",
         Tool::Equipment => "Equipment",
+        Tool::Icons => "Icons",
         Tool::Arrow => "Reaction arrow",
         Tool::Text => "Text label",
         Tool::Erase => "Eraser",

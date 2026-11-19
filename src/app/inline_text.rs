@@ -911,6 +911,7 @@ pub(super) fn commits_draft(message: &Message) -> bool {
             | Message::InsertTemplate(_)
             | Message::Templates(_)
             | Message::Equipment(_)
+            | Message::Icons(_)
             | Message::AromaticDisplay
             | Message::MakeIonic
             | Message::CenterRingCharge

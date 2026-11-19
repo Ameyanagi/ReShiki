@@ -1153,6 +1153,7 @@ pub(super) fn chain_canvas(doc: &Document, mode: ChainMode) -> MoleculeCanvas<'_
         template_connection: reshiki::templates::Connection::Auto,
         template: None,
         piece: None,
+        icon: None,
         connect: None,
         arrows: ArrowOptions {
             preset: Default::default(),

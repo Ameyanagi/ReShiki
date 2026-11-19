@@ -88,6 +88,7 @@ pub(super) fn keeps_open(message: &Message) -> bool {
             | Message::TextStyle(StyleChange::Color(_))
             | Message::Canvas(crate::canvas::Edit::Hover(_) | crate::canvas::Edit::PointerHover(_))
             | Message::InspectorScroll(_)
+            | Message::Icons(super::icon_browser::Action::Scrolled { .. })
             | Message::Nmr(super::nmr::Action::RenderedSize(_))
             | Message::InspectorAction(
                 super::inspector::Action::RefreshProperties

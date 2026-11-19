@@ -180,6 +180,7 @@ impl NativeGraphic {
             leader: None,
             cycle: None,
             piece: None,
+            icon: None,
             path: self
                 .path
                 .unwrap_or_default()
