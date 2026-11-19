@@ -479,15 +479,16 @@ def mac_disk_image(folder, output_dir, signed=False):
     return output
 
 
-# hdiutil fails intermittently on hosted runners with "Resource busy".
-# -ov makes another attempt safe; the last failure still stops the build.
-DISK_IMAGE_ATTEMPTS = 3
-DISK_IMAGE_DELAY_SECONDS = 10
+# hdiutil fails intermittently on hosted runners with "Resource busy" or
+# "Resource temporarily unavailable". -ov makes another attempt safe; the last
+# failure still stops the build.
+DISK_IMAGE_DELAYS_SECONDS = (5, 10, 20, 40)
 
 
 def create_disk_image(staging, output, *, sleep=time.sleep):
-    # Creating an LZMA (ULMO) image straight from a folder fails with "No space
-    # left on device" for some folder contents, so compress in a second step.
+    # Creating an LZMA (ULMO) image straight from a folder has failed with "No
+    # space left on device", so compress in a second step. (On macOS 27 the
+    # direct image of the 0.16.0 app was also 27.5-28.5 MB against 25.7 MB.)
     # Left to size the image itself, hdiutil made it too small on the Intel
     # runner and the copy into it failed with "No space left on device" (a
     # sparse file does the same anywhere). Size it from file lengths with
@@ -500,24 +501,35 @@ def create_disk_image(staging, output, *, sleep=time.sleep):
     megabytes = (length + length // 10) // 2**20 + 32
     with tempfile.TemporaryDirectory(prefix="ReShiki disk image ") as temporary:
         zlib = Path(temporary) / "zlib.dmg"
-        for command in (
-            ["hdiutil", "create", "-volname", "ReShiki", "-srcfolder", staging]
-            + ["-size", f"{megabytes}m", "-format", "UDZO", "-ov", zlib],
-            ["hdiutil", "convert", zlib, "-format", "ULMO", "-ov", "-o", output],
-        ):
-            for attempt in range(1, DISK_IMAGE_ATTEMPTS + 1):
+        for step in ("create", "convert"):
+            for attempt, delay in enumerate((*DISK_IMAGE_DELAYS_SECONDS, None), start=1):
+                if step == "create":
+                    command = ["hdiutil", "create", "-volname", "ReShiki", "-srcfolder", staging]
+                    command += ["-size", f"{megabytes}m", "-format", "UDZO", "-ov", zlib]
+                else:
+                    # On hosted runners "convert" has failed at once with
+                    # "Resource temporarily unavailable", three times over 20 s.
+                    # hdiutil reports that when it cannot lock an image file;
+                    # what held the lock is unknown. In case it is the image
+                    # just created, each attempt reads a fresh copy of it.
+                    source = Path(temporary) / f"zlib copy {attempt}.dmg"
+                    shutil.copyfile(zlib, source)
+                    command = ["hdiutil", "convert", source, "-format", "ULMO", "-ov", "-o", output]
                 try:
                     run(command)
-                    break
                 except subprocess.CalledProcessError as error:
-                    if attempt == DISK_IMAGE_ATTEMPTS:
+                    if delay is None:
                         raise
                     print(
-                        f"hdiutil {command[1]} failed (exit {error.returncode}); "
-                        f"retrying in {DISK_IMAGE_DELAY_SECONDS} s",
+                        f"hdiutil {step} failed on attempt {attempt} "
+                        f"(exit {error.returncode}); retrying in {delay} s",
                         flush=True,
                     )
-                    sleep(DISK_IMAGE_DELAY_SECONDS)
+                    sleep(delay)
+                else:
+                    if attempt > 1:
+                        print(f"hdiutil {step} succeeded on attempt {attempt}", flush=True)
+                    break
 
 
 def verify_mac_disk_image(output, signed, *, architecture):

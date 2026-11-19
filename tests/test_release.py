@@ -604,16 +604,19 @@ class TransientRetryTests(unittest.TestCase):
             if isinstance(outcome, Exception):
                 raise outcome
 
+        waits = []
+        log = io.StringIO()
         with (
             tempfile.TemporaryDirectory() as temporary,
             patch("installers.run", side_effect=fake) as run,
-            redirect_stdout(io.StringIO()),
+            patch("installers.shutil.copyfile") as copy,
+            redirect_stdout(log),
         ):
             contents = Path(temporary)
             # A sparse file: 100 MiB long, almost no blocks on disk.
             with (contents / "reshiki").open("wb") as file:
                 file.truncate(100 * 2**20)
-            installers.create_disk_image(contents, Path("out.dmg"), sleep=lambda _: None)
+            installers.create_disk_image(contents, Path("out.dmg"), sleep=waits.append)
         commands = [call.args[0] for call in run.call_args_list]
         self.assertEqual(
             [command[1] for command in commands], ["create", "create", "convert", "convert"]
@@ -623,23 +626,44 @@ class TransientRetryTests(unittest.TestCase):
         # Sized from file lengths with headroom, not from blocks on disk.
         self.assertEqual(create[create.index("-size") + 1], "142m")
         self.assertEqual(create[create.index("-format") + 1], "UDZO")
+        # Each convert attempt reads its own fresh copy of the created image.
+        self.assertEqual(
+            [call.args for call in copy.call_args_list],
+            [(create[-1], commands[2][2]), (create[-1], convert[2])],
+        )
+        self.assertEqual(len({create[-1], commands[2][2], convert[2]}), 3)
         # LZMA compression; every supported macOS (14 and later) opens it.
-        self.assertEqual(convert[2], create[-1])
         self.assertEqual(convert[convert.index("-format") + 1], "ULMO")
         self.assertEqual(convert[convert.index("-o") + 1], Path("out.dmg"))
         for command in commands:
             self.assertIn("-ov", command)
+        self.assertEqual(waits, [5, 5])
+        self.assertIn("hdiutil convert succeeded on attempt 2", log.getvalue())
 
     def test_disk_image_creation_raises_after_the_last_attempt(self):
         import installers
 
+        # "create" writes the image; every "convert" then fails.
+        sources = []
+
+        def fake(command):
+            if command[1] == "create":
+                command[-1].write_bytes(b"zlib image")
+                return
+            sources.append((command[2], command[2].read_bytes()))
+            raise self.failure(["hdiutil"])
+
+        waits = []
         with (
-            patch("installers.run", side_effect=self.failure(["hdiutil"])) as run,
+            patch("installers.run", side_effect=fake),
             redirect_stdout(io.StringIO()),
             self.assertRaises(subprocess.CalledProcessError),
         ):
-            installers.create_disk_image(Path("contents"), Path("out.dmg"), sleep=lambda _: None)
-        self.assertEqual(run.call_count, installers.DISK_IMAGE_ATTEMPTS)
+            installers.create_disk_image(Path("contents"), Path("out.dmg"), sleep=waits.append)
+        # Five attempts, each on its own real copy of the created image.
+        self.assertEqual(len({source for source, _ in sources}), 5)
+        self.assertEqual([content for _, content in sources], [b"zlib image"] * 5)
+        self.assertEqual(waits, [5, 10, 20, 40])
 
 
 if __name__ == "__main__":
