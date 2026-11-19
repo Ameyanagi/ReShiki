@@ -49,12 +49,9 @@ pub enum ColorSetting {
 /// A palette hue in a menu.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct HueChoice(pub reshiki::palette::Hue);
-/// `doc` with its map numbers hidden and reaction signs moved to match. It
-/// runs before coloring, whose new settings would stop that repair.
+/// `doc` with its map numbers hidden, as a colored figure reads best.
 pub(super) fn maps_hidden(doc: &reshiki::document::Document) -> reshiki::document::Document {
-    let mut hidden = reshiki::reaction_mapping::set_maps_visible(doc, false);
-    let _ = reshiki::transaction::reconcile(&mut hidden, doc.clone());
-    hidden
+    reshiki::reaction_mapping::set_maps_visible(doc, false)
 }
 
 /// The status after coloring by origin, which hides the map numbers.
@@ -163,6 +160,9 @@ impl App {
             Err(Refusal::Maps) => {
                 self.tab.doc = before;
                 self.tab.reactions.color_after_maps = Some(arrow);
+                // The review stays with this arrow while its pairs are selected.
+                self.tab.reactions.arrow = Some(arrow);
+                self.tab.reactions.epoch = self.tab.file_epoch;
                 self.inspector_open = true;
                 self.inspector_tab = InspectorTab::Reactions;
                 Task::done(Message::Mapping(super::reaction_mapping::Action::Auto))

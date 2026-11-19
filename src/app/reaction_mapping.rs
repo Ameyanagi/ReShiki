@@ -252,19 +252,23 @@ impl App {
                 let color_step = std::mem::take(&mut self.tab.mapping.color_step);
                 // Color by origin asked for these maps: maps and colors are
                 // one Undo step.
+                let current = self.reaction_arrow();
                 let color = self.tab.reactions.color_after_maps.take().filter(|arrow| {
-                    // Only a review of that arrow's own reaction.
-                    let ids: std::collections::HashSet<_> = self
-                        .tab
-                        .doc
-                        .reactions
-                        .iter()
-                        .find(|r| r.arrow == *arrow)
-                        .map(|r| r.ids().into_iter().collect())
-                        .unwrap_or_default();
-                    proposal
-                        .as_ref()
-                        .is_some_and(|p| p.pairs.iter().any(|(a, _)| ids.contains(a)))
+                    // Only the arrow still under review.
+                    Some(*arrow) == current && {
+                        // Only a review of that arrow's own reaction.
+                        let ids: std::collections::HashSet<_> = self
+                            .tab
+                            .doc
+                            .reactions
+                            .iter()
+                            .find(|r| r.arrow == *arrow)
+                            .map(|r| r.ids().into_iter().collect())
+                            .unwrap_or_default();
+                        proposal
+                            .as_ref()
+                            .is_some_and(|p| p.pairs.iter().any(|(a, _)| ids.contains(a)))
+                    }
                 });
                 let mut colored = None;
                 self.commit_mapping(|before| {

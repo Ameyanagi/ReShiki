@@ -311,9 +311,13 @@ impl App {
                             }
                             return Task::none();
                         }
-                        // Map the step first; applying its maps colors it.
-                        Err(reshiki::reaction_colors::Refusal::Maps) => {}
-                        Err(refusal) => return fail(self, refusal.message().into()),
+                        Err(refusal) => {
+                            self.tab.doc = before;
+                            // Map the step first; applying its maps colors it.
+                            if refusal != reshiki::reaction_colors::Refusal::Maps {
+                                return fail(self, refusal.message().into());
+                            }
+                        }
                     }
                 }
                 // The proposal to review shows in Properties.

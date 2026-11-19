@@ -491,8 +491,8 @@ pub(super) fn find(
         }
         if candidate.members.iter().any(|id| {
             target.atoms.get(id).is_none_or(|atom| {
+                // Atom maps may sit in a group.
                 atom.isotope != 0
-                    || atom.map_num != 0
                     || atom.stereo_group.is_some()
                     || !atom.marks.is_empty()
                     || atom.display.number.is_some()
