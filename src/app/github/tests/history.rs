@@ -35,7 +35,8 @@ fn listing(dir: &Path) -> App {
 }
 
 fn legacy_listing(dir: &Path) -> (App, PathBuf) {
-    let raw: &[u8] = include_bytes!("../../../../docs/fixtures/qa-property-continuity/anisole.rsk");
+    // A drawing saved as version 15, as the mock GitHub serves it.
+    let raw: &[u8] = include_bytes!("../../../../website/public/examples/benzofuran.rsk");
     let doc = Document::from_native_file(raw).unwrap();
     assert_ne!(doc.file_json().unwrap().as_slice(), raw);
 
