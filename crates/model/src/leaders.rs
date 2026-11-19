@@ -270,48 +270,49 @@ pub fn callout_position(doc: &Document, target: &Target) -> Result<Point, String
     if !target.exists(doc) {
         return Err("Select an atom, a bond, a molecule or an object for the callout".into());
     }
-    let at = anchor(doc, target).ok_or("The callout target has no position")?;
+    let (lo, hi) = extent(doc, target).ok_or("The callout target has no position")?;
     let reach = callout_reach(doc);
-    Ok(at.offset(reach, -reach))
+    Ok(Point::new(hi.x + reach, lo.y - reach))
 }
 
 fn callout_reach(doc: &Document) -> f32 {
     doc.drawing_style.bond_length_world * 1.6
 }
 
-/// The point a callout's text is placed from: an atom or bond point, or the
-/// top right corner of a molecule or object.
-fn anchor(doc: &Document, target: &Target) -> Option<Point> {
+/// The box a callout's text is placed beside: an atom or bond point, or the
+/// bounds of a molecule or object.
+fn extent(doc: &Document, target: &Target) -> Option<(Point, Point)> {
     match *target {
-        Target::Atom { .. } | Target::Bond { .. } => target.resolve(doc, Point::default()),
+        Target::Atom { .. } | Target::Bond { .. } => {
+            target.resolve(doc, Point::default()).map(|at| (at, at))
+        }
         Target::Molecule { atom } => {
             let atoms = crate::reactions::molecules(doc, &[atom])
                 .pop()
                 .unwrap_or_default();
-            crate::scene::selection_bounds(doc, &atoms).map(|(lo, hi)| Point::new(hi.x, lo.y))
+            crate::scene::selection_bounds(doc, &atoms)
         }
-        Target::Object { id } => {
-            crate::scene::selection_bounds(doc, &[id]).map(|(lo, hi)| Point::new(hi.x, lo.y))
-        }
+        Target::Object { id } => crate::scene::selection_bounds(doc, &[id]),
     }
 }
 
-/// Keep the new callout text `text` on the page its target is on: text that
-/// would cross the page's right margin goes up and to the left of the target
-/// instead, and text still outside the margins is moved in. Without pages, or
-/// with the target off every page, the text stays where it is.
+/// Keep the new callout text `text` on the page its target's middle is on:
+/// text that would cross the page's right margin goes up and to the left of
+/// the target instead, and text still outside the margins is moved in.
+/// Without pages, or with the target off every page, the text stays put.
 pub fn keep_on_page(doc: &mut Document, text: u64, target: &Target) {
     let Some(layout) = &doc.page_layout else {
         return;
     };
-    let Some(at) = anchor(doc, target) else {
+    let Some((start, end)) = extent(doc, target) else {
         return;
     };
+    let middle = start.lerp(end, 0.5);
     let Some((lo, hi)) = (0..layout.count())
         .filter(|&i| {
-            layout
-                .bounds(i)
-                .is_some_and(|(a, b)| (a.x..=b.x).contains(&at.x) && (a.y..=b.y).contains(&at.y))
+            layout.bounds(i).is_some_and(|(a, b)| {
+                (a.x..=b.x).contains(&middle.x) && (a.y..=b.y).contains(&middle.y)
+            })
         })
         .find_map(|i| layout.content_bounds(i))
     else {
@@ -324,7 +325,7 @@ pub fn keep_on_page(doc: &mut Document, text: u64, target: &Target) {
     // at its left or top margin.
     let inside = |shift: f32, lo: f32, hi: f32, a: f32, b: f32| shift.min(hi - b).max(lo - a);
     let left = if b.x > hi.x {
-        at.x - callout_reach(doc) - b.x
+        start.x - callout_reach(doc) - b.x
     } else {
         0.
     };

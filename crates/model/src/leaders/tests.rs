@@ -185,6 +185,7 @@ fn a_bond_point_off_the_bond_is_refused() {
 #[test]
 fn a_callout_by_the_page_edge_stays_on_the_page() {
     let (mut doc, a, b) = ethane();
+    let a_atom = a;
     let bond = Target::Bond {
         a,
         b,
@@ -210,6 +211,10 @@ fn a_callout_by_the_page_edge_stays_on_the_page() {
     // The leader still runs from the text to the bond middle.
     let [_, end] = leader(&doc).line_ends();
     assert!(end.distance(Point::new(10., 0.)) < 1e-3, "{end:?}");
+    // Text for a whole molecule goes left of the molecule, not over it.
+    let id = add_callout(&mut doc, Target::Molecule { atom: a_atom }, text).unwrap();
+    let (_, b) = crate::scene::selection_bounds(&doc, &[id]).unwrap();
+    assert!(b.x < 0., "Left of the molecule: {b:?}");
     // Away from the edge the text keeps its usual place.
     doc.page_layout = Some(crate::pages::Layout::around(&doc));
     let id = add_callout(&mut doc, bond, text).unwrap();
