@@ -82,6 +82,10 @@ fn shared_glyphs_exactly_match_fresh_outlines_at_each_zoom_and_font() {
                     let fresh = outline(text, 14., zoom, [25, 90, 140], &style);
                     assert_eq!(cached.bounds, fresh.bounds, "{family} {zoom} {text}");
                     assert_eq!(cached.paths.len(), fresh.paths.len());
+                    assert_eq!(
+                        cached.pictures.iter().map(|(r, _)| *r).collect::<Vec<_>>(),
+                        fresh.pictures.iter().map(|(r, _)| *r).collect::<Vec<_>>()
+                    );
                     for ((a, ac), (b, bc)) in cached.paths.iter().zip(&fresh.paths) {
                         assert_eq!(ac, bc);
                         assert_eq!(
@@ -164,4 +168,54 @@ fn a_full_cache_evicts_the_least_recently_used_outlines() {
         &stale,
         &cache.get("stale", 14., 1., [0, 0, 0], &style)
     ));
+}
+
+/// Apple Color Emoji's outlines are empty markers, so an emoji drawn from its
+/// outline was blank. It must come out as a sharp colour picture beside the text.
+#[cfg(target_os = "macos")]
+#[test]
+fn colour_emoji_draw_as_pictures_beside_the_text() {
+    let style = TextStyle::default();
+    let plain = outline("H", 14., 2., [0, 0, 0], &style);
+    let text = outline("H💡", 14., 2., [0, 0, 0], &style);
+    assert!(plain.pictures.is_empty());
+    let [
+        (
+            rect,
+            Handle::Rgba {
+                width,
+                height,
+                pixels,
+                ..
+            },
+        ),
+    ] = &text.pictures[..]
+    else {
+        panic!("one picture expected, got {}", text.pictures.len());
+    };
+    let h = plain.bounds.unwrap();
+    // Right of the H, about one em (28 px at zoom 2) tall, rasterized at twice that.
+    assert!(rect.x >= h.x + h.width - 4., "{rect:?} {h:?}");
+    assert!((20. ..=36.).contains(&rect.height), "{rect:?}");
+    assert_eq!(*width as f32, rect.width * 2.);
+    assert_eq!(*height as f32, rect.height * 2.);
+    // In colour: some opaque pixel that is not grey.
+    assert!(
+        pixels
+            .chunks(4)
+            .any(|p| p[3] == 255 && (p[0] != p[1] || p[1] != p[2]))
+    );
+    assert!(text.bounds.unwrap().width > h.width + rect.width - 4.);
+    // On the text's baseline: the H's ink ends 2 px above its bounds' bottom.
+    let baseline = h.y + h.height - 2.;
+    assert!(
+        (rect.y + rect.height - baseline).abs() < 8.,
+        "{rect:?} {h:?}"
+    );
+    // A repeated emoji shares one image.
+    let twice = outline("💡💡", 14., 2., [0, 0, 0], &style);
+    let [(_, a), (_, b)] = &twice.pictures[..] else {
+        panic!("two pictures expected");
+    };
+    assert_eq!(a.id(), b.id());
 }

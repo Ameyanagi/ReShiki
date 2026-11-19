@@ -4,7 +4,10 @@ mod glyphs;
 use super::{Point, Rectangle, rgb};
 use iced::{
     Color,
-    widget::canvas::{self, Path},
+    widget::{
+        canvas::{self, Path},
+        image::Handle,
+    },
 };
 use reshiki::typography::TextStyle;
 use std::{collections::HashMap, rc::Rc};
@@ -125,11 +128,13 @@ impl TextCache {
 
 pub(super) struct OutlinedText {
     pub paths: Vec<(Path, Color)>,
+    /// Colour glyphs (emoji), each a picture in the same coordinates as `paths`.
+    pub pictures: Vec<(Rectangle, Handle)>,
     pub bounds: Option<Rectangle>,
     cost: usize,
 }
 impl OutlinedText {
-    fn new(paths: Vec<(Path, Color)>) -> Self {
+    fn new(paths: Vec<(Path, Color)>, pictures: Vec<(Rectangle, Handle)>) -> Self {
         use iced::widget::canvas::path::lyon_path::Event;
         let mut low = Point::new(f32::INFINITY, f32::INFINITY);
         let mut high = Point::new(f32::NEG_INFINITY, f32::NEG_INFINITY);
@@ -158,6 +163,20 @@ impl OutlinedText {
                 }
             }
         }
+        // A repeated emoji shares one image; count its pixels once.
+        let mut images = std::collections::HashSet::new();
+        for (rect, handle) in &pictures {
+            low.x = low.x.min(rect.x);
+            low.y = low.y.min(rect.y);
+            high.x = high.x.max(rect.x + rect.width);
+            high.y = high.y.max(rect.y + rect.height);
+            cost += std::mem::size_of::<(Rectangle, Handle)>();
+            if let Handle::Rgba { id, pixels, .. } = handle
+                && images.insert(*id)
+            {
+                cost += pixels.len();
+            }
+        }
         let bounds = (cost > 0).then_some(Rectangle {
             x: low.x - 2.,
             y: low.y - 2.,
@@ -167,6 +186,7 @@ impl OutlinedText {
         cost += paths.len() * std::mem::size_of::<(Path, Color)>();
         Self {
             paths,
+            pictures,
             bounds,
             cost,
         }
@@ -220,11 +240,12 @@ fn outline_with_glyphs(
     // SVG's text-before-edge uses the font ascent. Align actual ink
     // to our shared font metrics so screen and export agree.
     let mut paths = Vec::new();
-    if let Some(glyphs) = glyphs {
-        glyphs.draw(&t, |path, color| paths.push((path, color)));
-    } else {
-        glyphs::Glyphs::default().draw(&t, |path, color| paths.push((path, color)));
-    }
+    let mut pictures = Vec::new();
+    glyphs.unwrap_or(&mut glyphs::Glyphs::default()).draw(
+        &t,
+        |path, color| paths.push((path, color)),
+        |rect, handle| pictures.push((rect, handle)),
+    );
     let actual_top = paths
         .iter()
         .flat_map(|(path, _)| path.raw().iter())
@@ -258,6 +279,7 @@ fn outline_with_glyphs(
                 Event::End { last, first, .. } => last.y.min(first.y),
             }
         })
+        .chain(pictures.iter().map(|(rect, _)| rect.y))
         .reduce(f32::min);
     let mut metrics_style = style.clone();
     metrics_style.underline = false;
@@ -274,7 +296,10 @@ fn outline_with_glyphs(
         .into_iter()
         .map(|(path, color)| (path.transform(&transform), color))
         .collect();
-    OutlinedText::new(paths)
+    for (rect, _) in &mut pictures {
+        rect.y += offset;
+    }
+    OutlinedText::new(paths, pictures)
 }
 
 #[cfg(test)]

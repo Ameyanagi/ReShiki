@@ -193,6 +193,16 @@ fn draw_primitives_with_opacity(
                     for (path, color) in &paths.paths {
                         frame.fill(&path.transform(&transform), alpha(*color));
                     }
+                    if !paths.pictures.is_empty() {
+                        frame.split();
+                        for (rect, handle) in &paths.pictures {
+                            frame.draw_image(
+                                text_rect(*rect, at, scale),
+                                canvas::Image::new(handle.clone()).opacity(opacity),
+                            );
+                        }
+                        frame.split();
+                    }
                 }
                 if style.underline {
                     let width = reshiki::style::styled_text_width(text, *size, style);
@@ -231,6 +241,16 @@ fn outlined_text(
 
 fn text_transform(at: Point, scale: f32) -> Transform {
     Transform::scale(scale, scale).then_translate(vector(at.x, at.y))
+}
+
+/// `rect` from outlined text, placed the way `text_transform` places its paths.
+fn text_rect(rect: Rectangle, at: Point, scale: f32) -> Rectangle {
+    Rectangle {
+        x: rect.x * scale + at.x,
+        y: rect.y * scale + at.y,
+        width: rect.width * scale,
+        height: rect.height * scale,
+    }
 }
 
 /// Whether `paths` drawn at `at`, scaled by `scale` and widened by `pad`,
