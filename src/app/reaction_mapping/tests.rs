@@ -855,3 +855,39 @@ async fn edit_atom_map_reveals_its_field_above_a_long_review() -> Result<(), Str
     );
     Ok(())
 }
+
+#[test]
+fn coloring_by_origin_hides_map_numbers_in_the_same_undo_step() {
+    let mut app = app();
+    let [r, p] = [app.tab.doc.atoms[0].id, app.tab.doc.atoms[1].id];
+    app.tab.doc = mapping::pair(&app.tab.doc, 3, &[r, p]).unwrap();
+    assert!(app.tab.doc.atom_labels.maps);
+    let frames = app.tab.history.undo_frames().len();
+    let _ = app.color_by_origin(3);
+    assert!(!app.error, "{}", app.status);
+    assert_eq!(app.status, crate::app::reactions::COLORED);
+    assert!(!app.tab.doc.atom_labels.maps);
+    assert!(app.tab.doc.reactions[0].colors.is_some());
+    assert_eq!(app.tab.history.undo_frames().len(), frames + 1);
+    // One Undo restores the visible maps without colors.
+    let colored = app.tab.doc.clone();
+    let _ = app.update(Message::Undo);
+    assert!(app.tab.doc.atom_labels.maps && app.tab.doc.reactions[0].colors.is_none());
+    let _ = app.update(Message::Redo);
+    assert_eq!(app.tab.doc, colored);
+    // Show maps brings the numbers back.
+    let _ = app.update(Message::Mapping(Action::Show(true)));
+    assert!(app.tab.doc.atom_labels.maps);
+}
+
+#[test]
+fn a_pending_color_by_origin_stays_with_its_own_arrow() {
+    use crate::app::reactions::Action as Reaction;
+    let mut app = app();
+    app.tab.reactions.color_after_maps = Some(3);
+    let _ = app.update(Message::Reaction(Reaction::Choose(3)));
+    assert_eq!(app.tab.reactions.color_after_maps, Some(3));
+    // Choosing another arrow drops it, so its Apply maps colors nothing.
+    let _ = app.update(Message::Reaction(Reaction::Choose(99)));
+    assert_eq!(app.tab.reactions.color_after_maps, None);
+}

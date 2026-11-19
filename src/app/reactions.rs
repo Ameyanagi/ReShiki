@@ -49,6 +49,14 @@ pub enum ColorSetting {
 /// A palette hue in a menu.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct HueChoice(pub reshiki::palette::Hue);
+/// `doc` with its map numbers hidden, as a colored figure reads best.
+pub(super) fn maps_hidden(doc: &reshiki::document::Document) -> reshiki::document::Document {
+    reshiki::reaction_mapping::set_maps_visible(doc, false)
+}
+
+/// The status after coloring by origin, which hides the map numbers.
+pub(super) const COLORED: &str = "Colored by origin; Show maps shows the map numbers";
+
 impl std::fmt::Display for HueChoice {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.0.name())
@@ -138,17 +146,22 @@ impl App {
     pub(super) fn color_by_origin(&mut self, arrow: u64) -> Task<Message> {
         use reshiki::reaction_colors::{Refusal, paint};
         let before = self.tab.doc.clone();
+        // A colored figure reads without map numbers.
+        self.tab.doc = maps_hidden(&before);
         match paint(&mut self.tab.doc, arrow) {
             Ok(()) => {
                 self.changed(before);
                 if !self.error {
-                    self.status = "Colored by origin".into();
+                    self.status = COLORED.into();
                 }
                 Task::none()
             }
             Err(Refusal::Maps) => {
                 self.tab.doc = before;
                 self.tab.reactions.color_after_maps = Some(arrow);
+                // The review stays with this arrow while its pairs are selected.
+                self.tab.reactions.arrow = Some(arrow);
+                self.tab.reactions.epoch = self.tab.file_epoch;
                 self.inspector_open = true;
                 self.inspector_tab = InspectorTab::Reactions;
                 Task::done(Message::Mapping(super::reaction_mapping::Action::Auto))
@@ -213,7 +226,13 @@ impl App {
                 arrow: Some(id),
                 epoch: self.tab.file_epoch,
                 preview: self.tab.reactions.preview.take(),
-                color_after_maps: self.tab.reactions.color_after_maps.take(),
+                // A pending Color by origin belongs to its own arrow.
+                color_after_maps: self
+                    .tab
+                    .reactions
+                    .color_after_maps
+                    .take()
+                    .filter(|a| *a == id),
             };
             self.tab.selected = vec![id];
             return Task::none();
@@ -225,7 +244,12 @@ impl App {
             arrow: Some(arrow),
             epoch: self.tab.file_epoch,
             preview: self.tab.reactions.preview.take(),
-            color_after_maps: self.tab.reactions.color_after_maps.take(),
+            color_after_maps: self
+                .tab
+                .reactions
+                .color_after_maps
+                .take()
+                .filter(|a| *a == arrow),
         };
         if let Action::Export(format) = action {
             if self.tab.busy {

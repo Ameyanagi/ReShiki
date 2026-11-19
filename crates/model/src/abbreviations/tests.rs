@@ -406,6 +406,15 @@ fn reconcile_keeps_moved_groups_and_drops_only_chemically_edited_ones() {
     doc.atom_mut(member).unwrap().element = "Si".into();
     doc.reconcile_abbreviations(&before);
     assert_eq!(doc.abbreviations, groups[..last]);
+
+    // Atom maps on members keep every group contracted (Auto-map maps
+    // through abbreviations such as PPh3).
+    let mut mapped = before.clone();
+    for (n, id) in groups.iter().flat_map(|g| g.members.clone()).enumerate() {
+        mapped.atom_mut(id).unwrap().map_num = n as u32 + 1;
+    }
+    mapped.reconcile_abbreviations(&before);
+    assert_eq!(mapped.abbreviations, groups);
 }
 
 /// Import only the chemical graph, keeping tests independent of depiction.

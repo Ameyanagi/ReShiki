@@ -252,19 +252,23 @@ impl App {
                 let color_step = std::mem::take(&mut self.tab.mapping.color_step);
                 // Color by origin asked for these maps: maps and colors are
                 // one Undo step.
+                let current = self.reaction_arrow();
                 let color = self.tab.reactions.color_after_maps.take().filter(|arrow| {
-                    // Only a review of that arrow's own reaction.
-                    let ids: std::collections::HashSet<_> = self
-                        .tab
-                        .doc
-                        .reactions
-                        .iter()
-                        .find(|r| r.arrow == *arrow)
-                        .map(|r| r.ids().into_iter().collect())
-                        .unwrap_or_default();
-                    proposal
-                        .as_ref()
-                        .is_some_and(|p| p.pairs.iter().any(|(a, _)| ids.contains(a)))
+                    // Only the arrow still under review.
+                    Some(*arrow) == current && {
+                        // Only a review of that arrow's own reaction.
+                        let ids: std::collections::HashSet<_> = self
+                            .tab
+                            .doc
+                            .reactions
+                            .iter()
+                            .find(|r| r.arrow == *arrow)
+                            .map(|r| r.ids().into_iter().collect())
+                            .unwrap_or_default();
+                        proposal
+                            .as_ref()
+                            .is_some_and(|p| p.pairs.iter().any(|(a, _)| ids.contains(a)))
+                    }
                 });
                 let mut colored = None;
                 self.commit_mapping(|before| {
@@ -279,23 +283,32 @@ impl App {
                                 &proposal.apply(&copy, true)?,
                             );
                             if color_step {
-                                colored =
-                                    Some(reshiki::cycles::steps::color(&mut doc, id, s).is_ok());
+                                let mut hidden = super::reactions::maps_hidden(&doc);
+                                let ok = reshiki::cycles::steps::color(&mut hidden, id, s).is_ok();
+                                if ok {
+                                    doc = hidden;
+                                }
+                                colored = Some(ok);
                             }
                             doc
                         }
                         None => proposal.apply(before, true)?,
                     };
-                    if let Some(arrow) = color {
-                        colored = Some(reshiki::reaction_colors::paint(&mut doc, arrow).is_ok());
+                    // A colored figure reads without map numbers; Show maps
+                    // brings them back.
+                    if let Some(arrow) = color.filter(|_| step.is_none()) {
+                        let mut hidden = super::reactions::maps_hidden(&doc);
+                        let ok = reshiki::reaction_colors::paint(&mut hidden, arrow).is_ok();
+                        if ok {
+                            doc = hidden;
+                        }
+                        colored = Some(ok);
                     }
                     Ok(doc)
                 });
                 if !self.error {
                     match colored {
-                        Some(true) => {
-                            self.status = "Atom maps applied and colored by origin".into()
-                        }
+                        Some(true) => self.status = super::reactions::COLORED.into(),
                         Some(false) => self.status = "No matching atoms to color".into(),
                         None => {}
                     }

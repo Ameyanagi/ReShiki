@@ -312,7 +312,12 @@ impl<'a> Target<'a> {
                 .map(|id| {
                     self.atoms
                         .get(id)
-                        .map(|atom| (**atom).clone())
+                        .map(|atom| {
+                            // Atom maps label a reaction, not the residue.
+                            let mut atom = (**atom).clone();
+                            atom.map_num = 0;
+                            atom
+                        })
                         .ok_or_else(|| invalid("Missing residue atom"))
                 })
                 .collect::<Result<Vec<_>>>()?,
@@ -491,8 +496,8 @@ pub(super) fn find(
         }
         if candidate.members.iter().any(|id| {
             target.atoms.get(id).is_none_or(|atom| {
+                // Atom maps may sit in a group.
                 atom.isotope != 0
-                    || atom.map_num != 0
                     || atom.stereo_group.is_some()
                     || !atom.marks.is_empty()
                     || atom.display.number.is_some()

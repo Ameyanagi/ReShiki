@@ -904,6 +904,8 @@ impl Document {
                 {
                     return true;
                 }
+                // Atom maps label atoms for a reaction; they leave the
+                // fragment's chemistry, and so the group, unchanged.
                 let atoms_unchanged = g.members.iter().all(|id| {
                     atoms
                         .get(id)
@@ -916,7 +918,6 @@ impl Document {
                                 a.explicit_h,
                                 a.no_implicit,
                                 a.radical_electrons,
-                                a.map_num,
                                 a.attachment,
                                 &a.centroid,
                             ) == (
@@ -926,7 +927,6 @@ impl Document {
                                 b.explicit_h,
                                 b.no_implicit,
                                 b.radical_electrons,
-                                b.map_num,
                                 b.attachment,
                                 &b.centroid,
                             )

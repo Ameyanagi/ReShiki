@@ -282,7 +282,9 @@ fn a_step_s_atom_map_review_shows_in_the_card_and_maps_the_drawing() {
     let _ = app.update(Message::Mapping(Mapping::ReviewPair(0)));
     assert!(app.cycle_card().is_none() && app.step_review_card().is_some());
     let _ = app.update(Message::Mapping(Mapping::ApplyProposal));
-    assert_eq!(app.status, "Atom maps applied and colored by origin");
+    assert_eq!(app.status, super::super::reactions::COLORED);
+    // The colored figure hides its map numbers in the same Undo step.
+    assert!(!app.tab.doc.atom_labels.maps);
     assert!(
         oa.iter()
             .all(|a| app.tab.doc.atom(*a).unwrap().map_num != 0)
