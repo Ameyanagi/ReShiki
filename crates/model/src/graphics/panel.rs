@@ -169,8 +169,8 @@ impl Graphic {
             _ => 0.,
         }
     }
-    /// Title band, page-colored title backings and dividers, drawn over the
-    /// panel's body in this order.
+    /// Title band, the breaks in the outline under border titles and
+    /// dividers, drawn over the panel's body in this order.
     pub fn panel_parts(&self, text_style: &TextStyle) -> Vec<Part> {
         let Some(panel) = &self.panel else {
             return vec![];
@@ -208,13 +208,17 @@ impl Graphic {
             ));
         }
         if panel.place == TitlePlace::Border {
+            // Only the outline under a title is broken: a box the title's
+            // height would cover a page gradient or a border behind the panel.
+            let reach = style::DEFAULT.world(self.style.width_pt * 0.5 + 0.5);
             for label in self.panel_titles(text_style) {
                 let gap = size * 0.3;
+                let edge = size * 0.5;
                 let (lo, hi) = (
-                    label.position.offset(-gap, 0.),
+                    label.position.offset(-gap, edge - reach),
                     label.position.offset(
                         style::styled_text_width(label.text, size, &label.style) + gap,
-                        size,
+                        edge + reach,
                     ),
                 );
                 parts.push(flat(

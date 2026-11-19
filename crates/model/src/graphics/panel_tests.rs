@@ -100,6 +100,17 @@ fn a_border_title_sits_on_the_top_edge_over_a_page_colored_backing() {
     let parts = g.panel_parts(&text);
     assert_eq!(parts.len(), 1);
     assert_eq!(parts[0].style.fill, Some(Color::Custom([255; 3])));
+    // The backing breaks only the outline: it never reaches far above or
+    // below the top edge, where it would cover a page gradient or border.
+    let ys: Vec<f32> = parts[0]
+        .commands
+        .iter()
+        .flat_map(|c| c.points())
+        .map(|p| p.y)
+        .collect();
+    let reach = crate::style::DEFAULT.world(g.style.width_pt * 0.5 + 0.5);
+    assert!(ys.iter().all(|y| y.abs() <= reach + 0.01), "{ys:?}");
+    assert!(ys.iter().any(|y| *y < 0.) && ys.iter().any(|y| *y > 0.));
     let [title] = g.panel_titles(&text).try_into().ok().unwrap();
     assert_eq!(title.style.color, g.style.stroke);
     assert!(title.position.y < 0. && title.position.y + title.size > 0.);

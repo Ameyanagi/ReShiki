@@ -194,3 +194,59 @@ fn wrap_opens_the_panel_card_whose_fill_and_shadow_change_only_the_panel() {
     assert_eq!(shape(&app, id).fill, None);
     assert_eq!(shape(&app, id).effects.gradient, None);
 }
+
+#[test]
+fn a_figure_layout_places_once_free_and_clear_contents_empties_one_panel() {
+    use crate::app::template_library::Action as A;
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    // An atom right where the layout is clicked: a layout never bonds to it.
+    let atom = app.tab.doc.add_atom("C", Point::new(400., 400.));
+    let index = reshiki::templates::LIBRARY
+        .iter()
+        .position(|t| t.name == "Previous work vs this work")
+        .unwrap();
+    let _ = app.update(Message::InsertTemplate(index));
+    let _ = app.update(Message::Templates(A::Repeat(true)));
+    app.edit(crate::canvas::Edit::Template(Point::new(400., 400.), None));
+    assert!(!app.error, "{}", app.status);
+    assert_eq!(app.tool, crate::canvas::Tool::Select, "placed once");
+    assert!(
+        app.tab.doc.bonds.iter().all(|b| b.a != atom && b.b != atom),
+        "joined to nothing"
+    );
+    let panels: Vec<u64> = app
+        .tab
+        .doc
+        .graphics
+        .iter()
+        .filter(|g| g.panel.is_some())
+        .map(|g| g.id)
+        .collect();
+    assert_eq!(panels.len(), 2);
+    let placed = app.tab.doc.clone();
+    let held = |app: &App, id| reshiki::graphics::panel::contents(&app.tab.doc, id).len();
+    let other = held(&app, panels[1]);
+    assert!(held(&app, panels[0]) > 0 && other > 0);
+
+    app.tab.selected = vec![panels[0]];
+    let _ = app.update(Message::Figure(Action::Clear));
+    assert!(!app.error, "{}", app.status);
+    assert_eq!(held(&app, panels[0]), 0);
+    assert_eq!(
+        held(&app, panels[1]),
+        other,
+        "the other panel keeps its scheme"
+    );
+    let frame = app.tab.doc.graphics.iter().find(|g| g.id == panels[0]);
+    assert!(frame.is_some_and(|g| !g.panel.as_ref().unwrap().titles.is_empty()));
+    assert_eq!(app.tab.selected, vec![panels[0]]);
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, placed, "one Undo step");
+    // An empty panel says so instead of recording an edit.
+    let _ = app.update(Message::Redo);
+    let cleared = app.tab.doc.clone();
+    let _ = app.update(Message::Figure(Action::Clear));
+    assert!(app.error);
+    assert_eq!(app.tab.doc, cleared);
+}

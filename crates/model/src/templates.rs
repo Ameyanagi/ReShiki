@@ -37,6 +37,10 @@ pub struct Template {
     pub anchor: Anchor,
 }
 impl Template {
+    /// A whole figure layout: placed free, once, never attached to an atom.
+    pub fn is_layout(&self) -> bool {
+        self.group == layouts::GROUP
+    }
     /// Built-in free placements follow the journal size; saved artwork keeps its size.
     pub fn place(
         &self,

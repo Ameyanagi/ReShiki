@@ -240,19 +240,34 @@ impl App {
         let Some(template) = self.templates.library.get(self.template_index) else {
             return;
         };
+        // A figure layout lands where it is clicked, once, joined to nothing.
+        let layout = template.is_layout();
         match template.place(
             &self.tab.doc,
             anchor,
             direction,
-            self.tab.camera.world_len(PICK_RADIUS_PX),
-            self.templates.anchor,
-            self.templates.connection,
+            if layout {
+                // Too small to reach an atom: the layout never attaches.
+                1e-3
+            } else {
+                self.tab.camera.world_len(PICK_RADIUS_PX)
+            },
+            if layout {
+                reshiki::templates::Anchor::Auto
+            } else {
+                self.templates.anchor
+            },
+            if layout {
+                reshiki::templates::Connection::Auto
+            } else {
+                self.templates.connection
+            },
         ) {
             Ok((document, selected)) => {
                 self.tab.doc = document;
                 self.tab.selected = selected;
                 self.sync_figure();
-                if !self.templates.repeat {
+                if !self.templates.repeat || layout {
                     self.tool = Tool::Select;
                 }
             }

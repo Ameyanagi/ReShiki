@@ -2089,9 +2089,27 @@ impl App {
             .width(Length::Fill)
             .height(145)
             .into();
+        body = body.push(horizontal_line()).push(text(&t.name).size(14));
+        if t.is_layout() {
+            // A whole figure: no atom to attach, placed once.
+            return body
+                .push(
+                    canvas(crate::canvas::TemplateThumbnail(&t.document))
+                        .width(Length::Fill)
+                        .height(145),
+                )
+                .push(
+                    panel_action("Place", Message::InsertTemplate(self.template_index))
+                        .style(crate::appearance::primary),
+                )
+                .push(
+                    text("Click the canvas or a page to place it.")
+                        .size(11)
+                        .style(muted_text),
+                )
+                .push(text(&t.note).size(11).style(muted_text));
+        }
         body = body
-            .push(horizontal_line())
-            .push(text(&t.name).size(14))
             .push(
                 crate::appearance::pick_list(
                     [
@@ -2241,6 +2259,28 @@ impl App {
             .size(11)
             .style(muted_text),
         );
+        // Layouts look alike at tile size: list them with their names.
+        if !empty && matches.iter().all(|(_, t)| t.is_layout()) {
+            for (index, template) in &matches {
+                body = body.push(
+                    button(
+                        row![
+                            canvas(crate::canvas::TemplateThumbnail(&template.document))
+                                .width(64)
+                                .height(44),
+                            text(template.name.as_str()).size(12).width(Length::Fill),
+                        ]
+                        .spacing(8)
+                        .align_y(Alignment::Center),
+                    )
+                    .padding(4)
+                    .width(Length::Fill)
+                    .style(control(state.active && self.template_index == *index))
+                    .on_press(Message::InsertTemplate(*index)),
+                );
+            }
+            return body;
+        }
         for tiles in matches.chunks(4) {
             let mut line = row![].spacing(4);
             for (index, template) in tiles {

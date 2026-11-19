@@ -12,6 +12,8 @@ use crate::{
 };
 use std::collections::HashMap;
 
+/// The template group of figure layouts.
+pub const GROUP: &str = "Figure layouts";
 const GUTTER_PT: f32 = 10.;
 
 /// A Kekulé benzene ring centered on `center`, as a placeholder structure.
@@ -132,7 +134,7 @@ fn template(
 ) -> Template {
     Template {
         id: String::new(),
-        group: "Figure layouts".into(),
+        group: GROUP.into(),
         name: name.into(),
         smiles: vec!["c1ccccc1"; rings].join("."),
         keywords: keywords.iter().map(|k| (*k).into()).collect(),
@@ -146,7 +148,7 @@ fn template(
 
 pub(super) fn templates() -> Result<Vec<Template>, String> {
     let r = crate::style::DEFAULT.bond_length_world;
-    let note = "The rings and arrows are illustrations, so they never form a reaction. Replace them with your structures. Option-click edits one object inside the panel.";
+    let note = "The rings and arrows are illustrations, so they never form a reaction. Select a panel and choose Clear contents, then paste or draw your scheme.";
 
     let mut toc = Document::default();
     let row = scheme(&mut toc, Point::default(), 2);
