@@ -390,6 +390,25 @@ fn each_validation_message_names_the_problem() {
     ];
     let more: Vec<(String, &str)> = vec![
         (
+            rejects(|v| v["holds"][0]["to"] = json!([0, -70])),
+            "Hold \"neck\" needs two different ends.",
+        ),
+        (
+            rejects(|v| v["holds"][0]["id"] = json!("top")),
+            "Hold \"top\" has the ID of a joint.",
+        ),
+        (
+            rejects(|v| v["holds"][0]["fit"] = json!("fill")),
+            "Hold \"neck\" fits \"fill\": only a jaw or slider fits, and only a millimetre range parameter.",
+        ),
+        (
+            rejects(|v| {
+                v["holds"][0]["kind"] = json!("jaw");
+                v["holds"][0]["fit"] = json!("valve");
+            }),
+            "Hold \"neck\" fits \"valve\": only a jaw or slider fits, and only a millimetre range parameter.",
+        ),
+        (
             rejects(|v| {
                 v["joints"][0]["poses"] =
                     json!({"valve": {"open": {"at": [0, -100], "dir": [0, 0]}}})

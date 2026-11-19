@@ -404,11 +404,12 @@ impl MoleculeCanvas<'_> {
                         hit.clone()
                     },
                 );
-                // A drag moves a piece's whole assembly; Alt pulls it out.
+                // A drag moves a piece's whole assembly, or slides what a
+                // stand holds along its rod; Alt pulls the piece out.
                 let ids = if state.modifiers.alt() {
                     reshiki::equipment::solve::detached(self.doc, &ids)
                 } else {
-                    reshiki::equipment::solve::closure(self.doc, &ids)
+                    reshiki::equipment::solve::carried(self.doc, &ids, &picked)
                 };
                 Gesture::Move {
                     start: p,

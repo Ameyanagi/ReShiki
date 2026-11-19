@@ -31,7 +31,7 @@ impl Affine {
     }
     /// Scale by `k` along the unit `axis` only, about `pivot`.
     pub fn stretch(k: f64, axis: Xy, pivot: Xy) -> Self {
-        let n = (axis[0] * axis[0] + axis[1] * axis[1]).sqrt();
+        let n = axis[0].hypot(axis[1]);
         let (ux, uy) = (axis[0] / n, axis[1] / n);
         let m = [
             1. + (k - 1.) * ux * ux,

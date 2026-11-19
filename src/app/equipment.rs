@@ -9,9 +9,9 @@ use iced::widget::{checkbox, column, container, row, text, tooltip};
 use iced::{Alignment, Element, Length, Task};
 use reshiki::document::{Document, Point};
 use reshiki::equipment::{
-    format::{Category, Definition, Gender},
+    format::{Category, Definition, Gender, HoldKind},
     placed,
-    solve::{self, JointRef, Offer, Snap},
+    solve::{self, JointRef, Offer, Port, Snap},
 };
 use std::{path::PathBuf, sync::Arc};
 
@@ -57,6 +57,8 @@ pub enum Action {
     Cancel,
     /// Release the seat at this joint and pull the pieces apart.
     Detach(JointRef),
+    /// Put a joint clip on every ground-glass seat of the selection.
+    AddClips,
     /// Show one library, or all.
     Shelf(Shelf),
     Import,
@@ -149,19 +151,74 @@ pub(crate) fn noun(d: &Definition) -> String {
 }
 
 /// "flask neck": the piece and one of its joints, as snapping names them.
+/// A hold is named by what it is: "stand rod", "clamp", "flask".
 pub(crate) fn joint_name(doc: &Document, j: &JointRef) -> String {
-    let piece = (doc.graphics.iter())
-        .find(|g| g.id == j.piece)
+    let g = doc.graphics.iter().find(|g| g.id == j.piece);
+    let piece = g
         .and_then(|g| g.piece.as_ref()?.linked.as_ref())
         .map_or_else(|| "piece".to_owned(), |d| noun(d));
-    format!("{piece} {}", j.joint.replace('-', " "))
+    let hold = g.and_then(|g| solve::ports(g).into_iter().find(|p| p.at == *j)?.hold());
+    match hold {
+        Some(HoldKind::Rail) => format!("{piece} rod"),
+        Some(_) => piece,
+        None => format!("{piece} {}", j.joint.replace('-', " ")),
+    }
+}
+
+/// What a seat at `port` with `partner` says: "Holds the clamp".
+fn seat_state(doc: &Document, port: &Port, partner: &JointRef) -> String {
+    let verb = match port.hold() {
+        Some(HoldKind::Rail) => "Holds the",
+        Some(HoldKind::Grip) => "Held by the",
+        Some(HoldKind::Slider) => "On the",
+        Some(HoldKind::Jaw) => "Grips the",
+        // A socket holds a cone; a cone sits in a socket.
+        None if port.gender == Gender::F => "Holds the",
+        None => "Seated in the",
+    };
+    let clip = if solve::clip_at(doc, &port.at).is_some() {
+        " · clipped"
+    } else {
+        ""
+    };
+    // A rod holds several clamps: say where along it each one is.
+    let at = (port.shared())
+        .then(|| {
+            let g = doc.graphics.iter().find(|g| g.id == partner.piece)?;
+            let p = solve::ports(g).into_iter().find(|p| p.at == *partner)?;
+            let c = [
+                p.point[0] + p.dir[0] * p.length / 2. - port.point[0],
+                p.point[1] + p.dir[1] * p.length / 2. - port.point[1],
+            ];
+            Some(format!(
+                " at {:.0} mm",
+                (c[0] * port.dir[0] + c[1] * port.dir[1]) / port.mm
+            ))
+        })
+        .flatten()
+        .unwrap_or_default();
+    format!("{verb} {}{at}{clip}", joint_name(doc, partner))
 }
 
 /// What a snap does, for the pill beside the joint and the status bar.
 pub(crate) fn snap_text(doc: &Document, snap: &Snap) -> String {
     let target = joint_name(doc, &snap.target.at);
+    let (held, holder) = if snap.target.gender == Gender::F {
+        (&snap.target, &snap.moving)
+    } else {
+        (&snap.moving, &snap.target)
+    };
     let mut text = match &snap.offer {
+        Offer::Seat if held.hold() == Some(HoldKind::Rail) => format!(
+            "Mount the {} on the {}",
+            joint_name(doc, &holder.at),
+            joint_name(doc, &held.at)
+        ),
+        Offer::Seat if held.hold().is_some() => {
+            format!("Hold the {} · {}", joint_name(doc, &held.at), held.size())
+        }
         Offer::Seat => format!("Seat on {target} · {}", snap.target.size()),
+        Offer::Clip => format!("Clip the {target} · {}", snap.target.size()),
         Offer::Adapter(d) => format!("Insert {} on {target}", name(d).replace(" to ", " → ")),
         Offer::Mismatch if snap.target.gender == snap.moving.gender => format!(
             "Two {} do not seat · no adapter fits",
@@ -318,6 +375,20 @@ impl App {
                 self.status = "Connect canceled".into();
                 self.error = false;
             }
+            Action::AddClips => {
+                let before = self.tab.doc.clone();
+                let ids = self.tab.selected.clone();
+                let added = solve::add_clips(&mut self.tab.doc, &ids);
+                self.tab.selected = solve::closure(&self.tab.doc, &ids);
+                self.changed(before);
+                if !self.error {
+                    self.status = match added {
+                        1 => "Added 1 joint clip".into(),
+                        n => format!("Added {n} joint clips"),
+                    };
+                }
+                return super::focus_drawing();
+            }
             Action::Detach(joint) => {
                 let before = self.tab.doc.clone();
                 let name = joint_name(&self.tab.doc, &joint);
@@ -413,7 +484,23 @@ impl App {
             Offer::Seat | Offer::Adapter(_) if !kept => {
                 format!("The layout moved the {moving}, so it is not seated")
             }
+            Offer::Seat if snap.target.hold().is_some() => {
+                let (held, holder) = if snap.target.gender == Gender::F {
+                    (&snap.target, &snap.moving)
+                } else {
+                    (&snap.moving, &snap.target)
+                };
+                let (held, holder) = (joint_name(doc, &held.at), joint_name(doc, &holder.at));
+                if snap.target.hold() == Some(HoldKind::Rail)
+                    || snap.moving.hold() == Some(HoldKind::Rail)
+                {
+                    format!("Mounted the {holder} on the {held}")
+                } else {
+                    format!("The {holder} holds the {held}")
+                }
+            }
             Offer::Seat => format!("Seated the {moving} on the {target}"),
+            Offer::Clip => format!("Clipped the {target}"),
             Offer::Adapter(d) => {
                 format!("Inserted the {}", title(d).to_lowercase())
             }
@@ -666,45 +753,43 @@ impl App {
             .align_y(Alignment::Center),
         ]
         .spacing(6);
-        // One piece: each joint, what is seated in it, and Detach.
+        // One piece: each joint and hold, what is seated on it, and Detach.
+        // A rod lists every clamp on it.
         if let [id] = self.tab.selected.as_slice()
             && let Some(g) = self.tab.doc.graphics.iter().find(|g| g.id == *id)
         {
             let doc = &self.tab.doc;
             for port in solve::ports(g) {
-                let partner = solve::partner(doc, &port.at);
-                let state = partner.as_ref().map_or_else(
-                    || "Free".to_owned(),
-                    |p| {
-                        // A socket holds a cone; a cone sits in a socket.
-                        let verb = if port.gender == Gender::F {
-                            "Holds"
-                        } else {
-                            "Seated in"
-                        };
-                        format!("{verb} the {}", joint_name(doc, p))
-                    },
-                );
-                let mut line = row![
-                    column![
-                        text(format!(
-                            "{} · {}",
-                            port.at.joint.replace('-', " "),
-                            port.size()
-                        ))
-                        .size(12),
-                        text(state).size(11).style(muted_text),
-                    ]
-                    .width(Length::Fill),
-                ]
-                .align_y(Alignment::Center);
-                if partner.is_some() {
-                    line = line.push(command(
-                        "Detach",
-                        Message::Equipment(Action::Detach(port.at.clone())),
-                    ));
+                let name = format!("{} · {}", port.at.joint.replace('-', " "), port.size());
+                let partners = solve::partners(doc, &port.at);
+                if partners.is_empty() {
+                    body = body.push(column![
+                        text(name).size(12),
+                        text("Free").size(11).style(muted_text)
+                    ]);
+                    continue;
                 }
-                body = body.push(line);
+                for (i, partner) in partners.iter().enumerate() {
+                    // Detach names the side a rod's seat is one of many on.
+                    let joint = if port.shared() { partner } else { &port.at };
+                    let mut lines = column![];
+                    if i == 0 {
+                        lines = lines.push(text(name.clone()).size(12));
+                    }
+                    body = body.push(
+                        row![
+                            lines
+                                .push(
+                                    text(seat_state(doc, &port, partner))
+                                        .size(11)
+                                        .style(muted_text)
+                                )
+                                .width(Length::Fill),
+                            command("Detach", Message::Equipment(Action::Detach(joint.clone()))),
+                        ]
+                        .align_y(Alignment::Center),
+                    );
+                }
             }
         }
         // An assembly: each seat in it, with Detach.
@@ -715,22 +800,45 @@ impl App {
                     .style(muted_text),
             );
             let doc = &self.tab.doc;
-            for seat in (doc.seats.iter()).filter(|s| {
-                self.tab.selected.contains(&s.a.piece) && self.tab.selected.contains(&s.b.piece)
-            }) {
+            let seats: Vec<_> = (doc.seats.iter())
+                .filter(|s| {
+                    self.tab.selected.contains(&s.a.piece) && self.tab.selected.contains(&s.b.piece)
+                })
+                .collect();
+            for seat in &seats {
+                // A rod holds many: detach the other side.
+                let joint = (doc.graphics.iter())
+                    .find(|g| g.id == seat.a.piece)
+                    .and_then(|g| solve::ports(g).into_iter().find(|p| p.at == seat.a))
+                    .map_or(&seat.a, |p| if p.shared() { &seat.b } else { &seat.a });
+                let clip = if seat.clip.is_some() {
+                    " · clipped"
+                } else {
+                    ""
+                };
                 body = body.push(
                     row![
                         text(format!(
-                            "{} · {}",
+                            "{} · {}{clip}",
                             joint_name(doc, &seat.a),
                             joint_name(doc, &seat.b)
                         ))
                         .size(12)
                         .width(Length::Fill),
-                        command("Detach", Message::Equipment(Action::Detach(seat.a.clone()))),
+                        command("Detach", Message::Equipment(Action::Detach(joint.clone()))),
                     ]
                     .align_y(Alignment::Center),
                 );
+            }
+            if solve::unclipped(doc, &self.tab.selected) > 0 {
+                body = body.push(hover_hint(
+                    command(
+                        "Add clips to all joints",
+                        Message::Equipment(Action::AddClips),
+                    ),
+                    "A joint clip of the right size on every ground-glass joint without one",
+                    tooltip::Position::Left,
+                ));
             }
         }
         // One kind of piece: keep it, export it, or update it.

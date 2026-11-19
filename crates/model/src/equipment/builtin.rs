@@ -3,7 +3,7 @@
 use super::format::{Definition, parse};
 use std::sync::{Arc, OnceLock};
 
-const FILES: [&str; 13] = [
+const FILES: [&str; 18] = [
     include_str!("../../../../assets/pieces/rbf-50-15.reshiki-piece"),
     include_str!("../../../../assets/pieces/rbf-100-15.reshiki-piece"),
     include_str!("../../../../assets/pieces/rbf-100-29.reshiki-piece"),
@@ -17,6 +17,11 @@ const FILES: [&str; 13] = [
     include_str!("../../../../assets/pieces/septum-29.reshiki-piece"),
     include_str!("../../../../assets/pieces/red-29-15.reshiki-piece"),
     include_str!("../../../../assets/pieces/exp-15-29.reshiki-piece"),
+    include_str!("../../../../assets/pieces/stand.reshiki-piece"),
+    include_str!("../../../../assets/pieces/clamp-3finger.reshiki-piece"),
+    include_str!("../../../../assets/pieces/ring.reshiki-piece"),
+    include_str!("../../../../assets/pieces/keck-clip-15.reshiki-piece"),
+    include_str!("../../../../assets/pieces/keck-clip-29.reshiki-piece"),
 ];
 
 /// Every built-in piece, in catalogue order. A file that fails its own check

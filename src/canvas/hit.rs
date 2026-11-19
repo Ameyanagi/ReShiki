@@ -262,6 +262,9 @@ fn hit_object_with_orbital(
                         reshiki::cycles::hit(doc, g, p, r)
                     } else {
                         g.hit_with_text_style(p, r, &doc.drawing_style.text_style())
+                            // A piece wins only where it shows above its assembly.
+                            && (g.piece.is_none()
+                                || reshiki::equipment::placed::on_top(doc, g.id, p, r))
                     }
             })
             .max_by_key(|(i, g)| (g.layer, *i))

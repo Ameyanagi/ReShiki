@@ -161,6 +161,27 @@ pub fn joints<'a>(def: &'a Definition, values: &Values) -> Vec<PosedJoint<'a>> {
     posed(def, values, &part_transforms(def, values))
 }
 
+/// The holds of `def` posed at `values` (already resolved).
+pub fn holds<'a>(def: &'a Definition, values: &Values) -> Vec<PosedHold<'a>> {
+    posed_holds(def, &part_transforms(def, values))
+}
+
+fn posed_holds<'a>(def: &'a Definition, parts: &BTreeMap<&str, Affine>) -> Vec<PosedHold<'a>> {
+    def.holds
+        .iter()
+        .map(|h| {
+            let m = (h.part.as_deref())
+                .and_then(|k| parts.get(k).copied())
+                .unwrap_or(Affine::IDENTITY);
+            PosedHold {
+                hold: h,
+                from: m.apply(h.from),
+                to: m.apply(h.to),
+            }
+        })
+        .collect()
+}
+
 fn posed<'a>(
     def: &'a Definition,
     values: &Values,
@@ -211,18 +232,7 @@ pub fn evaluate<'a>(def: &'a Definition, values: &Values) -> Result<Evaluated<'a
         }
     }
     let joints = posed(def, values, &parts);
-    let holds = def
-        .holds
-        .iter()
-        .map(|h| {
-            let m = of(&h.part);
-            PosedHold {
-                hold: h,
-                from: m.apply(h.from),
-                to: m.apply(h.to),
-            }
-        })
-        .collect();
+    let holds = posed_holds(def, &parts);
     let mut liquids = Vec::new();
     for l in &def.liquids {
         let fill = def.params.iter().find_map(|p| match p {

@@ -276,8 +276,9 @@ Atom maps and colors are one Undo step each and are saved with the drawing.
 
 Lab equipment is a preview in this build. The catalogue has round-bottom
 flasks (50 and 100 mL with 15/25 joints; 100, 300 and 500 mL with 29/42),
-Liebig condensers, glass stoppers, rubber septa and a reducing and an
-expansion adapter.
+Liebig condensers, glass stoppers, rubber septa, a reducing and an
+expansion adapter, a lab stand, a three-finger clamp, a support ring and
+joint clips for 15/25 and 29/42.
 
 1. Click **Equipment** (the flask in the last row of the tools palette), or
    choose **Insert equipment…** in the command palette. The side panel lists
@@ -332,6 +333,34 @@ An assembly keeps one layer. A piece that seats onto an assembly behind the
 structures goes behind them too, and the label says **Goes behind the
 structures**. Undo reverses a snap, an inserted adapter and a pull-out in one
 step.
+
+### Hold equipment: stands, clamps and clips
+
+Clamps and stands hold glass the way they do on the bench, with depth: a
+clamp's back fingers pass behind the neck it holds and its front finger in
+front, and the stand's rod runs behind the flask. Exports and ChemDraw files
+keep that order.
+
+1. Drag a clamp so its jaws come near a flask's neck. The label says **Hold
+   the flask · Ø13 mm**; release, and the fingers close on the neck whatever
+   its size.
+2. Drag the clamp, or the flask it holds, so the clamp's boss comes near the
+   rod of a stand. The label says **Mount the clamp on the stand rod**.
+   Dragging the stand to a clamp works too: the stand stays where you put it
+   and the clamp comes to its rod.
+3. Drag the flask or the clamp to slide them up and down the rod; they stop
+   at its ends. The stand stays put. Drag the stand to move everything, or
+   Option-drag (Alt-drag) the clamp to take it and the flask off the rod.
+
+A rod holds any number of clamps. **Properties → Equipment** lists each clamp
+on the rod with its height along the rod, for example **Holds the clamp at
+280 mm**, and **Detach**. The support ring mounts on a rod the same way.
+
+Joint clips go on seated ground-glass joints. Select an assembly and click
+**Add clips to all joints** in Properties, or pick a clip in the Equipment
+panel and click near a joint of its size; the label says **Clip the flask
+neck · 29/42**. A clip moves with its joint and goes when the joint is
+detached; select it alone with Option-click to delete it.
 
 ### Keep and share equipment pieces
 
@@ -430,8 +459,8 @@ cm**, **RSC graphical abstract · 8 × 4 cm** or **Elsevier graphical abstract �
   check.
 - Color by origin on a cycle uses the default hues and has no legend; its
   settings are not kept. Undo removes it.
-- Equipment pieces snap only by their joints. Clamps, stands and clips come
-  later, and the liquid level and other parameters cannot be changed yet.
+- The liquid level, a clamp's tilt and other parameters cannot be changed
+  yet. Nothing sits in a support ring until pieces with a place for it come.
   ChemDraw gets each piece as a group of curves; opening that file again
   gives those curves, not a piece.
 - A drawing with equipment saves as document version 40 and carries the

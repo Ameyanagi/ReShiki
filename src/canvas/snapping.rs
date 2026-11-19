@@ -30,6 +30,17 @@ impl MoleculeCanvas<'_> {
     ) -> (World, Vec<Guide>) {
         let modifiers = state.modifiers;
         let copies = self.copies(modifiers);
+        // Pieces held on a stand slide along its rod; Option pulls them off.
+        if !copies
+            && !modifiers.alt()
+            && let Some(d) = reshiki::equipment::solve::constrain(
+                self.doc,
+                ids,
+                [f64::from(requested.x), f64::from(requested.y)],
+            )
+        {
+            return (World::new(d[0] as f32, d[1] as f32), vec![]);
+        }
         let delta = if copies {
             if modifiers.shift() {
                 movement::axis_locked(requested)

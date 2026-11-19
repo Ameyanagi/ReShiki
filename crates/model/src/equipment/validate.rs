@@ -150,10 +150,29 @@ pub fn validate(d: &Definition) -> Result<(), String> {
         }
         point(&format!("Hold \"{}\"", h.id), h.from)?;
         point(&format!("Hold \"{}\"", h.id), h.to)?;
+        if h.from == h.to {
+            return Err(format!("Hold \"{}\" needs two different ends.", h.id));
+        }
+        // A seat names a joint or a hold by ID, so one ID cannot be both.
+        if d.joints.iter().any(|j| j.id() == h.id) {
+            return Err(format!("Hold \"{}\" has the ID of a joint.", h.id));
+        }
         if let Some(k) = &h.part
             && !parts.contains_key(k.as_str())
         {
             return Err(format!("Hold \"{}\" names a missing part \"{k}\".", h.id));
+        }
+        if let Some(k) = &h.fit {
+            let mm_range = d
+                .params
+                .iter()
+                .any(|p| matches!(p, Param::Range { id, unit: Unit::Mm, .. } if id == k));
+            if h.kind.held() || !mm_range {
+                return Err(format!(
+                    "Hold \"{}\" fits \"{k}\": only a jaw or slider fits, and only a millimetre range parameter.",
+                    h.id
+                ));
+            }
         }
     }
     for l in &d.liquids {
