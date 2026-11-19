@@ -94,3 +94,36 @@ fn ring_fill_effects_paint_save_and_need_version_40() {
     let json = serde_json::to_value(&doc.ring_fills[0]).unwrap();
     assert!(json.get("effect").is_none(), "{json}");
 }
+
+#[test]
+fn a_ring_glows_or_sits_on_a_disc_past_its_bonds() {
+    use crate::scene::Primitive;
+    let mut doc = Document::default();
+    let ring = crate::editing::ring(&mut doc, Point::new(0., 0.), 6, false, 1.);
+    apply(&mut doc, &ring, Some(Color::Custom([0, 0, 255])));
+    let reach = |p: &Primitive| {
+        let (lo, hi) = crate::scene::bounds(std::slice::from_ref(p));
+        (hi.x - lo.x) / 2.
+    };
+    let ring_radius = reach(&doc.ring_fills[0].primitive(&doc).unwrap());
+    set_effect(&mut doc, &ring, RingEffect::Glow);
+    let glow = doc.ring_fills[0].primitive(&doc).unwrap();
+    assert!(matches!(
+        glow,
+        Primitive::Glow {
+            color: [0, 0, 255],
+            ..
+        }
+    ));
+    assert!(reach(&glow) > ring_radius * 1.2);
+    set_effect(&mut doc, &ring, RingEffect::Disc);
+    let disc = doc.ring_fills[0].primitive(&doc).unwrap();
+    assert!(matches!(disc, Primitive::Path { filled: true, .. }));
+    // Around the farthest atom, a little wider.
+    assert!(
+        reach(&disc) > ring_radius * 1.1,
+        "{} {ring_radius}",
+        reach(&disc)
+    );
+    assert_eq!(doc.file_version(), crate::document::DRAWING_ELEMENTS);
+}

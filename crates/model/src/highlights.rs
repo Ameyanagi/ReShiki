@@ -15,6 +15,36 @@ const KAPPA: f32 = 0.552_284_8;
 // Cubic circle segments overshoot the true radius by at most 0.0273%.
 pub(crate) const CAPSULE_RADIUS_SCALE: f32 = 1.0003;
 
+/// How the drawing paints its atom and bond highlights.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum HighlightStyle {
+    /// ChemDraw's flat highlight: a band along bonds, a pill around atoms.
+    #[default]
+    Flat,
+    /// The flat highlight grown and blurred into a soft halo.
+    Glow,
+    /// A round disc behind each highlighted atom.
+    Disc,
+}
+impl HighlightStyle {
+    pub const ALL: [Self; 3] = [Self::Flat, Self::Glow, Self::Disc];
+    pub fn is_flat(&self) -> bool {
+        *self == Self::Flat
+    }
+}
+impl std::fmt::Display for HighlightStyle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::Flat => "Flat",
+            Self::Glow => "Soft glow",
+            Self::Disc => "Disc",
+        })
+    }
+}
+/// A disc's radius over the flat highlight's.
+const DISC: f32 = 1.6;
+
 pub(crate) fn radius(style: &crate::style::DrawingStyle) -> f32 {
     style.bond_length_world * style.bond_spacing_ratio * 1.5 + style.line_width() / 2.
 }
@@ -375,6 +405,7 @@ pub(crate) fn primitives_with_opacity(
         // color can overpaint it (including unrelated crossing bonds). Avoid
         // drawing that same boundary twice and darkening its antialiased edge.
         if !opacity.has_visibility()
+            && doc.highlight_style != HighlightStyle::Disc
             && a == b
             && rx == ry
             && bonds.len() == 1
@@ -382,7 +413,14 @@ pub(crate) fn primitives_with_opacity(
         {
             continue;
         }
-        let commands = capsule(a, b, Point::new(rx, 0.), Point::new(0., ry));
+        let commands = if doc.highlight_style == HighlightStyle::Disc {
+            // A circle around the label's pill, centered on its middle.
+            let r = DISC * (rx + a.distance(b) / 2.).max(ry);
+            let center = a.lerp(b, 0.5);
+            capsule(center, center, Point::new(r, 0.), Point::new(0., r))
+        } else {
+            capsule(a, b, Point::new(rx, 0.), Point::new(0., ry))
+        };
         if !opacity.has_visibility() {
             atoms
                 .entry((color, 1_f32.to_bits()))
@@ -399,6 +437,7 @@ pub(crate) fn primitives_with_opacity(
             );
         }
     }
+    let painted = |parts: Vec<Primitive>| glowing(doc, parts);
     if opacity.has_visibility() {
         // Batch translucent rear paint to avoid doubling identical endpoint
         // halos. Keep opaque front atoms above opaque bond halos across colors,
@@ -414,13 +453,42 @@ pub(crate) fn primitives_with_opacity(
                 }
             });
         }
-        opacity_paths(rear)
-            .chain(opacity_paths(bonds))
-            .chain(opacity_paths(atoms))
-            .collect()
+        painted(
+            opacity_paths(rear)
+                .chain(opacity_paths(bonds))
+                .chain(opacity_paths(atoms))
+                .collect(),
+        )
     } else {
-        opacity_paths(bonds).chain(opacity_paths(atoms)).collect()
+        painted(opacity_paths(bonds).chain(opacity_paths(atoms)).collect())
     }
+}
+
+/// The highlight paths as soft glows when the drawing asks for them.
+fn glowing(doc: &Document, parts: Vec<Primitive>) -> Vec<Primitive> {
+    if doc.highlight_style != HighlightStyle::Glow {
+        return parts;
+    }
+    let r = radius(&doc.drawing_style);
+    fn glow(part: Primitive, doc: &Document, r: f32) -> Primitive {
+        match part {
+            Primitive::Opacity { alpha, primitive } => Primitive::Opacity {
+                alpha,
+                primitive: Box::new(glow(*primitive, doc, r)),
+            },
+            Primitive::Path {
+                commands, style, ..
+            } => crate::scene::glow_primitive(
+                commands,
+                style.fill.unwrap_or(style.stroke),
+                r * 0.4,
+                r * 0.5,
+                doc,
+            ),
+            part => part,
+        }
+    }
+    parts.into_iter().map(|part| glow(part, doc, r)).collect()
 }
 
 /// Whether a drawing carries any highlight paint, including collapsed members.
@@ -544,6 +612,69 @@ pub(crate) fn inherit_merged(doc: &mut Document, mapping: &HashMap<u64, u64>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_drawing_paints_every_highlight_flat_as_a_glow_or_as_a_disc() {
+        let mut doc = Document::default();
+        let a = doc.add_atom("C", Point::default());
+        let b = doc.add_atom("C", Point::new(42., 0.));
+        doc.add_bond(a, b, 1, "plain");
+        let blue = Color::Custom([0, 0, 255]);
+        doc.bonds[0].highlight = Some(blue);
+        doc.atoms[0].display.highlight = Some(blue);
+        let paint =
+            |doc: &Document| primitives_with_opacity(doc, &crate::rear_opacity::Paint::new(doc));
+        assert!(
+            paint(&doc)
+                .iter()
+                .all(|p| matches!(p, Primitive::Path { .. }))
+        );
+        assert_eq!(doc.file_version(), Document::default().file_version());
+
+        doc.highlight_style = HighlightStyle::Glow;
+        let glows = paint(&doc);
+        assert!(!glows.is_empty());
+        for glow in &glows {
+            let Primitive::Glow {
+                color,
+                spread,
+                blur,
+                ..
+            } = glow
+            else {
+                panic!("a glow: {glow:?}");
+            };
+            assert_eq!(*color, [0, 0, 255]);
+            assert!(*spread > 0. && *blur > 0.);
+        }
+        // Export leaves room for the glow's soft edge.
+        let (lo, _) = crate::scene::bounds(&glows);
+        assert!(lo.x < -radius(&doc.drawing_style) * 1.5, "{lo:?}");
+        let svg = crate::scene::svg(&doc);
+        assert!(svg.contains("<feGaussianBlur"), "{svg}");
+        assert_eq!(doc.file_version(), crate::document::DRAWING_ELEMENTS);
+
+        doc.highlight_style = HighlightStyle::Disc;
+        // Atoms paint after bonds, so the disc is the last path.
+        let Some(Primitive::Path { commands, .. }) = paint(&doc).pop() else {
+            panic!("a disc");
+        };
+        let disc = commands
+            .iter()
+            .flat_map(PathCommand::points)
+            .map(|p| p.distance(Point::default()))
+            .fold(0., f32::max);
+        // The atom's disc reaches past the flat highlight's pill.
+        assert!(disc > DISC * 0.99 * radius(&doc.drawing_style), "{disc}");
+        let json = serde_json::to_value(&doc).unwrap();
+        assert_eq!(json["highlight_style"], "disc");
+        let back: Document = serde_json::from_value(json).unwrap();
+        assert_eq!(back.highlight_style, HighlightStyle::Disc);
+        assert_eq!(
+            crate::graphics::export_notice(&doc),
+            [crate::graphics::GLOW_NOTICE]
+        );
+    }
 
     #[test]
     fn centered_double_highlight_contains_joined_rail_corners() {

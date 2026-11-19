@@ -599,6 +599,15 @@ impl App {
             n => format!("{effect} fill on {n} rings"),
         };
     }
+    pub(super) fn apply_highlight_style(&mut self, style: reshiki::highlights::HighlightStyle) {
+        if self.tab.doc.highlight_style == style {
+            return;
+        }
+        let before = self.tab.doc.clone();
+        self.tab.doc.highlight_style = style;
+        self.changed(before);
+        self.status = format!("{style} highlights in this drawing");
+    }
     /// The effect every selected ring fill shares, if they share one.
     pub(super) fn selected_ring_effect(&self) -> Option<reshiki::ring_fills::RingEffect> {
         let cycles = reshiki::ring_fills::selected_cycles(&self.tab.doc, &self.tab.selected);

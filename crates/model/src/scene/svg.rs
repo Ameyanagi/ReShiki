@@ -497,6 +497,33 @@ fn push_svg(s: &mut String, drawing: Vec<Primitive>, frame: &Frame, halos: &mut 
                     path_data(&commands)
                 ));
             }
+            Primitive::Glow {
+                commands,
+                color: [r, g, b],
+                alpha,
+                spread,
+                blur,
+            } => {
+                frame.gradients.set(frame.gradients.get() + 1);
+                let id = format!("reshiki-glow-{}", frame.gradients.get());
+                // The blur's own region, so nothing of the glow is clipped.
+                let (lo, hi) = super::bounds(&[Primitive::Glow {
+                    commands: commands.clone(),
+                    color: [r, g, b],
+                    alpha,
+                    spread,
+                    blur,
+                }]);
+                s.push_str(&format!(
+                    "<defs><filter id=\"{id}\" filterUnits=\"userSpaceOnUse\" x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\"><feGaussianBlur stdDeviation=\"{blur}\"/></filter></defs><g opacity=\"{alpha}\" filter=\"url(#{id})\"><path d=\"{}\" fill=\"rgb({r},{g},{b})\" stroke=\"rgb({r},{g},{b})\" stroke-width=\"{}\" stroke-linejoin=\"round\"/></g>",
+                    lo.x,
+                    lo.y,
+                    hi.x - lo.x,
+                    hi.y - lo.y,
+                    path_data(&commands),
+                    2. * spread
+                ));
+            }
             Primitive::Card {
                 lo,
                 hi,
@@ -634,7 +661,8 @@ fn push_halo(s: &mut String, primitives: &[Primitive], radius: f32, color: &str)
             | Primitive::Contour { .. }
             | Primitive::Wire { .. }
             | Primitive::Card { .. }
-            | Primitive::Gradient { .. } => {}
+            | Primitive::Gradient { .. }
+            | Primitive::Glow { .. } => {}
         }
     }
 }

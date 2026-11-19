@@ -60,7 +60,21 @@ draw a rectangle over the area, give it a gradient and choose **Send to back**.
 
 To change a ring interior, select the whole ring, open the color button's
 **Ring interiors** and choose a **Fill effect**: **Flat**, **Gradient** (the
-paper color at the middle of the ring into its color) or **See-through**.
+paper color at the middle of the ring into its color), **See-through**, **Soft glow** (a
+halo of the color around the ring) or **Disc** (a round disc behind the ring,
+a little wider than its atoms).
+
+### Glowing highlights
+
+Open the color button, choose **Apply to → Highlights** and pick a **Highlight
+style**. It applies to every atom and bond highlight in the drawing:
+
+- **Flat**: ChemDraw's band along bonds and pill around atoms.
+- **Soft glow**: the same shape, grown and blurred into a halo.
+- **Disc**: a round disc behind each highlighted atom; bonds keep their band.
+
+The style is one Undo step. Glows are drawn on the canvas and in PNG, SVG and
+PDF, and export bounds include their soft edge.
 
 Each change is one Undo step. Gradients and see-through fills are drawn on the
 canvas and in PNG, SVG and PDF, on the light and dark canvas.
@@ -201,6 +215,8 @@ cm**, **RSC graphical abstract · 8 × 4 cm** or **Elsevier graphical abstract �
   lines, curves and arrows open in ChemDraw as solid strokes.
 - ChemDraw has shadows only on rectangles and ovals, so a shadow on a rotated
   rectangle or a path is not written to CDXML or CDX.
+- ChemDraw has no glows or discs. Highlights export as ChemDraw's flat
+  highlight and glowing or disc ring fills as flat ring fills, with a notice.
 - ChemDraw has no gradient or see-through fills. A gradient is written as the
   flat color halfway along it. A see-through fill in its outline's color is
   written as ChemDraw's faded fill, which covers what lies behind it; other
@@ -291,7 +307,13 @@ box). SVG writes it as a native `linearGradient` or `radialGradient` with a
 `gradientTransform`, so PDF and PNG keep it exact, and the canvas draws it with
 resvg from the same SVG, as it does 3D models. Its colors are the ones the flat
 fill would show on the canvas. A see-through fill wraps the fill in an
-`Opacity` primitive.
+`Opacity` primitive. A glow is a `Glow` primitive: the shape filled and stroked
+`spread` wider, under an SVG `feGaussianBlur` whose filter region covers three
+standard deviations; svg2pdf rasterizes the blur in PDF. Highlights glow with a
+spread of 0.4 and a blur of 0.5 highlight radii; ring fills with 0.1 and 0.2
+bond lengths. A highlight disc is 1.6 times the flat highlight's radius; a ring
+disc reaches 1.15 times past its farthest atom. `Document::highlight_style`
+stores the drawing's style (document version 40).
 
 CDXML does not keep ReShiki's parametric shape type. External saves may split
 grouped bracket strokes, change stacking values and quantize colors/coordinates.

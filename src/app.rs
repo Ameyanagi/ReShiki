@@ -258,6 +258,7 @@ pub enum Message {
     ColorScope(typography::ColorScope),
     ClearRingFill,
     RingEffect(reshiki::ring_fills::RingEffect),
+    HighlightStyle(reshiki::highlights::HighlightStyle),
     ClearHighlights,
     TextColor(String),
     ApplyTextColor,

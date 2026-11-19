@@ -513,10 +513,11 @@ impl Writer<'_> {
             // fragment and references bonds, so atom edits reshape its fill.
             let id = self.id()?;
             // ChemDraw paints a ring fill flat: a gradient as the color halfway
-            // along it, a see-through one as it shows over white paper.
+            // along it, a see-through one as it shows over white paper, and a
+            // glow or disc as the ring's own fill.
             let rgb = self.palette.rgb(fill.color);
             let color = self.color(match fill.effect {
-                RingEffect::Flat => fill.color,
+                RingEffect::Flat | RingEffect::Glow | RingEffect::Disc => fill.color,
                 RingEffect::Gradient => mix([255; 3], rgb, 0.5),
                 RingEffect::SeeThrough => mix([255; 3], rgb, crate::graphics::Effects::SEE_THROUGH),
             })?;

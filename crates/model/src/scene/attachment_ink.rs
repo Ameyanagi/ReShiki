@@ -233,7 +233,8 @@ fn intersects_fraction(part: &Primitive, origin: Point, axis: Point, at: f32) ->
         | Primitive::ShadedPolygon { .. }
         | Primitive::Contour { .. }
         | Primitive::Wire { .. }
-        | Primitive::Card { .. } => false,
+        | Primitive::Card { .. }
+        | Primitive::Glow { .. } => false,
     }
 }
 

@@ -526,6 +526,7 @@ pub(crate) fn remap_ids(doc: &mut Document, mapping: &HashMap<u64, u64>) -> Opti
         abbreviations,
         atom_labels: _,
         ring_fills,
+        highlight_style: _,
         depth_appearance,
         version: _,
         atoms,

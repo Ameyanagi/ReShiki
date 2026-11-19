@@ -271,7 +271,7 @@ pub const PROPERTY_CAPTIONS: u32 = 38;
 /// A name line or a custom name in a property caption.
 pub const CAPTION_NAMES: u32 = 39;
 /// Drawing-element styles: shading, drop shadows, wavy strokes, arrowheads
-/// on lines, corner radii, gradient and see-through fills; Reference and
+/// on lines, corner radii, gradient and see-through fills, glows; Reference and
 /// Illustration molecules and arrows; color by origin settings on reactions;
 /// figure panels and lasting row, column and grid layouts.
 pub const DRAWING_ELEMENTS: u32 = 40;
@@ -284,8 +284,8 @@ pub const DRAWING_ELEMENTS: u32 = 40;
 /// with three or four radical electrons require version 37, linked
 /// property captions require version 38, a property caption with a name
 /// requires version 39, or shading, drop shadows, wavy strokes, arrowheads
-/// on lines, corner radii, gradient and see-through fills, a Reference or
-/// Illustration molecule or arrow, color by origin settings, figure panels,
+/// on lines, corner radii, gradient and see-through fills, glows, a
+/// Reference or Illustration molecule or arrow, color by origin settings, figure panels,
 /// lasting layouts, arrow bodies, badges, arcs or callout leaders require
 /// version 40.
 /// Optional atom-label settings, including steroid α/β display, retain this
@@ -325,7 +325,7 @@ pub const DRAWING_ELEMENTS: u32 = 40;
 /// | 37 | Three or four radical electrons on an atom. |
 /// | 38 | Property captions linked to their molecules (#1175). |
 /// | 39 | Names in property captions: a name line and custom names. |
-/// | 40 | Drawing release: shading, drop shadows, wavy strokes, arrowheads on lines, corner radii, gradient and see-through fills; object purpose (Reference, Illustration); color by origin; figure panels and lasting layouts; arrow bodies, shaft badges, arc arrows and callout leaders. |
+/// | 40 | Drawing release: shading, drop shadows, wavy strokes, arrowheads on lines, corner radii, gradient and see-through fills, glows and discs; object purpose (Reference, Illustration); color by origin; figure panels and lasting layouts; arrow bodies, shaft badges, arc arrows and callout leaders. |
 pub const VERSION: u32 = 40;
 
 /// Bytes of text in one annotation. Layout time grows faster than the text.
@@ -368,6 +368,12 @@ pub struct Document {
     pub atom_labels: crate::atom_labels::Settings,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub ring_fills: Vec<crate::ring_fills::RingFill>,
+    /// How every atom and bond highlight in the drawing is painted.
+    #[serde(
+        default,
+        skip_serializing_if = "crate::highlights::HighlightStyle::is_flat"
+    )]
+    pub highlight_style: crate::highlights::HighlightStyle,
     /// Editable projection paint; ordinary foreground and fill colors remain
     /// the base colors restored by clearing the depth appearance.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -411,6 +417,7 @@ impl Default for Document {
         Self {
             generic: Default::default(),
             ring_fills: vec![],
+            highlight_style: Default::default(),
             depth_appearance: vec![],
             version: EDITOR_BASELINE,
             drawing_style: Default::default(),
@@ -523,6 +530,7 @@ impl Document {
                 .ring_fills
                 .iter()
                 .any(|f| f.effect != crate::ring_fills::RingEffect::Flat)
+            || !self.highlight_style.is_flat()
         {
             DRAWING_ELEMENTS
         } else if self.property_captions.iter().any(|link| {
@@ -830,6 +838,7 @@ impl Document {
             abbreviations,
             atom_labels: _,
             ring_fills,
+            highlight_style: _,
             depth_appearance,
             version: _,
             atoms,
@@ -873,6 +882,7 @@ impl Document {
             abbreviations,
             atom_labels: _,
             ring_fills,
+            highlight_style: _,
             depth_appearance,
             version: _,
             atoms,

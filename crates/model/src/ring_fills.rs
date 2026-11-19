@@ -27,9 +27,19 @@ pub enum RingEffect {
     Gradient,
     /// The color at half strength, so what lies behind shows through.
     SeeThrough,
+    /// A soft halo of the color around the ring.
+    Glow,
+    /// A round disc of the color behind the ring, reaching past its bonds.
+    Disc,
 }
 impl RingEffect {
-    pub const ALL: [Self; 3] = [Self::Flat, Self::Gradient, Self::SeeThrough];
+    pub const ALL: [Self; 5] = [
+        Self::Flat,
+        Self::Gradient,
+        Self::SeeThrough,
+        Self::Glow,
+        Self::Disc,
+    ];
 }
 impl std::fmt::Display for RingEffect {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -37,6 +47,8 @@ impl std::fmt::Display for RingEffect {
             Self::Flat => "Flat",
             Self::Gradient => "Gradient",
             Self::SeeThrough => "See-through",
+            Self::Glow => "Soft glow",
+            Self::Disc => "Disc",
         })
     }
 }
@@ -168,6 +180,20 @@ impl RingFill {
                 alpha: crate::graphics::Effects::SEE_THROUGH,
                 primitive: Box::new(flat(commands)),
             },
+            RingEffect::Glow => {
+                let bond = doc.drawing_style.bond_length_world;
+                crate::scene::glow_primitive(commands, self.color, bond * 0.1, bond * 0.2, doc)
+            }
+            RingEffect::Disc => {
+                // The circle through the ring's farthest atom, a little wider.
+                let points: Vec<_> = commands.iter().flat_map(PathCommand::points).collect();
+                let n = points.len().max(1) as f32;
+                let center = points
+                    .iter()
+                    .fold(Point::default(), |c, p| c.offset(p.x / n, p.y / n));
+                let r = points.iter().map(|p| p.distance(center)).fold(0., f32::max) * DISC;
+                flat(circle(center, r))
+            }
             RingEffect::Gradient => {
                 let (origin, x, y) = crate::graphics::bounding_frame(&commands)?;
                 crate::scene::gradient_primitive(
@@ -288,6 +314,23 @@ pub fn selected_cycles(doc: &Document, selected: &[u64]) -> Vec<Vec<u64>> {
     }
     cycles.into_iter().collect()
 }
+/// A disc's radius over the ring's own.
+const DISC: f32 = 1.15;
+
+/// A circle of four cubic quarters.
+fn circle(c: Point, r: f32) -> Vec<PathCommand> {
+    const K: f32 = 0.552_284_8;
+    let p = |x: f32, y: f32| c.offset(x * r, y * r);
+    vec![
+        PathCommand::Move(p(1., 0.)),
+        PathCommand::Cubic(p(1., K), p(K, 1.), p(0., 1.)),
+        PathCommand::Cubic(p(-K, 1.), p(-1., K), p(-1., 0.)),
+        PathCommand::Cubic(p(-1., -K), p(-K, -1.), p(0., -1.)),
+        PathCommand::Cubic(p(K, -1.), p(1., -K), p(1., 0.)),
+        PathCommand::Close,
+    ]
+}
+
 /// Paint the selected rings' fills with `effect`; returns how many changed.
 pub fn set_effect(doc: &mut Document, selected: &[u64], effect: RingEffect) -> usize {
     let cycles: HashSet<_> = selected_cycles(doc, selected).into_iter().collect();
