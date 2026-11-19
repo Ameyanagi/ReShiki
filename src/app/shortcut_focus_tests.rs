@@ -1252,6 +1252,64 @@ async fn assistant_shortcuts_follow_actual_prompt_focus() {
 
 #[tokio::test]
 #[ignore = "Opt-in renderer input check"]
+async fn zoom_keys_stay_in_a_focused_editor_and_zoom_after_blur() {
+    let mut ui = Ui::new().await;
+    let mut app = assistant_app();
+    let bounds = ui.input(&app, "assistant-input").0;
+    ui.click(&mut app, bounds.center());
+    assert!(ui.input(&app, "assistant-input").1);
+    let zoom = app.tab.camera.zoom;
+    let draft = app.assistant.input_text();
+    let keys = [("=", Code::Equal), ("-", Code::Minus)];
+    for (c, code) in keys {
+        let (status, messages) = ui.event(
+            &app,
+            press(Key::Character(c.into()), code, Modifiers::COMMAND, Some(c)),
+            mouse::Cursor::Unavailable,
+        );
+        assert_eq!(status, iced::event::Status::Captured, "{c}: {messages:?}");
+        assert!(
+            !messages.iter().any(|m| matches!(m, Message::Zoom(_))),
+            "{c}: {messages:?}"
+        );
+        apply(&mut app, messages);
+    }
+    assert_eq!(
+        app.tab.camera.zoom, zoom,
+        "the view keeps its zoom while typing"
+    );
+    assert_eq!(app.assistant.input_text(), draft, "no text is typed");
+
+    let (_, messages) = ui.event(
+        &app,
+        press(
+            Key::Named(Named::Escape),
+            Code::Escape,
+            Modifiers::empty(),
+            None,
+        ),
+        mouse::Cursor::Unavailable,
+    );
+    apply(&mut app, messages);
+    assert!(!ui.input(&app, "assistant-input").1);
+    let (_, messages) = ui.event(
+        &app,
+        press(
+            Key::Character("=".into()),
+            Code::Equal,
+            Modifiers::COMMAND,
+            Some("="),
+        ),
+        mouse::Cursor::Unavailable,
+    );
+    assert!(
+        matches!(messages.as_slice(), [Message::Zoom(z)] if *z > 1.),
+        "{messages:?}"
+    );
+}
+
+#[tokio::test]
+#[ignore = "Opt-in renderer input check"]
 async fn updates_dialog_captures_keys_before_editors_file_commands_and_canvas() {
     let mut ui = Ui::new().await;
     let mut app = assistant_app();
