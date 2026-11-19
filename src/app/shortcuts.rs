@@ -219,8 +219,12 @@ pub(super) fn key_message(key: &Key, modified: &Key, mods: Modifiers) -> Option<
         if mods.shift() && !mods.alt() && matches!(key, Key::Named(Named::ArrowRight)) {
             return Some(Message::Shortcut(Action::ReactionCopy));
         }
-        // ⌘+ by the typed character: Shift+; on a Japanese keyboard.
-        if mods.shift() && !mods.alt() && matches!(modified, Key::Character(m) if m == "+") {
+        // ⌘+ and ⌘= by the typed character: on a Japanese keyboard they are
+        // Shift+; and Shift+-.
+        if mods.shift()
+            && !mods.alt()
+            && matches!(modified, Key::Character(m) if m == "+" || m == "=")
+        {
             return Some(Message::Zoom(1.25));
         }
         let Key::Character(c) = key else {
