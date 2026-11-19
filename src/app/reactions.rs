@@ -490,25 +490,17 @@ impl App {
                         atom.label_h = source.label_h;
                     }
                 }
+                let name = self.part_name(&part.atoms);
+                let label = if part.coefficient > 1 {
+                    format!("{} × {name}", part.coefficient)
+                } else {
+                    name
+                };
                 card = card.push(
                     button(
                         row![
                             canvas(DrawingThumbnail(preview)).width(92).height(28),
-                            text(format!(
-                                "{}{} {}",
-                                if part.coefficient > 1 {
-                                    format!("{} × ", part.coefficient)
-                                } else {
-                                    String::new()
-                                },
-                                part.atoms.len(),
-                                if part.atoms.len() == 1 {
-                                    "atom"
-                                } else {
-                                    "atoms"
-                                }
-                            ))
-                            .size(12),
+                            text(label).size(12),
                         ]
                         .align_y(iced::Alignment::Center),
                     )

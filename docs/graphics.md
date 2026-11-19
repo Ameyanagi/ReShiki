@@ -226,11 +226,14 @@ the gutters. Moving one item by itself leaves it where you put it.
    structures in cycle** to select every intermediate, reagent and product,
    for example to change their color or font.
 5. In **Properties → Catalytic cycle**, choose **Clockwise** or
-   **Counterclockwise**, and set **Radius (pt)**, **Gap (pt)** (the space
-   between an arc and an intermediate) and **Center** text. Pick a step to
-   give it a **Name**, make it **Reversible**, **Hide arrow**, or set its
-   **Bow** and extra **Space in** and **out** in points. **Parts** lists every
-   part with its role.
+   **Counterclockwise**. Open **Layout** to set **Radius (pt)**, **Gap (pt)**
+   and **Center** text. Each row shows the step name or the intermediates'
+   names, formulas or text. Choose a step to see its reagents under **In:**
+   and its products under **Out:**. Set the step's **Name**, turn on
+   **Reversible** or **Hide arrow**, or adjust **Bow**, **Space in** and
+   **out** in points. **Purpose and properties** opens the parts' purpose and
+   molecular properties; **Graphic style** below restyles the circle and its
+   arrows.
 6. **Remove from cycle** also takes the selected part out. It stays in the
    drawing.
 
@@ -247,9 +250,9 @@ Each step is a reaction: its reactants are the step's first intermediate and
 its reagents, its products the next intermediate and its products. Texts are
 its conditions.
 
-1. Select the cycle and pick the step in **Properties → Catalytic cycle**, or
+1. Select the cycle and open the step in **Properties → Catalytic cycle**, or
    right-click the step's arc.
-2. Under **Step as a reaction**, or in the right-click menu:
+2. Choose an action under the open step or in the right-click menu.
    - **Copy step as reaction SMILES** copies that step's reaction.
    - **Check step balance** says whether the step keeps every atom,
      hydrogens included, and the charge, and what one side has more of.

@@ -1,8 +1,10 @@
 //! Catalytic cycles: making them, dropping parts in, and their properties.
-use super::workspace::{control, hover_hint, muted_text, panel_action, section};
+use super::workspace::{
+    accessible_command, control, hover_hint, muted_text, panel_action, section,
+};
 use super::{App, Message};
-use iced::widget::{button, checkbox, column, row, text};
-use iced::{Alignment, Element, Length, Task};
+use iced::widget::{button, checkbox, column, container, row, text};
+use iced::{Alignment, Element, Length, Padding, Task};
 use reshiki::cycles::{Cycle, Role, steps};
 
 #[derive(Debug, Clone)]
@@ -22,7 +24,9 @@ pub enum Action {
     Clockwise(bool),
     Edit(Field, String),
     Apply(Field),
-    Step(StepChoice),
+    Step(usize),
+    ToggleLayout,
+    TogglePurpose,
     Reversible(bool),
     Hidden(bool),
     /// The chosen step as a reaction: copy its reaction SMILES.
@@ -61,7 +65,7 @@ pub(super) struct Proposal {
     reversed: bool,
 }
 
-/// The cycle card's text fields and chosen step.
+/// The cycle card's text fields and disclosures.
 #[derive(Debug, Clone, Default)]
 pub(super) struct Inputs {
     /// Make catalytic cycle's proposal under review.
@@ -70,6 +74,9 @@ pub(super) struct Inputs {
     /// while it is selected, also among other selected cycles.
     cycle: Option<u64>,
     step: usize,
+    step_expanded: bool,
+    layout_open: bool,
+    pub(super) purpose_open: bool,
     radius: String,
     gap: String,
     label: String,
@@ -92,16 +99,18 @@ impl Inputs {
     }
 }
 
-/// A step in the step picker.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct StepChoice {
-    index: usize,
-    label: String,
-}
-impl std::fmt::Display for StepChoice {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&self.label)
-    }
+pub(super) fn disclosure(
+    id: &'static str,
+    label: &'static str,
+    open: bool,
+    action: Action,
+) -> reshiki::accessibility::Button<'static, Message> {
+    let marker = if open { '▾' } else { '▸' };
+    accessible_command(id, label, format!("{label} {marker}"))
+        .expanded(open)
+        .padding([4, 8])
+        .width(Length::Fill)
+        .on_press(Message::Cycle(action))
 }
 
 fn labelled<'a>(
@@ -256,9 +265,19 @@ impl App {
             }
             Action::Edit(field, value) => *self.tab.cycle_inputs.get_mut(field) = value,
             Action::Apply(field) => self.apply_cycle_field(field),
-            Action::Step(choice) => {
-                self.tab.cycle_inputs.step = choice.index;
-                self.sync_cycle();
+            Action::Step(step) => {
+                let inputs = &mut self.tab.cycle_inputs;
+                inputs.step_expanded = inputs.step != step || !inputs.step_expanded;
+                if inputs.step != step {
+                    inputs.step = step;
+                    self.sync_cycle();
+                }
+            }
+            Action::ToggleLayout => {
+                self.tab.cycle_inputs.layout_open = !self.tab.cycle_inputs.layout_open;
+            }
+            Action::TogglePurpose => {
+                self.tab.cycle_inputs.purpose_open = !self.tab.cycle_inputs.purpose_open;
             }
             Action::Reversible(on) => self.edit_step(|step| step.reversible = on),
             Action::Hidden(on) => self.edit_step(|step| step.hidden = on),
@@ -650,16 +669,51 @@ impl App {
         inputs.trail = pt(step.trail_pt);
     }
 
-    /// What a part shows in the parts list: its text, or its size.
-    fn part_name(&self, ids: &[u64]) -> String {
+    /// A short label for a cycle part or reaction participant.
+    pub(super) fn part_name(&self, ids: &[u64]) -> String {
         let doc = &self.tab.doc;
-        if let [id] = ids
+        let name = if let [id] = ids
             && let Some(a) = doc.annotations.iter().find(|a| a.id == *id)
         {
-            return a.text.lines().next().unwrap_or_default().to_owned();
+            a.text.clone()
+        } else {
+            let atoms = reshiki::editing::analysis_atoms(doc, ids);
+            if let Some(link) = reshiki::molecule_names::label(doc, &atoms) {
+                link.text.clone()
+            } else {
+                self.molecular_composition(&atoms, ids).map_or_else(
+                    |_| "Structure".into(),
+                    |properties| self.shown_formula(&properties.display_formula),
+                )
+            }
+        };
+        let mut chars = name.lines().next().unwrap_or_default().chars();
+        let mut label: String = chars.by_ref().take(32).collect();
+        if chars.next().is_some() {
+            label.pop();
+            label.push('…');
         }
-        let atoms = ids.iter().filter(|id| doc.atom(**id).is_some()).count();
-        format!("Structure, {atoms} atoms")
+        label
+    }
+
+    fn step_labels(&self, cycle: &Cycle) -> Vec<String> {
+        let names: Vec<_> = cycle
+            .intermediates
+            .iter()
+            .map(|ids| self.part_name(ids))
+            .collect();
+        cycle
+            .steps
+            .iter()
+            .enumerate()
+            .map(|(i, step)| match step.name.trim().lines().next() {
+                Some(name) => format!("{}  {name}", i + 1),
+                None => {
+                    let name = |k: usize| names.get(k % names.len()).map_or("", String::as_str);
+                    format!("{}  {} → {}", i + 1, name(i), name(i + 1))
+                }
+            })
+            .collect()
     }
 
     /// Properties of the selected cycle.
@@ -693,145 +747,152 @@ impl App {
                 .padding(5)
                 .width(width)
         };
-        let mut body = column![
-            section("Catalytic cycle"),
-            hover_hint(
-                row![
-                    toggle("Clockwise", !counterclockwise, Action::Clockwise(true)),
-                    toggle(
-                        "Counterclockwise",
-                        counterclockwise,
-                        Action::Clockwise(false)
-                    ),
-                ]
-                .spacing(4),
-                "Switching direction runs the steps the other way: reagents become products",
-                iced::widget::tooltip::Position::Top,
-            ),
-            row![
-                labelled(
-                    "Radius (pt)",
-                    input("cycle-radius", "Cycle radius (pt)", Field::Radius, 52.)
-                ),
-                labelled(
-                    "Gap (pt)",
-                    input(
-                        "cycle-gap",
-                        "Gap around intermediates (pt)",
-                        Field::Gap,
-                        40.
-                    )
-                ),
-            ]
-            .spacing(10),
-            labelled(
-                "Center",
-                input(
-                    "cycle-label",
-                    "Text in the cycle's center",
-                    Field::Label,
-                    150.
-                )
-            ),
-        ]
-        .spacing(8);
-        let names: Vec<String> = cycle
-            .intermediates
-            .iter()
-            .map(|ids| self.part_name(ids))
-            .collect();
-        let n = names.len();
-        if n > 0 {
-            let next = names.iter().cycle().skip(1);
-            let choices: Vec<StepChoice> = names
-                .iter()
-                .zip(next)
-                .zip(&cycle.steps)
-                .enumerate()
-                .map(|(i, ((from, to), step))| StepChoice {
-                    index: i,
-                    label: match step.name.trim() {
-                        "" => format!("Step {}: {from} → {to}", i + 1),
-                        name => format!("Step {}: {name}", i + 1),
-                    },
-                })
-                .collect();
-            let current = choices.get(inputs.step).cloned();
-            let step = cycle.steps.get(inputs.step).cloned().unwrap_or_default();
-            body = body
+        let mut layout = column![disclosure(
+            "cycle-layout",
+            "Layout",
+            inputs.layout_open,
+            Action::ToggleLayout,
+        )]
+        .spacing(5);
+        if inputs.layout_open {
+            layout = layout
                 .push(
-                    crate::appearance::pick_list(choices, current, |c| {
-                        Message::Cycle(Action::Step(c))
-                    })
-                    .text_size(12)
-                    .padding(6)
-                    .width(Length::Fill),
+                    row![
+                        labelled(
+                            "Radius (pt)",
+                            input("cycle-radius", "Cycle radius (pt)", Field::Radius, 52.)
+                        ),
+                        labelled(
+                            "Gap (pt)",
+                            input(
+                                "cycle-gap",
+                                "Gap around intermediates (pt)",
+                                Field::Gap,
+                                40.
+                            )
+                        ),
+                    ]
+                    .spacing(10),
                 )
                 .push(labelled(
-                    "Name",
-                    input("cycle-step-name", "Step name", Field::Name, 170.),
-                ))
-                .push(
-                    row![
-                        checkbox(step.reversible)
-                            .label("Reversible")
-                            .on_toggle(|on| Message::Cycle(Action::Reversible(on)))
-                            .size(14)
-                            .text_size(12),
-                        checkbox(step.hidden)
-                            .label("Hide arrow")
-                            .on_toggle(|on| Message::Cycle(Action::Hidden(on)))
-                            .size(14)
-                            .text_size(12),
-                    ]
-                    .spacing(14),
+                    "Center",
+                    input(
+                        "cycle-label",
+                        "Text in the cycle's center",
+                        Field::Label,
+                        150.,
+                    ),
+                ));
+        }
+        let mut rows = column![].spacing(2);
+        for (i, (step, label)) in cycle.steps.iter().zip(self.step_labels(cycle)).enumerate() {
+            let active = i == inputs.step;
+            let expanded = active && inputs.step_expanded;
+            let mut entry = column![
+                reshiki::accessibility::button(
+                    format!("cycle-step-{i}"),
+                    label.clone(),
+                    container(text(label).size(12).wrapping(text::Wrapping::None)).clip(true),
                 )
-                .push(
+                .padding([4, 8])
+                .width(Length::Fill)
+                .style(control(active))
+                .expanded(expanded)
+                .on_press(send(Action::Step(i))),
+            ]
+            .spacing(5);
+            if expanded {
+                let mut details = column![].spacing(6);
+                for (role, parts) in [("In", &step.reagents), ("Out", &step.products)] {
+                    if !parts.is_empty() {
+                        let names = parts
+                            .iter()
+                            .map(|ids| self.part_name(ids))
+                            .collect::<Vec<_>>()
+                            .join(", ");
+                        details = details.push(text(format!("{role}: {names}")).size(12));
+                    }
+                }
+                details = details
+                    .push(labelled(
+                        "Name",
+                        input("cycle-step-name", "Step name", Field::Name, 170.),
+                    ))
+                    .push(
+                        row![
+                            checkbox(step.reversible)
+                                .label("Reversible")
+                                .on_toggle(|on| Message::Cycle(Action::Reversible(on)))
+                                .size(14)
+                                .text_size(12),
+                            checkbox(step.hidden)
+                                .label("Hide arrow")
+                                .on_toggle(|on| Message::Cycle(Action::Hidden(on)))
+                                .size(14)
+                                .text_size(12),
+                        ]
+                        .spacing(14),
+                    )
+                    .push(
+                        row![
+                            labelled(
+                                "Bow",
+                                input("cycle-step-bow", "Arc bow (pt)", Field::Bow, 40.)
+                            ),
+                            labelled(
+                                "Space in",
+                                input(
+                                    "cycle-step-lead",
+                                    "Extra space after the step's first intermediate (pt)",
+                                    Field::Lead,
+                                    36.
+                                )
+                            ),
+                            labelled(
+                                "out",
+                                input(
+                                    "cycle-step-trail",
+                                    "Extra space before the step's next intermediate (pt)",
+                                    Field::Trail,
+                                    36.
+                                )
+                            ),
+                        ]
+                        .spacing(8),
+                    )
+                    .push(self.step_reaction_controls());
+                entry = entry.push(container(details).padding(Padding::ZERO.left(10.)));
+            }
+            rows = rows.push(entry);
+        }
+        let hint = if cycle.steps.is_empty() {
+            "Drag a structure or text onto the circle to add it"
+        } else {
+            "Click a part again to move it alone; drag it off the cycle to take it out"
+        };
+        Some(
+            column![
+                section("Catalytic cycle"),
+                hover_hint(
                     row![
-                        labelled(
-                            "Bow",
-                            input("cycle-step-bow", "Arc bow (pt)", Field::Bow, 40.)
-                        ),
-                        labelled(
-                            "Space in",
-                            input(
-                                "cycle-step-lead",
-                                "Extra space after the step's first intermediate (pt)",
-                                Field::Lead,
-                                36.
-                            )
-                        ),
-                        labelled(
-                            "out",
-                            input(
-                                "cycle-step-trail",
-                                "Extra space before the step's next intermediate (pt)",
-                                Field::Trail,
-                                36.
-                            )
+                        toggle("Clockwise", !counterclockwise, Action::Clockwise(true)),
+                        toggle(
+                            "Counterclockwise",
+                            counterclockwise,
+                            Action::Clockwise(false)
                         ),
                     ]
-                    .spacing(8),
-                )
-                .push(self.step_reaction_controls());
-        }
-        let mut parts = column![text("Parts").size(11).style(muted_text)].spacing(3);
-        for (role, ids) in cycle.parts() {
-            parts = parts.push(text(format!("{role} · {}", self.part_name(ids))).size(12));
-        }
-        if n == 0 {
-            parts = parts.push(
-                text("Drag a structure or text onto the circle to add it")
-                    .size(12)
-                    .style(muted_text),
-            );
-        }
-        body = body.push(parts).push(
-            text("Click a part again to move it alone; drag it off the cycle to take it out")
-                .size(11)
-                .style(muted_text),
-        );
-        Some(body.into())
+                    .spacing(4),
+                    "Switching direction runs the steps the other way: reagents become products",
+                    iced::widget::tooltip::Position::Top,
+                ),
+                layout,
+                (!cycle.steps.is_empty()).then_some(rows),
+                text(hint).size(11).style(muted_text),
+            ]
+            .spacing(8)
+            .into(),
+        )
     }
 
     /// The chosen step's reaction tools.
@@ -845,7 +906,6 @@ impl App {
         };
         let free = !mapping && !self.tab.busy;
         column![
-            text("Step as a reaction").size(11).style(muted_text),
             panel_action("Copy step as reaction SMILES", send(Action::CopySmiles)),
             row![
                 panel_action(auto, send(Action::AutoMap))
