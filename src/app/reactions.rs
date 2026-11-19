@@ -401,9 +401,26 @@ impl App {
                     }
                     .into()
                 });
+            // Two "Arrow · Forward" rows read alike: a titled panel around the
+            // arrow names it instead (e.g. "This work").
+            let (lo, hi) = arrow.bounds();
+            let place = self
+                .tab
+                .doc
+                .graphics
+                .iter()
+                .filter_map(|g| {
+                    let title = g.panel.as_ref()?.titles.first()?;
+                    (!title.trim().is_empty()).then(|| (title, g.shape_bounds()))
+                })
+                .filter(|(_, (a, b))| a.x <= lo.x && a.y <= lo.y && hi.x <= b.x && hi.y <= b.y)
+                .min_by(|(_, (a, b)), (_, (c, d))| {
+                    ((b.x - a.x) * (b.y - a.y)).total_cmp(&((d.x - c.x) * (d.y - c.y)))
+                })
+                .map_or_else(|| preset.to_string(), |(title, _)| title.clone());
             body = body.push(
                 button(row![
-                    text(format!("Arrow {} · {preset}", index + 1))
+                    text(format!("Arrow {} · {place}", index + 1))
                         .size(13)
                         .width(Length::Fill),
                     text(summary).size(12)
