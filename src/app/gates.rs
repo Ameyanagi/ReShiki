@@ -6,7 +6,6 @@ use super::{
 };
 use crate::canvas::{self, Edit, Tool};
 use iced::Task;
-use reshiki::document::Point;
 use std::ops::ControlFlow::{self, Break, Continue};
 
 pub(super) type Gate = ControlFlow<Task<Message>, Message>;
