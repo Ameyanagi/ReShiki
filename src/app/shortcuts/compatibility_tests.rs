@@ -90,7 +90,10 @@ fn displayed_shortcuts_are_the_keys_that_run_their_commands() {
     for message in messages {
         let (mods, name) = binding(&message).expect("a shortcut");
         let (pressed, expected) = match name {
-            "Delete" => (Key::Named(Named::Delete), message.clone()),
+            "Delete" => (
+                Key::Named(Named::Delete),
+                Message::Shortcut(Action::DeleteKey),
+            ),
             "Enter" => (Key::Named(Named::Enter), Message::ContextKey(name.into())),
             // Unmodified letters act on the selection under the pointer.
             _ if !mods.command() => (key(name), Message::ContextKey(name.into())),
@@ -98,6 +101,13 @@ fn displayed_shortcuts_are_the_keys_that_run_their_commands() {
         };
         let actual = key_message(&pressed, &pressed, mods);
         assert_eq!(format!("{actual:?}"), format!("{:?}", Some(expected)));
+    }
+    for named in [Named::Delete, Named::Backspace] {
+        let pressed = Key::Named(named);
+        assert!(matches!(
+            key_message(&pressed, &pressed, Modifiers::SHIFT),
+            Some(Message::Delete)
+        ));
     }
     // File commands are routed before text fields see them.
     for message in [

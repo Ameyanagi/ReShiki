@@ -247,6 +247,9 @@ Choose an element in **Atoms**, then drag from an existing atom to add it with a
 | Enter or =                | Edit atom label                                             |
 | g / ?                     | Select target / open its properties                         |
 
+Over a heteroatom, **Delete** or **Backspace** changes it to carbon on the first
+press and deletes it on the second.
+
 Group keys replace endpoints and isolated atoms. At other atoms with an implicit
 H to spare, they add a single bond and the group in one Undo step, using the same
 placement as **1** followed by the group key. Non-endpoints without a free H and
@@ -397,7 +400,7 @@ With nothing selected, these keys format the whole label. Chemical abbreviations
 | Cmd/Ctrl+/                                 | Fit drawing                                                                               |
 | Cmd/Ctrl+;                                 | Toggle rulers                                                                             |
 | Cmd/Ctrl+Alt+X                             | Toggle crosshair                                                                          |
-| Delete or Backspace                        | Delete selection                                                                          |
+| Delete or Backspace                        | Delete selection or [change a heteroatom to carbon](#at-an-atom)                          |
 | Arrow / Shift+arrow (keyboard drawing off) | Nudge 1 / 10 drawing units; nudges never snap                                             |
 | Double-click an atom                       | Select its molecule                                                                       |
 | Shift-click                                | Add to or toggle the selection                                                            |

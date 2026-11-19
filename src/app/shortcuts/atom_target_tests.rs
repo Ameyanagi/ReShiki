@@ -15,6 +15,11 @@ fn key(app: &mut App, text: &str) {
     let _ = app.update(message);
 }
 
+fn press_delete_key(app: &mut App, named: Named) {
+    let key = Key::Named(named);
+    let _ = app.update(key_message(&key, &key, Modifiers::empty()).unwrap());
+}
+
 fn fixture(element: &str) -> (App, u64, Vec<u64>) {
     let (mut app, _) = App::new();
     app.tab.busy = false;
@@ -110,6 +115,167 @@ fn assert_one_undo(app: &mut App, before: &Document) {
     );
     let _ = app.update(Message::Redo);
     assert_eq!(app.tab.doc, changed);
+}
+
+#[test]
+fn delete_and_backspace_reset_hovered_atoms_before_deleting_them() {
+    for (element, charge, isotope, named) in [
+        ("N", 0, 0, Named::Delete),
+        ("N", 1, 0, Named::Delete),
+        ("N", 0, 15, Named::Backspace),
+        ("C", 1, 0, Named::Backspace),
+        ("C", 0, 13, Named::Delete),
+    ] {
+        let (mut app, target, unrelated) = fixture(element);
+        app.tab.keyboard_drawing.leave();
+        let atom = app.tab.doc.atom_mut(target).unwrap();
+        atom.charge = charge;
+        atom.isotope = isotope;
+        let point = atom.position;
+        hover(&mut app, point);
+        let before = app.tab.doc.clone();
+
+        press_delete_key(&mut app, named);
+
+        let atom = app.tab.doc.atom(target).unwrap();
+        assert_eq!(
+            (atom.element.as_str(), atom.charge, atom.isotope),
+            ("C", 0, 0)
+        );
+        assert_eq!(atom.display.carbons, None);
+        assert_eq!(atom.display.hydrogens, None);
+        assert_eq!(app.tab.doc.atoms.len(), before.atoms.len());
+        assert_eq!(app.tab.doc.bonds, before.bonds);
+        assert_eq!(app.tab.selected, [target]);
+        assert_eq!(app.hovered_target().0, Some(target));
+
+        press_delete_key(&mut app, named);
+        assert!(app.tab.doc.atom(target).is_none());
+        assert_unrelated(&before, &app.tab.doc, &unrelated);
+
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.tab.doc.atom(target).unwrap().element, "C");
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.tab.doc, before);
+        assert!(!app.tab.history.can_undo());
+    }
+}
+
+#[test]
+fn delete_key_deletes_the_selection_over_plain_carbon_or_a_bond() {
+    for offset in [0., -21.] {
+        let (mut app, target, unrelated) = fixture("C");
+        let point = app.tab.doc.atom(target).unwrap().position;
+        hover(&mut app, point.offset(offset, 0.));
+
+        press_delete_key(&mut app, Named::Delete);
+
+        assert_eq!(app.tab.doc.atom(target).unwrap().element, "C");
+        assert!(unrelated.iter().all(|id| app.tab.doc.atom(*id).is_none()));
+    }
+}
+
+#[test]
+fn delete_command_deletes_the_selection_over_a_heteroatom() {
+    let (mut app, target, unrelated) = fixture("N");
+    let point = app.tab.doc.atom(target).unwrap().position;
+    hover(&mut app, point);
+
+    let _ = app.update(Message::Delete);
+
+    assert_eq!(app.tab.doc.atom(target).unwrap().element, "N");
+    assert!(unrelated.iter().all(|id| app.tab.doc.atom(*id).is_none()));
+}
+
+#[test]
+fn delete_key_resets_the_keyboard_drawing_atom() {
+    use reshiki::keyboard_drawing::Target;
+
+    let (mut app, target, unrelated) = fixture("O");
+    let point = app.tab.doc.atom(unrelated[0]).unwrap().position;
+    hover(&mut app, point);
+    app.tab
+        .keyboard_drawing
+        .set_target(Target::Atom(target), &app.tab.doc);
+    assert!(app.keyboard_drawing_active());
+    assert_eq!(app.hovered_target().0, Some(unrelated[0]));
+
+    press_delete_key(&mut app, Named::Delete);
+
+    assert_eq!(app.tab.doc.atom(target).unwrap().element, "C");
+    assert_eq!(app.tab.keyboard_drawing.target(), Target::Atom(target));
+    assert_eq!(app.tab.selected, [target]);
+    assert_eq!(app.tab.hover, Some((point, app.tab.file_epoch)));
+}
+
+#[test]
+fn delete_key_deletes_the_selection_over_an_abbreviation() {
+    let (mut app, target, unrelated) = fixture("O");
+    let point = app.tab.doc.atom(target).unwrap().position;
+    let methyl = app.tab.doc.add_atom("C", point.offset(42., 0.));
+    app.tab.doc.add_bond(target, methyl, 1, "plain");
+    app.tab
+        .doc
+        .contract(&[target, methyl], "OMe", "MeO")
+        .unwrap();
+    hover(&mut app, point);
+
+    press_delete_key(&mut app, Named::Delete);
+
+    assert_eq!(app.tab.doc.atom(target).unwrap().element, "O");
+    assert!(app.tab.doc.abbreviation_containing(target).is_some());
+    assert!(unrelated.iter().all(|id| app.tab.doc.atom(*id).is_none()));
+}
+
+#[test]
+fn delete_key_deletes_a_selected_centroid_marker() {
+    let (mut app, _, members) = fixture("C");
+    app.tab.keyboard_drawing.leave();
+    let marker = reshiki::projection::add_centroid(&mut app.tab.doc, &members).unwrap();
+    let point = app.tab.doc.atom(marker).unwrap().position;
+    app.tab.selected = vec![marker];
+    hover(&mut app, point);
+    assert_eq!(app.hovered_target().0, Some(marker));
+
+    press_delete_key(&mut app, Named::Delete);
+
+    assert!(app.tab.doc.atom(marker).is_none());
+    assert!(members.iter().all(|id| app.tab.doc.atom(*id).is_some()));
+}
+
+#[test]
+fn delete_key_keeps_crystal_site_charge() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    app.tab.doc = reshiki::crystal::read(
+        "cif",
+        include_str!("../../../tests/fixtures/crystal/nacl.cif"),
+    )
+    .unwrap()
+    .0;
+    let before = app.tab.doc.clone();
+    let atom = before
+        .atoms
+        .iter()
+        .find(|atom| atom.element == "Cl")
+        .unwrap();
+    hover(&mut app, atom.position);
+
+    press_delete_key(&mut app, Named::Delete);
+
+    let carbon = app.tab.doc.atom(atom.id).unwrap();
+    assert_eq!(carbon.element, "C");
+    assert_eq!(carbon.charge, atom.charge);
+    assert_eq!(app.tab.doc.models, before.models);
+    assert_eq!(app.status, "C−: charge kept · Edit atom label to change it");
+
+    let converted = app.tab.doc.clone();
+    press_delete_key(&mut app, Named::Delete);
+    assert!(app.tab.doc.atom(atom.id).is_none());
+
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, converted);
+    assert_one_undo(&mut app, &before);
 }
 
 #[test]

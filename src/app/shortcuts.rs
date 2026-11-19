@@ -26,6 +26,7 @@ pub enum Action {
     Rulers,
     Crosshair,
     Nudge(f32, f32),
+    DeleteKey,
     Join,
     MergeAtoms,
     CopyText(&'static str),
@@ -321,6 +322,9 @@ pub(super) fn key_message(key: &Key, modified: &Key, mods: Modifiers) -> Option<
         Key::Character(c) => Message::ContextKey(c.to_string()),
         Key::Named(Named::Space) if mods.is_empty() => Message::Shortcut(Action::SelectRecent),
         Key::Named(Named::Space) => Message::Tool(Tool::Select),
+        Key::Named(Named::Delete | Named::Backspace) if mods.is_empty() => {
+            Message::Shortcut(Action::DeleteKey)
+        }
         Key::Named(Named::Delete | Named::Backspace) => Message::Delete,
         Key::Named(Named::Enter) => Message::ContextKey("Enter".into()),
         Key::Named(Named::Escape) => Message::Escape,
@@ -380,6 +384,62 @@ impl App {
                 };
                 self.tab.doc.translate(&ids, x, y);
                 self.changed(before);
+            }
+            Action::DeleteKey => {
+                use reshiki::keyboard_drawing::Target;
+
+                self.sync_keyboard_drawing();
+                let from_hotspot = self.tool.selects() && self.tab.keyboard_drawing.active();
+                let target = if from_hotspot {
+                    match self.tab.keyboard_drawing.target() {
+                        Target::Atom(id) => Some(id),
+                        _ => None,
+                    }
+                } else {
+                    self.hovered_target().0
+                };
+                let doc = &self.tab.doc;
+                // A crystal site keeps its charge as carbon, like the `c` key.
+                let on_crystal_site = target.is_some_and(|id| {
+                    doc.models
+                        .iter()
+                        .any(|m| m.cell.is_some() && m.contains(id))
+                });
+                if let Some(id) = target
+                    && let Some(atom) = doc.atom(id)
+                    && atom.centroid.is_empty()
+                    && doc.abbreviation_containing(id).is_none()
+                    && (atom.element != "C"
+                        || atom.isotope != 0
+                        || (!on_crystal_site && atom.charge != 0))
+                    && let Some(result) =
+                        hotkeys::atom_edit(doc, id, "c", self.tab.bond_drawing.length)
+                {
+                    let position = atom.position;
+                    let charge = if on_crystal_site { atom.charge } else { 0 };
+                    let status = if charge == 0 {
+                        "Changed to carbon".into()
+                    } else {
+                        super::canvas_edit::click::charge_kept_status("C", charge)
+                    };
+                    let result = result.map(|(mut doc, _)| {
+                        if let Some(atom) = doc.atom_mut(id) {
+                            atom.charge = charge;
+                            atom.isotope = 0;
+                            atom.display.carbons = None;
+                            atom.display.hydrogens = None;
+                        }
+                        (doc, vec![id])
+                    });
+                    if self.commit_hotkey(result, &status) {
+                        self.tab.labels_dirty = true;
+                        if !from_hotspot {
+                            self.tab.hover = Some((position, self.tab.file_epoch));
+                        }
+                    }
+                } else {
+                    self.delete_selection();
+                }
             }
             Action::Join => {
                 let (result, status) = match self.join_shortcut() {
