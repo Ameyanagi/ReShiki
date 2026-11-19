@@ -255,3 +255,12 @@ fn clicks_reach_an_atom_of_a_cycle_part() {
     assert_eq!(sorted(part.clone()), sorted(m.clone()));
     assert_eq!(doc.click_selection(&part, &[m[0]]), vec![m[0]]);
 }
+
+#[test]
+fn a_cycle_circle_dragged_alone_keeps_its_parts_group() {
+    let mut doc = Document::default();
+    let (id, [a, ..]) = cycle(&mut doc);
+    assert!(move_by(&mut doc, &[id], 0., 2000.).is_empty());
+    let group = doc.groups.iter().find(|g| g.members.contains(&id)).unwrap();
+    assert!(group.members.contains(&a));
+}

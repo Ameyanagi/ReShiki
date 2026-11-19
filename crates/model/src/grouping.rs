@@ -236,6 +236,12 @@ impl Document {
         let (mut groups, mut left) = (vec![], vec![]);
         for g in around {
             let owns = |id: u64| g.members.contains(&id) && own(id) == Some(g.id);
+            // A cycle's circle never leaves the group of its own parts.
+            if (self.graphics.iter())
+                .any(|c| c.cycle.is_some() && set.contains(&c.id) && owns(c.id))
+            {
+                break;
+            }
             let runs = cycle.is_some_and(owns);
             let out_of_cycle = runs && cycle.is_some_and(|c| !crate::cycles::holds(self, c, moved));
             if out_of_cycle {
