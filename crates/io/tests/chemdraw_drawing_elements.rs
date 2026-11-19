@@ -620,7 +620,7 @@ async fn daggers_and_the_bar_are_symbols_and_stereo_flags_are_boxed_text() {
          <graphic id='3' GraphicType='Symbol' BoundingBox='85 105 79 99' SymbolType='DoubleDagger'/>\
          <graphic id='4' GraphicType='Symbol' BoundingBox='115 105 109 99' SymbolType='LonePairBar'/>\
          <graphic id='5' GraphicType='Symbol' BoundingBox='395 105 389 99' SymbolType='Racemic'/>\
-         <graphic id='6' GraphicType='Symbol' BoundingBox='425 105 419 99' SymbolType='Absolute'/>\
+         <graphic id='6' GraphicType='Symbol' BoundingBox='425 105 431 111' SymbolType='Absolute'/>\
          <graphic id='7' GraphicType='Symbol' BoundingBox='455 105 449 99' SymbolType='Relative'/>",
     )
     .await
@@ -642,8 +642,9 @@ async fn daggers_and_the_bar_are_symbols_and_stereo_flags_are_boxed_text() {
         let mut flags: Vec<_> = document.annotations.iter().map(|a| a.text.as_str()).collect();
         flags.sort_unstable();
         assert_eq!(flags, ["Abs", "Rac", "Rel"]);
-        // Each box is centered on its symbol, 30 pt apart, as wide as ChemDraw
-        // draws it around the caption-sized label, and grouped with its label.
+        // Each box is centered on its symbol's first point, wherever the second
+        // lies, so 30 pt apart; as wide as ChemDraw draws it around the
+        // caption-sized label, and grouped with its label.
         let boxes = &document.graphics[3..];
         let size = |axis: Point| axis.x.hypot(axis.y);
         let scale = size(boxes[0].axis_y) / (1.32 * 10.);

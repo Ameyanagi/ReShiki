@@ -1405,7 +1405,7 @@ impl Pass {
                 return Ok(());
             }
         };
-        let Some(&[x1, y1, x2, y2]) = node.attr("BoundingBox").and_then(numbers).as_deref() else {
+        let Some(&[x, y, _, _]) = node.attr("BoundingBox").and_then(numbers).as_deref() else {
             return Ok(());
         };
         let color = node.attr("color").map(str::to_owned);
@@ -1423,7 +1423,6 @@ impl Pass {
             at = node.parent;
         }
         let node = self.node(index)?;
-        let (x, y) = ((x1 + x2) / 2., (y1 + y2) / 2.);
         let kept: Vec<(String, String)> = node
             .attributes
             .iter()
@@ -1433,7 +1432,8 @@ impl Pass {
         for child in node.children.clone() {
             self.tree.detach(child)?;
         }
-        // The box, centered on the symbol, with ChemDraw's proportions.
+        // The box, centered on the symbol's first point as ChemDraw draws it,
+        // with ChemDraw's proportions.
         let frame = self.tree.create("graphic")?;
         let (half_width, half_height) = (box_width * size / 2., 0.66 * size);
         let mut attributes = vec![
