@@ -166,6 +166,7 @@ list shows as soon as it arrives; each version's picture fills in as its row
 comes into view. Select one, then choose **Compare** to see it beside the
 drawing now, **Open** to see it in a new tab or **Restore** to make it the
 drawing again. Restore is one undo step and makes a new save.
+Restoring the GitHub version the drawing is based on leaves nothing to send.
 
 The GitHub button sits at the left end of the status bar, just before the
 chip, signed in or not. It shows your initial while you are signed in; its
@@ -274,6 +275,8 @@ chemistry**.
   `state.json` (what GitHub had for each drawing) and `versions/` (up to 50
   saves per drawing since its last send). A drawing is unsent when its saved
   file differs from the bytes last synced, so nothing else needs to be stored.
+  When Restore writes the GitHub version a drawing is based on in a newer
+  `.rsk` format, ReShiki keeps the save in History and counts the file as synced.
 - Files are read and written off the window's thread. Whether drawings are
   unsent is read in the background when a drawing opens and on window focus;
   after a save, only that drawing is read back. Opening from the picker,

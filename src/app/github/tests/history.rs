@@ -34,6 +34,131 @@ fn listing(dir: &Path) -> App {
     app
 }
 
+fn legacy_listing(dir: &Path) -> (App, PathBuf) {
+    // A drawing saved as version 15, as the mock GitHub serves it.
+    let raw: &[u8] = include_bytes!("../../../../website/public/examples/benzofuran.rsk");
+    let doc = Document::from_native_file(raw).unwrap();
+    assert_ne!(doc.file_json().unwrap().as_slice(), raw);
+
+    let mut app = listing(dir);
+    let path = app.tab.path.clone().unwrap();
+    std::fs::write(&path, raw).unwrap();
+    let state = app.github.states.get_mut(&repo().key).unwrap();
+    let file = state.files.get_mut("ring.rsk").unwrap();
+    file.base_commit = sha('1');
+    file.base_hash = workcopy::hash(raw);
+    app.show_opened(doc.clone(), Some(path.clone()));
+    read_back(&mut app);
+    assert!(unsent(&app).is_empty());
+
+    let generation = app.github.versions.generation;
+    versions(
+        &mut app,
+        versions::Action::Doc(
+            generation,
+            sha('1'),
+            Ok((Arc::new(doc), workcopy::hash(raw))),
+        ),
+    );
+    (app, path)
+}
+
+#[test]
+fn restoring_the_tracked_github_version_leaves_nothing_to_send() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = legacy_listing(dir.path());
+    let save = |app: &mut App| {
+        let doc = app.tab.doc.clone();
+        let bytes = doc.file_json().unwrap();
+        std::fs::write(&path, &bytes).unwrap();
+        app.tab.mark_saved(doc.clone());
+        app.file_io.saving = false;
+        let task = app.github_saved(true, Some((path.clone(), doc)));
+        land(app, task);
+        read_back(app);
+        bytes
+    };
+
+    edit(&mut app);
+    let moved = app.tab.doc.atoms[0].position;
+    save(&mut app);
+    assert_eq!(unsent(&app), ["ring.rsk"]);
+
+    let pick = versions::Pick::Remote(sha('1'));
+    versions(&mut app, versions::Action::Select(pick));
+    versions(&mut app, versions::Action::Restore);
+    let restored = save(&mut app);
+    assert!(unsent(&app).is_empty());
+    let key = repo().key;
+    let saves = workcopy::snapshots(dir.path(), &key, "ring.rsk").unwrap();
+    assert!(
+        saves
+            .into_iter()
+            .any(|save| std::fs::read(save.path).unwrap() == restored)
+    );
+    let kept = workcopy::load(dir.path(), &key).unwrap().unwrap();
+    assert_eq!(kept.files["ring.rsk"].base_hash, workcopy::hash(&restored));
+
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc.atoms[0].position, moved);
+    save(&mut app);
+    assert_eq!(unsent(&app), ["ring.rsk"]);
+}
+
+#[test]
+fn restoring_another_github_version_stays_unsent() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = legacy_listing(dir.path());
+    let base = file_state(&app, "ring.rsk").unwrap().base_hash;
+    let bytes = drawing(30.);
+    let doc = Arc::new(Document::from_native_file(&bytes).unwrap());
+    let generation = app.github.versions.generation;
+    versions(
+        &mut app,
+        versions::Action::Doc(
+            generation,
+            sha('2'),
+            Ok((doc.clone(), workcopy::hash(&bytes))),
+        ),
+    );
+    let pick = versions::Pick::Remote(sha('2'));
+    versions(&mut app, versions::Action::Select(pick));
+    versions(&mut app, versions::Action::Restore);
+    assert_eq!(&app.tab.doc, doc.as_ref());
+    std::fs::write(&path, app.tab.doc.file_json().unwrap()).unwrap();
+    app.tab.mark_saved(app.tab.doc.clone());
+    app.file_io.saving = false;
+    let task = app.github_saved(true, Some((path, app.tab.doc.clone())));
+    land(&mut app, task);
+    read_back(&mut app);
+    assert_eq!(unsent(&app), ["ring.rsk"]);
+    assert_eq!(file_state(&app, "ring.rsk").unwrap().base_hash, base);
+}
+
+#[test]
+fn an_edit_after_restoring_the_tracked_version_is_unsent() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = legacy_listing(dir.path());
+    let pick = versions::Pick::Remote(sha('1'));
+    versions(&mut app, versions::Action::Select(pick));
+    versions(&mut app, versions::Action::Restore);
+    std::fs::write(&path, app.tab.doc.file_json().unwrap()).unwrap();
+    app.tab.mark_saved(app.tab.doc.clone());
+    app.file_io.saving = false;
+    let task = app.github_saved(true, Some((path.clone(), app.tab.doc.clone())));
+    land(&mut app, task);
+    read_back(&mut app);
+    assert!(unsent(&app).is_empty());
+
+    edit(&mut app);
+    std::fs::write(&path, app.tab.doc.file_json().unwrap()).unwrap();
+    app.tab.mark_saved(app.tab.doc.clone());
+    let task = app.github_saved(true, Some((path, app.tab.doc.clone())));
+    land(&mut app, task);
+    read_back(&mut app);
+    assert_eq!(unsent(&app), ["ring.rsk"]);
+}
+
 #[test]
 fn history_lists_first_and_reads_a_drawing_when_its_row_shows() {
     let dir = tempfile::tempdir().unwrap();
@@ -46,10 +171,11 @@ fn history_lists_first_and_reads_a_drawing_when_its_row_shows() {
     assert!(versions(&mut app, versions::Action::Shown(sha('1'))) > 0);
     assert_eq!(versions(&mut app, versions::Action::Shown(sha('1'))), 0);
     let generation = app.github.versions.generation;
-    let doc = Arc::new(Document::from_native_file(&drawing(30.)).unwrap());
+    let bytes = drawing(30.);
+    let doc = Arc::new(Document::from_native_file(&bytes).unwrap());
     versions(
         &mut app,
-        versions::Action::Doc(generation, sha('1'), Ok(doc)),
+        versions::Action::Doc(generation, sha('1'), Ok((doc, workcopy::hash(&bytes)))),
     );
     assert_eq!(
         listed(&app),
@@ -62,10 +188,11 @@ fn history_shows_a_drawings_versions_again_at_once() {
     let dir = tempfile::tempdir().unwrap();
     let mut app = listing(dir.path());
     let generation = app.github.versions.generation;
-    let doc = Arc::new(Document::from_native_file(&drawing(30.)).unwrap());
+    let bytes = drawing(30.);
+    let doc = Arc::new(Document::from_native_file(&bytes).unwrap());
     versions(
         &mut app,
-        versions::Action::Doc(generation, sha('1'), Ok(doc)),
+        versions::Action::Doc(generation, sha('1'), Ok((doc, workcopy::hash(&bytes)))),
     );
     // Another drawing, then this one again: what was listed and read shows
     // at once, while the list is asked again.
@@ -131,10 +258,11 @@ fn a_drawing_whose_row_left_the_list_is_asked_again_when_it_shows() {
     let generation = app.github.versions.generation;
     let found = Ok(vec![version('3'), version('1')]);
     versions(&mut app, versions::Action::RemoteLoaded(generation, found));
-    let doc = Arc::new(Document::from_native_file(&drawing(30.)).unwrap());
+    let bytes = drawing(30.);
+    let doc = Arc::new(Document::from_native_file(&bytes).unwrap());
     versions(
         &mut app,
-        versions::Action::Doc(generation, sha('2'), Ok(doc)),
+        versions::Action::Doc(generation, sha('2'), Ok((doc, workcopy::hash(&bytes)))),
     );
     // Load more brings it back: shown again, it is asked again.
     let found = Ok(vec![version('1'), version('2')]);
