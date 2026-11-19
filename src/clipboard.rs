@@ -479,8 +479,10 @@ async fn prepare_copy_with_limit(
         // source page background. Native data above retains the original theme.
         // Resolve depth paint against the source paper before changing the
         // external snapshot's canvas; a dark drawing fades toward black.
+        // Equipment becomes curves in the colours the source canvas shows.
         let exchange_doc = crate::canvas_theme::for_paste(
-            crate::depth_appearance::materialize(&doc).into_owned(),
+            crate::equipment::placed::materialized(&crate::depth_appearance::materialize(&doc))
+                .into_owned(),
             crate::canvas_theme::CanvasTheme::Light,
         );
         let mut request = Request::molecule("export", exchange_doc.clone());

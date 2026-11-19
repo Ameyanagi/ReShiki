@@ -243,8 +243,8 @@ Equipment** shows its name and size. Equipment is always an illustration: it
 is never part of a reaction.
 
 Pieces are drawn in line style at 0.4 pt per mm with 0.6 pt outlines,
-whatever their size: white glass, hatched ground-glass joints, an open socket
-mouth and a light liquid. Joints do not snap together yet.
+whatever their size: white glass, hatched ground-glass joints and an open
+socket mouth. Flasks start empty. Joints do not snap together yet.
 
 ### Start from a figure layout
 

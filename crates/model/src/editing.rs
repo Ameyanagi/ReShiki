@@ -125,7 +125,6 @@ pub fn selection(doc: &Document, ids: &[u64]) -> Document {
         crate::depth_appearance::selection(doc, &ids.iter().copied().collect::<Vec<_>>());
     // A cycle copied without some parts draws only the ones it holds.
     crate::cycles::reconcile(&mut part);
-    part.piece_definitions = crate::equipment::placed::used(&part);
     part
 }
 
@@ -912,16 +911,10 @@ fn map_positions(
             graphic.axis_x = vector(graphic.axis_x);
             graphic.axis_y = vector(graphic.axis_y);
             graphic.normalize_panel();
-            // A piece cannot stretch or leave its scale range: it moves with
-            // its centre instead.
             if graphic.kind == crate::graphics::GraphicKind::Piece
                 && crate::equipment::placed::validate(graphic).is_err()
             {
-                let (lo, hi) = before.shape_bounds();
-                let mid = Point::new((lo.x + hi.x) / 2., (lo.y + hi.y) / 2.);
-                let to = convert(mid);
-                *graphic = before;
-                graphic.origin = graphic.origin.offset(to.x - mid.x, to.y - mid.y);
+                crate::equipment::placed::settle(graphic, before, &convert);
             }
         }
     }

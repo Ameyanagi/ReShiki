@@ -688,10 +688,11 @@ impl Graphic {
             hi.x = hi.x.max(p.x);
             hi.y = hi.y.max(p.y);
         }
-        let pad = if self.kind == GraphicKind::Picture {
-            0.
-        } else {
-            self.style.width() * 0.5
+        let pad = match self.kind {
+            GraphicKind::Picture => 0.,
+            // A piece's outline is painted twice as wide as its style says.
+            GraphicKind::Piece => self.style.width(),
+            _ => self.style.width() * 0.5,
         };
         (lo.offset(-pad, -pad), hi.offset(pad, pad))
     }
@@ -744,9 +745,18 @@ impl Graphic {
                         .any(|pair| matches!(pair,[a,b] if segment_distance(p,*a,*b)<r))
             });
         }
+        // A piece's parts carry their own stroke widths.
+        let piece = self.kind == GraphicKind::Piece;
         self.parts().iter().any(|part| {
+            let half = if piece {
+                part.style.width()
+            } else {
+                self.style.width()
+            } * 0.5;
             flattened(&part.commands).iter().any(|path| {
-                path.windows(2).any(|pair| matches!(pair,[a,b] if segment_distance(p,*a,*b)<r+self.style.width()*0.5)) || (part.filled && inside_polygon(p, path))
+                path.windows(2)
+                    .any(|pair| matches!(pair,[a,b] if segment_distance(p,*a,*b)<r+half))
+                    || (part.filled && inside_polygon(p, path))
             })
         })
     }

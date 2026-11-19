@@ -18,8 +18,14 @@ fn a_piece_exports_as_one_group_of_curves_in_paint_order() {
     for xml in [&xml, &decoded] {
         let imported = cdxml::import_cdxml(xml).unwrap().document;
         assert!(imported.graphics.iter().all(|g| g.piece.is_none()));
-        assert_eq!(imported.graphics.len(), painted);
-        assert!(imported.groups.iter().any(|g| g.members.len() == painted));
+        // Compound paths may arrive as several curves; all stay in one group.
+        assert!(imported.graphics.len() >= painted);
+        assert!(
+            imported
+                .groups
+                .iter()
+                .any(|g| g.members.len() == imported.graphics.len())
+        );
         // White glass over its doubled outline, as on the canvas.
         assert!(
             imported

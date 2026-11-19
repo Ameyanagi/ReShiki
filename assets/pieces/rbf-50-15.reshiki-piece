@@ -102,7 +102,7 @@
    },
    "kind": "fill",
    "liquid": "body",
-   "default": 0.35
+   "default": 0
   },
   {
    "id": "liquid_color",

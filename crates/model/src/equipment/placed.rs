@@ -86,10 +86,24 @@ pub fn graphic(id: u64, definition: Arc<Definition>, center: Point, world_per_mm
     g.axis_y = Point::new(0., world_per_mm);
     g.piece = Some(Box::new(PieceRef::new(definition)));
     // Centre the drawn piece, not its millimetre origin, on the point.
-    let (lo, hi) = g.shape_bounds();
-    let mid = Point::new((lo.x + hi.x) / 2., (lo.y + hi.y) / 2.);
+    let mid = middle(&g);
     g.origin = Point::new(2. * center.x - mid.x, 2. * center.y - mid.y);
     g
+}
+
+/// The middle of the drawn piece, fixed to the piece as it turns, so turning
+/// one way and back returns it to where it was.
+pub fn middle(g: &Graphic) -> Point {
+    let mut upright = g.clone();
+    upright.origin = Point::default();
+    upright.axis_x = Point::new(1., 0.);
+    upright.axis_y = Point::new(0., 1.);
+    let (lo, hi) = upright.shape_bounds();
+    let (x, y) = ((lo.x + hi.x) / 2., (lo.y + hi.y) / 2.);
+    g.origin.offset(
+        g.axis_x.x * x + g.axis_y.x * y,
+        g.axis_x.y * x + g.axis_y.y * y,
+    )
 }
 
 /// Link every placed piece to its embedded definition, after checking each one.
@@ -132,6 +146,28 @@ pub fn used(doc: &Document) -> Vec<Arc<Definition>> {
         }
     }
     out
+}
+
+/// After a transform a piece cannot follow: it never stretches, so it keeps
+/// its frame, and it stops at the scale limits; either way its middle goes
+/// where the transform takes it.
+pub(crate) fn settle(g: &mut Graphic, before: Graphic, convert: impl Fn(Point) -> Point) {
+    let to = convert(middle(&before));
+    let (x, y) = (g.axis_x, g.axis_y);
+    let (sx, sy) = (x.distance(Point::default()), y.distance(Point::default()));
+    let similar = (sx - sy).abs() <= sx * 1e-3 && (x.x * y.x + x.y * y.y).abs() <= sx * sy * 1e-3;
+    let pt = crate::style::DEFAULT.points_per_world();
+    let (axis_x, axis_y) = if similar && sx > 0. {
+        let k = (sx * pt).clamp(MIN_PT_PER_MM, MAX_PT_PER_MM) / (sx * pt);
+        (Point::new(x.x * k, x.y * k), Point::new(y.x * k, y.y * k))
+    } else {
+        (before.axis_x, before.axis_y)
+    };
+    *g = before;
+    g.axis_x = axis_x;
+    g.axis_y = axis_y;
+    let mid = middle(g);
+    g.origin = g.origin.offset(to.x - mid.x, to.y - mid.y);
 }
 
 /// A piece graphic is a linked piece in a similarity frame within the scale limits.
@@ -188,7 +224,7 @@ fn transform(g: &Graphic) -> Affine {
 }
 
 type CacheKey = (String, String, [u32; 6]);
-const CACHE_SIZE: usize = 64;
+const CACHE_SIZE: usize = 256;
 thread_local! {
     /// Recent paint plans: hovering and hit testing ask for the same pieces again and again.
     static PLANS: RefCell<Vec<(CacheKey, Rc<Vec<PlanPath>>)>> = const { RefCell::new(Vec::new()) };

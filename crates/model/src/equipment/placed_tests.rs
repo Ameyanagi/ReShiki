@@ -26,6 +26,10 @@ fn a_placed_piece_saves_at_version_40_with_its_definition_and_reopens_the_same()
     let key = json["graphics"][0]["piece"]["definition"].as_str().unwrap();
     assert!(key.starts_with("reshiki/rbf-100-15@1#"), "{key}");
     let back = Document::from_json(&bytes).unwrap();
+    // Read any other way (recovery drafts, templates, engine replies), pieces link too.
+    let raw: Document = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(raw.graphics, back.graphics);
+    assert!(raw.graphics[0].piece.as_ref().unwrap().linked.is_some());
     assert_eq!(back.graphics, doc.graphics);
     assert!(back.graphics[0].piece.as_ref().unwrap().linked.is_some());
     assert_eq!(
@@ -42,7 +46,7 @@ fn a_drawing_without_the_definition_it_uses_does_not_open() {
     let error = Document::from_json(json.to_string().as_bytes()).unwrap_err();
     assert!(
         error.starts_with("The drawing uses the equipment piece reshiki/rbf-100-15@1#")
-            && error.ends_with("but does not include it."),
+            && error.contains("but does not include it."),
         "{error}"
     );
     // An embedded definition is checked like a piece file.
@@ -75,16 +79,20 @@ fn the_flask_paints_glass_hatching_and_liquid_and_is_hit_inside_its_bulb() {
 fn copying_carries_the_definitions_and_deleting_the_last_piece_drops_them() {
     let doc = with_flask();
     let part = crate::editing::selection(&doc, &[doc.graphics[0].id]);
-    assert_eq!(part.piece_definitions.len(), 1);
     let clipboard = serde_json::to_string(&part.current()).unwrap();
     let pasted = Document::from_json(clipboard.as_bytes()).unwrap();
     let mut target = Document::default();
     crate::editing::append(&mut target, &pasted, Point::new(10., 0.));
     assert_eq!(target.graphics.len(), 1);
-    assert_eq!(target.current().piece_definitions.len(), 1);
+    let written = |d: &Document| {
+        serde_json::to_value(d).unwrap()["piece_definitions"]
+            .as_array()
+            .map_or(0, Vec::len)
+    };
+    assert_eq!(written(&target), 1);
     let mut emptied = doc.clone();
     emptied.delete(&[doc.graphics[0].id]);
-    assert!(emptied.current().piece_definitions.is_empty());
+    assert_eq!(written(&emptied), 0);
 }
 
 #[test]
@@ -108,11 +116,22 @@ fn a_piece_turns_and_scales_but_never_stretches_or_takes_point_edits() {
     let mut g = doc.graphics[0].clone();
     assert!(g.edit_point(0, Point::new(1., 1.)).is_err());
     assert_eq!(g.kind, GraphicKind::Piece);
-    // Beyond 5 pt per mm a resize only moves the piece.
-    let frame = (doc.graphics[0].axis_x, doc.graphics[0].axis_y);
+    // Turning one way and back returns the piece to where it was.
+    let before = doc.graphics[0].clone();
+    let pivot = crate::editing::rotation_center(&doc, &[id]).unwrap();
+    crate::editing::transform_about(&mut doc, &[id], pivot, 1., 30.);
+    let pivot = crate::editing::rotation_center(&doc, &[id]).unwrap();
+    crate::editing::transform_about(&mut doc, &[id], pivot, 1., -30.);
+    assert!(doc.graphics[0].origin.distance(before.origin) < 1e-3);
+    // A resize stops at 5 pt per mm.
     crate::editing::transform_about(&mut doc, &[id], Point::new(0., 0.), 20., 0.);
     doc.validate().unwrap();
-    assert_eq!((doc.graphics[0].axis_x, doc.graphics[0].axis_y), frame);
+    let g = &doc.graphics[0];
+    let pt_per_mm = g.axis_x.distance(Point::default()) * doc.drawing_style.points_per_world();
+    assert!(
+        (pt_per_mm - placed::MAX_PT_PER_MM).abs() < 1e-3,
+        "{pt_per_mm}"
+    );
 }
 
 #[test]

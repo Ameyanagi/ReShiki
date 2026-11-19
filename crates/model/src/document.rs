@@ -340,7 +340,9 @@ fn newer_version(version: u64) -> String {
     )
 }
 
+/// The derive supplies the wire form; the impls below link equipment pieces.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(remote = "Document")]
 pub struct Document {
     #[serde(default, skip_serializing_if = "crate::generic::Generic::is_empty")]
     pub generic: crate::generic::Generic,
@@ -417,6 +419,37 @@ pub struct Document {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub piece_definitions: Vec<std::sync::Arc<crate::equipment::format::Definition>>,
 }
+/// Every drawing writes the definitions its pieces use, and every drawing read
+/// links its pieces to them, wherever it is written or read: files, the
+/// clipboard, recovery drafts, templates and engine round trips.
+impl Serialize for Document {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let used = crate::equipment::placed::used(self);
+        let current = used.len() == self.piece_definitions.len()
+            && used
+                .iter()
+                .zip(&self.piece_definitions)
+                .all(|(a, b)| std::sync::Arc::ptr_eq(a, b));
+        if current {
+            Document::serialize(self, serializer)
+        } else {
+            Document::serialize(
+                &Document {
+                    piece_definitions: used,
+                    ..self.clone()
+                },
+                serializer,
+            )
+        }
+    }
+}
+impl<'de> Deserialize<'de> for Document {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let mut doc = Document::deserialize(deserializer)?;
+        crate::equipment::placed::link(&mut doc).map_err(serde::de::Error::custom)?;
+        Ok(doc)
+    }
+}
 impl Default for Document {
     fn default() -> Self {
         Self {
@@ -469,7 +502,6 @@ impl Document {
         }
         crate::pictures::check_stored(bytes)?;
         let mut doc: Self = serde_json::from_slice(bytes).map_err(|e| e.to_string())?;
-        crate::equipment::placed::link(&mut doc)?;
         doc.validate()?;
         doc.migrate();
         crate::purpose::repair(&mut doc);
@@ -511,7 +543,6 @@ impl Document {
     pub fn current(&self) -> Self {
         Self {
             version: self.file_version(),
-            piece_definitions: crate::equipment::placed::used(self),
             ..self.clone()
         }
     }
@@ -928,6 +959,13 @@ impl Document {
             || !generic.is_empty()
     }
     pub fn validate(&self) -> Result<(), String> {
+        let pieces = crate::equipment::placed::used(self).len();
+        if pieces > crate::equipment::placed::MAX_DEFINITIONS {
+            return Err(format!(
+                "A drawing can use at most {} different equipment pieces; this one uses {pieces}.",
+                crate::equipment::placed::MAX_DEFINITIONS
+            ));
+        }
         if self.version < DISTANCE_BONDS && self.bonds.iter().any(|b| b.distance_derived) {
             return Err(format!(
                 "Distance-derived bonds need document version {DISTANCE_BONDS} or later"
