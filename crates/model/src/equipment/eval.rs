@@ -112,7 +112,10 @@ fn state<'v>(values: &'v Values, id: &str) -> Option<&'v str> {
 }
 
 /// The transform of every part, composed with its parents.
-fn part_transforms<'a>(def: &'a Definition, values: &Values) -> BTreeMap<&'a str, Affine> {
+pub(crate) fn part_transforms<'a>(
+    def: &'a Definition,
+    values: &Values,
+) -> BTreeMap<&'a str, Affine> {
     let own = |p: &Part| -> Affine {
         let t = number(def, values, &p.param);
         match &p.motion {
@@ -163,12 +166,23 @@ pub fn joints<'a>(def: &'a Definition, values: &Values) -> Vec<PosedJoint<'a>> {
 
 /// The holds of `def` posed at `values` (already resolved).
 pub fn holds<'a>(def: &'a Definition, values: &Values) -> Vec<PosedHold<'a>> {
-    posed_holds(def, &part_transforms(def, values))
+    posed_holds(def, values, &part_transforms(def, values))
 }
 
-fn posed_holds<'a>(def: &'a Definition, parts: &BTreeMap<&str, Affine>) -> Vec<PosedHold<'a>> {
+/// Whether something drawn or held only in some states is there at `values`.
+fn present(when: &BTreeMap<String, Vec<String>>, values: &Values) -> bool {
+    when.iter()
+        .all(|(k, states)| state(values, k).is_some_and(|v| states.iter().any(|x| x == v)))
+}
+
+fn posed_holds<'a>(
+    def: &'a Definition,
+    values: &Values,
+    parts: &BTreeMap<&str, Affine>,
+) -> Vec<PosedHold<'a>> {
     def.holds
         .iter()
+        .filter(|h| present(&h.when, values))
         .map(|h| {
             let m = (h.part.as_deref())
                 .and_then(|k| parts.get(k).copied())
@@ -219,11 +233,7 @@ pub fn evaluate<'a>(def: &'a Definition, values: &Values) -> Result<Evaluated<'a
     };
     let mut shapes = Vec::new();
     for s in &def.shapes {
-        let drawn = s
-            .when
-            .iter()
-            .all(|(k, states)| state(values, k).is_some_and(|v| states.iter().any(|x| x == v)));
-        if drawn {
+        if present(&s.when, values) {
             let path = parse_path(&s.path).map_err(|e| format!("Shape \"{}\": {e}", s.id))?;
             shapes.push(Drawn {
                 shape: s,
@@ -232,7 +242,7 @@ pub fn evaluate<'a>(def: &'a Definition, values: &Values) -> Result<Evaluated<'a
         }
     }
     let joints = posed(def, values, &parts);
-    let holds = posed_holds(def, &parts);
+    let holds = posed_holds(def, values, &parts);
     let mut liquids = Vec::new();
     for l in &def.liquids {
         let fill = def.params.iter().find_map(|p| match p {

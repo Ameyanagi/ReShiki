@@ -97,6 +97,25 @@ impl MoleculeCanvas<'_> {
                 }
                 Edit::RepeatLabelMove(bracket, World::new(p.x - start.x, p.y - start.y))
             }
+            Gesture::PieceHandle { id, handle, start } => {
+                use reshiki::equipment::solve::adjust;
+                let g = self.doc.graphics.iter().find(|g| g.id == id)?;
+                // A click switches a state; a drag sets a value.
+                let clicked = start.distance(p) < self.camera.world_len(DRAG_SLOP_PX);
+                let value = match (clicked, handle.toggle) {
+                    (true, true) => adjust::toggled(g, &handle.param),
+                    (false, false) => adjust::dragged(g, &handle, [f64::from(p.x), f64::from(p.y)]),
+                    _ => None,
+                };
+                let Some(value) = value.filter(|_| inside && self.tool.selects()) else {
+                    return Some(Action::request_redraw().and_capture());
+                };
+                Edit::PieceParam {
+                    id,
+                    param: handle.param,
+                    value,
+                }
+            }
             Gesture::GraphicPoint { id, index } => Edit::GraphicPoint(id, index, p),
             Gesture::PathPoint(drag) => {
                 if !drag.dragged(p, self.camera) {

@@ -208,6 +208,25 @@ impl MoleculeCanvas<'_> {
         ) {
             return mouse::Interaction::Grabbing;
         }
+        if let Some(Gesture::PieceHandle { handle, .. }) = &state.gesture {
+            return if handle.toggle {
+                mouse::Interaction::Pointer
+            } else {
+                mouse::Interaction::Grabbing
+            };
+        }
+        if state.gesture.is_none()
+            && self.tool.selects()
+            && !state.modifiers.alt()
+            && let Some(p) = cursor.position_in(bounds)
+            && let Some((_, handle)) = self.piece_handle_at(self.camera.world(p, bounds))
+        {
+            return if handle.toggle {
+                mouse::Interaction::Pointer
+            } else {
+                mouse::Interaction::Grab
+            };
+        }
         if let Some(Gesture::Move { ids, .. }) = &state.gesture
             && reshiki::models3d::shows_3d(self.doc, ids)
         {

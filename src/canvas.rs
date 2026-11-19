@@ -190,6 +190,12 @@ pub enum Edit {
     /// Move the repeat label beside a bracket by this much.
     RepeatLabelMove(u64, World),
     ArrowHandle(u64, usize, World),
+    /// Set a parameter of an equipment piece: a part's handle was dragged or clicked.
+    PieceParam {
+        id: u64,
+        param: String,
+        value: reshiki::equipment::eval::Value,
+    },
     /// Move an arrow node's direction control alone, making the node a Corner.
     ArrowControlFree(u64, usize, World),
     /// Split the arrow's shaft at this point with a new node.
@@ -501,6 +507,12 @@ enum Gesture {
         /// An interior node handle keeps its offset from the pointer, so a
         /// click inside it selects rather than moves it.
         grab: World,
+    },
+    /// A movable part's or a liquid's handle on a selected equipment piece.
+    PieceHandle {
+        id: u64,
+        handle: reshiki::equipment::solve::adjust::Handle,
+        start: World,
     },
     Transform(Box<TransformDrag>),
     Tilt(tilt::TiltDrag),

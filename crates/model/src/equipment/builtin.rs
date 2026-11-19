@@ -3,12 +3,16 @@
 use super::format::{Definition, parse};
 use std::sync::{Arc, OnceLock};
 
-const FILES: [&str; 18] = [
+const FILES: [&str; 22] = [
     include_str!("../../../../assets/pieces/rbf-50-15.reshiki-piece"),
     include_str!("../../../../assets/pieces/rbf-100-15.reshiki-piece"),
     include_str!("../../../../assets/pieces/rbf-100-29.reshiki-piece"),
     include_str!("../../../../assets/pieces/rbf-300-29.reshiki-piece"),
     include_str!("../../../../assets/pieces/rbf-500-29.reshiki-piece"),
+    include_str!("../../../../assets/pieces/schlenk-flask-100-15.reshiki-piece"),
+    include_str!("../../../../assets/pieces/schlenk-tube-15.reshiki-piece"),
+    include_str!("../../../../assets/pieces/jy-storage-flask-100.reshiki-piece"),
+    include_str!("../../../../assets/pieces/jy-schlenk-tube.reshiki-piece"),
     include_str!("../../../../assets/pieces/liebig-15.reshiki-piece"),
     include_str!("../../../../assets/pieces/liebig-29.reshiki-piece"),
     include_str!("../../../../assets/pieces/stopper-15.reshiki-piece"),

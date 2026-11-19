@@ -332,6 +332,9 @@ pub struct Hold {
     /// closes on: a clamp's fingers meet the neck they hold.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fit: Option<String>,
+    /// Parameter → states in which the hold holds: open jaws hold nothing.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub when: BTreeMap<String, Vec<String>>,
 }
 
 impl HoldKind {

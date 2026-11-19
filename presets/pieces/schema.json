@@ -553,6 +553,22 @@
               "maxItems": 2
             }
           ]
+        },
+        "fit": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "when": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            }
+          }
         }
       }
     },

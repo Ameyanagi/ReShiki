@@ -58,6 +58,10 @@ A seated cone sits 0.06 L outside the socket mouth (2.52 mm for 29/42).
 
 A segment something grips or slides along: `kind` is `rail` (a stand rod), `slider` (a boss head), `grip` (a neck) or `jaw` (a clamp), with `from`, `to` and `diameter_mm` (one number, or `[min, max]` for a jaw).
 
+- `part` moves the hold with a part, as a clamp's jaw tilts with its head.
+- `fit` names a millimetre `range` parameter that a jaw or slider sets to the diameter it closes on, so a clamp's fingers meet the neck.
+- `when`: `{"jaw": ["closed"]}` holds only in those states; an open jaw lets go of the neck, and closing it on a neck takes hold again.
+
 ### Parameters and parts
 
 - `range`: `min`, `max`, `default` and `unit` (`mm`, `deg` or `fraction`).

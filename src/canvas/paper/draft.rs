@@ -319,6 +319,39 @@ impl MoleculeCanvas<'_> {
         }
     }
 
+    /// A part or liquid handle dragged: the piece re-solved as release will
+    /// leave it, with the value and any seat it lets go of beside the pointer.
+    pub(super) fn preview_piece_handle(
+        &self,
+        draft: &mut Draft<'_>,
+        state: &State,
+        bounds: Rectangle,
+    ) {
+        use reshiki::equipment::solve::adjust;
+        let (Some(Gesture::PieceHandle { id, handle, start }), Some(c)) =
+            (&state.gesture, state.cursor)
+        else {
+            return;
+        };
+        let p = self
+            .camera
+            .world(Point::new(c.x - bounds.x, c.y - bounds.y), bounds);
+        if handle.toggle || start.distance(p) < self.camera.world_len(pick::DRAG_SLOP_PX) {
+            return;
+        }
+        let Some(g) = self.doc.graphics.iter().find(|g| g.id == *id) else {
+            return;
+        };
+        let Some(value) = adjust::dragged(g, handle, [f64::from(p.x), f64::from(p.y)]) else {
+            return;
+        };
+        let text = crate::app::equipment::value_text(g, &handle.param, Some(&value));
+        if let Ok(released) = adjust::set(draft.preview.to_mut(), *id, &handle.param, value) {
+            let note = crate::app::equipment::released_text(self.doc, *id, &released);
+            draft.chain_badge = Some((p, text + &note, released.is_empty()));
+        }
+    }
+
     pub(super) fn preview_move(&self, draft: &mut Draft<'_>, state: &State, bounds: Rectangle) {
         let Draft {
             preview,
