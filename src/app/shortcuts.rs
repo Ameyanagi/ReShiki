@@ -259,6 +259,8 @@ pub(super) fn key_message(key: &Key, modified: &Key, mods: Modifiers) -> Option<
                 "d" => Message::Optimization(super::optimization::Action::Begin),
                 "e" => Message::Inspector(InspectorTab::Export),
                 "c" => Message::CopyImage,
+                // ⌘+ is ⌘⇧= on most keyboards.
+                "+" | "=" => Message::Zoom(1.25),
                 _ => return None,
             });
         }
@@ -276,6 +278,8 @@ pub(super) fn key_message(key: &Key, modified: &Key, mods: Modifiers) -> Option<
             "l" => Message::Shortcut(Action::FixedLength),
             "e" => Message::Shortcut(Action::FixedAngles),
             "/" => Message::Fit,
+            "=" | "+" => Message::Zoom(1.25),
+            "-" => Message::Zoom(0.8),
             "," => Message::Settings(super::settings_page::Action::Open(None)),
             ";" => Message::Shortcut(Action::Rulers),
             "[" => Message::BondDepth(false),
