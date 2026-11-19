@@ -1,0 +1,174 @@
+{
+  "format": "reshiki-piece",
+  "format_version": 0,
+  "id": "reshiki/liebig-29",
+  "revision": 1,
+  "family": "liebig",
+  "variant": {
+    "joint": "29/42"
+  },
+  "names": {
+    "en": "Liebig condenser, 29/42",
+    "ja": "リービッヒ冷却管 29/42"
+  },
+  "category": "condenser",
+  "keywords": [
+    "Liebig",
+    "condenser",
+    "リービッヒ",
+    "冷却管"
+  ],
+  "credits": {
+    "author": "ReShiki",
+    "license": "CC0-1.0"
+  },
+  "units": "mm",
+  "shapes": [
+    {
+      "id": "s0",
+      "layer": "body",
+      "material": "glass",
+      "role": "glass",
+      "path": "M-7 -11.6L-7 -3.4L7 -3.4L7 -11.6Z"
+    },
+    {
+      "id": "s1",
+      "layer": "body",
+      "material": "glass",
+      "role": "glass",
+      "path": "M7 -4L7 -263L-7 -263L-7 -4Z"
+    },
+    {
+      "id": "s2",
+      "layer": "body",
+      "material": "glass",
+      "role": "glass",
+      "path": "M7 -16L15 -26L15 -226L7 -236L-7 -236L-15 -226L-15 -26L-7 -16Z"
+    },
+    {
+      "id": "s3",
+      "layer": "body",
+      "material": "glass",
+      "role": "glass",
+      "path": "M-13 -262L-13 -260L13 -260L13 -262Z"
+    },
+    {
+      "id": "s4",
+      "layer": "body",
+      "material": "glass",
+      "role": "glass",
+      "path": "M11 -34.6L23 -34.6L23 -33.3L27.5 -34.6L27.5 -33.3L32 -34.6L32 -33.4L36 -34.8L36 -41.2L32 -42.6L32 -41.4L27.5 -42.7L27.5 -41.4L23 -42.7L23 -41.4L11 -41.4Z"
+    },
+    {
+      "id": "s5",
+      "layer": "body",
+      "material": "glass",
+      "role": "glass",
+      "path": "M11 -220.6L23 -220.6L23 -219.3L27.5 -220.6L27.5 -219.3L32 -220.6L32 -219.4L36 -220.8L36 -227.2L32 -228.6L32 -227.4L27.5 -228.7L27.5 -227.4L23 -228.7L23 -227.4L11 -227.4Z"
+    },
+    {
+      "id": "s6",
+      "layer": "body",
+      "material": "glass",
+      "role": "detail",
+      "path": "M-7 -26L-7 -236"
+    },
+    {
+      "id": "s7",
+      "layer": "body",
+      "material": "glass",
+      "role": "detail",
+      "path": "M7 -26L7 -236"
+    }
+  ],
+  "joints": [
+    {
+      "id": "bottom",
+      "kind": "taper",
+      "size": "29/42",
+      "gender": "M",
+      "at": [
+        0,
+        0
+      ],
+      "dir": [
+        0,
+        1
+      ],
+      "draw": "standard"
+    },
+    {
+      "id": "top",
+      "kind": "taper",
+      "size": "29/42",
+      "gender": "F",
+      "at": [
+        0,
+        -308
+      ],
+      "dir": [
+        0,
+        -1
+      ],
+      "draw": "standard"
+    },
+    {
+      "id": "water-in",
+      "kind": "plug",
+      "family": "hose",
+      "gender": "M",
+      "size_mm": 7,
+      "at": [
+        36,
+        -38
+      ],
+      "dir": [
+        1,
+        0
+      ]
+    },
+    {
+      "id": "water-out",
+      "kind": "plug",
+      "family": "hose",
+      "gender": "M",
+      "size_mm": 7,
+      "at": [
+        36,
+        -224
+      ],
+      "dir": [
+        1,
+        0
+      ]
+    }
+  ],
+  "holds": [
+    {
+      "id": "top-neck",
+      "kind": "grip",
+      "from": [
+        0,
+        -262
+      ],
+      "to": [
+        0,
+        -260
+      ],
+      "diameter_mm": 26
+    },
+    {
+      "id": "jacket",
+      "kind": "grip",
+      "from": [
+        0,
+        -46
+      ],
+      "to": [
+        0,
+        -216
+      ],
+      "diameter_mm": 30
+    }
+  ]
+}

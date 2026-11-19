@@ -1,0 +1,369 @@
+{
+  "format": "reshiki-piece",
+  "format_version": 0,
+  "id": "reshiki/jy-schlenk-tube",
+  "revision": 1,
+  "family": "jy-schlenk-tube",
+  "variant": {
+    "body": "30 x 135 mm"
+  },
+  "names": {
+    "en": "J. Young Schlenk tube",
+    "ja": "J. Young シュレンク管"
+  },
+  "category": "schlenk",
+  "keywords": [
+    "Young",
+    "Schlenk",
+    "PTFE valve",
+    "air-free",
+    "ヤング",
+    "シュレンク"
+  ],
+  "credits": {
+    "author": "ReShiki",
+    "license": "CC0-1.0"
+  },
+  "units": "mm",
+  "shapes": [
+    {
+      "id": "s0",
+      "layer": "body",
+      "material": "glass",
+      "role": "glass",
+      "path": "M-4 -13.5Q-15 -6.07 -15 0L-15 120A15 15 0 0 0 15 120L15 0Q15 -6.07 4 -13.5Z"
+    },
+    {
+      "id": "s1",
+      "layer": "body",
+      "material": "glass",
+      "role": "glass",
+      "path": "M4 -12L4 -22L-4 -22L-4 -12Z"
+    },
+    {
+      "id": "s2",
+      "layer": "body",
+      "material": "glass",
+      "role": "glass",
+      "path": "M3.5 -21L3.5 -25L6.5 -30L6.5 -54L7.2 -54L7.2 -60L-7.2 -60L-7.2 -54L-6.5 -54L-6.5 -30L-3.5 -25L-3.5 -21Z"
+    },
+    {
+      "id": "s3",
+      "layer": "body",
+      "material": "glass",
+      "role": "glass",
+      "path": "M5 -30.6L12 -30.6L12 -37.4L5 -37.4Z"
+    },
+    {
+      "id": "s4",
+      "layer": "body",
+      "material": "glass",
+      "role": "detail",
+      "path": "M-5.2 -30L-1.6 -27.3"
+    },
+    {
+      "id": "s5",
+      "layer": "body",
+      "material": "glass",
+      "role": "detail",
+      "path": "M5.2 -30L1.6 -27.3"
+    },
+    {
+      "id": "s6",
+      "layer": "body",
+      "material": "glass",
+      "role": "detail",
+      "path": "M-7.2 -54.6L7.2 -55.5"
+    },
+    {
+      "id": "s7",
+      "layer": "body",
+      "material": "glass",
+      "role": "detail",
+      "path": "M-7.2 -56.5L7.2 -57.4"
+    },
+    {
+      "id": "s8",
+      "layer": "body",
+      "material": "glass",
+      "role": "detail",
+      "path": "M-7.2 -58.4L7.2 -59.3"
+    },
+    {
+      "id": "s9",
+      "layer": "body",
+      "material": "glass",
+      "role": "glass",
+      "path": "M9 -30.7L31 -30.7L31 -29.4L35.5 -30.7L35.5 -29.4L40 -30.7L40 -29.5L44 -30.9L44 -37.1L40 -38.5L40 -37.3L35.5 -38.6L35.5 -37.3L31 -38.6L31 -37.3L9 -37.3Z"
+    },
+    {
+      "id": "s10",
+      "layer": "inner",
+      "material": "ptfe",
+      "role": "solid",
+      "path": "M1.4 -27.4L3.9 -29.6L3.9 -73L-3.9 -73L-3.9 -29.6L-1.4 -27.4Z",
+      "part": "valve-part"
+    },
+    {
+      "id": "s11",
+      "layer": "inner",
+      "material": "rubber",
+      "role": "solid",
+      "color": [
+        58,
+        63,
+        68
+      ],
+      "path": "M-3.9 -30.1L-3.9 -31.3L3.9 -31.3L3.9 -30.1Z",
+      "part": "valve-part"
+    },
+    {
+      "id": "s12",
+      "layer": "inner",
+      "material": "rubber",
+      "role": "solid",
+      "color": [
+        58,
+        63,
+        68
+      ],
+      "path": "M-5.3 -38.5L-5.3 -39.9L5.3 -39.9L5.3 -38.5Z",
+      "part": "valve-part"
+    },
+    {
+      "id": "s13",
+      "layer": "inner",
+      "material": "rubber",
+      "role": "solid",
+      "color": [
+        58,
+        63,
+        68
+      ],
+      "path": "M-5.3 -41.5L-5.3 -42.9L5.3 -42.9L5.3 -41.5Z",
+      "part": "valve-part"
+    },
+    {
+      "id": "s14",
+      "layer": "body",
+      "material": "plastic",
+      "role": "solid",
+      "color": [
+        238,
+        182,
+        32
+      ],
+      "path": "M-7.15 -56L7.15 -56L8.97 -56.78L9.75 -58.6L9.75 -73.4L8.97 -75.22L7.15 -76L-7.15 -76L-8.97 -75.22L-9.75 -73.4L-9.75 -58.6L-8.97 -56.78Z",
+      "part": "valve-part"
+    },
+    {
+      "id": "s15",
+      "layer": "body",
+      "material": "plastic",
+      "role": "detail",
+      "color": [
+        168,
+        122,
+        12
+      ],
+      "path": "M-6.6 -58L-6.6 -74",
+      "part": "valve-part"
+    },
+    {
+      "id": "s16",
+      "layer": "body",
+      "material": "plastic",
+      "role": "detail",
+      "color": [
+        168,
+        122,
+        12
+      ],
+      "path": "M-3.3 -58L-3.3 -74",
+      "part": "valve-part"
+    },
+    {
+      "id": "s17",
+      "layer": "body",
+      "material": "plastic",
+      "role": "detail",
+      "color": [
+        168,
+        122,
+        12
+      ],
+      "path": "M0 -58L0 -74",
+      "part": "valve-part"
+    },
+    {
+      "id": "s18",
+      "layer": "body",
+      "material": "plastic",
+      "role": "detail",
+      "color": [
+        168,
+        122,
+        12
+      ],
+      "path": "M3.3 -58L3.3 -74",
+      "part": "valve-part"
+    },
+    {
+      "id": "s19",
+      "layer": "body",
+      "material": "plastic",
+      "role": "detail",
+      "color": [
+        168,
+        122,
+        12
+      ],
+      "path": "M6.6 -58L6.6 -74",
+      "part": "valve-part"
+    },
+    {
+      "id": "s20",
+      "layer": "body",
+      "material": "ptfe",
+      "role": "solid",
+      "path": "M-3.1 -76L3.1 -76L4.08 -76.42L4.5 -77.4L4.5 -80.6L4.08 -81.58L3.1 -82L-3.1 -82L-4.08 -81.58L-4.5 -80.6L-4.5 -77.4L-4.08 -76.42Z",
+      "part": "valve-part"
+    }
+  ],
+  "joints": [
+    {
+      "id": "hose",
+      "kind": "plug",
+      "family": "hose",
+      "gender": "M",
+      "size_mm": 7,
+      "at": [
+        44,
+        -34
+      ],
+      "dir": [
+        1,
+        0
+      ]
+    }
+  ],
+  "holds": [
+    {
+      "id": "body",
+      "kind": "grip",
+      "from": [
+        0,
+        8
+      ],
+      "to": [
+        0,
+        115
+      ],
+      "diameter_mm": 30
+    },
+    {
+      "id": "neck",
+      "kind": "grip",
+      "from": [
+        0,
+        -13
+      ],
+      "to": [
+        0,
+        -21
+      ],
+      "diameter_mm": 8
+    }
+  ],
+  "params": [
+    {
+      "id": "valve",
+      "names": {
+        "en": "Valve",
+        "ja": "バルブ"
+      },
+      "kind": "states",
+      "default": "closed",
+      "states": [
+        {
+          "id": "closed",
+          "names": {
+            "en": "Closed",
+            "ja": "閉"
+          }
+        },
+        {
+          "id": "open",
+          "names": {
+            "en": "Open",
+            "ja": "開"
+          }
+        }
+      ]
+    },
+    {
+      "id": "fill",
+      "names": {
+        "en": "Liquid level",
+        "ja": "液面"
+      },
+      "kind": "fill",
+      "liquid": "body",
+      "default": 0.25
+    },
+    {
+      "id": "liquid_color",
+      "names": {
+        "en": "Liquid colour",
+        "ja": "液の色"
+      },
+      "kind": "color",
+      "liquid": "body",
+      "default": [
+        79,
+        143,
+        208
+      ]
+    }
+  ],
+  "parts": [
+    {
+      "id": "valve-part",
+      "param": "valve",
+      "motion": {
+        "per_state": {
+          "closed": [
+            1,
+            0,
+            0,
+            1,
+            0,
+            0
+          ],
+          "open": [
+            1,
+            0,
+            0,
+            1,
+            0,
+            -7
+          ]
+        }
+      },
+      "handle": {
+        "at": [
+          0,
+          -66
+        ],
+        "gesture": "toggle"
+      }
+    }
+  ],
+  "liquids": [
+    {
+      "id": "body",
+      "region": "M -13.8 0 L -13.8 120 L -13.724 121.442 L -13.498 122.869 L -13.125 124.264 L -12.607 125.613 L -11.951 126.9 L -11.164 128.111 L -10.255 129.234 L -9.234 130.255 L -8.111 131.164 L -6.9 131.951 L -5.613 132.607 L -4.264 133.125 L -2.869 133.498 L -1.442 133.724 L 0 133.8 L 1.442 133.724 L 2.869 133.498 L 4.264 133.125 L 5.613 132.607 L 6.9 131.951 L 8.111 131.164 L 9.234 130.255 L 10.255 129.234 L 11.164 128.111 L 11.951 126.9 L 12.607 125.613 L 13.125 124.264 L 13.498 122.869 L 13.724 121.442 L 13.8 120 L 13.8 0 Z",
+      "meniscus": "concave"
+    }
+  ]
+}

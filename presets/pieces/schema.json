@@ -1,0 +1,907 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ReShiki equipment piece (format 0 preview, 1)",
+  "description": "One piece of lab equipment as data only: paths in millimetres (y down), joints, holds, parameters, movable parts and liquid regions. The Rust validator adds geometric checks this schema cannot express; run `reshiki --cli pieces check FILE`.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "format",
+    "format_version",
+    "id",
+    "revision",
+    "family",
+    "names",
+    "category",
+    "units"
+  ],
+  "properties": {
+    "format": {
+      "const": "reshiki-piece"
+    },
+    "format_version": {
+      "enum": [0, 1],
+      "description": "0 while the format is a preview; release builds that know only 1 refuse 0."
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9-]{1,64}/[a-z0-9-]{1,64}$",
+      "description": "namespace/name; reshiki/ is reserved for built-ins."
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "family": {
+      "type": "string",
+      "maxLength": 200
+    },
+    "variant": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string",
+        "maxLength": 200
+      }
+    },
+    "names": {
+      "type": "object",
+      "required": ["en"],
+      "additionalProperties": {
+        "type": "string",
+        "maxLength": 200
+      },
+      "propertyNames": {
+        "pattern": "^[a-z]{2,3}(-[A-Za-z0-9]+)?$"
+      }
+    },
+    "category": {
+      "enum": [
+        "flask",
+        "schlenk",
+        "condenser",
+        "distillation",
+        "adapter",
+        "addition",
+        "filtration",
+        "nmr",
+        "chromatography",
+        "vessel",
+        "heating",
+        "holding",
+        "other"
+      ]
+    },
+    "keywords": {
+      "type": "array",
+      "maxItems": 64,
+      "items": {
+        "type": "string",
+        "maxLength": 200
+      }
+    },
+    "credits": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "author": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "license": {
+          "type": "string",
+          "maxLength": 200
+        }
+      }
+    },
+    "units": {
+      "const": "mm"
+    },
+    "grounded": {
+      "type": "boolean",
+      "description": "Stays put when something attached to it moves: a stand, a hotplate."
+    },
+    "clip": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["size"],
+      "properties": {
+        "size": {
+          "enum": ["10/18", "14/20", "14/23", "15/25", "19/22", "19/28", "19/38", "24/29", "29/42"]
+        }
+      },
+      "description": "A joint clip; its frame is a seat's mating frame: the socket mouth at the origin, +y into the socket."
+    },
+    "tube": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["width_mm", "material", "ends"],
+      "description": "Flexible tubing drawn along a centre line stored on each placed copy.",
+      "properties": {
+        "width_mm": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "material": {
+          "enum": [
+            "glass",
+            "frosted",
+            "ptfe",
+            "rubber",
+            "plastic",
+            "metal",
+            "porcelain",
+            "cork",
+            "paper",
+            "silica",
+            "sand",
+            "liquid",
+            "ink"
+          ]
+        },
+        "color": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 255
+          },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "ends": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "minItems": 2,
+          "maxItems": 2
+        }
+      }
+    },
+    "shapes": {
+      "type": "array",
+      "maxItems": 256,
+      "items": {
+        "$ref": "#/$defs/shape"
+      }
+    },
+    "joints": {
+      "type": "array",
+      "maxItems": 32,
+      "items": {
+        "$ref": "#/$defs/joint"
+      }
+    },
+    "holds": {
+      "type": "array",
+      "maxItems": 16,
+      "items": {
+        "$ref": "#/$defs/hold"
+      }
+    },
+    "params": {
+      "type": "array",
+      "maxItems": 16,
+      "items": {
+        "$ref": "#/$defs/param"
+      }
+    },
+    "parts": {
+      "type": "array",
+      "maxItems": 32,
+      "items": {
+        "$ref": "#/$defs/part"
+      }
+    },
+    "liquids": {
+      "type": "array",
+      "maxItems": 8,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "region"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "region": {
+            "type": "string"
+          },
+          "meniscus": {
+            "enum": ["concave", "convex", "flat"]
+          }
+        }
+      }
+    },
+    "labels": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "at"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "at": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "minimum": -2000,
+              "maximum": 2000
+            },
+            "minItems": 2,
+            "maxItems": 2
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "shape": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "layer", "material", "role", "path"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "layer": {
+          "enum": ["back", "body", "inner", "front"]
+        },
+        "depth": {
+          "type": "integer",
+          "minimum": -8,
+          "maximum": 8
+        },
+        "material": {
+          "enum": [
+            "glass",
+            "frosted",
+            "ptfe",
+            "rubber",
+            "plastic",
+            "metal",
+            "porcelain",
+            "cork",
+            "paper",
+            "silica",
+            "sand",
+            "liquid",
+            "ink"
+          ]
+        },
+        "color": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 255
+          },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "role": {
+          "enum": ["glass", "solid", "detail"],
+          "description": "glass joins the piece's one silhouette; solid is filled and outlined; detail is a stroke."
+        },
+        "style": {
+          "enum": ["line", "shaded"]
+        },
+        "path": {
+          "type": "string",
+          "description": "SVG path data in mm: M L H V C S Q T A Z."
+        },
+        "part": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "when": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            }
+          }
+        }
+      }
+    },
+    "joint": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "id", "size", "gender", "at", "dir"],
+          "properties": {
+            "id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "gender": {
+              "enum": ["M", "F"]
+            },
+            "at": {
+              "type": "array",
+              "items": {
+                "type": "number",
+                "minimum": -2000,
+                "maximum": 2000
+              },
+              "minItems": 2,
+              "maxItems": 2
+            },
+            "dir": {
+              "type": "array",
+              "items": {
+                "type": "number",
+                "minimum": -2000,
+                "maximum": 2000
+              },
+              "minItems": 2,
+              "maxItems": 2
+            },
+            "part": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "poses": {
+              "type": "object",
+              "description": "Parameter → state → pose, for joints whose position in a state is not a rigid motion.",
+              "additionalProperties": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["at", "dir"],
+                  "properties": {
+                    "at": {
+                      "type": "array",
+                      "items": {
+                        "type": "number",
+                        "minimum": -2000,
+                        "maximum": 2000
+                      },
+                      "minItems": 2,
+                      "maxItems": 2
+                    },
+                    "dir": {
+                      "type": "array",
+                      "items": {
+                        "type": "number",
+                        "minimum": -2000,
+                        "maximum": 2000
+                      },
+                      "minItems": 2,
+                      "maxItems": 2
+                    }
+                  }
+                }
+              }
+            },
+            "kind": {
+              "const": "taper"
+            },
+            "size": {
+              "enum": [
+                "10/18",
+                "14/20",
+                "14/23",
+                "15/25",
+                "19/22",
+                "19/28",
+                "19/38",
+                "24/29",
+                "29/42"
+              ]
+            },
+            "draw": {
+              "const": "standard"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "id", "family", "gender", "size_mm", "at", "dir"],
+          "properties": {
+            "id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "gender": {
+              "enum": ["M", "F"]
+            },
+            "at": {
+              "type": "array",
+              "items": {
+                "type": "number",
+                "minimum": -2000,
+                "maximum": 2000
+              },
+              "minItems": 2,
+              "maxItems": 2
+            },
+            "dir": {
+              "type": "array",
+              "items": {
+                "type": "number",
+                "minimum": -2000,
+                "maximum": 2000
+              },
+              "minItems": 2,
+              "maxItems": 2
+            },
+            "part": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "poses": {
+              "type": "object",
+              "description": "Parameter → state → pose, for joints whose position in a state is not a rigid motion.",
+              "additionalProperties": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["at", "dir"],
+                  "properties": {
+                    "at": {
+                      "type": "array",
+                      "items": {
+                        "type": "number",
+                        "minimum": -2000,
+                        "maximum": 2000
+                      },
+                      "minItems": 2,
+                      "maxItems": 2
+                    },
+                    "dir": {
+                      "type": "array",
+                      "items": {
+                        "type": "number",
+                        "minimum": -2000,
+                        "maximum": 2000
+                      },
+                      "minItems": 2,
+                      "maxItems": 2
+                    }
+                  }
+                }
+              }
+            },
+            "kind": {
+              "const": "plug"
+            },
+            "family": {
+              "enum": ["hose", "stopper", "septum", "thermometer", "nmr", "stir"]
+            },
+            "size_mm": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            }
+          }
+        }
+      ]
+    },
+    "hold": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "from", "to", "diameter_mm"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "kind": {
+          "enum": ["rail", "slider", "grip", "jaw"]
+        },
+        "from": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "minimum": -2000,
+            "maximum": 2000
+          },
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "to": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "minimum": -2000,
+            "maximum": 2000
+          },
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "part": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "diameter_mm": {
+          "oneOf": [
+            {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "minItems": 2,
+              "maxItems": 2
+            }
+          ]
+        }
+      }
+    },
+    "param": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "id", "names", "min", "max", "default", "unit"],
+          "properties": {
+            "kind": {
+              "const": "range"
+            },
+            "id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "names": {
+              "type": "object",
+              "required": ["en"],
+              "additionalProperties": {
+                "type": "string",
+                "maxLength": 200
+              },
+              "propertyNames": {
+                "pattern": "^[a-z]{2,3}(-[A-Za-z0-9]+)?$"
+              }
+            },
+            "min": {
+              "type": "number"
+            },
+            "max": {
+              "type": "number"
+            },
+            "default": {
+              "type": "number"
+            },
+            "unit": {
+              "enum": ["mm", "deg", "fraction"]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "id", "names", "states", "default"],
+          "properties": {
+            "kind": {
+              "const": "states"
+            },
+            "id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "names": {
+              "type": "object",
+              "required": ["en"],
+              "additionalProperties": {
+                "type": "string",
+                "maxLength": 200
+              },
+              "propertyNames": {
+                "pattern": "^[a-z]{2,3}(-[A-Za-z0-9]+)?$"
+              }
+            },
+            "default": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "states": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["id", "names"],
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
+                  },
+                  "names": {
+                    "type": "object",
+                    "required": ["en"],
+                    "additionalProperties": {
+                      "type": "string",
+                      "maxLength": 200
+                    },
+                    "propertyNames": {
+                      "pattern": "^[a-z]{2,3}(-[A-Za-z0-9]+)?$"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "id", "names", "liquid", "default"],
+          "properties": {
+            "kind": {
+              "const": "fill"
+            },
+            "id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "names": {
+              "type": "object",
+              "required": ["en"],
+              "additionalProperties": {
+                "type": "string",
+                "maxLength": 200
+              },
+              "propertyNames": {
+                "pattern": "^[a-z]{2,3}(-[A-Za-z0-9]+)?$"
+              }
+            },
+            "liquid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "default": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "id", "names", "liquid", "default"],
+          "properties": {
+            "kind": {
+              "const": "color"
+            },
+            "id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "names": {
+              "type": "object",
+              "required": ["en"],
+              "additionalProperties": {
+                "type": "string",
+                "maxLength": 200
+              },
+              "propertyNames": {
+                "pattern": "^[a-z]{2,3}(-[A-Za-z0-9]+)?$"
+              }
+            },
+            "liquid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "default": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 255
+              },
+              "minItems": 3,
+              "maxItems": 3
+            }
+          }
+        }
+      ]
+    },
+    "part": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "param", "motion"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "parent": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "param": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "handle": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["at", "gesture"],
+          "properties": {
+            "at": {
+              "type": "array",
+              "items": {
+                "type": "number",
+                "minimum": -2000,
+                "maximum": 2000
+              },
+              "minItems": 2,
+              "maxItems": 2
+            },
+            "gesture": {
+              "enum": ["drag", "toggle"]
+            }
+          }
+        },
+        "motion": {
+          "description": "Linear in the parameter, measured from its default.",
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["translate"],
+              "properties": {
+                "translate": {
+                  "type": "array",
+                  "items": {
+                    "type": "number"
+                  },
+                  "minItems": 2,
+                  "maxItems": 2
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["rotate"],
+              "properties": {
+                "rotate": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["pivot", "degrees_per_unit"],
+                  "properties": {
+                    "pivot": {
+                      "type": "array",
+                      "items": {
+                        "type": "number",
+                        "minimum": -2000,
+                        "maximum": 2000
+                      },
+                      "minItems": 2,
+                      "maxItems": 2
+                    },
+                    "degrees_per_unit": {
+                      "type": "number"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["scale"],
+              "properties": {
+                "scale": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["pivot", "per_unit"],
+                  "properties": {
+                    "pivot": {
+                      "type": "array",
+                      "items": {
+                        "type": "number",
+                        "minimum": -2000,
+                        "maximum": 2000
+                      },
+                      "minItems": 2,
+                      "maxItems": 2
+                    },
+                    "per_unit": {
+                      "type": "number"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["stretch"],
+              "properties": {
+                "stretch": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["pivot", "axis", "per_unit"],
+                  "properties": {
+                    "pivot": {
+                      "type": "array",
+                      "items": {
+                        "type": "number",
+                        "minimum": -2000,
+                        "maximum": 2000
+                      },
+                      "minItems": 2,
+                      "maxItems": 2
+                    },
+                    "axis": {
+                      "type": "array",
+                      "items": {
+                        "type": "number",
+                        "minimum": -2000,
+                        "maximum": 2000
+                      },
+                      "minItems": 2,
+                      "maxItems": 2
+                    },
+                    "per_unit": {
+                      "type": "number"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["per_state"],
+              "properties": {
+                "per_state": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "array",
+                    "items": {
+                      "type": "number"
+                    },
+                    "minItems": 6,
+                    "maxItems": 6
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}

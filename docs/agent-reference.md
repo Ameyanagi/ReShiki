@@ -19,6 +19,7 @@ Commands:
   analyze      Print molecular properties as one JSON line
   predict-nmr  Print predicted NMR shifts as one JSON line
   name         Print the systematic name of a structure
+  pieces       Check equipment piece files: reshiki --cli pieces check FILE…
   info         Print versions, limits and formats as one JSON line
   tools        Print the agent tool catalog as one JSON line
   schema       Print a JSON Schema: reshiki --cli schema proposal
@@ -247,6 +248,20 @@ value contains name, preferred, status, reason, detail, alternatives and aliases
   alternatives   Other verified names, each with name, status and reason.
 With --locants, value also contains locants: one string or null per imported
 atom, in input atom order. Atoms outside the principal parent have null.
+```
+
+### reshiki --cli pieces
+
+```text
+Experimental: ReShiki's agent tools, schemas and results may change between releases.
+Usage: reshiki --cli pieces check FILE...
+
+Checks lab equipment piece files (.reshiki-piece): the format, the limits,
+every reference between shapes, joints, parts and parameters, and that each
+joint sits on the rim of its opening. Prints one JSON line,
+{"pieces": [{"file", "ok", "id", "revision", "hash"} or
+{"file", "ok": false, "error"}]}, and exits 1 when any file fails. The
+hash is the piece's content identity. Nothing is installed or changed.
 ```
 
 ### reshiki --cli info
