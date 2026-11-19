@@ -576,3 +576,39 @@ fn a_hue_change_recolors_the_legend_through_the_edit_reconcile() {
     let (_, swatches) = legend_swatches(&doc);
     assert_eq!(swatches[0], Color::Palette(Hue::Purple, Row::Strong));
 }
+
+#[test]
+fn a_panel_title_below_the_reaction_is_not_free_space() {
+    use crate::graphics::{BracketSides, Graphic, GraphicKind, GraphicStyle, Panel, TitlePlace};
+    let DielsAlder { mut doc, arrow, .. } = diels_alder(true);
+    let (lo, hi) = crate::scene::selection_bounds(&doc, &doc.all_ids()).unwrap();
+    // A panel just below the reaction holds the spot the legend would take,
+    // but its title band covers it.
+    let id = doc.next_id();
+    let mut panel = Graphic::dragged(
+        id,
+        GraphicKind::RoundedRectangle,
+        Point::new(lo.x - 40., hi.y + 5.),
+        Point::new(hi.x + 40., hi.y + 400.),
+        GraphicStyle::default(),
+        BracketSides::Both,
+        false,
+    );
+    panel.panel = Some(Panel {
+        titles: vec!["Mechanistic studies of the cycloaddition".into()],
+        place: TitlePlace::Bar,
+        ..Default::default()
+    });
+    doc.graphics.push(panel);
+    doc.validate().unwrap();
+    set_legend(&mut doc, arrow, true, Default::default()).unwrap();
+    let (legend, _) = legend_and_others(&doc);
+    let text = doc.drawing_style.text_style();
+    let band = doc.graphics[0].panel_bar_height(&text);
+    assert!(band > 0.);
+    let (top, _) = crate::scene::selection_bounds(&doc, &[id]).unwrap();
+    assert!(
+        apart(legend, (top, Point::new(hi.x + 40., top.y + band))),
+        "{legend:?}"
+    );
+}

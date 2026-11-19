@@ -773,10 +773,37 @@ fn place(doc: &mut Document, arrow: u64, legend: u64) {
         Point::new(hi.x + w, hi.y + 4. * height),
     ));
     // Only objects in reach of a spot the legend may take.
+    // A panel's title band, titles and dividers are obstacles of their own.
+    let text = doc.drawing_style.text_style();
+    let mut panel_marks = Vec::new();
+    for g in doc.graphics.iter().filter(|g| g.panel.is_some()) {
+        for part in g.panel_parts(&text) {
+            let mut points = Vec::new();
+            for command in &part.commands {
+                command.map(|p| {
+                    points.push(p);
+                    p
+                });
+            }
+            if let Some(first) = points.first() {
+                let fold = points.iter().fold((*first, *first), |(lo, hi), p| {
+                    (
+                        Point::new(lo.x.min(p.x), lo.y.min(p.y)),
+                        Point::new(hi.x.max(p.x), hi.y.max(p.y)),
+                    )
+                });
+                panel_marks.push((fold, false));
+            }
+        }
+        for label in g.panel_titles(&text) {
+            panel_marks.extend(label.ink_boxes().into_iter().map(|b| (b, false)));
+        }
+    }
     let boxes: Vec<_> = crate::scene::selections_bounds(doc, &objects)
         .into_iter()
         .enumerate()
         .filter_map(|(i, b)| Some((b?, i >= shapes)))
+        .chain(panel_marks)
         .filter(|((p, q), _)| {
             q.x >= from.x.min(below.x)
                 && p.x <= to.x.max(below.x + w)
