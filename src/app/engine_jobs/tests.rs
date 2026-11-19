@@ -173,3 +173,12 @@ fn inserted_structures_follow_the_drawings_label_settings() {
     let _ = app.update(Message::Undo);
     assert_eq!(app.tab.doc, before);
 }
+
+#[test]
+fn only_the_export_button_goes_on_past_the_loss_list() {
+    use rfd::MessageDialogResult as Answer;
+    assert!(super::goes_on(Answer::Ok));
+    assert!(super::goes_on(Answer::Custom("Export…".into())));
+    assert!(!super::goes_on(Answer::Custom("Cancel".into())));
+    assert!(!super::goes_on(Answer::Cancel));
+}

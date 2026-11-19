@@ -231,19 +231,15 @@ impl App {
             }
             let (output, stem) = (response.output.unwrap_or_default(), self.export_stem());
             // What a ChemDraw file leaves out is read before it is written.
-            if matches!(format, "cdx" | "cdxml")
-                && !warnings.is_empty()
-                && !cfg!(target_arch = "wasm32")
-            {
-                return Task::perform(read_losses(format, warnings.clone()), |go| go).then(
-                    move |go| {
-                        if go {
-                            export_file(output.clone(), format, stem.clone(), vec![])
-                        } else {
-                            Task::done(Message::Exported(Ok(None)))
-                        }
-                    },
-                );
+            #[cfg(not(target_arch = "wasm32"))]
+            if matches!(format, "cdx" | "cdxml") && !warnings.is_empty() {
+                return read_losses(format, warnings).then(move |go| {
+                    if go {
+                        export_file(output.clone(), format, stem.clone(), vec![])
+                    } else {
+                        Task::done(Message::Exported(Ok(None)))
+                    }
+                });
             }
             return export_file(output, format, stem, warnings);
         }
@@ -555,23 +551,37 @@ pub(super) fn whole_analysis(doc: &Document, analysis: Option<Analysis>) -> Opti
     analysis.filter(|_| !reshiki::purpose::used(doc) && doc.atoms.iter().all(|a| a.map_num == 0))
 }
 
-/// Lists what a ChemDraw export leaves out or changes; true goes on to save it.
-async fn read_losses(format: &str, losses: Vec<String>) -> bool {
-    const EXPORT: &str = "Export…";
-    let list: Vec<_> = losses.iter().map(|loss| format!("• {loss}")).collect();
-    let answer = rfd::AsyncMessageDialog::new()
-        .set_level(rfd::MessageLevel::Warning)
-        .set_title(format!("Export {}?", format.to_uppercase()))
-        .set_description(format!(
-            "What changes in this file:\n\n{}",
-            list.join("\n\n")
-        ))
-        .set_buttons(rfd::MessageButtons::OkCancelCustom(
-            EXPORT.into(),
-            "Cancel".into(),
-        ))
-        .show()
-        .await;
+#[cfg(not(target_arch = "wasm32"))]
+const EXPORT: &str = "Export…";
+
+/// Lists, over the window, what a ChemDraw export leaves out or changes; true
+/// goes on to choose where to save it.
+#[cfg(not(target_arch = "wasm32"))]
+fn read_losses(format: &'static str, losses: Vec<String>) -> Task<bool> {
+    iced::window::latest().then(move |window| {
+        let list: Vec<_> = losses.iter().map(|loss| format!("• {loss}")).collect();
+        let dialog = rfd::AsyncMessageDialog::new()
+            .set_level(rfd::MessageLevel::Warning)
+            .set_title(format!("Export {}?", format.to_uppercase()))
+            .set_description(format!(
+                "What changes in this file:\n\n{}",
+                list.join("\n\n")
+            ))
+            .set_buttons(rfd::MessageButtons::OkCancelCustom(
+                EXPORT.into(),
+                "Cancel".into(),
+            ));
+        match window {
+            Some(id) => iced::window::run(id, move |window| dialog.set_parent(&window).show())
+                .then(|answer| Task::perform(answer, goes_on)),
+            None => Task::perform(dialog.show(), goes_on),
+        }
+    })
+}
+
+/// Windows and GTK answer Ok; macOS and Zenity name the button.
+#[cfg(not(target_arch = "wasm32"))]
+fn goes_on(answer: rfd::MessageDialogResult) -> bool {
     match answer {
         rfd::MessageDialogResult::Ok => true,
         rfd::MessageDialogResult::Custom(label) => label == EXPORT,
