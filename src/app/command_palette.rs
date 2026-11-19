@@ -1,9 +1,10 @@
-//! The command palette: `:` opens a fuzzy search over commands, and Enter
+//! The command palette: Command+K or `:` opens a fuzzy search, and Enter
 //! runs the selected one. Unlike Help, it executes. Each command runs through
 //! the path its button, menu or key already uses, so an edit is one undo step.
 use super::{
     App, Message, Pending,
     help::{Placement, chord, modal, row_button, search},
+    shortcuts,
     workspace::{control, muted_text},
 };
 use crate::canvas::Edit;
@@ -179,10 +180,21 @@ impl State {
     }
 }
 
+pub(super) fn is_shortcut(key: &Key, modifiers: Modifiers) -> bool {
+    modifiers.command()
+        && !modifiers.shift()
+        && !modifiers.alt()
+        && matches!(key, Key::Character(c) if c.eq_ignore_ascii_case("k"))
+}
+
+pub(super) fn shortcut_keys() -> String {
+    shortcuts::keys(Modifiers::COMMAND, "K")
+}
+
 /// Keys the palette takes before its search field: closing, filtering and
 /// moving.
 pub(super) fn modal_key(key: &Key, modifiers: Modifiers) -> Option<Message> {
-    if matches!(key, Key::Named(Named::Escape)) {
+    if matches!(key, Key::Named(Named::Escape)) || is_shortcut(key, modifiers) {
         return Some(Message::Commands(Action::Close));
     }
     if matches!(key, Key::Named(Named::Tab))
@@ -341,6 +353,88 @@ impl App {
                 .selected
                 .is_empty()
                 .then_some("Select something first"),
+            Need::LastingLayout => {
+                (self.alignment_count() < 2).then_some("Select at least two objects")
+            }
+            Need::Layout => self
+                .selected_layout()
+                .is_none()
+                .then_some("Select a lasting layout"),
+            Need::ObjectOrder => (!super::object_toolbar::Command::Layer(true).enabled(self, 0))
+                .then_some("Select graphics or bonds"),
+            Need::Callout => self
+                .callout_target()
+                .is_none()
+                .then_some("Select a callout target"),
+            Need::Equipment => (!self.pieces_selected()).then_some("Select equipment first"),
+            Need::EquipmentClips => (self.tab.selected.len() < 2
+                || reshiki::equipment::solve::unclipped(&self.tab.doc, &self.tab.selected) == 0)
+                .then_some("Select equipment with unclipped joints"),
+            Need::MakeCycle => (self.tab.cycle_inputs.proposal.is_none()
+                && (self.selected_cycle().is_some()
+                    || self.cycle_part_selected()
+                    || self.alignment_count() < 2))
+                .then_some("Select at least two objects outside a cycle"),
+            Need::CyclePart => (self.selected_cycle().is_some() || !self.cycle_part_selected())
+                .then_some("Select a part of a cycle"),
+            Need::Cycle => self
+                .selected_cycle()
+                .is_none()
+                .then_some("Select a catalytic cycle"),
+            Need::CycleStep => self
+                .cycle_step()
+                .is_none()
+                .then_some("Select a cycle with steps"),
+            Need::CycleProposal => self
+                .tab
+                .cycle_inputs
+                .proposal
+                .is_none()
+                .then_some("Make a cycle proposal first"),
+            Need::Panel => self
+                .selected_panels()
+                .next()
+                .is_none()
+                .then_some("Select a panel"),
+            Need::GraphicFill => (self.selected_styled_graphics().next().is_none()
+                || !self.graphic_fill_controls())
+            .then_some("Select a closed shape"),
+            Need::RingFill => (!self.selected_ring_fills().iter().any(Option::is_some))
+                .then_some("Select a filled ring"),
+            Need::Purpose => (!self
+                .tab
+                .selected
+                .iter()
+                .any(|id| reshiki::purpose::of(&self.tab.doc, *id).is_some()))
+            .then_some("Select a molecule or arrow"),
+            Need::ReactionPreview => (!self.selected_reaction_arrow().is_some_and(|a| {
+                a.purpose.is_chemistry()
+                    && reshiki::arrows::Preset::from_kind(&a.kind)
+                        .reaction_role_refusal()
+                        .is_none()
+            }))
+            .then_some("Select one reaction arrow"),
+            Need::ReactionReady => (!self.selected_reaction_arrow().is_some_and(|a| {
+                self.tab
+                    .doc
+                    .reactions
+                    .iter()
+                    .any(|r| r.arrow == a.id && r.ready())
+            }))
+            .then_some("Select one arrow with assigned reaction roles"),
+            Need::ReactionColors => self
+                .reaction_colors()
+                .is_none()
+                .then_some("Color a reaction by origin first"),
+            Need::Arrow => self
+                .selected_arrows()
+                .next()
+                .is_none()
+                .then_some("Select an arrow"),
+            Need::ArrowBody => (self.selected_arrows().next().is_none()
+                || !self.arrow_body_controls())
+            .then_some("Select an arrow with body styles"),
+            Need::MakeArc => (!self.can_make_arc()).then_some("Select a free arrow without a bend"),
             Need::TextBoxes => (!self.selected_text_boxes()).then_some("Select a text box first"),
             Need::Resizable => self.need_unavailable(Need::Selection, target).or_else(|| {
                 let ids = self
@@ -480,9 +574,10 @@ impl App {
             Category::Insert | Category::Tool if target.atoms.is_empty() => 10,
             _ => 0,
         };
-        let query = self.commands.query().to_owned();
+        let typed = self.commands.query().to_owned();
+        let query = search::normalize_spelling(&typed);
         let query = query.as_str();
-        let extra = catalog::parameterised(self, query);
+        let extra = catalog::parameterised(self, &typed);
         // A blocked scale or flip keeps its explanation first, followed by the
         // explicit display switch. Only one whole model can use that switch.
         let display_recovery = extra
@@ -546,10 +641,10 @@ impl App {
                     // has a word starting with the query comes first; for one
                     // or two letters, after every command instead.
                     if catalog::github_place(&command.name) {
-                        let short = query.chars().count() <= 2;
+                        let short = typed.chars().count() <= 2;
                         let word = (command.name.rsplit(": ").next().unwrap_or_default())
                             .split(|c: char| !c.is_alphanumeric())
-                            .any(|word| word.to_lowercase().starts_with(&query.to_lowercase()));
+                            .any(|word| word.to_lowercase().starts_with(&typed.to_lowercase()));
                         if short {
                             return search::score(command, query).map(|_| (0, i, 0));
                         }
@@ -582,17 +677,6 @@ impl App {
                 })
                 .collect()
         };
-        // Catalog order puts direct actions before templates and examples, so
-        // a repeated built-in title keeps the direct action. Saved templates
-        // always stay: they may hold a different structure under the same
-        // name, and their rows name the collection.
-        let mut names = std::collections::HashSet::new();
-        scored.retain(|(_, i, _)| {
-            catalog.get(*i).is_some_and(|c| {
-                matches!(&c.run, Run::Template(_, id) if !id.starts_with("builtin:"))
-                    || names.insert(c.name.clone())
-            })
-        });
         let blocked = |i: usize| blocked.get(i).copied().unwrap_or(false);
         // An exact alias ranks first even when it cannot run, to say why.
         // Recent commands stay above the rest, with available ones first.
@@ -617,26 +701,26 @@ impl App {
             rows.push((true, command));
         }
         if !query.is_empty() && best < STRONG && named {
-            if reshiki::chemistry::smiles::parse(query).is_ok() {
+            if reshiki::chemistry::smiles::parse(&typed).is_ok() {
                 rows.push((
                     false,
                     Command::new(
-                        format!("Insert SMILES {query}"),
+                        format!("Insert SMILES {typed}"),
                         Category::Insert,
                         "Insert the structure this SMILES describes",
                         "",
-                        Run::Smiles(query.into()),
+                        Run::Smiles(typed.clone()),
                     ),
                 ));
             }
             rows.push((
                 false,
                 Command::new(
-                    format!("Insert structure named “{query}”"),
+                    format!("Insert structure named “{typed}”"),
                     Category::Insert,
                     "Convert the chemical name to a structure and insert it",
                     "",
-                    Run::Name(query.into()),
+                    Run::Name(typed),
                 ),
             ));
         }
@@ -646,7 +730,11 @@ impl App {
             .collect();
         let state = &mut self.commands;
         for (first, blocked, command) in rows {
-            if !names.insert(command.name.clone()) {
+            if state
+                .hits
+                .iter()
+                .any(|&index| state.items[index].name == command.name)
+            {
                 continue;
             }
             let index = state.items.len();
@@ -1036,10 +1124,11 @@ impl App {
             container(text(detail).size(12).wrapping(Wrapping::None))
                 .width(Length::Fill)
                 .clip(true),
-            text(format!(
-                "↑ ↓ move · Tab filters · ↩ runs · Esc closes · {}",
+            rich_text(shortcuts::spans(&format!(
+                "{} toggles · : opens · ↑ ↓ move · Tab filters · ↩ runs · Esc closes · {}",
+                shortcut_keys(),
                 self.command_target_hint(&target)
-            ))
+            )))
             .size(12)
             .style(muted_text),
         ]

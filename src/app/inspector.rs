@@ -2349,11 +2349,7 @@ impl App {
                     Message::Figure(super::figure_panels::Action::Wrap)
                 ),
                 crate::appearance::pick_list(
-                    [
-                        reshiki::layouts::Flow::Row,
-                        reshiki::layouts::Flow::Column,
-                        reshiki::layouts::Flow::Grid(2),
-                    ],
+                    super::figure_panels::LASTING_LAYOUTS,
                     None::<reshiki::layouts::Flow>,
                     |flow| Message::Figure(super::figure_panels::Action::Arrange(flow)),
                 )

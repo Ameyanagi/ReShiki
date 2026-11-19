@@ -47,6 +47,182 @@ fn top(app: &App) -> &Command {
 }
 
 #[test]
+fn drawing_commands_have_unique_palette_names() {
+    let list = catalog::build(&app());
+    let mut seen = HashSet::new();
+    for command in &list {
+        assert!(
+            seen.insert(command.name.as_str()),
+            "Duplicate palette name: {}",
+            command.name
+        );
+    }
+    for name in [
+        "Figure layouts",
+        "Make catalytic cycle",
+        "Remove from cycle",
+        "Cycle review: Reverse order",
+        "Cycle review: Discard",
+        "Cycle: Clockwise",
+        "Cycle: Counterclockwise",
+        "Cycle step: Reversible",
+        "Cycle step: Hide arrow",
+        "Connect…",
+        "Equipment: Add clips to all joints",
+        "Equipment: Detach",
+        "Equipment: Update",
+        "Equipment: Update all in drawing",
+        "Add callout",
+        "Wrap in panel",
+        "Row with even gutters",
+        "Column with even gutters",
+        "Grid with even gutters",
+        "Bring to front",
+        "Send to back",
+        "Shadow",
+        "Graphic: Shaded",
+        "Make arc",
+        "Panel: Outline",
+        "Panel: Title bar",
+        "Panel: In border",
+        "Panel: Rounded corners",
+        "Panel: Square corners",
+        "Panel: Split columns",
+        "Panel: Split rows",
+        "Panel: Fit to contents",
+        "Panel: Clear contents",
+        "Layout: Row",
+        "Layout: Column",
+        "Layout: Grid",
+        "Layout: Start",
+        "Layout: Center",
+        "Layout: End",
+        "Gradient: None",
+        "Gradient: Linear",
+        "Gradient: Radial",
+        "Highlight style: Flat",
+        "Highlight style: Soft glow",
+        "Highlight style: Disc",
+        "Fill effect: Flat",
+        "Fill effect: Gradient",
+        "Fill effect: Opacity",
+        "Fill effect: Soft glow",
+        "Fill effect: Disc",
+        "Arrow body: Line",
+        "Arrow body: Block",
+        "Arrow body: Hollow block",
+        "Arrow body: Chevron",
+        "Arrow body: Gradient",
+        "Arrow pattern: Solid",
+        "Arrow pattern: Dashed",
+        "Arrow pattern: Dotted",
+        "Arrow pattern: Wavy",
+        "Bold arrow",
+        "Dashed arrow",
+        "Hollow arrow",
+        "Unequal equilibrium arrow",
+        "Angled arrow",
+        "Half arrow",
+        "Block arrow",
+        "Hollow block arrow",
+        "Chevron arrow",
+        "Gradient arrow",
+        "Arc arrow",
+        "Purpose: Chemistry",
+        "Purpose: Reference",
+        "Purpose: Illustration",
+        "Preview reaction",
+        "Color by origin",
+        "Color by origin: Clear colors",
+        "Color by origin: Mark new bonds",
+        "Color by origin: Mark broken and changed bonds",
+        "Color by origin: Fill new rings",
+        "Color by origin: Legend",
+    ] {
+        let command = list
+            .iter()
+            .find(|command| command.name == name)
+            .unwrap_or_else(|| panic!("Missing palette command: {name}"));
+        let label = name.split_once(": ").map_or(name, |(_, label)| label);
+        assert!(label.chars().count() <= 30, "{name}");
+        assert!(
+            command.detail.chars().count() <= 80,
+            "{name}: {}",
+            command.detail
+        );
+    }
+}
+
+#[test]
+fn drawing_commands_send_the_same_actions_as_their_controls() {
+    use crate::app::{cycles, equipment, figure_panels, palettes};
+    use reshiki::highlights::HighlightStyle;
+
+    let list = catalog::build(&app());
+    let commands = [
+        (
+            "Make catalytic cycle",
+            Message::Cycle(cycles::Action::Make),
+            Need::MakeCycle,
+        ),
+        (
+            "Connect…",
+            Message::Equipment(equipment::Action::Connect),
+            Need::Equipment,
+        ),
+        ("Add callout", Message::AddCallout, Need::Callout),
+        (
+            "Wrap in panel",
+            Message::Figure(figure_panels::Action::Wrap),
+            Need::Selection,
+        ),
+        (
+            "Highlight style: Soft glow",
+            Message::HighlightStyle(HighlightStyle::Glow),
+            Need::Nothing,
+        ),
+    ]
+    .into_iter()
+    .map(|(name, message, need)| (name.to_owned(), message, need))
+    .chain(palettes::arrow_options().into_iter().map(|option| {
+        (
+            option.command_name(),
+            Message::Palette(option.action()),
+            Need::Nothing,
+        )
+    }));
+    for (name, message, need) in commands {
+        let command = list.iter().find(|command| command.name == name).unwrap();
+        assert_eq!(command.need, need, "{name}");
+        let Run::Send(messages) = &command.run else {
+            panic!("{name} must send its control’s message");
+        };
+        assert_eq!(
+            format!("{messages:?}"),
+            format!("{:?}", [message]),
+            "{name}"
+        );
+    }
+}
+
+#[test]
+fn figure_layouts_opens_the_templates_collection() {
+    use crate::app::{InspectorTab, template_library::Filter};
+    let mut app = app();
+    app.inspector_open = false;
+    app.templates.query = "benzene".into();
+    app.templates.filter = Filter::Favorites;
+
+    run(&mut app, "Figure layouts");
+
+    assert!(app.inspector_open);
+    assert_eq!(app.inspector_tab, InspectorTab::Templates);
+    assert_eq!(app.templates.collection, reshiki::templates::FIGURE_LAYOUTS);
+    assert_eq!(app.templates.filter, Filter::All);
+    assert!(app.templates.query.is_empty());
+}
+
+#[test]
 fn stereo_commands_are_searchable_and_style_notes_toggle_through_the_palette() {
     let mut app = app();
     for name in ["Check drawing", "Redraw stereo bonds"] {
@@ -819,7 +995,7 @@ fn colon_opens_the_palette_and_benzene_inserts_one_undo_step() {
 }
 
 #[test]
-fn duplicate_titles_prefer_the_direct_insert() {
+fn colliding_insert_names_keep_the_direct_command_and_distinguish_templates() {
     let mut app = app();
     app.templates.library.templates = vec![reshiki::templates::Template {
         id: "test:benzene".into(),
@@ -834,23 +1010,15 @@ fn duplicate_titles_prefer_the_direct_insert() {
         anchor: Default::default(),
     }];
     search(&mut app, "benzene");
-    assert!(
-        app.commands
-            .catalog()
-            .iter()
-            .filter(|command| command.name == "Benzene")
-            .count()
-            > 1,
-        "the catalog lists Benzene as a direct insert, template and example"
-    );
     let ranked = app.commands.ranked();
-    let benzene: Vec<_> = ranked.iter().filter(|c| c.name == "Benzene").collect();
-    assert!(
-        matches!(benzene.as_slice(), [direct, saved]
-            if matches!(direct.run, Run::Ring(_))
-                && matches!(&saved.run, Run::Template(_, id) if id == "test:benzene")),
-        "the built-in template and example repeat the direct insert; the saved template stays"
-    );
+    assert_eq!(ranked.iter().filter(|c| c.name == "Benzene").count(), 1);
+    assert!(ranked.iter().any(|c| matches!(
+        &c.run, Run::Template(_, id) if id == "test:benzene" && c.name == "Benzene (saved template)"
+    )));
+    assert!(ranked.iter().any(|c| matches!(
+        &c.run, Run::Send(messages) if matches!(messages.as_slice(), [Message::Example(_)])
+            && c.name == "Benzene (example)"
+    )));
     assert_eq!(top(&app).name, "Benzene");
     assert!(matches!(
         top(&app).run,
@@ -1728,6 +1896,35 @@ fn name_matches_outrank_synonym_and_description_matches() {
     // A shortcut key typed exactly ranks with the name matches.
     search(&mut app, "v");
     assert_eq!(top(&app).name, "Select tool");
+}
+
+#[test]
+fn palette_search_accepts_british_spelling() {
+    let mut app = app();
+    search(&mut app, "color");
+    let names: Vec<_> = app
+        .commands
+        .ranked()
+        .iter()
+        .map(|command| command.name.clone())
+        .collect();
+    assert!(names.iter().any(|name| name == "Color by origin"));
+
+    search(&mut app, "colour");
+    assert!(app.commands.ranked().iter().map(|c| &c.name).eq(&names));
+    assert_eq!(
+        search::normalize_spelling("Colour+CENTRE, grey favourite organise"),
+        "color+center, gray favorite organize"
+    );
+}
+
+#[test]
+fn origin_ranks_reaction_coloring_first() {
+    let mut app = app();
+    search(&mut app, "origin");
+
+    assert_eq!(top(&app).name, "Color by origin");
+    assert!(app.command_unavailable(top(&app)).is_some());
 }
 
 #[test]

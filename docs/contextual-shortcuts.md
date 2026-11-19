@@ -19,9 +19,10 @@ The preview pane labels its drawings **Example: before** and **Example: after**.
 
 ## Run a command
 
-Press **:** to open the **command palette**, also over an atom or bond; in a
-text field, **:** types a colon. Type part of a command and press **Enter** or
-click a row: unlike Help, the palette runs the command and closes. Each row
+Press **⌘K** (**Ctrl+K** on Windows and Linux) or **:** to open the
+**command palette**, including over an atom or bond. In a text field, **:**
+types a colon. Type part of a command, then press **Enter** or click a row to
+run it and close the palette. Press **⌘K**, **Ctrl+K** or **Esc** to close it. Each row
 shows its category and shortcut, so the palette also teaches the keys, and the
 selected row's description appears below the list.
 
@@ -334,7 +335,7 @@ bond and tool actions. Ring palette hover hints show one tool-selection key.
 | Keys                      | Action                                                                      |
 | ------------------------- | --------------------------------------------------------------------------- |
 | ? / F1 / Cmd/Ctrl+Shift+/ | Searchable shortcut finder and editable examples                            |
-| :                         | Command palette: search for a command and run it                            |
+| ⌘K / Ctrl+K / :           | Open the command palette                                                    |
 | Cmd/Ctrl+,                | Settings. Esc or Cmd/Ctrl+, closes them.                                    |
 | Cmd/Ctrl+N / O / S        | New / open, each in a new tab / save                                        |
 | Cmd/Ctrl+Shift+S          | Save as…                                                                    |

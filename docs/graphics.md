@@ -51,7 +51,7 @@ selected, the settings apply to the next shape you draw. Shading and shadows
 are drawn on the canvas and in PNG, SVG and PDF. Clicks and snapping use the
 shape itself, not its shadow.
 
-### Gradient and see-through fills
+### Gradients and opacity
 
 Select a rectangle, rounded rectangle, ellipse or closed path. In
 **Properties**, below **Shaded** and **Shadow**:
@@ -65,19 +65,19 @@ Select a rectangle, rounded rectangle, ellipse or closed path. In
 - **From** starts as **Paper**, the canvas color: white on the light canvas,
   black on the dark one, so the gradient keeps its range on both. Type
   `Paper` or a color.
-- **Opacity (%)** makes the fill see-through, so what lies behind it shows.
+- **Opacity (%)** controls how much of the drawing shows through the fill.
   Its outline stays solid. A line, an arrow line or a shape without a fill
   fades its lines instead. 100 is opaque.
 
-A gradient or see-through fill replaces **Shaded**. A shape without a fill
+A gradient or reduced opacity replaces **Shaded**. A shape without a fill
 takes the tint of its stroke color as the fill, or the stroke color itself for
 Ink or a custom color. For a gradient page or panel background,
 draw a rectangle over the area, give it a gradient and choose **Send to back**.
 
 To change a ring interior, select the whole ring, open the color button's
 **Ring interiors** and choose a **Fill effect**: **Flat**, **Gradient** (the
-paper color at the middle of the ring into its color), **See-through**, **Soft glow** (a
-halo of the color around the ring) or **Disc** (a round disc behind the ring,
+paper color at the middle of the ring into its color), **Opacity** (half
+opacity), **Soft glow** (a halo of the color around the ring) or **Disc** (a round disc behind the ring,
 a little wider than its atoms).
 
 ### Glowing highlights
@@ -92,7 +92,7 @@ style**. It applies to every atom and bond highlight in the drawing:
 The style is one Undo step. Glows are drawn on the canvas and in PNG, SVG and
 PDF, and export bounds include their soft edge.
 
-Each change is one Undo step. Gradients and see-through fills are drawn on the
+Each change is one Undo step. Gradients and fills with reduced opacity are drawn on the
 canvas and in PNG, SVG and PDF, on the light and dark canvas.
 
 ### Wavy lines
@@ -186,8 +186,8 @@ endpoints, attachments and arrowheads stay in place.
 4. **Split columns** and **Split rows** add a divider in the widest gap
    between the contents. Each column between vertical dividers takes its own
    title. Type a position in percent to move a divider; **×** removes it.
-5. **Rounded** or **Square** sets the corners (a rounded panel's radius is
-   **Corner (pt)** under **Graphic style**). Outline color, line width,
+5. Choose **Rounded corners** or **Square corners**. Set the radius of rounded
+   corners in **Graphic style → Corner (pt)**. Outline color, line width,
    dashes, gradients and a custom fill color are under **Graphic style**,
    which changes every selected shape: to change the panel alone,
    click its margin a second time first. **Fit to contents** refits the panel around what it is grouped with.
@@ -342,7 +342,7 @@ Two sockets, two cones, or sizes no adapter joins only show why they do not
 seat.
 
 Seated pieces form an assembly. A click selects the whole assembly and a drag
-moves it; turning, scaling, copying and **Bring to Front** act on all of it.
+moves it; turning, scaling, copying and **Bring to front** act on all of it.
 To take a piece out, click it again so it is selected alone, then drag it:
 the pieces held only through it come along, and the rest stays. The tag
 **Release to take it off** shows before you let go. Option-drag (Alt-drag on
@@ -350,8 +350,8 @@ Windows and Linux) does the same without the second click. **Properties →
 Equipment** lists each joint of the selected piece, what is seated in it and
 **Detach**, which pulls the pieces apart along the joint and leaves a gap.
 
-From the keyboard, select a piece and press J (or choose **Connect…** in
-Properties). The drawing shows the nearest joint that fits, seated. The arrow
+Select a piece and press **J**, or choose **Connect…** in **Properties** or
+the command palette. The drawing shows the nearest joint that fits, seated. The arrow
 keys move through the others, Return connects and Esc cancels.
 
 An assembly keeps one layer. A piece that seats onto an assembly behind the

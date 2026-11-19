@@ -70,17 +70,25 @@ link it.
 
 ## One name per feature
 
-| Use                     | Not                                                     |
-| ----------------------- | ------------------------------------------------------- |
-| Rear opacity            | rear-side opacity, rear visibility, cage opacity        |
-| Chemical names          | local Rust chemical naming, OPSIN backend, local naming |
-| NMR prediction          | NMR estimate, predicted spectrum                        |
-| Generic structures      | Generic Structures, generic expansion feature           |
-| Atom maps               | atom mapping proposal, map classes (in user text)       |
-| Pen path                | tunable pen line, connected path                        |
-| Reference align/stretch | exact reference geometry                                |
-| Coordinate in place     | coordination attachment, Coordinate…                    |
-| `.rsk` file             | native file, native format, ReShiki native              |
+| Use                                                                                                      | Not                                                               |
+| -------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| Opacity                                                                                                  | See-through (ring fill effect)                                    |
+| Hollow block (Arrow body: Hollow block in the command palette)                                           | Hollow (arrow body)                                               |
+| Purpose: Chemistry / Purpose: Reference / Purpose: Illustration (command palette)                        | Bare purpose labels in the command palette                        |
+| Preview reaction                                                                                         | Preview (in Reaction roles)                                       |
+| Color by origin                                                                                          | Update colors                                                     |
+| Insert equipment…                                                                                        | Equipment (toolbar action)                                        |
+| Row / Column / Grid with even gutters                                                                    | Arrange in a row / column / grid, Grid of 2 columns (new layouts) |
+| Rounded corners / Square corners (Panel: Rounded corners / Panel: Square corners in the command palette) | Rounded / Square (panel controls)                                 |
+| Rear opacity                                                                                             | rear-side opacity, rear visibility, cage opacity                  |
+| Chemical names                                                                                           | local Rust chemical naming, OPSIN backend, local naming           |
+| NMR prediction                                                                                           | NMR estimate, predicted spectrum                                  |
+| Generic structures                                                                                       | Generic Structures, generic expansion feature                     |
+| Atom maps                                                                                                | atom mapping proposal, map classes (in user text)                 |
+| Pen path                                                                                                 | tunable pen line, connected path                                  |
+| Reference align/stretch                                                                                  | exact reference geometry                                          |
+| Coordinate in place                                                                                      | coordination attachment, Coordinate…                              |
+| `.rsk` file                                                                                              | native file, native format, ReShiki native                        |
 
 ## App text
 
@@ -97,6 +105,9 @@ rules, plus these:
 - End a label with `…` when the command asks for more before it acts.
 - Use one name for a command on every surface: toolbar, context row, right-click
   menu, command palette, Properties and Help.
+- In the command palette, a label that needs its section gets it as a prefix:
+  **Panel: Outline**. The label after the prefix keeps its original wording and
+  follows the 30-character limit.
 - Write US English: center, color, canceled, stereocenter, symmetrize.
 - Write real plurals: "1 template", "3 templates", never "template(s)".
 - Name keys as their keycaps: Esc, Enter, Tab, Delete, ⇧. Take shortcuts from
