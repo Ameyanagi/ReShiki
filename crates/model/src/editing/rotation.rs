@@ -30,8 +30,15 @@ pub fn center(doc: &Document, ids: &[u64]) -> Option<Point> {
             add(f64::from(atom.position.x), f64::from(atom.position.y));
         }
     }
+    // Text in a shape is placed by the shape, so only the shape counts.
+    let held: HashSet<_> = doc
+        .graphics
+        .iter()
+        .filter(|g| selected.contains(&g.id))
+        .filter_map(|g| g.text)
+        .collect();
     for caption in &doc.annotations {
-        if selected.contains(&caption.id) {
+        if selected.contains(&caption.id) && !held.contains(&caption.id) {
             add(f64::from(caption.position.x), f64::from(caption.position.y));
         }
     }

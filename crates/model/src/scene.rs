@@ -2261,6 +2261,12 @@ pub fn primitives_with_opacity(
     push_arrows_and_annotations(&mut out, doc);
     for graphic in graphics.iter().filter(|g| g.layer >= 0) {
         out.extend(graphic_primitive(graphic, doc, shaded));
+        if let Some(text) = graphic
+            .text
+            .and_then(|t| doc.annotations.iter().find(|a| a.id == t))
+        {
+            push_annotation(&mut out, text);
+        }
         if halos.front.contains(&graphic.id) {
             push_label_halo(&mut out, doc, runs, opacity, &halos.above(Some(graphic.id)));
         }
@@ -2977,16 +2983,26 @@ fn push_arrows_and_annotations(out: &mut Vec<Primitive>, doc: &Document) {
             }
         }
     }
-    for a in &doc.annotations {
-        for fragment in crate::typography::layout(&a.text, &a.format).fragments {
-            out.push(Primitive::Text {
-                position: a.position.offset(fragment.position.x, fragment.position.y),
-                text: fragment.text,
-                size: fragment.style.size(),
-                color: fragment.style.color.rgb(),
-                style: fragment.style,
-            });
-        }
+    // Text in a shape in front of the drawing is drawn right after its shape.
+    let front: std::collections::HashSet<_> = doc
+        .graphics
+        .iter()
+        .filter(|g| g.layer >= 0)
+        .filter_map(|g| g.text)
+        .collect();
+    for a in doc.annotations.iter().filter(|a| !front.contains(&a.id)) {
+        push_annotation(out, a);
+    }
+}
+fn push_annotation(out: &mut Vec<Primitive>, a: &crate::document::Annotation) {
+    for fragment in crate::typography::layout(&a.text, &a.format).fragments {
+        out.push(Primitive::Text {
+            position: a.position.offset(fragment.position.x, fragment.position.y),
+            text: fragment.text,
+            size: fragment.style.size(),
+            color: fragment.style.color.rgb(),
+            style: fragment.style,
+        });
     }
 }
 /// Read-only state shared by every bond of the bond pass.

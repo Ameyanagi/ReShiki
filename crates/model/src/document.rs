@@ -773,9 +773,7 @@ impl Document {
     }
     fn delete_objects(&mut self, ids: &[u64]) {
         crate::models3d::crystal::mark_distance_bonds(self);
-        // A shape takes the text it holds with it.
-        let ids = crate::shape_text::with_texts(self, ids);
-        let ids = self.expand_abbreviation_selection(&ids);
+        let ids = self.expand_abbreviation_selection(ids);
         let ids = ids.as_slice();
         self.expand_abbreviations(ids);
         self.invalidate_chemistry(ids);
@@ -799,7 +797,9 @@ impl Document {
         crate::generic::prune(self);
     }
     pub fn translate(&mut self, ids: &[u64], dx: f32, dy: f32) {
-        let ids = self.expand_abbreviation_selection(ids);
+        // Dragging the text in a shape drags the shape.
+        let ids = crate::shape_text::with_holders(self, ids);
+        let ids = self.expand_abbreviation_selection(&ids);
         let ids = ids.as_slice();
         for graphic in &mut self.graphics {
             if ids.contains(&graphic.id) {
@@ -840,6 +840,12 @@ impl Document {
                         unit.extend(group.members.iter().map(|member| (*member, index)));
                     }
                 }
+            }
+        }
+        // Dragging the text in a shape drags the shape, unless it moves itself.
+        for g in &self.graphics {
+            if let Some(index) = g.text.and_then(|t| unit.get(&t).copied()) {
+                unit.entry(g.id).or_insert(index);
             }
         }
         let offset = |id: u64, p: Point| match unit.get(&id).and_then(|i| units.get(*i)) {

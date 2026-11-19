@@ -140,9 +140,10 @@ fn a_rotated_shape_wraps_text_to_its_horizontal_chord() {
 }
 
 #[test]
-fn deleting_the_shape_deletes_its_text_and_deleting_the_text_frees_the_shape() {
+fn deleting_a_shape_takes_its_text_and_deleting_the_text_frees_the_shape() {
     let mut doc = shape_with("hν");
-    doc.delete(&[SHAPE]);
+    let ids = with_texts(&doc, &[SHAPE]);
+    doc.delete(&ids);
     assert!(doc.annotations.is_empty() && doc.graphics.is_empty());
     let mut doc = shape_with("hν");
     let id = doc.graphics[0].text.unwrap();
@@ -190,4 +191,61 @@ fn only_plain_closed_shapes_hold_text_once() {
     });
     assert_eq!(doc.graphics[0].text, None);
     assert!(doc.annotations.iter().any(|a| a.id == id));
+}
+
+#[test]
+fn copying_the_text_alone_copies_plain_text() {
+    let doc = shape_with("Base");
+    let id = doc.graphics[0].text.unwrap();
+    let part = crate::editing::selection(&doc, &[id]);
+    assert_eq!(part.annotations.len(), 1);
+    assert!(part.graphics.is_empty());
+}
+
+#[test]
+fn turning_or_aligning_a_shape_keeps_its_text_centred() {
+    let mut doc = shape_with("hν");
+    let id = doc.graphics[0].text.unwrap();
+    let ids = [SHAPE, id];
+    let start = doc.graphics[0].clone();
+    for _ in 0..2 {
+        edit(&mut doc, |doc| {
+            let pivot = crate::editing::rotation_center(doc, &ids).unwrap();
+            crate::editing::transform_about(doc, &ids, pivot, 1., 180.);
+        });
+    }
+    let (centre, _) = inner(&doc.graphics[0]);
+    assert!(near(centre, inner(&start).0), "{centre:?}");
+    assert!(near(centre_of(text(&doc, id)), centre));
+}
+
+#[test]
+fn an_arrow_never_claims_text_in_a_shape() {
+    let mut doc = shape(
+        GraphicKind::Rectangle,
+        Point::new(20., -28.),
+        Point::new(100., 0.),
+    );
+    doc.arrows.push(crate::document::Arrow::new(
+        50,
+        Point::new(0., 0.),
+        Point::new(120., 0.),
+        crate::arrows::Preset::Forward,
+        crate::arrows::ArrowStyle::preset(crate::arrows::Preset::Forward),
+    ));
+    let id = type_into(&mut doc, "A");
+    assert_eq!(doc.graphics[0].text, Some(id));
+    assert!(doc.arrow_labels.is_empty());
+}
+
+#[test]
+fn a_small_shape_still_takes_text() {
+    let mut doc = shape(
+        GraphicKind::Ellipse,
+        Point::new(0., 0.),
+        Point::new(20., 20.),
+    );
+    let id = type_into(&mut doc, "+");
+    assert_eq!(text(&doc, id).format.width_pt, Some(10.));
+    assert!(near(centre_of(text(&doc, id)), Point::new(10., 10.)));
 }

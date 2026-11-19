@@ -382,6 +382,7 @@ pub fn reconcile(doc: &mut Document, before: &Document) {
         .iter()
         .map(|n| n.annotation)
         .chain(doc.property_captions.iter().map(|l| l.annotation))
+        .chain(doc.graphics.iter().filter_map(|g| g.text))
         .collect();
     let candidates: Vec<u64> = doc
         .annotations

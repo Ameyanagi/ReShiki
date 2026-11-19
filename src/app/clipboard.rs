@@ -447,7 +447,10 @@ impl App {
             editing::selection(&self.tab.doc, &self.tab.selected)
         };
         let cut_ids = if cut {
-            reshiki::arrow_labels::with_labels(&self.tab.doc, &self.tab.selected)
+            reshiki::shape_text::with_texts(
+                &self.tab.doc,
+                &reshiki::arrow_labels::with_labels(&self.tab.doc, &self.tab.selected),
+            )
         } else {
             vec![]
         };
@@ -726,7 +729,10 @@ impl App {
         let text = format!("{}{json}", editing::CLIPBOARD_PREFIX);
         if cut {
             let before = self.tab.doc.clone();
-            let ids = reshiki::arrow_labels::with_labels(&self.tab.doc, &self.tab.selected);
+            let ids = reshiki::shape_text::with_texts(
+                &self.tab.doc,
+                &reshiki::arrow_labels::with_labels(&self.tab.doc, &self.tab.selected),
+            );
             self.tab.doc.delete(&ids);
             self.tab.selected.clear();
             self.changed(before);
