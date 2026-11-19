@@ -981,7 +981,8 @@ impl super::App {
     fn restore_view(&mut self, view: reshiki::document::View) {
         let camera = crate::canvas::Camera {
             center: view.center,
-            zoom: view.zoom.min(5.),
+            // The range the camera itself keeps; reveals go down to 0.001.
+            zoom: view.zoom.clamp(0.001, 5.),
         };
         let paper = self.guides.paper(iced::Rectangle::with_size(self.viewport));
         let (half_x, half_y) = (
@@ -1006,10 +1007,15 @@ impl super::App {
         {
             return;
         }
-        // Page controls act on the page in view.
-        if let Some(page) = pages.iter().position(|(lo, hi)| {
-            (lo.x..=hi.x).contains(&camera.center.x) && (lo.y..=hi.y).contains(&camera.center.y)
-        }) {
+        // Page controls act on the page nearest the middle of the view.
+        let away = |(lo, hi): &(reshiki::document::Point, reshiki::document::Point)| {
+            lo.lerp(*hi, 0.5).distance(camera.center)
+        };
+        if let Some((page, _)) = pages
+            .iter()
+            .enumerate()
+            .min_by(|(_, a), (_, b)| away(a).total_cmp(&away(b)))
+        {
             self.tab.pages.active = page;
         }
         self.tab.camera = camera;
