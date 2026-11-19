@@ -249,8 +249,7 @@ impl App {
         let mut status = "Page size applied · Drawing scale and positions preserved";
         if layout.validate().is_err() {
             layout.margins = Default::default();
-            status =
-                "Page size applied · The margins did not fit, so they are back to their defaults";
+            status = "Page size applied · Margins too wide, reset to defaults";
         }
         if let Err(error) = layout.validate() {
             self.error = true;
