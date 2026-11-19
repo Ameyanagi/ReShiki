@@ -153,6 +153,9 @@ pub fn preview(doc: &Document, arrow: u64) -> Result<Reaction, &'static str> {
     let labels = crate::arrow_labels::of(doc, arrow).map(|label| label.annotation);
     if let Some(reaction) = doc.reactions.iter().find(|r| r.arrow == arrow) {
         let mut reaction = reaction.clone();
+        // A color legend is not a condition.
+        let legend = reaction.colors.as_ref().and_then(|c| c.legend);
+        reaction.annotations.retain(|id| Some(*id) != legend);
         for label in labels {
             if !reaction.annotations.contains(&label) {
                 reaction.annotations.push(label);
@@ -230,6 +233,9 @@ pub struct Reaction {
     /// Captions and conditions selected with the reaction, not chemical participants.
     #[serde(default)]
     pub annotations: Vec<u64>,
+    /// Color by origin settings, kept so a rerun repaints the reaction.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub colors: Option<crate::reaction_colors::Colors>,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Role {
@@ -255,6 +261,7 @@ impl Reaction {
             products: vec![],
             agents: vec![],
             annotations: vec![],
+            colors: None,
         }
     }
     pub fn participants(&self, role: Role) -> &[Participant] {
@@ -288,6 +295,10 @@ impl Reaction {
         self.arrow = *mapping.get(&self.arrow)?;
         for id in &mut self.annotations {
             *id = *mapping.get(id)?;
+        }
+        // The legend is one of the annotations, already required above.
+        if let Some(colors) = &mut self.colors {
+            colors.legend = colors.legend.and_then(|id| mapping.get(&id).copied());
         }
         for role in Role::ALL {
             for participant in self.participants_mut(role) {
@@ -549,6 +560,9 @@ pub fn prune(doc: &mut Document) {
     doc.reactions.retain(|r| arrows.contains(&r.arrow));
     for reaction in &mut doc.reactions {
         reaction.annotations.retain(|id| annotations.contains(id));
+        if let Some(colors) = &mut reaction.colors {
+            colors.legend = colors.legend.filter(|id| reaction.annotations.contains(id));
+        }
         for role in Role::ALL {
             for participant in reaction.participants_mut(role) {
                 participant.atoms.retain(|id| atoms.contains(id));

@@ -688,6 +688,7 @@ fn the_first_save_of_a_chemdraw_file_names_what_keeping_the_format_loses() {
         format!("Keep as CDX loses arrow links. {unchanged}")
     );
     doc.reactions.push(reshiki::reactions::Reaction {
+        colors: None,
         arrow,
         reactants: vec![],
         products: vec![],

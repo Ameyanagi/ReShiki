@@ -448,6 +448,7 @@ pub async fn render_progress<P: From<Event>>(
             reaction.role,
         ));
         doc.reactions.push(crate::reactions::Reaction {
+            colors: None,
             arrow: arrow_id,
             reactants,
             products,

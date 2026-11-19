@@ -1115,6 +1115,13 @@ fn analysis() -> Vec<Command> {
             Message::Reaction(reactions::Action::Open),
         ),
         send(
+            "Color by origin",
+            Analyze,
+            "Color each reactant and carry it into the products along the atom maps",
+            "reaction color fragment highlight bond formed ring legend",
+            Message::Reaction(reactions::Action::ColorByOrigin),
+        ),
+        send(
             "Preview reaction",
             Analyze,
             "Outline what takes part in the selected arrow's reaction",

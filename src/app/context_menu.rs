@@ -357,6 +357,17 @@ impl App {
                         .reaction_role_refusal()
                         .is_none(),
             ));
+            let ready = self
+                .tab
+                .doc
+                .reactions
+                .iter()
+                .any(|r| r.arrow == arrow.id && r.ready());
+            entries.push(Entry::command(
+                "Color by origin",
+                Message::Reaction(super::reactions::Action::ColorByOrigin),
+                ready,
+            ));
         }
         entries
     }

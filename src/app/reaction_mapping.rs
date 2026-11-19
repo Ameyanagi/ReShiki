@@ -153,6 +153,13 @@ impl App {
         }
     }
     pub(super) fn mapping_action(&mut self, action: Action) -> Task<Message> {
+        // Color by origin waits only for the review it started.
+        if !matches!(
+            action,
+            Action::Auto | Action::Ready(..) | Action::ReviewPair(_) | Action::ApplyProposal
+        ) {
+            self.tab.reactions.color_after_maps = None;
+        }
         match action {
             Action::Ready(epoch, serial, result) => {
                 return self.mapping_ready(epoch, serial, result);
@@ -215,12 +222,42 @@ impl App {
             }
             Action::ApplyProposal => {
                 let proposal = self.tab.mapping.proposal.clone();
-                self.commit_mapping(|before| {
+                // Color by origin asked for these maps: maps and colors are
+                // one Undo step.
+                let color = self.tab.reactions.color_after_maps.take().filter(|arrow| {
+                    // Only a review of that arrow's own reaction.
+                    let ids: std::collections::HashSet<_> = self
+                        .tab
+                        .doc
+                        .reactions
+                        .iter()
+                        .find(|r| r.arrow == *arrow)
+                        .map(|r| r.ids().into_iter().collect())
+                        .unwrap_or_default();
                     proposal
                         .as_ref()
-                        .ok_or("Run Auto-map first")?
-                        .apply(before, true)
+                        .is_some_and(|p| p.pairs.iter().any(|(a, _)| ids.contains(a)))
                 });
+                let mut colored = None;
+                self.commit_mapping(|before| {
+                    let mut doc = proposal
+                        .as_ref()
+                        .ok_or("Run Auto-map first")?
+                        .apply(before, true)?;
+                    if let Some(arrow) = color {
+                        colored = Some(reshiki::reaction_colors::paint(&mut doc, arrow).is_ok());
+                    }
+                    Ok(doc)
+                });
+                if !self.error {
+                    match colored {
+                        Some(true) => {
+                            self.status = "Atom maps applied and colored by origin".into()
+                        }
+                        Some(false) => self.status = "No matching atoms to color".into(),
+                        None => {}
+                    }
+                }
             }
             Action::Show(show) => {
                 self.commit_mapping(|before| Ok(mapping::set_maps_visible(before, show)));
@@ -269,9 +306,11 @@ impl App {
                 }
             }
             Ok(_) => {
+                self.tab.reactions.color_after_maps = None;
                 self.status = "The drawing changed; run Auto-map again".into();
             }
             Err(error) => {
+                self.tab.reactions.color_after_maps = None;
                 self.status = error;
                 self.error = true;
             }
