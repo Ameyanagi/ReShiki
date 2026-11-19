@@ -957,7 +957,10 @@ impl App {
                 Message::Transform(Transform::FlipVertical),
                 true,
             ),
+            Separator,
         ];
+        // Stacking order, as in the selection toolbar's Order menu.
+        entries.extend(self.arrange_entries(&[&Command::ORDER]));
         if multiple {
             entries.push(Separator);
             for (label, action) in [

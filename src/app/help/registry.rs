@@ -611,6 +611,13 @@ pub(crate) fn entries() -> Vec<Entry> {
             &["zoom", "view", "show all"],
         ),
         entry(
+            format!("{} / {}", keys(command, "="), keys(command, "-")),
+            "Zoom in / out",
+            "Magnify or shrink the view around its middle. The + key also zooms in. While you edit a caption or label, these keys format the text instead.",
+            Anywhere,
+            &["zoom", "view", "magnify", "plus", "minus"],
+        ),
+        entry(
             format!("{} / {}", keys(command, ";"), keys(command | alt, "X")),
             "Rulers / crosshair",
             "Show or hide the rulers or the crosshair",

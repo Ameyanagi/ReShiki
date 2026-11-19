@@ -405,3 +405,27 @@ fn a_key_after_a_context_menu_never_edits_the_right_clicked_bond() {
     assert_eq!(app.tab.doc.bonds[0].order, 2, "the double bond stays");
     assert_eq!(app.tool, Tool::Bond(1));
 }
+
+#[test]
+fn command_equals_and_minus_zoom_the_view() {
+    use iced::keyboard::{Key, Modifiers};
+    let read =
+        |c: &str, mods| key_message(&Key::Character(c.into()), &Key::Character(c.into()), mods);
+    let command = Modifiers::COMMAND;
+    assert!(matches!(read("=", command), Some(Message::Zoom(z)) if z > 1.));
+    assert!(matches!(read("+", command | Modifiers::SHIFT), Some(Message::Zoom(z)) if z > 1.));
+    assert!(matches!(read("-", command), Some(Message::Zoom(z)) if z < 1.));
+    // Japanese keyboards type + with Shift+;.
+    let jis = key_message(
+        &Key::Character(";".into()),
+        &Key::Character("+".into()),
+        command | Modifiers::SHIFT,
+    );
+    assert!(matches!(jis, Some(Message::Zoom(z)) if z > 1.));
+    let jis = key_message(
+        &Key::Character("-".into()),
+        &Key::Character("=".into()),
+        command | Modifiers::SHIFT,
+    );
+    assert!(matches!(jis, Some(Message::Zoom(z)) if z > 1.));
+}

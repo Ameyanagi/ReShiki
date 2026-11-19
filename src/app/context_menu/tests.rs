@@ -1756,3 +1756,24 @@ fn copy_image_on_editable_drawing_changes_one_copy_and_keeps_the_default() {
         "a new menu starts at the default again"
     );
 }
+
+#[test]
+fn a_shapes_arrange_menu_offers_its_stacking_order() {
+    let (mut app, _) = App::new();
+    let id = app.tab.doc.next_id();
+    app.tab
+        .doc
+        .graphics
+        .push(reshiki::graphics::Graphic::dragged(
+            id,
+            reshiki::graphics::GraphicKind::Rectangle,
+            reshiki::document::Point::new(0., 0.),
+            reshiki::document::Point::new(80., 40.),
+            Default::default(),
+            reshiki::graphics::BracketSides::Both,
+            false,
+        ));
+    app.tab.selected = vec![id];
+    let align = labels(&app, Page::Align);
+    assert!(align.contains(&"Bring to front") && align.contains(&"Send to back"));
+}
