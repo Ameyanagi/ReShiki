@@ -419,10 +419,21 @@ impl<B: ChemistryEngine> ChemistryEngine for LocalEngine<B> {
             }
         }
         if self.native_responses && request.operation == "import" {
+            // The ChemDraw readers read a binary file as CDXML; their errors
+            // name the format of the file instead.
+            let cdx = request.format.as_deref() == Some("cdx");
             return match native_import::execute(request, self.inchi.clone())
                 .await
-                .map_err(|e| e.to_string())?
-            {
+                .map_err(|e| {
+                    let message = e.to_string();
+                    if cdx {
+                        message
+                            .replace("molecular CDXML", "CDX")
+                            .replace("CDXML", "CDX")
+                    } else {
+                        message
+                    }
+                })? {
                 native_import::Outcome::Complete(response) => Ok(*response),
                 native_import::Outcome::Deferred(_) => {
                     Err("Native import unexpectedly deferred an import operation".into())

@@ -856,10 +856,14 @@ impl super::App {
                 loss,
             }) => {
                 // A ChemDraw or MOL file stays the tab's file, as a drawing does.
+                let tabs = self.strip().count();
                 if !self
                     .open_target(Some(path.as_path()).filter(|path| kept_format(path).is_some()))
                 {
                     return Task::none();
+                }
+                if self.strip().count() > tabs {
+                    self.tabs.opening.push((self.tab.id, self.tab.file_epoch));
                 }
                 self.tab.chemdraw_loss = loss;
                 let task = self.run(

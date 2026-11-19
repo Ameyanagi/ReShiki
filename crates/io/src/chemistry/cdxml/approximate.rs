@@ -193,6 +193,7 @@ fn rewrite(xml: &str) -> Result<(String, Option<String>, usize)> {
         log: BTreeMap::new(),
         changed: false,
         original: HashSet::new(),
+        next_id: 0,
         headless: HashSet::new(),
         resized: HashSet::new(),
         affected: HashSet::new(),
@@ -202,6 +203,12 @@ fn rewrite(xml: &str) -> Result<(String, Option<String>, usize)> {
             pass.original.insert(id.to_owned());
         }
     }
+    pass.next_id = pass
+        .original
+        .iter()
+        .filter_map(|id| id.parse::<u32>().ok())
+        .max()
+        .map_or(1, |id| id.saturating_add(1));
     pass.objects(0)?;
     pass.brackets()?;
     for index in pass.tree.descendants(0)? {
@@ -238,6 +245,8 @@ struct Pass {
     changed: bool,
     /// Identifiers the file had before anything was rewritten.
     original: HashSet<String>,
+    /// An identifier no object in the file has.
+    next_id: u32,
     /// Arrows that became lines without a head.
     headless: HashSet<String>,
     /// Objects already counted for a size out of range.
@@ -451,6 +460,28 @@ impl Pass {
     /// Replace every object the readers do not know by the parts of it that
     /// import on their own.
     fn objects(&mut self, index: usize) -> Result<()> {
+        // Older ChemDraw files keep atoms and bonds straight in a group;
+        // ChemDraw reads them as one fragment there, and so does this.
+        let loose: Vec<_> = self
+            .node(index)?
+            .children
+            .iter()
+            .copied()
+            .filter(|&child| {
+                self.node(child)
+                    .is_ok_and(|node| matches!(node.tag.as_str(), "n" | "b"))
+            })
+            .collect();
+        if !loose.is_empty() && matches!(self.node(index)?.tag.as_str(), "group" | "page") {
+            let fragment = self.tree.create("fragment")?;
+            self.set(fragment, "id", self.next_id.to_string())?;
+            self.next_id = self.next_id.saturating_add(1);
+            for child in loose {
+                self.tree.append(fragment, child)?;
+            }
+            self.tree.append(index, fragment)?;
+            self.changed = true;
+        }
         let children = self.node(index)?.children.clone();
         let root = self.node(index)?.tag == "CDXML";
         // The new child list is built once, however many objects go.
@@ -1386,15 +1417,15 @@ impl Pass {
         }
         Ok(())
     }
-    /// An element's label takes one font, size and weight; only its colours
-    /// may differ.
+    /// An atom label, including an abbreviation's, takes one font, size and
+    /// weight; only its colours may differ.
     fn label_style(&mut self, index: usize) -> Result<()> {
         let node = self.node(index)?;
         let Some(atom) = node.parent else {
             return Ok(());
         };
         let parent = self.node(atom)?;
-        if parent.tag != "n" || !matches!(parent.attr("NodeType"), None | Some("Element")) {
+        if parent.tag != "n" {
             return Ok(());
         }
         let root = self.node(0)?;

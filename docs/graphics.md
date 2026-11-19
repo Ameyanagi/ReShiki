@@ -584,12 +584,17 @@ lists what changed and how many, such as "2 doubled curves as single lines;
 | Dagger, double dagger, lone pair bar; hybrid and filled orbitals           | The matching ReShiki symbol or orbital, without a message    |
 | Rac, Abs and Rel stereo flags                                              | Text                                                         |
 | Rotated caption; outlined or shadowed text                                 | Upright; plain face                                          |
-| Atom label with more than one font, size or weight                         | The style of its first character; colours are kept           |
+| Atom or abbreviation label with more than one font, size or weight         | The style of its first character; colours are kept           |
 | Line, arrowhead, shadow or text size outside ReShiki's range               | The nearest size in range                                    |
 | BioDraw shape, gel plate, TLC plate, other unknown object                  | Left out and named; captions and drawings inside it are kept |
 | Table                                                                      | The cell contents without the frame                          |
 | Plasmid map in a CDXML file                                                | Its ring, regions as arcs, and labels                        |
 | Picture without a PNG, TIFF, JPEG, GIF or BMP copy                         | Left out and named                                           |
+
+A file with several pages, such as one of ChemDraw's template libraries, opens
+with its pages in rows on one drawing, in page order, so **Fit** shows them
+all. Page boundaries, paper settings and empty pages are not kept, and the
+message says so.
 
 In a CDX file, a table, plasmid map, gel plate or TLC plate is named as "other
 ChemDraw object", and the captions and drawings inside it are kept. A CDX

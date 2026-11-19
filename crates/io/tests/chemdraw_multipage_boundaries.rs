@@ -1,5 +1,8 @@
 use reshiki_io::{chemistry::cdxml, engine::LocalEngine, exchange, formats};
-use reshiki_model::{document::Document, scene};
+use reshiki_model::{
+    document::{Document, Point},
+    scene,
+};
 use std::path::Path;
 
 #[test]
@@ -106,7 +109,7 @@ fn check_pages(single: &Document, combined: &Document) {
     let (_, first_hi) = scene::bounds(&scene::primitives(&first));
     let (second_lo, _) = scene::bounds(&scene::primitives(&second));
     assert!(
-        second_lo.y > first_hi.y,
+        second_lo.y > first_hi.y || second_lo.x > first_hi.x,
         "page contents overlap: {first_hi:?} / {second_lo:?}"
     );
     let origin = |page: &Document| {
@@ -155,6 +158,10 @@ fn check_pages(single: &Document, combined: &Document) {
 
 async fn roundtrip_pages(single: &Document, combined: &Document) {
     let engine = LocalEngine::in_process();
+    let (atoms, captions) = (single.atoms.len(), single.annotations.len());
+    let (_, first_hi) = scene::bounds(&scene::primitives(&page(combined, 0, atoms, captions)));
+    let (second_lo, _) = scene::bounds(&scene::primitives(&page(combined, 1, atoms, captions)));
+    let side_by_side = second_lo.y <= first_hi.y;
     for format in ["cdxml", "cdx", "cds"] {
         let bytes = if format == "cds" {
             let xml = formats::write_with_engine(combined.clone(), "cdxml", &engine)
@@ -171,16 +178,17 @@ async fn roundtrip_pages(single: &Document, combined: &Document) {
                 .await
                 .unwrap();
         // External fragment/group order may change. Match these fixtures by
-        // their geometric page order rather than imposing stable external IDs.
-        restored.atoms.sort_by(|a, b| {
-            a.position
-                .y
-                .total_cmp(&b.position.y)
-                .then(a.position.x.total_cmp(&b.position.x))
-        });
+        // their geometric page order rather than imposing stable external IDs:
+        // the second page is to the right of the first or below it.
+        let along = |p: Point| if side_by_side { (p.x, p.y) } else { (p.y, p.x) };
+        let order = |a: Point, b: Point| {
+            let (a, b) = (along(a), along(b));
+            a.0.total_cmp(&b.0).then(a.1.total_cmp(&b.1))
+        };
+        restored.atoms.sort_by(|a, b| order(a.position, b.position));
         restored
             .annotations
-            .sort_by(|a, b| a.position.y.total_cmp(&b.position.y));
+            .sort_by(|a, b| order(a.position, b.position));
         check_pages(single, &restored);
     }
 }

@@ -351,3 +351,39 @@ fn imported_files_open_on_the_remembered_canvas() {
         }
     }
 }
+
+#[test]
+fn a_failed_open_names_its_file_and_leaves_no_untitled_tab() {
+    let mut app = ready();
+    let before = app.tab.doc.clone();
+    app.tab.doc.add_atom("N", Point::default());
+    app.changed(before);
+    let drawing = app.tab.id;
+    let key = open(&mut app, "Bio Instruments.cdx", "cdx");
+    assert_ne!(key.tab, drawing);
+    assert_eq!(app.strip().count(), 2);
+    let _ = app.update(Message::EngineFinished {
+        key,
+        result: Box::new(Err("Invalid CDX: Unreadable page".into())),
+    });
+    assert_eq!(app.strip().count(), 1);
+    assert_eq!(app.tab.id, drawing);
+    assert_eq!(
+        app.status,
+        "Could not open Bio Instruments.cdx: Invalid CDX: Unreadable page"
+    );
+    assert!(app.error);
+
+    // An empty tab the user made stays when the file it opens fails.
+    let _ = app.update(Message::New);
+    let empty = app.tab.id;
+    assert_ne!(empty, drawing);
+    let key = open(&mut app, "Bio Instruments.cdx", "cdx");
+    assert_eq!(key.tab, empty);
+    let _ = app.update(Message::EngineFinished {
+        key,
+        result: Box::new(Err("Invalid CDX: Unreadable page".into())),
+    });
+    assert_eq!(app.strip().count(), 2);
+    assert_eq!(app.tab.id, empty);
+}
