@@ -116,4 +116,22 @@ fn an_arrow_is_named_by_its_panel_column_title() {
     assert_eq!(panel_title(&doc, &arrow(3, 250.)), Some("This work"));
     // Outside every panel, the arrow keeps its kind for a name.
     assert_eq!(panel_title(&doc, &arrow(4, 500.)), None);
+    // Turned a quarter turn, the columns sit one above the other.
+    let g = &mut doc.graphics[0];
+    (g.origin, g.axis_x, g.axis_y) = (
+        Point::new(100., 0.),
+        Point::new(0., 400.),
+        Point::new(-100., 0.),
+    );
+    let down = |id, y: f32| {
+        Arrow::new(
+            id,
+            Point::new(50., y),
+            Point::new(50., y + 60.),
+            Default::default(),
+            Default::default(),
+        )
+    };
+    assert_eq!(panel_title(&doc, &down(5, 50.)), Some("Previous work"));
+    assert_eq!(panel_title(&doc, &down(6, 250.)), Some("This work"));
 }

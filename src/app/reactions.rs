@@ -16,29 +16,37 @@ pub struct State {
 }
 
 /// The title of the panel column around `arrow`, in the smallest titled
-/// panel that holds it, such as "This work".
+/// panel that holds it, such as "This work". Columns follow the panel's own
+/// axes, so a turned panel names its arrows as drawn.
 fn panel_title<'a>(
     doc: &'a reshiki::document::Document,
     arrow: &reshiki::document::Arrow,
 ) -> Option<&'a str> {
-    let (lo, hi) = arrow.bounds();
-    let middle = (lo.x + hi.x) / 2.;
     doc.graphics
         .iter()
         .filter_map(|g| {
             let panel = g.panel.as_ref()?;
-            let (a, b) = g.shape_bounds();
-            if !(a.x <= lo.x && a.y <= lo.y && hi.x <= b.x && hi.y <= b.y) {
+            let (x, y) = (g.axis_x, g.axis_y);
+            let det = x.x * y.y - x.y * y.x;
+            // Where a point sits across (0 to 1) and down the panel.
+            let local = |p: reshiki::document::Point| {
+                let (dx, dy) = (p.x - g.origin.x, p.y - g.origin.y);
+                ((dx * y.y - dy * y.x) / det, (x.x * dy - x.y * dx) / det)
+            };
+            let ends = [local(arrow.start), local(arrow.end)];
+            if !ends
+                .iter()
+                .all(|(u, v)| (0. ..=1.).contains(u) && (0. ..=1.).contains(v))
+            {
                 return None;
             }
-            // One title per column between vertical dividers.
-            let at = (middle - a.x) / (b.x - a.x);
+            let at = (ends[0].0 + ends[1].0) / 2.;
             let column = panel
                 .columns()
                 .iter()
                 .position(|(l, r)| (*l..=*r).contains(&at))?;
             let title = panel.titles.get(column)?.trim();
-            (!title.is_empty()).then_some((title, (b.x - a.x) * (b.y - a.y)))
+            (!title.is_empty()).then_some((title, det.abs()))
         })
         .min_by(|(_, x), (_, y)| x.total_cmp(y))
         .map(|(title, _)| title)
