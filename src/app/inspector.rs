@@ -1064,6 +1064,10 @@ impl App {
             body = body.push(row);
         }
         // A cycle's roles and steps come before what its parts are made of.
+        // A step's proposed atom maps come first, where Apply is in view.
+        if let Some(review) = self.step_review_card() {
+            body = body.push(card(container(review).padding(12)));
+        }
         if let Some(cycle) = self.cycle_card().or_else(|| self.cycle_part_card()) {
             body = body.push(card(container(cycle).padding(12)));
         }

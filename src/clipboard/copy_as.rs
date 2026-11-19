@@ -209,8 +209,19 @@ pub fn chemical_snapshot<'a>(
     if chemistry.reactions.as_slice() == std::slice::from_ref(&reaction) {
         return Ok(chemistry);
     }
+    // A catalytic cycle selected with the scheme stays out of its reaction.
+    let cycled = crate::cycles::part_ids(source);
+    let prune = !reaction.ids().iter().any(|id| cycled.contains(id));
     let mut chemical = chemistry.into_owned();
     chemical.reactions = vec![reaction];
+    if prune && chemical.all_ids().iter().any(|id| cycled.contains(id)) {
+        let keep: Vec<u64> = chemical
+            .all_ids()
+            .into_iter()
+            .filter(|id| !cycled.contains(id))
+            .collect();
+        chemical = crate::editing::selection(&chemical, &keep);
+    }
     Ok(Cow::Owned(chemical))
 }
 

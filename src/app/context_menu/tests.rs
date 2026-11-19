@@ -248,6 +248,7 @@ fn marked_atom_menu_starts_positioning_without_changing_the_drawing() -> Result<
     let before = app.tab.doc.clone();
     for target in [other, atom] {
         app.edit(Edit::ContextMenu {
+            at: Default::default(),
             position: Point::new(30., 40.),
             selected: vec![target],
             hit: vec![target],
@@ -278,6 +279,7 @@ fn atom_menu_groups_editing_naming_connecting_and_clipboard_commands() -> Result
     let atom = app.tab.doc.atoms.first().ok_or("ring atom")?.id;
     let before = app.tab.doc.clone();
     app.edit(Edit::ContextMenu {
+        at: Default::default(),
         position: Point::new(30., 40.),
         selected: vec![atom],
         hit: vec![atom],
@@ -400,12 +402,14 @@ fn expand_generic_structures_follows_the_target_and_waits_for_a_running_expansio
     app.tab.selected = vec![carbon];
     assert_eq!(enabled(&app, Page::Main, EXPAND), Some(true));
     app.edit(Edit::ContextMenu {
+        at: Default::default(),
         position: Point::new(30., 40.),
         selected: vec![carbon],
         hit: vec![ring_atom],
     });
     assert_eq!(enabled(&app, Page::Main, EXPAND), None);
     app.edit(Edit::ContextMenu {
+        at: Default::default(),
         position: Point::new(30., 40.),
         selected: vec![ring_atom],
         hit: vec![carbon],
@@ -555,6 +559,7 @@ fn expand_context_follows_grouped_graphics_and_generated_name_captions() -> Resu
     for hit in [graphic, name] {
         assert!(!reshiki::generic::touches(&app.tab.doc, &[hit]));
         app.edit(Edit::ContextMenu {
+            at: Default::default(),
             position: Point::new(30., 40.),
             selected: vec![unrelated],
             hit: vec![hit],
@@ -570,6 +575,7 @@ fn expand_context_follows_grouped_graphics_and_generated_name_captions() -> Resu
     }
     for hit in [unrelated, ordinary] {
         app.edit(Edit::ContextMenu {
+            at: Default::default(),
             position: Point::new(30., 40.),
             selected: app.tab.doc.all_ids(),
             hit: vec![hit],
@@ -600,6 +606,7 @@ fn expand_context_from_grouped_pet_caption_prepares_its_component() -> Result<()
     let expected = app.tab.doc.all_ids();
     let unrelated = app.tab.doc.add_atom("C", World::new(700., 0.));
     app.edit(Edit::ContextMenu {
+        at: Default::default(),
         position: Point::new(30., 40.),
         selected: vec![unrelated],
         hit: vec![caption],
@@ -646,6 +653,7 @@ async fn expand_context_from_grouped_alternative_caption_opens_concrete_products
     app.tab.doc.group_selection(&[carbon, halogen, caption])?;
     let unrelated = app.tab.doc.add_atom("C", World::new(700., 0.));
     app.edit(Edit::ContextMenu {
+        at: Default::default(),
         position: Point::new(30., 40.),
         selected: vec![unrelated],
         hit: vec![caption],
@@ -698,6 +706,7 @@ async fn expand_pet_from_ring_bond_context_opens_complete_product() {
     app.tab.doc = pet_repeat();
     let bond = app.tab.doc.bonds[6].clone();
     app.edit(Edit::ContextMenu {
+        at: Default::default(),
         position: Point::new(30., 40.),
         selected: vec![bond.a, bond.b],
         hit: vec![bond.a, bond.b],
@@ -769,6 +778,7 @@ async fn expand_context_uses_clicked_molecule_when_selection_contains_another_mo
     app.tab.doc.add_bond(carbon, oxygen, 1, "plain");
     let bond = app.tab.doc.bonds[6].clone();
     app.edit(Edit::ContextMenu {
+        at: Default::default(),
         position: Point::new(30., 40.),
         selected: app.tab.doc.all_ids(),
         hit: vec![bond.a, bond.b],
@@ -836,6 +846,7 @@ fn chemical_name_menu_uses_clicked_component_and_switches_between_show_and_hide(
     let all = app.tab.doc.all_ids();
     app.tab.doc.group_selection(&all)?;
     app.edit(Edit::ContextMenu {
+        at: Default::default(),
         position: Point::new(30., 40.),
         selected: all,
         hit: vec![first[0]],
@@ -848,6 +859,7 @@ fn chemical_name_menu_uses_clicked_component_and_switches_between_show_and_hide(
     let before = app.tab.doc.clone();
     let reopen = |app: &mut App| {
         app.edit(Edit::ContextMenu {
+            at: Default::default(),
             position: Point::new(30., 40.),
             selected: app.tab.doc.all_ids(),
             hit: vec![first[0]],
@@ -906,6 +918,7 @@ fn chemical_names_entry_selects_the_clicked_molecule_and_opens_its_inspector() -
     reshiki::editing::append(&mut app.tab.doc, &source, World::new(250., 0.));
     let before = app.tab.doc.clone();
     app.edit(Edit::ContextMenu {
+        at: Default::default(),
         position: Point::new(30., 40.),
         selected: vec![first[1]],
         hit: vec![first[1]],
@@ -1281,6 +1294,7 @@ fn context_tilt_routes_all_axes_and_tool_without_losing_selection() -> Result<()
         reshiki::editing::append(&mut app.tab.doc, &source, World::new(240., 0.));
         let before = app.tab.doc.clone();
         app.edit(Edit::ContextMenu {
+            at: Default::default(),
             position: Point::new(20., 20.),
             hit: vec![],
             selected: ids.clone(),
@@ -1308,6 +1322,7 @@ fn context_tilt_routes_all_axes_and_tool_without_losing_selection() -> Result<()
         let _ = app.update(Message::Redo);
         assert_eq!(app.tab.doc, expected);
         app.edit(Edit::ContextMenu {
+            at: Default::default(),
             position: Point::new(20., 20.),
             hit: vec![],
             selected: ids.clone(),
@@ -1368,6 +1383,7 @@ fn context_alignment_preserves_molecular_geometry_and_undo_restores_every_group(
     let before = app.tab.doc.clone();
     let ids = app.tab.doc.all_ids();
     app.edit(Edit::ContextMenu {
+        at: Default::default(),
         position: Point::new(20., 20.),
         hit: vec![],
         selected: ids.clone(),
@@ -1407,6 +1423,7 @@ fn context_alignment_preserves_molecular_geometry_and_undo_restores_every_group(
     let _ = app.update(Message::Undo);
     assert_eq!(app.tab.doc, before);
     app.edit(Edit::ContextMenu {
+        at: Default::default(),
         position: Point::new(20., 20.),
         hit: vec![],
         selected: ids,
@@ -1544,6 +1561,7 @@ fn show_properties_menu_ticks_shown_rows_and_starts_with_weight() -> Result<(), 
     // A counter-ion is its own molecule.
     app.tab.doc.add_atom("Na", World::new(200., 0.));
     app.edit(Edit::ContextMenu {
+        at: Default::default(),
         position: Point::new(30., 40.),
         selected: vec![ethanol[0]],
         hit: vec![ethanol[0]],
@@ -1609,6 +1627,7 @@ fn show_properties_menu_ticks_shown_rows_and_starts_with_weight() -> Result<(), 
     let _ = app.update(Message::Undo);
     assert!(app.tab.doc.property_captions.is_empty());
     app.edit(Edit::ContextMenu {
+        at: Default::default(),
         position: Point::new(30., 40.),
         selected: vec![ethanol[0]],
         hit: vec![ethanol[0]],

@@ -62,6 +62,7 @@ impl App {
             }
             Edit::ContextMenu {
                 position,
+                at,
                 selected,
                 hit,
             } => {
@@ -71,6 +72,8 @@ impl App {
                 // Every Properties field follows the new selection, so Enter
                 // never applies a value typed for the previous one.
                 self.set_selection(selected);
+                // A cycle's step commands act on the step right-clicked.
+                self.choose_step_at(at, &hit);
                 if let Some(tab) = closed_inspector {
                     self.inspector_open = false;
                     self.inspector_tab = tab;
@@ -343,8 +346,12 @@ impl App {
                     self.tab.doc.translate(&ids, dx, dy);
                     // The drop target the drag showed gives the part its role.
                     if let Some(target) = reshiki::cycles::drop_target(&self.tab.doc, &ids) {
-                        reshiki::cycles::assign(&mut self.tab.doc, &target);
-                        joined = Some(format!("Added to the cycle as {}", target.role));
+                        let left = reshiki::cycles::assign(&mut self.tab.doc, &target);
+                        joined = Some(if left {
+                            format!("Now {} · it left its reaction", target.role)
+                        } else {
+                            format!("Added to the cycle as {}", target.role)
+                        });
                     }
                     self.tab.selected = ids;
                 }

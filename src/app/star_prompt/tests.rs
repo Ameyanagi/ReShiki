@@ -349,6 +349,7 @@ fn every_export_and_copy_counts_once_wherever_its_drawing_went() {
         revision: app.tab.revision,
         format,
         selected: vec![],
+        what: None,
     };
     let _ = app.receive(Message::CopyAsWritten(
         key(&app, CopyFormat::Png),

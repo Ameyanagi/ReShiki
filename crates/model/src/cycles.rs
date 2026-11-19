@@ -14,6 +14,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::f32::consts::{FRAC_PI_2, TAU};
 
+pub mod steps;
+
 /// Clear space between an arc's end and a part's ink, in points.
 pub const GAP_PT: f32 = 6.;
 /// The most intermediates, and the most reagents and products of one step.
@@ -685,11 +687,31 @@ pub fn role_of(doc: &Document, id: u64) -> Option<(u64, Role)> {
         .find_map(|g| Some((g.id, g.cycle.as_deref()?.role(id)?)))
 }
 
+/// Take `part` out of every ordinary reaction: its reaction roles, its place
+/// among a reaction's conditions and its link to an arrow. A cycle's steps
+/// are its reactions now. Returns whether it had any.
+fn leave_reactions(doc: &mut Document, part: &[u64]) -> bool {
+    let (reactions, labels) = (doc.reactions.clone(), doc.arrow_labels.len());
+    let held = |p: &crate::reactions::Participant| p.atoms.iter().any(|id| part.contains(id));
+    for reaction in &mut doc.reactions {
+        for role in crate::reactions::Role::ALL {
+            reaction.participants_mut(role).retain(|p| !held(p));
+        }
+        reaction.annotations.retain(|id| !part.contains(id));
+        if let Some(colors) = &mut reaction.colors {
+            colors.legend = colors.legend.filter(|id| !part.contains(id));
+        }
+    }
+    doc.arrow_labels.retain(|l| !part.contains(&l.annotation));
+    doc.reactions != reactions || doc.arrow_labels.len() != labels
+}
+
 /// Make a cycle of the selected molecules and texts: they become its
 /// intermediates, clockwise from the top, on a circle through them. They
-/// slide straight in or out onto it; nothing else changes. The cycle is
-/// grouped with them. Returns the cycle's ID.
-pub fn make(doc: &mut Document, ids: &[u64]) -> Result<u64, String> {
+/// slide straight in or out onto it; nothing else changes, except that they
+/// leave any ordinary reaction. The cycle is grouped with them. Returns the
+/// cycle's ID and whether any part left a reaction.
+pub fn make(doc: &mut Document, ids: &[u64]) -> Result<(u64, bool), String> {
     let units: Vec<_> = units(doc, ids)
         .into_iter()
         .filter(|u| u.iter().all(|id| role_of(doc, *id).is_none()))
@@ -725,6 +747,10 @@ pub fn make(doc: &mut Document, ids: &[u64]) -> Result<u64, String> {
         order.rotate_left(first);
     }
     let intermediates: Vec<Vec<u64>> = order.into_iter().map(|(_, u)| u.clone()).collect();
+    let mut left = false;
+    for unit in &units {
+        left |= leave_reactions(doc, unit);
+    }
     for (unit, p) in units.iter().zip(&centers) {
         let d = p.distance(center);
         if d > 1e-3 {
@@ -754,7 +780,7 @@ pub fn make(doc: &mut Document, ids: &[u64]) -> Result<u64, String> {
     let mut members = vec![id];
     members.extend(units.into_iter().flatten());
     doc.group_selection(&members)?;
-    Ok(id)
+    Ok((id, left))
 }
 
 /// An empty cycle of `radius` about `center`: a whole circle arrow that
@@ -776,6 +802,41 @@ pub fn insert(doc: &mut Document, center: Point, radius: f32) -> u64 {
     g.cycle = Some(Box::default());
     doc.graphics.push(g);
     id
+}
+
+/// The step whose stretch of the circle holds `p`, seen from the center,
+/// and how far along that stretch it is, from 0 to 1.
+fn within(doc: &Document, g: &Graphic, cycle: &Cycle, p: Point) -> Option<(usize, f32)> {
+    let (center, _) = g.cycle_circle();
+    let dir = if g.cycle_counterclockwise() { -1. } else { 1. };
+    let angle = (p.y - center.y).atan2(p.x - center.x);
+    let n = cycle.intermediates.len();
+    let centers: Vec<Option<f32>> = boxes(doc, cycle)
+        .into_iter()
+        .take(n)
+        .map(|b| {
+            b.map(|b| {
+                let c = center_of(b);
+                (c.y - center.y).atan2(c.x - center.x)
+            })
+        })
+        .collect();
+    (0..n).find_map(|s| {
+        let a0 = centers.get(s).copied().flatten()?;
+        let a1 = centers.get((s + 1) % n).copied().flatten()?;
+        let mut span = (dir * (a1 - a0)).rem_euclid(TAU);
+        if span < 1e-4 {
+            span = TAU;
+        }
+        let t = (dir * (angle - a0)).rem_euclid(TAU) / span;
+        (t <= 1.).then_some((s, t))
+    })
+}
+
+/// The step of cycle graphic `g` whose arc, side arrows or name lie toward
+/// `p` from the center.
+pub fn step_at(doc: &Document, g: &Graphic, p: Point) -> Option<usize> {
+    within(doc, g, g.cycle.as_deref()?, p).map(|(s, _)| s)
 }
 
 /// Where dropping a moved structure or text would put it in a cycle.
@@ -816,31 +877,8 @@ pub fn drop_target(doc: &Document, moved: &[u64]) -> Option<Target> {
         let (center, radius) = g.cycle_circle();
         let d = p.distance(center);
         let ring = 0.6 * bond;
-        let dir = if g.cycle_counterclockwise() { -1. } else { 1. };
-        let angle = (p.y - center.y).atan2(p.x - center.x);
         let n = cycle.intermediates.len();
-        // The step whose stretch of the circle holds the point, and how far
-        // along it the point is.
-        let centers: Vec<Option<f32>> = boxes(doc, cycle)
-            .into_iter()
-            .take(n)
-            .map(|b| {
-                b.map(|b| {
-                    let c = center_of(b);
-                    (c.y - center.y).atan2(c.x - center.x)
-                })
-            })
-            .collect();
-        let within = (0..n).find_map(|s| {
-            let a0 = centers.get(s).copied().flatten()?;
-            let a1 = centers.get((s + 1) % n).copied().flatten()?;
-            let mut span = (dir * (a1 - a0)).rem_euclid(TAU);
-            if span < 1e-4 {
-                span = TAU;
-            }
-            let t = (dir * (angle - a0)).rem_euclid(TAU) / span;
-            (t <= 1.).then_some((s, t))
-        });
+        let within = within(doc, g, cycle, p);
         let role = if (d - radius).abs() < ring {
             Role::Intermediate(within.map_or(0, |(s, _)| s + 1))
         } else if d > radius * 0.35 && d < radius + 4. * bond {
@@ -871,15 +909,17 @@ pub fn drop_target(doc: &Document, moved: &[u64]) -> Option<Target> {
     })
 }
 
-/// Give the target's part its role, and group it with the cycle.
-pub fn assign(doc: &mut Document, target: &Target) {
+/// Give the target's part its role, and group it with the cycle. It leaves
+/// any ordinary reaction; returns whether it had a role there.
+pub fn assign(doc: &mut Document, target: &Target) -> bool {
+    let left = leave_reactions(doc, &target.part);
     let Some(cycle) = doc
         .graphics
         .iter_mut()
         .find(|g| g.id == target.cycle)
         .and_then(|g| g.cycle.as_deref_mut())
     else {
-        return;
+        return left;
     };
     let part = target.part.clone();
     match target.role {
@@ -920,6 +960,7 @@ pub fn assign(doc: &mut Document, target: &Target) {
         members.extend(&target.part);
         let _ = doc.group_selection(&members);
     }
+    left
 }
 
 /// Take the parts holding any of `ids` out of their cycles and their groups;

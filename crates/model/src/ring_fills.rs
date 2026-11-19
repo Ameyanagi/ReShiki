@@ -119,7 +119,7 @@ fn legacy_hue(key: [u8; 3]) -> Option<Hue> {
         .map(|(_, _, hue)| *hue)
 }
 
-fn key(atoms: &[u64]) -> Vec<u64> {
+pub(crate) fn key(atoms: &[u64]) -> Vec<u64> {
     let mut result = atoms.to_vec();
     if let Some((first, _)) = result.iter().enumerate().min_by_key(|(_, id)| *id) {
         result.rotate_left(first);

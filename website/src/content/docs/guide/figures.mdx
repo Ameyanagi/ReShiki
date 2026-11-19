@@ -114,7 +114,9 @@ To keep molecules or whole reactions in a row, column or grid, select them and c
 
 ## Catalytic cycles
 
-Draw the intermediates as structures or text in a rough circle, select them and choose **Make catalytic cycle** from the canvas menu. They line up on a circle with an arc arrow from each to the next. The arrows are worked out from where the parts sit, so Option/Alt-dragging one part refits every arrow. Drag a reagent or product beside a step's arc to add it with a side arrow; a tag such as **Reagent of step 1** says what the drop will do. **Properties → Catalytic cycle** sets the direction, radius, step names and reversible steps. A scheme drawn beside the cycle is still read on its own. [Cycle details](/developer/graphics/#draw-a-catalytic-cycle).
+Draw the intermediates as structures or text in a rough circle, select them and choose **Make catalytic cycle** from the canvas menu. They line up on a circle with an arc arrow from each to the next. The arrows are worked out from where the parts sit, so Option/Alt-dragging one part refits every arrow. Drag a reagent or product beside a step's arc to add it with a side arrow; a tag such as **Reagent of step 1** says what the drop will do. **Properties → Catalytic cycle** sets the direction, radius, step names and reversible steps. A scheme drawn beside the cycle is still read on its own.
+
+Each step is also a reaction: the step's intermediate and reagents go to the next intermediate and its products. Pick a step in **Properties → Catalytic cycle**, or right-click its arc, to **Copy step as reaction SMILES**, **Auto-map step**, **Check step balance** or **Color cycle by origin**. Colors follow the atom maps from one step into the next. [Cycle details](/developer/graphics/#draw-a-catalytic-cycle), [steps as reactions](/developer/graphics/#use-a-cycles-steps-as-reactions).
 
 ## Set the page
 

@@ -43,6 +43,7 @@ impl MoleculeCanvas<'_> {
         Some(
             Action::publish(Edit::ContextMenu {
                 position,
+                at: p,
                 selected,
                 hit: target,
             })

@@ -84,6 +84,7 @@ fn oxygen_starts_immediately_and_labels_do_not_edit_history_or_selection() {
     app.tab.saved = drawing.clone();
     let selected = app.tab.selected.clone();
     app.edit(crate::canvas::Edit::ContextMenu {
+        at: Default::default(),
         position: iced::Point::ORIGIN,
         hit: vec![],
         selected: selected.clone(),

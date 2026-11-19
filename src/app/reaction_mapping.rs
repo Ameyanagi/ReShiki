@@ -10,7 +10,7 @@ use reshiki::{
     document::Document,
     reaction_mapping::{self as mapping, Budget, Proposal},
 };
-use std::sync::Arc;
+use std::{borrow::Cow, sync::Arc};
 
 const EDITOR_HINT: &str = "Auto-map keeps maps you set. Reagents are not mapped.";
 const ALIGN_HINT: &str = "Moves complete product molecules";
@@ -23,10 +23,15 @@ pub(super) struct State {
     atom: Option<u64>,
     text: String,
     serial: u64,
-    pending: Option<(u64, u64)>,
-    proposal: Option<Arc<Proposal>>,
+    pub(super) pending: Option<(u64, u64)>,
+    pub(super) proposal: Option<Arc<Proposal>>,
     preview: Option<Preview>,
     pub(super) review_pair: Option<(u64, u64)>,
+    /// The catalytic cycle and step the proposal maps, on a copy of the
+    /// step's parts; `None` maps an arrow's reaction in the drawing.
+    pub(super) step: Option<(u64, usize)>,
+    /// Color the cycle by origin once the step's reviewed maps are applied.
+    pub(super) color_step: bool,
 }
 
 struct Preview {
@@ -122,18 +127,38 @@ impl App {
             && preview.theme == self.tab.doc.custom_theme
         {
             #[cfg(test)]
-            {
-                let fresh = Preview::new(key, proposal, &self.tab.doc);
+            if let Some(source) = self.mapping_source() {
+                let fresh = Preview::new(key, proposal, &source);
                 debug_assert_eq!(preview.current, fresh.current);
                 debug_assert_eq!(preview.document, fresh.document);
             }
             return;
         }
-        let preview = Preview::new(key, proposal, &self.tab.doc);
+        let preview = match self.mapping_source() {
+            Some(source) => Preview::new(key, proposal, &source),
+            // The cycle or its step is gone.
+            None => Preview {
+                key,
+                current: false,
+                document: None,
+                version: self.tab.doc.version,
+                theme: self.tab.doc.custom_theme.clone(),
+            },
+        };
         if !preview.current {
             self.tab.mapping.review_pair = None;
         }
         self.tab.mapping.preview = Some(preview);
+    }
+
+    /// The drawing the proposal maps: a cycle step's copy, or the drawing.
+    fn mapping_source(&self) -> Option<Cow<'_, Document>> {
+        match self.tab.mapping.step {
+            Some((id, _)) => reshiki::cycles::steps::reactions(&self.tab.doc, id)
+                .ok()
+                .map(|(copy, _)| Cow::Owned(copy)),
+            None => Some(Cow::Borrowed(&self.tab.doc)),
+        }
     }
 
     /// The one selected atom that atom-map commands edit. Shared with the
@@ -159,6 +184,7 @@ impl App {
             Action::Auto | Action::Ready(..) | Action::ReviewPair(_) | Action::ApplyProposal
         ) {
             self.tab.reactions.color_after_maps = None;
+            self.tab.mapping.color_step = false;
         }
         match action {
             Action::Ready(epoch, serial, result) => {
@@ -222,6 +248,8 @@ impl App {
             }
             Action::ApplyProposal => {
                 let proposal = self.tab.mapping.proposal.clone();
+                let step = self.tab.mapping.step;
+                let color_step = std::mem::take(&mut self.tab.mapping.color_step);
                 // Color by origin asked for these maps: maps and colors are
                 // one Undo step.
                 let color = self.tab.reactions.color_after_maps.take().filter(|arrow| {
@@ -240,10 +268,24 @@ impl App {
                 });
                 let mut colored = None;
                 self.commit_mapping(|before| {
-                    let mut doc = proposal
-                        .as_ref()
-                        .ok_or("Run Auto-map first")?
-                        .apply(before, true)?;
+                    let proposal = proposal.as_ref().ok_or("Run Auto-map first")?;
+                    let mut doc = match step {
+                        // A cycle step's maps go back onto the same atoms.
+                        Some((id, s)) => {
+                            let (copy, _) = reshiki::cycles::steps::reactions(before, id)?;
+                            let mut doc = before.clone();
+                            reshiki::cycles::steps::copy_maps(
+                                &mut doc,
+                                &proposal.apply(&copy, true)?,
+                            );
+                            if color_step {
+                                colored =
+                                    Some(reshiki::cycles::steps::color(&mut doc, id, s).is_ok());
+                            }
+                            doc
+                        }
+                        None => proposal.apply(before, true)?,
+                    };
                     if let Some(arrow) = color {
                         colored = Some(reshiki::reaction_colors::paint(&mut doc, arrow).is_ok());
                     }
@@ -282,7 +324,7 @@ impl App {
             return Task::none();
         }
         match result {
-            Ok(proposal) if proposal.current(&self.tab.doc) => {
+            Ok(proposal) if self.mapping_source().is_some_and(|s| proposal.current(&s)) => {
                 self.status = if proposal.complete {
                     "Atom-map proposal ready to review"
                 } else {
@@ -307,10 +349,12 @@ impl App {
             }
             Ok(_) => {
                 self.tab.reactions.color_after_maps = None;
+                self.tab.mapping.color_step = false;
                 self.status = "The drawing changed; run Auto-map again".into();
             }
             Err(error) => {
                 self.tab.reactions.color_after_maps = None;
+                self.tab.mapping.color_step = false;
                 self.status = error;
                 self.error = true;
             }
@@ -353,14 +397,50 @@ impl App {
             self.error = true;
             return Task::none();
         };
+        self.run_auto_map(self.tab.doc.clone(), arrow, None, false)
+    }
+    /// Propose atom maps for step `s` of cycle `id`; with `color`, applying
+    /// them colors the cycle by origin.
+    pub(super) fn start_step_auto_map(&mut self, id: u64, s: usize, color: bool) -> Task<Message> {
+        if self.tab.mapping.pending.is_some() || self.tab.busy {
+            return Task::none();
+        }
+        // The whole cycle's copy, so new numbers stay clear of other steps
+        // and applying checks every step the maps touch.
+        let source = reshiki::cycles::steps::step(&self.tab.doc, id, s)
+            .and_then(|_| reshiki::cycles::steps::reactions(&self.tab.doc, id));
+        match source {
+            Ok((copy, arrows)) => match arrows.get(s) {
+                Some(arrow) => {
+                    let arrow = *arrow;
+                    self.run_auto_map(copy, arrow, Some((id, s)), color)
+                }
+                None => Task::none(),
+            },
+            Err(error) => {
+                self.status = error;
+                self.error = true;
+                Task::none()
+            }
+        }
+    }
+    fn run_auto_map(
+        &mut self,
+        source: Document,
+        arrow: u64,
+        step: Option<(u64, usize)>,
+        color: bool,
+    ) -> Task<Message> {
         self.tab.mapping.serial = self.tab.mapping.serial.wrapping_add(1);
         let serial = self.tab.mapping.serial;
         let epoch = self.tab.file_epoch;
         self.tab.mapping.pending = Some((epoch, serial));
         self.tab.mapping.set_proposal(None);
+        self.tab.mapping.step = step;
+        self.tab.mapping.color_step = color;
         self.status = "Finding atom correspondence…".into();
         self.error = false;
-        Task::perform(calculate(self.tab.doc.clone(), arrow), move |result| {
+        Task::perform(calculate(source, arrow), move |result| {
             Message::Mapping(Action::Ready(epoch, serial, result))
         })
     }
@@ -370,7 +450,7 @@ impl App {
             .mapping
             .proposal
             .as_ref()
-            .filter(|p| p.current(&self.tab.doc))
+            .filter(|p| self.mapping_source().is_some_and(|s| p.current(&s)))
             .and_then(|p| p.pairs.get(index))
         {
             self.tab.selected = vec![*a, *b];
@@ -420,7 +500,10 @@ impl App {
             n => format!("{n} atoms mapped"),
         };
         let mut body = self.map_editor(ready);
-        if let Some(proposal) = &self.tab.mapping.proposal {
+        // A cycle step's proposal is reviewed in Properties.
+        if let Some(proposal) = &self.tab.mapping.proposal
+            && self.tab.mapping.step.is_none()
+        {
             body = self.proposal_review(body, proposal);
         }
         self.inspector_section(Section::AtomMaps, "Atom maps", summary, true, body)
@@ -518,7 +601,7 @@ impl App {
         ]
         .spacing(6)
     }
-    fn proposal_review<'a>(
+    pub(super) fn proposal_review<'a>(
         &'a self,
         mut body: Column<'a, Message>,
         proposal: &Proposal,
