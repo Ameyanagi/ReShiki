@@ -291,6 +291,16 @@ fn clear(doc: &mut Document, atoms: &HashSet<u64>, paint: &HashSet<Color>) {
         .retain(|f| !(paint.contains(&f.color) && f.atoms.iter().all(|id| atoms.contains(id))));
 }
 
+/// Remove every color color by origin gives by default from `atoms`: all
+/// fragment hues and the marks for new and changed bonds and rings.
+pub fn clear_defaults(doc: &mut Document, atoms: &HashSet<u64>) {
+    let colors = Colors {
+        reactants: FRAGMENTS.to_vec(),
+        ..Colors::new()
+    };
+    clear(doc, atoms, &paints(&colors));
+}
+
 /// Whether a product atom has a map number that a reactant atom also has.
 fn shares_maps(doc: &Document, reaction: &Reaction) -> bool {
     let maps = |role: Role| -> HashSet<u32> {

@@ -932,7 +932,11 @@ async fn a_cycle_step_copies_as_its_own_reaction_smiles() {
     }
     assert_eq!(
         lines,
-        ["CBr.[Pd]>>C[Pd]Br", "C[Pd]Br>>C[Pd]C", "C[Pd]C>>[Pd]"]
+        [
+            "CBr.[Pd]>>[CH3][Pd][Br]",
+            "[CH3][Pd][Br]>>[CH3][Pd][CH3]",
+            "[CH3][Pd][CH3]>>[Pd]"
+        ]
     );
 }
 

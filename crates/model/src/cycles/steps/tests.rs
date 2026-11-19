@@ -1,4 +1,4 @@
-use super::{balance, color, copy_back, reactions, step};
+use super::{balance, color, copy_maps, reactions, step};
 use crate::{
     chemistry,
     cycles::{Role, Target, assign, make, step_at},
@@ -184,7 +184,7 @@ fn auto_map_on_a_step_copy_lands_on_the_same_atoms() {
     let (copy, arrows) = reactions(&doc, t.id).unwrap();
     let proposal = propose(&copy, arrows[0], Budget::default()).unwrap();
     let mapped = proposal.apply(&copy, true).unwrap();
-    copy_back(&mut doc, &mapped);
+    copy_maps(&mut doc, &mapped);
     let map = |id: u64| doc.atom(id).unwrap().map_num;
     // Pd, carbon and bromine keep one number each across the step.
     assert_eq!(map(t.pd[0]), map(t.oa[1]));
@@ -336,4 +336,57 @@ fn a_reference_reagent_stays_out_of_the_step_s_copy() {
     let (copy, _) = step(&doc, t.id, 1).unwrap();
     assert!(t.meli.iter().all(|id| copy.atom(*id).is_none()));
     assert_eq!(copy.reactions[0].reactants.len(), 1);
+}
+
+#[test]
+fn recoloring_clears_colors_of_steps_that_lost_their_maps() {
+    let t = toy(true);
+    let mut doc = t.doc.clone();
+    color(&mut doc, t.id, 0).unwrap();
+    assert!(label_color(&doc, t.libr[1]).is_some_and(|c| c != Color::Ink));
+    // Step 2's products lose their maps; coloring again leaves them plain.
+    for id in t.libr.iter().chain(&t.tm).chain(&t.ethane) {
+        doc.atom_mut(*id).unwrap().map_num = 0;
+    }
+    color(&mut doc, t.id, 0).unwrap();
+    assert!(label_color(&doc, t.libr[1]).is_none_or(|c| c == Color::Ink));
+    assert!(
+        doc.bonds
+            .iter()
+            .filter(|b| t.ethane.contains(&b.a))
+            .all(|b| b.color == Color::Ink && b.highlight.is_none())
+    );
+}
+
+#[test]
+fn a_reactant_that_leaves_for_a_cycle_takes_its_hue_along() {
+    let t = toy(false);
+    let mut doc = t.doc.clone();
+    let a = molecule(&mut doc, "CI", 900., 0., &[]);
+    let b = molecule(&mut doc, "CO", 900., 100., &[]);
+    let c = molecule(&mut doc, "COC", 1200., 50., &[]);
+    let arrow = doc.next_id();
+    doc.arrows.push(Arrow::new(
+        arrow,
+        Point::new(1000., 50.),
+        Point::new(1150., 50.),
+        crate::arrows::Preset::Forward,
+        Default::default(),
+    ));
+    let role = crate::reactions::Role::Reactant;
+    crate::reactions::assign(&mut doc, arrow, &a, role).unwrap();
+    crate::reactions::assign(&mut doc, arrow, &b, role).unwrap();
+    crate::reactions::assign(&mut doc, arrow, &c, crate::reactions::Role::Product).unwrap();
+    let hues = vec![crate::palette::Hue::Blue, crate::palette::Hue::Green];
+    doc.reactions[0].colors = Some(crate::reaction_colors::Colors {
+        reactants: hues,
+        formed: crate::palette::Hue::Red,
+        bonds: true,
+        changes: false,
+        rings: true,
+        legend: None,
+    });
+    join(&mut doc, t.id, Role::Reagent(0), &a);
+    let colors = doc.reactions[0].colors.as_ref().unwrap();
+    assert_eq!(colors.reactants, vec![crate::palette::Hue::Green]);
 }

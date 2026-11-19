@@ -392,11 +392,14 @@ step for the atom-map search and color by origin, a throwaway drawing holds
 only the steps' parts, one forward arrow per step with an ID the drawing does
 not use, and a `Reaction` per step; Reference and Illustration structures are
 left out, and a step's tools need structures as both intermediates. Reaction
-SMILES, the atom-map search and `reaction_colors::paint` run on that copy, and
-`steps::copy_back` writes atom maps, label and bond colors, highlights and ring
-fills back onto the reaction participants' atom IDs as one Undo step, with
-changed ring fills replaced in place. An atom-map proposal for a step
-remembers its cycle and step, and the review compares it with a fresh copy. The balance check counts the elements of each side from the chemistry
+SMILES, the atom-map search and `reaction_colors::paint` run on that copy.
+Applying maps writes only the participants' map numbers back
+(`steps::copy_maps`); coloring first clears every default color-by-origin
+hue from the cycle's participants, then writes label and bond colors,
+highlights and ring fills back onto the same atom IDs, replacing a ring's
+fill in place. Each is one Undo step. An atom-map proposal for a step
+remembers its cycle and step, and the review compares it with a fresh copy.
+The balance check counts the elements of each side from the chemistry
 graph, with explicit and implicit hydrogens, and the formal charges.
 
 ### Interchange boundary

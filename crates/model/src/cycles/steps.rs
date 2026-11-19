@@ -126,26 +126,37 @@ pub fn step(doc: &Document, id: u64, s: usize) -> Result<(Document, u64), String
     }
 }
 
-/// Put what a tool changed on a step's copy back onto the same structures:
-/// atom maps, label and bond colors, highlights and ring fills. Only the
-/// copy's reaction participants are written.
-pub fn copy_back(doc: &mut Document, from: &Document) {
-    let held: HashSet<u64> = from
-        .reactions
+/// The atoms of a copy's reaction participants.
+fn participants(from: &Document) -> HashSet<u64> {
+    from.reactions
         .iter()
         .flat_map(|r| [Role::Reactant, Role::Product].map(|role| r.participants(role)))
         .flatten()
         .flat_map(|p| p.atoms.iter().copied())
-        .collect();
-    let atoms: HashMap<u64, _> = from
-        .atoms
-        .iter()
-        .filter(|a| held.contains(&a.id))
-        .map(|a| (a.id, a))
-        .collect();
+        .collect()
+}
+
+/// Put the atom maps of a copy's reaction participants back onto the same
+/// atoms.
+pub fn copy_maps(doc: &mut Document, from: &Document) {
+    let held = participants(from);
     for atom in &mut doc.atoms {
-        if let Some(a) = atoms.get(&atom.id) {
+        if held.contains(&atom.id)
+            && let Some(a) = from.atom(atom.id)
+        {
             atom.map_num = a.map_num;
+        }
+    }
+}
+
+/// Put the colors a copy's reaction participants took back onto the same
+/// structures: label and bond colors, highlights and ring fills.
+fn copy_colors(doc: &mut Document, from: &Document) {
+    let held = participants(from);
+    for atom in &mut doc.atoms {
+        if held.contains(&atom.id)
+            && let Some(a) = from.atom(atom.id)
+        {
             atom.text_style.clone_from(&a.text_style);
             atom.display.color_override = a.display.color_override;
         }
@@ -165,11 +176,7 @@ pub fn copy_back(doc: &mut Document, from: &Document) {
     }
     // Fills on the copy's rings replace theirs in place, so the stacking of
     // other fills stays as it was.
-    let ring = |f: &RingFill| {
-        let mut atoms = f.atoms.clone();
-        atoms.sort_unstable();
-        atoms
-    };
+    let ring = |f: &RingFill| crate::ring_fills::key(&f.atoms);
     let inside = |f: &RingFill| f.atoms.iter().all(|id| held.contains(id));
     let mut fills: HashMap<Vec<u64>, &RingFill> = from
         .ring_fills
@@ -200,8 +207,13 @@ pub fn copy_back(doc: &mut Document, from: &Document) {
 /// so an intermediate keeps its colors from one step into the next.
 pub fn color(doc: &mut Document, id: u64, s: usize) -> Result<(), Refusal> {
     let (mut copy, arrows) = reactions(doc, id).map_err(|_| Refusal::Roles)?;
-    paint(&mut copy, *arrows.get(s).ok_or(Refusal::Roles)?)?;
-    copy_back(doc, &copy);
+    let arrow = *arrows.get(s).ok_or(Refusal::Roles)?;
+    // No settings are kept, so an earlier run's colors go first, also from
+    // steps that have since lost their maps.
+    let held = participants(&copy);
+    crate::reaction_colors::clear_defaults(&mut copy, &held);
+    paint(&mut copy, arrow)?;
+    copy_colors(doc, &copy);
     Ok(())
 }
 

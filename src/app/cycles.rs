@@ -41,6 +41,9 @@ pub enum Field {
 /// The cycle card's text fields and chosen step.
 #[derive(Debug, Clone, Default)]
 pub(super) struct Inputs {
+    /// The cycle right-clicked last, which the card and step tools use
+    /// while it is selected, also among other selected cycles.
+    cycle: Option<u64>,
     step: usize,
     radius: String,
     gap: String,
@@ -191,14 +194,19 @@ impl App {
 
     /// Choose the step of the selected cycle that lies toward `p`, as a
     /// right-click on its arc does.
-    pub(super) fn choose_step_at(&mut self, p: reshiki::document::Point) {
-        if let Some(step) = self
-            .selected_cycle_graphic()
-            .and_then(|g| reshiki::cycles::step_at(&self.tab.doc, g, p))
-        {
-            self.tab.cycle_inputs.step = step;
-            self.sync_cycle();
-        }
+    pub(super) fn choose_step_at(&mut self, p: reshiki::document::Point, hit: &[u64]) {
+        let doc = &self.tab.doc;
+        let Some((id, step)) = doc
+            .graphics
+            .iter()
+            .filter(|g| g.cycle.is_some() && hit.contains(&g.id))
+            .find_map(|g| Some((g.id, reshiki::cycles::step_at(doc, g, p)?)))
+        else {
+            return;
+        };
+        self.tab.cycle_inputs.cycle = Some(id);
+        self.tab.cycle_inputs.step = step;
+        self.sync_cycle();
     }
 
     /// Run a reaction tool on step `s` of cycle `id`.
@@ -292,12 +300,22 @@ impl App {
 
     /// The selected cycle: the one whose circle is selected.
     pub(super) fn selected_cycle(&self) -> Option<(u64, &Cycle)> {
-        self.tab
+        let selected = |id: &u64| self.tab.selected.contains(id);
+        let mut cycles = self
+            .tab
             .doc
             .graphics
             .iter()
-            .filter(|g| g.cycle.is_some() && self.tab.selected.contains(&g.id))
-            .find_map(|g| Some((g.id, g.cycle.as_deref()?)))
+            .filter(|g| selected(&g.id))
+            .filter_map(|g| Some((g.id, g.cycle.as_deref()?)));
+        let first = cycles.next()?;
+        let chosen = self.tab.cycle_inputs.cycle;
+        Some(
+            std::iter::once(first)
+                .chain(cycles)
+                .find(|(id, _)| Some(*id) == chosen)
+                .unwrap_or(first),
+        )
     }
 
     fn selected_cycle_graphic(&self) -> Option<&reshiki::graphics::Graphic> {

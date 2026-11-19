@@ -73,7 +73,7 @@ impl App {
                 // never applies a value typed for the previous one.
                 self.set_selection(selected);
                 // A cycle's step commands act on the step right-clicked.
-                self.choose_step_at(at);
+                self.choose_step_at(at, &hit);
                 if let Some(tab) = closed_inspector {
                     self.inspector_open = false;
                     self.inspector_tab = tab;

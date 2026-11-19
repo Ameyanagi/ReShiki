@@ -197,6 +197,33 @@ fn step_tools_act_on_the_chosen_step_and_color_is_one_undo_step() {
     let _ = app.update(Message::Cycle(Action::Check));
     assert_eq!(app.status, "Step 2 is balanced");
     assert_eq!(app.tab.doc, start);
+    // Without LiBr, step 2 loses lithium and bromine; step 3 stays balanced.
+    let mut lost = app.tab.doc.clone();
+    let libr: Vec<u64> = lost
+        .atoms
+        .iter()
+        .filter(|a| a.element == "Li" && a.map_num == 5)
+        .map(|a| a.id)
+        .collect();
+    let id = app.selected_cycle().unwrap().0;
+    let libr = reshiki::reactions::molecules(&lost, &libr)
+        .into_iter()
+        .find(|m| {
+            m.len() == 2 && reshiki::cycles::role_of(&lost, m[0]) == Some((id, Role::Product(1)))
+        })
+        .unwrap();
+    reshiki::cycles::remove(&mut lost, &libr);
+    app.tab.doc = lost;
+    let _ = app.update(Message::Cycle(Action::Check));
+    assert_eq!(
+        app.status,
+        "Step 2 not balanced · extra on the left: Br, Li"
+    );
+    app.tab.cycle_inputs.step = 2;
+    let _ = app.update(Message::Cycle(Action::Check));
+    assert_eq!(app.status, "Step 3 is balanced");
+    app.tab.doc = start.clone();
+    app.tab.cycle_inputs.step = 1;
 
     let _ = app.update(Message::Cycle(Action::Color));
     assert!(!app.error, "{}", app.status);
@@ -274,6 +301,23 @@ fn right_clicking_a_step_chooses_it_for_the_menu() {
         hit: vec![id],
     });
     assert_eq!(app.cycle_step(), Some((id, 1)));
+    // With a second cycle selected too, the one right-clicked is used.
+    let parts = [
+        text(&mut app, 3000., -200., "A"),
+        text(&mut app, 3170., 90., "B"),
+        text(&mut app, 2770., 90., "C"),
+    ];
+    let (other, _) = reshiki::cycles::make(&mut app.tab.doc, &parts).unwrap();
+    let g = app.tab.doc.graphics.iter().find(|g| g.id == other).unwrap();
+    let (center, radius) = g.cycle_circle();
+    let p = Point::new(center.x, center.y + radius);
+    app.edit(Edit::ContextMenu {
+        position: iced::Point::ORIGIN,
+        at: p,
+        selected: vec![id, other],
+        hit: vec![other],
+    });
+    assert_eq!(app.cycle_step(), Some((other, 1)));
 }
 
 #[test]

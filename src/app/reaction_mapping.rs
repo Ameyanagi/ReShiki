@@ -274,7 +274,7 @@ impl App {
                         Some((id, s)) => {
                             let (copy, _) = reshiki::cycles::steps::reactions(before, id)?;
                             let mut doc = before.clone();
-                            reshiki::cycles::steps::copy_back(
+                            reshiki::cycles::steps::copy_maps(
                                 &mut doc,
                                 &proposal.apply(&copy, true)?,
                             );
