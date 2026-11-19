@@ -677,6 +677,9 @@ pub fn options(doc: &Document, ids: &[u64]) -> Vec<(Port, Port, Offer)> {
             } else {
                 continue;
             };
+            if !scalable(doc, &moving, s.mm / m.mm) {
+                continue;
+            }
             out.push((gap(m, s), s.clone(), m.clone(), offer));
         }
     }
@@ -730,7 +733,9 @@ pub fn detach(doc: &mut Document, j: &JointRef) -> bool {
     } else {
         (&seat.b, &seat.a)
     };
-    if let (Some(s), Some(g)) = (port(doc, stay), port(doc, go)) {
+    // Pieces still joined through another seat stay where they are.
+    let apart = !assembly(doc, stay.piece).contains(&go.piece);
+    if apart && let (Some(s), Some(g)) = (port(doc, stay), port(doc, go)) {
         // A joint length and a diameter: a clear gap, and out of snap reach.
         let away = match &s.kind {
             Kind::Taper(size) => taper(size).map_or(10., |t| t.l + t.d),

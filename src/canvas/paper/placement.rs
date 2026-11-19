@@ -387,8 +387,9 @@ impl MoleculeCanvas<'_> {
     }
 
     /// Keyboard Connect shows the offered joint seated, as Return makes it.
-    pub(super) fn preview_connect(&self, draft: &mut Draft<'_>) {
-        let Some((ids, target, moving)) = self.connect else {
+    pub(super) fn preview_connect(&self, draft: &mut Draft<'_>, state: &State) {
+        // A pointer gesture works on the drawing as it is; Connect waits.
+        let (Some((ids, target, moving)), None) = (self.connect, &state.gesture) else {
             return;
         };
         let doc = draft.preview.to_mut();
