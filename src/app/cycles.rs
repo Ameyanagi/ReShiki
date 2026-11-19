@@ -815,12 +815,9 @@ impl App {
             );
         }
         body = body.push(parts).push(
-            text(format!(
-                "{}-click a part to move it alone; the arrows follow",
-                crate::platform::alt_key()
-            ))
-            .size(11)
-            .style(muted_text),
+            text("Click a part again to move it alone; drag it off the cycle to take it out")
+                .size(11)
+                .style(muted_text),
         );
         Some(body.into())
     }

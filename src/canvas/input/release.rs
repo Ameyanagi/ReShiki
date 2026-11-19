@@ -519,6 +519,11 @@ impl MoleculeCanvas<'_> {
                 .first()
                 .copied()
                 .filter(|id| self.doc.atom(*id).is_some())
+                // A click into the selected object picks a piece of it.
+                .filter(|_| {
+                    !(clicked.len() < self.selected.len()
+                        && clicked.iter().all(|id| self.selected.contains(id)))
+                })
             {
                 let now = iced::time::Instant::now();
                 if state.last_click.is_some_and(|(time, id)| {

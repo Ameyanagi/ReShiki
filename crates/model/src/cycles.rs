@@ -875,29 +875,13 @@ pub fn drop_target(doc: &Document, moved: &[u64]) -> Option<Target> {
     }
     let ink = crate::scene::selection_bounds(doc, &part)?;
     let p = center_of(ink);
-    let bond = doc.drawing_style.bond_length_world;
     doc.graphics.iter().rev().find_map(|g| {
         let cycle = g.cycle.as_deref()?;
         if moved.contains(&g.id) {
             return None;
         }
-        let (center, radius) = g.cycle_circle();
-        let d = p.distance(center);
-        let ring = 0.6 * bond;
+        let role = zone(doc, g, cycle, p)?;
         let n = cycle.intermediates.len();
-        let within = within(doc, g, cycle, p);
-        let role = if (d - radius).abs() < ring {
-            Role::Intermediate(within.map_or(0, |(s, _)| s + 1))
-        } else if d > radius * 0.35 && d < radius + 4. * bond {
-            let (s, t) = within?;
-            if t < 0.5 {
-                Role::Reagent(s)
-            } else {
-                Role::Product(s)
-            }
-        } else {
-            return None;
-        };
         // A full list takes no more.
         let full = match role {
             Role::Intermediate(_) => n,
@@ -914,6 +898,40 @@ pub fn drop_target(doc: &Document, moved: &[u64]) -> Option<Target> {
             ink,
         })
     })
+}
+
+/// The role a part centred at `p` would take in cycle graphic `g`: on its
+/// circle an intermediate, beside the first half of a step's arc a reagent,
+/// beside the second half a product.
+fn zone(doc: &Document, g: &Graphic, cycle: &Cycle, p: Point) -> Option<Role> {
+    let (center, radius) = g.cycle_circle();
+    let d = p.distance(center);
+    let bond = doc.drawing_style.bond_length_world;
+    let within = within(doc, g, cycle, p);
+    if (d - radius).abs() < 0.6 * bond {
+        Some(Role::Intermediate(within.map_or(0, |(s, _)| s + 1)))
+    } else if d > radius * 0.35 && d < radius + 4. * bond {
+        let (s, t) = within?;
+        Some(if t < 0.5 {
+            Role::Reagent(s)
+        } else {
+            Role::Product(s)
+        })
+    } else {
+        None
+    }
+}
+
+/// Whether `part` still lies within cycle `cycle`: inside its circle or as
+/// far out as a drop beside a step's arc would add it.
+pub fn holds(doc: &Document, cycle: u64, part: &[u64]) -> bool {
+    let Some(g) = doc.graphics.iter().find(|g| g.id == cycle) else {
+        return false;
+    };
+    let (center, radius) = g.cycle_circle();
+    let reach = radius + 4. * doc.drawing_style.bond_length_world;
+    crate::scene::selection_bounds(doc, part)
+        .is_some_and(|ink| center_of(ink).distance(center) < reach)
 }
 
 /// Give the target's part its role, and group it with the cycle. It leaves
@@ -973,6 +991,15 @@ pub fn assign(doc: &mut Document, target: &Target) -> bool {
 /// Take the parts holding any of `ids` out of their cycles and their groups;
 /// they stay in the drawing. Returns how many parts left.
 pub fn remove(doc: &mut Document, ids: &[u64]) -> usize {
+    let freed = leave(doc, ids);
+    ungroup_freed(doc, &freed);
+    freed.len()
+}
+
+/// Take the parts holding any of `ids` out of their cycles, groups aside.
+/// Returns every object that lost its role, side parts of a cycle left with
+/// no steps too.
+pub(crate) fn leave(doc: &mut Document, ids: &[u64]) -> HashSet<u64> {
     let held = part_ids(doc);
     let hit = |part: &Vec<u64>| part.iter().any(|id| ids.contains(id));
     for g in &mut doc.graphics {
@@ -995,14 +1022,12 @@ pub fn remove(doc: &mut Document, ids: &[u64]) -> usize {
         }
     }
     // Side parts of a cycle left with no steps go too.
-    let freed: HashSet<u64> = held.difference(&part_ids(doc)).copied().collect();
-    ungroup_freed(doc, &freed);
-    freed.len()
+    held.difference(&part_ids(doc)).copied().collect()
 }
 
 /// Parts that lost their role leave every group: a group nested in the
 /// cycle's would otherwise overlap it.
-fn ungroup_freed(doc: &mut Document, freed: &HashSet<u64>) {
+pub(crate) fn ungroup_freed(doc: &mut Document, freed: &HashSet<u64>) {
     if freed.is_empty() {
         return;
     }

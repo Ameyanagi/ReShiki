@@ -164,7 +164,8 @@ endpoints, attachments and arrowheads stay in place.
 2. Choose **Wrap in panel** from the canvas menu, the command palette or
    **Properties → Grouping & frames**. A tinted, rounded panel appears behind
    the selection with 10 pt of padding, grouped with it so they move together.
-   Option/Alt-click edits one object inside.
+   Click an object inside a second time to edit it alone. Drag it out of the
+   frame and it leaves the panel.
 3. **Properties** opens on the **Panel** card, above what the panel holds.
    Type a title and press Enter, pick a fill swatch, and turn **Outline** or
    **Shadow** on or off. **Title bar**
@@ -177,7 +178,7 @@ endpoints, attachments and arrowheads stay in place.
    **Corner (pt)** under **Graphic style**). Outline color, line width,
    dashes, gradients and a custom fill color are under **Graphic style**,
    which changes every selected shape: to change the panel alone,
-   Option-click its margin first. **Fit to contents** refits the panel around what it is grouped with.
+   click its margin a second time first. **Fit to contents** refits the panel around what it is grouped with.
 
 Each change is one Undo step. Panels are artwork: reaction detection, atom
 mapping and analysis never read them.
@@ -215,16 +216,19 @@ the gutters. Moving one item by itself leaves it where you put it.
    second half a product going out. A dashed outline and a tag such as
    **Intermediate 3** or **Reagent of step 2** show the role before you let
    go. A part already in the cycle keeps its role when it moves.
-4. Clicking any part selects the whole cycle. Option/Alt-click moves one part
-   alone; every arc and side arrow refits to it.
+4. Clicking any part selects the whole cycle. Click the part again to select
+   it alone, then drag it: every arc and side arrow refits to it. Let go
+   farther out than a reagent's place, and it leaves the cycle; the tag
+   **Release to take it out of the cycle** and the arcs closing up without
+   it show this before you let go. Option/Alt-drag does the same in one go.
 5. In **Properties → Catalytic cycle**, choose **Clockwise** or
    **Counterclockwise**, and set **Radius (pt)**, **Gap (pt)** (the space
    between an arc and an intermediate) and **Center** text. Pick a step to
    give it a **Name**, make it **Reversible**, **Hide arrow**, or set its
    **Bow** and extra **Space in** and **out** in points. **Parts** lists every
    part with its role.
-6. To take a part out, select it alone and choose **Remove from cycle**. It
-   stays in the drawing.
+6. **Remove from cycle** also takes the selected part out. It stays in the
+   drawing.
 
 Each change is one Undo step. A reagent's side arrow joins the arc without a
 head; a product's leaves it with one. Reaction detection never takes a
@@ -320,8 +324,10 @@ seat.
 
 Seated pieces form an assembly. A click selects the whole assembly and a drag
 moves it; turning, scaling, copying and **Bring to Front** act on all of it.
-To take a piece out, Option-drag (Alt-drag on Windows and Linux) it: the
-pieces held only through it come along, and the rest stays. **Properties →
+To take a piece out, click it again so it is selected alone, then drag it:
+the pieces held only through it come along, and the rest stays. The tag
+**Release to take it off** shows before you let go. Option-drag (Alt-drag on
+Windows and Linux) does the same without the second click. **Properties →
 Equipment** lists each joint of the selected piece, what is seated in it and
 **Detach**, which pulls the pieces apart along the joint and leaves a gap.
 

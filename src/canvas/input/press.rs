@@ -59,6 +59,7 @@ impl MoleculeCanvas<'_> {
     ) -> Option<Action<Edit>> {
         // Only another press on a transform handle can complete the pair.
         let last_transform_click = state.last_transform_click.take();
+        state.pull_out = false;
         let point = point?;
         let p = self.camera.world(point, bounds);
         if self.tool == Tool::Erase {
@@ -430,6 +431,13 @@ impl MoleculeCanvas<'_> {
                 return Some(Action::publish(Edit::Select(hit)).and_capture());
             }
             Tool::Select | Tool::Lasso => Some(if !hit.is_empty() {
+                // A click picks the whole object first, then the piece
+                // under the pointer inside it.
+                let clicked = if state.modifiers.shift() || state.modifiers.alt() {
+                    hit.clone()
+                } else {
+                    self.doc.click_selection(self.selected, &picked)
+                };
                 let ids = reshiki::attachments::movement_selection(
                     self.doc,
                     &if state.modifiers.shift() {
@@ -440,12 +448,16 @@ impl MoleculeCanvas<'_> {
                     {
                         self.selected.to_vec()
                     } else {
-                        hit.clone()
+                        clicked.clone()
                     },
                 );
                 // A drag moves a piece's whole assembly, or slides what a
-                // stand holds along its rod; Alt pulls the piece out.
-                let ids = if state.modifiers.alt() {
+                // stand holds along its rod. A piece picked out of its
+                // assembly, or Alt, pulls the piece out.
+                let piece = self.doc.expand_groups(&ids).len()
+                    > ids.iter().collect::<std::collections::HashSet<_>>().len();
+                state.pull_out = state.modifiers.alt() || piece;
+                let ids = if state.pull_out {
                     reshiki::equipment::solve::detached(self.doc, &ids)
                 } else {
                     reshiki::equipment::solve::carried(self.doc, &ids, &picked)
@@ -453,7 +465,7 @@ impl MoleculeCanvas<'_> {
                 Gesture::Move {
                     start: p,
                     ids,
-                    clicked: hit,
+                    clicked,
                 }
             } else if self.tool == Tool::Lasso {
                 Gesture::Lasso { points: vec![p] }

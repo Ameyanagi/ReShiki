@@ -470,16 +470,25 @@ pub fn around(doc: &Document, ids: &[u64]) -> Vec<u64> {
 /// Whole molecules and other objects that lie entirely inside the panel,
 /// for scoping what a panel holds. Empty when `panel` is not a panel.
 pub fn contents(doc: &Document, panel: u64) -> Vec<u64> {
-    content_units(doc, panel)
+    content_units(doc, panel, None)
         .into_iter()
         .flat_map(|(unit, _)| unit)
         .collect()
 }
 
+/// Whether `ids` lie wholly inside the panel's frame.
+pub fn holds(doc: &Document, panel: u64, ids: &[u64]) -> bool {
+    !content_units(doc, panel, Some(ids.to_vec())).is_empty()
+}
+
 /// What the panel holds, each whole molecule or other object with its
 /// extent along the panel's own axes, measured from its top left corner.
 /// Measured in those axes, a rotated panel holds only what its frame shows.
-fn content_units(doc: &Document, panel: u64) -> Vec<(Vec<u64>, (Point, Point))> {
+fn content_units(
+    doc: &Document,
+    panel: u64,
+    unit: Option<Vec<u64>>,
+) -> Vec<(Vec<u64>, (Point, Point))> {
     let Some(frame) = doc
         .graphics
         .iter()
@@ -508,12 +517,18 @@ fn content_units(doc: &Document, panel: u64) -> Vec<(Vec<u64>, (Point, Point))> 
             )
         }
     };
-    let atoms: Vec<u64> = doc.atoms.iter().map(|a| a.id).collect();
-    let mut units = crate::reactions::molecules(doc, &atoms);
-    units.extend(
-        doc.object_ids()
-            .filter(|id| *id != panel && doc.atom(*id).is_none())
-            .map(|id| vec![id]),
+    let units = unit.map_or_else(
+        || {
+            let atoms: Vec<u64> = doc.atoms.iter().map(|a| a.id).collect();
+            let mut units = crate::reactions::molecules(doc, &atoms);
+            units.extend(
+                doc.object_ids()
+                    .filter(|id| *id != panel && doc.atom(*id).is_none())
+                    .map(|id| vec![id]),
+            );
+            units
+        },
+        |unit| vec![unit],
     );
     let bounds = crate::scene::selections_bounds_in_axes(doc, &units, Some((o, degrees)));
     // Inside the frame, rounded corners included: the shape is convex, so a
@@ -561,7 +576,7 @@ pub fn divider_position(doc: &Document, panel: u64, vertical: bool) -> f32 {
     let (_, _, _, w, h) = frame.panel_frame();
     let (start, end) = (0., if vertical { w } else { h });
     // Each object on its own: the panel's group would join them all.
-    let mut spans: Vec<(f32, f32)> = content_units(doc, panel)
+    let mut spans: Vec<(f32, f32)> = content_units(doc, panel, None)
         .into_iter()
         .map(|(_, (a, b))| if vertical { (a.x, b.x) } else { (a.y, b.y) })
         .collect();
