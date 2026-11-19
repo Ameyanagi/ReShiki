@@ -67,6 +67,10 @@ impl MoleculeCanvas<'_> {
             return Some(Action::publish(Edit::EraseStart(p)).and_capture());
         }
         if self.tool == Tool::Equipment {
+            if self.piece.is_some_and(|d| d.tube.is_some()) {
+                state.gesture = Some(Gesture::Hose { start: p });
+                return Some(Action::request_redraw().and_capture());
+            }
             return Some(Action::publish(Edit::Piece(p)).and_capture());
         }
         if self.tool == Tool::Tilt {
