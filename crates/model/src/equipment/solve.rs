@@ -627,7 +627,11 @@ pub fn snap(doc: &mut Document, ids: &[u64], reach: f32, any_angle: bool) -> Opt
             let reach = f64::from(reach).max(REACH_DIAMETERS * s.diameter());
             let off = gap(m, s);
             let turn = angle_between(m.dir, mul(s.dir, -1.));
-            if off > reach || (!any_angle && turn > REACH_DEG) {
+            // A pair whose scaling a moving piece cannot take is no choice.
+            if off > reach
+                || (!any_angle && turn > REACH_DEG)
+                || !scalable(doc, &moving, s.mm / m.mm)
+            {
                 continue;
             }
             let fit = mates(m, s);
@@ -639,9 +643,6 @@ pub fn snap(doc: &mut Document, ids: &[u64], reach: f32, any_angle: bool) -> Opt
         }
     }
     let (fit, _, s, m) = best?;
-    if !scalable(doc, &moving, s.mm / m.mm) {
-        return None;
-    }
     let (s, m) = (s.clone(), m.clone());
     let offer = if fit {
         Offer::Seat

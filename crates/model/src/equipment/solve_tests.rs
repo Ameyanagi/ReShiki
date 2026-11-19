@@ -437,3 +437,51 @@ fn detach_leaves_the_cone_out_of_snap_reach_and_scale_limits_block_a_snap() {
     assert!(solve::snap(&mut big.clone(), &[stopper], 14., false).is_some());
     assert!(solve::snap(&mut big, &[stopper, other], 14., false).is_none());
 }
+
+#[test]
+fn shrinking_an_assembly_past_the_limit_stops_every_piece_there_and_keeps_the_seat() {
+    let mut doc = Document::default();
+    let flask = add(&mut doc, "reshiki/rbf-100-15", Point::new(200., 300.));
+    let stopper = add(&mut doc, "reshiki/stopper-15", Point::new(600., 100.));
+    bring(&mut doc, stopper, "bottom", &joint(flask, "neck"), (0., 0.));
+    let before = doc.clone();
+    solve::snap(&mut doc, &[stopper], 14., false).unwrap();
+    commit(&mut doc, before);
+    for (k, limit) in [(0.05, placed::MIN_PT_PER_MM), (40., placed::MAX_PT_PER_MM)] {
+        let mut scaled = doc.clone();
+        let ids = [flask, stopper];
+        crate::editing::transform_about(&mut scaled, &ids, Point::new(200., 300.), k, 0.);
+        commit(&mut scaled, doc.clone());
+        assert_eq!(scaled.seats.len(), 1, "scaled by {k}");
+        let pt = crate::style::DEFAULT.points_per_world();
+        for g in &scaled.graphics {
+            let s = g.axis_x.distance(Point::default()) * pt;
+            assert!((s - limit).abs() < 1e-3 * limit, "{s} pt per mm");
+        }
+    }
+}
+
+#[test]
+fn a_neck_the_selection_cannot_scale_to_does_not_hide_one_it_can_seat_on() {
+    let mut doc = Document::default();
+    let big = add(&mut doc, "reshiki/rbf-100-15", Point::new(200., 300.));
+    let k = placed::MAX_PT_PER_MM / placed::DEFAULT_PT_PER_MM;
+    crate::editing::transform_about(&mut doc, &[big], Point::new(200., 300.), k, 0.);
+    let stopper = add(&mut doc, "reshiki/stopper-15", Point::new(900., 100.));
+    let other = add(&mut doc, "reshiki/stopper-29", Point::new(1200., 100.));
+    crate::editing::transform_about(&mut doc, &[other], Point::new(1200., 100.), 2.5, 0.);
+    // The stopper sits exactly on the big flask's neck, and a few units off
+    // where a normal flask's neck would seat it.
+    bring(&mut doc, stopper, "bottom", &joint(big, "neck"), (0., 0.));
+    let normal = add(&mut doc, "reshiki/rbf-100-15", Point::new(2000., 2000.));
+    let m = port(&doc, &joint(stopper, "bottom"));
+    let s = port(&doc, &joint(normal, "neck"));
+    let exposure = 0.06 * 25. * s.mm;
+    doc.translate(
+        &[normal],
+        (m.point[0] - s.dir[0] * exposure - s.point[0]) as f32 + 4.,
+        (m.point[1] - s.dir[1] * exposure - s.point[1]) as f32,
+    );
+    let snap = solve::snap(&mut doc, &[stopper, other], 14., false).unwrap();
+    assert_eq!(snap.target.at, joint(normal, "neck"));
+}

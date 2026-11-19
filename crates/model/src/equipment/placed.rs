@@ -155,6 +155,20 @@ pub fn used(doc: &Document) -> Vec<Arc<Definition>> {
     out
 }
 
+/// The part of a uniform scale `k` that every piece in `ids` can take, so
+/// pieces reach the scale limits together and seated joints stay together.
+pub(crate) fn scale_limit(doc: &Document, ids: &[u64], k: f32) -> f32 {
+    let pt = crate::style::DEFAULT.points_per_world();
+    let (lo, hi) = (doc.graphics.iter())
+        .filter(|g| g.piece.is_some() && ids.contains(&g.id))
+        .map(|g| g.axis_x.distance(Point::default()) * pt)
+        .filter(|s| *s > 0.)
+        .fold((0_f32, f32::INFINITY), |(lo, hi), s| {
+            (lo.max(MIN_PT_PER_MM / s), hi.min(MAX_PT_PER_MM / s))
+        });
+    if lo <= hi { k.clamp(lo, hi) } else { k }
+}
+
 /// After a transform a piece cannot follow: it never stretches, so it keeps
 /// its frame, and it stops at the scale limits; either way its middle goes
 /// where the transform takes it.
