@@ -55,8 +55,7 @@ pub(super) fn maps_hidden(doc: &reshiki::document::Document) -> reshiki::documen
 }
 
 /// The status after coloring by origin, which hides the map numbers.
-pub(super) const COLORED: &str =
-    "Colored by origin. Map numbers are hidden; turn on Show maps to see them";
+pub(super) const COLORED: &str = "Colored by origin; Show maps shows the map numbers";
 
 impl std::fmt::Display for HueChoice {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
