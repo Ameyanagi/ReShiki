@@ -2,9 +2,9 @@
 //! or placement path that its button, menu or key already uses. Keys come
 //! from the same tables that menus, tooltips and Help read.
 use super::super::{
-    App, InspectorTab, Message, abbreviations, arrows, assistant, cleanup, color_popover, cycles,
-    equipment, figure_panels, generic, graphics, import, inspector, keyboard_drawing, models3d,
-    naming, nmr, numeric_transforms,
+    App, InspectorTab, Message, abbreviations, arrows, assistant, cleanup, cycles, equipment,
+    figure_panels, generic, graphics, import, inspector, keyboard_drawing, models3d, naming, nmr,
+    numeric_transforms,
     numeric_transforms::Field,
     object_toolbar, optimization, pages, palettes, printing, reaction_mapping, reactions,
     shortcuts::{self, TabKey, keys, tab_keys},

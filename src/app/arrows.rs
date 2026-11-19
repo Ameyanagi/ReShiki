@@ -410,10 +410,10 @@ impl App {
         )
     }
 
+    /// Whether the arrow panel offers Make arc: on straight and curved
+    /// arrows alike, but not once one is an arc.
     pub(super) fn can_make_arc(&self) -> bool {
-        !self
-            .selected_arrows()
-            .any(|a| a.is_arc() || a.bezier_controls().is_some())
+        !self.selected_arrows().any(|a| a.is_arc())
             && self
                 .selected_arrows()
                 .any(|a| a.kind != "bent" && !a.is_attached())
@@ -672,6 +672,7 @@ impl App {
             let mut straighten =
                 row![action("arrow.straighten", "Straighten", Action::Straighten)].spacing(4);
             let arcs = selected.iter().any(|a| a.is_arc());
+            let can_arc = self.can_make_arc();
             let make_arc = || {
                 hover_hint(
                     action("arrow.make-arc", "Make arc", Action::MakeArc),
@@ -679,7 +680,7 @@ impl App {
                     tooltip::Position::Top,
                 )
             };
-            if self.can_make_arc() {
+            if can_arc && !curved {
                 straighten = straighten.push(make_arc());
             } else if curved && !arcs {
                 straighten = straighten.push(hover_hint(
