@@ -779,6 +779,97 @@ fn growth_uses_open_space_at_either_end_and_at_a_branch() {
     assert!((alternate.x - 72.74613).abs() < 0.01 && (alternate.y - 42.0).abs() < 0.01);
 }
 
+/// The new bond at `id` must leave every ring outline, and its midpoint too.
+fn assert_exocyclic(doc: &Document, id: u64, rings: &[Vec<u64>]) {
+    let start = doc.atom(id).unwrap().position;
+    let end = bond_extension(doc, start, Some(id), 1);
+    let middle = Point::new((start.x + end.x) / 2.0, (start.y + end.y) / 2.0);
+    for ring in rings {
+        let outline: Vec<_> = ring
+            .iter()
+            .map(|i| doc.atom(*i).unwrap().position)
+            .collect();
+        assert!(
+            !encloses(&outline, middle) && !encloses(&outline, end),
+            "bond from {id} at {start:?} runs to {end:?}, into ring {ring:?}"
+        );
+    }
+}
+
+#[test]
+fn bonds_from_joined_ring_atoms_stay_outside_both_rings() {
+    for size in [5, 6] {
+        for joined in 0..6 {
+            let mut doc = Document::default();
+            let hexagon = ring(&mut doc, Point::default(), 6, false, 5.0);
+            let id = hexagon[joined];
+            let start = doc.atom(id).unwrap().position;
+            let end = bond_extension(&doc, start, Some(id), 1);
+            let other = doc.add_atom("C", end);
+            doc.add_bond(id, other, 1, "plain");
+            let second = ring_oriented(&mut doc, end, size, false, 5.0, None).unwrap();
+            assert_eq!(second.len(), size as usize);
+            let rings = [hexagon.clone(), second];
+            assert_exocyclic(&doc, id, &rings);
+            assert_exocyclic(&doc, other, &rings);
+        }
+    }
+}
+
+#[test]
+fn bonds_from_fusion_atoms_leave_the_fused_system() {
+    for size in [5, 6, 7, 8] {
+        for edge in 0..6 {
+            let mut doc = Document::default();
+            let hexagon = ring(&mut doc, Point::default(), 6, false, 5.0);
+            let (a, b) = (hexagon[edge], hexagon[(edge + 1) % 6]);
+            let (pa, pb) = (doc.atom(a).unwrap().position, doc.atom(b).unwrap().position);
+            let fused = ring(
+                &mut doc,
+                Point::new((pa.x + pb.x) / 2.0, (pa.y + pb.y) / 2.0),
+                size,
+                false,
+                5.0,
+            );
+            assert_eq!(fused.len(), size as usize);
+            let rings = [hexagon.clone(), fused];
+            assert_exocyclic(&doc, a, &rings);
+            assert_exocyclic(&doc, b, &rings);
+        }
+    }
+}
+
+#[test]
+fn a_narrow_ring_counts_and_a_hydrogen_bond_closes_no_ring() {
+    // A thin triangle whose far edge lies closer than any fixed probe.
+    let mut doc = Document::default();
+    let s = doc.add_atom("C", Point::default());
+    for p in [
+        Point::new(3.0, -11.2),
+        Point::new(3.0, 11.2),
+        Point::new(-42.0, 0.0),
+    ] {
+        let id = doc.add_atom("C", p);
+        doc.add_bond(s, id, 1, "plain");
+    }
+    doc.add_bond(2, 3, 1, "plain");
+    assert!(bond_extension(&doc, Point::default(), Some(s), 1).x < 0.0);
+
+    // O–H···O closes no ring, so the widest gap, east, stays free.
+    let mut doc = Document::default();
+    let s = doc.add_atom("C", Point::default());
+    let a = doc.add_atom("O", Point::new(14.0, -40.0));
+    let b = doc.add_atom("O", Point::new(14.0, 40.0));
+    let w = doc.add_atom("C", Point::new(-42.0, 0.0));
+    let h = doc.add_atom("H", Point::new(80.0, 0.0));
+    for id in [a, b, w] {
+        doc.add_bond(s, id, 1, "plain");
+    }
+    doc.add_bond(a, h, 1, "plain");
+    doc.add_bond(h, b, 0, "plain");
+    assert!(bond_extension(&doc, Point::default(), Some(s), 1).x > 30.0);
+}
+
 #[test]
 fn triple_and_cumulative_double_bonds_extend_linearly() {
     for (previous, next) in [(3, 1), (1, 3), (2, 2)] {

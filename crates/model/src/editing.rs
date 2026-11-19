@@ -1243,8 +1243,20 @@ pub fn bond_extension(doc: &Document, start: Point, atom: Option<u64>, order: u8
         }
     };
     let point = |angle: f32| start.offset(length * angle.cos(), length * angle.sin());
+    let rings = match (atom, neighbors.as_slice()) {
+        (Some(id), [_, _, ..]) => ring_outlines(doc, id, &neighbors),
+        _ => vec![],
+    };
     let score = |angle: f32, gap: f32| {
         let end = point(angle);
+        // A bond from a ring atom is exocyclic: never into a ring it closes.
+        // A tiny step decides which side of the vertex the direction takes.
+        let probe = start.offset(0.001 * length * angle.cos(), 0.001 * length * angle.sin());
+        let interior = if rings.iter().any(|ring| encloses(ring, probe)) {
+            100.0
+        } else {
+            0.0
+        };
         let mut collisions = 0.0;
         // Avoid placing a new atom on an existing atom or routing through a bond.
         for a in &doc.atoms {
@@ -1266,7 +1278,7 @@ pub fn bond_extension(doc: &Document, start: Point, atom: Option<u64>, order: u8
                 }
             }
         }
-        collisions * 1000.0 + (TAU - gap) + (1.0 - (angle - preferred).cos()) * 0.01
+        interior + collisions * 1000.0 + (TAU - gap) + (1.0 - (angle - preferred).cos()) * 0.01
     };
     let Some(mut best) = candidates.first().copied() else {
         return point(preferred);
@@ -1280,6 +1292,60 @@ pub fn bond_extension(doc: &Document, start: Point, atom: Option<u64>, order: u8
         }
     }
     point(best.0)
+}
+
+/// The outline of the smallest ring through `atom` and each pair of its
+/// `neighbors` that a covalent path avoiding `atom` joins. Hydrogen bonds and
+/// dative links close no ring.
+fn ring_outlines(doc: &Document, atom: u64, neighbors: &[(u64, Point, u8)]) -> Vec<Vec<Point>> {
+    let positions: HashMap<_, _> = doc.atoms.iter().map(|a| (a.id, a.position)).collect();
+    let mut adjacent = HashMap::<u64, Vec<u64>>::new();
+    for b in &doc.bonds {
+        if b.a != atom && b.b != atom && !matches!(b.order, 0 | 5) {
+            adjacent.entry(b.a).or_default().push(b.b);
+            adjacent.entry(b.b).or_default().push(b.a);
+        }
+    }
+    let mut outlines = vec![];
+    for (i, &(from, _, _)) in neighbors.iter().enumerate().take(neighbors.len() - 1) {
+        let mut previous = HashMap::from([(from, from)]);
+        let mut queue = std::collections::VecDeque::from([from]);
+        while let Some(id) = queue.pop_front() {
+            for &next in adjacent.get(&id).into_iter().flatten() {
+                if let std::collections::hash_map::Entry::Vacant(entry) = previous.entry(next) {
+                    entry.insert(id);
+                    queue.push_back(next);
+                }
+            }
+        }
+        for &(to, _, _) in neighbors.iter().skip(i + 1) {
+            let mut outline = vec![positions.get(&atom).copied()];
+            let mut id = to;
+            // Neighbors that no path reaches leave `previous` without them.
+            while id != from {
+                outline.push(positions.get(&id).copied());
+                let Some(&parent) = previous.get(&id) else {
+                    outline.push(None);
+                    break;
+                };
+                id = parent;
+            }
+            outline.push(positions.get(&from).copied());
+            outlines.extend(outline.into_iter().collect::<Option<Vec<_>>>());
+        }
+    }
+    outlines
+}
+
+/// Even-odd point-in-polygon test.
+fn encloses(outline: &[Point], p: Point) -> bool {
+    let mut inside = false;
+    for (a, b) in outline.iter().zip(outline.iter().cycle().skip(1)) {
+        if (a.y > p.y) != (b.y > p.y) && p.x < a.x + (p.y - a.y) * (b.x - a.x) / (b.y - a.y) {
+            inside = !inside;
+        }
+    }
+    inside
 }
 
 fn segment_distance(p: Point, a: Point, b: Point) -> f32 {
