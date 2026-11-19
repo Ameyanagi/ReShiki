@@ -125,8 +125,10 @@ impl Targets {
             };
             let bounds = target.bounds - translation - scroll.translation;
             let dx = reveal_delta(bounds.x, bounds.width, scroll.bounds.x, scroll.bounds.width);
+            // A little room below keeps a taller neighbour, such as the
+            // button beside it, whole.
             let dy = if bottom {
-                bounds.y + bounds.height - scroll.bounds.y - scroll.bounds.height
+                bounds.y + bounds.height + 8. - scroll.bounds.y - scroll.bounds.height
             } else {
                 reveal_delta(
                     bounds.y,

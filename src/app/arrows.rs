@@ -510,10 +510,8 @@ impl App {
         let header: Element<'_, Message> = if roles {
             row![
                 container(super::workspace::section(&heading)).width(Length::Fill),
-                command(
-                    "Reaction roles…",
-                    Message::Reaction(super::reactions::Action::Open)
-                ),
+                accessible_command("arrow.reaction-roles", "Reaction roles", "Reaction roles…")
+                    .on_press(Message::Reaction(super::reactions::Action::Open)),
             ]
             .align_y(Alignment::Center)
             .into()

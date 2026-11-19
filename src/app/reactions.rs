@@ -15,6 +15,35 @@ pub struct State {
     pub(super) color_after_maps: Option<u64>,
 }
 
+/// The title of the panel column around `arrow`, in the smallest titled
+/// panel that holds it, such as "This work".
+fn panel_title<'a>(
+    doc: &'a reshiki::document::Document,
+    arrow: &reshiki::document::Arrow,
+) -> Option<&'a str> {
+    let (lo, hi) = arrow.bounds();
+    let middle = (lo.x + hi.x) / 2.;
+    doc.graphics
+        .iter()
+        .filter_map(|g| {
+            let panel = g.panel.as_ref()?;
+            let (a, b) = g.shape_bounds();
+            if !(a.x <= lo.x && a.y <= lo.y && hi.x <= b.x && hi.y <= b.y) {
+                return None;
+            }
+            // One title per column between vertical dividers.
+            let at = (middle - a.x) / (b.x - a.x);
+            let column = panel
+                .columns()
+                .iter()
+                .position(|(l, r)| (*l..=*r).contains(&at))?;
+            let title = panel.titles.get(column)?.trim();
+            (!title.is_empty()).then_some((title, (b.x - a.x) * (b.y - a.y)))
+        })
+        .min_by(|(_, x), (_, y)| x.total_cmp(y))
+        .map(|(title, _)| title)
+}
+
 #[cfg(test)]
 mod tests;
 #[derive(Debug, Clone)]
@@ -401,23 +430,9 @@ impl App {
                     }
                     .into()
                 });
-            // Two "Arrow · Forward" rows read alike: a titled panel around the
-            // arrow names it instead (e.g. "This work").
-            let (lo, hi) = arrow.bounds();
-            let place = self
-                .tab
-                .doc
-                .graphics
-                .iter()
-                .filter_map(|g| {
-                    let title = g.panel.as_ref()?.titles.first()?;
-                    (!title.trim().is_empty()).then(|| (title, g.shape_bounds()))
-                })
-                .filter(|(_, (a, b))| a.x <= lo.x && a.y <= lo.y && hi.x <= b.x && hi.y <= b.y)
-                .min_by(|(_, (a, b)), (_, (c, d))| {
-                    ((b.x - a.x) * (b.y - a.y)).total_cmp(&((d.x - c.x) * (d.y - c.y)))
-                })
-                .map_or_else(|| preset.to_string(), |(title, _)| title.clone());
+            // Two "Arrow · Forward" rows read alike: a panel title names it.
+            let place =
+                panel_title(&self.tab.doc, arrow).map_or_else(|| preset.to_string(), str::to_owned);
             body = body.push(
                 button(row![
                     text(format!("Arrow {} · {place}", index + 1))

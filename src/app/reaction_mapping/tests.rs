@@ -982,7 +982,8 @@ async fn a_replacement_review_shows_its_summary_above_apply() -> Result<(), Stri
         app.tab.mapping.serial = app.tab.mapping.serial.wrapping_add(1);
         let (epoch, serial) = (app.tab.file_epoch, app.tab.mapping.serial);
         app.tab.mapping.pending = Some((epoch, serial));
-        Ok(app.mapping_action(Action::Ready(epoch, serial, Ok(proposal))))
+        // Through update, which refreshes the review it reveals.
+        Ok(app.update(Message::Mapping(Action::Ready(epoch, serial, Ok(proposal)))))
     };
     let _ = ready(&mut app)?;
     let size = iced::Size::new(1040., 680.);
@@ -999,26 +1000,24 @@ async fn a_replacement_review_shows_its_summary_above_apply() -> Result<(), Stri
         iced::widget::operation::RelativeOffset::END,
     );
     run(&mut ui, &renderer, end).await;
+    let cache = ui.into_cache();
     let task = ready(&mut app)?;
-    let mut ui = Ui::build(app.view(), size, ui.into_cache(), &mut renderer);
+    let mut ui = Ui::build(app.view(), size, cache, &mut renderer);
     run(&mut ui, &renderer, task).await;
     let mut collect = Collect::new(iced::Rectangle::with_size(size));
     ui.operate(&renderer, &mut operation::black_box(&mut collect));
     let apply = collect
         .snapshot()
         .nodes
-        .into_iter()
+        .iter()
         .find(|node| node.id == "mapping.apply")
         .ok_or("Apply maps")?;
-    let shown = apply
-        .visible_bounds
-        .is_some_and(|visible| (visible.height - apply.bounds.height).abs() < 0.5);
-    // Apply sits low in the view, so the heading, summary and preview above
-    // it show too.
+    // Apply is wholly in view and low in it, so the heading, summary and
+    // preview above it show too.
+    let visible = apply.visible_bounds.ok_or("Apply maps is out of view")?;
     assert!(
-        shown && apply.bounds.y > size.height / 2.,
-        "{:?}",
-        apply.bounds
+        (visible.height - apply.bounds.height).abs() < 0.5 && visible.y > size.height / 2.,
+        "{visible:?}"
     );
     Ok(())
 }

@@ -179,11 +179,13 @@ fn conditions(doc: &Document, reaction: &Reaction, arrow: &Arrow) -> Vec<u64> {
             0.
         };
         let pad = bond * 0.5;
-        t.iter().all(|t| (-pad..=length + pad).contains(t)) && gap <= bond
+        (-pad..=length + pad).contains(&((t[0] + t[3]) / 2.)) && gap <= bond
     };
     doc.annotations
         .iter()
-        .filter(|a| reaction.annotations.contains(&a.id) && Some(a.id) != legend)
+        .filter(|a| {
+            reaction.annotations.contains(&a.id) && Some(a.id) != legend && a.text.trim() != "+"
+        })
         .filter(|a| {
             reshiki::arrow_labels::of(doc, arrow.id).any(|l| l.annotation == a.id) || along(a)
         })
