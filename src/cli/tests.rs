@@ -2462,6 +2462,26 @@ async fn pieces_render_writes_svg_to_stdout_and_honors_dark() {
 }
 
 #[tokio::test]
+async fn pieces_render_refuses_a_dark_png() {
+    let folder = tempfile::tempdir().unwrap();
+    let path = folder.path().join("dark.png");
+    let (code, _, err) = call(&[
+        "pieces",
+        "render",
+        BUILTIN_PIECE,
+        "--to",
+        "png",
+        "--dark",
+        "-o",
+        path.to_str().unwrap(),
+    ])
+    .await;
+    assert_eq!(code, 1, "{err}");
+    assert!(err.contains("--dark needs --to svg"), "{err}");
+    assert!(!path.exists());
+}
+
+#[tokio::test]
 async fn pieces_render_writes_png_and_respects_force() {
     let folder = tempfile::tempdir().unwrap();
     let path = folder.path().join("preview.png");

@@ -192,10 +192,16 @@ fn admission(completion: Completion) -> Admission {
         | Completion::Labels
         | Completion::Mapping
         | Completion::Pasted
-        | Completion::ThemeFile
-        | Completion::PieceLibrary => Admission {
+        | Completion::ThemeFile => Admission {
             atom_text: false,
             preview: false,
+            optimization: true,
+            updates_dialog: true,
+        },
+        // Library files and folders never touch the drawing.
+        Completion::PieceLibrary => Admission {
+            atom_text: true,
+            preview: true,
             optimization: true,
             updates_dialog: true,
         },

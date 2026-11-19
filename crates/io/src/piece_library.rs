@@ -289,7 +289,12 @@ pub fn add(dir: &Path, pieces: &[Definition]) -> Result<Change, String> {
         if change.added.contains(&path) {
             continue;
         }
-        if let Err(e) = crate::storage::write_atomic(&path, &piece_bytes(d)) {
+        let bytes = piece_bytes(d);
+        if bytes.len() > crate::equipment::validate::MAX_FILE_BYTES {
+            let _ = archive(dir, &change.added);
+            return Err(format!("{}: the piece is larger than 1 MB.", d.id));
+        }
+        if let Err(e) = crate::storage::write_atomic(&path, &bytes) {
             let _ = archive(dir, &change.added);
             return Err(e);
         }
@@ -311,7 +316,7 @@ pub fn remove(dir: &Path, piece_key: &str) -> Result<Change, String> {
             crate::storage::read(p)
                 .ok()
                 .and_then(|b| read(&b).ok())
-                .is_some_and(|pieces| pieces.iter().any(|d| key(d) == piece_key))
+                .is_some_and(|pieces| matches!(pieces.as_slice(), [d] if key(d) == piece_key))
         })
         .collect();
     if paths.is_empty() {

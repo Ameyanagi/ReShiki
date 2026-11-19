@@ -217,14 +217,19 @@ pub fn matches(d: &Definition, query: &str) -> bool {
 }
 
 /// A drawing holding only the piece, for its thumbnail.
-fn thumbnail(d: &Arc<Definition>, theme: reshiki::canvas_theme::CanvasTheme) -> Document {
+fn thumbnail(e: &Entry, theme: reshiki::canvas_theme::CanvasTheme) -> Document {
     let mut doc = Document {
         canvas_theme: theme,
         ..Document::default()
     };
     let scale = placed::world_per_mm(&doc, placed::DEFAULT_PT_PER_MM);
-    doc.graphics
-        .push(placed::graphic(1, d.clone(), Point::default(), scale));
+    doc.graphics.push(placed::graphic_keyed(
+        1,
+        e.definition.clone(),
+        e.key.clone(),
+        Point::default(),
+        scale,
+    ));
     doc
 }
 
@@ -559,7 +564,7 @@ impl App {
             let shown = sizes.iter().copied().find(|e| armed(e)).unwrap_or(*first);
             let d = &shown.definition;
             let preview: Element<'_, Message> =
-                canvas(crate::canvas::DrawingThumbnail(thumbnail(d, theme)))
+                canvas(crate::canvas::DrawingThumbnail(thumbnail(shown, theme)))
                     .width(44)
                     .height(44)
                     .into();
@@ -585,7 +590,17 @@ impl App {
                     reshiki::accessibility::button(
                         format!("equipment-size-{}", e.key),
                         format!("{} · {}", label(e), size(d)),
-                        text(size(d)).size(11),
+                        text(
+                            if sizes
+                                .iter()
+                                .any(|o| o.key != e.key && size(&o.definition) == size(d))
+                            {
+                                format!("{} · r{}", size(d), d.revision)
+                            } else {
+                                size(d)
+                            },
+                        )
+                        .size(11),
                     )
                     .checked(armed(e))
                     .padding([3, 7])

@@ -581,7 +581,7 @@ the piece's content identity. See the [piece file format](../presets/pieces/READ
 
 `render` runs the same checks on one file, then draws the piece by itself in
 the default line style. It writes SVG by default. Use `--to png` for PNG,
-`--dark` for dark canvas colors, and `-o OUTPUT` to save the preview to a file.
+`--dark` for dark canvas colors (SVG only; PNG previews are drawn on white), and `-o OUTPUT` to save the preview to a file.
 SVG has a transparent surround and PNG uses the white background of `render`.
 
 ```sh

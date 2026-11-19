@@ -7,7 +7,7 @@ use reshiki_model::{document::Document, scene};
 /// How far [`png`] scales a small drawing up.
 pub const MAX_UPSCALE: f32 = 3.;
 
-/// Renders `document` on its canvas colour (white for a light canvas), scaled up to [`MAX_UPSCALE`] and down to fit
+/// Renders `document` on white, scaled up to [`MAX_UPSCALE`] and down to fit
 /// within `max_width` x `max_height` pixels and `max_pixels` in all.
 pub fn png(
     document: &Document,
@@ -30,8 +30,7 @@ pub fn png(
     let height = (size.height() * scale).ceil().clamp(1., max_height as f32) as u32;
     let mut pixels =
         resvg::tiny_skia::Pixmap::new(width, height).ok_or("Could not create canvas image")?;
-    let [r, g, b] = document.canvas_theme.background();
-    pixels.fill(resvg::tiny_skia::Color::from_rgba8(r, g, b, 255));
+    pixels.fill(resvg::tiny_skia::Color::WHITE);
     resvg::render(
         &tree,
         resvg::tiny_skia::Transform::from_scale(scale, scale),

@@ -78,6 +78,18 @@ pub fn world_per_mm(doc: &Document, pt_per_mm: f32) -> f32 {
 
 /// A new piece graphic with its frame centred on `center`.
 pub fn graphic(id: u64, definition: Arc<Definition>, center: Point, world_per_mm: f32) -> Graphic {
+    let k = key(&definition);
+    graphic_keyed(id, definition, k, center, world_per_mm)
+}
+
+/// [`graphic`] for a definition whose key is already known.
+pub fn graphic_keyed(
+    id: u64,
+    definition: Arc<Definition>,
+    key: String,
+    center: Point,
+    world_per_mm: f32,
+) -> Graphic {
     let mut g = Graphic::dragged(
         id,
         GraphicKind::Rectangle,
@@ -91,7 +103,12 @@ pub fn graphic(id: u64, definition: Arc<Definition>, center: Point, world_per_mm
     g.origin = center;
     g.axis_x = Point::new(world_per_mm, 0.);
     g.axis_y = Point::new(0., world_per_mm);
-    g.piece = Some(Box::new(PieceRef::new(definition)));
+    g.piece = Some(Box::new(PieceRef {
+        definition: key,
+        params: Values::new(),
+        linked: Some(definition),
+        seated: BTreeSet::new(),
+    }));
     // Centre the drawn piece, not its millimetre origin, on the point.
     let mid = middle(&g);
     g.origin = Point::new(2. * center.x - mid.x, 2. * center.y - mid.y);

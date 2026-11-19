@@ -177,16 +177,16 @@ impl App {
         self.reload_libraries(labs);
     }
 
-    /// Read the libraries again; a piece armed from one that no longer
-    /// offers it is disarmed.
+    /// Read the libraries again. An armed piece stays armed as the entry
+    /// that now offers it, or is disarmed when none does.
     fn reload_libraries(&mut self, labs: Vec<PathBuf>) {
         let libraries = &mut self.equipment.libraries;
         libraries.reload(labs);
         if let Some(armed) = &self.equipment.armed {
             let k = key(armed);
-            if !libraries.entries.iter().any(|e| e.key == k) {
-                self.equipment.armed = None;
-            }
+            self.equipment.armed = (libraries.entries.iter())
+                .find(|e| e.key == k)
+                .map(|e| e.definition.clone());
         }
     }
 
@@ -280,6 +280,11 @@ impl App {
                     ..Default::default()
                 };
                 let bytes = library::collection_bytes(&about, &pieces);
+                if bytes.len() > library::MAX_COLLECTION_BYTES {
+                    self.status = "My pieces is larger than a library file can hold (32 MB)".into();
+                    self.error = true;
+                    return Task::none();
+                }
                 return save(
                     "Export My pieces",
                     "My pieces",
@@ -345,6 +350,14 @@ impl App {
                 });
             }
             Action::Linked(Some(root)) => {
+                // ReShiki writes My pieces; a linked folder is only read.
+                if let Ok(mine) = library::my_pieces()
+                    && (root.starts_with(&mine) || mine.starts_with(&root))
+                {
+                    self.status = "That folder holds My pieces. Link a lab folder instead.".into();
+                    self.error = true;
+                    return Task::none();
+                }
                 let linked = root.clone();
                 if self.set_labs(|labs| {
                     if !labs.contains(&linked) {

@@ -57,6 +57,11 @@ pub(crate) async fn render(
     terminal: bool,
 ) -> Result<(), CliError> {
     refuse_binary(&preview.format, &preview.output, terminal)?;
+    if dark && preview.format == "png" {
+        return Err(CliError::Failed(
+            "--dark needs --to svg: PNG previews are drawn on white".into(),
+        ));
+    }
     let definition = read(&file).map_err(CliError::Failed)?;
     let mut doc = Document {
         canvas_theme: if dark {
