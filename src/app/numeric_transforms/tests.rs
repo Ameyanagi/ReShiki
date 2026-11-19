@@ -565,21 +565,34 @@ fn apply_button_keeps_the_fixed_height_note_after_changing_width() {
 }
 
 #[test]
-fn a_size_below_the_fixed_text_names_the_smallest_size() {
+fn a_size_below_the_fixed_text_applies_the_closest_size() {
     let mut app = fixture();
     // The ring with its N label, without the other objects.
     app.tab.selected = app.tab.doc.atoms[..6].iter().map(|a| a.id).collect();
     app.sync_numeric_transforms();
     let original = app.tab.doc.clone();
+    let original_height = extent(&original, &app.tab.selected, Field::Height).unwrap();
     let _ = app.update(Message::NumericTransform(Action::Proportional(false)));
     apply(&mut app, Field::Height, "1");
-    assert!(app.error);
-    assert!(
-        app.status
-            .starts_with("Text keeps its size, so the height cannot go below "),
-        "{}",
-        app.status
-    );
+    assert!(!app.error, "{}", app.status);
+    let closest: f32 = app
+        .status
+        .strip_prefix("Text keeps its size, so the closest height is ")
+        .and_then(|size| size.strip_suffix(" pt"))
+        .unwrap_or_else(|| panic!("Unexpected status: {}", app.status))
+        .parse()
+        .unwrap();
+    let height = extent(&app.tab.doc, &app.tab.selected, Field::Height).unwrap();
+    assert!((height - closest).abs() <= 0.0051, "{height} vs {closest}");
+    assert!(height > 1. && height < original_height, "{height}");
+    assert_ne!(app.tab.doc, original);
+    // Nothing smaller is reachable: asking again keeps the drawing.
+    let closest_doc = app.tab.doc.clone();
+    apply(&mut app, Field::Height, "1");
+    assert!(!app.error, "{}", app.status);
+    assert_eq!(app.tab.doc, closest_doc, "{}", app.status);
+    assert!(app.tab.history.can_undo());
+    let _ = app.update(Message::Undo);
     assert_eq!(app.tab.doc, original);
     // A reachable height still applies exactly.
     apply(&mut app, Field::Height, "50");
