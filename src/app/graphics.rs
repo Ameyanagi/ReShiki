@@ -758,7 +758,11 @@ impl App {
                 continue;
             }
             // Only a closed shape has an inside for a gradient to fill.
-            if matches!(change, GraphicChange::Gradient(Some(_))) && !g.closed_shape() {
+            if matches!(
+                change,
+                GraphicChange::Gradient(Some(_)) | GraphicChange::GradientKind(Some(_))
+            ) && !g.closed_shape()
+            {
                 continue;
             }
             change.apply(&mut g.style);
@@ -815,23 +819,15 @@ impl App {
         }
     }
 
-    /// The selection's gradient as `choice`, keeping its start color and angle.
+    /// Each selected shape's gradient as `choice`, keeping its own start
+    /// color and angle.
     pub(super) fn set_gradient(&mut self, choice: GradientChoice) {
-        use reshiki::graphics::{Gradient, GradientKind};
-        let current = self.tab.graphic_style.effects.gradient;
-        let from = current.map_or(Gradient::WHITE, |g| g.from);
-        let angle = match current.map(|g| g.kind) {
-            Some(GradientKind::Linear { angle }) => angle,
-            _ => DOWN,
-        };
-        let kind = match choice {
+        use reshiki::graphics::GradientKind;
+        self.apply_graphic_style(GraphicChange::GradientKind(match choice {
             GradientChoice::None => None,
-            GradientChoice::Linear => Some(GradientKind::Linear { angle }),
+            GradientChoice::Linear => Some(GradientKind::Linear { angle: DOWN }),
             GradientChoice::Radial => Some(GradientKind::Radial),
-        };
-        self.apply_graphic_style(GraphicChange::Gradient(
-            kind.map(|kind| Gradient { from, kind }),
-        ));
+        }));
     }
 
     pub(super) fn apply_gradient_from(&mut self) {

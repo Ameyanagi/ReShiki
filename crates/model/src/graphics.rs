@@ -185,6 +185,9 @@ pub enum GraphicChange {
     Corner(Option<f32>),
     Opacity(Option<f32>),
     Gradient(Option<Gradient>),
+    /// A gradient of this kind for each shape, keeping its own start color
+    /// and, from linear to linear, its own angle; `None` removes it.
+    GradientKind(Option<GradientKind>),
     /// A new start color for each shape's own gradient.
     GradientFrom(crate::palette::Color),
     /// A new angle for each shape's own linear gradient.
@@ -230,6 +233,23 @@ impl GraphicChange {
                     s.effects.shaded = false;
                     s.fill = s.fill.or(Some(s.stroke));
                 }
+            }
+            Self::GradientKind(None) => s.effects.gradient = None,
+            Self::GradientKind(Some(kind)) => {
+                let gradient = match s.effects.gradient {
+                    Some(
+                        g @ Gradient {
+                            kind: GradientKind::Linear { .. },
+                            ..
+                        },
+                    ) if matches!(kind, GradientKind::Linear { .. }) => g,
+                    Some(g) => Gradient { kind: *kind, ..g },
+                    None => Gradient {
+                        from: Gradient::WHITE,
+                        kind: *kind,
+                    },
+                };
+                Self::Gradient(Some(gradient)).apply(s);
             }
             Self::GradientFrom(v) => {
                 if let Some(gradient) = &mut s.effects.gradient {

@@ -746,3 +746,36 @@ fn gradient_field_edits_keep_each_shapes_own_gradient() {
     assert_eq!(line.style.effects.opacity, Some(0.5));
     assert_eq!(line.style.effects.gradient, None);
 }
+
+#[test]
+fn changing_the_gradient_kind_keeps_each_shapes_colors_and_angle() {
+    let mut linear = GraphicStyle::default();
+    GraphicChange::Gradient(Some(Gradient {
+        from: crate::palette::Color::Ink,
+        kind: GradientKind::Linear { angle: 30. },
+    }))
+    .apply(&mut linear);
+    let mut radial = linear.clone();
+    GraphicChange::GradientKind(Some(GradientKind::Radial)).apply(&mut radial);
+    assert_eq!(
+        radial.effects.gradient,
+        Some(Gradient {
+            from: crate::palette::Color::Ink,
+            kind: GradientKind::Radial
+        })
+    );
+    GraphicChange::GradientKind(Some(GradientKind::Linear { angle: 90. })).apply(&mut linear);
+    assert_eq!(
+        linear.effects.gradient.map(|g| g.kind),
+        Some(GradientKind::Linear { angle: 30. })
+    );
+    let mut plain = GraphicStyle::default();
+    GraphicChange::GradientKind(Some(GradientKind::Radial)).apply(&mut plain);
+    assert_eq!(
+        plain.effects.gradient.map(|g| g.from),
+        Some(Gradient::WHITE)
+    );
+    assert_eq!(plain.fill, Some(plain.stroke));
+    GraphicChange::GradientKind(None).apply(&mut plain);
+    assert_eq!(plain.effects.gradient, None);
+}
