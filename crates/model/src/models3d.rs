@@ -3045,6 +3045,13 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
                 width,
             })
     };
+    let side_outline = || {
+        outline(line * 2.).map(|o| Outline {
+            color: rgb(mix(float(o.color), float(backdrop), 1. - o.alpha)),
+            alpha: 1.,
+            width: o.width,
+        })
+    };
     if model.background == Background::Card {
         let (lo, hi) = view.bounds();
         let width = model.size / 340.;
@@ -3406,7 +3413,7 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
                                 from,
                                 to,
                                 stops,
-                                outline: outline(line * 2.),
+                                outline: side_outline(),
                             },
                         ));
                         continue;
@@ -3447,7 +3454,7 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
                             from,
                             to,
                             stops,
-                            outline: outline(line * 2.),
+                            outline: side_outline(),
                         }
                     } else {
                         Primitive::ShadedQuad {

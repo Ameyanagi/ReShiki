@@ -2235,7 +2235,18 @@ fn a_front_stick_half_leaves_its_joint_unclipped() {
         .chain(cap.iter().rev().copied())
         .collect();
     assert!(polygons.contains(&rim_points));
-    assert_eq!(outline.width, rim.width);
+    assert_eq!(
+        *outline,
+        Outline {
+            color: rgb(mix(
+                float(rim.color),
+                float(doc.canvas_theme.background()),
+                1. - rim.alpha,
+            )),
+            alpha: 1.,
+            width: rim.width,
+        }
+    );
 }
 
 /// Neighbouring sticks share one border on their bisector, so three bonds
@@ -2337,34 +2348,59 @@ fn view_point(doc: &Document, i: usize) -> Point {
 /// The shared contour frames the fills. Flat halves also stroke their sides.
 #[test]
 fn stick_contour_frames_the_fills() {
-    let doc = trigonal(|_| {});
-    let parts = primitives(&doc);
-    let Some(Primitive::Contour {
-        polygons: rims,
-        outline,
-    }) = parts.first()
-    else {
-        panic!("the outline comes first: {parts:?}");
-    };
-    assert_eq!(*rims, polygons(&parts));
-    let line = (doc.models[0].size / 400.).clamp(0.6, 1.1);
-    assert_eq!((outline.width, outline.alpha), (line * 2., 0.85));
-    assert!(parts[1..].iter().all(|p| matches!(
-        p,
-        Primitive::ShadedPolygon { outline: Some(outline), .. }
-            if (outline.width, outline.alpha) == (line * 2., 0.85)
-    )));
-    assert_eq!(
-        parts
-            .iter()
-            .filter(|p| matches!(p, Primitive::Contour { .. }))
-            .count(),
-        1
-    );
-    let svg = scene::svg(&doc);
-    let stroke = svg.find("stroke-linejoin=\"round\"").unwrap();
-    assert!(stroke < svg.find("<polygon").unwrap());
-    assert_eq!(svg.matches("<linearGradient").count(), 6);
+    for theme in CanvasTheme::ALL {
+        for background in [Background::None, Background::Card] {
+            let mut doc = trigonal(|m| m.background = background);
+            doc.canvas_theme = theme;
+            let parts = primitives(&doc);
+            let (backdrop, parts) = match (background, parts.as_slice()) {
+                (Background::None, parts) => (theme.background(), parts),
+                (Background::Card, [Primitive::Card { fill, .. }, parts @ ..]) => (*fill, parts),
+                _ => panic!("the card comes first: {parts:?}"),
+            };
+            let [
+                Primitive::Contour {
+                    polygons: rims,
+                    outline,
+                },
+                fills @ ..,
+            ] = parts
+            else {
+                panic!("the contour comes first: {parts:?}");
+            };
+            assert_eq!(*rims, polygons(parts));
+            let line = (doc.models[0].size / 400.).clamp(0.6, 1.1);
+            assert_eq!(outline.width, line * 2.);
+            assert_eq!(
+                (outline.color, outline.alpha),
+                if theme.is_dark() { RIM } else { OUTLINE }
+            );
+            let side = Outline {
+                color: rgb(mix(
+                    float(outline.color),
+                    float(backdrop),
+                    1. - outline.alpha,
+                )),
+                alpha: 1.,
+                width: outline.width,
+            };
+            assert_eq!(fills.len(), 6);
+            for fill in fills {
+                let Primitive::ShadedPolygon { outline, .. } = fill else {
+                    panic!("expected a Stick half: {fill:?}");
+                };
+                assert_eq!(*outline, Some(side), "{theme} canvas, {background:?}");
+            }
+            let svg = scene::svg(&doc);
+            let stroke = svg.find("stroke-linejoin=\"round\"").unwrap();
+            assert!(stroke < svg.find("<polygon").unwrap());
+            assert_eq!(svg.matches("<linearGradient").count(), 6);
+            // The outline counts toward the drawing's bounds.
+            let (lo, _) = scene::bounds(parts);
+            let leftmost = rims.iter().flatten().map(|p| p.x).fold(f32::MAX, f32::min);
+            assert!(lo.x <= leftmost - line + 1e-4);
+        }
+    }
     let (_, glossy) = styled(|m| {
         m.style = Style::Stick;
         m.look = Look::Glossy;
@@ -2381,10 +2417,6 @@ fn stick_contour_frames_the_fills() {
                 ..
             }
     )));
-    // The outline counts toward the drawing's bounds.
-    let (lo, _) = scene::bounds(&parts);
-    let leftmost = rims.iter().flatten().map(|p| p.x).fold(f32::MAX, f32::min);
-    assert!(lo.x <= leftmost - line + 1e-4);
 }
 
 /// An atom without a joint is a disc, even at the rear end of a tilted stick.
