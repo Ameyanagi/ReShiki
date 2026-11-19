@@ -160,6 +160,8 @@ fn part_names_use_the_linked_name_and_shorten_long_labels() {
         false,
     )
     .unwrap();
+    // Names are cached per drawing revision; an app edit moves it on.
+    app.tab.revision += 1;
     assert_eq!(app.part_name(&methane), "Methane");
 
     let line = "α".repeat(33);
