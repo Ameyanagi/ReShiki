@@ -51,6 +51,8 @@ impl std::fmt::Display for CanvasTheme {
 /// the canvas. Templates still inherit their destination canvas.
 pub fn for_paste(doc: crate::document::Document, target: CanvasTheme) -> crate::document::Document {
     let mut doc = resolved_document(&doc).into_owned();
+    // Card papers belong to the source's display, not to the pasted copy.
+    doc.on_other_canvas.clear();
     keep_typography(&mut doc);
     for atom in &mut doc.atoms {
         atom.display.color_override = true;
@@ -379,18 +381,182 @@ pub fn resolved_exchange_document(
 fn resolve_document(
     doc: &crate::document::Document,
 ) -> std::borrow::Cow<'_, crate::document::Document> {
+    use std::borrow::Cow;
+    let carded = on_fills(doc);
+    let doc = carded.as_ref();
     if doc.custom_theme.is_none()
         && doc.color_theme.is_publication()
         && doc.ring_fills.is_empty()
         && !crate::highlights::any(doc)
-        && !crate::palette::any_color(doc, |c| matches!(c, Color::Palette(..)))
+        && !crate::palette::any_color(doc, |c| matches!(c, Color::Palette(..) | Color::Paper))
     {
+        return carded;
+    }
+    Cow::Owned(resolve_all(doc))
+}
+
+/// The canvas whose ink reads on `rgb`: black ink on light paper.
+pub fn ink_canvas(rgb: [u8; 3]) -> CanvasTheme {
+    use crate::color_contrast::contrast;
+    if contrast([0; 3], rgb) >= contrast([255; 3], rgb) {
+        CanvasTheme::Light
+    } else {
+        CanvasTheme::Dark
+    }
+}
+
+/// Objects drawn on a filled shape take the colors of the canvas whose ink
+/// reads on that fill: black ink on a light card even on the dark canvas, and
+/// white ink on a dark card on the light one. Palette fills follow the canvas,
+/// so this mostly concerns custom and Ink fills. The topmost filled shape
+/// under an object's middle decides; shapes stack in paint order.
+fn on_fills(doc: &crate::document::Document) -> std::borrow::Cow<'_, crate::document::Document> {
+    use crate::{document::Point, graphics::flattened};
+    /// A filled shape: its outline, bounds and the canvas its contents take.
+    struct Card {
+        outline: Vec<Vec<Point>>,
+        bounds: (Point, Point),
+        canvas: CanvasTheme,
+    }
+    let canvas = doc.canvas_theme;
+    let [light, dark] = CanvasTheme::ALL.map(|mode| Palette::in_mode(doc, mode));
+    let under = |cards: &[Card], p: Point| {
+        cards
+            .iter()
+            .rev()
+            .find(|card| {
+                let (lo, hi) = card.bounds;
+                (lo.x..=hi.x).contains(&p.x)
+                    && (lo.y..=hi.y).contains(&p.y)
+                    && crate::graphics::fills(p, &card.outline)
+            })
+            .map_or(canvas, |card| card.canvas)
+    };
+    let middle = |(lo, hi): (Point, Point)| Point::new((lo.x + hi.x) / 2., (lo.y + hi.y) / 2.);
+    // Shapes in paint order; the chemistry lies over those behind it.
+    let mut order: Vec<_> = doc.graphics.iter().enumerate().collect();
+    order.sort_by_key(|(_, g)| g.layer);
+    let mut cards: Vec<Card> = vec![];
+    let mut graphics = vec![canvas; doc.graphics.len()];
+    let mut behind_chemistry = None;
+    for (i, g) in order {
+        if g.layer >= 0 && behind_chemistry.is_none() {
+            behind_chemistry = Some(cards.len());
+        }
+        let bounds = g.bounds();
+        let mode = under(&cards, middle(bounds));
+        if let Some(slot) = graphics.get_mut(i) {
+            *slot = mode;
+        }
+        let palette = if mode.is_dark() { dark } else { light };
+        if let Some(rgb) = g.backing(|c| palette.rgb(c), mode.background()) {
+            cards.push(Card {
+                outline: flattened(&g.commands()),
+                bounds,
+                canvas: ink_canvas(rgb),
+            });
+        }
+    }
+    if cards.iter().all(|card| card.canvas == canvas) {
         return std::borrow::Cow::Borrowed(doc);
     }
+    let chemistry = cards
+        .get(..behind_chemistry.unwrap_or(cards.len()))
+        .unwrap_or_default();
+    let on = |p: Point| under(chemistry, p);
+    let positions: std::collections::HashMap<u64, Point> =
+        doc.atoms.iter().map(|a| (a.id, a.position)).collect();
+    let position = |id| positions.get(&id).copied().unwrap_or_default();
+    let atoms: Vec<_> = doc.atoms.iter().map(|a| on(a.position)).collect();
+    let bonds: Vec<_> = doc
+        .bonds
+        .iter()
+        .map(|b| on(middle((position(b.a), position(b.b)))))
+        .collect();
+    let arrows: Vec<_> = doc
+        .arrows
+        .iter()
+        .map(|a| on(middle((a.start, a.end))))
+        .collect();
+    let texts: Vec<_> = if doc.annotations.is_empty() {
+        vec![]
+    } else {
+        let each: Vec<_> = doc.annotations.iter().map(|t| vec![t.id]).collect();
+        crate::scene::selections_bounds(doc, &each)
+            .into_iter()
+            .map(|bounds| bounds.map_or(canvas, |bounds| on(middle(bounds))))
+            .collect()
+    };
+    let modes: std::collections::HashMap<u64, CanvasTheme> = doc
+        .atoms
+        .iter()
+        .map(|a| a.id)
+        .zip(atoms.iter().copied())
+        .collect();
+    let atom_mode = |id| modes.get(&id).copied().unwrap_or(canvas);
+    // The other canvas's look, with Ink and Paper as exact colors.
+    let mut flipped = doc.clone();
+    flipped.canvas_theme = canvas.toggled();
+    for arrow in &mut flipped.arrows {
+        arrow.style = Some(arrow.appearance());
+    }
+    let mut shown = resolve_all(&flipped);
+    let (ink, paper) = (
+        Color::Custom(flipped.canvas_theme.color([0; 3])),
+        Color::Custom(flipped.canvas_theme.background()),
+    );
+    crate::palette::for_each_color_mut(&mut shown, |color| match color {
+        Color::Ink => *color = ink,
+        Color::Paper => *color = paper,
+        _ => {}
+    });
+    let mut carded = doc.clone();
+    fn swap<T: Clone>(canvas: CanvasTheme, modes: &[CanvasTheme], target: &mut [T], source: &[T]) {
+        for ((mode, item), shown) in modes.iter().zip(target).zip(source) {
+            if *mode != canvas {
+                item.clone_from(shown);
+            }
+        }
+    }
+    swap(canvas, &atoms, &mut carded.atoms, &shown.atoms);
+    swap(canvas, &bonds, &mut carded.bonds, &shown.bonds);
+    swap(canvas, &arrows, &mut carded.arrows, &shown.arrows);
+    swap(canvas, &texts, &mut carded.annotations, &shown.annotations);
+    swap(canvas, &graphics, &mut carded.graphics, &shown.graphics);
+    let groups: Vec<_> = doc
+        .abbreviations
+        .iter()
+        .map(|g| atom_mode(g.anchor))
+        .collect();
+    swap(
+        canvas,
+        &groups,
+        &mut carded.abbreviations,
+        &shown.abbreviations,
+    );
+    let fills: Vec<_> = doc
+        .ring_fills
+        .iter()
+        .map(|f| f.atoms.first().map_or(canvas, |id| atom_mode(*id)))
+        .collect();
+    swap(canvas, &fills, &mut carded.ring_fills, &shown.ring_fills);
+    let atom_ids = doc.atoms.iter().map(|a| a.id).zip(&atoms);
+    let arrow_ids = doc.arrows.iter().map(|a| a.id).zip(&arrows);
+    carded.on_other_canvas = atom_ids
+        .chain(arrow_ids)
+        .filter(|(_, mode)| **mode != canvas)
+        .map(|(id, _)| id)
+        .collect();
+    std::borrow::Cow::Owned(carded)
+}
+
+/// Every theme color as it shows on the document's canvas; see
+/// [`resolved_document`].
+fn resolve_all(doc: &crate::document::Document) -> crate::document::Document {
     let palette = Palette::of(doc);
     let mut resolved = doc.clone();
     crate::palette::for_each_color_mut(&mut resolved, |color| {
-        if matches!(color, Color::Palette(..)) {
+        if matches!(color, Color::Palette(..) | Color::Paper) {
             *color = Color::Custom(palette.rgb(*color));
         }
     });
@@ -450,7 +616,7 @@ fn resolve_document(
     }
     resolved.color_theme = ColorTheme::Publication;
     resolved.custom_theme = None;
-    std::borrow::Cow::Owned(resolved)
+    resolved
 }
 
 /// A resolved document in the renderers' canonical light-canvas bytes: custom
@@ -493,3 +659,6 @@ pub fn element_swatch(
 
 #[cfg(test)]
 mod contrast_tests;
+
+#[cfg(test)]
+mod fill_ink_tests;

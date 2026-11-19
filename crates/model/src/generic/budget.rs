@@ -239,6 +239,7 @@ impl Presentation {
             models,
             recent_colors,
             piece_definitions,
+            on_other_canvas: _,
         } = doc;
         fn records<T>(n: usize) -> usize {
             n.saturating_mul(std::mem::size_of::<T>())

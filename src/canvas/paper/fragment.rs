@@ -156,6 +156,7 @@ fn changed_atoms(base: &Document, preview: &Document) -> Option<HashSet<u64>> {
         models,
         recent_colors,
         piece_definitions,
+        on_other_canvas: _,
     } = preview;
     let same = depth_appearance.is_empty()
         && base.depth_appearance.is_empty()

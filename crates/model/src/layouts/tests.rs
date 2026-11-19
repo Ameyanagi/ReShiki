@@ -221,6 +221,11 @@ fn figure_layout_templates_place_with_their_panels_and_layouts() {
         assert!(placed.groups.iter().any(|g| g.layout.is_some()), "{name}");
         let panels = placed.graphics.iter().filter(|g| g.panel.is_some()).count();
         assert_eq!(panels > 0, name != "Two matched scheme rows", "{name}");
+        // Theme colors only, so a layout reads on either canvas.
+        assert!(
+            !crate::palette::any_color(&placed, |c| matches!(c, crate::palette::Color::Custom(_))),
+            "{name}"
+        );
     }
 }
 

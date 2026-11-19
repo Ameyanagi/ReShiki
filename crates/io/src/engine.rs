@@ -77,7 +77,12 @@ impl Request {
         request.prepared = Some(prepared);
         request
     }
-    pub fn molecule(operation: &str, document: Document) -> Self {
+    pub fn molecule(operation: &str, mut document: Document) -> Self {
+        if operation == "export" {
+            // ChemDraw and the other exchange formats have no dark canvas:
+            // they get the drawing as it looks on the light canvas.
+            document.canvas_theme = crate::canvas_theme::CanvasTheme::Light;
+        }
         let graphic_parts = (operation == "export").then(|| {
             // Build parts as the scene does, so phase shading matches the canvas,
             // then give their custom colors back as they appear on the canvas.

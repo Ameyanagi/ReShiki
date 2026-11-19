@@ -598,26 +598,38 @@ impl Writer<'_> {
                 }]
             };
             let text_style = doc.drawing_style.text_style();
-            // Title backings take the page color, and titles on a band the
-            // color that reads on the band as exported, on either canvas.
+            // Title backings take the panel's fill, and titles on a band the
+            // color that reads on the band as exported.
             let border = g
                 .panel
                 .as_ref()
                 .is_some_and(|p| p.place == crate::graphics::TitlePlace::Border);
-            let page = crate::palette::Color::Custom(doc.canvas_theme.background());
+            let palette = crate::palette::Palette::of(doc);
+            let paper = doc.canvas_theme.background();
+            let backing = crate::palette::Color::Custom(
+                g.backing(|c| palette.rgb(c), paper).unwrap_or(paper),
+            );
             let panel_parts: Vec<_> = g
                 .panel_parts(&text_style)
                 .into_iter()
                 .map(|mut part| {
                     if border && part.filled {
-                        part.style.fill = Some(page);
+                        part.style.fill = Some(backing);
                     }
                     part
                 })
                 .collect();
             let mut panel_titles = g.panel_titles(&text_style);
-            if !border {
-                let band = crate::palette::Palette::of(doc).rgb(g.style.stroke);
+            if border {
+                let outline = palette.rgb(g.style.stroke);
+                let rgb = crate::graphics::panel::border_title_rgb(outline, palette.rgb(backing));
+                if rgb != outline {
+                    for label in &mut panel_titles {
+                        label.style.color = crate::palette::Color::Custom(rgb);
+                    }
+                }
+            } else {
+                let band = palette.rgb(g.style.stroke);
                 let ink = if crate::color_contrast::luminance(band) > 0.45 {
                     [0; 3]
                 } else {

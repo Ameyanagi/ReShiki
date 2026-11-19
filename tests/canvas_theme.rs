@@ -110,11 +110,19 @@ fn theme_survives_native_storage_selection_and_printing_without_changing_style()
 }
 
 #[test]
-fn editable_exchange_contains_white_bonds_and_a_black_background() {
+fn chemdraw_files_from_the_dark_canvas_show_the_light_one_without_a_background() {
     let mut doc = sample();
     doc.canvas_theme = CanvasTheme::Dark;
-    let xml = exchange::drawing::write(&doc, Default::default()).unwrap();
+    doc.bonds[0].color = Color::Palette(Hue::Red, Row::Strong);
+    // ChemDraw has no dark canvas: an export request takes the light one.
+    let request = reshiki::engine::Request::molecule("export", doc.clone());
+    let exported = request.document.as_ref().unwrap();
+    assert_eq!(exported.canvas_theme, CanvasTheme::Light);
+    let xml = exchange::drawing::write(exported, (&request).into()).unwrap();
     let cdx = exchange::to_cdx(&xml).unwrap();
+    let mut light = doc.clone();
+    light.canvas_theme = CanvasTheme::Light;
+    let red = Palette::of(&light).swatch(Hue::Red, Row::Strong);
     for text in [xml, exchange::from_cdx(&cdx).unwrap()] {
         let parsed = roxmltree::Document::parse(&text).unwrap();
         let colors: Vec<_> = parsed
@@ -125,55 +133,27 @@ fn editable_exchange_contains_white_bonds_and_a_black_background() {
             let node = colors[index.parse::<usize>().unwrap() - 2];
             ["r", "g", "b"].map(|attr| node.attribute(attr).unwrap().parse::<f32>().unwrap())
         };
-        assert_eq!(
-            rgb(parsed.root_element().attribute("bgcolor").unwrap()),
-            [0.; 3]
-        );
-        let background = parsed
-            .descendants()
-            .find(|n| n.has_tag_name("graphic") && n.attribute("RectangleType") == Some("Filled"))
-            .unwrap();
-        assert_eq!(background.attribute("Z"), Some("1"));
-        let page = parsed
-            .descendants()
-            .find(|n| n.has_tag_name("page"))
-            .unwrap();
-        assert_eq!(page.first_element_child(), Some(background));
-        assert_eq!(rgb("2"), [1.; 3], "ChemDraw's reserved white entry");
-        assert_eq!(rgb("3"), [0.; 3], "ChemDraw's reserved black entry");
-        let mut ranks = std::collections::HashSet::new();
-        for object in page
-            .descendants()
-            .filter(|n| n.is_element() && *n != background)
-        {
-            if let Some(z) = object.attribute("Z") {
-                let z: usize = z.parse().unwrap();
-                assert!(
-                    z > 1 && ranks.insert(z),
-                    "Every foreground object needs a distinct positive stacking rank"
-                );
-            }
-        }
-        assert_eq!(rgb(background.attribute("color").unwrap()), [0.; 3]);
-        assert_eq!(
-            parsed.descendants().filter(|n| n.has_tag_name("n")).count(),
-            2
+        assert_eq!(parsed.root_element().attribute("bgcolor"), None);
+        assert!(
+            !parsed.descendants().any(
+                |n| n.has_tag_name("graphic") && n.attribute("RectangleType") == Some("Filled")
+            ),
+            "no page rectangle"
         );
         let bond = parsed.descendants().find(|n| n.has_tag_name("b")).unwrap();
-        assert_eq!(rgb(bond.attribute("color").unwrap()), [1.; 3]);
+        assert_eq!(
+            rgb(bond.attribute("color").unwrap()),
+            red.map(|v| f32::from(v) / 255.),
+            "palette colors take their light-canvas tone"
+        );
         let label = parsed
             .descendants()
             .find(|n| n.has_tag_name("s") && n.text() == Some("O"))
             .unwrap();
-        assert_eq!(rgb(label.attribute("color").unwrap()), [1.; 3]);
         assert_eq!(
-            parsed
-                .root_element()
-                .attribute("LabelSize")
-                .unwrap()
-                .parse::<f32>()
-                .unwrap(),
-            10.
+            label.attribute("color").map(rgb).unwrap_or([0.; 3]),
+            [0.; 3],
+            "black ink"
         );
     }
 }

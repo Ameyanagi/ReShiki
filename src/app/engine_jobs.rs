@@ -203,11 +203,15 @@ impl App {
             Ok(response) => response,
         };
         if let Job::Export(format) = kind {
+            let mut warnings = response.warnings;
+            if matches!(format, "cdx" | "cdxml") && self.tab.doc.canvas_theme.is_dark() {
+                warnings.insert(0, "Light canvas colors: ChemDraw has no dark canvas".into());
+            }
             return export_file(
                 response.output.unwrap_or_default(),
                 format,
                 self.export_stem(),
-                response.warnings,
+                warnings,
             );
         }
         if self.tab.revision != revision {
@@ -438,6 +442,13 @@ impl App {
             self.cancel_reference_stretch();
             let before = self.tab.doc.clone();
             self.tab.doc = document.clone();
+            // An imported file has no canvas of its own: it opens on the
+            // remembered one, as a new drawing does. Other imports keep the tab's.
+            match kind {
+                Job::ImportFile(_) => self.tab.doc.canvas_theme = self.appearance.canvas_theme,
+                Job::Import => self.tab.doc.canvas_theme = before.canvas_theme,
+                _ => {}
+            }
             if !self.adopt_changed_document(before) {
                 return;
             }

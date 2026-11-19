@@ -17,7 +17,7 @@ pub enum TitlePlace {
     /// On a band across the top, in the outline color.
     #[default]
     Bar,
-    /// Set into the top edge, on the page color.
+    /// Set into the top edge, on the panel's fill.
     Border,
 }
 impl std::fmt::Display for TitlePlace {
@@ -301,6 +301,16 @@ impl Graphic {
                 }
             })
             .collect()
+    }
+}
+
+/// A border title's color on its backing, as the canvas shows both: the
+/// outline color, or black or white where the outline would not read.
+pub fn border_title_rgb(outline: [u8; 3], backing: [u8; 3]) -> [u8; 3] {
+    if crate::color_contrast::contrast(outline, backing) >= 3. {
+        outline
+    } else {
+        crate::canvas_theme::ink_canvas(backing).color([0; 3])
     }
 }
 

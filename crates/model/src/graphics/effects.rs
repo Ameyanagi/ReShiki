@@ -59,8 +59,9 @@ pub enum GradientKind {
     Radial,
 }
 impl Gradient {
-    /// White into the fill color, as the plan's gradient tiles show.
-    pub const WHITE: crate::palette::Color = crate::palette::Color::Custom([255; 3]);
+    /// The paper into the fill color, as the plan's gradient tiles show, so
+    /// a gradient keeps its range on both canvases.
+    pub const PAPER: crate::palette::Color = crate::palette::Color::Paper;
     /// The start and end of the gradient in the unit square of the shape's
     /// frame: a linear one spans the square's extent along its angle; a
     /// radial one reaches the circle inscribed in the square.
@@ -172,6 +173,30 @@ impl Graphic {
                 .commands()
                 .iter()
                 .any(|c| matches!(c, PathCommand::Close)))
+    }
+    /// The color a reader sees inside a filled shape lying on `paper`, with
+    /// `shown` giving each color as the canvas shows it: a see-through fill
+    /// mixed with the paper, a gradient at its middle. None without a fill.
+    pub fn backing(
+        &self,
+        shown: impl Fn(crate::palette::Color) -> [u8; 3],
+        paper: [u8; 3],
+    ) -> Option<[u8; 3]> {
+        let fill = self.style.fill.filter(|_| {
+            self.closed_shape() && self.cycle.is_none() && self.kind != GraphicKind::Piece
+        })?;
+        let mix = |mut a: [u8; 3], b: [u8; 3], t: f32| {
+            for (a, b) in a.iter_mut().zip(b) {
+                *a = (f32::from(*a) * (1. - t) + f32::from(b) * t).round() as u8;
+            }
+            a
+        };
+        let effects = self.style.effects;
+        let rgb = match effects.gradient {
+            Some(gradient) => mix(shown(gradient.from), shown(fill), 0.5),
+            None => shown(fill),
+        };
+        Some(mix(paper, rgb, effects.opacity.unwrap_or(1.)))
     }
     /// The outline as drawn, waves included.
     fn outline(&self) -> Vec<PathCommand> {

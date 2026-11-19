@@ -230,3 +230,50 @@ fn a_click_on_a_divider_picks_an_unfilled_panel() {
     assert!(g.hit_with_text_style(Point::new(100., 50.), 1., &text));
     assert!(!g.hit_with_text_style(Point::new(60., 50.), 1., &text));
 }
+
+#[test]
+fn a_border_title_backing_takes_the_panel_fill_on_both_canvases() {
+    use crate::{canvas_theme::CanvasTheme, palette::Palette, scene::Primitive};
+    let tinted = panel(&["Previous work"], TitlePlace::Border);
+    let mut faint = tinted.clone();
+    faint.style.fill = Some(Color::Ink);
+    faint.style.effects.opacity = Some(0.08);
+    let mut open = tinted.clone();
+    open.style.fill = None;
+    for theme in CanvasTheme::ALL {
+        let backing = |g: &Graphic| {
+            let doc = Document {
+                canvas_theme: theme,
+                graphics: vec![g.clone()],
+                ..Default::default()
+            };
+            let parts = crate::scene::primitives(&doc);
+            // The backing is the last filled path, drawn over the outline.
+            let fill = parts
+                .iter()
+                .rev()
+                .find_map(|p| match p {
+                    Primitive::Path {
+                        style,
+                        filled: true,
+                        ..
+                    } => style.fill,
+                    _ => None,
+                })
+                .unwrap();
+            // Scene colors are canonical; the canvas shows them flipped once.
+            (theme.color(fill.rgb()), Palette::of(&doc))
+        };
+        let (shown, palette) = backing(&tinted);
+        assert_eq!(shown, palette.rgb(tinted.style.fill.unwrap()), "{theme}");
+        let (shown, _) = backing(&faint);
+        let paper = theme.background();
+        assert!(
+            shown.iter().zip(paper).all(|(a, b)| a.abs_diff(b) <= 21),
+            "{theme}: a faint fill backs the title in a faint grey, {shown:?}"
+        );
+        assert_ne!(shown, paper, "{theme}");
+        let (shown, _) = backing(&open);
+        assert_eq!(shown, paper, "{theme}: an unfilled panel shows the paper");
+    }
+}

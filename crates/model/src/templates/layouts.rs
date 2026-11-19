@@ -163,9 +163,12 @@ pub(super) fn templates() -> Result<Vec<Template>, String> {
     let grey = titled(&["Previous work"], TitlePlace::Border);
     let first = panel(&mut compare, &previous, Hue::Indigo, grey);
     if let Some(g) = compare.graphics.iter_mut().find(|g| g.id == first) {
+        // A neutral panel in Ink with a faint see-through fill: light grey on
+        // the light canvas, dark grey on the dark one.
         g.style.corner_pt = Some(6.);
-        g.style.stroke = Color::Custom([128, 128, 128]);
-        g.style.fill = Some(Color::Custom([242, 242, 242]));
+        g.style.stroke = Color::Ink;
+        g.style.fill = Some(Color::Ink);
+        g.style.effects.opacity = Some(0.08);
     }
     panel(
         &mut compare,
@@ -182,7 +185,7 @@ pub(super) fn templates() -> Result<Vec<Template>, String> {
         middle,
         Point::new(hi.x - 10., middle.y),
         GraphicStyle {
-            stroke: Color::Custom([128, 128, 128]),
+            stroke: Color::Ink,
             width_pt: compare.drawing_style.line_width_pt,
             pattern: LinePattern::Dashed,
             ..Default::default()

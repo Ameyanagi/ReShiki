@@ -496,7 +496,7 @@ fn shading_keeps_its_light_highlight_on_the_dark_canvas() {
 fn gradient(kind: GradientKind) -> Effects {
     Effects {
         gradient: Some(Gradient {
-            from: Gradient::WHITE,
+            from: Gradient::PAPER,
             kind,
         }),
         ..Default::default()
@@ -507,7 +507,7 @@ fn gradient(kind: GradientKind) -> Effects {
 fn a_linear_gradient_spans_its_frame_along_its_angle() {
     let ends = |angle| {
         let (from, to) = Gradient {
-            from: Gradient::WHITE,
+            from: Gradient::PAPER,
             kind: GradientKind::Linear { angle },
         }
         .ends();
@@ -518,7 +518,7 @@ fn a_linear_gradient_spans_its_frame_along_its_angle() {
     // Diagonal: corner to corner, so both ends reach the frame.
     assert_eq!(ends(45.), [[0., 0.], [1., 1.]]);
     let radial = Gradient {
-        from: Gradient::WHITE,
+        from: Gradient::PAPER,
         kind: GradientKind::Radial,
     };
     assert_eq!(radial.ends(), ([0.5, 0.5], [1., 0.5]));
@@ -567,7 +567,7 @@ fn a_gradient_fill_is_one_primitive_under_the_outline_in_the_colors_shown() {
         assert_eq!(
             stops,
             &[
-                (0., flat(Gradient::WHITE), 1.),
+                (0., flat(Gradient::PAPER), 1.),
                 (1., flat(crate::palette::Color::Custom([0, 0, 255])), 1.)
             ]
         );
@@ -773,9 +773,47 @@ fn changing_the_gradient_kind_keeps_each_shapes_colors_and_angle() {
     GraphicChange::GradientKind(Some(GradientKind::Radial)).apply(&mut plain);
     assert_eq!(
         plain.effects.gradient.map(|g| g.from),
-        Some(Gradient::WHITE)
+        Some(Gradient::PAPER)
     );
     assert_eq!(plain.fill, Some(plain.stroke));
     GraphicChange::GradientKind(None).apply(&mut plain);
     assert_eq!(plain.effects.gradient, None);
+}
+
+#[test]
+fn a_default_gradient_keeps_its_range_on_both_canvases() {
+    use crate::{
+        canvas_theme::CanvasTheme,
+        document::Document,
+        palette::{Color, Hue, Row},
+        scene::Primitive,
+    };
+    // A ChemDraw shape filled with black ink, then given the default gradient.
+    let mut oval = shape(GraphicKind::Ellipse, Effects::default());
+    oval.style.fill = Some(Color::Ink);
+    GraphicChange::GradientKind(Some(GradientKind::Radial)).apply(&mut oval.style);
+    let mut doc = Document {
+        graphics: vec![oval],
+        ..Default::default()
+    };
+    for theme in CanvasTheme::ALL {
+        doc.canvas_theme = theme;
+        let drawing = crate::scene::primitives(&doc);
+        let Some(Primitive::Gradient { stops, .. }) = drawing.first() else {
+            panic!("the gradient first: {drawing:?}");
+        };
+        let [(_, from, _), (_, to, _)] = stops.as_slice() else {
+            panic!("two stops: {stops:?}");
+        };
+        // From the paper into the ink, as each canvas shows them.
+        assert_eq!(*from, theme.background(), "{theme}");
+        assert_eq!(*to, theme.color([0; 3]), "{theme}");
+    }
+    // A colored outline fills with its tint.
+    let mut style = GraphicStyle {
+        stroke: Color::Palette(Hue::Teal, Row::Strong),
+        ..Default::default()
+    };
+    GraphicChange::GradientKind(Some(GradientKind::Radial)).apply(&mut style);
+    assert_eq!(style.fill, Some(Color::Palette(Hue::Teal, Row::Tint)));
 }

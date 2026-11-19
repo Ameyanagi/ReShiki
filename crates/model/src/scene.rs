@@ -2431,22 +2431,29 @@ fn graphic_primitive(g: &&crate::graphics::Graphic, doc: &Document) -> Vec<Primi
             }
         }
         let text_style = &doc.drawing_style.text_style();
-        parts.extend(
-            g.panel_parts(text_style)
-                .into_iter()
-                .map(|p| Primitive::Path {
-                    commands: p.commands,
-                    style: p.style,
-                    filled: p.filled,
-                }),
-        );
-        // A title on a band reads against the band as the canvas shows it;
-        // the renderer then converts the chosen ink back for that canvas.
+        // A title set into the border is backed by the panel's own fill as
+        // the canvas shows it, so it never shows a box of another color.
         let canvas = doc.canvas_theme;
+        let paper = canvas.background();
+        let backing = g.backing(|c| canvas.color(c.rgb()), paper).unwrap_or(paper);
         let on_band = g
             .panel
             .as_ref()
             .is_some_and(|p| p.place == crate::graphics::TitlePlace::Bar);
+        parts.extend(g.panel_parts(text_style).into_iter().map(|mut p| {
+            if p.filled && !on_band {
+                let knockout = Color::Custom(canvas.color(backing));
+                p.style.stroke = knockout;
+                p.style.fill = Some(knockout);
+            }
+            Primitive::Path {
+                commands: p.commands,
+                style: p.style,
+                filled: p.filled,
+            }
+        }));
+        // A title on a band reads against the band as the canvas shows it;
+        // the renderer then converts the chosen ink back for that canvas.
         let band_ink = || {
             let band = canvas.color(g.style.stroke.rgb());
             let ink = if crate::color_contrast::luminance(band) > 0.45 {
@@ -2456,21 +2463,25 @@ fn graphic_primitive(g: &&crate::graphics::Graphic, doc: &Document) -> Vec<Primi
             };
             canvas.color(ink)
         };
+        let title = if on_band {
+            band_ink()
+        } else {
+            canvas.color(crate::graphics::panel::border_title_rgb(
+                canvas.color(g.style.stroke.rgb()),
+                backing,
+            ))
+        };
         let superscript = g
             .superscript_label(text_style)
             .into_iter()
-            .map(|l| (l, false));
-        let titles = g.panel_titles(text_style).into_iter().map(|l| (l, on_band));
-        for (label, banded) in superscript.chain(titles) {
+            .map(|l| (l.style.color.rgb(), l));
+        let titles = g.panel_titles(text_style).into_iter().map(|l| (title, l));
+        for (color, label) in superscript.chain(titles) {
             parts.push(Primitive::Text {
                 position: label.position,
                 text: label.text.into(),
                 size: label.size,
-                color: if banded {
-                    band_ink()
-                } else {
-                    label.style.color.rgb()
-                },
+                color,
                 style: label.style,
             });
         }
@@ -2530,6 +2541,17 @@ pub(crate) fn gradient_primitive(
         from,
         to,
         stops: vec![(0., shown(gradient.from), 1.), (1., shown(fill), 1.)],
+    }
+}
+/// The paper a gradient made while drawing starts from: the canvas's, or the
+/// other canvas's for an object on a card of the other canvas, in the
+/// renderer's canonical bytes.
+pub(crate) fn drawn_paper(doc: &Document, id: u64) -> crate::palette::Color {
+    let canvas = doc.canvas_theme;
+    if doc.on_other_canvas.contains(&id) {
+        crate::palette::Color::Custom(canvas.color(canvas.toggled().background()))
+    } else {
+        crate::graphics::Gradient::PAPER
     }
 }
 /// A cycle draws only its derived arrows and labels.
@@ -2871,9 +2893,10 @@ fn push_arrows_and_annotations(out: &mut Vec<Primitive>, doc: &Document) {
         }
     }
     for a in &doc.arrows {
-        for p in a.paths() {
+        for mut p in a.paths() {
             // A gradient body fills exactly as a gradient shape does.
-            if p.style.effects.gradient.is_some() {
+            if let Some(gradient) = &mut p.style.effects.gradient {
+                gradient.from = drawn_paper(doc, a.id);
                 let shape = crate::arrows::shape(a.id, p.commands, &p.style, p.filled);
                 out.extend(graphic_primitive(&&shape, doc));
             } else {

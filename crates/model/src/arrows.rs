@@ -869,7 +869,7 @@ impl Arrow {
                 // arrow's color at the head, as gradient shapes fill.
                 if body == Body::Gradient {
                     style.effects.gradient = Some(crate::graphics::Gradient {
-                        from: crate::graphics::Gradient::WHITE,
+                        from: crate::graphics::Gradient::PAPER,
                         kind: crate::graphics::GradientKind::Linear {
                             angle: along(&commands, u),
                         },

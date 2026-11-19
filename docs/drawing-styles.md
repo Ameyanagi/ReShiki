@@ -62,7 +62,7 @@ Presentation and Pastel derive their light and dark palettes from the same Jmol 
 
 The periodic table and quick atom buttons use colored tile backgrounds with regular-weight, high-contrast symbols. Jmol tiles derive their backgrounds from its published element colors; canvas label brightness adjustments do not change those tile hues. A thicker outline identifies the selected element.
 
-Canvas colors are saved with the document and participate in Undo/Redo. File exports (PNG, SVG, PDF and ChemDraw) and printing include the canvas background and visible colors. Copies always have a transparent background: Copy Image retains the visible ink in PDF/PNG/SVG, and editable ChemDraw copies retain those object colors without adding a page rectangle. Pasting between ReShiki drawings adds no background either; Ink and palette colors take on the receiving canvas.
+Canvas colors are saved with the document; changing them is not an Undo step. New drawings and imported ChemDraw or MOL files open on the canvas you chose last. Picture exports (PNG, SVG, PDF) and printing include the canvas background and visible colors. ChemDraw files (CDXML, CDX) always get the light canvas's look without a page rectangle, because ChemDraw has no dark canvas. Copies always have a transparent background: Copy Image retains the visible ink in PDF/PNG/SVG, and editable ChemDraw copies retain those object colors without adding a page rectangle. Pasting between ReShiki drawings adds no background either; Ink and palette colors take on the receiving canvas.
 
 **View → Interface** controls only the surrounding interface: **Match canvas**, **Light**, or **Dark**. The preference is remembered between launches and never changes the drawing, document history, clipboard, or exports. There is no separate dark drawing preset.
 
@@ -84,6 +84,11 @@ light canvas and white on the dark one.
 - Ring tints keep white bonds at 5:1 contrast on the dark canvas. Automatic
   element labels adjust their lightness to 5:1 against the paper and every
   ring fill behind them. Explicit atom colors are kept.
+- Structures, arrows, text and shapes on a filled shape take the ink of the
+  canvas that suits the fill: black on a light card even on the dark canvas,
+  white on a dark card on the light one. The topmost fill under an object's
+  middle decides. Palette tints follow the canvas, so this mostly concerns
+  custom and Ink fills.
 
 ### Custom colors
 

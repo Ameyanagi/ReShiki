@@ -327,3 +327,27 @@ fn unsuccessful_imports_do_not_install_a_source_name() {
         }
     }
 }
+
+#[test]
+fn imported_files_open_on_the_remembered_canvas() {
+    use reshiki::canvas_theme::CanvasTheme;
+    for (name, format) in [("caffeine.cdxml", "cdxml"), ("co2.cif", "cif")] {
+        let mut app = ready();
+        let _ = app.update(Message::CanvasTheme(CanvasTheme::Dark));
+        assert!(
+            app.status
+                .ends_with("Dark canvas · Exports: canvas colors · Copies: transparent"),
+            "{}",
+            app.status
+        );
+        // A light drawing in front: the import still takes the remembered canvas.
+        let _ = app.update(Message::CanvasTheme(CanvasTheme::Light));
+        app.appearance.canvas_theme = CanvasTheme::Dark;
+        let key = open(&mut app, name, format);
+        let _ = app.update(imported(key));
+        assert_eq!(app.tab.doc.canvas_theme, CanvasTheme::Dark, "{name}");
+        if format == "cdxml" {
+            assert!(!app.dirty(), "an opened ChemDraw file stays unchanged");
+        }
+    }
+}

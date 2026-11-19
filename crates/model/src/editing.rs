@@ -544,6 +544,7 @@ pub(crate) fn remap_ids(doc: &mut Document, mapping: &HashMap<u64, u64>) -> Opti
         models,
         recent_colors: _,
         piece_definitions: _,
+        on_other_canvas: _,
     } = doc;
     let map = |id: &mut u64| {
         *id = *mapping.get(id)?;

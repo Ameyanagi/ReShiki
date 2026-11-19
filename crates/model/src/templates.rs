@@ -951,6 +951,7 @@ impl Attachment<'_> {
             models: _,
             recent_colors: _,
             piece_definitions: _,
+            on_other_canvas: _,
         } = &mut result;
         atoms.retain(|a| !mapping.contains_key(&a.id));
         // A multi-edge fusion may map both endpoints of a genuinely new

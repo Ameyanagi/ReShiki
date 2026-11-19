@@ -170,7 +170,7 @@ async fn gradients_and_other_see_through_color_export_as_the_color_chemdraw_show
         fill: Some(BLUE),
         effects: Effects {
             gradient: Some(Gradient {
-                from: Gradient::WHITE,
+                from: Gradient::PAPER,
                 kind: GradientKind::Radial,
             }),
             ..Default::default()

@@ -45,17 +45,21 @@ Select a rectangle, rounded rectangle, ellipse or closed path. In
 **Properties**, below **Shaded** and **Shadow**:
 
 - **Gradient → Linear** blends the fill from a start color into the fill color
-  across the shape. **From** sets the start color (white at first) and
+  across the shape. **From** sets the start color and
   **Angle (°)** its direction: 0 runs left to right, 90 top to bottom. The
   gradient turns with a rotated rectangle or ellipse.
 - **Gradient → Radial** blends from the start color at the middle of the shape
   into the fill color at its edge.
+- **From** starts as **Paper**, the canvas color: white on the light canvas,
+  black on the dark one, so the gradient keeps its range on both. Type
+  `Paper` or a color.
 - **Opacity (%)** makes the fill see-through, so what lies behind it shows.
   Its outline stays solid. A line, an arrow line or a shape without a fill
   fades its lines instead. 100 is opaque.
 
 A gradient or see-through fill replaces **Shaded**. A shape without a fill
-takes its stroke color as the fill. For a gradient page or panel background,
+takes the tint of its stroke color as the fill, or the stroke color itself for
+Ink or a custom color. For a gradient page or panel background,
 draw a rectangle over the area, give it a gradient and choose **Send to back**.
 
 To change a ring interior, select the whole ring, open the color button's

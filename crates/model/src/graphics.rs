@@ -234,7 +234,13 @@ impl GraphicChange {
                 s.effects.gradient = *v;
                 if v.is_some() {
                     s.effects.shaded = false;
-                    s.fill = s.fill.or(Some(s.stroke));
+                    // Paper into the line's tint, so the default reads on
+                    // both canvases; Ink and custom lines fill with themselves.
+                    use crate::palette::{Color, Row};
+                    s.fill = s.fill.or(Some(match s.stroke {
+                        Color::Palette(hue, _) => Color::Palette(hue, Row::Tint),
+                        stroke => stroke,
+                    }));
                 }
             }
             Self::GradientKind(None) => s.effects.gradient = None,
@@ -248,7 +254,7 @@ impl GraphicChange {
                     ) if matches!(kind, GradientKind::Linear { .. }) => g,
                     Some(g) => Gradient { kind: *kind, ..g },
                     None => Gradient {
-                        from: Gradient::WHITE,
+                        from: Gradient::PAPER,
                         kind: *kind,
                     },
                 };
@@ -906,7 +912,7 @@ pub fn segment_distance(p: Point, a: Point, b: Point) -> f32 {
 }
 // windows(2): an unclosed contour has no closing edge, unlike the closed-contour tests in
 // scientific/label_halo.rs `contains` and mark_placement.rs `intersects`.
-fn inside_polygon(p: Point, path: &[Point]) -> bool {
+pub(crate) fn inside_polygon(p: Point, path: &[Point]) -> bool {
     let mut inside = false;
     for pair in path.windows(2) {
         let [a, b] = pair else {
@@ -917,6 +923,20 @@ fn inside_polygon(p: Point, path: &[Point]) -> bool {
         }
     }
     inside
+}
+/// Whether `p` lies in the area the outlines `paths` fill together, by the
+/// nonzero rule the renderers use: an inner outline running the other way
+/// leaves a hole.
+pub(crate) fn fills(p: Point, paths: &[Vec<Point>]) -> bool {
+    let mut winding = 0;
+    for path in paths {
+        for (a, b) in path.iter().zip(path.iter().cycle().skip(1)) {
+            if (a.y > p.y) != (b.y > p.y) && p.x < (b.x - a.x) * (p.y - a.y) / (b.y - a.y) + a.x {
+                winding += if b.y > a.y { 1 } else { -1 };
+            }
+        }
+    }
+    winding != 0
 }
 pub fn flattened(commands: &[PathCommand]) -> Vec<Vec<Point>> {
     let mut paths: Vec<Vec<Point>> = vec![];

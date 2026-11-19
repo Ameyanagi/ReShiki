@@ -504,7 +504,7 @@ impl App {
                         reshiki::accessibility::text_input(
                             "graphic-gradient-from",
                             "Gradient start color",
-                            "#FFFFFF",
+                            "Paper",
                             &self.tab.graphic_gradient_input,
                         )
                         .style(crate::appearance::input_style)
@@ -513,7 +513,7 @@ impl App {
                         .size(12)
                         .padding(5)
                         .width(76),
-                        "Enter applies · the gradient ends at the fill color",
+                        "Paper (the canvas color) or a color · Enter applies · the gradient ends at the fill color",
                         tooltip::Position::Top,
                     ),
                 ]
@@ -744,7 +744,11 @@ impl App {
             .map_or(100., |a| (a * 1000.).round() / 10.)
             .to_string();
         if let Some(gradient) = effects.gradient {
-            self.tab.graphic_gradient_input = hex(gradient.from);
+            self.tab.graphic_gradient_input = if gradient.from == Paint::Paper {
+                "Paper".into()
+            } else {
+                hex(gradient.from)
+            };
             if let reshiki::graphics::GradientKind::Linear { angle } = gradient.kind {
                 self.tab.graphic_angle_input = points(angle);
             }
@@ -838,11 +842,17 @@ impl App {
     }
 
     pub(super) fn apply_gradient_from(&mut self) {
-        match parse_color(&self.tab.graphic_gradient_input) {
-            Some(rgb) => self.apply_graphic_style(GraphicChange::GradientFrom(Paint::Custom(rgb))),
+        let input = self.tab.graphic_gradient_input.trim();
+        let from = if input.eq_ignore_ascii_case("paper") {
+            Some(Paint::Paper)
+        } else {
+            parse_color(input).map(Paint::Custom)
+        };
+        match from {
+            Some(from) => self.apply_graphic_style(GraphicChange::GradientFrom(from)),
             None => {
                 self.error = true;
-                self.status = "Enter a six-digit hex color, such as #FFFFFF".into();
+                self.status = "Enter Paper or a six-digit hex color, such as #FFFFFF".into();
             }
         }
     }
