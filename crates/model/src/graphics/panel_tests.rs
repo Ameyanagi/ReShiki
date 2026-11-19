@@ -217,3 +217,16 @@ fn a_band_title_reads_on_the_band_as_the_dark_canvas_shows_it() {
     // Pure blue stays dark blue on the dark canvas, so the title shows white.
     assert_eq!(doc.canvas_theme.color(title), [255; 3]);
 }
+
+#[test]
+fn a_click_on_a_divider_picks_an_unfilled_panel() {
+    let text = TextStyle::default();
+    let mut g = panel(&[], TitlePlace::Bar);
+    g.style.fill = None;
+    g.panel.as_mut().unwrap().dividers.push(Divider {
+        vertical: true,
+        at: 0.5,
+    });
+    assert!(g.hit_with_text_style(Point::new(100., 50.), 1., &text));
+    assert!(!g.hit_with_text_style(Point::new(60., 50.), 1., &text));
+}

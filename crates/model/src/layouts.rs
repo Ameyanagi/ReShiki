@@ -88,6 +88,25 @@ impl Layout {
     }
 }
 
+/// Text linked to objects: molecule names, property captions and arrow
+/// conditions, each with the objects it follows.
+pub(crate) fn caption_links(doc: &Document) -> Vec<(&[u64], u64)> {
+    doc.molecule_names
+        .iter()
+        .map(|name| (name.atoms.as_slice(), name.annotation))
+        .chain(
+            doc.property_captions
+                .iter()
+                .map(|link| (link.atoms.as_slice(), link.annotation)),
+        )
+        .chain(
+            doc.arrow_labels
+                .iter()
+                .map(|label| (std::slice::from_ref(&label.arrow), label.annotation)),
+        )
+        .collect()
+}
+
 /// The units a layout group arranges, each moved as one: connected molecules
 /// with their captions, nested groups, whole reactions and schemes drawn
 /// along an arrow. When that leaves a single unit, as for one scheme laid
@@ -104,21 +123,7 @@ pub fn units(doc: &Document, group: u64) -> Vec<Vec<u64>> {
     let mut inside: HashSet<_> = members.iter().copied().collect();
     // Captions linked to molecules inside move with them, even when they were
     // added after the layout.
-    let links: Vec<(&[u64], u64)> = doc
-        .molecule_names
-        .iter()
-        .map(|name| (name.atoms.as_slice(), name.annotation))
-        .chain(
-            doc.property_captions
-                .iter()
-                .map(|link| (link.atoms.as_slice(), link.annotation)),
-        )
-        .chain(
-            doc.arrow_labels
-                .iter()
-                .map(|label| (std::slice::from_ref(&label.arrow), label.annotation)),
-        )
-        .collect();
+    let links = caption_links(doc);
     for (atoms, annotation) in &links {
         if !atoms.is_empty() && atoms.iter().all(|id| inside.contains(id)) {
             inside.insert(*annotation);
@@ -400,15 +405,8 @@ pub fn arrange(doc: &mut Document, ids: &[u64], flow: Flow, gutter_pt: f32) -> R
     }
     // Linked captions follow their molecules without being members, so a
     // reselected layout still matches its group.
-    let linked: HashSet<u64> = doc
-        .molecule_names
-        .iter()
-        .map(|name| (name.atoms.as_slice(), name.annotation))
-        .chain(
-            doc.property_captions
-                .iter()
-                .map(|link| (link.atoms.as_slice(), link.annotation)),
-        )
+    let linked: HashSet<u64> = caption_links(doc)
+        .into_iter()
         .filter(|(atoms, _)| !atoms.is_empty() && atoms.iter().all(|id| members.contains(id)))
         .map(|(_, annotation)| annotation)
         .collect();

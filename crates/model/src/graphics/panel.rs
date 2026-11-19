@@ -320,24 +320,12 @@ pub fn fit(doc: &mut Document, panel: u64) {
     // Captions linked to molecules it holds, even ones added later.
     let mut held = held;
     held.extend(
-        doc.molecule_names
-            .iter()
-            .map(|name| (&name.atoms, name.annotation))
-            .chain(
-                doc.property_captions
-                    .iter()
-                    .map(|link| (&link.atoms, link.annotation)),
-            )
-            .map(|(atoms, annotation)| (atoms.as_slice(), annotation))
-            .chain(
-                doc.arrow_labels
-                    .iter()
-                    .map(|label| (std::slice::from_ref(&label.arrow), label.annotation)),
-            )
-            .filter(|(atoms, annotation)| {
-                !atoms.is_empty()
+        crate::layouts::caption_links(doc)
+            .into_iter()
+            .filter(|(objects, annotation)| {
+                !objects.is_empty()
                     && !held.contains(annotation)
-                    && atoms.iter().all(|id| held.contains(id))
+                    && objects.iter().all(|id| held.contains(id))
             })
             .map(|(_, annotation)| annotation)
             .collect::<Vec<_>>(),
@@ -428,13 +416,22 @@ pub fn divider_position(doc: &Document, panel: u64, vertical: bool) -> f32 {
     let Some(frame) = doc.graphics.iter().find(|g| g.id == panel) else {
         return 0.5;
     };
-    let (lo, hi) = frame.shape_bounds();
-    let axis = |p: Point| if vertical { p.x } else { p.y };
-    let (start, end) = (axis(lo), axis(hi));
+    // Measured along the panel's own axis, so a rotated panel splits right.
+    let (o, ex, ey, w, h) = frame.panel_frame();
+    let along = if vertical { ex } else { ey };
+    let axis = |p: Point| (p.x - o.x) * along.x + (p.y - o.y) * along.y;
+    let (start, end) = (0., if vertical { w } else { h });
     // Each object on its own: the panel's group would join them all.
     let mut spans: Vec<(f32, f32)> = content_units(doc, panel)
         .into_iter()
-        .map(|(_, (a, b))| (axis(a), axis(b)))
+        .map(|(_, (a, b))| {
+            let corners = [a, Point::new(b.x, a.y), b, Point::new(a.x, b.y)].map(axis);
+            corners
+                .iter()
+                .fold((f32::INFINITY, f32::NEG_INFINITY), |(lo, hi), v| {
+                    (lo.min(*v), hi.max(*v))
+                })
+        })
         .collect();
     spans.sort_by(|a, b| a.0.total_cmp(&b.0));
     let taken: Vec<f32> = frame

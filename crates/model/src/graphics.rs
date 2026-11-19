@@ -631,9 +631,16 @@ impl Graphic {
                 })
             })
             || self.panel_parts(text_style).iter().any(|part| {
-                flattened(&part.commands)
-                    .iter()
-                    .any(|path| part.filled && inside_polygon(p, path))
+                flattened(&part.commands).iter().any(|path| {
+                    if part.filled {
+                        inside_polygon(p, path)
+                    } else {
+                        // Dividers are lines: a click near one picks the panel.
+                        path.windows(2).any(|pair| {
+                            matches!(pair, [a, b] if segment_distance(p, *a, *b) < r + part.style.width() * 0.5)
+                        })
+                    }
+                })
             })
         {
             return true;
