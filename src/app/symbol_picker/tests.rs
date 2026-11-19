@@ -34,16 +34,35 @@ fn typed_shortcuts_become_symbols_and_undo_brings_the_shortcut_back() {
 }
 
 #[test]
-fn a_shortcut_keeps_the_style_it_was_typed_in() {
+fn a_shortcut_takes_the_style_around_it_and_keeps_its_neighbours() {
+    use iced::widget::text_editor::Motion;
     let mut app = app();
     begin(&mut app);
-    keys(&mut app, "Na");
+    keys(&mut app, "ab");
+    let _ = app.update(Message::CaptionAction(Input::Select(Motion::Left)));
     let _ = app.update(Message::TextStyle(
         reshiki::typography::StyleChange::Script(Script::Superscript),
     ));
-    keys(&mut app, "+-");
-    assert_eq!(app.tab.caption, "Na±");
-    assert_eq!(app.tab.caption_format.at(2).script, Script::Superscript);
+    let _ = app.update(Message::CaptionAction(Input::Move(Motion::Left)));
+    keys(&mut app, "+");
+    let typed = app.tab.caption_format.at(1).script;
+    keys(&mut app, "-");
+    assert_eq!(app.tab.caption, "a±b");
+    let format = &app.tab.caption_format;
+    assert_eq!(format.at(0).script, Script::Normal);
+    assert_eq!(format.at(1).script, typed, "± keeps the typed style");
+    assert_eq!(format.at("a±".len()).script, Script::Superscript, "b");
+}
+
+#[test]
+fn a_shortcut_expands_on_later_lines_and_in_right_to_left_text() {
+    let mut app = app();
+    begin(&mut app);
+    let _ = app.update(Message::CaptionAction(Input::Edit(Edit::Paste(
+        std::sync::Arc::new("first\nאב -".into()),
+    ))));
+    keys(&mut app, ">");
+    assert_eq!(app.tab.caption, "first\nאב →");
 }
 
 #[test]
@@ -78,10 +97,12 @@ fn picker_inserts_at_the_cursor_and_remembers_recents() {
 #[test]
 fn picker_without_a_draft_edits_the_selected_text_box_or_starts_one() {
     let mut app = app();
+    app.tab.camera.center = Point::new(120., 80.);
     let _ = app.update(Message::StyleMenu(Action::Insert("→")));
     assert_eq!(app.tab.caption, "→");
     assert!(app.finish_inline(true));
     assert_eq!(app.tab.doc.annotations.len(), 1);
+    assert_eq!(app.tab.doc.annotations[0].position, Point::new(120., 80.));
     let id = app.tab.doc.next_id();
     app.tab.doc.annotations.push(Annotation {
         id,
@@ -100,16 +121,23 @@ fn picker_without_a_draft_edits_the_selected_text_box_or_starts_one() {
 }
 
 #[test]
-fn insert_symbol_is_in_the_command_palette() {
-    let app = app();
-    let commands = super::super::command_palette::catalog::build(&app);
-    let command = commands
-        .iter()
-        .find(|c| c.name == "Insert symbol…")
-        .unwrap();
-    assert!(matches!(
-        &command.run,
-        super::super::command_palette::catalog::Run::Send(messages)
-            if matches!(messages.as_slice(), [Message::StyleMenu(Action::Symbols)])
-    ));
+fn insert_symbol_from_the_palette_keeps_the_draft_and_its_cursor() {
+    use super::super::command_palette::Action as Palette;
+    use iced::widget::text_editor::Motion;
+    let mut app = app();
+    begin(&mut app);
+    keys(&mut app, "AB");
+    let _ = app.update(Message::CaptionAction(Input::Move(Motion::Left)));
+    let _ = app.update(Message::Commands(Palette::Open));
+    let _ = app.update(Message::Commands(Palette::Query("insert symbol".into())));
+    assert_eq!(
+        app.commands.current().map(|c| c.name.as_str()),
+        Some("Insert symbol…")
+    );
+    let _ = app.update(Message::Commands(Palette::Submit));
+    assert!(matches!(app.style_menu, Some(Menu::Symbols { .. })));
+    assert!(app.tab.inline_text.is_some(), "the draft stays open");
+    let _ = app.update(Message::StyleMenu(Action::Insert("α")));
+    assert_eq!(app.tab.caption, "AαB");
+    assert!(app.tab.doc.annotations.is_empty(), "nothing committed yet");
 }

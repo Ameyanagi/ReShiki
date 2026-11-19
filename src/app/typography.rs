@@ -412,7 +412,7 @@ impl App {
             .unwrap_or_default();
     }
     pub(super) fn caption_action(&mut self, action: iced::widget::text_editor::Action) {
-        use iced::widget::text_editor::{Action, Edit, Motion};
+        use iced::widget::text_editor::{Action, Cursor, Edit, Position};
         let typed = matches!(action, Action::Edit(Edit::Insert(_)));
         self.edit_caption(action);
         if !typed {
@@ -420,19 +420,23 @@ impl App {
         }
         // A typed shortcut such as -> becomes its symbol; Undo brings it back.
         let editor = &mut self.tab.caption_editor;
-        let cursor = super::inline_text::editor_offset(&self.tab.caption, editor.cursor().position);
-        let Some((len, symbol)) = self
-            .tab
-            .caption
-            .get(..cursor)
-            .and_then(reshiki::symbols::expand)
-        else {
+        let end = editor.cursor().position;
+        let Some((len, symbol)) = editor.line(end.line).and_then(|line| {
+            line.text
+                .get(..end.column)
+                .and_then(reshiki::symbols::expand)
+        }) else {
             return;
         };
-        // Shortcuts are ASCII, one byte per character.
-        for _ in 0..len {
-            editor.perform(Action::Select(Motion::Left));
-        }
+        // Select the shortcut's own bytes: arrow-key motions follow the
+        // visual order, which runs the other way in right-to-left text.
+        editor.move_to(Cursor {
+            position: Position {
+                column: end.column - len,
+                ..end
+            },
+            selection: Some(end),
+        });
         self.edit_caption(Action::Edit(Edit::Paste(std::sync::Arc::new(
             symbol.into(),
         ))));

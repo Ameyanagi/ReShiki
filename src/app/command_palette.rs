@@ -110,6 +110,14 @@ impl State {
             .get(self.selected)
             .and_then(|i| self.items.get(*i))
     }
+    /// The command that a Run or Submit runs.
+    pub(super) fn to_run(&self, action: &Action) -> Option<&Command> {
+        match action {
+            Action::Run(index) => self.items.get(*index),
+            Action::Submit => self.current(),
+            _ => None,
+        }
+    }
     #[cfg(test)]
     pub(super) fn ranked(&self) -> Vec<&Command> {
         self.results

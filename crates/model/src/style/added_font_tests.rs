@@ -469,3 +469,24 @@ fn an_added_arial_is_used_instead_of_the_bundled_stand_in() {
     assert_ne!(family, "Arial");
     assert_eq!(width, advance(regular, 'C'));
 }
+
+/// Without system fonts, as in the browser, every symbol the picker inserts
+/// still has a glyph: Liberation Sans, then the bundled symbols subset.
+#[test]
+fn bundled_fonts_draw_every_picker_symbol() {
+    use resvg::usvg::fontdb::{Database, Style, Weight};
+    let mut db = Database::new();
+    super::load_bundled_fonts(&mut db);
+    for symbol in crate::symbols::GROUPS.iter().flat_map(|g| g.symbols) {
+        for c in symbol.text.chars() {
+            let face = super::resolve_font_in(&db, "Arial", Weight::NORMAL, Style::Normal, c, &[]);
+            assert!(face.is_some(), "{c} ({})", symbol.name);
+        }
+    }
+    // Hidden from font pickers.
+    assert!(
+        !super::family_names(&db)
+            .iter()
+            .any(|name| name.contains("Symbols"))
+    );
+}

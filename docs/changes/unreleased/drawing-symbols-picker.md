@@ -8,4 +8,5 @@ issues: []
   letters, charges (⊕ ⊖ • ⁺ ⁻), conditions (hν Δ e⁻) and check marks, plus
   your recent symbols. While you edit a caption, shortcuts such as `->`,
   `<=>`, `+-` and `\alpha` turn into their symbols as you type; Undo brings
-  back what you typed. See [Style toolbar](typography.md).
+  back what you typed. The browser build draws every picker symbol too. See
+  [Style toolbar](typography.md).

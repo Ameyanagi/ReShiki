@@ -63,4 +63,13 @@ fn symbols_are_listed_once_per_group_and_found_by_text() {
         }
     }
     assert_eq!(find("not a symbol"), None);
+    // Names label the picker's buttons and key their accessibility ids.
+    let names: Vec<_> = GROUPS
+        .iter()
+        .flat_map(|g| g.symbols)
+        .map(|s| s.name)
+        .collect();
+    for (i, name) in names.iter().enumerate() {
+        assert!(!names[..i].contains(name), "{name} twice");
+    }
 }

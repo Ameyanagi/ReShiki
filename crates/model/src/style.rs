@@ -235,6 +235,7 @@ pub fn prefer_added_arial(db: &mut resvg::usvg::fontdb::Database) {
 /// generic sans-serif preference and leaving installed Arial faces untouched.
 pub fn load_bundled_fonts(db: &mut resvg::usvg::fontdb::Database) {
     font::load_bundled(db);
+    font::load_symbols(db);
 }
 
 /// Add a TrueType or OpenType font (or collection) for measuring, drawing and
@@ -484,13 +485,17 @@ fn resolve_font_in(
                 .map(|face| face.id)
         })
         .or_else(|| {
-            db.query(&Query {
-                families: &[Family::Name(font::BUNDLED_FAMILY)],
-                weight,
-                style,
-                ..Default::default()
-            })
-            .filter(|id| has_glyph(*id))
+            [font::BUNDLED_FAMILY, font::SYMBOLS_FAMILY]
+                .into_iter()
+                .find_map(|name| {
+                    db.query(&Query {
+                        families: &[Family::Name(name)],
+                        weight,
+                        style,
+                        ..Default::default()
+                    })
+                    .filter(|id| has_glyph(*id))
+                })
         })
 }
 

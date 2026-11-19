@@ -2,6 +2,7 @@
 //! without a text draft it starts one, on the selected text box or at the
 //! center of the view.
 use super::color_popover::{Action, Menu, surface};
+use super::command_palette::catalog::Run;
 use super::popover::popover;
 use super::workspace::{control, hover_hint, muted_text};
 use super::{App, Message, inline_text};
@@ -91,7 +92,19 @@ impl App {
             return self.focus_draft();
         }
         self.style_menu = Some(Menu::Symbols { hovered: None });
-        Task::none()
+        // Typing goes on in the caption; it closes the picker.
+        self.focus_draft()
+    }
+
+    /// The palette's Insert symbol… keeps a text draft open, to insert into it.
+    pub(super) fn opens_symbols(&self, message: &Message) -> bool {
+        let Message::Commands(action) = message else {
+            return false;
+        };
+        self.commands.to_run(action).is_some_and(|command| {
+            matches!(&command.run, Run::Send(messages)
+                if matches!(messages.as_slice(), [Message::StyleMenu(Action::Symbols)]))
+        })
     }
 
     /// Keyboard focus goes back to the text draft, if there is one.
@@ -104,8 +117,10 @@ impl App {
     }
 
     pub(super) fn insert_symbol(&mut self, symbol: &'static str) -> Task<Message> {
-        let mut task = Task::none();
-        if self.tab.inline_text.is_none() {
+        use iced::widget::text_editor::{Action as Input, Edit, Motion};
+        let task = if self.tab.inline_text.is_some() {
+            iced::widget::operation::focus(EDITOR)
+        } else {
             let selected = self
                 .tab
                 .doc
@@ -115,34 +130,38 @@ impl App {
             let (id, position) = selected.map_or((None, self.tab.camera.center), |label| {
                 (Some(label.id), label.position)
             });
-            task = self.inline_action(inline_text::Action::Begin(id, position));
+            let task = self.inline_action(inline_text::Action::Begin(id, position));
             if self.tab.inline_text.is_none() {
                 return task;
             }
-        }
-        self.caption_action(iced::widget::text_editor::Action::Edit(
-            iced::widget::text_editor::Edit::Paste(std::sync::Arc::new(symbol.into())),
-        ));
+            // Add to the caption: a linked name opens selected, for renaming.
+            self.tab
+                .caption_editor
+                .perform(Input::Move(Motion::DocumentEnd));
+            task
+        };
+        self.caption_action(Input::Edit(Edit::Paste(std::sync::Arc::new(symbol.into()))));
         let recent = &mut self.appearance.recent_symbols;
         recent.retain(|text| text != symbol);
         recent.insert(0, symbol.into());
         recent.truncate(RECENT);
         // Recents are a convenience: a failed save only forgets them.
         let _ = self.appearance.save();
-        Task::batch([task, iced::widget::operation::focus(EDITOR)])
+        task
     }
 }
 
 fn section<'a>(name: &'a str, symbols: &[&'static Symbol]) -> Element<'a, Message> {
-    let rows = symbols.chunks(COLUMNS).enumerate().map(|(row, chunk)| {
-        Row::with_children(chunk.iter().enumerate().map(|(i, &symbol)| {
-            cell(
-                format!("symbol-{}-{}", name.to_lowercase(), row * COLUMNS + i),
-                symbol,
-            )
-        }))
-        .spacing(2)
-        .into()
+    // Each button keeps its id when recents reorder.
+    let id = |symbol: &Symbol| {
+        format!("symbol-{name}-{}", symbol.name)
+            .to_lowercase()
+            .replace(' ', "-")
+    };
+    let rows = symbols.chunks(COLUMNS).map(|chunk| {
+        Row::with_children(chunk.iter().map(|&symbol| cell(id(symbol), symbol)))
+            .spacing(2)
+            .into()
     });
     column![text(name.to_uppercase()).size(10).style(muted_text)]
         .extend(rows)

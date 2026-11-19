@@ -162,6 +162,7 @@ explains how the crates and modules fit together.
 - `src/app/star_prompt.rs`: The "Like ReShiki?" toast, which asks once for a GitHub star after real use, and again at most once after a later feature release.
 - `src/app/startup.rs`
 - `src/app/stereo.rs`: Advisory drawing checks and explicit, undoable stereobond fixes.
+- `src/app/symbol_picker.rs`: The Ω symbol picker in the Style bar.
 - `src/app/tabs.rs`: Document tabs
 - `src/app/template_library.rs`
 - `src/app/template_style_evidence.rs`: Opt-in renderer snapshots through the real editor dispatch, usable on baseline too.
@@ -810,6 +811,7 @@ explains how the crates and modules fit together.
 - `crates/model/src/style.rs`: Default ACS structure settings, shared with the exchange worker.
 - `crates/model/src/style/font.rs`
 - `crates/model/src/style/units.rs`: Drawing-style input units.
+- `crates/model/src/symbols.rs`: The symbol picker's table and the typed shortcuts that insert its symbols.
 - `crates/model/src/templates.rs`: Built-in molecules and attachment geometry, shared by preview and placement.
 - `crates/model/src/templates/aromatic.rs`: Bounded aromatic fusion planning.
 - `crates/model/src/templates/coordination.rs`: Depiction-only coordination frames; projected wedges do not assign R/S.
