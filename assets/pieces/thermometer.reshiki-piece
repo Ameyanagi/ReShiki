@@ -192,7 +192,7 @@
    "size_mm": 7,
    "at": [
     0,
-    70
+    150
    ],
    "dir": [
     0,
@@ -210,7 +210,7 @@
    "kind": "range",
    "min": 30,
    "max": 240,
-   "default": 190,
+   "default": 110,
    "unit": "mm"
   }
  ],

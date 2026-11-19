@@ -871,10 +871,14 @@ impl App {
             let mut chips = row![].spacing(4);
             for e in sizes {
                 let d = &e.definition;
+                let size_label = size(d);
+                if size_label.is_empty() {
+                    continue;
+                }
                 // Two chips of one size name their revision, and two of one
                 // revision the start of their content hash.
-                let twin = |o: &Entry| o.key != e.key && size(&o.definition) == size(d);
-                let mut chip = size(d);
+                let twin = |o: &Entry| o.key != e.key && size(&o.definition) == size_label;
+                let mut chip = size_label.clone();
                 if sizes.iter().any(|o| twin(o)) {
                     chip.push_str(&format!(" · r{}", d.revision));
                 }
@@ -888,7 +892,7 @@ impl App {
                 chips = chips.push(
                     reshiki::accessibility::button(
                         format!("equipment-size-{}", e.key),
-                        format!("{} · {}", label(e), size(d)),
+                        format!("{} · {size_label}", label(e)),
                         text(chip).size(11),
                     )
                     .checked(armed(e))
