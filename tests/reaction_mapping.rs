@@ -810,11 +810,13 @@ type Pairs = std::collections::BTreeSet<(usize, usize)>;
 /// reactant atom positions in SMILES order. A broken bond may lead to an
 /// unmatched atom; a bond between two unmatched atoms is not listed.
 async fn reaction_centre(smiles: &str) -> (mapping::Proposal, [Pairs; 3]) {
-    let doc = import(smiles).await;
-    let proposal = mapping::propose(&doc, doc.reactions[0].arrow, Budget::default()).unwrap();
-    assert!(proposal.complete, "{smiles}");
-    let reactants = side(&doc, Role::Reactant);
-    let products = side(&doc, Role::Product);
+    centre(&import(smiles).await)
+}
+fn centre(doc: &Document) -> (mapping::Proposal, [Pairs; 3]) {
+    let proposal = mapping::propose(doc, doc.reactions[0].arrow, Budget::default()).unwrap();
+    assert!(proposal.complete);
+    let reactants = side(doc, Role::Reactant);
+    let products = side(doc, Role::Product);
     let position = |id: u64| reactants.iter().position(|r| *r == id);
     let source = |product: u64| {
         let pair = proposal.pairs.iter().find(|(_, p)| *p == product)?;
@@ -939,4 +941,35 @@ async fn aldol_bonds_one_alpha_carbon_to_the_other_carbonyl_carbon() {
         "formed {formed:?}, reordered {reordered:?}"
     );
     assert_eq!(broken, Pairs::new());
+}
+#[tokio::test]
+async fn hydrogens_drawn_as_atoms_count_like_hydrogens_in_labels() {
+    // Penta-1,3-diene → pent-2-ene reduces the terminal C4=C5 bond. Drawing
+    // two of the product's hydrogens as atoms must not change that.
+    let mut doc = import("CC=CC=C>>CC=CCC").await;
+    let products = side(&doc, Role::Product);
+    for &carbon in [products[0], products[3]].iter() {
+        let at = doc.atom(carbon).unwrap().position;
+        let h = doc.add_atom("H", Point::new(at.x, at.y - 40.));
+        doc.add_bond(carbon, h, 1, "plain");
+        doc.reactions[0].products[0].atoms.push(h);
+    }
+    doc.validate().unwrap();
+    let (_, [formed, broken, reordered]) = centre(&doc);
+    assert_eq!(formed, Pairs::new());
+    assert_eq!(broken, Pairs::new());
+    assert_eq!(reordered, pairs([(3, 4)]));
+}
+#[tokio::test]
+async fn reducing_several_triple_bonds_maps_within_the_default_budget() {
+    let (proposal, [formed, broken, reordered]) = reaction_centre(
+        "FCC=CC.FC=CCC.FCCC=C.FCC#CC.FCCC#C.FC#CCC.CC(C#CC#CC#C)CC>>\
+         FCC=CC.FC=CCC.FCCC=C.FCC#CC.FCCC#C.FC#CCC.CC(CCCCCC)CC",
+    )
+    .await;
+    assert!(proposal.complete);
+    assert_eq!(formed, Pairs::new());
+    assert_eq!(broken, Pairs::new());
+    // Only the last molecule's three triple bonds change.
+    assert_eq!(reordered, pairs([(32, 33), (34, 35), (36, 37)]));
 }

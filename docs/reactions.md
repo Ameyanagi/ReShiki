@@ -226,7 +226,8 @@ heavy-atom adjacency, all adjacency, smaller charge/H/radical differences,
 unchanged bond classes, and fewer changed atom environments. Hydrogen counts
 rank above bond orders: in a Diels–Alder reaction the double bond moves to the
 inner diene carbons and no hydrogen moves, so keeping a diene double bond by
-moving hydrogens is the wrong map. Bond order, charge,
+moving hydrogens is the wrong map. A hydrogen drawn as an atom counts like one
+in a label. Bond order, charge,
 attached hydrogens, degree and ring membership can change in a reaction and
 never exclude candidate pairs. Coordinates and stereochemistry are preserved;
 they are not used to infer a reaction mechanism.

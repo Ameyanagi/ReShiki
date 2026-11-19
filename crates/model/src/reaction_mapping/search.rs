@@ -34,9 +34,9 @@ pub struct Score {
     pub property_delta: u64,
 }
 /// Most bonds kept first, then fewest hydrogen, charge and radical changes,
-/// then most bond orders kept. Hydrogens rank above bond orders: a map that
-/// keeps an order by moving hydrogens is wrong for pericyclic steps, where
-/// the π bonds shift and no hydrogen moves (Diels–Alder).
+/// then most bond orders kept. Hydrogens rank above bond orders: where π
+/// bonds shift and no hydrogen moves, as in a Diels–Alder reaction, a map
+/// that keeps a bond order by moving hydrogens is wrong.
 impl Ord for Score {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         (
@@ -212,7 +212,7 @@ impl Graph {
                 radical: chemical.radical_electrons,
             });
         }
-        let edges = molecule
+        let edges: BTreeMap<_, _> = molecule
             .state
             .graph
             .bonds
@@ -229,6 +229,17 @@ impl Graph {
                 )
             })
             .collect();
+        // A hydrogen drawn as an atom counts like one in a label, so the
+        // same molecule drawn either way keeps its hydrogen counts.
+        for &(a, b) in edges.keys() {
+            for (x, y) in [(a, b), (b, a)] {
+                if atoms.get(y).is_some_and(|h: &Atom| h.element == "H")
+                    && let Some(atom) = atoms.get_mut(x)
+                {
+                    atom.h += 1;
+                }
+            }
+        }
         Ok(Self {
             atoms,
             edges,
@@ -360,6 +371,11 @@ struct Search<'a> {
     source: &'a Graph,
     target: &'a Graph,
     domains: Vec<Vec<usize>>,
+    /// Each source atom's fewest hydrogen, charge and radical changes over
+    /// all its candidates.
+    least: Vec<u64>,
+    /// Each source atom's bonded neighbours.
+    next: Vec<Vec<usize>>,
     k: usize,
     map: HashMap<usize, usize>,
     used: HashSet<usize>,
@@ -405,6 +421,58 @@ impl Search<'_> {
             .as_ref()
             .and_then(|costs| costs.get(s)?.get(t).copied())
             .unwrap_or(0)
+    }
+    /// The fewest hydrogen, charge and radical changes any completion that
+    /// can still match the best map makes: those of the pairs made so far,
+    /// plus the cheapest pairs the atoms still to pair could take. When the
+    /// best map's bonds can be matched only by keeping every open bond, an
+    /// atom bonded to a paired one must take a free target bonded to its
+    /// partner. `None` when no such target is left, so nothing can match.
+    fn least_changes(&mut self, upper: &Score, every_open_bond: bool) -> Option<u64> {
+        let (source, target) = (self.source, self.target);
+        let pair = |a: usize, b: usize| -> Option<u64> {
+            Some(delta(source.atoms.get(a)?, target.atoms.get(b)?))
+        };
+        let made: u64 = self.map.iter().filter_map(|(a, b)| pair(*a, *b)).sum();
+        let tight = every_open_bond
+            && (upper.heavy_adjacency, upper.adjacency)
+                == (self.best_score.heavy_adjacency, self.best_score.adjacency);
+        let (mut forced, mut count, mut rest) = (0, 0, Vec::new());
+        let undecided: Vec<usize> = (0..source.atoms.len())
+            .filter(|s| !self.decided.contains(s))
+            .collect();
+        for s in undecided {
+            let partners: Vec<usize> = self
+                .next
+                .get(s)
+                .into_iter()
+                .flatten()
+                .filter_map(|n| self.map.get(n).copied())
+                .collect();
+            if !tight || partners.is_empty() {
+                rest.push(self.least.get(s).copied().unwrap_or(0));
+                continue;
+            }
+            let scan = self.domains.get(s).map_or(0, Vec::len) * partners.len();
+            if !self.spend(scan as u64) {
+                return None;
+            }
+            let domain = self.domains.get(s).map_or(&[][..], Vec::as_slice);
+            forced += domain
+                .iter()
+                .filter(|t| {
+                    !self.used.contains(t)
+                        && partners
+                            .iter()
+                            .all(|p| target.edges.contains_key(&edge(**t, *p)))
+                })
+                .filter_map(|t| pair(s, *t))
+                .min()?;
+            count += 1;
+        }
+        rest.sort_unstable();
+        let free = (self.k - self.map.len()).saturating_sub(count);
+        Some(made + forced + rest.into_iter().take(free).sum::<u64>())
     }
     fn signature(map: &HashMap<usize, usize>) -> Vec<(usize, usize)> {
         let mut pairs: Vec<_> = map.iter().map(|(a, b)| (*a, *b)).collect();
@@ -511,20 +579,15 @@ impl Search<'_> {
             .iter()
             .filter(|&&(a, b)| self.target.heavy(*a, *b))
             .count() as u32;
-        // Pairs only add changes, so those made so far bound any completion.
-        upper.property_delta = self
-            .map
-            .iter()
-            .filter_map(|(a, b)| {
-                Some(delta(
-                    self.source.atoms.get(*a)?,
-                    self.target.atoms.get(*b)?,
-                ))
-            })
-            .sum();
         upper.heavy_adjacency += heavy_open.min(heavy_available);
         upper.adjacency += open.min(available.len() as u32);
         upper.unchanged_bonds += open.min(available.len() as u32);
+        if self.ties.is_none() {
+            let Some(changes) = self.least_changes(&upper, open as usize <= available.len()) else {
+                return;
+            };
+            upper.property_delta = changes;
+        }
         let upper = self.ranked(upper);
         // Costs are never negative, so the cost so far bounds any completion.
         let tied = if self.ties.is_some() {
@@ -695,10 +758,31 @@ fn run<'a>(
     incumbent.extend(maximum.into_iter().map(|(t, s)| (s, t)));
     let k = incumbent.len();
     charge(&mut work, budget, score_work(source, target, k))?;
+    let least = domains
+        .iter()
+        .zip(&source.atoms)
+        .map(|(domain, a)| {
+            domain
+                .iter()
+                .filter_map(|t| Some(delta(a, target.atoms.get(*t)?)))
+                .min()
+                .unwrap_or(0)
+        })
+        .collect();
+    let mut next = vec![Vec::new(); source.atoms.len()];
+    for &(a, b) in source.edges.keys() {
+        for (x, y) in [(a, b), (b, a)] {
+            if let Some(list) = next.get_mut(x) {
+                list.push(y);
+            }
+        }
+    }
     let mut search = Search {
         source,
         target,
         domains,
+        least,
+        next,
         k,
         map: seeds.clone(),
         used,
