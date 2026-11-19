@@ -688,7 +688,12 @@ impl App {
             .iter()
             .find(|g| self.tab.selected.contains(&g.id))
         {
+            // A condition icon's paper disc stays with the icon, not the next shape.
+            let fill = self.tab.graphic_style.fill;
             self.tab.graphic_style = g.style.clone();
+            if matches!(g.kind, GraphicKind::Symbol(kind) if kind.is_condition()) {
+                self.tab.graphic_style.fill = fill;
+            }
             self.tab.orbital_phase = g.phase;
             self.tab.phase_flipped = g.phase_flipped;
             self.tab.bracket_sides = g.sides;
@@ -771,6 +776,12 @@ impl App {
                 change,
                 GraphicChange::Pattern(reshiki::graphics::LinePattern::Wavy)
             ) && matches!(g.kind, GraphicKind::Symbol(_) | GraphicKind::Orbital(_))
+            {
+                continue;
+            }
+            // A condition icon keeps its disc when a fill is set for a selection.
+            if matches!(change, GraphicChange::Fill(_))
+                && matches!(g.kind, GraphicKind::Symbol(kind) if kind.is_condition())
             {
                 continue;
             }

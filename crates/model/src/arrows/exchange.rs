@@ -140,7 +140,11 @@ pub fn lowered(doc: &Document) -> Cow<'_, Document> {
     let mut removed = Vec::new();
     let mut bodies = Vec::new();
     for arrow in out.arrows.iter().filter(|a| a.shape_body()) {
-        let members = shapes(arrow.paths(), &mut next);
+        let mut members = shapes(arrow.paths(), &mut next);
+        // Under every front shape, as the arrow paints.
+        for member in &mut members {
+            member.layer = 0;
+        }
         let ids: Vec<u64> = members.iter().map(|g| g.id).collect();
         bodies.extend(members);
         removed.push(arrow.id);

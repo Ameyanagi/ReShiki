@@ -57,7 +57,7 @@ pub(super) fn graphic(f: &mut Frame<'_>, ink: Color, kind: reshiki::graphics::Gr
         GraphicKind::Symbol(_) => (World::new(12., 12.), World::new(28., 12.)),
         _ => (World::new(4., 5.), World::new(21., 20.)),
     };
-    let g = Graphic::dragged(
+    let mut g = Graphic::dragged(
         1,
         kind,
         start,
@@ -66,6 +66,8 @@ pub(super) fn graphic(f: &mut Frame<'_>, ink: Color, kind: reshiki::graphics::Gr
         BracketSides::Both,
         false,
     );
+    // An outline glyph: a condition icon's disc would draw as a ring.
+    g.style.fill = None;
     let path = Path::new(|b| {
         for c in g.commands() {
             match c {
