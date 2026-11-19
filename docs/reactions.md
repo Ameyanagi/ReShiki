@@ -294,8 +294,18 @@ highlighted, and an optional legend names each color.
 Each command is one Undo step. Bonds take the reactant's palette color, and
 labeled atoms such as O take it too. A new bond keeps its ink and gets a
 highlight; a new ring gets a ring fill. Broken and changed bonds get an amber
-highlight, or orange when new bonds are amber. The legend is one text: edit the
-names, and they stay when you update the colors.
+highlight, or orange when new bonds are amber. A new ring's fill is see-through,
+so the new bonds' highlight stays darker than it.
+
+The legend is one text. It starts below the reaction, or at the nearest free
+spot clear of other objects, and on the reaction's page when you use
+[Page setup](publication-pages.md); a legend wider than the page lists one
+entry per line. Edit the names: they stay when you update the colors or turn an
+entry on or off, and retyping the whole legend keeps each swatch's color.
+**Copy as → Reaction SMILES** does not need the legend in the selection.
+
+A molecule's SMILES, in **Properties** and in **Copy SMILES**, leaves out atom
+maps; reaction SMILES and RXN keep them.
 
 In a scheme with several steps, a product colored by one step keeps those
 colors as a reactant of the next step, so a fragment stays one color from

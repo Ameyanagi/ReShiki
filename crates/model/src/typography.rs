@@ -368,7 +368,14 @@ impl TextFormat {
     }
     /// Preserve spans across an editor replacement. The original range resolves
     /// ambiguous diffs such as replacing or deleting one of several equal letters.
-    pub fn edited(&mut self, old: &str, new: &str, replaced: Range<usize>) {
+    /// Returns the range of `new` that took an inherited style (the typed text)
+    /// and the offset in `old` of the character it took the style from.
+    pub fn edited(
+        &mut self,
+        old: &str,
+        new: &str,
+        replaced: Range<usize>,
+    ) -> (Range<usize>, usize) {
         if old != new {
             self.name_breaks = false;
         }
@@ -382,31 +389,49 @@ impl TextFormat {
                         .checked_add(suffix.len())
                         .is_some_and(|end| end <= new.len())
             });
-        let mut prefix = if exact {
-            replaced.start
-        } else {
-            old.chars()
-                .zip(new.chars())
-                .take_while(|(a, b)| a == b)
+        // The unchanged start and end of two texts, in bytes.
+        let kept = |a: &str, b: &str| -> (usize, usize) {
+            let head = a
+                .chars()
+                .zip(b.chars())
+                .take_while(|(x, y)| x == y)
                 .map(|(c, _)| c.len_utf8())
-                .sum::<usize>()
-        };
-        while !old.is_char_boundary(prefix) || !new.is_char_boundary(prefix) {
-            prefix -= 1;
-        }
-        let suffix = if exact {
-            old.len() - replaced.end
-        } else {
-            old.get(prefix..)
+                .sum::<usize>();
+            let tail = a
+                .get(head..)
                 .unwrap_or_default()
                 .chars()
                 .rev()
-                .zip(new.get(prefix..).unwrap_or_default().chars().rev())
-                .take_while(|(a, b)| a == b)
+                .zip(b.get(head..).unwrap_or_default().chars().rev())
+                .take_while(|(x, y)| x == y)
                 .map(|(c, _)| c.len_utf8())
-                .sum::<usize>()
+                .sum::<usize>();
+            (head, tail)
         };
-        let inherited = self.at(prefix.min(old.len().saturating_sub(1))).clone();
+        // Inside the replaced range, text that stays the same keeps its style:
+        // pasting a text over itself changes nothing.
+        let (prefix, suffix) = if exact {
+            let inserted = replaced.start..new.len() - (old.len() - replaced.end);
+            let (head, tail) = kept(
+                old.get(replaced.clone()).unwrap_or_default(),
+                new.get(inserted).unwrap_or_default(),
+            );
+            (replaced.start + head, old.len() - replaced.end + tail)
+        } else {
+            kept(old, new)
+        };
+        // New text takes the style of the replaced text it follows, never of
+        // text outside the selection.
+        let from = if exact && replaced.end > replaced.start {
+            prefix.min(replaced.end - 1)
+        } else {
+            prefix
+        };
+        let mut from = from.min(old.len().saturating_sub(1));
+        while !old.is_char_boundary(from) {
+            from -= 1;
+        }
+        let inherited = self.at(from).clone();
         let styles = new
             .char_indices()
             .map(|(i, _)| {
@@ -420,6 +445,7 @@ impl TextFormat {
             })
             .collect();
         self.pack(new, styles);
+        (prefix..new.len() - suffix, from)
     }
 }
 

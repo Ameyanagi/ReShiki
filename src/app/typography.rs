@@ -421,9 +421,25 @@ impl App {
             &self.tab.caption,
             action,
         ) {
-            self.tab
+            let typed = self
+                .tab
                 .caption_format
                 .edited(&self.tab.caption, &text, replaced);
+            let legend = self.tab.caption_target.is_some_and(|id| {
+                self.tab
+                    .doc
+                    .reactions
+                    .iter()
+                    .any(|r| r.colors.as_ref().and_then(|c| c.legend) == Some(id))
+            });
+            if legend {
+                reshiki::reaction_colors::untint_typed(
+                    &self.tab.caption,
+                    &text,
+                    &mut self.tab.caption_format,
+                    typed,
+                );
+            }
             self.tab.caption = text;
             self.auto_format_caption();
             if self.tab.inline_text.is_some() {

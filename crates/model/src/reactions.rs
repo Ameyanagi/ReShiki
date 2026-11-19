@@ -431,7 +431,18 @@ pub fn copy_reaction(
     }
     if let Some(reaction) = source.reactions.iter().find(|r| r.arrow == arrow.id) {
         let selected: HashSet<_> = snapshot.all_ids().into_iter().collect();
-        if !reaction.ready() || reaction.ids().iter().any(|id| !selected.contains(id)) {
+        // A color legend explains the paint; the reaction copies without it.
+        let legend = reaction
+            .colors
+            .as_ref()
+            .and_then(|c| c.legend)
+            .filter(|id| !selected.contains(id));
+        if !reaction.ready()
+            || reaction
+                .ids()
+                .iter()
+                .any(|id| Some(*id) != legend && !selected.contains(id))
+        {
             return Err("Select the complete defined reaction before copying.");
         }
         if Role::ALL
@@ -443,7 +454,14 @@ pub fn copy_reaction(
         {
             return Err("Select only the defined reaction, including all its participants.");
         }
-        return Ok(Some(reaction.clone()));
+        let mut reaction = reaction.clone();
+        if let Some(legend) = legend {
+            reaction.annotations.retain(|id| *id != legend);
+            if let Some(colors) = &mut reaction.colors {
+                colors.legend = None;
+            }
+        }
+        return Ok(Some(reaction));
     }
     let style = arrow.appearance();
     if arrow.kind != "forward"

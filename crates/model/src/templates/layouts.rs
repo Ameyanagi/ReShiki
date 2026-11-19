@@ -146,7 +146,7 @@ fn template(
 
 pub(super) fn templates() -> Result<Vec<Template>, String> {
     let r = crate::style::DEFAULT.bond_length_world;
-    let note = "Placeholder rings: draw over them or replace them. Option-click edits one object inside the panel.";
+    let note = "The rings and arrows are illustrations, so they never form a reaction. Replace them with your structures. Option-click edits one object inside the panel.";
 
     let mut toc = Document::default();
     let row = scheme(&mut toc, Point::default(), 2);
@@ -265,6 +265,10 @@ pub(super) fn templates() -> Result<Vec<Template>, String> {
     documents
         .into_iter()
         .map(|(name, keywords, rings, mut document)| {
+            // Placeholders are pictures: a ring → arrow → ring row must never
+            // read as a reaction, nor join one drawn over it.
+            let ids = document.all_ids();
+            crate::purpose::set(&mut document, &ids, crate::purpose::Purpose::Illustration);
             document.require_version(crate::document::DRAWING_ELEMENTS);
             document.validate()?;
             Ok(template(name, keywords, note, rings, document))

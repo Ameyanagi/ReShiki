@@ -414,3 +414,34 @@ fn generated_names_wrap_only_at_chemical_punctuation() {
     edited.edited(name, "My sample", 0..name.len());
     assert!(!edited.name_breaks);
 }
+
+#[test]
+fn replacing_text_keeps_the_style_of_what_stays_the_same() {
+    use super::{StyleChange, TextFormat};
+    use crate::palette::{Color, Hue, Row};
+    let text = "■ A   ■ B";
+    let mut format = TextFormat::default();
+    let blue = Color::Palette(Hue::Blue, Row::Strong);
+    format.apply(text, Some(0..'■'.len_utf8()), &StyleChange::Color(blue));
+    // Pasting the same text over all of it changes nothing.
+    let before = format.clone();
+    format.edited(text, text, 0..text.len());
+    assert_eq!(format, before);
+    // Retyping all of it keeps the unchanged start and end; new text takes
+    // the style of the first character it replaces.
+    let retyped = "■ C   ■ B";
+    format.edited(text, retyped, 0..text.len());
+    assert_eq!(format.at(0).color, blue);
+    assert_eq!(format.at('■'.len_utf8() + 1).color, Color::Ink);
+
+    // Never the style of text outside the selection: CO₂ with "CO" → "COO".
+    let mut formula = TextFormat::default();
+    formula.apply(
+        "CO2",
+        Some(2..3),
+        &StyleChange::Script(super::Script::Subscript),
+    );
+    formula.edited("CO2", "COO2", 0..2);
+    assert_eq!(formula.at(2), formula.at(0));
+    assert_ne!(formula.at(3), formula.at(0));
+}

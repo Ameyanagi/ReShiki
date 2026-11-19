@@ -7,6 +7,7 @@ use crate::palette::{Color, Hue, Row};
 use crate::reactions::{Reaction, Role};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
+use std::ops::Range;
 
 #[cfg(test)]
 mod tests;
@@ -477,6 +478,12 @@ pub fn paint(doc: &mut Document, arrow: u64) -> Result<(), Refusal> {
                     &ring,
                     Some(Color::Palette(colors.formed, Row::Tint)),
                 );
+                // At half strength, so the new bonds' full tint stands out.
+                if let Some(fill) = doc.ring_fills.iter_mut().find(|f| {
+                    f.atoms.len() == ring.len() && f.atoms.iter().all(|a| ring.contains(a))
+                }) {
+                    fill.effect = crate::ring_fills::RingEffect::SeeThrough;
+                }
             }
         }
     }
@@ -554,13 +561,51 @@ fn legend(doc: &mut Document, id: u64, entries: &[(char, Color, String)]) {
     let same =
         glyphs.len() == entries.len() && glyphs.iter().zip(entries).all(|((_, g), (e, ..))| g == e);
     if !same {
+        // An entry that stays keeps the name you gave it: its swatch keeps
+        // its glyph and color while another entry comes or goes.
+        let names: Vec<_> = glyphs
+            .iter()
+            .enumerate()
+            .map(|(k, &(i, glyph))| {
+                let start = i + glyph.len_utf8();
+                let end = glyphs.get(k + 1).map_or(text.text.len(), |(j, _)| *j);
+                let name = text.text.get(start..end).unwrap_or_default().trim();
+                ((glyph, text.format.at(i).color), name.to_owned())
+            })
+            .collect();
+        // A legend listed one entry per line stays so.
+        let separator = if text.text.contains('\n') {
+            "  \n"
+        } else {
+            "   "
+        };
+        // Each old name goes to one entry: first an entry it still names
+        // as generated, then, in order, one whose swatch matches.
+        let mut names: Vec<_> = names.into_iter().map(Some).collect();
+        let mut take = |entry: &(char, Color, String), exact: bool| {
+            names
+                .iter_mut()
+                .find(|old| {
+                    old.as_ref().is_some_and(|(key, name)| {
+                        *key == (entry.0, entry.1) && (!exact || *name == entry.2)
+                    })
+                })
+                .and_then(Option::take)
+                .map(|(_, name)| name)
+        };
+        let exact: Vec<_> = entries.iter().map(|e| take(e, true)).collect();
         text.text = entries
             .iter()
-            .map(|(glyph, _, name)| format!("{glyph} {name}"))
+            .zip(exact)
+            .map(|(entry, kept)| {
+                let name = kept.or_else(|| take(entry, false));
+                format!("{} {}", entry.0, name.as_deref().unwrap_or(&entry.2))
+            })
             .collect::<Vec<_>>()
-            .join("   ");
+            .join(separator);
         text.format.spans.clear();
     }
+    let rebuilt = !same;
     let starts: Vec<_> = text
         .text
         .char_indices()
@@ -572,9 +617,93 @@ fn legend(doc: &mut Document, id: u64, entries: &[(char, Color, String)]) {
         let change = crate::typography::StyleChange::Color(*color);
         text.format.apply(&text.text, Some(start..end), &change);
     }
+    // A legend that gained an entry may now run past its page.
+    if rebuilt
+        && let Some((l, _)) = crate::scene::selection_bounds(doc, &[id])
+        && let Some(page) = page_at(doc, l)
+    {
+        fit(doc, id, page);
+    }
 }
 
-/// Show or hide the legend below `arrow`'s reaction, in caption `format`.
+/// Text typed into a legend never takes a swatch's color: when the typed
+/// text inherited its style from a swatch of `old`, it gets the caption color.
+/// Called as you type, so colors you give names, before or after, stay.
+pub fn untint_typed(
+    old: &str,
+    text: &str,
+    format: &mut crate::typography::TextFormat,
+    (typed, from): (Range<usize>, usize),
+) {
+    let glyph = |c: char| c == SWATCH || c == RING;
+    if !old
+        .get(from..)
+        .and_then(|s| s.chars().next())
+        .is_some_and(glyph)
+    {
+        return;
+    }
+    let base = format.style.color;
+    let styles = text
+        .char_indices()
+        .map(|(i, c)| {
+            let mut style = format.at(i).clone();
+            if typed.contains(&i) && !glyph(c) {
+                style.color = base;
+            }
+            style
+        })
+        .collect();
+    format.pack(text, styles);
+}
+
+/// Keep each legend's swatch colors through a text edit: retyped text takes
+/// the style of the text it replaces, so a retyped swatch would lose its
+/// color. Names keep whatever style the edit gave them.
+pub(crate) fn reconcile(doc: &mut Document, before: &Document) {
+    let legends: Vec<u64> = doc
+        .reactions
+        .iter()
+        .filter_map(|r| r.colors.as_ref()?.legend)
+        .collect();
+    let glyph = |c: char| c == SWATCH || c == RING;
+    for id in legends {
+        let (Some(old), Some(new)) = (
+            before.annotations.iter().find(|a| a.id == id),
+            doc.annotations.iter_mut().find(|a| a.id == id),
+        ) else {
+            continue;
+        };
+        if old.text == new.text {
+            continue;
+        }
+        let swatches: Vec<Color> = old
+            .text
+            .char_indices()
+            .filter(|(_, c)| glyph(*c))
+            .map(|(i, _)| old.format.at(i).color)
+            .collect();
+        let kinds = |text: &str| text.chars().filter(|c| glyph(*c)).collect::<Vec<_>>();
+        // Swatches keep their colors in order while the entries stay the same.
+        let mut order = (kinds(&old.text) == kinds(&new.text)).then(|| swatches.iter());
+        let styles = new
+            .text
+            .char_indices()
+            .map(|(i, c)| {
+                let mut style = new.format.at(i).clone();
+                if glyph(c)
+                    && let Some(color) = order.as_mut().and_then(Iterator::next)
+                {
+                    style.color = *color;
+                }
+                style
+            })
+            .collect();
+        new.format.pack(&new.text, styles);
+    }
+}
+
+/// Show or hide the legend of `arrow`'s reaction, in caption `format`.
 pub fn set_legend(
     doc: &mut Document,
     arrow: u64,
@@ -599,10 +728,9 @@ pub fn set_legend(
         }
         (None, true) => {
             let id = doc.next_id();
-            let at = legend_position(doc, arrow);
             doc.annotations.push(Annotation {
                 id,
-                position: at,
+                position: Point::default(),
                 text: String::new(),
                 format,
             });
@@ -610,35 +738,186 @@ pub fn set_legend(
                 reaction.annotations.push(id);
                 reaction.colors.get_or_insert_with(Colors::new).legend = Some(id);
             }
-            paint(doc, arrow)
+            paint(doc, arrow)?;
+            place(doc, arrow, id);
+            Ok(())
         }
         _ => Ok(()),
     }
 }
 
-/// Below the reaction's molecules and arrow, left aligned.
-fn legend_position(doc: &Document, arrow: u64) -> Point {
+/// Put a new legend near its reaction, clear of everything else and inside
+/// the page the reaction is on: below the reaction, left aligned, when that
+/// is free, otherwise at the nearest free spot. A legend wider than its page
+/// lists its entries one per line.
+fn place(doc: &mut Document, arrow: u64, legend: u64) {
     let Some(reaction) = doc.reactions.iter().find(|r| r.arrow == arrow) else {
-        return Point::default();
+        return;
     };
-    let mut points: Vec<Point> = Role::ALL
+    let own: Vec<u64> = reaction
+        .ids()
         .into_iter()
-        .flat_map(|role| reaction.participants(role))
-        .flat_map(|p| p.atoms.iter())
-        .filter_map(|id| doc.atom(*id).map(|a| a.position))
+        .filter(|id| *id != legend)
         .collect();
-    points.extend(
-        doc.arrows
-            .iter()
-            .filter(|a| a.id == arrow)
-            .flat_map(|a| [a.start, a.end]),
-    );
-    let left = points.iter().map(|p| p.x).fold(f32::INFINITY, f32::min);
-    let bottom = points.iter().map(|p| p.y).fold(f32::NEG_INFINITY, f32::max);
-    if !left.is_finite() || !bottom.is_finite() {
-        return Point::default();
+    let Some((lo, hi)) = crate::scene::selection_bounds(doc, &own) else {
+        return;
+    };
+    let gap = doc.drawing_style.bond_length_world * 0.5;
+    // The reaction's page is the one its arrow is on.
+    let middle = doc
+        .arrows
+        .iter()
+        .find(|a| a.id == arrow)
+        .map_or(Point::new((lo.x + hi.x) / 2., (lo.y + hi.y) / 2.), |a| {
+            Point::new((a.start.x + a.end.x) / 2., (a.start.y + a.end.y) / 2.)
+        });
+    let page = page_at(doc, middle);
+    if let Some(page) = page {
+        fit(doc, legend, page);
     }
-    Point::new(left, bottom + doc.drawing_style.bond_length_world * 1.2)
+    let Some((l, h)) = crate::scene::selection_bounds(doc, &[legend]) else {
+        return;
+    };
+    let (w, height) = (h.x - l.x, h.y - l.y);
+    // Everything else, a molecule at a time; shapes come last.
+    let mut objects: Vec<Vec<u64>> =
+        crate::reactions::molecules(doc, &doc.atoms.iter().map(|a| a.id).collect::<Vec<_>>());
+    objects.extend(
+        doc.annotations
+            .iter()
+            .map(|a| a.id)
+            .chain(doc.arrows.iter().map(|a| a.id))
+            .filter(|id| *id != legend)
+            .map(|id| vec![id]),
+    );
+    let shapes = objects.len();
+    objects.extend(doc.graphics.iter().map(|g| vec![g.id]));
+    let below = Point::new(lo.x, hi.y + gap);
+    let (from, to) = page.unwrap_or((
+        Point::new(lo.x - w, lo.y - 4. * height),
+        Point::new(hi.x + w, hi.y + 4. * height),
+    ));
+    // Only objects in reach of a spot the legend may take.
+    // A panel's title band, titles and dividers are obstacles of their own.
+    let text = doc.drawing_style.text_style();
+    let mut panel_marks = Vec::new();
+    for g in doc.graphics.iter().filter(|g| g.panel.is_some()) {
+        for part in g.panel_parts(&text) {
+            let mut points = Vec::new();
+            for command in &part.commands {
+                command.map(|p| {
+                    points.push(p);
+                    p
+                });
+            }
+            if let Some(first) = points.first() {
+                let fold = points.iter().fold((*first, *first), |(lo, hi), p| {
+                    (
+                        Point::new(lo.x.min(p.x), lo.y.min(p.y)),
+                        Point::new(hi.x.max(p.x), hi.y.max(p.y)),
+                    )
+                });
+                panel_marks.push((fold, false));
+            }
+        }
+        for label in g.panel_titles(&text) {
+            panel_marks.extend(label.ink_boxes().into_iter().map(|b| (b, false)));
+        }
+    }
+    let boxes: Vec<_> = crate::scene::selections_bounds(doc, &objects)
+        .into_iter()
+        .enumerate()
+        .filter_map(|(i, b)| Some((b?, i >= shapes)))
+        .chain(panel_marks)
+        .filter(|((p, q), _)| {
+            q.x >= from.x.min(below.x)
+                && p.x <= to.x.max(below.x + w)
+                && q.y >= from.y.min(below.y)
+                && p.y <= to.y.max(below.y + height)
+        })
+        .collect();
+    // An object crosses the legend unless it lies clear of it, or is a
+    // shape that holds it whole, as a page background or a panel does.
+    let hits = |at: Point| {
+        let (a, b) = (at, at.offset(w, height));
+        boxes
+            .iter()
+            .filter(|((p, q), shape)| {
+                let apart = q.x < a.x || p.x > b.x || q.y < a.y || p.y > b.y;
+                let holds = p.x <= a.x && p.y <= a.y && q.x >= b.x && q.y >= b.y;
+                !apart && !(*shape && holds)
+            })
+            .count()
+    };
+    let inside = |at: Point| {
+        page.is_none_or(|(a, b)| {
+            at.x >= a.x && at.y >= a.y && at.x + w <= b.x && at.y + height <= b.y
+        })
+    };
+    // At most 200 steps across the region, however large the page.
+    let step = (height / 2.)
+        .max(gap / 4.)
+        .max((to.x - from.x).max(to.y - from.y) / 200.);
+    let columns = ((to.x - from.x) / step).max(0.) as usize;
+    let rows = ((to.y - from.y) / step).max(0.) as usize;
+    let grid = (0..=rows)
+        .flat_map(|r| (0..=columns).map(move |c| from.offset(c as f32 * step, r as f32 * step)));
+    let best = if inside(below) && hits(below) == 0 {
+        below
+    } else {
+        std::iter::once(below)
+            .chain(grid)
+            .map(|at| {
+                let rank = (!inside(at), hits(at));
+                (rank, (at.x - below.x).hypot(at.y - below.y), at)
+            })
+            .min_by(|a, b| a.0.cmp(&b.0).then(a.1.total_cmp(&b.1)))
+            .map_or(below, |(_, _, at)| at)
+    };
+    if let Some(text) = doc.annotations.iter_mut().find(|t| t.id == legend) {
+        text.position = text.position.offset(best.x - l.x, best.y - l.y);
+    }
+}
+
+/// Keep a legend on `page`: one entry per line when it is wider than the
+/// page, and moved back inside when it runs past an edge.
+fn fit(doc: &mut Document, legend: u64, (a, b): (Point, Point)) {
+    let ink = |doc: &Document| crate::scene::selection_bounds(doc, &[legend]);
+    if let Some((l, h)) = ink(doc)
+        && h.x - l.x > b.x - a.x
+        && let Some(text) = doc.annotations.iter_mut().find(|t| t.id == legend)
+    {
+        // Break before each later swatch, in place of the separator's last
+        // space: the same length, so the swatch colors stay on their glyphs.
+        let breaks: Vec<usize> = text
+            .text
+            .char_indices()
+            .filter(|(i, c)| {
+                (*c == SWATCH || *c == RING)
+                    && text.text.get(..*i).is_some_and(|s| s.ends_with("   "))
+            })
+            .map(|(i, _)| i - 1)
+            .collect();
+        for i in breaks {
+            text.text.replace_range(i..i + 1, "\n");
+        }
+    }
+    if let Some((l, h)) = ink(doc)
+        && let Some(text) = doc.annotations.iter_mut().find(|t| t.id == legend)
+    {
+        let shift = |lo: f32, hi: f32, min: f32, max: f32| (max - hi).min(0.).max(min - lo);
+        text.position = text
+            .position
+            .offset(shift(l.x, h.x, a.x, b.x), shift(l.y, h.y, a.y, b.y));
+    }
+}
+
+/// The page that holds `at`, if the drawing has pages.
+fn page_at(doc: &Document, at: Point) -> Option<(Point, Point)> {
+    let layout = doc.page_layout.as_ref()?;
+    (0..layout.count())
+        .filter_map(|i| layout.bounds(i))
+        .find(|(a, b)| (a.x..=b.x).contains(&at.x) && (a.y..=b.y).contains(&at.y))
 }
 
 /// Remove the paint of `arrow`'s reaction and its chain, keeping settings.

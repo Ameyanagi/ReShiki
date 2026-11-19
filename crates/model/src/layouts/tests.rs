@@ -226,6 +226,18 @@ fn figure_layout_templates_place_with_their_panels_and_layouts() {
             !crate::palette::any_color(&placed, |c| matches!(c, crate::palette::Color::Custom(_))),
             "{name}"
         );
+        // The placeholder rings and arrows are illustrations: no reaction.
+        assert!(
+            placed.atoms.iter().all(|a| !a.purpose.is_chemical())
+                && placed.arrows.iter().all(|a| !a.purpose.is_chemical()),
+            "{name}"
+        );
+        let all = crate::editing::selection(&placed, &placed.all_ids());
+        assert_eq!(
+            crate::reactions::copy_reaction(&placed, &all),
+            Ok(None),
+            "{name}"
+        );
     }
 }
 
