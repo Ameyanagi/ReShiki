@@ -493,6 +493,19 @@ fn paint(plan: &[PlanPath], owners: &[&Graphic], theme: CanvasTheme) -> Vec<Prim
         .collect()
 }
 
+/// Two groups that share members while neither holds the other.
+fn overlapping(groups: &[crate::grouping::Group]) -> Option<(usize, usize)> {
+    groups.iter().enumerate().find_map(|(i, a)| {
+        let j = (groups.iter().enumerate().skip(i + 1)).find(|(_, b)| {
+            let within = |x: &[u64], y: &[u64]| x.iter().all(|m| y.contains(m));
+            a.members.iter().any(|m| b.members.contains(m))
+                && !within(&a.members, &b.members)
+                && !within(&b.members, &a.members)
+        })?;
+        Some((i, j.0))
+    })
+}
+
 /// The drawing as ChemDraw can keep it: each piece, or each assembly as a
 /// whole, becomes a group of filled and stroked curves in paint order, in
 /// the colours the canvas shows.
@@ -578,6 +591,18 @@ pub fn materialized(doc: &Document) -> std::borrow::Cow<'_, Document> {
             layout: None,
         });
         next += 1;
+    }
+    // Two groups that each held a piece of one assembly now share its
+    // curves: merge them, so groups stay nested or apart as ChemDraw needs.
+    while let Some((a, b)) = overlapping(&out.groups) {
+        let merged = out.groups.remove(b);
+        if let Some(into) = out.groups.get_mut(a) {
+            for m in merged.members {
+                if !into.members.contains(&m) {
+                    into.members.push(m);
+                }
+            }
+        }
     }
     out.prune_groups();
     std::borrow::Cow::Owned(out)

@@ -90,3 +90,54 @@ fn a_clamped_flask_exports_as_one_group_with_the_fingers_around_the_neck() {
     assert!(fills.iter().position(|f| *f == metal).unwrap() < first_glass);
     assert!(fills.iter().rposition(|f| *f == metal).unwrap() > last_glass);
 }
+
+#[test]
+fn pieces_grouped_apart_then_seated_export_as_one_nested_group() {
+    use crate::equipment::solve;
+    use crate::graphics::{Graphic, GraphicKind, GraphicStyle};
+    let mut document = Document::default();
+    let scale = placed::world_per_mm(&document, placed::DEFAULT_PT_PER_MM);
+    for (id, piece, at) in [
+        (1, "reshiki/rbf-100-15", Point::new(100., 100.)),
+        (2, "reshiki/stopper-15", Point::new(300., 0.)),
+    ] {
+        let d = builtin::find(piece).unwrap();
+        document.graphics.push(placed::graphic(id, d, at, scale));
+    }
+    for (id, at) in [(3, Point::new(-100., 0.)), (4, Point::new(500., 0.))] {
+        let far = Point::new(at.x + 20., at.y + 20.);
+        let style = GraphicStyle::default();
+        let g = Graphic::dragged(
+            id,
+            GraphicKind::Rectangle,
+            at,
+            far,
+            style,
+            Default::default(),
+            false,
+        );
+        document.graphics.push(g);
+    }
+    for (id, members) in [(5, vec![1, 3]), (6, vec![2, 4])] {
+        document.groups.push(crate::grouping::Group {
+            id,
+            members,
+            integral: false,
+            layout: None,
+        });
+    }
+    let (s, m, _) = solve::options(&document, &[2]).remove(0);
+    solve::connect(&mut document, &[2], &s.at, &m.at).unwrap();
+    let request = Request::molecule("export", document.clone());
+    let xml = write(&document, (&request).into()).unwrap();
+    let imported = cdxml::import_cdxml(&xml).unwrap().document;
+    // Both rectangles stay grouped with the assembly's curves.
+    assert!(
+        imported
+            .groups
+            .iter()
+            .any(|g| g.members.len() == imported.graphics.len()),
+        "{:?}",
+        imported.groups
+    );
+}

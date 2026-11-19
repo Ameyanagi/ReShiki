@@ -233,12 +233,23 @@ fn add_clips_puts_one_on_each_joint_and_it_follows_its_seat_until_released() {
     let all = solve::closure(&doc, &[condenser]);
     assert!(all.contains(&clip));
     assert!(doc.expand_groups(&[clip]).contains(&flask));
-    // Moving only the two pieces brings the clip along to the new mouth.
+    // Moving and turning only the two pieces brings the clip along.
     let before = doc.clone();
     doc.translate(&[flask, condenser], 50., 20.);
+    crate::editing::transform_about(
+        &mut doc,
+        &[flask, condenser],
+        Point::new(300., 300.),
+        1.,
+        90.,
+    );
     commit(&mut doc, before);
     assert!(on_mouth(&doc));
-    assert_eq!(graphic(&doc, clip).axis_x, graphic(&doc, flask).axis_x);
+    let (c, f) = (graphic(&doc, clip), graphic(&doc, flask));
+    for (a, b) in [(c.axis_x, f.axis_x), (c.axis_y, f.axis_y)] {
+        assert!(a.distance(b) < 1e-4, "{a:?} {b:?}");
+    }
+    assert!(f.axis_x.y.abs() > 0.5, "the flask turned");
     let back = Document::from_json(&doc.file_json().unwrap()).unwrap();
     assert_eq!(back.seats[0].clip, Some(clip));
     // Copying the assembly copies its clip with it.
@@ -309,8 +320,11 @@ fn a_clamp_slid_along_the_rod_brings_a_loose_flask_to_it_and_two_stands_never_jo
     let rod2 = port(&doc, other, "rod");
     bring(&mut doc, held, "boss", along(&rod2, 0.5), (0., 0.));
     solve::snap(&mut doc, &[held], 14., false).unwrap();
+    let condenser = add(&mut doc, "reshiki/liebig-15", Point::new(300., -200.));
+    let (s, m, _) = solve::options(&doc, &[condenser]).remove(0);
+    solve::connect(&mut doc, &[condenser], &s.at, &m.at).unwrap();
     let seats = doc.seats.len();
-    let to = along(&port(&doc, flask, "neck-neck"), 0.5);
+    let to = along(&port(&doc, condenser, "jacket"), 0.5);
     bring(&mut doc, held, "jaw", to, (2., 0.));
     let both = solve::closure(&doc, &[other]);
     let other_at = graphic(&doc, other).origin;
@@ -321,7 +335,7 @@ fn a_clamp_slid_along_the_rod_brings_a_loose_flask_to_it_and_two_stands_never_jo
 
 #[test]
 fn a_bad_clip_reference_deletes_nothing_and_a_clip_copied_alone_stays_a_clip() {
-    let (mut doc, flask, condenser) = reflux();
+    let (mut doc, flask, _) = reflux();
     let ids = solve::closure(&doc, &[flask]);
     solve::add_clips(&mut doc, &ids);
     let clip = doc.seats[0].clip.unwrap();
@@ -329,16 +343,21 @@ fn a_bad_clip_reference_deletes_nothing_and_a_clip_copied_alone_stays_a_clip() {
     let part = crate::editing::selection(&doc, &[clip]);
     assert_eq!(part.graphics.len(), 1);
     assert!(part.seats.is_empty());
-    // A seat that names another graphic as its clip and no longer fits
-    // takes only its seat when it goes.
+    // A seat that no longer fits takes with it only a clip of its size.
     let flask_too = add(&mut doc, "reshiki/rbf-100-15", Point::new(900., 900.));
-    let mut json: serde_json::Value = serde_json::from_slice(&doc.file_json().unwrap()).unwrap();
-    json["seats"][0]["clip"] = serde_json::json!(flask_too);
-    json["seats"][0]["a"]["joint"] = serde_json::json!("nowhere");
-    let back = Document::from_json(json.to_string().as_bytes()).unwrap();
-    assert!(back.seats.is_empty());
-    assert!(back.graphics.iter().any(|g| g.id == flask_too));
-    assert!(back.graphics.iter().any(|g| g.id == condenser));
+    let small = add(&mut doc, "reshiki/keck-clip-15", Point::new(900., 0.));
+    let file: serde_json::Value = serde_json::from_slice(&doc.file_json().unwrap()).unwrap();
+    let reopen = |named: u64| {
+        let mut json = file.clone();
+        json["seats"][0]["clip"] = serde_json::json!(named);
+        json["seats"][0]["a"]["joint"] = serde_json::json!("nowhere");
+        let back = Document::from_json(json.to_string().as_bytes()).unwrap();
+        assert!(back.seats.is_empty());
+        back.graphics.iter().any(|g| g.id == named)
+    };
+    assert!(reopen(flask_too));
+    assert!(reopen(small));
+    assert!(!reopen(clip));
 }
 
 #[test]
@@ -362,4 +381,45 @@ fn a_loose_clip_put_on_a_joint_joins_its_assembly_layer_and_place() {
     commit(&mut doc, before);
     assert!(doc.graphics.iter().all(|g| g.layer == 3));
     assert_eq!(doc.graphics.last().unwrap().id, early);
+}
+
+#[test]
+fn two_stands_are_never_offered_to_each_other_or_joined_by_a_group() {
+    // Stand A with an empty clamp; stand B with a clamp on a condenser's jacket.
+    let mut doc = Document::default();
+    let a = add(&mut doc, "reshiki/stand", Point::new(0., 0.));
+    let clamp_a = add(&mut doc, "reshiki/clamp-3finger", Point::new(300., 0.));
+    let b = add(&mut doc, "reshiki/stand", Point::new(-800., 0.));
+    let clamp_b = add(&mut doc, "reshiki/clamp-3finger", Point::new(-500., 0.));
+    let condenser = add(&mut doc, "reshiki/liebig-15", Point::new(-300., 0.));
+    for (clamp, stand) in [(clamp_a, a), (clamp_b, b)] {
+        let rod = along(&port(&doc, stand, "rod"), 0.5);
+        bring(&mut doc, clamp, "boss", rod, (0., 0.));
+        solve::snap(&mut doc, &[clamp], 14., false).unwrap();
+    }
+    let jaw = along(&port(&doc, clamp_b, "jaw"), 0.5);
+    bring(&mut doc, condenser, "jacket", jaw, (0., 0.));
+    solve::snap(&mut doc, &[condenser], 14., false).unwrap();
+    assert_eq!(doc.seats.len(), 3);
+    let side_a = solve::closure(&doc, &[a]);
+    assert!(
+        solve::options(&doc, &side_a)
+            .iter()
+            .all(|(s, ..)| s.at.piece != condenser)
+    );
+    // A loose flask grouped with stand A does not come to clamp A, since
+    // the group would bring the stand along.
+    let flask = add(&mut doc, "reshiki/rbf-100-15", Point::new(900., 0.));
+    doc.groups.push(crate::grouping::Group {
+        id: doc.next_id(),
+        members: vec![a, flask],
+        integral: false,
+        layout: None,
+    });
+    let jaw = along(&port(&doc, clamp_a, "jaw"), 0.5);
+    bring(&mut doc, flask, "neck-grip", jaw, (6., 0.));
+    let a_at = graphic(&doc, a).origin;
+    let held = solve::carried(&doc, &[clamp_a], &[clamp_a]);
+    assert!(solve::snap(&mut doc, &held, 14., false).is_none());
+    assert_eq!(graphic(&doc, a).origin, a_at);
 }

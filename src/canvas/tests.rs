@@ -3829,8 +3829,12 @@ fn dragging_a_clamped_flask_slides_it_along_the_rod_and_leaves_the_stand() -> Re
     let mut canvas = chain_canvas(&doc, ChainMode::Straight);
     canvas.tool = Tool::Select;
     let bounds = Rectangle::with_size(iced::Size::new(1200., 1200.));
+    // Press on the bulb, well away from the clamp.
     let flask = doc.graphics.iter().find(|g| g.id == 3).ok_or("flask")?;
-    let start = canvas.camera.screen(placed::middle(flask), bounds);
+    let (lo, hi) = flask.shape_bounds();
+    let bulb = World::new((lo.x + hi.x) / 2., lo.y + 0.75 * (hi.y - lo.y));
+    assert_eq!(super::hit::hit_object(&doc, bulb, 10.), Some(3));
+    let start = canvas.camera.screen(bulb, bounds);
     let mut state = State::default();
     canvas.update(
         &mut state,

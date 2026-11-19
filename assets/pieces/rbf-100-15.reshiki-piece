@@ -67,19 +67,6 @@
  ],
  "holds": [
   {
-   "id": "neck-neck",
-   "kind": "grip",
-   "from": [
-    0,
-    -38.794
-   ],
-   "to": [
-    0,
-    -36.794
-   ],
-   "diameter_mm": 13
-  },
-  {
    "id": "neck-grip",
    "kind": "grip",
    "from": [

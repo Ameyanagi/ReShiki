@@ -206,7 +206,7 @@
    "material": "metal",
    "role": "solid",
    "path": "M-24.6 -10.3A24.6 6.59 0 0 1 24.6 -7.5L24.6 -4.7A21.1 5.09 0 0 0 -21.1 -4.7Z",
-   "part": "fingers",
+   "part": "fingers-open",
    "when": {
     "jaw": [
      "open"
@@ -232,7 +232,7 @@
    "material": "metal",
    "role": "solid",
    "path": "M-24.6 4.7A24.6 6.59 0 0 1 24.6 7.5L24.6 10.3A21.1 5.09 0 0 0 -21.1 10.3Z",
-   "part": "fingers",
+   "part": "fingers-open",
    "when": {
     "jaw": [
      "open"
@@ -258,7 +258,7 @@
    "material": "metal",
    "role": "solid",
    "path": "M-24.6 -3A24.6 7.59 0 0 0 24.6 -3L25.6 3A22.1 6.59 0 0 1 -22.1 3Z",
-   "part": "fingers",
+   "part": "fingers-open",
    "when": {
     "jaw": [
      "open"
@@ -444,6 +444,24 @@
       0
      ],
      "per_unit": 0.028409
+    }
+   }
+  },
+  {
+   "id": "fingers-open",
+   "parent": "head",
+   "param": "grip",
+   "motion": {
+    "stretch": {
+     "pivot": [
+      0,
+      0
+     ],
+     "axis": [
+      1,
+      0
+     ],
+     "per_unit": 0.020325
     }
    }
   },

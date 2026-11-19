@@ -184,7 +184,12 @@ pub fn ports(g: &Graphic) -> Vec<Port> {
         let (from, to) = (t.apply(h.from), t.apply(h.to));
         let length = len(sub(to, from));
         // A part's motion can squash a hold to nothing; it holds nothing then.
-        (length.is_finite() && length > 0.).then(|| Port {
+        let d = sub(to, from);
+        (length.is_finite()
+            && length > 0.
+            && (d[0] / length).is_finite()
+            && (d[1] / length).is_finite())
+        .then(|| Port {
             at: at(&h.hold.id),
             kind: Kind::Hold(h.hold.kind, h.hold.diameter_mm.range()),
             gender: if h.hold.kind.held() {
@@ -193,7 +198,7 @@ pub fn ports(g: &Graphic) -> Vec<Port> {
                 Gender::M
             },
             point: from,
-            dir: normalize(sub(to, from)),
+            dir: [d[0] / length, d[1] / length],
             mm: t.scale_factor(),
             length,
         })
@@ -322,7 +327,7 @@ pub fn check(doc: &mut Document, before: Option<&Document>) {
             taken.extend([seat.a.clone(), seat.b.clone()]);
             doc.seats.push(seat);
         } else {
-            dropped.extend(seat.clip);
+            dropped.extend(seat.clip.filter(|c| owns(doc, &seat, *c)));
         }
     }
     clips(doc, &dropped);
@@ -359,6 +364,19 @@ fn clip_frame(doc: &Document, seat: &Seat) -> Option<(String, [Point; 3])> {
     let y = mul(normalize(f.dir), -f.mm);
     let p = |v: [f64; 2]| Point::new(v[0] as f32, v[1] as f32);
     Some((size.clone(), [p(f.point), p([y[1], -y[0]]), p(y)]))
+}
+
+/// The clip `c` is a clip of the size of the seat's joints, so it goes with it.
+fn owns(doc: &Document, seat: &Seat, c: u64) -> bool {
+    let size = [&seat.a, &seat.b]
+        .into_iter()
+        .filter_map(|j| port(doc, j))
+        .find_map(|p| match p.kind {
+            Kind::Taper(size) => Some(size),
+            _ => None,
+        });
+    let clip = doc.graphics.iter().find(|g| g.id == c).and_then(clip_size);
+    size.is_some_and(|s| clip == Some(s.as_str()))
 }
 
 fn clip_size(g: &Graphic) -> Option<&str> {
@@ -779,8 +797,15 @@ fn seat(doc: &mut Document, moving: &[u64], s: &Port, m: &Port, offer: &Offer) -
         .collect();
     let outer = free(doc, &moved, false);
     let taken = |doc: &Document, p: &Port| !p.shared() && doc.seats.iter().any(|s| s.holds(&p.at));
+    // Two stands never become one assembly.
+    let apart = |doc: &Document, a: &Port, b: &Port| {
+        let (x, y) = (assembly(doc, a.at.piece), assembly(doc, b.at.piece));
+        !x.contains(&b.at.piece) && fixed(doc, &x) && fixed(doc, &y)
+    };
     for a in &inner {
-        if let Some(b) = outer.iter().find(|b| fits(a, b) && !taken(doc, b))
+        if let Some(b) = outer
+            .iter()
+            .find(|b| fits(a, b) && !taken(doc, b) && !apart(doc, a, b))
             && !taken(doc, a)
         {
             doc.seats.push(Seat::new(b.at.clone(), a.at.clone()));
@@ -826,13 +851,18 @@ fn ground_lock(
     if !held && !ids.iter().any(|id| grounded(doc, *id)) {
         return Some((ids.to_vec(), s, m));
     }
-    if fixed.iter().any(|id| grounded(doc, *id)) {
+    if self::fixed(doc, &fixed) || !scalable(doc, &fixed, m.mm / s.mm) {
         return None;
     }
-    scalable(doc, &fixed, m.mm / s.mm).then(|| {
-        let ids = doc.expand_groups(&fixed.into_iter().collect::<Vec<_>>());
-        (ids, m, s)
-    })
+    // A group can tie the target to the stand or to the moving pieces.
+    let target = doc.expand_groups(&fixed.into_iter().collect::<Vec<_>>());
+    let tied = (target.iter()).any(|id| grounded(doc, *id) || ids.contains(id));
+    (!tied).then_some((target, m, s))
+}
+
+/// The pieces include a grounded one, such as a stand.
+fn fixed(doc: &Document, pieces: &BTreeSet<u64>) -> bool {
+    pieces.iter().any(|id| grounded(doc, *id))
 }
 
 /// After the pieces `ids` moved: release their seats to pieces that stayed,
@@ -870,7 +900,11 @@ pub fn snap(doc: &mut Document, ids: &[u64], reach: f32, any_angle: bool) -> Opt
     let held =
         (doc.seats.iter()).any(|s| moving.contains(&s.a.piece) != moving.contains(&s.b.piece));
     let inner = free(doc, &moving, true);
-    let outer = free(doc, &moving, false);
+    // Pieces that cannot move freely only meet pieces that can come to them.
+    let stuck = held || fixed(doc, &moving);
+    let outer: Vec<Port> = (free(doc, &moving, false).into_iter())
+        .filter(|s| !stuck || !fixed(doc, &assembly(doc, s.at.piece)))
+        .collect();
     // A joint that fits wins, then one an adapter joins, then the closest.
     let mut best: Option<(u8, f64, &Port, &Port)> = None;
     for m in &inner {
@@ -1010,7 +1044,10 @@ pub fn add_clips(doc: &mut Document, ids: &[u64]) -> usize {
 pub fn options(doc: &Document, ids: &[u64]) -> Vec<(Port, Port, Offer)> {
     let moving: BTreeSet<u64> = closure(doc, ids).into_iter().collect();
     let inner = free(doc, &moving, true);
-    let outer = free(doc, &moving, false);
+    let stuck = fixed(doc, &moving);
+    let outer: Vec<Port> = (free(doc, &moving, false).into_iter())
+        .filter(|s| !stuck || !fixed(doc, &assembly(doc, s.at.piece)))
+        .collect();
     let mut out: Vec<(f64, Port, Port, Offer)> = Vec::new();
     for m in &inner {
         for s in &outer {
