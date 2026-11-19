@@ -33,6 +33,62 @@ async fn dispatch(app: &mut App, message: Message) {
     }
 }
 
+#[tokio::test]
+async fn cleanup_applies_the_style_bond_length_preference() {
+    let mut document = Document::default();
+    document.drawing_style.set_bond_length(17.);
+    let style = document.drawing_style.bond_length_world;
+    let a = document.add_atom("C", Point::new(0., 0.));
+    let b = document.add_atom("O", Point::new(2. * style, 0.));
+    document.add_bond(a, b, 1, "plain");
+    let mut app = app(document);
+
+    assert!(!app.appearance.cleanup_style_bond_length);
+    dispatch(&mut app, Message::Cleanup(Action::StyleBondLength(true))).await;
+    assert!(app.appearance.cleanup_style_bond_length);
+    dispatch(&mut app, Message::Cleanup(Action::Begin)).await;
+    assert!(!app.error, "{}", app.status);
+    let doc = &app.tab.doc;
+    let length = doc
+        .atom(a)
+        .unwrap()
+        .position
+        .distance(doc.atom(b).unwrap().position);
+    assert!((length / style - 1.).abs() < 0.01, "{length} vs {style}");
+}
+
+#[tokio::test]
+async fn clean_up_reaction_is_one_undo_step_and_then_tidy() {
+    use reshiki::arrows::{ArrowStyle, Preset};
+    let mut document = Document::default();
+    let a = document.add_atom("C", Point::new(0., 20.));
+    let b = document.add_atom("O", Point::new(40., 20.));
+    document.add_bond(a, b, 1, "plain");
+    let arrow = document.next_id();
+    document.arrows.push(reshiki::document::Arrow::new(
+        arrow,
+        Point::new(100., 0.),
+        Point::new(140., 0.),
+        Preset::Forward,
+        ArrowStyle::preset(Preset::Forward),
+    ));
+    // Labels are measured as the editor shows them, after an edit's reconcile.
+    let _ = reshiki::transaction::reconcile(&mut document, Document::default()).unwrap();
+    let original = document.clone();
+    let mut app = app(document);
+    let shortcut = super::super::shortcuts::label(&Message::Cleanup(Action::Scheme));
+    assert!(shortcut.is_some_and(|keys| keys.contains('X')));
+    dispatch(&mut app, Message::Cleanup(Action::Scheme)).await;
+    assert!(!app.error, "{}", app.status);
+    let cleaned = app.tab.doc.clone();
+    assert_ne!(cleaned, original);
+    dispatch(&mut app, Message::Cleanup(Action::Scheme)).await;
+    assert_eq!(app.tab.doc, cleaned);
+    assert_eq!(app.status, "The reaction is already tidy");
+    dispatch(&mut app, Message::Undo).await;
+    assert_eq!(app.tab.doc, original);
+}
+
 async fn placed_fischer_converts_to_three_arm_centers(name: &str, count: usize) -> Document {
     let mut app = app(Document::default());
     let index = app

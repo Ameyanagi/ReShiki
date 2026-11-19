@@ -1056,6 +1056,23 @@ fn median_length(document: &Document) -> f32 {
 }
 
 #[test]
+fn cleanup_can_use_the_drawing_style_bond_length() -> anyhow::Result<()> {
+    let source = scaled("c1ccccc1", 2.)?;
+    let style = source.drawing_style.bond_length_world;
+    assert!((median_length(&source) / style - 2.).abs() < 0.02);
+    let style_options = Options {
+        style_bond_length: true,
+        ..Default::default()
+    };
+    for (options, target) in [(Options::default(), 2. * style), (style_options, style)] {
+        let cleaned = clean(&source, options, &[], 0.)?.document;
+        let length = median_length(&cleaned);
+        assert!((length / target - 1.).abs() < 0.01, "{length} vs {target}");
+    }
+    Ok(())
+}
+
+#[test]
 fn cleanup_keeps_the_drawn_size_including_templated_rings() -> anyhow::Result<()> {
     // Cyclododecane and norbornane are drawn from ring templates, which ignore
     // the requested bond length.

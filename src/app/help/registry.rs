@@ -467,6 +467,13 @@ pub(crate) fn entries() -> Vec<Entry> {
             &["tidy", "beautify", "layout"],
         ),
         entry(
+            keys(command | shift, "X"),
+            "Clean up reaction",
+            "Line up the selected reaction, or every reaction, on its arrows",
+            Selection,
+            &["tidy", "scheme", "align", "arrow"],
+        ),
+        entry(
             label(Message::Optimization(optimization::Action::Begin)),
             "3D optimize…",
             "Generate an optimized 3D conformer and preview it before Apply",

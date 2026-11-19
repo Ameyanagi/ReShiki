@@ -52,6 +52,9 @@ pub struct Options {
     pub keep_orientation: bool,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub iupac_orientation: bool,
+    /// Draw at the drawing style's bond length instead of keeping each structure's size.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub style_bond_length: bool,
 }
 impl Options {
     pub fn orientation(self) -> Orientation {
@@ -75,6 +78,7 @@ impl Default for Options {
             scope: Scope::Drawing,
             keep_orientation: true,
             iupac_orientation: false,
+            style_bond_length: false,
         }
     }
 }
@@ -82,6 +86,20 @@ impl Default for Options {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn style_bond_length_defaults_to_false_and_is_omitted() -> serde_json::Result<()> {
+        let json = r#"{"scope":"drawing","keep_orientation":true}"#;
+        let mut options: Options = serde_json::from_str(json)?;
+        assert!(!Options::default().style_bond_length);
+        assert!(!options.style_bond_length);
+        assert_eq!(serde_json::to_string(&options)?, json);
+
+        options.style_bond_length = true;
+        let encoded = serde_json::to_string(&options)?;
+        assert_eq!(serde_json::from_str::<Options>(&encoded)?, options);
+        Ok(())
+    }
 
     #[test]
     fn orientation_preserves_existing_json_and_defaults() -> serde_json::Result<()> {

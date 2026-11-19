@@ -1366,7 +1366,7 @@ pub fn selection_bounds_in_axes(
         .flatten()
 }
 
-fn selections_bounds_in_axes(
+pub(crate) fn selections_bounds_in_axes(
     doc: &Document,
     selections: &[Vec<u64>],
     axes: Option<(Point, f32)>,

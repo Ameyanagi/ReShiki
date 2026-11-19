@@ -1966,6 +1966,7 @@ fn spiro_cleanup_keeps_regular_rings_and_bond_lengths() -> anyhow::Result<()> {
                     scope,
                     keep_orientation,
                     iupac_orientation,
+                    ..Default::default()
                 });
                 request.selected_ids = selected.clone();
                 let cleaned = crate::engine::native_cleanup::prepare(&request)?;
@@ -2019,7 +2020,7 @@ fn spiro_cleanup_of_a_selected_ring_stays_clear_of_fixed_atoms() -> anyhow::Resu
             request.cleanup = Some(Options {
                 scope: Scope::SelectedAtoms,
                 keep_orientation,
-                iupac_orientation: false,
+                ..Default::default()
             });
             request.selected_ids = Some(ids[14..].to_vec());
             let cleaned = crate::engine::native_cleanup::prepare(&request)?;
@@ -2099,8 +2100,7 @@ fn spiro_cleanup_never_reflects_selected_atoms_onto_other_selected_atoms() -> an
     let mut request = Request::molecule("clean", source.clone());
     request.cleanup = Some(Options {
         scope: Scope::SelectedAtoms,
-        keep_orientation: true,
-        iupac_orientation: false,
+        ..Default::default()
     });
     request.selected_ids = Some(
         [10, 11, 14, 18]
