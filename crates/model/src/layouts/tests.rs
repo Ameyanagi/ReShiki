@@ -441,3 +441,28 @@ fn top_aligned_items_of_different_heights_keep_their_order() {
     let (t, s) = (bounds(&doc, &tall), bounds(&doc, &short));
     assert!(t.0.x < s.0.x && (t.0.y - s.0.y).abs() < 0.01, "{t:?} {s:?}");
 }
+
+#[test]
+fn touching_grid_rows_stay_apart() {
+    let mut doc = Document::default();
+    let items: Vec<_> = (0..4)
+        .map(|i| chain(&mut doc, 200. * (i % 2) as f32, 120. * (i / 2) as f32, 2))
+        .collect();
+    let ids: Vec<u64> = items.iter().flatten().copied().collect();
+    let group = arrange(&mut doc, &ids, Flow::Grid(2), 0.).unwrap();
+    for gutter in [0., 10.] {
+        if let Some(layout) = doc
+            .groups
+            .iter_mut()
+            .find(|g| g.id == group)
+            .and_then(|g| g.layout.as_mut())
+        {
+            layout.gutter_pt = gutter;
+        }
+        reflow(&mut doc, group, None, None);
+    }
+    let corner = |u: &Vec<u64>| bounds(&doc, u).0;
+    let (a, b, c) = (corner(&items[0]), corner(&items[1]), corner(&items[2]));
+    assert!((a.y - b.y).abs() < 0.01 && a.x < b.x);
+    assert!(c.y > a.y && (c.x - a.x).abs() < 0.01);
+}

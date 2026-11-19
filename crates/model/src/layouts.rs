@@ -251,21 +251,23 @@ pub fn reflow(
         Flow::Column => cells.sort_by(|a, b| center(a.2).y.total_cmp(&center(b.2).y)),
         Flow::Grid(_) => {
             cells.sort_by(|a, b| a.2.0.y.total_cmp(&b.2.0.y));
-            // Each row and the lowest bottom edge in it.
-            let mut rows: Vec<(Vec<Cell>, f32)> = vec![];
+            // Each row, its top and the lowest bottom edge in it. A unit
+            // joins a row it overlaps, or one whose top it shares (flat units
+            // on one line); rows that only touch stay apart.
+            let mut rows: Vec<(Vec<Cell>, f32, f32)> = vec![];
             for cell in cells {
                 let (top, bottom) = (cell.2.0.y, cell.2.1.y);
                 match rows.last_mut() {
-                    Some((row, low)) if top <= *low => {
+                    Some((row, first, low)) if top < *low - 0.01 || (top - *first).abs() < 0.01 => {
                         *low = low.max(bottom);
                         row.push(cell);
                     }
-                    _ => rows.push((vec![cell], bottom)),
+                    _ => rows.push((vec![cell], top, bottom)),
                 }
             }
             cells = rows
                 .into_iter()
-                .flat_map(|(mut row, _)| {
+                .flat_map(|(mut row, ..)| {
                     row.sort_by(|a, b| center(a.2).x.total_cmp(&center(b.2).x));
                     row
                 })
