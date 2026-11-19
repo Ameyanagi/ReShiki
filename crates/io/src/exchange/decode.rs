@@ -210,7 +210,11 @@ impl<'a> Parser<'a> {
             } else {
                 usize::from(size)
             };
-            tree.raw.push((tag, self.r.take(size)?));
+            let value = self.r.take(size)?;
+            // A cycle's own data is read by `cycles::take_cdx`.
+            if tag != super::cycles::CODE {
+                tree.raw.push((tag, value));
+            }
         }
         Ok(tree)
     }

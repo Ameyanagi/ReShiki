@@ -578,9 +578,11 @@ explains how the crates and modules fit together.
 - `crates/io/src/engine/reference/colors.rs`: Translate current color tags at the optional historical worker boundary.
 - `crates/io/src/engine/reference/reaction.rs`: Reaction parsing, chemical preparation and canvas assembly stay in Rust.
 - `crates/io/src/exchange/charsets.rs`: Exact legacy codepage tables, generated from Python's standard codecs.
+- `crates/io/src/exchange/cycles.rs`: A catalytic cycle's own data in a ChemDraw file.
 - `crates/io/src/exchange/decode.rs`
 - `crates/io/src/exchange/drawing.rs`: Editable document serialization.
 - `crates/io/src/exchange/drawing/clipboard.rs`: Explicitly lossy presentation conversion for an external clipboard copy.
+- `crates/io/src/exchange/drawing/cycles.rs`: A catalytic cycle's ChemDraw steps and the data ReShiki reopens it from.
 - `crates/io/src/exchange/drawing/generic.rs`: ChemDraw generic properties are attached to their actual atom and bracket IDs.
 - `crates/io/src/exchange/drawing/groups.rs`
 - `crates/io/src/exchange/drawing/labels.rs`

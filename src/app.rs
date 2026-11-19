@@ -1051,7 +1051,7 @@ impl App {
         {
             return session.preview_document();
         }
-        &self.tab.doc
+        self.cycle_proposal_document().unwrap_or(&self.tab.doc)
     }
     /// The runtime's entry point. A finished export or copy counts
     /// toward the GitHub star prompt here, once, even when its drawing has

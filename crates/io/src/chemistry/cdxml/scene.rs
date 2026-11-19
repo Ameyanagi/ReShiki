@@ -360,6 +360,30 @@ impl Objects {
     }
 }
 
+impl CdxmlScene {
+    /// The drawing objects each file object became, by the file's object ID.
+    pub fn file_objects(&self, prepared: &PreparedCdxml) -> Result<HashMap<u64, Vec<u64>>> {
+        let source = presentation::parse(&prepared.expanded_xml)?;
+        let nodes: Vec<_> = source.descendants().filter(Node::is_element).collect();
+        let mut out: HashMap<u64, Vec<u64>> = HashMap::new();
+        for entry in &self.objects {
+            if let Some(id) = nodes
+                .get(entry.source)
+                .and_then(|n| n.attribute("id"))
+                .and_then(|id| id.parse().ok())
+            {
+                out.entry(id).or_default().extend(&entry.atoms);
+            }
+        }
+        // A fragment can be listed more than once.
+        for ids in out.values_mut() {
+            ids.sort_unstable();
+            ids.dedup();
+        }
+        Ok(out)
+    }
+}
+
 /// Assemble native helper values without narrowing numbers or changing the
 /// prepared snapshot. All source identities refer to its expanded XML.
 pub fn assemble_cdxml(prepared: &PreparedCdxml) -> Result<CdxmlScene> {

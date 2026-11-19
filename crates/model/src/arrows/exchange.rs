@@ -37,8 +37,28 @@ pub fn lowered_count(doc: &Document) -> Lowered {
     }
 }
 
-/// What an editable CDXML/CDX copy writes as shapes instead of arrows.
+/// What an editable CDXML/CDX copy writes as shapes instead of arrows, and
+/// how its catalytic cycles travel.
 pub fn export_notice(doc: &Document) -> Option<String> {
+    let plural =
+        |n: usize, one: &str, many: &str| format!("{n} {}", if n == 1 { one } else { many });
+    let cycles = doc.graphics.iter().filter(|g| g.cycle.is_some()).count();
+    let cycles = (cycles > 0).then(|| {
+        format!(
+            "ChemDraw gets {} as plain arrows, text and reaction steps. ReShiki reopens {} as a cycle while the file is unchanged.",
+            plural(cycles, "catalytic cycle", "catalytic cycles"),
+            if cycles == 1 { "it" } else { "each" }
+        )
+    });
+    match (shapes_notice(doc), cycles) {
+        (Some(a), Some(b)) => Some(format!("{a} {b}")),
+        (a, b) => a.or(b),
+    }
+}
+
+/// What an editable CDXML/CDX copy writes as shapes instead of arrows and
+/// callouts, which no reader gets back.
+pub fn shapes_notice(doc: &Document) -> Option<String> {
     let Lowered { bodies, badges } = lowered_count(doc);
     let leaders = doc.graphics.iter().filter(|g| g.leader.is_some()).count();
     let plural =
@@ -57,24 +77,12 @@ pub fn export_notice(doc: &Document) -> Option<String> {
     if leaders > 0 {
         parts.push(plural(leaders, "callout leader", "callout leaders"));
     }
-    let shapes = (!parts.is_empty()).then(|| {
+    (!parts.is_empty()).then(|| {
         format!(
             "ChemDraw gets {} as grouped shapes that look the same. Save as a .rsk file to keep them editable as arrows and callouts.",
             parts.join(", ")
         )
-    });
-    let cycles = doc.graphics.iter().filter(|g| g.cycle.is_some()).count();
-    let cycles = (cycles > 0).then(|| {
-        format!(
-            "ChemDraw gets {} as plain arrows and text. Save as a .rsk file to keep {} a cycle.",
-            plural(cycles, "catalytic cycle", "catalytic cycles"),
-            if cycles == 1 { "it" } else { "each" }
-        )
-    });
-    match (shapes, cycles) {
-        (Some(a), Some(b)) => Some(format!("{a} {b}")),
-        (a, b) => a.or(b),
-    }
+    })
 }
 
 /// One shape per subpath, so every stroke stays an ordinary open or closed path.

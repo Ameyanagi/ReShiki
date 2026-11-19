@@ -22,6 +22,9 @@ impl App {
             return Break(task);
         }
         let message = self.file_prepared_gate(message)?;
+        if let Some(task) = self.cycle_proposal_gate(&message) {
+            return Break(task);
+        }
         if self.recovery_manager.open() {
             match &message {
                 Message::Recovery(_) => {}

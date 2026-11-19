@@ -16,6 +16,7 @@ use crate::{
         stereo::{Point3, perception::State},
     },
     document::Document,
+    exchange::cycles,
 };
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use std::sync::Arc;
@@ -324,39 +325,77 @@ fn prepare(request: Request) -> Result<Preparation, Error> {
             }
         }
         "cdxml" | "cdx" => {
-            let xml = if format == "cdx" {
+            let (xml, found) = if format == "cdx" {
                 if text.len() > crate::exchange::LIMIT.div_ceil(3) * 4 {
                     return Err(Error::BinaryLimit);
                 }
-                crate::exchange::from_cdx_tolerant(&STANDARD.decode(text)?)
-                    .map_err(Error::Binary)?
+                let bytes = STANDARD.decode(text)?;
+                let (bytes, found) = cycles::take_cdx(&bytes);
+                (
+                    crate::exchange::from_cdx_tolerant(&bytes).map_err(Error::Binary)?,
+                    found,
+                )
             } else {
-                text
+                let (xml, found) = cycles::take_cdxml(&text);
+                (xml.into_owned(), found)
             };
             let (xml, approximated) = cdxml::approximate(&xml);
             let (xml, variables) =
                 cdxml::drawing_variables(&xml).map_err(|e| Error::Binary(e.to_string()))?;
             let mut warnings = Vec::from_iter(approximated);
-            if cdxml::schemes::validate(&xml).map_err(|e| Error::Binary(e.to_string()))? {
+            let fresh = match found {
+                Some(cycles::Found::Fresh(payload)) => Some(payload),
+                Some(cycles::Found::Edited) => {
+                    warnings.push(cycles::EDITED_NOTICE.into());
+                    None
+                }
+                None => None,
+            };
+            // The schemes of a file with its cycles are the cycles' steps.
+            if cdxml::schemes::validate(&xml).map_err(|e| Error::Binary(e.to_string()))?
+                && fresh.is_none()
+            {
                 warnings.push(cdxml::schemes::NOTICE.into());
             }
+            // The objects each file object became, while the scene has them.
+            let objects = |prepared: &cdxml::PreparedCdxml, scene: &cdxml::CdxmlScene| {
+                fresh
+                    .as_ref()
+                    .map(|_| scene.file_objects(prepared))
+                    .transpose()
+            };
+            // A cycle that does not come back opens as it was drawn.
+            let restore = |document: &mut Document, objects: Option<_>, scale: f64| {
+                if let (Some(payload), Some(objects)) = (&fresh, objects)
+                    && cycles::restore(document, payload, &objects, scale as f32)
+                        < payload.cycles.len()
+                {
+                    return vec![cycles::EDITED_NOTICE.to_owned()];
+                }
+                vec![]
+            };
             if !variables.is_empty() {
                 let prepared = cdxml::prepare_drawing(&xml)?;
                 let scene = cdxml::assemble_cdxml(&prepared)?;
                 warnings.extend(scene.notices.iter().cloned());
+                let found = objects(&prepared, &scene)?;
                 let mut document = scene.into_unchecked_drawing()?;
                 variables
                     .restore(&prepared, &mut document)
                     .map_err(|e| Error::Binary(e.to_string()))?;
+                warnings.extend(restore(&mut document, found, prepared.source_scale));
                 warnings.push(variables.notice().into());
                 return Ok(Preparation::Drawing(Box::new(document), warnings));
             }
             let prepared = match cdxml::prepare_cdxml(&xml) {
                 Ok(prepared) => prepared,
                 Err(error) if matches!(error.cause, cdxml::PreparationCause::Sanitization(_)) => {
-                    let scene = cdxml::assemble_cdxml(&cdxml::prepare_drawing(&xml)?)?;
+                    let prepared = cdxml::prepare_drawing(&xml)?;
+                    let scene = cdxml::assemble_cdxml(&prepared)?;
                     warnings.extend(scene.notices.iter().cloned());
-                    let document = scene.into_unchecked_drawing()?;
+                    let found = objects(&prepared, &scene)?;
+                    let mut document = scene.into_unchecked_drawing()?;
+                    warnings.extend(restore(&mut document, found, prepared.source_scale));
                     warnings.push(format!(
                         "Drawing imported; chemical assignments need review: {}",
                         error.cause
@@ -366,20 +405,27 @@ fn prepare(request: Request) -> Result<Preparation, Error> {
                 Err(error) => return Err(error.into()),
             };
             if styled_coordination_changed(&prepared) {
-                let scene = cdxml::assemble_cdxml(&cdxml::prepare_drawing(&xml)?)?;
+                let prepared = cdxml::prepare_drawing(&xml)?;
+                let scene = cdxml::assemble_cdxml(&prepared)?;
                 warnings.extend(scene.notices.iter().cloned());
                 warnings.push("Drawing imported; styled metal contacts retained as drawn. Coordination assignments need review; molecular properties are unavailable".into());
-                return Ok(Preparation::Drawing(
-                    Box::new(scene.into_unchecked_drawing()?),
-                    warnings,
-                ));
+                let found = objects(&prepared, &scene)?;
+                let mut document = scene.into_unchecked_drawing()?;
+                warnings.extend(restore(&mut document, found, prepared.source_scale));
+                return Ok(Preparation::Drawing(Box::new(document), warnings));
             }
             let mut scene = cdxml::assemble_cdxml(&prepared)?;
             if scene.conformer_3d.is_none() {
                 warnings.extend(layout(&mut scene.molecule, &[])?.0);
                 scene.conformer_3d = Some(false);
             }
-            let imported = scene.into_document()?;
+            let found = objects(&prepared, &scene)?;
+            let mut imported = scene.into_document()?;
+            warnings.extend(restore(
+                &mut imported.document,
+                found,
+                prepared.source_scale,
+            ));
             warnings.extend(imported.notices);
             Prepared {
                 molecule: imported.molecule,

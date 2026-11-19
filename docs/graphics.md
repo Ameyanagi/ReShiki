@@ -199,9 +199,12 @@ the gutters. Moving one item by itself leaves it where you put it.
 
 1. Draw the intermediates as structures or text, roughly in a circle.
 2. Select them and choose **Make catalytic cycle** from the canvas menu or
-   the command palette. They slide onto a circle through them, ordered
-   clockwise from the top, and an arc arrow runs from each to the next. To
-   start from an empty circle instead, choose **Catalytic cycle** in the
+   the command palette. The drawing shows them on a circle through them,
+   ordered clockwise from the top, with an arc arrow from each to the next,
+   and **Properties → Make catalytic cycle** lists the order. Choose
+   **Reverse order** to run it the other way, then **Make catalytic cycle**
+   or Enter to make it, or **Discard** or Esc to leave the drawing as it was.
+   To start from an empty circle instead, choose **Catalytic cycle** in the
    command palette's insert commands.
 3. To add a part, drag a structure or text that is not in a cycle. On the
    circle it becomes a new intermediate between its neighbors; beside the
@@ -252,6 +255,19 @@ its conditions.
 3. The same commands are in the command palette.
 
 Atom maps and colors are one Undo step each and are saved with the drawing.
+
+### Open a cycle in ChemDraw and back
+
+1. Export the drawing as CDXML or CDX. ChemDraw gets each cycle as its arcs,
+   side arrows and step names, grouped with its parts, and each step as a
+   ChemDraw reaction step from one intermediate (and its reagents) to the
+   next (and its products).
+2. Open the file in ReShiki again. If nothing in it changed, every cycle
+   comes back as a cycle, with its steps, names and settings.
+3. If the file was edited and saved elsewhere, it opens as that program
+   saved it: plain arrows, text and structures, and a message says so. Select
+   the intermediates and choose **Make catalytic cycle** to make the cycle
+   again, then drag the reagents and products back beside their steps.
 
 ### Place lab equipment
 
@@ -320,8 +336,8 @@ cm**, **RSC graphical abstract · 8 × 4 cm** or **Elsevier graphical abstract �
 - A panel's title uses the drawing's font and size in bold. Title text is
   edited in **Properties**, not on the canvas.
 - A catalytic cycle is a circle. ChemDraw has no cycle object: CDXML and CDX
-  get its arrows and text, grouped with its parts, and opening that file
-  again gives those arrows, not a cycle.
+  get its arrows, text and reaction steps. Only ReShiki reads the cycle back,
+  and only from a file nothing else has changed.
 - A step's tools need a structure as each of its two intermediates. A step
   next to a text intermediate has no reaction SMILES, atom maps or balance
   check.
@@ -390,7 +406,30 @@ dropped intermediate join. Reaction preview, automatic reaction copy and the
 arrow hints skip every cycle part, and a part that joins a cycle leaves its
 ordinary reaction roles, condition lists and arrow labels. CDXML and
 CDX export write the drawn arrows and text in the cycle's group
-(`cycles::materialized`). A cycle needs document version 40.
+(`cycles::materialized`), and one ChemDraw `scheme` per cycle with a `step`
+per step: reactants, products, arcs and texts above the arrow. A cycle needs
+document version 40.
+
+The cycle itself rides along privately (`exchange::cycles`): a `ReShikiCycles`
+attribute on the CDXML root, or CDX property 0x5243 on the document object
+(the range 0x4000–0x7FFF the CDX format leaves to other programs). Its value
+is a SHA-256 fingerprint of the rest of the file and the data, a space and
+base64 JSON of each cycle graphic in file coordinates. A drawing with a cycle
+writes each molecule as a fragment of its own, grouped or not. A cycle whose
+parts are not each exactly one fragment or text writes no data. Parts are named by the file's own
+object IDs: a structure by the outermost `fragment` holding its first atom, a
+text by its `t`; the drawn arrows, paths and names by theirs. The CDX writer
+seals the binary file again with its own fingerprint. On import,
+`take_cdxml`/`take_cdx` remove the data and compare the fingerprint. A match
+restores each cycle that checks out (valid, every part a distinct imported
+object): `CdxmlScene::file_objects` maps the file's object IDs to the imported
+objects, the drawn objects are deleted, the cycle takes their place in their
+groups (or joins the groups holding all its parts when it drew nothing) and the
+parts grow to whole molecules. A restored drawing that fails validation is
+dropped for the plain import. A mismatch, or a cycle that does not come back,
+adds a warning. Converting a ReShiki CDXML file to CDX seals the data again
+only if the CDXML file was unchanged. A file whose cycles came back
+counts its schemes and steps as kept on save.
 
 Steps as reactions (`cycles::steps`) are never stored. For a step, or every
 step for the atom-map search and color by origin, a throwaway drawing holds

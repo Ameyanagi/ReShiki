@@ -154,7 +154,8 @@ impl Cycle {
     pub(crate) fn ids_mut(&mut self) -> impl Iterator<Item = &mut u64> {
         self.parts_mut().flatten()
     }
-    fn parts_mut(&mut self) -> impl Iterator<Item = &mut Vec<u64>> {
+    /// Every part, intermediates first, as `parts` gives them.
+    pub fn parts_mut(&mut self) -> impl Iterator<Item = &mut Vec<u64>> {
         self.intermediates.iter_mut().chain(
             self.steps
                 .iter_mut()
@@ -213,6 +214,8 @@ impl Graphic {
 #[derive(Debug, Default)]
 pub struct Drawn {
     pub arrows: Vec<Arrow>,
+    /// The step each arrow is the arc of; side arrows have none.
+    pub arcs: Vec<Option<usize>>,
     /// Step names and the center label: top-left corner, text and format.
     pub labels: Vec<(Point, String, TextFormat)>,
 }
@@ -333,6 +336,7 @@ pub fn drawn(doc: &Document, g: &Graphic) -> Drawn {
             sweep,
             &style,
         ));
+        out.arcs.push(None);
     }
     let mut boxes: Vec<(Point, Point)> = Vec::with_capacity(n);
     let mut angles = Vec::with_capacity(n);
@@ -472,8 +476,10 @@ pub fn drawn(doc: &Document, g: &Graphic) -> Drawn {
                     -arc.sweep,
                     &forward,
                 ));
+                out.arcs.extend([Some(s), Some(s)]);
             } else {
                 out.arrows.push(arrow(g.id, start, end, arc.sweep, &style));
+                out.arcs.push(Some(s));
             }
         }
         // Side arrows swoop in to the arc, or out of it, meeting it along
@@ -502,6 +508,7 @@ pub fn drawn(doc: &Document, g: &Graphic) -> Drawn {
             );
             taken.push(side.bounds());
             out.arrows.push(side);
+            out.arcs.push(None);
         }
         if !step.name.trim().is_empty() {
             names.push((wrapped(&step.name, &format, bond * 2.5), arc, outward));
@@ -1059,18 +1066,31 @@ pub fn set_radius(doc: &mut Document, id: u64, radius: f32) {
     }
 }
 
+/// A cycle as [`materialized`] wrote it.
+#[derive(Debug, Clone)]
+pub struct Materialized {
+    /// The cycle as it was, its parts still the drawing's objects.
+    pub graphic: Graphic,
+    /// Every object drawn in its place.
+    pub drawn: Vec<u64>,
+    /// Each step's arc arrows: step and arrow ID.
+    pub arcs: Vec<(usize, u64)>,
+}
+
 /// The drawing as other programs can keep it: each cycle becomes the
 /// ordinary arrows and text it draws, grouped with its parts.
-pub fn materialized(doc: &Document) -> std::borrow::Cow<'_, Document> {
+pub fn materialized(doc: &Document) -> (std::borrow::Cow<'_, Document>, Vec<Materialized>) {
     if !doc.graphics.iter().any(|g| g.cycle.is_some()) {
-        return std::borrow::Cow::Borrowed(doc);
+        return (std::borrow::Cow::Borrowed(doc), vec![]);
     }
     let mut out = doc.clone();
     let mut next = doc.next_id();
+    let mut written = vec![];
     for g in doc.graphics.iter().filter(|g| g.cycle.is_some()) {
         let drawn = drawn(doc, g);
         let mut ids = vec![];
-        for mut arrow in drawn.arrows {
+        let mut arcs = vec![];
+        for (mut arrow, step) in drawn.arrows.into_iter().zip(drawn.arcs) {
             let style = arrow.appearance();
             if style.head == Head::None && style.tail == Head::None {
                 // ChemDraw keeps a headless curve as a plain path.
@@ -1088,6 +1108,9 @@ pub fn materialized(doc: &Document) -> std::borrow::Cow<'_, Document> {
             }
             arrow.id = next;
             ids.push(next);
+            if let Some(step) = step {
+                arcs.push((step, next));
+            }
             next += 1;
             out.arrows.push(arrow);
         }
@@ -1108,19 +1131,19 @@ pub fn materialized(doc: &Document) -> std::borrow::Cow<'_, Document> {
         {
             group.members.extend(&ids);
         }
+        written.push(Materialized {
+            graphic: g.clone(),
+            drawn: ids,
+            arcs,
+        });
     }
     out.graphics.retain(|g| g.cycle.is_none());
-    let gone: HashSet<u64> = doc
-        .graphics
-        .iter()
-        .filter(|g| g.cycle.is_some())
-        .map(|g| g.id)
-        .collect();
+    let gone: HashSet<u64> = written.iter().map(|m| m.graphic.id).collect();
     for group in &mut out.groups {
         group.members.retain(|id| !gone.contains(id));
     }
     out.prune_groups();
-    std::borrow::Cow::Owned(out)
+    (std::borrow::Cow::Owned(out), written)
 }
 
 /// `ids` with every cycle part any of them belongs to, whole.

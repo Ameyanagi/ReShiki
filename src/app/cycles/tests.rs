@@ -17,6 +17,12 @@ fn text(app: &mut App, x: f32, y: f32, value: &str) -> u64 {
     id
 }
 
+/// Make catalytic cycle on the selection, then make it from the review.
+fn make(app: &mut App) {
+    let _ = app.update(Message::Cycle(Action::Make));
+    let _ = app.update(Message::Cycle(Action::MakeApply));
+}
+
 fn cycle(app: &App) -> (u64, Cycle) {
     app.selected_cycle()
         .map(|(id, c)| (id, c.clone()))
@@ -40,7 +46,7 @@ fn make_name_and_reverse_are_each_one_undo_step() {
     ];
     let initial = app.tab.doc.clone();
     app.tab.selected = parts.to_vec();
-    let _ = app.update(Message::Cycle(Action::Make));
+    make(&mut app);
     assert!(!app.error, "{}", app.status);
     let made = app.tab.doc.clone();
     let (id, c) = cycle(&app);
@@ -77,7 +83,7 @@ fn dropping_text_beside_a_step_makes_it_a_reagent_in_the_same_undo_step() {
         text(&mut app, -230., 90., "C"),
     ];
     app.tab.selected = parts.to_vec();
-    let _ = app.update(Message::Cycle(Action::Make));
+    make(&mut app);
     let (id, _) = cycle(&app);
     let g = app.tab.doc.graphics.iter().find(|g| g.id == id).unwrap();
     let (center, radius) = g.cycle_circle();
@@ -108,7 +114,7 @@ fn a_part_selected_alone_shows_its_role_and_leaves_the_cycle() {
         text(&mut app, -230., 90., "C"),
     ];
     app.tab.selected = parts.to_vec();
-    let _ = app.update(Message::Cycle(Action::Make));
+    make(&mut app);
     app.tab.selected = vec![parts[1]];
     assert!(app.cycle_part_card().is_some());
     let _ = app.update(Message::Cycle(Action::Remove));
@@ -338,7 +344,7 @@ fn a_text_that_leaves_its_reaction_for_a_cycle_says_so() {
         text(&mut app, -230., 90., "C"),
     ];
     app.tab.selected = parts.to_vec();
-    let _ = app.update(Message::Cycle(Action::Make));
+    make(&mut app);
     let (id, _) = cycle(&app);
     // A condition of an ordinary reaction elsewhere.
     let free = text(&mut app, 2000., 2000., "Ar–X");
@@ -384,4 +390,46 @@ fn balance_status_names_the_extra_atoms_by_side() {
         super::balance_status(1, &balance),
         "Step 2 not balanced · extra on the left: B, 2 H · extra on the right: Br · charge +0 → +1"
     );
+}
+
+#[test]
+fn make_shows_the_cycle_for_review_before_it_changes_the_drawing() {
+    let (mut app, _) = App::new();
+    let parts = [
+        text(&mut app, 0., -200., "A"),
+        text(&mut app, 170., 90., "B"),
+        text(&mut app, -230., 90., "C"),
+    ];
+    app.tab.selected = parts.to_vec();
+    let initial = app.tab.doc.clone();
+    let _ = app.update(Message::Cycle(Action::Make));
+    assert!(!app.error, "{}", app.status);
+    // Shown, not made: the drawing and its history are as they were.
+    assert_eq!(app.tab.doc, initial);
+    assert!(!app.tab.history.can_undo());
+    assert!(app.cycle_proposal_card().is_some());
+    let shown = app.display_document();
+    assert!(shown.graphics.iter().any(|g| g.cycle.is_some()));
+    // Edits wait while it is under review.
+    let _ = app.update(Message::Delete);
+    assert_eq!(app.tab.doc, initial);
+    assert!(app.status.contains("Enter applies"), "{}", app.status);
+    // Esc discards.
+    let _ = app.update(Message::Escape);
+    assert!(app.tab.cycle_inputs.proposal.is_none());
+    assert_eq!(app.tab.doc, initial);
+    assert_eq!(app.tab.selected, parts);
+
+    // Reversed, then Enter makes it as one Undo step.
+    let _ = app.update(Message::Cycle(Action::Make));
+    let _ = app.update(Message::Cycle(Action::MakeReverse));
+    let _ = app.update(Message::ContextKey("Enter".into()));
+    assert!(!app.error, "{}", app.status);
+    let (_, c) = cycle(&app);
+    assert!(c.counterclockwise);
+    assert_eq!(c.intermediates[0], vec![parts[0]]);
+    assert_eq!(c.intermediates[1], vec![parts[2]]);
+    assert_eq!(app.tab.history.undo_frames().len(), 1);
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, initial);
 }

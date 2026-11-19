@@ -351,6 +351,41 @@ async fn review_close_returns_focus_atom_label() {
     }
 }
 
+/// Make catalytic cycle's review: Enter makes the cycle as one Undo step and
+/// selects it; Esc leaves the drawing and its selection as they were.
+#[tokio::test]
+#[ignore = "Opt-in renderer input check"]
+async fn review_close_returns_focus_make_cycle() {
+    let mut ui = Ui::new().await;
+    for apply in [true, false] {
+        let mut app = drawing_app();
+        let n = app.tab.doc.add_atom("N", Point::new(300., 0.));
+        app.tab.doc.atom_mut(n).unwrap().label_h = 3;
+        app.tab.selected.push(n);
+        app.tab.saved = app.tab.doc.clone();
+        app.sync_keyboard_drawing();
+        let drawing = app.tab.doc.clone();
+        let selected = app.tab.selected.clone();
+        let task = app.update(Message::Cycle(crate::app::cycles::Action::Make));
+        ui.run_task(&mut app, task).await;
+        assert!(app.tab.cycle_inputs.proposal.is_some(), "{}", app.status);
+        assert_eq!(app.tab.doc, drawing);
+        close(&mut ui, &mut app, apply).await;
+        assert!(!app.error, "{}", app.status);
+        assert!(app.tab.cycle_inputs.proposal.is_none());
+        if apply {
+            assert!(app.tab.doc.graphics.iter().any(|g| g.cycle.is_some()));
+            assert_eq!(app.tab.history.undo_frames().len(), 1);
+            assert!(selected.iter().all(|id| app.tab.selected.contains(id)));
+        } else {
+            assert_eq!(app.tab.doc, drawing);
+            assert!(!app.tab.history.can_undo());
+            assert_eq!(app.tab.selected, selected);
+        }
+        assert_canvas_delete(&mut ui, &mut app).await;
+    }
+}
+
 async fn open_import(ui: &mut Ui, app: &mut App) {
     ui.key(
         app,
