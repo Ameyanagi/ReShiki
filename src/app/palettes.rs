@@ -654,14 +654,12 @@ impl App {
             options.push((label, ArrowPreset::Forward, style, None));
         }
         // One arc preset keeps the palette on screen; Sweep (°) sets any angle.
-        for sweep in [180.] {
-            options.push((
-                "Arc".into(),
-                ArrowPreset::Forward,
-                ArrowStyle::default(),
-                Some(sweep),
-            ));
-        }
+        options.push((
+            "Arc".into(),
+            ArrowPreset::Forward,
+            ArrowStyle::default(),
+            Some(180.),
+        ));
         for presets in options.chunks(3) {
             let mut line = row![].spacing(8);
             for (label, preset, style, arc) in presets {

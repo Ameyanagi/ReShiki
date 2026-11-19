@@ -155,11 +155,11 @@ fn body_badge_and_arc_are_one_undo_step_each_and_keep_the_reaction() {
         let _ = app.update(Message::Undo);
     }
     assert_eq!(app.tab.doc.arrows, original.arrows);
+    for _ in 0..4 {
+        let _ = app.update(Message::Redo);
+    }
+    assert_eq!(app.tab.doc.arrows[0].arc, Some(180.));
     app.tab.arrows.sweep = "400".into();
-    let _ = app.update(Message::Redo);
-    let _ = app.update(Message::Redo);
-    let _ = app.update(Message::Redo);
-    let _ = app.update(Message::Redo);
     app.arrow_action(arrows::Action::ApplySweep);
     assert!(app.error);
 }

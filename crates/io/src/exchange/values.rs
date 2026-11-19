@@ -77,7 +77,8 @@ pub(super) fn encode_number(p: &Property, value: &str) -> Result<Vec<u8>> {
     if scaled(p) {
         n *= 65536.;
     }
-    if p.name == "BondSpacing" {
+    // Tenths: a percentage, and the degrees of an arc (ChemDraw 26 files).
+    if matches!(p.name, "BondSpacing" | "AngularSize") {
         n *= 10.;
     }
     // ChemDraw's binary line heights use twentieths of a point. Zero and
@@ -167,7 +168,7 @@ pub(super) fn decode_number(p: &Property, data: &[u8]) -> Result<String> {
     if scaled(p) {
         n /= 65536.;
     }
-    if p.name == "BondSpacing" {
+    if matches!(p.name, "BondSpacing" | "AngularSize") {
         n /= 10.;
     }
     if line_height(p.name) {

@@ -281,3 +281,18 @@ fn exchange_copy_keeps_nested_groups_valid() {
     doc.validate().unwrap();
     super::lowered(&doc).validate().unwrap();
 }
+
+#[test]
+fn a_double_headed_chevron_points_both_ways() {
+    let mut a = arrow(Body::Chevron);
+    let mut style = a.appearance();
+    style.tail = Head::Full;
+    a.style = Some(style);
+    let chevrons = a.paths();
+    // The tip of each chevron is its third point.
+    let tip = |i: usize| points(&chevrons[i].commands)[2].x;
+    let back = |i: usize| points(&chevrons[i].commands)[0].x;
+    assert!(tip(0) < back(0), "the first chevron points to the start");
+    let last = chevrons.len() - 1;
+    assert!(tip(last) > back(last), "the last chevron points to the end");
+}

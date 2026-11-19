@@ -218,11 +218,13 @@ impl Arrow {
         } else {
             0.
         };
-        let backward = s.head == Head::None && s.tail != Head::None;
+        // A double-headed arrow's chevrons point out from its middle.
+        let both = s.head != Head::None && s.tail != Head::None;
         (0..count)
             .map(|i| {
                 let middle = (i as f32 * pitch + span * 0.5) / length;
-                let t = self.length_parameter(if backward { 1. - middle } else { middle });
+                let backward = s.head == Head::None && s.tail != Head::None || both && middle < 0.5;
+                let t = self.length_parameter(middle);
                 let mut d = self.shaft_tangent(t, false);
                 if backward {
                     d = Point::new(-d.x, -d.y);

@@ -191,12 +191,14 @@ impl Writer<'_> {
                 };
                 self.tree.set(n, "LineWidth", number(line))?;
                 let size = |pt: f64| integer(pt / line * 100.);
-                self.tree.set(n, "HeadSize", size(length))?;
-                self.tree.set(
-                    n,
-                    "ArrowheadCenterSize",
-                    size(length * (1. - style_real(s.head_notch))),
-                )?;
+                // Round the length first and keep the center within the
+                // reader's notch range, as for line arrows.
+                let head = (length / line * 100.).round_ties_even();
+                let center = (head * (1. - style_real(s.head_notch)))
+                    .round_ties_even()
+                    .clamp((head / 10.).ceil(), head);
+                self.tree.set(n, "HeadSize", integer(head))?;
+                self.tree.set(n, "ArrowheadCenterSize", integer(center))?;
                 self.tree.set(
                     n,
                     "FillType",

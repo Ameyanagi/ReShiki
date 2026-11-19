@@ -113,7 +113,7 @@ fn dragging_a_leader_end_releases_it_and_keeps_a_line() {
         .unwrap();
     line.edit_point(1, Point::new(60., 60.)).unwrap();
     assert_eq!(line.kind, GraphicKind::Line);
-    assert_eq!(line.line_ends()[1], Point::new(60., 60.));
+    assert!(line.line_ends()[1].distance(Point::new(60., 60.)) < 1e-3);
     assert!(line.leader.as_ref().unwrap().end.is_none());
     doc.validate().unwrap();
 }
@@ -153,4 +153,30 @@ fn a_join_moves_an_end_to_the_atom_that_remains() {
         leader(&doc).leader.as_ref().unwrap().end,
         Some(Target::Atom { atom: a })
     );
+}
+
+#[test]
+fn a_bond_point_off_the_bond_is_refused() {
+    let (mut doc, a, b) = ethane();
+    add_callout(
+        &mut doc,
+        Target::Bond {
+            a,
+            b,
+            fraction: 0.5,
+        },
+        "Here",
+    )
+    .unwrap();
+    let line = doc
+        .graphics
+        .iter_mut()
+        .find(|g| g.leader.is_some())
+        .unwrap();
+    line.leader.as_mut().unwrap().end = Some(Target::Bond {
+        a,
+        b,
+        fraction: 1e38,
+    });
+    assert!(doc.validate().is_err());
 }

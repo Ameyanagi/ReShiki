@@ -191,7 +191,8 @@ def numeric(name, kind, enum, value, encode=True):
             number = float(value)
         if kind == "CDXCoordinate" or name in ANGLES:
             number *= 65536
-        if name == "BondSpacing":
+        # Tenths: a percentage, and the degrees of an arc (ChemDraw 26 files).
+        if name in ("BondSpacing", "AngularSize"):
             number *= 10
         if kind != "FLOAT64":
             number = round(number)
@@ -230,7 +231,7 @@ def numeric(name, kind, enum, value, encode=True):
             raise ValueError("Unsupported binary enumeration: " + name)
     if kind == "CDXCoordinate" or name in ANGLES:
         number /= 65536
-    if name == "BondSpacing":
+    if name in ("BondSpacing", "AngularSize"):
         number /= 10
     return f"{number:.8g}"
 

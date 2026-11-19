@@ -4,7 +4,7 @@
 use super::{Arrow, ArrowPath, Body};
 use crate::{
     document::{Annotation, Document},
-    graphics::{Graphic, GraphicKind, GraphicStyle, PathCommand},
+    graphics::{Graphic, GraphicStyle, PathCommand},
     grouping::Group,
 };
 use std::borrow::Cow;
@@ -125,7 +125,7 @@ pub fn lowered(doc: &Document) -> Cow<'_, Document> {
         if !whole && arrow.badge.is_none() {
             continue;
         }
-        let mut members = shapes(
+        let members = shapes(
             if whole {
                 arrow.paths()
             } else {
@@ -142,11 +142,6 @@ pub fn lowered(doc: &Document) -> Cow<'_, Document> {
             },
             &mut next,
         );
-        // The disc covers the shaft in ChemDraw, which draws it unbroken.
-        if !whole && let Some(disc) = members.first_mut() {
-            disc.style.fill = Some(crate::palette::Color::Custom([255, 255, 255]));
-            disc.layer = 2;
-        }
         let mut ids: Vec<u64> = members.iter().map(|g| g.id).collect();
         if let Some((position, text, format)) = arrow.badge_text() {
             out.annotations.push(Annotation {
@@ -193,19 +188,40 @@ pub fn lowered(doc: &Document) -> Cow<'_, Document> {
         group.members.retain(|id| !removed.contains(id));
     }
     out.groups.retain(|g| g.members.len() > 1);
+    // A callout travels as its line, dot and text in one group.
     let mut dots = Vec::new();
+    let mut callouts = Vec::new();
     for g in &mut out.graphics {
+        let Some(leader) = g.leader.take() else {
+            continue;
+        };
+        let mut members = vec![g.id];
+        g.leader = Some(leader.clone());
         if let Some((commands, style)) = g.leader_dot() {
             dots.push(shape(next, commands, &style, true));
+            members.push(next);
             next += 1;
         }
         g.leader = None;
+        if let Some(crate::leaders::Target::Object { id }) = leader.start {
+            members.push(id);
+        }
+        callouts.push(members);
     }
     out.graphics.extend(dots);
-    debug_assert!(
-        out.graphics
+    for members in callouts {
+        let grouped = out
+            .groups
             .iter()
-            .all(|g| g.kind != GraphicKind::Line || g.leader.is_none())
-    );
+            .any(|g| g.members.iter().any(|id| members.contains(id)));
+        if !grouped && members.len() > 1 {
+            out.groups.push(Group {
+                id: next,
+                members,
+                integral: false,
+            });
+            next += 1;
+        }
+    }
     Cow::Owned(out)
 }

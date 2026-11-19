@@ -247,9 +247,19 @@ pub(crate) fn transformed(doc: &mut Document, moved: impl Fn(u64) -> Option<usiz
 }
 
 pub fn validate(doc: &Document) -> Result<(), String> {
-    for g in doc.graphics.iter().filter(|g| g.leader.is_some()) {
+    for g in doc.graphics.iter() {
+        let Some(leader) = &g.leader else {
+            continue;
+        };
         if g.kind != GraphicKind::Line {
             return Err("Only a line can be a callout leader".into());
+        }
+        if [&leader.start, &leader.end]
+            .into_iter()
+            .flatten()
+            .any(|t| matches!(t, Target::Bond { fraction, .. } if !(0.0..=1.0).contains(fraction)))
+        {
+            return Err("A callout leader's bond point must lie on the bond".into());
         }
     }
     Ok(())

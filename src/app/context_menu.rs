@@ -310,11 +310,6 @@ impl App {
             self.molecule_entries(atoms),
             self.structure_entries(atoms, bonds, tilt),
             self.generic_entries(),
-            if self.callout_target().is_some() {
-                vec![command("Add callout", Message::AddCallout, true)]
-            } else {
-                vec![]
-            },
             if self.selected_text_boxes() {
                 vec![command(
                     "Format as chemical name",
@@ -687,6 +682,9 @@ impl App {
             ));
         }
         entries.push(submenu("Arrange & transform", Page::Align));
+        if self.callout_target().is_some() {
+            entries.push(command("Add callout", Message::AddCallout, true));
+        }
         if bonds {
             entries.push(submenu("Bond appearance", Page::Bonds));
         }

@@ -669,8 +669,8 @@ impl Graphic {
     pub fn edit_point(&mut self, index: usize, p: Point) -> Result<(), String> {
         // Dragging a callout leader's end releases it from its target, and
         // the leader stays a line.
+        let mut ends = self.line_ends();
         if let Some(leader) = self.leader.as_mut() {
-            let mut ends = self.line_ends();
             match index {
                 0 => leader.start = None,
                 1 => leader.end = None,
@@ -682,7 +682,9 @@ impl Graphic {
             if !p.is_finite() {
                 return Err("Non-finite graphic point".into());
             }
-            ends[index] = p;
+            if let Some(end) = ends.get_mut(index) {
+                *end = p;
+            }
             self.set_line_ends(ends);
             return Ok(());
         }

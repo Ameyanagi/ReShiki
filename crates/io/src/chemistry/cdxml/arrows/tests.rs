@@ -308,7 +308,12 @@ fn chemdraw_arc_arrows_read_as_arcs_running_the_same_way() {
         );
         let arrow = read_drawing(&xml);
         let sweep: f32 = angle.parse().unwrap();
-        assert_eq!(arrow.arc, Some(-sweep), "{angle}");
+        // ChemDraw rounds the ends to hundredths of a point.
+        assert!(
+            (arrow.arc.unwrap() + sweep).abs() < 0.2,
+            "{angle}: {:?}",
+            arrow.arc
+        );
         let p = arrow.point(0.5);
         assert!(
             p.distance(Point::new(middle.0, middle.1)) < 0.05,

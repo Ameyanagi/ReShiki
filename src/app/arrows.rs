@@ -933,7 +933,8 @@ impl App {
                 let [molecule] = molecules.as_slice() else {
                     return None;
                 };
-                (molecule.len() == atoms.len()).then(|| Target::Molecule { atom: atoms[0] })
+                let atom = *atoms.first()?;
+                (molecule.len() == atoms.len()).then_some(Target::Molecule { atom })
             }
         }
     }

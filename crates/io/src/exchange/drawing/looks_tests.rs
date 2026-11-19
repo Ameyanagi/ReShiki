@@ -168,7 +168,16 @@ async fn chevrons_badges_and_callouts_travel_as_grouped_shapes_with_a_notice() {
             1,
             "{format}"
         );
-        assert!(tree.descendants().any(|n| n.has_tag_name("group")));
+        // The badge and the callout each travel as one group.
+        let groups: Vec<_> = tree
+            .descendants()
+            .filter(|n| n.has_tag_name("group"))
+            .collect();
+        assert!(groups.len() >= 2, "{format}");
+        assert!(groups.iter().any(|g| {
+            g.descendants()
+                .any(|n| n.has_tag_name("s") && n.text() == Some("New bond"))
+        }));
         assert!(
             tree.descendants()
                 .any(|n| n.has_tag_name("s") && n.text() == Some("Pd"))
