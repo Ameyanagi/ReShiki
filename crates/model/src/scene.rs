@@ -2532,7 +2532,15 @@ pub(crate) fn gradient_primitive(
     fill: crate::palette::Color,
     doc: &Document,
 ) -> Primitive {
-    let shown = |c: crate::palette::Color| doc.canvas_theme.color(c.rgb());
+    let canvas = doc.canvas_theme;
+    let shown = |c: crate::palette::Color| canvas.color(c.rgb());
+    let end = shown(fill);
+    // Paper the fill already shows, as an Ink arrow on a card of the other
+    // canvas does, starts from the other canvas's paper instead.
+    let start = match gradient.from {
+        crate::palette::Color::Paper if end == canvas.background() => canvas.toggled().background(),
+        from => shown(from),
+    };
     let (from, to) = gradient.ends();
     Primitive::Gradient {
         commands,
@@ -2540,7 +2548,7 @@ pub(crate) fn gradient_primitive(
         radial: gradient.kind == crate::graphics::GradientKind::Radial,
         from,
         to,
-        stops: vec![(0., shown(gradient.from), 1.), (1., shown(fill), 1.)],
+        stops: vec![(0., start, 1.), (1., end, 1.)],
     }
 }
 /// A cycle draws only its derived arrows and labels.

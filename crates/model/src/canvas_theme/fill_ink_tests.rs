@@ -172,3 +172,45 @@ fn a_border_title_reads_on_an_ink_panel() {
         [32, 80, 145]
     );
 }
+
+#[test]
+fn a_gradient_arrow_on_a_card_of_the_other_canvas_keeps_its_ramp() {
+    use crate::{
+        arrows::{ArrowStyle, Body, Preset},
+        document::Arrow,
+        scene::Primitive,
+    };
+    for (canvas, fill) in [
+        (CanvasTheme::Dark, Color::Custom([0xD9; 3])),
+        (CanvasTheme::Light, Color::Custom([0x20, 0x20, 0x40])),
+    ] {
+        let (mut doc, _) = figure(canvas, fill);
+        let mut style = ArrowStyle::preset(Preset::Forward);
+        style.set_body(Body::Gradient);
+        let id = doc.next_id();
+        doc.arrows.push(Arrow::new(
+            id,
+            Point::new(0., 20.),
+            Point::new(40., 20.),
+            Preset::Forward,
+            style,
+        ));
+        let scene = crate::scene::primitives(&doc);
+        let Some(Primitive::Gradient { stops, .. }) = scene
+            .iter()
+            .find(|p| matches!(p, Primitive::Gradient { .. }))
+        else {
+            panic!("a gradient body: {scene:?}");
+        };
+        let [(_, start, _), (_, end, _)] = stops.as_slice() else {
+            panic!("two stops: {stops:?}");
+        };
+        // The card's ink, from the card's paper.
+        let ink = ink_canvas(match fill {
+            Color::Custom(rgb) => rgb,
+            _ => unreachable!(),
+        });
+        assert_eq!(*end, ink.color([0; 3]), "{canvas}");
+        assert_eq!(*start, ink.background(), "{canvas}");
+    }
+}
