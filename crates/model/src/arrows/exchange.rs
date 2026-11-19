@@ -86,7 +86,13 @@ fn shapes(paths: Vec<ArrowPath>, next: &mut u64) -> Vec<Graphic> {
     graphics
 }
 
-fn shape(id: u64, commands: Vec<PathCommand>, style: &GraphicStyle, filled: bool) -> Graphic {
+/// A pen path with the arrow part's outline and look.
+pub(crate) fn shape(
+    id: u64,
+    commands: Vec<PathCommand>,
+    style: &GraphicStyle,
+    filled: bool,
+) -> Graphic {
     let mut style = style.clone();
     if filled {
         style.fill = Some(style.stroke);

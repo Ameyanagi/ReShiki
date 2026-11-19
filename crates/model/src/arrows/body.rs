@@ -408,6 +408,7 @@ impl Arrow {
             fill: None,
             width_pt: s.width_pt.clamp(0.5, 1.2),
             pattern: LinePattern::Solid,
+            ..GraphicStyle::default()
         }
     }
 }

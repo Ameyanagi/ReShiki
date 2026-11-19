@@ -26,6 +26,7 @@ mod exchange;
 mod nodes;
 pub use arc::{MAX_SWEEP, MIN_SWEEP, sweep_through};
 pub use body::{Badge, BadgeIcon, Body};
+pub(crate) use exchange::shape;
 pub use exchange::{Lowered, export_notice, lowered, lowered_count};
 pub use nodes::{FIRST_NODE_HANDLE, NodePart, node_handle};
 choices!(Head { Full => "Full", None => "None", Left => "Half left", Right => "Half right" });
@@ -846,11 +847,12 @@ impl Arrow {
             effects: Default::default(),
             corner_pt: None,
         };
+        let body = self.drawn_body();
         let mut path = |mut commands: Vec<PathCommand>, filled: bool, head: bool| {
             let mut style = stroke.clone();
             if head {
                 style.pattern = LinePattern::Solid;
-            } else if s.pattern == LinePattern::Wavy && !filled {
+            } else if s.pattern == LinePattern::Wavy && !filled && body.is_line() {
                 let radius = crate::graphics::wave_radius(s.width_pt);
                 // Run straight under each head and a little beyond it.
                 let lead = DEFAULT.world(s.head_length_pt) + radius;
@@ -863,6 +865,8 @@ impl Arrow {
             if filled {
                 style.fill = Some(s.color);
                 style.width_pt = 0.;
+                // A gradient body shades like a ChemDraw Shaded fill.
+                style.effects.shaded = body == Body::Gradient;
             }
             result.push(ArrowPath {
                 commands,
@@ -870,7 +874,6 @@ impl Arrow {
                 filled,
             });
         };
-        let body = self.drawn_body();
         match body {
             Body::Line => self.shafts(&s, n, gap, &mut path),
             Body::Chevron => {

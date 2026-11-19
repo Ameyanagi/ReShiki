@@ -148,7 +148,7 @@ The body changes only the look. A block reaction arrow keeps its reaction
 roles and condition text, and switching back to **Line** restores line-sized
 heads. Equilibrium, retrosynthesis and elbow arrows keep line bodies. The
 arrow palette also offers **Block**, **Hollow block**, **Chevron** and
-**Gradient** presets. A **Gradient** body is drawn flat until shaded fills are available.
+**Gradient** presets. A **Gradient** body is shaded like ChemDraw's Shaded fill.
 
 ### Add a badge
 
@@ -201,7 +201,6 @@ Equilibrium arrows also set **Reverse length (0.2–1)** and **Shaft separation
 - Only `.rsk` files keep the links between an arrow and its targets. Other
   formats keep the arrow's shape.
 - Arcs are circular. Automatic routing is not available.
-- A **Gradient** body is drawn with a flat fill for now.
 - ChemDraw draws an arrow above its badge shapes, so there the shaft runs
   through the badge disc.
 - A multi-segment arrowed curve read from CDXML/CDX opens as a pen path with
