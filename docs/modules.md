@@ -58,6 +58,7 @@ explains how the crates and modules fit together.
 - `src/app/command_palette/catalog.rs`: The palette's commands
 - `src/app/context_menu.rs`: Commands for the object under a secondary click, or the current selection.
 - `src/app/context_menu/cascade.rs`: Cascading context panels share one event boundary and use laid-out rows as anchors.
+- `src/app/cycles.rs`: Catalytic cycles
 - `src/app/depth_appearance.rs`
 - `src/app/desktop.rs`: UI-side ownership acknowledgement; the transport cannot accept a request merely because it queued bytes.
 - `src/app/dispatch.rs`: The message dispatch table
@@ -676,6 +677,7 @@ explains how the crates and modules fit together.
 - `crates/model/src/crossings.rs`: Drawing depth at crossings; never changes chemical connectivity.
 - `crates/model/src/crossings/depth.rs`: Resolve crossings at their actual XYZ intersection, with explicit layers taking precedence over automatic depth.
 - `crates/model/src/crossings/ring_strokes.rs`: Crossing clearance for cubic aromatic circles and partial ring curves.
+- `crates/model/src/cycles.rs`: Catalytic cycles.
 - `crates/model/src/depiction.rs`: Opt-in nitrogen charge separation using the same cleanup as analysis.
 - `crates/model/src/depth_appearance.rs`: Persistent paint for an editable projection, independent of chemical styles.
 - `crates/model/src/document.rs`

@@ -24,7 +24,7 @@ mod arc;
 mod body;
 mod exchange;
 mod nodes;
-pub use arc::{MAX_SWEEP, MIN_SWEEP, sweep_through};
+pub use arc::{MAX_SWEEP, MIN_SWEEP, circle as arc_circle, sweep_through};
 pub use body::{Badge, BadgeIcon, Body};
 pub(crate) use exchange::shape;
 pub use exchange::{Lowered, export_notice, lowered, lowered_count};

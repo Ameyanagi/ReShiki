@@ -34,6 +34,7 @@ pub mod color_contrast;
 pub mod common_groups;
 pub mod compare;
 pub mod crossings;
+pub mod cycles;
 pub mod depiction;
 pub mod depth_appearance;
 pub mod document;

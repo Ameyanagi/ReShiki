@@ -124,6 +124,8 @@ impl App {
             return;
         }
         let before = self.tab.doc.clone();
+        // A role a drop gave a part, said after the edit's own status.
+        let mut joined = None;
         if matches!(edit, Edit::Bond(..) | Edit::TextBond { .. }) {
             self.tab.arrows.cancel_source();
         }
@@ -338,6 +340,11 @@ impl App {
                     self.tab.selected = snapped;
                 } else {
                     self.tab.doc.translate(&ids, dx, dy);
+                    // The drop target the drag showed gives the part its role.
+                    if let Some(target) = reshiki::cycles::drop_target(&self.tab.doc, &ids) {
+                        reshiki::cycles::assign(&mut self.tab.doc, &target);
+                        joined = Some(format!("Added to the cycle as {}", target.role));
+                    }
                     self.tab.selected = ids;
                 }
             }
@@ -372,6 +379,9 @@ impl App {
             Edit::Click(p) | Edit::RepeatLabel(p) => return self.canvas_click(p, before),
         }
         self.changed(before);
+        if let Some(joined) = joined.filter(|_| !self.error) {
+            self.status = joined;
+        }
     }
     pub(super) fn place_arrow(&mut self, start: Point, end: Point) {
         let id = self.tab.doc.next_id();

@@ -57,12 +57,24 @@ pub fn export_notice(doc: &Document) -> Option<String> {
     if leaders > 0 {
         parts.push(plural(leaders, "callout leader", "callout leaders"));
     }
-    (!parts.is_empty()).then(|| {
+    let shapes = (!parts.is_empty()).then(|| {
         format!(
             "ChemDraw gets {} as grouped shapes that look the same. Save as a .rsk file to keep them editable as arrows and callouts.",
             parts.join(", ")
         )
-    })
+    });
+    let cycles = doc.graphics.iter().filter(|g| g.cycle.is_some()).count();
+    let cycles = (cycles > 0).then(|| {
+        format!(
+            "ChemDraw gets {} as plain arrows and text. Save as a .rsk file to keep {} a cycle.",
+            plural(cycles, "catalytic cycle", "catalytic cycles"),
+            if cycles == 1 { "it" } else { "each" }
+        )
+    });
+    match (shapes, cycles) {
+        (Some(a), Some(b)) => Some(format!("{a} {b}")),
+        (a, b) => a.or(b),
+    }
 }
 
 /// One shape per subpath, so every stroke stays an ordinary open or closed path.

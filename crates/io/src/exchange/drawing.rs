@@ -12,6 +12,8 @@ use std::collections::HashMap;
 mod bracket_superscript_tests;
 mod clipboard;
 #[cfg(test)]
+mod cycle_tests;
+#[cfg(test)]
 mod effects_tests;
 #[cfg(test)]
 mod fill_effects_tests;
@@ -200,11 +202,16 @@ fn write_impl(
     let document = depth_painted.as_ref();
     let resolved = crate::canvas_theme::resolved_exchange_document(document);
     let document = resolved.as_ref();
+    // A catalytic cycle travels as the arrows and text it draws.
+    let cycles = crate::cycles::materialized(document);
+    let document = cycles.as_ref();
     // Arrow looks without a ChemDraw form travel as grouped shapes.
     let lowered = crate::arrows::lowered(document);
     let document = lowered.as_ref();
     let shape_paths: HashMap<u64, Vec<PathCommand>>;
-    let options = if matches!(lowered, std::borrow::Cow::Owned(_)) {
+    let options = if matches!(lowered, std::borrow::Cow::Owned(_))
+        || matches!(cycles, std::borrow::Cow::Owned(_))
+    {
         let mut paths = options.graphic_paths.cloned().unwrap_or_default();
         for g in &document.graphics {
             paths.entry(g.id).or_insert_with(|| g.commands());

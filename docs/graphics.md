@@ -191,6 +191,35 @@ item changes size, for example after adding a bond, its neighbors move to keep
 the gutters. Moving one item by itself leaves it where you put it.
 **Ungroup** ends the layout.
 
+### Draw a catalytic cycle
+
+1. Draw the intermediates as structures or text, roughly in a circle.
+2. Select them and choose **Make catalytic cycle** from the canvas menu or
+   the command palette. They slide onto a circle through them, ordered
+   clockwise from the top, and an arc arrow runs from each to the next. To
+   start from an empty circle instead, choose **Catalytic cycle** in the
+   command palette's insert commands.
+3. To add a part, drag a structure or text that is not in a cycle. On the
+   circle it becomes a new intermediate between its neighbors; beside the
+   first half of a step's arc it becomes a reagent coming in, beside the
+   second half a product going out. A dashed outline and a tag such as
+   **Intermediate 3** or **Reagent of step 2** show the role before you let
+   go. A part already in the cycle keeps its role when it moves.
+4. Clicking any part selects the whole cycle. Option/Alt-click moves one part
+   alone; every arc and side arrow refits to it.
+5. In **Properties → Catalytic cycle**, choose **Clockwise** or
+   **Counterclockwise**, and set **Radius (pt)**, **Gap (pt)** (the space
+   between an arc and an intermediate) and **Center** text. Pick a step to
+   give it a **Name**, make it **Reversible**, **Hide arrow**, or set its
+   **Bow** and extra **Space in** and **out** in points. **Parts** lists every
+   part with its role.
+6. To take a part out, select it alone and choose **Remove from cycle**. It
+   stays in the drawing.
+
+Each change is one Undo step. A reagent's side arrow joins the arc without a
+head; a product's leaves it with one. Reaction detection never takes a
+cycle's parts, so a scheme drawn beside the cycle is read on its own.
+
 ### Start from a figure layout
 
 **Templates → Figure layouts** has a single-row TOC with a title bar, previous
@@ -231,6 +260,11 @@ cm**, **RSC graphical abstract · 8 × 4 cm** or **Elsevier graphical abstract �
   files.
 - A panel's title uses the drawing's font and size in bold. Title text is
   edited in **Properties**, not on the canvas.
+- A catalytic cycle is a circle. ChemDraw has no cycle object: CDXML and CDX
+  get its arrows and text, grouped with its parts, and opening that file
+  again gives those arrows, not a cycle.
+- A cycle's steps are not yet reactions: they have no atom maps, reaction
+  SMILES or color by origin.
 - Rotating a whole layout changes its items' sizes, so the next size change
   lays them out upright again.
 - Brackets are graphics. To define a repeating unit, see
@@ -270,6 +304,23 @@ are the group's connected molecules, nested groups and whole reactions. After
 each edit the layout is laid out again if an item changed size or number.
 `graphics::panel::contents` lists what lies wholly inside a panel. Both entries
 need document version 40.
+
+A catalytic cycle is an ellipse graphic with a `cycle` entry
+(`crates/model/src/cycles.rs`): direction, gap, center text, intermediates
+in order (each the atom IDs of one molecule or one text's ID) and one step
+per intermediate with its name, reversible and hidden flags, bow, extra space
+and reagent and product parts. Arcs, side arrows and names are computed on
+every draw by `cycles::drawn` from the parts' ink, so they are never stored
+and never enter the drawing's arrow list. Each arc starts and stops where it
+leaves the ink box grown by the gap; a side arrow is a curve from its part's
+ink that meets its step's arc along the arc's way, at least 1.2 bond lengths
+along from the part. Step names try the inside and outside of the arc's
+middle, then points along it and further from it, and take the place covering
+the least ink without crossing the arc. After each edit the parts grow to whole
+molecules, parts that went are dropped, and the steps on both sides of a
+dropped intermediate join. Reaction preview skips every cycle part. CDXML and
+CDX export write the drawn arrows and text in the cycle's group
+(`cycles::materialized`). A cycle needs document version 40.
 
 ### Interchange boundary
 

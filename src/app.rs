@@ -30,6 +30,7 @@ mod clipboard;
 mod color_popover;
 mod command_palette;
 mod context_menu;
+mod cycles;
 mod depth_appearance;
 mod dispatch;
 mod document_styles;
@@ -228,6 +229,8 @@ pub enum Message {
     Graphics(graphics::Action),
     /// Figure panels and lasting layouts.
     Figure(figure_panels::Action),
+    /// Catalytic cycles.
+    Cycle(cycles::Action),
     RemoveMark(u64, usize),
     RotateMark(u64, usize),
     AtomRadical(u8),
@@ -935,6 +938,7 @@ impl App {
         self.sync_arrow_label_gap_input();
         // A flip or another edit can reorder a selected panel's titles.
         self.sync_figure();
+        self.sync_cycle();
     }
     /// What every recorded change of the drawing needs, whether an edit made
     /// it or Undo or Redo restored it. Results for the previous revision are

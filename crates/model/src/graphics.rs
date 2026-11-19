@@ -349,6 +349,9 @@ pub struct Graphic {
     /// A callout leader's attached ends; only lines have one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub leader: Option<crate::leaders::Leader>,
+    /// The intermediates and steps that make an ellipse a catalytic cycle.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cycle: Option<Box<crate::cycles::Cycle>>,
 }
 fn back_layer() -> i32 {
     -1
@@ -451,6 +454,7 @@ impl Graphic {
                 heads: None,
                 panel: None,
                 leader: None,
+                cycle: None,
             };
         }
         let mut dx = end.x - start.x;
@@ -497,6 +501,7 @@ impl Graphic {
             heads: None,
             panel: None,
             leader: None,
+            cycle: None,
         }
     }
     /// A rounded rectangle's corner radius in drawing units, at most half its
@@ -806,6 +811,15 @@ impl Graphic {
                 return Err("Panel settings require a rectangle".into());
             }
             panel.validate()?;
+        }
+        if let Some(cycle) = &self.cycle {
+            let (center, radius) = self.cycle_circle();
+            if self.kind != GraphicKind::Ellipse
+                || !(center.is_finite() && radius.is_finite() && radius > 1e-3)
+            {
+                return Err("A catalytic cycle must be a circle of some size".into());
+            }
+            cycle.validate()?;
         }
         if let Some(arc) = self.arc {
             if self.kind != GraphicKind::Arc {

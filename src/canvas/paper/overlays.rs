@@ -290,6 +290,37 @@ impl MoleculeCanvas<'_> {
         }
     }
 
+    /// A dashed accent box around a part a drop would add to a cycle; the
+    /// badge at the pointer names its role.
+    pub(super) fn draw_drop_ink(
+        &self,
+        frame: &mut layered::Frame<'_>,
+        ink: Option<(World, World)>,
+        bounds: Rectangle,
+    ) {
+        let Some((lo, hi)) = ink else {
+            return;
+        };
+        let a = self.camera.screen(lo, bounds);
+        let b = self.camera.screen(hi, bounds);
+        let path = Path::rounded_rectangle(
+            Point::new(a.x - 6., a.y - 6.),
+            iced::Size::new(b.x - a.x + 12., b.y - a.y + 12.),
+            6.0.into(),
+        );
+        frame.fill(&path, Color { a: 0.12, ..ACCENT });
+        frame.stroke(
+            &path,
+            Stroke {
+                line_dash: canvas::LineDash {
+                    segments: &[5., 3.],
+                    offset: 0,
+                },
+                ..Stroke::default().with_width(1.4).with_color(ACCENT)
+            },
+        );
+    }
+
     pub(super) fn draw_editor_markers(
         &self,
         frame: &mut layered::Frame<'_>,
@@ -524,7 +555,7 @@ impl MoleculeCanvas<'_> {
         for graphic in preview
             .graphics
             .iter()
-            .filter(|g| selected.contains(&g.id) && g.panel.is_none())
+            .filter(|g| selected.contains(&g.id) && g.panel.is_none() && g.cycle.is_none())
         {
             if let Some(handles) = graphic.path_handles() {
                 self.draw_path_handles(frame, graphic, handles, bounds, edit_points);

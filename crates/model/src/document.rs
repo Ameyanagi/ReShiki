@@ -273,7 +273,7 @@ pub const CAPTION_NAMES: u32 = 39;
 /// Drawing-element styles: shading, drop shadows, wavy strokes, arrowheads
 /// on lines, corner radii, gradient and see-through fills, glows; Reference and
 /// Illustration molecules and arrows; color by origin settings on reactions;
-/// figure panels and lasting row, column and grid layouts.
+/// figure panels and lasting row, column and grid layouts; catalytic cycles.
 pub const DRAWING_ELEMENTS: u32 = 40;
 
 /// The newest document format this build reads. Native output uses version 30
@@ -286,8 +286,8 @@ pub const DRAWING_ELEMENTS: u32 = 40;
 /// requires version 39, or shading, drop shadows, wavy strokes, arrowheads
 /// on lines, corner radii, gradient and see-through fills, glows, a
 /// Reference or Illustration molecule or arrow, color by origin settings, figure panels,
-/// lasting layouts, arrow bodies, badges, arcs or callout leaders require
-/// version 40.
+/// lasting layouts, arrow bodies, badges, arcs, callout leaders or catalytic
+/// cycles require version 40.
 /// Optional atom-label settings, including steroid α/β display, retain this
 /// version; older readers may ignore those presentation preferences.
 ///
@@ -517,6 +517,7 @@ impl Document {
                 || g.kind == GraphicKind::Line && g.heads.is_some()
                 || g.panel.is_some()
                 || g.leader.is_some()
+                || g.cycle.is_some()
         }) || self.arrows.iter().any(|a| {
             let style = a.appearance();
             style.pattern == LinePattern::Wavy

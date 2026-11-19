@@ -243,6 +243,8 @@ impl App {
             .iter()
             .filter(|g| self.tab.selected.contains(&g.id) && g.picture.is_none())
             .collect();
+        // A cycle's style colors its arrows; it has no fill.
+        let cycle = selected.iter().any(|g| g.cycle.is_some());
         let kind = match self.tool {
             Tool::Graphic(k) => k,
             _ => selected
@@ -281,6 +283,8 @@ impl App {
             }),
             text(if selected.iter().any(|g| g.panel.is_some()) {
                 "Panel".to_owned()
+            } else if cycle {
+                "Cycle arrows".to_owned()
             } else {
                 kind.to_string()
             })
@@ -422,7 +426,7 @@ impl App {
             }
             _ => {}
         }
-        if kind.closed()
+        if kind.closed() && !cycle
             || (kind == GraphicKind::Path
                 && selected.iter().any(|g| {
                     g.commands()
@@ -744,6 +748,7 @@ impl App {
             }
         }
         self.sync_figure();
+        self.sync_cycle();
     }
     pub(super) fn apply_graphic_style(&mut self, change: GraphicChange) {
         change.apply(&mut self.tab.graphic_style);
