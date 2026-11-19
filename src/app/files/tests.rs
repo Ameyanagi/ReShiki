@@ -759,9 +759,15 @@ async fn a_drawing_reopens_at_the_view_it_was_saved_in() {
         center: Point::new(640., 12.5),
         zoom: 0.76,
     };
+    // A view that shows none of the drawing or its page is not kept.
+    let lost = reshiki::document::View {
+        center: Point::new(1e30, 0.),
+        zoom: 5.,
+    };
     for (bytes, saved) in [
         (drawing.file_json_with_view(Some(view)).unwrap(), true),
         (drawing.file_json().unwrap(), false),
+        (drawing.file_json_with_view(Some(lost)).unwrap(), false),
     ] {
         let (mut app, _) = App::new();
         let opened = prepare_contents("view.rsk".into(), Ok(bytes)).await;

@@ -893,10 +893,7 @@ impl super::App {
                 if self.open_target(Some(&path)) {
                     self.show_opened(*doc, Some(path));
                     if let Some(view) = view {
-                        self.tab.camera.center = iced::Point::new(view.center.x, view.center.y);
-                        self.tab.camera.zoom = view.zoom.clamp(super::MIN_ZOOM, 5.);
-                        self.tab.pages.fit = None;
-                        self.tab.fit_to_view = false;
+                        self.restore_view(view);
                     }
                 }
                 return kept;
@@ -977,6 +974,47 @@ impl super::App {
             ));
         }
         self.error = false;
+    }
+
+    /// Show the opened drawing as it was saved, unless that view shows none
+    /// of it (or of its pages): then it stays fitted.
+    fn restore_view(&mut self, view: reshiki::document::View) {
+        let camera = crate::canvas::Camera {
+            center: view.center,
+            zoom: view.zoom.min(5.),
+        };
+        let paper = self.guides.paper(iced::Rectangle::with_size(self.viewport));
+        let (half_x, half_y) = (
+            camera.world_len(paper.width / 2.),
+            camera.world_len(paper.height / 2.),
+        );
+        let layout = self.tab.doc.page_layout.as_ref();
+        let pages: Vec<_> = layout
+            .map(|layout| {
+                (0..layout.count())
+                    .filter_map(|i| layout.bounds(i))
+                    .collect()
+            })
+            .unwrap_or_default();
+        let shown = |(lo, hi): &(reshiki::document::Point, reshiki::document::Point)| {
+            (lo.x - half_x..=hi.x + half_x).contains(&camera.center.x)
+                && (lo.y - half_y..=hi.y + half_y).contains(&camera.center.y)
+        };
+        if !std::iter::once(self.tab.doc.bounds())
+            .chain(pages.iter().copied())
+            .any(|bounds| shown(&bounds))
+        {
+            return;
+        }
+        // Page controls act on the page in view.
+        if let Some(page) = pages.iter().position(|(lo, hi)| {
+            (lo.x..=hi.x).contains(&camera.center.x) && (lo.y..=hi.y).contains(&camera.center.y)
+        }) {
+            self.tab.pages.active = page;
+        }
+        self.tab.camera = camera;
+        self.tab.pages.fit = None;
+        self.tab.fit_to_view = false;
     }
 
     /// Save, or Save as in `format`. The first Save of a ChemDraw or MOL file
@@ -1093,11 +1131,10 @@ impl super::App {
         }
         let snapshot = std::sync::Arc::new(self.tab.doc.clone());
         let save_snapshot = std::sync::Arc::clone(&snapshot);
+        #[cfg(not(target_arch = "wasm32"))]
+        let github_root = self.github.root.clone();
         let view = Some(reshiki::document::View {
-            center: reshiki::document::Point::new(
-                self.tab.camera.center.x,
-                self.tab.camera.center.y,
-            ),
+            center: self.tab.camera.center,
             zoom: self.tab.camera.zoom,
         });
         let epoch = self.tab.file_epoch;
@@ -1163,6 +1200,13 @@ impl super::App {
                         .filter(|binding| binding.same_path(&path))
                         .map_or(path.clone(), |binding| binding.path.clone());
                     let save_path = path.clone();
+                    // A drawing kept in a GitHub repository is shared: each
+                    // person's view stays out of its commits and versions.
+                    let view = view.filter(|_| {
+                        github_root.as_deref().is_none_or(|root| {
+                            reshiki::github::workcopy::locate(root, &path).is_none()
+                        })
+                    });
                     // A ChemDraw or MOL file is written by the chemistry engine.
                     let exported = match kept_format(&path) {
                         Some(format) => Some(
