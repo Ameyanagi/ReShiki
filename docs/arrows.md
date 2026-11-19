@@ -157,7 +157,8 @@ files keep it as ChemDraw's Shaded fill.
 1. Select an arrow.
 2. In **Properties → Badge**, choose **Light (hν)**, **Electrode (e⁻)**,
    **Heat (Δ)**, **Metal** or **Enzyme**. For **Metal**, type the symbol and
-   press Enter. Choosing Metal and typing its symbol undo together.
+   press Enter. Choosing Metal and typing its symbol undo together, unless
+   you save in between. Enter returns the keyboard to the drawing.
 
 The badge sits in a gap in the middle of a line arrow, or beside a broad body.
 It moves and rotates with the arrow and names a condition: a straight forward

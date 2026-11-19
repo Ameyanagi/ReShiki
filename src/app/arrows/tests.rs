@@ -263,3 +263,48 @@ fn picking_metal_then_typing_its_symbol_is_one_undo_step() {
         "the other pick stays"
     );
 }
+
+#[test]
+fn a_canvas_switch_keeps_the_metal_step_but_a_save_ends_it() {
+    use reshiki::arrows::{ArrowStyle, BadgeIcon, Preset};
+    use reshiki::canvas_theme::CanvasTheme;
+    let (mut app, _) = App::new();
+    app.tab.doc.arrows.push(reshiki::document::Arrow::new(
+        1,
+        Point::new(0., 0.),
+        Point::new(120., 0.),
+        Preset::Forward,
+        ArrowStyle::default(),
+    ));
+    app.tab.selected = vec![1];
+    app.arrow_action(arrows::Action::Badge(Some(BadgeIcon::Light)));
+    let light = app.tab.doc.arrows.clone();
+    app.arrow_action(arrows::Action::Badge(Some(BadgeIcon::Metal)));
+    let _ = app.update(Message::CanvasTheme(CanvasTheme::Dark));
+    app.tab.arrows.badge_text = "Cu".into();
+    app.arrow_action(arrows::Action::ApplyBadgeText);
+    let _ = app.update(Message::Undo);
+    assert_eq!(
+        app.tab.doc.arrows, light,
+        "one step across the canvas switch"
+    );
+
+    // Saved with the default Pd, then Cu: Undo returns to the saved Pd.
+    app.arrow_action(arrows::Action::Badge(Some(BadgeIcon::Metal)));
+    let dir = tempfile::tempdir().unwrap();
+    app.tab.path = Some(dir.path().join("badge.rsk"));
+    let _ = app.save_drawing(None);
+    app.tab.arrows.badge_text = "Cu".into();
+    app.arrow_action(arrows::Action::ApplyBadgeText);
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc.arrows[0].badge.as_ref().unwrap().text, "Pd");
+}
+
+#[test]
+fn the_badge_hint_steps_aside_while_its_list_is_open() {
+    let (mut app, _) = App::new();
+    app.arrow_action(arrows::Action::BadgeMenu(true));
+    assert!(app.tab.arrows.badge_menu);
+    app.arrow_action(arrows::Action::BadgeMenu(false));
+    assert!(!app.tab.arrows.badge_menu);
+}

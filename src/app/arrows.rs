@@ -57,10 +57,14 @@ pub struct State {
     pub arc: Option<f32>,
     pub sweep: String,
     pub badge_text: String,
-    /// The tab's file epoch, revision and selection right after a pick of
-    /// Metal, so typing its symbol next, on the same arrows, joins that pick's
-    /// undo step.
-    metal_pick: Option<(u64, u64, Vec<u64>)>,
+    /// After a pick of Metal: the tab's file epoch, the selection and the
+    /// drawing before the pick. Typing the symbol next, on the same arrows,
+    /// joins the pick's undo step while that step is still the last edit,
+    /// so a canvas brightness switch between them keeps one step. A save
+    /// ends it, so Undo returns to the saved badge.
+    pub(super) metal_pick: Option<(u64, Vec<u64>, Document)>,
+    /// The Badge list is open: its hint would cover the choices.
+    pub(super) badge_menu: bool,
     source: Option<reshiki::arrow_anchors::Pick>,
 }
 /// The Badge list's choices: none, or one icon.
@@ -93,6 +97,7 @@ impl Default for State {
             sweep: String::new(),
             badge_text: String::new(),
             metal_pick: None,
+            badge_menu: false,
             source: None,
         }
     }
@@ -125,6 +130,7 @@ pub enum Action {
     Dipole(bool),
     Body(Body),
     Badge(Option<BadgeIcon>),
+    BadgeMenu(bool),
     BadgeText(String),
     ApplyBadgeText,
     MakeArc,
@@ -223,6 +229,7 @@ impl App {
     }
     pub(super) fn arrow_action(&mut self, action: Action) {
         match action {
+            Action::BadgeMenu(open) => self.tab.arrows.badge_menu = open,
             Action::AttachTargets(value) => {
                 self.tab.arrows.attach_targets = value;
                 self.tab.arrows.cancel_source();
@@ -432,27 +439,33 @@ impl App {
             self.error = true;
             return;
         }
-        let picked = (
-            self.tab.file_epoch,
-            self.tab.revision,
-            self.tab.selected.clone(),
-        );
         let before = std::mem::replace(&mut self.tab.doc, next);
-        if matches!(action, Action::ApplyBadgeText)
-            && self.tab.arrows.metal_pick.as_ref() == Some(&picked)
-        {
+        let joins = matches!(action, Action::ApplyBadgeText)
+            && self
+                .tab
+                .arrows
+                .metal_pick
+                .as_ref()
+                .is_some_and(|(epoch, selected, pre)| {
+                    *epoch == self.tab.file_epoch
+                        && *selected == self.tab.selected
+                        && self.tab.history.peek(false) == Some(pre)
+                });
+        let picked = matches!(action, Action::Badge(Some(BadgeIcon::Metal))).then(|| {
+            (
+                self.tab.file_epoch,
+                self.tab.selected.clone(),
+                before.clone(),
+            )
+        });
+        if joins {
             self.changed_continuing(before, true);
         } else {
             self.changed(before);
         }
-        let revised = (
-            self.tab.file_epoch,
-            self.tab.revision,
-            self.tab.selected.clone(),
-        );
-        self.tab.arrows.metal_pick = (matches!(action, Action::Badge(Some(BadgeIcon::Metal)))
-            && revised.1 != picked.1)
-            .then_some(revised);
+        // Only a recorded pick can be joined.
+        self.tab.arrows.metal_pick =
+            picked.filter(|(_, _, pre)| self.tab.history.peek(false) == Some(pre));
         self.sync_arrows();
         self.error = false;
         self.status = match action {
@@ -622,27 +635,41 @@ impl App {
         }
         if let Some(first) = selected.first() {
             let badge = first.badge.as_ref();
-            panel = panel.push(hover_hint(
-                row![
-                    text("Badge").size(11).width(44),
-                    crate::appearance::pick_list(
-                        BadgeChoice::all(),
-                        Some(BadgeChoice(badge.map(|b| b.icon))),
-                        |v| Message::ArrowAction(Action::Badge(v.0))
-                    )
-                    .text_size(12)
-                    .padding(5)
-                    .width(Length::Fill)
-                ]
-                .align_y(Alignment::Center),
-                if first.drawn_body().is_line() {
-                    "A condition icon in a gap in the shaft"
-                } else {
-                    "A condition icon beside the arrow"
-                },
-                // Beside the row: the open list grows up or down over it.
-                tooltip::Position::Left,
-            ));
+            let badge_row = row![
+                text("Badge").size(11).width(44),
+                crate::appearance::pick_list(
+                    BadgeChoice::all(),
+                    Some(BadgeChoice(badge.map(|b| b.icon))),
+                    |v| Message::ArrowAction(Action::Badge(v.0))
+                )
+                .on_open(Message::ArrowAction(Action::BadgeMenu(true)))
+                .on_close(Message::ArrowAction(Action::BadgeMenu(false)))
+                .text_size(12)
+                .padding(5)
+                .width(Length::Fill)
+            ]
+            .align_y(Alignment::Center);
+            // The hint never covers the open list's choices.
+            panel = panel.push(if self.tab.arrows.badge_menu {
+                Element::from(badge_row)
+            } else {
+                hover_hint(
+                    badge_row,
+                    match (
+                        selected.iter().any(|a| a.drawn_body().is_line()),
+                        selected.iter().any(|a| !a.drawn_body().is_line()),
+                    ) {
+                        (true, false) => "A condition icon in a gap in the shaft",
+                        (false, _) => "A condition icon beside the arrow",
+                        (true, true) => {
+                            "A condition icon in a gap in a line shaft, or beside a broad arrow"
+                        }
+                    },
+                    // Beside the row: the open list grows up or down over it.
+                    tooltip::Position::Left,
+                )
+                .into()
+            });
             if badge.is_some_and(|b| b.icon == BadgeIcon::Metal) {
                 panel = panel.push(
                     row![

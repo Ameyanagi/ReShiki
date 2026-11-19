@@ -141,7 +141,16 @@ impl App {
             Message::ToggleAromaticRing => return Some(self.toggle_aromatic_ring()),
             Message::ToggleSelectedRing => self.toggle_selected_ring(),
             Message::ArrowStyle(style) => self.set_arrow_style(style),
-            Message::ArrowAction(action) => self.arrow_action(action),
+            Message::ArrowAction(action) => {
+                let symbol = matches!(action, super::arrows::Action::ApplyBadgeText);
+                self.arrow_action(action);
+                // Back to the drawing, so ⌘Z next undoes the badge.
+                if symbol && !self.error {
+                    return Some(iced::advanced::widget::operate(
+                        super::keyboard_drawing::ReleaseFocus,
+                    ));
+                }
+            }
             Message::ArrowLabelGap(action) => self.arrow_label_gap_action(action),
             Message::CustomElement(s) => self.custom_element = s,
             Message::ApplyElement => self.apply_custom_element(),
