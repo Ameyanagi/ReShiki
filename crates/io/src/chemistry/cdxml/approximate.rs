@@ -207,12 +207,23 @@ fn rewrite(xml: &str) -> Result<(String, Option<String>, usize)> {
     for index in pass.tree.descendants(0)? {
         pass.element(index)?;
     }
-    // The document's label size is also its drawing style's. Each label that
-    // takes it was counted above.
+    // Defaults each caption and label took were settled and counted above.
+    // The document's label size is also its drawing style's.
     if let Some(size) = pass.attr(0, "LabelSize")?.as_deref().and_then(number)
         && !(4.0..=144.).contains(&size)
     {
         pass.set(0, "LabelSize", spell(size.clamp(4., 144.)))?;
+    }
+    for index in pass.tree.descendants(0)? {
+        for key in ["LabelFace", "CaptionFace"] {
+            if let Some(face) = pass
+                .attr(index, key)?
+                .and_then(|face| face.trim().parse::<i64>().ok())
+                .and_then(plain_face)
+            {
+                pass.set(index, key, face.to_string())?;
+            }
+        }
     }
     if !pass.changed {
         return Ok((xml.into(), None, 0));
@@ -247,6 +258,11 @@ fn point(text: &str) -> Option<[f64; 2]> {
         [x, y, ..] => Some([*x, *y]),
         _ => None,
     }
+}
+/// The faces the text reader draws, when `face` has others.
+fn plain_face(face: i64) -> Option<i64> {
+    let known = face & (1 | 2 | 4 | 32 | 64);
+    (known != face && face >= 0).then_some(known)
 }
 fn number(text: &str) -> Option<f64> {
     text.trim().parse::<f64>().ok().filter(|n| n.is_finite())
@@ -1318,15 +1334,13 @@ impl Pass {
             else {
                 continue;
             };
-            let known = face & (1 | 2 | 4 | 32 | 64);
             if face == 65535 {
                 // ChemDraw's value for "not set".
                 self.remove(index, &[key])?;
-            } else if known != face && face >= 0 {
+            } else if counted && let Some(known) = plain_face(face) {
+                // A default is settled where a caption or label takes it.
                 self.set(index, key, known.to_string())?;
-                if counted {
-                    self.count(index, Kind::TextFace);
-                }
+                self.count(index, Kind::TextFace);
             }
         }
         // A size a caption or label inherits from its page or the document
@@ -1502,6 +1516,20 @@ impl Pass {
         } else {
             None
         };
+        // The same for an outline or shadow the text inherits.
+        let face_key = format!("{prefix}Face");
+        let inherits = node.attr(&face_key).is_none()
+            && node.children.iter().any(|&child| {
+                self.node(child)
+                    .is_ok_and(|run| run.tag == "s" && run.attr("face").is_none())
+            });
+        let inherited_face = if inherits {
+            inherited(self, node, &face_key)?
+                .and_then(|face| face.trim().parse::<i64>().ok())
+                .and_then(plain_face)
+        } else {
+            None
+        };
         let height_key = format!("{prefix}LineHeight");
         let height = match inherited(self, node, &height_key)? {
             Some(height) => Some(height),
@@ -1522,6 +1550,10 @@ impl Pass {
         if let Some(size) = inherited_size {
             self.set(index, &size_key, spell(size.clamp(4., 144.)))?;
             self.count(index, Kind::TextSize);
+        }
+        if let Some(face) = inherited_face {
+            self.set(index, &face_key, face.to_string())?;
+            self.count(index, Kind::TextFace);
         }
         let mut changed = false;
         if spacing.is_some_and(|spacing| !(0.8..=3.).contains(&spacing)) {

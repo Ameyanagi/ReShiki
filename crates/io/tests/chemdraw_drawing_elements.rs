@@ -679,6 +679,25 @@ async fn captions_take_the_nearest_size_of_their_page_or_document() {
 }
 
 #[tokio::test]
+async fn captions_that_inherit_an_outline_are_named() {
+    for xml in [
+        "<CDXML CaptionFace='8'><page id='1'><t id='2' p='10 20'><s>outlined</s></t>\
+         <t id='3' p='10 40'><s face='0'>own</s></t></page></CDXML>",
+        "<CDXML><page id='1' CaptionFace='9'><t id='2' p='10 20'><s>outlined</s></t>\
+         <t id='3' p='10 40'><s face='0'>own</s></t></page></CDXML>",
+    ] {
+        let (document, notices) = open(xml.as_bytes().to_vec(), "cdxml").await.unwrap();
+        assert_eq!(
+            notices,
+            nearest("1 outlined or shadowed text in the plain face"),
+            "{xml}"
+        );
+        assert_eq!(formats::chemdraw_loss("cdxml", xml).unsupported, 1, "{xml}");
+        assert_eq!(document.annotations.len(), 2, "{xml}");
+    }
+}
+
+#[tokio::test]
 async fn a_hidden_object_left_out_keeps_its_contents_hidden() {
     let xml = "<CDXML><page id='1'>\
                <bioshape id='2' Visible='no'><t id='3' p='10 20'><s>hidden</s></t></bioshape>\
