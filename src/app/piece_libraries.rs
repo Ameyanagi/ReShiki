@@ -457,7 +457,10 @@ impl App {
             ];
             if !folder.problems.is_empty() {
                 let list: Vec<String> = (folder.problems.iter())
-                    .map(|p| format!("{}: {}", p.path.display(), p.error))
+                    .map(|p| {
+                        let path = p.path.strip_prefix(root).unwrap_or(&p.path);
+                        format!("{}: {}", path.display(), p.error)
+                    })
                     .collect();
                 about = about.push(hover_hint(
                     text(match folder.problems.len() {
@@ -470,16 +473,19 @@ impl App {
                     tooltip::Position::Left,
                 ));
             }
-            body = body.push(hover_hint(
+            // The folder's path shows on Unlink, apart from the problem list.
+            body = body.push(
                 row![
                     about.width(Length::Fill),
-                    command("Unlink", act(Action::Unlink(i))),
+                    hover_hint(
+                        command("Unlink", act(Action::Unlink(i))),
+                        format!("Stop using {}", root.display()),
+                        tooltip::Position::Left,
+                    ),
                 ]
                 .spacing(6)
                 .align_y(Alignment::Center),
-                root.display().to_string(),
-                tooltip::Position::Left,
-            ));
+            );
         }
         let mut buttons = row![].spacing(6);
         if cfg!(not(target_arch = "wasm32")) {
@@ -560,7 +566,7 @@ impl App {
             ));
         }
         buttons = buttons.push(command(
-            "Export piece…",
+            "Export this piece…",
             Message::Equipment(Action::ExportPiece(k)),
         ));
         body.push(buttons).into()

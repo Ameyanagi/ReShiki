@@ -640,7 +640,13 @@ impl App {
             .collect();
         let (heading, detail) = match pieces.as_slice() {
             [] => return None,
-            [d] => (title(d).to_owned(), size(d)),
+            // A library piece names its revision, so the one exported or
+            // updated is plain.
+            [d] if d.id.starts_with("reshiki/") => (title(d).to_owned(), size(d)),
+            [d] => (
+                title(d).to_owned(),
+                format!("{} · revision {}", size(d), d.revision),
+            ),
             many => (format!("{} equipment pieces", many.len()), String::new()),
         };
         let mut body = column![
@@ -699,6 +705,11 @@ impl App {
         }
         // An assembly: each seat in it, with Detach.
         if self.tab.selected.len() > 1 {
+            body = body.push(
+                text("Option-click a piece for its own joints and library actions.")
+                    .size(11)
+                    .style(muted_text),
+            );
             let doc = &self.tab.doc;
             for seat in (doc.seats.iter()).filter(|s| {
                 self.tab.selected.contains(&s.a.piece) && self.tab.selected.contains(&s.b.piece)

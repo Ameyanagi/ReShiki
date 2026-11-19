@@ -353,7 +353,8 @@ shows one library or all of them.
 
 Every drawing carries the pieces it uses. When you open a drawing from
 someone else, **Properties → Equipment** offers **Add to My pieces** for a
-piece you do not have, and **Export piece…** for any piece.
+piece you do not have, and **Export this piece…** for any piece. In an
+assembly, Option-click the piece first.
 
 A piece is known by its ID, revision and content. When a library has a newer
 revision of a piece in your drawing, Properties says so, for example
