@@ -368,7 +368,8 @@ impl TextFormat {
     }
     /// Preserve spans across an editor replacement. The original range resolves
     /// ambiguous diffs such as replacing or deleting one of several equal letters.
-    pub fn edited(&mut self, old: &str, new: &str, replaced: Range<usize>) {
+    /// Returns the range of `new` that took an inherited style: the typed text.
+    pub fn edited(&mut self, old: &str, new: &str, replaced: Range<usize>) -> Range<usize> {
         if old != new {
             self.name_breaks = false;
         }
@@ -434,6 +435,7 @@ impl TextFormat {
             })
             .collect();
         self.pack(new, styles);
+        prefix..new.len() - suffix
     }
 }
 

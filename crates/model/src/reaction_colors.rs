@@ -7,6 +7,7 @@ use crate::palette::{Color, Hue, Row};
 use crate::reactions::{Reaction, Role};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
+use std::ops::Range;
 
 #[cfg(test)]
 mod tests;
@@ -623,6 +624,30 @@ fn legend(doc: &mut Document, id: u64, entries: &[(char, Color, String)]) {
     {
         fit(doc, id, page);
     }
+}
+
+/// Typed text in a legend never takes a swatch's color: it would otherwise
+/// inherit the color of a swatch it replaced or follows. Called as you type,
+/// so a color you then give a name stays.
+pub fn untint_typed(text: &str, format: &mut crate::typography::TextFormat, typed: Range<usize>) {
+    let glyph = |c: char| c == SWATCH || c == RING;
+    let swatches: HashSet<Color> = text
+        .char_indices()
+        .filter(|(_, c)| glyph(*c))
+        .map(|(i, _)| format.at(i).color)
+        .collect();
+    let base = format.style.color;
+    let styles = text
+        .char_indices()
+        .map(|(i, c)| {
+            let mut style = format.at(i).clone();
+            if typed.contains(&i) && !glyph(c) && swatches.contains(&style.color) {
+                style.color = base;
+            }
+            style
+        })
+        .collect();
+    format.pack(text, styles);
 }
 
 /// Keep each legend's swatch colors through a text edit: retyped text takes

@@ -635,3 +635,26 @@ fn a_name_colored_in_the_same_edit_keeps_its_color() {
     let legend = doc.annotations.iter().find(|a| a.id == id).unwrap();
     assert_eq!(legend.format.at(name).color, BLUE);
 }
+
+#[test]
+fn text_typed_into_a_legend_starts_in_the_caption_color() {
+    let DielsAlder { mut doc, arrow, .. } = diels_alder(true);
+    set_legend(&mut doc, arrow, true, Default::default()).unwrap();
+    let (id, colors) = legend_swatches(&doc);
+    let before = doc.clone();
+    let legend = doc.annotations.iter_mut().find(|a| a.id == id).unwrap();
+    let old = legend.text.clone();
+    // Starts differently, so all of it inherits the first swatch's blue.
+    let typed = "Origins\n■ diene   ■ dienophile   ■ New bond   ● New ring";
+    legend.text = typed.into();
+    let range = legend.format.edited(&old, typed, 0..old.len());
+    untint_typed(typed, &mut legend.format, range);
+    let _ = crate::transaction::reconcile(&mut doc, before).unwrap();
+    assert_eq!(legend_swatches(&doc).1, colors);
+    let legend = doc.annotations.iter().find(|a| a.id == id).unwrap();
+    for (i, c) in legend.text.char_indices() {
+        if c != SWATCH && c != RING {
+            assert_eq!(legend.format.at(i).color, Color::Ink, "{c:?} at {i}");
+        }
+    }
+}
