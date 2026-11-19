@@ -169,5 +169,18 @@ async fn an_unfilled_shadowed_shape_on_a_colored_page_opens_filled_with_it() {
             .map(|g| g.style.fill.map(|c| c.rgb()))
             .collect();
         assert_eq!(fills, [inside, None], "{page}");
+        // Saved again, it is what ChemDraw itself writes for a filled
+        // shadowed rectangle, and it opens again the same.
+        let bytes = crate::formats::write(doc, "cdxml").await.unwrap();
+        let xml = String::from_utf8(bytes.clone()).unwrap();
+        let filled = if inside.is_some() { "Filled " } else { "" };
+        assert!(
+            xml.contains(&format!(r#"RectangleType="{filled}Shadow""#)),
+            "{page}\n{xml}"
+        );
+        let again = crate::formats::read(bytes, "cdxml").await.unwrap();
+        let shadowed = &again.graphics[0];
+        assert_eq!(shadowed.style.fill.map(|c| c.rgb()), inside, "{page}");
+        assert!(shadowed.style.effects.shadow_pt.is_some(), "{page}");
     }
 }
