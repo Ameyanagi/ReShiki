@@ -320,6 +320,7 @@ impl App {
                 vec![]
             },
             self.purpose_entries(atoms),
+            self.cycle_entries(),
             [
                 command("Cut", Message::Copy(true), true),
                 command("Copy", Message::Copy(false), true),
@@ -344,6 +345,34 @@ impl App {
         .filter(|group| !group.is_empty())
         .collect::<Vec<_>>()
         .join(&Entry::Separator)
+    }
+
+    /// A part of a cycle leaves it; two or more free parts make one.
+    fn cycle_entries(&self) -> Vec<Entry> {
+        let doc = &self.tab.doc;
+        if self.selected_cycle().is_some() {
+            return vec![];
+        }
+        if self
+            .tab
+            .selected
+            .iter()
+            .any(|id| reshiki::cycles::role_of(doc, *id).is_some())
+        {
+            vec![Entry::command(
+                "Remove from cycle",
+                Message::Cycle(super::cycles::Action::Remove),
+                true,
+            )]
+        } else if self.alignment_count() >= 2 {
+            vec![Entry::command(
+                "Make catalytic cycle",
+                Message::Cycle(super::cycles::Action::Make),
+                true,
+            )]
+        } else {
+            vec![]
+        }
     }
 
     /// What the selected molecules and arrows are for, and what takes part in
@@ -952,27 +981,6 @@ impl App {
                 Message::Figure(super::figure_panels::Action::Wrap),
                 true,
             ));
-            // A part of a cycle leaves it; two or more free parts make one.
-            let doc = &self.tab.doc;
-            if self.selected_cycle().is_none()
-                && self
-                    .tab
-                    .selected
-                    .iter()
-                    .any(|id| reshiki::cycles::role_of(doc, *id).is_some())
-            {
-                entries.push(command(
-                    "Remove from cycle",
-                    Message::Cycle(super::cycles::Action::Remove),
-                    true,
-                ));
-            } else if self.selected_cycle().is_none() && self.alignment_count() >= 2 {
-                entries.push(command(
-                    "Make catalytic cycle",
-                    Message::Cycle(super::cycles::Action::Make),
-                    true,
-                ));
-            }
         }
         entries
     }

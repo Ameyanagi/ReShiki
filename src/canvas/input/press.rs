@@ -332,6 +332,9 @@ impl MoleculeCanvas<'_> {
         if self.tool.selects() && hit.is_empty() {
             hit = reshiki::editing::ring_at(self.doc, p).unwrap_or_default();
         }
+        // What was clicked before groups widen it: a part picked out of its
+        // group with Option/Alt drags on its own.
+        let picked = hit.clone();
         if self.tool.selects() {
             hit = if state.modifiers.alt() {
                 self.doc.expand_integral_groups(&hit)
@@ -382,7 +385,8 @@ impl MoleculeCanvas<'_> {
                         &if state.modifiers.shift() {
                             reshiki::selection_region::combine(self.selected, &hit, true, false)
                         } else if !state.modifiers.alt()
-                            && hit.iter().all(|id| self.selected.contains(id))
+                            && !picked.is_empty()
+                            && picked.iter().all(|id| self.selected.contains(id))
                         {
                             self.selected.to_vec()
                         } else {

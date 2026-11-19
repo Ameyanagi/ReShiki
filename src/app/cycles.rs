@@ -1,5 +1,5 @@
 //! Catalytic cycles: making them, dropping parts in, and their properties.
-use super::workspace::{control, muted_text, panel_action, section};
+use super::workspace::{control, hover_hint, muted_text, panel_action, section};
 use super::{App, Message};
 use iced::widget::{button, checkbox, column, row, text};
 use iced::{Alignment, Element, Length};
@@ -315,19 +315,23 @@ impl App {
         };
         let mut body = column![
             section("Catalytic cycle"),
-            row![
-                toggle(
-                    "Clockwise",
-                    !cycle.counterclockwise,
-                    Action::Clockwise(true)
-                ),
-                toggle(
-                    "Counterclockwise",
-                    cycle.counterclockwise,
-                    Action::Clockwise(false)
-                ),
-            ]
-            .spacing(4),
+            hover_hint(
+                row![
+                    toggle(
+                        "Clockwise",
+                        !cycle.counterclockwise,
+                        Action::Clockwise(true)
+                    ),
+                    toggle(
+                        "Counterclockwise",
+                        cycle.counterclockwise,
+                        Action::Clockwise(false)
+                    ),
+                ]
+                .spacing(4),
+                "Runs the steps the other way round: reagents become products and products reagents",
+                iced::widget::tooltip::Position::Top,
+            ),
             row![
                 labelled(
                     "Radius (pt)",
@@ -365,7 +369,10 @@ impl App {
             let choices: Vec<StepChoice> = (0..n)
                 .map(|i| StepChoice {
                     index: i,
-                    label: format!("Step {}: {} → {}", i + 1, names[i], names[(i + 1) % n]),
+                    label: match cycle.steps.get(i).map(|s| s.name.trim()) {
+                        Some(name) if !name.is_empty() => format!("Step {}: {name}", i + 1),
+                        _ => format!("Step {}: {} → {}", i + 1, names[i], names[(i + 1) % n]),
+                    },
                 })
                 .collect();
             let current = choices.get(inputs.step).cloned();
@@ -478,3 +485,6 @@ impl App {
         )
     }
 }
+
+#[cfg(test)]
+mod tests;

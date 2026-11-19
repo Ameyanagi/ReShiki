@@ -484,3 +484,17 @@ fn step_names_keep_clear_of_each_other_and_the_parts() {
         }
     }
 }
+
+#[test]
+fn an_intermediate_moved_off_the_circle_keeps_an_opening() {
+    let (mut doc, id, [_, oa, _]) = suzuki();
+    let (center, _) = graphic(&doc, id).cycle_circle();
+    let (lo, hi) = ink(&doc, oa);
+    let c = lo.lerp(hi, 0.5);
+    let bond = doc.drawing_style.bond_length_world;
+    let out = 4. * bond / c.distance(center);
+    doc.translate(&[oa], (c.x - center.x) * out, (c.y - center.y) * out);
+    let arrows = drawn(&doc, graphic(&doc, id)).arrows;
+    // Step 1 ends and step 2 starts either side of the moved intermediate.
+    assert!(arrows[0].end.distance(arrows[1].start) > bond);
+}

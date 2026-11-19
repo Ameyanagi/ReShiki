@@ -305,6 +305,23 @@ each edit the layout is laid out again if an item changed size or number.
 `graphics::panel::contents` lists what lies wholly inside a panel. Both entries
 need document version 40.
 
+A catalytic cycle is an ellipse graphic with a `cycle` entry
+(`crates/model/src/cycles.rs`): direction, gap, center text, intermediates
+in order (each the atom IDs of one molecule or one text's ID) and one step
+per intermediate with its name, reversible and hidden flags, bow, extra space
+and reagent and product parts. Arcs, side arrows and names are computed on
+every draw by `cycles::drawn` from the parts' ink, so they are never stored
+and never enter the drawing's arrow list. Each arc starts and stops where it
+leaves the ink box grown by the gap; a side arrow is a curve from its part's
+ink that meets its step's arc along the arc's way, at least 1.2 bond lengths
+along from the part. Step names try the inside and outside of the arc's
+middle, then points along it and further from it, and take the place covering
+the least ink without crossing the arc. After each edit the parts grow to whole
+molecules, parts that went are dropped, and the steps on both sides of a
+dropped intermediate join. Reaction preview skips every cycle part. CDXML and
+CDX export write the drawn arrows and text in the cycle's group
+(`cycles::materialized`). A cycle needs document version 40.
+
 ### Interchange boundary
 
 CDXML exports solid/dashed graphics as editable Bézier paths. Separate fill and

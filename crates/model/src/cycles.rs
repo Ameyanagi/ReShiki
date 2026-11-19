@@ -263,13 +263,10 @@ fn edge((lo, hi): (Point, Point), p: Point) -> Point {
     }
 }
 
-/// An arc arrow from `start` to `end` with a signed sweep in degrees, or a
-/// straight one when `sweep` is `None`.
-fn arrow(id: u64, start: Point, end: Point, sweep: Option<f32>, style: &ArrowStyle) -> Arrow {
+/// An arc arrow from `start` to `end` with a signed sweep in degrees.
+fn arrow(id: u64, start: Point, end: Point, sweep: f32, style: &ArrowStyle) -> Arrow {
     let mut a = Arrow::new(id, start, end, Preset::Forward, style.clone());
-    if let Some(sweep) = sweep {
-        a.set_arc(sweep);
-    }
+    a.set_arc(sweep);
     a
 }
 
@@ -311,7 +308,7 @@ pub fn drawn(doc: &Document, g: &Graphic) -> Drawn {
             g.id,
             at(start),
             at(start + sweep.to_radians()),
-            Some(sweep),
+            sweep,
             &style,
         ));
     }
@@ -329,6 +326,16 @@ pub fn drawn(doc: &Document, g: &Graphic) -> Drawn {
     let mut taken: Vec<(Point, Point)> = all.iter().flatten().copied().collect();
     let mut sides = all.iter().skip(n);
     let walk = 0.25_f32.to_radians();
+    // Half the angle a box spans as seen from the center, about `mid`.
+    let seen = |(lo, hi): (Point, Point), mid: f32| -> f32 {
+        [lo, Point::new(hi.x, lo.y), hi, Point::new(lo.x, hi.y)]
+            .into_iter()
+            .map(|p| {
+                let a = (p.y - center.y).atan2(p.x - center.x);
+                ((a - mid + std::f32::consts::PI).rem_euclid(TAU) - std::f32::consts::PI).abs()
+            })
+            .fold(0., f32::max)
+    };
     let mut names = vec![];
     for (s, step) in cycle.steps.iter().enumerate().take(n) {
         let j = (s + 1) % n;
@@ -339,13 +346,21 @@ pub fn drawn(doc: &Document, g: &Graphic) -> Drawn {
         }
         // Leave the first intermediate's ink, then stop short of the next.
         let clear = |b: (Point, Point)| grown(b, gap);
+        // An intermediate moved off the circle keeps an opening as wide as
+        // it looks from the center, so the arcs still point at it.
         let mut from = 0.;
         while from < span * 0.5 && contains(clear(boxes[s]), at(a0 + dir * from)) {
             from += walk;
         }
+        if from == 0. {
+            from = seen(clear(boxes[s]), angles[s]).min(span * 0.5);
+        }
         let mut to = span;
         while to > span * 0.5 && contains(clear(boxes[j]), at(a0 + dir * to)) {
             to -= walk;
+        }
+        if to == span {
+            to = span - seen(clear(boxes[j]), angles[j]).min(span * 0.5);
         }
         if to - from > 0.02 {
             // Extra space never runs into the ink, and the arc keeps most of
@@ -416,24 +431,23 @@ pub fn drawn(doc: &Document, g: &Graphic) -> Drawn {
                     g.id,
                     arc.at(0., outward * half),
                     arc.at(1., outward * half),
-                    Some(arc.sweep),
+                    arc.sweep,
                     &forward,
                 ));
                 out.arrows.push(arrow(
                     g.id,
                     arc.at(1., -outward * half),
                     arc.at(0., -outward * half),
-                    Some(-arc.sweep),
+                    -arc.sweep,
                     &forward,
                 ));
             } else {
-                out.arrows
-                    .push(arrow(g.id, start, end, Some(arc.sweep), &style));
+                out.arrows.push(arrow(g.id, start, end, arc.sweep, &style));
             }
         }
-        // Side arrows touch the arc: each runs on a circle tangent to it.
+        // Side arrows swoop in to the arc, or out of it, meeting it along
+        // its way, far enough along from their end for an easy curve.
         let length = arc.radius * arc.sweep.to_radians().abs();
-        let shift = if length > 0. { bond / length } else { 0. };
         for incoming in step
             .reagents
             .iter()
@@ -443,14 +457,15 @@ pub fn drawn(doc: &Document, g: &Graphic) -> Drawn {
             let Some(&Some(b)) = sides.next() else {
                 continue;
             };
-            let t = arc.along(center_of(b)) + if incoming { shift } else { -shift };
-            let t = t.clamp(0.15, 0.85);
-            let touch = arc.at(t, 0.);
-            let end = edge(grown(b, gap), touch);
+            let c = center_of(b);
+            let ahead = (1.2 * bond).max(1.1 * (c.distance(arc.center) - arc.radius).abs());
+            let shift = if length > 0. { ahead / length } else { 0. };
+            let t = (arc.along(c) + if incoming { shift } else { -shift }).clamp(0.15, 0.85);
             let side = side_arrow(
                 g.id,
-                (touch, arc.tangent(t), arc.center),
-                end,
+                arc.at(t, 0.),
+                arc.tangent(t),
+                grown(b, gap),
                 incoming,
                 &style,
             );
@@ -472,8 +487,9 @@ pub fn drawn(doc: &Document, g: &Graphic) -> Drawn {
             let c = polar(arc.center, arc.radius + out * (gap + reach), angle);
             (c.offset(-w * 0.5, -h * 0.5), c.offset(w * 0.5, h * 0.5))
         };
-        let covered = |b: (Point, Point)| -> f32 {
-            taken
+        // Ink the box covers, and the whole box again if it reaches the arc.
+        let covered = |b: (Point, Point), out: f32| -> f32 {
+            let inked: f32 = taken
                 .iter()
                 .map(|t| grown(*t, gap * 0.5))
                 .map(|t| {
@@ -481,18 +497,40 @@ pub fn drawn(doc: &Document, g: &Graphic) -> Drawn {
                     let y = (b.1.y.min(t.1.y) - b.0.y.max(t.0.y)).max(0.);
                     x * y
                 })
-                .sum()
+                .sum();
+            let c = arc.center;
+            let nearest = Point::new(c.x.clamp(b.0.x, b.1.x), c.y.clamp(b.0.y, b.1.y));
+            let farthest = Point::new(
+                if c.x - b.0.x > b.1.x - c.x {
+                    b.0.x
+                } else {
+                    b.1.x
+                },
+                if c.y - b.0.y > b.1.y - c.y {
+                    b.0.y
+                } else {
+                    b.1.y
+                },
+            );
+            let clear = if out < 0. {
+                farthest.distance(c) < arc.radius - gap * 0.5
+            } else {
+                nearest.distance(c) > arc.radius + gap * 0.5
+            };
+            inked + if clear { 0. } else { w * h }
         };
         let mut best: Option<((Point, Point), f32)> = None;
-        'search: for t in [0.5, 0.38, 0.62, 0.26, 0.74] {
-            for out in [-outward, outward] {
-                let b = place(t, out);
-                let cost = covered(b);
-                if best.is_none_or(|(_, c)| cost < c) {
-                    best = Some((b, cost));
-                }
-                if cost <= 0. {
-                    break 'search;
+        'search: for depth in [1., 1.8] {
+            for t in [0.5, 0.38, 0.62, 0.26, 0.74] {
+                for out in [-outward, outward] {
+                    let b = place(t, out * depth);
+                    let cost = covered(b, out);
+                    if best.is_none_or(|(_, c)| cost < c) {
+                        best = Some((b, cost));
+                    }
+                    if cost <= 0. {
+                        break 'search;
+                    }
                 }
             }
         }
@@ -512,14 +550,14 @@ pub fn drawn(doc: &Document, g: &Graphic) -> Drawn {
     out
 }
 
-/// A side arrow between `end` and the point where it touches the step's arc,
-/// with the arc's way on and center there. It runs on the circle tangent to
-/// the arc at that point through `end`; a reagent comes in headless, a
+/// A side arrow between a part's ink and the point where it touches the
+/// step's arc, heading the arc's way there. A reagent comes in headless; a
 /// product goes out with a head.
 fn side_arrow(
     id: u64,
-    (touch, way, arc_center): (Point, Point, Point),
-    end: Point,
+    touch: Point,
+    way: Point,
+    ink: (Point, Point),
     incoming: bool,
     style: &ArrowStyle,
 ) -> Arrow {
@@ -527,35 +565,20 @@ fn side_arrow(
         head: if incoming { Head::None } else { Head::Full },
         ..style.clone()
     };
-    let (start, finish) = if incoming { (end, touch) } else { (touch, end) };
-    let r = touch.distance(arc_center);
-    let normal = Point::new((touch.x - arc_center.x) / r, (touch.y - arc_center.y) / r);
-    let v = Point::new(touch.x - end.x, touch.y - end.y);
-    let along = normal.x * v.x + normal.y * v.y;
-    let squared = v.x * v.x + v.y * v.y;
-    if r < 1e-3 || along.abs() < 1e-3 * squared.sqrt() {
-        return arrow(id, start, finish, None, &style);
-    }
-    let s = -squared / (2. * along);
-    let q = touch.offset(normal.x * s, normal.y * s);
-    let angle = |p: Point| (p.y - q.y).atan2(p.x - q.x).to_degrees();
-    // Turning with increasing angle at the touch point heads this way.
-    let m = Point::new(touch.x - q.x, touch.y - q.y);
-    let sign = if -m.y * way.x + m.x * way.y >= 0. {
-        1.
+    // The curve meets the arc along it: its control there sits on the way.
+    let reach = 0.5 * touch.distance(center_of(ink));
+    let sign = if incoming { -1. } else { 1. };
+    let near = touch.offset(sign * way.x * reach, sign * way.y * reach);
+    let end = edge(ink, near);
+    let far = end.lerp(near, 0.5);
+    let (start, finish, controls) = if incoming {
+        (end, touch, [far, near])
     } else {
-        -1.
+        (touch, end, [near, far])
     };
-    let turn = if incoming {
-        angle(touch) - angle(end)
-    } else {
-        angle(end) - angle(touch)
-    };
-    let sweep = sign * (sign * turn).rem_euclid(360.);
-    if sweep.abs() > 270. || sweep.abs() < crate::arrows::MIN_SWEEP {
-        return arrow(id, start, finish, None, &style);
-    }
-    arrow(id, start, finish, Some(sweep), &style)
+    let mut a = Arrow::new(id, start, finish, Preset::Forward, style);
+    a.cubic = Some(controls);
+    a
 }
 
 /// A long step name breaks at the space nearest its middle.
