@@ -2200,6 +2200,8 @@ pub fn primitives_with_opacity(
     let mut out = vec![];
     let mut graphics: Vec<_> = doc.graphics.iter().collect();
     graphics.sort_by_key(|g| g.layer);
+    // All shadings of the drawing share one band budget.
+    let shaded = graphics.iter().filter(|g| g.style.effects.shaded).count();
     let mut halos = orbital_halos(doc, &graphics, &inputs.labels().runs, opacity);
     let cells = crate::models3d::flat_cells(&raw.models, doc);
     for id in cells.haloed {
@@ -2207,7 +2209,7 @@ pub fn primitives_with_opacity(
             halos.atoms.push((id, None));
         }
     }
-    push_underlays(&mut out, doc, &graphics, opacity);
+    push_underlays(&mut out, doc, &graphics, shaded, opacity);
     out.extend(cells.behind);
     let rings = push_ring_strokes(&mut out, doc, opacity);
     let pass = BondPass::new(&inputs);
@@ -2248,7 +2250,7 @@ pub fn primitives_with_opacity(
     out.extend(crate::models3d::primitives(raw));
     push_arrows_and_annotations(&mut out, doc);
     for graphic in graphics.iter().filter(|g| g.layer >= 0) {
-        out.extend(graphic_primitive(graphic, doc));
+        out.extend(graphic_primitive(graphic, doc, shaded));
         if halos.front.contains(&graphic.id) {
             push_label_halo(&mut out, doc, runs, opacity, &halos.above(Some(graphic.id)));
         }
@@ -2340,7 +2342,11 @@ fn paint_rear_before_front(out: &mut Vec<Primitive>, start: usize) {
     out.extend(front);
 }
 
-fn graphic_primitive(g: &&crate::graphics::Graphic, doc: &Document) -> Vec<Primitive> {
+fn graphic_primitive(
+    g: &&crate::graphics::Graphic,
+    doc: &Document,
+    shaded: usize,
+) -> Vec<Primitive> {
     if g.cycle.is_some() {
         return cycle_primitives(g, doc);
     }
@@ -2366,16 +2372,7 @@ fn graphic_primitive(g: &&crate::graphics::Graphic, doc: &Document) -> Vec<Primi
             .map(|commands| flat(commands, crate::graphics::SHADOW_RGB))
             .into_iter()
             .collect();
-        let bands = if g.style.effects.shaded {
-            g.shading_bands(
-                doc.graphics
-                    .iter()
-                    .filter(|g| g.style.effects.shaded)
-                    .count(),
-            )
-        } else {
-            Vec::new()
-        };
+        let bands = g.shading_bands(shaded);
         // The color the shape shows: on the dark canvas custom colors arrive
         // pre-flipped, while Ink shades from black as on the light canvas.
         let shade = match g.style.fill.unwrap_or(g.style.stroke) {
@@ -2594,13 +2591,14 @@ fn push_underlays(
     out: &mut Vec<Primitive>,
     doc: &Document,
     graphics: &[&crate::graphics::Graphic],
+    shaded: usize,
     opacity: &crate::rear_opacity::Paint,
 ) {
     out.extend(
         graphics
             .iter()
             .filter(|g| g.layer < 0)
-            .flat_map(|g| graphic_primitive(g, doc)),
+            .flat_map(|g| graphic_primitive(g, doc, shaded)),
     );
     for fill in &doc.ring_fills {
         out.extend(opacity.owned_parts(
@@ -2907,7 +2905,7 @@ fn push_arrows_and_annotations(out: &mut Vec<Primitive>, doc: &Document) {
             if let Some(gradient) = &mut p.style.effects.gradient {
                 gradient.from = drawn_paper(doc, a.id);
                 let shape = crate::arrows::shape(a.id, p.commands, &p.style, p.filled);
-                out.extend(graphic_primitive(&&shape, doc));
+                out.extend(graphic_primitive(&&shape, doc, 1));
             } else {
                 out.push(Primitive::Path {
                     commands: p.commands,

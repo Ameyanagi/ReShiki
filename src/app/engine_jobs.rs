@@ -202,7 +202,8 @@ impl App {
                     return Task::none();
                 };
                 // The tab added for this file closes again, so a failed open
-                // leaves no empty Untitled tab behind.
+                // leaves no empty Untitled tab behind. One that failed behind
+                // the front tab stays, with the error, until it is looked at.
                 let id = self.tab.id;
                 let added = self.tabs.opening.contains(&(id, self.tab.file_epoch));
                 self.tabs.opening.retain(|(tab, _)| *tab != id);
