@@ -241,6 +241,169 @@ fn v2000_chain(atoms: usize) -> String {
     lines.join("\n")
 }
 
+fn wedge_interchange_drawing(
+    center_element: &str,
+    narrow_at_center: bool,
+    display: &str,
+) -> crate::document::Document {
+    use crate::document::{Document, Point};
+
+    let mut doc = Document::default();
+    let center = doc.add_atom(center_element, Point::default());
+    let ligands = if center_element == "Ru" {
+        vec![
+            ("Cl", Point::new(-36., -21.), 1, "hash"),
+            ("Cl", Point::new(42., 0.), 1, "wedge"),
+            ("C", Point::new(0., -42.), 2, "plain"),
+            ("C", Point::new(-21., 36.), 1, "plain"),
+            ("C", Point::new(21., 36.), 1, "plain"),
+        ]
+    } else {
+        vec![
+            ("Cl", Point::new(-36., -21.), 1, display),
+            ("Br", Point::new(42., 0.), 1, "plain"),
+            ("F", Point::new(0., -42.), 1, "plain"),
+            ("I", Point::new(0., 42.), 1, "plain"),
+        ]
+    };
+    for (element, position, order, display) in ligands {
+        let ligand = doc.add_atom(element, position);
+        let (a, b) = if narrow_at_center || display == "plain" {
+            (center, ligand)
+        } else {
+            (ligand, center)
+        };
+        doc.add_bond(a, b, order, display);
+    }
+    doc
+}
+
+fn assert_v2000_wedge_records(block: &str, doc: &crate::document::Document) {
+    let lines = block.lines().collect::<Vec<_>>();
+    assert!(lines[3].ends_with("V2000"));
+    assert_eq!(
+        lines[3][..3].trim().parse::<usize>().unwrap(),
+        doc.atoms.len()
+    );
+    assert_eq!(
+        lines[3][3..6].trim().parse::<usize>().unwrap(),
+        doc.bonds.len()
+    );
+    let ordinal = |id| doc.atoms.iter().position(|atom| atom.id == id).unwrap() + 1;
+    for (line, bond) in lines[4 + doc.atoms.len()..].iter().zip(&doc.bonds) {
+        let fields: Vec<usize> = (0..4)
+            .map(|i| line[3 * i..3 * (i + 1)].trim().parse().unwrap())
+            .collect();
+        // V2000 1 is a solid wedge and 6 is a hashed wedge; the first
+        // atom is the narrow endpoint, including a ligand-to-center bond.
+        let code = match bond.display.as_str() {
+            "wedge" => 1,
+            "hash" => 6,
+            _ => 0,
+        };
+        assert_eq!(
+            fields,
+            [
+                ordinal(bond.a),
+                ordinal(bond.b),
+                usize::from(bond.order),
+                code
+            ]
+        );
+    }
+}
+
+#[test]
+fn reporter_ruthenium_v2000_writes_wedge_flags_and_imports_the_same_plain_chemistry()
+-> anyhow::Result<()> {
+    use crate::chemistry::smiles;
+
+    for narrow_at_center in [true, false] {
+        let doc = wedge_interchange_drawing("Ru", narrow_at_center, "plain");
+        let molecule = document::prepare(&doc)?;
+        assert!(
+            molecule
+                .state
+                .metadata
+                .atoms
+                .iter()
+                .all(|atom| atom.chiral_tag == 0)
+        );
+        let expected = smiles::write::write(&molecule.state, Default::default())?.text;
+        let block = write_document(&doc)?;
+        assert_v2000_wedge_records(&block, &doc);
+        let sdf = format!("{block}\n>  <SOURCE>\nissue 1287\n\n$$$$\n");
+        for text in [&block, &sdf] {
+            let imported = read(text)?;
+            assert_eq!(
+                smiles::write::write(&imported.molecule.state, Default::default())?.text,
+                expected
+            );
+            let (drawing, _, _) = imported.display_document()?;
+            assert_eq!(
+                drawing
+                    .atoms
+                    .iter()
+                    .map(|atom| &atom.element)
+                    .collect::<Vec<_>>(),
+                doc.atoms
+                    .iter()
+                    .map(|atom| &atom.element)
+                    .collect::<Vec<_>>()
+            );
+            // Molecular import regenerates wedge paint from atom stereo.
+            // This Ru center has no tetrahedral tag, so its bonds import as plain.
+            assert!(drawing.bonds.iter().all(|bond| bond.display == "plain"));
+            assert!(drawing.atoms.iter().all(|atom| atom.stereo.is_none()));
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn silicon_v2000_wedge_flags_use_the_first_narrow_atom_and_reimport_tetrahedral_stereo()
+-> anyhow::Result<()> {
+    use crate::chemistry::smiles;
+
+    for display in ["wedge", "hash"] {
+        for narrow_at_center in [true, false] {
+            let doc = wedge_interchange_drawing("Si", narrow_at_center, display);
+            let molecule = document::prepare(&doc)?;
+            assert_eq!(
+                molecule.state.metadata.atoms[0].chiral_tag != 0,
+                narrow_at_center
+            );
+            let expected = smiles::write::write(&molecule.state, Default::default())?.text;
+            let block = write_document(&doc)?;
+            assert_v2000_wedge_records(&block, &doc);
+            let sdf = format!("{block}\n>  <SOURCE>\nissue 1287\n\n$$$$\n");
+            for text in [&block, &sdf] {
+                let imported = read(text)?;
+                assert_eq!(
+                    smiles::write::write(&imported.molecule.state, Default::default())?.text,
+                    expected
+                );
+                let (drawing, _, _) = imported.display_document()?;
+                let silicon = drawing
+                    .atoms
+                    .iter()
+                    .find(|atom| atom.element == "Si")
+                    .unwrap();
+                assert_eq!(silicon.stereo.is_some(), narrow_at_center);
+                if narrow_at_center {
+                    // Import can choose another ligand for the regenerated wedge.
+                    assert!(drawing.bonds.iter().any(|bond| {
+                        matches!(bond.display.as_str(), "wedge" | "hash") && bond.a == silicon.id
+                    }));
+                } else {
+                    assert!(drawing.bonds.iter().all(|bond| bond.display == "plain"));
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 // RDKit 2026.03.6 MolToMolBlock of C[C@H](O)[C@H](F)Cl, forceV3000=True.
 const ENHANCED_STEREO_BASE: &str = "\n     RDKit          2D\n\n  0  0  0  0  0  0  0  0  0  0999 V3000\n\
 M  V30 BEGIN CTAB\nM  V30 COUNTS 6 5 0 0 0\nM  V30 BEGIN ATOM\n\
