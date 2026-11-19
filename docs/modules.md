@@ -699,7 +699,7 @@ explains how the crates and modules fit together.
 - `crates/model/src/equipment/placed.rs`: Pieces placed in a drawing.
 - `crates/model/src/equipment/plan.rs`: The paint plan
 - `crates/model/src/equipment/revise.rs`: Moving placed pieces to another revision of their definition, as a library offers it.
-- `crates/model/src/equipment/solve.rs`: Seats join the joints of placed pieces.
+- `crates/model/src/equipment/solve.rs`: Seats join the joints and holds of placed pieces.
 - `crates/model/src/equipment/validate.rs`: Checks the schema cannot express
 - `crates/model/src/erasing.rs`: Erase the geometry crossed by a pointer stroke, including between motion events.
 - `crates/model/src/fischer.rs`: Explicit Fischer projections
