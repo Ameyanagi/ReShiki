@@ -127,6 +127,90 @@ fn growth_respects_bond_length_and_focus_and_rejects_overvalence() -> Result<(),
 }
 
 #[test]
+fn growth_at_silicon_and_boron_ring_atoms_with_implicit_hydrogens() -> Result<(), String> {
+    let mut doc = Document::default();
+    let id = editing::ring(&mut doc, Point::default(), 6, false, 5.)[0];
+    for element in ["Si", "B"] {
+        doc.atom_mut(id).ok_or("Missing ring atom")?.element = element.into();
+        for key in ["1", "0"] {
+            let (candidate, _) = atom_edit(&doc, id, key, 42.).ok_or("Missing growth")??;
+            assert_eq!(
+                candidate.atoms.len(),
+                doc.atoms.len() + 1,
+                "{element}, {key}"
+            );
+            let new = candidate.atoms.last().ok_or("Missing new atom")?;
+            let bond = candidate.bonds.last().ok_or("Missing new bond")?;
+            assert_eq!(
+                (bond.a, bond.b, bond.order),
+                (id, new.id, 1),
+                "{element}, {key}"
+            );
+            candidate.validate()?;
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn growth_rejects_silicon_and_boron_at_full_valence() -> Result<(), String> {
+    for (element, valence) in [("Si", 4), ("B", 3)] {
+        let mut doc = Document::default();
+        let id = doc.add_atom(element, Point::default());
+        for (x, y) in [(42., 0.), (0., 42.), (-42., 0.), (0., -42.)]
+            .into_iter()
+            .take(valence)
+        {
+            let neighbor = doc.add_atom("C", Point::new(x, y));
+            doc.add_bond(id, neighbor, 1, "plain");
+        }
+        let error = atom_edit(&doc, id, "1", 42.)
+            .ok_or("Missing growth")?
+            .unwrap_err();
+        assert!(
+            error.starts_with("This atom has no available valence"),
+            "{element}: {error}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn growth_rejects_a_boron_ring_radical() -> Result<(), String> {
+    let mut doc = Document::default();
+    let id = editing::ring(&mut doc, Point::default(), 6, false, 5.)[0];
+    let atom = doc.atom_mut(id).ok_or("Missing ring atom")?;
+    atom.element = "B".into();
+    atom.radical_electrons = 1;
+    let error = atom_edit(&doc, id, "1", 42.)
+        .ok_or("Missing growth")?
+        .unwrap_err();
+    assert!(
+        error.starts_with("This atom has no available valence"),
+        "{error}"
+    );
+    Ok(())
+}
+
+#[test]
+fn growth_rejects_silicon_with_explicit_hydrogens() -> Result<(), String> {
+    let mut doc = Document::default();
+    let id = editing::ring(&mut doc, Point::default(), 6, false, 5.)[0];
+    let atom = doc.atom_mut(id).ok_or("Missing ring atom")?;
+    atom.element = "Si".into();
+    atom.explicit_h = 2;
+    atom.no_implicit = true;
+    let error = atom_edit(&doc, id, "1", 42.)
+        .ok_or("Missing growth")?
+        .unwrap_err();
+    assert!(
+        error.starts_with("This atom has no available valence"),
+        "{error}"
+    );
+    Ok(())
+}
+
+#[test]
 fn isotope_and_variables_preserve_their_distinct_semantics() -> Result<(), String> {
     let (doc, _, id) = ethane();
     let (isotope, _) = atom_edit(&doc, id, "d", 42.).ok_or("Missing deuterium")??;

@@ -474,7 +474,8 @@ fn sprout_at(
         || !replacing_h
             && (atom.no_implicit
                 || atom.explicit_h != 0
-                || templates::valence(doc, id) + order * 2 > capacity)
+                || templates::valence(doc, id) + 2 * u32::from(atom.radical_electrons) + order * 2
+                    > capacity)
     {
         return Err(
             "This atom has no available valence; edit its hydrogens or stereochemistry first"

@@ -215,7 +215,8 @@ fn aniline_and_toluene_dimethyl_shortcut_grows_on_the_hovered_center() {
 fn dimethyl_rejects_insufficient_heteroatom_valence_without_adding_a_carbon() {
     // Aniline is the native ChemDraw parity oracle above. These are ReShiki
     // chemistry/transaction contracts, not claims about ChemDraw's warnings.
-    for element in ["O", "S", "P", "N"] {
+    // Neutral P takes three bonds, so P–R grows PMe2 like N.
+    for element in ["O", "S", "N"] {
         let (mut app, target, unrelated) = fixture(element);
         if element == "N" {
             let other = app.tab.doc.add_atom(
@@ -408,6 +409,40 @@ fn aniline_group_hotkeys_keep_valid_acetyl_tert_butyl_and_phenyl_attachments() {
                     || (bond.b == attached && app.tab.doc.atom(bond.a).unwrap().element == "O"))));
         }
         assert_unrelated(&before, &app.tab.doc, &unrelated);
+        assert_one_undo(&mut app, &before);
+    }
+}
+
+#[test]
+fn single_bond_shortcut_grows_on_hovered_silicon_and_boron_ring_atoms() {
+    for element in ["Si", "B"] {
+        let (mut app, _) = App::new();
+        app.tab.busy = false;
+        app.tab.bond_drawing.length = 42.;
+        app.tab.doc = reshiki::rings::Preset::Regular.document(42., false);
+        let target = app.tab.doc.atoms[0].id;
+        app.tab.doc.atom_mut(target).unwrap().element = element.into();
+        app.tab.selected = vec![app.tab.doc.atoms[1].id];
+        let before = app.tab.doc.clone();
+        hover(&mut app, before.atom(target).unwrap().position);
+        key(&mut app, "1");
+        assert!(!app.error, "{element}: {}", app.status);
+
+        let doc = &app.tab.doc;
+        assert_eq!(doc.atoms.len(), before.atoms.len() + 1, "{element}");
+        assert_eq!(doc.bonds.len(), before.bonds.len() + 1, "{element}");
+        let added = doc
+            .atoms
+            .iter()
+            .find(|atom| before.atom(atom.id).is_none())
+            .unwrap();
+        assert!(
+            doc.bonds
+                .iter()
+                .any(|bond| bond.connects(target, added.id) && bond.order == 1),
+            "{element}: expected a new single bond on the hovered atom"
+        );
+        doc.validate().unwrap();
         assert_one_undo(&mut app, &before);
     }
 }

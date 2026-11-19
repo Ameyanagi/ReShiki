@@ -560,7 +560,9 @@ pub fn connect_atoms(source: &Document, a: u64, b: u64) -> Result<Document, Stri
         if atom.stereo.is_some()
             || atom.no_implicit
             || atom.explicit_h != 0
-            || templates::valence(source, id).saturating_add(2) > templates::capacity(atom)
+            || templates::valence(source, id)
+                .saturating_add(2 * u32::from(atom.radical_electrons) + 2)
+                > templates::capacity(atom)
         {
             return Err(
                 "This atom has no available valence; edit its hydrogens or stereochemistry first"
