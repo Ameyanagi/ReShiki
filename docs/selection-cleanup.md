@@ -32,7 +32,7 @@ message confirms that the drawing was left unchanged.
 - Every arrow takes the same length: 3.2 bond lengths, or longer when the text above or below an arrow needs it.
 - Text and reagents above or below an arrow are centred on it as a block and keep their side and order. Conditions attached to an arrow stay attached.
 - Arrows on one line form one row, such as A → B → C or A → B ← C. A molecule shared by two rows, such as the product of a horizontal step that starts a vertical one, stays where the first row put it.
-- Recorded reaction roles decide which molecules sit on the arrow's line and which are reagents. Selecting only the arrow of a recorded reaction cleans the whole reaction. Without roles, a molecule or `+` sign within a bond length of the line is on it, and one beside the arrow's middle is a reagent.
+- Recorded reaction roles decide which molecules sit on the arrow's line and which are reagents. Selecting only the arrow of a recorded reaction cleans the whole reaction; without recorded roles, select the molecules too. Without roles, a molecule or `+` sign within a bond length of the line is on it, unless a gap of more than 4 bond lengths separates it from the arrows. Text or a molecule clear of the line beside the arrow's middle is a reagent.
 - With **Also set bond length to the style** on, each molecule in a cleaned reaction is first redrawn at the style's bond length. Other molecules keep their size.
 
 Only straight arrows are lined up, and an arrow inside a group is left alone. Captions just above or below a molecule, such as compound numbers and names, move with it. Curved and attached arrows, and other text away from an arrow, stay where they are.

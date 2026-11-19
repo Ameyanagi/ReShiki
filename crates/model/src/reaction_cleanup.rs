@@ -14,6 +14,8 @@ mod tests;
 const GAP: f32 = 0.5;
 /// Moves shorter than this are rounding, so a tidy scheme stays unchanged.
 const EPSILON: f32 = 1e-3;
+/// The widest gap along a row between a reaction's items, in bond lengths.
+const REACH: f32 = 4.0;
 /// How far a molecule or sign may sit off the axis and still be in the row,
 /// in bond lengths.
 const BAND: f32 = 1.0;
@@ -141,7 +143,7 @@ pub fn clean(
     let planned: Vec<(Row, HashMap<usize, Place>)> = rows(doc, &straight)
         .into_iter()
         .map(|row| {
-            let measured = measure(doc, &row, &cores);
+            let measured = measure(doc, &row, &units, &cores);
             // An arrow's reach once it has at least the standard length.
             let span = |arrow: u64| {
                 let a = doc.arrows.iter().find(|a| a.id == arrow)?;
@@ -151,6 +153,7 @@ pub fn clean(
             };
             // Recorded roles first, then position.
             let mut places: HashMap<usize, Place> = HashMap::new();
+            let mut recorded = HashSet::new();
             for reaction in doc
                 .reactions
                 .iter()
@@ -164,6 +167,7 @@ pub fn clean(
                     for participant in reaction.participants(role) {
                         for i in participant.atoms.iter().filter_map(|id| owner.get(id)) {
                             places.entry(*i).or_insert(place);
+                            recorded.insert(*i);
                         }
                     }
                 }
@@ -176,8 +180,12 @@ pub fn clean(
                     continue;
                 };
                 let centre = Extent::mid(extent.along);
+                // Beside an arrow means clear of its line, near its middle.
+                let clear = extent.across.0 > 0. || extent.across.1 < 0.;
                 let beside = row.arrows.iter().copied().find(|arrow| {
-                    span(*arrow).is_some_and(|(s, e)| (s..=e).contains(&centre))
+                    clear
+                        && !sign(unit)
+                        && span(*arrow).is_some_and(|(s, e)| (s..=e).contains(&centre))
                         && Extent::mid(extent.across).abs() <= bond * 4.
                 });
                 if let Some(arrow) = beside.filter(|_| molecule(unit) || text(unit)) {
@@ -187,6 +195,40 @@ pub fn clean(
                     && extent.across.1 >= -bond * BAND
                 {
                     places.insert(i, Place::Axis);
+                }
+            }
+            // Molecules found by position belong to the row only within reach
+            // of its arrows: a gap wider than REACH ends the scheme.
+            let mut line: Vec<((f32, f32), Option<usize>)> = row
+                .arrows
+                .iter()
+                .filter_map(|arrow| Some((span(*arrow)?, None)))
+                .chain(
+                    places
+                        .iter()
+                        .filter(|(i, place)| **place == Place::Axis && !recorded.contains(*i))
+                        .filter_map(|(i, _)| Some((measured.get(i)?.along, Some(*i)))),
+                )
+                .collect();
+            line.sort_by(|a, b| a.0.0.total_cmp(&b.0.0));
+            let mut cluster: Vec<usize> = vec![];
+            let (mut end, mut arrow) = (f32::NEG_INFINITY, false);
+            for (range, item) in line
+                .into_iter()
+                .chain([((f32::INFINITY, f32::INFINITY), None)])
+            {
+                if range.0 - end > bond * REACH {
+                    if !arrow {
+                        for i in cluster.drain(..) {
+                            places.remove(&i);
+                        }
+                    }
+                    (cluster, arrow) = (vec![], false);
+                }
+                end = end.max(range.1);
+                match item {
+                    Some(i) => cluster.push(i),
+                    None => arrow = true,
                 }
             }
             // Captions such as compound numbers follow the molecule they label.
@@ -214,6 +256,14 @@ pub fn clean(
             (row, places)
         })
         .collect();
+    // An arrow alone, with nothing on its line, is left as it is.
+    let planned: Vec<_> = planned
+        .into_iter()
+        .filter(|(_, places)| places.values().any(|place| *place == Place::Axis))
+        .collect();
+    if planned.is_empty() {
+        return Err("Select a reaction's molecules with its arrow to clean it up".into());
+    }
     let mut out = doc.clone();
     if style_bond_length {
         let members: HashSet<usize> = planned
@@ -234,7 +284,7 @@ pub fn clean(
     let widest = planned
         .iter()
         .flat_map(|(row, places)| {
-            let measured = measure(&out, row, &cores);
+            let measured = measure(&out, row, &units, &cores);
             row.arrows
                 .iter()
                 .flat_map(|arrow| {
@@ -245,7 +295,8 @@ pub fn clean(
                         .copied()
                         .filter(|id| id != arrow)
                         .collect();
-                    let labels = measure(&out, row, &[labels]).remove(&0);
+                    let labels =
+                        measure(&out, row, std::slice::from_ref(&labels), &[labels]).remove(&0);
                     sides(&measured, places, *arrow)
                         .into_iter()
                         .flatten()
@@ -258,7 +309,7 @@ pub fn clean(
     let length = widest.max(bond * 2.8) + bond * 0.4;
     let mut placed = HashSet::new();
     for (row, places) in &planned {
-        let measured = measure(&out, row, &cores);
+        let measured = measure(&out, row, &units, &cores);
         lay_out(
             &mut out,
             row,
@@ -348,7 +399,7 @@ fn rows(doc: &Document, straight: &HashMap<u64, usize>) -> Vec<Row> {
         let mid = arrow.start.lerp(arrow.end, 0.5);
         match rows.iter_mut().find(|row| {
             (row.dir.x * dir.x + row.dir.y * dir.y).abs() > 3f32.to_radians().cos()
-                && row.across(mid).abs() < bond * 0.5
+                && row.across(mid).abs() < bond * BAND
         }) {
             Some(row) => row.arrows.push(arrow.id),
             None => rows.push(Row {
@@ -361,19 +412,29 @@ fn rows(doc: &Document, straight: &HashMap<u64, usize>) -> Vec<Row> {
     rows
 }
 
-/// Each unit's ink measured in the row's frame, by unit index.
-fn measure(doc: &Document, row: &Row, units: &[Vec<u64>]) -> HashMap<usize, Extent> {
+/// Each unit measured in the row's frame, by unit index: along the row with
+/// everything that moves with it, across it by its core (a molecule's own ink).
+fn measure(
+    doc: &Document,
+    row: &Row,
+    units: &[Vec<u64>],
+    cores: &[Vec<u64>],
+) -> HashMap<usize, Extent> {
     let degrees = row.dir.y.atan2(row.dir.x).to_degrees();
-    crate::scene::selections_bounds_in_axes(doc, units, Some((row.origin, degrees)))
+    let frame = |selections| {
+        crate::scene::selections_bounds_in_axes(doc, selections, Some((row.origin, degrees)))
+    };
+    frame(units)
         .into_iter()
+        .zip(frame(cores))
         .enumerate()
-        .filter_map(|(i, bounds)| {
-            let (lo, hi) = bounds?;
+        .filter_map(|(i, (whole, core))| {
+            let ((lo, hi), (core_lo, core_hi)) = (whole?, core?);
             Some((
                 i,
                 Extent {
                     along: (lo.x - row.origin.x, hi.x - row.origin.x),
-                    across: (lo.y - row.origin.y, hi.y - row.origin.y),
+                    across: (core_lo.y - row.origin.y, core_hi.y - row.origin.y),
                 },
             ))
         })
@@ -408,7 +469,10 @@ fn scale_to(doc: &mut Document, unit: &[u64], bond: f32) {
     };
     let atoms: Vec<u64> = position.keys().copied().collect();
     let centre = crate::editing::center(doc, &atoms);
-    crate::editing::transform_about(doc, &atoms, centre, bond / median, 0.);
+    // A molecule already at the length stays exactly as it is.
+    if (bond / median - 1.).abs() > 1e-4 {
+        crate::editing::transform_about(doc, &atoms, centre, bond / median, 0.);
+    }
 }
 
 #[allow(clippy::too_many_arguments)]

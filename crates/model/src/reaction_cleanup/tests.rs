@@ -310,3 +310,32 @@ fn a_plus_symbol_counts_as_a_sign() {
     ];
     assert!(gaps.iter().all(|gap| close(*gap, bond * GAP)), "{gaps:?}");
 }
+
+#[test]
+fn a_molecule_far_along_the_line_is_not_part_of_the_reaction() {
+    let (mut doc, _, _) = untidy();
+    let bond = doc.drawing_style.bond_length_world;
+    let far = chain(&mut doc, 2, Point::new(1200., 5.), bond * 1.5);
+    let cleaned = clean(&doc, &[], true).unwrap();
+    for id in far {
+        assert_eq!(cleaned.atom(id), doc.atom(id));
+    }
+}
+
+#[test]
+fn an_arrow_selected_alone_without_roles_is_refused() {
+    let (doc, _, arrow) = untidy();
+    assert!(clean(&doc, &[arrow], false).is_err());
+}
+
+#[test]
+fn a_molecule_on_the_line_near_the_arrow_stays_on_the_axis() {
+    let mut doc = Document::default();
+    let a = doc.add_atom("C", Point::new(35., 0.));
+    let b = doc.add_atom("C", Point::new(77., 0.));
+    doc.add_bond(a, b, 1, "plain");
+    let arrow = arrow(&mut doc, Point::new(100., 0.), Point::new(140., 0.));
+    let cleaned = clean(&doc, &[], false).unwrap();
+    let ink = bounds(&cleaned, &[a, b]);
+    assert!(ink.1.x < the_arrow(&cleaned, arrow).start.x);
+}
