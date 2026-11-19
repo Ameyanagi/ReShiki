@@ -151,11 +151,12 @@ fn body_badge_and_arc_are_one_undo_step_each_and_keep_the_reaction() {
     app.tab.arrows.sweep = "-90".into();
     app.arrow_action(arrows::Action::ApplySweep);
     assert_eq!(app.tab.doc.arrows[0].arc, Some(-90.));
-    for _ in 0..5 {
+    // Body, badge with its metal symbol, arc, sweep.
+    for _ in 0..4 {
         let _ = app.update(Message::Undo);
     }
     assert_eq!(app.tab.doc.arrows, original.arrows);
-    for _ in 0..4 {
+    for _ in 0..3 {
         let _ = app.update(Message::Redo);
     }
     assert_eq!(app.tab.doc.arrows[0].arc, Some(180.));
@@ -197,4 +198,48 @@ fn add_callout_on_a_bond_types_its_text_and_undoes_in_one_step() {
     let _ = app.update(Message::AddCallout);
     app.finish_inline(false);
     assert_eq!(app.tab.doc, original);
+}
+
+#[test]
+fn picking_metal_then_typing_its_symbol_is_one_undo_step() {
+    use reshiki::arrows::{ArrowStyle, BadgeIcon, Preset};
+    let (mut app, _) = App::new();
+    app.tab.doc.arrows.push(reshiki::document::Arrow::new(
+        1,
+        Point::new(0., 0.),
+        Point::new(120., 0.),
+        Preset::Forward,
+        ArrowStyle::default(),
+    ));
+    app.tab.selected = vec![1];
+    app.arrow_action(arrows::Action::Badge(Some(BadgeIcon::Light)));
+    let light = app.tab.doc.clone();
+    app.arrow_action(arrows::Action::Badge(Some(BadgeIcon::Metal)));
+    app.tab.arrows.badge_text = "Cu".into();
+    app.arrow_action(arrows::Action::ApplyBadgeText);
+    assert_eq!(app.tab.doc.arrows[0].badge.as_ref().unwrap().text, "Cu");
+    let _ = app.update(Message::Undo);
+    assert_eq!(
+        app.tab.doc.arrows, light.arrows,
+        "one Undo returns the light badge"
+    );
+    let _ = app.update(Message::Redo);
+    assert_eq!(app.tab.doc.arrows[0].badge.as_ref().unwrap().text, "Cu");
+
+    // A second symbol, or a symbol after another edit, is its own step.
+    app.tab.arrows.badge_text = "Zn".into();
+    app.arrow_action(arrows::Action::ApplyBadgeText);
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc.arrows[0].badge.as_ref().unwrap().text, "Cu");
+    app.arrow_action(arrows::Action::Badge(Some(BadgeIcon::Light)));
+    app.arrow_action(arrows::Action::Badge(Some(BadgeIcon::Metal)));
+    app.arrow_action(arrows::Action::Body(reshiki::arrows::Body::Block));
+    app.tab.arrows.badge_text = "Ni".into();
+    app.arrow_action(arrows::Action::ApplyBadgeText);
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc.arrows[0].badge.as_ref().unwrap().text, "Pd");
+    assert_eq!(
+        app.tab.doc.arrows[0].appearance().body,
+        reshiki::arrows::Body::Block
+    );
 }

@@ -8,9 +8,11 @@ issues: []
   never changes what the arrow means: a block reaction arrow keeps its roles
   and conditions. The arrow palette offers each body as a preset. See
   [Reaction and mechanism arrows](arrows.md).
-- **Badges**: **Properties → Badge** puts a small icon on the shaft for light
-  (hν), an electrode (e⁻), heat (Δ), a metal or an enzyme. It moves with the
-  arrow, and a reaction arrow with a badge still copies as reaction SMILES.
+- **Badges**: **Properties → Badge** puts a small icon in a gap in the shaft,
+  or beside a broad body, for light (hν), an electrode (e⁻), heat (Δ), a metal
+  or an enzyme. Choosing **Metal** and typing its symbol is one Undo step. The
+  badge moves with the arrow, and a reaction arrow with a badge still copies as
+  reaction SMILES.
 - **Arc arrows**: **Make arc** in **Properties** and the **Arc** preset draw
   circular arc arrows. Drag the diamond to change the sweep, or type it in
   **Sweep (°)**. ChemDraw arc arrows open as arc arrows and export as ChemDraw

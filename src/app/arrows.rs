@@ -57,6 +57,9 @@ pub struct State {
     pub arc: Option<f32>,
     pub sweep: String,
     pub badge_text: String,
+    /// The tab's (file epoch, revision) right after a pick of Metal, so typing
+    /// its symbol next joins that pick's undo step.
+    metal_pick: Option<(u64, u64)>,
     source: Option<reshiki::arrow_anchors::Pick>,
 }
 /// The Badge list's choices: none, or one icon.
@@ -88,6 +91,7 @@ impl Default for State {
             arc: None,
             sweep: String::new(),
             badge_text: String::new(),
+            metal_pick: None,
             source: None,
         }
     }
@@ -427,8 +431,17 @@ impl App {
             self.error = true;
             return;
         }
+        let picked = (self.tab.file_epoch, self.tab.revision);
         let before = std::mem::replace(&mut self.tab.doc, next);
-        self.changed(before);
+        if matches!(action, Action::ApplyBadgeText) && self.tab.arrows.metal_pick == Some(picked) {
+            self.changed_continuing(before, true);
+        } else {
+            self.changed(before);
+        }
+        let revised = (self.tab.file_epoch, self.tab.revision);
+        self.tab.arrows.metal_pick = (matches!(action, Action::Badge(Some(BadgeIcon::Metal)))
+            && revised != picked)
+            .then_some(revised);
         self.sync_arrows();
         self.error = false;
         self.status = match action {
@@ -611,8 +624,13 @@ impl App {
                     .width(Length::Fill)
                 ]
                 .align_y(Alignment::Center),
-                "An icon on the shaft that also names a condition",
-                tooltip::Position::Top,
+                if first.drawn_body().is_line() {
+                    "A condition icon in a gap in the shaft"
+                } else {
+                    "A condition icon beside the arrow"
+                },
+                // Beside the row: the open list grows up or down over it.
+                tooltip::Position::Left,
             ));
             if badge.is_some_and(|b| b.icon == BadgeIcon::Metal) {
                 panel = panel.push(
