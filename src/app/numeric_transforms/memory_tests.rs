@@ -46,12 +46,12 @@ fn capture(name: &str, mut app: App, expected: Result<bool, &str>) -> Value {
     let before = state(&app);
     let result = app.numeric_transform_candidate(&fields);
     match (&result, expected) {
-        (Ok(document), Ok(changed)) => assert_eq!(document.is_some(), changed, "{name}"),
+        (Ok((document, _)), Ok(changed)) => assert_eq!(document.is_some(), changed, "{name}"),
         (Err(error), Err(expected)) => assert_eq!(error, expected, "{name}"),
         (actual, expected) => panic!("{name}: {actual:?}, expected {expected:?}"),
     }
     let candidate = match result {
-        Ok(document) => json!({ "document": document }),
+        Ok((document, notes)) => json!({ "document": document, "notes": notes }),
         Err(error) => json!({ "error": error }),
     };
     assert_eq!(
@@ -196,11 +196,7 @@ fn manual_numeric_transform_memory_characterization() {
     app.sync_numeric_transforms();
     input(&mut app, Field::Rotation, "72");
     input(&mut app, Field::Width, "1000");
-    cases.push(capture(
-        "late-unreachable-width",
-        app,
-        Err("Width: This size cannot be reached while keeping text and line widths fixed"),
-    ));
+    cases.push(capture("late-unreachable-width", app, Ok(false)));
 
     let output = std::env::var_os("RESHIKI_NUMERIC_TRANSFORM_CAPTURE")
         .expect("Set RESHIKI_NUMERIC_TRANSFORM_CAPTURE to the transcript path");
@@ -213,10 +209,10 @@ fn manual_numeric_transform_candidate_memory_workload() {
     for boundary_stereo in [false, true] {
         let app = profiling_fixture(boundary_stereo);
         let fields = [Field::Rotation, Field::TiltX, Field::TiltY, Field::Scale];
-        drop(app.numeric_transform_candidate(&fields).unwrap().unwrap());
+        drop(app.numeric_transform_candidate(&fields).unwrap().0.unwrap());
         let baseline = crate::allocation_metrics::reset();
         for _ in 0..30 {
-            let candidate = app.numeric_transform_candidate(&fields).unwrap().unwrap();
+            let candidate = app.numeric_transform_candidate(&fields).unwrap().0.unwrap();
             std::hint::black_box(&candidate);
             drop(candidate);
         }
@@ -239,7 +235,7 @@ fn manual_numeric_transform_candidate_memory_workload() {
         );
 
         let baseline = crate::allocation_metrics::reset();
-        let candidate = app.numeric_transform_candidate(&fields).unwrap().unwrap();
+        let candidate = app.numeric_transform_candidate(&fields).unwrap().0.unwrap();
         let retained = crate::allocation_metrics::snapshot();
         let stereo_capacity_bytes = candidate
             .bonds
