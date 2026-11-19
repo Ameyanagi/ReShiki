@@ -585,3 +585,39 @@ fn a_grouped_text_is_never_a_drop_target() {
     );
     assert_eq!(drop_target(&doc, &[free]), None);
 }
+
+#[test]
+fn a_reagent_whose_step_goes_leaves_the_cycle_group_and_keeps_names() {
+    let mut doc = Document::default();
+    let id = super::insert(&mut doc, Point::new(0., 0.), 200.);
+    let only = text(&mut doc, Point::new(-20., -210.), "Pd");
+    let reagent = text(&mut doc, Point::new(150., -250.), "ArX");
+    for (role, part) in [(Role::Intermediate(0), only), (Role::Reagent(0), reagent)] {
+        let target = Target {
+            cycle: id,
+            role,
+            part: vec![part],
+            ink: ink(&doc, part),
+        };
+        super::assign(&mut doc, &target);
+    }
+    let before = doc.clone();
+    doc.delete(&[only]);
+    let _ = crate::transaction::reconcile(&mut doc, before).unwrap();
+    assert!(cycle(&doc, id).steps.is_empty());
+    assert!(doc.groups.iter().all(|g| !g.members.contains(&reagent)));
+
+    // Joining two steps keeps the name of the one that went if the other
+    // had none.
+    let (mut doc, id, [_, oa, _]) = suzuki();
+    if let Some(c) = doc
+        .graphics
+        .iter_mut()
+        .find(|g| g.id == id)
+        .and_then(|g| g.cycle.as_deref_mut())
+    {
+        c.steps[1].name = "Transmetalation".into();
+    }
+    remove(&mut doc, &[oa]);
+    assert_eq!(cycle(&doc, id).steps[0].name, "Transmetalation");
+}

@@ -176,6 +176,9 @@ impl Cycle {
         {
             step.reagents.extend(gone.reagents);
             step.products.extend(gone.products);
+            if step.name.trim().is_empty() {
+                step.name = gone.name;
+            }
         }
     }
 }
@@ -941,16 +944,29 @@ pub fn remove(doc: &mut Document, ids: &[u64]) -> usize {
         }
     }
     // Side parts of a cycle left with no steps go too.
-    let kept = part_ids(doc);
-    let freed: HashSet<u64> = held.difference(&kept).copied().collect();
-    let count = freed.len();
-    if count > 0 {
-        for group in &mut doc.groups {
+    let freed: HashSet<u64> = held.difference(&part_ids(doc)).copied().collect();
+    ungroup_freed(doc, &freed);
+    freed.len()
+}
+
+/// Parts that lost their role leave the groups that hold a cycle; other
+/// groups they belong to stay.
+fn ungroup_freed(doc: &mut Document, freed: &HashSet<u64>) {
+    if freed.is_empty() {
+        return;
+    }
+    let cycles: HashSet<u64> = doc
+        .graphics
+        .iter()
+        .filter(|g| g.cycle.is_some())
+        .map(|g| g.id)
+        .collect();
+    for group in &mut doc.groups {
+        if group.members.iter().any(|id| cycles.contains(id)) {
             group.members.retain(|id| !freed.contains(id));
         }
-        doc.prune_groups();
     }
-    count
+    doc.prune_groups();
 }
 
 /// Run the cycle the other way round: the order reverses and what came in
@@ -1165,11 +1181,15 @@ pub fn reconcile(doc: &mut Document) {
             Some(cycle)
         })
         .collect();
+    let held = part_ids(doc);
     for (g, cycle) in doc.graphics.iter_mut().zip(fixed) {
         if cycle.is_some() && g.cycle != cycle {
             g.cycle = cycle;
         }
     }
+    // A side part whose step went with its intermediate is free again.
+    let freed: HashSet<u64> = held.difference(&part_ids(doc)).copied().collect();
+    ungroup_freed(doc, &freed);
 }
 
 #[cfg(test)]
