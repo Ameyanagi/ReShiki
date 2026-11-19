@@ -159,8 +159,9 @@ files keep it as ChemDraw's Shaded fill.
    **Ultrasound**, **Cold** or **Enzyme**.
 2. Click the middle of the arrow, or drag to set the icon's size. The icon
    sits on a disc of the paper color, so it covers the shaft behind it.
-3. Select the arrow and the icon and press ⌘/Ctrl+G to group them. Clicking
-   either one now selects both, and they move together.
+3. Click the icon, Shift-click the arrow's shaft and press ⌘/Ctrl+G to group
+   them. Clicking either one now selects both, and they move together.
+   Option/Alt-click selects only the icon, for example to change its color.
 
 An icon is an ordinary shape: **Properties** sets its color and line width,
 and it resizes like any symbol. It never takes part in the reaction. Type the

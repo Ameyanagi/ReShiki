@@ -600,6 +600,16 @@ fn a_condition_icon_keeps_its_disc_and_lends_it_to_no_other_shape() {
         app.tab.doc.graphics[1].style.fill, paper,
         "the icon keeps its disc"
     );
+    // The style bar's color recolors the icon's lines, never its disc.
+    app.tab.selected = vec![2];
+    let blue = reshiki::palette::Color::Custom([30, 60, 200]);
+    assert_eq!(
+        app.current_selection_color(),
+        Some(reshiki::palette::Color::Ink)
+    );
+    app.apply_selection_color(blue);
+    assert_eq!(app.tab.doc.graphics[1].style.stroke, blue);
+    assert_eq!(app.tab.doc.graphics[1].style.fill, paper);
     // Switching the icon to a chemical symbol drops the disc, and back again.
     app.tab.selected = vec![2];
     let _ = app.update(Message::Graphics(Action::ScientificKind(

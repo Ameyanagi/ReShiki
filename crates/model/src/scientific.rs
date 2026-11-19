@@ -453,29 +453,25 @@ fn condition_parts(kind: SymbolKind, style: &GraphicStyle) -> Vec<Part> {
             out.push(stroke(wires));
         }
         SymbolKind::Heat => {
-            // A flame with an inner flame: tip, widest point, base.
-            for (top, mid, half, bottom) in
-                [(-0.56_f32, 0.14, 0.38_f32, 0.52), (0., 0.28, 0.16, 0.4)]
-            {
-                let rise = (mid - top) * 0.4;
-                let fall = (bottom - mid) * 0.55;
-                out.push(stroke(vec![
-                    Move(p(0., top)),
-                    Cubic(
-                        p(half * 0.27, top + rise * 0.5),
-                        p(half, mid - rise),
-                        p(half, mid),
-                    ),
-                    Cubic(p(half, mid + fall), p(half * 0.55, bottom), p(0., bottom)),
-                    Cubic(p(-half * 0.55, bottom), p(-half, mid + fall), p(-half, mid)),
-                    Cubic(
-                        p(-half, mid - rise),
-                        p(-half * 0.27, top + rise * 0.5),
-                        p(0., top),
-                    ),
-                    Close,
-                ]));
-            }
+            // A flame with a side tongue, and an inner flame.
+            out.push(stroke(vec![
+                Move(p(0.06, -0.58)),
+                Cubic(p(0.16, -0.36), p(0.38, -0.18), p(0.38, 0.14)),
+                Cubic(p(0.38, 0.38), p(0.2, 0.52), p(0., 0.52)),
+                Cubic(p(-0.2, 0.52), p(-0.38, 0.38), p(-0.38, 0.16)),
+                Cubic(p(-0.38, -0.02), p(-0.3, -0.14), p(-0.22, -0.26)),
+                Cubic(p(-0.2, -0.12), p(-0.14, -0.04), p(-0.1, -0.04)),
+                Cubic(p(-0.1, -0.26), p(-0.02, -0.4), p(0.06, -0.58)),
+                Close,
+            ]));
+            out.push(stroke(vec![
+                Move(p(0.02, 0.)),
+                Cubic(p(0.08, 0.12), p(0.17, 0.18), p(0.17, 0.3)),
+                Cubic(p(0.17, 0.4), p(0.09, 0.44), p(0., 0.44)),
+                Cubic(p(-0.09, 0.44), p(-0.17, 0.4), p(-0.17, 0.3)),
+                Cubic(p(-0.17, 0.18), p(-0.06, 0.12), p(0.02, 0.)),
+                Close,
+            ]));
         }
         SymbolKind::Microwave => {
             // An oven: its door window with a wave, and two knobs.
@@ -548,6 +544,10 @@ impl Part {
     }
 }
 impl Graphic {
+    /// A condition icon's fill is its paper disc, not a color to edit.
+    pub fn is_condition_icon(&self) -> bool {
+        matches!(self.kind, GraphicKind::Symbol(kind) if kind.is_condition())
+    }
     pub fn parts(&self) -> Vec<Part> {
         if self.kind == GraphicKind::Piece {
             return crate::equipment::placed::parts(self);
