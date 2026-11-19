@@ -463,7 +463,12 @@ fn shading_keeps_its_light_highlight_on_the_dark_canvas() {
             .collect()
     };
     let light = shown(&doc);
+    // A custom blue keeps its exact color on either canvas.
+    let mut blue = doc.clone();
+    blue.graphics[0].style.fill = Some(crate::palette::Color::Custom([0, 0, 255]));
+    let light_blue = shown(&blue);
     doc.canvas_theme = crate::canvas_theme::CanvasTheme::Dark;
+    blue.canvas_theme = crate::canvas_theme::CanvasTheme::Dark;
     assert!(doc.canvas_theme.is_dark());
     // The bands look the same on both canvases: white at the highlight.
     assert_eq!(shown(&doc), light);
@@ -471,4 +476,7 @@ fn shading_keeps_its_light_highlight_on_the_dark_canvas() {
         light.last(),
         Some(&shade([0; 3], 0.5 / (light.len() as f32)))
     );
+    assert_eq!(shown(&blue), light_blue);
+    let n = light_blue.len() as f32;
+    assert_eq!(light_blue.first(), Some(&shade([0, 0, 255], (n - 0.5) / n)));
 }

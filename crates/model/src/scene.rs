@@ -2323,7 +2323,12 @@ fn graphic_primitive(g: &&crate::graphics::Graphic, doc: &Document) -> Vec<Primi
             .into_iter()
             .collect();
         let bands = g.shading_bands();
-        let shade = g.style.fill.unwrap_or(g.style.stroke).rgb();
+        // The color the shape shows: on the dark canvas custom colors arrive
+        // pre-flipped, while Ink shades from black as on the light canvas.
+        let shade = match g.style.fill.unwrap_or(g.style.stroke) {
+            Color::Custom(rgb) => doc.canvas_theme.color(rgb),
+            color => color.rgb(),
+        };
         parts.extend(bands.iter().filter_map(|(band, t)| {
             use crate::graphics::PathCommand::{Close, Line, Move};
             let (first, rest) = band.split_first()?;
