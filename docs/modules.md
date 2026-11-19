@@ -806,6 +806,7 @@ explains how the crates and modules fit together.
 - `crates/model/src/scientific/label_halo.rs`: Find the atom labels an orbital's complete lobes run into.
 - `crates/model/src/scientific/mark_placement.rs`: Click placement and the orbit of a dragged mark.
 - `crates/model/src/selection_region.rs`: Freeform selection shared by lasso and rectangular selection.
+- `crates/model/src/shape_text.rs`: Text a closed shape holds
 - `crates/model/src/stereo_groups.rs`: Enhanced stereochemistry groups (#766)
 - `crates/model/src/stereochemistry.rs`: Atomic edits of an explicitly defined tetrahedral configuration.
 - `crates/model/src/storage.rs`: Files the app writes for itself and for the user.
