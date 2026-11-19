@@ -76,7 +76,11 @@ pub(super) fn keep_format_text(
             lost.push("editable arrow looks and callouts".into());
         }
     }
-    if reshiki::purpose::used(doc) {
+    // ReShiki reads panels and purpose back from its own CDXML only.
+    if format == "cdx" && doc.graphics.iter().any(|g| g.panel.is_some()) {
+        lost.push("panels".into());
+    }
+    if format != "cdxml" && reshiki::purpose::used(doc) {
         lost.push("object purpose".into());
     }
     let Some(last) = lost.pop() else {

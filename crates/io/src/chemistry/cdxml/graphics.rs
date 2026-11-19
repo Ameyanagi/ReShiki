@@ -120,11 +120,23 @@ pub struct NativeGraphic {
     pub heads: Option<NativePathHeads>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub picture_source: Option<PictureSource>,
+    /// A panel ReShiki wrote, whole but for its ID, layer and frame.
+    #[serde(skip)]
+    pub panel: Option<Box<Graphic>>,
 }
 impl NativeGraphic {
     /// This is the JSON->Value->Document numeric boundary: direct f64->f32.
     /// Image normalization shares the existing bounded application decoder.
     pub fn into_document(self, budget: &mut crate::pictures::exchange::Budget) -> Result<Graphic> {
+        if let Some(mut panel) = self.panel {
+            panel.id = self.id;
+            panel.layer = self.layer.into_document()?;
+            panel.origin = self.origin.into_document();
+            panel.axis_x = self.axis_x.into_document();
+            panel.axis_y = self.axis_y.into_document();
+            panel.validate().map_err(Error::Document)?;
+            return Ok(*panel);
+        }
         let picture = self
             .picture_source
             .map(|p| p.into_document(budget))
@@ -353,8 +365,42 @@ impl Reader<'_, '_> {
             path: Some(path),
             heads: None,
             picture_source: None,
+            panel: None,
         })
     }
+    /// A panel ReShiki wrote, in place of the group of its parts. Its frame
+    /// is in page points, as the group's curves are.
+    fn panel(&mut self, el: Node<'_, '_>, panel: Graphic) -> Result<NativeGraphic> {
+        let scale = |p: crate::document::Point| {
+            NativePoint::new(f64::from(p.x) * self.scale, f64::from(p.y) * self.scale)
+        };
+        Ok(NativeGraphic {
+            id: 0,
+            kind: panel.kind,
+            origin: scale(panel.origin),
+            axis_x: scale(panel.axis_x),
+            axis_y: scale(panel.axis_y),
+            style: None,
+            sides: None,
+            superscript: None,
+            phase: None,
+            phase_flipped: None,
+            layer: self.layer(el)?,
+            path: None,
+            heads: None,
+            picture_source: None,
+            panel: Some(Box::new(panel)),
+        })
+    }
+}
+
+/// The panel ReShiki wrote on a group, or None. A record that does not read
+/// as a valid panel leaves the group as the shapes and text ChemDraw sees.
+pub(super) fn panel_record(node: Node<'_, '_>) -> Option<Graphic> {
+    let record = node.attribute(crate::exchange::PANEL)?;
+    serde_json::from_str(record)
+        .ok()
+        .filter(|g: &Graphic| named(node, "group") && g.panel.is_some() && g.validate().is_ok())
 }
 
 /// Equivalent to native local_pictures=True. Claimed elements are skipped by
@@ -442,7 +488,10 @@ pub fn read(
         {
             continue;
         }
-        let mut value = if named(el, "group") {
+        reader.spend(el.attribute(crate::exchange::PANEL).map_or(0, str::len))?;
+        let mut value = if let Some(panel) = panel_record(el) {
+            reader.panel(el, panel)?
+        } else if named(el, "group") {
             let children: Vec<_> = el
                 .children()
                 .filter(Node::is_element)

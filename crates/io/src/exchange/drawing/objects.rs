@@ -571,32 +571,64 @@ impl Writer<'_> {
                 self.objects.push((g.id, n));
                 continue;
             }
-            let parts = if let Some(parts) = self.options.graphic_parts.and_then(|p| p.get(&g.id)) {
-                parts.clone()
-            } else {
-                if matches!(g.kind, GraphicKind::Symbol(_) | GraphicKind::Orbital(_)) {
-                    return Err(invalid(
-                        "Scientific drawing export requires styled vector parts",
-                    ));
+            let mut parts =
+                if let Some(parts) = self.options.graphic_parts.and_then(|p| p.get(&g.id)) {
+                    parts.clone()
+                } else {
+                    if matches!(g.kind, GraphicKind::Symbol(_) | GraphicKind::Orbital(_)) {
+                        return Err(invalid(
+                            "Scientific drawing export requires styled vector parts",
+                        ));
+                    }
+                    let commands = self
+                        .options
+                        .graphic_paths
+                        .and_then(|p| p.get(&g.id))
+                        .ok_or_else(|| invalid("Graphic export requires vector geometry"))?
+                        .clone();
+                    // A borderless panel keeps only its fill.
+                    let borderless = g.panel.as_ref().is_some_and(|p| !p.border);
+                    let mut style = g.style.clone();
+                    if borderless {
+                        style.width_pt = 0.;
+                    }
+                    vec![crate::scientific::Part {
+                        commands,
+                        style,
+                        filled: borderless,
+                    }]
+                };
+            let page = crate::palette::Color::Custom(doc.canvas_theme.background());
+            // ChemDraw draws no shadow on curves: it goes first as a grey
+            // shape, and an unfilled outline shows the page inside, as the
+            // canvas draws it.
+            if let Some(commands) = g.shadow_commands().filter(|c| {
+                // A fill needs closed outlines only.
+                curve_points(c).is_ok_and(|paths| paths.iter().all(|(_, closed)| *closed))
+            }) {
+                if g.style.fill.is_none()
+                    && g.style.effects.opacity.is_none()
+                    && let Some(body) = parts.first_mut()
+                {
+                    body.style.fill = Some(page);
                 }
-                let commands = self
-                    .options
-                    .graphic_paths
-                    .and_then(|p| p.get(&g.id))
-                    .ok_or_else(|| invalid("Graphic export requires vector geometry"))?
-                    .clone();
-                // A borderless panel keeps only its fill.
-                let borderless = g.panel.as_ref().is_some_and(|p| !p.border);
-                let mut style = g.style.clone();
-                if borderless {
-                    style.width_pt = 0.;
-                }
-                vec![crate::scientific::Part {
-                    commands,
-                    style,
-                    filled: borderless,
-                }]
-            };
+                let grey = crate::palette::Color::Custom(
+                    doc.canvas_theme.color(crate::graphics::SHADOW_RGB),
+                );
+                parts.insert(
+                    0,
+                    crate::scientific::Part {
+                        commands,
+                        style: GraphicStyle {
+                            stroke: grey,
+                            fill: Some(grey),
+                            width_pt: 0.,
+                            ..Default::default()
+                        },
+                        filled: true,
+                    },
+                );
+            }
             let text_style = doc.drawing_style.text_style();
             // Title backings take the panel's fill, and titles on a band the
             // color that reads on the band as exported.
@@ -678,6 +710,7 @@ impl Writer<'_> {
             let parent = if g
                 .superscript_label(&doc.drawing_style.text_style())
                 .is_some()
+                || g.panel.is_some()
                 || !panel_parts.is_empty()
                 || !panel_titles.is_empty()
                 || parsed.len() > 1
@@ -735,8 +768,10 @@ impl Writer<'_> {
                 }
             }
             self.bracket_superscript(g, parent, z)?;
-            if !panel_parts.is_empty() || !panel_titles.is_empty() {
+            if g.panel.is_some() {
                 self.panel(panel_parts, &panel_titles, parent, z)?;
+                let record = self.panel_record(g)?;
+                self.tree.set(parent, crate::exchange::PANEL, record)?;
                 object = Some(parent);
             }
             if let Some(n) = object {
@@ -966,6 +1001,39 @@ impl Writer<'_> {
             ],
         )?;
         Ok(())
+    }
+    /// The panel as ReShiki reads it back: its frame on the page and the
+    /// colors written for it here.
+    fn panel_record(&self, g: &crate::graphics::Graphic) -> Result<String> {
+        let mut record = g.clone();
+        let written = |c| crate::palette::Color::imported(self.palette.rgb(c));
+        record.style.stroke = written(record.style.stroke);
+        record.style.fill = record.style.fill.map(written);
+        if let Some(gradient) = &mut record.style.effects.gradient {
+            gradient.from = written(gradient.from);
+        }
+        // An unfilled shadowed panel shows the page inside, which the light
+        // canvas it opens on would paint white.
+        if self.doc.canvas_theme.is_dark()
+            && record.style.effects.shadow_pt.is_some()
+            && record.style.fill.is_none()
+            && record.style.effects.opacity.is_none()
+        {
+            record.style.fill = Some(written(crate::palette::Color::Custom(
+                self.doc.canvas_theme.background(),
+            )));
+        }
+        let page = |p: Point, shift: P| {
+            let p = P::from(p);
+            Point::new(
+                (p.x * self.scale + shift.x) as f32,
+                (p.y * self.scale + shift.y) as f32,
+            )
+        };
+        record.origin = page(g.origin, self.shift);
+        record.axis_x = page(g.axis_x, P::default());
+        record.axis_y = page(g.axis_y, P::default());
+        serde_json::to_string(&record).map_err(|e| invalid(e.to_string()))
     }
     /// A panel's title band, title backings, dividers and titles, as plain
     /// filled curves, lines and text inside the panel's group.

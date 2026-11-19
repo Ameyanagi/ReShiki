@@ -16,6 +16,12 @@ pub use decode::{from_cdx, from_cdx_tolerant};
 pub use encode::{to_cds, to_cdx};
 use std::{collections::HashMap, sync::LazyLock};
 
+/// A molecule's or arrow's purpose other than Chemistry, on its fragment or
+/// arrow. ReShiki's own data: ChemDraw ignores it and CDX has no place for it.
+pub(crate) const PURPOSE: &str = "ReShikiPurpose";
+/// A panel as JSON, on the group of shapes and text ChemDraw gets for it.
+pub(crate) const PANEL: &str = "ReShikiPanel";
+
 pub const LIMIT: usize = 16 * 1024 * 1024;
 const MAX_OBJECTS: usize = 100_000;
 const MAX_PROPERTIES: usize = 1_000_000;
