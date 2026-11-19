@@ -94,11 +94,17 @@ pub fn from_cdx(data: &[u8]) -> Result<String> {
 /// [`from_cdx`] for opening a file: objects, properties and values outside the
 /// supported subset are passed on or skipped instead of refusing the file.
 /// An unknown object keeps a name the import then reports as left out; an
-/// unknown property or value is dropped, so its object takes the default.
-/// Broken structure and the size limits are refused as before.
+/// unknown property or value of a drawing object is dropped, so the object
+/// takes the default. An unknown property of an atom, bond or chemical group
+/// is dropped and counted for the import to report; an unknown value there,
+/// broken structure and the size limits are refused as before.
 pub fn from_cdx_tolerant(data: &[u8]) -> Result<String> {
     decode(data, true)
 }
+
+/// How many properties of an atom, bond or chemical group the tolerant
+/// decoder skipped.
+pub(crate) const SKIPPED: &str = "ReShikiSkippedProperties";
 
 fn decode(data: &[u8], tolerant: bool) -> Result<String> {
     if data.len() > LIMIT {
@@ -325,7 +331,21 @@ fn convert(tree: &Tree<'_>, fonts: &mut HashMap<u16, u16>, tolerant: bool) -> Re
             el.children.push(table);
         }
     }
-    let (mut text, mut utf8_text) = (None, None);
+    // Atoms, bonds and what groups them keep every value or fail: a dropped
+    // one would change the chemistry without a word. A property ReShiki does
+    // not know there is counted, for the import to name.
+    let strict = !tolerant
+        || matches!(
+            tree.name,
+            "n" | "b"
+                | "fragment"
+                | "bracketedgroup"
+                | "bracketattachment"
+                | "crossingbond"
+                | "scheme"
+                | "step"
+        );
+    let (mut text, mut utf8_text, mut skipped) = (None, None, 0usize);
     for (tag, data) in &tree.raw {
         if *tag == 0x100 {
             continue;
@@ -333,8 +353,12 @@ fn convert(tree: &Tree<'_>, fonts: &mut HashMap<u16, u16>, tolerant: bool) -> Re
         let Some(p) = SCHEMA.codes.get(tag) else {
             if matches!(tree.name, "CDXML" | "page")
                 || tree.name == "n" && matches!(tag, 0x448 | 0x44d)
-                || tolerant
+                || !strict
             {
+                continue;
+            }
+            if tolerant {
+                skipped += 1;
                 continue;
             }
             return Err(format!("Unsupported binary drawing property 0x{tag:04x}"));
@@ -349,23 +373,7 @@ fn convert(tree: &Tree<'_>, fonts: &mut HashMap<u16, u16>, tolerant: bool) -> Re
         }
         match property(tree, &mut el, *tag, p, data, fonts) {
             Ok(()) => {}
-            // Atoms, bonds and what groups them keep every value or fail: a
-            // dropped one would change the chemistry without a word.
-            Err(error)
-                if !tolerant
-                    || matches!(
-                        tree.name,
-                        "n" | "b"
-                            | "fragment"
-                            | "bracketedgroup"
-                            | "bracketattachment"
-                            | "crossingbond"
-                            | "scheme"
-                            | "step"
-                    ) =>
-            {
-                return Err(error);
-            }
+            Err(error) if strict => return Err(error),
             Err(_) => match (p.name, *data) {
                 // ChemDraw stores a colour index in four bytes in clip art.
                 ("color", &[a, b, 0, 0]) => el.set(p.name, u16::from_le_bytes([a, b])),
@@ -379,6 +387,9 @@ fn convert(tree: &Tree<'_>, fonts: &mut HashMap<u16, u16>, tolerant: bool) -> Re
                 _ => {}
             },
         }
+    }
+    if skipped > 0 {
+        el.set(SKIPPED, skipped);
     }
     let attr = |name: &str| {
         el.attrs

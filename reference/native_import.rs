@@ -197,6 +197,37 @@ fn wire_response(mut value: Value) -> anyhow::Result<Response> {
     Ok(response)
 }
 
+/// The frozen worker's refusals of a drawing style or object, which the
+/// import approximates instead.
+const DRAWING_REFUSALS: &[&str] = &[
+    "Filled or faded CDXML arrows",
+    "Unsupported CDXML arrow",
+    "Unsupported CDXML no-go mark",
+    "Unsupported arrowhead center size",
+    "This arrowed CDXML spline",
+    "Graphic line width is outside",
+    "Transparent/faded CDXML graphics",
+    "Arrowed, shaded or doubled CDXML curves",
+    "Invalid CDXML Bézier control-point sequence",
+    "Graphic is missing its two defining points",
+    "Gradient-shaded CDXML orbitals",
+    "Unsupported CDXML orbital",
+    "Unsupported CDXML chemical symbol",
+    "Unsupported graphic line style",
+    "Shadowed/shaded rectangle styles",
+    "Unsupported oval style",
+    "This CDXML graphic type is not supported",
+    "Outlined/shadowed CDXML text",
+    "Unsupported CDXML text color or font size",
+    "This CDXML text alignment",
+    "This CDXML paragraph spacing or width",
+    "Rotated CDXML text",
+    "CDXML contains unsupported drawing objects",
+    "Mixed fonts within a CDXML atom label",
+    "Circular/elliptical CDXML arrows",
+    "Single CDXML brackets need explicit orientation",
+    "Invalid drawing style font_size_pt",
+];
 async fn reference_cases(format: &str, script: &str) -> anyhow::Result<()> {
     let Some(helper) = helper("reshiki-inchi-helper")? else {
         return Ok(());
@@ -479,11 +510,18 @@ async fn reference_cases(format: &str, script: &str) -> anyhow::Result<()> {
                 }
             }
             // A ChemDraw style or object ReShiki cannot draw yet imports as the
-            // nearest one with a notice; the frozen worker refuses the file.
+            // nearest one with a notice, where the frozen worker refuses the
+            // file for that drawing.
             (Ok(Outcome::Complete(a)), None)
                 if format == "cdxml"
-                    && reshiki::chemistry::cdxml::approximate(&case.text).0 != case.text
-                    && !a.warnings.is_empty() =>
+                    // The worker gives one message for objects and for pages.
+                    && case.text.matches("<page").count() <= 1
+                    && case.failure.as_deref().is_some_and(|failure| {
+                        DRAWING_REFUSALS.iter().any(|r| failure.starts_with(r))
+                    })
+                    && reshiki::chemistry::cdxml::approximate(&case.text)
+                        .1
+                        .is_some_and(|notice| a.warnings.contains(&notice)) =>
             {
                 accepted += 1;
                 None

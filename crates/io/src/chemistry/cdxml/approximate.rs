@@ -75,6 +75,7 @@ enum Kind {
     VectorPicture,
     UnknownGraphic,
     OtherObject,
+    ChemistrySetting,
 }
 impl Kind {
     /// Singular, plural, and how one or several were imported; `None` when
@@ -165,6 +166,11 @@ impl Kind {
                 None,
             ),
             Self::OtherObject => ("other ChemDraw object", "other ChemDraw objects", None),
+            Self::ChemistrySetting => (
+                "atom or bond setting ReShiki does not know",
+                "atom or bond settings ReShiki does not know",
+                None,
+            ),
         }
     }
 }
@@ -195,6 +201,7 @@ fn rewrite(xml: &str) -> Result<(String, Option<String>, usize)> {
         original: HashSet::new(),
         headless: HashSet::new(),
         resized: HashSet::new(),
+        affected: HashSet::new(),
     };
     for index in pass.tree.descendants(0)? {
         if let Some(id) = pass.node(index)?.attr("id") {
@@ -206,12 +213,18 @@ fn rewrite(xml: &str) -> Result<(String, Option<String>, usize)> {
     for index in pass.tree.descendants(0)? {
         pass.element(index)?;
     }
+    // The document's label size is also its drawing style's. Each label that
+    // takes it was counted above.
+    if let Some(size) = pass.attr(0, "LabelSize")?.as_deref().and_then(number)
+        && !(4.0..=144.).contains(&size)
+    {
+        pass.set(0, "LabelSize", spell(size.clamp(4., 144.)))?;
+    }
     if !pass.changed {
         return Ok((xml.into(), None, 0));
     }
     pass.references()?;
-    let count = pass.log.values().sum();
-    Ok((pass.tree.serialize()?, pass.notice(), count))
+    Ok((pass.tree.serialize()?, pass.notice(), pass.affected.len()))
 }
 
 struct Pass {
@@ -224,6 +237,9 @@ struct Pass {
     headless: HashSet<String>,
     /// Objects already counted for a size out of range.
     resized: HashSet<usize>,
+    /// Objects drawn differently or left out, each once however many of
+    /// their styles changed.
+    affected: HashSet<usize>,
 }
 
 fn numbers(text: &str) -> Option<Vec<f64>> {
@@ -363,8 +379,17 @@ impl Pass {
         self.changed |= removed;
         Ok(removed)
     }
-    fn count(&mut self, kind: Kind) {
+    fn count(&mut self, index: usize, kind: Kind) {
         *self.log.entry(kind).or_default() += 1;
+        // A text run belongs to its caption or label.
+        let object = self
+            .tree
+            .node(index)
+            .ok()
+            .filter(|node| node.tag == "s")
+            .and_then(|node| node.parent)
+            .unwrap_or(index);
+        self.affected.insert(object);
     }
     fn drop_element(&mut self, index: usize) -> Result<()> {
         self.changed = true;
@@ -447,18 +472,18 @@ impl Pass {
             match tag.as_str() {
                 // A template file's grid has nothing to draw.
                 "templategrid" => {}
-                "bioshape" => self.count(Kind::BioShape),
-                "plasmidmap" => self.count(Kind::PlasmidMap),
-                "table" => self.count(Kind::Table),
-                "gepplate" => self.count(Kind::GelPlate),
-                "tlcplate" => self.count(Kind::TlcPlate),
-                _ => self.count(Kind::OtherObject),
+                "bioshape" => self.count(child, Kind::BioShape),
+                "plasmidmap" => self.count(child, Kind::PlasmidMap),
+                "table" => self.count(child, Kind::Table),
+                "gepplate" => self.count(child, Kind::GelPlate),
+                "tlcplate" => self.count(child, Kind::TlcPlate),
+                _ => self.count(child, Kind::OtherObject),
             }
             self.tree.node_mut(child)?.parent = None;
             if root {
                 continue;
             }
-            for part in self.salvage(child, 0)? {
+            for part in self.salvage(child, 0, false)? {
                 self.tree.node_mut(part)?.parent = Some(index);
                 kept.push(part);
                 self.objects(part)?;
@@ -470,11 +495,12 @@ impl Pass {
         }
         Ok(())
     }
-    fn salvage(&mut self, index: usize, depth: usize) -> Result<Vec<usize>> {
+    fn salvage(&mut self, index: usize, depth: usize, hidden: bool) -> Result<Vec<usize>> {
         let mut kept = Vec::new();
         if depth > 64 {
             return Ok(kept);
         }
+        let hidden = hidden || self.node(index)?.attr("Visible") == Some("no");
         if self.node(index)?.tag == "plasmidmap"
             && let Some(ring) = self.plasmid_ring(index)?
         {
@@ -494,7 +520,13 @@ impl Pass {
             } else if SALVAGED.contains(&tag.as_str()) {
                 kept.push(child);
             } else if tag == "page" || !ALLOWED.contains(&tag.as_str()) {
-                kept.extend(self.salvage(child, depth + 1)?);
+                kept.extend(self.salvage(child, depth + 1, hidden)?);
+            }
+        }
+        // What a hidden object holds stays hidden with it.
+        if hidden {
+            for &part in &kept {
+                self.tree.node_mut(part)?.set("Visible", "no".into());
             }
         }
         Ok(kept)
@@ -549,6 +581,13 @@ impl Pass {
         if !self.attached(index)? {
             return Ok(());
         }
+        // What the binary file held that the CDX decoder skipped.
+        if let Some(count) = self.attr(index, crate::exchange::SKIPPED)? {
+            self.remove(index, &[crate::exchange::SKIPPED])?;
+            for _ in 0..count.parse::<usize>().unwrap_or(1).min(64) {
+                self.count(index, Kind::ChemistrySetting);
+            }
+        }
         self.text(index)?;
         // Hidden artwork is not drawn, and still marks out its page.
         if self.node(index)?.attr("Visible") == Some("no") {
@@ -566,7 +605,7 @@ impl Pass {
                 }) =>
             {
                 self.drop_element(index)?;
-                self.count(Kind::VectorPicture);
+                self.count(index, Kind::VectorPicture);
                 Ok(())
             }
             "graphic"
@@ -595,7 +634,7 @@ impl Pass {
         if let Some(alpha) = self.attr(index, "alpha")?.as_deref().and_then(number) {
             self.remove(index, &["alpha"])?;
             if alpha < 1. {
-                self.count(Kind::Faded);
+                self.count(index, Kind::Faded);
             }
         }
         Ok(())
@@ -606,7 +645,7 @@ impl Pass {
         {
             self.set(index, key, spell(value.clamp(low, high)))?;
             if self.resized.insert(index) {
-                self.count(Kind::Size);
+                self.count(index, Kind::Size);
             }
         }
         Ok(())
@@ -635,7 +674,7 @@ impl Pass {
             };
             self.set(index, "ArrowheadCenterSize", spell(nearest))?;
             if self.resized.insert(index) {
-                self.count(Kind::Size);
+                self.count(index, Kind::Size);
             }
         }
         Ok(())
@@ -677,7 +716,7 @@ impl Pass {
             .is_some_and(|fill| matches!(fill.as_str(), "Solid" | "Shaded"))
         {
             self.set(index, "FillType", "None")?;
-            self.count(Kind::BlockArrow);
+            self.count(index, Kind::BlockArrow);
         }
         self.head_sizes(index)?;
         self.clamp(index, "LineWidth", 0.1, 12.)?;
@@ -702,7 +741,7 @@ impl Pass {
         if node.attr("Head3D").is_none() || node.attr("Tail3D").is_none() {
             // Nothing says where the arrow runs.
             self.drop_element(index)?;
-            self.count(Kind::UnknownGraphic);
+            self.count(index, Kind::UnknownGraphic);
         }
         Ok(())
     }
@@ -744,7 +783,7 @@ impl Pass {
         })();
         let Some((first, segments)) = geometry else {
             self.set(index, "AngularSize", "0")?;
-            self.count(Kind::ArcStraight);
+            self.count(index, Kind::ArcStraight);
             return Ok(());
         };
         let node = self.tree.node_mut(index)?;
@@ -795,7 +834,7 @@ impl Pass {
             }
         }
         if bits & 512 != 0 {
-            self.count(Kind::DoubledCurve);
+            self.count(index, Kind::DoubledCurve);
         }
         bits &= 1 | 2 | 4 | 128 | 256;
         if bits != original {
@@ -814,7 +853,7 @@ impl Pass {
             bits & (128 | 256) != 0 || matches!(node.attr("FillType"), Some("Solid" | "Shaded"));
         if heads && (closed || filled) {
             self.remove(index, &["ArrowheadHead", "ArrowheadTail"])?;
-            self.count(Kind::ClosedCurveHead);
+            self.count(index, Kind::ClosedCurveHead);
             if let Some(id) = self.attr(index, "id")? {
                 self.headless.insert(id);
             }
@@ -842,7 +881,16 @@ impl Pass {
             });
             if marked {
                 self.remove(index, &marks)?;
-                self.count(Kind::CurvedArrowMark);
+                self.count(index, Kind::CurvedArrowMark);
+            }
+            // The arrow reader draws no thinner line.
+            if arrow {
+                let bold = bits & 4 != 0
+                    || self
+                        .attr(index, "LineType")?
+                        .is_some_and(|line| line.contains("Bold"));
+                let width = if bold { "BoldWidth" } else { "LineWidth" };
+                self.clamp(index, width, 0.1, 12.)?;
             }
         }
         self.head_sizes(index)
@@ -896,7 +944,7 @@ impl Pass {
         self.drop_element(index)?;
         // A single point or an empty list draws nothing.
         if count > 6 {
-            self.count(Kind::BrokenCurve);
+            self.count(index, Kind::BrokenCurve);
         }
         Ok(false)
     }
@@ -923,9 +971,11 @@ impl Pass {
             Some("Symbol") => self.symbol(index),
             Some("Arc") => self.arc_graphic(index),
             Some("Bracket") => Ok(()),
+            // A mark on an atom is the mark reader's to judge.
+            _ if self.marks_atom(node) => Ok(()),
             _ => {
                 self.drop_element(index)?;
-                self.count(Kind::UnknownGraphic);
+                self.count(index, Kind::UnknownGraphic);
                 Ok(())
             }
         }
@@ -950,7 +1000,7 @@ impl Pass {
             }
             _ => {
                 self.drop_element(index)?;
-                self.count(Kind::UnknownGraphic);
+                self.count(index, Kind::UnknownGraphic);
                 Ok(())
             }
         }
@@ -983,7 +1033,7 @@ impl Pass {
             return Ok(());
         }
         if phase == GREY {
-            self.count(Kind::ShadedOrbital);
+            self.count(index, Kind::ShadedOrbital);
         }
         self.set(
             index,
@@ -991,12 +1041,14 @@ impl Pass {
             format!("{shape}{phase}{}", if mirrored { "2" } else { "" }),
         )
     }
+    fn marks_atom(&self, node: &Element) -> bool {
+        node.children
+            .iter()
+            .any(|&child| self.node(child).is_ok_and(|child| child.tag == "represent"))
+    }
     fn symbol(&mut self, index: usize) -> Result<()> {
         let node = self.node(index)?;
-        let marks_atom = node
-            .children
-            .iter()
-            .any(|&child| self.node(child).is_ok_and(|child| child.tag == "represent"));
+        let marks_atom = self.marks_atom(node);
         // Earlier ReShiki versions wrote an atom's lone pair with the value
         // ChemDraw uses for the bar, which never marks an atom.
         if marks_atom && node.attr("SymbolType") == Some("LonePairBar") {
@@ -1015,7 +1067,7 @@ impl Pass {
             _ if marks_atom => return Ok(()),
             _ => {
                 self.drop_element(index)?;
-                self.count(Kind::UnknownGraphic);
+                self.count(index, Kind::UnknownGraphic);
                 return Ok(());
             }
         };
@@ -1039,7 +1091,7 @@ impl Pass {
             .retain(|(key, _)| matches!(key.as_str(), "id" | "Z" | "Visible"));
         node.set("p", format!("{} {}", spell(x1.min(x2)), spell(y1.max(y2))));
         self.changed = true;
-        self.count(Kind::StereoFlag);
+        self.count(index, Kind::StereoFlag);
         Ok(())
     }
     /// An arrow from before ChemDraw stored arrows as their own object, with
@@ -1061,7 +1113,20 @@ impl Pass {
                 _ => return Ok(()),
             };
         let kind = node.attr("ArrowType").unwrap_or_default().to_owned();
-        let length = node.attr("HeadSize").and_then(number).unwrap_or(1000.);
+        // A negative size draws the other half of a half head.
+        let length = match node.attr("HeadSize") {
+            None => 1000.,
+            Some(size) => match number(size) {
+                Some(size) => size,
+                // The reader refuses it as it stands.
+                None => return Ok(()),
+            },
+        };
+        let half = |head: &'static str| match head {
+            "HalfLeft" if length < 0. => "HalfRight",
+            _ => head,
+        };
+        let (head, tail, length) = (half(head), tail.map(half), length.abs());
         let node = self.tree.node_mut(index)?;
         node.tag = "arrow".into();
         node.attributes.retain(|(key, _)| {
@@ -1074,6 +1139,7 @@ impl Pass {
             node.set("ArrowheadTail", tail.into());
         }
         node.set("ArrowheadType", shape.into());
+        node.set("HeadSize", spell(length));
         node.set("ArrowheadCenterSize", spell(length * 0.875));
         node.set("ArrowheadWidth", spell(length * 0.25));
         if let Some(gap) = gap {
@@ -1096,7 +1162,7 @@ impl Pass {
             node.attr("AngularSize").and_then(number),
         ) else {
             self.drop_element(index)?;
-            self.count(Kind::UnknownGraphic);
+            self.count(index, Kind::UnknownGraphic);
             return Ok(());
         };
         let heads = match node.attr("ArrowType") {
@@ -1296,7 +1362,7 @@ impl Pass {
             });
             node.set("CurvePoints", curve_points(start, &segments));
             self.changed = true;
-            self.count(Kind::SingleBracket);
+            self.count(single.index, Kind::SingleBracket);
         }
         Ok(())
     }
@@ -1319,11 +1385,12 @@ impl Pass {
             } else if known != face && face >= 0 {
                 self.set(index, key, known.to_string())?;
                 if counted {
-                    self.count(Kind::TextFace);
+                    self.count(index, Kind::TextFace);
                 }
             }
         }
-        // The document's own defaults belong to its drawing style.
+        // A size a caption or label inherits from its page or the document
+        // is settled for each one that takes it.
         let sizes: &[&str] = match tag.as_str() {
             "s" => &["size"],
             "t" | "n" => &["LabelSize", "CaptionSize"],
@@ -1334,7 +1401,7 @@ impl Pass {
                 && !(4.0..=144.).contains(&size)
             {
                 self.set(index, key, spell(size.clamp(4., 144.)))?;
-                self.count(Kind::TextSize);
+                self.count(index, Kind::TextSize);
             }
         }
         if !matches!(tag.as_str(), "t" | "n" | "page" | "CDXML") {
@@ -1348,7 +1415,7 @@ impl Pass {
         {
             self.remove(index, &["RotationAngle"])?;
             if tag == "t" {
-                self.count(Kind::RotatedText);
+                self.count(index, Kind::RotatedText);
             }
         }
         // Any other value, such as Auto, reads as the default left alignment.
@@ -1432,7 +1499,7 @@ impl Pass {
             self.set(run, "size", size.clone())?;
             self.set(run, "face", (run_face & !7 | face & 7).to_string())?;
         }
-        self.count(Kind::LabelStyle);
+        self.count(index, Kind::LabelStyle);
         Ok(())
     }
     fn paragraph(&mut self, index: usize) -> Result<()> {
@@ -1480,6 +1547,21 @@ impl Pass {
         .as_deref()
         .map_or(Some(10.), number)
         .map(|size| size.clamp(4., 144.));
+        // Runs without a size take the one the text inherits.
+        let size_key = format!("{prefix}Size");
+        let inherits = node.attr(&size_key).is_none()
+            && node.children.iter().any(|&child| {
+                self.node(child)
+                    .is_ok_and(|run| run.tag == "s" && run.attr("size").is_none())
+            });
+        let inherited_size = if inherits {
+            inherited(self, node, &size_key)?
+                .as_deref()
+                .and_then(number)
+                .filter(|size| !(4.0..=144.).contains(size))
+        } else {
+            None
+        };
         let height_key = format!("{prefix}LineHeight");
         let height = match inherited(self, node, &height_key)? {
             Some(height) => Some(height),
@@ -1497,6 +1579,10 @@ impl Pass {
             .and_then(number)
             .zip(size)
             .map(|(height, size)| height / size);
+        if let Some(size) = inherited_size {
+            self.set(index, &size_key, spell(size.clamp(4., 144.)))?;
+            self.count(index, Kind::TextSize);
+        }
         let mut changed = false;
         if spacing.is_some_and(|spacing| !(0.8..=3.).contains(&spacing)) {
             self.set(index, &height_key, "auto")?;
@@ -1511,7 +1597,7 @@ impl Pass {
             changed = true;
         }
         if changed {
-            self.count(Kind::Paragraph);
+            self.count(index, Kind::Paragraph);
         }
         Ok(())
     }

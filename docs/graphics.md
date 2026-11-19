@@ -359,8 +359,9 @@ lists what changed and how many, such as "2 doubled curves as single lines;
 
 In a CDX file, a table, plasmid map, gel plate or TLC plate is named as "other
 ChemDraw object", and the captions and drawings inside it are kept. A CDX
-value ReShiki does not know is skipped on a drawing object; on an atom or bond
-it still refuses the file.
+property or value ReShiki does not know is skipped on a drawing object. On an
+atom or bond, an unknown property is skipped and named in the message, and an
+unknown value still refuses the file.
 
 Saving such a file back in ChemDraw's format writes ReShiki's drawing, not the
 original objects. The first **Save** of the opened file counts them: "Keep as

@@ -1,8 +1,9 @@
 //! Drawings saved by ChemDraw itself import whole: a style ReShiki cannot draw
 //! yet takes the nearest one it can, and the import says so once.
+use base64::{Engine, engine::general_purpose::STANDARD};
 use reshiki_io::{engine::LocalEngine, exchange, formats};
 use reshiki_model::{
-    arrows::{HeadShape, NoGo},
+    arrows::{Head, HeadShape, NoGo},
     document::{Document, Point},
     graphics::{Graphic, GraphicKind, LinePattern, PathCommand},
     palette::Color,
@@ -526,6 +527,26 @@ async fn doubled_and_older_curves_import_as_plain_curves() {
 }
 
 #[tokio::test]
+async fn a_hairline_curve_with_a_head_takes_the_thinnest_arrow_line() {
+    for (document, notices) in sheet(
+        "<curve id='2' CurvePoints='20 20 20 20 30 0 50 40 60 20 60 20' ArrowheadHead='Full' \
+         LineWidth='0.05'/>\
+         <curve id='3' CurvePoints='20 50 20 50 30 30 50 70 60 50 60 50' ArrowheadHead='Full' \
+         ArrowheadType='Hollow' LineWidth='0.05'/>",
+    )
+    .await
+    {
+        assert_eq!(
+            notices,
+            nearest("1 line, arrowhead or shadow size at the nearest size ReShiki draws")
+        );
+        // A hollow head makes a path, which draws the hairline itself.
+        assert_eq!(document.arrows[0].appearance().width_pt, 0.1);
+        assert_eq!(document.graphics.len(), 1);
+    }
+}
+
+#[tokio::test]
 async fn objects_without_an_equivalent_are_left_out_and_named() {
     let read = |objects: &'static str| async move {
         let xml = format!("<CDXML><page id='1'>{objects}</page></CDXML>");
@@ -627,6 +648,102 @@ async fn captions_with_unknown_settings_import_upright_and_plain() {
 }
 
 #[tokio::test]
+async fn captions_take_the_nearest_size_of_their_page_or_document() {
+    for (xml, notices, size) in [
+        (
+            "<CDXML><page id='1' CaptionSize='3'><t id='2' p='10 20'><s>page</s></t>\
+             <t id='3' p='10 40'><s>page</s></t></page></CDXML>",
+            nearest("2 text sizes at the nearest size ReShiki draws"),
+            4.,
+        ),
+        (
+            "<CDXML CaptionSize='200'><page id='1'><t id='2' p='10 20'><s>document</s></t>\
+             </page></CDXML>",
+            nearest("1 text size at the nearest size ReShiki draws"),
+            144.,
+        ),
+        // A caption with its own size takes nothing from the document, and
+        // the document's label size only sets its drawing style.
+        (
+            "<CDXML CaptionSize='200' LabelSize='200'><page id='1'><t id='2' p='10 20'>\
+             <s size='10'>own</s></t></page></CDXML>",
+            Vec::new(),
+            10.,
+        ),
+    ] {
+        let (document, found) = open(xml.as_bytes().to_vec(), "cdxml").await.unwrap();
+        assert_eq!(found, notices, "{xml}");
+        assert_eq!(
+            formats::chemdraw_loss("cdxml", xml).unsupported,
+            document.annotations.len() * usize::from(size != 10.),
+            "{xml}"
+        );
+        for caption in &document.annotations {
+            assert_eq!(caption.format.style.size_pt, size, "{xml}");
+        }
+    }
+    let xml = "<CDXML LabelSize='200'><page id='1'><t id='2' p='10 20'><s>plain</s></t>\
+               </page></CDXML>";
+    let (document, _) = open(xml.as_bytes().to_vec(), "cdxml").await.unwrap();
+    assert_eq!(document.drawing_style.font_size_pt, 144.);
+}
+
+#[tokio::test]
+async fn a_hidden_object_left_out_keeps_its_contents_hidden() {
+    let xml = "<CDXML><page id='1'>\
+               <bioshape id='2' Visible='no'><t id='3' p='10 20'><s>hidden</s></t></bioshape>\
+               <bioshape id='4'><t id='5' p='10 40'><s>shown</s></t></bioshape></page></CDXML>";
+    let (document, notices) = open(xml.as_bytes().to_vec(), "cdxml").await.unwrap();
+    assert_eq!(notices[..1], left_out("2 BioDraw shapes"));
+    assert!(notices[1].starts_with("Hidden drawing objects were omitted."));
+    let texts: Vec<_> = document
+        .annotations
+        .iter()
+        .map(|a| a.text.as_str())
+        .collect();
+    assert_eq!(texts, ["shown"]);
+}
+
+#[tokio::test]
+async fn an_older_half_arrow_takes_its_side_from_the_sign_of_its_size() {
+    let xml = "<CDXML><page id='1'>\
+               <graphic id='2' GraphicType='Line' ArrowType='HalfHead' HeadSize='1000' \
+               BoundingBox='70 20 10 20'/>\
+               <graphic id='3' GraphicType='Line' ArrowType='HalfHead' HeadSize='-1000' \
+               BoundingBox='70 40 10 40'/>\
+               <graphic id='4' GraphicType='Line' ArrowType='HalfHead' HeadSize='-600' \
+               BoundingBox='70 60 10 60'/></page></CDXML>";
+    let (document, notices) = open(xml.as_bytes().to_vec(), "cdxml").await.unwrap();
+    assert_eq!(notices, Vec::<String>::new());
+    let [left, right, small] = document.arrows.as_slice() else {
+        panic!("{:?}", document.arrows);
+    };
+    let [left, right, small] = [left, right, small].map(|arrow| arrow.appearance());
+    assert_eq!(
+        [left.head, right.head, small.head],
+        [Head::Left, Head::Right, Head::Right]
+    );
+    assert_eq!(
+        [
+            left.head_length_pt,
+            right.head_length_pt,
+            small.head_length_pt
+        ],
+        [10., 10., 6.]
+    );
+}
+
+#[test]
+fn a_save_counts_each_changed_object_once() {
+    // A block arrow out of size, and a rotated caption in a tiny outlined face.
+    let xml = "<CDXML><page id='1'><arrow id='2' Tail3D='10 20 0' Head3D='70 20 0' \
+               ArrowheadHead='Full' FillType='Solid' HeadSize='9000'/>\
+               <t id='3' p='10 60' RotationAngle='5898240'><s size='3' face='9'>turned</s></t>\
+               </page></CDXML>";
+    assert_eq!(formats::chemdraw_loss("cdxml", xml).unsupported, 2);
+}
+
+#[tokio::test]
 async fn chemdraws_binary_extras_do_not_stop_a_file() {
     let xml = "<CDXML><colortable><color r='1' g='1' b='1'/><color r='0' g='0' b='0'/>\
                <color r='1' g='0' b='0'/></colortable><page id='1'>\
@@ -674,6 +791,44 @@ async fn chemdraws_binary_extras_do_not_stop_a_file() {
             "{name}"
         );
     }
+}
+
+#[tokio::test]
+async fn an_unknown_property_on_an_atom_is_named() {
+    let xml = "<CDXML><page id='1'><fragment id='2'><n id='3' p='10 10'/><n id='4' p='30 10'/>\
+               <b id='5' B='3' E='4'/></fragment></page></CDXML>";
+    let plain = exchange::to_cdx(xml).unwrap();
+    open(plain.clone(), "cdx").await.unwrap();
+    let atom = [0x04, 0x80, 0x03, 0x00, 0x00, 0x00];
+    let at = plain
+        .windows(atom.len())
+        .position(|window| window == atom)
+        .unwrap()
+        + atom.len();
+    let mut data = plain[..at].to_vec();
+    data.extend_from_slice(&[0x03, 0x03, 0x02, 0x00, 0x2c, 0x01]);
+    data.extend_from_slice(&plain[at..]);
+    assert!(exchange::from_cdx(&data).is_err());
+    assert_eq!(
+        formats::chemdraw_loss("cdx", &STANDARD.encode(&data)).unsupported,
+        1
+    );
+    let (document, notices) = open(data, "cdx").await.unwrap();
+    assert_eq!(
+        notices,
+        left_out("1 atom or bond setting ReShiki does not know")
+    );
+    assert_eq!((document.atoms.len(), document.bonds.len()), (2, 1));
+}
+
+#[tokio::test]
+async fn a_mark_on_an_atom_is_never_left_out() {
+    // A radical without a graphic type, standing for the atom's charge: the
+    // mark reader refuses it rather than the pass dropping chemistry.
+    let xml = "<CDXML><page id='1'><fragment id='2'><n id='3' p='0 0' Element='8' Charge='-1'/>\
+               <graphic id='4' SymbolType='Radical' BoundingBox='4 3 0 0'>\
+               <represent object='3' attribute='Charge'/></graphic></fragment></page></CDXML>";
+    assert!(open(xml.as_bytes().to_vec(), "cdxml").await.is_err());
 }
 
 #[tokio::test]
