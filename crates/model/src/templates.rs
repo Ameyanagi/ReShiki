@@ -574,10 +574,10 @@ pub(crate) fn valence_label(element: &str, capacity: u32, valence: u32) -> Strin
 
 pub fn capacity(atom: &Atom) -> u32 {
     match (atom.element.as_str(), atom.charge) {
-        ("C", 0) => 8,
-        ("N", 0) => 6,
+        ("C" | "Si" | "Ge", 0) | ("B", -1) => 8,
+        ("N" | "B", 0) => 6,
         ("N", 1) => 8,
-        ("O" | "S", 0) => 4,
+        ("O" | "S" | "Se" | "Te", 0) => 4,
         _ => 0,
     }
 }

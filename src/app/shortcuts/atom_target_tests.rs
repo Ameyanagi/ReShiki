@@ -413,6 +413,40 @@ fn aniline_group_hotkeys_keep_valid_acetyl_tert_butyl_and_phenyl_attachments() {
 }
 
 #[test]
+fn single_bond_shortcut_grows_on_hovered_silicon_and_boron_ring_atoms() {
+    for element in ["Si", "B"] {
+        let (mut app, _) = App::new();
+        app.tab.busy = false;
+        app.tab.bond_drawing.length = 42.;
+        app.tab.doc = reshiki::rings::Preset::Regular.document(42., false);
+        let target = app.tab.doc.atoms[0].id;
+        app.tab.doc.atom_mut(target).unwrap().element = element.into();
+        app.tab.selected = vec![app.tab.doc.atoms[1].id];
+        let before = app.tab.doc.clone();
+        hover(&mut app, before.atom(target).unwrap().position);
+        key(&mut app, "1");
+        assert!(!app.error, "{element}: {}", app.status);
+
+        let doc = &app.tab.doc;
+        assert_eq!(doc.atoms.len(), before.atoms.len() + 1, "{element}");
+        assert_eq!(doc.bonds.len(), before.bonds.len() + 1, "{element}");
+        let added = doc
+            .atoms
+            .iter()
+            .find(|atom| before.atom(atom.id).is_none())
+            .unwrap();
+        assert!(
+            doc.bonds
+                .iter()
+                .any(|bond| bond.connects(target, added.id) && bond.order == 1),
+            "{element}: expected a new single bond on the hovered atom"
+        );
+        doc.validate().unwrap();
+        assert_one_undo(&mut app, &before);
+    }
+}
+
+#[test]
 fn atom_growth_keys_preserve_the_target_and_add_the_documented_carbon_graph() {
     for (shortcut, order, display, added_c, added_o) in [
         ("0", 1, "plain", 1, 0),

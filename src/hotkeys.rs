@@ -100,10 +100,11 @@ pub fn bond_edit(doc: &Document, a: u64, b: u64, preset: BondPreset) -> Result<D
     if preset == BondPreset::Triple {
         for id in [a, b] {
             let atom = result.atom(id).ok_or("Missing triple-bond endpoint")?;
-            if templates::valence(&result, id) + 2 * atom.explicit_h > templates::capacity(atom) {
-                return Err(
-                    "This endpoint has too many bonds or hydrogens for a triple bond".into(),
-                );
+            if templates::valence(&result, id)
+                + 2 * (atom.explicit_h + u32::from(atom.radical_electrons))
+                > templates::capacity(atom)
+            {
+                return Err("This endpoint would exceed its valence with a triple bond".into());
             }
         }
         straighten_alkyne(&mut result, a, b)?;
@@ -474,7 +475,8 @@ fn sprout_at(
         || !replacing_h
             && (atom.no_implicit
                 || atom.explicit_h != 0
-                || templates::valence(doc, id) + order * 2 > capacity)
+                || templates::valence(doc, id) + 2 * u32::from(atom.radical_electrons) + order * 2
+                    > capacity)
     {
         return Err(
             "This atom has no available valence; edit its hydrogens or stereochemistry first"
