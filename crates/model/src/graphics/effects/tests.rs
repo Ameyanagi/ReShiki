@@ -95,7 +95,7 @@ fn rectangle_bands_shrink_into_the_top_left_corner() {
             ..Default::default()
         },
     );
-    let bands = rectangle.shading_bands();
+    let bands = rectangle.shading_bands(1);
     let n = bands.len();
     // 40 × 20 drawing units is about 14 pt across: three bands per point.
     assert_eq!(n, 42);
@@ -126,7 +126,7 @@ fn oval_bands_stay_inside_the_oval() {
             ..Default::default()
         },
     );
-    for (band, _) in oval.shading_bands() {
+    for (band, _) in oval.shading_bands(1) {
         for p in band {
             let (u, v) = ((p.x - 20.) / 20., (p.y - 10.) / 10.);
             assert!(u * u + v * v <= 1.01, "{p:?}");
@@ -159,7 +159,7 @@ fn shadows_follow_closed_shapes_only() {
                 ..Default::default()
             }
         )
-        .shading_bands()
+        .shading_bands(1)
         .is_empty()
     );
 }
@@ -238,7 +238,7 @@ fn the_scene_paints_shadow_then_bands_then_the_outline_and_counts_the_shadow_in_
         })
         .collect();
     assert_eq!(fills[0], (Some(SHADOW_RGB), true));
-    let n = doc.graphics[0].shading_bands().len();
+    let n = doc.graphics[0].shading_bands(1).len();
     assert!(n >= MIN_BANDS);
     assert_eq!(fills.len(), 1 + n + 1);
     assert_eq!(fills[1].0, Some(shade([0; 3], (n as f32 - 0.5) / n as f32)));
@@ -294,7 +294,7 @@ fn a_shaded_path_shrinks_toward_its_highlight_and_stays_inside() {
         PathCommand::Line(Point::new(0., 40.)),
         PathCommand::Close,
     ];
-    let bands = path.shading_bands();
+    let bands = path.shading_bands(1);
     let n = bands.len();
     assert!(n >= MIN_BANDS);
     for (band, _) in &bands {
@@ -816,4 +816,21 @@ fn a_default_gradient_keeps_its_range_on_both_canvases() {
     };
     GraphicChange::GradientKind(Some(GradientKind::Radial)).apply(&mut style);
     assert_eq!(style.fill, Some(Color::Palette(Hue::Teal, Row::Tint)));
+}
+
+#[test]
+fn many_shaded_shapes_share_one_band_budget() {
+    // ChemDraw's Anatomy library has nearly 900 shaded shapes; their bands
+    // together must fit the canvas's GPU buffers.
+    let effects = Effects {
+        shaded: true,
+        ..Default::default()
+    };
+    let oval = shape(GraphicKind::Ellipse, effects);
+    let alone = oval.shading_bands(1).len();
+    assert!(alone >= MIN_BANDS);
+    let shared = oval.shading_bands(900);
+    assert!(shared.len() >= 2 && shared.len() < alone);
+    let points: usize = shared.iter().map(|(band, _)| band.len()).sum();
+    assert!(points * 900 <= DRAWING_BAND_POINTS, "{points}");
 }

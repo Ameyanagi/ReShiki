@@ -7,7 +7,11 @@ use crate::{
 };
 use std::collections::HashMap;
 
-pub(super) const NOTICE: &str = "Multiple ChemDraw pages were arranged vertically on one editable canvas. Original page boundaries, paper settings, and empty pages are not retained.";
+pub(super) const NOTICE: &str = "Multiple ChemDraw pages were placed in rows on one drawing, in page order. Page boundaries, paper settings and empty pages are not kept.";
+
+/// Width to height of the arranged pages, about that of a drawing window, so
+/// Fit shows a page library as a sheet of pages rather than a thin column.
+const SHEET_ASPECT: f64 = 4. / 3.;
 
 // These fields are absolute locations, not dimensions or relative label offsets.
 const GEOMETRY: &[(&str, usize)] = &[
@@ -74,7 +78,7 @@ pub(super) fn arrange(xml: &str) -> Result<String> {
     // fixed-point integers into the molecular conformer. One XYZ integer step
     // therefore moves this many paper points, rather than 1/65536 of a point.
     let xyz_paper_step = conformer_scale * 28. / source_scale;
-    let mut next_top = 0.;
+    let mut placed = Vec::new();
     for page in pages {
         let nodes = tree.descendants(page)?;
         let defaults: presentation::Attributes =
@@ -139,7 +143,13 @@ pub(super) fn arrange(xml: &str) -> Result<String> {
                 if !valid_count || values.iter().any(|value| !value.is_finite()) {
                     return Err(Error::Invalid(format!("Invalid page {field} coordinates")));
                 }
-                for point in values.chunks_exact(dimensions) {
+                // An arrow's arc centre and axis ends are construction points
+                // that ChemDraw can leave far from the arrow; its box covers
+                // what it draws.
+                let drawn = node.tag != "arrow"
+                    || node.attr("BoundingBox").is_none()
+                    || !matches!(field, "Center3D" | "MajorAxisEnd3D" | "MinorAxisEnd3D");
+                for point in values.chunks_exact(dimensions).filter(|_| drawn) {
                     let x = *point.first().ok_or(Error::Limit)?;
                     let y = *point.get(1).ok_or(Error::Limit)?;
                     let b = bounds.get_or_insert([x, y, x, y]);
@@ -220,9 +230,10 @@ pub(super) fn arrange(xml: &str) -> Result<String> {
                             b[3] = b[3].max(y + height);
                         }
                     }
+                    // A caption's box can be narrower than its text, as
+                    // when an upright copy replaces a rotated caption.
                     if field == "p"
                         && node.tag == "t"
-                        && node.attr("BoundingBox").is_none()
                         && !node
                             .parent
                             .map(|parent| tree.node(parent))
@@ -245,10 +256,48 @@ pub(super) fn arrange(xml: &str) -> Result<String> {
                 geometry.push((index, field, dimensions, values));
             }
         }
-        let Some([left, top, _, bottom]) = bounds else {
-            continue;
-        };
-        let (mut dx, mut dy) = (-left, next_top - top);
+        if let Some(bounds) = bounds {
+            placed.push((bounds, native_atoms, geometry));
+        }
+    }
+    // Rows of pages in page order, left to right, then down, about as wide
+    // as a window. Each column is as wide as its widest page and each row
+    // starts below everything above it.
+    let gap = f64::from(crate::pages::GAP_PT);
+    let largest = |extent: fn(&[f64; 4]) -> f64| {
+        placed
+            .iter()
+            .map(|(bounds, ..)| extent(bounds))
+            .fold(0., f64::max)
+            + gap
+    };
+    let width = largest(|&[left, _, right, _]| right - left);
+    let height = largest(|&[_, top, _, bottom]| bottom - top);
+    let columns = ((placed.len() as f64 * height / width * SHEET_ASPECT).sqrt() as usize)
+        .clamp(1, placed.len().max(1));
+    let mut starts = vec![0_f64; columns];
+    for (slot, ([left, _, right, _], ..)) in placed.iter().enumerate() {
+        if let Some(start) = starts.get_mut(slot % columns + 1) {
+            *start = start.max(right - left + gap);
+        }
+    }
+    let mut column_left = 0.;
+    for start in &mut starts {
+        column_left += *start;
+        *start = column_left;
+    }
+    let (mut next_left, mut row_top, mut lowest) = (0., 0., 0_f64);
+    for (slot, ([left, top, right, bottom], native_atoms, geometry)) in
+        placed.into_iter().enumerate()
+    {
+        if slot > 0 && slot % columns == 0 {
+            (next_left, row_top) = (0., lowest + gap);
+        }
+        // A page snapped to whole XYZ steps can reach past its column.
+        let start = starts
+            .get(slot % columns)
+            .map_or(next_left, |s| s.max(next_left));
+        let (mut dx, mut dy) = (start - left, row_top - top);
         let (kx, ky) = if native_atoms.is_empty() {
             (0., 0.)
         } else {
@@ -257,11 +306,13 @@ pub(super) fn arrange(xml: &str) -> Result<String> {
             dy = steps.1 * xyz_paper_step;
             steps
         };
-        for (atom, [x, y, z]) in native_atoms {
-            let (x, y) = ((x + kx) / 65536., (y + ky) / 65536.);
-            native_integer(x)?;
-            native_integer(y)?;
-            tree.node_mut(atom)?.set("xyz", format!("{x} {y} {z}"));
+        next_left = right + dx + gap;
+        lowest = lowest.max(bottom + dy);
+        for (atom, [ax, ay, az]) in native_atoms {
+            let (ax, ay) = ((ax + kx) / 65536., (ay + ky) / 65536.);
+            native_integer(ax)?;
+            native_integer(ay)?;
+            tree.node_mut(atom)?.set("xyz", format!("{ax} {ay} {az}"));
         }
         for (index, field, dimensions, mut values) in geometry {
             for point in values.chunks_exact_mut(dimensions) {
@@ -289,7 +340,6 @@ pub(super) fn arrange(xml: &str) -> Result<String> {
                     .join(" "),
             );
         }
-        next_top = bottom + dy + f64::from(crate::pages::GAP_PT);
     }
     tree.serialize()
 }

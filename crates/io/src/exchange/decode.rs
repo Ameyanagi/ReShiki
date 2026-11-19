@@ -383,6 +383,11 @@ fn convert(tree: &Tree<'_>, fonts: &mut HashMap<u16, u16>, tolerant: bool) -> Re
                 ("color", &[a, b, 0, 0]) => el.set(p.name, u16::from_le_bytes([a, b])),
                 // Earlier ReShiki versions wrote the cross as 1.
                 ("NoGo", &[1]) => el.set(p.name, "Cross"),
+                // ChemDraw writes an object tag's name, such as "stereo",
+                // as bare text without a string's style runs.
+                ("Name", _) if tree.name == "objecttag" => {
+                    el.set(p.name, String::from_utf8_lossy(data))
+                }
                 ("CurvePoints3D", _) => {
                     if let Some(points) = curve_points_3d(data) {
                         el.set(p.name, points);

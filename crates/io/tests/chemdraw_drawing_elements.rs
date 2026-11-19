@@ -638,6 +638,31 @@ async fn captions_with_unknown_settings_import_upright_and_plain() {
 }
 
 #[tokio::test]
+async fn abbreviation_labels_with_mixed_fonts_open_in_their_first_characters_style() {
+    // As ChemDraw writes "D-Trp" with a small D: an abbreviation label, not
+    // an element label, with runs in two sizes.
+    for (document, notices) in sheet(
+        "<fragment id='11'><n id='12' p='70 100'/><n id='13' p='100 100' NodeType='Fragment'>\
+         <fragment id='14'><n id='15' p='100 100' Element='8'/><n id='16' p='115 100'/>\
+         <n id='17' p='85 100' NodeType='ExternalConnectionPoint'/>\
+         <b id='18' B='17' E='15'/><b id='19' B='15' E='16'/></fragment>\
+         <t p='96 104'><s size='7'>O</s><s size='10'>Me</s></t></n>\
+         <b id='20' B='12' E='13'/></fragment>",
+    )
+    .await
+    {
+        assert_eq!(
+            notices,
+            nearest("1 atom label with mixed text styles in the style of its first character")
+        );
+        let [abbreviation] = document.abbreviations.as_slice() else {
+            panic!("one abbreviation: {:?}", document.abbreviations);
+        };
+        assert_eq!(abbreviation.label_style.as_ref().unwrap().size_pt, 7.);
+    }
+}
+
+#[tokio::test]
 async fn captions_take_the_nearest_size_of_their_page_or_document() {
     for (xml, notices, size) in [
         (
@@ -800,6 +825,49 @@ async fn chemdraws_binary_extras_do_not_stop_a_file() {
             "{name}"
         );
     }
+}
+
+#[tokio::test]
+async fn atoms_kept_straight_in_a_group_open_as_one_molecule() {
+    // Older ChemDraw files, such as its Anatomy template, keep a diagram's
+    // atom labels in an integral group without a fragment around them.
+    for (document, notices) in sheet(
+        "<group id='10' Integral='yes'><n id='11' p='50 50' Element='8'/>\
+         <n id='12' p='70 50'/><b id='13' B='11' E='12'/></group>",
+    )
+    .await
+    {
+        assert_eq!(notices, Vec::<String>::new());
+        assert_eq!((document.atoms.len(), document.bonds.len()), (2, 1));
+    }
+}
+
+#[tokio::test]
+async fn object_tag_names_written_as_bare_text_are_read() {
+    // ChemDraw writes an atom number's or stereo label's tag name as bare
+    // text, without the style-run count ReShiki's own CDX has.
+    let xml = "<CDXML><page id='1'><fragment id='2'>\
+               <n id='3' p='10 10' ShowAtomNumber='yes' AtomNumber='1'>\
+               <objecttag TagType='Unknown' Name='number'><t p='12 4'><s size='7.5'>1</s></t>\
+               </objecttag></n><n id='4' p='30 10'/><b id='5' B='3' E='4'/></fragment>\
+               </page></CDXML>";
+    let plain = exchange::to_cdx(xml).unwrap();
+    let styled = [&[0x08, 0x00, 0x08, 0x00, 0x00, 0x00][..], b"number"].concat();
+    let at = plain
+        .windows(styled.len())
+        .position(|window| window == styled.as_slice())
+        .unwrap();
+    let mut bare = plain.clone();
+    bare.splice(
+        at..at + styled.len(),
+        [&[0x08, 0x00, 0x06, 0x00][..], b"number"].concat(),
+    );
+    let (expected, _) = open(plain, "cdx").await.unwrap();
+    let (document, _) = open(bare, "cdx").await.unwrap();
+    assert_eq!(
+        serde_json::to_value(&document).unwrap(),
+        serde_json::to_value(&expected).unwrap()
+    );
 }
 
 #[tokio::test]

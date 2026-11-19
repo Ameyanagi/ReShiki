@@ -196,12 +196,34 @@ impl App {
                 if matches!(kind, Job::ImportFile(_)) {
                     self.tab.file_handle = None;
                 }
+                let Job::ImportFile(path) = &kind else {
+                    self.error = true;
+                    self.status = e;
+                    return Task::none();
+                };
+                // The tab added for this file closes again, so a failed open
+                // leaves no empty Untitled tab behind. One that failed behind
+                // the front tab stays, with the error, until it is looked at.
+                let id = self.tab.id;
+                let added = self.tabs.opening.contains(&(id, self.tab.file_epoch));
+                self.tabs.opening.retain(|(tab, _)| *tab != id);
+                let closed = if added
+                    && self.tabs.temporary_depth == 0
+                    && self.tab.reusable()
+                    && self.file_io.saving_tab != Some(id)
+                {
+                    self.close_active_tab()
+                } else {
+                    Task::none()
+                };
                 self.error = true;
-                self.status = e;
-                return Task::none();
+                self.status = format!("Could not open {}: {e}", super::import::name(path));
+                return closed;
             }
             Ok(response) => response,
         };
+        let id = self.tab.id;
+        self.tabs.opening.retain(|(tab, _)| *tab != id);
         if let Job::Export(format) = kind {
             let mut warnings = response.warnings;
             if matches!(format, "cdx" | "cdxml") && self.tab.doc.canvas_theme.is_dark() {

@@ -21,6 +21,9 @@ const BOX_HIGHLIGHT: f32 = 0.05;
 const FALLOFF: f32 = 2.5;
 /// Band vertices one shading may produce.
 const MAX_BAND_POINTS: usize = 400_000;
+/// Band vertices all the shadings of one drawing share, so a ChemDraw library
+/// with hundreds of shaded shapes stays within the canvas's GPU buffers.
+const DRAWING_BAND_POINTS: usize = 1_000_000;
 /// Half-waves one wavy path may produce; longer paths get longer waves.
 const MAX_WAVES: f32 = 10_000.;
 /// Half-waves around the smallest closed wavy outline.
@@ -277,7 +280,8 @@ impl Graphic {
     /// the shape shrunk toward the highlight. A shape that cannot be seen
     /// whole from its highlight shades out to the circle inscribed in its
     /// frame instead, its corners outside that circle in the edge color.
-    pub fn shading_bands(&self) -> Vec<(Vec<Point>, f32)> {
+    /// `shaded` shapes in the drawing share its band budget.
+    pub fn shading_bands(&self, shaded: usize) -> Vec<(Vec<Point>, f32)> {
         if !self.style.effects.shaded || self.style.fill.is_none() || !self.closed_shape() {
             return vec![];
         }
@@ -304,7 +308,7 @@ impl Graphic {
         let points: usize = shapes.iter().map(Vec::len).sum();
         let count = ((size * 3.).ceil() as usize)
             .clamp(MIN_BANDS, MAX_BANDS)
-            .min(MAX_BAND_POINTS / points.max(1));
+            .min(MAX_BAND_POINTS.min(DRAWING_BAND_POINTS / shaded.max(1)) / points.max(1));
         // A path too detailed to shade within the budget keeps a flat fill.
         if count < 2 {
             return vec![];

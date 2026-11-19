@@ -54,6 +54,8 @@ pub(super) struct State {
     pub(super) deferred_results: Vec<(TabId, Message)>,
     /// Temporary background routing never changes the visible drawing context.
     pub(super) temporary_depth: usize,
+    /// Tabs added to hold a file that is still opening, with their file epoch.
+    pub(super) opening: Vec<(TabId, u64)>,
     /// The budget of a [`App::trim_histories`] asked for during that routing.
     pending_trim: Option<usize>,
 }
