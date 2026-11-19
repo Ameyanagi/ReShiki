@@ -1063,6 +1063,10 @@ impl App {
         if let Some(row) = self.purpose_row(&selected) {
             body = body.push(row);
         }
+        // A cycle's roles and steps come before what its parts are made of.
+        if let Some(cycle) = self.cycle_card().or_else(|| self.cycle_part_card()) {
+            body = body.push(card(container(cycle).padding(12)));
+        }
         let molecular_first = self.tab.selected.is_empty()
             || self.property_key().is_some_and(|key| !key.atoms.is_empty());
         // Keep the active ring tool's placement card visible above the expanded values.
@@ -1126,16 +1130,10 @@ impl App {
             if let Some(panel) = self.figure_panel_card() {
                 body = body.push(card(container(panel).padding(12)));
             }
-            if let Some(cycle) = self.cycle_card() {
-                body = body.push(card(container(cycle).padding(12)));
-            }
             body = body.push(card(container(self.graphic_panel()).padding(12)));
         }
         if let Some(layout) = self.layout_card() {
             body = body.push(card(container(layout).padding(12)));
-        }
-        if let Some(part) = self.cycle_part_card() {
-            body = body.push(card(container(part).padding(12)));
         }
         if let Some(section) = self.repeating_unit_section() {
             body = body.push(section);

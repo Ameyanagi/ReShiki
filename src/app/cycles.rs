@@ -326,11 +326,7 @@ impl App {
             section("Catalytic cycle"),
             hover_hint(
                 row![
-                    toggle(
-                        "Clockwise",
-                        !counterclockwise,
-                        Action::Clockwise(true)
-                    ),
+                    toggle("Clockwise", !counterclockwise, Action::Clockwise(true)),
                     toggle(
                         "Counterclockwise",
                         counterclockwise,
@@ -338,7 +334,7 @@ impl App {
                     ),
                 ]
                 .spacing(4),
-                "Runs the steps the other way round: reagents become products and products reagents",
+                "Switching direction runs the steps the other way: reagents become products",
                 iced::widget::tooltip::Position::Top,
             ),
             row![

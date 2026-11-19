@@ -592,7 +592,8 @@ fn side_arrow(
     let reach = 0.5 * touch.distance(center_of(ink));
     let sign = if incoming { -1. } else { 1. };
     let near = touch.offset(sign * way.x * reach, sign * way.y * reach);
-    let end = edge(ink, near);
+    // A part right beside the arc is met from the touch point instead.
+    let end = edge(ink, if contains(ink, near) { touch } else { near });
     let far = end.lerp(near, 0.5);
     let (start, finish, controls) = if incoming {
         (end, touch, [far, near])
