@@ -1106,11 +1106,12 @@ impl App {
         let document = (self.tab.id, self.tab.file_epoch);
         let menu = self.context_menu.is_some();
         let mut task = self.handle(message);
-        // The canvas forgets the pointer when a context menu opens or closes
+        // The canvas forgets the pointer when a context menu closes
         // (canvas::reset_menu_pointer), so the hovered atom or bond goes too:
         // a key pressed later acts on what the pointer touches next, never on
         // the object right-clicked, even when the pointer left during the menu.
-        if menu != self.context_menu.is_some() {
+        // Menu items (Move & attach) still read the hover while they run.
+        if menu && self.context_menu.is_none() {
             self.tab.hover = None;
         }
         self.sync_drawing_panel_context();

@@ -395,6 +395,9 @@ fn a_key_after_a_context_menu_never_edits_the_right_clicked_bond() {
         selected: vec![a, b, c],
         hit: vec![a, b],
     }));
+    // A move queued with the right-click can still reach the canvas after
+    // the menu opened.
+    let _ = app.update(Message::Canvas(Edit::Hover(Some(middle))));
     // The pointer left while the menu was open; Escape closes it and no
     // canvas move follows before the key.
     let _ = app.update(Message::Escape);
