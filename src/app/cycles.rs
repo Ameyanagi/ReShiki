@@ -77,6 +77,8 @@ pub(super) struct Inputs {
     step_expanded: bool,
     layout_open: bool,
     pub(super) purpose_open: bool,
+    /// Part names at a drawing revision: a formula costs a chemistry pass.
+    names: std::cell::RefCell<(u64, std::collections::HashMap<Vec<u64>, String>)>,
     radius: String,
     gap: String,
     label: String,
@@ -671,6 +673,18 @@ impl App {
 
     /// A short label for a cycle part or reaction participant.
     pub(super) fn part_name(&self, ids: &[u64]) -> String {
+        let mut names = self.tab.cycle_inputs.names.borrow_mut();
+        if names.0 != self.tab.revision {
+            *names = (self.tab.revision, Default::default());
+        }
+        names
+            .1
+            .entry(ids.to_vec())
+            .or_insert_with(|| self.uncached_part_name(ids))
+            .clone()
+    }
+
+    fn uncached_part_name(&self, ids: &[u64]) -> String {
         let doc = &self.tab.doc;
         let name = if let [id] = ids
             && let Some(a) = doc.annotations.iter().find(|a| a.id == *id)
@@ -687,7 +701,8 @@ impl App {
                 )
             }
         };
-        let mut chars = name.lines().next().unwrap_or_default().chars();
+        let line = name.lines().find(|l| !l.trim().is_empty());
+        let mut chars = line.unwrap_or_default().trim().chars();
         let mut label: String = chars.by_ref().take(32).collect();
         if chars.next().is_some() {
             label.pop();

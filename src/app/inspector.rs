@@ -466,6 +466,8 @@ pub(super) fn card<'a>(body: impl Into<Element<'a, Message>>) -> Element<'a, Mes
 }
 impl App {
     pub(super) fn show_molecular_properties(&mut self) -> Task<Message> {
+        // A selected cycle folds the section away: unfold it.
+        self.tab.cycle_inputs.purpose_open = true;
         self.inspector_open = true;
         self.inspector_tab = InspectorTab::Properties;
         self.tab.inspector_ui.model_controls = false;
