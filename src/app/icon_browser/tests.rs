@@ -34,6 +34,8 @@ fn search_ranks_names_first_and_reads_japanese_and_conditions() {
     assert_eq!(found("heat")[0], Choice::Condition(SymbolKind::Heat));
     assert_eq!(found("加熱")[0], Choice::Condition(SymbolKind::Heat));
     assert!(found("chemistry flask").contains(&by_name("flask")));
+    assert_eq!(found("flask-2")[0], by_name("flask-2"));
+    assert_eq!(found("Flask 2")[0], by_name("flask-2"));
     assert!(found("no such icon at all").is_empty());
 }
 
@@ -44,7 +46,7 @@ fn the_grid_lists_recent_then_conditions_then_categories() {
         (state.rows().into_iter())
             .filter_map(|r| match r {
                 Row::Heading(h) => Some(h),
-                Row::Tiles(_) => None,
+                Row::Tiles(..) => None,
             })
             .collect()
     };
@@ -53,7 +55,7 @@ fn the_grid_lists_recent_then_conditions_then_categories() {
     assert_eq!(headings(&state)[..2], ["Recent", CONDITIONS]);
     let tiles: usize = (state.rows().iter())
         .map(|r| match r {
-            Row::Tiles(c) => c.len(),
+            Row::Tiles(c, _) => c.len(),
             Row::Heading(_) => 0,
         })
         .sum();
@@ -95,9 +97,10 @@ fn a_click_places_one_icon_a_bond_long_in_one_undo_step() {
     let _ = app.update(Message::Redo);
     assert_eq!(app.tab.doc, placed);
     // The armed icon again: a copy in the middle of the view.
+    app.tab.camera.center = Point::new(500., -300.);
     let _ = app.update(Message::Icons(Action::Pick(by_name("flask"))));
     assert_eq!(app.tab.doc.graphics.len(), 2);
-    assert_eq!(app.tab.doc.graphics[1].origin, app.tab.camera.center);
+    assert_eq!(app.tab.doc.graphics[1].origin, Point::new(500., -300.));
 }
 
 #[test]

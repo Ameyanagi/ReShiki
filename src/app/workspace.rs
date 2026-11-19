@@ -1531,7 +1531,12 @@ impl App {
                     )
                     .size(12)
                     .into(),
-                    done("Cancel"),
+                    hover_hint(
+                        command("Done", Message::Icons(super::icon_browser::Action::Close)),
+                        "Close Icons and return to Select · Esc",
+                        tooltip::Position::Bottom,
+                    )
+                    .into(),
                 ]
             }
             Tool::Ring | Tool::RingPreset(_) => self.ring_tool_options(),

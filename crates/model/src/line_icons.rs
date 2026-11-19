@@ -55,8 +55,14 @@ impl Icon {
         })
     }
 
+    /// Bounds an icon read from a file: the library's largest has 21 paths
+    /// and a few hundred commands.
     pub fn validate(&self) -> Result<(), String> {
         let on_grid = |p: Point| p.is_finite() && p.x.abs().max(p.y.abs()) <= 2. * GRID;
+        let commands: usize = self.paths.iter().map(|p| p.commands.len()).sum();
+        if self.name.len() > 100 || self.paths.len() > 64 || commands > 2000 {
+            return Err(format!("Icon {} is larger than an icon can be", self.name));
+        }
         if self.paths.is_empty()
             || self.paths.iter().any(|path| {
                 !matches!(path.commands.first(), Some(PathCommand::Move(_)))

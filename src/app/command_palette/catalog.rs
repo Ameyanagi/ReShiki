@@ -592,7 +592,7 @@ fn inserts(app: &App) -> Vec<Command> {
         "Icons…",
         Insert,
         "Search over 5,000 line icons and the reaction condition icons, then click to place one",
-        "icons icon symbol pictogram clip art tabler condition light heat flask アイコン",
+        "icons icon symbol pictogram clip art tabler condition light heat flask",
         Message::Tool(Tool::Icons),
     ));
     list.push(send(

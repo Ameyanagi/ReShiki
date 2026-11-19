@@ -217,7 +217,9 @@ fn extent(doc: &Document, ids: &[u64], field: Field) -> Option<f32> {
 }
 
 fn scale(doc: &mut Document, ids: &[u64], pivot: Point, field: Field, factor: f32, lock: bool) {
-    if lock || field == Field::Scale {
+    // An icon keeps its shape, as on the canvas.
+    let icon = (doc.graphics.iter()).any(|g| g.is_icon() && ids.contains(&g.id));
+    if lock || field == Field::Scale || icon {
         // Equipment stops at its scale limits as one, so seats hold.
         let factor = reshiki::equipment::placed::scale_limit(doc, ids, factor);
         editing::transform_about(doc, ids, pivot, factor, 0.);

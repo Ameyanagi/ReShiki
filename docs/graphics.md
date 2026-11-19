@@ -295,8 +295,8 @@ the shaft; group it with the arrow (⌘/Ctrl+G) and they move together. Change
 its color and line width in **Properties**, and scale or turn it with its
 handles; its points cannot be edited. Each placement is one Undo step. The
 drawing keeps the icon's paths, so the file opens the same anywhere. PNG,
-SVG and PDF export draw it, the dark canvas shows it in the canvas colors,
-and ChemDraw gets it as curves.
+SVG and PDF export draw it, and the dark canvas shows it in the canvas
+colors. ChemDraw gets it as curves, unless its line is dotted (see [Limits](#limits)).
 
 ### Place lab equipment
 

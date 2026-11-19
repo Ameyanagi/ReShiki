@@ -10,7 +10,7 @@ use reshiki::document::{Document, Point};
 use reshiki::graphics::{BracketSides, Graphic, GraphicKind, GraphicStyle, PathCommand};
 use reshiki::line_icons::{GRID, Icon};
 use reshiki::scientific::SymbolKind;
-use std::sync::LazyLock;
+use std::sync::{LazyLock, OnceLock};
 
 /// The Tabler Icons release the library comes from; see licenses/tabler-icons.
 pub const TABLER_VERSION: &str = "3.50.0";
@@ -43,11 +43,12 @@ impl std::fmt::Display for Filter {
         f.write_str(match self {
             Self::All => "All icons",
             Self::Conditions => CONDITIONS,
-            Self::Category(i) => &library().categories[*i],
+            Self::Category(i) => library().categories.get(*i).map_or("", String::as_str),
         })
     }
 }
 const CONDITIONS: &str = "Reaction conditions";
+const RECENT_HEADING: &str = "Recent";
 
 #[derive(Debug, Clone)]
 pub enum Action {
@@ -78,83 +79,117 @@ pub struct State {
 pub struct Entry {
     /// Tabler's name, as "flask-2".
     pub name: String,
-    category: Option<usize>,
-    /// Name, category and tags in English and Japanese, lowercased.
+    /// Name, category and tags in English and Japanese, lowercased, with
+    /// spaces for hyphens.
     words: String,
     paths: String,
+    /// The drawing, read the first time it is shown.
+    icon: OnceLock<Option<Icon>>,
 }
 pub struct Library {
     pub entries: Vec<Entry>,
     categories: Vec<String>,
+    /// Each category's icons, and last those without one.
+    by_category: Vec<Vec<usize>>,
 }
 
 /// `assets/icons/tabler-outline.tsv`, deflated by `build.rs`.
 const PACK: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/tabler-outline.tsv.deflate"));
 const JAPANESE: &str = include_str!("../../assets/icons/tabler-ja.tsv");
+/// The library; empty only if the bundled data were damaged, which the
+/// tests rule out.
 static LIBRARY: LazyLock<Library> = LazyLock::new(|| {
-    let pack = miniz_oxide::inflate::decompress_to_vec(PACK).expect("the icon library inflates");
-    let pack = String::from_utf8(pack).expect("the icon library is UTF-8");
-    let rows = |text: &'static str| text.lines().filter(|l| !l.starts_with('#'));
-    let japanese: std::collections::HashMap<_, _> = rows(JAPANESE)
-        .filter_map(|line| line.split_once('\t'))
+    let pack = miniz_oxide::inflate::decompress_to_vec(PACK).unwrap_or_default();
+    let pack = String::from_utf8(pack).unwrap_or_default();
+    let rows = |text: &str| -> Vec<Vec<String>> {
+        (text.lines())
+            .filter(|l| !l.starts_with('#'))
+            .map(|l| l.split('\t').map(str::to_owned).collect())
+            .collect()
+    };
+    let japanese: std::collections::HashMap<String, String> = (rows(JAPANESE).into_iter())
+        .filter_map(|f| match f.as_slice() {
+            [name, words] => Some((name.clone(), words.replace(',', " "))),
+            _ => None,
+        })
         .collect();
-    let lines: Vec<Vec<&str>> = pack
-        .lines()
-        .filter(|l| !l.starts_with('#'))
-        .map(|l| l.split('\t').collect())
+    // Name, category, tags and paths.
+    let lines: Vec<[String; 4]> = (rows(&pack).into_iter())
+        .filter_map(|f| f.try_into().ok())
         .collect();
     let mut categories: Vec<String> = (lines.iter())
-        .filter(|f| !f[1].is_empty())
-        .map(|f| f[1].to_owned())
+        .map(|[_, c, ..]| c.clone())
+        .filter(|c| !c.is_empty())
         .collect();
     categories.sort();
     categories.dedup();
-    let entries = lines
-        .iter()
-        .map(|f| Entry {
-            name: f[0].to_owned(),
-            category: categories.iter().position(|c| c == f[1]),
-            words: [
-                f[0].replace('-', " ").as_str(),
-                f[1],
-                &f[2].replace(',', " "),
-                &japanese.get(f[0]).unwrap_or(&"").replace(',', " "),
-            ]
-            .join(" ")
-            .to_lowercase(),
-            paths: f[3].to_owned(),
+    let mut by_category = vec![Vec::new(); categories.len() + 1];
+    for (i, [_, c, ..]) in lines.iter().enumerate() {
+        let c = (categories.iter().position(|o| o == c)).unwrap_or(categories.len());
+        if let Some(list) = by_category.get_mut(c) {
+            list.push(i);
+        }
+    }
+    let entries = (lines.into_iter())
+        .map(|[name, category, tags, paths]| Entry {
+            words: normalized(&format!(
+                "{name} {category} {} {}",
+                tags.replace(',', " "),
+                japanese.get(&name).map_or("", String::as_str)
+            )),
+            name,
+            paths,
+            icon: OnceLock::new(),
         })
         .collect();
     Library {
         entries,
         categories,
+        by_category,
     }
 });
 pub fn library() -> &'static Library {
     &LIBRARY
 }
 
+/// Lowercase, with a space for each hyphen: "Flask-2" finds "flask 2".
+fn normalized(text: &str) -> String {
+    text.replace('-', " ").to_lowercase()
+}
+
 /// English and Japanese words that find a condition icon.
 pub(super) fn condition_words(kind: SymbolKind) -> &'static str {
-    match kind {
-        SymbolKind::Light => "lamp bulb hv photochemistry irradiation 光 照射 光反応 ランプ 電球",
-        SymbolKind::Electrode => "electrochemistry electrolysis 電極 電気化学 電解",
-        SymbolKind::Heat => "flame reflux heating Δ 加熱 熱 還流 炎",
-        SymbolKind::Microwave => "oven µw マイクロ波 電子レンジ",
-        SymbolKind::Ultrasound => "sonication ultrasonic 超音波 ソニケーション",
-        SymbolKind::Cold => "snowflake cooling ice 冷却 低温 氷 雪",
-        SymbolKind::Enzyme => "biocatalysis 酵素 生体触媒",
-        _ => "",
+    const WORDS: &str = include_str!("../../assets/icons/conditions.tsv");
+    let kind = format!("{kind:?}");
+    (WORDS.lines())
+        .filter_map(|line| line.split_once('\t'))
+        .find_map(|(k, words)| (k == kind).then_some(words))
+        .unwrap_or_default()
+}
+
+impl Library {
+    /// The icons of category `c`; the last index holds those without one.
+    fn category(&self, c: usize) -> Vec<Choice> {
+        (self.by_category.get(c).into_iter().flatten())
+            .map(|i| Choice::Library(*i))
+            .collect()
     }
 }
 
 impl Choice {
+    fn entry(self) -> Option<&'static Entry> {
+        match self {
+            Self::Library(i) => library().entries.get(i),
+            Self::Condition(_) => None,
+        }
+    }
     /// "Flask 2", "Light".
     pub fn name(self) -> String {
-        match self {
-            Self::Condition(kind) => kind.to_string(),
-            Self::Library(i) => {
-                let name = library().entries[i].name.replace('-', " ");
+        match (self, self.entry()) {
+            (Self::Condition(kind), _) => kind.to_string(),
+            (_, None) => String::new(),
+            (_, Some(e)) => {
+                let name = e.name.replace('-', " ");
                 let mut chars = name.chars();
                 chars
                     .next()
@@ -170,15 +205,14 @@ impl Choice {
                 condition_words(kind)
             )
             .into(),
-            Self::Library(i) => library().entries[i].words.as_str().into(),
+            Self::Library(_) => self.entry().map_or("", |e| e.words.as_str()).into(),
         }
     }
-    fn icon(self) -> Option<Icon> {
-        let Self::Library(i) = self else {
-            return None;
-        };
-        let e = &library().entries[i];
-        Icon::parse(&e.name, &e.paths).ok()
+    fn icon(self) -> Option<&'static Icon> {
+        let e = self.entry()?;
+        e.icon
+            .get_or_init(|| Icon::parse(&e.name, &e.paths).ok())
+            .as_ref()
     }
     /// The graphic one click places at `at`: one bond length across, in the
     /// document's line width.
@@ -188,16 +222,16 @@ impl Choice {
         at: Point,
         doc: &Document,
         stroke: reshiki::palette::Color,
-    ) -> Graphic {
+    ) -> Option<Graphic> {
         let size = doc.drawing_style.bond_length_world;
         let style = GraphicStyle {
             stroke,
             width_pt: doc.drawing_style.line_width_pt,
             ..GraphicStyle::default()
         };
-        match (self, self.icon()) {
-            (_, Some(icon)) => Graphic::line_icon(id, icon, at, size, style),
-            (Self::Condition(kind), _) => {
+        Some(match self {
+            Self::Library(_) => Graphic::line_icon(id, self.icon()?.clone(), at, size, style),
+            Self::Condition(kind) => {
                 let mut g = Graphic::dragged(
                     id,
                     GraphicKind::Symbol(kind),
@@ -211,28 +245,28 @@ impl Choice {
                 g.axis_y = Point::new(0., size);
                 g
             }
-            (Self::Library(_), None) => unreachable!("the bundled icons all read"),
-        }
+        })
     }
 }
 
 /// Every word of `query` in the icon's words, best first: the name itself,
-/// then names that start with or hold the first word, then tags.
+/// then names that start with the query or hold its first word, then tags.
 fn ranked(query: &str, choices: Vec<Choice>) -> Vec<Choice> {
-    let query = query.to_lowercase();
+    let query = normalized(query);
     let words: Vec<&str> = query.split_whitespace().collect();
     let Some(first) = words.first() else {
         return choices;
     };
+    let whole = words.join(" ");
     let mut found: Vec<(u8, Choice)> = choices
         .into_iter()
         .filter_map(|c| {
             let all = c.words();
             words.iter().all(|w| all.contains(w)).then(|| {
                 let name = c.name().to_lowercase();
-                let rank = if name == *first {
+                let rank = if name == whole {
                     0
-                } else if name.starts_with(first) {
+                } else if name.starts_with(&whole) {
                     1
                 } else if name.contains(first) {
                     2
@@ -249,13 +283,14 @@ fn ranked(query: &str, choices: Vec<Choice>) -> Vec<Choice> {
 
 enum Row {
     Heading(String),
-    Tiles(Vec<Choice>),
+    /// Up to a row of icons, and whether they are the recent ones.
+    Tiles(Vec<Choice>, bool),
 }
 impl Row {
     fn height(&self) -> f32 {
         match self {
             Self::Heading(_) => HEADING,
-            Self::Tiles(_) => TILE + GAP,
+            Self::Tiles(..) => TILE + GAP,
         }
     }
 }
@@ -267,7 +302,12 @@ fn tiles(rows: &mut Vec<Row>, heading: Option<&str>, choices: Vec<Choice>) {
     if let Some(h) = heading {
         rows.push(Row::Heading(h.to_owned()));
     }
-    rows.extend(choices.chunks(COLUMNS).map(|c| Row::Tiles(c.to_vec())));
+    let recent = heading == Some(RECENT_HEADING);
+    rows.extend(
+        choices
+            .chunks(COLUMNS)
+            .map(|c| Row::Tiles(c.to_vec(), recent)),
+    );
 }
 
 impl State {
@@ -279,9 +319,7 @@ impl State {
         match self.filter {
             Filter::All => conditions.chain(library).collect(),
             Filter::Conditions => conditions.collect(),
-            Filter::Category(c) => library
-                .filter(|l| matches!(l, Choice::Library(i) if lib.entries[*i].category == Some(c)))
-                .collect(),
+            Filter::Category(c) => lib.category(c),
         }
     }
 
@@ -298,13 +336,7 @@ impl State {
             return rows;
         }
         let lib = library();
-        let category = |c: Option<usize>| {
-            (0..lib.entries.len())
-                .filter(|i| lib.entries[*i].category == c)
-                .map(Choice::Library)
-                .collect()
-        };
-        tiles(&mut rows, Some("Recent"), self.recent.clone());
+        tiles(&mut rows, Some(RECENT_HEADING), self.recent.clone());
         tiles(
             &mut rows,
             Some(CONDITIONS),
@@ -314,9 +346,9 @@ impl State {
                 .collect(),
         );
         for (c, name) in lib.categories.iter().enumerate() {
-            tiles(&mut rows, Some(name), category(Some(c)));
+            tiles(&mut rows, Some(name), lib.category(c));
         }
-        tiles(&mut rows, Some("Other"), category(None));
+        tiles(&mut rows, Some("Other"), lib.category(lib.categories.len()));
         rows
     }
 }
@@ -344,7 +376,7 @@ impl<Message> canvas::Program<Message> for Tile {
             paint(
                 &mut f,
                 iced::Color::from_rgb8(51, 62, 72),
-                &icon,
+                icon,
                 bounds.width / GRID,
             );
         }
@@ -415,6 +447,9 @@ impl App {
                 if self.tool != Tool::Icons {
                     self.select_tool(Tool::Icons);
                 }
+                // The command palette can arm an icon with the panel hidden.
+                self.inspector_open = true;
+                self.inspector_tab = InspectorTab::Icons;
                 self.icons.armed = Some(choice);
                 self.status = format!("{} · Click to place · Esc closes", choice.name());
                 return super::focus_drawing();
@@ -441,13 +476,16 @@ impl App {
             return;
         };
         let id = self.tab.doc.next_id();
-        let g = choice.graphic(id, at, &self.tab.doc, self.tab.graphic_style.stroke);
+        let Some(g) = choice.graphic(id, at, &self.tab.doc, self.tab.graphic_style.stroke) else {
+            return;
+        };
         self.tab.doc.graphics.push(g);
         self.tab.selected = vec![id];
         self.changed(before);
         if self.error {
             return;
         }
+        self.sync_typography();
         let recent = &mut self.icons.recent;
         recent.retain(|c| *c != choice);
         recent.insert(0, choice);
@@ -461,12 +499,12 @@ impl App {
     /// The graphic a click would place, for the ghost under the pointer.
     pub(super) fn armed_icon(&self) -> Option<Graphic> {
         let choice = self.icons.armed.filter(|_| self.tool == Tool::Icons)?;
-        Some(choice.graphic(
+        choice.graphic(
             0,
             Point::default(),
             &self.tab.doc,
             self.tab.graphic_style.stroke,
-        ))
+        )
     }
 
     pub(super) fn icons_panel(&self) -> Element<'_, Message> {
@@ -477,7 +515,7 @@ impl App {
         let rows = state.rows();
         let count: usize = (rows.iter())
             .map(|r| match r {
-                Row::Tiles(c) => c.len(),
+                Row::Tiles(c, _) => c.len(),
                 Row::Heading(_) => 0,
             })
             .sum::<usize>()
@@ -491,24 +529,27 @@ impl App {
             state.scroll - MARGIN,
             state.scroll + state.height.max(800.) + MARGIN,
         );
+        // Rows keep their place in the list as their key, so a focused tile
+        // keeps its focus while rows above it come and go.
         let (mut above, mut below, mut y) = (0., 0., 0.);
-        let mut shown = column![];
-        for r in &rows {
+        let mut shown = Vec::new();
+        for (i, r) in rows.iter().enumerate() {
             let h = r.height();
             if y + h < top {
                 above += h;
             } else if y > bottom {
                 below += h;
             } else {
-                shown = shown.push(self.icon_row(r));
+                shown.push((i + 1, self.icon_row(r)));
             }
             y += h;
         }
-        let grid = scrollable(column![
-            Space::new().height(above),
-            shown,
-            Space::new().height(below)
-        ])
+        let spacer = |key, height| (key, Space::new().height(height).into());
+        let grid = scrollable(iced::widget::keyed_column(
+            std::iter::once(spacer(0, above))
+                .chain(shown)
+                .chain([spacer(usize::MAX, below)]),
+        ))
         .id(GRID_ID)
         .on_scroll(|v| {
             Message::Icons(Action::Scrolled {
@@ -536,7 +577,7 @@ impl App {
                     command("Done", Message::Icons(Action::Close)),
                 ]
                 .align_y(Alignment::Center),
-                crate::appearance::text_input("Search icons · 検索…", &state.query)
+                crate::appearance::text_input("Search icons in English or Japanese…", &state.query)
                     .id("icon-search")
                     .on_input(|s| Message::Icons(Action::Search(s)))
                     .size(12)
@@ -570,13 +611,21 @@ impl App {
                 .align_y(Alignment::End)
                 .padding(iced::Padding::ZERO.bottom(4))
                 .into(),
-            Row::Tiles(choices) => {
+            Row::Tiles(choices, recent) => {
                 let armed = |c: &Choice| self.tool == Tool::Icons && self.icons.armed == Some(*c);
                 let mut line = row![].spacing(GAP);
                 for c in choices {
+                    // A recent icon also shows in its own section: its own id.
                     let key = match c {
                         Choice::Condition(k) => format!("condition-{k:?}"),
-                        Choice::Library(i) => library().entries[*i].name.clone(),
+                        Choice::Library(_) => {
+                            c.entry().map_or_else(String::new, |e| e.name.clone())
+                        }
+                    };
+                    let key = if *recent {
+                        format!("recent-{key}")
+                    } else {
+                        key
                     };
                     line = line.push(hover_hint(
                         reshiki::accessibility::button(

@@ -26,6 +26,9 @@ fn the_library_form_reads_lines_arcs_and_filled_dots() {
     assert!(Icon::parse("bad", "M3 3l18 18|Q").is_err());
     let far = Icon::parse("far", "M3 3L90 3").unwrap();
     assert!(far.validate().is_err());
+    // A file cannot make one icon arbitrarily costly to draw.
+    let huge = Icon::parse("huge", &"M3 3l1 1".repeat(1001)).unwrap();
+    assert!(huge.validate().is_err());
 }
 
 #[test]
