@@ -581,6 +581,13 @@ fn inserts(app: &App) -> Vec<Command> {
             })),
         );
     }
+    list.push(send(
+        "Catalytic cycle",
+        Insert,
+        "Add an empty cycle at the center of the view, then drag structures or text onto its circle",
+        "catalytic cycle catalyst loop circle mechanism intermediates",
+        Message::Cycle(crate::app::cycles::Action::Insert),
+    ));
     list
 }
 
@@ -789,6 +796,18 @@ fn edits() -> Vec<Command> {
             Message::Group,
         ),
         selection("Ungroup", "Split a group", "split", Message::Ungroup),
+        selection(
+            "Make catalytic cycle",
+            "Turn the selected structures and texts into a catalytic cycle's intermediates, with arrows that follow them",
+            "catalytic cycle catalyst loop mechanism intermediates circle",
+            Message::Cycle(crate::app::cycles::Action::Make),
+        ),
+        selection(
+            "Remove from cycle",
+            "Take the selected parts out of their catalytic cycle; they stay in the drawing",
+            "catalytic cycle remove detach intermediate reagent product",
+            Message::Cycle(crate::app::cycles::Action::Remove),
+        ),
         selection(
             "Wrap in panel",
             "Put the selection on a tinted panel that can take a title and dividers",

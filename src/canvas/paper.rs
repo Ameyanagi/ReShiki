@@ -40,6 +40,8 @@ struct Draft<'d> {
     rejection: Option<reshiki::editing::RingRejection>,
     translation: Option<World>,
     smart: Vec<Guide>,
+    /// The ink of a part that would join a catalytic cycle if dropped now.
+    drop_ink: Option<(World, World)>,
 }
 
 struct SelectionPreview<'a> {
@@ -60,6 +62,7 @@ impl<'d> Draft<'d> {
             rejection: None,
             translation: None,
             smart: Vec::new(),
+            drop_ink: None,
         }
     }
 }
@@ -132,6 +135,7 @@ impl MoleculeCanvas<'_> {
             rejection,
             translation,
             smart,
+            drop_ink,
         } = draft;
         if let Some(id) = self.hidden_annotation {
             preview.to_mut().annotations.retain(|a| a.id != id);
@@ -226,6 +230,7 @@ impl MoleculeCanvas<'_> {
         let nmr_cache = (cached_camera.is_some() && translation.is_none()).then_some(&state.scene);
         self.draw_nmr_assignments(frame, &preview, selected, bounds, nmr_cache);
         self.draw_editor_markers(frame, &preview, bounds);
+        self.draw_drop_ink(frame, drop_ink, bounds);
         self.draw_orbital_target(frame, state, bounds);
         self.draw_mark_orbit(frame, state, &preview, bounds);
         self.draw_arrow_handles(frame, &preview, selected, bounds);

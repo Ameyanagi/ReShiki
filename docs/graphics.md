@@ -191,6 +191,35 @@ item changes size, for example after adding a bond, its neighbors move to keep
 the gutters. Moving one item by itself leaves it where you put it.
 **Ungroup** ends the layout.
 
+### Draw a catalytic cycle
+
+1. Draw the intermediates as structures or text, roughly in a circle.
+2. Select them and choose **Make catalytic cycle** from the canvas menu or
+   the command palette. They slide onto a circle through them, ordered
+   clockwise from the top, and an arc arrow runs from each to the next. To
+   start from an empty circle instead, choose **Catalytic cycle** in the
+   command palette's insert commands.
+3. To add a part, drag a structure or text that is not in a cycle. On the
+   circle it becomes a new intermediate between its neighbors; beside the
+   first half of a step's arc it becomes a reagent coming in, beside the
+   second half a product going out. A dashed outline and a tag such as
+   **Intermediate 3** or **Reagent of step 2** show the role before you let
+   go. A part already in the cycle keeps its role when it moves.
+4. Clicking any part selects the whole cycle. Option/Alt-click moves one part
+   alone; every arc and side arrow refits to it.
+5. In **Properties → Catalytic cycle**, choose **Clockwise** or
+   **Counterclockwise**, and set **Radius (pt)**, **Gap (pt)** (the space
+   between an arc and an intermediate) and **Center** text. Pick a step to
+   give it a **Name**, make it **Reversible**, **Hide arrow**, or set its
+   **Bow** and extra **Space in** and **out** in points. **Parts** lists every
+   part with its role.
+6. To take a part out, select it alone and choose **Remove from cycle**. It
+   stays in the drawing.
+
+Each change is one Undo step. A reagent's side arrow joins the arc without a
+head; a product's leaves it with one. Reaction detection never takes a
+cycle's parts, so a scheme drawn beside the cycle is read on its own.
+
 ### Start from a figure layout
 
 **Templates → Figure layouts** has a single-row TOC with a title bar, previous
@@ -231,6 +260,11 @@ cm**, **RSC graphical abstract · 8 × 4 cm** or **Elsevier graphical abstract �
   files.
 - A panel's title uses the drawing's font and size in bold. Title text is
   edited in **Properties**, not on the canvas.
+- A catalytic cycle is a circle. ChemDraw has no cycle object: CDXML and CDX
+  get its arrows and text, grouped with its parts, and opening that file
+  again gives those arrows, not a cycle.
+- A cycle's steps are not yet reactions: they have no atom maps, reaction
+  SMILES or color by origin.
 - Rotating a whole layout changes its items' sizes, so the next size change
   lays them out upright again.
 - Brackets are graphics. To define a repeating unit, see

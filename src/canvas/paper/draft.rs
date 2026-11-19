@@ -325,6 +325,8 @@ impl MoleculeCanvas<'_> {
             ring_selection,
             translation,
             smart,
+            chain_badge,
+            drop_ink,
             ..
         } = draft;
         if let (Some(Gesture::StretchBond { start, plan }), Some(p)) =
@@ -376,6 +378,11 @@ impl MoleculeCanvas<'_> {
                 preview.to_mut().translate(ids, delta.x, delta.y);
                 *ring_selection = Some(ids.clone());
                 *smart = guides;
+                // Say what a drop here would make the part in a cycle.
+                if let Some(target) = reshiki::cycles::drop_target(preview, ids) {
+                    *chain_badge = Some((p, target.role.to_string(), true));
+                    *drop_ink = Some(target.ink);
+                }
             }
         }
     }

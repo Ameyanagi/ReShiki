@@ -163,10 +163,12 @@ pub fn preview(doc: &Document, arrow: u64) -> Result<Reaction, &'static str> {
         }
         return Ok(reaction);
     }
+    // A catalytic cycle's parts belong to its own steps.
+    let cycled = crate::cycles::part_ids(doc);
     let ids: Vec<_> = doc
         .atoms
         .iter()
-        .filter(|a| a.purpose.is_chemistry())
+        .filter(|a| a.purpose.is_chemistry() && !cycled.contains(&a.id))
         .map(|a| a.id)
         .collect();
     let parts = molecules(doc, &ids);

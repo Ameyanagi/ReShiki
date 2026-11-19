@@ -360,6 +360,7 @@ impl Prepared {
                 && let Some(original) = self.original.graphics.iter().find(|g| g.id == graphic.id)
             {
                 graphic.leader = original.leader.clone();
+                graphic.cycle = original.cycle.clone();
             }
         }
         let joined_mapping: HashMap<_, _> = self

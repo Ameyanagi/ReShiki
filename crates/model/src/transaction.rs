@@ -301,6 +301,7 @@ pub fn reconcile(doc: &mut Document, before: Document) -> Result<Reconciled, Rej
     crate::linked_properties::reconcile(doc, &before);
     crate::arrow_labels::reconcile(doc, &before);
     crate::models3d::reconcile(doc, &before);
+    crate::cycles::reconcile(doc);
     // Leaders settle last: captions and labels they point at may have moved.
     crate::leaders::reconcile(doc);
     if *doc != before {

@@ -338,6 +338,11 @@ impl App {
                     self.tab.selected = snapped;
                 } else {
                     self.tab.doc.translate(&ids, dx, dy);
+                    // The drop target the drag showed gives the part its role.
+                    if let Some(target) = reshiki::cycles::drop_target(&self.tab.doc, &ids) {
+                        reshiki::cycles::assign(&mut self.tab.doc, &target);
+                        self.status = format!("Added to the cycle as {}", target.role);
+                    }
                     self.tab.selected = ids;
                 }
             }

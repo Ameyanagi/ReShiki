@@ -581,6 +581,7 @@ pub(crate) fn remap_ids(doc: &mut Document, mapping: &HashMap<u64, u64>) -> Opti
     for g in graphics {
         map(&mut g.id)?;
         crate::leaders::remap(g, mapping);
+        crate::cycles::remap(g, mapping);
     }
     for g in groups {
         map(&mut g.id)?;

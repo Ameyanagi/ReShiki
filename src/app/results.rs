@@ -743,6 +743,7 @@ fn completion(message: &Message) -> Option<Completion> {
         | Message::Arc(..)
         | Message::Graphics(..)
         | Message::Figure(..)
+        | Message::Cycle(..)
         | Message::RemoveMark(..)
         | Message::RotateMark(..)
         | Message::AtomRadical(..)

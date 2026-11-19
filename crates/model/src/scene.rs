@@ -2341,6 +2341,9 @@ fn paint_rear_before_front(out: &mut Vec<Primitive>, start: usize) {
 }
 
 fn graphic_primitive(g: &&crate::graphics::Graphic, doc: &Document) -> Vec<Primitive> {
+    if g.cycle.is_some() {
+        return cycle_primitives(g, doc);
+    }
     if g.kind == crate::graphics::GraphicKind::Picture {
         vec![Primitive::Picture((*g).clone())]
     } else {
@@ -2525,6 +2528,32 @@ pub(crate) fn gradient_primitive(
         to,
         stops: vec![(0., shown(gradient.from), 1.), (1., shown(fill), 1.)],
     }
+}
+/// A cycle draws only its derived arrows and labels.
+fn cycle_primitives(g: &crate::graphics::Graphic, doc: &Document) -> Vec<Primitive> {
+    let drawn = crate::cycles::drawn(doc, g);
+    let mut out: Vec<Primitive> = drawn
+        .arrows
+        .iter()
+        .flat_map(|a| a.paths())
+        .map(|p| Primitive::Path {
+            commands: p.commands,
+            style: p.style,
+            filled: p.filled,
+        })
+        .collect();
+    for (origin, text, format) in drawn.labels {
+        for fragment in crate::typography::layout(&text, &format).fragments {
+            out.push(Primitive::Text {
+                position: origin.offset(fragment.position.x, fragment.position.y),
+                text: fragment.text,
+                size: fragment.style.size(),
+                color: fragment.style.color.rgb(),
+                style: fragment.style,
+            });
+        }
+    }
+    out
 }
 fn push_underlays(
     out: &mut Vec<Primitive>,

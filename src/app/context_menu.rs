@@ -952,6 +952,27 @@ impl App {
                 Message::Figure(super::figure_panels::Action::Wrap),
                 true,
             ));
+            // A part of a cycle leaves it; two or more free parts make one.
+            let doc = &self.tab.doc;
+            if self.selected_cycle().is_none()
+                && self
+                    .tab
+                    .selected
+                    .iter()
+                    .any(|id| reshiki::cycles::role_of(doc, *id).is_some())
+            {
+                entries.push(command(
+                    "Remove from cycle",
+                    Message::Cycle(super::cycles::Action::Remove),
+                    true,
+                ));
+            } else if self.selected_cycle().is_none() && self.alignment_count() >= 2 {
+                entries.push(command(
+                    "Make catalytic cycle",
+                    Message::Cycle(super::cycles::Action::Make),
+                    true,
+                ));
+            }
         }
         entries
     }

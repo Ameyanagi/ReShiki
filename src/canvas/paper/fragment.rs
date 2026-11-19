@@ -83,6 +83,11 @@ impl Fragment {
             return None;
         }
         let atoms = molecules(base, preview, changed_atoms(base, preview)?);
+        // A cycle's arrows follow its parts, so moving one redraws it whole.
+        let held = reshiki::cycles::part_ids(base);
+        if atoms.iter().any(|id| held.contains(id)) {
+            return None;
+        }
         let ids: Vec<_> = preview
             .atoms
             .iter()
