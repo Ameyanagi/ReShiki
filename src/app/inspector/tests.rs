@@ -1024,6 +1024,46 @@ async fn selected_2d_crystal_puts_structure_before_molecular_properties() -> Res
     Ok(())
 }
 
+#[tokio::test]
+#[ignore = "Opt-in real renderer panel section order regression"]
+async fn wrapped_panel_shows_its_title_fill_and_shadow_before_molecular_properties()
+-> Result<(), String> {
+    use iced::advanced::{renderer::Headless, widget::operation};
+    let mut renderer = <iced::Renderer as Headless>::new(
+        iced::Font::with_name(reshiki::style::ui_font_family()),
+        iced::Pixels(16.),
+        None,
+    )
+    .await
+    .ok_or("No renderer")?;
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let a = app.tab.doc.add_atom("C", Default::default());
+    let b = app
+        .tab
+        .doc
+        .add_atom("O", reshiki::document::Point::new(42., 0.));
+    app.tab.doc.add_bond(a, b, 1, "plain");
+    app.tab.selected = vec![a, b];
+    let _ = app.update(Message::Figure(crate::app::figure_panels::Action::Wrap));
+    assert!(!app.error, "{}", app.status);
+    let size = iced::Size::new(300., 2400.);
+    let mut ui = iced_runtime::UserInterface::build(
+        app.ordinary_properties_panel(),
+        size,
+        iced_runtime::user_interface::Cache::new(),
+        &mut renderer,
+    );
+    let mut collect = reshiki::accessibility::Collect::new(iced::Rectangle::with_size(size));
+    ui.operate(&renderer, &mut operation::black_box(&mut collect));
+    let nodes = &collect.snapshot().nodes;
+    let at = |id: &str| nodes.iter().position(|node| node.id == id);
+    let title = at("panel-title-0").ok_or("no panel title")?;
+    let molecule = at("inspector-section-Molecule").ok_or("no molecular section")?;
+    assert!(title < molecule, "the panel title comes first");
+    Ok(())
+}
+
 #[test]
 fn focused_model_controls_override_only_the_explicit_model_section_preference() {
     let (mut app, _) = App::new();

@@ -1080,6 +1080,21 @@ impl App {
         if let Some(cycle) = self.cycle_card().or_else(|| self.cycle_part_card()) {
             body = body.push(card(container(cycle).padding(12)));
         }
+        let styled_graphics = matches!(self.tool, Tool::Graphic(_))
+            || self
+                .tab
+                .doc
+                .graphics
+                .iter()
+                .any(|g| selected.contains(&g.id) && g.picture.is_none() && g.piece.is_none());
+        // A panel's title, fill and shadow come before what it holds.
+        let panel_card = self.figure_panel_card().filter(|_| styled_graphics);
+        let panel_first = panel_card.is_some();
+        if let Some(panel) = panel_card {
+            body = body
+                .push(card(container(panel).padding(12)))
+                .push(card(container(self.graphic_panel()).padding(12)));
+        }
         let molecular_first = self.tab.selected.is_empty()
             || self.property_key().is_some_and(|key| !key.atoms.is_empty());
         // Keep the active ring tool's placement card visible above the expanded values.
@@ -1135,18 +1150,7 @@ impl App {
             body = body.push(card);
         }
         // Pieces draw their own lines and fills: graphic style does not apply.
-        if matches!(self.tool, Tool::Graphic(_))
-            || self
-                .tab
-                .doc
-                .graphics
-                .iter()
-                .any(|g| selected.contains(&g.id) && g.picture.is_none() && g.piece.is_none())
-        {
-            // A panel's titles and dividers come before its colors.
-            if let Some(panel) = self.figure_panel_card() {
-                body = body.push(card(container(panel).padding(12)));
-            }
+        if styled_graphics && !panel_first {
             body = body.push(card(container(self.graphic_panel()).padding(12)));
         }
         if let Some(layout) = self.layout_card() {

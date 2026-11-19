@@ -6,7 +6,7 @@ use iced::widget::{button, checkbox, column, row, text, tooltip};
 use iced::{Alignment, Element, Length};
 use reshiki::{
     document::Point,
-    graphics::{Divider, Graphic, GraphicKind, GraphicStyle, Panel, TitlePlace},
+    graphics::{Divider, Graphic, GraphicChange, GraphicKind, GraphicStyle, Panel, TitlePlace},
     layouts::{Align, Flow},
     palette::{Color, Hue, Row},
 };
@@ -447,7 +447,56 @@ impl App {
                 .padding(6),
             );
         }
+        // Fill and shadow sit with the title: they are what a panel is for.
+        let style = &self.tab.graphic_style;
+        let restyle = |change| Some(Message::Graphics(super::graphics::Action::Style(change)));
+        let palette = reshiki::palette::Palette::of(&self.tab.doc);
         body = body
+            .push(
+                super::color_popover::paper(
+                    super::color_popover::palette_row(
+                        &palette,
+                        Row::Tint,
+                        reshiki::palette::Hues::of(&self.tab.doc),
+                        20.,
+                        (style.fill.is_none(), restyle(GraphicChange::Fill(None))),
+                        |hue| {
+                            let color = Color::Palette(hue, Row::Tint);
+                            (
+                                style.fill == Some(color),
+                                restyle(GraphicChange::Fill(Some(color))),
+                            )
+                        },
+                    ),
+                    self.tab.doc.canvas_theme,
+                )
+                .padding([6, 6]),
+            )
+            .push(
+                row![
+                    checkbox(panel.border)
+                        .label("Outline")
+                        .on_toggle(move |on| send(Action::Border(on)))
+                        .size(14)
+                        .text_size(12),
+                    hover_hint(
+                        checkbox(style.effects.shadow_pt.is_some())
+                            .label("Shadow")
+                            .on_toggle(|on| {
+                                Message::Graphics(super::graphics::Action::Style(
+                                    GraphicChange::Shadow(
+                                        on.then_some(reshiki::graphics::Effects::SHADOW_PT),
+                                    ),
+                                ))
+                            })
+                            .size(14)
+                            .text_size(12),
+                        "A grey drop shadow below and to the right",
+                        tooltip::Position::Top,
+                    ),
+                ]
+                .spacing(14),
+            )
             .push(
                 row![
                     toggle(
@@ -469,13 +518,6 @@ impl App {
                     toggle("Square", !rounded, Action::Rounded(false)),
                 ]
                 .spacing(4),
-            )
-            .push(
-                checkbox(panel.border)
-                    .label("Outline")
-                    .on_toggle(move |on| send(Action::Border(on)))
-                    .size(14)
-                    .text_size(12),
             )
             .push(
                 row![
@@ -532,7 +574,7 @@ impl App {
                 tooltip::Position::Top,
             ))
             .push(
-                text("Enter applies titles and positions. Colors are under Graphic style.")
+                text("Enter applies titles and positions. Line and gradient are under Graphic style.")
                     .size(11)
                     .style(muted_text),
             )
