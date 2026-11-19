@@ -258,7 +258,7 @@ impl ArrowStyle {
             ("Arrowhead length", self.head_length_pt, 0.5, 24.),
             ("Arrowhead half-width", self.head_width_pt, 0.25, 16.),
             ("Arrow separation", self.gap_pt, 0.5, 16.),
-            ("Equilibrium ratio", self.equilibrium_ratio, 0.2, 5.),
+            ("Reverse length", self.equilibrium_ratio, 0.2, 5.),
         ] {
             if !n.is_finite() || !(lo..=hi).contains(&n) {
                 return Err(format!("{label} must be {lo}–{hi}"));
