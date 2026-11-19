@@ -1611,3 +1611,110 @@ fn file_sizes_follow_the_adaptive_budget() {
     assert_eq!(dpi, 600);
     assert_eq!((width, height), png_pixels(size, 600));
 }
+
+/// Drawings with every kind of bond corner: ring and chain mitres, fused
+/// and three-way atoms, labels, wedges, colors, crossings and carbonyls.
+fn bond_corner_drawings() -> Vec<(&'static str, Document)> {
+    use crate::document::Point;
+    let mut drawings: Vec<_> = [
+        (
+            "bond-join-regression",
+            &include_bytes!("../../../../tests/fixtures/bond-join-regression.rsk")[..],
+        ),
+        (
+            "artemisinin",
+            include_bytes!("../../../../tests/fixtures/qa-artemisinin-after.rsk"),
+        ),
+        (
+            "esterification",
+            include_bytes!("../../../../tests/fixtures/esterification-scheme.rsk"),
+        ),
+        (
+            "tilted-fused",
+            include_bytes!("../../../../tests/fixtures/tilted-fused-double-bonds.rsk"),
+        ),
+        (
+            "phenylalanine",
+            include_bytes!("../../../../tests/fixtures/phenylalanine-rotation.rsk"),
+        ),
+    ]
+    .into_iter()
+    .map(|(name, bytes)| (name, Document::from_json(bytes).unwrap()))
+    .collect();
+    let mut doc = Document::default();
+    let hexagon: Vec<_> = (0..6)
+        .map(|i| {
+            let angle = std::f32::consts::FRAC_PI_3 * i as f32 + 0.5;
+            doc.add_atom("C", Point::new(30. * angle.cos(), 30. * angle.sin()))
+        })
+        .collect();
+    for i in 0..6 {
+        doc.add_bond(hexagon[i], hexagon[(i + 1) % 6], 1 + (i % 2) as u8, "plain");
+    }
+    let chain: Vec<_> = [
+        (60., 10.),
+        (86., 25.),
+        (112., 10.),
+        (138., 25.),
+        (164., 10.),
+    ]
+    .into_iter()
+    .map(|(x, y)| doc.add_atom("C", Point::new(x, y)))
+    .collect();
+    doc.add_bond(hexagon[0], chain[0], 1, "plain");
+    doc.add_bond(chain[0], chain[1], 1, "wedge");
+    doc.add_bond(chain[1], chain[2], 1, "plain");
+    doc.add_bond(chain[2], chain[3], 1, "plain");
+    doc.add_bond(chain[3], chain[4], 2, "plain");
+    doc.atoms.last_mut().unwrap().element = "O".into();
+    doc.bonds[2].color = crate::palette::Color::Custom([200, 0, 0]);
+    // A bond crossing the chain.
+    let over = doc.add_atom("C", Point::new(120., -20.));
+    let under = doc.add_atom("N", Point::new(130., 50.));
+    doc.add_bond(over, under, 1, "plain");
+    drawings.push(("ring-chain-crossing", doc));
+    drawings
+}
+
+/// Vector export strokes plain bonds; at 1200 dpi its pixels must match the
+/// filled outlines the canvas and PNG draw, ends and corners included.
+#[test]
+fn vector_bond_lines_paint_the_same_ink_as_the_filled_outlines() {
+    for (name, doc) in bond_corner_drawings() {
+        let filled = scene::primitives(&doc);
+        let stroked = scene::vector_primitives(&doc);
+        assert!(
+            stroked
+                .iter()
+                .any(|p| matches!(p, scene::Primitive::Polyline { .. })),
+            "{name}"
+        );
+        let pixels = |primitives| {
+            let tree = parse_svg(scene::svg_of(&doc, primitives, None)).unwrap();
+            let size = png_pixels((tree.size().width(), tree.size().height()), 1200);
+            (size, raster(&tree, None, 1200., size, (0., 0.)).unwrap())
+        };
+        let (size, before) = pixels(filled);
+        let (stroked_size, after) = pixels(stroked);
+        assert_eq!(size, stroked_size, "{name}: the bounds are the outlines'");
+        let (mut ink, mut differ, mut total) = (0, 0, 0.);
+        for (a, b) in before.pixels().iter().zip(after.pixels()) {
+            let (a, b) = (a.alpha(), b.alpha());
+            ink += usize::from(a.max(b) > 0);
+            differ += usize::from(a.abs_diff(b) > 127);
+            total += f64::from(a.abs_diff(b)) / 255.;
+        }
+        println!(
+            "{name}: {ink} ink pixels, {differ} differ by half, {total:.1} pixels of ink moved"
+        );
+        assert!(
+            differ * 10_000 <= ink && total * 1000. <= ink as f64,
+            "{name}: {differ} of {ink} pixels differ, {total:.1} pixels of ink moved"
+        );
+        let svg = String::from_utf8(drawing(&doc, "svg").unwrap()).unwrap();
+        assert!(
+            svg.contains("stroke-linejoin=\"miter\""),
+            "{name}: SVG export strokes bonds"
+        );
+    }
+}

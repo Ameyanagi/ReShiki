@@ -218,9 +218,33 @@ impl Joins<'_> {
             return [None, None];
         }
         [
-            self.centered_cap(b, b.a, start, end, offset),
-            self.centered_cap(b, b.b, end, start, -offset),
+            self.centered_cap(b, b.a, start, end, offset)
+                .map(|(cap, _)| cap),
+            self.centered_cap(b, b.b, end, start, -offset)
+                .map(|(cap, _)| cap),
         ]
+    }
+    /// A centered rail as a round-capped line: each end that meets a
+    /// neighbour stops on the neighbour's center line, where its cap stays
+    /// inside the neighbour's stroke, so the ink is the outline's.
+    pub(crate) fn centered_line(
+        &self,
+        b: &Bond,
+        start: Point,
+        end: Point,
+        offset: f32,
+    ) -> Option<(Point, Point)> {
+        if !self.centered(b) {
+            return None;
+        }
+        let first = self.centered_cap(b, b.a, start, end, offset);
+        let last = self.centered_cap(b, b.b, end, start, -offset);
+        (first.is_some() || last.is_some()).then(|| {
+            (
+                first.map_or(start, |(_, at)| at),
+                last.map_or(end, |(_, at)| at),
+            )
+        })
     }
     pub(crate) fn centered_polygon(
         &self,
@@ -257,7 +281,7 @@ impl Joins<'_> {
         point: Point,
         opposite: Point,
         offset: f32,
-    ) -> Option<[Point; 2]> {
+    ) -> Option<([Point; 2], Point)> {
         let length = point.distance(opposite).max(0.001);
         let u = Point::new(
             (opposite.x - point.x) / length,
@@ -318,7 +342,36 @@ impl Joins<'_> {
             // Reject distant intersections without moving a rail edge sideways.
             (intersection.distance(point) <= limit).then_some(intersection)
         };
-        Some([corner(1.)?, corner(-1.)?])
+        let cap = [corner(1.)?, corner(-1.)?];
+        // Where the rail's center line crosses the neighbour's.
+        let t = cross(subtract(origin, point), v) / cross(u, v);
+        Some((cap, point.offset(u.x * t, u.y * t)))
+    }
+    /// The bond whose outline continues `b`'s through unlabelled atom `id`
+    /// around their outer corner, a gap of at least a half turn that butt
+    /// ends leave open, so their lines join there with a mitre.
+    pub(crate) fn across_open_side(&self, b: &Bond, id: u64) -> Option<&Bond> {
+        let (atom, visible) = self.atoms.get(&id)?;
+        let point = atom.position;
+        let u = subtract(self.atoms.get(&other(b, id))?.0.position, point);
+        let mut gaps = [(f32::INFINITY, None), (f32::INFINITY, None)];
+        for adj in self.neighbors(b, id) {
+            let Some((end, _)) = self.atoms.get(&other(adj, id)) else {
+                continue;
+            };
+            let v = subtract(end.position, point);
+            let turn = cross(u, v).atan2(u.x * v.x + u.y * v.y);
+            for (gap, side) in gaps.iter_mut().zip([1., -1.]) {
+                let angle = (side * turn).rem_euclid(std::f32::consts::TAU);
+                if angle > 0.001 && angle < gap.0 {
+                    *gap = (angle, Some(adj));
+                }
+            }
+        }
+        let (gap, adj) = gaps.into_iter().max_by(|a, b| a.0.total_cmp(&b.0))?;
+        (!visible && gap.is_finite() && gap > std::f32::consts::PI - 0.001)
+            .then_some(adj)
+            .flatten()
     }
     pub fn polygon(&self, b: &Bond, start: Point, end: Point) -> Vec<Point> {
         let [al, ar] = self.cap(b, b.a, start, end);

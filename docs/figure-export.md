@@ -42,6 +42,12 @@ Copied pictures and exported files each have their own PNG resolution: 150, 300,
 
 The size in centimeters is the same at every resolution: a higher resolution puts more pixels into the same printed size, and the PNG records its resolution so other apps place it at that size. The **Resolution** menu shows the drawing's size in centimeters and its pixel size at each setting. In Settings, close-ups show part of the current drawing at each resolution, made by the same renderer as the exported file and shown at the same size, so you can see what a lower resolution loses. When the drawing is empty, they show a sample structure on the drawing's canvas. On PNG, the **Export** tab's preview shows the file's pixels at the chosen resolution, scaled to fit.
 
+## Bonds in vector files
+
+SVG, PDF and EMF draw plain bonds as stroked lines in the drawing's line width. Change the stroke width of a pasted or opened figure in Adobe Illustrator or Inkscape, and every plain bond follows, not only the inner lines of double bonds. Bonds that meet at an unlabelled carbon form one line with a mitred corner, so corners and ends look the same as on the canvas and in the PNG. Lines end flat at labels and chain ends.
+
+Wedges, hashed wedges and bold bonds stay filled shapes, because their width varies or is set by the bold width. Where a plain bond meets one of them, or a bond of another color, a small filled corner completes the mitre. Bonds faded by rear opacity also stay filled, so overlapping lines do not darken where they meet.
+
 ## Text in SVG files
 
 SVG export draws text as outlines by default. The outlines have the same glyphs, positions and sizes as the PNG, so labels look the same in every app, including apps and computers that do not have the drawing's font. The file keeps the drawing's physical size.

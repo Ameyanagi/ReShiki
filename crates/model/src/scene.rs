@@ -33,6 +33,15 @@ pub enum Primitive {
         filled: bool,
     },
     Line(Point, Point, f32),
+    /// Plain bond lines in vector export, for editors that restyle strokes:
+    /// butt ends, and corners mitred up to 4 widths (beyond that, bevelled),
+    /// in a color the canvas theme maps.
+    Polyline {
+        points: Vec<Point>,
+        closed: bool,
+        width: f32,
+        color: crate::palette::Color,
+    },
     Polygon(Vec<Point>),
     Text {
         position: Point,
@@ -2147,6 +2156,14 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
     let opacity = crate::rear_opacity::Paint::new(&flat);
     primitives_with_opacity(doc, &flat, &opacity)
 }
+/// [`primitives`] for SVG, PDF and EMF: opaque plain bonds are stroked
+/// [`Primitive::Polyline`]s with the same ink, so an editor that changes the
+/// stroke width changes every bond, not only the lines drawn as strokes.
+pub fn vector_primitives(doc: &Document) -> Vec<Primitive> {
+    let flat = crate::models3d::drawn(doc);
+    let opacity = crate::rear_opacity::Paint::new(&flat);
+    drawing(doc, &flat, &opacity, true)
+}
 /// Drawing primitives using shared rear-opacity paint. `flat` must be
 /// [`crate::models3d::drawn`] of this same raw, unmaterialized document, and
 /// `opacity` its `rear_opacity::Paint::new`: atoms shown as 3D models are not
@@ -2155,6 +2172,14 @@ pub fn primitives_with_opacity(
     raw: &Document,
     flat: &Document,
     opacity: &crate::rear_opacity::Paint,
+) -> Vec<Primitive> {
+    drawing(raw, flat, opacity, false)
+}
+fn drawing(
+    raw: &Document,
+    flat: &Document,
+    opacity: &crate::rear_opacity::Paint,
+    lines: bool,
 ) -> Vec<Primitive> {
     let inputs = BondInputs::prepare(flat, opacity, Resolve::Scene);
     let doc = inputs.doc();
@@ -2174,13 +2199,11 @@ pub fn primitives_with_opacity(
     let rings = push_ring_strokes(&mut out, doc, opacity);
     let pass = BondPass::new(&inputs);
     let doc = pass.doc;
-    // Fill joined bond outlines together. Separate antialiased polygons leave
-    // translucent seams even when their mathematical corners agree exactly.
-    let mut joined: std::collections::BTreeMap<
-        (crate::palette::Color, u32),
-        Vec<crate::graphics::PathCommand>,
-    > = Default::default();
-    let scene = pass.scene(style, &rings, opacity);
+    let mut joined = Joined::default();
+    let scene = BondScene {
+        lines,
+        ..pass.scene(style, &rings, opacity)
+    };
     let bond_paint_start = out.len();
     for (bond_index, b) in doc
         .bonds
@@ -2491,10 +2514,7 @@ fn collect_atom_labels(doc: &Document, opacity: &crate::rear_opacity::Paint) -> 
 }
 fn push_junctions(
     out: &mut Vec<Primitive>,
-    joined: &mut std::collections::BTreeMap<
-        (crate::palette::Color, u32),
-        Vec<crate::graphics::PathCommand>,
-    >,
+    joined: &mut Joined,
     joins: &crate::bond_joins::Joins<'_>,
     crossing_gaps: &[Vec<crate::crossings::Gap>],
     doc: &Document,
@@ -2546,6 +2566,7 @@ fn push_junctions(
                 });
             } else {
                 joined
+                    .fills
                     .entry((junction.color, alpha.to_bits()))
                     .or_default()
                     .extend(commands);
@@ -2553,28 +2574,87 @@ fn push_junctions(
         }
     }
 }
-fn push_joined_outlines(
-    out: &mut Vec<Primitive>,
-    joined: std::collections::BTreeMap<
-        (crate::palette::Color, u32),
-        Vec<crate::graphics::PathCommand>,
-    >,
-) {
-    out.extend(joined.into_iter().flat_map(|((color, alpha), commands)| {
-        crate::rear_opacity::with_opacity(
-            vec![Primitive::Path {
-                commands,
-                style: crate::graphics::GraphicStyle {
-                    stroke: color,
-                    fill: Some(color),
-                    width_pt: 0.,
-                    ..Default::default()
-                },
-                filled: true,
-            }],
-            f32::from_bits(alpha),
-        )
-    }));
+/// Joined bond outlines, filled together: separate antialiased polygons
+/// leave translucent seams even where their corners agree exactly.
+#[derive(Default)]
+struct Joined {
+    /// Path commands by color and opacity bits.
+    fills:
+        std::collections::BTreeMap<(crate::palette::Color, u32), Vec<crate::graphics::PathCommand>>,
+    /// Vector export's plain bond lines by color and width bits, each with
+    /// whether its ends continue into another line.
+    lines: std::collections::BTreeMap<(crate::palette::Color, u32), Vec<([Point; 2], [bool; 2])>>,
+}
+fn push_joined_outlines(out: &mut Vec<Primitive>, joined: Joined) {
+    out.extend(
+        joined
+            .fills
+            .into_iter()
+            .flat_map(|((color, alpha), commands)| {
+                crate::rear_opacity::with_opacity(
+                    vec![Primitive::Path {
+                        commands,
+                        style: crate::graphics::GraphicStyle {
+                            stroke: color,
+                            fill: Some(color),
+                            width_pt: 0.,
+                            ..Default::default()
+                        },
+                        filled: true,
+                    }],
+                    f32::from_bits(alpha),
+                )
+            }),
+    );
+    for ((color, width), lines) in joined.lines {
+        let key = |p: Point| (p.x.to_bits(), p.y.to_bits());
+        let mut ends: std::collections::HashMap<_, Vec<(usize, usize)>> = Default::default();
+        for (index, (points, continues)) in lines.iter().enumerate() {
+            for end in (0..2).filter(|end| continues[*end]) {
+                ends.entry(key(points[end])).or_default().push((index, end));
+            }
+        }
+        // Each line end continues into the one other end meeting it there.
+        let mut next = vec![[None; 2]; lines.len()];
+        for meeting in ends.values() {
+            if let &[(i, e), (j, f)] = meeting.as_slice() {
+                next[i][e] = Some((j, f));
+                next[j][f] = Some((i, e));
+            }
+        }
+        let mut drawn = vec![false; lines.len()];
+        // Open runs from their free ends first, then the closed rings.
+        let open = (0..lines.len()).filter(|i| next[*i].contains(&None));
+        for first in open.chain(0..lines.len()) {
+            if drawn[first] {
+                continue;
+            }
+            let (mut index, mut end) = (first, usize::from(next[first][0].is_some()));
+            let mut points = vec![lines[first].0[end]];
+            let mut closed = false;
+            loop {
+                drawn[index] = true;
+                points.push(lines[index].0[1 - end]);
+                match next[index][1 - end] {
+                    Some((i, _)) if i == first => {
+                        closed = points.len() > 2;
+                        break;
+                    }
+                    Some((i, e)) if !drawn[i] => (index, end) = (i, e),
+                    _ => break,
+                }
+            }
+            if closed {
+                points.pop();
+            }
+            out.push(Primitive::Polyline {
+                points,
+                closed,
+                width: f32::from_bits(width),
+                color,
+            });
+        }
+    }
 }
 fn push_atom_labels(
     out: &mut Vec<Primitive>,
@@ -2673,6 +2753,8 @@ struct BondScene<'a, 'd> {
     faces: &'a FaceIndex<'d>,
     crossing_gaps: &'a [Vec<crate::crossings::Gap>],
     opacity: &'a crate::rear_opacity::Paint,
+    /// Vector export: opaque plain bonds become [`Primitive::Polyline`]s.
+    lines: bool,
 }
 /// A drawable bond's end atoms, label-trimmed ends, direction and normal.
 #[derive(Clone, Copy)]
@@ -2804,10 +2886,7 @@ impl BondPiece {
 fn push_bond(
     scene: BondScene<'_, '_>,
     out: &mut Vec<Primitive>,
-    joined: &mut std::collections::BTreeMap<
-        (crate::palette::Color, u32),
-        Vec<crate::graphics::PathCommand>,
-    >,
+    joined: &mut Joined,
     bond_index: usize,
     b: &Bond,
     ink_sources: Option<&mut Vec<(DepthField, Vec<Primitive>)>>,
@@ -2839,6 +2918,13 @@ fn push_bond(
     let mut pieces = Vec::new();
     if rail {
         match b.display.as_str() {
+            "plain" if !matches!(b.order, 2 | 7) && stroked(scene, b) => {
+                pieces.extend(
+                    stroked_outline(scene, b, start, end)
+                        .into_iter()
+                        .map(BondPiece::plain),
+                );
+            }
             "plain" | "bold" | "wedge" if !matches!(b.order, 2 | 7) && joins.needed(b) => {
                 pieces.push(BondPiece::plain(Primitive::Polygon(
                     joins.polygon(b, start, end),
@@ -3161,8 +3247,22 @@ fn push_bond_rails(
                 support: vec![],
             },
         });
+        if index == 0 && offset == 0. && stroked(scene, b) {
+            pieces.extend(
+                stroked_outline(scene, b, first, last)
+                    .into_iter()
+                    .map(BondPiece::plain),
+            );
+            continue;
+        }
         let primitive = if let Some(points) = joins.centered_polygon(b, first, last, offset) {
-            Primitive::Polygon(points)
+            match joins
+                .centered_line(b, first, last, offset)
+                .filter(|_| scene.lines && scene.opacity.opaque(b))
+            {
+                Some((first, last)) => Primitive::Line(first, last, style.line_width()),
+                None => Primitive::Polygon(points),
+            }
         } else if index == 0 && offset == 0. && joins.needed(b) {
             Primitive::Polygon(joins.polygon(b, first, last))
         } else if display == "bold" {
@@ -3226,6 +3326,72 @@ fn push_bond_rails(
         }
     }
 }
+/// Whether vector export strokes this bond's joined outline: an opaque,
+/// constant-width plain line. Translucent ones stay filled, as overlapping
+/// strokes would darken where they meet.
+fn stroked(scene: BondScene<'_, '_>, b: &Bond) -> bool {
+    scene.lines
+        && b.display == "plain"
+        && !b.is_projected_dative()
+        && scene.joins.needed(b)
+        && scene.opacity.opaque(b)
+}
+/// Whether `b`'s line continues through atom `id` into another bond's line
+/// of the same color, around a mitred outer corner.
+fn continues(scene: BondScene<'_, '_>, b: &Bond, id: u64) -> bool {
+    stroked(scene, b)
+        && scene
+            .joins
+            .across_open_side(b, id)
+            .is_some_and(|other| other.color == b.color && stroked(scene, other))
+}
+/// A plain bond's joined outline from `first` to `last` as a butt-ended
+/// line, plus the part of the outline's mitre that end leaves open where the
+/// line cannot continue into its neighbour's (a wedge, or another color).
+fn stroked_outline(
+    scene: BondScene<'_, '_>,
+    b: &Bond,
+    first: Point,
+    last: Point,
+) -> Vec<Primitive> {
+    let mut parts = vec![Primitive::Polyline {
+        points: vec![first, last],
+        closed: false,
+        width: scene.style.line_width(),
+        color: b.color,
+    }];
+    let outline = scene.joins.polygon(b, first, last);
+    for (id, at, toward) in [(b.a, first, last), (b.b, last, first)] {
+        if continues(scene, b, id) && scene.doc.atom(id).is_some_and(|a| a.position == at) {
+            continue;
+        }
+        // The outline behind the butt end, reaching a little into the line
+        // so the two never meet edge to edge in a hairline seam.
+        let length = at.distance(toward).max(0.001);
+        let depth = |p: Point| {
+            ((p.x - at.x) * (toward.x - at.x) + (p.y - at.y) * (toward.y - at.y)) / length
+                - scene.style.line_width() / 4.
+        };
+        if outline
+            .iter()
+            .all(|p| depth(*p) > -scene.style.line_width() / 4. - 0.001)
+        {
+            continue;
+        }
+        let mut open = vec![];
+        for (&p, &q) in outline.iter().zip(outline.iter().cycle().skip(1)) {
+            let (dp, dq) = (depth(p), depth(q));
+            if dp < 0. {
+                open.push(p);
+            }
+            if (dp < 0.) != (dq < 0.) {
+                open.push(p.lerp(q, dp / (dp - dq)));
+            }
+        }
+        parts.push(Primitive::Polygon(open));
+    }
+    parts
+}
 fn cut_bond_crossings(
     scene: BondScene<'_, '_>,
     out: &mut Vec<Primitive>,
@@ -3241,10 +3407,7 @@ fn cut_bond_crossings(
 fn collect_joined_outlines(
     scene: BondScene<'_, '_>,
     out: &mut Vec<Primitive>,
-    joined: &mut std::collections::BTreeMap<
-        (crate::palette::Color, u32),
-        Vec<crate::graphics::PathCommand>,
-    >,
+    joined: &mut Joined,
     bond_start: usize,
     b: &Bond,
 ) {
@@ -3256,11 +3419,25 @@ fn collect_joined_outlines(
             let (alpha, primitive) = take_opacity(primitive);
             if let Primitive::Polygon(points) = primitive {
                 if let Some(first) = points.first() {
-                    let commands = joined.entry((b.color, alpha.to_bits())).or_default();
+                    let commands = joined.fills.entry((b.color, alpha.to_bits())).or_default();
                     commands.push(PathCommand::Move(*first));
                     commands.extend(points.iter().skip(1).copied().map(PathCommand::Line));
                     commands.push(PathCommand::Close);
                 }
+            } else if let Primitive::Polyline { points, width, .. } = &primitive
+                && let &[first, last] = points.as_slice()
+            {
+                let continues = [first, last].map(|end| {
+                    [b.a, b.b].into_iter().any(|id| {
+                        scene.doc.atom(id).is_some_and(|a| a.position == end)
+                            && continues(scene, b, id)
+                    })
+                });
+                joined
+                    .lines
+                    .entry((b.color, width.to_bits()))
+                    .or_default()
+                    .push(([first, last], continues));
             } else {
                 secondary.extend(crate::rear_opacity::with_opacity(vec![primitive], alpha));
             }
@@ -3342,6 +3519,42 @@ fn head(pieces: &mut Vec<BondPiece>, tip: Point, ux: f32, uy: f32, length: f32) 
         base.offset(uy * half, -ux * half),
     ])));
 }
+/// The corners of a [`Primitive::Polyline`]'s ink: its butt ends and the
+/// tips of the mitres within the limit, where the bond outlines had theirs.
+fn polyline_outline(points: &[Point], closed: bool, width: f32) -> Vec<Point> {
+    let half = width / 2.;
+    let normal = |a: Point, b: Point| {
+        let length = a.distance(b).max(0.001);
+        Point::new((a.y - b.y) / length, (b.x - a.x) / length)
+    };
+    let count = points.len();
+    let segments = if closed {
+        count
+    } else {
+        count.saturating_sub(1)
+    };
+    let mut out = vec![];
+    for i in 0..segments {
+        let (a, b) = (points[i], points[(i + 1) % count]);
+        let n = normal(a, b);
+        for p in [a, b] {
+            out.extend([
+                p.offset(n.x * half, n.y * half),
+                p.offset(-n.x * half, -n.y * half),
+            ]);
+        }
+        if i + 1 < segments || closed {
+            let m = normal(b, points[(i + 2) % count]);
+            // Mitre length over width is sqrt(2 / (1 + n·m)); the limit is 4.
+            let along = 1. + n.x * m.x + n.y * m.y;
+            if along >= 1. / 8. {
+                let tip = Point::new((n.x + m.x) * half / along, (n.y + m.y) * half / along);
+                out.extend([b.offset(tip.x, tip.y), b.offset(-tip.x, -tip.y)]);
+            }
+        }
+    }
+    out
+}
 pub fn bounds(drawing: &[Primitive]) -> (Point, Point) {
     let mut points = vec![];
     for p in drawing {
@@ -3369,6 +3582,12 @@ pub fn bounds(drawing: &[Primitive]) -> (Point, Point) {
                 }
             }
             Primitive::Line(a, b, _) => points.extend([*a, *b]),
+            Primitive::Polyline {
+                points: line,
+                closed,
+                width,
+                ..
+            } => points.extend(polyline_outline(line, *closed, *width)),
             Primitive::Polygon(p) => points.extend(p),
             // The haloed labels follow it; the margin covers the halo.
             Primitive::Halo { .. } => {}
@@ -3495,5 +3714,7 @@ mod primitives_parity_tests;
 mod radical_label_tests;
 #[cfg(test)]
 mod round_label_trim_tests;
+#[cfg(test)]
+mod stroked_bond_tests;
 #[cfg(test)]
 mod tests;

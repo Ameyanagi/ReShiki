@@ -417,10 +417,14 @@ fn render_drawing(
     doc.validate()?;
     let (doc, paper) = background.apply(doc);
     let doc = doc.as_ref();
-    let primitives = scene::primitives(doc);
-    if format == "png" {
+    // Vector formats stroke plain bonds, so editors restyle their widths.
+    let primitives = if format == "png" {
+        let primitives = scene::primitives(doc);
         png_fits(scene::bounds(&primitives), budget)?;
-    }
+        primitives
+    } else {
+        scene::vector_primitives(doc)
+    };
     #[cfg(test)]
     SCENES.with(|scenes| scenes.set(scenes.get() + 1));
     let svg = scene::svg_of(doc, primitives, paper);
@@ -825,8 +829,9 @@ pub fn pages_pdf(doc: &Document, background: Background) -> Result<Vec<u8>, Stri
         .page_layout
         .as_ref()
         .ok_or("Set up publication pages before exporting a page PDF.")?;
-    let svg = scene::svg_on(doc, paper);
-    let tree = parse_svg(svg)?;
+    let primitives = scene::vector_primitives(doc);
+    let (drawing_lo, drawing_hi) = scene::bounds(&primitives);
+    let tree = parse_svg(scene::svg_of(doc, primitives, paper))?;
     let (chunk, root) = svg2pdf::to_chunk(&tree, svg2pdf::ConversionOptions::default())
         .map_err(|e| e.to_string())?;
     let mut next = Ref::new(1);
@@ -846,7 +851,6 @@ pub fn pages_pdf(doc: &Document, background: Background) -> Result<Vec<u8>, Stri
     pdf.pages(pages)
         .kids(page_ids.iter().map(|(id, _)| *id))
         .count(layout.count() as i32);
-    let (drawing_lo, drawing_hi) = scene::bounds(&scene::primitives(doc));
     let scale = crate::style::DEFAULT.points_per_world();
     let width = (drawing_hi.x - drawing_lo.x) * scale;
     let height = (drawing_hi.y - drawing_lo.y) * scale;

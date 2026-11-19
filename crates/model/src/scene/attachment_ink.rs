@@ -222,6 +222,7 @@ fn intersects_fraction(part: &Primitive, origin: Point, axis: Point, at: f32) ->
             })
         }
         Primitive::Picture(_)
+        | Primitive::Polyline { .. }
         | Primitive::Text { .. }
         | Primitive::Halo { .. }
         | Primitive::Sphere { .. }
