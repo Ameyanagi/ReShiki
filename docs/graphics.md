@@ -303,7 +303,7 @@ moves it; turning, scaling, copying and **Bring to Front** act on all of it.
 To take a piece out, Option-drag (Alt-drag on Windows and Linux) it: the
 pieces held only through it come along, and the rest stays. **Properties →
 Equipment** lists each joint of the selected piece, what is seated in it and
-**Detach**, which pulls the pieces apart along the joint.
+**Detach**, which pulls the pieces apart along the joint and leaves a gap.
 
 From the keyboard, select a piece and press J (or choose **Connect…** in
 Properties). The drawing shows the nearest joint that fits, seated. The arrow
@@ -450,8 +450,9 @@ never solved again: after every edit and when a drawing is read,
 its place, 0.06 L outside the female mouth, the axes are opposite within
 0.2° and both pieces have one scale. A seat that fails is released and both
 pieces stay where they are. Snapping (`solve::snap`) compares the moving
-pieces' free joints with every other free joint: reach is 14 screen px or the
-joint's diameter, whichever is larger, and the score is 12 × the distance
+pieces' free joints with every other free joint, measuring from the socket's
+contact point to the cone, shoulder to tip, so a cone caught by its tip counts
+as close. Reach is 14 screen px or the joint's diameter, whichever is larger, and the score is 12 × the distance
 divided by the reach plus 0.3 × the angle in degrees. A joint that fits
 wins over a closer one that does not. The seat transform turns the moving
 assembly so the axes oppose, scales it to the target's scale and puts the

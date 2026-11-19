@@ -385,3 +385,30 @@ fn a_second_joint_that_fits_after_a_snap_is_seated_and_joins_the_layer() {
     assert!(parted.graphics.iter().all(|g| g.layer == -1));
     assert_eq!(solve::assembly(&parted, flask).len(), 3);
 }
+
+#[test]
+fn a_cone_lowered_until_its_tip_meets_the_mouth_already_snaps() {
+    let mut doc = Document::default();
+    let flask = add(&mut doc, "reshiki/rbf-100-15", Point::new(200., 300.));
+    let condenser = add(&mut doc, "reshiki/liebig-15", Point::new(400., 100.));
+    let mm = port(&doc, &joint(flask, "neck")).mm as f32;
+    // The shoulder is a whole ground length plus 2 mm above its seat; the tip
+    // is just above the mouth.
+    bring(
+        &mut doc,
+        condenser,
+        "bottom",
+        &joint(flask, "neck"),
+        (0., -27. * mm),
+    );
+    assert!(solve::snap(&mut doc.clone(), &[condenser], 14., false).is_some());
+    // Further up, nothing catches.
+    bring(
+        &mut doc,
+        condenser,
+        "bottom",
+        &joint(flask, "neck"),
+        (0., -50. * mm),
+    );
+    assert!(solve::snap(&mut doc, &[condenser], 14., false).is_none());
+}

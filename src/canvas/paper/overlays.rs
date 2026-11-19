@@ -372,6 +372,62 @@ impl MoleculeCanvas<'_> {
         });
     }
 
+    /// With Option held over a seated piece, outline what an Option-drag
+    /// would pull out of its assembly, before the button goes down.
+    pub(super) fn draw_pull_out(
+        &self,
+        frame: &mut layered::Frame<'_>,
+        state: &State,
+        bounds: Rectangle,
+    ) {
+        if !self.tool.selects() || state.gesture.is_some() || !state.modifiers.alt() {
+            return;
+        }
+        let Some(p) = state.cursor.filter(|p| bounds.contains(*p)) else {
+            return;
+        };
+        let at = self
+            .camera
+            .world(Point::new(p.x - bounds.x, p.y - bounds.y), bounds);
+        let seated =
+            |id: &u64| (self.doc.seats.iter()).any(|s| s.a.piece == *id || s.b.piece == *id);
+        let hit: Vec<u64> = crate::canvas::hit::hit_selection(
+            self.doc,
+            at,
+            self.camera.world_len(pick::PICK_RADIUS_PX),
+        )
+        .into_iter()
+        .filter(seated)
+        .collect();
+        if hit.is_empty() {
+            return;
+        }
+        let out = reshiki::equipment::solve::detached(self.doc, &hit);
+        let Some((lo, hi)) = reshiki::scene::selection_bounds(self.doc, &out) else {
+            return;
+        };
+        let (a, b) = (
+            self.camera.screen(lo, bounds),
+            self.camera.screen(hi, bounds),
+        );
+        let path = Path::rounded_rectangle(
+            Point::new(a.x - 6., a.y - 6.),
+            iced::Size::new(b.x - a.x + 12., b.y - a.y + 12.),
+            6.0.into(),
+        );
+        frame.fill(&path, Color { a: 0.08, ..ACCENT });
+        frame.stroke(
+            &path,
+            Stroke {
+                line_dash: canvas::LineDash {
+                    segments: &[5., 3.],
+                    offset: 0,
+                },
+                ..Stroke::default().with_width(1.6).with_color(ACCENT)
+            },
+        );
+    }
+
     pub(super) fn draw_editor_markers(
         &self,
         frame: &mut layered::Frame<'_>,
@@ -835,9 +891,6 @@ impl MoleculeCanvas<'_> {
                     }
                     if self.tool.selects() && !state.modifiers.alt() {
                         hit = self.doc.expand_groups(&hit);
-                    } else if self.tool.selects() {
-                        // What an Alt-drag would pull out of its assembly.
-                        hit = reshiki::equipment::solve::detached(self.doc, &hit);
                     }
                     markers::Markers::hover(self.doc, &hit).draw(frame, self.camera, bounds, false);
                 }

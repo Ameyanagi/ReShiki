@@ -169,6 +169,24 @@ pub fn residual(a: &Port, b: &Port) -> (f64, f64) {
     (if scale > 1e-3 { f64::INFINITY } else { off }, turn)
 }
 
+/// How far apart two joints are for snapping: from the female contact point
+/// to the male cone, shoulder to tip. A cone whose tip reaches the mouth, or
+/// is already inside it, counts as close.
+fn gap(a: &Port, b: &Port) -> f64 {
+    let (f, m) = if a.gender == Gender::F {
+        (a, b)
+    } else {
+        (b, a)
+    };
+    let length = match (&m.kind, m.gender) {
+        (Kind::Taper(size), Gender::M) => taper(size).map_or(0., |t| t.l) * m.mm,
+        _ => 0.,
+    };
+    let p = f.contact();
+    let along = dot(sub(p, m.point), m.dir).clamp(0., length);
+    len(sub(p, add(m.point, mul(m.dir, along))))
+}
+
 fn fits(a: &Port, b: &Port) -> bool {
     let (off, turn) = residual(a, b);
     mates(a, b) && off <= TOLERANCE_MM && turn <= TOLERANCE_DEG
@@ -602,7 +620,7 @@ pub fn snap(doc: &mut Document, ids: &[u64], reach: f32, any_angle: bool) -> Opt
     for m in &inner {
         for s in &outer {
             let reach = f64::from(reach).max(REACH_DIAMETERS * s.diameter());
-            let off = len(sub(m.point, s.contact()));
+            let off = gap(m, s);
             let turn = angle_between(m.dir, mul(s.dir, -1.));
             if off > reach || (!any_angle && turn > REACH_DEG) {
                 continue;
@@ -651,7 +669,7 @@ pub fn options(doc: &Document, ids: &[u64]) -> Vec<(Port, Port, Offer)> {
             } else {
                 continue;
             };
-            out.push((len(sub(m.point, s.contact())), s.clone(), m.clone(), offer));
+            out.push((gap(m, s), s.clone(), m.clone(), offer));
         }
     }
     out.sort_by(|a, b| a.0.total_cmp(&b.0));
@@ -675,7 +693,7 @@ pub fn connect(doc: &mut Document, ids: &[u64], s: &JointRef, m: &JointRef) -> O
 }
 
 /// Release the seat at joint `j` and pull the side without the anchor out
-/// along the joint's axis, by the joint's length, so the two read as apart.
+/// along the joint's axis, by one and a half joint lengths, so a gap shows.
 pub fn detach(doc: &mut Document, j: &JointRef) -> bool {
     let Some(i) = doc.seats.iter().position(|s| s.holds(j)) else {
         return false;
@@ -692,10 +710,12 @@ pub fn detach(doc: &mut Document, j: &JointRef) -> bool {
         (&seat.b, &seat.a)
     };
     if let (Some(s), Some(g)) = (port(doc, stay), port(doc, go)) {
-        let away = match &s.kind {
-            Kind::Taper(size) => taper(size).map_or(10., |t| t.l),
-            Kind::Plug(_, size) => *size,
-        } * s.mm;
+        // One and a half joint lengths: the cone clears the mouth with a gap.
+        let away =
+            1.5 * match &s.kind {
+                Kind::Taper(size) => taper(size).map_or(10., |t| t.l),
+                Kind::Plug(_, size) => *size,
+            } * s.mm;
         let shift = mul(normalize(s.dir), away);
         let pulled: Vec<u64> = assembly(doc, g.at.piece).into_iter().collect();
         doc.translate(&pulled, shift[0] as f32, shift[1] as f32);

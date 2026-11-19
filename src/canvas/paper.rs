@@ -259,6 +259,7 @@ impl MoleculeCanvas<'_> {
         self.draw_editor_markers(frame, &preview, bounds);
         self.draw_drop_ink(frame, drop_ink, bounds);
         self.draw_seat_hint(frame, seat_hint.as_ref(), bounds);
+        self.draw_pull_out(frame, state, bounds);
         self.draw_orbital_target(frame, state, bounds);
         self.draw_mark_orbit(frame, state, &preview, bounds);
         self.draw_arrow_handles(frame, &preview, selected, bounds);

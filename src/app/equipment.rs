@@ -528,7 +528,15 @@ impl App {
                 let partner = solve::partner(doc, &port.at);
                 let state = partner.as_ref().map_or_else(
                     || "Free".to_owned(),
-                    |p| format!("Seated in the {}", joint_name(doc, p)),
+                    |p| {
+                        // A socket holds a cone; a cone sits in a socket.
+                        let verb = if port.gender == Gender::F {
+                            "Holds"
+                        } else {
+                            "Seated in"
+                        };
+                        format!("{verb} the {}", joint_name(doc, p))
+                    },
                 );
                 let mut line = row![
                     column![
