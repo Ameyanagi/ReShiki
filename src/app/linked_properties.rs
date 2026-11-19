@@ -6,6 +6,7 @@ use super::{App, Message};
 use iced::Task;
 use reshiki::linked_properties::{self, Property};
 use reshiki::naming;
+use reshiki::{document::Document, typography::TextFormat};
 
 impl App {
     /// The one whole molecule the selection touches, or the drawing's only
@@ -37,22 +38,10 @@ impl App {
         if property == Property::Name {
             self.tab.naming.caption_failed.clear();
         }
-        let before = self.tab.doc.clone();
-        let shown = linked_properties::shown(&before, atoms, property);
-        if let Err(error) = linked_properties::toggle(
-            &mut self.tab.doc,
-            atoms,
-            property,
-            self.tab.caption_format.clone(),
-            self.appearance.two_decimal_weight,
-        ) {
-            self.tab.doc = before;
-            self.status = error;
-            self.error = true;
-            return;
-        }
-        self.changed(before);
-        if !self.error {
+        let shown = linked_properties::shown(&self.tab.doc, atoms, property);
+        if self.edit_captions(|doc, format, two| {
+            linked_properties::toggle(doc, atoms, property, format, two)
+        }) {
             self.status = format!(
                 "{} {} · Undo {} it",
                 property.name(),
@@ -62,25 +51,51 @@ impl App {
         }
     }
 
-    /// The Name field and the name line's double-click both end here. An
-    /// empty name returns to the automatic name.
-    pub(super) fn rename_molecule(&mut self, atoms: &[u64], name: &str) {
-        self.tab.naming.name_draft = None;
+    /// Formula, Mol. Wt. and Exact Mass under the molecule, in one Undo step.
+    pub(super) fn show_masses(&mut self, atoms: &[u64]) {
+        if self.edit_captions(|doc, format, two| {
+            linked_properties::show(doc, atoms, &Property::MASSES, format, two)
+        }) {
+            self.status = "Formula and masses shown".into();
+        }
+    }
+
+    /// The decimal places of a mass line under the molecule.
+    pub(super) fn set_property_places(&mut self, atoms: &[u64], property: Property, places: u8) {
+        if self.edit_captions(|doc, _, two| {
+            linked_properties::set_places(doc, atoms, property, places, two)
+        }) {
+            self.status = format!("{} decimals: {places}", property.name());
+        }
+    }
+
+    /// Run a caption edit as one Undo step. Returns whether it applied.
+    fn edit_captions(
+        &mut self,
+        edit: impl FnOnce(&mut Document, TextFormat, bool) -> Result<(), String>,
+    ) -> bool {
         let before = self.tab.doc.clone();
-        if let Err(error) = linked_properties::rename(
+        if let Err(error) = edit(
             &mut self.tab.doc,
-            atoms,
-            name,
             self.tab.caption_format.clone(),
             self.appearance.two_decimal_weight,
         ) {
             self.tab.doc = before;
             self.status = error;
             self.error = true;
-            return;
+            return false;
         }
         self.changed(before);
-        if !self.error {
+        !self.error
+    }
+
+    /// The Name field and the name line's double-click both end here. An
+    /// empty name returns to the automatic name.
+    pub(super) fn rename_molecule(&mut self, atoms: &[u64], name: &str) {
+        self.tab.naming.name_draft = None;
+        if self.edit_captions(|doc, format, two| {
+            linked_properties::rename(doc, atoms, name, format, two)
+        }) {
             self.status = if name.trim().is_empty() {
                 "Automatic name shown".into()
             } else {

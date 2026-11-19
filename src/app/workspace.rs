@@ -2852,7 +2852,7 @@ impl App {
                     })
                     .size(14)
                     .text_size(12),
-                "Show molecular weight with 2 decimal places instead of 3; exact mass keeps 5 decimal places",
+                "Mol. Wt. with 2 decimal places instead of 3; a caption can set its own",
                 tooltip::Position::Top,
             )
             .into(),

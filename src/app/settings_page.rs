@@ -867,7 +867,7 @@ impl App {
                     ),
                     Item::choice(
                         "Molecular weight",
-                        "Exact mass keeps 5 decimal places.",
+                        "Properties shows exact mass with 5 decimal places; captions with 4 unless set.",
                         choices(
                             "settings-weight",
                             &[(false, "3 decimals".into()), (true, "2 decimals".into())],

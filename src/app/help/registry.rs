@@ -620,9 +620,16 @@ pub(crate) fn entries() -> Vec<Entry> {
         entry(
             "View → 2-decimal MW",
             "Molecular weight precision",
-            "Show molecular weight with 2 decimal places instead of the default 3; exact mass keeps 5 decimal places",
+            "Show molecular weight with 2 decimal places instead of the default 3; exact mass keeps 5 in Properties. A caption can set its own places beside its pin",
             Anywhere,
             &["mass", "MW", "rounding", "decimals", "inspector"],
+        ),
+        entry(
+            "Right-click → Show formula & masses below",
+            "Formula and masses below a molecule",
+            "Formula, Mol. Wt. and Exact Mass under the molecule; set each mass's decimal places beside its pin in Properties",
+            Selection,
+            &["exact mass", "mass spectrometry", "HRMS", "MW", "caption", "decimals"],
         ),
         entry(
             if crate::platform::mac() {

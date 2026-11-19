@@ -418,7 +418,16 @@ impl App {
                 true,
             ));
         }
-        if self.context_property_target().is_some() {
+        if let Some(target) = self.context_property_target() {
+            use reshiki::linked_properties::{Property, shown};
+            let missing = Property::MASSES
+                .into_iter()
+                .any(|p| !shown(&self.tab.doc, &target, p));
+            entries.push(command(
+                "Show formula & masses below",
+                Message::ShowMasses(target),
+                missing,
+            ));
             entries.push(Entry::page("Show properties", Page::Properties));
         }
         let connected: Vec<_> = reshiki::editing::groups(&self.tab.doc, &self.tab.doc.all_ids())

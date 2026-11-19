@@ -456,7 +456,7 @@ changes independently.
 | `app`             | 0.16.0 | The ReShiki build                                |
 | `operation_api`   | 2      | The operation tools and their results            |
 | `engine_protocol` | 1      | The internal chemistry engine's request protocol |
-| `document`        | 39     | The `.rsk` drawing format                        |
+| `document`        | 40     | The `.rsk` drawing format                        |
 
 Run the `info` tool or `reshiki --cli info` for the live values. CLI JSON lines
 carry `api.operation_api` and `api.stability`.
