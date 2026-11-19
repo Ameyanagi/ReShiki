@@ -11,7 +11,8 @@
 //! ```
 //! Whether a drawing is unsent is never stored: it is unsent when its file
 //! differs from the bytes last synced, so a crash, an edit made elsewhere and
-//! a save that changed nothing all come out right.
+//! a save that changed nothing all come out right. Restoring the GitHub version
+//! a drawing is based on counts the file Restore wrote as synced.
 use super::RepoKey;
 use crate::storage;
 use serde::{Deserialize, Serialize};
@@ -49,7 +50,8 @@ pub struct FileState {
     pub base_commit: String,
     /// `None`: the drawing is not on GitHub yet.
     pub base_blob: Option<String>,
-    /// SHA-256 of the bytes last synced, in hex.
+    /// SHA-256 in hex of the bytes last synced or of the file Restore wrote
+    /// for the same version in this ReShiki's format.
     pub base_hash: String,
     pub conflict: Option<ConflictMark>,
 }

@@ -64,6 +64,8 @@ impl Versions {
 struct Remote {
     version: api::RemoteVersion,
     doc: Option<Arc<Document>>,
+    /// SHA-256 of GitHub's bytes at that commit.
+    hash: Option<String>,
     /// That commit deleted the drawing.
     deleted: bool,
 }
@@ -84,8 +86,8 @@ pub enum Action {
     RemoteLoaded(u64, Result<Vec<api::RemoteVersion>, gh::Error>),
     /// A commit's row came into view: its drawing is read.
     Shown(String),
-    /// A commit's drawing; `Err(true)` when that commit deleted it.
-    Doc(u64, String, Result<Arc<Document>, bool>),
+    /// A commit's drawing and its hash. `Err(true)` when that commit deleted it.
+    Doc(u64, String, Result<(Arc<Document>, String), bool>),
     LoadMore,
     Select(Pick),
     /// The version beside the drawing now, with what differs marked.
@@ -277,11 +279,14 @@ impl App {
             perform(
                 async move {
                     match api::raw_at(&client, &key, &repo_path, &at).await {
-                        Ok(bytes) => reshiki::task::spawn_blocking(move || parse(bytes))
-                            .await
-                            .ok()
-                            .flatten()
-                            .ok_or(false),
+                        Ok(bytes) => reshiki::task::spawn_blocking(move || {
+                            let hash = workcopy::hash(&bytes);
+                            parse(bytes).map(|doc| (doc, hash))
+                        })
+                        .await
+                        .ok()
+                        .flatten()
+                        .ok_or(false),
                         Err(gh::Error::NotFound) => Err(true),
                         Err(_) => Err(false),
                     }
@@ -321,6 +326,7 @@ impl App {
                         let read = known.iter().find(|r| r.version.commit == version.commit);
                         list.push(Remote {
                             doc: read.and_then(|read| read.doc.clone()),
+                            hash: read.and_then(|read| read.hash.clone()),
                             deleted: read.is_some_and(|read| read.deleted),
                             version,
                         });
@@ -345,7 +351,10 @@ impl App {
                 let remote = self.github.versions.remote.iter_mut().flatten();
                 match remote.into_iter().find(|r| r.version.commit == commit) {
                     Some(found) => match result {
-                        Ok(doc) => found.doc = Some(doc),
+                        Ok((doc, hash)) => {
+                            found.doc = Some(doc);
+                            found.hash = Some(hash);
+                        }
                         Err(deleted) => found.deleted = deleted,
                     },
                     // Its row moved past the first page meanwhile: asked
@@ -415,6 +424,26 @@ impl App {
                 }
                 if !self.replaceable() {
                     return Task::none();
+                }
+                let versions = &self.github.versions;
+                if let (Some(Pick::Remote(commit)), Some(at @ (key, repo_path))) =
+                    (&versions.selected, &versions.target)
+                    && let Some(file) = self
+                        .github
+                        .states
+                        .get(key)
+                        .and_then(|state| state.files.get(repo_path))
+                    && versions.remote.iter().flatten().any(|remote| {
+                        &remote.version.commit == commit
+                            && remote.hash.as_ref() == Some(&file.base_hash)
+                    })
+                    && let Ok(bytes) = doc.file_json()
+                {
+                    self.github.restored = Some(super::Restored {
+                        at: at.clone(),
+                        base: file.base_hash.clone(),
+                        hash: workcopy::hash(&bytes),
+                    });
                 }
                 self.replace_with_stored((*doc).clone());
                 let save = crate::app::tagged(self.save_drawing(None), self.tab.id);

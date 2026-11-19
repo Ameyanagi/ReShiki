@@ -111,6 +111,14 @@ enum Closing {
     Window(iced::window::Id, Vec<TabId>, HashSet<RepoKey>),
 }
 
+/// A Restore of the GitHub version a drawing is based on, until its save
+/// lands: the drawing as this ReShiki writes it then counts as synced.
+pub(super) struct Restored {
+    at: (RepoKey, String),
+    base: String,
+    hash: String,
+}
+
 pub(super) struct State {
     client_id: Option<String>,
     ends: config::Endpoints,
@@ -174,6 +182,7 @@ pub(super) struct State {
     /// About asked GitHub whether they did, in this sign-in.
     pub(super) star_asked: bool,
     versions: versions::Versions,
+    pub(super) restored: Option<Restored>,
     /// Repository colors and the repository last used.
     prefs: identity::Prefs,
     /// A status that is a question, not an error, shown in amber.
@@ -234,6 +243,7 @@ impl State {
             starred: false,
             star_asked: false,
             versions: versions::Versions::default(),
+            restored: None,
             amber: None,
             checked: None,
             newer: HashMap::new(),
@@ -1642,6 +1652,7 @@ impl App {
         saved: bool,
         written: Option<(PathBuf, reshiki::document::Document)>,
     ) -> Task<Message> {
+        let restored = self.github.restored.take();
         if !saved {
             // A save failed or was canceled: what waited for it waits for the user.
             self.github.after_save = None;
@@ -1659,10 +1670,23 @@ impl App {
             return Task::batch([next, resolve]);
         };
         let root = self.github.root.clone().unwrap_or_default();
-        let base = self
+        let file = self
             .github_state(&key)
-            .and_then(|state| state.files.get(&repo_path))
-            .map(|file| file.base_hash.clone());
+            .and_then(|state| state.files.get_mut(&repo_path));
+        // Keep the save in History against the base it restored.
+        let base = file.as_ref().map(|file| file.base_hash.clone());
+        let persist = if saved
+            && let Some(restored) = restored
+            && restored.at.0 == key
+            && restored.at.1 == repo_path
+            && let Some(file) = file
+            && file.base_hash == restored.base
+        {
+            file.base_hash = restored.hash;
+            self.github_persist(&key)
+        } else {
+            Task::none()
+        };
         let read = self.github_scan(&key, Some(repo_path.clone()));
         let record = perform(
             {
@@ -1674,7 +1698,7 @@ impl App {
             },
             Action::Recorded,
         );
-        Task::batch([record, next, resolve, read])
+        Task::batch([record, next, resolve, read, persist])
     }
 
     /// One commit of every unsent drawing of `key` (or of those in `only`),
