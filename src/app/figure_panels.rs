@@ -303,7 +303,7 @@ impl App {
     fn fit_panels(&mut self) {
         let before = self.tab.doc.clone();
         let panels: Vec<u64> = self.selected_panels().map(|g| g.id).collect();
-        for id in panels {
+        for id in reshiki::graphics::panel::inner_first(&self.tab.doc, panels) {
             reshiki::graphics::panel::fit(&mut self.tab.doc, id);
         }
         self.changed(before);

@@ -406,3 +406,38 @@ fn a_layout_reselected_with_its_caption_can_change_flow() {
     assert_eq!(arrange(&mut doc, &ids, Flow::Column, GUTTER), Ok(group));
     assert!(bounds(&doc, &b).0.y > bounds(&doc, &a).1.y);
 }
+
+#[test]
+fn top_aligned_items_of_different_heights_keep_their_order() {
+    let mut doc = Document::default();
+    // A tall vertical chain on the left, a short one on the right.
+    let tall: Vec<u64> = (0..6)
+        .map(|i| doc.add_atom("C", Point::new(21. * (i % 2) as f32, 36. * i as f32)))
+        .collect();
+    for pair in tall.windows(2) {
+        doc.add_bond(pair[0], pair[1], 1, "plain");
+    }
+    let short = chain(&mut doc, 200., 0., 2);
+    let ids: Vec<u64> = tall.iter().chain(&short).copied().collect();
+    let group = arrange(&mut doc, &ids, Flow::Grid(2), GUTTER).unwrap();
+    if let Some(layout) = doc
+        .groups
+        .iter_mut()
+        .find(|g| g.id == group)
+        .and_then(|g| g.layout.as_mut())
+    {
+        layout.align = Align::Start;
+    }
+    reflow(&mut doc, group, None, None);
+    if let Some(layout) = doc
+        .groups
+        .iter_mut()
+        .find(|g| g.id == group)
+        .and_then(|g| g.layout.as_mut())
+    {
+        layout.gutter_pt = 40.;
+    }
+    reflow(&mut doc, group, None, None);
+    let (t, s) = (bounds(&doc, &tall), bounds(&doc, &short));
+    assert!(t.0.x < s.0.x && (t.0.y - s.0.y).abs() < 0.01, "{t:?} {s:?}");
+}

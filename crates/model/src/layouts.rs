@@ -244,28 +244,32 @@ pub fn reflow(
         .map(|((unit, b), earlier)| (unit, b, earlier.unwrap_or(b)))
         .collect();
     // Read in the order the units were laid out: a row left to right, a
-    // column top to bottom, a grid by rows (a row ends where a unit's middle
-    // falls below the first one's extent).
+    // column top to bottom, a grid by rows. A grid row holds the units that
+    // overlap it vertically, whatever their heights and alignment.
     match previous.unwrap_or(layout.flow) {
         Flow::Row => cells.sort_by(|a, b| center(a.2).x.total_cmp(&center(b.2).x)),
         Flow::Column => cells.sort_by(|a, b| center(a.2).y.total_cmp(&center(b.2).y)),
         Flow::Grid(_) => {
-            cells.sort_by(|a, b| center(a.2).y.total_cmp(&center(b.2).y));
-            let mut rows: Vec<Vec<Cell>> = vec![];
+            cells.sort_by(|a, b| a.2.0.y.total_cmp(&b.2.0.y));
+            // Each row and the lowest bottom edge in it.
+            let mut rows: Vec<(Vec<Cell>, f32)> = vec![];
             for cell in cells {
-                let half = |c: &Cell| (c.2.1.y - c.2.0.y) * 0.5;
-                // Items on one line (flat ones too) share a row.
-                let below =
-                    |first: &Cell| center(cell.2).y - center(first.2).y > half(first).max(1.);
+                let (top, bottom) = (cell.2.0.y, cell.2.1.y);
                 match rows.last_mut() {
-                    Some(row) if row.first().is_some_and(|first| !below(first)) => row.push(cell),
-                    _ => rows.push(vec![cell]),
+                    Some((row, low)) if top <= *low => {
+                        *low = low.max(bottom);
+                        row.push(cell);
+                    }
+                    _ => rows.push((vec![cell], bottom)),
                 }
             }
-            for row in &mut rows {
-                row.sort_by(|a, b| center(a.2).x.total_cmp(&center(b.2).x));
-            }
-            cells = rows.into_iter().flatten().collect();
+            cells = rows
+                .into_iter()
+                .flat_map(|(mut row, _)| {
+                    row.sort_by(|a, b| center(a.2).x.total_cmp(&center(b.2).x));
+                    row
+                })
+                .collect();
         }
     }
     let columns = layout.flow.columns(cells.len());
@@ -323,16 +327,8 @@ pub fn reflow(
         .find(|g| g.id == group)
         .map(|g| g.members.clone())
         .unwrap_or_default();
-    // Inner panels first, so an outer one fits around their new frames.
-    let mut panels = crate::graphics::panel::around(doc, &members);
-    let depth = |doc: &Document, id: u64| {
-        doc.groups
-            .iter()
-            .filter(|g| g.members.contains(&id))
-            .count()
-    };
-    panels.sort_by_key(|id| std::cmp::Reverse(depth(doc, *id)));
-    for panel in panels {
+    let panels = crate::graphics::panel::around(doc, &members);
+    for panel in crate::graphics::panel::inner_first(doc, panels) {
         crate::graphics::panel::fit(doc, panel);
     }
 }

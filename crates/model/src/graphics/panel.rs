@@ -317,6 +317,25 @@ pub fn fit(doc: &mut Document, panel: u64) {
         .min_by_key(|g| g.members.len())
         .map(|g| g.members.iter().copied().filter(|m| *m != panel).collect())
         .unwrap_or_else(|| contents(doc, panel));
+    // Captions linked to molecules it holds, even ones added later.
+    let mut held = held;
+    held.extend(
+        doc.molecule_names
+            .iter()
+            .map(|name| (&name.atoms, name.annotation))
+            .chain(
+                doc.property_captions
+                    .iter()
+                    .map(|link| (&link.atoms, link.annotation)),
+            )
+            .filter(|(atoms, annotation)| {
+                !atoms.is_empty()
+                    && !held.contains(annotation)
+                    && atoms.iter().all(|id| held.contains(id))
+            })
+            .map(|(_, annotation)| annotation)
+            .collect::<Vec<_>>(),
+    );
     let Some((lo, hi)) = crate::scene::selection_bounds(doc, &held) else {
         return;
     };
@@ -328,6 +347,19 @@ pub fn fit(doc: &mut Document, panel: u64) {
         g.axis_x = Point::new(hi.x - lo.x + 2. * pad, 0.);
         g.axis_y = Point::new(0., hi.y - lo.y + 2. * pad + band);
     }
+}
+
+/// Panels in fitting order: inner ones first, so an outer panel fits around
+/// their new frames.
+pub fn inner_first(doc: &Document, mut panels: Vec<u64>) -> Vec<u64> {
+    let depth = |id: u64| {
+        doc.groups
+            .iter()
+            .filter(|g| g.members.contains(&id))
+            .count()
+    };
+    panels.sort_by_key(|id| std::cmp::Reverse(depth(*id)));
+    panels
 }
 
 /// Panels whose own group holds every one of `ids`: they wrap them.
