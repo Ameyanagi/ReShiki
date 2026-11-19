@@ -422,6 +422,7 @@ async fn svg_file_saves_default_to_outlines_and_allow_live_text() {
     let host = host(both(dir.path()));
     let mut doc = Document::default();
     doc.annotations.push(Annotation {
+        angle: 0.,
         id: 1,
         position: Default::default(),
         text: "SVG file".into(),

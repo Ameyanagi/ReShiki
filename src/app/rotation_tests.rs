@@ -184,6 +184,7 @@ fn rotation_commands_keep_mixed_groups_and_upright_caption_anchors() {
     };
     let mut app = fixture(17., Point::new(250., -130.));
     app.tab.doc.annotations.push(Annotation {
+        angle: 0.,
         id: app.tab.doc.next_id(),
         position: Point::new(350., 20.),
         text: "Caption".into(),
@@ -258,16 +259,24 @@ fn rotation_commands_keep_mixed_groups_and_upright_caption_anchors() {
     let mut caption = fixture(0., Point::default());
     caption.tab.doc = Document::default();
     caption.tab.doc.annotations.push(Annotation {
+        angle: 0.,
         id: 1,
         position: Point::new(20., -40.),
-        text: "Keep upright".into(),
+        text: "Turns alone".into(),
         format: Default::default(),
     });
     caption.tab.selected = vec![1];
-    let before = caption.tab.doc.clone();
+    let centre = caption.tab.doc.annotations[0].centre();
     key(&mut caption, Named::ArrowDown);
-    assert_eq!(caption.tab.doc, before);
-    assert!(!caption.tab.history.can_undo());
+    // A caption selected on its own turns in place, as one edit.
+    let turned = &caption.tab.doc.annotations[0];
+    assert!(
+        [15., 345.].iter().any(|a| (turned.angle - a).abs() < 1e-3),
+        "{}",
+        turned.angle
+    );
+    assert!(turned.centre().distance(centre) < 1e-3);
+    assert!(caption.tab.history.can_undo());
 }
 
 #[test]
@@ -334,6 +343,7 @@ fn rotation_pointer_events_cancel_without_history_and_commit_once_per_gesture() 
         source.atom_mut(a).unwrap().depth = 7.;
         let pivot = if mixed {
             source.annotations.push(Annotation {
+                angle: 0.,
                 id: source.next_id(),
                 position: Point::new(120., 60.),
                 text: "Upright caption".into(),

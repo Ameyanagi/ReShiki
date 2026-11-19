@@ -67,6 +67,7 @@ fn drawing() -> (Document, [u64; 4]) {
     doc.add_bond(atoms[1], atoms[2], 1, "plain");
     let caption = doc.next_id();
     doc.annotations.push(Annotation {
+        angle: 0.,
         id: caption,
         position: Point::new(200., 0.),
         text: "ethanol".into(),

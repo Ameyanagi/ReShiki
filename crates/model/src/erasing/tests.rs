@@ -29,6 +29,7 @@ fn stroke_removes_crossed_atoms_and_objects_but_preserves_nearby_geometry() {
         ArrowStyle::default(),
     ));
     doc.annotations.push(Annotation {
+        angle: 0.,
         id: 11,
         position: Point::new(-10., 50.),
         text: "label".into(),

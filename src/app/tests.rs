@@ -308,6 +308,7 @@ fn cleanup_with_only_a_caption_selected_changes_nothing() {
     app.tab.doc.add_bond(a, b, 1, "plain");
     let caption = app.tab.doc.next_id();
     app.tab.doc.annotations.push(Annotation {
+        angle: 0.,
         id: caption,
         position: Point::new(0., 60.),
         text: "note".into(),
@@ -1291,6 +1292,7 @@ fn library_authoring_is_independent_of_drawing_history_and_repeat_placement_keep
     assert_eq!(app.templates.library.templates[0].anchor, Anchor::Atom(b));
     let caption = app.tab.doc.next_id();
     app.tab.doc.annotations.push(Annotation {
+        angle: 0.,
         id: caption,
         position: Point::new(0., 60.),
         text: "Label".into(),
@@ -1443,6 +1445,7 @@ fn palette_keeps_text_range_formatting_and_recolors_graphics_only_in_all_scope()
     let (mut app, _) = App::new();
     app.tab.doc = Document::default();
     app.tab.doc.annotations.push(Annotation {
+        angle: 0.,
         id: 1,
         position: Point::default(),
         text: "AB CD".into(),
@@ -1510,6 +1513,7 @@ fn palette_scopes_recolor_selected_bonds_and_objects_in_one_undo() {
         Default::default(),
     ));
     app.tab.doc.annotations.push(Annotation {
+        angle: 0.,
         id: 5,
         position: Point::new(0., 120.),
         text: "Label".into(),
@@ -2008,6 +2012,7 @@ fn partial_typography_edit_and_repeated_backspace_restore_with_undo() {
     use reshiki::typography::{StyleChange, TextFormat};
     let (mut app, _) = App::new();
     app.tab.doc.annotations.push(Annotation {
+        angle: 0.,
         id: 1,
         position: Point::default(),
         text: "AAA".into(),
@@ -3052,6 +3057,7 @@ fn text_click_on_an_existing_label_selects_it_without_a_history_step() {
     let label = app.tab.doc.next_id();
     let position = Point::new(0., 60.);
     app.tab.doc.annotations.push(Annotation {
+        angle: 0.,
         id: label,
         position,
         text: "Label".into(),

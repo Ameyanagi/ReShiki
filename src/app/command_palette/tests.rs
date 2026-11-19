@@ -373,6 +373,7 @@ fn indexed_command_targets_match_the_original_selection_and_pointing_query() {
     let (a, b) = ethane(&mut app);
     let caption = app.tab.doc.next_id();
     app.tab.doc.annotations.push(Annotation {
+        angle: 0.,
         id: caption,
         position: Point::new(100., 100.),
         text: "Caption".into(),
@@ -1134,6 +1135,7 @@ fn caption_and_graphic_selections_never_fall_back_to_pointer_or_hotspot() {
         let (a, b) = ethane(&mut app);
         let caption = app.tab.doc.next_id();
         app.tab.doc.annotations.push(Annotation {
+            angle: 0.,
             id: caption,
             position: Point::new(150., 100.),
             text: "Caption".into(),
@@ -1893,6 +1895,7 @@ fn out_of_range_font_sizes_stay_first_and_leave_the_document_and_input_untouched
     let mut app = app();
     let id = app.tab.doc.next_id();
     app.tab.doc.annotations.push(reshiki::document::Annotation {
+        angle: 0.,
         id,
         position: Point::default(),
         text: "Caption".into(),
@@ -2432,6 +2435,7 @@ fn chemical_name_format_command_requires_selected_text_boxes_and_undoes_once() {
     let mut app = app();
     let atom = app.tab.doc.add_atom("C", Point::default());
     app.tab.doc.annotations.push(reshiki::document::Annotation {
+        angle: 0.,
         id: 2,
         position: Point::new(0., 50.),
         text: "N,N'-diethylmethanamine".into(),

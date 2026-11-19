@@ -365,6 +365,7 @@ fn selecting_and_styling_a_scheme_keeps_the_assistant_open_for_replacement() {
     app.tab.doc.add_bond(carbon, oxygen, 1, "plain");
     let caption = app.tab.doc.next_id();
     app.tab.doc.annotations.push(Annotation {
+        angle: 0.,
         id: caption,
         position: Point::new(80., -30.),
         text: "Reaction conditions".into(),

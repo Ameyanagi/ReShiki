@@ -327,6 +327,7 @@ pub fn add_callout(doc: &mut Document, target: Target, text: &str) -> Result<u64
     let position = callout_position(doc, &target)?;
     let id = doc.next_id();
     doc.annotations.push(Annotation {
+        angle: 0.,
         id,
         position,
         text: text.into(),

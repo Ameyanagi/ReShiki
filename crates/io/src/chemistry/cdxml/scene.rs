@@ -61,6 +61,15 @@ pub struct NativeCaption {
     pub position: ImportPoint,
     pub text: String,
     pub format: NativeFormat,
+    /// Clockwise turn in degrees, about `centre`, or without one about
+    /// `position`, as ChemDraw turns text about its anchor.
+    #[serde(skip_serializing_if = "is_upright")]
+    pub angle: f32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub centre: Option<ImportPoint>,
+}
+fn is_upright(angle: &f32) -> bool {
+    *angle == 0.
 }
 #[derive(Clone, Debug, Serialize)]
 pub struct SceneAtom {
@@ -694,17 +703,35 @@ fn read_captions_and_arrows(
                     .is_none_or(|p| !matches!(p.tag_name().name(), "n" | "objecttag"))
             {
                 let text = reader.read(node, Some(&defaults), false)?;
-                let position = point(
-                    node.attribute("BoundingBox")
-                        .or_else(|| node.attribute("p"))
-                        .unwrap_or("0 0"),
-                    prepared.source_scale,
-                )?;
+                let corner = node
+                    .attribute("BoundingBox")
+                    .or_else(|| node.attribute("p"))
+                    .unwrap_or("0 0");
+                let position = point(corner, prepared.source_scale)?;
+                // Degrees in 16.16 fixed point.
+                let angle = (super::numeric::float(node.attribute("RotationAngle").unwrap_or("0"))?
+                    / 65536.)
+                    .rem_euclid(360.) as f32;
+                // A turned caption's box surrounds the turned text, so its
+                // centre is the text's centre.
+                let centre = match node.attribute("BoundingBox") {
+                    Some(bounds) if angle != 0. => {
+                        let far: Vec<_> = bounds.split_whitespace().skip(2).collect();
+                        let far = point(&far.join(" "), prepared.source_scale)?;
+                        Some(ImportPoint {
+                            x: (position.x + far.x) / 2.,
+                            y: (position.y + far.y) / 2.,
+                        })
+                    }
+                    _ => None,
+                };
                 base.annotations.push(NativeCaption {
                     id: next_id,
                     position,
                     text: text.text,
                     format: text.format,
+                    angle,
+                    centre,
                 });
             } else if node.has_tag_name("arrow")
                 && !(document

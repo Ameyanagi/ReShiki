@@ -386,6 +386,7 @@ fn figure_document() -> reshiki::document::Document {
         format.style.italic = true;
         format.style.color = Color::Custom([180, 50, 55]);
         document.annotations.push(Annotation {
+            angle: 0.,
             id: 10_001 + index as u64,
             position: Point::new(0., 110. + index as f32 * 40.),
             text: "HNO 東京".into(),

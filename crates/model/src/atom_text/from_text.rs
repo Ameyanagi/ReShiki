@@ -50,10 +50,15 @@ pub fn text_first_glyph_center(annotation: &Annotation) -> Option<Point> {
             size,
             &fragment.style,
         ))?;
-        return Some(annotation.position.offset(
-            fragment.position.x + advance + (lo.x + hi.x) / 2.,
-            fragment.position.y + (lo.y + hi.y) / 2.,
-        ));
+        return Some(
+            annotation
+                .position
+                .offset(
+                    fragment.position.x + advance + (lo.x + hi.x) / 2.,
+                    fragment.position.y + (lo.y + hi.y) / 2.,
+                )
+                .turned(annotation.centre(), annotation.angle),
+        );
     }
     None
 }

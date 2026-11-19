@@ -27,6 +27,13 @@ pub enum Primitive {
         primitive: Box<Primitive>,
     },
     Picture(Box<crate::graphics::Graphic>),
+    /// Text runs ([`Primitive::Text`]) turned `angle` degrees clockwise
+    /// about `pivot`.
+    Rotated {
+        pivot: Point,
+        angle: f32,
+        primitives: Vec<Primitive>,
+    },
     Path {
         commands: Vec<crate::graphics::PathCommand>,
         style: crate::graphics::GraphicStyle,
@@ -1352,6 +1359,29 @@ pub fn label_ink_boxes(runs: &[Primitive]) -> Vec<(Point, Point)> {
                     .map(|(lo, hi)| (position.offset(lo.x, lo.y), position.offset(hi.x, hi.y))),
             ),
             Primitive::Opacity { alpha, primitive } if *alpha > 0. => collect(primitive, boxes),
+            // The upright box around each turned glyph box.
+            Primitive::Rotated {
+                pivot,
+                angle,
+                primitives,
+            } => {
+                let mut inner = Vec::new();
+                for run in primitives {
+                    collect(run, &mut inner);
+                }
+                boxes.extend(inner.into_iter().map(|(lo, hi)| {
+                    let corners = [lo, Point::new(hi.x, lo.y), hi, Point::new(lo.x, hi.y)]
+                        .map(|p| p.turned(*pivot, *angle));
+                    corners[1..]
+                        .iter()
+                        .fold((corners[0], corners[0]), |(lo, hi), p| {
+                            (
+                                Point::new(lo.x.min(p.x), lo.y.min(p.y)),
+                                Point::new(hi.x.max(p.x), hi.y.max(p.y)),
+                            )
+                        })
+                }));
+            }
             _ => {}
         }
     }
@@ -1569,11 +1599,7 @@ pub(crate) fn selections_bounds_in_axes(
         .iter()
         .filter(|a| owners.contains_key(&a.id))
     {
-        let (width, height) = a.size();
-        grow(
-            a.id,
-            &mut [a.position, a.position.offset(width, height)].into_iter(),
-        );
+        grow(a.id, &mut a.corners().into_iter());
     }
     for a in doc.arrows.iter().filter(|a| owners.contains_key(&a.id)) {
         let (lo, hi) = a.bounds();
@@ -3003,13 +3029,25 @@ fn push_arrows_and_annotations(out: &mut Vec<Primitive>, doc: &Document) {
     }
 }
 fn push_annotation(out: &mut Vec<Primitive>, a: &crate::document::Annotation) {
-    for fragment in crate::typography::layout(&a.text, &a.format).fragments {
-        out.push(Primitive::Text {
+    let layout = crate::typography::layout(&a.text, &a.format);
+    let runs: Vec<_> = layout
+        .fragments
+        .into_iter()
+        .map(|fragment| Primitive::Text {
             position: a.position.offset(fragment.position.x, fragment.position.y),
             text: fragment.text,
             size: fragment.style.size(),
             color: fragment.style.color.rgb(),
             style: fragment.style,
+        })
+        .collect();
+    if a.angle == 0. || runs.is_empty() {
+        out.extend(runs);
+    } else {
+        out.push(Primitive::Rotated {
+            pivot: a.position.offset(layout.width / 2., layout.height / 2.),
+            angle: a.angle,
+            primitives: runs,
         });
     }
 }
@@ -3709,6 +3747,19 @@ pub fn bounds(drawing: &[Primitive]) -> (Point, Point) {
             Primitive::Picture(g) => {
                 let (lo, hi) = g.bounds();
                 points.extend([lo, hi]);
+            }
+            Primitive::Rotated {
+                pivot,
+                angle,
+                primitives,
+            } => {
+                let (lo, hi) = bounds(primitives);
+                let pad = STYLE.world(4.);
+                let (lo, hi) = (lo.offset(pad, pad), hi.offset(-pad, -pad));
+                points.extend(
+                    [lo, Point::new(hi.x, lo.y), hi, Point::new(lo.x, hi.y)]
+                        .map(|p| p.turned(*pivot, *angle)),
+                );
             }
             Primitive::Path {
                 commands, style, ..

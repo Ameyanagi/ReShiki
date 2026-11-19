@@ -99,6 +99,7 @@ async fn svg_export_preferences_control_live_text_and_payload_independently() {
     app.tab.path = Some("figure.rsk".into());
     app.tab.doc = Document::default();
     app.tab.doc.annotations.push(Annotation {
+        angle: 0.,
         id: 1,
         position: Default::default(),
         text: "Editable figure text".into(),

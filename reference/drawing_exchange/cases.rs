@@ -86,6 +86,7 @@ pub fn documents() -> anyhow::Result<Vec<(String, Document)>> {
     group.add_bond(a, b, 1, "plain");
     group.add_bond(b, c, 1, "plain");
     group.annotations.push(Annotation {
+        angle: 0.,
         id: 4,
         position: Point::new(0., 60.),
         text: "ethyl alcohol".into(),

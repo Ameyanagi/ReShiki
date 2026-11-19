@@ -169,6 +169,7 @@ fn svg_text_is_nullable_and_accepts_only_the_published_modes() {
 fn caption() -> Document {
     let mut doc = Document::default();
     doc.annotations.push(Annotation {
+        angle: 0.,
         id: 1,
         position: Point::default(),
         text: "Outlined SVG".into(),

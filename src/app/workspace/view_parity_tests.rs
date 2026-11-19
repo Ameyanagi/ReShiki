@@ -405,6 +405,7 @@ fn cases() -> Vec<Case> {
                 app.tab.doc = Document::default();
                 app.tab.doc.annotations = vec![
                     Annotation {
+                        angle: 0.,
                         id: 1,
                         position: World::new(20., 30.),
                         text: "First label".into(),
@@ -415,6 +416,7 @@ fn cases() -> Vec<Case> {
                         },
                     },
                     Annotation {
+                        angle: 0.,
                         id: 2,
                         position: World::new(200., 30.),
                         text: "Other label".into(),

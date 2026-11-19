@@ -527,6 +527,7 @@ fn applying_an_unchanged_text_draft_keeps_authored_geometry_and_history() {
     file.bonds[0].order = 1;
     let caption = file.next_id();
     file.annotations.push(reshiki::document::Annotation {
+        angle: 0.,
         id: caption,
         position: Point::new(-40., 60.),
         text: "Step 1".into(),
