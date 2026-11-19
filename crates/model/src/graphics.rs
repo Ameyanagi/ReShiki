@@ -924,6 +924,20 @@ pub(crate) fn inside_polygon(p: Point, path: &[Point]) -> bool {
     }
     inside
 }
+/// Whether `p` lies in the area the outlines `paths` fill together, by the
+/// nonzero rule the renderers use: an inner outline running the other way
+/// leaves a hole.
+pub(crate) fn fills(p: Point, paths: &[Vec<Point>]) -> bool {
+    let mut winding = 0;
+    for path in paths {
+        for (a, b) in path.iter().zip(path.iter().cycle().skip(1)) {
+            if (a.y > p.y) != (b.y > p.y) && p.x < (b.x - a.x) * (p.y - a.y) / (b.y - a.y) + a.x {
+                winding += if b.y > a.y { 1 } else { -1 };
+            }
+        }
+    }
+    winding != 0
+}
 pub fn flattened(commands: &[PathCommand]) -> Vec<Vec<Point>> {
     let mut paths: Vec<Vec<Point>> = vec![];
     for c in commands {

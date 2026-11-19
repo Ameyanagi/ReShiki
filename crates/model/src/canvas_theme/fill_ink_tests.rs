@@ -265,3 +265,37 @@ fn a_ring_gradient_on_a_card_of_the_other_canvas_starts_from_its_paper() {
     let light = Palette::in_mode(&doc, CanvasTheme::Light).swatch(Hue::Teal, Row::Tint);
     assert_eq!(ring_stops(&doc), ([255; 3], light));
 }
+
+#[test]
+fn chemistry_in_the_hole_of_a_compound_path_keeps_the_canvas_ink() {
+    use crate::graphics::PathCommand::{Close, Line, Move};
+    let (mut doc, [a, ..]) = figure(CanvasTheme::Dark, Color::Custom([0xD9; 3]));
+    // A light frame around the molecule: an outer outline and an inner one
+    // running the other way, which leaves the middle empty.
+    let g = &mut doc.graphics[0];
+    g.kind = GraphicKind::Path;
+    g.reset_frame();
+    let p = Point::new;
+    g.path = vec![
+        Move(p(-30., -30.)),
+        Line(p(80., -30.)),
+        Line(p(80., 50.)),
+        Line(p(-30., 50.)),
+        Close,
+        Move(p(-20., -20.)),
+        Line(p(-20., 40.)),
+        Line(p(70., 40.)),
+        Line(p(70., -20.)),
+        Close,
+    ];
+    doc.validate().unwrap();
+    let resolved = resolved_document(&doc);
+    assert_eq!(
+        label(&resolved, a),
+        element_color(&doc, "O", CanvasTheme::Dark),
+        "the hole shows the dark canvas, so the ink stays light"
+    );
+    // On the frame itself the light fill still calls for black ink.
+    let on_frame = doc.add_atom("O", p(-25., 0.));
+    assert_eq!(label(&resolved_document(&doc), on_frame), [0; 3]);
+}

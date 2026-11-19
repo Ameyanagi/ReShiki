@@ -428,10 +428,7 @@ fn on_fills(doc: &crate::document::Document) -> std::borrow::Cow<'_, crate::docu
                 let (lo, hi) = card.bounds;
                 (lo.x..=hi.x).contains(&p.x)
                     && (lo.y..=hi.y).contains(&p.y)
-                    && card
-                        .outline
-                        .iter()
-                        .any(|path| crate::graphics::inside_polygon(p, path))
+                    && crate::graphics::fills(p, &card.outline)
             })
             .map_or(canvas, |card| card.canvas)
     };
