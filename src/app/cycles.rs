@@ -78,7 +78,7 @@ pub(super) struct Inputs {
     layout_open: bool,
     pub(super) purpose_open: bool,
     /// Part names at a drawing revision: a formula costs a chemistry pass.
-    names: std::cell::RefCell<(u64, std::collections::HashMap<Vec<u64>, String>)>,
+    names: std::cell::RefCell<((u64, u64), std::collections::HashMap<Vec<u64>, String>)>,
     radius: String,
     gap: String,
     label: String,
@@ -674,8 +674,10 @@ impl App {
     /// A short label for a cycle part or reaction participant.
     pub(super) fn part_name(&self, ids: &[u64]) -> String {
         let mut names = self.tab.cycle_inputs.names.borrow_mut();
-        if names.0 != self.tab.revision {
-            *names = (self.tab.revision, Default::default());
+        // Computed names change without a new revision.
+        let at = (self.tab.revision, self.tab.label_generation);
+        if names.0 != at {
+            *names = (at, Default::default());
         }
         names
             .1
