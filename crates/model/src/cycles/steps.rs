@@ -137,9 +137,15 @@ fn participants(from: &Document) -> HashSet<u64> {
 }
 
 /// Put the atom maps of a copy's reaction participants back onto the same
-/// atoms.
+/// atoms. Atoms inside an abbreviation such as PPh3 take none, which would
+/// expand it.
 pub fn copy_maps(doc: &mut Document, from: &Document) {
-    let held = participants(from);
+    let mut held = participants(from);
+    for group in &doc.abbreviations {
+        for id in &group.members {
+            held.remove(id);
+        }
+    }
     for atom in &mut doc.atoms {
         if held.contains(&atom.id)
             && let Some(a) = from.atom(atom.id)

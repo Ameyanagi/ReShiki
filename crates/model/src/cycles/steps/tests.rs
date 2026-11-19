@@ -430,3 +430,20 @@ fn colors_go_back_on_their_rings_in_place() {
     // A ring outside the copy's reactions keeps its fill.
     assert_eq!(doc.ring_fills[1], fill(&other, Hue::Green));
 }
+
+#[test]
+fn applied_maps_keep_abbreviations_contracted() {
+    let t = toy(false);
+    let mut doc = t.doc.clone();
+    doc.contract(&[t.oa[0]], "Me", "Me").unwrap();
+    doc.contract(&[t.mebr[0]], "Me", "Me").unwrap();
+    let before = doc.clone();
+    let (copy, arrows) = reactions(&doc, t.id).unwrap();
+    let proposal = propose(&copy, arrows[0], Budget::default()).unwrap();
+    copy_maps(&mut doc, &proposal.apply(&copy, true).unwrap());
+    let map = |doc: &Document, id: u64| doc.atom(id).unwrap().map_num;
+    assert!(map(&doc, t.oa[1]) != 0 && map(&doc, t.oa[2]) != 0);
+    assert_eq!((map(&doc, t.oa[0]), map(&doc, t.mebr[0])), (0, 0));
+    let _ = crate::transaction::reconcile(&mut doc, before).unwrap();
+    assert_eq!(doc.abbreviations.len(), 2);
+}

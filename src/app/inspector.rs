@@ -1064,11 +1064,12 @@ impl App {
             body = body.push(row);
         }
         // A cycle's roles and steps come before what its parts are made of.
-        if let Some(cycle) = self.cycle_card().or_else(|| self.cycle_part_card()) {
-            body = body.push(card(container(cycle).padding(12)));
-        }
+        // A step's proposed atom maps come first, where Apply is in view.
         if let Some(review) = self.step_review_card() {
             body = body.push(card(container(review).padding(12)));
+        }
+        if let Some(cycle) = self.cycle_card().or_else(|| self.cycle_part_card()) {
+            body = body.push(card(container(cycle).padding(12)));
         }
         let molecular_first = self.tab.selected.is_empty()
             || self.property_key().is_some_and(|key| !key.atoms.is_empty());
