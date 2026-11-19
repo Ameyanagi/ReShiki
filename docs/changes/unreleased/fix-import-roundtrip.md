@@ -10,5 +10,5 @@ issues: []
 - CDXML and CDX export write a panel's shadow, and the shadow of a rotated
   rectangle or a path, as a grey shape behind it. An unfilled shadowed rectangle
   or oval on a colored ChemDraw page, such as a CDXML file exported from the
-  dark canvas, opens with the page color inside, as ChemDraw draws it, instead
-  of a white face. See [Editable graphics](graphics.md).
+  dark canvas by an earlier build, opens with the page color inside, as
+  ChemDraw draws it, instead of a white face. See [Editable graphics](graphics.md).

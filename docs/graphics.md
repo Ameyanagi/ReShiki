@@ -521,7 +521,7 @@ ChemDraw's own Rectangle and Oval graphics with their Shaded, Shadow or
 Shadowed flags and ShadowSize (hundredths of a point), so ChemDraw can restyle
 them. Upright rectangles only: a rotated one stays a path. ChemDraw paints a
 shadowed outline's inside with the page color. ReShiki opens an unfilled one on
-a colored page, such as a CDXML file exported from the dark canvas, filled with
+a colored page, such as a ChemDraw file with a black background, filled with
 that color. A shaded path is a
 ChemDraw shaded curve (CurveType 256, FillType Shaded). A wavy line without
 heads is ChemDraw's line graphic with LineType Wavy, and a straight wavy arrow

@@ -340,7 +340,7 @@ impl Reader<'_, '_> {
         }
         style.shadow_pt = self.shadow(el, effects.1)?;
         // ChemDraw paints a shadowed outline's inside with the page, which
-        // on a colored page, such as a dark-canvas export, is a fill.
+        // on a colored page, such as a black ChemDraw background, is a fill.
         if style.shadow_pt.is_some() && style.fill.is_none() && style.opacity.is_none() {
             style.fill = self.page;
         }
