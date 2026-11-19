@@ -60,8 +60,9 @@ pub struct State {
     /// After a pick of Metal: the tab's file epoch, the selection, the
     /// drawing before the pick and the arrows after it. Typing the symbol
     /// next, on the same arrows, joins the pick's undo step while the pick is
-    /// still the last edit, the arrows are as it left them and that state is
-    /// unsaved: a canvas brightness switch keeps one step, a save ends it.
+    /// still the last edit, the arrows are as it left them and the drawing
+    /// is neither saved nor being saved: a canvas brightness switch keeps one
+    /// step, a save ends it.
     pub(super) metal_pick: Option<MetalPick>,
     source: Option<reshiki::arrow_anchors::Pick>,
 }
@@ -454,7 +455,9 @@ impl App {
                         && *selected == self.tab.selected
                         && self.tab.history.peek(false) == Some(pre)
                         && before.arrows == *arrows
-                        && self.tab.saved.arrows != *arrows
+                        // Not saved since the pick, nor being saved.
+                        && !super::same_drawing(&before, &self.tab.saved)
+                        && !self.file_io.saving
                 });
         let pre = matches!(action, Action::Badge(Some(BadgeIcon::Metal))).then(|| before.clone());
         if joins {

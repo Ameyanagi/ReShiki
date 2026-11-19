@@ -276,6 +276,13 @@ fn a_canvas_switch_keeps_the_metal_step_but_a_save_ends_it() {
         Preset::Forward,
         ArrowStyle::default(),
     ));
+    app.tab.doc.arrows.push(reshiki::document::Arrow::new(
+        2,
+        Point::new(0., 60.),
+        Point::new(120., 60.),
+        Preset::Forward,
+        ArrowStyle::default(),
+    ));
     app.tab.selected = vec![1];
     app.arrow_action(arrows::Action::Badge(Some(BadgeIcon::Light)));
     let light = app.tab.doc.arrows.clone();
@@ -295,6 +302,30 @@ fn a_canvas_switch_keeps_the_metal_step_but_a_save_ends_it() {
     app.tab.saved = app.tab.doc.clone();
     app.tab.arrows.badge_text = "Cu".into();
     app.arrow_action(arrows::Action::ApplyBadgeText);
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc.arrows[0].badge.as_ref().unwrap().text, "Pd");
+
+    // A pick that only matches an older save, after another edit: one step.
+    let before = app.tab.doc.clone();
+    app.tab.doc.translate(&[2], 10., 0.);
+    app.changed(before);
+    app.arrow_action(arrows::Action::Badge(Some(BadgeIcon::Light)));
+    let light = app.tab.doc.arrows.clone();
+    app.arrow_action(arrows::Action::Badge(Some(BadgeIcon::Metal)));
+    app.tab.arrows.badge_text = "Cu".into();
+    app.arrow_action(arrows::Action::ApplyBadgeText);
+    let _ = app.update(Message::Undo);
+    assert_eq!(
+        app.tab.doc.arrows, light,
+        "the older save does not split it"
+    );
+
+    // A symbol typed while a save is being written is its own step.
+    app.arrow_action(arrows::Action::Badge(Some(BadgeIcon::Metal)));
+    app.file_io.saving = true;
+    app.tab.arrows.badge_text = "Cu".into();
+    app.arrow_action(arrows::Action::ApplyBadgeText);
+    app.file_io.saving = false;
     let _ = app.update(Message::Undo);
     assert_eq!(app.tab.doc.arrows[0].badge.as_ref().unwrap().text, "Pd");
 }
