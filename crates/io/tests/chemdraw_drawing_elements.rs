@@ -284,9 +284,11 @@ async fn faded_graphics_import_opaque_and_block_arrows_keep_their_body() {
          <graphic id='4' GraphicType='Rectangle' BoundingBox='10 90 60 120' alpha='0.5'/>\
          </page></CDXML>";
     let (document, notices) = open(faded.as_bytes().to_vec(), "cdxml").await.unwrap();
-    // FadePercent only spreads a shaded fill; alpha is see-through.
+    // FadePercent is read as a see-through fill; alpha is drawn opaque.
     assert_eq!(notices, nearest("1 see-through object opaque"));
     assert_eq!(document.graphics.len(), 3);
+    assert!(document.graphics[1].style.effects.opacity.is_some());
+    assert!(document.graphics[2].style.effects.opacity.is_none());
     for (document, notices) in sheet(
         "<arrow id='4' Tail3D='10 100 0' Head3D='70 100 0' ArrowheadHead='Full' \
          ArrowheadType='Hollow' FillType='Solid' HeadSize='2000' ArrowheadCenterSize='1500' \
@@ -753,7 +755,7 @@ async fn chemdraws_binary_extras_do_not_stop_a_file() {
     // know, and an identifier used twice.
     let wide = with(&[0x01, 0x03, 0x04, 0x00, 0x04, 0x00, 0x00, 0x00]);
     let property = with(&[
-        0x01, 0x03, 0x02, 0x00, 0x04, 0x00, 0x03, 0x03, 0x02, 0x00, 0x2c, 0x01,
+        0x01, 0x03, 0x02, 0x00, 0x04, 0x00, 0x00, 0x7f, 0x02, 0x00, 0x2c, 0x01,
     ]);
     let object = with(&[
         0x01, 0x03, 0x02, 0x00, 0x04, 0x00, 0x25, 0x80, 0x07, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -794,7 +796,7 @@ async fn an_unknown_property_on_an_atom_is_named() {
         .unwrap()
         + atom.len();
     let mut data = plain[..at].to_vec();
-    data.extend_from_slice(&[0x03, 0x03, 0x02, 0x00, 0x2c, 0x01]);
+    data.extend_from_slice(&[0x00, 0x7f, 0x02, 0x00, 0x2c, 0x01]);
     data.extend_from_slice(&plain[at..]);
     assert!(exchange::from_cdx(&data).is_err());
     assert_eq!(

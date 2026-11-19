@@ -627,17 +627,8 @@ impl Pass {
         }
     }
 
-    /// ChemDraw's FadePercent only spreads a shaded fill, which ReShiki
-    /// draws its own way; alpha makes the object see-through.
+    /// ChemDraw's alpha makes the object see-through; ReShiki draws it opaque.
     fn fade(&mut self, index: usize) -> Result<()> {
-        if self
-            .attr(index, "FadePercent")?
-            .as_deref()
-            .and_then(number)
-            .is_some()
-        {
-            self.remove(index, &["FadePercent"])?;
-        }
         if let Some(alpha) = self.attr(index, "alpha")?.as_deref().and_then(number) {
             self.remove(index, &["alpha"])?;
             if alpha < 1. {
