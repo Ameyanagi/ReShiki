@@ -383,7 +383,12 @@ fn outlined_svg_is_never_smaller_than_its_floor() {
         "../../../../assets/examples/shortcut-examples.rsk"
     ))
     .unwrap();
-    let tree = parse_svg(scene::svg_with_background(&doc)).unwrap();
+    let svg = scene::svg_of(
+        &doc,
+        scene::vector_primitives(&doc),
+        Some(doc.canvas_theme.background()),
+    );
+    let tree = parse_svg(svg).unwrap();
     let (floor, outlined) = (
         outlined_floor(tree.root()),
         office_svg(&tree).unwrap().len(),

@@ -833,12 +833,15 @@ fn half(primitive: &Primitive, g: Gap, bound: f32, below: bool) -> Option<Primit
             closed: false,
             width,
             color,
-        } if points.len() == 2 => segment(points[0], points[1]).map(|(a, b)| Primitive::Polyline {
-            points: vec![a, b],
-            closed: false,
-            width: *width,
-            color: *color,
-        }),
+        } => match points.as_slice() {
+            &[a, b] => segment(a, b).map(|(a, b)| Primitive::Polyline {
+                points: vec![a, b],
+                closed: false,
+                width: *width,
+                color: *color,
+            }),
+            _ => Some(primitive.clone()),
+        },
         Primitive::Polygon(points) => {
             let mut clipped = vec![];
             for (a, b) in points

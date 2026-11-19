@@ -2583,7 +2583,7 @@ struct Joined {
         std::collections::BTreeMap<(crate::palette::Color, u32), Vec<crate::graphics::PathCommand>>,
     /// Vector export's plain bond lines by color and width bits, each with
     /// whether its ends continue into another line.
-    lines: std::collections::BTreeMap<(crate::palette::Color, u32), Vec<([Point; 2], [bool; 2])>>,
+    lines: std::collections::BTreeMap<(crate::palette::Color, u32), Vec<BondLine>>,
 }
 fn push_joined_outlines(out: &mut Vec<Primitive>, joined: Joined) {
     out.extend(
@@ -2607,54 +2607,68 @@ fn push_joined_outlines(out: &mut Vec<Primitive>, joined: Joined) {
             }),
     );
     for ((color, width), lines) in joined.lines {
-        let key = |p: Point| (p.x.to_bits(), p.y.to_bits());
-        let mut ends: std::collections::HashMap<_, Vec<(usize, usize)>> = Default::default();
-        for (index, (points, continues)) in lines.iter().enumerate() {
-            for end in (0..2).filter(|end| continues[*end]) {
-                ends.entry(key(points[end])).or_default().push((index, end));
-            }
-        }
-        // Each line end continues into the one other end meeting it there.
-        let mut next = vec![[None; 2]; lines.len()];
-        for meeting in ends.values() {
-            if let &[(i, e), (j, f)] = meeting.as_slice() {
-                next[i][e] = Some((j, f));
-                next[j][f] = Some((i, e));
-            }
-        }
-        let mut drawn = vec![false; lines.len()];
-        // Open runs from their free ends first, then the closed rings.
-        let open = (0..lines.len()).filter(|i| next[*i].contains(&None));
-        for first in open.chain(0..lines.len()) {
-            if drawn[first] {
-                continue;
-            }
-            let (mut index, mut end) = (first, usize::from(next[first][0].is_some()));
-            let mut points = vec![lines[first].0[end]];
-            let mut closed = false;
-            loop {
-                drawn[index] = true;
-                points.push(lines[index].0[1 - end]);
-                match next[index][1 - end] {
-                    Some((i, _)) if i == first => {
-                        closed = points.len() > 2;
-                        break;
-                    }
-                    Some((i, e)) if !drawn[i] => (index, end) = (i, e),
-                    _ => break,
-                }
-            }
-            if closed {
-                points.pop();
-            }
-            out.push(Primitive::Polyline {
-                points,
-                closed,
-                width: f32::from_bits(width),
-                color,
-            });
+        out.extend(
+            bond_runs(lines)
+                .into_iter()
+                .map(|(points, closed)| Primitive::Polyline {
+                    points,
+                    closed,
+                    width: f32::from_bits(width),
+                    color,
+                }),
+        );
+    }
+}
+/// A plain bond line in vector export, with whether each end continues
+/// into another line.
+type BondLine = ([Point; 2], [bool; 2]);
+/// Bond lines joined where two continuing ends meet, each run with whether
+/// it closes on itself.
+fn bond_runs(lines: Vec<BondLine>) -> Vec<(Vec<Point>, bool)> {
+    let key = |p: Point| (p.x.to_bits(), p.y.to_bits());
+    let mut meeting: std::collections::HashMap<_, Vec<usize>> = Default::default();
+    for (index, (points, continues)) in lines.iter().enumerate() {
+        for (point, _) in points.iter().zip(continues).filter(|(_, c)| **c) {
+            meeting.entry(key(*point)).or_default().push(index);
         }
     }
+    // The other line continuing through `point`, when exactly two meet there.
+    let partner = |point: Point, from: usize| match meeting.get(&key(point))?.as_slice() {
+        &[a, b] => Some(if a == from { b } else { a }),
+        _ => None,
+    };
+    let mut remaining: std::collections::BTreeMap<_, _> = lines
+        .into_iter()
+        .map(|(points, _)| points)
+        .enumerate()
+        .collect();
+    let mut runs = vec![];
+    while let Some((first, [a, b])) = remaining.pop_first() {
+        let mut run = std::collections::VecDeque::from([a, b]);
+        for forward in [true, false] {
+            let (mut from, mut end) = (first, if forward { b } else { a });
+            while let Some(next) = partner(end, from)
+                && let Some([p, q]) = remaining.remove(&next)
+            {
+                end = if key(p) == key(end) { q } else { p };
+                if forward {
+                    run.push_back(end);
+                } else {
+                    run.push_front(end);
+                }
+                from = next;
+            }
+        }
+        // A ring joins where it started only through a continuing end.
+        let closed = run.len() > 3
+            && run.front() == run.back()
+            && run.front().is_some_and(|p| partner(*p, first).is_some());
+        if closed {
+            run.pop_back();
+        }
+        runs.push((run.into(), closed));
+    }
+    runs
 }
 fn push_atom_labels(
     out: &mut Vec<Primitive>,
@@ -3527,15 +3541,21 @@ fn polyline_outline(points: &[Point], closed: bool, width: f32) -> Vec<Point> {
         let length = a.distance(b).max(0.001);
         Point::new((a.y - b.y) / length, (b.x - a.x) / length)
     };
-    let count = points.len();
     let segments = if closed {
-        count
+        points.len()
     } else {
-        count.saturating_sub(1)
+        points.len().saturating_sub(1)
     };
+    let next = points.iter().cycle().skip(1);
+    let after = points.iter().cycle().skip(2);
     let mut out = vec![];
-    for i in 0..segments {
-        let (a, b) = (points[i], points[(i + 1) % count]);
+    for (i, ((&a, &b), &c)) in points
+        .iter()
+        .zip(next)
+        .zip(after)
+        .take(segments)
+        .enumerate()
+    {
         let n = normal(a, b);
         for p in [a, b] {
             out.extend([
@@ -3544,7 +3564,7 @@ fn polyline_outline(points: &[Point], closed: bool, width: f32) -> Vec<Point> {
             ]);
         }
         if i + 1 < segments || closed {
-            let m = normal(b, points[(i + 2) % count]);
+            let m = normal(b, c);
             // Mitre length over width is sqrt(2 / (1 + n·m)); the limit is 4.
             let along = 1. + n.x * m.x + n.y * m.y;
             if along >= 1. / 8. {
