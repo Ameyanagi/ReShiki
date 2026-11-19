@@ -345,7 +345,7 @@ pub(crate) fn entries() -> Vec<Entry> {
         entry(
             label(Message::Delete),
             "Delete",
-            "Delete the selection",
+            "Delete the selection. Press Delete over a heteroatom to change it to carbon first",
             Selection,
             &["remove", "erase", "backspace"],
         ),

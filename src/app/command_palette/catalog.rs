@@ -758,7 +758,7 @@ fn edits() -> Vec<Command> {
         .alias(&["red", "redo"]),
         selection(
             "Delete",
-            "Delete the selection",
+            "Delete the selection. Press Delete over a heteroatom to change it to carbon first",
             "remove erase",
             Message::Delete,
         ),

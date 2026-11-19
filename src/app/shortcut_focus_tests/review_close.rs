@@ -25,6 +25,9 @@ fn drawing_app() -> App {
 
 async fn assert_canvas_delete(ui: &mut Ui, app: &mut App) {
     ui.assert_unfocused(app);
+    // Exercise selection deletion without a contextual atom target.
+    app.tab.keyboard_drawing.leave();
+    app.tab.hover = None;
     let drawing = app.tab.doc.clone();
     let selected = app.tab.selected.clone();
     assert!(!selected.is_empty());
