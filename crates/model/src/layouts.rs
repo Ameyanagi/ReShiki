@@ -251,18 +251,26 @@ pub fn reflow(
         Flow::Column => cells.sort_by(|a, b| center(a.2).y.total_cmp(&center(b.2).y)),
         Flow::Grid(_) => {
             cells.sort_by(|a, b| a.2.0.y.total_cmp(&b.2.0.y));
-            // Each row, its top and the lowest bottom edge in it. A unit
-            // joins a row it overlaps, or one whose top it shares (flat units
-            // on one line); rows that only touch stay apart.
+            // Each row, its alignment line and the lowest bottom edge in it.
+            // A unit joins a row it overlaps, or whose alignment line (top,
+            // middle or bottom) it shares, as flat units do; rows that only
+            // touch stay apart.
+            let line = |(lo, hi): (Point, Point)| match layout.align {
+                Align::Start => lo.y,
+                Align::Center => (lo.y + hi.y) * 0.5,
+                Align::End => hi.y,
+            };
             let mut rows: Vec<(Vec<Cell>, f32, f32)> = vec![];
             for cell in cells {
-                let (top, bottom) = (cell.2.0.y, cell.2.1.y);
+                let (top, bottom, at) = (cell.2.0.y, cell.2.1.y, line(cell.2));
                 match rows.last_mut() {
-                    Some((row, first, low)) if top < *low - 0.01 || (top - *first).abs() < 0.01 => {
+                    Some((row, shared, low))
+                        if top < *low - 0.01 || (at - *shared).abs() < 0.01 =>
+                    {
                         *low = low.max(bottom);
                         row.push(cell);
                     }
-                    _ => rows.push((vec![cell], top, bottom)),
+                    _ => rows.push((vec![cell], at, bottom)),
                 }
             }
             cells = rows

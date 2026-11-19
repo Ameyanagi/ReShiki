@@ -466,3 +466,33 @@ fn touching_grid_rows_stay_apart() {
     assert!((a.y - b.y).abs() < 0.01 && a.x < b.x);
     assert!(c.y > a.y && (c.x - a.x).abs() < 0.01);
 }
+
+#[test]
+fn bottom_aligned_flat_items_keep_their_place() {
+    let mut doc = Document::default();
+    let a = doc.add_atom("C", Point::new(0., 0.));
+    let b = doc.add_atom("C", Point::new(40., 0.));
+    doc.add_bond(a, b, 1, "plain");
+    let flat = vec![a, b];
+    let tall: Vec<u64> = (0..4)
+        .map(|i| doc.add_atom("C", Point::new(200. + 21. * (i % 2) as f32, 36. * i as f32)))
+        .collect();
+    for pair in tall.windows(2) {
+        doc.add_bond(pair[0], pair[1], 1, "plain");
+    }
+    let ids: Vec<u64> = flat.iter().chain(&tall).copied().collect();
+    let group = arrange(&mut doc, &ids, Flow::Grid(2), GUTTER).unwrap();
+    for (align, gutter) in [(Align::End, GUTTER), (Align::End, 30.)] {
+        if let Some(layout) = doc
+            .groups
+            .iter_mut()
+            .find(|g| g.id == group)
+            .and_then(|g| g.layout.as_mut())
+        {
+            layout.align = align;
+            layout.gutter_pt = gutter;
+        }
+        reflow(&mut doc, group, None, None);
+    }
+    assert!(bounds(&doc, &flat).0.x < bounds(&doc, &tall).0.x);
+}
