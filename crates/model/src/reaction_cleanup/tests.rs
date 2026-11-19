@@ -123,6 +123,21 @@ fn text_beside_the_arrow_moves_with_it_and_is_centred() {
 }
 
 #[test]
+fn a_caption_under_a_molecule_moves_with_it() {
+    let (mut doc, [a, ..], _) = untidy();
+    let below = centre(&doc, &a).offset(0., 40.);
+    let caption = text(&mut doc, "1", below);
+    let offset = |doc: &Document| {
+        let (m, c) = (centre(doc, &a), centre(doc, &[caption]));
+        (c.x - m.x, c.y - m.y)
+    };
+    let cleaned = clean(&doc, &[], false).unwrap();
+    let (before, after) = (offset(&doc), offset(&cleaned));
+    assert!(close(before.0, after.0) && close(before.1, after.1));
+    assert_ne!(centre(&cleaned, &a), centre(&doc, &a));
+}
+
+#[test]
 fn a_downward_arrow_centres_its_molecules_on_its_line() {
     let mut doc = Document::default();
     let bond = doc.drawing_style.bond_length_world;
@@ -197,4 +212,101 @@ fn a_drawing_without_a_straight_arrow_is_refused() {
     let mut doc = Document::default();
     chain(&mut doc, 3, Point::default(), 42.);
     assert!(clean(&doc, &[], false).is_err());
+}
+
+#[test]
+fn arrows_facing_each_other_share_one_row() {
+    let mut doc = Document::default();
+    let bond = doc.drawing_style.bond_length_world;
+    let a = chain(&mut doc, 2, Point::new(0., 8.), bond);
+    let forward = arrow(&mut doc, Point::new(90., 0.), Point::new(130., 0.));
+    let b = chain(&mut doc, 3, Point::new(180., -10.), bond);
+    let back = arrow(&mut doc, Point::new(380., 3.), Point::new(320., 3.));
+    let c = chain(&mut doc, 2, Point::new(420., 12.), bond);
+    let cleaned = clean(&doc, &[], false).unwrap();
+    let (one, two) = (the_arrow(&cleaned, forward), the_arrow(&cleaned, back));
+    assert!(one.end.x > one.start.x && two.end.x < two.start.x);
+    for (left, right) in [
+        (bounds(&cleaned, &a).1.x, one.start.x),
+        (one.end.x, bounds(&cleaned, &b).0.x),
+        (bounds(&cleaned, &b).1.x, two.end.x),
+        (two.start.x, bounds(&cleaned, &c).0.x),
+    ] {
+        assert!(close(right - left, bond * GAP), "gap {}", right - left);
+    }
+}
+
+#[test]
+fn reagents_side_by_side_stay_apart_and_widen_the_arrow() {
+    let (mut doc, _, arrow) = untidy();
+    let left = text(&mut doc, "NaOH", Point::new(235., -18.));
+    let right = text(&mut doc, "NaOH", Point::new(335., -18.));
+    let cleaned = clean(&doc, &[], false).unwrap();
+    let (l, r) = (bounds(&cleaned, &[left]), bounds(&cleaned, &[right]));
+    assert!(l.1.x <= r.0.x + 0.05, "{l:?} overlaps {r:?}");
+    let a = the_arrow(&cleaned, arrow);
+    let mid = a.start.lerp(a.end, 0.5).x;
+    assert!(close((l.0.x + r.1.x) / 2., mid));
+    assert!(a.start.distance(a.end) >= r.1.x - l.0.x);
+}
+
+#[test]
+fn style_bond_length_leaves_molecules_outside_reactions_alone() {
+    let (mut doc, _, _) = untidy();
+    let bond = doc.drawing_style.bond_length_world;
+    let lone = chain(&mut doc, 3, Point::new(0., 400.), bond * 2.);
+    let cleaned = clean(&doc, &[], true).unwrap();
+    for id in lone {
+        assert_eq!(cleaned.atom(id), doc.atom(id));
+    }
+}
+
+#[test]
+fn a_selected_arrow_brings_its_recorded_reaction() {
+    let (mut doc, [a, _, _, c], arrow) = untidy();
+    let mut reaction = crate::reactions::Reaction::new(arrow);
+    for (atoms, role) in [
+        (&a, crate::reactions::Role::Reactant),
+        (&c, crate::reactions::Role::Product),
+    ] {
+        reaction
+            .participants_mut(role)
+            .push(crate::reactions::Participant {
+                atoms: atoms.clone(),
+                coefficient: 1,
+            });
+    }
+    doc.reactions.push(reaction);
+    let cleaned = clean(&doc, &[arrow], false).unwrap();
+    for unit in [&a, &c] {
+        assert!(
+            close(centre(&cleaned, unit).y, 0.),
+            "{unit:?} is off the axis"
+        );
+    }
+}
+
+#[test]
+fn a_plus_symbol_counts_as_a_sign() {
+    let mut doc = Document::default();
+    let bond = doc.drawing_style.bond_length_world;
+    let a = chain(&mut doc, 2, Point::new(0., 0.), bond);
+    let plus = doc.next_id();
+    doc.graphics.push(crate::graphics::Graphic::dragged(
+        plus,
+        crate::graphics::GraphicKind::Symbol(crate::scientific::SymbolKind::Plus),
+        Point::new(100., 14.),
+        Point::new(100., 14.),
+        Default::default(),
+        Default::default(),
+        false,
+    ));
+    let b = chain(&mut doc, 2, Point::new(140., 0.), bond);
+    arrow(&mut doc, Point::new(260., 0.), Point::new(300., 0.));
+    let cleaned = clean(&doc, &[], false).unwrap();
+    let gaps = [
+        bounds(&cleaned, &[plus]).0.x - bounds(&cleaned, &a).1.x,
+        bounds(&cleaned, &b).0.x - bounds(&cleaned, &[plus]).1.x,
+    ];
+    assert!(gaps.iter().all(|gap| close(*gap, bond * GAP)), "{gaps:?}");
 }

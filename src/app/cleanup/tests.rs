@@ -72,8 +72,9 @@ async fn clean_up_reaction_is_one_undo_step_and_then_tidy() {
         Preset::Forward,
         ArrowStyle::preset(Preset::Forward),
     ));
-    // Labels are measured as the editor shows them, after an edit's reconcile.
-    let _ = reshiki::transaction::reconcile(&mut document, Document::default()).unwrap();
+    // The implicit hydrogens the editor shows, so the OH label is measured.
+    document.atoms[0].label_h = 3;
+    document.atoms[1].label_h = 1;
     let original = document.clone();
     let mut app = app(document);
     let shortcut = super::super::shortcuts::label(&Message::Cleanup(Action::Scheme));

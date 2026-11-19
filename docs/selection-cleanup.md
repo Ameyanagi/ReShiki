@@ -30,12 +30,12 @@ message confirms that the drawing was left unchanged.
 
 - Reactants, products and `+` signs are centred on the arrow's line and spaced evenly, half a bond length apart.
 - Every arrow takes the same length: 3.2 bond lengths, or longer when the text above or below an arrow needs it.
-- Text and reagents above or below an arrow are centred on it and keep their side. Conditions attached to an arrow stay attached.
-- Arrows that point the same way on one line form one row, such as A → B → C. A molecule shared by two rows, such as the product of a horizontal step that starts a vertical one, stays where the first row put it.
-- Recorded reaction roles decide which molecules sit on the arrow's line and which are reagents. Without them, a molecule or `+` sign within a bond length of the line is on it, and one beside the arrow's middle is a reagent.
-- With **Also set bond length to the style** on, each molecule is first redrawn at the style's bond length.
+- Text and reagents above or below an arrow are centred on it as a block and keep their side and order. Conditions attached to an arrow stay attached.
+- Arrows on one line form one row, such as A → B → C or A → B ← C. A molecule shared by two rows, such as the product of a horizontal step that starts a vertical one, stays where the first row put it.
+- Recorded reaction roles decide which molecules sit on the arrow's line and which are reagents. Selecting only the arrow of a recorded reaction cleans the whole reaction. Without roles, a molecule or `+` sign within a bond length of the line is on it, and one beside the arrow's middle is a reagent.
+- With **Also set bond length to the style** on, each molecule in a cleaned reaction is first redrawn at the style's bond length. Other molecules keep their size.
 
-Only straight arrows are lined up. Curved and attached arrows, and text away from an arrow, stay where they are. Molecule names move with their molecules; other captions do not.
+Only straight arrows are lined up, and an arrow inside a group is left alone. Captions just above or below a molecule, such as compound numbers and names, move with it. Curved and attached arrows, and other text away from an arrow, stay where they are.
 
 ## Verification
 

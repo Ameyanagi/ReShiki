@@ -25,6 +25,8 @@ enum Place {
     Axis,
     /// Above or below this arrow, centred on it.
     On(u64),
+    /// A caption just above or below this axis unit, moving with it.
+    With(usize),
 }
 
 /// A unit measured in a row's frame: `along` the arrows and `across` them.
@@ -81,7 +83,6 @@ pub fn clean(
 ) -> Result<Document, String> {
     let bond = doc.drawing_style.bond_length_world;
     let scope = scope(doc, selection);
-    let mut out = doc.clone();
     let units = crate::editing::groups(doc, &scope);
     let atoms: HashSet<u64> = doc.atoms.iter().map(|a| a.id).collect();
     let straight: HashMap<u64, usize> = units
@@ -101,35 +102,52 @@ pub fn clean(
         return Err("Select a reaction with a straight arrow to clean up".into());
     }
     let molecule = |unit: &[u64]| unit.iter().any(|id| atoms.contains(id));
-    if style_bond_length {
-        for unit in units.iter().filter(|unit| molecule(unit)) {
-            scale_to(&mut out, unit, bond);
-        }
-    }
     // Molecules and `+` signs can sit on an axis; other text only beside an arrow.
     let sign = |unit: &[u64]| {
         let [id] = unit else { return false };
         doc.annotations
             .iter()
             .any(|a| a.id == *id && a.text.trim() == "+")
+            || doc.graphics.iter().any(|g| {
+                g.id == *id
+                    && g.kind
+                        == crate::graphics::GraphicKind::Symbol(crate::scientific::SymbolKind::Plus)
+            })
     };
     let text = |unit: &[u64]| {
         unit.iter()
             .all(|id| doc.annotations.iter().any(|a| a.id == *id))
     };
+    // A molecule is measured by its own ink, so a name under it does not
+    // pull it off the axis; the name moves with it.
+    let cores: Vec<Vec<u64>> = units
+        .iter()
+        .map(|unit| {
+            let core: Vec<u64> = unit
+                .iter()
+                .copied()
+                .filter(|id| atoms.contains(id))
+                .collect();
+            if core.is_empty() { unit.clone() } else { core }
+        })
+        .collect();
     let owner: HashMap<u64, usize> = units
         .iter()
         .enumerate()
         .flat_map(|(i, unit)| unit.iter().map(move |id| (*id, i)))
         .collect();
+    let shortest = bond * 3.2;
     // Where each unit goes, per row, from the drawing as it was.
     let planned: Vec<(Row, HashMap<usize, Place>)> = rows(doc, &straight)
         .into_iter()
         .map(|row| {
-            let measured = measure(&out, &row, &units);
+            let measured = measure(doc, &row, &cores);
+            // An arrow's reach once it has at least the standard length.
             let span = |arrow: u64| {
-                let a = out.arrows.iter().find(|a| a.id == arrow)?;
-                Some((row.along(a.start), row.along(a.end)))
+                let a = doc.arrows.iter().find(|a| a.id == arrow)?;
+                let mid = row.along(a.start.lerp(a.end, 0.5));
+                let half = a.start.distance(a.end).max(shortest) / 2.;
+                Some((mid - half, mid + half))
             };
             // Recorded roles first, then position.
             let mut places: HashMap<usize, Place> = HashMap::new();
@@ -144,7 +162,7 @@ pub fn clean(
                     (crate::reactions::Role::Agent, Place::On(reaction.arrow)),
                 ] {
                     for participant in reaction.participants(role) {
-                        if let Some(i) = participant.atoms.first().and_then(|id| owner.get(id)) {
+                        for i in participant.atoms.iter().filter_map(|id| owner.get(id)) {
                             places.entry(*i).or_insert(place);
                         }
                     }
@@ -171,33 +189,76 @@ pub fn clean(
                     places.insert(i, Place::Axis);
                 }
             }
+            // Captions such as compound numbers follow the molecule they label.
+            for (i, unit) in units.iter().enumerate() {
+                let Some(extent) = measured.get(&i) else {
+                    continue;
+                };
+                if places.contains_key(&i) || !text(unit) || sign(unit) {
+                    continue;
+                }
+                let centre = Extent::mid(extent.along);
+                let owner = places.iter().find_map(|(j, place)| {
+                    let molecule = measured.get(j)?;
+                    let clear = (extent.across.0 - molecule.across.1)
+                        .max(molecule.across.0 - extent.across.1);
+                    (*place == Place::Axis
+                        && (molecule.along.0..=molecule.along.1).contains(&centre)
+                        && clear <= bond * 1.5)
+                        .then_some(*j)
+                });
+                if let Some(j) = owner {
+                    places.insert(i, Place::With(j));
+                }
+            }
             (row, places)
         })
         .collect();
+    let mut out = doc.clone();
+    if style_bond_length {
+        let members: HashSet<usize> = planned
+            .iter()
+            .flat_map(|(_, p)| p.keys().copied())
+            .collect();
+        for unit in units
+            .iter()
+            .enumerate()
+            .filter(|(i, unit)| members.contains(i) && molecule(unit))
+            .map(|(_, unit)| unit)
+        {
+            scale_to(&mut out, unit, bond);
+        }
+    }
     // One length for every arrow: the longest any needs for the text or
-    // reagents beside it, with the journal spacing labelled arrows follow.
+    // reagents on one side of it, with the journal spacing labelled arrows follow.
     let widest = planned
         .iter()
         .flat_map(|(row, places)| {
-            let measured = measure(&out, row, &units);
-            let labels = row.arrows.iter().filter_map(|arrow| {
-                let unit = units.get(*straight.get(arrow)?)?;
-                let texts: Vec<u64> = unit.iter().copied().filter(|id| *id != *arrow).collect();
-                let extent = measure(&out, row, &[texts]).remove(&0)?;
-                Some(extent.along.1 - extent.along.0)
-            });
-            places
+            let measured = measure(&out, row, &cores);
+            row.arrows
                 .iter()
-                .filter(|(_, place)| matches!(place, Place::On(_)))
-                .filter_map(move |(i, _)| measured.get(i).map(|e| e.along.1 - e.along.0))
-                .chain(labels)
+                .flat_map(|arrow| {
+                    let unit = straight.get(arrow).and_then(|i| units.get(*i));
+                    let labels: Vec<u64> = unit
+                        .into_iter()
+                        .flatten()
+                        .copied()
+                        .filter(|id| id != arrow)
+                        .collect();
+                    let labels = measure(&out, row, &[labels]).remove(&0);
+                    sides(&measured, places, *arrow)
+                        .into_iter()
+                        .flatten()
+                        .chain(labels)
+                        .map(|e| e.along.1 - e.along.0)
+                })
                 .collect::<Vec<_>>()
         })
         .fold(0., f32::max);
     let length = widest.max(bond * 2.8) + bond * 0.4;
     let mut placed = HashSet::new();
     for (row, places) in &planned {
-        let measured = measure(&out, row, &units);
+        let measured = measure(&out, row, &cores);
         lay_out(
             &mut out,
             row,
@@ -214,14 +275,50 @@ pub fn clean(
     Ok(out)
 }
 
+/// The combined extent of the units beside `arrow`, above it and below it.
+fn sides(
+    measured: &HashMap<usize, Extent>,
+    places: &HashMap<usize, Place>,
+    arrow: u64,
+) -> [Option<Extent>; 2] {
+    let mut sides = [None::<Extent>; 2];
+    for (i, place) in places {
+        let Some(extent) = measured.get(i).filter(|_| *place == Place::On(arrow)) else {
+            continue;
+        };
+        let side = usize::from(Extent::mid(extent.across) > 0.);
+        if let Some(slot) = sides.get_mut(side) {
+            *slot = Some(match *slot {
+                None => *extent,
+                Some(e) => Extent {
+                    along: (e.along.0.min(extent.along.0), e.along.1.max(extent.along.1)),
+                    across: (
+                        e.across.0.min(extent.across.0),
+                        e.across.1.max(extent.across.1),
+                    ),
+                },
+            });
+        }
+    }
+    sides
+}
+
 /// The selection with whole molecules, their names and the labels of selected arrows.
 fn scope(doc: &Document, selection: &[u64]) -> Vec<u64> {
     if selection.is_empty() {
         return doc.all_ids();
     }
     let mut ids: Vec<u64> = selection.to_vec();
+    // A selected arrow brings its recorded reaction.
+    for reaction in doc
+        .reactions
+        .iter()
+        .filter(|r| selection.contains(&r.arrow))
+    {
+        ids.extend(reaction.ids());
+    }
     ids.extend(
-        crate::reactions::molecules(doc, selection)
+        crate::reactions::molecules(doc, &ids.clone())
             .into_iter()
             .flatten(),
     );
@@ -238,7 +335,7 @@ fn scope(doc: &Document, selection: &[u64]) -> Vec<u64> {
     ids
 }
 
-/// Straight arrows grouped into rows: same direction, on one line.
+/// Straight arrows grouped into rows: on one line, pointing either way.
 fn rows(doc: &Document, straight: &HashMap<u64, usize>) -> Vec<Row> {
     let bond = doc.drawing_style.bond_length_world;
     let mut rows: Vec<Row> = vec![];
@@ -250,7 +347,7 @@ fn rows(doc: &Document, straight: &HashMap<u64, usize>) -> Vec<Row> {
         );
         let mid = arrow.start.lerp(arrow.end, 0.5);
         match rows.iter_mut().find(|row| {
-            row.dir.x * dir.x + row.dir.y * dir.y > 3f32.to_radians().cos()
+            (row.dir.x * dir.x + row.dir.y * dir.y).abs() > 3f32.to_radians().cos()
                 && row.across(mid).abs() < bond * 0.5
         }) {
             Some(row) => row.arrows.push(arrow.id),
@@ -298,8 +395,16 @@ fn scale_to(doc: &mut Document, unit: &[u64], bond: f32) {
         .filter(|l| *l > 1e-3)
         .collect();
     lengths.sort_by(f32::total_cmp);
-    let Some(median) = lengths.get(lengths.len() / 2).copied() else {
-        return;
+    // The same median as structure Clean up: the mean of the middle pair.
+    let middle = lengths.len() / 2;
+    let median = match (
+        lengths.len() % 2,
+        lengths.get(middle.wrapping_sub(1)),
+        lengths.get(middle),
+    ) {
+        (1, _, Some(m)) => *m,
+        (_, Some(a), Some(b)) => (a + b) / 2.,
+        _ => return,
     };
     let atoms: Vec<u64> = position.keys().copied().collect();
     let centre = crate::editing::center(doc, &atoms);
@@ -381,19 +486,33 @@ fn lay_out(
         let Some(arrow) = arrow else {
             let (dx, dy) = row.delta(start - extent.along.0, across);
             moves.push((unit.clone(), dx, dy));
+            for (j, place) in places {
+                if *place == Place::With(*i)
+                    && let Some(caption) = units.get(*j)
+                    && placed.insert(*j)
+                {
+                    moves.push((caption.clone(), dx, dy));
+                }
+            }
             continue;
         };
-        // The arrow, its labels and the units beside it move with its middle.
+        // The arrow and its labels move with its middle. What stands on each
+        // side moves as one block, centred on the new middle.
         let middle = start + length / 2.;
         let (dx, dy) = row.delta(middle - Extent::mid(extent.along), across);
         moves.push((unit.clone(), dx, dy));
         arrows.push((*arrow, start));
+        let sides = sides(measured, places, *arrow);
         for (j, place) in places {
             if *place == Place::On(*arrow)
                 && let (Some(beside), Some(unit)) = (measured.get(j), units.get(*j))
+                && let Some(block) = sides
+                    .get(usize::from(Extent::mid(beside.across) > 0.))
+                    .copied()
+                    .flatten()
                 && placed.insert(*j)
             {
-                let (dx, dy) = row.delta(middle - Extent::mid(beside.along), across);
+                let (dx, dy) = row.delta(middle - Extent::mid(block.along), across);
                 moves.push((unit.clone(), dx, dy));
             }
         }
@@ -405,8 +524,11 @@ fn lay_out(
         let Some(a) = doc.arrows.iter_mut().find(|a| a.id == arrow) else {
             continue;
         };
-        // Every arrow in a row points along it.
-        let (start, end) = (row.at(start, axis), row.at(start + length, axis));
+        // An arrow pointing back along the row keeps its direction.
+        let (mut start, mut end) = (row.at(start, axis), row.at(start + length, axis));
+        if row.along(a.end) < row.along(a.start) {
+            std::mem::swap(&mut start, &mut end);
+        }
         if a.start.distance(start) > EPSILON || a.end.distance(end) > EPSILON {
             (a.start, a.end) = (start, end);
             // A straightened arrow keeps its control on the shaft.
