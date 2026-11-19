@@ -332,4 +332,18 @@ fn a_later_step_carries_the_colors_it_receives() {
             .iter()
             .all(|b| b.color == Color::Ink || b.color == BLUE || b.color == GREEN)
     );
+
+    // Both legends follow a hue change made on the first step.
+    let arrow = doc.reactions[0].arrow;
+    set_legend(&mut doc, arrow, true, Default::default()).unwrap();
+    set_legend(&mut doc, second, true, Default::default()).unwrap();
+    update(&mut doc, arrow, |colors| colors.reactants[0] = Hue::Purple).unwrap();
+    let purple = Color::Palette(Hue::Purple, Row::Strong);
+    assert_eq!(bond(&doc, saturated[&2], saturated[&3]).color, purple);
+    for reaction in &doc.reactions {
+        let id = reaction.colors.as_ref().unwrap().legend.unwrap();
+        let legend = doc.annotations.iter().find(|a| a.id == id).unwrap();
+        assert!(legend.text.starts_with("■ Reactant 1"));
+        assert_eq!(legend.format.at(0).color, purple);
+    }
 }

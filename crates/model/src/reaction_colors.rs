@@ -149,19 +149,31 @@ fn chain(doc: &Document, arrow: u64) -> Vec<usize> {
     ordered
 }
 
-/// Atom-map pairs of the bonds on one side, with their orders.
-/// A map number used twice on one side names no one atom and is left out.
-fn mapped_bonds(doc: &Document, atoms: &HashSet<u64>) -> HashMap<(u32, u32), u8> {
+/// The map numbers used exactly once among these atoms; a repeated number
+/// names no one atom.
+fn unique_maps(doc: &Document, atoms: &HashSet<u64>) -> HashSet<u32> {
     let mut seen = HashSet::new();
-    let repeated: HashSet<u32> = atoms
+    let mut repeated = HashSet::new();
+    for map in atoms
         .iter()
         .filter_map(|id| doc.atom(*id).map(|a| a.map_num))
-        .filter(|m| *m != 0 && !seen.insert(*m))
-        .collect();
+        .filter(|m| *m != 0)
+    {
+        if !seen.insert(map) {
+            repeated.insert(map);
+        }
+    }
+    &seen - &repeated
+}
+
+/// Atom-map pairs of the bonds on one side, with their orders, over the
+/// side's unique maps.
+fn mapped_bonds(doc: &Document, atoms: &HashSet<u64>) -> HashMap<(u32, u32), u8> {
+    let unique = unique_maps(doc, atoms);
     let map = |id: u64| {
         doc.atom(id)
             .map(|a| a.map_num)
-            .filter(|m| *m != 0 && !repeated.contains(m))
+            .filter(|m| unique.contains(m))
     };
     doc.bonds
         .iter()
@@ -192,14 +204,7 @@ fn changes(doc: &Document, reaction: &Reaction) -> Changes {
     };
     let (reactants, products) = (side(Role::Reactant), side(Role::Product));
     let (before, after) = (mapped_bonds(doc, &reactants), mapped_bonds(doc, &products));
-    let maps = |atoms: &HashSet<u64>| -> HashSet<u32> {
-        atoms
-            .iter()
-            .filter_map(|id| doc.atom(*id).map(|a| a.map_num))
-            .filter(|m| *m != 0)
-            .collect()
-    };
-    let (mapped_before, mapped_after) = (maps(&reactants), maps(&products));
+    let (mapped_before, mapped_after) = (unique_maps(doc, &reactants), unique_maps(doc, &products));
     let map = |id: u64| doc.atom(id).map_or(0, |a| a.map_num);
     let mut result = Changes {
         formed: HashSet::new(),
@@ -212,6 +217,9 @@ fn changes(doc: &Document, reaction: &Reaction) -> Changes {
         }
         let key = (x.min(y), x.max(y));
         if products.contains(&bond.a) && products.contains(&bond.b) {
+            if !mapped_after.contains(&x) || !mapped_after.contains(&y) {
+                continue;
+            }
             match before.get(&key) {
                 // Formed only between atoms the reactants also carry.
                 None if mapped_before.contains(&x) && mapped_before.contains(&y) => {
@@ -224,6 +232,8 @@ fn changes(doc: &Document, reaction: &Reaction) -> Changes {
             }
         } else if reactants.contains(&bond.a)
             && reactants.contains(&bond.b)
+            && mapped_before.contains(&x)
+            && mapped_before.contains(&y)
             && !after.contains_key(&key)
             && mapped_after.contains(&x)
             && mapped_after.contains(&y)
@@ -308,6 +318,9 @@ pub fn paint(doc: &mut Document, arrow: u64) -> Result<(), Refusal> {
         return Err(Refusal::Maps);
     }
     // Only steps whose sides share atom maps carry color.
+    // Earlier paint goes from the whole chain, so a step that lost its maps
+    // keeps none; only steps whose sides share atom maps are painted again.
+    erase(doc, arrow);
     let steps: Vec<_> = chain(doc, arrow)
         .into_iter()
         .filter(|i| doc.reactions.get(*i).is_some_and(|r| shares_maps(doc, r)))
@@ -345,6 +358,7 @@ pub fn paint(doc: &mut Document, arrow: u64) -> Result<(), Refusal> {
         .filter_map(|i| doc.reactions.get(*i)?.colors.as_ref())
         .flat_map(paints)
         .collect();
+    // New default hues may differ from the erased ones.
     clear(doc, &atoms, &paint);
 
     let mut origin: HashMap<u64, Hue> = HashMap::new();
@@ -436,7 +450,7 @@ pub fn paint(doc: &mut Document, arrow: u64) -> Result<(), Refusal> {
             atom.display.color_override = true;
         }
     }
-    let mut ringed = false;
+    let mut ringed = Vec::new();
     for (colors, step, products) in &formed {
         if !colors.rings || step.formed.is_empty() {
             continue;
@@ -447,7 +461,7 @@ pub fn paint(doc: &mut Document, arrow: u64) -> Result<(), Refusal> {
                 .zip(ring.iter().cycle().skip(1))
                 .any(|(a, b)| step.formed.contains(&pair(*a, *b)));
             if closes {
-                ringed = true;
+                ringed.push(colors.formed);
                 crate::ring_fills::apply(
                     doc,
                     &ring,
@@ -457,29 +471,21 @@ pub fn paint(doc: &mut Document, arrow: u64) -> Result<(), Refusal> {
         }
     }
     let steps: Vec<_> = formed.iter().map(|(c, s, _)| (c, s)).collect();
-    legend(doc, arrow, &fresh, &steps, ringed);
+    let ids: Vec<_> = steps.iter().filter_map(|(c, _)| c.legend).collect();
+    legends(doc, &ids, &fresh, &steps, &ringed);
     Ok(())
 }
 
-/// Add, update or remove the legend of `arrow`'s reaction. One text holds a
-/// colored swatch and a name per entry; names you edit are kept while the
-/// entries stay the same.
-fn legend(
+/// Write the legend of every step that has one. One text holds a colored
+/// swatch and a name per entry; names you edit are kept while the entries
+/// stay the same. New and changed bonds and new rings get one entry per hue.
+fn legends(
     doc: &mut Document,
-    arrow: u64,
+    ids: &[u64],
     fragments: &[Hue],
     steps: &[(&Colors, &Changes)],
-    ringed: bool,
+    ringed: &[Hue],
 ) {
-    let Some(reaction) = doc.reactions.iter().find(|r| r.arrow == arrow) else {
-        return;
-    };
-    let Some(colors) = &reaction.colors else {
-        return;
-    };
-    let Some(id) = colors.legend else {
-        return;
-    };
     let mut entries: Vec<(char, Color, String)> = fragments
         .iter()
         .enumerate()
@@ -492,23 +498,41 @@ fn legend(
         })
         .collect();
     // Strong swatches: a small square in a pale tint is hard to see.
-    let new = Color::Palette(colors.formed, Row::Strong);
-    let changed = match colors.changed() {
+    let strong = |color: Color| match color {
         Color::Palette(hue, _) => Color::Palette(hue, Row::Strong),
         other => other,
     };
-    if steps.iter().any(|(c, s)| c.bonds && !s.formed.is_empty()) {
-        entries.push((SWATCH, new, "New bond".into()));
+    let mut push = |glyph: char, color: Color, name: &str| {
+        if !entries
+            .iter()
+            .any(|(g, c, n)| *g == glyph && *c == color && n == name)
+        {
+            entries.push((glyph, color, name.into()));
+        }
+    };
+    for (colors, step) in steps {
+        if colors.bonds && !step.formed.is_empty() {
+            push(
+                SWATCH,
+                Color::Palette(colors.formed, Row::Strong),
+                "New bond",
+            );
+        }
     }
-    if steps
-        .iter()
-        .any(|(c, s)| c.changes && !s.changed.is_empty())
-    {
-        entries.push((SWATCH, changed, "Changed bond".into()));
+    for (colors, step) in steps {
+        if colors.changes && !step.changed.is_empty() {
+            push(SWATCH, strong(colors.changed()), "Changed bond");
+        }
     }
-    if ringed {
-        entries.push((RING, new, "New ring".into()));
+    for hue in ringed {
+        push(RING, Color::Palette(*hue, Row::Strong), "New ring");
     }
+    for &id in ids {
+        legend(doc, id, &entries);
+    }
+}
+
+fn legend(doc: &mut Document, id: u64, entries: &[(char, Color, String)]) {
     let Some(text) = doc.annotations.iter_mut().find(|a| a.id == id) else {
         return;
     };
@@ -517,8 +541,8 @@ fn legend(
         .char_indices()
         .filter(|(_, c)| *c == SWATCH || *c == RING)
         .collect();
-    let same = glyphs.len() == entries.len()
-        && glyphs.iter().zip(&entries).all(|((_, g), (e, ..))| g == e);
+    let same =
+        glyphs.len() == entries.len() && glyphs.iter().zip(entries).all(|((_, g), (e, ..))| g == e);
     if !same {
         text.text = entries
             .iter()
@@ -534,7 +558,7 @@ fn legend(
         .map(|(i, c)| (i, i + c.len_utf8()))
         .collect();
     // Recolor only the glyphs, keeping the rest of each entry's style.
-    for ((start, end), (_, color, _)) in starts.into_iter().zip(&entries) {
+    for ((start, end), (_, color, _)) in starts.into_iter().zip(entries) {
         let change = crate::typography::StyleChange::Color(*color);
         text.format.apply(&text.text, Some(start..end), &change);
     }
