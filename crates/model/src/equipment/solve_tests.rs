@@ -450,6 +450,7 @@ fn shrinking_an_assembly_past_the_limit_stops_every_piece_there_and_keeps_the_se
     for (k, limit) in [(0.05, placed::MIN_PT_PER_MM), (40., placed::MAX_PT_PER_MM)] {
         let mut scaled = doc.clone();
         let ids = [flask, stopper];
+        let k = placed::scale_limit(&scaled, &ids, k);
         crate::editing::transform_about(&mut scaled, &ids, Point::new(200., 300.), k, 0.);
         commit(&mut scaled, doc.clone());
         assert_eq!(scaled.seats.len(), 1, "scaled by {k}");
@@ -484,4 +485,28 @@ fn a_neck_the_selection_cannot_scale_to_does_not_hide_one_it_can_seat_on() {
     );
     let snap = solve::snap(&mut doc, &[stopper, other], 14., false).unwrap();
     assert_eq!(snap.target.at, joint(normal, "neck"));
+}
+
+#[test]
+fn a_joint_an_adapter_joins_wins_over_a_closer_one_nothing_joins() {
+    let mut doc = Document::default();
+    let flask = add(&mut doc, "reshiki/rbf-100-29", Point::new(200., 300.));
+    let stopper = add(&mut doc, "reshiki/stopper-15", Point::new(600., 100.));
+    bring(&mut doc, stopper, "bottom", &joint(flask, "neck"), (4., 0.));
+    // Another stopper's cone right on the moving cone: two cones never seat.
+    let other = add(&mut doc, "reshiki/stopper-15", Point::new(900., 600.));
+    let m = port(&doc, &joint(stopper, "bottom"));
+    let o = port(&doc, &joint(other, "bottom"));
+    doc.translate(
+        &[other],
+        (m.point[0] - o.point[0]) as f32,
+        (m.point[1] - o.point[1]) as f32,
+    );
+    let snap = solve::snap(&mut doc, &[stopper], 14., true).unwrap();
+    assert_eq!(snap.target.at, joint(flask, "neck"));
+    assert!(matches!(snap.offer, Offer::Adapter(_)));
+    // Leaving the scale as it is stays possible past the limits.
+    let k = placed::MAX_PT_PER_MM / placed::DEFAULT_PT_PER_MM;
+    crate::editing::transform_about(&mut doc, &[flask], Point::new(200., 300.), k * 1.0005, 0.);
+    assert_eq!(placed::scale_limit(&doc, &[flask, other], 1.), 1.);
 }

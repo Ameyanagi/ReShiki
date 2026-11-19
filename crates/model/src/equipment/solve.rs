@@ -621,7 +621,8 @@ pub fn snap(doc: &mut Document, ids: &[u64], reach: f32, any_angle: bool) -> Opt
     }
     let inner = free(doc, &moving, true);
     let outer = free(doc, &moving, false);
-    let mut best: Option<(bool, f64, &Port, &Port)> = None;
+    // A joint that fits wins, then one an adapter joins, then the closest.
+    let mut best: Option<(u8, f64, &Port, &Port)> = None;
     for m in &inner {
         for s in &outer {
             let reach = f64::from(reach).max(REACH_DIAMETERS * s.diameter());
@@ -634,17 +635,20 @@ pub fn snap(doc: &mut Document, ids: &[u64], reach: f32, any_angle: bool) -> Opt
             {
                 continue;
             }
-            let fit = mates(m, s);
+            let tier = if mates(m, s) {
+                2
+            } else {
+                u8::from(adapter(s, m).is_some())
+            };
             let score = off / reach * 12. + 0.3 * turn;
-            // A joint that fits wins over a closer one that does not.
-            if best.is_none_or(|(f, b, ..)| (fit, -score) > (f, -b)) {
-                best = Some((fit, score, s, m));
+            if best.is_none_or(|(t, b, ..)| (tier, -score) > (t, -b)) {
+                best = Some((tier, score, s, m));
             }
         }
     }
-    let (fit, _, s, m) = best?;
+    let (tier, _, s, m) = best?;
     let (s, m) = (s.clone(), m.clone());
-    let offer = if fit {
+    let offer = if tier == 2 {
         Offer::Seat
     } else if let Some((d, ..)) = adapter(&s, &m) {
         Offer::Adapter(d)

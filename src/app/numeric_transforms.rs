@@ -218,6 +218,8 @@ fn extent(doc: &Document, ids: &[u64], field: Field) -> Option<f32> {
 
 fn scale(doc: &mut Document, ids: &[u64], pivot: Point, field: Field, factor: f32, lock: bool) {
     if lock || field == Field::Scale {
+        // Equipment stops at its scale limits as one, so seats hold.
+        let factor = reshiki::equipment::placed::scale_limit(doc, ids, factor);
         editing::transform_about(doc, ids, pivot, factor, 0.);
     } else {
         let (x, y) = if field == Field::Width {
@@ -250,10 +252,18 @@ fn size_factor(
     if (target - current).abs() <= 0.0051 {
         return Ok(1.);
     }
+    // Search only the factors equipment in the selection can take.
+    let limit = |k| {
+        if lock || field == Field::Scale {
+            reshiki::equipment::placed::scale_limit(doc, ids, k)
+        } else {
+            k
+        }
+    };
     let (mut low, mut high) = if target < current {
-        (0.0001, 1.)
+        (limit(0.0001), 1.)
     } else {
-        (1., 10_000.)
+        (1., limit(10_000.))
     };
     let mut lo_size = measure(low);
     let mut hi_size = measure(high);

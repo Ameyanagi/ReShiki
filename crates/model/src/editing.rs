@@ -744,7 +744,6 @@ pub fn transform_about(doc: &mut Document, ids: &[u64], pivot: Point, scale: f32
     {
         return;
     }
-    let scale = crate::equipment::placed::scale_limit(doc, ids, scale);
     for atom in &mut doc.atoms {
         if ids.contains(&atom.id) {
             atom.depth *= scale;
@@ -889,12 +888,6 @@ pub fn scale_axes_about(doc: &mut Document, ids: &[u64], pivot: Point, x: f32, y
     {
         return;
     }
-    let (x, y) = if x == y {
-        let k = crate::equipment::placed::scale_limit(doc, ids, x);
-        (k, k)
-    } else {
-        (x, y)
-    };
     let vector = |p: Point| Point::new(p.x * x, p.y * y);
     transform_display(doc, ids, vector);
     map_positions(

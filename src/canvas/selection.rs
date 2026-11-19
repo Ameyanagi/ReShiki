@@ -310,6 +310,8 @@ pub(super) fn rotation_readout_bounds(
 pub(crate) fn rotate(doc: &mut Document, ids: &[u64], pivot: World, scale: f32, degrees: f32) {
     reshiki::models3d::roll(doc, ids, degrees);
     let drawn = reshiki::models3d::without_hidden(doc, ids);
+    // Equipment stops at its scale limits as one, so seats hold.
+    let scale = reshiki::equipment::placed::scale_limit(doc, &drawn, scale);
     editing::transform_about(doc, &drawn, pivot, scale, degrees);
 }
 
