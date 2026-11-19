@@ -188,7 +188,8 @@ pub fn office_metafile(
 ) -> Result<Vec<u8>, String> {
     doc.validate()?;
     let (doc, paper) = background.apply(doc);
-    let tree = crate::export::parse_svg(scene::svg_on(&doc, paper))?;
+    let tree =
+        crate::export::parse_svg(scene::svg_of(&doc, scene::vector_primitives(&doc), paper))?;
     metafile(&tree, &doc)
 }
 

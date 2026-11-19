@@ -46,7 +46,7 @@ The size in centimeters is the same at every resolution: a higher resolution put
 
 SVG, PDF and EMF draw plain bonds as stroked lines in the drawing's line width. Change the stroke width of a pasted or opened figure in Adobe Illustrator or Inkscape, and every plain bond follows, not only the inner lines of double bonds. Bonds that meet at an unlabelled carbon form one line with a mitred corner, so corners and ends look the same as on the canvas and in the PNG. Lines end flat at labels and chain ends.
 
-Wedges, hashed wedges and bold bonds stay filled shapes, because their width varies or is set by the bold width. Where a plain bond meets one of them, or a bond of another color, a small filled corner completes the mitre. Bonds faded by rear opacity also stay filled, so overlapping lines do not darken where they meet.
+Wedges, hashed wedges and bold bonds stay filled shapes, because their width varies or is set by the bold width. Where a plain bond meets one of them, or a bond of another color, a small filled corner completes the mitre. Bonds between atoms that rear opacity fades stay filled too, so overlapping lines do not darken where they meet.
 
 ## Text in SVG files
 

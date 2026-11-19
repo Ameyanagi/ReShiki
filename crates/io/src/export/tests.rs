@@ -780,16 +780,13 @@ fn outlined_svg_and_office_exports_preserve_text_geometry_and_physical_size() {
     for theme in crate::canvas_theme::CanvasTheme::ALL {
         let mut doc = doc.clone();
         doc.canvas_theme = theme;
+        let vector = |paper| scene::svg_of(&doc, scene::vector_primitives(&doc), paper);
         assert_eq!(
             drawing(&doc, "svg").unwrap(),
-            scene::svg_with_background(&doc).into_bytes()
+            vector(Some(theme.background())).into_bytes()
         );
         for clipboard in [false, true] {
-            let source = if clipboard {
-                scene::svg(&doc)
-            } else {
-                scene::svg_with_background(&doc)
-            };
+            let source = vector((!clipboard).then(|| theme.background()));
             let bytes = if clipboard {
                 clipboard_figure(&doc, "svg-office").unwrap().bytes
             } else {
