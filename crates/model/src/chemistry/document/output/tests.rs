@@ -722,6 +722,7 @@ fn output_keeps_presentation_and_can_be_undone_as_one_edit() -> anyhow::Result<(
         id: 56,
         members: vec![a, b, 55],
         integral: false,
+        layout: None,
     });
     let molecule = prepare(&original)?;
     let draft = for_drawing(&molecule, &original)?;

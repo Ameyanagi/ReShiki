@@ -13,12 +13,36 @@ pub enum Preset {
     A5,
     Letter,
     Legal,
+    /// Final-size table-of-contents graphics, landscape, without margins.
+    AcsToc,
+    RscAbstract,
+    ElsevierAbstract,
     Custom,
 }
 impl Preset {
-    pub const ALL: [Self; 5] = [Self::A4, Self::A5, Self::Letter, Self::Legal, Self::Custom];
+    pub const ALL: [Self; 8] = [
+        Self::A4,
+        Self::A5,
+        Self::Letter,
+        Self::Legal,
+        Self::AcsToc,
+        Self::RscAbstract,
+        Self::ElsevierAbstract,
+        Self::Custom,
+    ];
+    /// A graphic shown at its printed size rather than a sheet of paper.
+    pub fn graphic(self) -> bool {
+        matches!(
+            self,
+            Self::AcsToc | Self::RscAbstract | Self::ElsevierAbstract
+        )
+    }
     pub fn size(self) -> Option<(f32, f32)> {
+        let cm = |w: f32, h: f32| Some((w * 72. / 2.54, h * 72. / 2.54));
         match self {
+            Self::AcsToc => cm(8.25, 4.45),
+            Self::RscAbstract => cm(8., 4.),
+            Self::ElsevierAbstract => cm(13., 5.),
             Self::A4 => Some((210. * 72. / 25.4, 297. * 72. / 25.4)),
             Self::A5 => Some((148. * 72. / 25.4, 210. * 72. / 25.4)),
             Self::Letter => Some((612., 792.)),
@@ -34,6 +58,9 @@ impl std::fmt::Display for Preset {
             Self::A5 => "A5",
             Self::Letter => "US Letter",
             Self::Legal => "US Legal",
+            Self::AcsToc => "ACS TOC graphic · 8.25 × 4.45 cm",
+            Self::RscAbstract => "RSC graphical abstract · 8 × 4 cm",
+            Self::ElsevierAbstract => "Elsevier graphical abstract · 13 × 5 cm",
             Self::Custom => "Custom",
         })
     }

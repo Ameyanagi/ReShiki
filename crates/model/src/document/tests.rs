@@ -232,6 +232,7 @@ fn drawable_id_order_excludes_groups_but_next_id_includes_them() {
         id: 40,
         members: vec![10, 7],
         integral: false,
+        layout: None,
     });
     assert_eq!(doc.all_ids(), [10, 2, 7, 6, 4]);
     assert_eq!(doc.object_ids().collect::<Vec<_>>(), doc.all_ids());

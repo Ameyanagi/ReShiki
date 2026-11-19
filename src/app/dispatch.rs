@@ -89,6 +89,7 @@ impl App {
             Message::InvertSelection => self.invert_selection(),
             Message::Arc(action) => self.update_arc(action),
             Message::Graphics(action) => self.graphic_action(action),
+            Message::Figure(action) => self.figure_action(action),
             Message::RotateMark(id, index) => self.rotate_mark(id, index),
             Message::RemoveMark(id, index) => self.remove_mark(id, index),
             Message::AtomRadical(value) => self.set_radical(value),

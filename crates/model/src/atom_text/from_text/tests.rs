@@ -275,6 +275,7 @@ fn conversion_preserves_first_character_style_and_deletes_through_document() {
         id: source.next_id(),
         members: vec![existing, id, other],
         integral: false,
+        layout: None,
     });
     source.validate().unwrap();
     let first_glyph = text_first_glyph_center(&source.annotations[0]).unwrap();

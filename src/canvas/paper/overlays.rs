@@ -520,7 +520,11 @@ impl MoleculeCanvas<'_> {
                 }
             }
         }
-        for graphic in preview.graphics.iter().filter(|g| selected.contains(&g.id)) {
+        for graphic in preview
+            .graphics
+            .iter()
+            .filter(|g| selected.contains(&g.id) && g.panel.is_none())
+        {
             if let Some(handles) = graphic.path_handles() {
                 self.draw_path_handles(frame, graphic, handles, bounds, edit_points);
             } else if edit_points {

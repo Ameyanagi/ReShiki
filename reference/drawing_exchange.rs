@@ -676,6 +676,7 @@ fn retrosynthesis_drawing_output_matches_reference() -> anyhow::Result<()> {
                     id: 3,
                     members: vec![1, 2],
                     integral: true,
+                    layout: None,
                 });
             }
             let request = Request::molecule("export", doc.clone());

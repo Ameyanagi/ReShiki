@@ -114,27 +114,32 @@ fn group_validation_rejects_dangling_duplicate_and_crossing_memberships() {
             id: 8,
             members: vec![1, 99],
             integral: false,
+            layout: None,
         }],
         vec![Group {
             id: 1,
             members: vec![1, 2],
             integral: false,
+            layout: None,
         }],
         vec![Group {
             id: 8,
             members: vec![1, 1],
             integral: false,
+            layout: None,
         }],
         vec![
             Group {
                 id: 8,
                 members: vec![1, 2, 3],
                 integral: false,
+                layout: None,
             },
             Group {
                 id: 9,
                 members: vec![2, 3, 4],
                 integral: false,
+                layout: None,
             },
         ],
     ] {

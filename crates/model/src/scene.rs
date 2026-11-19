@@ -2358,12 +2358,47 @@ fn graphic_primitive(g: &&crate::graphics::Graphic, doc: &Document) -> Vec<Primi
                 style,
             }
         }));
-        if let Some(label) = g.superscript_label(&doc.drawing_style.text_style()) {
+        let text_style = &doc.drawing_style.text_style();
+        parts.extend(
+            g.panel_parts(text_style)
+                .into_iter()
+                .map(|p| Primitive::Path {
+                    commands: p.commands,
+                    style: p.style,
+                    filled: p.filled,
+                }),
+        );
+        // A title on a band reads against the band as the canvas shows it;
+        // the renderer then converts the chosen ink back for that canvas.
+        let canvas = doc.canvas_theme;
+        let on_band = g
+            .panel
+            .as_ref()
+            .is_some_and(|p| p.place == crate::graphics::TitlePlace::Bar);
+        let band_ink = || {
+            let band = canvas.color(g.style.stroke.rgb());
+            let ink = if crate::color_contrast::luminance(band) > 0.45 {
+                [0; 3]
+            } else {
+                [255; 3]
+            };
+            canvas.color(ink)
+        };
+        let superscript = g
+            .superscript_label(text_style)
+            .into_iter()
+            .map(|l| (l, false));
+        let titles = g.panel_titles(text_style).into_iter().map(|l| (l, on_band));
+        for (label, banded) in superscript.chain(titles) {
             parts.push(Primitive::Text {
                 position: label.position,
                 text: label.text.into(),
                 size: label.size,
-                color: label.style.color.rgb(),
+                color: if banded {
+                    band_ink()
+                } else {
+                    label.style.color.rgb()
+                },
                 style: label.style,
             });
         }

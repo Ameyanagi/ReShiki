@@ -436,6 +436,7 @@ impl Sketch {
             id: doc.next_id(),
             members: doc.all_ids(),
             integral: true,
+            layout: None,
         });
         doc.validate()?;
         Ok(doc)

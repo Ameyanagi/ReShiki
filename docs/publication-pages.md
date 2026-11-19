@@ -1,7 +1,7 @@
 # Publication pages
 
 Open **View → Page setup…** or **Export → Page setup…**. Choose A4, A5,
-US Letter, US Legal or a custom size. Width, height and the four margins use
+US Letter, US Legal, a table-of-contents graphic or a custom size. Width, height and the four margins use
 millimetres. Portrait/landscape and a 1–10 by 1–10 page grid are available.
 Apply creates one Undo step; editing the fields alone does not change the drawing.
 
@@ -10,6 +10,12 @@ Atom selection markers shrink at page-fit zoom to keep small structures readable
 Page order runs left to right, then down. The page panel offers Previous/Next,
 Fit page and Fit all pages. The ordinary Fit command still fits the artwork.
 Opening a saved paged document fits the first page.
+
+**ACS TOC graphic · 8.25 × 4.45 cm**, **RSC graphical abstract · 8 × 4 cm**
+and **Elsevier graphical abstract · 13 × 5 cm** set a landscape sheet of that
+size without margins: the sheet edge is the final crop. The canvas shows the
+figure at the document's drawing scale inside it, and **Export pages as PDF…**
+writes it at that printed size.
 
 Changing paper size or page count leaves object positions and sizes intact.
 **Center selection on page** moves complete connected molecules, integral groups

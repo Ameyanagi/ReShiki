@@ -2,12 +2,14 @@
 mod arc;
 mod effects;
 mod heads;
+pub mod panel;
 mod path;
 mod superscript;
 use crate::{document::Point, style};
 pub use arc::ArcGeometry;
 pub use effects::{Effects, SHADOW_RGB, shade, wave_radius, wavy};
 pub use heads::PathHeads;
+pub use panel::{Divider, Panel, TitlePlace};
 pub use path::{MIN_CLOSED_NODES, MIN_OPEN_NODES, PathHandle, PathNodeType, PathSummary};
 use serde::{Deserialize, Serialize};
 pub use superscript::GraphicLabel;
@@ -275,6 +277,9 @@ pub struct Graphic {
     /// Optional arrowheads on a single open curve or path.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub heads: Option<PathHeads>,
+    /// Titles, corners and dividers that make a rectangle a figure panel.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub panel: Option<Panel>,
 }
 fn back_layer() -> i32 {
     -1
@@ -371,6 +376,7 @@ impl Graphic {
                 path: vec![],
                 node_types: vec![],
                 heads: None,
+                panel: None,
             };
         }
         let mut dx = end.x - start.x;
@@ -415,6 +421,7 @@ impl Graphic {
             path: vec![],
             node_types: vec![],
             heads: None,
+            panel: None,
         }
     }
     /// A rounded rectangle's corner radius in drawing units, at most half its
@@ -436,6 +443,7 @@ impl Graphic {
         self.origin = o;
         self.axis_x = Point::new(x.x - o.x, x.y - o.y);
         self.axis_y = Point::new(y.x - o.x, y.y - o.y);
+        self.normalize_panel();
     }
     pub fn commands(&self) -> Vec<PathCommand> {
         if matches!(self.kind, GraphicKind::Symbol(_) | GraphicKind::Orbital(_)) {
@@ -555,13 +563,22 @@ impl Graphic {
         text_style: &crate::typography::TextStyle,
     ) -> (Point, Point) {
         let (mut lo, mut hi) = self.shape_bounds();
-        if let Some(label) = self.superscript_label(text_style) {
-            for (a, b) in label.ink_boxes() {
-                lo.x = lo.x.min(a.x);
-                lo.y = lo.y.min(a.y);
-                hi.x = hi.x.max(b.x);
-                hi.y = hi.y.max(b.y);
-            }
+        let extras = self
+            .panel_parts(text_style)
+            .into_iter()
+            .flat_map(|part| part.commands)
+            .flat_map(|c| c.points())
+            .map(|p| (p, p));
+        let titles = self
+            .superscript_label(text_style)
+            .into_iter()
+            .chain(self.panel_titles(text_style))
+            .flat_map(|label| label.ink_boxes());
+        for (a, b) in extras.chain(titles) {
+            lo.x = lo.x.min(a.x);
+            lo.y = lo.y.min(a.y);
+            hi.x = hi.x.max(b.x);
+            hi.y = hi.y.max(b.y);
         }
         (lo, hi)
     }
@@ -604,11 +621,28 @@ impl Graphic {
         r: f32,
         text_style: &crate::typography::TextStyle,
     ) -> bool {
-        if self.superscript_label(text_style).is_some_and(|label| {
-            label.ink_boxes().into_iter().any(|(lo, hi)| {
-                p.x >= lo.x - r && p.x <= hi.x + r && p.y >= lo.y - r && p.y <= hi.y + r
+        if self
+            .superscript_label(text_style)
+            .into_iter()
+            .chain(self.panel_titles(text_style))
+            .any(|label| {
+                label.ink_boxes().into_iter().any(|(lo, hi)| {
+                    p.x >= lo.x - r && p.x <= hi.x + r && p.y >= lo.y - r && p.y <= hi.y + r
+                })
             })
-        }) {
+            || self.panel_parts(text_style).iter().any(|part| {
+                flattened(&part.commands).iter().any(|path| {
+                    if part.filled {
+                        inside_polygon(p, path)
+                    } else {
+                        // Dividers are lines: a click near one picks the panel.
+                        path.windows(2).any(|pair| {
+                            matches!(pair, [a, b] if segment_distance(p, *a, *b) < r + part.style.width() * 0.5)
+                        })
+                    }
+                })
+            })
+        {
             return true;
         }
         if self.kind == GraphicKind::Picture {
@@ -634,6 +668,9 @@ impl Graphic {
         }
         if self.kind == GraphicKind::Picture {
             return Ok(());
+        }
+        if self.panel.is_some() {
+            return Err("A panel keeps its shape: resize it with its handles".into());
         }
         if let Some(result) = self.edit_connected_path_point(index, p) {
             return result;
@@ -667,6 +704,12 @@ impl Graphic {
                 return Err("Path arrowheads do not match the graphic kind".into());
             }
             heads.validate()?;
+        }
+        if let Some(panel) = &self.panel {
+            if !self.kind.panel_capable() {
+                return Err("Panel settings require a rectangle".into());
+            }
+            panel.validate()?;
         }
         if let Some(arc) = self.arc {
             if self.kind != GraphicKind::Arc {

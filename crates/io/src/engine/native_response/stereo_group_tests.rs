@@ -422,6 +422,7 @@ fn cdxml_object_groups_keep_a_shared_stereo_group_in_one_fragment() -> anyhow::R
         id,
         members: vec![9, 10, 11],
         integral: true,
+        layout: None,
     });
     let xml = exchange::drawing::write(&doc, Default::default())?;
     let imported = cdxml::import_cdxml(&xml)?.document;

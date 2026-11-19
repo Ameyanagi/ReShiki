@@ -47,6 +47,7 @@ pub mod haworth;
 pub mod highlights;
 pub mod ionic;
 pub mod joining;
+pub mod layouts;
 pub mod ligands;
 pub mod linked_properties;
 pub mod models3d;

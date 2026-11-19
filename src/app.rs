@@ -40,6 +40,7 @@ use document_tab::DocumentTab;
 mod engine_jobs;
 mod event_slot;
 mod figure_export;
+mod figure_panels;
 mod file_shortcuts;
 mod files;
 #[cfg(target_os = "macos")]
@@ -225,6 +226,8 @@ pub enum Message {
     ApplyBondColor,
     Arc(arcs::Action),
     Graphics(graphics::Action),
+    /// Figure panels and lasting layouts.
+    Figure(figure_panels::Action),
     RemoveMark(u64, usize),
     RotateMark(u64, usize),
     AtomRadical(u8),
@@ -926,6 +929,8 @@ impl App {
         let existing: std::collections::HashSet<_> = self.tab.doc.all_ids().into_iter().collect();
         self.tab.selected.retain(|id| existing.contains(id));
         self.sync_arrow_label_gap_input();
+        // A flip or another edit can reorder a selected panel's titles.
+        self.sync_figure();
     }
     /// What every recorded change of the drawing needs, whether an edit made
     /// it or Undo or Redo restored it. Results for the previous revision are

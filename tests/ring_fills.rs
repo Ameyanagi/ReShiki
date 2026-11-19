@@ -242,6 +242,7 @@ async fn native_fills_follow_grouped_fragments() -> Result<(), Box<dyn std::erro
         id: 1000,
         members: second,
         integral: false,
+        layout: None,
     });
     let xml = reshiki::exchange::drawing::write(&doc, Default::default())?;
     let parsed = roxmltree::Document::parse(&xml)?;

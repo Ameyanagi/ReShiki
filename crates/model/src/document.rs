@@ -265,7 +265,8 @@ pub const PROPERTY_CAPTIONS: u32 = 38;
 pub const CAPTION_NAMES: u32 = 39;
 /// ChemDraw drawing-element styles: shading, drop shadows, wavy strokes,
 /// arrowheads on lines and corner radii; Reference and Illustration
-/// molecules and arrows; color by origin settings on reactions.
+/// molecules and arrows; color by origin settings on reactions; figure
+/// panels and lasting row, column and grid layouts.
 pub const DRAWING_ELEMENTS: u32 = 40;
 
 /// The newest document format this build reads. Native output uses version 30
@@ -276,8 +277,9 @@ pub const DRAWING_ELEMENTS: u32 = 40;
 /// with three or four radical electrons require version 37, linked
 /// property captions require version 38, a property caption with a name
 /// requires version 39, or shading, drop shadows, wavy strokes, arrowheads
-/// on lines, corner radii, a Reference or Illustration molecule or arrow, or
-/// color by origin settings require version 40.
+/// on lines, corner radii, a Reference or Illustration molecule or arrow,
+/// color by origin settings, figure panels or lasting layouts require
+/// version 40.
 /// Optional atom-label settings, including steroid α/β display, retain this
 /// version; older readers may ignore those presentation preferences.
 ///
@@ -315,7 +317,7 @@ pub const DRAWING_ELEMENTS: u32 = 40;
 /// | 37 | Three or four radical electrons on an atom. |
 /// | 38 | Property captions linked to their molecules (#1175). |
 /// | 39 | Names in property captions: a name line and custom names. |
-/// | 40 | Shading, drop shadows, wavy strokes, arrowheads on lines and corner radii; object purpose (Reference, Illustration); color by origin. |
+/// | 40 | Shading, drop shadows, wavy strokes, arrowheads on lines and corner radii; object purpose (Reference, Illustration); color by origin; figure panels and lasting layouts. |
 pub const VERSION: u32 = 40;
 
 /// Bytes of text in one annotation. Layout time grows faster than the text.
@@ -498,12 +500,14 @@ impl Document {
                 || g.style.corner_pt.is_some()
                 || g.style.pattern == LinePattern::Wavy
                 || g.kind == GraphicKind::Line && g.heads.is_some()
+                || g.panel.is_some()
         }) || self
             .arrows
             .iter()
             .any(|a| a.appearance().pattern == LinePattern::Wavy)
             || crate::purpose::used(self)
             || self.reactions.iter().any(|r| r.colors.is_some())
+            || self.groups.iter().any(|g| g.layout.is_some())
         {
             DRAWING_ELEMENTS
         } else if self.property_captions.iter().any(|link| {

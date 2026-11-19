@@ -303,6 +303,7 @@ fn generic_native_group_validation_is_prepaid_for_every_expansion_scope() {
             id: first + 2,
             members: vec![first, first + 1],
             integral: false,
+            layout: None,
         });
     }
     // The source is valid, and this probe observes the actual native pair scan.

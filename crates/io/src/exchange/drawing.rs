@@ -18,6 +18,8 @@ mod groups;
 mod labels;
 mod ligands;
 mod objects;
+#[cfg(test)]
+mod panel_tests;
 mod partial_charges;
 mod tree;
 pub use clipboard::write as write_clipboard;
