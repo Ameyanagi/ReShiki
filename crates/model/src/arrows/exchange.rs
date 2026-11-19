@@ -78,8 +78,13 @@ fn shapes(paths: Vec<ArrowPath>, next: &mut u64) -> Vec<Graphic> {
                 piece.push(command);
             }
         }
+        // ChemDraw keeps a gradient body as its own Shaded fill.
+        let mut style = path.style;
+        if style.effects.gradient.take().is_some() {
+            style.effects.shaded = true;
+        }
         for piece in pieces.into_iter().filter(|p| p.len() > 1) {
-            graphics.push(shape(*next, piece, &path.style, path.filled));
+            graphics.push(shape(*next, piece, &style, path.filled));
             *next += 1;
         }
     }

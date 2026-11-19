@@ -456,6 +456,47 @@ fn push_svg(s: &mut String, drawing: Vec<Primitive>, frame: &Frame, halos: &mut 
                     "stroke-linecap=\"round\"".into()
                 }
             )),
+            Primitive::Gradient {
+                commands,
+                frame: [o, x, y],
+                radial,
+                from,
+                to,
+                stops,
+            } => {
+                frame.gradients.set(frame.gradients.get() + 1);
+                let id = format!("{}{}", super::GRADIENT_ID, frame.gradients.get());
+                let geometry = if radial {
+                    format!(
+                        "radialGradient id=\"{id}\" cx=\"{}\" cy=\"{}\" r=\"{}\"",
+                        from[0],
+                        from[1],
+                        (to[0] - from[0]).hypot(to[1] - from[1])
+                    )
+                } else {
+                    format!(
+                        "linearGradient id=\"{id}\" x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\"",
+                        from[0], from[1], to[0], to[1]
+                    )
+                };
+                let stops: String = stops
+                    .iter()
+                    .map(|(offset, [r, g, b], alpha)| {
+                        format!("<stop offset=\"{offset}\" stop-color=\"rgb({r},{g},{b})\" stop-opacity=\"{alpha}\"/>")
+                    })
+                    .collect();
+                let tag = if radial { "radialGradient" } else { "linearGradient" };
+                s.push_str(&format!(
+                    "<defs><{geometry} gradientUnits=\"userSpaceOnUse\" gradientTransform=\"matrix({} {} {} {} {} {})\">{stops}</{tag}></defs><path d=\"{}\" fill=\"url(#{id})\"/>",
+                    x.x,
+                    x.y,
+                    y.x,
+                    y.y,
+                    o.x,
+                    o.y,
+                    path_data(&commands)
+                ));
+            }
             Primitive::Card {
                 lo,
                 hi,
@@ -592,7 +633,8 @@ fn push_halo(s: &mut String, primitives: &[Primitive], radius: f32, color: &str)
             | Primitive::ShadedPolygon { .. }
             | Primitive::Contour { .. }
             | Primitive::Wire { .. }
-            | Primitive::Card { .. } => {}
+            | Primitive::Card { .. }
+            | Primitive::Gradient { .. } => {}
         }
     }
 }

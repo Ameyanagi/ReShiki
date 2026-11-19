@@ -1935,6 +1935,12 @@ pub(super) const PROPERTIES: &[Property] = &[
         variants: &[],
     },
     Property {
+        code: 0x0303,
+        name: "FadePercent",
+        kind: "INT16",
+        variants: &[],
+    },
+    Property {
         code: 0x0308,
         name: "highlightColor",
         kind: "UINT16",

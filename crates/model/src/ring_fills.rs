@@ -15,6 +15,30 @@ pub struct RingFill {
     pub atoms: Vec<u64>,
     /// Palette tints follow the theme; imported and pasted colors are custom.
     pub color: Color,
+    pub effect: RingEffect,
+}
+/// How a ring fill paints its color.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RingEffect {
+    #[default]
+    Flat,
+    /// The paper color at the middle of the ring into its color at the bonds.
+    Gradient,
+    /// The color at half strength, so what lies behind shows through.
+    SeeThrough,
+}
+impl RingEffect {
+    pub const ALL: [Self; 3] = [Self::Flat, Self::Gradient, Self::SeeThrough];
+}
+impl std::fmt::Display for RingEffect {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::Flat => "Flat",
+            Self::Gradient => "Gradient",
+            Self::SeeThrough => "See-through",
+        })
+    }
 }
 /// Earlier files stored a legacy key or, with `fixed_color`, an exact color.
 #[derive(Deserialize)]
@@ -23,6 +47,8 @@ struct StoredRingFill {
     color: StoredColor,
     #[serde(default)]
     fixed_color: bool,
+    #[serde(default)]
+    effect: RingEffect,
 }
 impl Serialize for RingFill {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
@@ -30,13 +56,18 @@ impl Serialize for RingFill {
         // Custom colors keep the `fixed_color` form that earlier versions read;
         // Ink and palette tints use the color's own form.
         let exact = matches!(self.color, Color::Custom(_));
-        let mut fill = serializer.serialize_struct("RingFill", 2 + usize::from(exact))?;
+        let effect = self.effect != RingEffect::Flat;
+        let mut fill = serializer
+            .serialize_struct("RingFill", 2 + usize::from(exact) + usize::from(effect))?;
         fill.serialize_field("atoms", &self.atoms)?;
         if exact {
             fill.serialize_field("color", &self.color.rgb())?;
             fill.serialize_field("fixed_color", &true)?;
         } else {
             fill.serialize_field("color", &self.color)?;
+        }
+        if effect {
+            fill.serialize_field("effect", &self.effect)?;
         }
         fill.end()
     }
@@ -55,6 +86,7 @@ impl TryFrom<StoredRingFill> for RingFill {
         Ok(Self {
             atoms: stored.atoms,
             color,
+            effect: stored.effect,
         })
     }
 }
@@ -117,7 +149,10 @@ impl RingFill {
     }
     pub fn primitive(&self, doc: &Document) -> Option<Primitive> {
         let commands = self.commands(doc);
-        (!commands.is_empty()).then_some(Primitive::Path {
+        if commands.is_empty() {
+            return None;
+        }
+        let flat = |commands| Primitive::Path {
             commands,
             style: GraphicStyle {
                 stroke: self.color,
@@ -126,6 +161,26 @@ impl RingFill {
                 ..Default::default()
             },
             filled: true,
+        };
+        Some(match self.effect {
+            RingEffect::Flat => flat(commands),
+            RingEffect::SeeThrough => Primitive::Opacity {
+                alpha: crate::graphics::Effects::SEE_THROUGH,
+                primitive: Box::new(flat(commands)),
+            },
+            RingEffect::Gradient => {
+                let (origin, x, y) = crate::graphics::bounding_frame(&commands)?;
+                crate::scene::gradient_primitive(
+                    commands,
+                    [origin, x, y],
+                    crate::graphics::Gradient {
+                        from: crate::graphics::Gradient::WHITE,
+                        kind: crate::graphics::GradientKind::Radial,
+                    },
+                    self.color,
+                    doc,
+                )
+            }
         })
     }
 }
@@ -233,6 +288,18 @@ pub fn selected_cycles(doc: &Document, selected: &[u64]) -> Vec<Vec<u64>> {
     }
     cycles.into_iter().collect()
 }
+/// Paint the selected rings' fills with `effect`; returns how many changed.
+pub fn set_effect(doc: &mut Document, selected: &[u64], effect: RingEffect) -> usize {
+    let cycles: HashSet<_> = selected_cycles(doc, selected).into_iter().collect();
+    let mut changed = 0;
+    for fill in &mut doc.ring_fills {
+        if fill.effect != effect && cycles.contains(&key(&fill.atoms)) {
+            fill.effect = effect;
+            changed += 1;
+        }
+    }
+    changed
+}
 /// Return the number of rings changed. None removes paint, not bonds.
 pub fn apply(doc: &mut Document, selected: &[u64], color: Option<Color>) -> usize {
     let cycles = selected_cycles(doc, selected);
@@ -256,7 +323,11 @@ pub fn apply(doc: &mut Document, selected: &[u64], color: Option<Color>) -> usiz
                 changed += 1;
             }
             (None, Some(color)) => {
-                doc.ring_fills.push(RingFill { atoms, color });
+                doc.ring_fills.push(RingFill {
+                    atoms,
+                    color,
+                    effect: RingEffect::Flat,
+                });
                 changed += 1;
             }
             _ => (),

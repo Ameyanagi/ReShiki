@@ -73,6 +73,7 @@ pub(super) fn keeps_open(message: &Message) -> bool {
             | Message::TextColor(_)
             | Message::ApplyTextColor
             | Message::ClearRingFill
+            | Message::RingEffect(_)
             | Message::ClearHighlights
             | Message::TextStyle(StyleChange::Color(_))
             | Message::Canvas(crate::canvas::Edit::Hover(_) | crate::canvas::Edit::PointerHover(_))
@@ -527,6 +528,31 @@ impl App {
             ("style-color-apply", "Apply custom color", "Apply"),
         );
         let mut body = column![head, swatches, input].spacing(10);
+        if self.tab.color_scope == ColorScope::Rings
+            && self.selected_ring_fills().iter().any(Option::is_some)
+        {
+            body = body.push(
+                row![
+                    text("Fill effect").size(12).style(muted_text),
+                    hover_hint(
+                        crate::appearance::pick_list(
+                            reshiki::ring_fills::RingEffect::ALL,
+                            self.selected_ring_effect(),
+                            Message::RingEffect,
+                        )
+                        .placeholder("Mixed")
+                        .text_size(12)
+                        .padding([5, 8])
+                        .width(Length::Fill),
+                        "Gradient: paper color at the middle · See-through: shows what lies behind",
+                        // Above, so it never covers the list's choices.
+                        tooltip::Position::Top,
+                    ),
+                ]
+                .spacing(8)
+                .align_y(Alignment::Center),
+            );
+        }
         if invalid {
             body = body.push(text(HINT).size(11).style(text::danger));
         } else if let Some(Paint::Custom(rgb)) = current {

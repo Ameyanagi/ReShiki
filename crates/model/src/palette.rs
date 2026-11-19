@@ -442,6 +442,9 @@ pub fn for_each_color_mut(doc: &mut Document, mut visit: impl FnMut(&mut Color))
         if let Some(fill) = &mut graphic.style.fill {
             visit(fill);
         }
+        if let Some(gradient) = &mut graphic.style.effects.gradient {
+            visit(&mut gradient.from);
+        }
     }
     for fill in &mut doc.ring_fills {
         visit(&mut fill.color);
@@ -483,10 +486,11 @@ pub fn any_color(doc: &Document, test: impl Fn(Color) -> bool) -> bool {
         .arrows
         .iter()
         .filter_map(|a| a.style.as_ref().map(|s| s.color));
-    let graphics = doc
-        .graphics
-        .iter()
-        .flat_map(|g| std::iter::once(g.style.stroke).chain(g.style.fill));
+    let graphics = doc.graphics.iter().flat_map(|g| {
+        std::iter::once(g.style.stroke)
+            .chain(g.style.fill)
+            .chain(g.style.effects.gradient.map(|gradient| gradient.from))
+    });
     let fills = doc.ring_fills.iter().map(|f| f.color);
     let abbreviations = doc.abbreviations.iter().flat_map(|g| {
         g.label_style

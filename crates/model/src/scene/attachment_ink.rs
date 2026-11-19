@@ -221,6 +221,9 @@ fn intersects_fraction(part: &Primitive, origin: Point, axis: Point, at: f32) ->
                         && path.windows(2).any(|line| range(line, style.width() * 0.5)))
             })
         }
+        Primitive::Gradient { commands, .. } => crate::graphics::flattened(commands)
+            .iter()
+            .any(|path| signed_area(path).abs() > 1e-10 && range(path, 0.)),
         Primitive::Picture(_)
         | Primitive::Text { .. }
         | Primitive::Halo { .. }

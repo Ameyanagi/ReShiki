@@ -58,6 +58,8 @@ impl Reader<'_, '_> {
         )?;
         if shaded {
             style.shade();
+        } else if path.iter().any(|c| matches!(c, NativeCommand::Close)) {
+            self.fade(el, &mut style)?;
         }
         let visible_heads = ["ArrowheadHead", "ArrowheadTail"]
             .iter()
@@ -324,6 +326,8 @@ impl Reader<'_, '_> {
         }
         if effects.0 {
             style.shade();
+        } else if kind.closed() {
+            self.fade(el, &mut style)?;
         }
         style.shadow_pt = self.shadow(el, effects.1)?;
         if kind == GraphicKind::RoundedRectangle && el.has_attribute("CornerRadius") {

@@ -767,6 +767,7 @@ fn completion(message: &Message) -> Option<Completion> {
         | Message::ApplyFontSize
         | Message::ColorScope(..)
         | Message::ClearRingFill
+        | Message::RingEffect(..)
         | Message::ClearHighlights
         | Message::TextColor(..)
         | Message::ApplyTextColor

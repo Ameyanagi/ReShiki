@@ -22,8 +22,8 @@ fn first_read_frame(code: u16) -> Vec<u8> {
 
 #[test]
 fn shared_schema_preserves_last_property_precedence() {
-    assert_eq!(SCHEMA.names.len(), 267);
-    assert_eq!(SCHEMA.codes.len(), 269);
+    assert_eq!(SCHEMA.names.len(), 268);
+    assert_eq!(SCHEMA.codes.len(), 270);
     assert_eq!(SCHEMA.names.get("SupersededBy").unwrap().code, 0x0013);
     assert_eq!(SCHEMA.names.get("Formula").unwrap().code, 0x0503);
     let fields = |p: &Property| (p.code, p.name, p.kind, p.variants);

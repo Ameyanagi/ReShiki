@@ -49,6 +49,9 @@ for code, enum in {
     name, kind, _ = PROPERTIES[code]
     PROPERTIES[code] = name, kind, enum
 PROPERTIES[0x13] = ("SupersededBy", "CDXObjectID", {})
+# ChemDraw 26 faded fills: a plain closed shape's inside in its color at this
+# many tenths of a percent over white. Native CDX writes two signed bytes.
+PROPERTIES[0x303] = ("FadePercent", "INT16", {})
 # ChemDraw 26 native CDX saves use a two-byte color-table index on atoms,
 # bonds, and contracted labels for persistent highlight paint.
 PROPERTIES[0x308] = ("highlightColor", "UINT16", {})

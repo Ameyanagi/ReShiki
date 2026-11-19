@@ -514,6 +514,7 @@ fn painted_ring_members_remap_and_collapsed_ring_paint_is_rejected() {
     doc.ring_fills.push(crate::ring_fills::RingFill {
         atoms: vec![ring_a, ring_b, ring_c],
         color: crate::palette::Color::Custom([80, 100, 150]),
+        effect: Default::default(),
     });
     let (joined, _) = merge_atoms(&doc, &[selected[0], ring_a, selected[1]]).unwrap();
     assert_eq!(joined.ring_fills[0].atoms, [selected[0], ring_b, ring_c]);

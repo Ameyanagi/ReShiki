@@ -92,6 +92,35 @@ pub(super) enum ColorField {
     Fill,
 }
 
+/// The fill's gradient, as the Properties list names it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GradientChoice {
+    None,
+    Linear,
+    Radial,
+}
+impl GradientChoice {
+    const ALL: [Self; 3] = [Self::None, Self::Linear, Self::Radial];
+    fn of(style: &reshiki::graphics::GraphicStyle) -> Self {
+        match style.effects.gradient.map(|g| g.kind) {
+            None => Self::None,
+            Some(reshiki::graphics::GradientKind::Linear { .. }) => Self::Linear,
+            Some(reshiki::graphics::GradientKind::Radial) => Self::Radial,
+        }
+    }
+}
+impl std::fmt::Display for GradientChoice {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::None => "None",
+            Self::Linear => "Linear",
+            Self::Radial => "Radial",
+        })
+    }
+}
+/// The angle a new linear gradient runs at: top to bottom.
+const DOWN: f32 = 90.;
+
 /// Graphic style and scientific-symbol inputs, nested under `Message::Graphics`.
 /// Applied style and superscript changes commit inline and join drafts.
 #[derive(Debug, Clone)]
@@ -101,6 +130,13 @@ pub enum Action {
     ApplyWidth,
     Corner(String),
     ApplyCorner,
+    Opacity(String),
+    ApplyOpacity,
+    Gradient(GradientChoice),
+    GradientFrom(String),
+    ApplyGradientFrom,
+    Angle(String),
+    ApplyAngle,
     Stroke(String),
     ApplyStroke,
     Fill(String),
@@ -147,6 +183,13 @@ impl App {
             Action::ApplyWidth => self.apply_graphic_width(),
             Action::Corner(s) => self.tab.graphic_corner_input = s,
             Action::ApplyCorner => self.apply_graphic_corner(),
+            Action::Opacity(s) => self.tab.graphic_opacity_input = s,
+            Action::ApplyOpacity => self.apply_graphic_opacity(),
+            Action::Gradient(choice) => self.set_gradient(choice),
+            Action::GradientFrom(s) => self.tab.graphic_gradient_input = s,
+            Action::ApplyGradientFrom => self.apply_gradient_from(),
+            Action::Angle(s) => self.tab.graphic_angle_input = s,
+            Action::ApplyAngle => self.apply_gradient_angle(),
             Action::Stroke(s) => self.tab.graphic_stroke_input = s,
             Action::ApplyStroke => self.apply_graphic_color(ColorField::Stroke),
             Action::Fill(s) => self.tab.graphic_fill_input = s,
@@ -432,8 +475,91 @@ impl App {
                         ),
                     ]
                     .spacing(14),
+                )
+                .push(
+                    row![
+                        text("Gradient").size(11),
+                        crate::appearance::pick_list(
+                            GradientChoice::ALL,
+                            Some(GradientChoice::of(style)),
+                            |choice| Message::Graphics(Action::Gradient(choice)),
+                        )
+                        .text_size(12)
+                        .padding(5)
+                        .width(Length::Fill),
+                    ]
+                    .spacing(6)
+                    .align_y(Alignment::Center),
                 );
+            if let Some(gradient) = style.effects.gradient {
+                let mut controls = row![
+                    text("From").size(11),
+                    hover_hint(
+                        reshiki::accessibility::text_input(
+                            "graphic-gradient-from",
+                            "Gradient start color",
+                            "#FFFFFF",
+                            &self.tab.graphic_gradient_input,
+                        )
+                        .style(crate::appearance::input_style)
+                        .on_input(|value| Message::Graphics(Action::GradientFrom(value)))
+                        .on_submit(Message::Graphics(Action::ApplyGradientFrom))
+                        .size(12)
+                        .padding(5)
+                        .width(76),
+                        "Enter applies · the gradient ends at the fill color",
+                        tooltip::Position::Top,
+                    ),
+                ]
+                .spacing(6)
+                .align_y(Alignment::Center);
+                if matches!(
+                    gradient.kind,
+                    reshiki::graphics::GradientKind::Linear { .. }
+                ) {
+                    controls = controls.push(text("Angle (°)").size(11)).push(hover_hint(
+                        reshiki::accessibility::text_input(
+                            "graphic-gradient-angle",
+                            "Gradient angle (degrees)",
+                            "90",
+                            &self.tab.graphic_angle_input,
+                        )
+                        .style(crate::appearance::input_style)
+                        .on_input(|value| Message::Graphics(Action::Angle(value)))
+                        .on_submit(Message::Graphics(Action::ApplyAngle))
+                        .size(12)
+                        .padding(5)
+                        .width(48),
+                        "Enter applies · 0 runs left to right, 90 top to bottom",
+                        tooltip::Position::Top,
+                    ));
+                }
+                panel = panel.push(controls);
+            }
         }
+        panel = panel.push(
+            row![
+                text("Opacity (%)").size(11),
+                hover_hint(
+                    reshiki::accessibility::text_input(
+                        "graphic-opacity",
+                        "Opacity (%)",
+                        "100",
+                        &self.tab.graphic_opacity_input,
+                    )
+                    .style(crate::appearance::input_style)
+                    .on_input(|value| Message::Graphics(Action::Opacity(value)))
+                    .on_submit(Message::Graphics(Action::ApplyOpacity))
+                    .size(12)
+                    .padding(5)
+                    .width(48),
+                    "Enter applies · fades the fill, or the lines of a shape without one",
+                    tooltip::Position::Top,
+                ),
+            ]
+            .spacing(6)
+            .align_y(Alignment::Center),
+        );
         if kind == GraphicKind::RoundedRectangle {
             panel = panel.push(
                 row![
@@ -531,8 +657,8 @@ impl App {
                         "Drag to draw · Shift makes a circle."
                     }
                     GraphicKind::Arc => "Drag the endpoints to adjust the curve.",
-                    _ if kind.brackets() => "Enter applies typed widths, colors and superscripts.",
-                    _ => "Enter applies typed widths and colors.",
+                    _ if kind.brackets() => "Enter applies typed numbers, colors and superscripts.",
+                    _ => "Enter applies typed numbers and colors.",
                 })
                 .size(11)
                 .style(muted_text),
@@ -606,6 +732,17 @@ impl App {
         if let Some(c) = self.tab.graphic_style.fill {
             self.tab.graphic_fill_input = hex(c);
         }
+        let effects = self.tab.graphic_style.effects;
+        self.tab.graphic_opacity_input = effects
+            .opacity
+            .map_or(100., |a| (a * 1000.).round() / 10.)
+            .to_string();
+        if let Some(gradient) = effects.gradient {
+            self.tab.graphic_gradient_input = hex(gradient.from);
+            if let reshiki::graphics::GradientKind::Linear { angle } = gradient.kind {
+                self.tab.graphic_angle_input = points(angle);
+            }
+        }
         self.sync_figure();
     }
     pub(super) fn apply_graphic_style(&mut self, change: GraphicChange) {
@@ -617,6 +754,14 @@ impl App {
                 change,
                 GraphicChange::Pattern(reshiki::graphics::LinePattern::Wavy)
             ) && matches!(g.kind, GraphicKind::Symbol(_) | GraphicKind::Orbital(_))
+            {
+                continue;
+            }
+            // Only a closed shape has an inside for a gradient to fill.
+            if matches!(
+                change,
+                GraphicChange::Gradient(Some(_)) | GraphicChange::GradientKind(Some(_))
+            ) && !g.closed_shape()
             {
                 continue;
             }
@@ -654,6 +799,55 @@ impl App {
             _ => {
                 self.error = true;
                 self.status = "Corner radius must be 0–1000 pt".into();
+            }
+        }
+    }
+
+    pub(super) fn apply_graphic_opacity(&mut self) {
+        let input = self.tab.graphic_opacity_input.trim().trim_end_matches('%');
+        match input.trim().parse::<f32>() {
+            Ok(100.) => self.apply_graphic_style(GraphicChange::Opacity(None)),
+            // ChemDraw's FadePercent keeps tenths of a percent.
+            Ok(percent) if percent.is_finite() && (1. ..=99.).contains(&percent) => self
+                .apply_graphic_style(GraphicChange::Opacity(Some(
+                    (percent * 10.).round() / 1000.,
+                ))),
+            _ => {
+                self.error = true;
+                self.status = "Opacity must be 1–99%, or 100 for none".into();
+            }
+        }
+    }
+
+    /// Each selected shape's gradient as `choice`, keeping its own start
+    /// color and angle.
+    pub(super) fn set_gradient(&mut self, choice: GradientChoice) {
+        use reshiki::graphics::GradientKind;
+        self.apply_graphic_style(GraphicChange::GradientKind(match choice {
+            GradientChoice::None => None,
+            GradientChoice::Linear => Some(GradientKind::Linear { angle: DOWN }),
+            GradientChoice::Radial => Some(GradientKind::Radial),
+        }));
+    }
+
+    pub(super) fn apply_gradient_from(&mut self) {
+        match parse_color(&self.tab.graphic_gradient_input) {
+            Some(rgb) => self.apply_graphic_style(GraphicChange::GradientFrom(Paint::Custom(rgb))),
+            None => {
+                self.error = true;
+                self.status = "Enter a six-digit hex color, such as #FFFFFF".into();
+            }
+        }
+    }
+
+    pub(super) fn apply_gradient_angle(&mut self) {
+        match self.tab.graphic_angle_input.trim().parse::<f32>() {
+            Ok(angle) if angle.is_finite() && angle.abs() <= 360. => {
+                self.apply_graphic_style(GraphicChange::GradientAngle(angle))
+            }
+            _ => {
+                self.error = true;
+                self.status = "Angle must be within ±360°".into();
             }
         }
     }

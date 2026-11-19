@@ -1,4 +1,5 @@
-//! ChemDraw's shape effects: shading, drop shadows and wavy strokes.
+//! Shape effects beyond a flat fill and stroke: ChemDraw's shading, drop
+//! shadows and wavy strokes, and gradient and see-through fills.
 use super::{Graphic, GraphicKind, PathCommand, flattened};
 use crate::document::Point;
 use serde::{Deserialize, Serialize};
@@ -25,7 +26,8 @@ const MAX_WAVES: f32 = 10_000.;
 /// Half-waves around the smallest closed wavy outline.
 const MIN_CLOSED_WAVES: usize = 8;
 
-/// Effects on a closed shape, written to ChemDraw as Shaded and Shadow.
+/// Effects on a shape. ChemDraw keeps Shaded and Shadow, and draws a
+/// see-through fill as its faded fill (FadePercent).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Effects {
@@ -35,10 +37,52 @@ pub struct Effects {
     /// A grey copy of the shape this many points down and to the right.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub shadow_pt: Option<f32>,
+    /// How opaque the fill is, 0–1; a shape without a fill fades its line.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub opacity: Option<f32>,
+    /// A fill that blends from another color into the fill color.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub gradient: Option<Gradient>,
+}
+/// A gradient fill: from `from` at the start to the shape's fill color.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct Gradient {
+    pub from: crate::palette::Color,
+    pub kind: GradientKind,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GradientKind {
+    /// Across the shape, `angle` degrees clockwise from left to right.
+    Linear { angle: f32 },
+    /// Out from the middle of the shape to its edge.
+    Radial,
+}
+impl Gradient {
+    /// White into the fill color, as the plan's gradient tiles show.
+    pub const WHITE: crate::palette::Color = crate::palette::Color::Custom([255; 3]);
+    /// The start and end of the gradient in the unit square of the shape's
+    /// frame: a linear one spans the square's extent along its angle; a
+    /// radial one reaches the circle inscribed in the square.
+    pub fn ends(self) -> ([f32; 2], [f32; 2]) {
+        match self.kind {
+            GradientKind::Linear { angle } => {
+                let (sin, cos) = angle.to_radians().sin_cos();
+                let half = (sin.abs() + cos.abs()) / 2.;
+                (
+                    [0.5 - cos * half, 0.5 - sin * half],
+                    [0.5 + cos * half, 0.5 + sin * half],
+                )
+            }
+            GradientKind::Radial => ([0.5, 0.5], [1., 0.5]),
+        }
+    }
 }
 impl Effects {
     /// ChemDraw's default ShadowSize of 400, in points.
     pub const SHADOW_PT: f32 = 4.;
+    /// The opacity a new see-through fill starts at.
+    pub const SEE_THROUGH: f32 = 0.5;
     pub fn is_plain(&self) -> bool {
         *self == Self::default()
     }
@@ -49,8 +93,55 @@ impl Effects {
         {
             return Err("Shadow offset must be 0.1–36 pt".into());
         }
+        if self
+            .opacity
+            .is_some_and(|a| !a.is_finite() || !(0.01..=0.99).contains(&a))
+        {
+            return Err("Opacity must be 1–99%".into());
+        }
+        if self.gradient.is_some_and(|g| match g.kind {
+            GradientKind::Linear { angle } => !angle.is_finite() || angle.abs() > 360.,
+            GradientKind::Radial => false,
+        }) {
+            return Err("Gradient angle must be within ±360°".into());
+        }
+        // Shading draws nested bands, which would darken where they overlap.
+        if self.shaded && (self.gradient.is_some() || self.opacity.is_some()) {
+            return Err("A shaded fill cannot also be a gradient or see-through".into());
+        }
         Ok(())
     }
+}
+
+/// What a ChemDraw export loses of gradient and see-through fills.
+pub const EXPORT_NOTICE: &str = "ChemDraw has no gradient or see-through fills. Gradients become flat colors, and see-through fills become faded colors that cover what lies behind them. Save a .rsk file to keep them.";
+
+/// The notice for a ChemDraw export of `doc`, if it has such fills.
+pub fn export_notice(doc: &crate::document::Document) -> Option<String> {
+    (doc.graphics
+        .iter()
+        .any(|g| g.style.effects.gradient.is_some() || g.style.effects.opacity.is_some())
+        || doc
+            .ring_fills
+            .iter()
+            .any(|f| f.effect != crate::ring_fills::RingEffect::Flat))
+    .then(|| EXPORT_NOTICE.into())
+}
+
+/// Whether `doc` has paint the canvas draws from image tiles, as it does
+/// 3D models: gradients, gradient arrow bodies included.
+pub fn tiled(doc: &crate::document::Document) -> bool {
+    doc.graphics
+        .iter()
+        .any(|g| g.style.effects.gradient.is_some())
+        || doc
+            .arrows
+            .iter()
+            .any(|a| a.drawn_body() == crate::arrows::Body::Gradient)
+        || doc
+            .ring_fills
+            .iter()
+            .any(|f| f.effect == crate::ring_fills::RingEffect::Gradient)
 }
 
 impl Graphic {
@@ -118,6 +209,25 @@ impl Graphic {
                 .collect(),
         )
     }
+    /// The outline a gradient fills and the frame it is laid out in: a
+    /// rectangle's or ellipse's own axes, so it turns with the shape, else
+    /// the outline's bounding box.
+    pub fn gradient_area(&self) -> Option<(Vec<PathCommand>, [Point; 3])> {
+        if self.style.effects.gradient.is_none()
+            || self.style.fill.is_none()
+            || !self.closed_shape()
+        {
+            return None;
+        }
+        let commands = self.outline();
+        // The stored axes, so the gradient turns and reflects with the shape.
+        let (origin, x, y) = if self.upright_frame().is_some() {
+            (self.origin, self.axis_x, self.axis_y)
+        } else {
+            bounding_frame(&commands)?
+        };
+        Some((commands, [origin, x, y]))
+    }
     /// ChemDraw-style shading as nested flat bands, painted in order, each
     /// with its color's distance from the highlight (0) to the far edge (1).
     /// Rectangles shade in boxes anchored at their top-left corner. Other
@@ -134,20 +244,9 @@ impl Graphic {
             self.kind,
             GraphicKind::Rectangle | GraphicKind::RoundedRectangle
         );
-        let (origin, x, y) = if let Some(frame) = self.upright_frame() {
-            frame
-        } else {
-            let mut points = commands.iter().flat_map(PathCommand::iter_points);
-            let Some(first) = points.next() else {
-                return vec![];
-            };
-            let (lo, hi) = points.fold((first, first), |(lo, hi), p| {
-                (
-                    Point::new(lo.x.min(p.x), lo.y.min(p.y)),
-                    Point::new(hi.x.max(p.x), hi.y.max(p.y)),
-                )
-            });
-            (lo, Point::new(hi.x - lo.x, 0.), Point::new(0., hi.y - lo.y))
+        let Some((origin, x, y)) = self.upright_frame().or_else(|| bounding_frame(&commands))
+        else {
+            return vec![];
         };
         let world = |u: f32, v: f32| origin.offset(x.x * u + y.x * v, x.y * u + y.y * v);
         let determinant = x.x * y.y - x.y * y.x;
@@ -223,6 +322,19 @@ impl Graphic {
         }
         bands
     }
+}
+
+/// The bounding box of `commands` as a frame: its corner and two sides.
+pub(crate) fn bounding_frame(commands: &[PathCommand]) -> Option<(Point, Point, Point)> {
+    let mut points = commands.iter().flat_map(PathCommand::iter_points);
+    let first = points.next()?;
+    let (lo, hi) = points.fold((first, first), |(lo, hi), p| {
+        (
+            Point::new(lo.x.min(p.x), lo.y.min(p.y)),
+            Point::new(hi.x.max(p.x), hi.y.max(p.y)),
+        )
+    });
+    Some((lo, Point::new(hi.x - lo.x, 0.), Point::new(0., hi.y - lo.y)))
 }
 
 /// The shading color `t` of the way from white to `rgb`, darkening faster

@@ -120,6 +120,7 @@ impl App {
             Message::FontSize(value) => self.tab.font_size_input = value,
             Message::ApplyFontSize => self.apply_font_size_input(),
             Message::ClearRingFill => self.apply_ring_color(None),
+            Message::RingEffect(effect) => self.apply_ring_effect(effect),
             Message::ClearHighlights => self.apply_highlight_color(None),
             Message::ColorScope(scope) => self.set_color_scope(scope),
             Message::TextColor(value) => self.set_text_color_input(value),

@@ -39,6 +39,32 @@ selected, the settings apply to the next shape you draw. Shading and shadows
 are drawn on the canvas and in PNG, SVG and PDF. Clicks and snapping use the
 shape itself, not its shadow.
 
+### Gradient and see-through fills
+
+Select a rectangle, rounded rectangle, ellipse or closed path. In
+**Properties**, below **Shaded** and **Shadow**:
+
+- **Gradient → Linear** blends the fill from a start color into the fill color
+  across the shape. **From** sets the start color (white at first) and
+  **Angle (°)** its direction: 0 runs left to right, 90 top to bottom. The
+  gradient turns with a rotated rectangle or ellipse.
+- **Gradient → Radial** blends from the start color at the middle of the shape
+  into the fill color at its edge.
+- **Opacity (%)** makes the fill see-through, so what lies behind it shows.
+  Its outline stays solid. A line, an arrow line or a shape without a fill
+  fades its lines instead. 100 is opaque.
+
+A gradient or see-through fill replaces **Shaded**. A shape without a fill
+takes its stroke color as the fill. For a gradient page or panel background,
+draw a rectangle over the area, give it a gradient and choose **Send to back**.
+
+To change a ring interior, select the whole ring, open the color button's
+**Ring interiors** and choose a **Fill effect**: **Flat**, **Gradient** (the
+paper color at the middle of the ring into its color) or **See-through**.
+
+Each change is one Undo step. Gradients and see-through fills are drawn on the
+canvas and in PNG, SVG and PDF, on the light and dark canvas.
+
 ### Wavy lines
 
 Choose **Wavy** as the stroke pattern of a line, curve or path, or of an arrow
@@ -175,6 +201,11 @@ cm**, **RSC graphical abstract · 8 × 4 cm** or **Elsevier graphical abstract �
   lines, curves and arrows open in ChemDraw as solid strokes.
 - ChemDraw has shadows only on rectangles and ovals, so a shadow on a rotated
   rectangle or a path is not written to CDXML or CDX.
+- ChemDraw has no gradient or see-through fills. A gradient is written as the
+  flat color halfway along it. A see-through fill in its outline's color is
+  written as ChemDraw's faded fill, which covers what lies behind it; other
+  see-through colors are written as they look over white paper. Export shows a
+  notice. Ring interior effects are written flat in the same way.
 - Shading paints each part of a compound path on its own, so a hole in it is
   shaded over. A path too detailed to shade keeps a flat fill.
 - Freehand tracing and non-proportional resizing are not available.
@@ -243,9 +274,24 @@ the same way. ReShiki draws the shading as flat bands, as ChemDraw's own
 renders do, three bands per point of size (32 to 256), so canvas, PNG, SVG
 and PDF match and the steps stay invisible when zoomed in. Drawings with shading,
 shadows, wavy strokes, arrowheads on graphic lines or a set corner radius are
-document version 40. ChemDraw's CornerRadius (hundredths of a point) becomes
+document version 40, as are gradient and see-through fills and ring interior
+effects. ChemDraw's CornerRadius (hundredths of a point) becomes
 **Corner (pt)** on import and is written back for native rounded rectangles.
 Curves nested in molecular fragments are also kept on import.
+
+ChemDraw paints the inside of a plain closed rectangle, oval or curve with its
+color at FadePercent tenths of a percent over white (CDX property 0x0303,
+INT16), measured with ChemDraw's own renderer. ReShiki reads that as a fill in
+the stroke color with opacity FadePercent / 1000 and writes it back the same
+way. Filled and shaded shapes, lines and arrows show no fade in ChemDraw, so
+FadePercent is ignored there; a value that is not a number is refused. A
+gradient is a `Gradient` scene primitive laid out in the unit square of the
+shape's frame (its own axes for rectangles and ellipses, else its bounding
+box). SVG writes it as a native `linearGradient` or `radialGradient` with a
+`gradientTransform`, so PDF and PNG keep it exact, and the canvas draws it with
+resvg from the same SVG, as it does 3D models. Its colors are the ones the flat
+fill would show on the canvas. A see-through fill wraps the fill in an
+`Opacity` primitive.
 
 CDXML does not keep ReShiki's parametric shape type. External saves may split
 grouped bracket strokes, change stacking values and quantize colors/coordinates.
@@ -254,7 +300,7 @@ number of graphic objects. `.rsk` files keep ReShiki's exact model.
 
 `.rsk`/SVG/PDF/PNG keep dots. SVG/PDF/EMF/PNG draw path arrowheads, and
 CDXML/CDX keep their editable head settings on open curves.
-Unsupported legacy shapes, doubled curves, transparency and arbitrary external
+Unsupported legacy shapes, doubled curves, ChemDraw `alpha` transparency and arbitrary external
 styling are not implemented. A bracket becomes a polymer
 repeating unit, with a movable repeat label, through **Define repeating unit**;
 see [generic structures](generic-structures.md#define-a-repeating-unit).
