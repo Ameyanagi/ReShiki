@@ -439,7 +439,7 @@ impl<B: ChemistryEngine> ChemistryEngine for LocalEngine<B> {
                     let bytes = STANDARD
                         .decode(text)
                         .map_err(|_| "Invalid binary drawing base64")?;
-                    crate::exchange::from_cdx(&bytes)
+                    crate::exchange::from_cdx_tolerant(&bytes)
                 })
                 .await
                 .map_err(|e| format!("Drawing conversion failed: {e}"))??,

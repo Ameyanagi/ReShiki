@@ -15,6 +15,8 @@ pub struct Loss {
     pub schemes: usize,
     pub steps: usize,
     pub pages: usize,
+    /// Objects imported in the nearest style ReShiki draws, or left out.
+    pub unsupported: usize,
 }
 
 pub(crate) fn loss(text: &str) -> Result<Loss> {
@@ -30,6 +32,7 @@ pub(crate) fn loss(text: &str) -> Result<Loss> {
             _ => {}
         }
     }
+    loss.unsupported = super::approximate::approximated(text);
     Ok(loss)
 }
 
@@ -42,6 +45,9 @@ pub(crate) fn validate(text: &str) -> Result<bool> {
     let tree = Tree::parse_import(text)?;
     let nodes = tree.descendants(0)?;
     let mut ids = HashMap::new();
+    // ChemDraw itself repeats an identifier, for example on linked property
+    // captions. Only a reference to a repeated one is ambiguous.
+    let mut repeated = std::collections::HashSet::new();
     let mut metadata = Vec::new();
     for &index in &nodes {
         let node = tree.node(index)?;
@@ -54,17 +60,18 @@ pub(crate) fn validate(text: &str) -> Result<bool> {
         {
             let id = id.parse::<u32>().map_err(|_| invalid())?;
             if id != 0 && ids.insert(id, index).is_some() {
-                return Err(invalid());
+                repeated.insert(id);
             }
         }
     }
     let mut references = 0usize;
     for &index in &metadata {
         let node = tree.node(index)?;
-        if !node
-            .attr("id")
-            .is_some_and(|id| id.parse::<u32>().is_ok_and(|id| id != 0))
-        {
+        // A scheme or step shares its identifier with nothing.
+        if !node.attr("id").is_some_and(|id| {
+            id.parse::<u32>()
+                .is_ok_and(|id| id != 0 && !repeated.contains(&id))
+        }) {
             return Err(invalid());
         }
         let parent = node.parent.map(|p| tree.node(p)).transpose()?;
@@ -106,8 +113,11 @@ pub(crate) fn validate(text: &str) -> Result<bool> {
                     return Err(Error::Limit);
                 }
                 let id = reference.parse::<u32>().map_err(|_| invalid())?;
+                if repeated.contains(&id) {
+                    return Err(invalid());
+                }
                 let &target = ids.get(&id).ok_or_else(invalid)?;
-                if !valid_target(&tree, &ids, name, target)? {
+                if !valid_target(&tree, &ids, &repeated, name, target)? {
                     return Err(invalid());
                 }
                 count += 1;
@@ -120,7 +130,13 @@ pub(crate) fn validate(text: &str) -> Result<bool> {
     Ok(!metadata.is_empty())
 }
 
-fn valid_target(tree: &Tree, ids: &HashMap<u32, usize>, field: &str, index: usize) -> Result<bool> {
+fn valid_target(
+    tree: &Tree,
+    ids: &HashMap<u32, usize>,
+    repeated: &std::collections::HashSet<u32>,
+    field: &str,
+    index: usize,
+) -> Result<bool> {
     let node = tree.node(index)?;
     let caption = node.tag == "t"
         && node
@@ -134,6 +150,9 @@ fn valid_target(tree: &Tree, ids: &HashMap<u32, usize>, field: &str, index: usiz
                 false
             } else if let Some(replacement) = node.attr("SupersededBy") {
                 let id = replacement.parse::<u32>().map_err(|_| invalid())?;
+                if repeated.contains(&id) {
+                    return Err(invalid());
+                }
                 let replacement = tree.node(*ids.get(&id).ok_or_else(invalid)?)?;
                 matches!(replacement.tag.as_str(), "arrow" | "curve") && arrow(replacement)
             } else {

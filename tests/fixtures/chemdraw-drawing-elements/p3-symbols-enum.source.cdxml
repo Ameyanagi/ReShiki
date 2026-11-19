@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE CDXML SYSTEM "http://www.cambridgesoft.com/xml/cdxml.dtd" >
+<CDXML CreationProgram="reshiki-probe" BoundingBox="0 0 540 720" LabelFont="3" LabelSize="10" CaptionFont="3" CaptionSize="7" LineWidth="1" BoldWidth="4" BondLength="30" HashSpacing="2.7" MarginWidth="2" color="0" bgcolor="1">
+<colortable><color r="1" g="1" b="1"/><color r="0" g="0" b="0"/><color r="1" g="0" b="0"/><color r="0" g="0" b="1"/></colortable>
+<fonttable><font id="3" charset="iso-8859-1" name="Arial"/></fonttable>
+<page id="1" BoundingBox="0 0 540 720" HeightPages="1" WidthPages="1">
+<graphic id="101" Z="101" GraphicType="Symbol" SymbolType="LonePair" BoundingBox="55.00 55.00 49.00 49.00"/>
+<t id="102" p="25.00 80.00" Z="102"><s font="3" size="6" color="0">LonePair</s></t>
+<graphic id="103" Z="103" GraphicType="Symbol" SymbolType="Electron" BoundingBox="140.00 55.00 134.00 49.00"/>
+<t id="104" p="110.00 80.00" Z="104"><s font="3" size="6" color="0">Electron</s></t>
+<graphic id="105" Z="105" GraphicType="Symbol" SymbolType="RadicalCation" BoundingBox="225.00 55.00 219.00 49.00"/>
+<t id="106" p="195.00 80.00" Z="106"><s font="3" size="6" color="0">RadicalCation</s></t>
+<graphic id="107" Z="107" GraphicType="Symbol" SymbolType="RadicalAnion" BoundingBox="310.00 55.00 304.00 49.00"/>
+<t id="108" p="280.00 80.00" Z="108"><s font="3" size="6" color="0">RadicalAnion</s></t>
+<graphic id="109" Z="109" GraphicType="Symbol" SymbolType="CirclePlus" BoundingBox="395.00 55.00 389.00 49.00"/>
+<t id="110" p="365.00 80.00" Z="110"><s font="3" size="6" color="0">CirclePlus</s></t>
+<graphic id="111" Z="111" GraphicType="Symbol" SymbolType="CircleMinus" BoundingBox="480.00 55.00 474.00 49.00"/>
+<t id="112" p="450.00 80.00" Z="112"><s font="3" size="6" color="0">CircleMinus</s></t>
+<graphic id="113" Z="113" GraphicType="Symbol" SymbolType="Dagger" BoundingBox="55.00 105.00 49.00 99.00"/>
+<t id="114" p="25.00 130.00" Z="114"><s font="3" size="6" color="0">Dagger</s></t>
+<graphic id="115" Z="115" GraphicType="Symbol" SymbolType="DoubleDagger" BoundingBox="140.00 105.00 134.00 99.00"/>
+<t id="116" p="110.00 130.00" Z="116"><s font="3" size="6" color="0">DoubleDagger</s></t>
+<graphic id="117" Z="117" GraphicType="Symbol" SymbolType="Plus" BoundingBox="225.00 105.00 219.00 99.00"/>
+<t id="118" p="195.00 130.00" Z="118"><s font="3" size="6" color="0">Plus</s></t>
+<graphic id="119" Z="119" GraphicType="Symbol" SymbolType="Minus" BoundingBox="310.00 105.00 304.00 99.00"/>
+<t id="120" p="280.00 130.00" Z="120"><s font="3" size="6" color="0">Minus</s></t>
+<graphic id="121" Z="121" GraphicType="Symbol" SymbolType="Racemic" BoundingBox="395.00 105.00 389.00 99.00"/>
+<t id="122" p="365.00 130.00" Z="122"><s font="3" size="6" color="0">Racemic</s></t>
+<graphic id="123" Z="123" GraphicType="Symbol" SymbolType="Absolute" BoundingBox="480.00 105.00 474.00 99.00"/>
+<t id="124" p="450.00 130.00" Z="124"><s font="3" size="6" color="0">Absolute</s></t>
+<graphic id="125" Z="125" GraphicType="Symbol" SymbolType="Relative" BoundingBox="55.00 155.00 49.00 149.00"/>
+<t id="126" p="25.00 180.00" Z="126"><s font="3" size="6" color="0">Relative</s></t>
+<graphic id="127" Z="127" GraphicType="Symbol" SymbolType="LonePairBar" BoundingBox="140.00 155.00 134.00 149.00"/>
+<t id="128" p="110.00 180.00" Z="128"><s font="3" size="6" color="0">LonePairBar</s></t>
+</page></CDXML>

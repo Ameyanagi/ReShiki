@@ -52,6 +52,11 @@ pub(super) fn keep_format_text(
             (loss.schemes, "reaction scheme", "reaction schemes"),
             (loss.steps, "step", "steps"),
             (loss.pages, "page", "pages"),
+            (
+                loss.unsupported,
+                "object ReShiki draws differently or leaves out",
+                "objects ReShiki draws differently or leaves out",
+            ),
         ] {
             match count {
                 0 => {}

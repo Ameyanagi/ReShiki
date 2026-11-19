@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE CDXML SYSTEM "http://www.cambridgesoft.com/xml/cdxml.dtd" >
+<CDXML CreationProgram="reshiki-probe" BoundingBox="0 0 540 720" LabelFont="3" LabelSize="10" CaptionFont="3" CaptionSize="7" LineWidth="1" BoldWidth="4" BondLength="30" HashSpacing="2.7" MarginWidth="2" color="0" bgcolor="1">
+<colortable><color r="1" g="1" b="1"/><color r="0" g="0" b="0"/><color r="1" g="0" b="0"/><color r="0" g="0" b="1"/></colortable>
+<fonttable><font id="3" charset="iso-8859-1" name="Arial"/></fonttable>
+<page id="1" BoundingBox="0 0 540 720" HeightPages="1" WidthPages="1">
+<graphic id="101" Z="101" GraphicType="Bracket" BracketType="RoundPair" BoundingBox="85.00 90.00 35.00 45.00"/>
+<t id="102" p="25.00 100.00" Z="102"><s font="3" size="6" color="0">RoundPair</s></t>
+<graphic id="103" Z="103" GraphicType="Bracket" BracketType="SquarePair" BoundingBox="170.00 90.00 120.00 45.00"/>
+<t id="104" p="110.00 100.00" Z="104"><s font="3" size="6" color="0">SquarePair</s></t>
+<graphic id="105" Z="105" GraphicType="Bracket" BracketType="CurlyPair" BoundingBox="255.00 90.00 205.00 45.00"/>
+<t id="106" p="195.00 100.00" Z="106"><s font="3" size="6" color="0">CurlyPair</s></t>
+<graphic id="107" Z="107" GraphicType="Bracket" BracketType="Round" BoundingBox="340.00 90.00 290.00 45.00"/>
+<t id="108" p="280.00 100.00" Z="108"><s font="3" size="6" color="0">Round</s></t>
+<graphic id="109" Z="109" GraphicType="Bracket" BracketType="Square" BoundingBox="425.00 90.00 375.00 45.00"/>
+<t id="110" p="365.00 100.00" Z="110"><s font="3" size="6" color="0">Square</s></t>
+<graphic id="111" Z="111" GraphicType="Bracket" BracketType="Curly" BoundingBox="510.00 90.00 460.00 45.00"/>
+<t id="112" p="450.00 100.00" Z="112"><s font="3" size="6" color="0">Curly</s></t>
+</page></CDXML>

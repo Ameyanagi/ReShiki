@@ -10,8 +10,8 @@ mod values;
 #[cfg(test)]
 mod tests;
 
-pub use decode::from_cdx;
 pub(crate) use decode::style_from_cdx;
+pub use decode::{from_cdx, from_cdx_tolerant};
 pub use encode::{to_cds, to_cdx};
 use std::{collections::HashMap, sync::LazyLock};
 

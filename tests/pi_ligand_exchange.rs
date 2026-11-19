@@ -159,12 +159,14 @@ async fn shortcut_ferrocene_exports_hidden_metal_charge() -> anyhow::Result<()> 
 }
 
 #[tokio::test]
-async fn external_gallery_with_legacy_caption_heights_is_rejected() -> anyhow::Result<()> {
+async fn external_gallery_with_legacy_caption_heights_imports_with_automatic_spacing()
+-> anyhow::Result<()> {
     let data = include_bytes!("fixtures/ligand-exchange/gallery-returned.cdx");
     let xml = reshiki::exchange::from_cdx(data).map_err(anyhow::Error::msg)?;
     let tree = roxmltree::Document::parse(&xml)?;
     // This historical capture inherited ReShiki's old CDX line-height unit
-    // bug. Preserve the bytes and reject their actual, unsupported spacing.
+    // bug. Preserve the bytes; their spacing is outside what ReShiki draws,
+    // so the captions import with automatic spacing and the import says so.
     for (height, count) in [("0.5", 114), ("1.1", 9), ("0.4", 9)] {
         ensure!(
             tree.descendants()
@@ -173,11 +175,19 @@ async fn external_gallery_with_legacy_caption_heights_is_rejected() -> anyhow::R
                 == count
         );
     }
-    let error = LocalEngine::default()
+    let response = LocalEngine::default()
         .request(Request::import("cdx", &STANDARD.encode(data)))
         .await
-        .unwrap_err();
-    ensure!(error.contains("paragraph spacing or width"), "{error}");
+        .map_err(anyhow::Error::msg)?;
+    ensure!(
+        response
+            .warnings
+            .iter()
+            .any(|w| w.contains("captions with automatic line spacing or width")),
+        "{:?}",
+        response.warnings
+    );
+    ensure!(response.document.is_some_and(|d| !d.annotations.is_empty()));
     Ok(())
 }
 

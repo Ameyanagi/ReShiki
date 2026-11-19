@@ -328,13 +328,15 @@ fn prepare(request: Request) -> Result<Preparation, Error> {
                 if text.len() > crate::exchange::LIMIT.div_ceil(3) * 4 {
                     return Err(Error::BinaryLimit);
                 }
-                crate::exchange::from_cdx(&STANDARD.decode(text)?).map_err(Error::Binary)?
+                crate::exchange::from_cdx_tolerant(&STANDARD.decode(text)?)
+                    .map_err(Error::Binary)?
             } else {
                 text
             };
+            let (xml, approximated) = cdxml::approximate(&xml);
             let (xml, variables) =
                 cdxml::drawing_variables(&xml).map_err(|e| Error::Binary(e.to_string()))?;
-            let mut warnings = Vec::new();
+            let mut warnings = Vec::from_iter(approximated);
             if cdxml::schemes::validate(&xml).map_err(|e| Error::Binary(e.to_string()))? {
                 warnings.push(cdxml::schemes::NOTICE.into());
             }

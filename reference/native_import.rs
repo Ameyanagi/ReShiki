@@ -478,6 +478,16 @@ async fn reference_cases(format: &str, script: &str) -> anyhow::Result<()> {
                     other => Some(format!("The input without @AL tags gave {other:?}")),
                 }
             }
+            // A ChemDraw style or object ReShiki cannot draw yet imports as the
+            // nearest one with a notice; the frozen worker refuses the file.
+            (Ok(Outcome::Complete(a)), None)
+                if format == "cdxml"
+                    && reshiki::chemistry::cdxml::approximate(&case.text).0 != case.text
+                    && !a.warnings.is_empty() =>
+            {
+                accepted += 1;
+                None
+            }
             (Ok(Outcome::Complete(a)), None) if format == "cdxml" => {
                 // Drawing interchange now retains unresolved chemical input.
                 // Strict molecular preparation must still reject the same

@@ -140,7 +140,11 @@ impl Reader<'_, '_> {
                     "Gradient-shaded CDXML orbitals are not supported yet",
                 ));
             }
-            let key = label.replace("Shaded", "").replace("Solid", "");
+            let grey = super::super::approximate::GREY;
+            let key = label
+                .replace("Shaded", "")
+                .replace("Solid", "")
+                .replace(grey, "");
             let key = if label.starts_with("dz2") {
                 "dz2"
             } else {
@@ -166,6 +170,8 @@ impl Reader<'_, '_> {
             )?;
             value.phase = Some(if label.contains("Solid") {
                 Phase::Solid
+            } else if label.contains(grey) {
+                Phase::Shaded
             } else {
                 Phase::Open
             });
@@ -185,6 +191,9 @@ impl Reader<'_, '_> {
                 Some("HDot") => SymbolKind::HydrogenDot,
                 Some("HDash") => SymbolKind::HydrogenDash,
                 Some("Attachment") => SymbolKind::Diamond,
+                Some("Dagger") => SymbolKind::Dagger,
+                Some("DoubleDagger") => SymbolKind::DoubleDagger,
+                Some("LonePairBar") => SymbolKind::LonePairBar,
                 _ => return Err(Error::Native("Unsupported CDXML chemical symbol")),
             };
             if el.attribute("ChemicallySignificant") == Some("yes")

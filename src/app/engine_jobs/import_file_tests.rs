@@ -145,6 +145,7 @@ fn the_format_question_is_about_the_file_its_tab_opened_and_enter_saves_as_reshi
         schemes: 4,
         steps: 12,
         pages: 0,
+        unsupported: 0,
     };
     let task = app.update(Message::FilePrepared(Some((
         std::path::Path::new("imports").join("schemes.cdxml"),

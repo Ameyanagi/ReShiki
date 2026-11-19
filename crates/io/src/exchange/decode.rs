@@ -79,7 +79,7 @@ pub(crate) fn style_from_cdx(data: &[u8]) -> Result<String> {
     if !matches!(r.remaining, [] | [0, 0]) {
         return Err("Unexpected trailing stationery data".into());
     }
-    let root = convert(&tree, &mut HashMap::new())?;
+    let root = convert(&tree, &mut HashMap::new(), false)?;
     let mut xml = String::new();
     root.write(&mut xml)?;
     Ok(xml)
@@ -88,6 +88,19 @@ pub(crate) fn style_from_cdx(data: &[u8]) -> Result<String> {
 /// Decode the supported binary drawing subset. Unknown drawing features fail
 /// explicitly rather than silently yielding a chemically different structure.
 pub fn from_cdx(data: &[u8]) -> Result<String> {
+    decode(data, false)
+}
+
+/// [`from_cdx`] for opening a file: objects, properties and values outside the
+/// supported subset are passed on or skipped instead of refusing the file.
+/// An unknown object keeps a name the import then reports as left out; an
+/// unknown property or value is dropped, so its object takes the default.
+/// Broken structure and the size limits are refused as before.
+pub fn from_cdx_tolerant(data: &[u8]) -> Result<String> {
+    decode(data, true)
+}
+
+fn decode(data: &[u8], tolerant: bool) -> Result<String> {
     if data.len() > LIMIT {
         return Err("Drawing exceeds the 16 MB structure limit".into());
     }
@@ -107,7 +120,8 @@ pub fn from_cdx(data: &[u8]) -> Result<String> {
         r,
         objects: 0,
         properties: 0,
-        ids: HashSet::new(),
+        ids: HashMap::new(),
+        tolerant,
     };
     let code = parser.r.u16()?;
     let tree = parser.object(code, 0)?;
@@ -118,7 +132,7 @@ pub fn from_cdx(data: &[u8]) -> Result<String> {
         return Err("Unexpected trailing binary drawing data".into());
     }
     let mut fonts = HashMap::new();
-    let root = convert(&tree, &mut fonts)?;
+    let root = convert(&tree, &mut fonts, tolerant)?;
     let mut xml = String::new();
     root.write(&mut xml)?;
     Ok(xml)
@@ -133,7 +147,8 @@ struct Parser<'a> {
     r: Reader<'a>,
     objects: usize,
     properties: usize,
-    ids: HashSet<u32>,
+    ids: HashMap<u32, bool>,
+    tolerant: bool,
 }
 impl<'a> Parser<'a> {
     fn object(&mut self, code: u16, depth: usize) -> Result<Tree<'a>> {
@@ -141,13 +156,27 @@ impl<'a> Parser<'a> {
         if depth > 64 || self.objects > MAX_OBJECTS {
             return Err("Drawing object limit exceeded".into());
         }
-        let name = OBJECTS
-            .iter()
-            .find(|(c, _)| *c == code)
-            .ok_or_else(|| format!("Unsupported binary drawing object 0x{code:04x}"))?
-            .1;
+        let name = match OBJECTS.iter().find(|(c, _)| *c == code) {
+            Some((_, name)) => name,
+            // Codes ChemDraw 26 writes; any other object is only counted.
+            None if self.tolerant => match code {
+                0x800b => "templategrid",
+                0x8025 => "bioshape",
+                _ => "unknownobject",
+            },
+            None => return Err(format!("Unsupported binary drawing object 0x{code:04x}")),
+        };
         let id = self.r.u32()?;
-        if id != 0 && !self.ids.insert(id) {
+        // ChemDraw itself repeats an identifier, for example on linked
+        // property captions; the readers decide whether one that is used
+        // is ambiguous, as they do for the text format.
+        // An atom, bond or fragment stays the only owner of its own: bonds
+        // and marks find them by it.
+        let chemical = matches!(name, "n" | "b" | "fragment");
+        if id != 0
+            && let Some(taken) = self.ids.insert(id, chemical)
+            && (!self.tolerant || chemical || taken)
+        {
             return Err("Duplicate binary drawing object identifier".into());
         }
         let mut tree = Tree {
@@ -252,7 +281,7 @@ fn escape(out: &mut String, text: &str, attribute: bool) -> Result<()> {
     }
     Ok(())
 }
-fn convert(tree: &Tree<'_>, fonts: &mut HashMap<u16, u16>) -> Result<Element> {
+fn convert(tree: &Tree<'_>, fonts: &mut HashMap<u16, u16>, tolerant: bool) -> Result<Element> {
     let (mut connection_count, mut node_type_count) = (0usize, 0usize);
     for (tag, _) in &tree.raw {
         match *tag {
@@ -304,6 +333,7 @@ fn convert(tree: &Tree<'_>, fonts: &mut HashMap<u16, u16>) -> Result<Element> {
         let Some(p) = SCHEMA.codes.get(tag) else {
             if matches!(tree.name, "CDXML" | "page")
                 || tree.name == "n" && matches!(tag, 0x448 | 0x44d)
+                || tolerant
             {
                 continue;
             }
@@ -317,9 +347,79 @@ fn convert(tree: &Tree<'_>, fonts: &mut HashMap<u16, u16>) -> Result<Element> {
             utf8_text = Some(*data);
             continue;
         }
+        match property(tree, &mut el, *tag, p, data, fonts) {
+            Ok(()) => {}
+            // Atoms, bonds and what groups them keep every value or fail: a
+            // dropped one would change the chemistry without a word.
+            Err(error)
+                if !tolerant
+                    || matches!(
+                        tree.name,
+                        "n" | "b"
+                            | "fragment"
+                            | "bracketedgroup"
+                            | "bracketattachment"
+                            | "crossingbond"
+                            | "scheme"
+                            | "step"
+                    ) =>
+            {
+                return Err(error);
+            }
+            Err(_) => match (p.name, *data) {
+                // ChemDraw stores a colour index in four bytes in clip art.
+                ("color", &[a, b, 0, 0]) => el.set(p.name, u16::from_le_bytes([a, b])),
+                // Earlier ReShiki versions wrote the cross as 1.
+                ("NoGo", &[1]) => el.set(p.name, "Cross"),
+                ("CurvePoints3D", _) => {
+                    if let Some(points) = curve_points_3d(data) {
+                        el.set(p.name, points);
+                    }
+                }
+                _ => {}
+            },
+        }
+    }
+    let attr = |name: &str| {
+        el.attrs
+            .iter()
+            .find(|(key, _)| key == name)
+            .map(|(_, value)| value.as_str())
+    };
+    if let Some(number) = attr("ExternalConnectionNum") {
+        external_connection_number(&el.name, attr("NodeType"), number)?;
+    }
+    if let Some(data) = utf8_text.or(text) {
+        el.children
+            .extend(decode_text(data, fonts, utf8_text.is_some())?);
+    }
+    for child in &tree.children {
+        el.children.push(convert(child, fonts, tolerant)?);
+    }
+    Ok(el)
+}
+/// A count, then x, y and z for each point.
+fn curve_points_3d(data: &[u8]) -> Option<String> {
+    let mut r = Reader::new(data);
+    let mut values = Vec::new();
+    for _ in 0..r.u16().ok()? {
+        values.push(decode_coordinates(r.take(12).ok()?, "CDXPoint3D").ok()?);
+    }
+    r.done().ok()?;
+    Some(values.join(" "))
+}
+fn property(
+    tree: &Tree<'_>,
+    el: &mut Element,
+    tag: u16,
+    p: &Property,
+    data: &[u8],
+    fonts: &HashMap<u16, u16>,
+) -> Result<()> {
+    {
         if numeric(p.kind) {
             el.set(p.name, decode_number(p, data)?);
-            continue;
+            return Ok(());
         }
         let mut r = Reader::new(data);
         match p.kind {
@@ -354,7 +454,7 @@ fn convert(tree: &Tree<'_>, fonts: &mut HashMap<u16, u16>) -> Result<Element> {
                 el.children.push(table);
             }
             "CDXFontStyle" => {
-                let prefix = if *tag == 0x80a { "Label" } else { "Caption" };
+                let prefix = if tag == 0x80a { "Label" } else { "Caption" };
                 for suffix in ["Font", "Face", "Size", "Color"] {
                     let n = r.u16()? as f64 / if suffix == "Size" { 20. } else { 1. };
                     el.set(&format!("{prefix}{suffix}"), n);
@@ -435,23 +535,7 @@ fn convert(tree: &Tree<'_>, fonts: &mut HashMap<u16, u16>) -> Result<Element> {
             _ => return Err(format!("Unsupported binary drawing property: {}", p.name)),
         }
     }
-    let attr = |name: &str| {
-        el.attrs
-            .iter()
-            .find(|(key, _)| key == name)
-            .map(|(_, value)| value.as_str())
-    };
-    if let Some(number) = attr("ExternalConnectionNum") {
-        external_connection_number(&el.name, attr("NodeType"), number)?;
-    }
-    if let Some(data) = utf8_text.or(text) {
-        el.children
-            .extend(decode_text(data, fonts, utf8_text.is_some())?);
-    }
-    for child in &tree.children {
-        el.children.push(convert(child, fonts)?);
-    }
-    Ok(el)
+    Ok(())
 }
 struct Run {
     start: usize,

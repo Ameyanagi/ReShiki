@@ -1214,7 +1214,7 @@ pub(super) const PROPERTIES: &[Property] = &[
         name: "SymbolType",
         kind: "INT16",
         variants: &[
-            ("LonePair", 13),
+            ("LonePair", 0),
             ("Electron", 1),
             ("RadicalCation", 2),
             ("RadicalAnion", 3),
@@ -1227,6 +1227,7 @@ pub(super) const PROPERTIES: &[Property] = &[
             ("Racemic", 10),
             ("Absolute", 11),
             ("Relative", 12),
+            ("LonePairBar", 13),
         ],
     },
     Property {
@@ -1429,7 +1430,7 @@ pub(super) const PROPERTIES: &[Property] = &[
         code: 0x0a3b,
         name: "NoGo",
         kind: "INT8",
-        variants: &[("None", 0), ("Cross", 1), ("Hash", 2)],
+        variants: &[("None", 0), ("Cross", 2), ("Hash", 3)],
     },
     Property {
         code: 0x0a3c,
