@@ -20,16 +20,31 @@ def palette(root):
     )
 
 
-def read_graphics(root, scale, first_id, object_map: dict | None = None, *, local_pictures=False):
-    objects = {} if object_map is None else object_map
-    colors = palette(root)
+def stacking_top(root):
+    """Only a graphic above every structure, text, arrow and arrowed curve
+    goes in front of the chemistry."""
+
+    def headed(el):
+        return any(
+            el.get(key, "None") not in ("None", "Unspecified")
+            for key in ("ArrowheadHead", "ArrowheadTail")
+        )
+
     chemistry_z = [
         int(el.attrib["Z"])
         for el in root.iter()
-        if el.tag in ("fragment", "n", "b", "t", "arrow") and "Z" in el.attrib
+        if (el.tag in ("fragment", "n", "b", "t", "arrow") or el.tag == "curve" and headed(el))
+        and "Z" in el.attrib
     ]
-    # Only a graphic above every structure, text and arrow goes in front.
-    top = max(chemistry_z, default=32767)
+    return max(chemistry_z, default=32767)
+
+
+def read_graphics(
+    root, scale, first_id, object_map: dict | None = None, *, local_pictures=False, top=None
+):
+    objects = {} if object_map is None else object_map
+    colors = palette(root)
+    top = stacking_top(root) if top is None else top
 
     def point(value):
         values = [float(v) for v in value.split()]

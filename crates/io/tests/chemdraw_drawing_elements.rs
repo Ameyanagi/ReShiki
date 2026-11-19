@@ -954,6 +954,17 @@ async fn text_and_arrows_chemdraw_stacks_over_a_shape_stay_over_it() {
         assert_eq!(layers, [-4, -3, -2, 1, 2]);
         assert_eq!(document.graphics[4].kind, GraphicKind::Line);
     }
+    // A curve with a head counts as an arrow: the box under it stays behind.
+    for (document, _) in sheet(
+        "<fragment id='2'><n id='3' p='20 20' Z='2'/></fragment>\
+         <graphic id='4' Z='7' GraphicType='Rectangle' RectangleType='Filled' \
+         BoundingBox='0 0 100 60'/>\
+         <curve id='5' Z='8' ArrowheadHead='Full' CurvePoints='0 0 0 0 30 10 60 10 90 0 90 0'/>",
+    )
+    .await
+    {
+        assert!(document.graphics[0].layer < 0, "{:?}", document.graphics);
+    }
 }
 
 #[tokio::test]
