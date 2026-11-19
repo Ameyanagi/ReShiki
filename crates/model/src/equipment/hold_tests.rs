@@ -110,6 +110,18 @@ fn a_clamp_mounts_on_the_rod_and_what_it_holds_slides_along_it_to_its_ends() {
     held.sort();
     assert_eq!(held, [flask, clamp]);
     assert_eq!(solve::carried(&doc, &all, &[stand]).len(), 3);
+    // Another stand and a loose flask selected with them still move.
+    let other = add(&mut doc, "reshiki/stand", Point::new(-900., 0.));
+    let loose = add(&mut doc, "reshiki/rbf-100-15", Point::new(900., 900.));
+    let mut both = solve::carried(&doc, &[flask, other, loose], &[flask]);
+    both.sort();
+    let mut want = vec![clamp, flask, other, loose];
+    want.sort();
+    assert_eq!(both, want);
+    let mut both = solve::carried(&doc, &[loose, other], &[loose]);
+    both.sort();
+    assert_eq!(both, [other, loose]);
+    doc.delete(&[other, loose]);
     // The rod is upright: a sideways drag goes nowhere, a slanted one
     // slides up, and a long one stops with the boss at the rod's end.
     let near = |a: [f64; 2], b: [f64; 2]| (a[0] - b[0]).hypot(a[1] - b[1]) < 1e-3;

@@ -1100,34 +1100,27 @@ fn scalable(doc: &Document, moving: &BTreeSet<u64>, k: f64) -> bool {
 }
 
 /// What a drag that starts on `clicked` moves when the selection is `ids`:
-/// their whole assembly, except that pieces held on a grounded one, such as
-/// a clamp on a stand, slide along without it and without what only it
-/// holds. Dragging the grounded piece itself moves everything.
+/// the selection with every assembly in it, except that pieces held on a
+/// grounded one, such as a clamp on a stand, slide along without it and
+/// without what only it holds. Dragging the grounded piece itself moves
+/// everything; other selected objects move as usual.
 pub fn carried(doc: &Document, ids: &[u64], clicked: &[u64]) -> Vec<u64> {
     let all = closure(doc, ids);
-    let ground: BTreeSet<u64> = (all.iter().copied())
-        .filter(|id| grounded(doc, *id))
-        .collect();
-    if ground.is_empty() || clicked.iter().any(|id| ground.contains(id)) {
-        return all;
-    }
-    let piece = |id: &u64| {
-        doc.graphics
-            .iter()
-            .any(|g| g.id == *id && g.piece.is_some())
-    };
-    let mut held = BTreeSet::new();
-    for c in clicked.iter().filter(|c| all.contains(c) && piece(c)) {
-        held.extend(reach(doc, *c, |s| {
+    let mut left: BTreeSet<u64> = BTreeSet::new();
+    for &c in clicked.iter().filter(|c| all.contains(c)) {
+        let members = assembly(doc, c);
+        let ground: BTreeSet<u64> = (members.iter().copied())
+            .filter(|id| grounded(doc, *id))
+            .collect();
+        if ground.is_empty() || ground.contains(&c) {
+            continue;
+        }
+        let held = reach(doc, c, |s| {
             !ground.contains(&s.a.piece) && !ground.contains(&s.b.piece)
-        }));
+        });
+        left.extend(members.difference(&held));
     }
-    if held.is_empty() {
-        return all;
-    }
-    all.into_iter()
-        .filter(|id| held.contains(id) || !piece(id))
-        .collect()
+    all.into_iter().filter(|id| !left.contains(id)).collect()
 }
 
 /// A drag of the pieces `ids` by `delta`, along the rails that hold them on
