@@ -390,18 +390,20 @@ fn an_existing_arial_face_skips_the_bundle_and_keeps_its_metrics() {
     }
 }
 
-/// macOS and Windows ship Arial, so the bundled faces stay unloaded there.
+/// macOS and Windows ship Arial, so the bundled Arial stand-ins stay unloaded
+/// there; only the symbols last resort is always present.
 #[cfg(any(target_os = "macos", windows))]
 #[test]
 fn installed_arial_leaves_the_bundled_faces_unloaded() {
     let mut db = resvg::usvg::fontdb::Database::new();
     super::load_fonts(&mut db);
-    let has = |family: &str| {
-        db.faces()
-            .any(|face| face.families.iter().any(|(name, _)| name == family))
+    let named = |face: &resvg::usvg::fontdb::FaceInfo, family: &str| {
+        face.families.iter().any(|(name, _)| name == family)
     };
-    assert!(has("Arial"));
-    assert!(!has(super::font::BUNDLED_FAMILY));
+    assert!(db.faces().any(|face| named(face, "Arial")));
+    assert!(!db.faces().any(|face| {
+        named(face, super::font::BUNDLED_FAMILY) && !named(face, super::font::SYMBOLS_FAMILY)
+    }));
 }
 
 #[test]

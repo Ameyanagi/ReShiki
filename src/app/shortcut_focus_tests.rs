@@ -2654,10 +2654,6 @@ async fn symbol_starting_a_caption_leaves_the_drawing_alone() {
     let (mut app, _) = App::new();
     app.tab.busy = false;
     click_running_tasks(&mut ui, &mut app, "text-style-symbols").await;
-    let keyboard = (
-        app.keyboard_drawing_active(),
-        app.tab.keyboard_drawing.shown(),
-    );
     click_running_tasks(&mut ui, &mut app, "symbol-conditions-light").await;
     assert!(app.style_menu.is_none());
     assert_eq!(app.tab.caption, "hν");
@@ -2665,11 +2661,8 @@ async fn symbol_starting_a_caption_leaves_the_drawing_alone() {
         ui.input(&app, "inline-caption").1,
         "typing goes to the caption"
     );
-    assert_eq!(
-        (
-            app.keyboard_drawing_active(),
-            app.tab.keyboard_drawing.shown()
-        ),
-        keyboard
-    );
+    // A release on the drawing would have clicked it: applying the draft and
+    // selecting nothing. The draft stays open and the drawing unchanged.
+    assert!(app.tab.inline_text.is_some());
+    assert!(app.tab.doc.annotations.is_empty() && app.tab.selected.is_empty());
 }
