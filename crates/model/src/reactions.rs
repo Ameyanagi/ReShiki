@@ -143,6 +143,13 @@ pub fn preview(doc: &Document, arrow: u64) -> Result<Reaction, &'static str> {
     if !target.purpose.is_chemistry() {
         return Err("This arrow is not Chemistry, so it has no reaction.");
     }
+    // Retrosynthesis, resonance and mechanism arrows take no reaction roles.
+    if crate::arrows::Preset::from_kind(&target.kind)
+        .reaction_role_refusal()
+        .is_some()
+    {
+        return Err("This kind of arrow has no reaction roles.");
+    }
     let labels = crate::arrow_labels::of(doc, arrow).map(|label| label.annotation);
     if let Some(reaction) = doc.reactions.iter().find(|r| r.arrow == arrow) {
         let mut reaction = reaction.clone();

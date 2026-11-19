@@ -46,7 +46,8 @@ molecule gives Chemistry.
 
 ### Preview a reaction
 
-Right-click a Chemistry arrow and choose **Preview reaction**, or choose
+Right-click a Chemistry reaction or equilibrium arrow and choose **Preview
+reaction**, or choose
 **Preview** in **Reaction roles**. Dashed outlines show each reactant, product
 and reagent, and the arrow with its conditions. An arrow with assigned roles
 shows them. Otherwise ReShiki reads the arrow's row: Chemistry molecules before

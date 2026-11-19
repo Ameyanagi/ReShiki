@@ -352,7 +352,10 @@ impl App {
             entries.push(Entry::command(
                 "Preview reaction",
                 Message::Reaction(super::reactions::Action::Preview),
-                arrow.purpose.is_chemistry(),
+                arrow.purpose.is_chemistry()
+                    && reshiki::arrows::Preset::from_kind(&arrow.kind)
+                        .reaction_role_refusal()
+                        .is_none(),
             ));
         }
         entries

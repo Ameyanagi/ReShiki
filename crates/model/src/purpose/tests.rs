@@ -298,3 +298,11 @@ fn preview_of_assigned_roles_shows_their_conditions() {
     let reaction = reactions::preview(&doc, arrow).unwrap();
     assert_eq!(reaction.annotations, vec![doc.arrow_labels[0].annotation]);
 }
+
+#[test]
+fn arrows_without_reaction_roles_have_no_preview() {
+    let (mut doc, ..) = scheme();
+    let retro = doc.arrows[0].id;
+    doc.arrows[0].kind = "retro".into();
+    assert!(reactions::preview(&doc, retro).is_err());
+}
