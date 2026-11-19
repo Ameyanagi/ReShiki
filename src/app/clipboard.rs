@@ -586,6 +586,8 @@ impl App {
             part.atom_labels = self.tab.doc.atom_labels.clone();
             part
         };
+        let known: std::collections::HashSet<u64> =
+            self.tab.doc.graphics.iter().map(|g| g.id).collect();
         if !self.append_pasted(&part) {
             self.status = "Could not insert the clipboard drawing".into();
             self.error = true;
@@ -601,8 +603,23 @@ impl App {
             && part.arrows.is_empty()
             && part.graphics.iter().all(|g| g.picture.is_some())
         {
-            if let Some(id) = self.tab.selected.first().copied() {
-                self.reveal_picture(id);
+            // Only the pictures just pasted: pasted into a panel, the
+            // selection is the panel's whole group.
+            if let Some((lo, hi)) = self
+                .tab
+                .doc
+                .graphics
+                .iter()
+                .filter(|g| g.picture.is_some() && !known.contains(&g.id))
+                .map(|g| g.bounds())
+                .reduce(|(a, b), (c, d)| {
+                    (
+                        Point::new(a.x.min(c.x), a.y.min(c.y)),
+                        Point::new(b.x.max(d.x), b.y.max(d.y)),
+                    )
+                })
+            {
+                self.reveal_bounds(lo, hi);
             }
             self.status = "Picture pasted · Drag the corner handles to resize".into();
         } else {
