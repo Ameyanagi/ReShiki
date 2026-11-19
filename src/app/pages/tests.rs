@@ -14,10 +14,15 @@ fn page_setup_is_an_explicit_atomic_edit_and_does_not_scale_objects() {
     let before = app.tab.doc.clone();
     app.tab.saved = before.clone();
     let _ = app.update(Message::Pages(Action::Open));
+    // A size applies at once and keeps the editor open.
     let _ = app.update(Message::Pages(Action::Preset(Preset::Letter)));
+    let letter = app.tab.doc.clone();
+    assert_eq!(letter.page_layout.as_ref().unwrap().width_pt, 612.);
+    assert!(app.tab.pages.editor.is_some());
     let _ = app.update(Message::Pages(Action::Input(Field::Columns, "2".into())));
-    assert_eq!(app.tab.doc, before);
+    assert_eq!(app.tab.doc, letter, "typing alone changes nothing");
     let _ = app.update(Message::Pages(Action::Apply));
+    assert!(app.tab.pages.editor.is_none());
     let expected = app.tab.doc.clone();
     assert!(app.dirty());
     assert_eq!(app.recovery_document().page_layout, expected.page_layout);
@@ -26,8 +31,11 @@ fn page_setup_is_an_explicit_atomic_edit_and_does_not_scale_objects() {
     assert_eq!(expected.bonds, before.bonds);
     assert_eq!(expected.page_layout.as_ref().unwrap().width_pt, 612.);
     let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, letter);
+    let _ = app.update(Message::Undo);
     assert_eq!(app.tab.doc, before);
     assert!(!app.dirty());
+    let _ = app.update(Message::Redo);
     let _ = app.update(Message::Redo);
     assert_eq!(app.tab.doc, expected);
     let _ = app.update(Message::Pages(Action::Open));
@@ -163,4 +171,20 @@ fn selecting_page_artwork_keeps_page_controls_and_centers_only_the_selection() {
     assert_eq!(app.tab.doc, before);
     assert_eq!(app.inspector_tab, InspectorTab::Pages);
     assert!(!app.tab.history.can_undo());
+}
+
+#[test]
+fn page_setup_closes_the_view_strip_and_landscape_applies_at_once() {
+    let mut app = ready();
+    app.view_open = true;
+    let _ = app.update(Message::Pages(Action::Show));
+    assert!(!app.view_open, "the strip's Done would be a second way out");
+    let _ = app.update(Message::Pages(Action::Preset(Preset::A4)));
+    let _ = app.update(Message::Pages(Action::Landscape(false)));
+    let portrait = app.tab.doc.clone();
+    let _ = app.update(Message::Pages(Action::Landscape(true)));
+    let layout = app.tab.doc.page_layout.as_ref().unwrap();
+    assert!(layout.width_pt > layout.height_pt);
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, portrait);
 }

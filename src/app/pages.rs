@@ -166,6 +166,45 @@ impl App {
             self.tab.pages.active = i;
         }
     }
+    /// Applies the edited page setup as one Undo step. A size or orientation
+    /// choice applies at once and keeps the editor open; Apply closes it.
+    fn apply_pages(&mut self, close: bool) -> Task<Message> {
+        let Some(editor) = &self.tab.pages.editor else {
+            return Task::none();
+        };
+        if editor.epoch != self.tab.file_epoch || editor.original != self.tab.doc.page_layout {
+            self.error = true;
+            self.status = "Page settings changed. Reopen Page setup to continue.".into();
+            return Task::none();
+        }
+        match editor.candidate() {
+            Ok(layout) => {
+                let before = self.tab.doc.clone();
+                self.tab.doc.page_layout = Some(layout);
+                self.tab
+                    .doc
+                    .require_version(reshiki::document::EDITOR_BASELINE);
+                self.changed(before);
+                self.tab.pages.editor =
+                    (!close).then(|| Editor::new(&self.tab.doc, self.tab.file_epoch));
+                self.tab.pages.active = self.tab.pages.active.min(
+                    self.tab
+                        .doc
+                        .page_layout
+                        .as_ref()
+                        .map(|l| l.count().saturating_sub(1))
+                        .unwrap_or(0),
+                );
+                self.fit_pages(Some(self.tab.pages.active));
+                self.status = "Page setup applied · Drawing scale and positions preserved".into();
+            }
+            Err(error) => {
+                self.error = true;
+                self.status = error;
+            }
+        }
+        Task::none()
+    }
     pub(super) fn page_action(&mut self, action: Action) -> Task<Message> {
         match action {
             Action::Show => {
@@ -180,6 +219,9 @@ impl App {
                 self.inspector_open = true;
                 self.inspector_tab = InspectorTab::Pages;
                 self.palette = None;
+                // Page setup lives in the sidebar now; the View strip's Done
+                // would be a second way to finish it.
+                self.view_open = false;
             }
             Action::Open => {
                 self.cancel_join();
@@ -198,6 +240,7 @@ impl App {
                 self.inspector_open = true;
                 self.inspector_tab = InspectorTab::Pages;
                 self.palette = None;
+                self.view_open = false;
             }
             Action::Cancel => {
                 self.tab.pages.editor = None;
@@ -250,6 +293,7 @@ impl App {
                         }
                     }
                     e.reset_inputs();
+                    return self.apply_pages(false);
                 }
             }
             Action::Landscape(landscape) => {
@@ -261,46 +305,10 @@ impl App {
                         std::mem::swap(&mut e.layout.width_pt, &mut e.layout.height_pt);
                     }
                     e.reset_inputs();
+                    return self.apply_pages(false);
                 }
             }
-            Action::Apply => {
-                let Some(editor) = &self.tab.pages.editor else {
-                    return Task::none();
-                };
-                if editor.epoch != self.tab.file_epoch
-                    || editor.original != self.tab.doc.page_layout
-                {
-                    self.error = true;
-                    self.status = "Page settings changed. Reopen Page setup to continue.".into();
-                    return Task::none();
-                }
-                match editor.candidate() {
-                    Ok(layout) => {
-                        let before = self.tab.doc.clone();
-                        self.tab.doc.page_layout = Some(layout);
-                        self.tab
-                            .doc
-                            .require_version(reshiki::document::EDITOR_BASELINE);
-                        self.changed(before);
-                        self.tab.pages.editor = None;
-                        self.tab.pages.active = self.tab.pages.active.min(
-                            self.tab
-                                .doc
-                                .page_layout
-                                .as_ref()
-                                .map(|l| l.count().saturating_sub(1))
-                                .unwrap_or(0),
-                        );
-                        self.fit_pages(Some(self.tab.pages.active));
-                        self.status =
-                            "Page setup applied · Drawing scale and positions preserved".into();
-                    }
-                    Err(error) => {
-                        self.error = true;
-                        self.status = error;
-                    }
-                }
-            }
+            Action::Apply => return self.apply_pages(true),
             Action::Remove => {
                 let before = self.tab.doc.clone();
                 self.tab.doc.page_layout = None;
@@ -475,22 +483,7 @@ impl App {
             text("Physical size · Document drawing scale")
                 .size(11)
                 .style(super::workspace::muted_text),
-            text("Canvas theme").size(11),
-            crate::appearance::pick_list(
-                self.theme_choices().0,
-                Some(self.theme_choices().1),
-                |choice| Message::ThemeFile(super::theme_files::Action::Choose(choice)),
-            )
-            .width(Length::Fill)
-            .text_size(12),
-            text("Canvas brightness · copies have transparent backgrounds").size(11),
-            crate::appearance::pick_list(
-                reshiki::canvas_theme::CanvasTheme::ALL,
-                Some(self.tab.doc.canvas_theme),
-                Message::CanvasTheme
-            )
-            .width(Length::Fill)
-            .text_size(12),
+            text("Size · applies at once").size(11),
             crate::appearance::pick_list(Preset::ALL, Some(preset), |p| Message::Pages(
                 Action::Preset(p)
             ))
@@ -533,6 +526,23 @@ impl App {
                 .style(crate::appearance::primary)
                 .on_press_maybe(candidate.is_ok().then_some(Message::Pages(Action::Apply)))
                 .width(Length::Fill),
+            horizontal_line(),
+            text("Canvas theme").size(11),
+            crate::appearance::pick_list(
+                self.theme_choices().0,
+                Some(self.theme_choices().1),
+                |choice| Message::ThemeFile(super::theme_files::Action::Choose(choice)),
+            )
+            .width(Length::Fill)
+            .text_size(12),
+            text("Canvas brightness · copies have transparent backgrounds").size(11),
+            crate::appearance::pick_list(
+                reshiki::canvas_theme::CanvasTheme::ALL,
+                Some(self.tab.doc.canvas_theme),
+                Message::CanvasTheme
+            )
+            .width(Length::Fill)
+            .text_size(12),
         ]
         .spacing(12);
         if let Err(error) = candidate {
