@@ -272,7 +272,8 @@ fn bundled_faces_supply_arial_and_helvetica_for_each_label_style() {
 
     let mut db = Database::new();
     super::load_bundled_fonts(&mut db);
-    assert_eq!(db.faces().count(), 4);
+    // Four Liberation Sans faces and the picker symbols.
+    assert_eq!(db.faces().count(), 5);
     assert_eq!(db.family_name(&Family::SansSerif), "Arial");
     let fonts = super::Fonts {
         names: super::family_names(&db),
@@ -366,7 +367,8 @@ fn an_existing_arial_face_skips_the_bundle_and_keeps_its_metrics() {
     let id = db.push_face_info(face);
     let original_families = db.face(id).unwrap().families.clone();
     super::load_bundled_fonts(&mut db);
-    assert_eq!(db.faces().count(), 1);
+    // Only the picker symbols, which no Arial replaces.
+    assert_eq!(db.faces().count(), 2);
     assert_eq!(db.face(id).unwrap().families, original_families);
     let fonts = super::Fonts {
         names: super::family_names(&db),
@@ -444,7 +446,8 @@ fn an_added_arial_is_used_instead_of_the_bundled_stand_in() {
             .any(|(name, _)| name == super::font::BUNDLED_FAMILY)
     };
     assert!(is_bundled(db.query(&arial(700)).unwrap()));
-    assert_eq!(db.faces().filter(|face| is_bundled(face.id)).count(), 4);
+    // Four Liberation Sans faces and the picker symbols.
+    assert_eq!(db.faces().filter(|face| is_bundled(face.id)).count(), 5);
 
     let fonts = super::Fonts {
         names: super::family_names(&db),
@@ -471,22 +474,53 @@ fn an_added_arial_is_used_instead_of_the_bundled_stand_in() {
 }
 
 /// Without system fonts, as in the browser, every symbol the picker inserts
-/// still has a glyph: Liberation Sans, then the bundled symbols subset.
+/// still has a glyph, measured from the face that draws it: Liberation Sans,
+/// then the bundled symbols subset, in every style.
 #[test]
 fn bundled_fonts_draw_every_picker_symbol() {
-    use resvg::usvg::fontdb::{Database, Style, Weight};
+    use resvg::usvg::fontdb::Database;
     let mut db = Database::new();
     super::load_bundled_fonts(&mut db);
-    for symbol in crate::symbols::GROUPS.iter().flat_map(|g| g.symbols) {
-        for c in symbol.text.chars() {
-            let face = super::resolve_font_in(&db, "Arial", Weight::NORMAL, Style::Normal, c, &[]);
-            assert!(face.is_some(), "{c} ({})", symbol.name);
+    let fonts = super::Fonts {
+        names: super::family_names(&db),
+        db: std::sync::Arc::new(db),
+        added: vec![],
+    };
+    for (bold, italic) in [(false, false), (true, false), (false, true), (true, true)] {
+        let style = crate::typography::TextStyle {
+            bold,
+            italic,
+            ..Default::default()
+        };
+        for symbol in crate::symbols::GROUPS.iter().flat_map(|g| g.symbols) {
+            for c in symbol.text.chars() {
+                assert!(super::glyph_face(c, &style, &fonts).is_some(), "{c}");
+            }
         }
+        let (family, advance) = super::glyph_metrics_in('⟶', &style, &fonts);
+        assert_eq!(family, super::font::SYMBOLS_FAMILY);
+        assert!((advance - 1.4336).abs() < 0.01, "{advance}");
+        assert_eq!(super::glyph_metrics_in('→', &style, &fonts).0, "Arial");
     }
-    // Hidden from font pickers.
     assert!(
-        !super::family_names(&db)
-            .iter()
-            .any(|name| name.contains("Symbols"))
+        !fonts.names.contains(&super::font::SYMBOLS_FAMILY),
+        "not in font lists"
     );
+}
+
+/// An installed face with the glyph wins over the bundled symbols.
+#[test]
+fn installed_faces_draw_symbols_before_the_bundle() {
+    use resvg::usvg::fontdb::{Database, Style, Weight};
+    let mut db = Database::new();
+    db.load_system_fonts();
+    super::font::load_bundled(&mut db);
+    let resolve = |db: &Database| {
+        super::resolve_font_in(db, "Arial", Weight::NORMAL, Style::Normal, '⇌', &[])
+    };
+    let Some(installed) = resolve(&db) else {
+        return; // No installed face has it, as in a bare container.
+    };
+    super::font::load_symbols(&mut db);
+    assert_eq!(resolve(&db), Some(installed));
 }

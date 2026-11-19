@@ -49,9 +49,10 @@ pub(super) fn keep_resident(db: &mut resvg::usvg::fontdb::Database, families: &[
 
 /// An alias hidden from font pickers distinguishes the bundled glyph fallback.
 pub(super) const BUNDLED_FAMILY: &str = ".ReShiki Bundled Sans";
-/// The bundled last resort for picker symbols that Liberation Sans lacks,
-/// hidden from font pickers. Source and license: licenses/dejavu-fonts.
-pub(super) const SYMBOLS_FAMILY: &str = ".ReShiki Symbols";
+/// The bundled last resort for picker symbols that Liberation Sans lacks. It
+/// is kept out of font pickers, and the bundled alias keeps it out of the
+/// search of installed faces. Source and license: licenses/dejavu-fonts.
+pub(super) const SYMBOLS_FAMILY: &str = "ReShiki Symbols";
 
 pub(super) fn load_symbols(db: &mut resvg::usvg::fontdb::Database) {
     use resvg::usvg::fontdb::{Language, Source};
@@ -59,7 +60,8 @@ pub(super) fn load_symbols(db: &mut resvg::usvg::fontdb::Database) {
     for id in db.load_font_source(Source::Binary(std::sync::Arc::new(bytes))) {
         if let Some(mut face) = db.face(id).cloned() {
             db.remove_face(id);
-            face.families = vec![(SYMBOLS_FAMILY.into(), Language::English_UnitedStates)];
+            face.families
+                .push((BUNDLED_FAMILY.into(), Language::English_UnitedStates));
             db.push_face_info(face);
         }
     }

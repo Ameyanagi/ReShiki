@@ -98,8 +98,10 @@ fn picker_inserts_at_the_cursor_and_remembers_recents() {
 fn picker_without_a_draft_edits_the_selected_text_box_or_starts_one() {
     let mut app = app();
     app.tab.camera.center = Point::new(120., 80.);
+    let _ = app.update(Message::StyleMenu(Action::Symbols));
     let _ = app.update(Message::StyleMenu(Action::Insert("→")));
     assert_eq!(app.tab.caption, "→");
+    assert!(app.style_menu.is_none(), "closes to show the new caption");
     assert!(app.finish_inline(true));
     assert_eq!(app.tab.doc.annotations.len(), 1);
     assert_eq!(app.tab.doc.annotations[0].position, Point::new(120., 80.));

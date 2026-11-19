@@ -288,6 +288,23 @@ fn bundled_only_font_database_outlines_arial_labels() {
     assert!(xml.descendants().any(|node| node.has_tag_name("path")));
 }
 
+/// The family name layout writes for a bundled picker symbol outlines too.
+#[test]
+fn bundled_only_font_database_outlines_picker_symbols() {
+    let mut db = resvg::usvg::fontdb::Database::new();
+    crate::style::load_bundled_fonts(&mut db);
+    let tree = parse_svg_with_fontdb(
+        r#"<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64">
+            <text x="8" y="48" font-family="ReShiki Symbols" font-size="40">⇌</text>
+        </svg>"#,
+        std::sync::Arc::new(db),
+    )
+    .unwrap();
+    let outlined = String::from_utf8(office_svg(&tree).unwrap()).unwrap();
+    let xml = roxmltree::Document::parse(&outlined).unwrap();
+    assert!(xml.descendants().any(|node| node.has_tag_name("path")));
+}
+
 #[test]
 fn raster_budget_rejects_invalid_and_extreme_sizes_without_allocating() {
     for (width, height) in [

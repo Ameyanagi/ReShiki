@@ -11,8 +11,8 @@ use iced::{Alignment, Element, Length, Task};
 use reshiki::symbols::{GROUPS, Symbol, find};
 
 const CELL: f32 = 30.;
-const COLUMNS: usize = 11;
-const RECENT: usize = 11;
+const COLUMNS: usize = 14;
+const RECENT: usize = 14;
 const EDITOR: &str = "inline-caption";
 
 impl App {
@@ -76,11 +76,15 @@ impl App {
         if !recent.is_empty() {
             body = body.push(section("Recent", &recent));
         }
-        let groups = Column::with_children(GROUPS.iter().map(|group| {
+        let group_section = |group: &'static reshiki::symbols::Group| {
             let symbols: Vec<_> = group.symbols.iter().collect();
             section(group.name, &symbols)
-        }))
-        .spacing(6);
+        };
+        // Short groups share a row, so the picker covers less of the drawing.
+        let (long, short) = GROUPS.split_at(3);
+        let groups = Column::with_children(long.iter().map(group_section))
+            .push(Row::with_children(short.iter().map(group_section)).spacing(16))
+            .spacing(6);
         body = body.push(scrollable(groups).height(Length::Shrink));
         container(body).padding(8).style(surface).into()
     }
@@ -134,10 +138,11 @@ impl App {
             if self.tab.inline_text.is_none() {
                 return task;
             }
-            // Add to the caption: a linked name opens selected, for renaming.
-            self.tab
-                .caption_editor
-                .perform(Input::Move(Motion::DocumentEnd));
+            // Add, not replace: a linked name opens selected, for renaming.
+            // Its line end keeps a property caption's later lines intact.
+            self.tab.caption_editor.perform(Input::Move(Motion::End));
+            // The picker would hide where the symbol went.
+            self.close_style_menu();
             task
         };
         self.caption_action(Input::Edit(Edit::Paste(std::sync::Arc::new(symbol.into()))));
