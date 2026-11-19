@@ -212,6 +212,40 @@ impl ReadGraphics {
 fn named(node: Node<'_, '_>, name: &str) -> bool {
     node.is_element() && node.tag_name().namespace().is_none() && node.tag_name().name() == name
 }
+/// What ChemDraw's line and arc tools draw: an arrow object without heads,
+/// fill, double shaft or arrow marks. It reads as a graphic line or path, not
+/// an arrow.
+pub(super) fn bare_stroke(node: Node<'_, '_>) -> bool {
+    named(node, "arrow")
+        && ["ArrowheadHead", "ArrowheadTail"].iter().all(|key| {
+            matches!(
+                node.attribute(*key).unwrap_or("None"),
+                "None" | "Unspecified"
+            )
+        })
+        && matches!(
+            node.attribute("FillType").unwrap_or("None"),
+            "None" | "Unspecified"
+        )
+        && node
+            .attribute("NoGo")
+            .is_none_or(|v| v.eq_ignore_ascii_case("none"))
+        && node.attribute("Dipole") != Some("yes")
+        && node
+            .attribute("ArrowShaftSpacing")
+            .is_none_or(|v| numeric::float(v).is_ok_and(|v| v == 0.))
+}
+/// A bare stroke no other reader claimed is a graphic here.
+fn read_as_graphic(
+    node: Node<'_, '_>,
+    identities: &HashMap<roxmltree::NodeId, usize>,
+    claimed: &BTreeSet<usize>,
+) -> bool {
+    bare_stroke(node)
+        && identities
+            .get(&node.id())
+            .is_some_and(|i| !claimed.contains(i))
+}
 fn visible(node: Node<'_, '_>) -> bool {
     node.ancestors()
         .all(|parent| parent.attribute("Visible") != Some("no"))
@@ -229,7 +263,8 @@ struct Reader<'a, 'input> {
     colors: presentation::Palette,
     /// A colored page, which ChemDraw paints inside shadowed outlines.
     page: Option<presentation::NativeColor>,
-    middle: NativeLayer,
+    /// The topmost structure, text or arrow; layers above it are in front.
+    top: NativeLayer,
     work: std::cell::Cell<usize>,
     points: usize,
 }
@@ -242,10 +277,94 @@ impl Reader<'_, '_> {
         }
         Ok(())
     }
+    /// A ChemDraw line from its tail to its head, or an arc from its tail
+    /// through -AngularSize degrees around its centre. As for arc arrows, the
+    /// arc's minor axis is its major axis turned a quarter clockwise.
+    fn stroke(&mut self, el: Node<'_, '_>) -> Result<NativeGraphic> {
+        let flags: BTreeSet<_> = el
+            .attribute("LineType")
+            .unwrap_or("Solid")
+            .split_whitespace()
+            .collect();
+        if flags.is_empty()
+            || flags
+                .iter()
+                .any(|f| !matches!(*f, "Solid" | "Dashed" | "Bold" | "Wavy"))
+        {
+            return Err(Error::Native("Unsupported graphic line style"));
+        }
+        let tail = self.point(required(el, "Tail3D")?)?;
+        let head = self.point(required(el, "Head3D")?)?;
+        // Older files keep bold in CurveType, as the arrow reader reads it.
+        let bold = flags.contains("Bold")
+            || numeric::integer(el.attribute("CurveType").unwrap_or("0"))?
+                .is_some_and(|f| f & 4 != 0);
+        let mut style = self.style(el, false, flags.contains("Dashed"), bold)?;
+        let degrees = float(el, "AngularSize", "0")?;
+        if degrees == 0. {
+            if flags.contains("Wavy") {
+                style.pattern = LinePattern::Wavy;
+            }
+            let axis = NativePoint::new(head.x - tail.x, head.y - tail.y);
+            return self.base(
+                el,
+                GraphicKind::Line,
+                [tail, axis, NativePoint::new(0., 0.)],
+                style,
+                vec![],
+            );
+        }
+        let c = self.point(required(el, "Center3D")?)?;
+        let m = self.point(required(el, "MajorAxisEnd3D")?)?;
+        let n = self.point(required(el, "MinorAxisEnd3D")?)?;
+        let u = (m.x - c.x, m.y - c.y);
+        let (ru, rv) = (u.0.hypot(u.1), (n.x - c.x).hypot(n.y - c.y));
+        if !(ru > 1e-9 && rv > 1e-9 && degrees.is_finite() && degrees.abs() <= 360.) {
+            return Err(Error::Native("Invalid CDXML arc"));
+        }
+        let v = (-u.1 * rv / ru, u.0 * rv / ru);
+        let w = (tail.x - c.x, tail.y - c.y);
+        let start =
+            ((w.1 * u.0 - w.0 * u.1) / (ru * rv)).atan2((w.0 * u.0 + w.1 * u.1) / (ru * ru));
+        let sweep = -degrees.to_radians();
+        let count = (sweep.abs() / std::f64::consts::FRAC_PI_2).ceil().max(1.);
+        let step = sweep / count;
+        let k = 4. / 3. * (step / 4.).tan();
+        let at = |angle: f64| {
+            let (sin, cos) = angle.sin_cos();
+            let p = NativePoint::new(c.x + u.0 * cos + v.0 * sin, c.y + u.1 * cos + v.1 * sin);
+            let d = (-u.0 * sin + v.0 * cos, -u.1 * sin + v.1 * cos);
+            (p, d)
+        };
+        let mut path = vec![NativeCommand::Move(at(start).0)];
+        for i in 0..count as usize {
+            let ((p0, d0), (p1, d1)) = (
+                at(start + step * i as f64),
+                at(start + step * (i + 1) as f64),
+            );
+            path.push(NativeCommand::Cubic(
+                NativePoint::new(p0.x + k * d0.0, p0.y + k * d0.1),
+                NativePoint::new(p1.x - k * d1.0, p1.y - k * d1.1),
+                p1,
+            ));
+        }
+        // ChemDraw draws a wavy arc as a plain one.
+        self.base(
+            el,
+            GraphicKind::Path,
+            [
+                NativePoint::new(0., 0.),
+                NativePoint::new(1., 0.),
+                NativePoint::new(0., 1.),
+            ],
+            style,
+            path,
+        )
+    }
     fn layer(&mut self, el: Node<'_, '_>) -> Result<NativeLayer> {
         let text = el.attribute("Z").unwrap_or("0");
-        self.spend(text.len() + self.middle.length())?;
-        Ok(NativeLayer::parse(text)?.relative(&self.middle))
+        self.spend(text.len() + self.top.length())?;
+        Ok(NativeLayer::parse(text)?.relative(&self.top))
     }
     fn point(&mut self, text: &str) -> Result<NativePoint> {
         self.spend(text.len())?;
@@ -429,22 +548,24 @@ pub fn read(
         .enumerate()
         .map(|(i, n)| (n.id(), i))
         .collect();
-    let mut middle = None;
+    // ReShiki draws text and arrows above structures and graphics on either
+    // side of both, so a graphic goes in front only when ChemDraw stacks it
+    // above every one of them: a shape never covers text ChemDraw shows.
+    let mut top = None;
     for el in root.descendants().filter(|n| {
         visible(*n)
-            && ["fragment", "n", "b", "t", "arrow"]
-                .iter()
-                .any(|k| named(*n, k))
+            && (["fragment", "n", "b", "t"].iter().any(|k| named(*n, k))
+                || named(*n, "arrow") && !read_as_graphic(*n, &identities, claimed))
     }) {
         if let Some(text) = el.attribute("Z") {
             let z = NativeLayer::parse(text)?;
-            if middle.as_ref().is_none_or(|m| &z < m) {
-                middle = Some(z);
+            if top.as_ref().is_none_or(|m| &z > m) {
+                top = Some(z);
             }
         }
     }
-    let middle = if let Some(middle) = middle {
-        middle
+    let top = if let Some(top) = top {
+        top
     } else {
         NativeLayer::parse("32767")?
     };
@@ -459,7 +580,7 @@ pub fn read(
         scale,
         colors,
         page,
-        middle,
+        top,
         work: std::cell::Cell::new(root.document().input_text().len()),
         points: 0,
     };
@@ -486,7 +607,7 @@ pub fn read(
             stack.push(el.children());
             continue;
         }
-        if !["graphic", "curve", "group", "embeddedobject"]
+        if !["graphic", "curve", "group", "embeddedobject", "arrow"]
             .iter()
             .any(|key| named(el, key))
         {
@@ -543,6 +664,11 @@ pub fn read(
                 stack.push(el.children());
                 continue;
             }
+        } else if named(el, "arrow") {
+            if !bare_stroke(el) {
+                continue;
+            }
+            reader.stroke(el)?
         } else if named(el, "embeddedobject") {
             reader.picture(el)?
         } else if named(el, "curve") {

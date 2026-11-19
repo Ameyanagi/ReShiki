@@ -24,6 +24,8 @@ A ChemDraw file opens even when it holds a style ReShiki cannot draw yet. ReShik
 
 The canvas brightness, zoom, grid and panels are view settings. Changing them is not an Undo step and does not mark the drawing as changed. The light or dark canvas is saved with the drawing the next time you save. A new drawing and an opened ChemDraw or MOL file start on the canvas you chose last. A ChemDraw file is always written with the light canvas's look, since ChemDraw has no dark canvas.
 
+ReShiki draws text and arrows above structures, with shapes behind or in front of all three. A shape in a ChemDraw file opens in front only when ChemDraw stacks it above every structure, text and arrow; any other shape opens behind the structures. So a title, legend or label that ChemDraw shows on a shaded box stays readable. A shape that ChemDraw stacks over part of a structure opens behind it.
+
 To add MOL, RXN, CDXML, CDX, SMILES or picture files to the current drawing instead, drop them on the drawing or use **Import → Choose file…**. On Windows you can also insert `.emf` pictures; see [Insert EMF pictures](/guide/windows/#insert-emf-pictures). Dropping a `.rsk` file opens it in a tab.
 
 If ReShiki offers recovery drafts after an interrupted session, choose **Restore** in the status bar to open each one in a tab, then save them to files. Closing a tab or the window with unsaved changes asks whether to save them first; New and Open add a tab instead.

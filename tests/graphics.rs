@@ -237,7 +237,13 @@ async fn every_shape_survives_chemistry_and_cdxml_as_editable_geometry() {
             result.graphics[0].bounds().0.y - original[0].bounds().0.y,
         );
         for (old, new) in original.iter().zip(&restored) {
-            assert_eq!(new.kind, GraphicKind::Path);
+            // A line comes back as ChemDraw's line; other shapes as paths.
+            let kind = if old.kind == GraphicKind::Line {
+                GraphicKind::Line
+            } else {
+                GraphicKind::Path
+            };
+            assert_eq!(new.kind, kind);
             assert_eq!(old.style.stroke, new.style.stroke);
             assert_eq!(old.filled(), new.filled());
             if old.filled() {

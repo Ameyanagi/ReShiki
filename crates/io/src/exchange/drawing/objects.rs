@@ -805,14 +805,15 @@ impl Writer<'_> {
     /// A shaded or shadowed rectangle or oval as ChemDraw's own shape, so
     /// ChemDraw keeps its style editable. Its one color is the fill's; an
     /// outline in another color follows as a curve in the same group. Rotated
-    /// rectangles and wavy or dotted outlines stay curves; a wavy line without
-    /// heads becomes ChemDraw's line, the one shape ChemDraw draws wavy.
+    /// rectangles and wavy or dotted outlines stay curves; a line without
+    /// heads becomes ChemDraw's line, which reads back as a line and is the
+    /// one shape ChemDraw draws wavy.
     fn native_shape(&mut self, g: &crate::graphics::Graphic, z: usize) -> Result<Option<Key>> {
         let style = &self.chemdraw_style(&g.style, g.kind != GraphicKind::Line);
         let (o, x, y) = (P::from(g.origin), P::from(g.axis_x), P::from(g.axis_y));
         let ellipse = g.kind == GraphicKind::Ellipse;
         let line = g.kind == GraphicKind::Line
-            && style.pattern == LinePattern::Wavy
+            && style.pattern != LinePattern::Dotted
             && g.heads
                 .is_none_or(|h| h.head == Head::None && h.tail == Head::None);
         if !line
@@ -858,7 +859,15 @@ impl Writer<'_> {
             // Start first, so the waves come back on the same side.
             attributes.extend([
                 ("GraphicType", "Line".into()),
-                ("LineType", "Wavy".into()),
+                (
+                    "LineType",
+                    match style.pattern {
+                        LinePattern::Wavy => "Wavy",
+                        LinePattern::Dashed => "Dashed",
+                        _ => "Solid",
+                    }
+                    .into(),
+                ),
                 (
                     "BoundingBox",
                     format!("{} {}", self.position(o), self.position(o.add(x.x, x.y))),
