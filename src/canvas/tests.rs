@@ -3859,3 +3859,43 @@ fn dragging_a_clamped_flask_slides_it_along_the_rod_and_leaves_the_stand() -> Re
     assert!(dx.abs() < 0.001 && (dy + 40.).abs() < 0.001, "{dx} {dy}");
     Ok(())
 }
+
+#[test]
+fn a_selected_pieces_handles_switch_a_valve_on_click_and_set_a_level_by_drag() {
+    use iced::keyboard::Modifiers;
+    use reshiki::equipment::{builtin, eval::Value, placed, solve::adjust};
+    let mut doc = Document::default();
+    let tube = builtin::find("reshiki/jy-schlenk-tube").unwrap();
+    doc.graphics.push(placed::graphic(
+        1,
+        tube,
+        reshiki::document::Point::new(0., 0.),
+        1.,
+    ));
+    let handles = adjust::handles(&doc.graphics[0]);
+    let at = |h: &adjust::Handle| World::new(h.at[0] as f32, h.at[1] as f32);
+    let valve = at(handles.iter().find(|h| h.toggle).unwrap());
+    let edits = select_drag(&doc, &[1], valve, valve, Modifiers::default());
+    assert!(
+        edits.iter().any(|e| matches!(e, Edit::PieceParam { id: 1, param, value: Value::State(s) } if param == "valve" && s == "open")),
+        "{edits:?}"
+    );
+    let surface = at(handles.iter().find(|h| h.part.is_none()).unwrap());
+    let edits = select_drag(
+        &doc,
+        &[1],
+        surface,
+        surface.offset(0., -30.),
+        Modifiers::default(),
+    );
+    assert!(
+        edits.iter().any(|e| matches!(e, Edit::PieceParam { param, value: Value::Number(n), .. } if param == "fill" && *n > 0.)),
+        "{edits:?}"
+    );
+    // An unselected piece shows no handles, and Option-drag pulls pieces
+    // out as before.
+    for (selected, modifiers) in [(&[][..], Modifiers::default()), (&[1][..], Modifiers::ALT)] {
+        let edits = select_drag(&doc, selected, valve, valve, modifiers);
+        assert!(!edits.iter().any(|e| matches!(e, Edit::PieceParam { .. })));
+    }
+}

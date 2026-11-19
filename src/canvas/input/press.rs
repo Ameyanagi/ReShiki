@@ -77,6 +77,9 @@ impl MoleculeCanvas<'_> {
         if let Some(action) = self.press_arrow_handle(state, p) {
             return Some(action);
         }
+        if let Some(action) = self.press_piece_handle(state, p) {
+            return Some(action);
+        }
         if let Some(action) = self.press_edit_points(state, p) {
             return Some(action);
         }
@@ -147,6 +150,41 @@ impl MoleculeCanvas<'_> {
             }
         }
         Some(Action::request_redraw().and_capture())
+    }
+
+    /// A selected piece's part or liquid handle; Option-drag still pulls a
+    /// piece out of its assembly.
+    fn press_piece_handle(&self, state: &mut State, p: World) -> Option<Action<Edit>> {
+        if !self.tool.selects() || state.modifiers.alt() {
+            return None;
+        }
+        let (id, handle) = self.piece_handle_at(p)?;
+        state.gesture = Some(Gesture::PieceHandle {
+            id,
+            handle,
+            start: p,
+        });
+        Some(Action::request_redraw().and_capture())
+    }
+
+    /// The handle of a selected piece nearest `p`, within pick reach.
+    pub(in crate::canvas) fn piece_handle_at(
+        &self,
+        p: World,
+    ) -> Option<(u64, reshiki::equipment::solve::adjust::Handle)> {
+        let q = [f64::from(p.x), f64::from(p.y)];
+        let reach = f64::from(self.camera.world_len(HANDLE_PICK_PX));
+        (self.doc.graphics.iter())
+            .filter(|g| g.piece.is_some() && self.selected.contains(&g.id))
+            .flat_map(|g| {
+                reshiki::equipment::solve::adjust::handles(g)
+                    .into_iter()
+                    .map(move |h| (g.id, h))
+            })
+            .map(|(id, h)| ((h.at[0] - q[0]).hypot(h.at[1] - q[1]), id, h))
+            .filter(|(d, ..)| *d <= reach)
+            .min_by(|a, b| a.0.total_cmp(&b.0))
+            .map(|(_, id, h)| (id, h))
     }
 
     fn press_arrow_handle(&self, state: &mut State, p: World) -> Option<Action<Edit>> {

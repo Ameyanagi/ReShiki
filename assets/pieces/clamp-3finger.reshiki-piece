@@ -2,7 +2,7 @@
  "format": "reshiki-piece",
  "format_version": 0,
  "id": "reshiki/clamp-3finger",
- "revision": 1,
+ "revision": 2,
  "family": "clamp-3finger",
  "variant": {},
  "names": {
@@ -325,7 +325,12 @@
     30
    ],
    "part": "head",
-   "fit": "grip"
+   "fit": "grip",
+   "when": {
+    "jaw": [
+     "closed"
+    ]
+   }
   }
  ],
  "params": [

@@ -162,6 +162,7 @@ pub fn validate(d: &Definition) -> Result<(), String> {
         {
             return Err(format!("Hold \"{}\" names a missing part \"{k}\".", h.id));
         }
+        when(&format!("Hold \"{}\"", h.id), &h.when, &params)?;
         if let Some(k) = &h.fit {
             let mm_range = d
                 .params
@@ -519,7 +520,7 @@ fn when(
     for (k, states) in when {
         let Some(Param::States { states: known, .. }) = params.get(k.as_str()) else {
             return Err(format!(
-                "{owner} is drawn in states of \"{k}\", which has no states."
+                "{owner} names states of \"{k}\", which has no states."
             ));
         };
         for s in states {

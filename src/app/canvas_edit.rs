@@ -396,6 +396,9 @@ impl App {
             Edit::PlaneBond(start, end) => return self.place_plane_bond(start, end, before),
             Edit::Bond(start, end, a, b) => return self.place_bond(start, end, a, b, before),
             Edit::Click(p) | Edit::RepeatLabel(p) => return self.canvas_click(p, before),
+            Edit::PieceParam { id, param, value } => {
+                return self.set_piece_param(id, &param, value, before);
+            }
         }
         self.changed(before);
         if let Some(joined) = joined.filter(|_| !self.error) {

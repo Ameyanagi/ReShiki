@@ -362,6 +362,38 @@ panel and click near a joint of its size; the label says **Clip the flask
 neck · 29/42**. A clip moves with its joint and goes when the joint is
 detached; select it alone with Option-click to delete it.
 
+### Move parts and set liquid levels
+
+The built-in **Schlenk flask, 100 mL** and **Schlenk tube, 15/25** have
+three-way stopcocks. The **J. Young storage flask, 100 mL** and **J. Young
+Schlenk tube** have J. Young valves. Round-bottom flasks, Schlenk ware and
+J. Young ware can hold liquid.
+
+1. Click a piece to select its whole assembly and show handles for movable
+   parts. Hover over a handle to see its setting and value, for example
+   **Valve: Closed · click to switch**. Option-drag still pulls a piece out
+   of the assembly. Holding Option disables the handles.
+2. Click a circle to cycle through the states of a valve or stopcock. A
+   J. Young valve switches between **Closed** and **Open**.
+   A stopcock cycles through **Closed**, **Arm to side barb**, **Arm to down
+   barb** and **All open**.
+3. Drag a diamond to tilt a clamp or move a liquid's surface. The label
+   beside the pointer shows the value, for example **Tilt: 25°** or **Liquid
+   level: 40 %**. The percentage measures only the share of the vessel's
+   drawn area below the surface. The surface stays level on the page when
+   you turn the vessel.
+4. **Properties → Equipment → Movable parts** lists each selected piece's
+   settings: buttons for states such as a clamp's **Jaws**, and sliders for
+   **Tilt**, **Neck diameter** and **Liquid level**. Each change, and each
+   slider drag, is one Undo step.
+
+Tilting a clamp on a stand turns the flask it holds about the boss head.
+The stand stays put. Off a stand, the flask stays put and only the clamp's
+boss head turns; mount the clamp on a stand to tilt what it holds. Opening the jaws releases the neck. Closing them on a
+neck takes hold again. If a move would pull the assembly apart, as when two
+clamps on the same rod hold a flask, the nearest clamp lets go. The status
+line names the released piece, for example **Tilt: 25° · releases the tube**.
+
 ### Keep and share equipment pieces
 
 The Equipment panel shows pieces from three places: the built-in catalogue,

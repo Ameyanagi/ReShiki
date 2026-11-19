@@ -65,6 +65,10 @@ pub(super) struct DocumentTab {
     pub(super) inline_text: Option<inline_text::State>,
     pub(super) atom_text: Option<atom_text::State>,
     pub(super) joining: Option<joining::State>,
+    /// The revision, piece and parameter an equipment slider drag has
+    /// reached, and what it let go of; the drag is one Undo step until
+    /// release or any other commit.
+    pub(super) piece_sliding: Option<(u64, u64, String, String)>,
     pub(super) erase_stroke: bool,
     pub(super) erase_committed: bool,
     pub(super) cleanup_serial: u64,
@@ -206,6 +210,7 @@ impl DocumentTab {
             inline_text: None,
             atom_text: None,
             joining: None,
+            piece_sliding: None,
             erase_stroke: false,
             erase_committed: false,
             cleanup_serial: 0,

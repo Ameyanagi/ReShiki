@@ -69,6 +69,38 @@ fn arming_and_placing_a_piece_adds_one_graphic_in_one_undo_step() {
 }
 
 #[test]
+fn opening_the_schlenk_tube_valve_is_one_undo_step() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let _ = app.update(Message::Equipment(Action::Arm(k(
+        "reshiki/jy-schlenk-tube",
+    ))));
+    let _ = app.update(Message::Canvas(Edit::Piece(Point::new(120., 80.))));
+    let id = app.tab.doc.graphics[0].id;
+    let _ = app.update(Message::Tool(Tool::Select));
+    app.set_selection(vec![id]);
+
+    let open = Value::State("open".into());
+    let _ = app.update(Message::Equipment(Action::Param {
+        id,
+        param: "valve".into(),
+        value: open.clone(),
+    }));
+    let tube = &app.tab.doc.graphics[0];
+    assert_eq!(
+        tube.piece.as_ref().unwrap().params.get("valve"),
+        Some(&open)
+    );
+    assert_eq!(value_text(tube, "valve", None), "Valve: Open");
+
+    let _ = app.update(Message::Undo);
+    let tube = &app.tab.doc.graphics[0];
+    assert_eq!(tube.id, id);
+    assert!(!tube.piece.as_ref().unwrap().params.contains_key("valve"));
+    assert_eq!(value_text(tube, "valve", None), "Valve: Closed");
+}
+
+#[test]
 fn escape_disarms_and_a_click_then_places_nothing() {
     let (mut app, _) = App::new();
     app.tab.busy = false;

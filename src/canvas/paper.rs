@@ -143,6 +143,7 @@ impl MoleculeCanvas<'_> {
         self.preview_template(&mut draft, frame, state, bounds);
         self.preview_piece(&mut draft, state, bounds);
         self.preview_connect(&mut draft, state);
+        self.preview_piece_handle(&mut draft, state, bounds);
         self.preview_move(&mut draft, state, bounds);
         self.preview_region(&mut draft, state, bounds);
         self.preview_delocalized_ring(&mut draft, state, bounds);
@@ -264,6 +265,7 @@ impl MoleculeCanvas<'_> {
         self.draw_orbital_target(frame, state, bounds);
         self.draw_mark_orbit(frame, state, &preview, bounds);
         self.draw_arrow_handles(frame, &preview, selected, bounds);
+        self.draw_piece_handles(frame, &preview, selected, state, bounds);
         self.draw_arrow_targets(frame, state, bounds, cursor);
         self.draw_notices(
             frame,

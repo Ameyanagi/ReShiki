@@ -523,6 +523,58 @@ impl MoleculeCanvas<'_> {
         }
     }
 
+    /// A selected piece's handles: diamonds to drag a part or a liquid's
+    /// surface, circles to click through a part's states. Hovering one names
+    /// its parameter and value.
+    pub(super) fn draw_piece_handles(
+        &self,
+        frame: &mut layered::Frame<'_>,
+        doc: &Document,
+        selected: &[u64],
+        state: &State,
+        bounds: Rectangle,
+    ) {
+        use reshiki::equipment::solve::adjust;
+        let dragged = match &state.gesture {
+            Some(Gesture::PieceHandle { id, handle, .. }) => Some((*id, handle)),
+            Some(_) => return,
+            None => None,
+        };
+        if !self.tool.selects() {
+            return;
+        }
+        for g in (doc.graphics.iter()).filter(|g| g.piece.is_some() && selected.contains(&g.id)) {
+            for h in adjust::handles(g) {
+                let at = self
+                    .camera
+                    .screen(World::new(h.at[0] as f32, h.at[1] as f32), bounds);
+                let shape = if h.toggle {
+                    HandleShape::Circle(4.5)
+                } else {
+                    HandleShape::Diamond
+                };
+                let chosen = dragged
+                    .is_some_and(|(id, d)| id == g.id && d.param == h.param && d.part == h.part);
+                draw_handle(frame, at, shape, chosen);
+            }
+        }
+        let Some(c) = state
+            .cursor
+            .filter(|c| dragged.is_none() && !state.modifiers.alt() && bounds.contains(*c))
+        else {
+            return;
+        };
+        let local = Point::new(c.x - bounds.x, c.y - bounds.y);
+        let p = self.camera.world(local, bounds);
+        if let Some((id, h)) = self.piece_handle_at(p)
+            && let Some(g) = self.doc.graphics.iter().find(|g| g.id == id)
+        {
+            let how = if h.toggle { "click to switch" } else { "drag" };
+            let text = crate::app::equipment::value_text(g, &h.param, None);
+            badge(frame, bounds, local, format!("{text} · {how}"), true);
+        }
+    }
+
     pub(super) fn draw_notices(
         &self,
         frame: &mut layered::Frame<'_>,

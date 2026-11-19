@@ -518,52 +518,118 @@ fn hatch(points: &[Xy], h: f64) -> Vec<Seg> {
     out
 }
 
+type Pools = Vec<Vec<Vec<Xy>>>;
+
+/// The part of a region (world space, y down) below the level `y`: pools,
+/// each an outer contour and its holes.
+fn below(region: &[Vec<Xy>], y: f64) -> Pools {
+    let (mut lo, mut hi) = ([f64::INFINITY; 2], [f64::NEG_INFINITY; 2]);
+    for p in region.iter().flatten() {
+        lo = [lo[0].min(p[0]), lo[1].min(p[1])];
+        hi = [hi[0].max(p[0]), hi[1].max(p[1])];
+    }
+    let clip = vec![
+        [lo[0] - 1., y],
+        [hi[0] + 1., y],
+        [hi[0] + 1., hi[1] + 1.],
+        [lo[0] - 1., hi[1] + 1.],
+    ];
+    FloatOverlay::with_subj_and_clip(&region.to_vec(), &clip)
+        .overlay(OverlayRule::Intersect, FillRule::EvenOdd)
+}
+
+fn pooled(shapes: &Pools) -> f64 {
+    shapes
+        .iter()
+        .flat_map(|s| s.iter().enumerate())
+        .map(|(i, c)| {
+            if i == 0 {
+                area(c).abs()
+            } else {
+                -area(c).abs()
+            }
+        })
+        .sum()
+}
+
+fn span(region: &[Vec<Xy>]) -> (f64, f64) {
+    region
+        .iter()
+        .flatten()
+        .fold((f64::INFINITY, f64::NEG_INFINITY), |(a, b), p| {
+            (a.min(p[1]), b.max(p[1]))
+        })
+}
+
+/// The region's whole area, by the same even-odd rule as the cut, so holes
+/// and windings agree.
+fn whole(region: &[Vec<Xy>]) -> f64 {
+    pooled(&below(region, span(region).0 - 1.))
+}
+
+/// The share of a region's drawn area below the level `y`, 0–1.
+pub fn share_below(region: &[Vec<Xy>], y: f64) -> f64 {
+    let total = whole(region);
+    if total <= 0. {
+        return 0.;
+    }
+    (pooled(&below(region, y)) / total).clamp(0., 1.)
+}
+
+/// The level that leaves `fill` of the region's area below it, by 24 bisection steps.
+pub fn level(region: &[Vec<Xy>], fill: f64) -> f64 {
+    let (mut lo, mut hi) = span(region);
+    let total = whole(region);
+    if fill >= 1. || total <= 0. {
+        return lo;
+    }
+    for _ in 0..24 {
+        let mid = (lo + hi) / 2.;
+        if pooled(&below(region, mid)) / total > fill {
+            lo = mid;
+        } else {
+            hi = mid;
+        }
+    }
+    (lo + hi) / 2.
+}
+
+/// Stretches of the cut surface at `level`, each from left to right.
+fn surfaces(shapes: &Pools, level: f64) -> Vec<(f64, f64)> {
+    shapes
+        .iter()
+        .flat_map(|shape| shape.first())
+        .flat_map(|outer| super::geometry::edges(outer, true))
+        .filter(|(a, b)| (a[1] - level).abs() < 1e-6 && (b[1] - level).abs() < 1e-6 && a[0] != b[0])
+        .map(|(a, b)| (a[0].min(b[0]), a[0].max(b[0])))
+        .collect()
+}
+
+/// Where the liquid's surface is, for its handle: the middle of its widest
+/// stretch, or the region's lowest point while it is empty and its highest
+/// once it is full.
+pub fn surface(region: &[Vec<Xy>], fill: f64) -> Option<Xy> {
+    let points = || region.iter().flatten().copied();
+    let lowest = points().max_by(|a, b| a[1].total_cmp(&b[1]))?;
+    if fill <= 0. {
+        return Some(lowest);
+    }
+    if fill >= 1. {
+        return points().min_by(|a, b| a[1].total_cmp(&b[1]));
+    }
+    let y = level(region, fill);
+    let widest = surfaces(&below(region, y), y)
+        .into_iter()
+        .max_by(|a, b| (a.1 - a.0).total_cmp(&(b.1 - b.0)));
+    Some(widest.map_or([lowest[0], y], |(l, r)| [(l + r) / 2., y]))
+}
+
 /// Pools below the level that leaves `fill` of the region's area, and a meniscus on each.
 fn liquid(region: &[Vec<Xy>], fill: f64, meniscus: Meniscus, scale: f64) -> Vec<(Ink, Vec<Seg>)> {
     if fill <= 0. || region.is_empty() {
         return Vec::new();
     }
-    let (y0, y1) = region
-        .iter()
-        .flatten()
-        .fold((f64::INFINITY, f64::NEG_INFINITY), |(a, b), p| {
-            (a.min(p[1]), b.max(p[1]))
-        });
-    let (x0, x1) = region
-        .iter()
-        .flatten()
-        .fold((f64::INFINITY, f64::NEG_INFINITY), |(a, b), p| {
-            (a.min(p[0]), b.max(p[0]))
-        });
-    let below = |level: f64| -> Vec<Vec<Vec<[f64; 2]>>> {
-        let clip = vec![
-            [x0 - 1., level],
-            [x1 + 1., level],
-            [x1 + 1., y1 + 1.],
-            [x0 - 1., y1 + 1.],
-        ];
-        let subject: Vec<Vec<[f64; 2]>> = region.to_vec();
-        FloatOverlay::with_subj_and_clip(&subject, &clip)
-            .overlay(OverlayRule::Intersect, FillRule::EvenOdd)
-    };
-    let pooled = |shapes: &[Vec<Vec<[f64; 2]>>]| -> f64 {
-        shapes
-            .iter()
-            .map(|s| {
-                s.iter()
-                    .enumerate()
-                    .map(|(i, c)| {
-                        if i == 0 {
-                            area(c).abs()
-                        } else {
-                            -area(c).abs()
-                        }
-                    })
-                    .sum::<f64>()
-            })
-            .sum()
-    };
-    let pools = |shapes: Vec<Vec<Vec<[f64; 2]>>>| -> Vec<(Ink, Vec<Seg>)> {
+    let pools = |shapes: Pools| -> Vec<(Ink, Vec<Seg>)> {
         shapes
             .into_iter()
             .map(|shape| {
@@ -574,30 +640,13 @@ fn liquid(region: &[Vec<Xy>], fill: f64, meniscus: Meniscus, scale: f64) -> Vec<
             })
             .collect()
     };
-    // The same even-odd rule as the cut, so holes and windings agree.
-    let total = pooled(&below(y0 - 1.));
-    if fill >= 1. || total <= 0. {
-        return pools(below(y0 - 1.));
+    if fill >= 1. || whole(region) <= 0. {
+        return pools(below(region, span(region).0 - 1.));
     }
-    let (mut lo, mut hi) = (y0, y1);
-    for _ in 0..24 {
-        let mid = (lo + hi) / 2.;
-        if pooled(&below(mid)) / total > fill {
-            lo = mid;
-        } else {
-            hi = mid;
-        }
-    }
-    let level = (lo + hi) / 2.;
-    let shapes = below(level);
+    let level = level(region, fill);
+    let shapes = below(region, level);
     // Each stretch of the cut surface gets its own meniscus, so none crosses dry glass.
-    let surfaces: Vec<(f64, f64)> = shapes
-        .iter()
-        .flat_map(|shape| shape.first())
-        .flat_map(|outer| super::geometry::edges(outer, true))
-        .filter(|(a, b)| (a[1] - level).abs() < 1e-6 && (b[1] - level).abs() < 1e-6 && a[0] != b[0])
-        .map(|(a, b)| (a[0].min(b[0]), a[0].max(b[0])))
-        .collect();
+    let surfaces = surfaces(&shapes, level);
     let mut out = pools(shapes);
     if meniscus == Meniscus::Flat {
         return out;

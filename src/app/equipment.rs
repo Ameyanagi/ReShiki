@@ -1,18 +1,22 @@
 //! The Equipment browser: lab apparatus to place on the drawing. Choosing a
 //! size arms it, and each click on the drawing places one copy.
 use super::piece_libraries::{Entry, Libraries, Shelf, Source};
-use super::workspace::{command, control, horizontal_line, hover_hint, muted_text, section};
+use super::workspace::{
+    command, control, horizontal_line, hover_hint, muted_text, section, segment, segment_track,
+};
 use super::{App, InspectorTab, Message};
 use crate::canvas::Tool;
 use crate::canvas::layered::canvas;
-use iced::widget::{checkbox, column, container, row, text, tooltip};
+use iced::widget::{checkbox, column, container, row, slider, text, tooltip};
 use iced::{Alignment, Element, Length, Task};
 use reshiki::document::{Document, Point};
 use reshiki::equipment::{
-    format::{Category, Definition, Gender, HoldKind},
+    eval::{Value, resolve},
+    format::{Category, Definition, Gender, HoldKind, Param, Unit},
     placed,
-    solve::{self, JointRef, Offer, Port, Snap},
+    solve::{self, JointRef, Offer, Port, Seat, Snap, adjust},
 };
+use reshiki::graphics::Graphic;
 use std::{path::PathBuf, sync::Arc};
 
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
@@ -75,6 +79,20 @@ pub enum Action {
     Linked(Option<PathBuf>),
     Unlink(usize),
     Reload,
+    /// Set a parameter of the piece `id`: a valve, a tilt, a liquid level.
+    Param {
+        id: u64,
+        param: String,
+        value: Value,
+    },
+    /// A slider moved: like `Param`, but a drag is one Undo step until
+    /// [`Action::SlideEnd`].
+    Slide {
+        id: u64,
+        param: String,
+        value: f64,
+    },
+    SlideEnd,
     /// Move these pieces to the definition with this key.
     Update {
         ids: Vec<u64>,
@@ -163,6 +181,60 @@ pub(crate) fn joint_name(doc: &Document, j: &JointRef) -> String {
         Some(_) => piece,
         None => format!("{piece} {}", j.joint.replace('-', " ")),
     }
+}
+
+/// "Tilt: 25°", "Valve: Open", "Liquid level: 40 %": a parameter of the
+/// piece `g` at `value`; its current value when `value` is `None`.
+pub(crate) fn value_text(g: &Graphic, param: &str, value: Option<&Value>) -> String {
+    let Some((piece, d)) = g.piece.as_ref().and_then(|p| Some((p, p.linked.as_ref()?))) else {
+        return String::new();
+    };
+    let Some(p) = d.params.iter().find(|p| p.id() == param) else {
+        return String::new();
+    };
+    let current = resolve(d, &piece.params)
+        .ok()
+        .and_then(|v| v.get(param).cloned());
+    let Some(value) = value.or(current.as_ref()) else {
+        return String::new();
+    };
+    let en = |names: &std::collections::BTreeMap<String, String>, or: &str| {
+        names.get("en").cloned().unwrap_or_else(|| or.to_owned())
+    };
+    let shown = match (p, value) {
+        (Param::States { states, .. }, Value::State(s)) => states
+            .iter()
+            .find(|x| x.id == *s)
+            .map_or_else(|| s.clone(), |x| en(&x.names, s)),
+        (
+            Param::Fill { .. }
+            | Param::Range {
+                unit: Unit::Fraction,
+                ..
+            },
+            Value::Number(n),
+        ) => format!("{:.0} %", n * 100.),
+        (
+            Param::Range {
+                unit: Unit::Deg, ..
+            },
+            Value::Number(n),
+        ) => format!("{n:.0}°"),
+        (Param::Range { unit: Unit::Mm, .. }, Value::Number(n)) => format!("{n} mm"),
+        _ => return en(p.names(), param),
+    };
+    format!("{}: {shown}", en(p.names(), param))
+}
+
+/// What setting a parameter let go of: " · releases the flask".
+pub(crate) fn released_text(doc: &Document, id: u64, released: &[Seat]) -> String {
+    released
+        .iter()
+        .map(|s| {
+            let other = if s.a.piece == id { &s.b } else { &s.a };
+            format!(" · releases the {}", joint_name(doc, other))
+        })
+        .collect()
 }
 
 /// What a seat at `port` with `partner` says: "Holds the clamp".
@@ -400,9 +472,82 @@ impl App {
                 }
                 return super::focus_drawing();
             }
+            Action::Param { id, param, value } => {
+                let before = self.tab.doc.clone();
+                self.set_piece_param(id, &param, value, before);
+                return super::focus_drawing();
+            }
+            Action::Slide { id, param, value } => {
+                // A drag continues only on the same slider while nothing
+                // else has been committed.
+                let at = (self.tab.revision, id, param.clone());
+                // What the drag has let go of so far stays in the status.
+                let carried = match self.tab.piece_sliding.take() {
+                    Some((r, i, p, note)) if (r, i, p) == at => Some(note),
+                    _ => None,
+                };
+                let before = self.tab.doc.clone();
+                let note = carried.clone().unwrap_or_default()
+                    + &self.set_piece_param_continuing(
+                        id,
+                        &param,
+                        Value::Number(value),
+                        before,
+                        carried.is_some(),
+                    );
+                if let Some(g) = (self.tab.doc.graphics.iter()).find(|g| g.id == id)
+                    && !self.error
+                {
+                    self.status = value_text(g, &param, None) + &note;
+                }
+                self.tab.piece_sliding = Some((self.tab.revision, id, param, note));
+            }
+            Action::SlideEnd => self.tab.piece_sliding = None,
             other => return self.library_action(other),
         }
         Task::none()
+    }
+
+    /// Set a parameter of the piece `id` as one Undo step, re-solving what is
+    /// seated on its parts, and say what it is now and what it let go of.
+    pub(super) fn set_piece_param(&mut self, id: u64, param: &str, value: Value, before: Document) {
+        self.set_piece_param_continuing(id, param, value, before, false);
+    }
+
+    /// [`App::set_piece_param`], merged into the last Undo step while `continuing`.
+    /// Returns what it let go of, as [`released_text`] says it.
+    fn set_piece_param_continuing(
+        &mut self,
+        id: u64,
+        param: &str,
+        value: Value,
+        before: Document,
+        continuing: bool,
+    ) -> String {
+        match adjust::set(&mut self.tab.doc, id, param, value) {
+            Err(error) => {
+                self.tab.doc = before;
+                self.status = error;
+                self.error = true;
+                String::new()
+            }
+            Ok(_) => {
+                let (seats, names) = (before.seats.clone(), before.clone());
+                self.changed_continuing(before, continuing);
+                if self.error {
+                    return String::new();
+                }
+                // Name what the commit let go of, a layout's reflow included.
+                let released: Vec<Seat> = (seats.into_iter())
+                    .filter(|s| !self.tab.doc.seats.contains(s))
+                    .collect();
+                let note = released_text(&names, id, &released);
+                if let Some(g) = self.tab.doc.graphics.iter().find(|g| g.id == id) {
+                    self.status = value_text(g, param, None) + &note;
+                }
+                note
+            }
+        }
     }
 
     /// Keyboard Connect, while it still applies: Select is the tool and the
@@ -723,18 +868,103 @@ impl App {
         body.push(self.libraries_section()).into()
     }
 
-    /// The selected pieces' name and size. Pieces are always illustration.
+    fn piece_param<'a>(
+        &self,
+        g: &'a Graphic,
+        param: &'a Param,
+        current: &Value,
+    ) -> Option<Element<'a, Message>> {
+        let id = g.id;
+        let param_id = param.id();
+        let label = param.names().get("en").map_or(param_id, String::as_str);
+        let (range, step, value) = match (param, current) {
+            (Param::States { states, .. }, Value::State(current)) => {
+                let choices = row(states.iter().map(|state| {
+                    let label = state.names.get("en").unwrap_or(&state.id);
+                    let selected = &state.id == current;
+                    reshiki::accessibility::button(
+                        format!("equipment-param-{id}-{param_id}-{}", state.id),
+                        label.as_str(),
+                        text(label.as_str()).size(11),
+                    )
+                    .checked(selected)
+                    .padding([4, 6])
+                    .style(segment(selected))
+                    .on_press(Message::Equipment(Action::Param {
+                        id,
+                        param: param_id.into(),
+                        value: Value::State(state.id.clone()),
+                    }))
+                    .into()
+                }))
+                .spacing(2);
+                return Some(
+                    row![
+                        text(label).size(12).width(Length::FillPortion(1)),
+                        container(choices.wrap())
+                            .width(Length::FillPortion(3))
+                            .padding(2)
+                            .style(segment_track),
+                    ]
+                    .spacing(6)
+                    .align_y(Alignment::Center)
+                    .into(),
+                );
+            }
+            (Param::Range { min, max, unit, .. }, Value::Number(value)) => {
+                let step = match unit {
+                    Unit::Deg => 1.,
+                    Unit::Mm => 0.5,
+                    Unit::Fraction => 0.01,
+                };
+                (*min..=*max, step, *value)
+            }
+            (Param::Fill { .. }, Value::Number(value)) => (0. ..=1., 0.01, *value),
+            _ => return None,
+        };
+        let shown = value_text(g, param_id, Some(&Value::Number(value)));
+        let shown = shown
+            .rsplit_once(": ")
+            .map_or(shown.as_str(), |(_, value)| value);
+        let param_id = param_id.to_owned();
+        let slider = slider(range, value, move |value| {
+            Message::Equipment(Action::Slide {
+                id,
+                param: param_id.clone(),
+                value,
+            })
+        })
+        .step(step)
+        .on_release(Message::Equipment(Action::SlideEnd));
+        Some(
+            column![
+                row![
+                    text(label).size(12).width(Length::Fill),
+                    text(shown.to_owned()).size(11).style(muted_text),
+                ]
+                .align_y(Alignment::Center),
+                slider,
+            ]
+            .spacing(4)
+            .into(),
+        )
+    }
+
+    /// The selected pieces' details and controls. Pieces are always illustration.
     pub(super) fn piece_card(&self) -> Option<Element<'_, Message>> {
-        let pieces: Vec<_> = (self.tab.doc.graphics.iter())
-            .filter(|g| self.tab.selected.contains(&g.id))
-            .filter_map(|g| g.piece.as_ref()?.linked.as_ref())
+        let pieces: Vec<_> = (self.tab.selected.iter())
+            .filter_map(|id| {
+                let g = self.tab.doc.graphics.iter().find(|g| g.id == *id)?;
+                let piece = g.piece.as_ref()?;
+                Some((g, piece, piece.linked.as_ref()?))
+            })
             .collect();
         let (heading, detail) = match pieces.as_slice() {
             [] => return None,
             // A library piece names its revision, so the one exported or
             // updated is plain.
-            [d] if d.id.starts_with("reshiki/") => (title(d).to_owned(), size(d)),
-            [d] => (
+            [(_, _, d)] if d.id.starts_with("reshiki/") => (title(d).to_owned(), size(d)),
+            [(_, _, d)] => (
                 title(d).to_owned(),
                 format!("{} · revision {}", size(d), d.revision),
             ),
@@ -753,6 +983,29 @@ impl App {
             .align_y(Alignment::Center),
         ]
         .spacing(6);
+        let movable: Vec<_> = pieces
+            .iter()
+            .copied()
+            .filter(|(_, _, d)| d.params.iter().any(|p| !matches!(p, Param::Color { .. })))
+            .collect();
+        if !movable.is_empty() {
+            body = body.push(section("Movable parts"));
+            for &(g, piece, d) in &movable {
+                let Ok(values) = resolve(d, &piece.params) else {
+                    continue;
+                };
+                if movable.len() > 1 {
+                    body = body.push(text(name(d)).size(12));
+                }
+                for param in &d.params {
+                    if let Some(current) = values.get(param.id())
+                        && let Some(control) = self.piece_param(g, param, current)
+                    {
+                        body = body.push(control);
+                    }
+                }
+            }
+        }
         // One piece: each joint and hold, what is seated on it, and Detach.
         // A rod lists every clamp on it.
         if let [id] = self.tab.selected.as_slice()
@@ -842,8 +1095,10 @@ impl App {
             }
         }
         // One kind of piece: keep it, export it, or update it.
-        if let [d, rest @ ..] = pieces.as_slice()
-            && rest.iter().all(|o| placed::key(o) == placed::key(d))
+        if let [(_, _, d), rest @ ..] = pieces.as_slice()
+            && rest
+                .iter()
+                .all(|(_, _, o)| placed::key(o) == placed::key(d))
         {
             body = body.push(self.piece_library_rows(d));
         }
