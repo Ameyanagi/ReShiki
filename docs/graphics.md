@@ -175,8 +175,9 @@ endpoints, attachments and arrowheads stay in place.
    title. Type a position in percent to move a divider; **×** removes it.
 5. **Rounded** or **Square** sets the corners (a rounded panel's radius is
    **Corner (pt)** under **Graphic style**). Outline color, line width,
-   dashes, gradients and a custom fill color are under **Graphic style**.
-   **Fit to contents** refits the panel around what it is grouped with.
+   dashes, gradients and a custom fill color are under **Graphic style**,
+   which changes every selected shape: to change the panel alone,
+   Option-click its margin first. **Fit to contents** refits the panel around what it is grouped with.
 
 Each change is one Undo step. Panels are artwork: reaction detection, atom
 mapping and analysis never read them.
