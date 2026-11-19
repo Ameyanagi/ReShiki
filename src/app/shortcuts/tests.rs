@@ -415,4 +415,11 @@ fn command_equals_and_minus_zoom_the_view() {
     assert!(matches!(read("=", command), Some(Message::Zoom(z)) if z > 1.));
     assert!(matches!(read("+", command | Modifiers::SHIFT), Some(Message::Zoom(z)) if z > 1.));
     assert!(matches!(read("-", command), Some(Message::Zoom(z)) if z < 1.));
+    // Japanese keyboards type + with Shift+;.
+    let jis = key_message(
+        &Key::Character(";".into()),
+        &Key::Character("+".into()),
+        command | Modifiers::SHIFT,
+    );
+    assert!(matches!(jis, Some(Message::Zoom(z)) if z > 1.));
 }
