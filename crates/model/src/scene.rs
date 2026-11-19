@@ -2366,7 +2366,16 @@ fn graphic_primitive(g: &&crate::graphics::Graphic, doc: &Document) -> Vec<Primi
             .map(|commands| flat(commands, crate::graphics::SHADOW_RGB))
             .into_iter()
             .collect();
-        let bands = g.shading_bands();
+        let bands = if g.style.effects.shaded {
+            g.shading_bands(
+                doc.graphics
+                    .iter()
+                    .filter(|g| g.style.effects.shaded)
+                    .count(),
+            )
+        } else {
+            Vec::new()
+        };
         // The color the shape shows: on the dark canvas custom colors arrive
         // pre-flipped, while Ink shades from black as on the light canvas.
         let shade = match g.style.fill.unwrap_or(g.style.stroke) {
