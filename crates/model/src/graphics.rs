@@ -7,7 +7,11 @@ mod path;
 mod superscript;
 use crate::{document::Point, style};
 pub use arc::ArcGeometry;
-pub use effects::{Effects, SHADOW_RGB, shade, wave_radius, wavy};
+pub(crate) use effects::bounding_frame;
+pub use effects::{
+    EXPORT_NOTICE, Effects, Gradient, GradientKind, SHADOW_RGB, export_notice, shade, tiled,
+    wave_radius, wavy,
+};
 pub use heads::PathHeads;
 pub use panel::{Divider, Panel, TitlePlace};
 pub use path::{MIN_CLOSED_NODES, MIN_OPEN_NODES, PathHandle, PathNodeType, PathSummary};
@@ -164,6 +168,9 @@ impl GraphicStyle {
         {
             return Err("Corner radius must be 0–1000 pt".into());
         }
+        if self.effects.gradient.is_some() && self.fill.is_none() {
+            return Err("A gradient needs a fill color".into());
+        }
         self.effects.validate()
     }
 }
@@ -176,6 +183,12 @@ pub enum GraphicChange {
     Shaded(bool),
     Shadow(Option<f32>),
     Corner(Option<f32>),
+    Opacity(Option<f32>),
+    Gradient(Option<Gradient>),
+    /// A new start color for each shape's own gradient.
+    GradientFrom(crate::palette::Color),
+    /// A new angle for each shape's own linear gradient.
+    GradientAngle(f32),
 }
 impl GraphicChange {
     pub fn apply(&self, s: &mut GraphicStyle) {
@@ -183,9 +196,10 @@ impl GraphicChange {
             Self::Stroke(v) => s.stroke = *v,
             Self::Fill(v) => {
                 s.fill = *v;
-                // Shading paints the fill, so no fill means no shading.
+                // Shading and gradients paint the fill, so no fill means neither.
                 if v.is_none() {
                     s.effects.shaded = false;
+                    s.effects.gradient = None;
                 }
             }
             Self::Width(v) => s.width_pt = *v,
@@ -196,9 +210,41 @@ impl GraphicChange {
                 if *v && s.fill.is_none() {
                     s.fill = Some(s.stroke);
                 }
+                // Shading replaces a gradient and is always opaque.
+                if *v {
+                    s.effects.gradient = None;
+                    s.effects.opacity = None;
+                }
             }
             Self::Shadow(v) => s.effects.shadow_pt = *v,
             Self::Corner(v) => s.corner_pt = *v,
+            Self::Opacity(v) => {
+                s.effects.opacity = *v;
+                if v.is_some() {
+                    s.effects.shaded = false;
+                }
+            }
+            Self::Gradient(v) => {
+                s.effects.gradient = *v;
+                if v.is_some() {
+                    s.effects.shaded = false;
+                    s.fill = s.fill.or(Some(s.stroke));
+                }
+            }
+            Self::GradientFrom(v) => {
+                if let Some(gradient) = &mut s.effects.gradient {
+                    gradient.from = *v;
+                }
+            }
+            Self::GradientAngle(v) => {
+                if let Some(Gradient {
+                    kind: GradientKind::Linear { angle },
+                    ..
+                }) = &mut s.effects.gradient
+                {
+                    *angle = *v;
+                }
+            }
         }
     }
 }
@@ -317,9 +363,13 @@ impl Graphic {
     ) -> Self {
         let mut style = style;
         if !kind.closed() {
-            // Shading and shadows stay with the drawing style for the next
-            // closed shape, not a line or bracket drawn in between.
-            style.effects = Effects::default();
+            // Shading, shadows and gradients stay with the drawing style for
+            // the next closed shape, not a line or bracket drawn in between;
+            // a see-through line keeps its opacity.
+            style.effects = Effects {
+                opacity: style.effects.opacity,
+                ..Effects::default()
+            };
         }
         if kind != GraphicKind::RoundedRectangle {
             style.corner_pt = None;

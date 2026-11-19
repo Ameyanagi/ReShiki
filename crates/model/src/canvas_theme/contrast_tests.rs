@@ -134,6 +134,7 @@ fn visibility_index_retains_dummy_carbon_ring_fill_and_highlight_filters() {
     doc.ring_fills.push(RingFill {
         atoms: vec![a, b, c],
         color: Color::Custom([0; 3]),
+        effect: Default::default(),
     });
     doc.atom_mut(a).unwrap().display.highlight = Some(Color::Custom([255; 3]));
     doc.atom_labels.carbons = Carbons::All;

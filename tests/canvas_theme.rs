@@ -662,6 +662,7 @@ fn all_elements_meet_text_target_over_every_builtin_fill_and_overlaps() {
                     doc.ring_fills.push(RingFill {
                         atoms: vec![id],
                         color: Color::Palette(hue, Row::Tint),
+                        effect: Default::default(),
                     });
                     let ink = mode.color(canvas_theme::atom_color(&doc, &doc.atoms[0]));
                     for background in std::iter::once(mode.background())
@@ -698,10 +699,12 @@ fn custom_contrast_conflicts_are_reported_without_recoloring_user_ink_or_fills()
         RingFill {
             atoms: vec![id],
             color: Color::Custom([0; 3]),
+            effect: Default::default(),
         },
         RingFill {
             atoms: vec![id],
             color: Color::Custom([120; 3]),
+            effect: Default::default(),
         },
     ];
     let before = doc.clone();

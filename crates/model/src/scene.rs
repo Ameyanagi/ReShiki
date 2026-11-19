@@ -106,6 +106,18 @@ pub enum Primitive {
         color: [u8; 3],
         dash: f32,
     },
+    /// A gradient fill in exact colors: `stops` (offset, color, alpha) run
+    /// from `from` to `to`, points in the unit square that `frame` (corner,
+    /// x side and y side) maps onto the drawing; a radial one spreads from
+    /// `from` out to the circle through `to`. `commands` fill nonzero.
+    Gradient {
+        commands: Vec<crate::graphics::PathCommand>,
+        frame: [Point; 3],
+        radial: bool,
+        from: [f32; 2],
+        to: [f32; 2],
+        stops: Vec<(f32, [u8; 3], f32)>,
+    },
     /// A 3D model's soft background card: a rounded rectangle in exact colors.
     Card {
         lo: Point,
@@ -2341,23 +2353,51 @@ fn graphic_primitive(g: &&crate::graphics::Graphic, doc: &Document) -> Vec<Primi
             let rgb = crate::graphics::shade(shade, *t);
             Some(flat(commands, doc.canvas_theme.color(rgb)))
         }));
+        let effects = g.style.effects;
+        let gradient = g.gradient_area().zip(effects.gradient.zip(g.style.fill));
+        if let Some(((commands, frame), (gradient, fill))) = gradient.clone() {
+            parts.push(see_through(
+                gradient_primitive(commands, frame, gradient, fill, doc),
+                effects.opacity,
+            ));
+        }
         // ChemDraw paints a shadowed outline's inside with paper.
-        let paper = !parts.is_empty() && bands.is_empty() && g.style.fill.is_none();
-        parts.extend(g.parts().into_iter().enumerate().map(|(i, p)| {
+        // A see-through outline stays clear inside.
+        let paper = !parts.is_empty()
+            && bands.is_empty()
+            && gradient.is_none()
+            && effects.opacity.is_none()
+            && g.style.fill.is_none();
+        // A see-through fill fades only the fill; without one, the lines fade.
+        let fades_fill = g.style.fill.is_some() && g.closed_shape();
+        for (i, p) in g.parts().into_iter().enumerate() {
             let mut style = p.style;
             if i == 0 && paper {
                 style.fill = Some(Color::Custom([255; 3]));
             }
-            Primitive::Path {
-                commands: p.commands,
-                filled: if i == 0 && !bands.is_empty() {
-                    false
-                } else {
-                    p.filled || i == 0 && paper
-                },
+            let filled = if i == 0 && (!bands.is_empty() || gradient.is_some()) {
+                false
+            } else {
+                p.filled || i == 0 && paper
+            };
+            let path = |style, filled| Primitive::Path {
+                commands: p.commands.clone(),
                 style,
+                filled,
+            };
+            match effects.opacity {
+                Some(alpha) if i == 0 && filled && fades_fill => {
+                    let mut fill = style.clone();
+                    fill.width_pt = 0.;
+                    parts.push(see_through(path(fill, true), Some(alpha)));
+                    parts.push(path(style, false));
+                }
+                Some(alpha) if !fades_fill => {
+                    parts.push(see_through(path(style, filled), Some(alpha)))
+                }
+                _ => parts.push(path(style, filled)),
             }
-        }));
+        }
         let text_style = &doc.drawing_style.text_style();
         parts.extend(
             g.panel_parts(text_style)
@@ -2403,6 +2443,38 @@ fn graphic_primitive(g: &&crate::graphics::Graphic, doc: &Document) -> Vec<Primi
             });
         }
         parts
+    }
+}
+/// The SVG ID prefix of a drawing's gradient fills, unlike a 3D model's.
+pub const GRADIENT_ID: &str = "reshiki-gradient-";
+/// `primitive` at `opacity`, or as it is when opaque.
+fn see_through(primitive: Primitive, opacity: Option<f32>) -> Primitive {
+    match opacity {
+        Some(alpha) => Primitive::Opacity {
+            alpha,
+            primitive: Box::new(primitive),
+        },
+        None => primitive,
+    }
+}
+/// `commands` filled with `gradient` from its start color into `fill`, in
+/// the colors the canvas shows them.
+pub(crate) fn gradient_primitive(
+    commands: Vec<crate::graphics::PathCommand>,
+    frame: [Point; 3],
+    gradient: crate::graphics::Gradient,
+    fill: crate::palette::Color,
+    doc: &Document,
+) -> Primitive {
+    let shown = |c: crate::palette::Color| doc.canvas_theme.color(c.rgb());
+    let (from, to) = gradient.ends();
+    Primitive::Gradient {
+        commands,
+        frame,
+        radial: gradient.kind == crate::graphics::GradientKind::Radial,
+        from,
+        to,
+        stops: vec![(0., shown(gradient.from), 1.), (1., shown(fill), 1.)],
     }
 }
 fn push_underlays(
@@ -3520,6 +3592,11 @@ pub fn bounds(drawing: &[Primitive]) -> (Point, Point) {
                 let r = outline.width / 2.;
                 points.extend([lo.offset(-r, -r), hi.offset(r, r)]);
             }
+            Primitive::Gradient { commands, .. } => points.extend(
+                commands
+                    .iter()
+                    .flat_map(crate::graphics::PathCommand::iter_points),
+            ),
             Primitive::Text {
                 position,
                 text,

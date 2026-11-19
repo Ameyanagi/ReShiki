@@ -429,10 +429,11 @@ impl ArrowReader {
                 "Circular/elliptical CDXML arrows are not supported yet; use a Bézier arrow",
             ));
         }
+        // ChemDraw draws no fade on an arrow; the value must still be a number.
         let fill = node.attr("FillType").unwrap_or("None");
         if !matches!(fill, "None" | "Unspecified")
             && !(drawing && matches!(fill, "Solid" | "Shaded"))
-            || scalar(node, "FadePercent", "100")? != 100.
+            || !scalar(node, "FadePercent", "1000")?.is_finite()
         {
             return Err(ArrowError::Invalid(
                 "Filled or faded CDXML arrows are not supported yet",

@@ -29,6 +29,7 @@ fn main() -> anyhow::Result<()> {
                 .map(|hue| RingFill {
                     atoms: vec![id],
                     color: Color::Palette(hue, Row::Tint),
+                    effect: Default::default(),
                 })
                 .to_vec();
             let palette = Palette::of(&doc);

@@ -70,7 +70,7 @@ thread_local! {
 }
 
 /// Set up the paper's next frame of `doc`: models render coarser while one
-/// turns or morphs, and with none drawn in 3D the tiles are let go.
+/// turns or morphs, and with no tiled paint the tiles are let go.
 pub(in crate::canvas) fn begin(doc: &reshiki::document::Document) {
     use reshiki::models3d::Display;
     let moving = doc
@@ -78,7 +78,7 @@ pub(in crate::canvas) fn begin(doc: &reshiki::document::Document) {
         .iter()
         .any(|m| m.turning || m.morph.is_some_and(|t| t < 1.));
     SAMPLES.set(if moving { TURNING } else { OVERSAMPLE });
-    if doc.models.iter().all(|m| m.display == Display::TwoD) {
+    if doc.models.iter().all(|m| m.display == Display::TwoD) && !reshiki::graphics::tiled(doc) {
         TILES.take();
     }
 }
@@ -101,6 +101,7 @@ pub(in crate::canvas) fn is_model(primitive: &Primitive) -> bool {
                 | Primitive::Contour { .. }
                 | Primitive::Wire { .. }
                 | Primitive::Card { .. }
+                | Primitive::Gradient { .. }
         ),
     }
 }

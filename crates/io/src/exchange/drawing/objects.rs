@@ -1,7 +1,8 @@
 use super::*;
 use crate::{
     arrows::{Body, Head, HeadShape, NoGo},
-    graphics::{GraphicKind, LinePattern, PathHeads},
+    graphics::{GraphicKind, GraphicStyle, LinePattern, PathHeads},
+    ring_fills::RingEffect,
     scientific::MarkKind,
 };
 
@@ -511,7 +512,14 @@ impl Writer<'_> {
             // ChemDraw's own ring-fill representation: the area belongs to the
             // fragment and references bonds, so atom edits reshape its fill.
             let id = self.id()?;
-            let color = self.color(fill.color)?;
+            // ChemDraw paints a ring fill flat: a gradient as the color halfway
+            // along it, a see-through one as it shows over white paper.
+            let rgb = self.palette.rgb(fill.color);
+            let color = self.color(match fill.effect {
+                RingEffect::Flat => fill.color,
+                RingEffect::Gradient => mix([255; 3], rgb, 0.5),
+                RingEffect::SeeThrough => mix([255; 3], rgb, crate::graphics::Effects::SEE_THROUGH),
+            })?;
             self.tree.add(
                 parent,
                 "ColoredMolecularArea",
@@ -646,7 +654,8 @@ impl Writer<'_> {
                         "Mixed open and closed filled paths cannot be preserved",
                     ));
                 }
-                parsed.push((part.style, paths));
+                let closed = paths.iter().all(|(_, closed)| *closed);
+                parsed.push((self.chemdraw_style(&part.style, closed), paths));
             }
             // Closed and compound paths draw no heads.
             let heads = match parsed.as_slice() {
@@ -679,7 +688,9 @@ impl Writer<'_> {
                     } else {
                         parent
                     };
-                    if let Some(fill) = paint.fill {
+                    // A faded fill is the outline's own: one curve draws both.
+                    let fade = paint.effects.opacity.filter(|_| *closed);
+                    if let Some(fill) = paint.fill.filter(|_| fade.is_none()) {
                         let n = self.curve(target, points, *closed, fill, true, 0., false, z)?;
                         if paint.effects.shaded && *closed {
                             self.tree.set(n, "CurveType", "257")?;
@@ -703,6 +714,9 @@ impl Writer<'_> {
                                 self.tree.set(n, name, value)?;
                             }
                         }
+                        if let Some(alpha) = fade {
+                            self.tree.set(n, "FadePercent", fade_percent(alpha))?;
+                        }
                         object = Some(if parent != self.page { parent } else { n });
                     }
                 }
@@ -724,7 +738,7 @@ impl Writer<'_> {
     /// rectangles and wavy or dotted outlines stay curves; a wavy line without
     /// heads becomes ChemDraw's line, the one shape ChemDraw draws wavy.
     fn native_shape(&mut self, g: &crate::graphics::Graphic, z: usize) -> Result<Option<Key>> {
-        let style = &g.style;
+        let style = &self.chemdraw_style(&g.style, g.kind != GraphicKind::Line);
         let (o, x, y) = (P::from(g.origin), P::from(g.axis_x), P::from(g.axis_y));
         let ellipse = g.kind == GraphicKind::Ellipse;
         let line = g.kind == GraphicKind::Line
@@ -748,9 +762,11 @@ impl Writer<'_> {
             return Ok(None);
         }
         // ChemDraw paints a shadowed outline white inside, so white is no fill.
-        let fill = style
-            .fill
-            .filter(|f| style.effects.shaded || self.palette.rgb(*f) != [255; 3]);
+        let fill = style.fill.filter(|f| {
+            style.effects.shaded
+                || style.effects.opacity.is_some()
+                || self.palette.rgb(*f) != [255; 3]
+        });
         // A line keeps any fill it inherited unused; it is drawn in its stroke.
         let fill = fill.filter(|_| !line);
         let outline = fill.is_some_and(|f| self.palette.rgb(f) != self.palette.rgb(style.stroke));
@@ -788,7 +804,10 @@ impl Writer<'_> {
         if ellipse && (width - height).abs() < 1e-6 && (x.x * y.x + x.y * y.y).abs() < 1e-6 {
             flags.push("Circle");
         }
-        if fill.is_some() {
+        if let Some(alpha) = style.effects.opacity.filter(|_| fill.is_some()) {
+            // ChemDraw fades a plain shape's inside with its own color.
+            attributes.push(("FadePercent", fade_percent(alpha)));
+        } else if fill.is_some() {
             flags.push(if style.effects.shaded {
                 "Shaded"
             } else {
@@ -801,6 +820,10 @@ impl Writer<'_> {
         if let Some(d) = style.effects.shadow_pt {
             flags.push(if ellipse { "Shadowed" } else { "Shadow" });
             attributes.push(("ShadowSize", format!("{:.0}", real(d) * 100.)));
+        }
+        // ChemDraw's plain oval has no flag; a plain rectangle is Plain.
+        if flags.is_empty() && !ellipse {
+            flags.push("Plain");
         }
         if ellipse {
             let center = o.add((x.x + y.x) / 2., (x.y + y.y) / 2.);
@@ -818,9 +841,6 @@ impl Writer<'_> {
                 ("MinorAxisEnd3D", format!("{} 0", self.position(minor))),
             ]);
         } else {
-            if flags.is_empty() {
-                flags.push("Plain");
-            }
             attributes.extend([
                 ("GraphicType", "Rectangle".into()),
                 ("RectangleType", flags.join(" ")),
@@ -859,6 +879,39 @@ impl Writer<'_> {
             )?;
         }
         Ok(Some(parent))
+    }
+    /// The nearest style ChemDraw draws, which has neither gradients nor
+    /// see-through color: a gradient becomes the flat color halfway along it,
+    /// and a see-through color is blended over white paper, except a closed
+    /// fill in its outline's color, which keeps its opacity for ChemDraw's
+    /// faded fill (FadePercent).
+    pub(super) fn chemdraw_style(&self, style: &GraphicStyle, closed: bool) -> GraphicStyle {
+        let mut out = style.clone();
+        if let (Some(gradient), Some(fill)) = (out.effects.gradient.take(), out.fill) {
+            out.fill = Some(mix(
+                self.palette.rgb(gradient.from),
+                self.palette.rgb(fill),
+                0.5,
+            ));
+        }
+        // As the scene draws it: a closed shape fades its fill, others their lines.
+        if let Some(alpha) = out.effects.opacity {
+            match out.fill.filter(|_| closed) {
+                Some(fill)
+                    if style.effects.gradient.is_none()
+                        && out.width_pt > 0.
+                        && self.palette.rgb(fill) == self.palette.rgb(out.stroke) => {}
+                Some(fill) => {
+                    out.fill = Some(mix([255; 3], self.palette.rgb(fill), alpha));
+                    out.effects.opacity = None;
+                }
+                None => {
+                    out.stroke = mix([255; 3], self.palette.rgb(out.stroke), alpha);
+                    out.effects.opacity = None;
+                }
+            }
+        }
+        out
     }
     pub(super) fn bracket_superscript(
         &mut self,
@@ -1123,4 +1176,18 @@ pub(super) fn curve_points(commands: &[PathCommand]) -> Result<Vec<(Vec<P>, bool
         return Err(invalid("Invalid graphic coordinate"));
     }
     Ok(groups)
+}
+
+/// The color `t` of the way from `a` to `b`.
+pub(super) fn mix(a: [u8; 3], b: [u8; 3], t: f32) -> crate::palette::Color {
+    let mut out = a;
+    for (c, b) in out.iter_mut().zip(b) {
+        *c = (f32::from(*c) + (f32::from(b) - f32::from(*c)) * t).round() as u8;
+    }
+    crate::palette::Color::Custom(out)
+}
+
+/// ChemDraw's FadePercent, in tenths of a percent of the color's strength.
+fn fade_percent(alpha: f32) -> String {
+    format!("{:.0}", (alpha * 1000.).clamp(1., 999.))
 }

@@ -203,6 +203,7 @@ fn both_color_visitors_see_every_stored_color() {
     doc.ring_fills.push(crate::ring_fills::RingFill {
         atoms: vec![a],
         color: Color::Ink,
+        effect: Default::default(),
     });
     let mut visited = 0;
     crate::palette::for_each_color_mut(&mut doc, |c| {

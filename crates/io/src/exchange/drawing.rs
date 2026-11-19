@@ -13,6 +13,8 @@ mod bracket_superscript_tests;
 mod clipboard;
 #[cfg(test)]
 mod effects_tests;
+#[cfg(test)]
+mod fill_effects_tests;
 mod generic;
 mod groups;
 mod labels;

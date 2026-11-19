@@ -589,6 +589,31 @@ impl App {
             )
         };
     }
+    pub(super) fn apply_ring_effect(&mut self, effect: reshiki::ring_fills::RingEffect) {
+        let before = self.tab.doc.clone();
+        let count = reshiki::ring_fills::set_effect(&mut self.tab.doc, &self.tab.selected, effect);
+        self.changed(before);
+        self.status = match count {
+            0 => "Select a filled ring to change its effect".into(),
+            1 => format!("{effect} ring fill"),
+            n => format!("{effect} fill on {n} rings"),
+        };
+    }
+    /// The effect every selected ring fill shares, if they share one.
+    pub(super) fn selected_ring_effect(&self) -> Option<reshiki::ring_fills::RingEffect> {
+        let cycles = reshiki::ring_fills::selected_cycles(&self.tab.doc, &self.tab.selected);
+        let mut effects = self.tab.doc.ring_fills.iter().filter_map(|fill| {
+            cycles
+                .iter()
+                .any(|atoms| {
+                    fill.atoms.len() == atoms.len()
+                        && fill.atoms.iter().all(|id| atoms.contains(id))
+                })
+                .then_some(fill.effect)
+        });
+        let first = effects.next()?;
+        effects.all(|e| e == first).then_some(first)
+    }
     pub(super) fn apply_highlight_color(&mut self, color: Option<Paint>) {
         let before = self.tab.doc.clone();
         let count = reshiki::highlights::apply(&mut self.tab.doc, &self.tab.selected, color);

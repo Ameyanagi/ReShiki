@@ -188,10 +188,26 @@ async fn native_fill_codes_preserve_unfilled_arrows_and_read_block_fills() -> an
             );
         }
     }
-    let faded = r#"<CDXML><page id="1"><arrow id="2" Tail3D="10 20 0" Head3D="70 20 0" ArrowheadHead="Full" FillType="None" FadePercent="90"/></page></CDXML>"#;
+    // ChemDraw draws no fade on an arrow, so it opens as the same arrow.
+    let arrow = |fade: &str| {
+        format!(
+            r#"<CDXML><page id="1"><arrow id="2" Tail3D="10 20 0" Head3D="70 20 0" ArrowheadHead="Full" FillType="None"{fade}/></page></CDXML>"#
+        )
+    };
+    let mut appearances = vec![];
+    for fade in ["", r#" FadePercent="90""#] {
+        let result = engine
+            .request(Request::import("cdxml", &arrow(fade)))
+            .await
+            .map_err(anyhow::Error::msg)?;
+        let arrows = result.document.context("Missing faded arrow")?.arrows;
+        appearances.push(arrows.first().context("Missing arrow")?.appearance());
+    }
+    assert_eq!(appearances[0], appearances[1]);
+    let filled = arrow(r#" FillType="Solid""#).replace(r#" FillType="None""#, "");
     assert!(
         engine
-            .request(Request::import("cdxml", faded))
+            .request(Request::import("cdxml", &filled))
             .await
             .unwrap_err()
             .contains("Filled or faded CDXML arrows")

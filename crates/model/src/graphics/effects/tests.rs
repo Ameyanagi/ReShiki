@@ -1,5 +1,5 @@
 use super::*;
-use crate::graphics::{GraphicStyle, LinePattern, PathHeads};
+use crate::graphics::{GraphicChange, GraphicStyle, LinePattern, PathHeads};
 
 fn shape(kind: GraphicKind, effects: Effects) -> Graphic {
     Graphic::dragged(
@@ -92,6 +92,7 @@ fn rectangle_bands_shrink_into_the_top_left_corner() {
         Effects {
             shaded: true,
             shadow_pt: None,
+            ..Default::default()
         },
     );
     let bands = rectangle.shading_bands();
@@ -122,6 +123,7 @@ fn oval_bands_stay_inside_the_oval() {
         Effects {
             shaded: true,
             shadow_pt: None,
+            ..Default::default()
         },
     );
     for (band, _) in oval.shading_bands() {
@@ -137,6 +139,7 @@ fn shadows_follow_closed_shapes_only() {
     let effects = Effects {
         shaded: false,
         shadow_pt: Some(4.),
+        ..Default::default()
     };
     let rectangle = shape(GraphicKind::Rectangle, effects);
     let d = crate::style::DEFAULT.world(4.);
@@ -152,7 +155,8 @@ fn shadows_follow_closed_shapes_only() {
             GraphicKind::Line,
             Effects {
                 shaded: true,
-                shadow_pt: None
+                shadow_pt: None,
+                ..Default::default()
             }
         )
         .shading_bands()
@@ -169,6 +173,7 @@ fn plain_styles_save_as_before_and_effects_round_trip() {
         effects: Effects {
             shaded: true,
             shadow_pt: Some(2.),
+            ..Default::default()
         },
         ..Default::default()
     };
@@ -182,7 +187,8 @@ fn plain_styles_save_as_before_and_effects_round_trip() {
     assert!(
         Effects {
             shaded: false,
-            shadow_pt: Some(0.)
+            shadow_pt: Some(0.),
+            ..Default::default()
         }
         .validate()
         .is_err()
@@ -217,6 +223,7 @@ fn the_scene_paints_shadow_then_bands_then_the_outline_and_counts_the_shadow_in_
     let effects = Effects {
         shaded: true,
         shadow_pt: Some(4.),
+        ..Default::default()
     };
     let doc = Document {
         graphics: vec![shape(GraphicKind::Ellipse, effects)],
@@ -250,6 +257,7 @@ fn a_shadowed_outline_is_paper_inside() {
         Effects {
             shaded: false,
             shadow_pt: Some(4.),
+            ..Default::default()
         },
     );
     rectangle.style.fill = None;
@@ -274,6 +282,7 @@ fn a_shaded_path_shrinks_toward_its_highlight_and_stays_inside() {
         Effects {
             shaded: true,
             shadow_pt: None,
+            ..Default::default()
         },
     );
     path.kind = GraphicKind::Path;
@@ -306,6 +315,7 @@ fn only_closed_shapes_take_effects_from_the_drawing_style() {
     let effects = Effects {
         shaded: true,
         shadow_pt: Some(4.),
+        ..Default::default()
     };
     assert_eq!(shape(GraphicKind::Ellipse, effects).style.effects, effects);
     for kind in [GraphicKind::Line, GraphicKind::Curve, GraphicKind::Brackets] {
@@ -325,6 +335,7 @@ fn a_tilted_shape_casts_its_shadow_in_its_own_frame() {
         Effects {
             shaded: false,
             shadow_pt: Some(4.),
+            ..Default::default()
         },
     );
     oval.axis_x = Point::new(25., 43.3);
@@ -445,6 +456,7 @@ fn shading_keeps_its_light_highlight_on_the_dark_canvas() {
             Effects {
                 shaded: true,
                 shadow_pt: None,
+                ..Default::default()
             },
         )],
         ..Default::default()
@@ -479,4 +491,258 @@ fn shading_keeps_its_light_highlight_on_the_dark_canvas() {
     assert_eq!(shown(&blue), light_blue);
     let n = light_blue.len() as f32;
     assert_eq!(light_blue.first(), Some(&shade([0, 0, 255], (n - 0.5) / n)));
+}
+
+fn gradient(kind: GradientKind) -> Effects {
+    Effects {
+        gradient: Some(Gradient {
+            from: Gradient::WHITE,
+            kind,
+        }),
+        ..Default::default()
+    }
+}
+
+#[test]
+fn a_linear_gradient_spans_its_frame_along_its_angle() {
+    let ends = |angle| {
+        let (from, to) = Gradient {
+            from: Gradient::WHITE,
+            kind: GradientKind::Linear { angle },
+        }
+        .ends();
+        [from, to].map(|p| p.map(|v| (v * 1000.).round() / 1000.))
+    };
+    assert_eq!(ends(0.), [[0., 0.5], [1., 0.5]]);
+    assert_eq!(ends(90.), [[0.5, 0.], [0.5, 1.]]);
+    // Diagonal: corner to corner, so both ends reach the frame.
+    assert_eq!(ends(45.), [[0., 0.], [1., 1.]]);
+    let radial = Gradient {
+        from: Gradient::WHITE,
+        kind: GradientKind::Radial,
+    };
+    assert_eq!(radial.ends(), ([0.5, 0.5], [1., 0.5]));
+}
+
+#[test]
+fn a_gradient_fill_is_one_primitive_under_the_outline_in_the_colors_shown() {
+    use crate::{canvas_theme::CanvasTheme, document::Document, scene::Primitive};
+    let mut ellipse = shape(GraphicKind::Ellipse, gradient(GradientKind::Radial));
+    ellipse.style.fill = Some(crate::palette::Color::Custom([0, 0, 255]));
+    let mut doc = Document {
+        graphics: vec![ellipse],
+        ..Default::default()
+    };
+    for theme in CanvasTheme::ALL {
+        doc.canvas_theme = theme;
+        // The colors a flat fill of each end shows on this canvas.
+        let flat = |fill| {
+            let mut plain = doc.clone();
+            plain.graphics[0].style.effects = Effects::default();
+            plain.graphics[0].style.fill = Some(fill);
+            crate::scene::primitives(&plain)
+                .iter()
+                .find_map(|p| match p {
+                    Primitive::Path {
+                        style,
+                        filled: true,
+                        ..
+                    } => style.fill.map(|c| theme.color(c.rgb())),
+                    _ => None,
+                })
+                .unwrap()
+        };
+        let drawing = crate::scene::primitives(&doc);
+        let Some(Primitive::Gradient {
+            radial,
+            frame,
+            stops,
+            ..
+        }) = drawing.first()
+        else {
+            panic!("the gradient first: {drawing:?}");
+        };
+        assert!(radial);
+        assert_eq!(frame[1], Point::new(40., 0.));
+        assert_eq!(
+            stops,
+            &[
+                (0., flat(Gradient::WHITE), 1.),
+                (1., flat(crate::palette::Color::Custom([0, 0, 255])), 1.)
+            ]
+        );
+        assert!(
+            matches!(drawing.get(1), Some(Primitive::Path { filled: false, .. })),
+            "the outline strokes over the gradient"
+        );
+    }
+    let svg = crate::scene::svg(&doc);
+    assert!(svg.contains("<radialGradient"), "{svg}");
+    assert!(
+        svg.contains("gradientTransform=\"matrix(40 0 0 20 0 0)\""),
+        "{svg}"
+    );
+}
+
+#[test]
+fn see_through_fades_the_fill_or_the_lines_of_a_shape_without_one() {
+    use crate::{document::Document, scene::Primitive};
+    let see_through = Effects {
+        opacity: Some(0.3),
+        ..Default::default()
+    };
+    // A new line takes no effects from the style it is drawn with.
+    let mut line = shape(GraphicKind::Line, see_through);
+    line.style.fill = None;
+    line.style.effects = see_through;
+    let doc = Document {
+        graphics: vec![shape(GraphicKind::Rectangle, see_through), line],
+        ..Default::default()
+    };
+    let drawing = crate::scene::primitives(&doc);
+    let parts: Vec<_> = drawing
+        .iter()
+        .map(|p| match p {
+            Primitive::Opacity { alpha, primitive } => match primitive.as_ref() {
+                Primitive::Path { filled, style, .. } => (Some(*alpha), *filled, style.width_pt),
+                other => panic!("{other:?}"),
+            },
+            Primitive::Path { filled, style, .. } => (None, *filled, style.width_pt),
+            other => panic!("{other:?}"),
+        })
+        .collect();
+    assert_eq!(
+        parts,
+        [
+            // The rectangle's fill fades; its outline stays solid.
+            (Some(0.3), true, 0.),
+            (None, false, 0.6),
+            // The line fades as a whole.
+            (Some(0.3), false, 0.6),
+        ]
+    );
+}
+
+#[test]
+fn shading_gradients_and_see_through_fills_exclude_each_other() {
+    let mut style = GraphicStyle::default();
+    GraphicChange::Gradient(gradient(GradientKind::Radial).gradient).apply(&mut style);
+    // A gradient fills, so an outline gains its own color as the fill.
+    assert_eq!(style.fill, Some(style.stroke));
+    GraphicChange::Opacity(Some(0.5)).apply(&mut style);
+    assert!(style.validate().is_ok());
+    GraphicChange::Shaded(true).apply(&mut style);
+    assert_eq!(
+        (style.effects.gradient, style.effects.opacity),
+        (None, None)
+    );
+    GraphicChange::Gradient(gradient(GradientKind::Radial).gradient).apply(&mut style);
+    assert!(!style.effects.shaded);
+    GraphicChange::Fill(None).apply(&mut style);
+    assert_eq!(style.effects.gradient, None);
+
+    let invalid = |effects: Effects, fill| {
+        GraphicStyle {
+            fill,
+            effects,
+            ..Default::default()
+        }
+        .validate()
+        .is_err()
+    };
+    let ink = Some(crate::palette::Color::Ink);
+    assert!(invalid(gradient(GradientKind::Radial), None));
+    assert!(invalid(
+        Effects {
+            shaded: true,
+            ..gradient(GradientKind::Radial)
+        },
+        ink
+    ));
+    for opacity in [0., 1., f32::NAN] {
+        assert!(invalid(
+            Effects {
+                opacity: Some(opacity),
+                ..Default::default()
+            },
+            ink
+        ));
+    }
+    assert!(invalid(gradient(GradientKind::Linear { angle: 400. }), ink));
+}
+
+#[test]
+fn fills_save_as_version_40_and_round_trip() {
+    use crate::document::Document;
+    let mut rectangle = shape(
+        GraphicKind::Rectangle,
+        Effects {
+            opacity: Some(0.4),
+            ..gradient(GradientKind::Linear { angle: 30. })
+        },
+    );
+    rectangle.style.effects.gradient = rectangle.style.effects.gradient.map(|g| Gradient {
+        from: crate::palette::Color::Palette(crate::palette::Hue::Blue, crate::palette::Row::Tint),
+        ..g
+    });
+    let doc = Document {
+        graphics: vec![rectangle],
+        ..Default::default()
+    };
+    assert_eq!(doc.file_version(), crate::document::DRAWING_ELEMENTS);
+    let json = serde_json::to_value(&doc.graphics[0].style).unwrap();
+    assert_eq!(json["effects"]["opacity"], 0.4f32);
+    assert_eq!(json["effects"]["gradient"]["kind"]["linear"]["angle"], 30.);
+    let back: GraphicStyle = serde_json::from_value(json).unwrap();
+    assert_eq!(back, doc.graphics[0].style);
+    // The start color is a theme color, recolored with the drawing.
+    assert!(crate::palette::any_color(&doc, |c| matches!(
+        c,
+        crate::palette::Color::Palette(crate::palette::Hue::Blue, _)
+    )));
+}
+
+#[test]
+fn gradient_field_edits_keep_each_shapes_own_gradient() {
+    let mut linear = GraphicStyle::default();
+    GraphicChange::Gradient(gradient(GradientKind::Linear { angle: 0. }).gradient)
+        .apply(&mut linear);
+    let mut radial = GraphicStyle::default();
+    GraphicChange::Gradient(gradient(GradientKind::Radial).gradient).apply(&mut radial);
+    let mut flat = GraphicStyle::default();
+    for style in [&mut linear, &mut radial, &mut flat] {
+        GraphicChange::GradientAngle(30.).apply(style);
+        GraphicChange::GradientFrom(crate::palette::Color::Ink).apply(style);
+    }
+    assert_eq!(
+        linear.effects.gradient.map(|g| (g.from, g.kind)),
+        Some((
+            crate::palette::Color::Ink,
+            GradientKind::Linear { angle: 30. }
+        ))
+    );
+    assert_eq!(
+        radial.effects.gradient.map(|g| g.kind),
+        Some(GradientKind::Radial)
+    );
+    assert_eq!(flat.effects.gradient, None);
+    // A see-through line drawn from the drawing style keeps its opacity.
+    let line = Graphic::dragged(
+        1,
+        GraphicKind::Line,
+        Point::new(0., 0.),
+        Point::new(40., 0.),
+        GraphicStyle {
+            effects: Effects {
+                opacity: Some(0.5),
+                ..gradient(GradientKind::Radial)
+            },
+            fill: Some(crate::palette::Color::Ink),
+            ..Default::default()
+        },
+        Default::default(),
+        false,
+    );
+    assert_eq!(line.style.effects.opacity, Some(0.5));
+    assert_eq!(line.style.effects.gradient, None);
 }

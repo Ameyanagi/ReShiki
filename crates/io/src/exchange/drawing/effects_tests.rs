@@ -104,6 +104,7 @@ async fn effects_export_as_native_chemdraw_shapes_and_come_back() {
         effects: Effects {
             shaded: true,
             shadow_pt: None,
+            ..Default::default()
         },
         ..Default::default()
     };
@@ -112,6 +113,7 @@ async fn effects_export_as_native_chemdraw_shapes_and_come_back() {
         effects: Effects {
             shaded: false,
             shadow_pt: Some(2.),
+            ..Default::default()
         },
         ..Default::default()
     };
@@ -241,6 +243,7 @@ async fn an_outline_in_another_color_follows_the_native_shape_and_wavy_lines_kee
         effects: Effects {
             shaded: true,
             shadow_pt: Some(4.),
+            ..Default::default()
         },
         ..Default::default()
     };
@@ -305,6 +308,7 @@ async fn a_corner_too_large_for_cdx_exports_as_curves() {
             effects: Effects {
                 shaded: false,
                 shadow_pt: Some(4.),
+                ..Default::default()
             },
             ..Default::default()
         },

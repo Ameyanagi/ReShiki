@@ -281,3 +281,39 @@ fn windows_print_keeps_exposed_open_chain_opaque_and_emf_accepts_it() {
     assert_eq!(records, u32_at(52), "EMF record count");
     assert!(painted_geometry > 0, "Missing painted vector geometry");
 }
+
+#[test]
+fn windows_print_draws_a_gradient_fill_in_its_average_color() {
+    use crate::graphics::{Effects, Gradient, GradientKind, Graphic, GraphicKind, GraphicStyle};
+    let mut doc = Document {
+        graphics: vec![Graphic::dragged(
+            1,
+            GraphicKind::Rectangle,
+            crate::document::Point::new(0., 0.),
+            crate::document::Point::new(40., 20.),
+            GraphicStyle {
+                fill: Some(crate::palette::Color::Custom([0, 0, 255])),
+                effects: Effects {
+                    gradient: Some(Gradient {
+                        from: Gradient::WHITE,
+                        kind: GradientKind::Linear { angle: 0. },
+                    }),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            Default::default(),
+            false,
+        )],
+        ..Default::default()
+    };
+    doc.page_layout = Some(crate::pages::Layout::around(&doc));
+    let snapshot: Value = serde_json::from_slice(&print_snapshot(&doc).unwrap()).unwrap();
+    assert!(
+        snapshot["primitives"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|p| p["fill"] == json!([128, 128, 255, 255]))
+    );
+}

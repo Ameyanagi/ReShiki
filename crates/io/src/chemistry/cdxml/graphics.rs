@@ -86,6 +86,8 @@ pub struct NativeStyle {
     pub shadow_pt: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub corner_pt: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub opacity: Option<f64>,
 }
 impl NativeStyle {
     /// ChemDraw's Shaded paints the shape in its one color.
@@ -139,6 +141,8 @@ impl NativeGraphic {
                 effects: crate::graphics::Effects {
                     shaded: s.shaded,
                     shadow_pt: s.shadow_pt.map(|d| d as f32),
+                    opacity: s.opacity.map(|a| a as f32),
+                    gradient: None,
                 },
                 corner_pt: s.corner_pt.map(|c| c as f32),
             }
@@ -280,7 +284,8 @@ impl Reader<'_, '_> {
             self.spend(text.len())?;
             Ok(numeric::float(text)?)
         };
-        if attribute("FadePercent", "100")? != 100.0 || attribute("alpha", "1")? != 1.0 {
+        // The original reader's wording, which the reference oracle compares.
+        if !attribute("FadePercent", "1000")?.is_finite() || attribute("alpha", "1")? != 1.0 {
             return Err(Error::Native(
                 "Transparent/faded CDXML graphics are not supported yet",
             ));
@@ -297,7 +302,19 @@ impl Reader<'_, '_> {
             shaded: false,
             shadow_pt: None,
             corner_pt: None,
+            opacity: None,
         })
+    }
+    /// ChemDraw paints a closed outline's inside with its color faded to
+    /// FadePercent tenths of a percent over white: a see-through fill. A
+    /// filled or shaded shape, and FadePercent 0 or 1000, show no fade.
+    fn fade(&self, el: Node<'_, '_>, style: &mut NativeStyle) -> Result<()> {
+        let fade = float(el, "FadePercent", "1000")?;
+        if style.fill.is_none() && 0. < fade && fade < 1000. {
+            style.fill = Some(style.stroke);
+            style.opacity = Some((fade / 1000.).clamp(0.01, 0.99));
+        }
+        Ok(())
     }
     /// ChemDraw's ShadowSize, in hundredths of a point, when `shadowed`.
     fn shadow(&self, el: Node<'_, '_>, shadowed: bool) -> Result<Option<f64>> {
@@ -450,6 +467,7 @@ pub fn read(
                     if let (Some(style), Some(fill)) = (&mut value.style, &a.style) {
                         style.fill = fill.fill;
                         style.shaded = fill.shaded;
+                        style.opacity = fill.opacity;
                     }
                     value.layer = reader.layer(el)?;
                     value
