@@ -860,6 +860,8 @@ pub(super) fn commits_draft(message: &Message) -> bool {
             | Message::CopyChemicalText
             | Message::FormatChemicalName
             | Message::ToggleProperty(..)
+            | Message::ShowMasses(..)
+            | Message::PropertyPlaces(..)
             | Message::Paste
             | Message::PastePicture
             | Message::Duplicate

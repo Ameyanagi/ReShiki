@@ -44,6 +44,18 @@ struct CompositionCache {
 /// The pin beside a property row.
 const PIN: f32 = 20.;
 
+/// Decimal places, shown as the pattern they write, such as 0.0000.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct Places(u8);
+impl std::fmt::Display for Places {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.0 {
+            0 => f.write_str("0"),
+            n => write!(f, "0.{}", "0".repeat(n.into())),
+        }
+    }
+}
+
 fn molecular_weight(mass: f64, two_decimal_weight: bool) -> String {
     let precision = if two_decimal_weight { 2 } else { 3 };
     format!("{mass:.precision$}")
@@ -1285,6 +1297,35 @@ impl App {
         .into()
     }
 
+    /// The decimal places of a Mol. Wt. or Exact Mass line shown under the
+    /// selected molecule.
+    fn property_places(
+        &self,
+        property: reshiki::linked_properties::Property,
+    ) -> Option<Element<'_, Message>> {
+        use reshiki::linked_properties::{Property, PropertyCaption, caption};
+        if !matches!(property, Property::Weight | Property::ExactMass) {
+            return None;
+        }
+        let atoms = self.property_target(&[])?;
+        let places = caption(&self.tab.doc, &atoms)
+            .filter(|link| link.properties.contains(&property))?
+            .places(property);
+        let choices: Vec<_> = (0..=PropertyCaption::MAX_PLACES).map(Places).collect();
+        Some(
+            hover_hint(
+                crate::appearance::pick_list(choices, Some(Places(places)), move |Places(n)| {
+                    Message::PropertyPlaces(atoms.clone(), property, n)
+                })
+                .text_size(11)
+                .padding([2, 4]),
+                "Decimal places under the molecule",
+                tooltip::Position::Left,
+            )
+            .into(),
+        )
+    }
+
     /// The molecule's name at the top of Molecular properties: empty shows
     /// the automatic name, typing and Return sets a custom one, ↺ goes back.
     fn molecule_name(&self, atoms: Vec<u64>) -> Element<'_, Message> {
@@ -1528,6 +1569,9 @@ impl App {
                     .spacing(6)
                     .align_y(Alignment::Center);
                 if let Some(property) = pin {
+                    if let Some(places) = self.property_places(property) {
+                        line = line.push(places);
+                    }
                     line = line.push(self.property_pin(property));
                 }
                 body = body.push(line);

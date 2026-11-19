@@ -290,6 +290,7 @@ fn atom_menu_groups_editing_naming_connecting_and_clipboard_commands() -> Result
             "—",
             "Show chemical name",
             "Chemical names…",
+            "Show formula & masses below",
             "Show properties",
             "Select molecule",
             "—",
@@ -1734,4 +1735,54 @@ fn copy_image_on_editable_drawing_changes_one_copy_and_keeps_the_default() {
         !app.copy_editable(),
         "a new menu starts at the default again"
     );
+}
+
+#[test]
+fn show_formula_and_masses_below_adds_the_missing_lines_in_one_step() -> Result<(), String> {
+    use reshiki::linked_properties::{Property, shown};
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    app.tab.doc = reshiki::document::Document::from_json(include_bytes!(
+        "../../../tests/fixtures/chemical-naming-rust/ethanol-rust-native.rsk"
+    ))?;
+    app.appearance.two_decimal_weight = true;
+    let ethanol: Vec<_> = app.tab.doc.atoms.iter().map(|atom| atom.id).collect();
+    let open = |app: &mut App| {
+        app.edit(Edit::ContextMenu {
+            position: Point::new(30., 40.),
+            selected: vec![],
+            hit: vec![ethanol[0]],
+        })
+    };
+    let _ = app.update(Message::ToggleProperty(ethanol.clone(), Property::Weight));
+    let weight = app.tab.doc.clone();
+    open(&mut app);
+    run_item(&mut app, Page::Main, "Show formula & masses below")?;
+    assert!(app.context_menu.is_none());
+    let link = &app.tab.doc.property_captions[0];
+    assert_eq!(link.properties, Property::MASSES);
+    assert_eq!(
+        app.tab
+            .doc
+            .annotations
+            .iter()
+            .find(|a| Some(a.id) == link.annotation)
+            .map(|a| a.text.as_str()),
+        Some("Formula: C2H6O\nMol. Wt.: 46.07\nExact Mass: 46.0419")
+    );
+    // Everything shown: the entry stays, unavailable.
+    open(&mut app);
+    assert!(app.context_entries(Page::Main).iter().any(|entry| matches!(
+        entry,
+        Entry::Item {
+            label: "Show formula & masses below",
+            enabled: false,
+            ..
+        }
+    )));
+    app.context_menu = None;
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, weight);
+    assert!(!shown(&app.tab.doc, &ethanol, Property::ExactMass));
+    Ok(())
 }

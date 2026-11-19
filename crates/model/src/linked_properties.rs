@@ -43,6 +43,8 @@ impl Property {
         Self::Tpsa,
         Self::Analysis,
     ];
+    /// The lines "Show formula & masses below" adds.
+    pub const MASSES: [Self; 3] = [Self::Formula, Self::Weight, Self::ExactMass];
     /// The menu name. Caption lines use the same words, except elemental
     /// analysis, which reads "Anal. Calcd for …".
     pub fn name(self) -> &'static str {
@@ -86,6 +88,13 @@ pub struct PropertyCaption {
     /// Mol. Wt. with two decimals instead of three (the Settings choice).
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub two_decimal_weight: bool,
+    /// Decimal places chosen for this caption's Mol. Wt.; none follows
+    /// `two_decimal_weight`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub weight_places: Option<u8>,
+    /// Decimal places chosen for this caption's Exact Mass; none is four.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub exact_mass_places: Option<u8>,
     /// The text last written. Different caption text means the user edited it.
     pub text: String,
     /// The molecule's canonical identity while it has a name line or a custom
@@ -103,6 +112,40 @@ pub struct PropertyCaption {
     pub custom_smiles: String,
 }
 impl PropertyCaption {
+    /// The most decimal places a mass line can choose.
+    pub const MAX_PLACES: u8 = 5;
+
+    fn default_places(&self, property: Property) -> u8 {
+        match property {
+            Property::Weight if !self.two_decimal_weight => 3,
+            Property::ExactMass => 4,
+            _ => 2,
+        }
+    }
+
+    /// The decimal places a value line is written with.
+    pub fn places(&self, property: Property) -> u8 {
+        match property {
+            Property::Weight => self.weight_places,
+            Property::ExactMass => self.exact_mass_places,
+            _ => None,
+        }
+        .unwrap_or_else(|| self.default_places(property))
+    }
+
+    /// Choose the decimal places of Mol. Wt. or Exact Mass, from 0 to
+    /// [`Self::MAX_PLACES`]. The default is kept as no choice, so the file
+    /// stays readable by older versions.
+    pub fn set_places(&mut self, property: Property, places: u8) {
+        let default = self.default_places(property);
+        let chosen = match property {
+            Property::Weight => &mut self.weight_places,
+            Property::ExactMass => &mut self.exact_mass_places,
+            _ => return,
+        };
+        *chosen = (places != default).then_some(places);
+    }
+
     /// Whether the molecule's name is tracked: shown, or typed.
     fn tracks_name(&self) -> bool {
         self.properties.contains(&Property::Name) || !self.custom_name.is_empty()
@@ -132,6 +175,8 @@ impl PropertyCaption {
         self.annotation = None;
         self.properties.clear();
         self.text.clear();
+        self.weight_places = None;
+        self.exact_mass_places = None;
         !self.custom_name.is_empty()
     }
 
@@ -238,13 +283,16 @@ fn write(values: Option<&Values>, link: &PropertyCaption) -> (String, Vec<Range<
                 formula(&mut text, &v.formula);
             }
             Property::Name => {}
-            Property::Weight => {
-                let places = if link.two_decimal_weight { 2 } else { 3 };
-                text.push_str(&format!("Mol. Wt.: {:.places$}", v.weight));
+            Property::Weight | Property::ExactMass | Property::LogP | Property::Tpsa => {
+                let value = match property {
+                    Property::Weight => v.weight,
+                    Property::ExactMass => v.exact_mass,
+                    Property::LogP => v.logp,
+                    _ => v.tpsa,
+                };
+                let places = usize::from(link.places(property));
+                text.push_str(&format!("{}: {value:.places$}", property.name()));
             }
-            Property::ExactMass => text.push_str(&format!("Exact Mass: {:.4}", v.exact_mass)),
-            Property::LogP => text.push_str(&format!("cLogP: {:.2}", v.logp)),
-            Property::Tpsa => text.push_str(&format!("TPSA: {:.2}", v.tpsa)),
             Property::Analysis => {
                 text.push_str("Anal. Calcd for ");
                 formula(&mut text, &v.formula);
@@ -496,6 +544,39 @@ fn rewrite(
     Ok(())
 }
 
+/// Show each of `properties` the molecule's caption does not show yet, as
+/// [`toggle`] would one by one.
+pub fn show(
+    doc: &mut Document,
+    atoms: &[u64],
+    properties: &[Property],
+    format: TextFormat,
+    two_decimal_weight: bool,
+) -> Result<(), String> {
+    for &property in properties {
+        if !shown(doc, atoms, property) {
+            toggle(doc, atoms, property, format.clone(), two_decimal_weight)?;
+        }
+    }
+    Ok(())
+}
+
+/// Choose the decimal places of a mass line in this molecule's caption; the
+/// edit's transaction rewrites the text.
+pub fn set_places(
+    doc: &mut Document,
+    atoms: &[u64],
+    property: Property,
+    places: u8,
+) -> Result<(), String> {
+    doc.property_captions
+        .iter_mut()
+        .find(|link| covers(link, atoms))
+        .ok_or("The property caption is missing")?
+        .set_places(property, places);
+    Ok(())
+}
+
 /// Name the molecule made of `atoms`: a custom name, or the automatic name
 /// when `name` is empty or equals it. The name line is shown, with a new
 /// caption if the molecule has none.
@@ -688,7 +769,8 @@ pub fn reconcile(doc: &mut Document, before: &Document) {
             && typed.is_none()
             && previous.is_some_and(|old| {
                 old.properties == link.properties
-                    && old.two_decimal_weight == link.two_decimal_weight
+                    && old.places(Property::Weight) == link.places(Property::Weight)
+                    && old.places(Property::ExactMass) == link.places(Property::ExactMass)
             })
             && before.drawing_style == doc.drawing_style;
         // Stereo read from the drawing can change with the shape, not with a move.
@@ -786,6 +868,10 @@ pub fn validate(doc: &Document) -> Result<(), String> {
             || !link.properties.iter().all(|p| properties.insert(*p))
             || link.name.contains('\n')
             || link.custom_name.contains('\n')
+            || [link.weight_places, link.exact_mass_places]
+                .into_iter()
+                .flatten()
+                .any(|places| places > PropertyCaption::MAX_PLACES)
         {
             return Err("Invalid property caption link".into());
         }

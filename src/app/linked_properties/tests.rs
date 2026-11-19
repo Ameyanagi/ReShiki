@@ -284,3 +284,31 @@ fn undo_and_redo_reuse_a_generated_name() {
     assert_eq!(caption(&app), Some("ethan-1-ol"));
     assert!(app.tab.naming.caption_pending.is_none());
 }
+
+#[test]
+fn mass_decimals_change_one_caption_in_one_undo_step() {
+    use crate::app::view_settings::Action::TwoDecimalWeight;
+    let (mut app, _) = App::new();
+    let atoms = ethanol(&mut app);
+    app.appearance.two_decimal_weight = true;
+    let _ = app.update(Message::ShowMasses(atoms.clone()));
+    let masses = app.tab.doc.clone();
+    let _ = app.update(Message::PropertyPlaces(
+        atoms.clone(),
+        Property::ExactMass,
+        5,
+    ));
+    assert_eq!(
+        caption(&app),
+        Some("Formula: C2H6O\nMol. Wt.: 46.07\nExact Mass: 46.04186")
+    );
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, masses);
+    // A caption's own Mol. Wt. places win over the Settings choice.
+    let _ = app.update(Message::PropertyPlaces(atoms, Property::Weight, 1));
+    app.view_action(TwoDecimalWeight(false));
+    assert_eq!(
+        caption(&app),
+        Some("Formula: C2H6O\nMol. Wt.: 46.1\nExact Mass: 46.0419")
+    );
+}

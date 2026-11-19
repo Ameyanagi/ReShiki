@@ -115,6 +115,10 @@ impl App {
             Message::TextStyle(change) => self.apply_text_style(change),
             Message::FormatChemicalName => self.format_chemical_name(),
             Message::ToggleProperty(atoms, property) => self.toggle_property(&atoms, property),
+            Message::ShowMasses(atoms) => self.show_masses(&atoms),
+            Message::PropertyPlaces(atoms, property, places) => {
+                self.set_property_places(&atoms, property, places)
+            }
             Message::FontSize(value) => self.tab.font_size_input = value,
             Message::ApplyFontSize => self.apply_font_size_input(),
             Message::ClearRingFill => self.apply_ring_color(None),

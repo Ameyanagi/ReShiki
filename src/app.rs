@@ -248,6 +248,10 @@ pub enum Message {
     FormatChemicalName,
     /// Show or hide one property line under a whole molecule.
     ToggleProperty(Vec<u64>, reshiki::linked_properties::Property),
+    /// Show Formula, Mol. Wt. and Exact Mass under a whole molecule.
+    ShowMasses(Vec<u64>),
+    /// The decimal places of a mass line under a whole molecule.
+    PropertyPlaces(Vec<u64>, reshiki::linked_properties::Property, u8),
     FontSize(String),
     ApplyFontSize,
     ColorScope(typography::ColorScope),

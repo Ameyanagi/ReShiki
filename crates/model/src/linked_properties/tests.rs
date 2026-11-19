@@ -962,3 +962,80 @@ fn joining_a_hidden_name_onto_a_caption_keeps_the_caption() {
     assert_eq!(doc.property_captions.len(), 1);
     assert_eq!(text(&doc), "Mol. Wt.: 186.21");
 }
+
+#[test]
+fn mass_lines_use_the_decimal_places_chosen_for_the_caption() {
+    let (mut doc, _) = shown_doc(&[Property::Weight, Property::ExactMass], true);
+    assert_eq!(text(&doc), "Mol. Wt.: 94.11\nExact Mass: 94.0419");
+    let mut history = History::default();
+    let before = doc.clone();
+    edit(&mut doc, &mut history, |doc| {
+        doc.property_captions[0].set_places(Property::ExactMass, 5);
+        doc.property_captions[0].set_places(Property::Weight, 0);
+    });
+    assert_eq!(text(&doc), "Mol. Wt.: 94\nExact Mass: 94.04186");
+    // One Undo step restores both lines.
+    assert!(history.undo(&mut doc));
+    assert_eq!(doc, before);
+    assert!(history.redo(&mut doc));
+    // A chosen Mol. Wt. stays when the Settings choice changes.
+    edit(&mut doc, &mut history, |doc| {
+        doc.property_captions[0].two_decimal_weight = false;
+    });
+    assert_eq!(text(&doc), "Mol. Wt.: 94\nExact Mass: 94.04186");
+    // Choosing the default again keeps no choice.
+    edit(&mut doc, &mut history, |doc| {
+        doc.property_captions[0].set_places(Property::ExactMass, 4);
+        doc.property_captions[0].set_places(Property::Weight, 3);
+    });
+    assert_eq!(text(&doc), "Mol. Wt.: 94.113\nExact Mass: 94.0419");
+    let link = &doc.property_captions[0];
+    assert_eq!((link.weight_places, link.exact_mass_places), (None, None));
+}
+
+#[test]
+fn chosen_places_save_as_version_40_only_when_set() {
+    let (mut doc, atoms) = shown_doc(&[Property::ExactMass], true);
+    doc.property_captions[0].set_places(Property::ExactMass, 4);
+    let file = doc.file_json().unwrap();
+    assert!(!String::from_utf8_lossy(&file).contains("places"));
+    assert_eq!(
+        Document::from_json(&file).unwrap().version,
+        crate::document::PROPERTY_CAPTIONS
+    );
+    doc.property_captions[0].set_places(Property::ExactMass, 5);
+    let loaded = Document::from_json(&doc.file_json().unwrap()).unwrap();
+    assert_eq!(loaded.version, crate::document::CAPTION_PLACES);
+    assert_eq!(loaded.property_captions, doc.property_captions);
+    // A copy keeps the choice.
+    let copy = editing::selection(&doc, &doc.all_ids());
+    assert_eq!(copy.property_captions, doc.property_captions);
+    // More places than the menu offers is not a valid file.
+    let mut json: serde_json::Value = serde_json::from_slice(&doc.file_json().unwrap()).unwrap();
+    json["property_captions"][0]["exact_mass_places"] = 9.into();
+    assert!(Document::from_json(json.to_string().as_bytes()).is_err());
+    // Hiding the last line drops the choice with the caption.
+    toggle(
+        &mut doc,
+        &atoms,
+        Property::ExactMass,
+        TextFormat::default(),
+        true,
+    )
+    .unwrap();
+    assert!(doc.property_captions.is_empty());
+}
+
+#[test]
+fn show_adds_formula_and_masses_once_in_panel_order() {
+    let (mut doc, atoms) = shown_doc(&[Property::Weight], false);
+    let masses = [Property::Formula, Property::Weight, Property::ExactMass];
+    show(&mut doc, &atoms, &masses, TextFormat::default(), false).unwrap();
+    assert_eq!(
+        text(&doc),
+        "Formula: C6H6O\nMol. Wt.: 94.113\nExact Mass: 94.0419"
+    );
+    let shown = doc.clone();
+    show(&mut doc, &atoms, &masses, TextFormat::default(), false).unwrap();
+    assert_eq!(doc, shown);
+}
