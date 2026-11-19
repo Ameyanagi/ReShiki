@@ -238,6 +238,7 @@ explains how the crates and modules fit together.
 - `src/cli/io.rs`: The CLI's file and standard-input access
 - `src/cli/mcp_usage.rs`: Shared MCP help and heap limits for headless entry points.
 - `src/cli/name.rs`: `reshiki --cli name`
+- `src/cli/pieces.rs`: `reshiki --cli pieces check FILE…`
 - `src/cli/predict_nmr.rs`: `reshiki --cli predict-nmr`
 - `src/cli/reference.rs`: Deterministic agent documentation from the live CLI and operation contracts.
 - `src/cli/render.rs`: `reshiki --cli render`
@@ -684,6 +685,12 @@ explains how the crates and modules fit together.
 - `crates/model/src/editing.rs`
 - `crates/model/src/editing/reference.rs`: Exact drawing orientation and single-bond stretching.
 - `crates/model/src/editing/rotation.rs`: Reference sites that follow rotation, unlike axis-aligned drawing bounds.
+- `crates/model/src/equipment.rs`: Lab apparatus
+- `crates/model/src/equipment/eval.rs`: Evaluates a definition at parameter values
+- `crates/model/src/equipment/format.rs`: The `.reshiki-piece` format
+- `crates/model/src/equipment/geometry.rs`: Path data and plane geometry for pieces, in f64 millimetres.
+- `crates/model/src/equipment/plan.rs`: The paint plan
+- `crates/model/src/equipment/validate.rs`: Checks the schema cannot express
 - `crates/model/src/erasing.rs`: Erase the geometry crossed by a pointer stroke, including between motion events.
 - `crates/model/src/fischer.rs`: Explicit Fischer projections
 - `crates/model/src/generic.rs`: Finite generic definitions are drawing data until deliberately materialized.
