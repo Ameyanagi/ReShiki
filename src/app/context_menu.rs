@@ -361,16 +361,23 @@ impl App {
     fn cycle_entries(&self) -> Vec<Entry> {
         use super::cycles::Action;
         let doc = &self.tab.doc;
-        if self.selected_cycle().is_some() {
+        if let Some((_, cycle)) = self.selected_cycle() {
             let steps = self.cycle_step().is_some();
-            return [
-                ("Copy step as reaction SMILES", Action::CopySmiles),
-                ("Auto-map step", Action::AutoMap),
-                ("Check step balance", Action::Check),
-                ("Color cycle by origin", Action::Color),
-            ]
-            .into_iter()
-            .map(|(label, action)| Entry::command(label, Message::Cycle(action), steps))
+            let parts = cycle.parts().next().is_some();
+            return std::iter::once(Entry::command(
+                "Select structures in cycle",
+                Message::Cycle(Action::SelectStructures),
+                parts,
+            ))
+            .chain(
+                [
+                    ("Copy step as reaction SMILES", Action::CopySmiles),
+                    ("Auto-map step", Action::AutoMap),
+                    ("Check step balance", Action::Check),
+                    ("Color cycle by origin", Action::Color),
+                ]
+                .map(|(label, action)| Entry::command(label, Message::Cycle(action), steps)),
+            )
             .collect();
         }
         if self

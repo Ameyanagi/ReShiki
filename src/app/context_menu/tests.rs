@@ -1777,3 +1777,44 @@ fn a_shapes_arrange_menu_offers_its_stacking_order() {
     let align = labels(&app, Page::Align);
     assert!(align.contains(&"Bring to front") && align.contains(&"Send to back"));
 }
+
+#[test]
+fn select_structures_in_cycle_picks_every_part_and_not_the_circle() -> Result<(), String> {
+    let (mut app, _) = App::new();
+    let mut parts = vec![];
+    for (x, y, label) in [
+        (0., -200., "Pd(0)L2"),
+        (170., 90., "ArPdX"),
+        (-230., 90., "ArPdAr"),
+    ] {
+        let id = app.tab.doc.next_id();
+        let style = app.tab.doc.drawing_style.text_style();
+        app.tab.doc.annotations.push(reshiki::document::Annotation {
+            id,
+            position: World::new(x, y),
+            text: label.into(),
+            format: reshiki::typography::TextFormat {
+                style,
+                ..Default::default()
+            },
+        });
+        parts.push(id);
+    }
+    app.tab.selected = parts.clone();
+    let _ = app.update(Message::Cycle(super::super::cycles::Action::Make));
+    let _ = app.update(Message::Cycle(super::super::cycles::Action::MakeApply));
+    let circle = app.selected_cycle().ok_or("no cycle")?.0;
+    // With the cycle selected, a click on its circle or arcs picks only them.
+    let whole = app.tab.selected.clone();
+    assert_eq!(app.tab.doc.click_selection(&whole, &[circle]), vec![circle]);
+    assert_eq!(
+        enabled(&app, Page::Main, "Select structures in cycle"),
+        Some(true)
+    );
+    run_item(&mut app, Page::Main, "Select structures in cycle")?;
+    let mut selected = app.tab.selected.clone();
+    selected.sort_unstable();
+    parts.sort_unstable();
+    assert_eq!(selected, parts);
+    Ok(())
+}

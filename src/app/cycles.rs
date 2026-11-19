@@ -17,6 +17,8 @@ pub enum Action {
     MakeReverse,
     Insert,
     Remove,
+    /// Select every intermediate, reagent and product of the selected cycle.
+    SelectStructures,
     Clockwise(bool),
     Edit(Field, String),
     Apply(Field),
@@ -233,6 +235,15 @@ impl App {
                 }
                 self.changed(before);
                 self.status = "Removed from the cycle · it stays in the drawing".into();
+            }
+            Action::SelectStructures => {
+                let Some((_, cycle)) = self.selected_cycle() else {
+                    return Task::none();
+                };
+                let parts: Vec<u64> = cycle.parts().flat_map(|(_, ids)| ids.clone()).collect();
+                let ids = reshiki::molecule_names::include_annotations(&self.tab.doc, &parts);
+                self.set_selection(ids);
+                self.status = "Selected the cycle's structures and texts".into();
             }
             Action::Clockwise(clockwise) => {
                 if self

@@ -221,6 +221,10 @@ the gutters. Moving one item by itself leaves it where you put it.
    farther out than a reagent's place, and it leaves the cycle; the tag
    **Release to take it out of the cycle** and the arcs closing up without
    it show this before you let go. Option/Alt-drag does the same in one go.
+   With the cycle selected, a click on its circle or an arc selects only the
+   circle and its arrows, to restyle them. Right-click and choose **Select
+   structures in cycle** to select every intermediate, reagent and product,
+   for example to change their color or font.
 5. In **Properties → Catalytic cycle**, choose **Clockwise** or
    **Counterclockwise**, and set **Radius (pt)**, **Gap (pt)** (the space
    between an arc and an intermediate) and **Center** text. Pick a step to
