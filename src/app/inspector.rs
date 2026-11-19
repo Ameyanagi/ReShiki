@@ -1649,6 +1649,15 @@ impl App {
                     .style(muted_text),
                 )
                 .into();
+        } else if key.is_none() && self.whole_property_key().atoms.is_empty() {
+            // Only pictures: nothing is calculated, so say so.
+            return body
+                .push(
+                    text("Illustrations have no molecular properties")
+                        .size(12)
+                        .style(muted_text),
+                )
+                .into();
         } else if let Some(Err(error)) = self.property_result(&self.property_request_key()) {
             body = body.push(if let Some(notice) = deferred_generic_properties(error) {
                 text(notice).size(12).style(muted_text)
