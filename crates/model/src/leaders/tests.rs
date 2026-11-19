@@ -214,7 +214,10 @@ fn a_callout_by_the_page_edge_stays_on_the_page() {
     // Text for a whole molecule goes left of the molecule, not over it.
     let id = add_callout(&mut doc, Target::Molecule { atom: a_atom }, text).unwrap();
     let (_, b) = crate::scene::selection_bounds(&doc, &[id]).unwrap();
-    assert!(b.x < 0., "Left of the molecule: {b:?}");
+    // Its right edge is one reach left of the molecule's left edge (x = 0),
+    // not of the corner it starts from (x = 20).
+    let reach = doc.drawing_style.bond_length_world * 1.6;
+    assert!((b.x + reach).abs() < 1., "Left of the molecule: {b:?}");
     // Away from the edge the text keeps its usual place.
     doc.page_layout = Some(crate::pages::Layout::around(&doc));
     let id = add_callout(&mut doc, bond, text).unwrap();

@@ -296,7 +296,7 @@ fn extent(doc: &Document, target: &Target) -> Option<(Point, Point)> {
     }
 }
 
-/// Keep the new callout text `text` on the page its target's middle is on:
+/// Keep the new callout text `text` on the page its target lies on most:
 /// text that would cross the page's right margin goes up and to the left of
 /// the target instead, and text still outside the margins is moved in.
 /// Without pages, or with the target off every page, the text stays put.
@@ -307,14 +307,16 @@ pub fn keep_on_page(doc: &mut Document, text: u64, target: &Target) {
     let Some((start, end)) = extent(doc, target) else {
         return;
     };
-    let middle = start.lerp(end, 0.5);
+    // The page the target lies on most; a point or a line counts by length.
+    let overlap = |(a, b): (Point, Point)| {
+        let x = end.x.min(b.x) - start.x.max(a.x);
+        let y = end.y.min(b.y) - start.y.max(a.y);
+        (x >= 0. && y >= 0.).then_some(x + y)
+    };
     let Some((lo, hi)) = (0..layout.count())
-        .filter(|&i| {
-            layout.bounds(i).is_some_and(|(a, b)| {
-                (a.x..=b.x).contains(&middle.x) && (a.y..=b.y).contains(&middle.y)
-            })
-        })
-        .find_map(|i| layout.content_bounds(i))
+        .filter_map(|i| Some((overlap(layout.bounds(i)?)?, layout.content_bounds(i)?)))
+        .max_by(|(a, _), (b, _)| a.total_cmp(b))
+        .map(|(_, content)| content)
     else {
         return;
     };
