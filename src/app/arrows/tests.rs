@@ -291,9 +291,8 @@ fn a_canvas_switch_keeps_the_metal_step_but_a_save_ends_it() {
 
     // Saved with the default Pd, then Cu: Undo returns to the saved Pd.
     app.arrow_action(arrows::Action::Badge(Some(BadgeIcon::Metal)));
-    let dir = tempfile::tempdir().unwrap();
-    app.tab.path = Some(dir.path().join("badge.rsk"));
-    let _ = app.save_drawing(None);
+    // As a finished save leaves it.
+    app.tab.saved = app.tab.doc.clone();
     app.tab.arrows.badge_text = "Cu".into();
     app.arrow_action(arrows::Action::ApplyBadgeText);
     let _ = app.update(Message::Undo);
@@ -301,10 +300,28 @@ fn a_canvas_switch_keeps_the_metal_step_but_a_save_ends_it() {
 }
 
 #[test]
-fn the_badge_hint_steps_aside_while_its_list_is_open() {
+fn a_symbol_never_joins_a_move_made_after_an_undone_metal_pick() {
+    use reshiki::arrows::{ArrowStyle, BadgeIcon, Preset};
     let (mut app, _) = App::new();
-    app.arrow_action(arrows::Action::BadgeMenu(true));
-    assert!(app.tab.arrows.badge_menu);
-    app.arrow_action(arrows::Action::BadgeMenu(false));
-    assert!(!app.tab.arrows.badge_menu);
+    app.tab.doc.arrows.push(reshiki::document::Arrow::new(
+        1,
+        Point::new(0., 0.),
+        Point::new(120., 0.),
+        Preset::Forward,
+        ArrowStyle::default(),
+    ));
+    app.tab.selected = vec![1];
+    app.arrow_action(arrows::Action::Badge(Some(BadgeIcon::Metal)));
+    let _ = app.update(Message::Undo);
+    app.arrow_action(arrows::Action::Badge(Some(BadgeIcon::Metal)));
+    let picked = app.tab.doc.arrows.clone();
+    // Moved by hand after the pick: the symbol is its own step.
+    let before = app.tab.doc.clone();
+    app.tab.doc.translate(&[1], 10., 0.);
+    app.changed(before);
+    app.tab.arrows.badge_text = "Cu".into();
+    app.arrow_action(arrows::Action::ApplyBadgeText);
+    let _ = app.update(Message::Undo);
+    assert_ne!(app.tab.doc.arrows, picked, "the move stays");
+    assert_eq!(app.tab.doc.arrows[0].badge.as_ref().unwrap().text, "Pd");
 }

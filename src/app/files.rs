@@ -1078,8 +1078,6 @@ impl super::App {
             self.status = ADDIN_SAVE_STATUS.into();
             self.error = false;
         }
-        // A save ends a pending badge step: Undo returns to what was saved.
-        self.tab.arrows.metal_pick = None;
         let snapshot = std::sync::Arc::new(self.tab.doc.clone());
         let save_snapshot = std::sync::Arc::clone(&snapshot);
         let epoch = self.tab.file_epoch;
