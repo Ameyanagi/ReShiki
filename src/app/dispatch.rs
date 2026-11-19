@@ -92,7 +92,13 @@ impl App {
             Message::InvertSelection => self.invert_selection(),
             Message::Arc(action) => self.update_arc(action),
             Message::Graphics(action) => self.graphic_action(action),
-            Message::Figure(action) => self.figure_action(action),
+            Message::Figure(action) => {
+                let wrap = matches!(action, super::figure_panels::Action::Wrap);
+                self.figure_action(action);
+                if wrap && !self.error {
+                    return Some(self.reveal_panel_card());
+                }
+            }
             Message::Cycle(action) => return Some(self.cycle_action(action)),
             Message::RotateMark(id, index) => self.rotate_mark(id, index),
             Message::RemoveMark(id, index) => self.remove_mark(id, index),

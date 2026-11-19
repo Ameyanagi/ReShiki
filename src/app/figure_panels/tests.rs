@@ -127,3 +127,59 @@ fn splitting_a_titled_column_keeps_later_titles_with_their_columns() {
         vec!["Scheme".to_string(), String::new(), "Evidence".to_string()]
     );
 }
+
+#[test]
+fn wrap_opens_the_panel_card_whose_fill_and_shadow_change_only_the_panel() {
+    let (mut app, _) = App::new();
+    let mut ids = molecules(&mut app, &[0.]);
+    // A filled ellipse inside the panel keeps its own style.
+    let ellipse = app.tab.doc.next_id();
+    app.tab.doc.graphics.push(Graphic::dragged(
+        ellipse,
+        GraphicKind::Ellipse,
+        Point::new(0., 30.),
+        Point::new(40., 60.),
+        GraphicStyle {
+            fill: Some(Color::Palette(Hue::Teal, Row::Tint)),
+            ..Default::default()
+        },
+        reshiki::graphics::BracketSides::Both,
+        false,
+    ));
+    ids.push(ellipse);
+    app.tab.selected = ids;
+    // Wrapped from the Templates tab with 3D model controls open.
+    app.inspector_tab = crate::app::InspectorTab::Templates;
+    app.tab.inspector_ui.model_controls = true;
+    let _ = app.update(Message::Figure(Action::Wrap));
+    assert!(!app.error, "{}", app.status);
+    assert!(app.inspector_open);
+    assert_eq!(app.inspector_tab, crate::app::InspectorTab::Properties);
+    assert!(!app.tab.inspector_ui.model_controls);
+    let id = panel(&app).id;
+    let shape = |app: &App, id| {
+        app.tab
+            .doc
+            .graphics
+            .iter()
+            .find(|g| g.id == id)
+            .unwrap()
+            .style
+            .clone()
+    };
+    let held = shape(&app, ellipse);
+    let wrapped = app.tab.doc.clone();
+    let blue = Color::Palette(Hue::Green, Row::Tint);
+    let _ = app.update(Message::Figure(Action::Fill(Some(blue))));
+    let _ = app.update(Message::Figure(Action::Shadow(true)));
+    assert_eq!(shape(&app, id).fill, Some(blue));
+    assert!(shape(&app, id).effects.shadow_pt.is_some());
+    assert_eq!(
+        shape(&app, ellipse),
+        held,
+        "what the panel holds is untouched"
+    );
+    let _ = app.update(Message::Undo);
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, wrapped, "each is one Undo step");
+}

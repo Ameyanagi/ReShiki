@@ -6,7 +6,7 @@ use iced::widget::{button, checkbox, column, row, text, tooltip};
 use iced::{Alignment, Element, Length};
 use reshiki::{
     document::Point,
-    graphics::{Divider, Graphic, GraphicChange, GraphicKind, GraphicStyle, Panel, TitlePlace},
+    graphics::{Divider, Graphic, GraphicKind, GraphicStyle, Panel, TitlePlace},
     layouts::{Align, Flow},
     palette::{Color, Hue, Row},
 };
@@ -19,6 +19,8 @@ pub enum Action {
     Place(TitlePlace),
     Rounded(bool),
     Border(bool),
+    Fill(Option<Color>),
+    Shadow(bool),
     AddDivider(bool),
     DividerAt(usize, String),
     ApplyDivider(usize),
@@ -75,6 +77,10 @@ impl App {
                 self.sync_graphics();
             }
             Action::Border(border) => self.edit_panels(|panel| panel.border = border),
+            Action::Fill(fill) => self.restyle_panel(|style| style.fill = fill),
+            Action::Shadow(on) => self.restyle_panel(|style| {
+                style.effects.shadow_pt = on.then_some(reshiki::graphics::Effects::SHADOW_PT);
+            }),
             Action::AddDivider(vertical) => {
                 let doc = self.tab.doc.clone();
                 let positions: Vec<(u64, f32)> = self
@@ -190,6 +196,31 @@ impl App {
             },
             Action::Align(align) => self.edit_layout(|layout| layout.align = align),
         }
+    }
+
+    /// Show the new panel's card: ordinary Properties, scrolled to the top,
+    /// from wherever the inspector was.
+    pub(super) fn reveal_panel_card(&mut self) -> iced::Task<Message> {
+        self.inspector_open = true;
+        self.inspector_tab = super::InspectorTab::Properties;
+        self.tab.inspector_ui.model_controls = false;
+        iced::widget::operation::snap_to(
+            "inspector-content",
+            iced::widget::operation::RelativeOffset::START,
+        )
+    }
+
+    /// Restyle the panel the Panel card shows, leaving what it holds alone.
+    fn restyle_panel(&mut self, change: impl FnOnce(&mut GraphicStyle)) {
+        let Some(id) = self.selected_panels().next().map(|g| g.id) else {
+            return;
+        };
+        let before = self.tab.doc.clone();
+        if let Some(g) = self.tab.doc.graphics.iter_mut().find(|g| g.id == id) {
+            change(&mut g.style);
+        }
+        self.changed(before);
+        self.sync_graphics();
     }
 
     fn selected_panels(&self) -> impl Iterator<Item = &Graphic> {
@@ -448,10 +479,12 @@ impl App {
             );
         }
         // Fill and shadow sit with the title: they are what a panel is for.
-        let style = &self.tab.graphic_style;
-        let restyle = |change| Some(Message::Graphics(super::graphics::Action::Style(change)));
+        // They show and change this panel only, never what it holds.
+        let style = &shape.style;
+        let restyle = |fill| Some(send(Action::Fill(fill)));
         let palette = reshiki::palette::Palette::of(&self.tab.doc);
         body = body
+            .push(text("Fill color").size(11).style(muted_text))
             .push(
                 super::color_popover::paper(
                     super::color_popover::palette_row(
@@ -459,13 +492,10 @@ impl App {
                         Row::Tint,
                         reshiki::palette::Hues::of(&self.tab.doc),
                         20.,
-                        (style.fill.is_none(), restyle(GraphicChange::Fill(None))),
+                        (style.fill.is_none(), restyle(None)),
                         |hue| {
                             let color = Color::Palette(hue, Row::Tint);
-                            (
-                                style.fill == Some(color),
-                                restyle(GraphicChange::Fill(Some(color))),
-                            )
+                            (style.fill == Some(color), restyle(Some(color)))
                         },
                     ),
                     self.tab.doc.canvas_theme,
@@ -482,13 +512,7 @@ impl App {
                     hover_hint(
                         checkbox(style.effects.shadow_pt.is_some())
                             .label("Shadow")
-                            .on_toggle(|on| {
-                                Message::Graphics(super::graphics::Action::Style(
-                                    GraphicChange::Shadow(
-                                        on.then_some(reshiki::graphics::Effects::SHADOW_PT),
-                                    ),
-                                ))
-                            })
+                            .on_toggle(move |on| send(Action::Shadow(on)))
                             .size(14)
                             .text_size(12),
                         "A grey drop shadow below and to the right",

@@ -438,8 +438,8 @@ impl App {
         {
             // A panel's fill swatches and shadow are in its Panel card.
             let panels = selected.iter().any(|g| g.panel.is_some());
-            panel = panel.push(text("Fill color").size(11).style(muted_text));
             if !panels {
+                panel = panel.push(text("Fill color").size(11).style(muted_text));
                 panel = panel.push(swatches(
                     Row::Tint,
                     (
@@ -473,6 +473,9 @@ impl App {
                     "A grey drop shadow below and to the right",
                     tooltip::Position::Top,
                 ));
+            }
+            if panels {
+                panel = panel.push(text("Custom fill color").size(11).style(muted_text));
             }
             panel = panel
                 .push(
