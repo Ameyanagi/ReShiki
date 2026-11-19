@@ -244,6 +244,7 @@ impl App {
                 let ids = reshiki::molecule_names::include_annotations(&self.tab.doc, &parts);
                 self.set_selection(ids);
                 self.status = "Selected the cycle's structures and texts".into();
+                return super::focus_drawing();
             }
             Action::Clockwise(clockwise) => {
                 if self
