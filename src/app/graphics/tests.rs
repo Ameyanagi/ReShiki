@@ -574,3 +574,55 @@ fn path_heads_bad_numbers_preserve_document_drafts_and_history() {
     let _ = app.update(Message::Redo);
     assert_eq!(app.tab.doc, before);
 }
+
+#[test]
+fn a_condition_icon_keeps_its_disc_and_lends_it_to_no_other_shape() {
+    let mut app = ready(
+        vec![
+            shape(1, GraphicKind::Rectangle),
+            shape(2, GraphicKind::Symbol(SymbolKind::Heat)),
+        ],
+        vec![2],
+    );
+    let paper = Some(reshiki::palette::Color::Paper);
+    assert_eq!(app.tab.doc.graphics[1].style.fill, paper);
+    assert_eq!(
+        app.tab.graphic_style.fill, None,
+        "the next shape stays unfilled"
+    );
+    app.tab.selected = vec![1, 2];
+    app.sync_graphics();
+    let _ = app.update(Message::Graphics(Action::Style(GraphicChange::Fill(Some(
+        reshiki::palette::Color::Custom([200, 30, 30]),
+    )))));
+    assert!(app.tab.doc.graphics[0].style.fill.is_some());
+    assert_eq!(
+        app.tab.doc.graphics[1].style.fill, paper,
+        "the icon keeps its disc"
+    );
+    let icon_style = app.tab.doc.graphics[1].style.clone();
+    let _ = app.update(Message::Graphics(Action::Style(GraphicChange::Shaded(
+        true,
+    ))));
+    assert_eq!(app.tab.doc.graphics[1].style, icon_style);
+    // The style bar's color recolors the icon's lines, never its disc.
+    app.tab.selected = vec![2];
+    let blue = reshiki::palette::Color::Custom([30, 60, 200]);
+    assert_eq!(
+        app.current_selection_color(),
+        Some(reshiki::palette::Color::Ink)
+    );
+    app.apply_selection_color(blue);
+    assert_eq!(app.tab.doc.graphics[1].style.stroke, blue);
+    assert_eq!(app.tab.doc.graphics[1].style.fill, paper);
+    // Switching the icon to a chemical symbol drops the disc, and back again.
+    app.tab.selected = vec![2];
+    let _ = app.update(Message::Graphics(Action::ScientificKind(
+        GraphicKind::Symbol(SymbolKind::Dagger),
+    )));
+    assert_eq!(app.tab.doc.graphics[1].style.fill, None);
+    let _ = app.update(Message::Graphics(Action::ScientificKind(
+        GraphicKind::Symbol(SymbolKind::Cold),
+    )));
+    assert_eq!(app.tab.doc.graphics[1].style.fill, paper);
+}

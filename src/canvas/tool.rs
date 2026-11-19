@@ -112,6 +112,10 @@ impl Tool {
                 "Click an atom to name it · Double-click or {alt}-click another atom to repeat the label · Click empty space for a caption · Esc clears the remembered label"
             ),
             Self::Erase => "Drag to erase atoms, bonds and objects along the stroke".into(),
+            Self::Graphic(GraphicKind::Symbol(kind)) if kind.is_condition() => {
+                "Click to place · Drag to set the size · Group it with an arrow to move them together"
+                    .into()
+            }
             Self::Graphic(GraphicKind::Symbol(_)) => format!(
                 "Click an atom to attach · Drag from it to orbit in 15° steps · {alt} or Shift places freely · Click empty space for a free symbol"
             ),

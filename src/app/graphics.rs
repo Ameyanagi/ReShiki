@@ -360,18 +360,19 @@ impl App {
         }
         match kind {
             GraphicKind::Symbol(kind) => {
-                panel = panel
-                    .push(
-                        crate::appearance::pick_list(
-                            reshiki::scientific::SymbolKind::ALL,
-                            Some(kind),
-                            |k| Message::Graphics(Action::ScientificKind(GraphicKind::Symbol(k))),
-                        )
-                        .text_size(12)
-                        .padding(6)
-                        .width(Length::Fill),
+                panel = panel.push(
+                    crate::appearance::pick_list(
+                        reshiki::scientific::SymbolKind::ALL,
+                        Some(kind),
+                        |k| Message::Graphics(Action::ScientificKind(GraphicKind::Symbol(k))),
                     )
-                    .push(hover_hint(
+                    .text_size(12)
+                    .padding(6)
+                    .width(Length::Fill),
+                );
+                // Condition icons are free shapes; they never attach.
+                if !kind.is_condition() {
+                    panel = panel.push(hover_hint(
                         checkbox(self.tab.attach_symbols)
                             .label("Attach to atoms")
                             .on_toggle(|attach| Message::Graphics(Action::AttachSymbols(attach)))
@@ -380,6 +381,7 @@ impl App {
                         ATTACH_SYMBOLS_HINT,
                         tooltip::Position::Top,
                     ));
+                }
             }
             GraphicKind::Orbital(kind) => {
                 panel = panel
@@ -686,7 +688,12 @@ impl App {
             .iter()
             .find(|g| self.tab.selected.contains(&g.id))
         {
+            // A condition icon's paper disc stays with the icon, not the next shape.
+            let fill = self.tab.graphic_style.fill;
             self.tab.graphic_style = g.style.clone();
+            if g.is_condition_icon() {
+                self.tab.graphic_style.fill = fill;
+            }
             self.tab.orbital_phase = g.phase;
             self.tab.phase_flipped = g.phase_flipped;
             self.tab.bracket_sides = g.sides;
@@ -769,6 +776,12 @@ impl App {
                 change,
                 GraphicChange::Pattern(reshiki::graphics::LinePattern::Wavy)
             ) && matches!(g.kind, GraphicKind::Symbol(_) | GraphicKind::Orbital(_))
+            {
+                continue;
+            }
+            // A condition icon keeps its disc when a selection's fill or shading changes.
+            if matches!(change, GraphicChange::Fill(_) | GraphicChange::Shaded(_))
+                && g.is_condition_icon()
             {
                 continue;
             }
@@ -924,6 +937,9 @@ impl App {
                     | (GraphicKind::Orbital(_), GraphicKind::Orbital(_))
             ) {
                 g.kind = kind;
+                if let GraphicKind::Symbol(symbol) = kind {
+                    g.style.fill = symbol.fill();
+                }
             }
         }
         self.tool = Tool::Graphic(kind);

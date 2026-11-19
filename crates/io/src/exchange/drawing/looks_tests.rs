@@ -1,6 +1,6 @@
 use super::*;
 use crate::{
-    arrows::{ArrowStyle, Badge, BadgeIcon, Body, Preset},
+    arrows::{ArrowStyle, Body, Preset},
     document::Arrow,
 };
 
@@ -127,14 +127,13 @@ async fn arc_arrows_export_as_chemdraw_arcs_running_the_same_way() {
 }
 
 #[tokio::test]
-async fn chevrons_badges_and_callouts_travel_as_grouped_shapes_with_a_notice() {
-    let mut badge = arrow(Body::Line);
-    badge.id = 2;
-    badge.start = Point::new(0., 60.);
-    badge.end = Point::new(100., 60.);
-    badge.badge = Some(Badge::new(BadgeIcon::Metal));
+async fn chevrons_and_callouts_travel_as_grouped_shapes_with_a_notice() {
+    let mut line = arrow(Body::Line);
+    line.id = 2;
+    line.start = Point::new(0., 60.);
+    line.end = Point::new(100., 60.);
     let mut document = Document {
-        arrows: vec![arrow(Body::Chevron), badge],
+        arrows: vec![arrow(Body::Chevron), line],
         ..Default::default()
     };
     let a = document.add_atom("C", Point::new(0., 150.));
@@ -156,11 +155,11 @@ async fn chevrons_badges_and_callouts_travel_as_grouped_shapes_with_a_notice() {
         notice.contains("1 chevron or curved block arrow"),
         "{notice}"
     );
-    assert!(notice.contains("1 arrow badge") && notice.contains("1 callout leader"));
+    assert!(notice.contains("1 callout leader"), "{notice}");
     for format in ["cdxml", "cdx"] {
         let xml = exported(&document, format).await;
         let tree = roxmltree::Document::parse(&xml).unwrap();
-        // Only the badge's arrow stays an arrow; the chevron is shapes.
+        // Only the line arrow stays an arrow; the chevron is shapes.
         assert_eq!(
             tree.descendants()
                 .filter(|n| n.has_tag_name("arrow"))
@@ -168,7 +167,7 @@ async fn chevrons_badges_and_callouts_travel_as_grouped_shapes_with_a_notice() {
             1,
             "{format}"
         );
-        // The badge and the callout each travel as one group.
+        // The chevron and the callout each travel as one group.
         let groups: Vec<_> = tree
             .descendants()
             .filter(|n| n.has_tag_name("group"))
@@ -178,9 +177,5 @@ async fn chevrons_badges_and_callouts_travel_as_grouped_shapes_with_a_notice() {
             g.descendants()
                 .any(|n| n.has_tag_name("s") && n.text() == Some("New bond"))
         }));
-        assert!(
-            tree.descendants()
-                .any(|n| n.has_tag_name("s") && n.text() == Some("Pd"))
-        );
     }
 }

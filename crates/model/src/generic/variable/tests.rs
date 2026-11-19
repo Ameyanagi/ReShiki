@@ -218,7 +218,6 @@ fn variable_pose_is_local_rigid_and_preserves_unrelated_native_associations() {
         });
     source.arrows.push(crate::document::Arrow {
         arc: None,
-        badge: None,
         id: source.next_id(),
         start: Point::new(-270., 80.),
         end: Point::new(-400., 80.),

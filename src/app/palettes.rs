@@ -387,6 +387,12 @@ impl App {
             }
             Family::Symbols | Family::Orbitals => self.scientific_palette(body, family),
         };
+        // The symbol list outgrows a short window; it scrolls there.
+        let body: Element<'_, Message> = if family == Family::Symbols {
+            iced::widget::scrollable(body).into()
+        } else {
+            body.into()
+        };
         let popup = container(body)
             .width(if family == Family::Atoms { 590 } else { 360 })
             .padding(14)
@@ -758,45 +764,61 @@ impl App {
         mut body: iced::widget::Column<'a, Message>,
         family: Family,
     ) -> iced::widget::Column<'a, Message> {
-        let tools: Vec<Tool> = match family {
-            Family::Symbols => reshiki::scientific::SymbolKind::ALL
+        use reshiki::scientific::SymbolKind;
+        let symbols = |condition: bool| -> Vec<Tool> {
+            SymbolKind::ALL
                 .iter()
+                .filter(|k| k.is_condition() == condition)
                 .map(|k| Tool::Graphic(GraphicKind::Symbol(*k)))
-                .collect(),
-            _ => reshiki::scientific::OrbitalKind::ALL
-                .iter()
-                .map(|k| Tool::Graphic(GraphicKind::Orbital(*k)))
-                .collect(),
+                .collect()
         };
-        for choices in tools.chunks(3) {
-            let mut line = row![].spacing(8);
-            for &tool in choices {
-                let label = match tool {
-                    Tool::Graphic(kind) => kind.to_string(),
-                    _ => String::new(),
-                };
-                line = line.push(super::workspace::hover_hint(
-                    button(
-                        column![
-                            canvas(super::icons::Glyph(super::icons::Icon::Tool(tool), true))
-                                .width(24)
-                                .height(24),
-                            text(label.clone()).size(10).width(94).center(),
-                        ]
-                        .align_x(Alignment::Center),
-                    )
-                    .padding(6)
-                    .style(super::workspace::control(self.tool == tool))
-                    .on_press(Message::Palette(Action::Tool(tool))),
-                    if let Tool::Graphic(kind) = tool {
-                        graphic_hint(kind, &label)
-                    } else {
-                        label
-                    },
-                    tooltip::Position::Bottom,
-                ));
+        let sections: Vec<(Option<&str>, Vec<Tool>)> = match family {
+            Family::Symbols => vec![
+                (None, symbols(false)),
+                (Some("Reaction conditions"), symbols(true)),
+            ],
+            _ => vec![(
+                None,
+                reshiki::scientific::OrbitalKind::ALL
+                    .iter()
+                    .map(|k| Tool::Graphic(GraphicKind::Orbital(*k)))
+                    .collect(),
+            )],
+        };
+        for (heading, tools) in sections {
+            if let Some(heading) = heading {
+                body = body.push(text(heading).size(12));
             }
-            body = body.push(line);
+            for choices in tools.chunks(3) {
+                let mut line = row![].spacing(8);
+                for &tool in choices {
+                    let label = match tool {
+                        Tool::Graphic(kind) => kind.to_string(),
+                        _ => String::new(),
+                    };
+                    line = line.push(super::workspace::hover_hint(
+                        button(
+                            column![
+                                canvas(super::icons::Glyph(super::icons::Icon::Tool(tool), true))
+                                    .width(24)
+                                    .height(24),
+                                text(label.clone()).size(10).width(94).center(),
+                            ]
+                            .align_x(Alignment::Center),
+                        )
+                        .padding(6)
+                        .style(super::workspace::control(self.tool == tool))
+                        .on_press(Message::Palette(Action::Tool(tool))),
+                        if let Tool::Graphic(kind) = tool {
+                            graphic_hint(kind, &label)
+                        } else {
+                            label
+                        },
+                        tooltip::Position::Bottom,
+                    ));
+                }
+                body = body.push(line);
+            }
         }
         body
     }

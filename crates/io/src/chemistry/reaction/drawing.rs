@@ -406,7 +406,6 @@ impl Imported {
         reaction.arrow = builder.id()?;
         let arrow = Arrow {
             arc: None,
-            badge: None,
             start_anchor: None,
             end_anchor: None,
             id: reaction.arrow,

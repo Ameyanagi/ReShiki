@@ -1857,6 +1857,27 @@ fn tools() -> Vec<Command> {
             | reshiki::scientific::SymbolKind::PartialNegative => {
                 "symbol graphic partial charge delta δ"
             }
+            reshiki::scientific::SymbolKind::Light => {
+                "symbol graphic reaction condition icon lamp bulb hv photochemistry"
+            }
+            reshiki::scientific::SymbolKind::Electrode => {
+                "symbol graphic reaction condition icon electrochemistry electrolysis"
+            }
+            reshiki::scientific::SymbolKind::Heat => {
+                "symbol graphic reaction condition icon flame reflux Δ"
+            }
+            reshiki::scientific::SymbolKind::Microwave => {
+                "symbol graphic reaction condition icon oven µw"
+            }
+            reshiki::scientific::SymbolKind::Ultrasound => {
+                "symbol graphic reaction condition icon sonication"
+            }
+            reshiki::scientific::SymbolKind::Cold => {
+                "symbol graphic reaction condition icon snowflake cooling ice"
+            }
+            reshiki::scientific::SymbolKind::Enzyme => {
+                "symbol graphic reaction condition icon biocatalysis"
+            }
             _ => "symbol graphic",
         };
         list.push(tool(

@@ -193,7 +193,6 @@ async fn retrosynthesis_arrows_roundtrip_through_cdxml_and_cdx() {
         let mut document = Document::default();
         document.arrows.push(Arrow {
             arc: None,
-            badge: None,
             id: 1,
             kind: Preset::Retro.kind().into(),
             start: Point::new(-30., 20.),
@@ -208,7 +207,6 @@ async fn retrosynthesis_arrows_roundtrip_through_cdxml_and_cdx() {
         });
         document.arrows.push(Arrow {
             arc: None,
-            badge: None,
             id: 2,
             kind: "forward".into(),
             start: Point::new(-30., 80.),
@@ -319,7 +317,6 @@ fn retrosynthesis_exchange_refuses_curves() {
         let document = Document {
             arrows: vec![Arrow {
                 arc: None,
-                badge: None,
                 id: 1,
                 kind: "retro".into(),
                 start: Point::default(),

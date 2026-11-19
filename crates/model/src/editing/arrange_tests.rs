@@ -38,7 +38,6 @@ fn geometry() -> Document {
     doc.annotations[0].format.style.underline = true;
     doc.arrows.push(Arrow {
         arc: None,
-        badge: None,
         start_anchor: None,
         end_anchor: None,
         id: doc.next_id(),
@@ -498,7 +497,6 @@ fn aligning_aligned_objects_leaves_an_unselected_arrow_untouched() {
     }
     doc.arrows.push(Arrow {
         arc: None,
-        badge: None,
         start_anchor: None,
         end_anchor: None,
         id: doc.next_id(),
@@ -530,7 +528,6 @@ fn labelled_arrows_translated_together_match_one_translate_per_unit() {
         let arrow = doc.next_id();
         doc.arrows.push(Arrow {
             arc: None,
-            badge: None,
             start_anchor: None,
             end_anchor: None,
             id: arrow,

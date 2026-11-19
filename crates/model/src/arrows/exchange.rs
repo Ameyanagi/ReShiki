@@ -3,7 +3,7 @@
 //! and circular arcs have native ChemDraw forms and stay arrows.
 use super::{Arrow, ArrowPath, Body};
 use crate::{
-    document::{Annotation, Document},
+    document::Document,
     graphics::{Graphic, GraphicStyle, PathCommand},
     grouping::Group,
 };
@@ -14,7 +14,6 @@ use std::borrow::Cow;
 pub struct Lowered {
     /// Chevron bodies and broad bodies on curved arrows.
     pub bodies: usize,
-    pub badges: usize,
 }
 
 impl Arrow {
@@ -29,11 +28,6 @@ impl Arrow {
 pub fn lowered_count(doc: &Document) -> Lowered {
     Lowered {
         bodies: doc.arrows.iter().filter(|a| a.shape_body()).count(),
-        badges: doc
-            .arrows
-            .iter()
-            .filter(|a| a.badge.is_some() && !a.shape_body())
-            .count(),
     }
 }
 
@@ -59,7 +53,7 @@ pub fn export_notice(doc: &Document) -> Option<String> {
 /// What an editable CDXML/CDX copy writes as shapes instead of arrows and
 /// callouts, which no reader gets back.
 pub fn shapes_notice(doc: &Document) -> Option<String> {
-    let Lowered { bodies, badges } = lowered_count(doc);
+    let Lowered { bodies } = lowered_count(doc);
     let leaders = doc.graphics.iter().filter(|g| g.leader.is_some()).count();
     let plural =
         |n: usize, one: &str, many: &str| format!("{n} {}", if n == 1 { one } else { many });
@@ -70,9 +64,6 @@ pub fn shapes_notice(doc: &Document) -> Option<String> {
             "chevron or curved block arrow",
             "chevron or curved block arrows",
         ));
-    }
-    if badges > 0 {
-        parts.push(plural(badges, "arrow badge", "arrow badges"));
     }
     if leaders > 0 {
         parts.push(plural(leaders, "callout leader", "callout leaders"));
@@ -138,59 +129,25 @@ pub(crate) fn shape(
 }
 
 /// The drawing as ChemDraw can keep it: chevron and curved broad bodies
-/// become filled shapes, badges become a disc, strokes and text grouped with
-/// their arrow, and callout leaders become a line with a dot.
+/// become filled shapes, and callout leaders become a line with a dot.
 pub fn lowered(doc: &Document) -> Cow<'_, Document> {
     let leaders = doc.graphics.iter().any(|g| g.leader.is_some());
-    if !leaders
-        && doc
-            .arrows
-            .iter()
-            .all(|a| a.badge.is_none() && !a.shape_body())
-    {
+    if !leaders && !doc.arrows.iter().any(|a| a.shape_body()) {
         return Cow::Borrowed(doc);
     }
     let mut out = doc.clone();
     let mut next = doc.next_id();
     let mut removed = Vec::new();
-    for arrow in &mut out.arrows {
-        let whole = arrow.shape_body();
-        if !whole && arrow.badge.is_none() {
-            continue;
+    let mut bodies = Vec::new();
+    for arrow in out.arrows.iter().filter(|a| a.shape_body()) {
+        let mut members = shapes(arrow.paths(), &mut next);
+        // Under every front shape, as the arrow paints.
+        for member in &mut members {
+            member.layer = 0;
         }
-        let members = shapes(
-            if whole {
-                arrow.paths()
-            } else {
-                let style = Arrow::badge_style(&arrow.appearance());
-                arrow
-                    .badge_paths()
-                    .into_iter()
-                    .map(|commands| ArrowPath {
-                        commands,
-                        style: style.clone(),
-                        filled: false,
-                    })
-                    .collect()
-            },
-            &mut next,
-        );
-        let mut ids: Vec<u64> = members.iter().map(|g| g.id).collect();
-        if let Some((position, text, format)) = arrow.badge_text() {
-            out.annotations.push(Annotation {
-                id: next,
-                position,
-                text,
-                format,
-            });
-            ids.push(next);
-            next += 1;
-        }
-        out.graphics.extend(members);
-        arrow.badge = None;
-        if whole {
-            removed.push(arrow.id);
-        }
+        let ids: Vec<u64> = members.iter().map(|g| g.id).collect();
+        bodies.extend(members);
+        removed.push(arrow.id);
         // Every group that holds the arrow holds its shapes, so nested
         // groups stay nested.
         let mut grouped = false;
@@ -203,9 +160,6 @@ pub fn lowered(doc: &Document) -> Cow<'_, Document> {
             grouped = true;
         }
         if !grouped {
-            if !whole {
-                ids.push(arrow.id);
-            }
             out.groups.push(Group {
                 id: next,
                 members: ids,
@@ -215,6 +169,8 @@ pub fn lowered(doc: &Document) -> Cow<'_, Document> {
             next += 1;
         }
     }
+    // Arrows paint under front shapes, such as an icon on the shaft.
+    out.graphics.splice(0..0, bodies);
     out.arrows.retain(|a| !removed.contains(&a.id));
     out.arrow_labels.retain(|l| !removed.contains(&l.arrow));
     out.reactions.retain(|r| !removed.contains(&r.arrow));

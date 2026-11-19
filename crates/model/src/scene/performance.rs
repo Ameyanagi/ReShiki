@@ -221,7 +221,6 @@ fn column_and_large_group_workloads() {
     let arrow = labelled.next_id();
     labelled.arrows.push(Arrow {
         arc: None,
-        badge: None,
         start_anchor: None,
         end_anchor: None,
         id: arrow,

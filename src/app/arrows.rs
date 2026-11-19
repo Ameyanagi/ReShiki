@@ -1,7 +1,7 @@
 use super::*;
 mod attachments;
 use crate::canvas::layered::canvas;
-use reshiki::arrows::{ArrowStyle, Badge, BadgeIcon, Body, Head, HeadShape, NoGo, Preset};
+use reshiki::arrows::{ArrowStyle, Body, Head, HeadShape, NoGo, Preset};
 use reshiki::graphics::LinePattern;
 
 /// The arrow card's one line of gesture help; the full text is in the guide.
@@ -56,26 +56,7 @@ pub struct State {
     /// The sweep new arrows take as arcs; None draws them straight.
     pub arc: Option<f32>,
     pub sweep: String,
-    pub badge_text: String,
     source: Option<reshiki::arrow_anchors::Pick>,
-}
-/// The Badge list's choices: none, or one icon.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct BadgeChoice(pub Option<BadgeIcon>);
-impl std::fmt::Display for BadgeChoice {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self.0 {
-            Some(icon) => icon.fmt(f),
-            None => f.write_str("No badge"),
-        }
-    }
-}
-impl BadgeChoice {
-    fn all() -> Vec<Self> {
-        std::iter::once(Self(None))
-            .chain(BadgeIcon::ALL.iter().map(|icon| Self(Some(*icon))))
-            .collect()
-    }
 }
 impl Default for State {
     fn default() -> Self {
@@ -87,7 +68,6 @@ impl Default for State {
             attach_targets: true,
             arc: None,
             sweep: String::new(),
-            badge_text: String::new(),
             source: None,
         }
     }
@@ -119,9 +99,6 @@ pub enum Action {
     NoGo(NoGo),
     Dipole(bool),
     Body(Body),
-    Badge(Option<BadgeIcon>),
-    BadgeText(String),
-    ApplyBadgeText,
     MakeArc,
     Sweep(String),
     ApplySweep,
@@ -197,10 +174,6 @@ impl App {
             self.tab.arrow_style = Preset::from_kind(&a.kind);
             self.tab.arrows.style = a.appearance();
             self.tab.arrows.sweep = a.arc.map_or_else(String::new, |s| format!("{s:.0}"));
-            self.tab.arrows.badge_text = a
-                .badge
-                .as_ref()
-                .map_or_else(String::new, |b| b.text.clone());
             if !matches!(
                 self.inspector_tab,
                 InspectorTab::Templates
@@ -244,11 +217,7 @@ impl App {
                 self.tab.arrows.sweep = s;
                 return;
             }
-            Action::BadgeText(s) => {
-                self.tab.arrows.badge_text = s;
-                return;
-            }
-            Action::Badge(_) | Action::ApplyBadgeText | Action::MakeArc | Action::ApplySweep => {
+            Action::MakeArc | Action::ApplySweep => {
                 self.arrow_geometry_action(action);
                 return;
             }
@@ -358,7 +327,7 @@ impl App {
         self.error = false;
         self.status = "Arrow updated · Drag the diamond to bend".into();
     }
-    /// Badges and arc sweeps belong to each selected arrow, not to its style.
+    /// Arc sweeps belong to each selected arrow, not to its style.
     fn arrow_geometry_action(&mut self, action: Action) {
         let mut next = self.tab.doc.clone();
         let mut changed = 0;
@@ -392,17 +361,6 @@ impl App {
             .filter(|a| self.tab.selected.contains(&a.id))
         {
             match action {
-                Action::Badge(icon) => {
-                    a.badge = icon.map(|icon| match &a.badge {
-                        Some(old) if icon == BadgeIcon::Metal && old.icon == icon => old.clone(),
-                        _ => Badge::new(icon),
-                    })
-                }
-                Action::ApplyBadgeText => {
-                    if let Some(badge) = a.badge.as_mut().filter(|b| b.icon == BadgeIcon::Metal) {
-                        badge.text = self.tab.arrows.badge_text.trim().to_owned();
-                    }
-                }
                 Action::MakeArc if a.kind != "bent" && !a.is_attached() && !a.is_arc() => {
                     a.set_arc(180.);
                     // A node picked before is gone: the arc's nodes are its own.
@@ -596,61 +554,24 @@ impl App {
                 panel = panel.push(number("Body width (pt)", Field::Gap));
             }
         }
-        if let Some(first) = selected.first() {
-            let badge = first.badge.as_ref();
-            panel = panel.push(hover_hint(
+        if selected.first().is_some_and(|first| first.is_arc()) {
+            panel = panel.push(
                 row![
-                    text("Badge").size(11).width(44),
-                    crate::appearance::pick_list(
-                        BadgeChoice::all(),
-                        Some(BadgeChoice(badge.map(|b| b.icon))),
-                        |v| Message::ArrowAction(Action::Badge(v.0))
+                    text("Sweep (°)").size(11).width(Length::Fill),
+                    hover_hint(
+                        crate::appearance::text_input("180", &self.tab.arrows.sweep)
+                            .on_input(|v| Message::ArrowAction(Action::Sweep(v)))
+                            .on_submit(Message::ArrowAction(Action::ApplySweep))
+                            .size(12)
+                            .padding(5)
+                            .width(70),
+                        "1–359 · Minus turns it the other way · Enter applies",
+                        tooltip::Position::Top,
                     )
-                    .text_size(12)
-                    .padding(5)
-                    .width(Length::Fill)
                 ]
+                .spacing(6)
                 .align_y(Alignment::Center),
-                "An icon on the shaft that also names a condition",
-                tooltip::Position::Top,
-            ));
-            if badge.is_some_and(|b| b.icon == BadgeIcon::Metal) {
-                panel = panel.push(
-                    row![
-                        text("Metal").size(11).width(44),
-                        hover_hint(
-                            crate::appearance::text_input("Pd", &self.tab.arrows.badge_text)
-                                .on_input(|v| Message::ArrowAction(Action::BadgeText(v)))
-                                .on_submit(Message::ArrowAction(Action::ApplyBadgeText))
-                                .size(12)
-                                .padding(5)
-                                .width(Length::Fill),
-                            "Metal symbol · Enter applies",
-                            tooltip::Position::Top,
-                        )
-                    ]
-                    .align_y(Alignment::Center),
-                );
-            }
-            if first.is_arc() {
-                panel = panel.push(
-                    row![
-                        text("Sweep (°)").size(11).width(Length::Fill),
-                        hover_hint(
-                            crate::appearance::text_input("180", &self.tab.arrows.sweep)
-                                .on_input(|v| Message::ArrowAction(Action::Sweep(v)))
-                                .on_submit(Message::ArrowAction(Action::ApplySweep))
-                                .size(12)
-                                .padding(5)
-                                .width(70),
-                            "1–359 · Minus turns it the other way · Enter applies",
-                            tooltip::Position::Top,
-                        )
-                    ]
-                    .spacing(6)
-                    .align_y(Alignment::Center),
-                );
-            }
+            );
         }
         let mut geometry = column![
             text("Arrowhead shape").size(11).style(muted_text),

@@ -153,3 +153,67 @@ fn diradical_dots_are_well_separated_and_lone_pair_spacing_is_unchanged() {
         assert!((centers[1] - centers[0] - gap).abs() < 1e-6);
     }
 }
+
+#[test]
+fn condition_icons_draw_inside_a_paper_disc_and_never_attach_to_atoms() {
+    for &kind in SymbolKind::CONDITIONS {
+        let style = GraphicStyle {
+            fill: kind.fill(),
+            ..GraphicStyle::default()
+        };
+        let parts = symbol_parts(kind, 1, &style);
+        let (disc, strokes) = parts.split_first().unwrap();
+        assert!(disc.filled && disc.style.fill == Some(crate::palette::Color::Paper));
+        assert!(!strokes.is_empty(), "{kind} draws an icon");
+        for part in strokes {
+            assert!(!part.filled && part.style.fill.is_none(), "{kind}");
+            for q in part.commands.iter().flat_map(PathCommand::iter_points) {
+                assert!(
+                    q.distance(p(0., 0.)) <= 0.62 + 1e-3,
+                    "{kind} leaves its disc"
+                );
+            }
+        }
+    }
+    let mut doc = Document::default();
+    let atom = doc.add_atom("C", p(0., 0.));
+    let id = partial_tool(SymbolKind::Light)
+        .place(&mut doc, p(1., 0.), p(1., 0.), false, 10.)
+        .unwrap();
+    assert!(doc.atom(atom).unwrap().marks.is_empty());
+    assert_eq!(doc.graphics[0].id, id);
+    // Placed icons take the paper-colored disc; a toolbar glyph has none.
+    assert_eq!(
+        doc.graphics[0].style.fill,
+        Some(crate::palette::Color::Paper)
+    );
+    let glyph = symbol_parts(SymbolKind::Light, 1, &GraphicStyle::default());
+    assert!(glyph.iter().all(|part| !part.filled));
+    assert!(
+        doc.graphics[0].axis_x.x > DEFAULT.world(8.),
+        "starts larger than a charge"
+    );
+}
+
+#[test]
+fn condition_icons_need_the_drawing_release_file_version() {
+    let mut doc = Document::default();
+    let symbol = |id, kind| {
+        Graphic::dragged(
+            id,
+            GraphicKind::Symbol(kind),
+            p(0., 0.),
+            p(0., 0.),
+            GraphicStyle::default(),
+            crate::graphics::BracketSides::Both,
+            false,
+        )
+    };
+    doc.graphics.push(symbol(1, SymbolKind::Dagger));
+    assert!(doc.file_version() < crate::document::DRAWING_ELEMENTS);
+    doc.graphics.push(symbol(2, SymbolKind::Cold));
+    assert_eq!(doc.file_version(), crate::document::DRAWING_ELEMENTS);
+    let back = Document::from_json(&doc.file_json().unwrap()).unwrap();
+    assert_eq!(back.version, crate::document::DRAWING_ELEMENTS);
+    assert_eq!(back.graphics, doc.graphics);
+}

@@ -25,7 +25,7 @@ mod body;
 mod exchange;
 mod nodes;
 pub use arc::{MAX_SWEEP, MIN_SWEEP, circle as arc_circle, sweep_through};
-pub use body::{Badge, BadgeIcon, Body};
+pub use body::Body;
 pub(crate) use exchange::shape;
 pub use exchange::{Lowered, export_notice, lowered, lowered_count, shapes_notice};
 pub use nodes::{FIRST_NODE_HANDLE, NodePart, node_handle};
@@ -377,7 +377,6 @@ impl Arrow {
             style: Some(style),
             purpose: Default::default(),
             arc: None,
-            badge: None,
         }
     }
     /// Returns whether either endpoint has an attachment anchor.
@@ -828,9 +827,6 @@ impl Arrow {
         {
             return Err("Arc arrows need a 1–359° sweep, free ends and no elbow".into());
         }
-        if let Some(badge) = &self.badge {
-            badge.validate()?;
-        }
         self.appearance().validate()
     }
     pub fn paths(&self) -> Vec<ArrowPath> {
@@ -900,12 +896,6 @@ impl Arrow {
         if s.no_go != NoGo::None {
             self.no_go_mark(&s, &mut path);
         }
-        let badge = Self::badge_style(&s);
-        result.extend(self.badge_paths().into_iter().map(|commands| ArrowPath {
-            commands,
-            style: badge.clone(),
-            filled: false,
-        }));
         result
     }
     /// The arriving electron-flow head, using the drawn shaft's geometry.
@@ -1306,9 +1296,7 @@ impl Arrow {
                 .as_ref()
                 .map(|(_, at)| *at)
                 .unwrap_or_else(|| to - sign * self.head_trim(s, head_kind, to, from));
-            for piece in self.gapped_body(n, start, end, offset) {
-                path(piece, false, false);
-            }
+            path(self.shaft_body(n, start, end, offset), false, false);
             if let Some((commands, _)) = end_head {
                 path(commands, true, true);
             } else {
@@ -1354,18 +1342,12 @@ impl Arrow {
             let head_width = DEFAULT.world(s.head_width_pt).max(0.001);
             if self.nodes.is_empty() {
                 let inset = (head_length * gap / head_width / length).min(0.4);
-                for offset in [-gap, gap] {
-                    for piece in self.gapped_body(n, 0., 1. - inset, offset) {
-                        path(piece, false, false);
-                    }
-                }
+                path(self.shaft_body(n, 0., 1. - inset, -gap), false, false);
+                path(self.shaft_body(n, 0., 1. - inset, gap), false, false);
             } else {
                 let to = self.cubic_inset(1., 0., head_length * gap / head_width, 0.4, 0.);
-                for offset in [-gap, gap] {
-                    for piece in self.gapped_body(n, 0., to, offset) {
-                        path(piece, false, false);
-                    }
-                }
+                path(self.shaft_body(n, 0., to, -gap), false, false);
+                path(self.shaft_body(n, 0., to, gap), false, false);
             }
             self.head_path(
                 s,

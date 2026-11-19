@@ -207,7 +207,6 @@ pub(super) fn union_source() -> Document {
     let center = target.center(&source).unwrap();
     source.arrows.push(crate::document::Arrow {
         arc: None,
-        badge: None,
         id: source.next_id(),
         start: center.offset(-100., 0.),
         end: Point::new(-600., 80.),

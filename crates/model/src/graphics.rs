@@ -418,11 +418,15 @@ impl Graphic {
         if kind == GraphicKind::Path {
             return Self::pen_curve(id, start, end, style);
         }
+        if let GraphicKind::Symbol(symbol) = kind {
+            style.fill = symbol.fill();
+        }
         if matches!(kind, GraphicKind::Symbol(_) | GraphicKind::Orbital(_)) {
             let delta = Point::new(end.x - start.x, end.y - start.y);
             let length = delta.distance(Point::default());
-            let default = if matches!(kind, GraphicKind::Symbol(_)) {
-                style::DEFAULT.world(8.)
+            let default = if let GraphicKind::Symbol(symbol) = kind {
+                // Condition icons start large enough to read on an arrow.
+                style::DEFAULT.world(if symbol.is_condition() { 11. } else { 8. })
             } else {
                 42.
             };
@@ -803,6 +807,9 @@ impl Graphic {
         if self.panel.is_some() {
             return Err("A panel keeps its shape: resize it with its handles".into());
         }
+        if self.is_condition_icon() {
+            return Err("A condition icon keeps its shape: move, turn or scale it".into());
+        }
         if let Some(result) = self.edit_connected_path_point(index, p) {
             return result;
         }
@@ -986,3 +993,28 @@ mod heads_tests;
 mod node_type_tests;
 #[cfg(test)]
 mod path_tests;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::scientific::SymbolKind;
+
+    #[test]
+    fn a_condition_icon_keeps_its_shape_when_a_point_edit_is_attempted() {
+        let mut graphic = Graphic::dragged(
+            1,
+            GraphicKind::Symbol(SymbolKind::Light),
+            Point::default(),
+            Point::default(),
+            GraphicStyle::default(),
+            BracketSides::Both,
+            false,
+        );
+        let before = graphic.clone();
+        assert_eq!(
+            graphic.edit_point(0, Point::new(1., 1.)).unwrap_err(),
+            "A condition icon keeps its shape: move, turn or scale it"
+        );
+        assert_eq!(graphic, before);
+    }
+}

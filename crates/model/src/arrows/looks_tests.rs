@@ -1,4 +1,4 @@
-use super::{ArrowStyle, Badge, BadgeIcon, Body, Head, Preset};
+use super::{ArrowStyle, Body, Head, Preset};
 use crate::{
     document::{Arrow, DRAWING_ELEMENTS, Document, Point},
     graphics::{PathCommand, flattened},
@@ -117,52 +117,6 @@ fn line_styles_save_without_a_body_field() {
     assert_eq!(back.arrows, doc.arrows);
 }
 
-#[test]
-fn badge_sits_in_a_gap_of_the_shaft_and_names_its_condition() {
-    let mut a = arrow(Body::Line);
-    let plain = a.paths().len();
-    a.badge = Some(Badge::new(BadgeIcon::Light));
-    let paths = a.paths();
-    // Two shaft pieces, the head, the disc and the bulb strokes.
-    assert!(paths.len() > plain + 2);
-    let frame = a.badge_frame().unwrap();
-    assert!(frame.center.distance(Point::new(50., 0.)) < 1e-3);
-    for path in &paths[..2] {
-        assert!(
-            points(&path.commands)
-                .iter()
-                .all(|q| q.distance(frame.center) >= frame.radius - 1e-2),
-            "the shaft must stop at the disc"
-        );
-    }
-    assert_eq!(a.badge.as_ref().unwrap().condition(), "hν");
-    assert!(a.badge_text().is_none());
-    a.badge = Some(Badge::new(BadgeIcon::Metal));
-    assert_eq!(a.badge_text().unwrap().1, "Pd");
-    assert_eq!(a.badge.as_ref().unwrap().condition(), "Pd");
-    a.badge.as_mut().unwrap().text.clear();
-    assert!(a.validate().is_err());
-}
-
-#[test]
-fn badge_on_a_block_body_sits_beside_it() {
-    let mut a = arrow(Body::Block);
-    a.badge = Some(Badge::new(BadgeIcon::Electrode));
-    let frame = a.badge_frame().unwrap();
-    assert!(frame.gap.is_none());
-    assert!(frame.center.y < -DEFAULT.world(a.appearance().head_width_pt));
-    assert_eq!(a.badge_text().unwrap().1, "e");
-}
-
-#[test]
-fn badge_keeps_a_straight_forward_arrow_a_reaction_arrow() {
-    let mut a = arrow(Body::Line);
-    a.badge = Some(Badge::new(BadgeIcon::Heat));
-    assert_eq!(a.kind, "forward");
-    assert!(a.control.is_none() && a.cubic.is_none());
-    assert_eq!(a.appearance().head, Head::Full);
-}
-
 fn arc(sweep: f32) -> Arrow {
     let mut a = arrow(Body::Line);
     a.set_arc(sweep);
@@ -279,9 +233,7 @@ fn degenerate_edits_leave_an_arc_whole() {
 #[test]
 fn exchange_copy_keeps_nested_groups_valid() {
     let mut doc = Document::default();
-    let mut a = arrow(Body::Line);
-    a.badge = Some(Badge::new(BadgeIcon::Heat));
-    doc.arrows.push(a);
+    doc.arrows.push(arrow(Body::Chevron));
     for (id, y) in [(2, -30.), (5, 30.)] {
         doc.annotations.push(crate::document::Annotation {
             id,
@@ -362,4 +314,23 @@ fn a_grouped_callout_keeps_its_dot_in_its_group_and_bodies_keep_removed_heads() 
     style.set_body(Body::Block);
     style.set_body(Body::Line);
     assert_eq!(style.head, Head::None);
+}
+
+#[test]
+fn an_exchange_copy_keeps_an_icon_on_a_chevron_above_its_shapes() {
+    let mut doc = Document::default();
+    doc.arrows.push(arrow(Body::Chevron));
+    doc.graphics.push(crate::graphics::Graphic::dragged(
+        2,
+        crate::graphics::GraphicKind::Symbol(crate::scientific::SymbolKind::Heat),
+        Point::new(50., 0.),
+        Point::new(50., 0.),
+        Default::default(),
+        crate::graphics::BracketSides::Both,
+        false,
+    ));
+    let lowered = super::lowered(&doc);
+    let icon = lowered.graphics.iter().position(|g| g.id == 2).unwrap();
+    assert!(lowered.graphics.len() > 2);
+    assert_eq!(icon, lowered.graphics.len() - 1, "the icon paints last");
 }

@@ -589,6 +589,37 @@ fn picture_backgrounds_paint_the_png_and_swap_black_and_white_ink() {
     }
 }
 
+#[test]
+fn picture_backgrounds_set_the_condition_icon_paper_color() {
+    use crate::{
+        canvas_theme::CanvasTheme,
+        document::Point,
+        graphics::{BracketSides, Graphic, GraphicKind, GraphicStyle},
+        scientific::SymbolKind,
+    };
+    let doc = Document {
+        canvas_theme: CanvasTheme::Light,
+        graphics: vec![Graphic::dragged(
+            1,
+            GraphicKind::Symbol(SymbolKind::Light),
+            Point::new(0., 0.),
+            Point::new(0., 0.),
+            GraphicStyle::default(),
+            BracketSides::Both,
+            false,
+        )],
+        ..Default::default()
+    };
+    for (paper, canvas) in [
+        ([0, 0, 0], CanvasTheme::Dark),
+        ([250, 245, 230], CanvasTheme::Light),
+    ] {
+        let (drawing, _) = Background::Color(paper).apply(&doc);
+        assert_eq!(drawing.graphics[0].style.fill, Some(Color::Custom(paper)));
+        assert_eq!(drawing.canvas_theme, canvas);
+    }
+}
+
 /// Office rebuilds the preview of an edited drawing on Copy's background.
 #[cfg(windows)]
 #[test]
