@@ -137,6 +137,7 @@ fn a_removed_callout_leaves_no_group_behind() {
         id: box_id + 1,
         members: vec![line, box_id],
         integral: false,
+        layout: None,
     });
     doc.validate().unwrap();
     doc.delete(&[text]);

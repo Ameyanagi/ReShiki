@@ -185,6 +185,7 @@ pub fn lowered(doc: &Document) -> Cow<'_, Document> {
                 id: next,
                 members: ids,
                 integral: false,
+                layout: None,
             });
             next += 1;
         }
@@ -239,6 +240,7 @@ pub fn lowered(doc: &Document) -> Cow<'_, Document> {
                 id: next,
                 members,
                 integral: false,
+                layout: None,
             });
             next += 1;
         }

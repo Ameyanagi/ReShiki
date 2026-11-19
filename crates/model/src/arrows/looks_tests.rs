@@ -277,11 +277,13 @@ fn exchange_copy_keeps_nested_groups_valid() {
         id: 3,
         members: vec![1, 2],
         integral: false,
+        layout: None,
     });
     doc.groups.push(crate::grouping::Group {
         id: 4,
         members: vec![1, 2, 5],
         integral: false,
+        layout: None,
     });
     doc.validate().unwrap();
     super::lowered(&doc).validate().unwrap();
@@ -323,6 +325,7 @@ fn a_grouped_callout_keeps_its_dot_in_its_group_and_bodies_keep_removed_heads() 
         id: doc.next_id(),
         members: vec![text, line],
         integral: false,
+        layout: None,
     });
     let out = super::lowered(&doc);
     out.validate().unwrap();
