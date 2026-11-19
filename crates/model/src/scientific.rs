@@ -610,7 +610,11 @@ impl Graphic {
             && let Some(sign) = parts.first_mut()
         {
             use PathCommand::{Line, Move};
-            let arm = SIGN_ARM * self.axis_x.x.hypot(self.axis_x.y);
+            // A stretched ion keeps a square sign of its mean size.
+            let arm = SIGN_ARM
+                * (self.axis_x.x * self.axis_y.y - self.axis_x.y * self.axis_y.x)
+                    .abs()
+                    .sqrt();
             let c = self
                 .origin
                 .offset(self.axis_x.x * ION_SIGN, self.axis_x.y * ION_SIGN);

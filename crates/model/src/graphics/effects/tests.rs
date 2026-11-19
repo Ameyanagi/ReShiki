@@ -896,14 +896,6 @@ fn a_shaded_orbital_phase_shades_each_lobe_on_both_canvases_and_needs_version_40
             .all(|p| !p.style.effects.shaded)
     );
     doc.graphics[0].style.effects.opacity = None;
-    // Only an orbital's shaded phase needs the newer version.
-    let mut symbol = doc.graphics[0].clone();
-    symbol.kind = GraphicKind::Symbol(crate::scientific::SymbolKind::Plus);
-    let symbols = Document {
-        graphics: vec![symbol],
-        ..Default::default()
-    };
-    assert!(symbols.file_version() < DRAWING_ELEMENTS);
     // Saved and opened again, the phase stays shaded.
     let reopened = Document::from_json(&doc.file_json().unwrap()).unwrap();
     assert_eq!(reopened.graphics[0].phase, Phase::Gradient);

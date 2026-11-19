@@ -436,28 +436,18 @@ async fn shaded_orbitals_and_upright_signs_keep_their_look_through_reshikis_cdxm
                 .sum();
             assert_eq!(shaded(&restored), lobes, "{sheet} {target}");
             assert_eq!(lobes > 0, sheet == "p2-orbitals-enum");
-            // Every curve stands where the drawing drew it.
-            let ink = |document: &Document| {
-                let mut boxes: Vec<_> = document
-                    .graphics
-                    .iter()
-                    .flat_map(|g| g.parts())
-                    .map(|part| {
-                        let (lo, hi) = extent(&Graphic {
-                            path: part.commands,
-                            ..document.graphics[0].clone()
-                        });
-                        [hi.x - lo.x, hi.y - lo.y].map(|v| (v * 10.).round() as i32)
-                    })
-                    .collect();
-                boxes.sort_unstable();
-                boxes
-            };
             if sheet == "p3-symbols-enum" {
-                // The upright plus keeps a vertical and a horizontal arm.
-                let arms = ink(&restored);
-                assert!(arms.iter().any(|[w, h]| *w == 0 && *h > 0), "{arms:?}");
-                assert!(arms.iter().any(|[w, h]| *h == 0 && *w > 0), "{arms:?}");
+                // Upright arms: the stems of the plus, circled plus, radical
+                // cation and both daggers, and the bars of the four signs,
+                // two ions and three dagger crossbars.
+                let (mut stems, mut bars) = (0, 0);
+                for graphic in &restored.graphics {
+                    let (lo, hi) = extent(graphic);
+                    let (w, h) = (hi.x - lo.x, hi.y - lo.y);
+                    stems += usize::from(w < 0.001 && h > 0.001);
+                    bars += usize::from(h < 0.001 && w > 0.001);
+                }
+                assert_eq!((stems, bars), (5, 9), "{target}");
             }
         }
     }
