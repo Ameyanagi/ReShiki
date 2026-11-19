@@ -694,11 +694,6 @@ fn leave_reactions(doc: &mut Document, part: &[u64]) -> bool {
     let (reactions, labels) = (doc.reactions.clone(), doc.arrow_labels.len());
     let held = |p: &crate::reactions::Participant| p.atoms.iter().any(|id| part.contains(id));
     for reaction in &mut doc.reactions {
-        // A reactant's hue goes with it, so the others keep theirs.
-        if let Some(colors) = &mut reaction.colors {
-            let mut gone = reaction.reactants.iter().map(held);
-            colors.reactants.retain(|_| !gone.next().unwrap_or(false));
-        }
         for role in crate::reactions::Role::ALL {
             reaction.participants_mut(role).retain(|p| !held(p));
         }

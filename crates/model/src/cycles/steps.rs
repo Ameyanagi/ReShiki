@@ -208,9 +208,35 @@ fn copy_colors(doc: &mut Document, from: &Document) {
 pub fn color(doc: &mut Document, id: u64, s: usize) -> Result<(), Refusal> {
     let (mut copy, arrows) = reactions(doc, id).map_err(|_| Refusal::Roles)?;
     let arrow = *arrows.get(s).ok_or(Refusal::Roles)?;
-    // No settings are kept, so an earlier run's colors go first, also from
-    // steps that have since lost their maps.
-    let held = participants(&copy);
+    // No settings are kept, so an earlier run's colors go first from every
+    // step joined to this one, also from steps that have since lost their
+    // maps. A text intermediate ends the chain.
+    let cycle = find(doc, id).map_err(|_| Refusal::Roles)?;
+    let n = cycle.intermediates.len();
+    let joins = |i: usize| {
+        cycle
+            .intermediates
+            .get(i % n)
+            .is_some_and(|p| structure(doc, p))
+    };
+    let mut chain = vec![s];
+    let mut i = s;
+    while chain.len() < n && joins(i + 1) {
+        i = (i + 1) % n;
+        chain.push(i);
+    }
+    let mut i = s;
+    while chain.len() < n && joins(i) {
+        i = (i + n - 1) % n;
+        chain.push(i);
+    }
+    let held: HashSet<u64> = chain
+        .iter()
+        .filter_map(|i| copy.reactions.get(*i))
+        .flat_map(|r| [Role::Reactant, Role::Product].map(|role| r.participants(role)))
+        .flatten()
+        .flat_map(|p| p.atoms.iter().copied())
+        .collect();
     crate::reaction_colors::clear_defaults(&mut copy, &held);
     paint(&mut copy, arrow)?;
     copy_colors(doc, &copy);

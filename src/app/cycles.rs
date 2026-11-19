@@ -196,16 +196,17 @@ impl App {
     /// right-click on its arc does.
     pub(super) fn choose_step_at(&mut self, p: reshiki::document::Point, hit: &[u64]) {
         let doc = &self.tab.doc;
-        let Some((id, step)) = doc
+        let Some(g) = doc
             .graphics
             .iter()
-            .filter(|g| g.cycle.is_some() && hit.contains(&g.id))
-            .find_map(|g| Some((g.id, reshiki::cycles::step_at(doc, g, p)?)))
+            .find(|g| g.cycle.is_some() && hit.contains(&g.id))
         else {
             return;
         };
-        self.tab.cycle_inputs.cycle = Some(id);
-        self.tab.cycle_inputs.step = step;
+        self.tab.cycle_inputs.cycle = Some(g.id);
+        if let Some(step) = reshiki::cycles::step_at(doc, g, p) {
+            self.tab.cycle_inputs.step = step;
+        }
         self.sync_cycle();
     }
 

@@ -359,34 +359,74 @@ fn recoloring_clears_colors_of_steps_that_lost_their_maps() {
 }
 
 #[test]
-fn a_reactant_that_leaves_for_a_cycle_takes_its_hue_along() {
-    let t = toy(false);
-    let mut doc = t.doc.clone();
-    let a = molecule(&mut doc, "CI", 900., 0., &[]);
-    let b = molecule(&mut doc, "CO", 900., 100., &[]);
-    let c = molecule(&mut doc, "COC", 1200., 50., &[]);
-    let arrow = doc.next_id();
-    doc.arrows.push(Arrow::new(
-        arrow,
-        Point::new(1000., 50.),
-        Point::new(1150., 50.),
-        crate::arrows::Preset::Forward,
-        Default::default(),
-    ));
-    let role = crate::reactions::Role::Reactant;
-    crate::reactions::assign(&mut doc, arrow, &a, role).unwrap();
-    crate::reactions::assign(&mut doc, arrow, &b, role).unwrap();
-    crate::reactions::assign(&mut doc, arrow, &c, crate::reactions::Role::Product).unwrap();
-    let hues = vec![crate::palette::Hue::Blue, crate::palette::Hue::Green];
-    doc.reactions[0].colors = Some(crate::reaction_colors::Colors {
-        reactants: hues,
-        formed: crate::palette::Hue::Red,
-        bonds: true,
-        changes: false,
-        rings: true,
-        legend: None,
+fn coloring_one_chain_keeps_the_colors_of_a_chain_cut_off_by_text() {
+    let mut doc = Document::default();
+    let text = |doc: &mut Document, x: f32, y: f32| {
+        let id = doc.next_id();
+        doc.annotations.push(Annotation {
+            id,
+            position: Point::new(x, y),
+            text: "[M]".into(),
+            format: TextFormat::default(),
+        });
+        id
+    };
+    let s0 = molecule(&mut doc, "CO", 0., -300., &[1, 2]);
+    let t1 = text(&mut doc, 300., 0.);
+    let s2 = molecule(&mut doc, "CN", 0., 300., &[3, 4]);
+    let t3 = text(&mut doc, -300., 0.);
+    let mut ids = s0.clone();
+    ids.extend(&s2);
+    ids.extend([t1, t3]);
+    let (id, _) = make(&mut doc, &ids).unwrap();
+    // Steps: s0 → [M] → s2 → [M] → s0; each structure has a partner that
+    // shares its maps on the other side of its step.
+    let p0 = molecule(&mut doc, "CO", 300., -300., &[1, 2]);
+    join(&mut doc, id, Role::Product(0), &p0);
+    let r1 = molecule(&mut doc, "CN", 300., 300., &[3, 4]);
+    join(&mut doc, id, Role::Reagent(1), &r1);
+    let p2 = molecule(&mut doc, "CN", -300., 300., &[3, 4]);
+    join(&mut doc, id, Role::Product(2), &p2);
+    let r3 = molecule(&mut doc, "CO", -300., -300., &[1, 2]);
+    join(&mut doc, id, Role::Reagent(3), &r3);
+    color(&mut doc, id, 0).unwrap();
+    let oxygen = label_color(&doc, s0[1]);
+    assert!(oxygen.is_some_and(|c| c != Color::Ink));
+    color(&mut doc, id, 1).unwrap();
+    assert!(label_color(&doc, s2[1]).is_some_and(|c| c != Color::Ink));
+    assert_eq!(label_color(&doc, s0[1]), oxygen);
+}
+
+#[test]
+fn colors_go_back_on_their_rings_in_place() {
+    let mut doc = Document::default();
+    let ring = molecule(&mut doc, "C1CCCCC1", 0., 0., &[]);
+    let other = molecule(&mut doc, "C1CCCCC1", 400., 0., &[]);
+    let fill = |atoms: &[u64], hue| crate::ring_fills::RingFill {
+        atoms: atoms.to_vec(),
+        color: Color::Palette(hue, crate::palette::Row::Tint),
+        effect: Default::default(),
+    };
+    use crate::palette::Hue;
+    doc.ring_fills = vec![fill(&ring, Hue::Blue), fill(&other, Hue::Green)];
+    let mut from = doc.clone();
+    let mut reaction = Reaction::new(doc.next_id());
+    reaction.reactants.push(Participant {
+        atoms: ring.clone(),
+        coefficient: 1,
     });
-    join(&mut doc, t.id, Role::Reagent(0), &a);
-    let colors = doc.reactions[0].colors.as_ref().unwrap();
-    assert_eq!(colors.reactants, vec![crate::palette::Hue::Green]);
+    from.reactions = vec![reaction];
+    // The same ring, walked from another atom the other way round.
+    let mut walked = ring.clone();
+    walked.rotate_left(2);
+    walked.reverse();
+    from.ring_fills = vec![fill(&walked, Hue::Red), fill(&other, Hue::Teal)];
+    super::copy_colors(&mut doc, &from);
+    assert_eq!(doc.ring_fills.len(), 2);
+    assert_eq!(
+        doc.ring_fills[0].color,
+        Color::Palette(Hue::Red, crate::palette::Row::Tint)
+    );
+    // A ring outside the copy's reactions keeps its fill.
+    assert_eq!(doc.ring_fills[1], fill(&other, Hue::Green));
 }

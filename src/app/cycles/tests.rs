@@ -318,6 +318,15 @@ fn right_clicking_a_step_chooses_it_for_the_menu() {
         hit: vec![other],
     });
     assert_eq!(app.cycle_step(), Some((other, 1)));
+    // An empty circle right-clicked has no steps to act on.
+    let empty = reshiki::cycles::insert(&mut app.tab.doc, Point::new(6000., 0.), 100.);
+    app.edit(Edit::ContextMenu {
+        position: iced::Point::ORIGIN,
+        at: Point::new(6000., 100.),
+        selected: vec![id, empty],
+        hit: vec![empty],
+    });
+    assert_eq!(app.cycle_step(), None);
 }
 
 #[test]
