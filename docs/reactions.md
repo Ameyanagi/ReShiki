@@ -16,6 +16,57 @@ Role edits are undoable. **Remove reaction roles** keeps all drawing objects. De
 
 Assistant-generated schemes already contain reactant and product roles, including their coefficients. Reaction conditions remain editable captions. Text written above or below a straight arrow attaches to it, and the arrow keeps itself long enough for the text; see [conditions on an arrow](arrows.md#write-conditions-on-an-arrow). Text conditions do not automatically become chemical reagent structures; draw and assign a reagent when it should be included in reaction data.
 
+## Object purpose
+
+Every molecule and arrow has a purpose. It decides which chemistry tools use
+the object. Only your choice changes it: color, layer order, grouping and
+position never do.
+
+| Purpose      | Use it for                                                    | Chemistry tools                                                                                     |
+| ------------ | ------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| Chemistry    | Molecules and arrows of the scheme. New objects start here.   | Everything: reaction roles, Preview reaction, chemical copy, atom maps, captions and Check drawing. |
+| Reference    | A real structure shown for context, such as a known compound. | Keeps its formula, name, NMR and captions, and its arrow keeps condition text. Never in a reaction. |
+| Illustration | Icons, decorative arrows and molecules drawn as pictures.     | Skipped by reaction tools, chemical copy, Check drawing and the whole-drawing formula.              |
+
+### Set a purpose
+
+1. Select molecules or arrows. Selecting one atom selects its whole molecule.
+2. In **Properties**, choose **Chemistry**, **Reference** or **Illustration**
+   under **Purpose**. You can also right-click and choose **Purpose**.
+
+A dashed outline and a small **Reference** or **Illustration** tag mark these
+objects while you edit. The marks never appear in exports or copied images.
+
+Changing a molecule to Reference or Illustration removes it from its reaction
+roles. Changing an arrow removes its reaction; an Illustration arrow also
+releases its condition text, which stays as ordinary text. Assigning a role in
+**Reaction roles** makes that molecule and its arrow Chemistry again. Atoms you
+draw onto a molecule take its purpose. Joining a Chemistry and a Reference
+molecule gives Chemistry.
+
+### Preview a reaction
+
+Right-click a Chemistry reaction or equilibrium arrow and choose **Preview
+reaction**, or choose
+**Preview** in **Reaction roles**. Dashed outlines show each reactant, product
+and reagent, and the arrow with its conditions. An arrow with assigned roles
+shows them. Otherwise ReShiki reads the arrow's row: Chemistry molecules before
+the arrow are reactants, molecules after it are products, and molecules above
+or below its middle are reagents. The next arrow in the row ends each side.
+Reference and Illustration objects never take part. Esc or any edit hides the
+preview.
+
+### Limits
+
+- Purpose is kept in `.rsk` files only (document version 40). CDX, CDXML, SVG,
+  PDF and PNG keep the appearance; reopened in ReShiki, everything is
+  Chemistry.
+- Text, shapes and pictures have no purpose; they are never chemistry.
+- Commands you run on a selected Illustration molecule, such as its name,
+  NMR prediction or formula, still work. Only drawing-wide tools skip it.
+- Keeping a ChemDraw file's format on Save warns that it loses the purpose.
+- Preview reaction does not assign roles. Use **Reaction roles** to keep them.
+
 ## Copy a drawn reaction
 
 **Cmd/Ctrl+C** copies the drawing for ReShiki, ChemDraw, Office and image apps.
@@ -28,7 +79,9 @@ receiving editor's interpretation of a mixture or salt; copying all components
 does not establish receiver acceptance.
 
 For an unassigned scheme, select all complete participant molecules and exactly
-one straight forward arrow. Copy-only inference assigns starting materials
+one straight forward arrow. Reference and Illustration molecules and arrows in
+the selection are left out, so a reference structure beside the product does
+not become a product. Copy-only inference assigns starting materials
 toward the arrow's start and products toward its end, including vertical,
 diagonal and right-to-left layouts. It groups complete connected components
 and assigns each one once. Molecules touching or crossing the arrow midpoint,

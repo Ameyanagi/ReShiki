@@ -202,6 +202,7 @@ async fn retrosynthesis_arrows_roundtrip_through_cdxml_and_cdx() {
             cubic: None,
             nodes: Vec::new(),
             style,
+            purpose: Default::default(),
         });
         document.arrows.push(Arrow {
             id: 2,
@@ -322,6 +323,7 @@ fn retrosynthesis_exchange_refuses_curves() {
                 cubic,
                 nodes: Vec::new(),
                 style: Some(ArrowStyle::preset(Preset::Retro)),
+                purpose: Default::default(),
             }],
             ..Default::default()
         };

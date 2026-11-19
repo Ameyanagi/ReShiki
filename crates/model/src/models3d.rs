@@ -1941,6 +1941,7 @@ fn chemistry(doc: &Document, ids: &HashSet<u64>) -> (Vec<Atom>, Vec<Bond>) {
             steroid_label: None,
             undefined_stereo: false,
             undefined_pseudoasymmetric: false,
+            purpose: Default::default(),
             stereo_group: None,
             position: Point::default(),
             depth: 0.,

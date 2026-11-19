@@ -922,6 +922,7 @@ pub(super) fn commits_draft(message: &Message) -> bool {
             | Message::ApplyBondPreset(_)
             | Message::BondPosition(_)
             | Message::ReverseBonds
+            | Message::Purpose(_)
             | Message::BondDepth(_)
             | Message::Graphics(
                 super::graphics::Action::Style(_)

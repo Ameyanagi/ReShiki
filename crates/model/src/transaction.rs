@@ -277,8 +277,9 @@ pub struct Committed {
 ///    pruned.
 /// 3. Abbreviations the edit broke are dropped before validation, which would
 ///    reject them.
-/// 4. Reaction participants grow with their molecules. A join of separate
-///    participants is rejected here, before validation.
+/// 4. Each molecule keeps one purpose. Reaction participants grow with their
+///    molecules, and non-Chemistry objects leave their reactions. A join of
+///    separate participants is rejected here, before validation.
 /// 5. Only a changed document is validated. Molecule groups are reconciled after
 ///    validation, because their final prune would repair a stale member that
 ///    validation rejects.
@@ -289,6 +290,7 @@ pub fn reconcile(doc: &mut Document, before: Document) -> Result<Reconciled, Rej
     crate::ring_fills::prune(doc);
     crate::depth_appearance::prune(doc);
     doc.reconcile_abbreviations(&before);
+    crate::purpose::reconcile(doc, &before);
     if let Err(error) = crate::reactions::reconcile(doc) {
         *doc = before;
         return Err(Rejection::Reactions(error));

@@ -489,6 +489,7 @@ fn foreground_text_arrows_and_graphics_keep_their_hits_over_the_model_outline() 
                 cubic: None,
                 nodes: Vec::new(),
                 style: None,
+                purpose: Default::default(),
             }),
             _ => {
                 let mut graphic = Graphic::dragged(

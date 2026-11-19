@@ -56,6 +56,156 @@ impl EndSides {
     }
 }
 
+/// The molecules in an arrow's scheme row, by index into `parts`: the band
+/// half an arrow length either side of the arrow. The next arrow in the row
+/// ends this arrow's sides (A → B → C).
+struct Row {
+    /// Molecules before and after the arrow midpoint.
+    ends: [Vec<usize>; 2],
+    /// Molecules above or below the shaft at its midpoint.
+    agents: Vec<usize>,
+    /// A molecule crosses the shaft at its midpoint.
+    ambiguous: bool,
+}
+impl Row {
+    fn new(
+        arrow: &Arrow,
+        arrows: &[&Arrow],
+        parts: &[Vec<u64>],
+        positions: &HashMap<u64, Point>,
+    ) -> Option<Self> {
+        let sides = EndSides::new(arrow).ok()?;
+        // Along and across the arrow from its midpoint, scaled by its squared length.
+        let length_squared = sides.dx * sides.dx + sides.dy * sides.dy;
+        let project = |point: Point| {
+            let (x, y) = (f64::from(point.x) - sides.mx, f64::from(point.y) - sides.my);
+            (
+                (x * sides.dx + y * sides.dy) / length_squared,
+                (y * sides.dx - x * sides.dy) / length_squared,
+            )
+        };
+        let (mut first, mut last) = (f64::NEG_INFINITY, f64::INFINITY);
+        for other in arrows.iter().filter(|other| other.id != arrow.id) {
+            let (along, across) = project(Point::new(
+                (other.start.x + other.end.x) * 0.5,
+                (other.start.y + other.end.y) * 0.5,
+            ));
+            if across.abs() <= 0.5 {
+                if along < 0. {
+                    first = first.max(along);
+                } else {
+                    last = last.min(along);
+                }
+            }
+        }
+        let tolerance = sides.tolerance / length_squared;
+        let mut row = Self {
+            ends: [Vec::new(), Vec::new()],
+            agents: Vec::new(),
+            ambiguous: false,
+        };
+        for (index, members) in parts.iter().enumerate() {
+            let (mut lo, mut hi, mut below, mut above) = (
+                f64::INFINITY,
+                f64::NEG_INFINITY,
+                f64::INFINITY,
+                f64::NEG_INFINITY,
+            );
+            for &point in members.iter().filter_map(|id| positions.get(id)) {
+                let (along, across) = project(point);
+                (lo, hi) = (lo.min(along), hi.max(along));
+                (below, above) = (below.min(across), above.max(across));
+            }
+            if below > 0.5 || above < -0.5 || hi < first || lo > last {
+                continue;
+            }
+            if hi < -tolerance {
+                row.ends[0].push(index);
+            } else if lo > tolerance {
+                row.ends[1].push(index);
+            } else if below > tolerance || above < -tolerance {
+                row.agents.push(index);
+            } else {
+                row.ambiguous = true;
+            }
+        }
+        Some(row)
+    }
+}
+
+/// What takes part in this arrow's reaction: its explicit roles, or else the
+/// Chemistry molecules in its scheme row, before and after the arrow, with
+/// its condition text. Reference and Illustration objects never take part.
+pub fn preview(doc: &Document, arrow: u64) -> Result<Reaction, &'static str> {
+    let Some(target) = doc.arrows.iter().find(|a| a.id == arrow) else {
+        return Err("Select a reaction arrow first.");
+    };
+    if !target.purpose.is_chemistry() {
+        return Err("This arrow is not Chemistry, so it has no reaction.");
+    }
+    // Retrosynthesis, resonance and mechanism arrows take no reaction roles.
+    if crate::arrows::Preset::from_kind(&target.kind)
+        .reaction_role_refusal()
+        .is_some()
+    {
+        return Err("This kind of arrow has no reaction roles.");
+    }
+    let labels = crate::arrow_labels::of(doc, arrow).map(|label| label.annotation);
+    if let Some(reaction) = doc.reactions.iter().find(|r| r.arrow == arrow) {
+        let mut reaction = reaction.clone();
+        for label in labels {
+            if !reaction.annotations.contains(&label) {
+                reaction.annotations.push(label);
+            }
+        }
+        return Ok(reaction);
+    }
+    let ids: Vec<_> = doc
+        .atoms
+        .iter()
+        .filter(|a| a.purpose.is_chemistry())
+        .map(|a| a.id)
+        .collect();
+    let parts = molecules(doc, &ids);
+    let positions: HashMap<_, _> = doc
+        .atoms
+        .iter()
+        .filter(|a| doc.atom_visible(a.id))
+        .map(|a| (a.id, a.position))
+        .collect();
+    let arrows: Vec<_> = doc
+        .arrows
+        .iter()
+        .filter(|a| a.purpose.is_chemistry())
+        .collect();
+    let row = Row::new(target, &arrows, &parts, &positions)
+        .ok_or("The reaction arrow needs distinct start and end points.")?;
+    if row.ambiguous {
+        return Err("A molecule crosses the arrow; assign roles instead.");
+    }
+    let mut reaction = Reaction::new(arrow);
+    let [before, after] = &row.ends;
+    for (role, ends) in [
+        (Role::Reactant, before),
+        (Role::Product, after),
+        (Role::Agent, &row.agents),
+    ] {
+        for index in ends {
+            if let Some(atoms) = parts.get(*index) {
+                reaction.participants_mut(role).push(Participant {
+                    atoms: atoms.clone(),
+                    coefficient: 1,
+                });
+            }
+        }
+    }
+    if !reaction.ready() {
+        return Err("No starting material or product sits beside this arrow.");
+    }
+    reaction.annotations = labels.collect();
+    Ok(reaction)
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Participant {
@@ -224,6 +374,8 @@ pub fn copy_reaction(
     source: &Document,
     snapshot: &Document,
 ) -> Result<Option<Reaction>, &'static str> {
+    // Reference and Illustration objects never take part, wherever they sit.
+    let snapshot = &*crate::purpose::only(snapshot, crate::purpose::Purpose::is_chemistry);
     if snapshot.arrows.is_empty() {
         let selected: HashSet<_> = snapshot.atoms.iter().map(|a| a.id).collect();
         let mut participants = source
@@ -366,6 +518,9 @@ pub fn assign(doc: &mut Document, arrow: u64, selected: &[u64], role: Role) -> R
     }
     reaction.participants_mut(role).extend(moved);
     let mut candidate = doc.clone();
+    // Assigning a role is an explicit choice to treat these as chemistry.
+    let chosen: Vec<_> = assigned.iter().copied().chain([arrow]).collect();
+    crate::purpose::set(&mut candidate, &chosen, crate::purpose::Purpose::Chemistry);
     candidate.reactions.retain(|r| r.arrow != arrow);
     candidate.reactions.push(reaction);
     reconcile(&mut candidate)?;
@@ -375,9 +530,21 @@ pub fn assign(doc: &mut Document, arrow: u64, selected: &[u64], role: Role) -> R
     Ok(())
 }
 
+/// Drop membership of deleted objects, and of molecules and arrows whose
+/// purpose is not Chemistry.
 pub fn prune(doc: &mut Document) {
-    let atoms: HashSet<_> = doc.atoms.iter().map(|a| a.id).collect();
-    let arrows: HashSet<_> = doc.arrows.iter().map(|a| a.id).collect();
+    let atoms: HashSet<_> = doc
+        .atoms
+        .iter()
+        .filter(|a| a.purpose.is_chemistry())
+        .map(|a| a.id)
+        .collect();
+    let arrows: HashSet<_> = doc
+        .arrows
+        .iter()
+        .filter(|a| a.purpose.is_chemistry())
+        .map(|a| a.id)
+        .collect();
     let annotations: HashSet<_> = doc.annotations.iter().map(|a| a.id).collect();
     doc.reactions.retain(|r| arrows.contains(&r.arrow));
     for reaction in &mut doc.reactions {

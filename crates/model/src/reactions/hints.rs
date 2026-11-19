@@ -1,10 +1,6 @@
 //! Informational checks of arrow meaning; neither chemistry nor drawing is edited.
-use super::{EndSides, molecules};
-use crate::{
-    chemistry,
-    document::{Document, Point},
-    editing,
-};
+use super::{Row, molecules};
+use crate::{chemistry, document::Document, editing};
 use std::collections::{HashMap, HashSet, VecDeque};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -36,7 +32,13 @@ pub fn arrow_semantics_hints(doc: &Document) -> Vec<ArrowSemanticsHint> {
     if doc.validate().is_err() {
         return vec![];
     }
-    let ids: Vec<_> = doc.atoms.iter().map(|atom| atom.id).collect();
+    // Only Chemistry molecules and arrows make up a scheme row.
+    let ids: Vec<_> = doc
+        .atoms
+        .iter()
+        .filter(|atom| atom.purpose.is_chemistry())
+        .map(|atom| atom.id)
+        .collect();
     let parts = molecules(doc, &ids);
     let positions: HashMap<_, _> = doc
         .atoms
@@ -46,68 +48,27 @@ pub fn arrow_semantics_hints(doc: &Document) -> Vec<ArrowSemanticsHint> {
         .collect();
     let mut signatures = HashMap::new();
     let mut hints = Vec::new();
-    for arrow in &doc.arrows {
+    let arrows: Vec<_> = doc
+        .arrows
+        .iter()
+        .filter(|arrow| arrow.purpose.is_chemistry())
+        .collect();
+    for arrow in arrows.iter().copied() {
         if !matches!(arrow.kind.as_str(), "resonance" | "equilibrium") {
             continue;
         }
-        let Ok(sides) = EndSides::new(arrow) else {
+        let Some(Row {
+            ends,
+            agents,
+            ambiguous,
+        }) = Row::new(arrow, &arrows, &parts, &positions)
+        else {
             continue;
         };
-        // Along and across the arrow from its midpoint, scaled by its squared length.
-        let length_squared = sides.dx * sides.dx + sides.dy * sides.dy;
-        let project = |point: Point| {
-            let (x, y) = (f64::from(point.x) - sides.mx, f64::from(point.y) - sides.my);
-            (
-                (x * sides.dx + y * sides.dy) / length_squared,
-                (y * sides.dx - x * sides.dy) / length_squared,
-            )
-        };
-        // A scheme row is the band half an arrow length either side of the arrow.
-        // The next arrow in the row ends this arrow's sides (A ↔ B ↔ C).
-        let (mut first, mut last) = (f64::NEG_INFINITY, f64::INFINITY);
-        for other in doc.arrows.iter().filter(|other| other.id != arrow.id) {
-            let (along, across) = project(Point::new(
-                (other.start.x + other.end.x) * 0.5,
-                (other.start.y + other.end.y) * 0.5,
-            ));
-            if across.abs() <= 0.5 {
-                if along < 0. {
-                    first = first.max(along);
-                } else {
-                    last = last.min(along);
-                }
-            }
-        }
-        let tolerance = sides.tolerance / length_squared;
-        let mut ends = [Vec::new(), Vec::new()];
-        let mut ambiguous = false;
-        for (index, members) in parts.iter().enumerate() {
-            let (mut lo, mut hi, mut below, mut above) = (
-                f64::INFINITY,
-                f64::NEG_INFINITY,
-                f64::INFINITY,
-                f64::NEG_INFINITY,
-            );
-            for &point in members.iter().filter_map(|id| positions.get(id)) {
-                let (along, across) = project(point);
-                (lo, hi) = (lo.min(along), hi.max(along));
-                (below, above) = (below.min(across), above.max(across));
-            }
-            if below > 0.5 || above < -0.5 || hi < first || lo > last {
-                continue;
-            }
-            if hi < -tolerance {
-                ends[0].push(index);
-            } else if lo > tolerance {
-                ends[1].push(index);
-            } else {
-                ambiguous = true;
-            }
-        }
         let ([left], [right]) = (ends[0].as_slice(), ends[1].as_slice()) else {
             continue;
         };
-        if ambiguous {
+        if ambiguous || !agents.is_empty() {
             continue;
         }
         for &index in [left, right] {

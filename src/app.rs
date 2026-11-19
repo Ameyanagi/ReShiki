@@ -325,6 +325,8 @@ pub enum Message {
     Duplicate,
     Transform(Transform),
     Arrange(Arrange),
+    /// Give the selected molecules and arrows this purpose.
+    Purpose(reshiki::purpose::Purpose),
     ReverseBonds,
     MakeIonic,
     CenterRingCharge,
@@ -1601,6 +1603,7 @@ fn same_atom(a: &reshiki::document::Atom, b: &reshiki::document::Atom) -> bool {
         map_num,
         label_h: _,
         text_style,
+        purpose,
     } = a;
     *display == b.display
         && *id == b.id
@@ -1622,6 +1625,7 @@ fn same_atom(a: &reshiki::document::Atom, b: &reshiki::document::Atom) -> bool {
         && *stereo_group == b.stereo_group
         && *map_num == b.map_num
         && *text_style == b.text_style
+        && *purpose == b.purpose
 }
 
 /// Marks the results of `task` as belonging to tab `id`, unless already marked.

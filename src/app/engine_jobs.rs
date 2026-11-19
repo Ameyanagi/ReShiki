@@ -5,7 +5,7 @@ use iced::{Subscription, Task};
 use reshiki::{
     document::{Document, Point},
     editing,
-    engine::{ChemistryEngine, Request, Response},
+    engine::{Analysis, ChemistryEngine, Request, Response},
 };
 
 const INSERT_STRUCTURE_FAILED: &str = "Could not insert structure";
@@ -165,7 +165,12 @@ impl App {
     }
     pub(super) fn analyze_drawing(&mut self) -> Task<Message> {
         self.run(
-            Request::molecule("analyze", self.tab.doc.clone()),
+            // Check chemistry; Illustration molecules are pictures.
+            Request::molecule(
+                "analyze",
+                reshiki::purpose::only(&self.tab.doc, reshiki::purpose::Purpose::is_chemical)
+                    .into_owned(),
+            ),
             Job::Analyze,
         )
     }
@@ -229,7 +234,7 @@ impl App {
         let before = std::mem::replace(&mut self.tab.doc, document);
         self.changed(before);
         if !self.error {
-            self.tab.analysis = response.analysis;
+            self.tab.analysis = whole_analysis(&self.tab.doc, response.analysis);
             self.status = format!("{name} applied");
             if !response.warnings.is_empty() {
                 self.status.push_str(" · ");
@@ -251,7 +256,7 @@ impl App {
         let before = std::mem::replace(&mut self.tab.doc, document);
         self.changed(before);
         if !self.error {
-            self.tab.analysis = response.analysis;
+            self.tab.analysis = whole_analysis(&self.tab.doc, response.analysis);
             self.status = format!(
                 "Cleaned up · {} undoes",
                 super::shortcuts::keys(iced::keyboard::Modifiers::COMMAND, "Z")
@@ -372,7 +377,7 @@ impl App {
             reshiki::atom_labels::copy_computed(&mut self.tab.doc, &document);
             self.tab.label_generation = self.tab.label_generation.wrapping_add(1);
             self.tab.labels_dirty = false;
-            self.tab.analysis = response.analysis;
+            self.tab.analysis = whole_analysis(&self.tab.doc, response.analysis);
             self.tool = Tool::Select;
             self.status = "Aromatic display changed · Molecular identity retained".into();
         }
@@ -387,7 +392,7 @@ impl App {
                 .doc
                 .expand_abbreviation_selection(&self.tab.selected);
             self.changed(before);
-            self.tab.analysis = response.analysis;
+            self.tab.analysis = whole_analysis(&self.tab.doc, response.analysis);
             self.tool = Tool::Select;
             self.status = if count == 0 {
                 "No matching common groups in this selection".into()
@@ -468,7 +473,7 @@ impl App {
                 self.begin_file_epoch();
             }
         }
-        self.tab.analysis = response.analysis;
+        self.tab.analysis = whole_analysis(&self.tab.doc, response.analysis);
         self.status = match kind {
             Job::Clean(_) => "Structure cleaned",
             Job::Analyze => "No chemistry errors found",
@@ -494,3 +499,9 @@ mod crystal_tests;
 
 #[cfg(test)]
 mod import_file_tests;
+
+/// A job's analysis of the whole drawing, which counts Illustration
+/// molecules; Properties then asks for the chemical part instead.
+fn whole_analysis(doc: &Document, analysis: Option<Analysis>) -> Option<Analysis> {
+    analysis.filter(|_| !reshiki::purpose::used(doc))
+}

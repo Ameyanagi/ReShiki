@@ -346,6 +346,7 @@ impl Arrow {
             cubic: None,
             nodes: Vec::new(),
             style: Some(style),
+            purpose: Default::default(),
         }
     }
     /// Returns whether either endpoint has an attachment anchor.

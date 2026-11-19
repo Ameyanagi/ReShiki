@@ -117,6 +117,7 @@ impl NativeArrow {
                 no_go: s.no_go,
                 dipole: s.dipole,
             }),
+            purpose: Default::default(),
         })
     }
 }

@@ -1115,6 +1115,39 @@ fn analysis() -> Vec<Command> {
             Message::Reaction(reactions::Action::Open),
         ),
         send(
+            "Preview reaction",
+            Analyze,
+            "Outline what takes part in the selected arrow's reaction",
+            "reaction scheme detect participants",
+            Message::Reaction(reactions::Action::Preview),
+        ),
+        Command::new(
+            "Purpose: Chemistry",
+            Analyze,
+            "Let the selection take part in reactions",
+            "purpose chemistry scheme",
+            Run::Send(vec![Message::Purpose(reshiki::purpose::Purpose::Chemistry)]),
+        )
+        .need(Need::Selection),
+        Command::new(
+            "Purpose: Reference",
+            Analyze,
+            "Show the selection for context, never in a reaction",
+            "purpose reference context known compound",
+            Run::Send(vec![Message::Purpose(reshiki::purpose::Purpose::Reference)]),
+        )
+        .need(Need::Selection),
+        Command::new(
+            "Purpose: Illustration",
+            Analyze,
+            "Treat the selection as a picture that chemistry tools skip",
+            "purpose illustration picture decorative",
+            Run::Send(vec![Message::Purpose(
+                reshiki::purpose::Purpose::Illustration,
+            )]),
+        )
+        .need(Need::Selection),
+        send(
             "Atom maps",
             Analyze,
             "Open reaction atom mapping",

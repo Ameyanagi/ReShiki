@@ -47,6 +47,7 @@ fn geometry() -> Document {
         cubic: None,
         nodes: Vec::new(),
         style: None,
+        purpose: Default::default(),
     });
     doc.graphics.push(Graphic::dragged(
         doc.next_id(),
@@ -499,6 +500,7 @@ fn aligning_aligned_objects_leaves_an_unselected_arrow_untouched() {
         cubic: None,
         nodes: Vec::new(),
         style: None,
+        purpose: Default::default(),
     });
     doc.validate().unwrap();
     let before = doc.clone();
@@ -528,6 +530,7 @@ fn labelled_arrows_translated_together_match_one_translate_per_unit() {
             cubic: None,
             nodes: Vec::new(),
             style: None,
+            purpose: Default::default(),
         });
         let caption = doc.next_id();
         doc.annotations.push(Annotation {

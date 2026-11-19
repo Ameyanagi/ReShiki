@@ -158,6 +158,9 @@ Equilibrium arrows also set **Reverse length (0.2–1)** and **Shaft separation
   Bending an arrow or attaching its ends releases its labels as ordinary
   text. Text that was already beside an arrow attaches only when you move it;
   editing it in place leaves it unattached.
+- An arrow with the **Illustration** purpose never takes condition text, and
+  the hints skip Reference and Illustration molecules and arrows; see
+  [object purpose](reactions.md#object-purpose).
 - Only `.rsk` files keep the link between an arrow and its condition text.
   CDXML/CDX, SVG, PDF and PNG keep the text and the arrow where they are.
 

@@ -40,6 +40,7 @@ fn clicked_molecule_is_independent_of_multi_selection_and_logical_groups() {
         start_anchor: None,
         end_anchor: None,
         style: None,
+        purpose: Default::default(),
     });
     assert_eq!(target(&doc, &[arrow], &first), None);
 }

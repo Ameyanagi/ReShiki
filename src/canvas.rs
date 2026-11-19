@@ -42,6 +42,7 @@ mod pages;
 mod paper;
 pub(crate) mod pick;
 mod previews;
+mod purpose;
 mod render;
 mod selection;
 mod smart_guides;
@@ -620,6 +621,8 @@ pub struct MoleculeCanvas<'a> {
     pub(crate) nmr: Option<nmr::Context<'a>>,
     /// Session-only feedback from the hovered locant in a chemical name.
     pub(crate) locant_highlight: &'a [u64],
+    /// Outlines what takes part in a reaction until the next edit.
+    pub(crate) reaction_preview: Option<&'a reshiki::reactions::Reaction>,
     pub(crate) optimizer: Option<optimization::Context<'a>>,
     /// Keyboard input routing; the marker waits for pointer or key interaction.
     pub(crate) keyboard_target: Option<World>,
@@ -672,6 +675,7 @@ impl<'a> MoleculeCanvas<'a> {
         Self {
             nmr: None,
             locant_highlight: &[],
+            reaction_preview: None,
             optimizer: None,
             keyboard_target: None,
             keyboard_marker: false,
@@ -796,6 +800,10 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                     .with_width(2.)
                     .with_color(overlay::ACCENT_STRONG),
             );
+        }
+        purpose::draw_cues(self.doc, &mut frame, self.camera, paper);
+        if let Some(reaction) = self.reaction_preview {
+            purpose::draw_preview(self.doc, reaction, &mut frame, self.camera, paper);
         }
         if let Some(context) = self.optimizer {
             optimization::draw_pins(self, context, &mut frame, paper);

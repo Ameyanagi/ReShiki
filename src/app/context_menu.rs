@@ -28,6 +28,8 @@ pub enum Page {
     Model,
     /// Property lines under the clicked molecule, ticked when shown.
     Properties,
+    /// Chemistry, Reference or Illustration, ticked for the current one.
+    Purpose,
     Attachments,
     CopyAs,
     /// Copy image on a background for this copy only.
@@ -233,6 +235,10 @@ impl App {
             ],
             Page::Model => self.model_entries(),
             Page::Properties => self.property_entries(),
+            Page::Purpose => reshiki::purpose::Purpose::ALL
+                .into_iter()
+                .map(|p| Entry::command(p.label(), Message::Purpose(p), true))
+                .collect(),
             Page::Align => self.align_entries(atoms, multiple),
             Page::Bonds => self.bond_entries(bonds),
             Page::AlignObjects => self.arrange_entries(&[&Command::HORIZONTAL, &Command::VERTICAL]),
@@ -300,6 +306,7 @@ impl App {
             } else {
                 vec![]
             },
+            self.purpose_entries(atoms),
             [
                 command("Cut", Message::Copy(true), true),
                 command("Copy", Message::Copy(false), true),
@@ -324,6 +331,34 @@ impl App {
         .filter(|group| !group.is_empty())
         .collect::<Vec<_>>()
         .join(&Entry::Separator)
+    }
+
+    /// What the selected molecules and arrows are for, and what takes part in
+    /// the selected arrow's reaction.
+    fn purpose_entries(&self, atoms: bool) -> Vec<Entry> {
+        let arrows: Vec<_> = self
+            .tab
+            .doc
+            .arrows
+            .iter()
+            .filter(|a| self.tab.selected.contains(&a.id))
+            .collect();
+        let mut entries = vec![];
+        // A molecule's Purpose is in its own group.
+        if !atoms && !arrows.is_empty() {
+            entries.push(Entry::page("Purpose", Page::Purpose));
+        }
+        if let [arrow] = arrows.as_slice() {
+            entries.push(Entry::command(
+                "Preview reaction",
+                Message::Reaction(super::reactions::Action::Preview),
+                arrow.purpose.is_chemistry()
+                    && reshiki::arrows::Preset::from_kind(&arrow.kind)
+                        .reaction_role_refusal()
+                        .is_none(),
+            ));
+        }
+        entries
     }
 
     /// The clicked atom's label and reaction map.
@@ -438,6 +473,7 @@ impl App {
                 true,
             ));
         }
+        entries.push(Entry::page("Purpose", Page::Purpose));
         entries
     }
 
@@ -480,6 +516,13 @@ impl App {
             Action::Run(message) => match message.as_ref() {
                 Message::ToggleProperty(atoms, property) => Some(
                     reshiki::linked_properties::shown(&self.tab.doc, atoms, *property),
+                ),
+                Message::Purpose(purpose) => Some(
+                    self.tab
+                        .selected
+                        .iter()
+                        .filter_map(|id| reshiki::purpose::of(&self.tab.doc, *id))
+                        .all(|p| p == *purpose),
                 ),
                 _ => None,
             },

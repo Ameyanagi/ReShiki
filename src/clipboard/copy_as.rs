@@ -195,17 +195,21 @@ pub fn selection_or_drawing(doc: &Document, selected: &[u64]) -> Document {
 
 /// Chemical formats may infer one clear reaction without changing the drawing.
 /// Inspect the source as well, since selection can prune incomplete explicit roles.
+/// Illustration objects are never chemical; a reaction leaves out Reference
+/// molecules too.
 pub fn chemical_snapshot<'a>(
     source: &Document,
     snapshot: &'a Document,
 ) -> Result<Cow<'a, Document>, &'static str> {
+    use crate::purpose::{Purpose, only};
     let Some(reaction) = crate::reactions::copy_reaction(source, snapshot)? else {
-        return Ok(Cow::Borrowed(snapshot));
+        return Ok(only(snapshot, Purpose::is_chemical));
     };
-    if snapshot.reactions.as_slice() == std::slice::from_ref(&reaction) {
-        return Ok(Cow::Borrowed(snapshot));
+    let chemistry = only(snapshot, Purpose::is_chemistry);
+    if chemistry.reactions.as_slice() == std::slice::from_ref(&reaction) {
+        return Ok(chemistry);
     }
-    let mut chemical = snapshot.clone();
+    let mut chemical = chemistry.into_owned();
     chemical.reactions = vec![reaction];
     Ok(Cow::Owned(chemical))
 }

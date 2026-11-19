@@ -271,6 +271,12 @@ impl App {
             self.tabs.menu = false;
             return Break(Task::none());
         }
+        if self.reaction_preview().is_some() && matches!(message, Message::Escape) {
+            self.tab.reactions.preview = None;
+            self.status = "Reaction preview hidden".into();
+            self.error = false;
+            return Break(super::focus_drawing());
+        }
         if self.check_results && matches!(message, Message::Escape) {
             self.check_results = false;
             return Break(super::focus_drawing());

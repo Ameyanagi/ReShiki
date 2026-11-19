@@ -261,6 +261,7 @@ fn reaction_copy(
         cubic: None,
         nodes: Vec::new(),
         style: None,
+        purpose: Default::default(),
     });
     let mut new_ids = copied.clone();
     new_ids.push(arrow);

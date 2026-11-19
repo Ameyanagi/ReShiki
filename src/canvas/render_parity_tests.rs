@@ -121,6 +121,7 @@ fn routing_document() -> Document {
         cubic: None,
         nodes: Vec::new(),
         style: None,
+        purpose: Default::default(),
     });
     for (layer, origin, axis_y) in [
         (-1, World::new(140., 70.), World::new(0., 115.)),
@@ -163,6 +164,7 @@ fn paper_document() -> (Document, Vec<u64>, [u64; 4]) {
         cubic: None,
         nodes: Vec::new(),
         style: None,
+        purpose: Default::default(),
     });
     doc.annotations.push(Annotation {
         id: doc.next_id(),

@@ -328,7 +328,7 @@ pub fn prune(doc: &mut Document) {
     let arrows: HashSet<_> = doc
         .arrows
         .iter()
-        .filter(|a| supports(a))
+        .filter(|a| supports(a) && a.purpose.is_chemical())
         .map(|a| a.id)
         .collect();
     let texts: HashSet<_> = doc.annotations.iter().map(|a| a.id).collect();
@@ -397,9 +397,11 @@ pub fn reconcile(doc: &mut Document, before: &Document) {
     if candidates.is_empty() && doc.arrow_labels.is_empty() {
         return;
     }
+    // Illustration arrows never take condition text.
     let stable: HashSet<u64> = doc
         .arrows
         .iter()
+        .filter(|a| a.purpose.is_chemical())
         .map(|a| a.id)
         .filter(|id| arrow_unchanged(doc, *id))
         .collect();
