@@ -133,14 +133,22 @@ fn assert_stereo_bond_painted(
     display: &str,
     (start, end): (Point, Point),
     ink: [&[(Point, Point)]; 2],
+    line_width: f32,
     case: &str,
 ) {
     let near = |a: Point, z: Point| a.distance(z) < 0.001;
+    let overhang = if display == "wedge" {
+        0.
+    } else {
+        line_width * 0.5
+    };
     let clear = |a, z| {
         assert!(
-            ink.into_iter()
-                .flatten()
-                .all(|&(lo, hi)| !crate::atom_labels::segment_hits_rect(a, z, lo, hi)),
+            ink.into_iter().flatten().all(|&(lo, hi)| {
+                let lo = lo.offset(-overhang, -overhang);
+                let hi = hi.offset(overhang, overhang);
+                !crate::atom_labels::segment_hits_rect(a, z, lo, hi)
+            }),
             "{case} paints into label ink along {a:?} to {z:?}"
         );
     };
@@ -244,11 +252,15 @@ fn short_stereo_bonds_between_labelled_atoms_clear_ink() {
                             continue;
                         }
 
-                        // A wide end at Ru can leave less clearance than the bold width.
+                        // A wide end at Ru can leave less clearance than the bold width,
+                        // and a hollow wedge from Ru fits by hundredths of a unit.
                         let must_paint = (ux, uy) != reporter_direction
                             || (matches!(element, "Ru" | "Pt" | "Si" | "Cl")
                                 && !(element == "Ru" && z.id == center)
-                                && matches!(display, "wedge" | "hash"));
+                                && (matches!(display, "wedge" | "hash")
+                                    || (display == "hollow_wedge"
+                                        && a.id == center
+                                        && element != "Ru")));
                         let Some((start, end)) = segment else {
                             assert!(!must_paint && full_segment.is_none(), "{case} has no span");
                             continue;
@@ -266,12 +278,41 @@ fn short_stereo_bonds_between_labelled_atoms_clear_ink() {
                             display,
                             (start, end),
                             [&a_ink, &z_ink],
+                            style.line_width(),
                             &case,
                         );
                     }
                 }
             }
         }
+    }
+}
+
+#[test]
+fn recovered_wedge_flank_clears_narrow_end_label() {
+    let mut doc = Document::default();
+    let a = doc.add_atom("Cl", Point::default());
+    let z = doc.add_atom("Ir", Point::new(18.5, 25.28));
+    for atom in &mut doc.atoms {
+        atom.no_implicit = true;
+    }
+    doc.add_bond(a, z, 1, "wedge");
+    let [a, z] = [a, z].map(|id| doc.atom(id).unwrap());
+    let [a_ink, z_ink] = [a, z].map(|atom| atom_label_ink_boxes(atom, &doc));
+    let style = &doc.drawing_style;
+    let margin = style.world(style.margin_width_pt);
+    let full = trimmed_span(a.position, z.position, &a_ink, &z_ink, margin).unwrap();
+    let full_segment = (full.along > 0.1).then_some((full.start, full.end));
+    let segment = bond_segment(&doc, &doc.bonds[0], None);
+    if segment != full_segment {
+        assert_stereo_bond_painted(
+            &primitives(&doc),
+            "wedge",
+            segment.expect("Cl–Ir wedge must preserve any full-margin span"),
+            [&a_ink, &z_ink],
+            style.line_width(),
+            "Cl–Ir wedge",
+        );
     }
 }
 
@@ -382,6 +423,7 @@ fn ruthenium_complex_paints_longer_wedge_and_hash_to_chlorine() {
             &bond.display,
             (start, end),
             [&a_ink, &z_ink],
+            style.line_width(),
             &bond.display,
         );
     }

@@ -2762,7 +2762,8 @@ fn dative_needs_core(b: &Bond, span: &TrimmedSpan) -> bool {
 /// when that gives a longer span at least as long as the bold width. Shorter
 /// spans cannot read as a taper and could swing the wide end into a label.
 /// The bond-axis slab captures the exact end-segment envelope at ink-box
-/// corners, with extra padding for the clearance gap.
+/// corners, with extra padding for the clearance gap. Check the whole outline
+/// as well, since a widening flank can still cross the narrow end's label.
 fn recover_stereo_span(
     span: TrimmedSpan,
     b: &Bond,
@@ -2782,15 +2783,19 @@ fn recover_stereo_span(
     {
         let TrimmedSpan { ux, uy, .. } = span;
         let half_line = style.line_width() * 0.5;
-        let gap = if matches!(display, "hollow_wedge" | "hash" | "hashed") {
-            2. * half_line
-        } else {
+        let overhang = if matches!(display, "hollow_wedge" | "hash" | "hashed") {
             half_line
+        } else {
+            0.
         };
+        let gap = half_line + overhang;
         let half_bold = bold_width * 0.5;
-        let narrow = [gap; 2];
-        let wide = [gap + uy.abs() * half_bold, gap + ux.abs() * half_bold];
-        let [a_pad, z_pad] = if matches!(display, "bold" | "hashed") {
+        let narrow = ([gap; 2], half_line);
+        let wide = (
+            [gap + uy.abs() * half_bold, gap + ux.abs() * half_bold],
+            half_bold,
+        );
+        let [(a_pad, a_half), (z_pad, z_half)] = if matches!(display, "bold" | "hashed") {
             [wide; 2]
         } else if b.narrowed_at_acceptor() {
             [wide, narrow]
@@ -2802,6 +2807,25 @@ fn recover_stereo_span(
         let end = label_end_padded(z, -ux, -uy, z_boxes, length, z_pad, Some(gap));
         let along = (end.x - start.x) * ux + (end.y - start.y) * uy;
         if along > span.along && along >= bold_width {
+            let offset = |p: Point, half| p.offset(-uy * half, ux * half);
+            let first = offset(start, a_half);
+            let outline = [
+                first,
+                offset(end, z_half),
+                offset(end, -z_half),
+                offset(start, -a_half),
+                first,
+            ];
+            if a_boxes.iter().chain(z_boxes).any(|&(lo, hi)| {
+                let lo = lo.offset(-overhang, -overhang);
+                let hi = hi.offset(overhang, overhang);
+                outline
+                    .iter()
+                    .zip(outline.iter().skip(1))
+                    .any(|(&p, &q)| crate::atom_labels::segment_hits_rect(p, q, lo, hi))
+            }) {
+                return span;
+            }
             return TrimmedSpan {
                 start,
                 end,
