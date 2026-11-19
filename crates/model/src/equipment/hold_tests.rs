@@ -122,6 +122,8 @@ fn a_clamp_mounts_on_the_rod_and_what_it_holds_slides_along_it_to_its_ends() {
     both.sort();
     assert_eq!(both, [other, loose]);
     doc.delete(&[other, loose]);
+    // Two clicked pieces each carry what they hold.
+    assert_eq!(solve::carried(&doc, &all, &[flask, stand]).len(), 3);
     // The rod is upright: a sideways drag goes nowhere, a slanted one
     // slides up, and a long one stops with the boss at the rod's end.
     let near = |a: [f64; 2], b: [f64; 2]| (a[0] - b[0]).hypot(a[1] - b[1]) < 1e-3;

@@ -1106,21 +1106,26 @@ fn scalable(doc: &Document, moving: &BTreeSet<u64>, k: f64) -> bool {
 /// everything; other selected objects move as usual.
 pub fn carried(doc: &Document, ids: &[u64], clicked: &[u64]) -> Vec<u64> {
     let all = closure(doc, ids);
-    let mut left: BTreeSet<u64> = BTreeSet::new();
+    // What a clicked piece carries, and what its stand leaves behind.
+    let (mut left, mut kept) = (BTreeSet::new(), BTreeSet::new());
     for &c in clicked.iter().filter(|c| all.contains(c)) {
         let members = assembly(doc, c);
         let ground: BTreeSet<u64> = (members.iter().copied())
             .filter(|id| grounded(doc, *id))
             .collect();
         if ground.is_empty() || ground.contains(&c) {
+            kept.extend(members);
             continue;
         }
         let held = reach(doc, c, |s| {
             !ground.contains(&s.a.piece) && !ground.contains(&s.b.piece)
         });
-        left.extend(members.difference(&held));
+        left.extend(members.difference(&held).copied());
+        kept.extend(held);
     }
-    all.into_iter().filter(|id| !left.contains(id)).collect()
+    (all.into_iter())
+        .filter(|id| kept.contains(id) || !left.contains(id))
+        .collect()
 }
 
 /// A drag of the pieces `ids` by `delta`, along the rails that hold them on
