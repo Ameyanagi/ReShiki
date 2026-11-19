@@ -270,7 +270,19 @@ pub fn callout_position(doc: &Document, target: &Target) -> Result<Point, String
     if !target.exists(doc) {
         return Err("Select an atom, a bond, a molecule or an object for the callout".into());
     }
-    let at = match *target {
+    let at = anchor(doc, target).ok_or("The callout target has no position")?;
+    let reach = callout_reach(doc);
+    Ok(at.offset(reach, -reach))
+}
+
+fn callout_reach(doc: &Document) -> f32 {
+    doc.drawing_style.bond_length_world * 1.6
+}
+
+/// The point a callout's text is placed from: an atom or bond point, or the
+/// top right corner of a molecule or object.
+fn anchor(doc: &Document, target: &Target) -> Option<Point> {
+    match *target {
         Target::Atom { .. } | Target::Bond { .. } => target.resolve(doc, Point::default()),
         Target::Molecule { atom } => {
             let atoms = crate::reactions::molecules(doc, &[atom])
@@ -282,9 +294,45 @@ pub fn callout_position(doc: &Document, target: &Target) -> Result<Point, String
             crate::scene::selection_bounds(doc, &[id]).map(|(lo, hi)| Point::new(hi.x, lo.y))
         }
     }
-    .ok_or("The callout target has no position")?;
-    let reach = doc.drawing_style.bond_length_world * 1.6;
-    Ok(at.offset(reach, -reach))
+}
+
+/// Keep the new callout text `text` on the page its target is on: text that
+/// would cross the page's right margin goes up and to the left of the target
+/// instead, and text still outside the margins is moved in. Without pages, or
+/// with the target off every page, the text stays where it is.
+pub fn keep_on_page(doc: &mut Document, text: u64, target: &Target) {
+    let Some(layout) = &doc.page_layout else {
+        return;
+    };
+    let Some(at) = anchor(doc, target) else {
+        return;
+    };
+    let Some((lo, hi)) = (0..layout.count())
+        .filter(|&i| {
+            layout
+                .bounds(i)
+                .is_some_and(|(a, b)| (a.x..=b.x).contains(&at.x) && (a.y..=b.y).contains(&at.y))
+        })
+        .find_map(|i| layout.content_bounds(i))
+    else {
+        return;
+    };
+    let Some((a, b)) = crate::scene::selection_bounds(doc, &[text]) else {
+        return;
+    };
+    // Moved in from the far edge first, so text larger than the page starts
+    // at its left or top margin.
+    let inside = |shift: f32, lo: f32, hi: f32, a: f32, b: f32| shift.min(hi - b).max(lo - a);
+    let left = if b.x > hi.x {
+        at.x - callout_reach(doc) - b.x
+    } else {
+        0.
+    };
+    let dx = inside(left, lo.x, hi.x, a.x, b.x);
+    let dy = inside(0., lo.y, hi.y, a.y, b.y);
+    if let Some(label) = doc.annotations.iter_mut().find(|label| label.id == text) {
+        label.position = label.position.offset(dx, dy);
+    }
 }
 
 /// Add the leader from the callout text `text` to `target`.
@@ -335,6 +383,7 @@ pub fn add_callout(doc: &mut Document, target: Target, text: &str) -> Result<u64
             ..Default::default()
         },
     });
+    keep_on_page(doc, id, &target);
     attach(doc, id, target)?;
     Ok(id)
 }

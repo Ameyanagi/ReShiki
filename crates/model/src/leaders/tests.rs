@@ -1,4 +1,4 @@
-use super::{Leader, Target, add_callout, reconcile, remap};
+use super::{Leader, Target, add_callout, callout_position, reconcile, remap};
 use crate::{
     document::{DRAWING_ELEMENTS, Document, Point},
     graphics::GraphicKind,
@@ -180,4 +180,46 @@ fn a_bond_point_off_the_bond_is_refused() {
         fraction: 1e38,
     });
     assert!(doc.validate().is_err());
+}
+
+#[test]
+fn a_callout_by_the_page_edge_stays_on_the_page() {
+    let (mut doc, a, b) = ethane();
+    let bond = Target::Bond {
+        a,
+        b,
+        fraction: 0.5,
+    };
+    let text = "New C–C bond, made here";
+    // Without pages the text goes up and to the right of the bond.
+    let free = callout_position(&doc, &bond).unwrap();
+    let mut alone = doc.clone();
+    let id = add_callout(&mut alone, bond.clone(), text).unwrap();
+    assert_eq!(position(&alone, id), free);
+    // A page whose right margin is just right of the bond middle (10, 0).
+    let mut layout = crate::pages::Layout::default();
+    let (lo, hi) = layout.content_bounds(0).unwrap();
+    layout.origin = Point::new(30. - hi.x, -(lo.y + hi.y) / 2.);
+    let (lo, hi) = layout.content_bounds(0).unwrap();
+    doc.page_layout = Some(layout);
+    let id = add_callout(&mut doc, bond.clone(), text).unwrap();
+    let (a, b) = crate::scene::selection_bounds(&doc, &[id]).unwrap();
+    assert!(a.x >= lo.x && b.x <= hi.x && a.y >= lo.y && b.y <= hi.y);
+    assert!(b.x < 10., "The text goes left of the bond: {a:?} {b:?}");
+    assert_eq!(position(&doc, id).y, free.y);
+    // The leader still runs from the text to the bond middle.
+    let [_, end] = leader(&doc).line_ends();
+    assert!(end.distance(Point::new(10., 0.)) < 1e-3, "{end:?}");
+    // Away from the edge the text keeps its usual place.
+    doc.page_layout = Some(crate::pages::Layout::around(&doc));
+    let id = add_callout(&mut doc, bond, text).unwrap();
+    assert_eq!(position(&doc, id), free);
+}
+
+fn position(doc: &Document, id: u64) -> Point {
+    doc.annotations
+        .iter()
+        .find(|t| t.id == id)
+        .unwrap()
+        .position
 }
