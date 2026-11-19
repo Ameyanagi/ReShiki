@@ -1,4 +1,4 @@
-//! Seats: which joints of placed pieces touch. Snapping makes them, every edit
+//! Seats join the joints of placed pieces. Snapping makes them, every edit
 //! and every read checks them with one tolerance, and the pieces they join
 //! form an assembly that moves as one. Stored poses are never re-solved: a
 //! seat that no longer fits is released and both pieces stay where they are.
