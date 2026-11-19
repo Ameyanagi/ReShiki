@@ -242,4 +242,24 @@ fn picking_metal_then_typing_its_symbol_is_one_undo_step() {
         app.tab.doc.arrows[0].appearance().body,
         reshiki::arrows::Body::Block
     );
+
+    // Metal picked on one arrow, the symbol typed on another: two steps.
+    app.tab.doc.arrows.push(reshiki::document::Arrow::new(
+        2,
+        Point::new(0., 60.),
+        Point::new(120., 60.),
+        Preset::Forward,
+        ArrowStyle::default(),
+    ));
+    app.tab.selected = vec![2];
+    app.arrow_action(arrows::Action::Badge(Some(BadgeIcon::Metal)));
+    app.tab.selected = vec![1];
+    app.tab.arrows.badge_text = "Co".into();
+    app.arrow_action(arrows::Action::ApplyBadgeText);
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc.arrows[0].badge.as_ref().unwrap().text, "Pd");
+    assert!(
+        app.tab.doc.arrows[1].badge.is_some(),
+        "the other pick stays"
+    );
 }

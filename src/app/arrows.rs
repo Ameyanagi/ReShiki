@@ -57,9 +57,10 @@ pub struct State {
     pub arc: Option<f32>,
     pub sweep: String,
     pub badge_text: String,
-    /// The tab's (file epoch, revision) right after a pick of Metal, so typing
-    /// its symbol next joins that pick's undo step.
-    metal_pick: Option<(u64, u64)>,
+    /// The tab's file epoch, revision and selection right after a pick of
+    /// Metal, so typing its symbol next, on the same arrows, joins that pick's
+    /// undo step.
+    metal_pick: Option<(u64, u64, Vec<u64>)>,
     source: Option<reshiki::arrow_anchors::Pick>,
 }
 /// The Badge list's choices: none, or one icon.
@@ -431,16 +432,26 @@ impl App {
             self.error = true;
             return;
         }
-        let picked = (self.tab.file_epoch, self.tab.revision);
+        let picked = (
+            self.tab.file_epoch,
+            self.tab.revision,
+            self.tab.selected.clone(),
+        );
         let before = std::mem::replace(&mut self.tab.doc, next);
-        if matches!(action, Action::ApplyBadgeText) && self.tab.arrows.metal_pick == Some(picked) {
+        if matches!(action, Action::ApplyBadgeText)
+            && self.tab.arrows.metal_pick.as_ref() == Some(&picked)
+        {
             self.changed_continuing(before, true);
         } else {
             self.changed(before);
         }
-        let revised = (self.tab.file_epoch, self.tab.revision);
+        let revised = (
+            self.tab.file_epoch,
+            self.tab.revision,
+            self.tab.selected.clone(),
+        );
         self.tab.arrows.metal_pick = (matches!(action, Action::Badge(Some(BadgeIcon::Metal)))
-            && revised != picked)
+            && revised.1 != picked.1)
             .then_some(revised);
         self.sync_arrows();
         self.error = false;
