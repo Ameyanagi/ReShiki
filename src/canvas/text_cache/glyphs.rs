@@ -62,8 +62,8 @@ pub(super) fn prepare_fonts() {
 const BUDGET: usize = 2 * 1024 * 1024;
 const LIMIT: usize = 4096;
 /// Colour glyphs are rasterized at twice their size, so they stay sharp on a
-/// Retina screen, up to this many pixels per em: emoji bitmaps are at most
-/// 160 px, so larger pictures only cost memory.
+/// Retina screen, but at most this many pixels per em: emoji bitmaps are at
+/// most 160 px, and larger pictures only cost memory.
 const PICTURE_PPEM: f32 = 256.;
 
 /// A colour glyph (emoji) as a picture: where it sits, in pixels at the
@@ -87,7 +87,7 @@ fn colour_face(fonts: &mut FontSystem, key: CacheKey) -> bool {
 /// markers, so its emoji must draw from their pictures.
 fn picture(fonts: &mut FontSystem, cache: &mut SwashCache, key: CacheKey) -> Picture {
     let size = f32::from_bits(key.font_size_bits);
-    let ppem = (size * 2.).min(size.max(PICTURE_PPEM));
+    let ppem = (size * 2.).min(PICTURE_PPEM);
     let image = cache.get_image_uncached(
         fonts,
         CacheKey {
@@ -102,7 +102,7 @@ fn picture(fonts: &mut FontSystem, cache: &mut SwashCache, key: CacheKey) -> Pic
     let mut rgba = image.data;
     // Swash composites COLR layers premultiplied; Iced expects straight alpha.
     if matches!(image.source, swash::scale::Source::ColorOutline(_)) {
-        for px in rgba.chunks_exact_mut(4) {
+        for px in rgba.as_chunks_mut::<4>().0 {
             let a = u32::from(px[3]);
             if a > 0 && a < 255 {
                 for c in &mut px[..3] {
@@ -177,7 +177,11 @@ impl Glyphs {
         for run in paragraph.buffer().layout_runs() {
             for glyph in run.glyphs {
                 let key = glyph.physical((0., 0.), 1.).cache_key;
-                let offset = Vector::new(glyph.x + glyph.x_offset, glyph.y_offset + run.line_y);
+                // Shaping offsets are in ems, and positive y is up.
+                let offset = Vector::new(
+                    glyph.x + glyph.font_size * glyph.x_offset,
+                    run.line_y - glyph.font_size * glyph.y_offset,
+                );
                 let colour = *self
                     .colour_faces
                     .entry(key.font_id)

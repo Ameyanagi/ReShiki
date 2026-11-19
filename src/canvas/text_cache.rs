@@ -163,15 +163,19 @@ impl OutlinedText {
                 }
             }
         }
+        // A repeated emoji shares one image; count its pixels once.
+        let mut images = std::collections::HashSet::new();
         for (rect, handle) in &pictures {
             low.x = low.x.min(rect.x);
             low.y = low.y.min(rect.y);
             high.x = high.x.max(rect.x + rect.width);
             high.y = high.y.max(rect.y + rect.height);
-            cost += match handle {
-                Handle::Rgba { pixels, .. } => pixels.len(),
-                _ => 0,
-            } + std::mem::size_of::<(Rectangle, Handle)>();
+            cost += std::mem::size_of::<(Rectangle, Handle)>();
+            if let Handle::Rgba { id, pixels, .. } = handle
+                && images.insert(*id)
+            {
+                cost += pixels.len();
+            }
         }
         let bounds = (cost > 0).then_some(Rectangle {
             x: low.x - 2.,

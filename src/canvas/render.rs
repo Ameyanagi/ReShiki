@@ -362,12 +362,6 @@ fn draw_halo(
                     frame.fill(&path, Color::WHITE);
                     frame.stroke(&path, spread(0.));
                 }
-                for (rect, _) in &paths.pictures {
-                    let rect = text_rect(*rect, at, scale);
-                    let path = Path::rectangle(rect.position(), rect.size());
-                    frame.fill(&path, Color::WHITE);
-                    frame.stroke(&path, spread(0.));
-                }
             }
             Primitive::Picture(_)
             | Primitive::Halo { .. }
