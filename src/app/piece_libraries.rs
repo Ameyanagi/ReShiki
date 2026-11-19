@@ -193,7 +193,17 @@ impl App {
     /// that now offers it, or is disarmed when none does.
     fn reload_libraries(&mut self, labs: Vec<PathBuf>) {
         let libraries = &mut self.equipment.libraries;
+        // The lab shown keeps showing, wherever it now is in the list.
+        let shown = match self.equipment.shelf {
+            Some(Source::Lab(i)) => libraries.labs.get(i).map(|(root, _)| root.clone()),
+            _ => None,
+        };
         libraries.reload(labs);
+        if let Some(root) = shown {
+            self.equipment.shelf = (libraries.labs.iter())
+                .position(|(r, _)| *r == root)
+                .map(Source::Lab);
+        }
         if let Some(armed) = &self.equipment.armed {
             let k = key(armed);
             self.equipment.armed = (libraries.entries.iter())
