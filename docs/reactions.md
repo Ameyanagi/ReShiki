@@ -291,7 +291,7 @@ highlighted, and an optional legend names each color.
 4. After you edit a molecule or its maps, choose **Update colors**. **Clear
    colors** removes the colors and the legend.
 
-Each command is one Undo step. Bonds take the reactant's palette color, and
+Each command is one Undo step. Coloring hides the map numbers so the figure stays readable; turn on **Show maps** in **Reaction roles** to see them. Atom maps keep abbreviations such as PPh₃ contracted. Bonds take the reactant's palette color, and
 labeled atoms such as O take it too. A new bond keeps its ink and gets a
 highlight; a new ring gets a ring fill. Broken and changed bonds get an amber
 highlight, or orange when new bonds are amber. A new ring's fill is see-through,

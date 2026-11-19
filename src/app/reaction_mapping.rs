@@ -279,23 +279,32 @@ impl App {
                                 &proposal.apply(&copy, true)?,
                             );
                             if color_step {
-                                colored =
-                                    Some(reshiki::cycles::steps::color(&mut doc, id, s).is_ok());
+                                let mut hidden = super::reactions::maps_hidden(&doc);
+                                let ok = reshiki::cycles::steps::color(&mut hidden, id, s).is_ok();
+                                if ok {
+                                    doc = hidden;
+                                }
+                                colored = Some(ok);
                             }
                             doc
                         }
                         None => proposal.apply(before, true)?,
                     };
-                    if let Some(arrow) = color {
-                        colored = Some(reshiki::reaction_colors::paint(&mut doc, arrow).is_ok());
+                    // A colored figure reads without map numbers; Show maps
+                    // brings them back.
+                    if let Some(arrow) = color.filter(|_| step.is_none()) {
+                        let mut hidden = super::reactions::maps_hidden(&doc);
+                        let ok = reshiki::reaction_colors::paint(&mut hidden, arrow).is_ok();
+                        if ok {
+                            doc = hidden;
+                        }
+                        colored = Some(ok);
                     }
                     Ok(doc)
                 });
                 if !self.error {
                     match colored {
-                        Some(true) => {
-                            self.status = "Atom maps applied and colored by origin".into()
-                        }
+                        Some(true) => self.status = super::reactions::COLORED.into(),
                         Some(false) => self.status = "No matching atoms to color".into(),
                         None => {}
                     }
