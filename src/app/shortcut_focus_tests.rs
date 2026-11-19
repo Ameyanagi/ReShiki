@@ -2644,3 +2644,32 @@ async fn symbol_picker_returns_typing_to_the_caption() {
     );
     assert!(app.tab.doc.annotations.is_empty());
 }
+
+/// A symbol that starts a caption closes the picker on the click's release;
+/// that release must not reach the drawing below.
+#[tokio::test]
+#[ignore = "Opt-in renderer input check"]
+async fn symbol_starting_a_caption_leaves_the_drawing_alone() {
+    let mut ui = Ui::new().await;
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    click_running_tasks(&mut ui, &mut app, "text-style-symbols").await;
+    let keyboard = (
+        app.keyboard_drawing_active(),
+        app.tab.keyboard_drawing.shown(),
+    );
+    click_running_tasks(&mut ui, &mut app, "symbol-conditions-light").await;
+    assert!(app.style_menu.is_none());
+    assert_eq!(app.tab.caption, "hν");
+    assert!(
+        ui.input(&app, "inline-caption").1,
+        "typing goes to the caption"
+    );
+    assert_eq!(
+        (
+            app.keyboard_drawing_active(),
+            app.tab.keyboard_drawing.shown()
+        ),
+        keyboard
+    );
+}
