@@ -360,6 +360,9 @@ impl Prepared {
                 && let Some(original) = self.original.graphics.iter().find(|g| g.id == graphic.id)
             {
                 graphic.leader = original.leader.clone();
+            }
+            // A cycle keeps every part, moved or not; the join remaps its atoms.
+            if let Some(original) = self.original.graphics.iter().find(|g| g.id == graphic.id) {
                 graphic.cycle = original.cycle.clone();
             }
         }

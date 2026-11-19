@@ -378,13 +378,6 @@ pub fn drawn(doc: &Document, g: &Graphic) -> Drawn {
         if to == span {
             to = span - seen(clear(next), a1).min(span * 0.5);
         }
-        // A lone intermediate's arc stays short of a whole circle.
-        let most = 358_f32.to_radians();
-        if to - from > most {
-            let extra = (to - from - most) * 0.5;
-            from += extra;
-            to -= extra;
-        }
         if to - from > 0.02 {
             // Extra space never runs into the ink, and the arc keeps most of
             // a bond length where the step has room.
@@ -402,6 +395,13 @@ pub fn drawn(doc: &Document, g: &Graphic) -> Drawn {
         } else {
             from = (from + to) * 0.5;
             to = from;
+        }
+        // A lone intermediate's arc stays short of a whole circle.
+        let most = 358_f32.to_radians();
+        if to - from > most {
+            let extra = (to - from - most) * 0.5;
+            from += extra;
+            to -= extra;
         }
         let start = at(a0 + dir * from);
         let end = at(a0 + dir * to);
@@ -792,7 +792,11 @@ pub fn drop_target(doc: &Document, moved: &[u64]) -> Option<Target> {
         return None;
     }
     let [part] = <[Vec<u64>; 1]>::try_from(units(doc, moved)).ok()?;
-    if part.iter().any(|id| role_of(doc, *id).is_some()) {
+    // A part that belongs to a cycle, or to a group of its own, keeps it.
+    if part
+        .iter()
+        .any(|id| role_of(doc, *id).is_some() || doc.groups.iter().any(|g| g.members.contains(id)))
+    {
         return None;
     }
     let ink = crate::scene::selection_bounds(doc, &part)?;
@@ -955,7 +959,9 @@ pub fn reverse(cycle: &mut Cycle) {
     // The first intermediate stays first and the rest come in reverse;
     // each step then runs between the same two, the other way.
     cycle.intermediates.reverse();
-    cycle.intermediates.rotate_right(1);
+    if !cycle.intermediates.is_empty() {
+        cycle.intermediates.rotate_right(1);
+    }
     cycle.steps.reverse();
     for step in &mut cycle.steps {
         std::mem::swap(&mut step.reagents, &mut step.products);

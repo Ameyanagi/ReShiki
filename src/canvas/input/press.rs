@@ -237,8 +237,9 @@ impl MoleculeCanvas<'_> {
                 .doc
                 .graphics
                 .iter()
-                // A panel keeps its shape; its frame handles resize it.
-                .filter(|g| self.selected.contains(&g.id) && g.panel.is_none())
+                // A panel keeps its shape; its frame handles resize it. A
+                // cycle's shape comes from its parts.
+                .filter(|g| self.selected.contains(&g.id) && g.panel.is_none() && g.cycle.is_none())
             {
                 if let Some(handles) = g.path_handles() {
                     if let Some(handle) = handles

@@ -168,7 +168,7 @@ impl App {
             .doc
             .graphics
             .iter()
-            .filter(|g| self.tab.selected.contains(&g.id))
+            .filter(|g| g.cycle.is_some() && self.tab.selected.contains(&g.id))
             .find_map(|g| Some((g.id, g.cycle.as_deref()?)))
     }
 

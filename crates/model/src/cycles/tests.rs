@@ -551,3 +551,37 @@ fn a_degenerate_circle_draws_nothing_and_does_not_validate() {
     assert!(doc.validate().is_err());
     assert!(drawn(&doc, graphic(&doc, id)).arrows.is_empty());
 }
+
+#[test]
+fn an_empty_cycle_reverses_without_parts() {
+    let mut doc = Document::default();
+    let id = super::insert(&mut doc, Point::new(0., 0.), 100.);
+    let g = doc.graphics.iter_mut().find(|g| g.id == id).unwrap();
+    reverse(g.cycle.as_deref_mut().unwrap());
+    assert!(graphic(&doc, id).cycle_counterclockwise());
+    doc.validate().unwrap();
+}
+
+#[test]
+fn a_grouped_text_is_never_a_drop_target() {
+    let (mut doc, id, [pd0, oa, _]) = suzuki();
+    let (center, radius) = graphic(&doc, id).cycle_circle();
+    let free = text(&mut doc, Point::default(), "Ar–X");
+    let other = text(&mut doc, Point::new(2000., 2000.), "note");
+    doc.group_selection(&[free, other]).unwrap();
+    let angle = |t: u64, doc: &Document| {
+        let (lo, hi) = ink(doc, t);
+        let c = lo.lerp(hi, 0.5);
+        (c.y - center.y).atan2(c.x - center.x)
+    };
+    let at = angle(pd0, &doc) + (angle(oa, &doc) - angle(pd0, &doc)) * 0.3;
+    let r = radius + 2. * doc.drawing_style.bond_length_world;
+    let (lo, hi) = ink(&doc, free);
+    let c = lo.lerp(hi, 0.5);
+    doc.translate(
+        &[free],
+        center.x + r * at.cos() - c.x,
+        center.y + r * at.sin() - c.y,
+    );
+    assert_eq!(drop_target(&doc, &[free]), None);
+}
