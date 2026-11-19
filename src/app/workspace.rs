@@ -2094,7 +2094,7 @@ impl App {
             // A whole figure: no atom to attach, placed once.
             return body
                 .push(
-                    canvas(crate::canvas::TemplateThumbnail(&t.document))
+                    canvas(crate::canvas::TemplateThumbnail(&t.document, None))
                         .width(Length::Fill)
                         .height(145),
                 )
@@ -2278,7 +2278,7 @@ impl App {
             body = body.push(
                 button(
                     row![
-                        canvas(crate::canvas::TemplateThumbnail(&template.document))
+                        canvas(crate::canvas::TemplateThumbnail(&template.document, None))
                             .width(64)
                             .height(44),
                         text(template.name.as_str()).size(12).width(Length::Fill),
