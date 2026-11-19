@@ -1066,6 +1066,13 @@ fn edits() -> Vec<Command> {
             Message::Arrange(arrange),
         ));
     }
+    list.push(send(
+        "Insert symbol…",
+        Category::Insert,
+        "Insert an arrow, Greek letter, charge or other symbol into text",
+        "symbol character special greek alpha arrow equilibrium omega degree plus minus",
+        Message::StyleMenu(super::super::color_popover::Action::Symbols),
+    ));
     list.push(
         send(
             "Format as chemical name",

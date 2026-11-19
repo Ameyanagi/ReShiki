@@ -42,10 +42,19 @@ pub enum Action {
     RestoreHues,
     Cancel,
     Done,
+    /// Open or close the symbol picker.
+    Symbols,
+    /// Insert this symbol at the text cursor.
+    Insert(&'static str),
+    /// Show this symbol's name and shortcut.
+    Hover(&'static reshiki::symbols::Symbol),
 }
 
 pub(super) enum Menu {
     Align,
+    Symbols {
+        hovered: Option<&'static reshiki::symbols::Symbol>,
+    },
     Color {
         /// The typed color could not be read.
         invalid: bool,
@@ -125,7 +134,20 @@ impl App {
                     edit: None,
                 });
             }
-            Action::Close => self.close_style_menu(),
+            Action::Close => {
+                let symbols = matches!(self.style_menu, Some(Menu::Symbols { .. }));
+                self.close_style_menu();
+                if symbols {
+                    return self.focus_draft();
+                }
+            }
+            Action::Symbols => return self.open_symbols(),
+            Action::Insert(symbol) => return self.insert_symbol(symbol),
+            Action::Hover(symbol) => {
+                if let Some(Menu::Symbols { hovered }) = &mut self.style_menu {
+                    *hovered = Some(symbol);
+                }
+            }
             Action::AddCustom => {
                 return Task::batch([
                     iced::widget::operation::focus(INPUT),

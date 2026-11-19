@@ -74,6 +74,7 @@ mod nmr;
 mod numeric_transforms;
 mod object_toolbar;
 mod office;
+mod symbol_picker;
 #[cfg(any(windows, target_os = "linux"))]
 pub(crate) use desktop::install_document_events as install_desktop_events;
 #[cfg(test)]

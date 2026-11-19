@@ -411,7 +411,10 @@ impl App {
                 .filter(|id| self.tab.doc.annotations.iter().any(|a| a.id == *id));
             return Break(self.inline_action(inline_text::Action::Begin(id, p)));
         }
-        if inline_text::commits_draft(&message) && !self.finish_inline(true) {
+        if inline_text::commits_draft(&message)
+            && !self.opens_symbols(&message)
+            && !self.finish_inline(true)
+        {
             return Break(Task::none());
         }
         Continue(message)

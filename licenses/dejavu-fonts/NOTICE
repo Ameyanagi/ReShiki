@@ -21,3 +21,16 @@ directory.
 
 Only the wasm32 build embeds it, because a browser has no system fonts.
 Menus, tooltips, Help, disclosures and buttons draw these symbols from it.
+
+Picker symbols font
+===================
+
+crates/model/fonts/ReShikiSymbols.ttf is a subset of DejaVu Sans 2.37 as
+Ubuntu's fonts-dejavu-core 2.37-8 package installs it
+(/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf, SHA-256
+ae7b7855e115a5966d8b1b3f80f254ccc117ec86f9965e202ee2940453837280), holding
+only the space and the symbol picker's symbols that Liberation Sans lacks:
+⁺ ⁻ ↺ ↻ ⇄ ⇌ ⇒ ∝ ⊕ ⊖ ✓ ✗ ⟶. scripts/subset_symbols_font.py makes it the same
+way as ReShiki Keys, and renames it ReShiki Symbols. Every build embeds it as
+the last glyph fallback for measuring, drawing and export, so these symbols
+draw where no installed font has them, as in the browser.

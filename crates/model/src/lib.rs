@@ -75,6 +75,7 @@ pub mod stereo_groups;
 pub mod stereochemistry;
 pub mod storage;
 pub mod style;
+pub mod symbols;
 pub mod templates;
 pub mod theme_files;
 pub mod theme_generator;

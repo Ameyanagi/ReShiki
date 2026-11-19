@@ -235,6 +235,7 @@ pub fn prefer_added_arial(db: &mut resvg::usvg::fontdb::Database) {
 /// generic sans-serif preference and leaving installed Arial faces untouched.
 pub fn load_bundled_fonts(db: &mut resvg::usvg::fontdb::Database) {
     font::load_bundled(db);
+    font::load_symbols(db);
 }
 
 /// Add a TrueType or OpenType font (or collection) for measuring, drawing and
@@ -484,13 +485,17 @@ fn resolve_font_in(
                 .map(|face| face.id)
         })
         .or_else(|| {
-            db.query(&Query {
-                families: &[Family::Name(font::BUNDLED_FAMILY)],
-                weight,
-                style,
-                ..Default::default()
-            })
-            .filter(|id| has_glyph(*id))
+            [font::BUNDLED_FAMILY, font::SYMBOLS_FAMILY]
+                .into_iter()
+                .find_map(|name| {
+                    db.query(&Query {
+                        families: &[Family::Name(name)],
+                        weight,
+                        style,
+                        ..Default::default()
+                    })
+                    .filter(|id| has_glyph(*id))
+                })
         })
 }
 
@@ -553,7 +558,12 @@ fn glyph_metrics_in(c: char, style: &crate::typography::TextStyle, fonts: &Fonts
             let name = fallback_families(&style.family, &fonts.db, &fonts.added)
                 .find(|name| info.families.iter().any(|(n, _)| n == name))
                 .or_else(|| info.families.first().map(|(name, _)| name.as_str()))?;
-            let family = fonts.names.iter().find(|n| **n == name).copied()?;
+            let family = fonts
+                .names
+                .iter()
+                .copied()
+                .find(|n| *n == name)
+                .or((name == font::SYMBOLS_FAMILY).then_some(font::SYMBOLS_FAMILY))?;
             fonts
                 .db
                 .with_face_data(id, |bytes, index| {
@@ -744,7 +754,7 @@ fn family_names(db: &resvg::usvg::fontdb::Database) -> &'static [&'static str] {
     let names: std::collections::BTreeSet<_> = db
         .faces()
         .flat_map(|f| f.families.iter().map(|(n, _)| n.clone()))
-        .filter(|n| !n.starts_with('.') && !n.trim().is_empty())
+        .filter(|n| !n.starts_with('.') && !n.trim().is_empty() && n != font::SYMBOLS_FAMILY)
         .collect();
     // Leaked once at start and once per added font.
     names

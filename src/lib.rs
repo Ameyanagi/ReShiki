@@ -26,8 +26,8 @@ pub use reshiki_model::{
     graphics, grouping, haworth, highlights, ionic, joining, layouts, leaders, ligands,
     linked_properties, models3d, molecule_names, pages, palette, pictures, projection, purpose,
     reaction_colors, reaction_mapping, reactions, rear_opacity, ring_arcs, ring_fills, rings,
-    scene, scientific, selection_region, stereo_groups, stereochemistry, storage, style, templates,
-    theme_files, theme_generator, transaction, typography,
+    scene, scientific, selection_region, stereo_groups, stereochemistry, storage, style, symbols,
+    templates, theme_files, theme_generator, transaction, typography,
 };
 
 #[cfg(not(target_arch = "wasm32"))]

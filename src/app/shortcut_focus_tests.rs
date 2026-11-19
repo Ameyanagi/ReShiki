@@ -2587,3 +2587,82 @@ async fn context_row_rotation_field_applies_a_typed_angle() {
     assert_eq!(app.tab.doc, drawing);
     assert!(!app.tab.history.can_undo());
 }
+
+/// The symbol picker inserts into the open caption and hands typing back to
+/// it; Escape closes only the picker, and typed shortcuts still expand.
+#[tokio::test]
+#[ignore = "Opt-in renderer input check"]
+async fn symbol_picker_returns_typing_to_the_caption() {
+    use super::color_popover::Menu;
+    let mut ui = Ui::new().await;
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let task = app.update(Message::InlineText(super::inline_text::Action::Begin(
+        None,
+        reshiki::document::Point::default(),
+    )));
+    ui.run_task(&mut app, task).await;
+    assert!(ui.input(&app, "inline-caption").1);
+    click_running_tasks(&mut ui, &mut app, "text-style-symbols").await;
+    assert!(matches!(app.style_menu, Some(Menu::Symbols { .. })));
+    assert!(
+        ui.input(&app, "inline-caption").1,
+        "opening keeps the caption focused"
+    );
+    click_running_tasks(&mut ui, &mut app, "symbol-arrows-equilibrium").await;
+    assert_eq!(app.tab.caption, "⇌");
+    assert!(
+        ui.input(&app, "inline-caption").1,
+        "typing goes to the caption"
+    );
+    let escape = || (Key::Named(Named::Escape), Code::Escape);
+    let (key, code) = escape();
+    ui.key(&mut app, key, code, Modifiers::empty(), None).await;
+    assert!(app.style_menu.is_none());
+    assert!(
+        app.tab.inline_text.is_some(),
+        "Escape closes only the picker"
+    );
+    assert!(ui.input(&app, "inline-caption").1);
+    for (c, code) in [('-', Code::Minus), ('>', Code::Period)] {
+        let typed = c.to_string();
+        ui.key(
+            &mut app,
+            Key::Character(typed.as_str().into()),
+            code,
+            Modifiers::empty(),
+            Some(&typed),
+        )
+        .await;
+    }
+    assert_eq!(app.tab.caption, "⇌→");
+    let (key, code) = escape();
+    ui.key(&mut app, key, code, Modifiers::empty(), None).await;
+    assert!(
+        app.tab.inline_text.is_none(),
+        "a second Escape cancels the draft"
+    );
+    assert!(app.tab.doc.annotations.is_empty());
+}
+
+/// A symbol that starts a caption closes the picker on the click's release;
+/// that release must not reach the drawing below.
+#[tokio::test]
+#[ignore = "Opt-in renderer input check"]
+async fn symbol_starting_a_caption_leaves_the_drawing_alone() {
+    let mut ui = Ui::new().await;
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    click_running_tasks(&mut ui, &mut app, "text-style-symbols").await;
+    click_running_tasks(&mut ui, &mut app, "symbol-conditions-light").await;
+    assert!(app.style_menu.is_none());
+    assert_eq!(app.tab.caption, "hν");
+    assert!(
+        ui.input(&app, "inline-caption").1,
+        "typing goes to the caption"
+    );
+    // A release on the drawing would have clicked it: applying the draft and
+    // selecting nothing. The draft stays open and the drawing unchanged.
+    assert!(app.tab.inline_text.is_some());
+    assert!(app.tab.doc.annotations.is_empty() && app.tab.selected.is_empty());
+}
