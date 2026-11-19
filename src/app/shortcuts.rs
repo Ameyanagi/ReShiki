@@ -359,7 +359,7 @@ impl App {
                     !self.guides.crosshair,
                 )));
             }
-            Action::Nudge(x, y) if self.tab.connect.is_some() => {
+            Action::Nudge(x, y) if self.connecting().is_some() => {
                 return self.equipment_action(super::equipment::Action::Step(if x + y < 0. {
                     -1
                 } else {
@@ -586,7 +586,7 @@ impl App {
         self.sync_keyboard_drawing();
         let (hovered_atom, hovered_bond) = self.hovered_target();
         // Connect a selected equipment piece by its joints.
-        if self.tab.connect.is_some() && key == "Enter" {
+        if self.connecting().is_some() && key == "Enter" {
             return self.equipment_action(super::equipment::Action::Seat);
         }
         let hotspot = self.tool.selects()

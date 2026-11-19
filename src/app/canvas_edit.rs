@@ -129,6 +129,7 @@ impl App {
         let before = self.tab.doc.clone();
         // A role a drop gave a part, said after the edit's own status.
         let mut joined = None;
+        let mut snapped = None;
         if matches!(edit, Edit::Bond(..) | Edit::TextBond { .. }) {
             self.tab.arrows.cancel_source();
         }
@@ -349,9 +350,8 @@ impl App {
                     if let Some(snap) =
                         reshiki::equipment::solve::snap(&mut self.tab.doc, &ids, reach, false)
                     {
-                        self.snapped(&snap);
-                        joined = Some(self.status.clone());
                         ids = reshiki::equipment::solve::closure(&self.tab.doc, &ids);
+                        snapped = Some(snap);
                     } else if self.tab.doc.seats.len() < seats {
                         joined = Some("Pulled out of its assembly".into());
                     }
@@ -400,6 +400,9 @@ impl App {
         self.changed(before);
         if let Some(joined) = joined.filter(|_| !self.error) {
             self.status = joined;
+        }
+        if let Some(snap) = snapped.filter(|_| !self.error) {
+            self.snapped(&snap);
         }
     }
     pub(super) fn place_arrow(&mut self, start: Point, end: Point) {

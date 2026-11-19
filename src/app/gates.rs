@@ -371,7 +371,7 @@ impl App {
         if matches!(message, Message::Escape) {
             return Break(if self.tab.inline_text.is_some() {
                 self.inline_action(inline_text::Action::Finish(false))
-            } else if self.tab.connect.is_some() {
+            } else if self.connecting().is_some() {
                 self.equipment_action(super::equipment::Action::Cancel)
             } else if self.tab.optimization.is_some() {
                 self.optimization_action(optimization::Action::Cancel)

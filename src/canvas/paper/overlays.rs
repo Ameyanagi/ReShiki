@@ -402,6 +402,8 @@ impl MoleculeCanvas<'_> {
         if hit.is_empty() {
             return;
         }
+        // As the press resolves it: integral groups first, then the pull-out.
+        let hit = self.doc.expand_integral_groups(&hit);
         let out = reshiki::equipment::solve::detached(self.doc, &hit);
         let Some((lo, hi)) = reshiki::scene::selection_bounds(self.doc, &out) else {
             return;

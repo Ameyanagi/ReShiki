@@ -65,6 +65,8 @@ pub struct Connect {
     pub ids: Vec<u64>,
     pub options: Vec<(JointRef, JointRef)>,
     pub index: usize,
+    /// The drawing the options were found in; any other edit ends Connect.
+    pub base: Document,
 }
 
 impl Connect {
@@ -231,10 +233,11 @@ impl App {
                     .into_iter()
                     .map(|(s, m, _)| (s.at, m.at))
                     .collect();
-                self.tab.connect = (!options.is_empty()).then_some(Connect {
+                self.tab.connect = (!options.is_empty()).then(|| Connect {
                     ids,
                     options,
                     index: 0,
+                    base: self.tab.doc.clone(),
                 });
                 self.connect_status();
                 return super::focus_drawing();
@@ -247,6 +250,9 @@ impl App {
                 self.connect_status();
             }
             Action::Seat => {
+                if self.connecting().is_none() {
+                    return Task::none();
+                }
                 let Some(c) = self.tab.connect.take() else {
                     return Task::none();
                 };
@@ -280,6 +286,12 @@ impl App {
             }
         }
         Task::none()
+    }
+
+    /// Keyboard Connect, while it still applies: Select is the tool and the
+    /// drawing is the one its joints were found in.
+    pub(super) fn connecting(&self) -> Option<&Connect> {
+        (self.tab.connect.as_ref()).filter(|c| self.tool == Tool::Select && c.base == self.tab.doc)
     }
 
     /// The selection holds an equipment piece.
@@ -349,7 +361,12 @@ impl App {
         let doc = &self.tab.doc;
         let moving = joint_name(doc, &snap.moving.at);
         let target = joint_name(doc, &snap.target.at);
+        let kept = solve::partner(doc, &snap.moving.at).is_some();
         self.status = match &snap.offer {
+            // A lasting layout can move a piece away again as it settles.
+            Offer::Seat | Offer::Adapter(_) if !kept => {
+                format!("The layout moved the {moving}, so it is not seated")
+            }
             Offer::Seat => format!("Seated the {moving} on the {target}"),
             Offer::Adapter(d) => {
                 format!("Inserted the {}", title(d).to_lowercase())

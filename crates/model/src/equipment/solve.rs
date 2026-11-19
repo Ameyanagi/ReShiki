@@ -555,9 +555,14 @@ fn seat(doc: &mut Document, moving: &[u64], s: &Port, m: &Port, offer: &Offer) -
         a: onto.at.clone(),
         b: m.at.clone(),
     });
-    // Close every other joint that now fits, such as a second neck.
+    // Close every other joint of the joined assembly that now fits, such as
+    // a second neck; other selected pieces that happen to line up stay free.
     let moved: BTreeSet<u64> = ids.iter().copied().collect();
-    let inner = free(doc, &moved, true);
+    let joined = assembly(doc, m.at.piece);
+    let inner: Vec<Port> = free(doc, &moved, true)
+        .into_iter()
+        .filter(|p| joined.contains(&p.at.piece))
+        .collect();
     let outer = free(doc, &moved, false);
     for a in &inner {
         if let Some(b) = outer
@@ -634,6 +639,9 @@ pub fn snap(doc: &mut Document, ids: &[u64], reach: f32, any_angle: bool) -> Opt
         }
     }
     let (fit, _, s, m) = best?;
+    if !scalable(doc, &moving, s.mm / m.mm) {
+        return None;
+    }
     let (s, m) = (s.clone(), m.clone());
     let offer = if fit {
         Offer::Seat
@@ -689,11 +697,24 @@ pub fn connect(doc: &mut Document, ids: &[u64], s: &JointRef, m: &JointRef) -> O
     } else {
         Offer::Adapter(adapter(&s, &m)?.0)
     };
+    let pieces: BTreeSet<u64> = moving.iter().copied().collect();
+    if !scalable(doc, &pieces, s.mm / m.mm) {
+        return None;
+    }
     Some(seat(doc, &moving, &s, &m, &offer))
 }
 
+/// Every moving piece stays within the scale limits when scaled by `k`.
+fn scalable(doc: &Document, moving: &BTreeSet<u64>, k: f64) -> bool {
+    let pt = f64::from(crate::style::DEFAULT.points_per_world());
+    let range = f64::from(placed::MIN_PT_PER_MM) * 0.999..=f64::from(placed::MAX_PT_PER_MM) * 1.001;
+    (doc.graphics.iter())
+        .filter(|g| g.piece.is_some() && moving.contains(&g.id))
+        .all(|g| range.contains(&(frame(g).scale_factor() * k * pt)))
+}
+
 /// Release the seat at joint `j` and pull the side without the anchor out
-/// along the joint's axis, by one and a half joint lengths, so a gap shows.
+/// along the joint's axis, far enough to leave a gap outside snap reach.
 pub fn detach(doc: &mut Document, j: &JointRef) -> bool {
     let Some(i) = doc.seats.iter().position(|s| s.holds(j)) else {
         return false;
@@ -710,12 +731,11 @@ pub fn detach(doc: &mut Document, j: &JointRef) -> bool {
         (&seat.b, &seat.a)
     };
     if let (Some(s), Some(g)) = (port(doc, stay), port(doc, go)) {
-        // One and a half joint lengths: the cone clears the mouth with a gap.
-        let away =
-            1.5 * match &s.kind {
-                Kind::Taper(size) => taper(size).map_or(10., |t| t.l),
-                Kind::Plug(_, size) => *size,
-            } * s.mm;
+        // A joint length and a diameter: a clear gap, and out of snap reach.
+        let away = match &s.kind {
+            Kind::Taper(size) => taper(size).map_or(10., |t| t.l + t.d),
+            Kind::Plug(_, size) => 2. * size,
+        } * s.mm;
         let shift = mul(normalize(s.dir), away);
         let pulled: Vec<u64> = assembly(doc, g.at.piece).into_iter().collect();
         doc.translate(&pulled, shift[0] as f32, shift[1] as f32);

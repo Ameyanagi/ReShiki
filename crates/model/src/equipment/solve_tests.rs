@@ -412,3 +412,28 @@ fn a_cone_lowered_until_its_tip_meets_the_mouth_already_snaps() {
     );
     assert!(solve::snap(&mut doc, &[condenser], 14., false).is_none());
 }
+
+#[test]
+fn detach_leaves_the_cone_out_of_snap_reach_and_scale_limits_block_a_snap() {
+    let mut doc = Document::default();
+    let flask = add(&mut doc, "reshiki/rbf-100-15", Point::new(200., 300.));
+    let stopper = add(&mut doc, "reshiki/stopper-15", Point::new(600., 100.));
+    bring(&mut doc, stopper, "bottom", &joint(flask, "neck"), (0., 0.));
+    solve::snap(&mut doc, &[stopper], 14., false).unwrap();
+    assert!(solve::detach(&mut doc, &joint(flask, "neck")));
+    let mut again = doc.clone();
+    again.translate(&[stopper], 6., 0.);
+    assert!(solve::snap(&mut again, &[stopper], 14., false).is_none());
+    // Seating on a flask at the largest scale would grow a co-selected piece
+    // past it, so nothing snaps.
+    let mut big = Document::default();
+    let flask = add(&mut big, "reshiki/rbf-100-15", Point::new(200., 300.));
+    let stopper = add(&mut big, "reshiki/stopper-15", Point::new(900., 100.));
+    let other = add(&mut big, "reshiki/stopper-29", Point::new(1200., 100.));
+    let k = placed::MAX_PT_PER_MM / placed::DEFAULT_PT_PER_MM;
+    crate::editing::transform_about(&mut big, &[flask], Point::new(200., 300.), k, 0.);
+    crate::editing::transform_about(&mut big, &[other], Point::new(1200., 100.), 2.5, 0.);
+    bring(&mut big, stopper, "bottom", &joint(flask, "neck"), (0., 0.));
+    assert!(solve::snap(&mut big.clone(), &[stopper], 14., false).is_some());
+    assert!(solve::snap(&mut big, &[stopper, other], 14., false).is_none());
+}
