@@ -78,7 +78,7 @@ fn plan(def: &Definition, values: Values) -> Vec<PlanPath> {
 /// platforms do not matter but any change in geometry does.
 fn summary(plan: &[PlanPath]) -> Json {
     let mut passes: BTreeMap<String, usize> = BTreeMap::new();
-    let (mut points, mut sx, mut sy) = (0usize, 0f64, 0f64);
+    let (mut points, mut sx, mut sy, mut mx, mut my) = (0usize, 0f64, 0f64, 0f64, 0f64);
     let mut b = [
         f64::INFINITY,
         f64::INFINITY,
@@ -103,6 +103,9 @@ fn summary(plan: &[PlanPath]) -> Json {
                 points += 1;
                 sx += q[0];
                 sy += q[1];
+                // Weighted by position, so moving a point within a path shows.
+                mx += q[0] * points as f64;
+                my += q[1] * points as f64;
                 b = [
                     b[0].min(q[0]),
                     b[1].min(q[1]),
@@ -118,9 +121,12 @@ fn summary(plan: &[PlanPath]) -> Json {
         .iter()
         .map(|p| {
             format!(
-                "{:?}/{:?}/{:?}/{};",
+                "{}/{:?}/{:?}/{:?}/{:?}/{:?}/{};",
+                p.owner,
                 p.pass,
                 p.material,
+                p.color,
+                p.style,
                 p.ink,
                 p.path.len()
             )
@@ -134,7 +140,7 @@ fn summary(plan: &[PlanPath]) -> Json {
             .map(|b| format!("{b:02x}"))
             .collect::<String>()
     };
-    json!({"passes": passes, "points": points, "order": order, "sum": [r(sx), r(sy)], "bounds": b.map(r)})
+    json!({"passes": passes, "points": points, "order": order, "sum": [r(sx), r(sy)], "moment": [r(mx), r(my)], "bounds": b.map(r)})
 }
 
 #[test]
@@ -174,7 +180,17 @@ fn every_fixture_matches_its_paint_plan_golden() {
                 .all(|(x, y)| (x.as_f64().unwrap() - y.as_f64().unwrap()).abs() <= 0.05)
         };
         assert!(
-            close(&want["sum"], &got["sum"]) && close(&want["bounds"], &got["bounds"]),
+            close(&want["sum"], &got["sum"])
+                && close(&want["bounds"], &got["bounds"])
+                && want["moment"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .zip(got["moment"].as_array().unwrap())
+                    .all(|(x, y)| {
+                        let (x, y) = (x.as_f64().unwrap(), y.as_f64().unwrap());
+                        (x - y).abs() <= 0.05 + 1e-9 * x.abs()
+                    }),
             "{key}: {want} != {got}"
         );
     }
@@ -407,7 +423,41 @@ fn each_validation_message_names_the_problem() {
             "Part \"plug\" has a motion with a missing or infinite number.",
         ),
     ];
-    for (got, want) in cases.into_iter().chain(more) {
+    let schema: Vec<(String, &str)> = vec![
+        (
+            rejects(|v| v["shapes"][0]["depth"] = json!(100)),
+            "Shape \"bulb\" has depth 100; use −8 to 8.",
+        ),
+        (
+            rejects(|v| v["params"][0]["names"] = json!({"ja": "バルブ"})),
+            "Parameter \"valve\" needs an English name.",
+        ),
+        (
+            rejects(|v| v["params"][0]["states"][1]["names"] = json!({"ja": "開"})),
+            "State \"open\" of \"valve\" needs an English name.",
+        ),
+        (
+            rejects(|v| {
+                v["params"].as_array_mut().unwrap().push(json!({"id": "s", "names": {"en": "Slide"}, "kind": "range", "min": 0, "max": 10, "default": 0, "unit": "mm"}));
+                v["parts"]
+                    .as_array_mut()
+                    .unwrap()
+                    .push(json!({"id": "far", "param": "s", "motion": {"translate": [1e308, 0]}}));
+            }),
+            "Part \"far\" moves too far over the range of \"s\".",
+        ),
+        // Every corner lies in the glass, but the middle crosses the gap beside the neck.
+        (
+            rejects(|v| v["liquids"][0]["region"] = json!("M -20 -20 L 50 -20 L 50 10 L -20 10 Z")),
+            "The liquid region \"bulb\" is outside the glass.",
+        ),
+        // The barb's joint would sit on glass drawn only while the valve is open.
+        (
+            rejects(|v| v["shapes"][4]["when"] = json!({"valve": ["open"]})),
+            "Joint \"barb\" is 12.0 mm from the outline. Place it on the rim of the opening.",
+        ),
+    ];
+    for (got, want) in cases.into_iter().chain(more).chain(schema) {
         assert_eq!(got, want);
     }
     // A repeated field is refused, not silently overwritten.

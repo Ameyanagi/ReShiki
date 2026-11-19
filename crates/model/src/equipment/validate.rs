@@ -2,8 +2,11 @@
 //! Every message names the field so an author can fix it.
 use super::format::*;
 use super::geometry::{
-    Seg, add, distance_to_outline, flatten, inside, mul, normalize, parse_path, perp,
+    Seg, add, area, distance_to_outline, flatten, inside, mul, normalize, parse_path, perp,
 };
+use i_overlay::core::fill_rule::FillRule;
+use i_overlay::core::overlay_rule::OverlayRule;
+use i_overlay::float::overlay::FloatOverlay;
 use std::collections::{BTreeMap, BTreeSet};
 
 pub const MAX_FILE_BYTES: usize = 1 << 20;
@@ -103,6 +106,12 @@ pub fn validate(d: &Definition) -> Result<(), String> {
             return Err(format!("Shape \"{}\" names a missing part \"{k}\".", s.id));
         }
         when(&format!("Shape \"{}\"", s.id), &s.when, &params)?;
+        if !(-8..=8).contains(&s.depth) {
+            return Err(format!(
+                "Shape \"{}\" has depth {}; use −8 to 8.",
+                s.id, s.depth
+            ));
+        }
         outlines.push((s, flatten(&segs)));
     }
     let glass: Vec<_> = outlines
@@ -110,10 +119,13 @@ pub fn validate(d: &Definition) -> Result<(), String> {
         .filter(|(s, _)| s.role == Role::Glass)
         .map(|(_, o)| o)
         .collect();
-    let filled: Vec<_> = outlines
+    let defaults: BTreeMap<&str, &str> = d
+        .params
         .iter()
-        .filter(|(s, _)| s.role != Role::Detail)
-        .map(|(_, o)| o)
+        .filter_map(|p| match p {
+            Param::States { id, default, .. } => Some((id.as_str(), default.as_str())),
+            _ => None,
+        })
         .collect();
 
     if let Some(t) = &d.tube
@@ -126,7 +138,7 @@ pub fn validate(d: &Definition) -> Result<(), String> {
             .tube
             .as_ref()
             .is_some_and(|t| t.ends.iter().any(|e| e == j.id()));
-        joint(j, &params, &parts, &glass, &filled, &outlines, tube_end)?;
+        joint(j, &params, &parts, &outlines, &defaults, tube_end)?;
     }
     for h in &d.holds {
         let [lo, hi] = h.diameter_mm.range();
@@ -171,12 +183,29 @@ pub fn validate(d: &Definition) -> Result<(), String> {
                 l.id
             ));
         }
-        let within = |p: &Xy| {
-            glass
-                .iter()
-                .any(|o| inside(*p, o) || distance_to_outline(*p, o) <= ATTACH_MM)
+        // Whatever of the region lies outside the glass, by area.
+        // One winding for every contour, so overlapping glass shapes unite.
+        let wound = |p: &Vec<Xy>| {
+            let mut p = p.clone();
+            if area(&p) < 0. {
+                p.reverse();
+            }
+            p
         };
-        if !region.iter().flat_map(|(points, _)| points).all(within) {
+        let subject: Vec<Vec<Xy>> = region.iter().map(|(p, _)| wound(p)).collect();
+        let clip: Vec<Vec<Xy>> = glass
+            .iter()
+            .flat_map(|o| o.iter().map(|(p, _)| wound(p)))
+            .collect();
+        let outside: f64 = FloatOverlay::with_subj_and_clip(&subject, &clip)
+            .overlay(OverlayRule::Difference, FillRule::NonZero)
+            .iter()
+            .flatten()
+            .map(|c| area(c))
+            .sum::<f64>()
+            .abs();
+        let total: f64 = subject.iter().map(|c| area(c)).sum::<f64>().abs();
+        if outside > (0.01 * total).max(0.5) {
             return Err(format!(
                 "The liquid region \"{}\" is outside the glass.",
                 l.id
@@ -281,6 +310,18 @@ fn english(names: &BTreeMap<String, String>, id: &str) -> String {
 }
 
 fn param(p: &Param, liquids: &BTreeSet<&str>) -> Result<(), String> {
+    if !p.names().contains_key("en") {
+        return Err(format!("Parameter \"{}\" needs an English name.", p.id()));
+    }
+    if let Param::States { states, .. } = p
+        && let Some(s) = states.iter().find(|s| !s.names.contains_key("en"))
+    {
+        return Err(format!(
+            "State \"{}\" of \"{}\" needs an English name.",
+            s.id,
+            p.id()
+        ));
+    }
     let name = english(p.names(), p.id());
     match p {
         Param::Range {
@@ -397,6 +438,29 @@ fn part(
             p.id
         ));
     }
+    // Bound what the motion can reach over the whole range, not only its numbers.
+    let span = number_range(param).map_or(1., |(lo, hi, d)| (lo - d).abs().max((hi - d).abs()));
+    let reach = 2. * MAX_COORDINATE;
+    let bounded = match &p.motion {
+        Motion::Translate(v) => v.iter().all(|x| (x * span).abs() <= reach),
+        Motion::Rotate {
+            pivot,
+            degrees_per_unit,
+        } => pivot.iter().all(|x| x.abs() <= reach) && (degrees_per_unit * span).abs() <= 3600.,
+        Motion::Scale { pivot, per_unit }
+        | Motion::Stretch {
+            pivot, per_unit, ..
+        } => pivot.iter().all(|x| x.abs() <= reach) && 1. + (per_unit * span).abs() <= 100.,
+        Motion::PerState(m) => m.values().all(|[a, b, c, d, e, f]| {
+            [a, b, c, d].iter().all(|x| x.abs() <= 100.) && e.abs() <= reach && f.abs() <= reach
+        }),
+    };
+    if !bounded {
+        return Err(format!(
+            "Part \"{}\" moves too far over the range of \"{}\".",
+            p.id, p.param
+        ));
+    }
     let shrink = match &p.motion {
         Motion::Scale { per_unit, .. } | Motion::Stretch { per_unit, .. } => Some(*per_unit),
         _ => None,
@@ -484,15 +548,17 @@ fn coordinates(owner: &str, segs: &[Seg]) -> Result<(), String> {
     Ok(())
 }
 
+/// A joint position and direction, and the state it belongs to (none for the default).
+type Pose<'a> = (Xy, Xy, Option<(&'a str, &'a str)>);
+
 type Outline = Vec<(Vec<Xy>, bool)>;
 
 fn joint(
     j: &Joint,
     params: &BTreeMap<&str, &Param>,
     parts: &BTreeMap<&str, &Part>,
-    glass: &[&Outline],
-    filled: &[&Outline],
     all: &[(&Shape, Outline)],
+    defaults: &BTreeMap<&str, &str>,
     tube_end: bool,
 ) -> Result<(), String> {
     let id = j.id();
@@ -507,16 +573,16 @@ fn joint(
     {
         return Err(format!("{owner} names a missing part \"{k}\"."));
     }
-    let mut poses = vec![(j.at(), dir)];
+    let mut poses: Vec<Pose> = vec![(j.at(), dir, None)];
     for (k, by_state) in j.poses() {
         let states = BTreeMap::from([(k.clone(), by_state.keys().cloned().collect())]);
         when(&owner, &states, params)?;
-        for pose in by_state.values() {
+        for (state, pose) in by_state {
             point(&owner, pose.at)?;
             if !(pose.dir.iter().all(|x| x.is_finite()) && pose.dir != [0., 0.]) {
                 return Err(format!("{owner} needs a direction in every pose."));
             }
-            poses.push((pose.at, pose.dir));
+            poses.push((pose.at, pose.dir, Some((k.as_str(), state.as_str()))));
         }
     }
     if let Joint::Taper { size, draw, .. } = j {
@@ -540,8 +606,41 @@ fn joint(
     if tube_end {
         return Ok(());
     }
-    for (at, dir) in poses {
-        attach(j, &owner, at, normalize(dir), parts, glass, filled, all)?;
+    for (at, dir, state) in poses {
+        // Check each pose against the shapes drawn in its state.
+        let shown: Vec<(&Shape, Outline)> = all
+            .iter()
+            .filter(|(s, _)| {
+                s.when.iter().all(|(k, states)| {
+                    let current = match state {
+                        Some((param, value)) if param == k => Some(value),
+                        _ => defaults.get(k.as_str()).copied(),
+                    };
+                    current.is_some_and(|c| states.iter().any(|x| x == c))
+                })
+            })
+            .map(|(s, o)| (*s, o.clone()))
+            .collect();
+        let glass: Vec<&Outline> = shown
+            .iter()
+            .filter(|(s, _)| s.role == Role::Glass)
+            .map(|(_, o)| o)
+            .collect();
+        let filled: Vec<&Outline> = shown
+            .iter()
+            .filter(|(s, _)| s.role != Role::Detail)
+            .map(|(_, o)| o)
+            .collect();
+        attach(
+            j,
+            &owner,
+            at,
+            normalize(dir),
+            parts,
+            &glass,
+            &filled,
+            &shown,
+        )?;
     }
     Ok(())
 }
