@@ -237,6 +237,40 @@ fn ketone_rails_stop_on_the_ring_line_with_round_ends() {
         })
         .collect();
     assert_eq!(rails.len(), 2);
+    // Each rail's ring end stops on a ring bond's center line.
+    let atom = |i: usize| doc.atoms[i].position;
+    let off_line = |p: Point, a: Point, b: Point| {
+        ((b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x)).abs() / a.distance(b)
+    };
+    for (a, b) in rails {
+        let end = if a.distance(atom(0)) < b.distance(atom(0)) {
+            a
+        } else {
+            b
+        };
+        let on = [1, 5].map(|i| off_line(end, atom(0), atom(i)));
+        assert!(on.iter().any(|d| *d < 1e-3), "{end:?} {on:?}");
+    }
+}
+
+#[test]
+fn a_branch_that_does_not_continue_leaves_the_mitre_to_the_two_that_do() {
+    // The branch is listed first, so it reaches the junction first.
+    let doc = drawing(
+        &[(0., 0.), (15., 25.980762), (30., 0.), (-15., 25.980762)],
+        &[(0, 1, 1, "plain"), (0, 2, 1, "plain"), (0, 3, 1, "plain")],
+    );
+    let vector = vector_primitives(&doc);
+    let mut runs: Vec<_> = lines(&vector).into_iter().map(|run| run.0).collect();
+    runs.sort_by_key(Vec::len);
+    let at = |i: usize| doc.atoms[i].position;
+    assert_eq!(runs.len(), 2, "{runs:?}");
+    assert_eq!(runs[0], [at(0), at(1)]);
+    let mut outer = runs[1].clone();
+    if outer[0] != at(2) {
+        outer.reverse();
+    }
+    assert_eq!(outer, [at(2), at(0), at(3)]);
 }
 
 #[test]

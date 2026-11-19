@@ -2625,16 +2625,19 @@ type BondLine = ([Point; 2], [bool; 2]);
 /// Bond lines joined where two continuing ends meet, each run with whether
 /// it closes on itself.
 fn bond_runs(lines: Vec<BondLine>) -> Vec<(Vec<Point>, bool)> {
-    let key = |p: Point| (p.x.to_bits(), p.y.to_bits());
+    // Adding zero makes -0 and +0 one key.
+    let key = |p: Point| ((p.x + 0.).to_bits(), (p.y + 0.).to_bits());
     let mut meeting: std::collections::HashMap<_, Vec<usize>> = Default::default();
     for (index, (points, continues)) in lines.iter().enumerate() {
         for (point, _) in points.iter().zip(continues).filter(|(_, c)| **c) {
             meeting.entry(key(*point)).or_default().push(index);
         }
     }
-    // The other line continuing through `point`, when exactly two meet there.
+    // The line `from` continues into through `point`, when exactly two
+    // continuing lines meet there and `from` is one of them.
     let partner = |point: Point, from: usize| match meeting.get(&key(point))?.as_slice() {
-        &[a, b] => Some(if a == from { b } else { a }),
+        &[a, b] if a == from => Some(b),
+        &[a, b] if b == from => Some(a),
         _ => None,
     };
     let mut remaining: std::collections::BTreeMap<_, _> = lines
