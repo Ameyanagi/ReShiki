@@ -12,9 +12,9 @@ issues: []
   (hν), an electrode (e⁻), heat (Δ), a metal or an enzyme. It moves with the
   arrow, and a reaction arrow with a badge still copies as reaction SMILES.
 - **Arc arrows**: **Make arc** in **Properties** and the **Arc** preset draw
-  circular arc arrows. Drag the diamond to
-  change the sweep, or type it in **Sweep (°)**. ChemDraw arc arrows export as
-  arc arrows.
+  circular arc arrows. Drag the diamond to change the sweep, or type it in
+  **Sweep (°)**. ChemDraw arc arrows open as arc arrows and export as ChemDraw
+  arc arrows. A **Gradient** body is shaded like ChemDraw's Shaded fill.
 - **Callouts**: right-click an atom, a bond, a molecule or a text and choose
   **Add callout**. The callout's leader stays on what it points at when you
   move it.
