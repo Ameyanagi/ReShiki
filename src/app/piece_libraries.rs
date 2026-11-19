@@ -267,7 +267,7 @@ impl App {
                 }
                 if pieces.len() > library::MAX_PIECES {
                     self.status = format!(
-                        "A library file holds at most {} pieces; My pieces has {}",
+                        "A library file holds {} pieces at most; this has {}",
                         library::MAX_PIECES,
                         pieces.len()
                     );

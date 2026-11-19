@@ -220,6 +220,8 @@ fn is_piece_file(path: &Path) -> bool {
         .is_some_and(|x| x == PIECE_EXTENSION || x == COLLECTION_EXTENSION)
 }
 
+// Browser storage has only files.
+#[cfg_attr(target_arch = "wasm32", allow(dead_code))]
 enum Kind {
     /// A regular file, by its length.
     File(u64),
