@@ -1076,3 +1076,50 @@ fn a_wide_paste_lands_beside_the_drawing_and_a_small_one_near_the_view_centre() 
     let pasted = app.tab.doc.atom(app.tab.selected[0]).unwrap().position;
     assert_eq!(pasted, center.offset(24., 24.));
 }
+
+#[test]
+fn a_wide_paste_keeps_the_zoom_and_scrolls_to_show_its_start() {
+    let (mut app, _) = App::new();
+    app.viewport = iced::Size::new(800., 600.);
+    app.guides.rulers = true;
+    app.tab.camera.zoom = 1.;
+    app.tab.doc.add_atom("C", Point::default());
+    app.tab.doc.add_atom("C", Point::new(1040., 0.));
+    let before = app.tab.doc.clone();
+
+    app.clipboard_read(
+        app.tab.file_epoch,
+        app.tab.revision,
+        Ok(PasteOutcome::native(before.clone())),
+    );
+
+    assert_eq!(app.tab.camera.zoom, 1.);
+    let (lo, _) = reshiki::scene::selection_bounds(&app.tab.doc, &app.tab.selected).unwrap();
+    let paper = app.guides.paper(iced::Rectangle::with_size(app.viewport));
+    let x = app.tab.camera.screen(lo, paper).x;
+    assert!((0.0..paper.width).contains(&x));
+    assert!((x - 40.).abs() < 1e-3);
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+}
+
+#[test]
+fn a_paste_that_is_on_screen_leaves_the_view_alone() {
+    let (mut app, _) = App::new();
+    app.viewport = iced::Size::new(800., 600.);
+    app.tab.camera.center = Point::new(70., -40.);
+    app.tab.camera.zoom = 1.5;
+    let camera = app.tab.camera;
+    let mut part = Document::default();
+    part.add_atom("O", Point::default());
+
+    app.clipboard_read(
+        app.tab.file_epoch,
+        app.tab.revision,
+        Ok(PasteOutcome::native(part)),
+    );
+
+    assert_eq!(app.tab.selected.len(), 1);
+    assert_eq!(app.tab.camera.center, camera.center);
+    assert_eq!(app.tab.camera.zoom, camera.zoom);
+}

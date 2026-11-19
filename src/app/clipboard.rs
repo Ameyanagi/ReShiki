@@ -634,10 +634,10 @@ impl App {
     /// Adds a pasted `part`, selects it and records the edit; false when
     /// nothing could be added. A small part lands just off the view's centre.
     /// One wider than a quarter of the view would cover what is there, so it
-    /// lands one bond length right of the drawing and is revealed, as an
-    /// inserted structure is. Pages keep the small offset: right of the
-    /// drawing may be off the page. Into one selected empty panel, such as
-    /// a cleared one, the part lands in the panel's middle.
+    /// lands one bond length right of the drawing. Pages keep the small offset:
+    /// right of the drawing may be off the page. Into one selected empty panel,
+    /// such as a cleared one, the part lands in the panel's middle. The view
+    /// pans if the selection is clipped and keeps its zoom.
     pub(super) fn append_pasted(&mut self, part: &Document) -> bool {
         let before = self.tab.doc.clone();
         let center = editing::center(part, &part.all_ids());
@@ -669,7 +669,6 @@ impl App {
         // A wide part is measured on its own in this drawing's settings, with
         // the hydrogens it will be drawn with, so that the visible edges end
         // one bond length apart. `Document::bounds` would pad them for framing.
-        let mut beside = false;
         if wide && let Some((_, drawing)) = edges(&before, &before.all_ids()) {
             let mut blank = before.clone();
             blank.clear_content();
@@ -681,7 +680,6 @@ impl App {
                     drawing.x + before.drawing_style.bond_length_world - lo.x,
                     self.tab.camera.center.y - center.y,
                 );
-                beside = true;
             }
         }
         let mut selected = editing::append_preserving_layout(&mut self.tab.doc, part, offset);
@@ -696,13 +694,12 @@ impl App {
                 selected = grouped;
             }
         }
-        if beside {
-            self.commit_structure_insert(before, selected);
-        } else {
-            self.tab.selected = selected;
-            if !self.adopt_changed_document(before) {
-                return false;
-            }
+        self.tab.selected = selected;
+        if !self.adopt_changed_document(before) {
+            return false;
+        }
+        if let Some((lo, hi)) = edges(&self.tab.doc, &self.tab.selected) {
+            self.pan_to_show(lo, hi);
         }
         true
     }
