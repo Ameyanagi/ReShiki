@@ -214,3 +214,54 @@ fn a_gradient_arrow_on_a_card_of_the_other_canvas_keeps_its_ramp() {
         assert_eq!(*start, ink.background(), "{canvas}");
     }
 }
+
+/// A hexagon of carbons around `center`, with a ring fill in `color` drawn as a
+/// gradient.
+fn gradient_ring(doc: &mut Document, center: Point, color: Color) {
+    let ids: Vec<u64> = (0..6)
+        .map(|i| {
+            let angle = (60. * i as f32).to_radians();
+            doc.add_atom("C", center.offset(8. * angle.cos(), 8. * angle.sin()))
+        })
+        .collect();
+    for (a, b) in ids.iter().zip(ids.iter().cycle().skip(1)) {
+        doc.add_bond(*a, *b, 1, "plain");
+    }
+    crate::ring_fills::apply(doc, &ids, Some(color));
+    for fill in &mut doc.ring_fills {
+        fill.effect = crate::ring_fills::RingEffect::Gradient;
+    }
+}
+
+fn ring_stops(doc: &Document) -> ([u8; 3], [u8; 3]) {
+    let scene = crate::scene::primitives(doc);
+    let Some(crate::scene::Primitive::Gradient { stops, .. }) = scene
+        .iter()
+        .find(|p| matches!(p, crate::scene::Primitive::Gradient { .. }))
+    else {
+        panic!("a ring gradient: {scene:?}");
+    };
+    let [(_, start, _), (_, end, _)] = stops.as_slice() else {
+        panic!("two stops: {stops:?}");
+    };
+    (*start, *end)
+}
+
+#[test]
+fn a_white_ring_gradient_off_any_card_starts_from_the_canvas_paper() {
+    let mut doc = Document::default();
+    gradient_ring(&mut doc, Point::new(300., 0.), Color::Custom([255; 3]));
+    assert_eq!(ring_stops(&doc), ([255; 3], [255; 3]));
+}
+
+#[test]
+fn a_ring_gradient_on_a_card_of_the_other_canvas_starts_from_its_paper() {
+    let (mut doc, _) = figure(CanvasTheme::Dark, Color::Custom([0xD9; 3]));
+    gradient_ring(
+        &mut doc,
+        Point::new(20., 10.),
+        Color::Palette(Hue::Teal, Row::Tint),
+    );
+    let light = Palette::in_mode(&doc, CanvasTheme::Light).swatch(Hue::Teal, Row::Tint);
+    assert_eq!(ring_stops(&doc), ([255; 3], light));
+}

@@ -51,6 +51,8 @@ impl std::fmt::Display for CanvasTheme {
 /// the canvas. Templates still inherit their destination canvas.
 pub fn for_paste(doc: crate::document::Document, target: CanvasTheme) -> crate::document::Document {
     let mut doc = resolved_document(&doc).into_owned();
+    // Card papers belong to the source's display, not to the pasted copy.
+    doc.on_other_canvas.clear();
     keep_typography(&mut doc);
     for atom in &mut doc.atoms {
         atom.display.color_override = true;
@@ -541,6 +543,13 @@ fn on_fills(doc: &crate::document::Document) -> std::borrow::Cow<'_, crate::docu
         .map(|f| f.atoms.first().map_or(canvas, |id| atom_mode(*id)))
         .collect();
     swap(canvas, &fills, &mut carded.ring_fills, &shown.ring_fills);
+    let atom_ids = doc.atoms.iter().map(|a| a.id).zip(&atoms);
+    let arrow_ids = doc.arrows.iter().map(|a| a.id).zip(&arrows);
+    carded.on_other_canvas = atom_ids
+        .chain(arrow_ids)
+        .filter(|(_, mode)| **mode != canvas)
+        .map(|(id, _)| id)
+        .collect();
     std::borrow::Cow::Owned(carded)
 }
 

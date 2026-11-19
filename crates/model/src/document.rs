@@ -418,6 +418,11 @@ pub struct Document {
     /// the same way without the library the pieces came from.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub piece_definitions: Vec<std::sync::Arc<crate::equipment::format::Definition>>,
+    /// Arrows and atoms on a card of the other canvas, set when the drawing
+    /// is resolved for display, so gradients made while drawing start from
+    /// that card's paper. Never stored.
+    #[serde(skip)]
+    pub on_other_canvas: std::collections::BTreeSet<u64>,
 }
 /// Every drawing writes the definitions its pieces use, and every drawing read
 /// links its pieces to them, wherever it is written or read: files, the
@@ -478,6 +483,7 @@ impl Default for Document {
             models: vec![],
             recent_colors: vec![],
             piece_definitions: vec![],
+            on_other_canvas: Default::default(),
         }
     }
 }
@@ -896,6 +902,7 @@ impl Document {
             models,
             recent_colors: _,
             piece_definitions,
+            on_other_canvas: _,
         } = self;
         atoms.clear();
         models.clear();
@@ -942,6 +949,7 @@ impl Document {
             models,
             recent_colors: _,
             piece_definitions: _,
+            on_other_canvas: _,
         } = self;
         !atoms.is_empty()
             || !models.is_empty()

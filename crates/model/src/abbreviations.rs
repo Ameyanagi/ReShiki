@@ -542,6 +542,7 @@ fn same_except_bonds(a: &Document, b: &Document) -> bool {
         models,
         recent_colors,
         piece_definitions,
+        on_other_canvas: _,
         property_captions,
     } = a;
     *atoms == b.atoms

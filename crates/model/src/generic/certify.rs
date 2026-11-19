@@ -162,6 +162,7 @@ pub(super) fn certify_translation(
         models,
         recent_colors: _,
         piece_definitions: _,
+        on_other_canvas: _,
     } = &mut restored;
     for (actual, old) in atoms.iter_mut().zip(&source.atoms) {
         check_shift(old.position, actual.position)?;

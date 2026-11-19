@@ -200,7 +200,12 @@ impl RingFill {
                     commands,
                     [origin, x, y],
                     crate::graphics::Gradient {
-                        from: crate::graphics::Gradient::PAPER,
+                        from: self
+                            .atoms
+                            .first()
+                            .map_or(crate::graphics::Gradient::PAPER, |id| {
+                                crate::scene::drawn_paper(doc, *id)
+                            }),
                         kind: crate::graphics::GradientKind::Radial,
                     },
                     self.color,
