@@ -2586,20 +2586,6 @@ struct Joined {
     lines: std::collections::BTreeMap<(crate::palette::Color, u32), Vec<BondLine>>,
 }
 fn push_joined_outlines(out: &mut Vec<Primitive>, joined: Joined) {
-    // Fills after lines: a butt end overlaps its neighbour's corner, which
-    // the neighbour's own fill restores where the colors differ.
-    for ((color, width), lines) in joined.lines {
-        out.extend(
-            bond_runs(lines)
-                .into_iter()
-                .map(|(points, closed)| Primitive::Polyline {
-                    points,
-                    closed,
-                    width: f32::from_bits(width),
-                    color,
-                }),
-        );
-    }
     out.extend(
         joined
             .fills
@@ -2620,6 +2606,18 @@ fn push_joined_outlines(out: &mut Vec<Primitive>, joined: Joined) {
                 )
             }),
     );
+    for ((color, width), lines) in joined.lines {
+        out.extend(
+            bond_runs(lines)
+                .into_iter()
+                .map(|(points, closed)| Primitive::Polyline {
+                    points,
+                    closed,
+                    width: f32::from_bits(width),
+                    color,
+                }),
+        );
+    }
 }
 /// A plain bond line in vector export, with whether each end continues
 /// into another line.
@@ -3359,6 +3357,7 @@ fn stroked(scene: BondScene<'_, '_>, b: &Bond) -> bool {
 /// of the same color, around a mitred outer corner.
 fn continues(scene: BondScene<'_, '_>, b: &Bond, id: u64) -> bool {
     stroked(scene, b)
+        && !scene.joins.mixed(b, id)
         && scene
             .joins
             .across_open_side(b, id)
@@ -3366,38 +3365,41 @@ fn continues(scene: BondScene<'_, '_>, b: &Bond, id: u64) -> bool {
 }
 /// A plain bond's joined outline from `first` to `last` as a butt-ended
 /// line, plus the part of the outline's mitre that end leaves open where the
-/// line cannot continue into its neighbour's (a wedge, another color, or a
-/// shortened corner), and the whole corner where another color meets.
+/// line cannot continue into its neighbour's (a wedge, or a shortened
+/// corner). Where another color meets, the line starts past the corner and
+/// the corner stays filled.
 fn stroked_outline(
     scene: BondScene<'_, '_>,
     b: &Bond,
     first: Point,
     last: Point,
 ) -> Vec<Primitive> {
-    let mut parts = vec![Primitive::Polyline {
-        points: vec![first, last],
-        closed: false,
-        width: scene.style.line_width(),
-        color: b.color,
-    }];
+    let mut parts = vec![];
+    let mut ends = [first, last];
     let outline = scene.joins.polygon(b, first, last);
     let overlap = scene.style.line_width() / 4.;
-    for (id, at, toward) in [(b.a, first, last), (b.b, last, first)] {
+    for (end, (id, at, toward)) in ends
+        .iter_mut()
+        .zip([(b.a, first, last), (b.b, last, first)])
+    {
         let joined = scene.doc.atom(id).is_some_and(|a| a.position == at);
-        let mixed = joined && scene.joins.mixed(b, id);
-        if joined && continues(scene, b, id) && !mixed {
+        if joined && continues(scene, b, id) {
             continue;
         }
         let length = at.distance(toward).max(0.001);
+        let along = |t: f32| at.lerp(toward, t / length);
         let depth = |p: &Point| {
             ((p.x - at.x) * (toward.x - at.x) + (p.y - at.y) * (toward.y - at.y)) / length
         };
         let corners = outline.iter().map(depth).filter(|d| *d < length / 2.);
-        // Where another color meets, the whole corner, so this color's part
-        // stays its own; otherwise the outline behind the butt end. Either
-        // reaches a little into the line, so no hairline seam shows.
-        let reach = if mixed {
-            corners.fold(0., f32::max)
+        // Where another color meets, the line starts past the corner, which
+        // stays filled in this color, so neither color covers the other.
+        // Otherwise only the outline behind the butt end is filled. Either
+        // fill reaches a little into the line, so no hairline seam shows.
+        let reach = if joined && scene.joins.mixed(b, id) {
+            let reach = corners.fold(0., f32::max);
+            *end = along(reach);
+            reach
         } else if corners.fold(0., f32::min) < -0.001 {
             0.
         } else {
@@ -3414,6 +3416,16 @@ fn stroked_outline(
             }
         }
         parts.push(Primitive::Polygon(corner));
+    }
+    // Pulled back from both ends, a very short bond may be all corners.
+    let [start, end] = ends;
+    if (end.x - start.x) * (last.x - first.x) + (end.y - start.y) * (last.y - first.y) > 0.001 {
+        parts.push(Primitive::Polyline {
+            points: vec![start, end],
+            closed: false,
+            width: scene.style.line_width(),
+            color: b.color,
+        });
     }
     parts
 }

@@ -1682,6 +1682,9 @@ fn bond_corner_drawings() -> Vec<(&'static str, Document)> {
     doc.add_bond(right[1], right[0], 1, "plain");
     doc.add_bond(right[0], right[2], 1, "plain");
     doc.bonds.last_mut().unwrap().color = crate::palette::Color::Custom([0, 0, 200]);
+    let wide = doc.add_atom("C", Point::new(150., 20.));
+    doc.add_bond(right[0], wide, 1, "hollow_wedge");
+    doc.bonds.last_mut().unwrap().color = crate::palette::Color::Custom([0, 150, 0]);
     drawings.push(("ring-chain-crossing", doc));
     drawings
 }

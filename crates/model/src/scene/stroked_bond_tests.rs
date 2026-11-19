@@ -210,9 +210,19 @@ fn colors_split_lines_and_fill_only_the_open_mitre_halves() {
             (crate::palette::Color::Ink, 6, false)
         ]
     );
-    let open = fills(&vector);
-    assert_eq!(open.len(), 4, "Each color fills its half of two corners");
-    assert!(open.iter().all(|shape| area(shape) < width * width));
+    let corners = fills(&vector);
+    assert_eq!(corners.len(), 4, "Each color fills its part of two corners");
+    assert!(corners.iter().all(|shape| area(shape) < width * width));
+    // The lines stop past those corners, so neither color covers the other.
+    let junctions = [doc.atoms[0].position, doc.atoms[1].position];
+    for (points, ..) in lines(&vector) {
+        for end in [points[0], points[points.len() - 1]] {
+            assert!(
+                junctions.iter().all(|j| j.distance(end) > width / 4.),
+                "{end:?}"
+            );
+        }
+    }
 }
 
 #[test]
