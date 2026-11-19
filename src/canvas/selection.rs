@@ -49,6 +49,9 @@ pub(super) struct SelectionBox {
     /// their frames and there are no edge handles. A drawing mixed with shown
     /// models does not resize at all.
     models: bool,
+    /// Equipment pieces scale only uniformly, so a selection holding one has
+    /// no edge handles.
+    pieces: bool,
 }
 
 impl SelectionBox {
@@ -84,6 +87,10 @@ impl SelectionBox {
             bounds,
             resizable: models || !reshiki::models3d::shows_3d(doc, ids),
             models,
+            pieces: doc
+                .graphics
+                .iter()
+                .any(|g| g.piece.is_some() && ids.contains(&g.id)),
         })
     }
 
@@ -169,7 +176,7 @@ impl SelectionBox {
     }
 
     fn edge_enabled(self, edge: usize) -> bool {
-        if !self.resizable || self.models {
+        if !self.resizable || self.models || self.pieces {
             return false;
         }
         let [a, _, c, _] = self.corners;

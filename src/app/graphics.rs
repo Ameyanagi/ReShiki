@@ -241,7 +241,9 @@ impl App {
             .doc
             .graphics
             .iter()
-            .filter(|g| self.tab.selected.contains(&g.id) && g.picture.is_none())
+            .filter(|g| {
+                self.tab.selected.contains(&g.id) && g.picture.is_none() && g.piece.is_none()
+            })
             .collect();
         // A cycle's style colors its arrows; it has no fill.
         let cycle = selected.iter().any(|g| g.cycle.is_some());
@@ -888,13 +890,14 @@ impl App {
             .filter(|g| self.tab.selected.contains(&g.id) && is_open_path(g))
     }
 
+    /// The selected graphics that take a graphic style: not equipment pieces.
     fn selected_graphics_mut(&mut self) -> impl Iterator<Item = &mut Graphic> {
         let selected = &self.tab.selected;
         self.tab
             .doc
             .graphics
             .iter_mut()
-            .filter(move |g| selected.contains(&g.id))
+            .filter(move |g| selected.contains(&g.id) && g.piece.is_none())
     }
 
     pub(super) fn set_scientific_kind(&mut self, kind: GraphicKind) {

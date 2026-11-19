@@ -39,6 +39,7 @@ mod document_tab;
 mod drawing_panel_capture;
 use document_tab::DocumentTab;
 mod engine_jobs;
+pub(crate) mod equipment;
 mod event_slot;
 mod figure_export;
 mod figure_panels;
@@ -159,6 +160,8 @@ pub enum InspectorTab {
     Predict,
     Labels,
     Templates,
+    /// The Equipment browser, opened by its tool.
+    Equipment,
     Import,
     Names,
     Export,
@@ -213,6 +216,7 @@ pub enum Message {
         Result<std::sync::Arc<reshiki::atom_labels::refresh::Refresh>, String>,
     ),
     Templates(template_library::Action),
+    Equipment(equipment::Action),
     TemplateNavigate(bool),
     InspectorScroll(f32),
     ResetBondDrawing,
@@ -512,6 +516,7 @@ pub struct App {
     viewport: iced::Size,
     template_index: usize,
     templates: template_library::State,
+    equipment: equipment::State,
     /// The last committed atom label, which a Text-tool double-click repeats.
     last_label: Option<atom_text::RememberedLabel>,
     /// The last Text-tool click on an atom, to recognize a double-click.
@@ -637,6 +642,7 @@ impl App {
             viewport: iced::Size::new(850.0, 600.0),
             template_index: 0,
             templates: template_library::State::load(),
+            equipment: equipment::State::default(),
             last_label: None,
             text_click: None,
             path_click: None,

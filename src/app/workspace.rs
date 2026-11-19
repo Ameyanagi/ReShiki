@@ -365,6 +365,11 @@ impl App {
                 .get(self.template_index)
                 .filter(|_| self.tool == Tool::Template)
                 .map(|t| (t, self.templates.anchor)),
+            piece: self
+                .equipment
+                .armed
+                .as_ref()
+                .filter(|_| self.tool == Tool::Equipment),
         })
         .shifted(crate::canvas::State::shifts)
         .width(Length::Fill)
@@ -752,6 +757,7 @@ impl App {
             (Tool::Graphic(self.toolbar.bracket.kind), brackets.as_str()),
             (self.toolbar.symbol, symbols.as_str()),
             (self.toolbar.orbital, orbitals.as_str()),
+            (Tool::Equipment, "Equipment"),
         ];
         let mut grid = column![].spacing(TOOL_GAP);
         for pair in tools.chunks(2) {
@@ -1496,6 +1502,19 @@ impl App {
                     done("Cancel"),
                 ]
             }
+            Tool::Equipment => {
+                vec![
+                    text(
+                        self.equipment
+                            .armed
+                            .as_deref()
+                            .map_or("Choose a piece", super::equipment::name),
+                    )
+                    .size(12)
+                    .into(),
+                    done("Cancel"),
+                ]
+            }
             Tool::Ring | Tool::RingPreset(_) => self.ring_tool_options(),
             Tool::Arrow => {
                 vec![
@@ -1894,6 +1913,7 @@ impl App {
             InspectorTab::Labels => self.atom_labels_panel(),
             InspectorTab::Abbreviations => self.abbreviations_panel(),
             InspectorTab::Templates => self.templates_panel(),
+            InspectorTab::Equipment => self.equipment_panel(),
             InspectorTab::Import => self.import_panel(),
             InspectorTab::Names => self.naming_panel(),
             InspectorTab::Export => self.export_panel(),
@@ -3962,6 +3982,7 @@ fn tool_name(tool: Tool) -> (&'static str, &'static str) {
         Tool::Bond(_) | Tool::StyledBond(_) | Tool::Wedge | Tool::Hash | Tool::Wavy => "Bond",
         Tool::Ring | Tool::RingPreset(_) => "Ring",
         Tool::Template => "Template",
+        Tool::Equipment => "Equipment",
         Tool::Arrow => "Reaction arrow",
         Tool::Text => "Text label",
         Tool::Erase => "Eraser",

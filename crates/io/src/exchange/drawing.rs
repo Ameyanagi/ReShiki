@@ -25,6 +25,8 @@ mod objects;
 #[cfg(test)]
 mod panel_tests;
 mod partial_charges;
+#[cfg(test)]
+mod piece_tests;
 mod tree;
 pub use clipboard::write as write_clipboard;
 use tree::{Key, Tree};
@@ -205,12 +207,16 @@ fn write_impl(
     // A catalytic cycle travels as the arrows and text it draws.
     let cycles = crate::cycles::materialized(document);
     let document = cycles.as_ref();
+    // Lab equipment travels as a group of plain curves per piece.
+    let pieces = crate::equipment::placed::materialized(document);
+    let document = pieces.as_ref();
     // Arrow looks without a ChemDraw form travel as grouped shapes.
     let lowered = crate::arrows::lowered(document);
     let document = lowered.as_ref();
     let shape_paths: HashMap<u64, Vec<PathCommand>>;
     let options = if matches!(lowered, std::borrow::Cow::Owned(_))
         || matches!(cycles, std::borrow::Cow::Owned(_))
+        || matches!(pieces, std::borrow::Cow::Owned(_))
     {
         let mut paths = options.graphic_paths.cloned().unwrap_or_default();
         for g in &document.graphics {

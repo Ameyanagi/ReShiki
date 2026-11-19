@@ -137,6 +137,7 @@ impl Glyph {
             Icon::Tool(Tool::Text) => tools::text(f, ink),
             Icon::Tool(Tool::Atom) => tools::atom(f, ink),
             Icon::Tool(Tool::Erase) => tools::erase(f, ink),
+            Icon::Tool(Tool::Equipment) => tools::equipment(f, ink),
             Icon::New => commands::new_document(f, ink),
             Icon::Open => commands::open(f, ink),
             Icon::Save => commands::save(f, ink),

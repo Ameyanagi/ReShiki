@@ -187,3 +187,15 @@ pub(super) fn erase(f: &mut Frame<'_>, ink: Color) {
     );
     line(f, ink, &[(8., 10.), (16., 18.)]);
 }
+
+/// A round-bottom flask: a neck on a round bulb.
+pub(super) fn equipment(f: &mut Frame<'_>, ink: Color) {
+    let mut points = vec![(10., 3.)];
+    // From the neck's left side, round the bottom, to its right side.
+    points.extend((0..=16).map(|i| {
+        let a = 4.4 - 5.66 * i as f32 / 16.;
+        (12. + 6.5 * a.cos(), 15. + 6.5 * a.sin())
+    }));
+    points.push((14., 3.));
+    line(f, ink, &points);
+}

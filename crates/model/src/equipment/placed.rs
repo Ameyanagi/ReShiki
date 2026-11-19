@@ -84,7 +84,7 @@ pub fn graphic(id: u64, definition: Arc<Definition>, center: Point, world_per_mm
     g.origin = center;
     g.axis_x = Point::new(world_per_mm, 0.);
     g.axis_y = Point::new(0., world_per_mm);
-    g.piece = Some(PieceRef::new(definition));
+    g.piece = Some(Box::new(PieceRef::new(definition)));
     // Centre the drawn piece, not its millimetre origin, on the point.
     let (lo, hi) = g.shape_bounds();
     let mid = Point::new((lo.x + hi.x) / 2., (lo.y + hi.y) / 2.);
@@ -199,16 +199,11 @@ pub fn plan(g: &Graphic) -> Rc<Vec<PlanPath>> {
     let Some((piece, d)) = g.piece.as_ref().and_then(|p| Some((p, p.linked.as_ref()?))) else {
         return Rc::default();
     };
-    let frame = [g.axis_x, g.axis_y, g.origin];
-    let bits = [0, 1, 2]
-        .map(|i| frame[i])
-        .map(|p| [p.x.to_bits(), p.y.to_bits()]);
+    let [x, y, o] = [g.axis_x, g.axis_y, g.origin];
     let key: CacheKey = (
         piece.definition.clone(),
         serde_json::to_string(&piece.params).unwrap_or_default(),
-        [
-            bits[0][0], bits[0][1], bits[1][0], bits[1][1], bits[2][0], bits[2][1],
-        ],
+        [x.x, x.y, y.x, y.y, o.x, o.y].map(f32::to_bits),
     );
     if let Some(hit) = PLANS.with_borrow_mut(|cache| {
         let i = cache.iter().position(|(k, _)| *k == key)?;
@@ -301,7 +296,7 @@ pub(crate) fn parts(g: &Graphic) -> Vec<Part> {
 }
 
 /// What the piece paints, in light-canvas colours like every other primitive.
-pub(crate) fn primitives(g: &Graphic) -> Vec<Primitive> {
+pub fn primitives(g: &Graphic) -> Vec<Primitive> {
     plan(g)
         .iter()
         .map(|p| {
@@ -340,4 +335,77 @@ pub(crate) fn primitives(g: &Graphic) -> Vec<Primitive> {
             }
         })
         .collect()
+}
+
+/// The drawing as ChemDraw can keep it: each piece becomes a group of
+/// filled and stroked curves in paint order, in the colours the canvas shows.
+pub fn materialized(doc: &Document) -> std::borrow::Cow<'_, Document> {
+    if !doc.graphics.iter().any(|g| g.piece.is_some()) {
+        return std::borrow::Cow::Borrowed(doc);
+    }
+    let shown = |c: Color| match c {
+        Color::Custom(rgb) => Color::Custom(doc.canvas_theme.color(rgb)),
+        other => other,
+    };
+    let mut out = doc.clone();
+    let mut next = doc.next_id();
+    out.graphics.clear();
+    for g in &doc.graphics {
+        if g.piece.is_none() {
+            out.graphics.push(g.clone());
+            continue;
+        }
+        let mut members = Vec::new();
+        for primitive in primitives(g) {
+            let (alpha, primitive) = match primitive {
+                Primitive::Opacity { alpha, primitive } => (Some(alpha), *primitive),
+                p => (None, p),
+            };
+            let Primitive::Path {
+                commands,
+                mut style,
+                filled,
+            } = primitive
+            else {
+                continue;
+            };
+            style.stroke = shown(style.stroke);
+            style.fill = style.fill.map(shown);
+            if style.width_pt == 0. {
+                // ChemDraw strokes every curve: a hairline in the fill's colour.
+                style.width_pt = 0.1;
+                style.stroke = style.fill.unwrap_or(style.stroke);
+            }
+            style.effects.opacity = alpha;
+            let mut shape =
+                Graphic::pen_curve(next, Point::default(), Point::new(1., 0.), style.clone());
+            shape.style = style;
+            shape.path = commands;
+            shape.node_types.clear();
+            shape.layer = g.layer;
+            if !filled {
+                shape.style.fill = None;
+            }
+            out.graphics.push(shape);
+            members.push(next);
+            next += 1;
+        }
+        for group in out
+            .groups
+            .iter_mut()
+            .filter(|group| group.members.contains(&g.id))
+        {
+            group.members.retain(|id| *id != g.id);
+            group.members.extend(&members);
+        }
+        out.groups.push(crate::grouping::Group {
+            id: next,
+            members,
+            integral: false,
+            layout: None,
+        });
+        next += 1;
+    }
+    out.prune_groups();
+    std::borrow::Cow::Owned(out)
 }

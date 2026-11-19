@@ -64,6 +64,9 @@ impl MoleculeCanvas<'_> {
             state.gesture = Some(Gesture::Erase { last: p });
             return Some(Action::publish(Edit::EraseStart(p)).and_capture());
         }
+        if self.tool == Tool::Equipment {
+            return Some(Action::publish(Edit::Piece(p)).and_capture());
+        }
         if self.tool == Tool::Tilt {
             return self.press_tilt(state, p, point);
         }

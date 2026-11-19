@@ -22,6 +22,8 @@ pub enum Tool {
     Ring,
     RingPreset(reshiki::rings::Preset),
     Template,
+    /// Places the piece armed in the Equipment browser.
+    Equipment,
     Arrow,
     Text,
     Erase,
@@ -102,6 +104,7 @@ impl Tool {
                 "Click to place or attach · Drag rotates in 15° steps · {alt} rotates freely or connects by a bond"
             ),
             Self::Template => "Click to place or attach · Drag to orient · Esc cancels".into(),
+            Self::Equipment => "Choose a piece, then click to place it · Esc cancels".into(),
             Self::Arrow => {
                 "Click to place or change an arrow · Click again to switch · Drag to draw".into()
             }

@@ -349,6 +349,32 @@ impl MoleculeCanvas<'_> {
         }
     }
 
+    /// The armed equipment piece follows the pointer, placed as a click would.
+    pub(super) fn preview_piece(&self, draft: &mut Draft<'_>, state: &State, bounds: Rectangle) {
+        use reshiki::equipment::placed;
+        let (Tool::Equipment, Some(definition), Some(p)) = (
+            self.tool,
+            self.piece,
+            state.cursor.filter(|p| bounds.contains(*p)),
+        ) else {
+            return;
+        };
+        let at = self
+            .camera
+            .world(Point::new(p.x - bounds.x, p.y - bounds.y), bounds);
+        let doc = draft.preview.to_mut();
+        let scale = placed::world_per_mm(doc, placed::DEFAULT_PT_PER_MM);
+        let ghost = placed::graphic(doc.next_id(), definition.clone(), at, scale);
+        doc.graphics.push(ghost);
+        draft.template_notice = Some((
+            format!(
+                "Click to place the {} · Esc cancels",
+                crate::app::equipment::noun(definition)
+            ),
+            true,
+        ));
+    }
+
     pub(super) fn preview_delocalized_ring(
         &self,
         draft: &mut Draft<'_>,

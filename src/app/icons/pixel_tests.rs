@@ -72,6 +72,7 @@ fn tool_family(tool: Tool) -> &'static str {
         Tool::Erase => "tool-erase",
         Tool::Graphic(_) => "tool-graphic",
         Tool::EditPoints => "tool-edit-points",
+        Tool::Equipment => "tool-equipment",
     }
 }
 
@@ -159,6 +160,7 @@ fn all_icons() -> Vec<(String, Icon)> {
         Tool::Text,
         Tool::Erase,
         Tool::EditPoints,
+        Tool::Equipment,
     ];
     tools.extend(
         [
@@ -236,6 +238,7 @@ fn expected_counts() -> BTreeMap<&'static str, usize> {
         "tool-text",
         "tool-erase",
         "tool-edit-points",
+        "tool-equipment",
         "tool-stretch",
     ]
     .into_iter()
@@ -276,7 +279,7 @@ fn icon_fixtures_cover_every_variant() {
         *counts.entry(family(*icon)).or_insert(0) += 1;
     }
     assert_eq!(counts, expected_counts());
-    assert_eq!(icons.len(), 147);
+    assert_eq!(icons.len(), 148);
 }
 
 fn render(

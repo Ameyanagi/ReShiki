@@ -1,6 +1,6 @@
 //! Placed pieces in a drawing: saving, opening, copying and the edit guards.
 use super::builtin;
-use super::placed::{self, PieceRef};
+use super::placed;
 use crate::document::{DRAWING_ELEMENTS, Document, Point};
 use crate::graphics::GraphicKind;
 
@@ -126,10 +126,9 @@ fn a_skewed_or_unlinked_piece_is_refused() {
             .contains("not stretched or skewed")
     );
     let mut g = doc.graphics[0].clone();
-    g.piece = Some(PieceRef {
-        linked: None,
-        ..g.piece.clone().unwrap()
-    });
+    if let Some(piece) = g.piece.as_mut() {
+        piece.linked = None;
+    }
     assert!(g.validate().unwrap_err().contains("is not in the drawing"));
     let mut g = doc.graphics[0].clone();
     g.piece

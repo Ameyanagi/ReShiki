@@ -1118,13 +1118,17 @@ impl App {
         if molecular_first && ring_tool {
             body = body.push(self.molecular_section(opened));
         }
+        if let Some(card) = self.piece_card() {
+            body = body.push(card);
+        }
+        // Pieces draw their own lines and fills: graphic style does not apply.
         if matches!(self.tool, Tool::Graphic(_))
             || self
                 .tab
                 .doc
                 .graphics
                 .iter()
-                .any(|g| selected.contains(&g.id) && g.picture.is_none())
+                .any(|g| selected.contains(&g.id) && g.picture.is_none() && g.piece.is_none())
         {
             // A panel's titles and dividers come before its colors.
             if let Some(panel) = self.figure_panel_card() {

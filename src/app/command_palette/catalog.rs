@@ -582,6 +582,13 @@ fn inserts(app: &App) -> Vec<Command> {
         );
     }
     list.push(send(
+        "Insert equipment…",
+        Insert,
+        "Choose lab glassware, then click to place it",
+        "equipment apparatus glassware lab flask condenser adapter stopper septum",
+        Message::Tool(Tool::Equipment),
+    ));
+    list.push(send(
         "Catalytic cycle",
         Insert,
         "Add an empty cycle at the center of the view, then drag structures or text onto its circle",

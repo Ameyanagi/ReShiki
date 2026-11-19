@@ -74,7 +74,7 @@ fn mixed_primitives() -> Vec<Primitive> {
     };
     vec![
         background,
-        Primitive::Picture(upright),
+        Primitive::Picture(Box::new(upright)),
         Primitive::Line(World::new(30., 80.), World::new(590., 140.), 0.2),
         Primitive::Polygon(vec![
             World::new(230., 40.),
@@ -82,7 +82,7 @@ fn mixed_primitives() -> Vec<Primitive> {
             World::new(330., 70.),
         ]),
         dashed,
-        Primitive::Picture(flipped),
+        Primitive::Picture(Box::new(flipped)),
         Primitive::Text {
             position: World::new(70., 240.),
             text: "Underlined NH2 · café".into(),
@@ -376,7 +376,7 @@ async fn manual_renderer_matches_captured_baseline() {
         &renderer,
         primitives.iter().filter_map(|primitive| {
             if let Primitive::Picture(g) = primitive {
-                Some(g.clone())
+                Some((**g).clone())
             } else {
                 None
             }
@@ -558,7 +558,7 @@ async fn manual_text_placement_matches_captured_baseline() {
     let _allocations = load_pictures(
         &renderer,
         primitives.iter().filter_map(|primitive| match primitive {
-            Primitive::Picture(graphic) => Some(graphic.clone()),
+            Primitive::Picture(graphic) => Some((**graphic).clone()),
             _ => None,
         }),
     );

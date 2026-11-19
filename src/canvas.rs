@@ -276,6 +276,8 @@ pub enum Edit {
     DelocalizedRing(World, Option<World>, u8),
     RingPreset(reshiki::rings::Preset, World, Option<World>, bool, bool),
     Template(World, Option<World>),
+    /// Place the armed equipment piece centred here.
+    Piece(World),
     Click(World),
     /// Legacy/programmatic camera edits use world coordinates.
     Pan(f32, f32),
@@ -653,6 +655,8 @@ pub struct MoleculeCanvas<'a> {
     pub aromatic_ring: bool,
     pub template_connection: reshiki::templates::Connection,
     pub template: Option<(&'a reshiki::templates::Template, reshiki::templates::Anchor)>,
+    /// The equipment piece a click places, shown under the pointer.
+    pub piece: Option<&'a std::sync::Arc<reshiki::equipment::format::Definition>>,
     pub arrows: ArrowOptions<'a>,
     pub graphics: GraphicOptions<'a>,
 }
@@ -702,6 +706,7 @@ impl<'a> MoleculeCanvas<'a> {
             aromatic_ring: false,
             template_connection: Default::default(),
             template: None,
+            piece: None,
             arrows: ArrowOptions {
                 preset: styles.arrow_preset,
                 style: styles.arrow_style,

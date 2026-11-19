@@ -320,7 +320,7 @@ pub struct Graphic {
     pub picture: Option<crate::pictures::Picture>,
     /// The definition and parameter values of a piece of lab equipment.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub piece: Option<crate::equipment::placed::PieceRef>,
+    pub piece: Option<Box<crate::equipment::placed::PieceRef>>,
     pub id: u64,
     pub kind: GraphicKind,
     pub origin: Point,
