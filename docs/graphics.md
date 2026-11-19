@@ -350,7 +350,8 @@ keep that order.
    Option-drag (Alt-drag) the clamp to take it and the flask off the rod.
 
 A rod holds any number of clamps. **Properties → Equipment** lists each clamp
-on the rod with **Detach**. The support ring mounts on a rod the same way.
+on the rod with its height along the rod, for example **Holds the clamp at
+280 mm**, and **Detach**. The support ring mounts on a rod the same way.
 
 Joint clips go on seated ground-glass joints. Select an assembly and click
 **Add clips to all joints** in Properties, or pick a clip in the Equipment

@@ -181,7 +181,23 @@ fn seat_state(doc: &Document, port: &Port, partner: &JointRef) -> String {
     } else {
         ""
     };
-    format!("{verb} {}{clip}", joint_name(doc, partner))
+    // A rod holds several clamps: say where along it each one is.
+    let at = (port.shared())
+        .then(|| {
+            let g = doc.graphics.iter().find(|g| g.id == partner.piece)?;
+            let p = solve::ports(g).into_iter().find(|p| p.at == *partner)?;
+            let c = [
+                p.point[0] + p.dir[0] * p.length / 2. - port.point[0],
+                p.point[1] + p.dir[1] * p.length / 2. - port.point[1],
+            ];
+            Some(format!(
+                " at {:.0} mm",
+                (c[0] * port.dir[0] + c[1] * port.dir[1]) / port.mm
+            ))
+        })
+        .flatten()
+        .unwrap_or_default();
+    format!("{verb} {}{at}{clip}", joint_name(doc, partner))
 }
 
 /// What a snap does, for the pill beside the joint and the status bar.

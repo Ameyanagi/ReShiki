@@ -282,6 +282,11 @@ fn a_clamp_placed_by_the_rod_mounts_on_it_in_one_undo_step() {
     let _ = app.update(Message::Canvas(Edit::Piece(click)));
     assert_eq!(app.tab.doc.seats.len(), 1, "{}", app.status);
     assert_eq!(app.status, "Mounted the clamp on the stand rod");
+    // The rod says where along it the clamp is: half of its 560 mm.
+    let doc = &app.tab.doc;
+    let rod = solve::ports(&doc.graphics[0]).remove(0);
+    let partner = solve::partner(doc, &rod.at).unwrap();
+    assert_eq!(seat_state(doc, &rod, &partner), "Holds the clamp at 280 mm");
     let _ = app.update(Message::Undo);
     assert_eq!(app.tab.doc, before);
 }
