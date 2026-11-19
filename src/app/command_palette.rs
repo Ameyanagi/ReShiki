@@ -13,7 +13,10 @@ use iced::widget::text::{Span, Wrapping};
 use iced::widget::{Space, column, container, rich_text, row, scrollable, stack, text};
 use iced::{Alignment, Element, Font, Length, Task};
 use reshiki::{atom_text::Mode, document::Point, keyboard_drawing::Target as Hotspot};
-use std::{cmp::Reverse, collections::HashSet};
+use std::{
+    cmp::Reverse,
+    collections::{HashMap, HashSet},
+};
 
 pub(super) mod catalog;
 use catalog::{Category, Command, Need, Ring, Run};
@@ -345,14 +348,16 @@ impl App {
     }
 
     fn need_unavailable(&self, need: Need, target: &Target) -> Option<&'static str> {
+        let selection_unavailable = || {
+            self.tab
+                .selected
+                .is_empty()
+                .then_some("Select something first")
+        };
         match need {
             Need::Nothing => None,
             Need::Blocked(reason) => Some(reason),
-            Need::Selection => self
-                .tab
-                .selected
-                .is_empty()
-                .then_some("Select something first"),
+            Need::Selection => selection_unavailable(),
             Need::LastingLayout => {
                 (self.alignment_count() < 2).then_some("Select at least two objects")
             }
@@ -370,10 +375,9 @@ impl App {
             Need::EquipmentClips => (self.tab.selected.len() < 2
                 || reshiki::equipment::solve::unclipped(&self.tab.doc, &self.tab.selected) == 0)
                 .then_some("Select equipment with unclipped joints"),
-            Need::MakeCycle => (self.tab.cycle_inputs.proposal.is_none()
-                && (self.selected_cycle().is_some()
-                    || self.cycle_part_selected()
-                    || self.alignment_count() < 2))
+            Need::MakeCycle => (self.selected_cycle().is_some()
+                || self.cycle_part_selected()
+                || self.alignment_count() < 2)
                 .then_some("Select at least two objects outside a cycle"),
             Need::CyclePart => (self.selected_cycle().is_some() || !self.cycle_part_selected())
                 .then_some("Select a part of a cycle"),
@@ -385,58 +389,50 @@ impl App {
                 .cycle_step()
                 .is_none()
                 .then_some("Select a cycle with steps"),
-            Need::CycleProposal => self
-                .tab
-                .cycle_inputs
-                .proposal
-                .is_none()
-                .then_some("Make a cycle proposal first"),
             Need::Panel => self
                 .selected_panels()
                 .next()
                 .is_none()
                 .then_some("Select a panel"),
-            Need::GraphicFill => (self.selected_styled_graphics().next().is_none()
-                || !self.graphic_fill_controls())
-            .then_some("Select a closed shape"),
-            Need::RingFill => (!self.selected_ring_fills().iter().any(Option::is_some))
-                .then_some("Select a filled ring"),
+            Need::GraphicFill => (!self.graphic_panel_visible() || !self.graphic_fill_controls())
+                .then_some("Select a closed shape"),
+            Need::RingFill => (self.tab.doc.ring_fills.is_empty()
+                || !self.selected_ring_fills().iter().any(Option::is_some))
+            .then_some("Select a filled ring"),
             Need::Purpose => (!self
                 .tab
                 .selected
                 .iter()
                 .any(|id| reshiki::purpose::of(&self.tab.doc, *id).is_some()))
             .then_some("Select a molecule or arrow"),
-            Need::ReactionPreview => (!self.selected_reaction_arrow().is_some_and(|a| {
-                a.purpose.is_chemistry()
-                    && reshiki::arrows::Preset::from_kind(&a.kind)
-                        .reaction_role_refusal()
-                        .is_none()
+            Need::ReactionPreview => (!self.reaction_arrow().is_some_and(|id| {
+                self.tab.doc.arrows.iter().any(|a| {
+                    a.id == id
+                        && a.purpose.is_chemistry()
+                        && reshiki::arrows::Preset::from_kind(&a.kind)
+                            .reaction_role_refusal()
+                            .is_none()
+                })
             }))
             .then_some("Select one reaction arrow"),
-            Need::ReactionReady => (!self.selected_reaction_arrow().is_some_and(|a| {
+            Need::ReactionReady => (!self.reaction_arrow().is_some_and(|arrow| {
                 self.tab
                     .doc
                     .reactions
                     .iter()
-                    .any(|r| r.arrow == a.id && r.ready())
+                    .any(|r| r.arrow == arrow && r.ready())
             }))
             .then_some("Select one arrow with assigned reaction roles"),
             Need::ReactionColors => self
                 .reaction_colors()
                 .is_none()
                 .then_some("Color a reaction by origin first"),
-            Need::Arrow => self
-                .selected_arrows()
-                .next()
-                .is_none()
-                .then_some("Select an arrow"),
-            Need::ArrowBody => (self.selected_arrows().next().is_none()
-                || !self.arrow_body_controls())
-            .then_some("Select an arrow with body styles"),
+            Need::Arrow => (!self.arrow_panel_visible()).then_some("Select an arrow"),
+            Need::ArrowBody => (!self.arrow_panel_visible() || !self.arrow_body_controls())
+                .then_some("Select an arrow with body styles"),
             Need::MakeArc => (!self.can_make_arc()).then_some("Select a free arrow without a bend"),
             Need::TextBoxes => (!self.selected_text_boxes()).then_some("Select a text box first"),
-            Need::Resizable => self.need_unavailable(Need::Selection, target).or_else(|| {
+            Need::Resizable => selection_unavailable().or_else(|| {
                 let ids = self
                     .tab
                     .doc
@@ -445,7 +441,7 @@ impl App {
                     .any(|id| reshiki::models3d::hides(&self.tab.doc, *id)))
                 .then_some(super::numeric_transforms::RESIZE_SHOWN_IN_3D)
             }),
-            Need::Flippable => self.need_unavailable(Need::Selection, target).or_else(|| {
+            Need::Flippable => selection_unavailable().or_else(|| {
                 reshiki::models3d::refusal(&self.tab.doc, &self.tab.selected, "flip")
                     .map(|_| "Switch to 2D to flip the drawing")
             }),
@@ -575,8 +571,15 @@ impl App {
             _ => 0,
         };
         let typed = self.commands.query().to_owned();
-        let query = search::normalize_spelling(&typed);
-        let query = query.as_str();
+        let normalized = search::normalize_spelling(&typed);
+        let normalized = (normalized != typed).then_some(normalized.as_str());
+        let mut availability = HashMap::new();
+        let mut is_blocked = |need| {
+            availability
+                .entry(need)
+                .or_insert_with(|| self.need_unavailable(need, &target))
+                .is_some()
+        };
         let extra = catalog::parameterised(self, &typed);
         // A blocked scale or flip keeps its explanation first, followed by the
         // explicit display switch. Only one whole model can use that switch.
@@ -585,23 +588,24 @@ impl App {
             .or_else(|| {
                 self.commands.catalog().iter().find(|command| {
                     command.need == Need::Flippable
-                        && !query.is_empty()
-                        && search::in_name_or_keys(*command, query)
+                        && !typed.is_empty()
+                        && (search::in_name_or_keys(*command, &typed)
+                            || normalized
+                                .is_some_and(|query| search::in_name_or_keys(*command, query)))
                 })
             })
             .filter(|command| {
                 matches!(command.need, Need::Resizable | Need::Flippable)
-                    && self.need_unavailable(command.need, &target).is_some()
+                    && is_blocked(command.need)
                     && self.selected_model().is_some()
             })
             .map(|command| command.name.clone());
         // Commands that cannot run now go below those that can.
         let blocked: Vec<bool> = (self.commands.catalog().iter())
-            .map(|c| self.need_unavailable(c.need, &target).is_some())
+            .map(|c| is_blocked(c.need))
             .collect();
-        let state = &mut self.commands;
-        state.items.truncate(state.catalog);
-        let catalog = &state.items;
+        let state = &self.commands;
+        let catalog = state.catalog();
         // (score, index, tier): an exact alias or recent command, then name or
         // key matches, then the rest. With no recent commands yet, Start here
         // takes their place.
@@ -609,7 +613,7 @@ impl App {
             [] => START_HERE.to_vec(),
             recent => recent.iter().map(String::as_str).collect(),
         };
-        let mut scored: Vec<(u32, usize, u8)> = if query.is_empty() {
+        let mut scored: Vec<(u32, usize, u8)> = if typed.is_empty() {
             catalog
                 .iter()
                 .zip(&blocked)
@@ -626,54 +630,58 @@ impl App {
                 })
                 .collect()
         } else {
+            let score_query = |command: &Command, query: &str| {
+                if command.aliases.contains(&query) {
+                    return Some((2, 10_000));
+                }
+                if catalog::github_word(command, query) {
+                    return Some((2, 9_000));
+                }
+                // A drawing or repository known on GitHub whose name
+                // has a word starting with the query comes first; for one
+                // or two letters, after every command instead.
+                if catalog::github_place(&command.name) {
+                    if query.chars().count() <= 2 {
+                        return search::score(command, query).map(|_| (0, 0));
+                    }
+                    let lower = query.to_lowercase();
+                    let word = (command.name.rsplit(": ").next().unwrap_or_default())
+                        .split(|c: char| !c.is_alphanumeric())
+                        .any(|word| word.to_lowercase().starts_with(&lower));
+                    if word {
+                        return Some((2, 8_500));
+                    }
+                }
+                let keyword = query.chars().count() >= 2
+                    && !query.eq_ignore_ascii_case("template")
+                    && match &command.run {
+                        Run::Template(index, _) => {
+                            self.templates.library.get(*index).is_some_and(|template| {
+                                template
+                                    .keywords
+                                    .iter()
+                                    .any(|keyword| keyword.eq_ignore_ascii_case(query))
+                            })
+                        }
+                        _ => false,
+                    };
+                let score = if keyword {
+                    let mut exact = command.clone();
+                    exact.name = query.into();
+                    search::score(&exact, query)
+                } else {
+                    search::score(command, query)
+                }?;
+                let tier = (keyword || search::in_name_or_keys(command, query)) as u8;
+                Some((tier, score + boost(command.category)))
+            };
             catalog
                 .iter()
                 .enumerate()
                 .filter_map(|(i, command)| {
-                    let alias = command.aliases.contains(&query);
-                    if alias {
-                        return Some((10_000, i, 2));
-                    }
-                    if catalog::github_word(command, query) {
-                        return Some((9_000, i, 2));
-                    }
-                    // A drawing or repository known on GitHub whose name
-                    // has a word starting with the query comes first; for one
-                    // or two letters, after every command instead.
-                    if catalog::github_place(&command.name) {
-                        let short = typed.chars().count() <= 2;
-                        let word = (command.name.rsplit(": ").next().unwrap_or_default())
-                            .split(|c: char| !c.is_alphanumeric())
-                            .any(|word| word.to_lowercase().starts_with(&typed.to_lowercase()));
-                        if short {
-                            return search::score(command, query).map(|_| (0, i, 0));
-                        }
-                        if word {
-                            return Some((8_500, i, 2));
-                        }
-                    }
-                    let keyword = query.chars().count() >= 2
-                        && !query.eq_ignore_ascii_case("template")
-                        && match &command.run {
-                            Run::Template(index, _) => {
-                                self.templates.library.get(*index).is_some_and(|template| {
-                                    template
-                                        .keywords
-                                        .iter()
-                                        .any(|keyword| keyword.eq_ignore_ascii_case(query))
-                                })
-                            }
-                            _ => false,
-                        };
-                    let score = if keyword {
-                        let mut exact = command.clone();
-                        exact.name = query.into();
-                        search::score(&exact, query)
-                    } else {
-                        search::score(command, query)
-                    }?;
-                    let tier = (keyword || search::in_name_or_keys(command, query)) as u8;
-                    Some((score + boost(command.category), i, tier))
+                    let (tier, score) = score_query(command, &typed)
+                        .max(normalized.and_then(|query| score_query(command, query)))?;
+                    Some((score, i, tier))
                 })
                 .collect()
         };
@@ -692,26 +700,32 @@ impl App {
         // An exact alias ranks first even when it cannot run, to say why.
         // Recent commands stay above the rest, with available ones first.
         let late = |i: usize, tier: u8| tier < 2 && blocked(i);
-        scored.sort_by_key(|&(score, i, tier)| (late(i, tier), Reverse(tier), Reverse(score), i));
+        scored.sort_by_key(|&(score, i, tier)| {
+            // An exact typed name wins a tie with an exact normalized name.
+            let exact = normalized.is_some()
+                && catalog
+                    .get(i)
+                    .is_some_and(|command| command.name.eq_ignore_ascii_case(&typed));
+            (late(i, tier), Reverse(tier), Reverse(score), !exact, i)
+        });
         let best = scored.iter().map(|(score, ..)| *score).max().unwrap_or(0);
         // Where the rows that cannot run begin.
         let mut split = scored
             .iter()
             .filter(|(_, i, tier)| !late(*i, *tier))
             .count();
-        state.start_here = if query.is_empty() && state.recent.is_empty() {
+        let start_here = if typed.is_empty() && state.recent.is_empty() {
             scored.iter().filter(|(.., tier)| *tier == 2).count()
         } else {
             0
         };
-        state.hits = scored.into_iter().map(|(_, i, _)| i).collect();
         // A command word with a value is what was meant, not a name.
         let named = extra.is_none();
         let mut rows = vec![];
         if let Some(command) = extra {
             rows.push((true, command));
         }
-        if !query.is_empty() && best < STRONG && named {
+        if !typed.is_empty() && best < STRONG && named {
             if reshiki::chemistry::smiles::parse(&typed).is_ok() {
                 rows.push((
                     false,
@@ -736,10 +750,14 @@ impl App {
             ));
         }
         // Explicit value rows stay first, including their refusal reason.
-        let rows: Vec<_> = (rows.into_iter())
-            .map(|(first, c)| (first, self.need_unavailable(c.need, &target).is_some(), c))
+        let rows: Vec<_> = rows
+            .into_iter()
+            .map(|(first, c)| (first, is_blocked(c.need), c))
             .collect();
         let state = &mut self.commands;
+        state.items.truncate(state.catalog);
+        state.start_here = start_here;
+        state.hits = scored.into_iter().map(|(_, i, _)| i).collect();
         for (first, blocked, command) in rows {
             if !names.insert(command.name.clone()) {
                 continue;

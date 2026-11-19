@@ -1043,13 +1043,7 @@ impl App {
                     .style(crate::appearance::text_color(Color::from_rgb8(182, 66, 61)))
             });
         }
-        let styled_graphics = matches!(self.tool, Tool::Graphic(_))
-            || self
-                .tab
-                .doc
-                .graphics
-                .iter()
-                .any(|g| selected.contains(&g.id) && g.picture.is_none() && g.piece.is_none());
+        let styled_graphics = self.graphic_panel_visible();
         let cycle = self.cycle_card();
         let show_cycle = cycle.is_some();
         // A selected panel's title, fill and shadow come before the cards of
@@ -1201,8 +1195,7 @@ impl App {
         {
             body = body.push(card(container(self.picture_panel()).padding(12)));
         }
-        if self.tool == Tool::Arrow || self.tab.doc.arrows.iter().any(|a| selected.contains(&a.id))
-        {
+        if self.arrow_panel_visible() {
             body = body.push(card(container(self.arrow_panel()).padding(12)));
         }
         if let Some(panel) = self.arrow_label_gap_panel() {

@@ -184,6 +184,10 @@ impl App {
         })
     }
 
+    pub(super) fn graphic_panel_visible(&self) -> bool {
+        matches!(self.tool, Tool::Graphic(_)) || self.selected_styled_graphics().next().is_some()
+    }
+
     pub(super) fn graphic_fill_controls(&self) -> bool {
         let mut selected = self.selected_styled_graphics();
         let first = selected.next();

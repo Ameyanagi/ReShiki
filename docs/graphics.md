@@ -303,7 +303,7 @@ Liebig condensers, glass stoppers, rubber septa, a reducing and an
 expansion adapter, a lab stand, a three-finger clamp, a support ring and
 joint clips for 15/25 and 29/42.
 
-1. Click **Equipment** (the flask in the last row of the tools palette), or
+1. Click **Insert equipment…** (the flask in the last row of the tools palette), or
    choose **Insert equipment…** in the command palette. The side panel lists
    the pieces.
 2. Search by name or keyword in English or Japanese (`round`, `Liebig`,

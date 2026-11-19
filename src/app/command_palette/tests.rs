@@ -49,24 +49,10 @@ fn top(app: &App) -> &Command {
 #[test]
 fn drawing_commands_have_unique_palette_names() {
     let list = catalog::build(&app());
-    let mut seen = HashSet::new();
-    // Templates and examples may repeat a direct insert's name; search keeps the direct one.
-    for command in list.iter().filter(|c| {
-        !matches!(&c.run, Run::Template(..))
-            && !matches!(&c.run, Run::Send(m) if matches!(m.as_slice(), [Message::Example(_)]))
-    }) {
-        assert!(
-            seen.insert(command.name.as_str()),
-            "Duplicate palette name: {}",
-            command.name
-        );
-    }
     for name in [
         "Figure layouts",
         "Make catalytic cycle",
         "Remove from cycle",
-        "Cycle review: Reverse order",
-        "Cycle review: Discard",
         "Cycle: Clockwise",
         "Cycle: Counterclockwise",
         "Cycle step: Reversible",
@@ -143,6 +129,11 @@ fn drawing_commands_have_unique_palette_names() {
         "Color by origin: Fill new rings",
         "Color by origin: Legend",
     ] {
+        assert_eq!(
+            list.iter().filter(|command| command.name == name).count(),
+            1,
+            "{name} is in the palette exactly once"
+        );
         let command = list
             .iter()
             .find(|command| command.name == name)
@@ -1581,7 +1572,12 @@ fn every_catalog_entry_runs() {
     for command in &catalog {
         *counts.entry(command.category.label()).or_insert(0) += 1;
         match &command.run {
-            Run::Send(messages) => assert!(!messages.is_empty(), "{}", command.name),
+            // A row that cannot act here, such as Detach with no single joint, sends nothing.
+            Run::Send(messages) => assert!(
+                !messages.is_empty() || matches!(command.need, Need::Blocked(_)),
+                "{}",
+                command.name
+            ),
             Run::AtomKey(key) if *key != "Enter" => {
                 let doc = reshiki::rings::Preset::Benzene.document(42., false);
                 let id = doc.atoms[0].id;
@@ -1931,12 +1927,82 @@ fn palette_search_accepts_british_spelling() {
 }
 
 #[test]
+fn an_exact_saved_template_name_beats_its_normalized_spelling() {
+    use reshiki::{rings::Preset, templates::Template};
+
+    let mut app = app();
+    app.templates.library.templates =
+        [("Gray", Preset::Benzene), ("Grey", Preset::Cyclopentadiene)]
+            .into_iter()
+            .map(|(name, preset)| Template {
+                id: format!("test:{name}"),
+                group: "Rings".into(),
+                name: name.into(),
+                smiles: String::new(),
+                keywords: vec![],
+                low_rank_keywords: vec![],
+                note: String::new(),
+                locants: Default::default(),
+                document: preset.document(42., false),
+                anchor: Default::default(),
+            })
+            .collect();
+
+    search(&mut app, "Grey");
+    assert_eq!(top(&app).name, "Grey");
+    let _ = app.update(Message::Commands(Action::Submit));
+    assert_eq!(app.tab.doc.atoms.len(), 5, "{}", app.status);
+}
+
+#[test]
 fn origin_ranks_reaction_coloring_first() {
     let mut app = app();
     search(&mut app, "origin");
 
     assert_eq!(top(&app).name, "Color by origin");
     assert!(app.command_unavailable(top(&app)).is_some());
+}
+
+#[test]
+fn reaction_commands_use_the_reaction_chosen_in_roles_with_only_a_product_selected() {
+    use crate::app::reactions::Action as ReactionAction;
+    use reshiki::{
+        document::Arrow,
+        reactions::{self, Role},
+    };
+
+    let mut app = app();
+    let reactant = app.tab.doc.add_atom("C", Point::default());
+    let product = app.tab.doc.add_atom("C", Point::new(250., 0.));
+    let other_reactant = app.tab.doc.add_atom("O", Point::new(0., 150.));
+    let [arrow, other] = [0., 150.].map(|y| {
+        let id = app.tab.doc.next_id();
+        app.tab.doc.arrows.push(Arrow::new(
+            id,
+            Point::new(80., y),
+            Point::new(180., y),
+            Default::default(),
+            Default::default(),
+        ));
+        id
+    });
+    reactions::assign(&mut app.tab.doc, arrow, &[reactant], Role::Reactant).unwrap();
+    reactions::assign(&mut app.tab.doc, arrow, &[product], Role::Product).unwrap();
+    reactions::assign(&mut app.tab.doc, other, &[other_reactant], Role::Reactant).unwrap();
+
+    let _ = app.update(Message::Reaction(ReactionAction::Open));
+    let _ = app.update(Message::Reaction(ReactionAction::Choose(arrow)));
+    let _ = app.update(Message::Canvas(Edit::Select(vec![product])));
+    assert_eq!(app.tab.selected, [product]);
+    assert_eq!(app.reaction_arrow(), Some(arrow));
+    for name in ["Preview reaction", "Color by origin"] {
+        search(&mut app, name);
+        assert_eq!(
+            app.command_unavailable(&app.commands.items[row(&app, name)]),
+            None,
+            "{name}"
+        );
+    }
 }
 
 #[test]

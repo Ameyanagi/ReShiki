@@ -60,7 +60,7 @@ impl Category {
 }
 
 /// What must be targeted before a command can run.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum Need {
     Nothing,
     Blocked(&'static str),
@@ -75,7 +75,6 @@ pub(crate) enum Need {
     CyclePart,
     Cycle,
     CycleStep,
-    CycleProposal,
     Panel,
     GraphicFill,
     RingFill,
@@ -840,11 +839,7 @@ fn edits(app: &App) -> Vec<Command> {
             Edit,
             "Arrange the selected structures and text in a catalytic cycle.",
             "catalyst loop mechanism intermediates circle",
-            Message::Cycle(if app.tab.cycle_inputs.proposal.is_some() {
-                cycles::Action::MakeApply
-            } else {
-                cycles::Action::Make
-            }),
+            Message::Cycle(cycles::Action::Make),
         )
         .need(Need::MakeCycle),
         send(
@@ -1060,29 +1055,6 @@ fn edits(app: &App) -> Vec<Command> {
             Message::Generic(generic::Action::Expand),
         ),
     ];
-    for (name, detail, action) in [
-        (
-            "Reverse order",
-            "Reverse the proposed cycle’s order.",
-            cycles::Action::MakeReverse,
-        ),
-        (
-            "Discard",
-            "Discard the proposed catalytic cycle.",
-            cycles::Action::MakeDiscard,
-        ),
-    ] {
-        list.push(
-            send(
-                format!("Cycle review: {name}"),
-                Edit,
-                detail,
-                "catalytic cycle loop review",
-                Message::Cycle(action),
-            )
-            .need(Need::CycleProposal),
-        );
-    }
     let (update, update_all) = app
         .selected_piece_updates()
         .map_or((None, None), |(update, all)| (Some(update), all));
@@ -1642,7 +1614,7 @@ fn analysis(app: &App) -> Vec<Command> {
     let step = app
         .selected_cycle()
         .zip(app.cycle_step())
-        .map(|((_, cycle), (_, index))| &cycle.steps[index]);
+        .and_then(|((_, cycle), (_, index))| cycle.steps.get(index));
     for (name, detail, need, action) in [
         (
             "Cycle: Clockwise",

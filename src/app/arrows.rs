@@ -403,6 +403,10 @@ impl App {
             .filter(|a| self.tab.selected.contains(&a.id))
     }
 
+    pub(super) fn arrow_panel_visible(&self) -> bool {
+        self.tool == Tool::Arrow || self.selected_arrows().next().is_some()
+    }
+
     pub(super) fn arrow_body_controls(&self) -> bool {
         !matches!(
             self.tab.arrow_style,
