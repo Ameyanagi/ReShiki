@@ -366,7 +366,7 @@ Joint clips go on seated ground-glass joints. Select an assembly and click
 **Add clips to all joints** in Properties, or pick a clip in the Equipment
 panel and click near a joint of its size; the label says **Clip the flask
 neck · 29/42**. A clip moves with its joint and goes when the joint is
-detached; select it alone with Option-click to delete it.
+detached; click it a second time to select it alone and delete it.
 
 ### Move parts and set liquid levels
 
@@ -377,8 +377,8 @@ J. Young ware can hold liquid.
 
 1. Click a piece to select its whole assembly and show handles for movable
    parts. Hover over a handle to see its setting and value, for example
-   **Valve: Closed · click to switch**. Option-drag still pulls a piece out
-   of the assembly. Holding Option disables the handles.
+   **Valve: Closed · click to switch**. A second click and a drag, or
+   Option-drag, still pulls a piece out of the assembly. Holding Option disables the handles.
 2. Click a circle to cycle through the states of a valve or stopcock. A
    J. Young valve switches between **Closed** and **Open**.
    A stopcock cycles through **Closed**, **Arm to side barb**, **Arm to down
@@ -424,7 +424,7 @@ shows one library or all of them.
 Every drawing carries the pieces it uses. When you open a drawing from
 someone else, **Properties → Equipment** offers **Add to My pieces** for a
 piece you do not have, and **Export this piece…** for any piece. In an
-assembly, Option-click the piece first.
+assembly, click the piece a second time first.
 
 A piece is known by its ID, revision and content. When a library has a newer
 revision of a piece in your drawing, Properties says so, for example
