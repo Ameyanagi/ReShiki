@@ -1,0 +1,13 @@
+{
+  "name": "ACS Document 1996",
+  "font_family": "Arial",
+  "bond_length_world": 42.0,
+  "bond_length_pt": 14.4,
+  "font_size_pt": 10.0,
+  "line_width_pt": 0.6,
+  "bold_width_pt": 2.0125885,
+  "margin_width_pt": 1.5873871,
+  "hash_spacing_pt": 2.4944763,
+  "bond_spacing_ratio": 0.18,
+  "png_dpi": 1200
+}

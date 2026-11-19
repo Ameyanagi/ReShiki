@@ -14,6 +14,25 @@ fn journal_presets_use_publisher_settings() {
     assert_eq!(Preset::Nature.style().font_family, "Helvetica");
     assert!((Preset::Angewandte.style().bold_width_pt - 2.6015625).abs() < 0.000001);
     assert_eq!(Preset::Rsc.style().line_width_pt, 0.5);
+    // ChemDraw's ACS Document 1996.cds, decoded from its 1/65536 pt values.
+    let acs = Preset::Acs1996.style();
+    assert_eq!(
+        (
+            acs.font_family.as_str(),
+            acs.font_size_pt,
+            acs.bond_length_pt
+        ),
+        ("Arial", 10., 14.4)
+    );
+    for (value, stored) in [
+        (acs.line_width_pt, 39321),
+        (acs.bold_width_pt, 131897),
+        (acs.margin_width_pt, 104031),
+        (acs.hash_spacing_pt, 163478),
+    ] {
+        assert_eq!((value * 65536.) as i32, stored);
+    }
+    assert_eq!(acs.bond_spacing_ratio, 0.18);
 }
 
 #[test]

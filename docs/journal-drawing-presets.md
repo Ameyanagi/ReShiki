@@ -1,8 +1,8 @@
 # Journal drawing presets
 
-Choose a journal directly from the preset selector beside the color theme selector and sun/moon canvas toggle. Selecting a journal applies its dimensions and scales the drawing in one Undo step. Choose **Manage styles…** at the bottom for a preview and detailed settings. The selector lists **JACS / ACS**, **Nature**, **RSC**, **Angewandte** and **SYNLETT / SYNTHESIS**. When the current settings match none of them, the selector shows **Custom**. Each journal choice has a **Publisher instructions ↗** link in the panel.
+Choose a journal directly from the preset selector beside the color theme selector and sun/moon canvas toggle. Selecting a journal applies its dimensions and scales the drawing in one Undo step. Choose **Manage styles…** at the bottom for a preview and detailed settings. The selector lists **JACS / ACS**, **ACS Document 1996**, **Nature**, **RSC**, **Angewandte** and **SYNLETT / SYNTHESIS**. When the current settings match none of them, the selector shows **Custom**. Each journal choice has a **Publisher instructions ↗** link in the panel.
 
-These five presets use publisher recommendations or publisher downloads. The ChemDraw standard baseline and bundled variants are excluded. Publisher guidance takes precedence where written dimensions differ from older downloads.
+These six presets use publisher recommendations or publisher downloads. The ChemDraw standard baseline and bundled variants are excluded. Publisher guidance takes precedence where written dimensions differ from older downloads.
 
 ## Publisher settings and sources
 
@@ -11,12 +11,14 @@ Reviewed 26 September 2026. Dimensions are publication points; values below are 
 | Preset / publisher instructions | Font | Label | Bond | Line | Bold | Margin | Hash | Spacing |
 |---|---|---:|---:|---:|---:|---:|---:|---:|---:|
 | [JACS / ACS](https://pubsapp.acs.org/paragonplus/submission/general/graphics_prep.html) | Arial | 10 | 14.4 | 0.6 | 2 | 1.6 | 2.5 | 18% |
+| [ACS Document 1996](https://pubsapp.acs.org/paragonplus/submission/general/graphics_prep.html) | Arial | 10 | 14.4 | 0.6 | 2.013 | 1.587 | 2.494 | 18% |
 | [Nature](https://www.nature.com/nature/for-authors/formatting-guide) | Helvetica | 6 | 10.8 | 0.5953 | 1.559 | 1.191 | 1.701 | 18% |
 | [RSC](https://www.rsc.org/publishing/publish-with-us/publish-a-journal-article/analytical-methods) | Arial | 7 | 12.2 | 0.5 | 1.6 | 1.25 | 1.8 | 20% |
 | [Angewandte](https://onlinelibrary.wiley.com/page/journal/15213773/homepage/notice-to-authors) | Arial | 12 | 17 | 0.75 | 2.602 | 2 | 2.602 | 18% |
 | [SYNLETT / SYNTHESIS](https://www.thieme.de/statics/dokumente/thieme/final/de/dokumente/zw_synthesis/Instr_SS_26_feb.pdf) | Arial | 6 | 10.12 | 0.5669 | 1.389 | 0.9071 | 1.757 | 18% |
 
 - **ACS:** Published ACS-1996 dimensions. The ACS graphics page was last updated in 2006; it permits Helvetica on Mac and Arial on PC. ReShiki retains Arial for cross-platform compatibility and its existing default.
+- **ACS Document 1996:** Uses the stationery bundled with ChemDraw, at the precision ChemDraw stores. ChemDraw keeps the bold width, margin and hash spacing as 0.071, 0.056 and 0.088 cm, so they differ from the rounded **JACS / ACS** values by less than 0.02 pt. Choose it to match drawings made with ChemDraw's **ACS Document 1996** style exactly.
 - **Nature:** Uses the publisher’s [ChemDraw stylesheet](https://www.nature.com/documents/nr-chemdraw-stylesheet.cds), including Helvetica 6 pt. See also the [chemical structure style guide](https://www.nature.com/documents/nr-chemical-structures-guide.pdf).
 - **RSC:** Uses the explicit point values in the publisher’s author instructions, including 12.2 pt bonds and 0.5 pt lines. The 1.25 pt label margin, unspecified in the written guidance, comes from the publisher’s [structure template download](https://www.rsc.org/publishing/publish-with-us/publish-a-journal-article/article-templates).
 - **Angewandte:** Uses the publisher’s [stationery download](https://wol-prod-cdn.literatumonline.com/pb-assets/assets/15213773/angew-cds.zip), a legacy ChemDraw 4.5 CDS file dated 2003 in the archive.
@@ -49,7 +51,7 @@ cargo run --example journal_styles -- artifacts/journal-styles/comparison
 python3 scripts/compare_journal_styles.py artifacts/journal-styles/comparison
 ```
 
-The generator uses identical aspirin, caffeine and alanine coordinates for every renderer, scaled to each preset’s physical bond length. The Python script requires ChemDraw on macOS and saves actual SVG, PDF, CDXML and CDX captures from isolated temporary documents. The comparison page contains the same five publisher presets as the app. Native CDX settings are checked to 0.00002 pt (spacing to 0.000001 of bond length); CDXML rounds to 0.01 pt.
+The generator uses identical aspirin, caffeine and alanine coordinates for every renderer, scaled to each preset’s physical bond length. The Python script requires ChemDraw on macOS and saves actual SVG, PDF, CDXML and CDX captures from isolated temporary documents. The comparison page contains the same publisher presets as the app. Native CDX settings are checked to 0.00002 pt (spacing to 0.000001 of bond length); CDXML rounds to 0.01 pt.
 
 Downloaded source files and render captures live under ignored `artifacts/journal-styles/`. Proprietary stationery binaries are not committed. `presets/drawing/sources.json` records publisher links, original filenames, source hashes and extracted settings.
 

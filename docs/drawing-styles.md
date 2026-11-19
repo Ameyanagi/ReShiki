@@ -2,7 +2,7 @@
 
 Click the style selector in the status bar, left of **View**, to switch directly between journal presets. Choose **Manage styles…** at the bottom of that menu, or **Properties → Edit drawing style…**, to open the detailed editor. New documents always start with **JACS / ACS**. Changing one document does not change the defaults for another.
 
-Choose **JACS / ACS**, **Nature**, **RSC**, **Angewandte**, or **SYNLETT / SYNTHESIS**. Each journal choice follows publisher instructions or an official download and has a **Publisher instructions ↗** link in the panel. See [journal settings and publisher sources](journal-drawing-presets.md).
+Choose **JACS / ACS**, **ACS Document 1996**, **Nature**, **RSC**, **Angewandte**, or **SYNLETT / SYNTHESIS**. Each journal choice follows publisher instructions or an official download and has a **Publisher instructions ↗** link in the panel. See [journal settings and publisher sources](journal-drawing-presets.md).
 
 Direct journal selection applies the preset immediately, scales existing geometry with its bond length, and updates matching fonts and strokes in one Undo step. **Manage styles…** opens the editor with the current settings; customized settings display as **Custom** in the selector.
 
