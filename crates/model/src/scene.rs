@@ -2344,6 +2344,9 @@ fn graphic_primitive(g: &&crate::graphics::Graphic, doc: &Document) -> Vec<Primi
     if g.cycle.is_some() {
         return cycle_primitives(g, doc);
     }
+    if g.kind == crate::graphics::GraphicKind::Piece {
+        return crate::equipment::placed::primitives(g);
+    }
     if g.kind == crate::graphics::GraphicKind::Picture {
         vec![Primitive::Picture((*g).clone())]
     } else {

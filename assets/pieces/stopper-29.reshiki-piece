@@ -1,0 +1,58 @@
+{
+ "format": "reshiki-piece",
+ "format_version": 0,
+ "id": "reshiki/stopper-29",
+ "revision": 1,
+ "family": "stopper",
+ "variant": {
+  "joint": "29/42"
+ },
+ "names": {
+  "en": "Glass stopper, 29/42",
+  "ja": "共栓 29/42"
+ },
+ "category": "addition",
+ "keywords": [
+  "stopper",
+  "共栓",
+  "栓"
+ ],
+ "credits": {
+  "author": "ReShiki",
+  "license": "CC0-1.0"
+ },
+ "units": "mm",
+ "shapes": [
+  {
+   "id": "s0",
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "path": "M-12.5 -11.6L-12.5 -3.4L12.5 -3.4L12.5 -11.6Z"
+  },
+  {
+   "id": "s1",
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "path": "M-14.5 -16.6L14.5 -16.6A3 3 0 0 1 17.5 -13.6L17.5 -10.6A3 3 0 0 1 14.5 -7.6L-14.5 -7.6A3 3 0 0 1 -17.5 -10.6L-17.5 -13.6A3 3 0 0 1 -14.5 -16.6Z"
+  }
+ ],
+ "joints": [
+  {
+   "id": "bottom",
+   "kind": "taper",
+   "size": "29/42",
+   "gender": "M",
+   "at": [
+    0,
+    0
+   ],
+   "dir": [
+    0,
+    1
+   ],
+   "draw": "standard"
+  }
+ ]
+}

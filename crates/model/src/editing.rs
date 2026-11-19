@@ -125,6 +125,7 @@ pub fn selection(doc: &Document, ids: &[u64]) -> Document {
         crate::depth_appearance::selection(doc, &ids.iter().copied().collect::<Vec<_>>());
     // A cycle copied without some parts draws only the ones it holds.
     crate::cycles::reconcile(&mut part);
+    part.piece_definitions = crate::equipment::placed::used(&part);
     part
 }
 
@@ -543,6 +544,7 @@ pub(crate) fn remap_ids(doc: &mut Document, mapping: &HashMap<u64, u64>) -> Opti
         reactions,
         models,
         recent_colors: _,
+        piece_definitions: _,
     } = doc;
     let map = |id: &mut u64| {
         *id = *mapping.get(id)?;
@@ -902,6 +904,7 @@ fn map_positions(
     let ids: HashSet<_> = doc.expand_abbreviation_selection(ids).into_iter().collect();
     for graphic in &mut doc.graphics {
         if ids.contains(&graphic.id) {
+            let before = graphic.clone();
             // Axes are displacements, not translated points. Subtracting two
             // transformed world endpoints loses precision when imported paths
             // have small axes and large local control coordinates.
@@ -909,6 +912,17 @@ fn map_positions(
             graphic.axis_x = vector(graphic.axis_x);
             graphic.axis_y = vector(graphic.axis_y);
             graphic.normalize_panel();
+            // A piece cannot stretch or leave its scale range: it moves with
+            // its centre instead.
+            if graphic.kind == crate::graphics::GraphicKind::Piece
+                && crate::equipment::placed::validate(graphic).is_err()
+            {
+                let (lo, hi) = before.shape_bounds();
+                let mid = Point::new((lo.x + hi.x) / 2., (lo.y + hi.y) / 2.);
+                let to = convert(mid);
+                *graphic = before;
+                graphic.origin = graphic.origin.offset(to.x - mid.x, to.y - mid.y);
+            }
         }
     }
     let boundary: Vec<_> = doc

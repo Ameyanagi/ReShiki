@@ -273,7 +273,8 @@ pub const CAPTION_NAMES: u32 = 39;
 /// Drawing-element styles: shading, drop shadows, wavy strokes, arrowheads
 /// on lines, corner radii, gradient and see-through fills, glows; Reference and
 /// Illustration molecules and arrows; color by origin settings on reactions;
-/// figure panels and lasting row, column and grid layouts; catalytic cycles.
+/// figure panels and lasting row, column and grid layouts; catalytic cycles;
+/// lab equipment pieces with their embedded definitions.
 pub const DRAWING_ELEMENTS: u32 = 40;
 
 /// The newest document format this build reads. Native output uses version 30
@@ -286,8 +287,8 @@ pub const DRAWING_ELEMENTS: u32 = 40;
 /// requires version 39, or shading, drop shadows, wavy strokes, arrowheads
 /// on lines, corner radii, gradient and see-through fills, glows, a
 /// Reference or Illustration molecule or arrow, color by origin settings, figure panels,
-/// lasting layouts, arrow bodies, badges, arcs, callout leaders or catalytic
-/// cycles require version 40.
+/// lasting layouts, arrow bodies, badges, arcs, callout leaders, catalytic
+/// cycles or equipment pieces require version 40.
 /// Optional atom-label settings, including steroid α/β display, retain this
 /// version; older readers may ignore those presentation preferences.
 ///
@@ -411,6 +412,10 @@ pub struct Document {
     /// Recent custom colors for the color picker, newest first.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub recent_colors: Vec<crate::color_contrast::Rgb>,
+    /// The definition of every equipment piece the drawing uses, so it opens
+    /// the same way without the library the pieces came from.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub piece_definitions: Vec<std::sync::Arc<crate::equipment::format::Definition>>,
 }
 impl Default for Document {
     fn default() -> Self {
@@ -439,6 +444,7 @@ impl Default for Document {
             reactions: vec![],
             models: vec![],
             recent_colors: vec![],
+            piece_definitions: vec![],
         }
     }
 }
@@ -463,6 +469,7 @@ impl Document {
         }
         crate::pictures::check_stored(bytes)?;
         let mut doc: Self = serde_json::from_slice(bytes).map_err(|e| e.to_string())?;
+        crate::equipment::placed::link(&mut doc)?;
         doc.validate()?;
         doc.migrate();
         crate::purpose::repair(&mut doc);
@@ -504,6 +511,7 @@ impl Document {
     pub fn current(&self) -> Self {
         Self {
             version: self.file_version(),
+            piece_definitions: crate::equipment::placed::used(self),
             ..self.clone()
         }
     }
@@ -518,6 +526,7 @@ impl Document {
                 || g.panel.is_some()
                 || g.leader.is_some()
                 || g.cycle.is_some()
+                || g.piece.is_some()
         }) || self.arrows.iter().any(|a| {
             let style = a.appearance();
             style.pattern == LinePattern::Wavy
@@ -854,6 +863,7 @@ impl Document {
             reactions,
             models,
             recent_colors: _,
+            piece_definitions,
         } = self;
         atoms.clear();
         models.clear();
@@ -862,6 +872,7 @@ impl Document {
         annotations.clear();
         arrows.clear();
         graphics.clear();
+        piece_definitions.clear();
         groups.clear();
         abbreviations.clear();
         reactions.clear();
@@ -898,6 +909,7 @@ impl Document {
             reactions,
             models,
             recent_colors: _,
+            piece_definitions: _,
         } = self;
         !atoms.is_empty()
             || !models.is_empty()

@@ -1,0 +1,131 @@
+{
+ "format": "reshiki-piece",
+ "format_version": 0,
+ "id": "reshiki/septum-29",
+ "revision": 1,
+ "family": "septum",
+ "variant": {
+  "joint": "29/42"
+ },
+ "names": {
+  "en": "Rubber septum, 29/42",
+  "ja": "セプタム 29/42"
+ },
+ "category": "addition",
+ "keywords": [
+  "septum",
+  "rubber",
+  "セプタム",
+  "ゴム栓"
+ ],
+ "credits": {
+  "author": "ReShiki",
+  "license": "CC0-1.0"
+ },
+ "units": "mm",
+ "shapes": [
+  {
+   "id": "s0",
+   "layer": "body",
+   "material": "rubber",
+   "role": "solid",
+   "color": [
+    138,
+    47,
+    42
+   ],
+   "path": "M-14.2 0L-13.5 12L13.5 12L14.2 0Z"
+  },
+  {
+   "id": "s1",
+   "layer": "front",
+   "material": "rubber",
+   "role": "solid",
+   "color": [
+    138,
+    47,
+    42
+   ],
+   "path": "M-18.7 1L-18.7 -4Q-18.7 -8 -15.3 -8Q0 -9.6 15.3 -8Q18.7 -8 18.7 -4L18.7 1Z"
+  },
+  {
+   "id": "s2",
+   "layer": "front",
+   "material": "rubber",
+   "role": "solid",
+   "color": [
+    138,
+    47,
+    42
+   ],
+   "path": "M-19.3 0L19.3 0L20.9 12Q0 13.6 -20.9 12Z"
+  },
+  {
+   "id": "s3",
+   "layer": "front",
+   "material": "glass",
+   "role": "detail",
+   "path": "M-18.3 0.4Q0 2 18.3 0.4"
+  },
+  {
+   "id": "s4",
+   "layer": "front",
+   "material": "glass",
+   "role": "detail",
+   "path": "M-10.62 3.5L-11.04 11.5"
+  },
+  {
+   "id": "s5",
+   "layer": "front",
+   "material": "glass",
+   "role": "detail",
+   "path": "M0 3.5L0 11.5"
+  },
+  {
+   "id": "s6",
+   "layer": "front",
+   "material": "glass",
+   "role": "detail",
+   "path": "M10.62 3.5L11.04 11.5"
+  },
+  {
+   "id": "s7",
+   "layer": "front",
+   "material": "rubber",
+   "role": "solid",
+   "path": "M-15.8 -8.2A15.8 1.6 0 0 1 15.8 -8.2A15.8 1.6 0 0 1 -15.8 -8.2Z"
+  }
+ ],
+ "joints": [
+  {
+   "id": "bottom",
+   "kind": "taper",
+   "size": "29/42",
+   "gender": "M",
+   "at": [
+    0,
+    -2.52
+   ],
+   "dir": [
+    0,
+    1
+   ],
+   "draw": "none"
+  },
+  {
+   "id": "needle",
+   "kind": "plug",
+   "family": "septum",
+   "gender": "F",
+   "size_mm": 1,
+   "at": [
+    0,
+    -9
+   ],
+   "dir": [
+    0,
+    -1
+   ]
+  }
+ ]
+}

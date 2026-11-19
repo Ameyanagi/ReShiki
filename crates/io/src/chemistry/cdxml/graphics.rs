@@ -167,6 +167,7 @@ impl NativeGraphic {
             heads: self.heads.map(NativePathHeads::into_document),
             leader: None,
             cycle: None,
+            piece: None,
             path: self
                 .path
                 .unwrap_or_default()

@@ -585,13 +585,18 @@ fn joint(
             poses.push((pose.at, pose.dir, Some((k.as_str(), state.as_str()))));
         }
     }
-    if let Joint::Taper { size, draw, .. } = j {
+    if let Joint::Taper {
+        size, draw, gender, ..
+    } = j
+    {
         if taper(size).is_none() {
             return Err(format!(
                 "{owner} has size \"{size}\", which is not a standard taper size."
             ));
         }
-        if *draw != JointDraw::Standard {
+        // A cone may draw its own end in rubber or PTFE, as a septum does;
+        // a socket is always ground glass.
+        if *draw != JointDraw::Standard && *gender == Gender::F {
             return Err(format!(
                 "{owner} is ground glass, so ReShiki must draw it: use \"draw\": \"standard\"."
             ));
@@ -685,6 +690,18 @@ fn attach(
     };
     // The point that must lie on the joint's own glass.
     let anchor = match j {
+        // A cone the piece draws itself sits on its own drawing, like a plug.
+        Joint::Taper {
+            draw: JointDraw::None,
+            ..
+        } => {
+            let outlines: Vec<&Outline> = all.iter().map(|(_, o)| o).collect();
+            let gap = near(at, &outlines);
+            if gap > ATTACH_MM {
+                return Err(far(gap));
+            }
+            at
+        }
         Joint::Taper { size, gender, .. } => {
             let Some(t) = taper(size) else {
                 return Ok(());

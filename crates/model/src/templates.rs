@@ -950,6 +950,7 @@ impl Attachment<'_> {
             // A removed atom leaves its model when the edit is reconciled.
             models: _,
             recent_colors: _,
+            piece_definitions: _,
         } = &mut result;
         atoms.retain(|a| !mapping.contains_key(&a.id));
         // A multi-edge fusion may map both endpoints of a genuinely new
