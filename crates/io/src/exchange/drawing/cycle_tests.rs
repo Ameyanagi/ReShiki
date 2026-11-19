@@ -331,6 +331,8 @@ async fn a_file_changed_elsewhere_opens_as_saved_with_a_note() {
             "{format}: {:?}",
             response.warnings
         );
+        // One message: the cycle's, not also the steps'.
+        assert_eq!(response.warnings.len(), 1, "{:?}", response.warnings);
         let doc = response.document.unwrap();
         assert!(doc.graphics.iter().all(|g| g.cycle.is_none()));
         assert!(doc.arrows.len() >= 4, "{format}");

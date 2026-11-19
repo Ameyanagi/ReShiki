@@ -343,6 +343,9 @@ fn prepare(request: Request) -> Result<Preparation, Error> {
             let (xml, variables) =
                 cdxml::drawing_variables(&xml).map_err(|e| Error::Binary(e.to_string()))?;
             let mut warnings = Vec::from_iter(approximated);
+            // The schemes of a file with cycle data are the cycles' steps;
+            // the cycle's own message covers them.
+            let ours = found.is_some();
             let fresh = match found {
                 Some(cycles::Found::Fresh(payload)) => Some(payload),
                 Some(cycles::Found::Edited) => {
@@ -351,10 +354,7 @@ fn prepare(request: Request) -> Result<Preparation, Error> {
                 }
                 None => None,
             };
-            // The schemes of a file with its cycles are the cycles' steps.
-            if cdxml::schemes::validate(&xml).map_err(|e| Error::Binary(e.to_string()))?
-                && fresh.is_none()
-            {
+            if cdxml::schemes::validate(&xml).map_err(|e| Error::Binary(e.to_string()))? && !ours {
                 warnings.push(cdxml::schemes::NOTICE.into());
             }
             // The objects each file object became, while the scene has them.
