@@ -393,6 +393,10 @@ pub struct State {
     gesture: Option<Gesture>,
     relaxation: Option<optimization::Drag>,
     cursor: Option<Point>,
+    /// The application holds a hover point from this canvas. A context menu
+    /// or a resize can leave `cursor` unknown or outside the new bounds, so
+    /// this, not `cursor`, says whether a move off the canvas must clear it.
+    hovering: bool,
     touch: input::touch::Touch,
     /// Only caption transitions during a bond drag need an application hint.
     bond_text_hover: Option<u64>,

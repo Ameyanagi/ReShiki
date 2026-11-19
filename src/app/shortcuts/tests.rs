@@ -371,3 +371,37 @@ fn shifted_and_option_characters_reach_their_shortcuts() {
         Some(Message::ToggleHelp)
     ));
 }
+
+#[test]
+fn a_key_after_a_context_menu_never_edits_the_right_clicked_bond() {
+    let (mut app, _) = App::new();
+    app.tab.doc = Document::default();
+    let a = app.tab.doc.add_atom("C", Point::default());
+    let b = app.tab.doc.add_atom("C", Point::new(42., 0.));
+    let c = app.tab.doc.add_atom("C", Point::new(63., 36.));
+    app.tab.doc.add_bond(a, b, 2, "plain");
+    app.tab.doc.add_bond(b, c, 1, "plain");
+    // Keyboard drawing off: keys choose tools or act on what is hovered.
+    if app.keyboard_drawing_active() {
+        let _ = app.update(Message::KeyboardDrawing(
+            super::super::keyboard_drawing::Action::Toggle,
+        ));
+    }
+    let middle = Point::new(21., 0.);
+    let _ = app.update(Message::Canvas(Edit::Hover(Some(middle))));
+    let _ = app.update(Message::Canvas(Edit::ContextMenu {
+        position: iced::Point::ORIGIN,
+        at: middle,
+        selected: vec![a, b, c],
+        hit: vec![a, b],
+    }));
+    // A move queued with the right-click can still reach the canvas after
+    // the menu opened.
+    let _ = app.update(Message::Canvas(Edit::Hover(Some(middle))));
+    // The pointer left while the menu was open; Escape closes it and no
+    // canvas move follows before the key.
+    let _ = app.update(Message::Escape);
+    let _ = app.context_key("1");
+    assert_eq!(app.tab.doc.bonds[0].order, 2, "the double bond stays");
+    assert_eq!(app.tool, Tool::Bond(1));
+}

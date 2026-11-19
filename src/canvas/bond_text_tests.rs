@@ -703,3 +703,42 @@ fn text_tool_option_click_repeats_the_label() {
         Some(Edit::RepeatLabel(_))
     ));
 }
+
+#[test]
+fn a_move_off_the_canvas_after_a_context_menu_clears_the_hover() {
+    let doc = Document::default();
+    let canvas = tests::chain_canvas(&doc, ChainMode::Straight);
+    let mut state = State::default();
+    let inside = screen(&canvas, World::new(0., 0.));
+    assert!(matches!(
+        send(
+            &canvas,
+            &mut state,
+            mouse::Event::CursorMoved { position: inside }
+        ),
+        Some(Edit::PointerHover(Some(_)))
+    ));
+    // A context menu makes the canvas forget the pointer (reset_menu_pointer).
+    state.cursor = None;
+    // Straight to the sidebar: the hover held for a right-clicked bond goes.
+    let sidebar = Point::new(bounds().x + bounds().width + 40., inside.y);
+    assert!(matches!(
+        send(
+            &canvas,
+            &mut state,
+            mouse::Event::CursorMoved { position: sidebar }
+        ),
+        Some(Edit::PointerHover(None))
+    ));
+    assert!(
+        send(
+            &canvas,
+            &mut state,
+            mouse::Event::CursorMoved {
+                position: Point::new(sidebar.x + 5., sidebar.y)
+            }
+        )
+        .is_none(),
+        "cleared once"
+    );
+}

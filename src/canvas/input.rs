@@ -112,6 +112,7 @@ impl MoleculeCanvas<'_> {
             }
             Event::Mouse(mouse::Event::CursorLeft) => {
                 state.cursor = None;
+                state.hovering = false;
                 state.bond_text_hover = None;
                 if matches!(state.gesture, Some(Gesture::Erase { .. })) {
                     state.gesture = None;
