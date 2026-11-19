@@ -1,6 +1,7 @@
 //! Bounded CDX/CDXML serialization. Chemistry remains behind `ChemistryEngine`.
 //! The Python codec is retained as a differential test oracle during migration.
 mod charsets;
+pub mod cycles;
 mod decode;
 pub mod drawing;
 mod encode;

@@ -63,17 +63,39 @@ pub use crate::chemistry::cdxml::schemes::Loss as ChemdrawLoss;
 /// (`cdxml`, or `cdx` as base64, as [`compatibility::import_text`] gives it).
 /// Nothing for another format or a file that cannot be read.
 pub fn chemdraw_loss(format: &str, contents: &str) -> ChemdrawLoss {
-    let xml = match format {
-        "cdxml" => Ok(contents.to_owned()),
+    use crate::exchange::cycles::{self, Found};
+    let read = match format {
+        "cdxml" => {
+            let (xml, found) = cycles::take_cdxml(contents);
+            Ok((xml.into_owned(), found))
+        }
         "cdx" => STANDARD
             .decode(contents)
             .map_err(|error| error.to_string())
-            .and_then(|bytes| crate::exchange::from_cdx_tolerant(&bytes)),
+            .and_then(|bytes| {
+                let (bytes, found) = cycles::take_cdx(&bytes);
+                Ok((crate::exchange::from_cdx_tolerant(&bytes)?, found))
+            }),
         _ => return ChemdrawLoss::default(),
     };
-    xml.ok()
-        .and_then(|xml| crate::chemistry::cdxml::schemes::loss(&xml).ok())
-        .unwrap_or_default()
+    let Ok((xml, found)) = read else {
+        return ChemdrawLoss::default();
+    };
+    let mut loss = crate::chemistry::cdxml::schemes::loss(&xml).unwrap_or_default();
+    // The cycles that come back write their own scheme and steps again.
+    if let Some(Found::Fresh(payload)) = found {
+        for n in payload
+            .cycles
+            .iter()
+            .filter_map(|saved| saved.graphic.cycle.as_deref())
+            .map(|c| c.intermediates.len())
+            .filter(|n| *n > 0)
+        {
+            loss.schemes = loss.schemes.saturating_sub(1);
+            loss.steps = loss.steps.saturating_sub(n);
+        }
+    }
+    loss
 }
 
 fn finalize(response: &Document) -> Result<Document, String> {

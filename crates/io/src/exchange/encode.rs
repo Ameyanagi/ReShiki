@@ -46,6 +46,8 @@ fn encode(xml: &str, stationery: bool) -> Result<Vec<u8>> {
     };
     encoder.object(root, 0)?;
     append(&mut encoder.out, &[0, 0])?;
+    // A cycle's data, sealed again for these bytes.
+    super::cycles::seal_cdx(&mut encoder.out, xml)?;
     Ok(encoder.out)
 }
 struct Encoder {

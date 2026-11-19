@@ -27,7 +27,7 @@ mod nodes;
 pub use arc::{MAX_SWEEP, MIN_SWEEP, circle as arc_circle, sweep_through};
 pub use body::{Badge, BadgeIcon, Body};
 pub(crate) use exchange::shape;
-pub use exchange::{Lowered, export_notice, lowered, lowered_count};
+pub use exchange::{Lowered, export_notice, lowered, lowered_count, shapes_notice};
 pub use nodes::{FIRST_NODE_HANDLE, NodePart, node_handle};
 choices!(Head { Full => "Full", None => "None", Left => "Half left", Right => "Half right" });
 choices!(HeadShape { Solid => "Solid", Hollow => "Hollow", Open => "Angled" });

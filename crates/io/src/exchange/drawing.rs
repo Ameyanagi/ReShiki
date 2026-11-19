@@ -13,6 +13,7 @@ mod bracket_superscript_tests;
 mod clipboard;
 #[cfg(test)]
 mod cycle_tests;
+mod cycles;
 #[cfg(test)]
 mod effects_tests;
 #[cfg(test)]
@@ -169,6 +170,9 @@ struct Writer<'a> {
     painted_bounds: (P, P),
     work: usize,
     variable_labels: bool,
+    /// Each molecule in a fragment of its own even without groups, so a
+    /// catalytic cycle's parts can be named apart.
+    split_fragments: bool,
 }
 
 /// Serialize a complete drawing without mutating it. Reject unrepresentable
@@ -205,7 +209,7 @@ fn write_impl(
     let resolved = crate::canvas_theme::resolved_exchange_document(document);
     let document = resolved.as_ref();
     // A catalytic cycle travels as the arrows and text it draws.
-    let cycles = crate::cycles::materialized(document);
+    let (cycles, written_cycles) = crate::cycles::materialized(document);
     let document = cycles.as_ref();
     // Lab equipment travels as a group of plain curves per piece.
     let pieces = crate::equipment::placed::materialized(document);
@@ -367,6 +371,7 @@ fn write_impl(
         crate::palette::Palette::of(original),
     )?;
     w.variable_labels = variable_labels;
+    w.split_fragments = !written_cycles.is_empty();
     w.atoms(&graph, &stereocentres)?;
     w.bonds()?;
     w.circles(&rings)?;
@@ -422,6 +427,7 @@ fn write_impl(
             w.tree.set(key, "Z", (rank + 1).to_string())?;
         }
     }
+    let payload = w.cycles(&written_cycles)?;
     let (_, hi) = w.painted_bounds;
     let right = (hi.x * w.scale + w.shift.x + 30.).ceil().max(612.);
     let bottom = (hi.y * w.scale + w.shift.y + 30.).ceil().max(792.);
@@ -435,7 +441,13 @@ fn write_impl(
         w.tree
             .set(w.page, "HeightPages", (bottom / 792.).ceil().to_string())?;
     }
-    w.tree.serialize()
+    let xml = w.tree.serialize()?;
+    Ok(
+        match payload.as_ref().and_then(crate::exchange::cycles::encode) {
+            Some(encoded) => crate::exchange::cycles::seal_cdxml(xml, &encoded),
+            None => xml,
+        },
+    )
 }
 
 #[cfg(test)]
@@ -635,6 +647,7 @@ impl<'a> Writer<'a> {
             painted_bounds,
             work: 50_000_000,
             variable_labels: false,
+            split_fragments: false,
         };
         w.font(&style.font_family)?;
         // ChemDraw requires the first two explicit entries to remain white and
