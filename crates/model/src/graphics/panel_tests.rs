@@ -122,7 +122,10 @@ fn a_border_title_sits_on_the_top_edge_over_a_page_colored_backing() {
         .map(|(a, _)| a.y)
         .fold(f32::MAX, f32::min);
     assert!(ink < 0. && lo.y <= ink);
-    assert!(g.hit_with_text_style(title.position.offset(2., 1.), 0.5, &text));
+    // A click on the title's letters picks the panel.
+    let (a, b) = title.ink_boxes()[0];
+    let middle = Point::new((a.x + b.x) / 2., (a.y + b.y) / 2.);
+    assert!(g.hit_with_text_style(middle, 0.5, &text));
 }
 
 #[test]
