@@ -204,24 +204,36 @@ pub fn lowered(doc: &Document) -> Cow<'_, Document> {
             continue;
         };
         let mut members = vec![g.id];
+        let mut dot = None;
         g.leader = Some(leader.clone());
         if let Some((commands, style)) = g.leader_dot() {
             dots.push(shape(next, commands, &style, true));
             members.push(next);
+            dot = Some(next);
             next += 1;
         }
         g.leader = None;
         if let Some(crate::leaders::Target::Object { id }) = leader.start {
             members.push(id);
         }
-        callouts.push(members);
+        callouts.push((members, dot));
     }
     out.graphics.extend(dots);
-    for members in callouts {
-        let grouped = out
-            .groups
-            .iter()
-            .any(|g| g.members.iter().any(|id| members.contains(id)));
+    for (members, dot) in callouts {
+        // A callout already in groups adds its dot to every group holding
+        // its line, so nested groups stay nested and move it along.
+        let line = members.first().copied();
+        let mut grouped = false;
+        for group in out.groups.iter_mut() {
+            if group.members.iter().any(|id| members.contains(id)) {
+                grouped = true;
+                if let Some(dot) =
+                    dot.filter(|_| line.is_some_and(|id| group.members.contains(&id)))
+                {
+                    group.members.push(dot);
+                }
+            }
+        }
         if !grouped && members.len() > 1 {
             out.groups.push(Group {
                 id: next,

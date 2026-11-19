@@ -111,9 +111,6 @@ impl ArrowStyle {
             self.head_length_pt = length;
             self.head_width_pt = width;
             self.head_notch = notch;
-            if self.head == Head::None && self.tail == Head::None {
-                self.head = Head::Full;
-            }
         }
         self.body = body;
     }

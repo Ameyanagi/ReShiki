@@ -301,3 +301,45 @@ fn a_double_headed_chevron_points_both_ways() {
     let last = chevrons.len() - 1;
     assert!(tip(last) > back(last), "the last chevron points to the end");
 }
+
+#[test]
+fn a_grouped_callout_keeps_its_dot_in_its_group_and_bodies_keep_removed_heads() {
+    let mut doc = Document::default();
+    let a = doc.add_atom("C", Point::new(0., 0.));
+    let b = doc.add_atom("C", Point::new(20., 0.));
+    doc.add_bond(a, b, 1, "plain");
+    let text = crate::leaders::add_callout(
+        &mut doc,
+        crate::leaders::Target::Bond {
+            a,
+            b,
+            fraction: 0.5,
+        },
+        "Here",
+    )
+    .unwrap();
+    let line = doc.graphics[0].id;
+    doc.groups.push(crate::grouping::Group {
+        id: doc.next_id(),
+        members: vec![text, line],
+        integral: false,
+    });
+    let out = super::lowered(&doc);
+    out.validate().unwrap();
+    let dot = out
+        .graphics
+        .iter()
+        .map(|g| g.id)
+        .find(|id| *id != line)
+        .unwrap();
+    assert!(
+        out.groups
+            .iter()
+            .any(|g| g.members.contains(&line) && g.members.contains(&dot))
+    );
+    let mut style = ArrowStyle::preset(Preset::Forward);
+    style.head = Head::None;
+    style.set_body(Body::Block);
+    style.set_body(Body::Line);
+    assert_eq!(style.head, Head::None);
+}
