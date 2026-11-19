@@ -1576,7 +1576,13 @@ pub(crate) fn bond_segment_with_faces(
     let margin = doc.drawing_style.world(doc.drawing_style.margin_width_pt);
     let a_boxes = boxes(a);
     let b_boxes = boxes(b);
-    let mut span = trimmed_span(a.position, b.position, &a_boxes, &b_boxes, margin)?;
+    let mut span = bond_trimmed_span(
+        a.position,
+        b.position,
+        [&a_boxes, &b_boxes],
+        bond,
+        &doc.drawing_style,
+    )?;
     if dative_needs_core(bond, &span) {
         let core = |atom: &Atom, boxes: &[_]| {
             if boxes.is_empty() {
@@ -1680,7 +1686,7 @@ fn centered_double_rails(
             // Label picking owns the unpadded boxes, both at the rail and at
             // its backbone projection. Do not paint into those owned corners.
             for point in [origin, base] {
-                let guard = label_box_end(point, dx, dy, lo, hi, length, 0.);
+                let guard = label_box_end(point, dx, dy, lo, hi, length, [0.; 2]);
                 far = far.max((guard.x - point.x) * dx + (guard.y - point.y) * dy);
             }
         }
@@ -1778,7 +1784,8 @@ fn rounded_label_end(
     let mut far = 0f32;
     for &((lo, hi), radius) in shapes {
         if radius <= 0. || !radius.is_finite() {
-            far = far.max(along(label_box_end(origin, ux, uy, lo, hi, max, margin)));
+            let end = label_box_end(origin, ux, uy, lo, hi, max, [margin; 2]);
+            far = far.max(along(end));
             continue;
         }
         // Padding the conservative glyph outline by the requested margin is
@@ -1798,7 +1805,7 @@ fn rounded_label_end(
                 Point::new(inner_high.x, high.y),
             ),
         ] {
-            far = far.max(along(label_box_end(origin, ux, uy, a, b, max, 0.)));
+            far = far.max(along(label_box_end(origin, ux, uy, a, b, max, [0.; 2])));
         }
         // Two central rectangles plus four discs exactly cover the rounded
         // rectangle. Intersect the finite ray with each convex piece.
@@ -1818,6 +1825,55 @@ fn rounded_label_end(
         }
     }
     origin.offset(ux * far, uy * far)
+}
+
+fn bond_trimmed_span(
+    a: Point,
+    z: Point,
+    [a_boxes, z_boxes]: [&[(Point, Point)]; 2],
+    bond: &Bond,
+    style: &crate::style::DrawingStyle,
+) -> Option<TrimmedSpan> {
+    let margin = style.world(style.margin_width_pt);
+    let mut span = trimmed_span(a, z, a_boxes, z_boxes, margin)?;
+    let (display, narrow_trimmed) = if bond.narrowed_at_acceptor() {
+        (bond.display.trim_end_matches("_end"), span.end != z)
+    } else {
+        (bond.display.as_str(), span.start != a)
+    };
+    if !narrow_trimmed {
+        return Some(span);
+    }
+    let half_line = style.line_width() * 0.5;
+    let stroke = match display {
+        "wedge" | "bold"
+            if bond.order == 1
+                || bond.is_projected_dative()
+                || (bond.order == 4 && bond.projection) =>
+        {
+            0.
+        }
+        "hollow_wedge" | "hash" | "hashed" => half_line,
+        _ => return Some(span),
+    };
+    // Keep a small gap at the narrow tip's label. The wide end reserves room
+    // for the full wedge width across the bond, not along its axis.
+    let gap = margin.min(half_line) + stroke;
+    let half_width = style.world(style.bold_width_pt) * 0.5;
+    let wide = [
+        gap + span.uy.abs() * half_width,
+        gap + span.ux.abs() * half_width,
+    ];
+    let (a_pad, z_pad) = if bond.narrowed_at_acceptor() {
+        (wide, [gap; 2])
+    } else {
+        ([gap; 2], wide)
+    };
+    let length = a.distance(z);
+    span.start = label_end_with_padding(a, span.ux, span.uy, a_boxes, length, a_pad);
+    span.end = label_end_with_padding(z, -span.ux, -span.uy, z_boxes, length, z_pad);
+    span.along = (span.end.x - span.start.x) * span.ux + (span.end.y - span.start.y) * span.uy;
+    Some(span)
 }
 
 /// Shared trimming arithmetic. Each caller keeps its own visible-span test:
@@ -1855,9 +1911,20 @@ pub(crate) fn label_end(
     max: f32,
     margin: f32,
 ) -> Point {
+    label_end_with_padding(origin, ux, uy, bounds, max, [margin; 2])
+}
+
+fn label_end_with_padding(
+    origin: Point,
+    ux: f32,
+    uy: f32,
+    bounds: &[(Point, Point)],
+    max: f32,
+    padding: [f32; 2],
+) -> Point {
     bounds
         .iter()
-        .map(|&(lo, hi)| label_box_end(origin, ux, uy, lo, hi, max, margin))
+        .map(|&(lo, hi)| label_box_end(origin, ux, uy, lo, hi, max, padding))
         .max_by(|a, b| {
             let along = |p: &Point| (p.x - origin.x) * ux + (p.y - origin.y) * uy;
             along(a).total_cmp(&along(b))
@@ -1872,15 +1939,15 @@ fn label_box_end(
     lo: Point,
     hi: Point,
     max: f32,
-    margin: f32,
+    [pad_x, pad_y]: [f32; 2],
 ) -> Point {
     // Intersect the whole segment with the padded label box. A label can
     // extend past the bond midpoint, or sit above its attachment position.
     let mut enter: f32 = 0.;
     let mut exit = max.max(0.);
     for (position, direction, low, high) in [
-        (origin.x, ux, lo.x - margin, hi.x + margin),
-        (origin.y, uy, lo.y - margin, hi.y + margin),
+        (origin.x, ux, lo.x - pad_x, hi.x + pad_x),
+        (origin.y, uy, lo.y - pad_y, hi.y + pad_y),
     ] {
         if direction.abs() < 1e-6 {
             if position < low || position > high {
@@ -2732,12 +2799,15 @@ fn bond_frame<'a>(scene: BondScene<'a, '_>, b: &Bond) -> Option<BondFrame<'a>> {
         return None;
     };
     let span_with = |core| {
-        trimmed_span(
+        bond_trimmed_span(
             a.position,
             z.position,
-            &trim_boxes(scene, a.id, core),
-            &trim_boxes(scene, z.id, core),
-            style.world(style.margin_width_pt),
+            [
+                &trim_boxes(scene, a.id, core),
+                &trim_boxes(scene, z.id, core),
+            ],
+            b,
+            style,
         )
     };
     let mut span = span_with(false)?;
@@ -2965,7 +3035,8 @@ fn push_hashed_wedge(
         ..
     } = frame;
     let length = start.distance(end);
-    let trimmed = start != a.position || end != z.position;
+    let narrow_trimmed = start != a.position;
+    let trimmed = narrow_trimmed || end != z.position;
     let spacing = style.world(style.hash_spacing_pt);
     // Label trimming must leave enough bars to read as a bond, all the way
     // to the label edge. Unlabelled bonds retain their existing spacing.
@@ -2975,7 +3046,10 @@ fn push_hashed_wedge(
         (length / spacing).floor().max(1.0)
     } as u32;
     for i in 1..=count {
-        let t = if trimmed {
+        let t = if narrow_trimmed {
+            // The first mark starts the taper at the narrow label edge.
+            (i - 1) as f32 / (count - 1) as f32
+        } else if trimmed {
             i as f32 / count as f32
         } else {
             (i as f32 * spacing / length).min(1.0)

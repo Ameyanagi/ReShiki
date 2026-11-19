@@ -129,6 +129,151 @@ fn label_trimmed_hash_reaches_oxygen_without_changing_unlabelled_hashes() {
 }
 
 #[test]
+fn stereobonds_from_ruthenium_and_chlorine_use_the_full_visible_gap() {
+    for element in ["Ru", "Cl"] {
+        for (solid, hashed) in [
+            ("wedge", "hash"),
+            ("hollow_wedge", "hashed"),
+            ("bold", "hash"),
+        ] {
+            let mut doc = Document::default();
+            let center = doc.add_atom(element, Point::default());
+            for (ligand, point, display) in [
+                ("Cl", Point::new(-40., -20.), "plain"),
+                ("Cl", Point::new(42., 0.), solid),
+                ("C", Point::new(-36., 21.), hashed),
+                ("C", Point::new(0., 42.), solid),
+                ("Br", Point::new(20., -38.), hashed),
+            ] {
+                let end = doc.add_atom(ligand, point);
+                doc.add_bond(center, end, 1, display);
+            }
+            let style = &doc.drawing_style;
+            let wide = style.world(style.bold_width_pt);
+            let line = style.line_width();
+            let spacing = style.world(style.hash_spacing_pt);
+            let parts = primitives(&doc);
+            let outlines: Vec<_> = parts
+                .iter()
+                .flat_map(|part| match part {
+                    Primitive::Path { commands, .. } => crate::graphics::flattened(commands),
+                    _ => vec![],
+                })
+                .collect();
+            let mut bars = parts.iter().filter_map(|part| match part {
+                Primitive::Line(a, b, _) => Some((*a, *b)),
+                _ => None,
+            });
+            for bond in &doc.bonds {
+                let a = doc.atom(bond.a).unwrap();
+                let b = doc.atom(bond.b).unwrap();
+                let a_ink = atom_label_ink_boxes(a, &doc);
+                let b_ink = atom_label_ink_boxes(b, &doc);
+                let old = trimmed_span(
+                    a.position,
+                    b.position,
+                    &a_ink,
+                    &b_ink,
+                    style.world(style.margin_width_pt),
+                )
+                .unwrap();
+                let (start, end) = bond_segment(&doc, bond, None).unwrap();
+                if bond.display == "plain" {
+                    assert_eq!((start, end), (old.start, old.end));
+                    continue;
+                }
+                let ink = trimmed_span(a.position, b.position, &a_ink, &b_ink, 0.).unwrap();
+                assert!(
+                    (ink.start.distance(a.position)..old.start.distance(a.position))
+                        .contains(&start.distance(a.position))
+                );
+                assert!(end.distance(b.position) >= ink.end.distance(b.position));
+                let length = start.distance(end);
+                assert!(
+                    length > old.along && length > wide,
+                    "{element}–{} {}",
+                    b.element,
+                    bond.display
+                );
+                if bond.display == hashed {
+                    let count = (length / spacing).ceil().max(3.) as usize;
+                    let strokes: Vec<_> = bars.by_ref().take(count).collect();
+                    assert_eq!(strokes.len(), count);
+                    for (i, (a, b)) in strokes.into_iter().enumerate() {
+                        let t = i as f32 / (count - 1) as f32;
+                        assert!(a.lerp(b, 0.5).distance(start.lerp(end, t)) < 0.001);
+                        let width = if hashed == "hash" {
+                            line + t * (wide - line)
+                        } else {
+                            wide
+                        };
+                        assert!((a.distance(b) - width).abs() < 0.001);
+                    }
+                } else {
+                    let (tip, far) = outlines
+                        .iter()
+                        .find_map(|points| {
+                            let &[a, b, c, d, _] = points.as_slice() else {
+                                return None;
+                            };
+                            (a.lerp(d, 0.5).distance(start) < 0.001
+                                && b.lerp(c, 0.5).distance(end) < 0.001)
+                                .then_some((a.distance(d), b.distance(c)))
+                        })
+                        .expect("A wedge from the trimmed start to the trimmed end");
+                    let expected_tip = if solid == "bold" { wide } else { line };
+                    assert!((tip - expected_tip).abs() < 0.001);
+                    assert!((far - wide).abs() < 0.001);
+                }
+            }
+            assert!(bars.next().is_none());
+        }
+    }
+}
+
+#[test]
+fn wedges_from_unlabelled_carbon_keep_their_outline() {
+    for element in ["C", "Cl"] {
+        let mut doc = Document::default();
+        let start = Point::default();
+        let target = Point::new(42., 0.);
+        let center = doc.add_atom("C", start);
+        let ligand = doc.add_atom(element, target);
+        doc.add_bond(center, ligand, 1, "wedge");
+        let style = &doc.drawing_style;
+        let end = label_end(
+            target,
+            -1.,
+            0.,
+            &atom_label_ink_boxes(doc.atom(ligand).unwrap(), &doc),
+            target.x,
+            style.world(style.margin_width_pt),
+        );
+        let tip = style.line_width() * 0.5;
+        let far = style.world(style.bold_width_pt) * 0.5;
+        let expected = vec![
+            start.offset(0., tip),
+            end.offset(0., far),
+            end.offset(0., -far),
+            start.offset(0., -tip),
+            start.offset(0., tip),
+        ];
+        let outlines: Vec<_> = primitives(&doc)
+            .into_iter()
+            .flat_map(|part| match part {
+                Primitive::Path {
+                    commands,
+                    filled: true,
+                    ..
+                } => crate::graphics::flattened(&commands),
+                _ => vec![],
+            })
+            .collect();
+        assert_eq!(outlines, [expected], "C–{element}");
+    }
+}
+
+#[test]
 fn overlapping_atom_label_ink_keeps_reverse_paint_order() {
     let mut doc = Document::default();
     let first = doc.add_atom("N", Point::default());

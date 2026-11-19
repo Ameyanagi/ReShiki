@@ -38,6 +38,42 @@ fn assert_frame(doc: &Document, expected: &Document) {
     }
 }
 
+#[test]
+fn ruthenium_wedge_and_hash_displays_keep_direction_in_cdxml_roundtrip()
+-> Result<(), Box<dyn std::error::Error>> {
+    let mut source = Document::default();
+    let metal = source.add_atom("Ru", Point::default());
+    for (element, point, display) in [
+        ("Cl", Point::new(-40., -20.), "plain"),
+        ("Cl", Point::new(42., 0.), "wedge"),
+        ("C", Point::new(-36., 21.), "hash"),
+        ("C", Point::new(0., 42.), "wedge"),
+        ("Br", Point::new(20., -38.), "hash"),
+    ] {
+        let ligand = source.add_atom(element, point);
+        source.add_bond(metal, ligand, 1, display);
+    }
+
+    let xml = drawing::write(&source, Default::default())?;
+    let restored = assemble_cdxml(&prepare_cdxml(&xml)?)?
+        .into_document()?
+        .document;
+    let metal = restored.atoms.iter().find(|a| a.element == "Ru").unwrap();
+    assert_eq!(restored.atoms.len(), source.atoms.len());
+    assert_eq!(restored.bonds.len(), source.bonds.len());
+    for (bond, expected) in restored.bonds.iter().zip(&source.bonds) {
+        assert_eq!(bond.order, expected.order);
+        assert_eq!(bond.display, expected.display);
+        // The first endpoint is the narrow end of both wedge and hash bonds.
+        assert_eq!(bond.a, metal.id);
+        assert_eq!(
+            restored.atom(bond.b).unwrap().element,
+            source.atom(expected.b).unwrap().element
+        );
+    }
+    Ok(())
+}
+
 #[tokio::test]
 async fn placed_coordination_templates_export_and_analyze_without_tetrahedral_stereo()
 -> Result<(), Box<dyn std::error::Error>> {
