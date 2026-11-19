@@ -932,6 +932,7 @@ impl Attachment<'_> {
             abbreviations,
             atom_labels: _,
             ring_fills,
+            highlight_style: _,
             depth_appearance,
             version: _,
             atoms,

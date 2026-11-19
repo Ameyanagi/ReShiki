@@ -150,7 +150,8 @@ fn draw_primitives_with_opacity(
             | Primitive::Contour { .. }
             | Primitive::Wire { .. }
             | Primitive::Card { .. }
-            | Primitive::Gradient { .. } => {}
+            | Primitive::Gradient { .. }
+            | Primitive::Glow { .. } => {}
             Primitive::Line(a, b, width) => {
                 let width = (*width * camera.zoom).max(minimum);
                 if !off_screen([*a, *b], width, camera, bounds) {
@@ -351,7 +352,8 @@ fn draw_halo(
             | Primitive::Contour { .. }
             | Primitive::Wire { .. }
             | Primitive::Card { .. }
-            | Primitive::Gradient { .. } => {}
+            | Primitive::Gradient { .. }
+            | Primitive::Glow { .. } => {}
         }
     }
 }

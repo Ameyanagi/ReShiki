@@ -135,6 +135,7 @@ fn changed_atoms(base: &Document, preview: &Document) -> Option<HashSet<u64>> {
         abbreviations,
         atom_labels,
         ring_fills,
+        highlight_style,
         depth_appearance,
         version,
         atoms,
@@ -162,6 +163,7 @@ fn changed_atoms(base: &Document, preview: &Document) -> Option<HashSet<u64>> {
         && *page_layout == base.page_layout
         && *atom_labels == base.atom_labels
         && *ring_fills == base.ring_fills
+        && *highlight_style == base.highlight_style
         && *version == base.version
         && *annotations == base.annotations
         && *molecule_names == base.molecule_names

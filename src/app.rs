@@ -258,6 +258,7 @@ pub enum Message {
     ColorScope(typography::ColorScope),
     ClearRingFill,
     RingEffect(reshiki::ring_fills::RingEffect),
+    HighlightStyle(reshiki::highlights::HighlightStyle),
     ClearHighlights,
     TextColor(String),
     ApplyTextColor,
@@ -1537,6 +1538,7 @@ fn same_drawing(a: &Document, b: &Document) -> bool {
         && a.generic == b.generic
         && a.abbreviations == b.abbreviations
         && a.ring_fills == b.ring_fills
+        && a.highlight_style == b.highlight_style
         && a.depth_appearance == b.depth_appearance
         && a.atoms.len() == b.atoms.len()
         && a.atoms.iter().zip(&b.atoms).all(|(a, b)| same_atom(a, b))

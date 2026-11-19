@@ -116,21 +116,36 @@ impl Effects {
 /// What a ChemDraw export loses of gradient and see-through fills.
 pub const EXPORT_NOTICE: &str = "ChemDraw has no gradient or see-through fills. Gradients become flat colors, and see-through fills become faded colors that cover what lies behind them. Save a .rsk file to keep them.";
 
-/// The notice for a ChemDraw export of `doc`, if it has such fills.
-pub fn export_notice(doc: &crate::document::Document) -> Option<String> {
-    (doc.graphics
+/// What a ChemDraw export loses of glows and discs.
+pub const GLOW_NOTICE: &str = "ChemDraw has no glows or discs, so highlights and ring fills are written flat. Save a .rsk file to keep them.";
+
+/// The notices for a ChemDraw export of `doc`, for the effects it has.
+pub fn export_notice(doc: &crate::document::Document) -> Vec<String> {
+    use crate::ring_fills::RingEffect;
+    let fills = doc
+        .graphics
         .iter()
         .any(|g| g.style.effects.gradient.is_some() || g.style.effects.opacity.is_some())
         || doc
             .ring_fills
             .iter()
-            .any(|f| f.effect != crate::ring_fills::RingEffect::Flat))
-    .then(|| EXPORT_NOTICE.into())
+            .any(|f| matches!(f.effect, RingEffect::Gradient | RingEffect::SeeThrough));
+    let glows = doc
+        .ring_fills
+        .iter()
+        .any(|f| matches!(f.effect, RingEffect::Glow | RingEffect::Disc))
+        || !doc.highlight_style.is_flat() && crate::highlights::any(doc);
+    [(fills, EXPORT_NOTICE), (glows, GLOW_NOTICE)]
+        .into_iter()
+        .filter(|(lost, _)| *lost)
+        .map(|(_, notice)| notice.into())
+        .collect()
 }
 
 /// Whether `doc` has paint the canvas draws from image tiles, as it does
-/// 3D models: gradients, gradient arrow bodies included.
+/// 3D models: gradients, gradient arrow bodies and glows.
 pub fn tiled(doc: &crate::document::Document) -> bool {
+    use crate::ring_fills::RingEffect;
     doc.graphics
         .iter()
         .any(|g| g.style.effects.gradient.is_some())
@@ -141,7 +156,9 @@ pub fn tiled(doc: &crate::document::Document) -> bool {
         || doc
             .ring_fills
             .iter()
-            .any(|f| f.effect == crate::ring_fills::RingEffect::Gradient)
+            .any(|f| matches!(f.effect, RingEffect::Gradient | RingEffect::Glow))
+        || doc.highlight_style == crate::highlights::HighlightStyle::Glow
+            && crate::highlights::any(doc)
 }
 
 impl Graphic {

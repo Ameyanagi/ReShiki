@@ -118,6 +118,15 @@ pub enum Primitive {
         to: [f32; 2],
         stops: Vec<(f32, [u8; 3], f32)>,
     },
+    /// A soft glow in an exact color: `commands` filled and grown by
+    /// `spread`, then blurred with a standard deviation of `blur`, at `alpha`.
+    Glow {
+        commands: Vec<crate::graphics::PathCommand>,
+        color: [u8; 3],
+        alpha: f32,
+        spread: f32,
+        blur: f32,
+    },
     /// A 3D model's soft background card: a rounded rectangle in exact colors.
     Card {
         lo: Point,
@@ -1538,6 +1547,23 @@ fn selections_bounds_in_axes(
             grow(bond.a, &mut [lo, hi].into_iter());
         }
     }
+    // A glow or disc reaches past its ring's atoms.
+    for fill in doc.ring_fills.iter().filter(|f| {
+        matches!(
+            f.effect,
+            crate::ring_fills::RingEffect::Glow | crate::ring_fills::RingEffect::Disc
+        )
+    }) {
+        let owner = fill.atoms.first().and_then(|id| owners.get(id));
+        if owner.is_some()
+            && fill.atoms.iter().all(|id| owners.get(id) == owner)
+            && let Some(paint) = fill.primitive(doc)
+            && let Some(&first) = fill.atoms.first()
+        {
+            let (lo, hi) = crate::scene::bounds(std::slice::from_ref(&paint));
+            grow(first, &mut [lo, hi].into_iter());
+        }
+    }
     for a in doc
         .annotations
         .iter()
@@ -2447,6 +2473,29 @@ fn graphic_primitive(g: &&crate::graphics::Graphic, doc: &Document) -> Vec<Primi
 }
 /// The SVG ID prefix of a drawing's gradient fills, unlike a 3D model's.
 pub const GRADIENT_ID: &str = "reshiki-gradient-";
+/// How far a glow reaches beyond its shape: the spread and three standard
+/// deviations of blur, past which it is invisible.
+pub(crate) fn glow_reach(spread: f32, blur: f32) -> f32 {
+    spread + 3. * blur
+}
+/// `commands` glowing in `color` as the canvas shows it.
+pub(crate) fn glow_primitive(
+    commands: Vec<crate::graphics::PathCommand>,
+    color: crate::palette::Color,
+    spread: f32,
+    blur: f32,
+    doc: &Document,
+) -> Primitive {
+    Primitive::Glow {
+        commands,
+        color: doc.canvas_theme.color(color.rgb()),
+        alpha: GLOW_ALPHA,
+        spread,
+        blur,
+    }
+}
+/// A glow's strength at its middle, as the plan's soft glow tiles show.
+const GLOW_ALPHA: f32 = 0.9;
 /// `primitive` at `opacity`, or as it is when opaque.
 fn see_through(primitive: Primitive, opacity: Option<f32>) -> Primitive {
     match opacity {
@@ -3597,6 +3646,20 @@ pub fn bounds(drawing: &[Primitive]) -> (Point, Point) {
                     .iter()
                     .flat_map(crate::graphics::PathCommand::iter_points),
             ),
+            Primitive::Glow {
+                commands,
+                spread,
+                blur,
+                ..
+            } => {
+                let r = glow_reach(*spread, *blur);
+                for p in commands
+                    .iter()
+                    .flat_map(crate::graphics::PathCommand::iter_points)
+                {
+                    points.extend([p.offset(-r, -r), p.offset(r, r)]);
+                }
+            }
             Primitive::Text {
                 position,
                 text,

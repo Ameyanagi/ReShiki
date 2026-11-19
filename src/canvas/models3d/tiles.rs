@@ -102,6 +102,7 @@ pub(in crate::canvas) fn is_model(primitive: &Primitive) -> bool {
                 | Primitive::Wire { .. }
                 | Primitive::Card { .. }
                 | Primitive::Gradient { .. }
+                | Primitive::Glow { .. }
         ),
     }
 }

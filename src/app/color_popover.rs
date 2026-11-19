@@ -74,6 +74,7 @@ pub(super) fn keeps_open(message: &Message) -> bool {
             | Message::ApplyTextColor
             | Message::ClearRingFill
             | Message::RingEffect(_)
+            | Message::HighlightStyle(_)
             | Message::ClearHighlights
             | Message::TextStyle(StyleChange::Color(_))
             | Message::Canvas(crate::canvas::Edit::Hover(_) | crate::canvas::Edit::PointerHover(_))
@@ -528,6 +529,27 @@ impl App {
             ("style-color-apply", "Apply custom color", "Apply"),
         );
         let mut body = column![head, swatches, input].spacing(10);
+        if self.tab.color_scope == ColorScope::Highlights {
+            body = body.push(
+                row![
+                    text("Highlight style").size(12).style(muted_text),
+                    hover_hint(
+                        crate::appearance::pick_list(
+                            reshiki::highlights::HighlightStyle::ALL,
+                            Some(self.tab.doc.highlight_style),
+                            Message::HighlightStyle,
+                        )
+                        .text_size(12)
+                        .padding([5, 8])
+                        .width(Length::Fill),
+                        "Every highlight in the drawing: flat, a soft glow or a disc",
+                        tooltip::Position::Top,
+                    ),
+                ]
+                .spacing(8)
+                .align_y(Alignment::Center),
+            );
+        }
         if self.tab.color_scope == ColorScope::Rings
             && self.selected_ring_fills().iter().any(Option::is_some)
         {
@@ -544,7 +566,7 @@ impl App {
                         .text_size(12)
                         .padding([5, 8])
                         .width(Length::Fill),
-                        "Gradient: paper color at the middle · See-through: shows what lies behind",
+                        "Gradient from the paper color, see-through, soft glow or disc",
                         // Above, so it never covers the list's choices.
                         tooltip::Position::Top,
                     ),

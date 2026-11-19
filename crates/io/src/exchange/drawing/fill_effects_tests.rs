@@ -246,3 +246,40 @@ async fn ring_fill_effects_export_as_the_flat_color_chemdraw_shows() {
         assert_eq!(back.ring_fills[0].effect, RingEffect::Flat, "{effect}");
     }
 }
+
+#[tokio::test]
+async fn glows_and_discs_export_flat_with_a_notice() {
+    use crate::ring_fills::RingEffect;
+    let mut document = Document::default();
+    let ring = crate::editing::ring(&mut document, Point::new(0., 0.), 6, false, 30.);
+    crate::ring_fills::apply(&mut document, &ring, Some(BLUE));
+    for effect in [RingEffect::Glow, RingEffect::Disc] {
+        crate::ring_fills::set_effect(&mut document, &ring, effect);
+        let bytes = crate::formats::write(document.clone(), "cdxml")
+            .await
+            .unwrap();
+        let back = crate::formats::read(bytes, "cdxml").await.unwrap();
+        assert_eq!(back.ring_fills[0].color.rgb(), [0, 0, 255], "{effect}");
+        assert_eq!(back.ring_fills[0].effect, RingEffect::Flat, "{effect}");
+    }
+    document.ring_fills.clear();
+    document.highlight_style = crate::highlights::HighlightStyle::Glow;
+    document.atoms[0].display.highlight = Some(RED);
+    let notices = crate::engine::export_notices::notices(
+        &document,
+        "cdx",
+        crate::engine::export_notices::Route::Prepared {
+            source: &document,
+            figure_only: false,
+        },
+    );
+    assert!(notices.contains(&crate::graphics::GLOW_NOTICE.to_owned()));
+    let bytes = crate::formats::write(document, "cdxml").await.unwrap();
+    let back = crate::formats::read(bytes, "cdxml").await.unwrap();
+    // ChemDraw keeps the highlight itself, flat.
+    assert_eq!(
+        back.atoms[0].display.highlight.map(|c| c.rgb()),
+        Some([255, 0, 0])
+    );
+    assert!(back.highlight_style.is_flat());
+}

@@ -121,6 +121,7 @@ impl App {
             Message::ApplyFontSize => self.apply_font_size_input(),
             Message::ClearRingFill => self.apply_ring_color(None),
             Message::RingEffect(effect) => self.apply_ring_effect(effect),
+            Message::HighlightStyle(style) => self.apply_highlight_style(style),
             Message::ClearHighlights => self.apply_highlight_color(None),
             Message::ColorScope(scope) => self.set_color_scope(scope),
             Message::TextColor(value) => self.set_text_color_input(value),
