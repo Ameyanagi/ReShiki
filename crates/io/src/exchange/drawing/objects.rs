@@ -603,8 +603,9 @@ impl Writer<'_> {
             // shape, and an unfilled outline shows the page inside, as the
             // canvas draws it.
             if let Some(commands) = g.shadow_commands().filter(|c| {
-                // A fill needs closed outlines only.
-                curve_points(c).is_ok_and(|paths| paths.iter().all(|(_, closed)| *closed))
+                // One closed outline: ChemDraw fills each curve on its own,
+                // so a hole in a compound path would be filled.
+                curve_points(c).is_ok_and(|paths| matches!(paths.as_slice(), [(_, true)]))
             }) {
                 if g.style.fill.is_none()
                     && g.style.effects.opacity.is_none()
@@ -1011,17 +1012,6 @@ impl Writer<'_> {
         record.style.fill = record.style.fill.map(written);
         if let Some(gradient) = &mut record.style.effects.gradient {
             gradient.from = written(gradient.from);
-        }
-        // An unfilled shadowed panel shows the page inside, which the light
-        // canvas it opens on would paint white.
-        if self.doc.canvas_theme.is_dark()
-            && record.style.effects.shadow_pt.is_some()
-            && record.style.fill.is_none()
-            && record.style.effects.opacity.is_none()
-        {
-            record.style.fill = Some(written(crate::palette::Color::Custom(
-                self.doc.canvas_theme.background(),
-            )));
         }
         let page = |p: Point, shift: P| {
             let p = P::from(p);

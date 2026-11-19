@@ -146,22 +146,6 @@ async fn a_panel_comes_back_from_cdxml_as_a_panel_and_chemdraw_sees_its_shadow()
         assert!(a.distance(b) < 0.01, "{a:?} {b:?}");
     }
 
-    // An unfilled shadowed panel from the dark canvas keeps the dark inside
-    // on the light canvas it opens on.
-    let mut dark = panel_document(TitlePlace::Bar, true);
-    dark.canvas_theme = crate::canvas_theme::CanvasTheme::Dark;
-    dark.graphics[0].style.fill = None;
-    dark.graphics[0].style.effects.shadow_pt = Some(4.);
-    let bytes = crate::formats::write(dark.clone(), "cdxml").await.unwrap();
-    let opened = crate::formats::read(bytes, "cdxml").await.unwrap();
-    let inside = opened
-        .graphics
-        .iter()
-        .find(|g| g.panel.is_some())
-        .and_then(|g| g.style.fill)
-        .map(|c| c.rgb());
-    assert_eq!(inside, Some(dark.canvas_theme.background()));
-
     // CDX has no place for ReShiki's own data: the panel stays shapes.
     let cdx = crate::formats::write(back, "cdx").await.unwrap();
     let shapes = crate::formats::read(cdx, "cdx").await.unwrap();
@@ -169,45 +153,21 @@ async fn a_panel_comes_back_from_cdxml_as_a_panel_and_chemdraw_sees_its_shadow()
 }
 
 #[tokio::test]
-async fn an_unfilled_shadowed_shape_keeps_the_dark_canvas_inside() {
-    for theme in crate::canvas_theme::CanvasTheme::ALL {
-        let mut document = Document {
-            canvas_theme: theme,
-            ..Default::default()
-        };
-        document.graphics.push(Graphic::dragged(
-            1,
-            GraphicKind::Rectangle,
-            Point::new(0., 0.),
-            Point::new(60., 30.),
-            GraphicStyle {
-                fill: None,
-                effects: crate::graphics::Effects {
-                    shadow_pt: Some(4.),
-                    ..Default::default()
-                },
-                ..Default::default()
-            },
-            BracketSides::Both,
-            false,
-        ));
-        let bytes = crate::formats::write(document, "cdxml").await.unwrap();
-        // Unfilled, so ChemDraw draws its own grey shadow.
-        let xml = String::from_utf8(bytes.clone()).unwrap();
-        assert!(xml.contains(r#"RectangleType="Shadow""#), "{xml}");
-        let back = crate::formats::read(bytes, "cdxml").await.unwrap();
-        let shape = back
+async fn an_unfilled_shadowed_shape_on_a_colored_page_opens_filled_with_it() {
+    // ChemDraw paints a shadowed outline's inside with the page: black here.
+    for (page, inside) in [("", None), (r#" bgcolor="3""#, Some([0; 3]))] {
+        let xml = format!(
+            r#"<CDXML{page}><colortable><color r="1" g="1" b="1"/><color r="0" g="0" b="0"/></colortable>
+<page id="1"><graphic id="2" GraphicType="Rectangle" RectangleType="Shadow" color="2"
+ BoundingBox="60 40 10 10"/><graphic id="3" GraphicType="Rectangle" RectangleType="Plain"
+ color="2" BoundingBox="160 40 110 10"/></page></CDXML>"#
+        );
+        let doc = crate::formats::read(xml.into(), "cdxml").await.unwrap();
+        let fills: Vec<_> = doc
             .graphics
             .iter()
-            .find(|g| g.style.effects.shadow_pt.is_some())
-            .unwrap();
-        // ChemDraw paints a shadowed outline's inside with the page: on the
-        // dark-canvas export's black page that opens as a black fill.
-        let inside = shape.style.fill.map(|c| c.rgb());
-        if theme.is_dark() {
-            assert_eq!(inside, Some(theme.background()));
-        } else {
-            assert_eq!(inside, None);
-        }
+            .map(|g| g.style.fill.map(|c| c.rgb()))
+            .collect();
+        assert_eq!(fills, [inside, None], "{page}");
     }
 }

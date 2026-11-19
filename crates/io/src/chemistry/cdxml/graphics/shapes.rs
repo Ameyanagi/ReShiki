@@ -341,18 +341,8 @@ impl Reader<'_, '_> {
         style.shadow_pt = self.shadow(el, effects.1)?;
         // ChemDraw paints a shadowed outline's inside with the page, which
         // on a colored page, such as a dark-canvas export, is a fill.
-        if style.shadow_pt.is_some()
-            && style.fill.is_none()
-            && style.opacity.is_none()
-            && let Some(page) = self
-                .root
-                .attribute("bgcolor")
-                .and_then(|v| numeric::integer(v).ok().flatten())
-                .and_then(|n| usize::try_from(n).ok())
-                .and_then(|n| self.colors.colors.get(n))
-                .filter(|c| c.0 != [255.; 3])
-        {
-            style.fill = Some(*page);
+        if style.shadow_pt.is_some() && style.fill.is_none() && style.opacity.is_none() {
+            style.fill = self.page;
         }
         if kind == GraphicKind::RoundedRectangle && el.has_attribute("CornerRadius") {
             // Hundredths of a point on the page, scaled with the drawing.

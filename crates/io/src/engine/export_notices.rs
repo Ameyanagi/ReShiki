@@ -125,7 +125,11 @@ fn chemdraw_lacks(document: &Document, format: &str) -> Option<String> {
         .into_iter()
         .filter(|p| {
             document.atoms.iter().any(|a| a.purpose == *p)
-                || document.arrows.iter().any(|a| a.purpose == *p)
+                // An arrow through nodes opens again as a path.
+                || document
+                    .arrows
+                    .iter()
+                    .any(|a| a.purpose == *p && a.nodes.is_empty())
         })
         .map(Purpose::label)
         .collect();

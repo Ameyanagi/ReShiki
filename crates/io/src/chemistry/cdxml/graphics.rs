@@ -227,6 +227,8 @@ struct Reader<'a, 'input> {
     root: Node<'a, 'input>,
     scale: f64,
     colors: presentation::Palette,
+    /// A colored page, which ChemDraw paints inside shadowed outlines.
+    page: Option<presentation::NativeColor>,
     middle: NativeLayer,
     work: std::cell::Cell<usize>,
     points: usize,
@@ -398,9 +400,13 @@ impl Reader<'_, '_> {
 /// as a valid panel leaves the group as the shapes and text ChemDraw sees.
 pub(super) fn panel_record(node: Node<'_, '_>) -> Option<Graphic> {
     let record = node.attribute(crate::exchange::PANEL)?;
-    serde_json::from_str(record)
-        .ok()
-        .filter(|g: &Graphic| named(node, "group") && g.panel.is_some() && g.validate().is_ok())
+    let panel: Graphic = serde_json::from_str(record).ok()?;
+    // Valid as a drawing would hold it, so the drawing still opens.
+    let drawing = crate::document::Document {
+        graphics: vec![panel.clone()],
+        ..Default::default()
+    };
+    (named(node, "group") && panel.panel.is_some() && drawing.validate().is_ok()).then_some(panel)
 }
 
 /// Equivalent to native local_pictures=True. Claimed elements are skipped by
@@ -442,10 +448,17 @@ pub fn read(
     } else {
         NativeLayer::parse("32767")?
     };
+    let page = root
+        .attribute("bgcolor")
+        .and_then(|v| numeric::integer(v).ok().flatten())
+        .and_then(|n| usize::try_from(n).ok())
+        .and_then(|n| colors.colors.get(n).copied())
+        .filter(|c| c.into_document().is_ok_and(|rgb| rgb != [255; 3]));
     let mut reader = Reader {
         root,
         scale,
         colors,
+        page,
         middle,
         work: std::cell::Cell::new(root.document().input_text().len()),
         points: 0,

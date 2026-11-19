@@ -355,8 +355,9 @@ cm**, **RSC graphical abstract · 8 × 4 cm** or **Elsevier graphical abstract �
 - ChemDraw draws waves only on straight lines without arrowheads. Other wavy
   lines, curves and arrows open in ChemDraw as solid strokes.
 - ChemDraw has shadows only on upright rectangles and ovals. A shadow on a
-  rotated rectangle, a path or a panel is written to CDXML and CDX as a grey
-  shape behind it, which opens as a separate shape.
+  rotated rectangle, a single closed path or a panel is written to CDXML and
+  CDX as a grey shape behind it, which opens as a separate shape. Other paths
+  lose their shadow there.
 - ChemDraw has no glows or discs. Highlights export as ChemDraw's flat
   highlight and glowing or disc ring fills as flat ring fills, with a notice.
 - ChemDraw has no gradient or see-through fills. A gradient is written as the
@@ -371,8 +372,6 @@ cm**, **RSC graphical abstract · 8 × 4 cm** or **Elsevier graphical abstract �
   lines and text, and export says so. ReShiki opens a CDXML file it wrote with
   the panels whole; a CDX file gives those shapes. Layouts are not written to
   ChemDraw files.
-- A panel with its title set into the border, exported to CDXML from the dark
-  canvas, opens again with the light canvas's white behind its title.
 - A panel's title uses the drawing's font and size in bold. Title text is
   edited in **Properties**, not on the canvas.
 - A catalytic cycle is a circle. ChemDraw has no cycle object: CDXML and CDX
