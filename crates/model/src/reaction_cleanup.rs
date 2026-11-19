@@ -289,14 +289,13 @@ pub fn clean(
                 .iter()
                 .flat_map(|arrow| {
                     let unit = straight.get(arrow).and_then(|i| units.get(*i));
-                    let labels: Vec<u64> = unit
+                    let labels: [Vec<u64>; 1] = [unit
                         .into_iter()
                         .flatten()
                         .copied()
                         .filter(|id| id != arrow)
-                        .collect();
-                    let labels =
-                        measure(&out, row, std::slice::from_ref(&labels), &[labels]).remove(&0);
+                        .collect()];
+                    let labels = measure(&out, row, &labels, &labels).remove(&0);
                     sides(&measured, places, *arrow)
                         .into_iter()
                         .flatten()
