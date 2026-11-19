@@ -648,9 +648,13 @@ them. Upright rectangles only: a rotated one stays a path. ChemDraw paints a
 shadowed outline's inside with the page color. ReShiki opens an unfilled one on
 a colored page, such as a ChemDraw file with a black background, filled with
 that color. A shaded path is a
-ChemDraw shaded curve (CurveType 256, FillType Shaded). A wavy line without
-heads is ChemDraw's line graphic with LineType Wavy, and a straight wavy arrow
-keeps LineType Wavy. On import, ChemDraw's Shaded paints the shape's one color
+ChemDraw shaded curve (CurveType 256, FillType Shaded). A line without heads
+is ChemDraw's line graphic with LineType Solid, Dashed or Wavy, and opens again
+as a line; a straight wavy arrow keeps LineType Wavy. ChemDraw stores what its
+line and arc tools draw as arrows without heads. ReShiki opens such an arrow,
+when no reaction step lists it and it has no fill, no-go or dipole mark, as a
+graphic: a straight one as a line from its tail to its head, an arc as a path
+of Bézier segments of at most a quarter turn each. On import, ChemDraw's Shaded paints the shape's one color
 and Shadow keeps its ShadowSize. ChemDraw shades an open curve as if closed,
 and draws a wavy curve or a wavy line with heads straight; ReShiki imports them
 the same way. ReShiki draws the shading as flat bands, as ChemDraw's own
@@ -661,6 +665,14 @@ document version 40, as are gradient and see-through fills and ring interior
 effects. ChemDraw's CornerRadius (hundredths of a point) becomes
 **Corner (pt)** on import and is written back for native rounded rectangles.
 Curves nested in molecular fragments are also kept on import.
+
+ReShiki paints graphics behind the chemistry, then structures, then text and
+arrows, then graphics in front. ChemDraw paints every object in its own Z
+order. On import a graphic goes in front only when its Z is above every
+visible fragment, atom, bond, text and arrow (a line or arc read as a graphic
+does not count); every other graphic goes behind, in Z order. Text ChemDraw shows
+over a shape therefore stays visible. The trade-off: a shape ChemDraw stacks
+over part of a structure, under a later text, opens behind the structure.
 
 ChemDraw paints the inside of a plain closed rectangle, oval or curve with its
 color at FadePercent tenths of a percent over white (CDX property 0x0303,

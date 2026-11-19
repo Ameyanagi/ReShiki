@@ -7,6 +7,8 @@ use reshiki_model::{
     document::{Document, Point},
     graphics::{Graphic, GraphicKind, LinePattern, PathCommand},
     palette::Color,
+    purpose::Purpose,
+    reactions::{self, Role},
     scientific::{OrbitalKind, Phase, SymbolKind},
 };
 use std::path::{Path, PathBuf};
@@ -35,6 +37,14 @@ async fn fixture(name: &str) -> (Document, Vec<String>) {
     open(std::fs::read(&path).unwrap(), format(&path).unwrap())
         .await
         .unwrap_or_else(|error| panic!("{name}: {error}"))
+}
+
+/// Where a path command ends.
+fn anchor(command: Option<&PathCommand>) -> Point {
+    match command {
+        Some(PathCommand::Move(p) | PathCommand::Line(p) | PathCommand::Cubic(_, _, p)) => *p,
+        _ => panic!("{command:?}"),
+    }
 }
 
 /// One page of objects with black, white, red and blue after the two
@@ -93,10 +103,16 @@ async fn the_owners_drawing_opens_whole_without_a_notice() {
     for name in ["drawing.cdxml", "drawing.cdx"] {
         let (document, notices) = fixture(name).await;
         assert_eq!(notices, Vec::<String>::new(), "{name}");
-        // 10 ovals, 10 rectangles and 5 lines.
+        // 10 ovals, 10 rectangles and 5 lines, the lines graphic lines as
+        // a line drawn in ReShiki is.
+        assert_eq!(document.graphics.len(), 25, "{name}");
         assert_eq!(
-            document.graphics.len() + document.arrows.len(),
-            25,
+            document
+                .graphics
+                .iter()
+                .filter(|g| g.kind == GraphicKind::Line)
+                .count(),
+            5,
             "{name}"
         );
     }
@@ -330,25 +346,28 @@ async fn arc_arrows_are_arcs_and_older_arcs_are_curves() {
     .await
     {
         assert_eq!(notices, nearest("1 arc arrow straight"));
-        let [quarter, long, headless, straight, legacy] = document.arrows.as_slice() else {
+        let [quarter, long, straight, legacy] = document.arrows.as_slice() else {
             panic!("{:?}", document.arrows);
         };
         // The arrow reader draws ChemDraw's arcs as arcs.
-        assert!(
-            [quarter, long, headless]
-                .iter()
-                .all(|arrow| arrow.arc.is_some())
-        );
+        assert!([quarter, long].iter().all(|arrow| arrow.arc.is_some()));
         assert!(straight.arc.is_none() && straight.cubic.is_none());
         // The arc arrow of an older file ends where ChemDraw's own arrow for
         // it does: both run up the right of their centres.
         assert!((legacy.start.x - legacy.end.x).abs() < 0.01 && legacy.start.y > legacy.end.y);
         assert!((legacy.start.y - quarter.start.y).abs() < 0.01);
         assert!((legacy.end.y - quarter.end.y).abs() < 0.01);
-        // An older headless arc is a path of one quarter turn.
-        let [arc] = document.graphics.as_slice() else {
+        // The Arc tool's half turn is a path from its tail to its head, and
+        // an older headless arc a path of one quarter turn.
+        let [headless, arc] = document.graphics.as_slice() else {
             panic!("{:?}", document.graphics);
         };
+        assert_eq!((headless.kind, headless.path.len()), (GraphicKind::Path, 3));
+        let (start, end) = (anchor(headless.path.first()), anchor(headless.path.last()));
+        assert!((start.y - end.y).abs() < 0.01 && start.x < end.x);
+        // Half a turn: as high as its radius.
+        let (low, high) = extent(headless);
+        assert!(((high.y - low.y) - (end.x - start.x) / 2.).abs() < 0.1);
         assert_eq!((arc.kind, arc.path.len()), (GraphicKind::Path, 2));
     }
 }
@@ -1109,6 +1128,97 @@ async fn a_mark_on_an_atom_is_never_left_out() {
                <graphic id='4' SymbolType='Radical' BoundingBox='4 3 0 0'>\
                <represent object='3' attribute='Charge'/></graphic></fragment></page></CDXML>";
     assert!(open(xml.as_bytes().to_vec(), "cdxml").await.is_err());
+}
+
+#[tokio::test]
+async fn text_and_arrows_chemdraw_stacks_over_a_shape_stay_over_it() {
+    // A structure under a shaded box, a legend over the box, a box at the
+    // legend's level, a box under an arrow, then a box and a line on top.
+    for (document, _) in sheet(
+        "<fragment id='2'><n id='3' p='20 20' Z='2'/><n id='4' p='40 20' Z='3'/>\
+         <b id='5' B='3' E='4' Z='4'/></fragment>\
+         <graphic id='6' Z='5' GraphicType='Rectangle' RectangleType='Shaded' \
+         BoundingBox='0 0 100 60'/>\
+         <t id='7' Z='6' p='10 50'><s>Legend</s></t>\
+         <graphic id='8' Z='6' GraphicType='Rectangle' RectangleType='Filled' \
+         BoundingBox='0 70 100 90'/>\
+         <graphic id='9' Z='7' GraphicType='Rectangle' RectangleType='Filled' \
+         BoundingBox='0 100 100 120'/>\
+         <arrow id='10' Z='8' Tail3D='10 110 0' Head3D='90 110 0' ArrowheadHead='Full'/>\
+         <graphic id='11' Z='9' GraphicType='Rectangle' RectangleType='Filled' \
+         BoundingBox='200 0 300 60'/>\
+         <arrow id='12' Z='10' Tail3D='200 80 0' Head3D='300 80 0'/>",
+    )
+    .await
+    {
+        let layers: Vec<_> = document.graphics.iter().map(|g| g.layer).collect();
+        // Behind the chemistry in ChemDraw's order, and only the top box and
+        // the line in front: the line is a graphic, not an arrow to stay under.
+        assert_eq!(layers, [-4, -3, -2, 1, 2]);
+        assert_eq!(document.graphics[4].kind, GraphicKind::Line);
+    }
+    // A curve with a head counts as an arrow: the box under it stays behind.
+    for (document, _) in sheet(
+        "<fragment id='2'><n id='3' p='20 20' Z='2'/></fragment>\
+         <graphic id='4' Z='7' GraphicType='Rectangle' RectangleType='Filled' \
+         BoundingBox='0 0 100 60'/>\
+         <curve id='5' Z='8' ArrowheadHead='Full' CurvePoints='0 0 0 0 30 10 60 10 90 0 90 0'/>",
+    )
+    .await
+    {
+        assert!(document.graphics[0].layer < 0, "{:?}", document.graphics);
+    }
+}
+
+#[tokio::test]
+async fn chemdraw_lines_are_graphic_lines_and_reaction_arrows_stay_arrows() {
+    // A reaction arrow between two structures, a dashed bold line, a wavy
+    // line, a line a reaction step lists, an arc without heads and a double
+    // shaft without heads.
+    for (document, _) in sheet(
+        "<fragment id='2'><n id='3' p='0 20'/><n id='4' p='10 20'/><b id='5' B='3' E='4'/>\
+         </fragment><fragment id='6'><n id='7' p='90 20'/><n id='8' p='100 20'/>\
+         <b id='9' B='7' E='8'/></fragment>\
+         <arrow id='10' Tail3D='20 20 0' Head3D='70 20 0' ArrowheadHead='Full'/>\
+         <arrow id='11' Tail3D='20 60 0' Head3D='70 60 0' LineType='Dashed Bold'/>\
+         <arrow id='12' Tail3D='70 80 0' Head3D='20 80 0' LineType='Wavy'/>\
+         <arrow id='13' Tail3D='20 100 0' Head3D='70 100 0'/>\
+         <arrow id='14' AngularSize='-180' Head3D='83 340 0' Tail3D='47 340 0' \
+         Center3D='65 340 0' MajorAxisEnd3D='83 340 0' MinorAxisEnd3D='65 358 0'/>\
+         <arrow id='17' Tail3D='20 120 0' Head3D='70 120 0' ArrowShaftSpacing='800'/>\
+         <scheme id='15'><step id='16' ReactionStepArrows='13'/></scheme>",
+    )
+    .await
+    {
+        let [dashed, wavy, arc] = document.graphics.as_slice() else {
+            panic!("{:?}", document.graphics);
+        };
+        assert_eq!(arc.kind, GraphicKind::Path);
+        assert_eq!(
+            (dashed.kind, dashed.style.pattern, dashed.style.width_pt),
+            (GraphicKind::Line, LinePattern::Dashed, 4.)
+        );
+        assert_eq!(
+            (wavy.kind, wavy.style.pattern),
+            (GraphicKind::Line, LinePattern::Wavy)
+        );
+        // Each runs from ChemDraw's tail to its head.
+        assert!(dashed.axis_x.x > 0. && wavy.axis_x.x < 0.);
+        assert_eq!((dashed.axis_x.y, wavy.axis_x.y), (0., 0.));
+        // The reaction arrow, the listed line and a broad body without heads
+        // stay arrows that take part in reactions.
+        let purposes: Vec<_> = document.arrows.iter().map(|a| a.purpose).collect();
+        assert_eq!(purposes, [Purpose::Chemistry; 3]);
+        let reaction = reactions::preview(&document, document.arrows[0].id).unwrap();
+        assert_eq!(
+            [Role::Reactant, Role::Product].map(|role| reaction.participants(role).len()),
+            [1, 1]
+        );
+    }
+    // A lone page, without its CDXML document, keeps a line as an arrow.
+    let page = "<page><arrow id='2' Tail3D='0 0 0' Head3D='20 0 0'/></page>";
+    let (document, _) = open(page.into(), "cdxml").await.unwrap();
+    assert_eq!((document.arrows.len(), document.graphics.len()), (1, 0));
 }
 
 #[tokio::test]

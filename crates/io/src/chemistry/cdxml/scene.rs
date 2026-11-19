@@ -668,6 +668,10 @@ fn read_captions_and_arrows(
     mut next_id: u64,
 ) -> Result<u64> {
     let arrows = super::ArrowReader::new(&prepared.expanded_xml)?;
+    let stepped = stepped_arrows(nodes);
+    // The graphics reader reads the pages of a CDXML document; on a lone
+    // page a line stays an arrow, as before.
+    let document = nodes.first().is_some_and(|root| root.has_tag_name("CDXML"));
     let panels: HashSet<_> = nodes
         .iter()
         .filter(|n| graphics::panel_record(**n).is_some())
@@ -703,6 +707,9 @@ fn read_captions_and_arrows(
                     format: text.format,
                 });
             } else if node.has_tag_name("arrow")
+                && !(document
+                    && graphics::bare_stroke(node)
+                    && !node.attribute("id").is_some_and(|id| stepped.contains(id)))
                 || node.has_tag_name("curve")
                     && ["ArrowheadHead", "ArrowheadTail"].iter().any(|key| {
                         !matches!(
@@ -726,6 +733,21 @@ fn read_captions_and_arrows(
         }
     }
     Ok(next_id)
+}
+/// The IDs of the arrows ChemDraw's reaction steps list, directly or by the
+/// older graphic that an arrow supersedes.
+fn stepped_arrows<'a>(nodes: &[Node<'a, '_>]) -> HashSet<&'a str> {
+    let listed: HashSet<_> = nodes
+        .iter()
+        .filter(|n| n.has_tag_name("step"))
+        .filter_map(|n| n.attribute("ReactionStepArrows"))
+        .flat_map(str::split_whitespace)
+        .collect();
+    let superseding = nodes
+        .iter()
+        .filter(|n| n.attribute("id").is_some_and(|id| listed.contains(id)))
+        .filter_map(|n| n.attribute("SupersededBy"));
+    superseding.chain(listed.iter().copied()).collect()
 }
 fn styled_label_atoms(
     prepared: &PreparedCdxml,
