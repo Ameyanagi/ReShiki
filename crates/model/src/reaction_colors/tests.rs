@@ -647,8 +647,8 @@ fn text_typed_into_a_legend_starts_in_the_caption_color() {
     // Starts differently, so all of it inherits the first swatch's blue.
     let typed = "Origins\n■ diene   ■ dienophile   ■ New bond   ● New ring";
     legend.text = typed.into();
-    let range = legend.format.edited(&old, typed, 0..old.len());
-    untint_typed(typed, &mut legend.format, range);
+    let typed_range = legend.format.edited(&old, typed, 0..old.len());
+    untint_typed(&old, typed, &mut legend.format, typed_range);
     let _ = crate::transaction::reconcile(&mut doc, before).unwrap();
     assert_eq!(legend_swatches(&doc).1, colors);
     let legend = doc.annotations.iter().find(|a| a.id == id).unwrap();
@@ -657,4 +657,27 @@ fn text_typed_into_a_legend_starts_in_the_caption_color() {
             assert_eq!(legend.format.at(i).color, Color::Ink, "{c:?} at {i}");
         }
     }
+}
+
+#[test]
+fn a_letter_typed_into_a_colored_name_keeps_its_color() {
+    let DielsAlder { mut doc, arrow, .. } = diels_alder(true);
+    set_legend(&mut doc, arrow, true, Default::default()).unwrap();
+    let (id, _) = legend_swatches(&doc);
+    let legend = doc.annotations.iter_mut().find(|a| a.id == id).unwrap();
+    let name = SWATCH.len_utf8() + 1;
+    let old = legend.text.clone();
+    legend.format.apply(
+        &old,
+        Some(name..name + "Reactant 1".len()),
+        &crate::typography::StyleChange::Color(BLUE),
+    );
+    // Insert a letter inside the blue name.
+    let at = name + 3;
+    let mut new = old.clone();
+    new.insert(at, 'x');
+    let typed = legend.format.edited(&old, &new, at..at);
+    untint_typed(&old, &new, &mut legend.format, typed);
+    legend.text = new;
+    assert_eq!(legend.format.at(at).color, BLUE);
 }

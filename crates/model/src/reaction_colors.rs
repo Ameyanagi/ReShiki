@@ -626,22 +626,29 @@ fn legend(doc: &mut Document, id: u64, entries: &[(char, Color, String)]) {
     }
 }
 
-/// Typed text in a legend never takes a swatch's color: it would otherwise
-/// inherit the color of a swatch it replaced or follows. Called as you type,
-/// so a color you then give a name stays.
-pub fn untint_typed(text: &str, format: &mut crate::typography::TextFormat, typed: Range<usize>) {
+/// Text typed into a legend never takes a swatch's color: when the typed
+/// text inherited its style from a swatch of `old`, it gets the caption color.
+/// Called as you type, so colors you give names, before or after, stay.
+pub fn untint_typed(
+    old: &str,
+    text: &str,
+    format: &mut crate::typography::TextFormat,
+    (typed, from): (Range<usize>, usize),
+) {
     let glyph = |c: char| c == SWATCH || c == RING;
-    let swatches: HashSet<Color> = text
-        .char_indices()
-        .filter(|(_, c)| glyph(*c))
-        .map(|(i, _)| format.at(i).color)
-        .collect();
+    if !old
+        .get(from..)
+        .and_then(|s| s.chars().next())
+        .is_some_and(glyph)
+    {
+        return;
+    }
     let base = format.style.color;
     let styles = text
         .char_indices()
         .map(|(i, c)| {
             let mut style = format.at(i).clone();
-            if typed.contains(&i) && !glyph(c) && swatches.contains(&style.color) {
+            if typed.contains(&i) && !glyph(c) {
                 style.color = base;
             }
             style

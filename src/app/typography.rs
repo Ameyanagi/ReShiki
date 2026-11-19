@@ -433,7 +433,12 @@ impl App {
                     .any(|r| r.colors.as_ref().and_then(|c| c.legend) == Some(id))
             });
             if legend {
-                reshiki::reaction_colors::untint_typed(&text, &mut self.tab.caption_format, typed);
+                reshiki::reaction_colors::untint_typed(
+                    &self.tab.caption,
+                    &text,
+                    &mut self.tab.caption_format,
+                    typed,
+                );
             }
             self.tab.caption = text;
             self.auto_format_caption();
