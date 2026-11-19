@@ -106,13 +106,16 @@ impl Cycle {
         if self.steps.len() != self.intermediates.len() {
             return Err("A cycle has one step per intermediate".into());
         }
+        // A drop adds at most 64 side parts to a step; steps that join when
+        // an intermediate goes keep all of theirs.
+        let sides = MAX_PARTS * MAX_PARTS;
         if self.intermediates.len() > MAX_PARTS
             || self
                 .steps
                 .iter()
-                .any(|s| s.reagents.len() > MAX_PARTS || s.products.len() > MAX_PARTS)
+                .any(|s| s.reagents.len() > sides || s.products.len() > sides)
         {
-            return Err("A cycle has at most 64 intermediates and 64 side parts per step".into());
+            return Err("A cycle has at most 64 intermediates".into());
         }
         if !range(self.gap_pt, 0., 72.)
             || self.steps.iter().any(|s| {
@@ -949,22 +952,14 @@ pub fn remove(doc: &mut Document, ids: &[u64]) -> usize {
     freed.len()
 }
 
-/// Parts that lost their role leave the groups that hold a cycle; other
-/// groups they belong to stay.
+/// Parts that lost their role leave every group: a group nested in the
+/// cycle's would otherwise overlap it.
 fn ungroup_freed(doc: &mut Document, freed: &HashSet<u64>) {
     if freed.is_empty() {
         return;
     }
-    let cycles: HashSet<u64> = doc
-        .graphics
-        .iter()
-        .filter(|g| g.cycle.is_some())
-        .map(|g| g.id)
-        .collect();
     for group in &mut doc.groups {
-        if group.members.iter().any(|id| cycles.contains(id)) {
-            group.members.retain(|id| !freed.contains(id));
-        }
+        group.members.retain(|id| !freed.contains(id));
     }
     doc.prune_groups();
 }

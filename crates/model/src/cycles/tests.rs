@@ -621,3 +621,42 @@ fn a_reagent_whose_step_goes_leaves_the_cycle_group_and_keeps_names() {
     remove(&mut doc, &[oa]);
     assert_eq!(cycle(&doc, id).steps[0].name, "Transmetalation");
 }
+
+#[test]
+fn a_part_in_its_own_group_can_leave_and_full_steps_can_join() {
+    let mut doc = Document::default();
+    let a = text(&mut doc, Point::new(0., -200.), "A");
+    let b = text(&mut doc, Point::new(170., 90.), "B");
+    let c = text(&mut doc, Point::new(-230., 90.), "C");
+    doc.group_selection(&[a, b]).unwrap();
+    let id = make(&mut doc, &[a, b, c]).unwrap();
+    doc.validate().unwrap();
+    let before = doc.clone();
+    remove(&mut doc, &[a]);
+    let _ = crate::transaction::reconcile(&mut doc, before).unwrap();
+    assert_eq!(cycle(&doc, id).intermediates.len(), 2);
+
+    // Two steps with 40 reagents each join into one valid step.
+    let (mut doc, id, [_, oa, _]) = suzuki();
+    for step in 0..2 {
+        for k in 0..40 {
+            let t = text(
+                &mut doc,
+                Point::new(3000. + k as f32 * 50., step as f32 * 50.),
+                "R",
+            );
+            if let Some(c) = doc
+                .graphics
+                .iter_mut()
+                .find(|g| g.id == id)
+                .and_then(|g| g.cycle.as_deref_mut())
+            {
+                c.steps[step].reagents.push(vec![t]);
+            }
+        }
+    }
+    let before = doc.clone();
+    doc.delete(&[oa]);
+    let _ = crate::transaction::reconcile(&mut doc, before).unwrap();
+    assert_eq!(cycle(&doc, id).steps[0].reagents.len(), 80);
+}
