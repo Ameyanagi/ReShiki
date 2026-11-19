@@ -2635,9 +2635,9 @@ fn bond_runs(lines: Vec<BondLine>) -> Vec<(Vec<Point>, bool)> {
     }
     // The line `from` continues into through `point`, when exactly two
     // continuing lines meet there and `from` is one of them.
-    let partner = |point: Point, from: usize| match meeting.get(&key(point))?.as_slice() {
-        &[a, b] if a == from => Some(b),
-        &[a, b] if b == from => Some(a),
+    let partner = |point: Point, from: usize| match *meeting.get(&key(point))?.as_slice() {
+        [a, b] if a == from => Some(b),
+        [a, b] if b == from => Some(a),
         _ => None,
     };
     let mut remaining: std::collections::BTreeMap<_, _> = lines
