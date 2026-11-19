@@ -11,7 +11,7 @@ fn a_piece_exports_as_one_group_of_curves_in_paint_order() {
         .graphics
         .push(placed::graphic(1, flask, Point::new(100., 100.), scale));
     document.validate().unwrap();
-    let painted = placed::primitives(&document.graphics[0]).len();
+    let painted = placed::primitives(&document.graphics[0], document.canvas_theme).len();
     let request = Request::molecule("export", document.clone());
     let xml = write(&document, (&request).into()).unwrap();
     let decoded = crate::exchange::from_cdx(&crate::exchange::to_cdx(&xml).unwrap()).unwrap();

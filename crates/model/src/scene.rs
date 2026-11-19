@@ -2345,7 +2345,7 @@ fn graphic_primitive(g: &&crate::graphics::Graphic, doc: &Document) -> Vec<Primi
         return cycle_primitives(g, doc);
     }
     if g.kind == crate::graphics::GraphicKind::Piece {
-        return crate::equipment::placed::primitives(g);
+        return crate::equipment::placed::primitives(g, doc.canvas_theme);
     }
     if g.kind == crate::graphics::GraphicKind::Picture {
         vec![Primitive::Picture(Box::new((*g).clone()))]

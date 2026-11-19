@@ -6,6 +6,7 @@ use super::eval::{Values, resolve};
 use super::format::{Definition, Material, StyleKind, content_hash};
 use super::geometry::{Affine, Seg};
 use super::plan::{Ink, Instance, Pass, PlanPath, Settings, Weight, paint_plan};
+use crate::canvas_theme::CanvasTheme;
 use crate::document::{Document, Point};
 use crate::graphics::{Graphic, GraphicKind, GraphicStyle, PathCommand};
 use crate::palette::Color;
@@ -287,25 +288,26 @@ fn width_pt(weight: Weight, pass: Pass) -> f32 {
     }
 }
 
-/// The colour a material is filled with in line style, on the light canvas.
-/// The dark canvas shows it through the usual lightness change.
-fn fill_rgb(material: Material, color: Option<[u8; 3]>) -> Color {
-    if let Some(c) = color {
-        return Color::Custom(c);
+/// The colour a material is filled with in line style, in the light-canvas
+/// form primitives use. Glass is paper and flips with the canvas; rubber,
+/// plastic and other coloured parts keep their colour on the dark canvas.
+fn fill_rgb(material: Material, color: Option<[u8; 3]>, theme: CanvasTheme) -> Color {
+    let kept = |c: [u8; 3]| Color::Custom(theme.color(c));
+    match material {
+        Material::Glass | Material::Frosted | Material::Paper => {
+            Color::Custom(color.unwrap_or([255; 3]))
+        }
+        Material::Liquid => Color::Custom(color.unwrap_or(super::eval::DEFAULT_LIQUID)),
+        Material::Ink => Color::Ink,
+        Material::Ptfe => kept(color.unwrap_or([251, 251, 248])),
+        Material::Rubber => kept(color.unwrap_or([138, 47, 42])),
+        Material::Plastic => kept(color.unwrap_or([236, 238, 240])),
+        Material::Metal => kept(color.unwrap_or([215, 220, 224])),
+        Material::Porcelain => kept(color.unwrap_or([247, 243, 234])),
+        Material::Cork => kept(color.unwrap_or([201, 164, 107])),
+        Material::Silica => kept(color.unwrap_or([239, 233, 220])),
+        Material::Sand => kept(color.unwrap_or([230, 213, 168])),
     }
-    Color::Custom(match material {
-        Material::Glass | Material::Frosted | Material::Paper => [255; 3],
-        Material::Ptfe => [251, 251, 248],
-        Material::Rubber => [138, 47, 42],
-        Material::Plastic => [236, 238, 240],
-        Material::Metal => [215, 220, 224],
-        Material::Porcelain => [247, 243, 234],
-        Material::Cork => [201, 164, 107],
-        Material::Silica => [239, 233, 220],
-        Material::Sand => [230, 213, 168],
-        Material::Liquid => super::eval::DEFAULT_LIQUID,
-        Material::Ink => return Color::Ink,
-    })
 }
 
 /// Hit-test and bounds geometry: the plan's paths with their stroke widths.
@@ -331,12 +333,12 @@ pub(crate) fn parts(g: &Graphic) -> Vec<Part> {
         .collect()
 }
 
-/// What the piece paints, in light-canvas colours like every other primitive.
-pub fn primitives(g: &Graphic) -> Vec<Primitive> {
+/// What the piece paints on `theme`, in light-canvas colours like every other primitive.
+pub fn primitives(g: &Graphic, theme: CanvasTheme) -> Vec<Primitive> {
     plan(g)
         .iter()
         .map(|p| {
-            let fill = fill_rgb(p.material, p.color);
+            let fill = fill_rgb(p.material, p.color, theme);
             let stroke = if p.material == Material::Liquid {
                 fill
             } else {
@@ -361,6 +363,11 @@ pub fn primitives(g: &Graphic) -> Vec<Primitive> {
                 (Material::Liquid, Ink::Fill) => Some(0.28),
                 (_, Ink::Stroke(Weight::Hatch)) => Some(0.75),
                 _ => None,
+            };
+            // A see-through piece, such as the placement ghost.
+            let alpha = match (alpha, g.style.effects.opacity) {
+                (Some(a), Some(b)) => Some(a * b),
+                (a, b) => a.or(b),
             };
             match alpha {
                 Some(alpha) => Primitive::Opacity {
@@ -392,7 +399,7 @@ pub fn materialized(doc: &Document) -> std::borrow::Cow<'_, Document> {
             continue;
         }
         let mut members = Vec::new();
-        for primitive in primitives(g) {
+        for primitive in primitives(g, doc.canvas_theme) {
             let (alpha, primitive) = match primitive {
                 Primitive::Opacity { alpha, primitive } => (Some(alpha), *primitive),
                 p => (None, p),

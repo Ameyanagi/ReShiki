@@ -141,7 +141,11 @@ impl App {
                 let Some(definition) = builtin::find(&id) else {
                     return Task::none();
                 };
-                self.status = format!("{} · Click to place · Esc cancels", name(&definition));
+                self.status = format!(
+                    "{} · {} · Click to place · Esc cancels",
+                    title(&definition),
+                    size(&definition)
+                );
                 self.error = false;
                 self.equipment.armed = Some(definition);
                 self.tool = Tool::Equipment;
@@ -211,14 +215,14 @@ impl App {
             body = body.push(super::inspector::card(
                 container(
                     column![
-                        text(name(d)).size(14),
+                        text(format!("{} · {}", title(d), size(d))).size(14),
                         checkbox(state.repeat)
                             .label("Keep placing")
                             .text_size(12)
                             .size(14)
                             .on_toggle(|v| Message::Equipment(Action::Repeat(v))),
                         text(if state.repeat {
-                            "Click again to add another copy. Esc finishes placement."
+                            "Click again to add another copy. Esc stops."
                         } else {
                             "Returns to Select after one placement."
                         })

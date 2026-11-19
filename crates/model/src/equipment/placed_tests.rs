@@ -169,3 +169,35 @@ fn every_built_in_piece_places_and_draws() {
         assert!(!crate::scene::primitives(&doc).is_empty(), "{}", d.id);
     }
 }
+
+#[test]
+fn rubber_keeps_its_colour_on_the_dark_canvas_while_glass_follows_the_paper() {
+    let septum = builtin::find("reshiki/septum-15").unwrap();
+    let mut doc = Document::default();
+    let scale = placed::world_per_mm(&doc, placed::DEFAULT_PT_PER_MM);
+    doc.graphics
+        .push(placed::graphic(1, septum, Point::new(0., 0.), scale));
+    let dark = crate::canvas_theme::CanvasTheme::Dark;
+    let fills: Vec<_> = placed::primitives(&doc.graphics[0], dark)
+        .into_iter()
+        .filter_map(|p| match p {
+            crate::scene::Primitive::Path { style, .. } => style.fill,
+            _ => None,
+        })
+        .collect();
+    // Primitives are in light-canvas form; the dark canvas flips them back.
+    let rubber = crate::palette::Color::Custom(dark.color([138, 47, 42]));
+    assert!(fills.contains(&rubber), "{fills:?}");
+    doc.graphics[0] = placed::graphic(
+        1,
+        builtin::find("reshiki/rbf-50-15").unwrap(),
+        Point::new(0., 0.),
+        scale,
+    );
+    assert!(
+        placed::primitives(&doc.graphics[0], dark)
+            .iter()
+            .any(|p| matches!(p, crate::scene::Primitive::Path { style, .. }
+                if style.fill == Some(crate::palette::Color::Custom([255; 3]))))
+    );
+}

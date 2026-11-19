@@ -364,7 +364,9 @@ impl MoleculeCanvas<'_> {
             .world(Point::new(p.x - bounds.x, p.y - bounds.y), bounds);
         let doc = draft.preview.to_mut();
         let scale = placed::world_per_mm(doc, placed::DEFAULT_PT_PER_MM);
-        let ghost = placed::graphic(doc.next_id(), definition.clone(), at, scale);
+        let mut ghost = placed::graphic(doc.next_id(), definition.clone(), at, scale);
+        // Half strength, so the ghost never passes for a placed piece.
+        ghost.style.effects.opacity = Some(0.5);
         doc.graphics.push(ghost);
         draft.template_notice = Some((
             format!(
