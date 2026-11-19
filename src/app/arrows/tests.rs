@@ -127,8 +127,8 @@ fn bent_arrows_refuse_nodes_with_a_status() {
 }
 
 #[test]
-fn body_badge_and_arc_are_one_undo_step_each_and_keep_the_reaction() {
-    use reshiki::arrows::{ArrowStyle, BadgeIcon, Body, Preset};
+fn body_and_arc_are_one_undo_step_each_and_keep_the_reaction() {
+    use reshiki::arrows::{ArrowStyle, Body, Preset};
     let (mut app, _) = App::new();
     app.tab.doc.arrows.push(reshiki::document::Arrow::new(
         1,
@@ -142,20 +142,16 @@ fn body_badge_and_arc_are_one_undo_step_each_and_keep_the_reaction() {
     app.arrow_action(arrows::Action::Body(Body::Block));
     assert_eq!(app.tab.doc.arrows[0].appearance().body, Body::Block);
     assert_eq!(app.tab.doc.arrows[0].kind, "forward");
-    app.arrow_action(arrows::Action::Badge(Some(BadgeIcon::Metal)));
-    app.tab.arrows.badge_text = "Ni".into();
-    app.arrow_action(arrows::Action::ApplyBadgeText);
-    assert_eq!(app.tab.doc.arrows[0].badge.as_ref().unwrap().text, "Ni");
     app.arrow_action(arrows::Action::MakeArc);
     assert_eq!(app.tab.doc.arrows[0].arc, Some(180.));
     app.tab.arrows.sweep = "-90".into();
     app.arrow_action(arrows::Action::ApplySweep);
     assert_eq!(app.tab.doc.arrows[0].arc, Some(-90.));
-    for _ in 0..5 {
+    for _ in 0..3 {
         let _ = app.update(Message::Undo);
     }
     assert_eq!(app.tab.doc.arrows, original.arrows);
-    for _ in 0..4 {
+    for _ in 0..2 {
         let _ = app.update(Message::Redo);
     }
     assert_eq!(app.tab.doc.arrows[0].arc, Some(180.));

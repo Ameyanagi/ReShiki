@@ -102,7 +102,6 @@ fn everything() -> (Document, Ids) {
     let arrow = doc.next_id();
     doc.arrows.push(Arrow {
         arc: None,
-        badge: None,
         start_anchor: None,
         end_anchor: None,
         id: arrow,

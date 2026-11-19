@@ -418,11 +418,15 @@ impl Graphic {
         if kind == GraphicKind::Path {
             return Self::pen_curve(id, start, end, style);
         }
+        if let GraphicKind::Symbol(symbol) = kind {
+            style.fill = symbol.fill();
+        }
         if matches!(kind, GraphicKind::Symbol(_) | GraphicKind::Orbital(_)) {
             let delta = Point::new(end.x - start.x, end.y - start.y);
             let length = delta.distance(Point::default());
-            let default = if matches!(kind, GraphicKind::Symbol(_)) {
-                style::DEFAULT.world(8.)
+            let default = if let GraphicKind::Symbol(symbol) = kind {
+                // Condition icons start large enough to read on an arrow.
+                style::DEFAULT.world(if symbol.is_condition() { 11. } else { 8. })
             } else {
                 42.
             };

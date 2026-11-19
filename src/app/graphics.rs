@@ -360,18 +360,19 @@ impl App {
         }
         match kind {
             GraphicKind::Symbol(kind) => {
-                panel = panel
-                    .push(
-                        crate::appearance::pick_list(
-                            reshiki::scientific::SymbolKind::ALL,
-                            Some(kind),
-                            |k| Message::Graphics(Action::ScientificKind(GraphicKind::Symbol(k))),
-                        )
-                        .text_size(12)
-                        .padding(6)
-                        .width(Length::Fill),
+                panel = panel.push(
+                    crate::appearance::pick_list(
+                        reshiki::scientific::SymbolKind::ALL,
+                        Some(kind),
+                        |k| Message::Graphics(Action::ScientificKind(GraphicKind::Symbol(k))),
                     )
-                    .push(hover_hint(
+                    .text_size(12)
+                    .padding(6)
+                    .width(Length::Fill),
+                );
+                // Condition icons are free shapes; they never attach.
+                if !kind.is_condition() {
+                    panel = panel.push(hover_hint(
                         checkbox(self.tab.attach_symbols)
                             .label("Attach to atoms")
                             .on_toggle(|attach| Message::Graphics(Action::AttachSymbols(attach)))
@@ -380,6 +381,7 @@ impl App {
                         ATTACH_SYMBOLS_HINT,
                         tooltip::Position::Top,
                     ));
+                }
             }
             GraphicKind::Orbital(kind) => {
                 panel = panel
@@ -924,6 +926,9 @@ impl App {
                     | (GraphicKind::Orbital(_), GraphicKind::Orbital(_))
             ) {
                 g.kind = kind;
+                if let GraphicKind::Symbol(symbol) = kind {
+                    g.style.fill = symbol.fill();
+                }
             }
         }
         self.tool = Tool::Graphic(kind);

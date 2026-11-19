@@ -134,7 +134,6 @@ impl NativeArrow {
             }),
             purpose: Default::default(),
             arc: None,
-            badge: None,
         };
         if let Some(arc) = arc {
             arc_geometry(&mut arrow, arc)?;

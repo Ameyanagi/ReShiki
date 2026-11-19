@@ -31,7 +31,6 @@ fn clicked_molecule_is_independent_of_multi_selection_and_logical_groups() {
     let arrow = doc.next_id();
     doc.arrows.push(reshiki::document::Arrow {
         arc: None,
-        badge: None,
         id: arrow,
         start: Point::new(400., 0.),
         end: Point::new(440., 0.),

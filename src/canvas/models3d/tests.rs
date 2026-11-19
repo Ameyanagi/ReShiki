@@ -480,7 +480,6 @@ fn foreground_text_arrows_and_graphics_keep_their_hits_over_the_model_outline() 
             }),
             1 => doc.arrows.push(Arrow {
                 arc: None,
-                badge: None,
                 id,
                 start: p.offset(-20., 0.),
                 end: p.offset(20., 0.),

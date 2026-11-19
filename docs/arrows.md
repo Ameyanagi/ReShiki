@@ -152,17 +152,20 @@ arrow palette also offers **Block**, **Hollow block**, **Chevron** and
 tail into the arrow's color at the head, as a gradient shape does; ChemDraw
 files keep it as ChemDraw's Shaded fill.
 
-### Add a badge
+### Put a condition icon on an arrow
 
-1. Select an arrow.
-2. In **Properties → Badge**, choose **Light (hν)**, **Electrode (e⁻)**,
-   **Heat (Δ)**, **Metal** or **Enzyme**. For **Metal**, type the symbol and
-   press Enter.
+1. Hold the **Chemical symbols** toolbar button and choose an icon under
+   **Reaction conditions**: **Light**, **Electrode**, **Heat**, **Microwave**,
+   **Ultrasound**, **Cold** or **Enzyme**.
+2. Click the middle of the arrow, or drag to set the icon's size. The icon
+   sits on a disc of the paper color, so it covers the shaft behind it.
+3. Select the arrow and the icon and press ⌘/Ctrl+G to group them. Clicking
+   either one now selects both, and they move together.
 
-The badge sits in a gap in the middle of a line arrow, or beside a broad body.
-It moves and rotates with the arrow and names a condition: a straight forward
-arrow with a badge still copies as reaction SMILES. Choose **No badge** to
-remove it.
+An icon is an ordinary shape: **Properties** sets its color and line width,
+and it resizes like any symbol. It never takes part in the reaction. Type the
+condition itself, such as "blue LEDs", as text beside the arrow; the text
+snaps to the arrow as usual, and the arrow still copies as reaction SMILES.
 
 ### Draw an arc arrow
 
@@ -203,8 +206,8 @@ Equilibrium arrows also set **Reverse length (0.2–1)** and **Shaft separation
 - Only `.rsk` files keep the links between an arrow and its targets. Other
   formats keep the arrow's shape.
 - Arcs are circular. Automatic routing is not available.
-- ChemDraw draws an arrow above its badge shapes, so there the shaft runs
-  through the badge disc.
+- A condition icon follows its arrow only as part of a group. Dragging an
+  arrow's end or bending it leaves the icon where it was.
 - A multi-segment arrowed curve read from CDXML/CDX opens as a pen path with
   arrowheads, not as an arrow.
 - Some arrow styles cannot be exported to CDXML and give an export error; see
@@ -326,13 +329,12 @@ to solid; those combinations therefore return an explicit export error. Head
 dimensions are quantized to CDXML's hundredths of a point; external
 applications can render strokes differently.
 
-### Bodies, badges, arcs and callouts
+### Bodies, arcs and callouts
 
 An arrow style's `body` is `line`, `block`, `hollow`, `chevron` or `gradient`;
 `gap_pt` is the body width. A broad body is one closed outline from the tail
 to the tip, with the head notch. Chevrons are filled shapes spaced along the
-shaft. The arrow's `badge` holds its icon and, for a metal, its symbol. `arc`
-is the signed sweep in degrees, clockwise positive; `cubic` and `nodes` hold
+shaft. `arc` is the signed sweep in degrees, clockwise positive; `cubic` and `nodes` hold
 its Bézier form, refitted after every edit, so every path, hit test and export
 draws it. A line graphic's `leader` names the atom, bond, molecule or object
 each end follows. Editing reconciles leaders after arrow attachments.
@@ -347,7 +349,7 @@ shaft edge. A circular arc arrow is written with `AngularSize`, `Center3D` and
 its axis ends. ChemDraw runs an arc from the tail through `-AngularSize`
 degrees, so a clockwise arc has a negative size; it ignores which way the
 minor axis points.
-Chevrons, broad bodies on curves, badges and callout leaders are written as
+Chevrons, broad bodies on curves and callout leaders are written as
 grouped shapes and text, and the export names them in a notice.
 
 ### Records

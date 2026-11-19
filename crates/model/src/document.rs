@@ -219,9 +219,6 @@ pub struct Arrow {
     /// clockwise positive; `cubic` and `nodes` hold its Bézier form.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub arc: Option<f32>,
-    /// An icon on the shaft that also names a condition.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub badge: Option<crate::arrows::Badge>,
 }
 fn forward() -> String {
     "forward".into()
@@ -287,7 +284,7 @@ pub const DRAWING_ELEMENTS: u32 = 40;
 /// requires version 39, or shading, drop shadows, wavy strokes, arrowheads
 /// on lines, corner radii, gradient and see-through fills, glows, a
 /// Reference or Illustration molecule or arrow, color by origin settings, figure panels,
-/// lasting layouts, arrow bodies, badges, arcs, callout leaders, catalytic
+/// lasting layouts, arrow bodies, arcs, callout leaders, condition icons, catalytic
 /// cycles or equipment pieces require version 40.
 /// Optional atom-label settings, including steroid α/β display, retain this
 /// version; older readers may ignore those presentation preferences.
@@ -326,7 +323,7 @@ pub const DRAWING_ELEMENTS: u32 = 40;
 /// | 37 | Three or four radical electrons on an atom. |
 /// | 38 | Property captions linked to their molecules (#1175). |
 /// | 39 | Names in property captions: a name line and custom names. |
-/// | 40 | Drawing release: shading, drop shadows, wavy strokes, arrowheads on lines, corner radii, gradient and see-through fills, glows and discs; object purpose (Reference, Illustration); color by origin; figure panels and lasting layouts; arrow bodies, shaft badges, arc arrows and callout leaders. |
+/// | 40 | Drawing release: shading, drop shadows, wavy strokes, arrowheads on lines, corner radii, gradient and see-through fills, glows and discs; object purpose (Reference, Illustration); color by origin; figure panels and lasting layouts; arrow bodies, arc arrows and callout leaders; condition icons. |
 pub const VERSION: u32 = 40;
 
 /// Bytes of text in one annotation. Layout time grows faster than the text.
@@ -570,12 +567,10 @@ impl Document {
                 || g.leader.is_some()
                 || g.cycle.is_some()
                 || g.piece.is_some()
+                || matches!(g.kind, GraphicKind::Symbol(kind) if kind.is_condition())
         }) || self.arrows.iter().any(|a| {
             let style = a.appearance();
-            style.pattern == LinePattern::Wavy
-                || !style.body.is_line()
-                || a.arc.is_some()
-                || a.badge.is_some()
+            style.pattern == LinePattern::Wavy || !style.body.is_line() || a.arc.is_some()
         }) || crate::purpose::used(self)
             || self.reactions.iter().any(|r| r.colors.is_some())
             || self.groups.iter().any(|g| g.layout.is_some())

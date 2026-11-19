@@ -640,7 +640,7 @@ explains how the crates and modules fit together.
 - `crates/model/src/arrow_labels.rs`: Condition text attached above or below a straight reaction arrow.
 - `crates/model/src/arrows.rs`: Editable reaction and electron-flow arrows.
 - `crates/model/src/arrows/arc.rs`: Circular arc arrows.
-- `crates/model/src/arrows/body.rs`: Arrow bodies (block, hollow, chevron, gradient) and shaft badges.
+- `crates/model/src/arrows/body.rs`: Arrow bodies (block, hollow, chevron, gradient).
 - `crates/model/src/arrows/exchange.rs`: Arrow looks that ChemDraw cannot store, written as ordinary grouped shapes for editable exchange.
 - `crates/model/src/arrows/nodes.rs`
 - `crates/model/src/atom_labels.rs`: Atom-label appearance and owned number/stereochemistry indicators.

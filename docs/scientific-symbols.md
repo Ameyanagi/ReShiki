@@ -11,6 +11,9 @@ to the page. Orbitals are editable drawing shapes that can snap to an atom.
    20 choices: circled and plain charges, radicals and diradicals, lone pairs
    and bars, radical ions, H-dot and H-dash, attachment diamond, star, wave and
    bead, single and double daggers, and partial positive (δ+) and partial negative (δ−).
+   Its **Reaction conditions** row holds icons for light, an electrode, heat,
+   microwaves, ultrasound, cold and an enzyme; see
+   [Put a condition icon on an arrow](arrows.md#put-a-condition-icon-on-an-arrow).
 2. With **Attach to atoms** on, click an atom to add the mark. The symbol tool
    stays active for more placements; press Escape or choose another tool to stop. Drag from the
    atom to choose its side: the mark orbits the atom in 15° steps, just

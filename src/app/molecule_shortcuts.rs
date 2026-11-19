@@ -252,7 +252,6 @@ fn reaction_copy(
     let y = (lo.y + hi.y) / 2.;
     doc.arrows.push(Arrow {
         arc: None,
-        badge: None,
         start_anchor: None,
         end_anchor: None,
         id: arrow,

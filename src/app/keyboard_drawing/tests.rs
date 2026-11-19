@@ -1456,7 +1456,6 @@ fn keys_edit_reaction_participants() {
             let arrow = app.tab.doc.next_id();
             app.tab.doc.arrows.push(reshiki::document::Arrow {
                 arc: None,
-                badge: None,
                 start_anchor: None,
                 end_anchor: None,
                 id: arrow,
