@@ -436,16 +436,48 @@ impl App {
                         .any(|c| matches!(c, reshiki::graphics::PathCommand::Close))
                 }))
         {
-            panel = panel
-                .push(text("Fill color").size(11).style(muted_text))
-                .push(swatches(
+            // A panel's fill swatches and shadow are in its Panel card.
+            let panels = selected.iter().any(|g| g.panel.is_some());
+            if !panels {
+                panel = panel.push(text("Fill color").size(11).style(muted_text));
+                panel = panel.push(swatches(
                     Row::Tint,
                     (
                         style.fill.is_none(),
                         Some(Message::Graphics(Action::Style(GraphicChange::Fill(None)))),
                     ),
                     |color| GraphicChange::Fill(Some(color)),
-                ))
+                ));
+            }
+            let mut effects = row![hover_hint(
+                checkbox(style.effects.shaded)
+                    .label("Shaded")
+                    .on_toggle(|on| { Message::Graphics(Action::Style(GraphicChange::Shaded(on))) })
+                    .size(14)
+                    .text_size(12),
+                "Fill from white at the upper left to the fill color, as ChemDraw shades",
+                tooltip::Position::Top,
+            )]
+            .spacing(14);
+            if !panels {
+                effects = effects.push(hover_hint(
+                    checkbox(style.effects.shadow_pt.is_some())
+                        .label("Shadow")
+                        .on_toggle(|on| {
+                            Message::Graphics(Action::Style(GraphicChange::Shadow(
+                                on.then_some(reshiki::graphics::Effects::SHADOW_PT),
+                            )))
+                        })
+                        .size(14)
+                        .text_size(12),
+                    "A grey drop shadow below and to the right",
+                    tooltip::Position::Top,
+                ));
+            }
+            if panels {
+                panel = panel.push(text("Custom fill color").size(11).style(muted_text));
+            }
+            panel = panel
                 .push(
                     crate::appearance::text_input("#RRGGBB", &self.tab.graphic_fill_input)
                         .on_input(|fill| Message::Graphics(Action::Fill(fill)))
@@ -453,35 +485,7 @@ impl App {
                         .size(12)
                         .padding(6),
                 )
-                .push(
-                    row![
-                        hover_hint(
-                            checkbox(style.effects.shaded)
-                                .label("Shaded")
-                                .on_toggle(|on| {
-                                    Message::Graphics(Action::Style(GraphicChange::Shaded(on)))
-                                })
-                                .size(14)
-                                .text_size(12),
-                            "Fill from white at the upper left to the fill color, as ChemDraw shades",
-                            tooltip::Position::Top,
-                        ),
-                        hover_hint(
-                            checkbox(style.effects.shadow_pt.is_some())
-                                .label("Shadow")
-                                .on_toggle(|on| {
-                                    Message::Graphics(Action::Style(GraphicChange::Shadow(
-                                        on.then_some(reshiki::graphics::Effects::SHADOW_PT),
-                                    )))
-                                })
-                                .size(14)
-                                .text_size(12),
-                            "A grey drop shadow below and to the right",
-                            tooltip::Position::Top,
-                        ),
-                    ]
-                    .spacing(14),
-                )
+                .push(effects)
                 .push(
                     row![
                         text("Gradient").size(11),

@@ -165,16 +165,19 @@ endpoints, attachments and arrowheads stay in place.
    **Properties → Grouping & frames**. A tinted, rounded panel appears behind
    the selection with 10 pt of padding, grouped with it so they move together.
    Option/Alt-click edits one object inside.
-3. In **Properties → Panel**, type a title and press Enter. **Title bar**
+3. **Properties** opens on the **Panel** card, above what the panel holds.
+   Type a title and press Enter, pick a fill swatch, and turn **Outline** or
+   **Shadow** on or off. **Title bar**
    puts it on a band in the outline color; **In border** sets it into the top
    edge. A title band grows the panel upward, so it never covers the contents.
 4. **Split columns** and **Split rows** add a divider in the widest gap
    between the contents. Each column between vertical dividers takes its own
    title. Type a position in percent to move a divider; **×** removes it.
 5. **Rounded** or **Square** sets the corners (a rounded panel's radius is
-   **Corner (pt)** under **Graphic style**) and **Outline** turns the border
-   on or off. Fill and outline colors and dashes are under **Graphic
-   style**. **Fit to contents** refits the panel around what it is grouped with.
+   **Corner (pt)** under **Graphic style**). Outline color, line width,
+   dashes, gradients and a custom fill color are under **Graphic style**,
+   which changes every selected shape: to change the panel alone,
+   Option-click its margin first. **Fit to contents** refits the panel around what it is grouped with.
 
 Each change is one Undo step. Panels are artwork: reaction detection, atom
 mapping and analysis never read them.

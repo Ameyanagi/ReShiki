@@ -19,6 +19,8 @@ pub enum Action {
     Place(TitlePlace),
     Rounded(bool),
     Border(bool),
+    Fill(Option<Color>),
+    Shadow(bool),
     AddDivider(bool),
     DividerAt(usize, String),
     ApplyDivider(usize),
@@ -75,6 +77,15 @@ impl App {
                 self.sync_graphics();
             }
             Action::Border(border) => self.edit_panels(|panel| panel.border = border),
+            // As Graphic style changes them, so No fill also drops a gradient.
+            Action::Fill(fill) => self
+                .restyle_panel(|style| reshiki::graphics::GraphicChange::Fill(fill).apply(style)),
+            Action::Shadow(on) => self.restyle_panel(|style| {
+                reshiki::graphics::GraphicChange::Shadow(
+                    on.then_some(reshiki::graphics::Effects::SHADOW_PT),
+                )
+                .apply(style)
+            }),
             Action::AddDivider(vertical) => {
                 let doc = self.tab.doc.clone();
                 let positions: Vec<(u64, f32)> = self
@@ -190,6 +201,31 @@ impl App {
             },
             Action::Align(align) => self.edit_layout(|layout| layout.align = align),
         }
+    }
+
+    /// Show the new panel's card: ordinary Properties, scrolled to the top,
+    /// from wherever the inspector was.
+    pub(super) fn reveal_panel_card(&mut self) -> iced::Task<Message> {
+        self.inspector_open = true;
+        self.inspector_tab = super::InspectorTab::Properties;
+        self.tab.inspector_ui.model_controls = false;
+        iced::widget::operation::snap_to(
+            "inspector-content",
+            iced::widget::operation::RelativeOffset::START,
+        )
+    }
+
+    /// Restyle the panel the Panel card shows, leaving what it holds alone.
+    fn restyle_panel(&mut self, change: impl FnOnce(&mut GraphicStyle)) {
+        let Some(id) = self.selected_panels().next().map(|g| g.id) else {
+            return;
+        };
+        let before = self.tab.doc.clone();
+        if let Some(g) = self.tab.doc.graphics.iter_mut().find(|g| g.id == id) {
+            change(&mut g.style);
+        }
+        self.changed(before);
+        self.sync_graphics();
     }
 
     fn selected_panels(&self) -> impl Iterator<Item = &Graphic> {
@@ -447,7 +483,49 @@ impl App {
                 .padding(6),
             );
         }
+        // Fill and shadow sit with the title: they are what a panel is for.
+        // They show and change this panel only, never what it holds.
+        let style = &shape.style;
+        let restyle = |fill| Some(send(Action::Fill(fill)));
+        let palette = reshiki::palette::Palette::of(&self.tab.doc);
         body = body
+            .push(text("Fill color").size(11).style(muted_text))
+            .push(
+                super::color_popover::paper(
+                    super::color_popover::palette_row(
+                        &palette,
+                        Row::Tint,
+                        reshiki::palette::Hues::of(&self.tab.doc),
+                        20.,
+                        (style.fill.is_none(), restyle(None)),
+                        |hue| {
+                            let color = Color::Palette(hue, Row::Tint);
+                            (style.fill == Some(color), restyle(Some(color)))
+                        },
+                    ),
+                    self.tab.doc.canvas_theme,
+                )
+                .padding([6, 6]),
+            )
+            .push(
+                row![
+                    checkbox(panel.border)
+                        .label("Outline")
+                        .on_toggle(move |on| send(Action::Border(on)))
+                        .size(14)
+                        .text_size(12),
+                    hover_hint(
+                        checkbox(style.effects.shadow_pt.is_some())
+                            .label("Shadow")
+                            .on_toggle(move |on| send(Action::Shadow(on)))
+                            .size(14)
+                            .text_size(12),
+                        "A grey drop shadow below and to the right",
+                        tooltip::Position::Top,
+                    ),
+                ]
+                .spacing(14),
+            )
             .push(
                 row![
                     toggle(
@@ -469,13 +547,6 @@ impl App {
                     toggle("Square", !rounded, Action::Rounded(false)),
                 ]
                 .spacing(4),
-            )
-            .push(
-                checkbox(panel.border)
-                    .label("Outline")
-                    .on_toggle(move |on| send(Action::Border(on)))
-                    .size(14)
-                    .text_size(12),
             )
             .push(
                 row![
@@ -532,7 +603,7 @@ impl App {
                 tooltip::Position::Top,
             ))
             .push(
-                text("Enter applies titles and positions. Colors are under Graphic style.")
+                text("Enter applies titles and positions.")
                     .size(11)
                     .style(muted_text),
             )

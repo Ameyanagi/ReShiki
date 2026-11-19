@@ -325,7 +325,7 @@ fn unpaired_electrons(doc: &Document, analysis: &Analysis, selected: Option<&Has
 pub(super) struct State {
     expected_viewport: Option<iced::Size>,
     expanded: HashMap<Section, bool>,
-    model_controls: bool,
+    pub(super) model_controls: bool,
     pub(super) figure: FigureFormat,
     figure_menu: bool,
     resolution_menu: bool,
@@ -1033,6 +1033,22 @@ impl App {
                     .style(crate::appearance::text_color(Color::from_rgb8(182, 66, 61)))
             });
         }
+        let styled_graphics = matches!(self.tool, Tool::Graphic(_))
+            || self
+                .tab
+                .doc
+                .graphics
+                .iter()
+                .any(|g| selected.contains(&g.id) && g.picture.is_none() && g.piece.is_none());
+        // A selected panel's title, fill and shadow come before the cards of
+        // what it holds, such as a crystal's structure or a cycle's steps.
+        let panel_card = self.figure_panel_card().filter(|_| styled_graphics);
+        let panel_first = panel_card.is_some();
+        if let Some(panel) = panel_card {
+            body = body
+                .push(card(container(panel).padding(12)))
+                .push(card(container(self.graphic_panel()).padding(12)));
+        }
         let model = self.selected_existing_model();
         let crystal_first = model.is_some_and(|model| {
             model.cell.is_some() && model.display == reshiki::models3d::Display::TwoD
@@ -1135,18 +1151,7 @@ impl App {
             body = body.push(card);
         }
         // Pieces draw their own lines and fills: graphic style does not apply.
-        if matches!(self.tool, Tool::Graphic(_))
-            || self
-                .tab
-                .doc
-                .graphics
-                .iter()
-                .any(|g| selected.contains(&g.id) && g.picture.is_none() && g.piece.is_none())
-        {
-            // A panel's titles and dividers come before its colors.
-            if let Some(panel) = self.figure_panel_card() {
-                body = body.push(card(container(panel).padding(12)));
-            }
+        if styled_graphics && !panel_first {
             body = body.push(card(container(self.graphic_panel()).padding(12)));
         }
         if let Some(layout) = self.layout_card() {
