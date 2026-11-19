@@ -229,12 +229,23 @@ impl App {
             if matches!(format, "cdx" | "cdxml") && self.tab.doc.canvas_theme.is_dark() {
                 warnings.insert(0, "Light canvas colors: ChemDraw has no dark canvas".into());
             }
-            return export_file(
-                response.output.unwrap_or_default(),
-                format,
-                self.export_stem(),
-                warnings,
-            );
+            let (output, stem) = (response.output.unwrap_or_default(), self.export_stem());
+            // What a ChemDraw file leaves out is read before it is written.
+            if matches!(format, "cdx" | "cdxml")
+                && !warnings.is_empty()
+                && !cfg!(target_arch = "wasm32")
+            {
+                return Task::perform(read_losses(format, warnings.clone()), |go| go).then(
+                    move |go| {
+                        if go {
+                            export_file(output.clone(), format, stem.clone(), vec![])
+                        } else {
+                            Task::done(Message::Exported(Ok(None)))
+                        }
+                    },
+                );
+            }
+            return export_file(output, format, stem, warnings);
         }
         if self.tab.revision != revision {
             self.status = "Finished · Newer edits kept · Run again to update".into();
@@ -542,4 +553,28 @@ mod import_file_tests;
 /// reaction and not to a molecule's SMILES.
 pub(super) fn whole_analysis(doc: &Document, analysis: Option<Analysis>) -> Option<Analysis> {
     analysis.filter(|_| !reshiki::purpose::used(doc) && doc.atoms.iter().all(|a| a.map_num == 0))
+}
+
+/// Lists what a ChemDraw export leaves out or changes; true goes on to save it.
+async fn read_losses(format: &str, losses: Vec<String>) -> bool {
+    const EXPORT: &str = "Export…";
+    let list: Vec<_> = losses.iter().map(|loss| format!("• {loss}")).collect();
+    let answer = rfd::AsyncMessageDialog::new()
+        .set_level(rfd::MessageLevel::Warning)
+        .set_title(format!("Export {}?", format.to_uppercase()))
+        .set_description(format!(
+            "What changes in this file:\n\n{}",
+            list.join("\n\n")
+        ))
+        .set_buttons(rfd::MessageButtons::OkCancelCustom(
+            EXPORT.into(),
+            "Cancel".into(),
+        ))
+        .show()
+        .await;
+    match answer {
+        rfd::MessageDialogResult::Ok => true,
+        rfd::MessageDialogResult::Custom(label) => label == EXPORT,
+        _ => false,
+    }
 }
