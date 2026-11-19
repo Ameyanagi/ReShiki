@@ -77,7 +77,7 @@ fn a_row_keeps_shared_gutters_and_centers_units_without_resizing_them() {
             layout.align,
             layout.order.len()
         ),
-        (Flow::Row, GUTTER, Align::Center, 3)
+        (Flow::Row, GUTTER, Align::Center, 9)
     );
     assert_eq!(bond_lengths(&doc), lengths);
     // Left to right in their old order: a, c, b.
@@ -505,4 +505,21 @@ fn bottom_aligned_flat_items_keep_their_place() {
         reflow(&mut doc, group, None, None);
     }
     assert!(bounds(&doc, &flat).0.x < bounds(&doc, &tall).0.x);
+}
+
+#[test]
+fn deleting_part_of_an_item_keeps_its_place() {
+    let mut doc = Document::default();
+    let items: Vec<_> = (0..3)
+        .map(|i| chain(&mut doc, 200. * i as f32, 0., 3))
+        .collect();
+    let ids: Vec<u64> = items.iter().flatten().copied().collect();
+    arrange(&mut doc, &ids, Flow::Row, GUTTER).unwrap();
+    let before = doc.clone();
+    // The first molecule's lowest-ID end atom goes; the rest stays connected.
+    doc.delete_preserving_layout(&[items[0][0]]);
+    let _ = crate::transaction::reconcile(&mut doc, before).unwrap();
+    let left = |ids: &[u64]| bounds(&doc, ids).0.x;
+    let first = &items[0][1..];
+    assert!(left(first) < left(&items[1]) && left(&items[1]) < left(&items[2]));
 }

@@ -70,8 +70,9 @@ pub struct Layout {
     pub gutter_pt: f32,
     #[serde(default)]
     pub align: Align,
-    /// One object ID per unit, in reading order. Units keep this order when
-    /// they grow, move or change flow; new units follow, read by position.
+    /// The object IDs of its units, unit by unit in reading order. Units keep
+    /// this order when they grow, shrink, move or change flow; new units
+    /// follow, read by position.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub order: Vec<u64>,
 }
@@ -335,7 +336,7 @@ pub fn reflow(
     let (lefts, tops) = (starts(&widths), starts(&heights));
     let order: Vec<u64> = cells
         .iter()
-        .filter_map(|cell| cell.0.iter().min().copied())
+        .flat_map(|cell| cell.0.iter().copied())
         .collect();
     let moves: Vec<_> = cells
         .into_iter()
