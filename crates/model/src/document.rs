@@ -569,6 +569,7 @@ impl Document {
                 || g.piece.is_some()
                 || matches!(g.kind, GraphicKind::Symbol(kind) if kind.is_condition())
                 || g.phase == crate::scientific::Phase::Gradient
+                || g.text.is_some()
         }) || self.arrows.iter().any(|a| {
             let style = a.appearance();
             style.pattern == LinePattern::Wavy || !style.body.is_line() || a.arc.is_some()
@@ -772,7 +773,9 @@ impl Document {
     }
     fn delete_objects(&mut self, ids: &[u64]) {
         crate::models3d::crystal::mark_distance_bonds(self);
-        let ids = self.expand_abbreviation_selection(ids);
+        // A shape takes the text it holds with it.
+        let ids = crate::shape_text::with_texts(self, ids);
+        let ids = self.expand_abbreviation_selection(&ids);
         let ids = ids.as_slice();
         self.expand_abbreviations(ids);
         self.invalidate_chemistry(ids);
@@ -787,6 +790,7 @@ impl Document {
         self.graphics.retain(|a| !ids.contains(&a.id));
         crate::equipment::solve::prune(self);
         crate::arrow_labels::prune(self);
+        crate::shape_text::prune(self);
         crate::projection::prune_centroids(self);
         crate::ring_fills::prune(self);
         crate::depth_appearance::prune(self);
@@ -1144,6 +1148,7 @@ impl Document {
         crate::molecule_names::validate(self)?;
         crate::linked_properties::validate(self)?;
         crate::arrow_labels::validate(self)?;
+        crate::shape_text::validate(self)?;
         for graphic in &self.graphics {
             graphic.validate()?;
         }

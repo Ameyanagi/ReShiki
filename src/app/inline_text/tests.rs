@@ -580,3 +580,50 @@ fn text_tool_conditions_attach_to_an_arrow_and_sideways_drag_detaches() {
     let _ = app.update(Message::Undo);
     assert_eq!(app.tab.doc, before);
 }
+
+#[test]
+fn double_clicking_a_shape_types_centred_text_into_it_in_one_step() {
+    use reshiki::graphics::{BracketSides, Graphic, GraphicKind, GraphicStyle};
+    let mut app = app();
+    let shape = app.tab.doc.next_id();
+    app.tab.doc.graphics.push(Graphic::dragged(
+        shape,
+        GraphicKind::Ellipse,
+        Point::new(0., 0.),
+        Point::new(90., 90.),
+        GraphicStyle::default(),
+        BracketSides::default(),
+        false,
+    ));
+    // Empty text adds nothing.
+    let _ = app.update(Message::Canvas(CanvasEdit::BeginText(shape)));
+    let _ = app.update(Message::InlineText(Action::Finish(true)));
+    assert!(app.tab.doc.annotations.is_empty());
+    assert!(!app.tab.history.can_undo());
+
+    let _ = app.update(Message::Canvas(CanvasEdit::BeginText(shape)));
+    assert_eq!(app.tab.caption_format.alignment, TextAlign::Center);
+    type_text(&mut app, "💡");
+    let _ = app.update(Message::InlineText(Action::Finish(true)));
+    let held = app.tab.doc.graphics[0]
+        .text
+        .expect("the shape holds the text");
+    let text = app
+        .tab
+        .doc
+        .annotations
+        .iter()
+        .find(|a| a.id == held)
+        .unwrap();
+    let (w, h) = text.size();
+    let centre = text.position.offset(w / 2., h / 2.);
+    assert!(centre.distance(Point::new(45., 45.)) < 1e-3, "{centre:?}");
+
+    // A second double-click edits the same text; one Undo removes it all.
+    let _ = app.update(Message::Canvas(CanvasEdit::BeginText(shape)));
+    assert_eq!(app.inline_label_id(), Some(held));
+    let _ = app.update(Message::InlineText(Action::Finish(false)));
+    let _ = app.update(Message::Undo);
+    assert!(app.tab.doc.annotations.is_empty());
+    assert_eq!(app.tab.doc.graphics[0].text, None);
+}

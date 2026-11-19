@@ -397,9 +397,7 @@ impl App {
             );
         }
         if let Message::Canvas(Edit::BeginText(id)) = message {
-            return Break(
-                self.inline_action(inline_text::Action::Begin(Some(id), Point::default())),
-            );
+            return Break(self.begin_text(id));
         }
         if let Message::Canvas(ref edit @ (Edit::Click(p) | Edit::RepeatLabel(p))) = message
             && self.tool == Tool::Text

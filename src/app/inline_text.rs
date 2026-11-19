@@ -34,6 +34,8 @@ pub struct State {
     /// What a new callout's text points at; its leader is added with the
     /// text, so one Undo removes both.
     pub(super) callout: Option<reshiki::leaders::Target>,
+    /// The closed shape new text goes into, centred and wrapped inside it.
+    shape: Option<u64>,
 }
 impl super::DocumentTab {
     /// A caption draft that differs from the text it started with.
@@ -143,6 +145,9 @@ impl App {
                 if let Some(target) = &state.callout {
                     reshiki::leaders::attach(&mut doc, id, target.clone())?;
                 }
+                if let Some(shape) = doc.graphics.iter_mut().find(|g| Some(g.id) == state.shape) {
+                    shape.text = Some(id);
+                }
             }
             (None, true) => {}
         }
@@ -213,6 +218,31 @@ impl App {
         (self.inspector_open, self.inspector_tab) = inspector;
         true
     }
+    /// Edit a caption, or the text a closed shape holds. A shape without text
+    /// starts an empty centred line inside it; empty text adds nothing.
+    pub(super) fn begin_text(&mut self, id: u64) -> Task<Message> {
+        let shape = self
+            .tab
+            .doc
+            .graphics
+            .iter()
+            .find(|g| g.id == id && reshiki::shape_text::supports(g))
+            .cloned();
+        let Some(shape) = shape else {
+            return self.inline_action(Action::Begin(Some(id), Point::default()));
+        };
+        if shape.text.is_some() {
+            return self.inline_action(Action::Begin(shape.text, Point::default()));
+        }
+        let task = self.inline_action(Action::Begin(None, Point::default()));
+        if let Some(state) = self.tab.inline_text.as_mut() {
+            self.tab.caption_format.alignment = TextAlign::Center;
+            self.tab.caption_format.width_pt = Some(reshiki::shape_text::width_pt(&shape));
+            state.position = reshiki::shape_text::start(&shape, &self.tab.caption_format);
+            state.shape = Some(id);
+        }
+        task
+    }
     pub(super) fn inline_action(&mut self, action: Action) -> Task<Message> {
         match action {
             Action::Begin(id, position) => {
@@ -268,6 +298,7 @@ impl App {
                     past: vec![],
                     future: vec![],
                     callout: None,
+                    shape: None,
                 });
                 self.palette = None;
                 self.tab.hover = None;

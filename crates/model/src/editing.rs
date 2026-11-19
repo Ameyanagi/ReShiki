@@ -98,6 +98,7 @@ pub fn selection(doc: &Document, ids: &[u64]) -> Document {
             .into_iter()
             .collect();
     crate::arrow_labels::include_labels(doc, &mut ids);
+    crate::shape_text::include_texts(doc, &mut ids);
     let mut part = doc.clone();
     part.molecule_names.retain(|name| {
         ids.contains(&name.annotation) && name.atoms.iter().all(|id| ids.contains(id))
@@ -190,6 +191,7 @@ pub fn preserved_expansion_selection(doc: &Document, selected: &[u64]) -> Result
         }
     }
     crate::arrow_labels::include_labels(doc, &mut ids);
+    crate::shape_text::include_texts(doc, &mut ids);
     if doc
         .bonds
         .iter()
@@ -593,6 +595,9 @@ pub(crate) fn remap_ids(doc: &mut Document, mapping: &HashMap<u64, u64>) -> Opti
         map(&mut g.id)?;
         crate::leaders::remap(g, mapping);
         crate::cycles::remap(g, mapping);
+        if let Some(text) = &mut g.text {
+            map(text)?;
+        }
     }
     for seat in seats {
         map(&mut seat.a.piece)?;
