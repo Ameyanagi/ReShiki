@@ -59,11 +59,28 @@ fn hollow_body_is_stroked_and_still_picked_inside() {
 #[test]
 fn gradient_and_chevron_bodies_are_filled() {
     let gradient = arrow(Body::Gradient).paths();
-    assert!(gradient.iter().all(|p| p.filled && p.style.effects.shaded));
-    // The scene shades it in bands, as it does a shaded shape.
+    assert!(
+        gradient
+            .iter()
+            .all(|p| p.filled && p.style.effects.gradient.is_some())
+    );
+    // The scene fills it with a real gradient, as it does a gradient shape,
+    // from the paper at the tail into the arrow's color at the head.
     let mut doc = Document::default();
     doc.arrows.push(arrow(Body::Gradient));
-    assert!(crate::scene::primitives(&doc).len() > 5);
+    let scene = crate::scene::primitives(&doc);
+    let Some(crate::scene::Primitive::Gradient {
+        radial: false,
+        from,
+        to,
+        ..
+    }) = scene
+        .iter()
+        .find(|p| matches!(p, crate::scene::Primitive::Gradient { .. }))
+    else {
+        panic!("a gradient body: {scene:?}");
+    };
+    assert!(to[0] > from[0], "{from:?} → {to:?}");
     let chevrons = arrow(Body::Chevron).paths();
     assert!(chevrons.len() > 2, "{}", chevrons.len());
     assert!(chevrons.iter().all(|p| p.filled));

@@ -148,7 +148,9 @@ The body changes only the look. A block reaction arrow keeps its reaction
 roles and condition text, and switching back to **Line** restores line-sized
 heads. Equilibrium, retrosynthesis and elbow arrows keep line bodies. The
 arrow palette also offers **Block**, **Hollow block**, **Chevron** and
-**Gradient** presets. A **Gradient** body is shaded like ChemDraw's Shaded fill.
+**Gradient** presets. A **Gradient** body fills from the paper color at the
+tail into the arrow's color at the head, as a gradient shape does; ChemDraw
+files keep it as ChemDraw's Shaded fill.
 
 ### Add a badge
 

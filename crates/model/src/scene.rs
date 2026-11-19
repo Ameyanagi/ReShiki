@@ -2790,8 +2790,8 @@ fn push_arrows_and_annotations(out: &mut Vec<Primitive>, doc: &Document) {
     }
     for a in &doc.arrows {
         for p in a.paths() {
-            // A gradient body shades exactly as a shaded shape does.
-            if p.style.effects.shaded {
+            // A gradient body fills exactly as a gradient shape does.
+            if p.style.effects.gradient.is_some() {
                 let shape = crate::arrows::shape(a.id, p.commands, &p.style, p.filled);
                 out.extend(graphic_primitive(&&shape, doc));
             } else {

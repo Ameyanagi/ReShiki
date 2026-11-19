@@ -865,8 +865,16 @@ impl Arrow {
             if filled {
                 style.fill = Some(s.color);
                 style.width_pt = 0.;
-                // A gradient body shades like a ChemDraw Shaded fill.
-                style.effects.shaded = body == Body::Gradient;
+                // A gradient body runs from the paper at the tail into the
+                // arrow's color at the head, as gradient shapes fill.
+                if body == Body::Gradient {
+                    style.effects.gradient = Some(crate::graphics::Gradient {
+                        from: crate::graphics::Gradient::WHITE,
+                        kind: crate::graphics::GradientKind::Linear {
+                            angle: along(&commands, u),
+                        },
+                    });
+                }
             }
             result.push(ArrowPath {
                 commands,
@@ -1454,3 +1462,11 @@ mod node_tests;
 mod paths_parity_tests;
 #[cfg(test)]
 mod preset_tests;
+
+/// The angle, in the unit square of `commands`' bounding box, of the drawing
+/// direction `u`: a gradient laid out in that box then runs along `u`.
+fn along(commands: &[PathCommand], u: Point) -> f32 {
+    let (w, h) = crate::graphics::bounding_frame(commands)
+        .map_or((1., 1.), |(_, x, y)| (x.x.max(1e-6), y.y.max(1e-6)));
+    (u.y * h).atan2(u.x * w).to_degrees()
+}

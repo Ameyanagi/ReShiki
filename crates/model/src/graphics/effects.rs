@@ -129,11 +129,15 @@ pub fn export_notice(doc: &crate::document::Document) -> Option<String> {
 }
 
 /// Whether `doc` has paint the canvas draws from image tiles, as it does
-/// 3D models: gradients.
+/// 3D models: gradients, gradient arrow bodies included.
 pub fn tiled(doc: &crate::document::Document) -> bool {
     doc.graphics
         .iter()
         .any(|g| g.style.effects.gradient.is_some())
+        || doc
+            .arrows
+            .iter()
+            .any(|a| a.drawn_body() == crate::arrows::Body::Gradient)
         || doc
             .ring_fills
             .iter()

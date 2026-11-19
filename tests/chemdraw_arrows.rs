@@ -204,7 +204,7 @@ async fn native_fill_codes_preserve_unfilled_arrows_and_read_block_fills() -> an
         appearances.push(arrows.first().context("Missing arrow")?.appearance());
     }
     assert_eq!(appearances[0], appearances[1]);
-    let filled = arrow(r#" FillType="Solid""#).replace(r#" FillType="None""#, "");
+    let filled = arrow(r#" FillType="Pattern""#).replace(r#" FillType="None""#, "");
     assert!(
         engine
             .request(Request::import("cdxml", &filled))
