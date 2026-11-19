@@ -120,15 +120,17 @@ async fn the_owners_drawing_opens_whole_without_a_notice() {
 
 #[tokio::test]
 async fn every_probe_sheet_opens_and_names_what_it_approximated() {
-    let curves = "2 doubled curves as single lines";
+    let curves = "2 doubled curves as pairs of grouped curves";
+    let ratio =
+        "1 unbalanced equilibrium arrow with its shorter arrow lengthened to a fifth of the other";
     for (sheet, saved, source) in [
         ("p1-shapes-enum", String::new(), String::new()),
         // Shaded orbitals are read as they are.
         ("p2-orbitals-enum", String::new(), String::new()),
         (
             "p3-symbols-enum",
-            "3 stereo flags as text".into(),
-            "3 stereo flags as text".into(),
+            "3 stereo flags as text in a rounded box".into(),
+            "3 stereo flags as text in a rounded box".into(),
         ),
         (
             "p4-brackets-enum",
@@ -136,7 +138,7 @@ async fn every_probe_sheet_opens_and_names_what_it_approximated() {
             "3 single brackets as curves".into(),
         ),
         // Block and arc arrows are read as they are.
-        ("p5-arrows-enum", String::new(), String::new()),
+        ("p5-arrows-enum", ratio.to_owned(), ratio.to_owned()),
         ("p6-curves-enum", curves.to_owned(), curves.to_owned()),
     ] {
         for (name, expected) in [
@@ -612,7 +614,7 @@ async fn signs_stand_upright_and_dots_sit_where_chemdraw_draws_them() {
 }
 
 #[tokio::test]
-async fn daggers_and_the_bar_are_symbols_and_stereo_flags_are_text() {
+async fn daggers_and_the_bar_are_symbols_and_stereo_flags_are_boxed_text() {
     for (document, notices) in sheet(
         "<graphic id='2' GraphicType='Symbol' BoundingBox='55 105 49 99' SymbolType='Dagger'/>\
          <graphic id='3' GraphicType='Symbol' BoundingBox='85 105 79 99' SymbolType='DoubleDagger'/>\
@@ -623,20 +625,39 @@ async fn daggers_and_the_bar_are_symbols_and_stereo_flags_are_text() {
     )
     .await
     {
-        assert_eq!(notices, nearest("3 stereo flags as text"));
+        assert_eq!(notices, nearest("3 stereo flags as text in a rounded box"));
         let kinds: Vec<_> = document.graphics.iter().map(|g| g.kind).collect();
-        use GraphicKind::Symbol;
+        use GraphicKind::{RoundedRectangle, Symbol};
         assert_eq!(
             kinds,
             [
                 Symbol(SymbolKind::Dagger),
                 Symbol(SymbolKind::DoubleDagger),
-                Symbol(SymbolKind::LonePairBar)
+                Symbol(SymbolKind::LonePairBar),
+                RoundedRectangle,
+                RoundedRectangle,
+                RoundedRectangle
             ]
         );
         let mut flags: Vec<_> = document.annotations.iter().map(|a| a.text.as_str()).collect();
         flags.sort_unstable();
         assert_eq!(flags, ["Abs", "Rac", "Rel"]);
+        // Each box is centered on its symbol, 30 pt apart, as wide as ChemDraw
+        // draws it around the caption-sized label, and grouped with its label.
+        let boxes = &document.graphics[3..];
+        let size = |axis: Point| axis.x.hypot(axis.y);
+        let scale = size(boxes[0].axis_y) / (1.32 * 10.);
+        assert!((size(boxes[0].axis_x) / scale - 2.3 * 10.).abs() < 0.01);
+        let center = |g: &Graphic| g.origin.x + (g.axis_x.x + g.axis_y.x) / 2.;
+        assert!(((center(&boxes[1]) - center(&boxes[0])) / scale - 30.).abs() < 0.01);
+        // The label starts at the box's top half and is centered across it.
+        let racemic = document.annotations.iter().find(|a| a.text == "Rac").unwrap();
+        let middle = boxes[0].origin.y + (boxes[0].axis_x.y + boxes[0].axis_y.y) / 2.;
+        assert!(racemic.position.y < middle);
+        assert!(((center(&boxes[0]) - racemic.position.x) / scale - 0.89 * 10.).abs() < 0.01);
+        assert!(document.graphics[3].style.corner_pt.is_some());
+        assert_eq!(document.groups.len(), 3);
+        assert!(document.groups.iter().all(|group| group.members.len() == 2));
     }
     // A flag keeps its colour, and a hidden one stays hidden.
     for (document, _) in sheet(
@@ -723,16 +744,106 @@ async fn doubled_and_older_curves_import_as_plain_curves() {
     ))
     .await
     {
-        assert_eq!(notices, nearest("1 doubled curve as a single line"));
+        assert_eq!(notices, nearest("1 doubled curve as two grouped curves"));
         // The headed curve is an arrow; the two without a segment draw nothing.
         assert_eq!(document.arrows.len(), 1);
-        let [closed, doubled, dashed, padded] = document.graphics.as_slice() else {
+        let [closed, outer, inner, dashed, padded] = document.graphics.as_slice() else {
             panic!("{:?}", document.graphics);
         };
         assert!(closed.style.effects.shaded && dashed.style.effects.shaded);
-        assert_eq!(doubled.style.fill, None);
+        assert_eq!((outer.style.fill, inner.style.fill), (None, None));
         assert_eq!(dashed.style.pattern, LinePattern::Dashed);
-        assert_eq!(padded.path, doubled.path);
+        // Each line runs half the bold width and half its own width from
+        // the curve, (4 + 1) / 2 pt, on either side.
+        let ends = |graphic: &Graphic| match graphic.path.as_slice() {
+            [PathCommand::Move(start), .., PathCommand::Cubic(_, _, end)] => [*start, *end],
+            path => panic!("{path:?}"),
+        };
+        let [start, end] = ends(padded);
+        let scale = (end.x - start.x) / 40.;
+        let [
+            PathCommand::Move(_),
+            PathCommand::Cubic(leaving, arriving, _),
+        ] = padded.path[..]
+        else {
+            panic!("{:?}", padded.path);
+        };
+        let [[a, b], [c, d]] = [outer, inner].map(ends);
+        for (one, other, at, toward) in [(a, c, start, leaving), (b, d, end, arriving)] {
+            // The two ends sit either side of the curve's, square to it.
+            let (x, y) = ((one.x - at.x) / scale, (one.y - at.y) / scale);
+            let (u, v) = (toward.x - at.x, toward.y - at.y);
+            assert!((x.hypot(y) - 2.5).abs() < 0.01, "{one:?}");
+            assert!((x * u + y * v).abs() / u.hypot(v) < 0.01, "{one:?}");
+            assert!((one.x + other.x - 2. * at.x).abs() < 0.01);
+            assert!((one.y + other.y - 2. * at.y).abs() < 0.01);
+        }
+        let [group] = document.groups.as_slice() else {
+            panic!("{:?}", document.groups);
+        };
+        let mut members = group.members.clone();
+        members.sort_unstable();
+        assert_eq!(members, [outer.id, inner.id]);
+    }
+}
+
+#[tokio::test]
+async fn unbalanced_equilibria_keep_their_lengths_and_retro_heads_take_both_shafts() {
+    // ChemDraw stores the forward arrow's length against the reverse one in
+    // hundredths; ReShiki keeps the reverse one's against the forward one.
+    let equilibrium = |y: u32, ratio: &str| {
+        format!(
+            "<arrow id='{y}' ArrowheadHead='HalfLeft' ArrowheadTail='HalfLeft' \
+             ArrowheadType='Solid' ArrowShaftSpacing='400' {ratio} \
+             Head3D='105 {y} 0' Tail3D='30 {y} 0'/>"
+        )
+    };
+    let objects = [
+        equilibrium(20, ""),
+        equilibrium(40, "ArrowEquilibriumRatio='50'"),
+        equilibrium(60, "ArrowEquilibriumRatio='300'"),
+        equilibrium(80, "ArrowEquilibriumRatio='2'"),
+        "<arrow id='100' ArrowheadHead='Full' ArrowheadType='Angle' ArrowShaftSpacing='600' \
+         HeadSize='1000' ArrowheadCenterSize='875' ArrowheadWidth='250' \
+         Head3D='105 100 0' Tail3D='30 100 0'/>\
+         <graphic id='101' SupersededBy='100' BoundingBox='105 100 30 100' GraphicType='Line' \
+         ArrowType='RetroSynthetic' HeadSize='1200'/>"
+            .into(),
+    ]
+    .concat();
+    for (document, notices) in sheet(&objects).await {
+        assert_eq!(
+            notices,
+            nearest(
+                "1 unbalanced equilibrium arrow with its shorter arrow lengthened to a fifth \
+                 of the other"
+            )
+        );
+        let style = |i: usize| document.arrows[i].style.clone().unwrap();
+        let ratios: Vec<_> = (0..4).map(|i| style(i).equilibrium_ratio).collect();
+        assert_eq!(ratios, [1., 2., 1. / 3., 5.]);
+        // The arrows still run from tail to head.
+        assert!(document.arrows.iter().all(|a| a.end.x > a.start.x));
+        // A retrosynthesis head is as wide as its center size, so the shafts,
+        // 3 pt either side, meet it. ChemDraw saves the older form beside it.
+        assert_eq!(document.arrows[4].kind, "retro");
+        assert_eq!(style(4).head_width_pt, 8.75);
+        // A ChemDraw save keeps each ratio.
+        let saved = formats::write(document.clone(), "cdxml").await.unwrap();
+        let text = String::from_utf8(saved.clone()).unwrap();
+        for value in [
+            "ArrowEquilibriumRatio=\"50\"",
+            "ArrowEquilibriumRatio=\"300\"",
+        ] {
+            assert!(text.contains(value), "{value}");
+        }
+        let (again, _) = open(saved, "cdxml").await.unwrap();
+        let again: Vec<_> = again
+            .arrows
+            .iter()
+            .map(|a| a.style.as_ref().unwrap().equilibrium_ratio)
+            .collect();
+        assert_eq!(again[..4], ratios);
     }
 }
 
@@ -1382,4 +1493,46 @@ async fn a_local_chemdraw_corpus_imports_every_file() {
         refused.len(),
         found.len()
     );
+}
+
+#[tokio::test]
+async fn a_label_written_hydrogens_first_keeps_them_on_the_left() {
+    // As in ChemDraw's citric acid cycle sample: water written H2O.
+    for (document, notices) in sheet(
+        "<fragment id='10'><n id='11' p='245.59 363.45' Element='8' NumHydrogens='2'><t p='240.8 367.82' LabelJustification='Left' LabelAlignment='Left'>\
+         <s size='12'>H</s><s size='12' face='32'>2</s><s size='12'>O</s></t></n></fragment>\
+         <fragment id='20'><n id='21' p='300 363' Element='8' NumHydrogens='2'><t p='296 367'>\
+         <s size='12'>OH</s><s size='12' face='32'>2</s></t></n></fragment>\
+         <fragment id='30'><n id='31' p='350 363' Element='8' NumHydrogens='3' Charge='1'>\
+         <t p='340 367'><s size='12'>H</s><s size='12' face='32'>3</s><s size='12'>O</s>\
+         <s size='12' face='64'>+</s></t></n></fragment>",
+    )
+    .await
+    {
+        assert_eq!(notices, nearest(""));
+        let sides: Vec<_> = document
+            .atoms
+            .iter()
+            .map(|atom| atom.display.hydrogen_position)
+            .collect();
+        use reshiki_model::atom_labels::HydrogenPosition::{Auto, Left};
+        assert_eq!(sides, [Left, Auto, Left]);
+    }
+}
+
+#[tokio::test]
+async fn a_doubled_curve_without_a_length_stays_one_line() {
+    let points = "20 20 20 20 20 20 20 20 20 20 20 20";
+    for (_, notices) in sheet(&format!(
+        "<curve id='2' CurvePoints='{points}' CurveType='512'/>\
+         <curve id='3' CurvePoints='20 20 20 20 30 0 50 40 60 20 60 20' CurveType='513' \
+         FadePercent='500'/>"
+    ))
+    .await
+    {
+        assert!(
+            notices[0].contains("2 doubled curves as single lines"),
+            "{notices:?}"
+        );
+    }
 }

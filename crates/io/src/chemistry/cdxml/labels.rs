@@ -3,7 +3,7 @@ use super::{
     Error,
     association::{self, ImportPoint, ObjectMapEntry, PreparedAtoms, invalid, numbers},
     presentation::{Attributes, NativeText, NativeTextStyle},
-    tree::Tree,
+    tree::{Element, Tree},
 };
 use crate::{
     atom_labels::{Carbons, HydrogenPosition, Settings},
@@ -126,6 +126,34 @@ fn inherited(tree: &Tree, element: usize) -> super::Result<Attributes> {
         }
     }
     Ok(attrs)
+}
+/// Whether an element atom's label text puts its hydrogens before the
+/// element, as in H2O or H3C.
+pub(super) fn hydrogens_first(tree: &Tree, atom: &Element) -> super::Result<bool> {
+    if !matches!(atom.attr("NodeType"), None | Some("Element")) {
+        return Ok(false);
+    }
+    let mut text = String::new();
+    for &child in &atom.children {
+        let label = tree.node(child)?;
+        if label.tag == "t" {
+            for &run in &label.children {
+                text.push_str(&tree.node(run)?.text);
+            }
+        }
+    }
+    let Some(rest) = text.strip_prefix('H') else {
+        return Ok(false);
+    };
+    // The element symbol, then at most a charge, as in H3O+.
+    let symbol = rest
+        .trim_start_matches(|c: char| c.is_ascii_digit())
+        .trim_end_matches(|c: char| c.is_ascii_digit() || matches!(c, '+' | '-' | '\u{2212}'));
+    let mut letters = symbol.chars();
+    Ok(letters.next().is_some_and(|c| c.is_ascii_uppercase())
+        && letters.all(|c| c.is_ascii_lowercase())
+        && symbol.len() <= 2
+        && symbol != "H")
 }
 fn pair(a: u64, b: u64) -> (u64, u64) {
     (a.min(b), a.max(b))
@@ -275,6 +303,10 @@ where
             "Below" => HydrogenPosition::Below,
             _ => return Err(invalid("This atom-label alignment is not supported yet").into()),
         };
+        // A label written hydrogens first, such as H2O, keeps them on the left.
+        if display.hydrogen_position == HydrogenPosition::Auto && hydrogens_first(&tree, node)? {
+            display.hydrogen_position = HydrogenPosition::Left;
+        }
         if yes(&attrs, "ShowAtomNumber")?
             && let Some(value) = node.attr("AtomNumber").filter(|v| !v.is_empty())
         {

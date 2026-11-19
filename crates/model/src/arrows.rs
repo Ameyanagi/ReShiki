@@ -258,7 +258,7 @@ impl ArrowStyle {
             ("Arrowhead length", self.head_length_pt, 0.5, 24.),
             ("Arrowhead half-width", self.head_width_pt, 0.25, 16.),
             ("Arrow separation", self.gap_pt, 0.5, 16.),
-            ("Equilibrium ratio", self.equilibrium_ratio, 0.2, 1.),
+            ("Equilibrium ratio", self.equilibrium_ratio, 0.2, 5.),
         ] {
             if !n.is_finite() || !(lo..=hi).contains(&n) {
                 return Err(format!("{label} must be {lo}–{hi}"));
@@ -1321,8 +1321,16 @@ impl Arrow {
             }
         };
         if self.kind == "equilibrium" {
-            shaft(0., 1., -gap, s.head, Head::None);
-            let inset = (1. - s.equilibrium_ratio) / 2.;
+            // The longer arrow runs the full length, the shorter one centered.
+            let forward = (1. - (1. / s.equilibrium_ratio).min(1.)) / 2.;
+            shaft(
+                self.length_parameter(forward),
+                self.length_parameter(1. - forward),
+                -gap,
+                s.head,
+                Head::None,
+            );
+            let inset = (1. - s.equilibrium_ratio.min(1.)) / 2.;
             shaft(
                 self.length_parameter(1. - inset),
                 self.length_parameter(inset),
@@ -1386,15 +1394,17 @@ impl Arrow {
         let middle = self.length_parameter(0.5);
         let p = self.point(middle);
         let d = self.shaft_tangent(middle, false);
-        let w = DEFAULT.world(2.);
+        // ChemDraw sizes the mark with the line: each stroke reaches five
+        // line widths either side of the shaft.
+        let w = DEFAULT.world(5. * s.width_pt);
         let q = |x: f32, y: f32| p.offset((d.x * x - d.y * y) * w, (d.y * x + d.x * y) * w);
         if s.no_go == NoGo::Hash {
             path(
                 vec![
-                    Move(q(-1.5, 1.)),
-                    Line(q(0.5, -1.)),
-                    Move(q(-0.5, 1.)),
-                    Line(q(1.5, -1.)),
+                    Move(q(-1., 1.)),
+                    Line(q(0., -1.)),
+                    Move(q(0., 1.)),
+                    Line(q(1., -1.)),
                 ],
                 false,
                 true,

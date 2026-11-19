@@ -15,7 +15,9 @@ geometry in `.rsk` files.
 2. Drag to size the object. Shift makes a square or circle, or keeps a line or
    curve at 45° steps. Escape cancels.
 3. Set stroke color, fill color, line width and solid, dashed, dotted or wavy
-   strokes in **Properties**. Number and hex fields apply when you press Enter.
+   strokes in **Properties**. As in ChemDraw, dashes and gaps are 2.7 pt long
+   (ChemDraw's default hash spacing) with square ends whatever the line
+   width. Number and hex fields apply when you press Enter.
    A rounded rectangle also has **Corner (pt)**; leave it empty to round 18% of
    the shorter side.
 
@@ -713,27 +715,28 @@ see [generic structures](generic-structures.md#define-a-repeating-unit).
 
 Opening or pasting a CDX or CDXML file never fails because of one style or
 object. ReShiki imports the nearest thing it draws and shows one message that
-lists what changed and how many, such as "2 doubled curves as single lines;
-1 rotated caption upright".
+lists what changed and how many, such as "2 doubled curves as pairs of
+grouped curves; 1 rotated caption upright".
 
-| In the ChemDraw file                                                       | In ReShiki                                                   |
-| -------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| Doubled curve                                                              | A single line                                                |
-| See-through object (alpha)                                                 | Opaque                                                       |
-| Arc from an older ChemDraw file                                            | The same arc as a curve or curved arrow, without a message   |
-| Arc arrow without its centre or axes                                       | A straight arrow                                             |
-| Curved arrow with a double shaft; longer curve with a no-go or dipole mark | The curve without the mark                                   |
-| Two upright single brackets of one style that face each other              | One bracket pair, without a message                          |
-| Any other single bracket                                                   | A curve of the same shape                                    |
-| Dagger, double dagger, lone pair bar; plain, shaded and filled orbitals    | The matching ReShiki symbol or orbital, without a message    |
-| Rac, Abs and Rel stereo flags                                              | Text                                                         |
-| Rotated caption; outlined or shadowed text                                 | Upright; plain face                                          |
-| Atom or abbreviation label with more than one font, size or weight         | The style of its first character; colours are kept           |
-| Line, arrowhead, shadow or text size outside ReShiki's range               | The nearest size in range                                    |
-| BioDraw shape, gel plate, TLC plate, other unknown object                  | Left out and named; captions and drawings inside it are kept |
-| Table                                                                      | The cell contents without the frame                          |
-| Plasmid map in a CDXML file                                                | Its ring, regions as arcs, and labels                        |
-| Picture without a PNG, TIFF, JPEG, GIF or BMP copy                         | Left out and named                                           |
+| In the ChemDraw file                                                         | In ReShiki                                                       |
+| ---------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| Doubled curve                                                                | Two grouped parallel curves; with a fill or arrowheads, one line |
+| See-through object (alpha)                                                   | Opaque                                                           |
+| Arc from an older ChemDraw file                                              | The same arc as a curve or curved arrow, without a message       |
+| Arc arrow without its centre or axes                                         | A straight arrow                                                 |
+| Curved arrow with a double shaft; longer curve with a no-go or dipole mark   | The curve without the mark                                       |
+| Two upright single brackets of one style that face each other                | One bracket pair, without a message                              |
+| Any other single bracket                                                     | A curve of the same shape                                        |
+| Dagger, double dagger, lone pair bar; plain, shaded and filled orbitals      | The matching ReShiki symbol or orbital, without a message        |
+| Rac, Abs and Rel stereo flags                                                | Text grouped with a rounded box                                  |
+| Unbalanced equilibrium arrow whose short arrow is under a fifth of the other | The short arrow a fifth as long as the other                     |
+| Rotated caption; outlined or shadowed text                                   | Upright; plain face                                              |
+| Atom or abbreviation label with more than one font, size or weight           | The style of its first character; colours are kept               |
+| Line, arrowhead, shadow or text size outside ReShiki's range                 | The nearest size in range                                        |
+| BioDraw shape, gel plate, TLC plate, other unknown object                    | Left out and named; captions and drawings inside it are kept     |
+| Table                                                                        | The cell contents without the frame                              |
+| Plasmid map in a CDXML file                                                  | Its ring, regions as arcs, and labels                            |
+| Picture without a PNG, TIFF, JPEG, GIF or BMP copy                           | Left out and named                                               |
 
 A file with several pages, such as one of ChemDraw's template libraries, opens
 with its pages in rows on one drawing, in page order, so **Fit** shows them

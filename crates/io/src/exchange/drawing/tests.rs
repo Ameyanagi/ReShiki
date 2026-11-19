@@ -292,6 +292,11 @@ async fn retrosynthesis_arrows_roundtrip_through_cdxml_and_cdx() {
             let expected_style = expected.appearance();
             assert!((actual_style.width_pt - expected_style.width_pt).abs() < 1. / 65536.);
             actual_style.width_pt = expected_style.width_pt;
+            // An angled head has no notch: ChemDraw reads its center size as
+            // the head's half-width, which comes back exactly.
+            if expected_style.shape == HeadShape::Open {
+                actual_style.head_notch = expected_style.head_notch;
+            }
             assert_eq!(actual_style, expected_style);
             // Editable exchange translates the page; preserve relative geometry.
             assert!((actual.end.x - actual.start.x - 180.).abs() < 0.001);

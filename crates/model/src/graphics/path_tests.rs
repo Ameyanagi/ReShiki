@@ -553,3 +553,24 @@ fn pen_segments_share_one_path_with_straight_curve_and_open_close_edits() {
         doc.current()
     );
 }
+
+#[test]
+fn dashes_keep_chemdraws_length_at_any_width_and_end_square() {
+    use crate::graphics::{DASH_PT, LinePattern};
+    assert_eq!(DASH_PT, 2.7);
+    let dash = crate::style::DEFAULT.world(DASH_PT);
+    for width_pt in [0.6, 1., 4.] {
+        let style = GraphicStyle {
+            width_pt,
+            pattern: LinePattern::Dashed,
+            ..Default::default()
+        };
+        assert_eq!(style.dashes(), [dash, dash]);
+        assert!(!style.round_caps());
+    }
+    let dotted = GraphicStyle {
+        pattern: LinePattern::Dotted,
+        ..Default::default()
+    };
+    assert!(dotted.round_caps() && GraphicStyle::default().round_caps());
+}

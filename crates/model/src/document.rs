@@ -571,7 +571,10 @@ impl Document {
                 || g.phase == crate::scientific::Phase::Gradient
         }) || self.arrows.iter().any(|a| {
             let style = a.appearance();
-            style.pattern == LinePattern::Wavy || !style.body.is_line() || a.arc.is_some()
+            style.pattern == LinePattern::Wavy
+                || !style.body.is_line()
+                || a.arc.is_some()
+                || style.equilibrium_ratio > 1.
         }) || crate::purpose::used(self)
             || self.reactions.iter().any(|r| r.colors.is_some())
             || self.groups.iter().any(|g| g.layout.is_some())
