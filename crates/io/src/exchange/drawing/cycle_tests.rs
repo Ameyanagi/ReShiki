@@ -27,7 +27,7 @@ fn cycle_document() -> Document {
         .graphics
         .iter_mut()
         .find(|g| g.id == cycle)
-        .and_then(|g| g.cycle.as_mut())
+        .and_then(|g| g.cycle.as_deref_mut())
     {
         c.steps[0].name = "Oxidative addition".into();
     }

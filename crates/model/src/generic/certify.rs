@@ -271,7 +271,7 @@ pub(super) fn certify_translation(
                 }
             }
         }
-        if let Some(cycle) = actual.cycle.as_mut() {
+        if let Some(cycle) = actual.cycle.as_deref_mut() {
             for id in cycle.ids_mut() {
                 undo(id)?;
             }

@@ -169,7 +169,7 @@ impl App {
             .graphics
             .iter()
             .filter(|g| self.tab.selected.contains(&g.id))
-            .find_map(|g| Some((g.id, g.cycle.as_ref()?)))
+            .find_map(|g| Some((g.id, g.cycle.as_deref()?)))
     }
 
     fn selected_cycle_graphic(&self) -> Option<&reshiki::graphics::Graphic> {
@@ -188,7 +188,7 @@ impl App {
             .graphics
             .iter_mut()
             .find(|g| g.id == id)
-            .and_then(|g| g.cycle.as_mut())
+            .and_then(|g| g.cycle.as_deref_mut())
         {
             edit(cycle);
         }
@@ -371,12 +371,17 @@ impl App {
             .collect();
         let n = names.len();
         if n > 0 {
-            let choices: Vec<StepChoice> = (0..n)
-                .map(|i| StepChoice {
+            let next = names.iter().cycle().skip(1);
+            let choices: Vec<StepChoice> = names
+                .iter()
+                .zip(next)
+                .zip(&cycle.steps)
+                .enumerate()
+                .map(|(i, ((from, to), step))| StepChoice {
                     index: i,
-                    label: match cycle.steps.get(i).map(|s| s.name.trim()) {
-                        Some(name) if !name.is_empty() => format!("Step {}: {name}", i + 1),
-                        _ => format!("Step {}: {} → {}", i + 1, names[i], names[(i + 1) % n]),
+                    label: match step.name.trim() {
+                        "" => format!("Step {}: {from} → {to}", i + 1),
+                        name => format!("Step {}: {name}", i + 1),
                     },
                 })
                 .collect();

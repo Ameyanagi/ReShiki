@@ -667,7 +667,7 @@ fn units(doc: &Document, ids: &[u64]) -> Vec<Vec<u64>> {
 pub fn part_ids(doc: &Document) -> HashSet<u64> {
     doc.graphics
         .iter()
-        .filter_map(|g| g.cycle.as_ref())
+        .filter_map(|g| g.cycle.as_deref())
         .flat_map(|c| c.parts().flat_map(|(_, ids)| ids.iter().copied()))
         .collect()
 }
@@ -676,7 +676,7 @@ pub fn part_ids(doc: &Document) -> HashSet<u64> {
 pub fn role_of(doc: &Document, id: u64) -> Option<(u64, Role)> {
     doc.graphics
         .iter()
-        .find_map(|g| Some((g.id, g.cycle.as_ref()?.role(id)?)))
+        .find_map(|g| Some((g.id, g.cycle.as_deref()?.role(id)?)))
 }
 
 /// Make a cycle of the selected molecules and texts: they become its
@@ -739,11 +739,11 @@ pub fn make(doc: &mut Document, ids: &[u64]) -> Result<u64, String> {
         crate::graphics::BracketSides::Both,
         false,
     );
-    g.cycle = Some(Cycle {
+    g.cycle = Some(Box::new(Cycle {
         steps: vec![Step::default(); intermediates.len()],
         intermediates,
         ..Default::default()
-    });
+    }));
     doc.graphics.push(g);
     let mut members = vec![id];
     members.extend(units.into_iter().flatten());
@@ -767,7 +767,7 @@ pub fn insert(doc: &mut Document, center: Point, radius: f32) -> u64 {
         crate::graphics::BracketSides::Both,
         false,
     );
-    g.cycle = Some(Cycle::default());
+    g.cycle = Some(Box::default());
     doc.graphics.push(g);
     id
 }
@@ -799,7 +799,7 @@ pub fn drop_target(doc: &Document, moved: &[u64]) -> Option<Target> {
     let p = center_of(ink);
     let bond = doc.drawing_style.bond_length_world;
     doc.graphics.iter().rev().find_map(|g| {
-        let cycle = g.cycle.as_ref()?;
+        let cycle = g.cycle.as_deref()?;
         if moved.contains(&g.id) {
             return None;
         }
@@ -867,7 +867,7 @@ pub fn assign(doc: &mut Document, target: &Target) {
         .graphics
         .iter_mut()
         .find(|g| g.id == target.cycle)
-        .and_then(|g| g.cycle.as_mut())
+        .and_then(|g| g.cycle.as_deref_mut())
     else {
         return;
     };
@@ -1068,7 +1068,7 @@ pub fn materialized(doc: &Document) -> std::borrow::Cow<'_, Document> {
 /// `ids` with every cycle part any of them belongs to, whole.
 pub fn whole_parts(doc: &Document, ids: &[u64]) -> Vec<u64> {
     let mut out = ids.to_vec();
-    for cycle in doc.graphics.iter().filter_map(|g| g.cycle.as_ref()) {
+    for cycle in doc.graphics.iter().filter_map(|g| g.cycle.as_deref()) {
         for (_, part) in cycle.parts() {
             if part.iter().any(|id| ids.contains(id)) {
                 out.extend(part.iter().filter(|id| !ids.contains(id)));
@@ -1139,7 +1139,7 @@ pub fn reconcile(doc: &mut Document) {
         used.extend(part.iter().copied());
         part
     };
-    let fixed: Vec<Option<Cycle>> = doc
+    let fixed: Vec<Option<Box<Cycle>>> = doc
         .graphics
         .iter()
         .map(|g| {

@@ -25,7 +25,7 @@ fn cycle(app: &App) -> (u64, Cycle) {
                 .doc
                 .graphics
                 .iter()
-                .find_map(|g| Some((g.id, g.cycle.clone()?)))
+                .find_map(|g| Some((g.id, g.cycle.as_deref().cloned()?)))
         })
         .unwrap()
 }

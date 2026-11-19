@@ -351,7 +351,7 @@ pub struct Graphic {
     pub leader: Option<crate::leaders::Leader>,
     /// The intermediates and steps that make an ellipse a catalytic cycle.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub cycle: Option<crate::cycles::Cycle>,
+    pub cycle: Option<Box<crate::cycles::Cycle>>,
 }
 fn back_layer() -> i32 {
     -1

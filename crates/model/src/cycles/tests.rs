@@ -38,7 +38,7 @@ fn cycle(doc: &Document, id: u64) -> &super::Cycle {
     doc.graphics
         .iter()
         .find(|g| g.id == id)
-        .and_then(|g| g.cycle.as_ref())
+        .and_then(|g| g.cycle.as_deref())
         .unwrap()
 }
 
@@ -109,7 +109,7 @@ fn a_reversible_step_draws_two_half_headed_arcs_and_a_hidden_one_none() {
         .graphics
         .iter_mut()
         .find(|g| g.id == id)
-        .and_then(|g| g.cycle.as_mut())
+        .and_then(|g| g.cycle.as_deref_mut())
     {
         c.steps[0].reversible = true;
         c.steps[1].hidden = true;
@@ -227,7 +227,7 @@ fn deleting_an_intermediate_joins_its_steps() {
         .graphics
         .iter_mut()
         .find(|g| g.id == id)
-        .and_then(|g| g.cycle.as_mut())
+        .and_then(|g| g.cycle.as_deref_mut())
     {
         c.steps[0].name = "Oxidative addition".into();
     }
@@ -268,7 +268,7 @@ fn pasting_the_whole_cycle_keeps_it_and_a_part_alone_drops_it() {
     let cycles: Vec<_> = doc
         .graphics
         .iter()
-        .filter_map(|g| g.cycle.as_ref())
+        .filter_map(|g| g.cycle.as_deref())
         .collect();
     assert_eq!(cycles.len(), 2);
     assert_eq!(cycles[1].intermediates.len(), 3);
@@ -288,7 +288,7 @@ fn pasting_the_whole_cycle_keeps_it_and_a_part_alone_drops_it() {
     let kept = other
         .graphics
         .iter()
-        .find_map(|g| g.cycle.as_ref())
+        .find_map(|g| g.cycle.as_deref())
         .unwrap();
     assert!(kept.intermediates.is_empty());
 }
@@ -305,7 +305,7 @@ fn reversing_runs_the_steps_the_other_way() {
     };
     super::assign(&mut doc, &target);
     let g = doc.graphics.iter_mut().find(|g| g.id == id).unwrap();
-    let c = g.cycle.as_mut().unwrap();
+    let c = g.cycle.as_deref_mut().unwrap();
     reverse(c);
     assert!(c.counterclockwise);
     assert_eq!(c.intermediates, vec![vec![pd0], vec![tm], vec![oa]]);
@@ -396,7 +396,7 @@ fn step_names_sit_inside_the_arc_and_long_ones_break() {
         .graphics
         .iter_mut()
         .find(|g| g.id == id)
-        .and_then(|g| g.cycle.as_mut())
+        .and_then(|g| g.cycle.as_deref_mut())
     {
         c.steps[0].name = "Oxidative addition".into();
         c.label = "Pd".into();
@@ -445,7 +445,7 @@ fn step_names_keep_clear_of_each_other_and_the_parts() {
         .graphics
         .iter_mut()
         .find(|g| g.id == id)
-        .and_then(|g| g.cycle.as_mut())
+        .and_then(|g| g.cycle.as_deref_mut())
     {
         for (step, name) in [
             "Oxidative addition",
@@ -532,7 +532,11 @@ fn a_flipped_cycle_runs_the_other_way_and_keeps_its_steps() {
 fn copying_the_circle_alone_keeps_no_phantom_parts() {
     let (doc, id, _) = suzuki();
     let part = crate::editing::selection(&doc, &[id]);
-    let c = part.graphics.iter().find_map(|g| g.cycle.as_ref()).unwrap();
+    let c = part
+        .graphics
+        .iter()
+        .find_map(|g| g.cycle.as_deref())
+        .unwrap();
     assert!(c.intermediates.is_empty() && c.steps.is_empty());
     part.validate().unwrap();
 }
