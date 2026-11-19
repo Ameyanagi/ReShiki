@@ -63,7 +63,7 @@
    "material": "metal",
    "role": "solid",
    "path": "M-117 -3.2L-26.6 -3.2A3 3 0 0 1 -23.6 -0.2L-23.6 0.2A3 3 0 0 1 -26.6 3.2L-117 3.2A3 3 0 0 1 -120 0.2L-120 -0.2A3 3 0 0 1 -117 -3.2Z",
-   "part": "head",
+   "part": "arm",
    "when": {
     "jaw": [
      "closed"
@@ -76,7 +76,7 @@
    "material": "metal",
    "role": "solid",
    "path": "M-23.6 -13L-19.6 -13A3 3 0 0 1 -16.6 -10L-16.6 10A3 3 0 0 1 -19.6 13L-23.6 13A3 3 0 0 1 -26.6 10L-26.6 -10A3 3 0 0 1 -23.6 -13Z",
-   "part": "fingers",
+   "part": "block",
    "when": {
     "jaw": [
      "closed"
@@ -102,7 +102,7 @@
    "material": "cork",
    "role": "solid",
    "path": "M14.3 -10.7L16.4 -10.7A1.2 1.2 0 0 1 17.6 -9.5L17.6 -5.5A1.2 1.2 0 0 1 16.4 -4.3L14.3 -4.3A1.2 1.2 0 0 1 13.1 -5.5L13.1 -9.5A1.2 1.2 0 0 1 14.3 -10.7Z",
-   "part": "fingers",
+   "part": "pads",
    "when": {
     "jaw": [
      "closed"
@@ -128,7 +128,7 @@
    "material": "cork",
    "role": "solid",
    "path": "M14.3 4.3L16.4 4.3A1.2 1.2 0 0 1 17.6 5.5L17.6 9.5A1.2 1.2 0 0 1 16.4 10.7L14.3 10.7A1.2 1.2 0 0 1 13.1 9.5L13.1 5.5A1.2 1.2 0 0 1 14.3 4.3Z",
-   "part": "fingers",
+   "part": "pads",
    "when": {
     "jaw": [
      "closed"
@@ -154,7 +154,7 @@
    "material": "metal",
    "role": "solid",
    "path": "M-42.1 -2.4L-27.1 -2.4A1.5 1.5 0 0 1 -25.6 -0.9L-25.6 0.9A1.5 1.5 0 0 1 -27.1 2.4L-42.1 2.4A1.5 1.5 0 0 1 -43.6 0.9L-43.6 -0.9A1.5 1.5 0 0 1 -42.1 -2.4Z",
-   "part": "fingers",
+   "part": "block",
    "when": {
     "jaw": [
      "closed"
@@ -167,7 +167,7 @@
    "material": "metal",
    "role": "solid",
    "path": "M-47.6 -8L-45.6 -8A2 2 0 0 1 -43.6 -6L-43.6 6A2 2 0 0 1 -45.6 8L-47.6 8A2 2 0 0 1 -49.6 6L-49.6 -6A2 2 0 0 1 -47.6 -8Z",
-   "part": "fingers",
+   "part": "block",
    "when": {
     "jaw": [
      "closed"
@@ -180,7 +180,7 @@
    "material": "metal",
    "role": "solid",
    "path": "M-117 -3.2L-33.6 -3.2A3 3 0 0 1 -30.6 -0.2L-30.6 0.2A3 3 0 0 1 -33.6 3.2L-117 3.2A3 3 0 0 1 -120 0.2L-120 -0.2A3 3 0 0 1 -117 -3.2Z",
-   "part": "head",
+   "part": "arm",
    "when": {
     "jaw": [
      "open"
@@ -193,7 +193,7 @@
    "material": "metal",
    "role": "solid",
    "path": "M-30.6 -13L-26.6 -13A3 3 0 0 1 -23.6 -10L-23.6 10A3 3 0 0 1 -26.6 13L-30.6 13A3 3 0 0 1 -33.6 10L-33.6 -10A3 3 0 0 1 -30.6 -13Z",
-   "part": "fingers",
+   "part": "block",
    "when": {
     "jaw": [
      "open"
@@ -219,7 +219,7 @@
    "material": "cork",
    "role": "solid",
    "path": "M21.3 -10.7L23.4 -10.7A1.2 1.2 0 0 1 24.6 -9.5L24.6 -5.5A1.2 1.2 0 0 1 23.4 -4.3L21.3 -4.3A1.2 1.2 0 0 1 20.1 -5.5L20.1 -9.5A1.2 1.2 0 0 1 21.3 -10.7Z",
-   "part": "fingers",
+   "part": "pads",
    "when": {
     "jaw": [
      "open"
@@ -245,7 +245,7 @@
    "material": "cork",
    "role": "solid",
    "path": "M21.3 4.3L23.4 4.3A1.2 1.2 0 0 1 24.6 5.5L24.6 9.5A1.2 1.2 0 0 1 23.4 10.7L21.3 10.7A1.2 1.2 0 0 1 20.1 9.5L20.1 5.5A1.2 1.2 0 0 1 21.3 4.3Z",
-   "part": "fingers",
+   "part": "pads",
    "when": {
     "jaw": [
      "open"
@@ -271,7 +271,7 @@
    "material": "metal",
    "role": "solid",
    "path": "M-49.1 -2.4L-34.1 -2.4A1.5 1.5 0 0 1 -32.6 -0.9L-32.6 0.9A1.5 1.5 0 0 1 -34.1 2.4L-49.1 2.4A1.5 1.5 0 0 1 -50.6 0.9L-50.6 -0.9A1.5 1.5 0 0 1 -49.1 -2.4Z",
-   "part": "fingers",
+   "part": "block",
    "when": {
     "jaw": [
      "open"
@@ -284,7 +284,7 @@
    "material": "metal",
    "role": "solid",
    "path": "M-54.6 -8L-52.6 -8A2 2 0 0 1 -50.6 -6L-50.6 6A2 2 0 0 1 -52.6 8L-54.6 8A2 2 0 0 1 -56.6 6L-56.6 -6A2 2 0 0 1 -54.6 -8Z",
-   "part": "fingers",
+   "part": "block",
    "when": {
     "jaw": [
      "open"
@@ -375,29 +375,11 @@
    "kind": "range",
    "min": 8,
    "max": 40,
-   "default": 13,
+   "default": 26,
    "unit": "mm"
   }
  ],
  "parts": [
-  {
-   "id": "fingers",
-   "param": "grip",
-   "parent": "head",
-   "motion": {
-    "stretch": {
-     "pivot": [
-      0,
-      0
-     ],
-     "axis": [
-      1,
-      0
-     ],
-     "per_unit": 0.07692307692307693
-    }
-   }
-  },
   {
    "id": "head",
    "param": "tilt",
@@ -416,6 +398,64 @@
      -10
     ],
     "gesture": "drag"
+   }
+  },
+  {
+   "id": "arm",
+   "parent": "head",
+   "param": "grip",
+   "motion": {
+    "stretch": {
+     "pivot": [
+      -120,
+      0
+     ],
+     "axis": [
+      1,
+      0
+     ],
+     "per_unit": -0.005187
+    }
+   }
+  },
+  {
+   "id": "block",
+   "parent": "head",
+   "param": "grip",
+   "motion": {
+    "translate": [
+     -0.5,
+     0
+    ]
+   }
+  },
+  {
+   "id": "fingers",
+   "parent": "head",
+   "param": "grip",
+   "motion": {
+    "stretch": {
+     "pivot": [
+      0,
+      0
+     ],
+     "axis": [
+      1,
+      0
+     ],
+     "per_unit": 0.028409
+    }
+   }
+  },
+  {
+   "id": "pads",
+   "parent": "head",
+   "param": "grip",
+   "motion": {
+    "translate": [
+     0.5,
+     0
+    ]
    }
   }
  ]

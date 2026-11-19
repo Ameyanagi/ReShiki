@@ -72,12 +72,21 @@ fn a_clamped_flask_exports_as_one_group_with_the_fingers_around_the_neck() {
     assert!(imported.graphics.len() >= painted);
     // One group holds both pieces: ChemDraw keeps a group together in the
     // stacking order, so only one group can put the fingers on both sides.
-    assert_eq!(imported.groups.len(), 1);
-    assert_eq!(imported.groups[0].members.len(), imported.graphics.len());
-    // The first curve is the clamp's back layer, behind the flask's glass.
-    let first = &imported.graphics[0];
-    assert_ne!(
-        first.style.fill,
-        Some(crate::palette::Color::Custom([255; 3]))
+    assert!(
+        imported
+            .groups
+            .iter()
+            .any(|g| g.members.len() == imported.graphics.len()),
+        "{:?}",
+        imported.groups
     );
+    // Clamp metal comes before the flask's white glass (the back fingers)
+    // and after it (the front finger).
+    let fills: Vec<_> = imported.graphics.iter().map(|g| g.style.fill).collect();
+    let metal = Some(crate::palette::Color::Custom([215, 220, 224]));
+    let glass = Some(crate::palette::Color::Custom([255; 3]));
+    let first_glass = fills.iter().position(|f| *f == glass).unwrap();
+    let last_glass = fills.iter().rposition(|f| *f == glass).unwrap();
+    assert!(fills.iter().position(|f| *f == metal).unwrap() < first_glass);
+    assert!(fills.iter().rposition(|f| *f == metal).unwrap() > last_glass);
 }

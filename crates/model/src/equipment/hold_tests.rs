@@ -233,10 +233,12 @@ fn add_clips_puts_one_on_each_joint_and_it_follows_its_seat_until_released() {
     let all = solve::closure(&doc, &[condenser]);
     assert!(all.contains(&clip));
     assert!(doc.expand_groups(&[clip]).contains(&flask));
+    // Moving only the two pieces brings the clip along to the new mouth.
     let before = doc.clone();
-    doc.translate(&all, 50., 20.);
+    doc.translate(&[flask, condenser], 50., 20.);
     commit(&mut doc, before);
     assert!(on_mouth(&doc));
+    assert_eq!(graphic(&doc, clip).axis_x, graphic(&doc, flask).axis_x);
     let back = Document::from_json(&doc.file_json().unwrap()).unwrap();
     assert_eq!(back.seats[0].clip, Some(clip));
     // Copying the assembly copies its clip with it.
@@ -271,4 +273,93 @@ fn a_clip_dropped_near_a_joint_of_its_size_goes_on_it_and_deleting_either_frees_
     doc.delete(&[flask]);
     assert!(doc.seats.is_empty());
     assert!(doc.graphics.iter().all(|g| g.id != clip));
+}
+
+#[test]
+fn a_clamp_slid_along_the_rod_brings_a_loose_flask_to_it_and_two_stands_never_join() {
+    let mut doc = Document::default();
+    let stand = add(&mut doc, "reshiki/stand", Point::new(0., 0.));
+    let clamp = add(&mut doc, "reshiki/clamp-3finger", Point::new(300., 0.));
+    let rod = port(&doc, stand, "rod");
+    bring(&mut doc, clamp, "boss", along(&rod, 0.5), (0., 0.));
+    solve::snap(&mut doc, &[clamp], 14., false).unwrap();
+    // A loose flask whose neck is beside the jaw, a little lower.
+    let flask = add(&mut doc, "reshiki/rbf-100-15", Point::new(300., 400.));
+    let jaw = along(&port(&doc, clamp, "jaw"), 0.5);
+    bring(&mut doc, flask, "neck-grip", jaw, (6., 30.));
+    let stand_at = graphic(&doc, stand).origin;
+    let flask_at = graphic(&doc, flask).origin;
+    // Slide the clamp down the rod to it: the flask comes to the jaw, and
+    // the clamp stays on the rod.
+    let held = solve::carried(&doc, &[clamp], &[clamp]);
+    let d = solve::constrain(&doc, &held, [3., 30.]).unwrap();
+    doc.translate(&held, d[0] as f32, d[1] as f32);
+    let clamp_at = graphic(&doc, clamp).origin;
+    let snap = solve::snap(&mut doc, &held, 14., false).unwrap();
+    assert_eq!(snap.moving.at, joint(flask, "neck-grip"));
+    assert_eq!(graphic(&doc, clamp).origin, clamp_at);
+    assert_eq!(graphic(&doc, stand).origin, stand_at);
+    assert!((graphic(&doc, flask).origin.x - flask_at.x + 6.).abs() < 1e-3);
+    let before = doc.clone();
+    commit(&mut doc, before);
+    assert_eq!(doc.seats.len(), 2);
+    // A second stand brought to the mounted clamp's flask stays apart.
+    let other = add(&mut doc, "reshiki/stand", Point::new(-600., 0.));
+    let held = add(&mut doc, "reshiki/clamp-3finger", Point::new(-300., 0.));
+    let rod2 = port(&doc, other, "rod");
+    bring(&mut doc, held, "boss", along(&rod2, 0.5), (0., 0.));
+    solve::snap(&mut doc, &[held], 14., false).unwrap();
+    let seats = doc.seats.len();
+    let to = along(&port(&doc, flask, "neck-neck"), 0.5);
+    bring(&mut doc, held, "jaw", to, (2., 0.));
+    let both = solve::closure(&doc, &[other]);
+    let other_at = graphic(&doc, other).origin;
+    assert!(solve::snap(&mut doc, &both, 14., false).is_none());
+    assert_eq!(doc.seats.len(), seats);
+    assert_eq!(graphic(&doc, other).origin, other_at);
+}
+
+#[test]
+fn a_bad_clip_reference_deletes_nothing_and_a_clip_copied_alone_stays_a_clip() {
+    let (mut doc, flask, condenser) = reflux();
+    let ids = solve::closure(&doc, &[flask]);
+    solve::add_clips(&mut doc, &ids);
+    let clip = doc.seats[0].clip.unwrap();
+    // A clip copied without its joint comes as a loose clip.
+    let part = crate::editing::selection(&doc, &[clip]);
+    assert_eq!(part.graphics.len(), 1);
+    assert!(part.seats.is_empty());
+    // A seat that names another graphic as its clip and no longer fits
+    // takes only its seat when it goes.
+    let flask_too = add(&mut doc, "reshiki/rbf-100-15", Point::new(900., 900.));
+    let mut json: serde_json::Value = serde_json::from_slice(&doc.file_json().unwrap()).unwrap();
+    json["seats"][0]["clip"] = serde_json::json!(flask_too);
+    json["seats"][0]["a"]["joint"] = serde_json::json!("nowhere");
+    let back = Document::from_json(json.to_string().as_bytes()).unwrap();
+    assert!(back.seats.is_empty());
+    assert!(back.graphics.iter().any(|g| g.id == flask_too));
+    assert!(back.graphics.iter().any(|g| g.id == condenser));
+}
+
+#[test]
+fn a_loose_clip_put_on_a_joint_joins_its_assembly_layer_and_place() {
+    let (mut doc, flask, _) = reflux();
+    for g in &mut doc.graphics {
+        g.layer = 3;
+    }
+    // A clip placed before the flask, behind the structures.
+    let early = add(&mut doc, "reshiki/keck-clip-29", Point::new(900., 900.));
+    let clip = doc.graphics.pop().unwrap();
+    doc.graphics.insert(0, clip);
+    let mouth = port(&doc, flask, "neck").point;
+    let before = doc.clone();
+    let c = placed::middle(graphic(&doc, early));
+    doc.translate(&[early], mouth[0] as f32 - c.x + 2., mouth[1] as f32 - c.y);
+    assert!(matches!(
+        solve::snap(&mut doc, &[early], 14., false).unwrap().offer,
+        Offer::Clip
+    ));
+    commit(&mut doc, before);
+    assert!(doc.graphics.iter().all(|g| g.layer == 3));
+    assert_eq!(doc.graphics.last().unwrap().id, early);
 }

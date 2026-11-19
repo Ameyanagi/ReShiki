@@ -409,7 +409,7 @@ impl MoleculeCanvas<'_> {
                 let ids = if state.modifiers.alt() {
                     reshiki::equipment::solve::detached(self.doc, &ids)
                 } else {
-                    reshiki::equipment::solve::carried(self.doc, &ids, &hit)
+                    reshiki::equipment::solve::carried(self.doc, &ids, &picked)
                 };
                 Gesture::Move {
                     start: p,

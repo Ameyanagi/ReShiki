@@ -3794,3 +3794,64 @@ fn edit_points_arrow_shaft_click_adds_a_node_and_node_handles_drag_click_and_fre
         Edit::ArrowControlFree(1, index, p) if index == node + 2 && p.distance(target) < 0.01
     ));
 }
+
+#[test]
+fn dragging_a_clamped_flask_slides_it_along_the_rod_and_leaves_the_stand() -> Result<(), String> {
+    use reshiki::equipment::{builtin, placed, solve};
+    let mut doc = Document::default();
+    let scale = placed::world_per_mm(&doc, placed::DEFAULT_PT_PER_MM);
+    for (id, piece, at) in [
+        (1, "reshiki/stand", World::new(0., 0.)),
+        (2, "reshiki/clamp-3finger", World::new(200., -200.)),
+        (3, "reshiki/rbf-100-15", World::new(300., 100.)),
+    ] {
+        let d = builtin::find(piece).ok_or("piece")?;
+        doc.graphics.push(placed::graphic(id, d, at, scale));
+    }
+    let middle = |doc: &Document, piece: u64, name: &str| -> Option<[f64; 2]> {
+        let g = doc.graphics.iter().find(|g| g.id == piece)?;
+        let p = solve::ports(g).into_iter().find(|p| p.at.joint == name)?;
+        Some([
+            p.point[0] + p.dir[0] * p.length / 2.,
+            p.point[1] + p.dir[1] * p.length / 2.,
+        ])
+    };
+    for (moving, hold, target, onto) in [(2, "jaw", 3, "neck-grip"), (3, "boss", 1, "rod")] {
+        let (a, b) = (
+            middle(&doc, 2, hold).ok_or("hold")?,
+            middle(&doc, target, onto).ok_or("target")?,
+        );
+        let ids = solve::closure(&doc, &[moving]);
+        doc.translate(&ids, (b[0] - a[0]) as f32, (b[1] - a[1]) as f32);
+        solve::snap(&mut doc, &ids, 14., false).ok_or("snap")?;
+    }
+    assert_eq!(doc.seats.len(), 2);
+    let mut canvas = chain_canvas(&doc, ChainMode::Straight);
+    canvas.tool = Tool::Select;
+    let bounds = Rectangle::with_size(iced::Size::new(1200., 1200.));
+    let flask = doc.graphics.iter().find(|g| g.id == 3).ok_or("flask")?;
+    let start = canvas.camera.screen(placed::middle(flask), bounds);
+    let mut state = State::default();
+    canvas.update(
+        &mut state,
+        &Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+        bounds,
+        mouse::Cursor::Available(start),
+    );
+    let edit = canvas
+        .update(
+            &mut state,
+            &Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
+            bounds,
+            mouse::Cursor::Available(Point::new(start.x + 25., start.y - 40.)),
+        )
+        .and_then(|action| action.into_inner().0)
+        .ok_or("Missing move")?;
+    let Edit::Move(mut ids, dx, dy) = edit else {
+        return Err("Expected move".into());
+    };
+    ids.sort();
+    assert_eq!(ids, [2, 3], "the stand stays");
+    assert!(dx.abs() < 0.001 && (dy + 40.).abs() < 0.001, "{dx} {dy}");
+    Ok(())
+}

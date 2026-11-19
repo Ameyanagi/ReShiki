@@ -180,9 +180,11 @@ pub fn ports(g: &Graphic) -> Vec<Port> {
             length: 0.,
         })
         .collect();
-    out.extend(holds(d, &values).into_iter().map(|h| {
+    out.extend(holds(d, &values).into_iter().filter_map(|h| {
         let (from, to) = (t.apply(h.from), t.apply(h.to));
-        Port {
+        let length = len(sub(to, from));
+        // A part's motion can squash a hold to nothing; it holds nothing then.
+        (length.is_finite() && length > 0.).then(|| Port {
             at: at(&h.hold.id),
             kind: Kind::Hold(h.hold.kind, h.hold.diameter_mm.range()),
             gender: if h.hold.kind.held() {
@@ -193,8 +195,8 @@ pub fn ports(g: &Graphic) -> Vec<Port> {
             point: from,
             dir: normalize(sub(to, from)),
             mm: t.scale_factor(),
-            length: len(sub(to, from)),
-        }
+            length,
+        })
     }));
     out
 }
@@ -397,8 +399,9 @@ fn clips(doc: &mut Document, dropped: &[u64]) {
         .filter(|c| !used.contains(*c))
         .copied()
         .collect();
-    if !gone.is_empty() {
-        doc.graphics.retain(|g| !gone.contains(&g.id));
+    if (doc.graphics.iter()).any(|g| gone.contains(&g.id) && clip_size(g).is_some()) {
+        doc.graphics
+            .retain(|g| !gone.contains(&g.id) || clip_size(g).is_none());
         doc.prune_groups();
     }
 }
@@ -807,14 +810,24 @@ fn seat(doc: &mut Document, moving: &[u64], s: &Port, m: &Port, offer: &Offer) -
     snap
 }
 
-/// The ground lock: when the moving pieces include a grounded one, such as
-/// a stand, and the target's assembly does not, the target's side moves to
-/// it instead, so a stand stays where it is put. The pieces that move and
-/// the roles of the two ports; `None` when the target cannot take the scale.
-fn ground_lock(doc: &Document, ids: &[u64], s: Port, m: Port) -> Option<(Vec<u64>, Port, Port)> {
+/// The ground lock: when the moving pieces cannot move freely, because
+/// they include a grounded piece such as a stand or are `held` on one's rod,
+/// the target's side moves to them instead, so a stand stays where it is put
+/// and a clamp stays on its rod. The pieces that move and the roles of the
+/// two ports; `None` when the target is fixed too, or cannot take the scale.
+fn ground_lock(
+    doc: &Document,
+    ids: &[u64],
+    held: bool,
+    s: Port,
+    m: Port,
+) -> Option<(Vec<u64>, Port, Port)> {
     let fixed = assembly(doc, s.at.piece);
-    if !ids.iter().any(|id| grounded(doc, *id)) || fixed.iter().any(|id| grounded(doc, *id)) {
+    if !held && !ids.iter().any(|id| grounded(doc, *id)) {
         return Some((ids.to_vec(), s, m));
+    }
+    if fixed.iter().any(|id| grounded(doc, *id)) {
+        return None;
     }
     scalable(doc, &fixed, m.mm / s.mm).then(|| {
         let ids = doc.expand_groups(&fixed.into_iter().collect::<Vec<_>>());
@@ -853,6 +866,9 @@ pub fn snap(doc: &mut Document, ids: &[u64], reach: f32, any_angle: bool) -> Opt
         .cloned()
         .collect();
     release(doc, |s| cut.contains(s));
+    // Seats that crossed and still fit hold the moving pieces in place.
+    let held =
+        (doc.seats.iter()).any(|s| moving.contains(&s.a.piece) != moving.contains(&s.b.piece));
     let inner = free(doc, &moving, true);
     let outer = free(doc, &moving, false);
     // A joint that fits wins, then one an adapter joins, then the closest.
@@ -885,7 +901,7 @@ pub fn snap(doc: &mut Document, ids: &[u64], reach: f32, any_angle: bool) -> Opt
         }
     }
     let (_, _, s, m) = best?;
-    let (ids, s, m) = ground_lock(doc, ids, s.clone(), m.clone())?;
+    let (ids, s, m) = ground_lock(doc, ids, held, s.clone(), m.clone())?;
     let offer = if mates(&s, &m) {
         Offer::Seat
     } else if let Some((d, ..)) = adapter(&s, &m) {
@@ -923,6 +939,18 @@ fn clip_on(doc: &mut Document, id: u64, size: &str, at: Point, reach: f32) -> Op
         .min_by(|a, b| len(sub(a.1.point, p)).total_cmp(&len(sub(b.1.point, p))))?;
     doc.seats.get_mut(i)?.clip = Some(id);
     clips(doc, &[]);
+    // The clip joins its assembly's layer and place in the drawing order.
+    let members = assembly(doc, f.at.piece);
+    let layer = (doc.graphics.iter())
+        .find(|g| g.id == f.at.piece)
+        .map_or(-1, |g| g.layer);
+    if let Some(g) = doc.graphics.iter_mut().find(|g| g.id == id) {
+        g.layer = layer;
+    }
+    let end = (doc.graphics.iter())
+        .rposition(|g| members.contains(&g.id) && g.id != id)
+        .map_or(doc.graphics.len(), |i| i + 1);
+    place(doc, &[id], end);
     Some(Snap {
         at: f.point,
         target: f,
@@ -1016,7 +1044,7 @@ pub fn connect(doc: &mut Document, ids: &[u64], s: &JointRef, m: &JointRef) -> O
     if !scalable(doc, &pieces, s.mm / m.mm) {
         return None;
     }
-    let (moving, s, m) = ground_lock(doc, &moving, s, m)?;
+    let (moving, s, m) = ground_lock(doc, &moving, false, s, m)?;
     let offer = if mates(&s, &m) {
         Offer::Seat
     } else {

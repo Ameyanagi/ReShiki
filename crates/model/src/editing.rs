@@ -109,6 +109,12 @@ pub fn selection(doc: &Document, ids: &[u64]) -> Document {
         .retain(|r| r.ids().iter().all(|id| ids.contains(id)));
     part.groups
         .retain(|g| g.members.iter().all(|id| ids.contains(id)));
+    // A clip copied without both pieces of its seat comes as a loose clip.
+    for seat in &mut part.seats {
+        if !ids.contains(&seat.a.piece) || !ids.contains(&seat.b.piece) {
+            seat.clip = None;
+        }
+    }
     let removed: Vec<_> = doc.object_ids().filter(|id| !ids.contains(id)).collect();
     if !removed.is_empty() {
         part.delete_preserving_layout(&removed);

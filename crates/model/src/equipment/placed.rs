@@ -506,6 +506,7 @@ pub fn materialized(doc: &Document) -> std::borrow::Cow<'_, Document> {
     };
     let mut out = doc.clone();
     let mut next = doc.next_id();
+    let mut emitted: std::collections::BTreeMap<u64, Vec<u64>> = Default::default();
     out.graphics.clear();
     for g in &doc.graphics {
         if g.piece.is_none() {
@@ -547,15 +548,26 @@ pub fn materialized(doc: &Document) -> std::borrow::Cow<'_, Document> {
             members.push(next);
             next += 1;
         }
+        // An assembly is one group, written where its first piece is; a
+        // group that holds any of its pieces holds all of its curves.
+        if !members.is_empty() {
+            for id in super::solve::assembly(doc, g.id) {
+                emitted.insert(id, members.clone());
+            }
+        }
+        let curves = emitted.get(&g.id).cloned().unwrap_or_default();
         for group in out
             .groups
             .iter_mut()
             .filter(|group| group.members.contains(&g.id))
         {
             group.members.retain(|id| *id != g.id);
-            group.members.extend(&members);
+            for c in &curves {
+                if !group.members.contains(c) {
+                    group.members.push(*c);
+                }
+            }
         }
-        // An assembly is one group, written where its first piece is.
         if members.is_empty() {
             continue;
         }

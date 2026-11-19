@@ -5,7 +5,7 @@
  "revision": 1,
  "family": "stand",
  "variant": {
-  "rod_mm": "620"
+  "rod": "620 mm rod"
  },
  "names": {
   "en": "Lab stand",
