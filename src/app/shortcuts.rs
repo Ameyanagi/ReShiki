@@ -219,6 +219,10 @@ pub(super) fn key_message(key: &Key, modified: &Key, mods: Modifiers) -> Option<
         if mods.shift() && !mods.alt() && matches!(key, Key::Named(Named::ArrowRight)) {
             return Some(Message::Shortcut(Action::ReactionCopy));
         }
+        // ⌘+ by the typed character: Shift+; on a Japanese keyboard.
+        if mods.shift() && !mods.alt() && matches!(modified, Key::Character(m) if m == "+") {
+            return Some(Message::Zoom(1.25));
+        }
         let Key::Character(c) = key else {
             return matches!(key, Key::Named(Named::Enter)).then_some(Message::InlineText(
                 super::inline_text::Action::Finish(true),
@@ -259,8 +263,8 @@ pub(super) fn key_message(key: &Key, modified: &Key, mods: Modifiers) -> Option<
                 "d" => Message::Optimization(super::optimization::Action::Begin),
                 "e" => Message::Inspector(InspectorTab::Export),
                 "c" => Message::CopyImage,
-                // ⌘+ is ⌘⇧= on most keyboards.
-                "+" | "=" => Message::Zoom(1.25),
+                // ⌘+ is ⌘⇧= on US keyboards.
+                "=" => Message::Zoom(1.25),
                 _ => return None,
             });
         }
