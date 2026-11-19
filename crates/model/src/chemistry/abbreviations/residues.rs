@@ -312,7 +312,12 @@ impl<'a> Target<'a> {
                 .map(|id| {
                     self.atoms
                         .get(id)
-                        .map(|atom| (**atom).clone())
+                        .map(|atom| {
+                            // Atom maps label a reaction, not the residue.
+                            let mut atom = (**atom).clone();
+                            atom.map_num = 0;
+                            atom
+                        })
                         .ok_or_else(|| invalid("Missing residue atom"))
                 })
                 .collect::<Result<Vec<_>>>()?,
