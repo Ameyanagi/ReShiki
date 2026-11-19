@@ -958,6 +958,63 @@ fn a_half_bond_toward_the_viewer_is_drawn_over_its_own_ball() {
     );
 }
 
+#[test]
+fn an_atom_label_is_drawn_after_its_own_half_bonds() {
+    for style in [Style::BallStick, Style::Stick] {
+        let doc = lone(&[("O", [0., 0., 0.]), ("C", [1.2, 0., 1.])], &[], |m| {
+            m.style = style;
+            m.rotation = [1., 0., 0., 0.];
+            m.perspective = 0.;
+            m.labels = Labels::Heteroatoms;
+        });
+        let view = View::new(&doc, &doc.models[0]).unwrap();
+        let parts = primitives(&doc);
+        let (_, halves) = paint_order(&view, &parts);
+        let label = parts
+            .iter()
+            .position(|p| matches!(p, Primitive::Text { text, .. } if text == "O"))
+            .unwrap();
+        assert!(label > halves[&(0, 1)].order, "{style:?}");
+        assert!(
+            label < halves[&(1, 0)].order,
+            "{style:?}: C's half is nearer"
+        );
+    }
+}
+
+#[test]
+fn a_perspective_cap_uses_the_camera_direction_from_the_exit() {
+    let doc = lone(&[("O", [0., 0., 0.]), ("C", [1.2, 0., 1.])], &[], |m| {
+        m.style = Style::BallStick;
+        m.rotation = [1., 0., 0., 0.];
+        m.perspective = 1.;
+    });
+    let view = View::new(&doc, &doc.models[0]).unwrap();
+    let parts = primitives(&doc);
+    let (_, halves) = paint_order(&view, &parts);
+    let half = &halves[&(0, 1)];
+    let [a, _, _, d] = *half.corners.unwrap();
+    let axis = sub(view.rotated[1], view.rotated[0]);
+    let u = axis.map(|v| v / length(axis));
+    let ball = Style::BallStick.atom_radius("O");
+    let trim = (ball * ball - BOND_RADIUS * BOND_RADIUS).sqrt();
+    let exit = mix(view.rotated[0], view.rotated[1], trim / length(axis));
+    let [x, _, z] = exit;
+    let camera_z = view.camera - z;
+    let cosine = (-x * u[0] + camera_z * u[2]).abs() / x.hypot(camera_z);
+    let (center, factor) = view.project(exit);
+    let radius = BOND_RADIUS * view.scale * factor;
+    assert!(a.lerp(d, 0.5).distance(center) < 1e-3);
+    assert!((cosine - u[2].abs()).abs() > 0.05);
+    assert_eq!(half.cap.len(), 15);
+    let across = screen_sub(a, d);
+    for (k, p) in (1..).zip(half.cap) {
+        let angle = k as f32 * ARC_STEP - std::f32::consts::FRAC_PI_2;
+        let expected = center.offset(-radius * cosine * angle.cos(), across.y / 2. * angle.sin());
+        assert!(p.distance(expected) < 1e-3, "{p:?} vs {expected:?}");
+    }
+}
+
 struct PaintedHalf<'a> {
     order: usize,
     corners: Option<&'a [Point; 4]>,
@@ -1344,8 +1401,13 @@ fn draw_order_follows_depth_in_a_saturated_polycycle() {
                         let half = &halves[&axis.atoms];
                         if axis.delta > 0.2 {
                             assert!(
-                                matches!(&parts[half.order], Primitive::ShadedQuad { cap, outline: Some(_), .. } if !cap.is_empty()),
-                                "{case}: {:?} should be a capped quad",
+                                matches!(
+                                    &parts[half.order],
+                                    Primitive::ShadedPolygon { points, outline: Some(_), .. }
+                                        if matches!(points.as_slice(), [_, a, cap @ .., d, _]
+                                            if !cap.is_empty() && a.lerp(*d, 0.5).distance(axis.start) < 1e-3)
+                                ),
+                                "{case}: {:?} should be a capped polygon",
                                 axis.atoms
                             );
                         } else {
@@ -1462,7 +1524,12 @@ fn the_frame_holds_the_model_at_full_perspective() {
             for p in primitives(&doc) {
                 let held = match &p {
                     Primitive::Sphere { center, radius, .. } => inside(*center, *radius),
-                    Primitive::ShadedQuad { corners, .. } => corners.iter().all(|c| inside(*c, 0.)),
+                    Primitive::ShadedQuad { corners, cap, .. } => {
+                        corners.iter().chain(cap).all(|p| inside(*p, 0.))
+                    }
+                    Primitive::ShadedPolygon { points, .. } => {
+                        points.iter().all(|p| inside(*p, 0.))
+                    }
                     _ => true,
                 };
                 assert!(held, "{style:?} {step}: {p:?} outside {lo:?} {hi:?}");
@@ -1592,7 +1659,7 @@ fn styled(edit: impl Fn(&mut Model3d)) -> (Document, Vec<Primitive>) {
     (doc, parts)
 }
 
-/// Spheres, shaded half-bonds and wireframe lines.
+/// Spheres, shaded quads and wireframe lines.
 fn counts(parts: &[Primitive]) -> (usize, usize, usize) {
     let count = |f: fn(&Primitive) -> bool| parts.iter().filter(|p| f(p)).count();
     (
@@ -1603,11 +1670,54 @@ fn counts(parts: &[Primitive]) -> (usize, usize, usize) {
 }
 
 #[test]
+fn a_nearer_red_wireframe_half_crosses_over_a_blue_half() {
+    let mut doc = Document::default();
+    let atoms = [
+        ("O", [-1., 0., 0.]),
+        ("O", [1., 0., 2.]),
+        ("N", [-0.5, -1., 0.25]),
+        ("N", [-0.5, 3., 0.25]),
+    ]
+    .map(|(symbol, xyz)| Placed {
+        id: doc.add_atom(symbol, Point::new(xyz[0] * 30., -xyz[1] * 30.)),
+        xyz,
+    });
+    doc.add_bond(atoms[0].id, atoms[1].id, 1, "plain");
+    doc.add_bond(atoms[2].id, atoms[3].id, 1, "plain");
+    let mut model = Model3d::new(&doc, atoms.to_vec(), vec![], ForceField::default());
+    model.display = Display::ThreeD;
+    model.style = Style::Wireframe;
+    model.rotation = [1., 0., 0., 0.];
+    model.perspective = 0.;
+    doc.models.push(model);
+    let view = View::new(&doc, &doc.models[0]).unwrap();
+    let parts = primitives(&doc);
+    let wire = |s, o| {
+        let (a, e, ..) = view.half_bond(s, o).unwrap();
+        parts
+            .iter()
+            .enumerate()
+            .find_map(|(i, part)| match part {
+                Primitive::Wire {
+                    from, to, color, ..
+                } if *from == a && *to == e => Some((i, *color)),
+                _ => None,
+            })
+            .unwrap()
+    };
+    let (red, [r, _, b]) = wire(0, 1);
+    assert!(r > b);
+    let (blue, [r, _, b]) = wire(2, 3);
+    assert!(b > r);
+    assert!(red > blue, "the red half is nearer at the crossing");
+}
+
+#[test]
 fn each_style_draws_the_prototype_shapes() {
     // Stick: three front halves, five joint halves, and one disc.
     let (_, stick) = styled(|m| m.style = Style::Stick);
-    assert_eq!(counts(&stick), (1, 3, 0));
-    assert_eq!(polygons(&stick).len(), 5);
+    assert_eq!(counts(&stick), (1, 0, 0));
+    assert_eq!(polygons(&stick).len(), 8);
 
     let (doc, wire) = styled(|m| m.style = Style::Wireframe);
     assert_eq!(counts(&wire), (0, 0, 8));
@@ -2001,8 +2111,7 @@ fn both_halves_of_a_bond_meet_with_continuous_shading() {
     }
 }
 
-/// Stick halves: the shaded polygons, each with the projected centre of the
-/// atom it starts at.
+/// Stick halves, including those that fade in during the morph.
 fn polygons(parts: &[Primitive]) -> Vec<Vec<Point>> {
     parts
         .iter()
@@ -2084,39 +2193,49 @@ fn a_front_stick_half_leaves_its_joint_unclipped() {
             .count()
             .is_multiple_of(2)
     };
-    let part = &parts[half];
-    if let Primitive::ShadedPolygon { points, .. } = part {
-        panic!(
-            "front half is still a joint sector (covers probe: {}, paint index: {half}, next sector: {})",
-            covers_probe(points),
-            halves[&(0, 4)].order
-        );
-    }
-    let Primitive::ShadedQuad {
-        corners,
-        cap,
+    let Primitive::ShadedPolygon {
+        points,
         from,
         to,
+        outline: Some(outline),
         ..
-    } = part
+    } = &parts[half]
     else {
-        panic!("expected a capped quad, got {part:?}");
+        panic!("expected an outlined front polygon, got {:?}", parts[half]);
+    };
+    let [b, a, cap @ .., d, c] = points.as_slice() else {
+        panic!("expected four corners, got {points:?}");
     };
     assert!(!cap.is_empty());
-    assert!(corners[0].lerp(corners[3], 0.5).distance(center) < 1e-3);
-    assert!((corners[0].distance(corners[3]) / 2. - STICK_RADIUS * view.scale).abs() < 1e-3);
-    assert!(corners[1].lerp(corners[2], 0.5).x > from.lerp(*to, 0.5).x);
+    assert!(a.lerp(*d, 0.5).distance(center) < 1e-3);
+    assert!((a.distance(*d) / 2. - STICK_RADIUS * view.scale).abs() < 1e-3);
+    assert!(b.lerp(*c, 0.5).x > from.lerp(*to, 0.5).x);
+    let across = screen_sub(*a, *d);
+    assert!(
+        std::iter::once(a)
+            .chain(cap)
+            .zip(cap.iter().chain([d]))
+            .all(|(p, q)| screen_dot(screen_sub(*p, *q), across) > 0.)
+    );
     for o in [1, 2] {
         let joint = halves[&(0, o)].order;
         assert!(matches!(parts[joint], Primitive::ShadedPolygon { .. }));
         assert!(half > joint);
     }
-    let filled: Vec<_> = corners.iter().chain(cap).copied().collect();
-    assert!(covers_probe(&filled));
-    let Some(Primitive::Contour { polygons, .. }) = parts.first() else {
+    assert!(covers_probe(points));
+    let Some(Primitive::Contour {
+        polygons,
+        outline: rim,
+    }) = parts.first()
+    else {
         panic!("the sticks share a contour");
     };
-    assert!(polygons.contains(&filled));
+    let rim_points: Vec<_> = [*a, *b, *c, *d]
+        .into_iter()
+        .chain(cap.iter().rev().copied())
+        .collect();
+    assert!(polygons.contains(&rim_points));
+    assert_eq!(outline.width, rim.width);
 }
 
 /// Neighbouring sticks share one border on their bisector, so three bonds
@@ -2233,7 +2352,7 @@ fn stick_contour_frames_the_fills() {
     assert!(parts[1..].iter().all(|p| matches!(
         p,
         Primitive::ShadedPolygon { outline: Some(outline), .. }
-            if (outline.width, outline.alpha) == (line, 0.85)
+            if (outline.width, outline.alpha) == (line * 2., 0.85)
     )));
     assert_eq!(
         parts
@@ -2306,7 +2425,7 @@ fn stick_atoms_without_joints_are_discs() {
         m.rotation = [1., 0., 0., 0.];
     });
     let parts = primitives(&tilted);
-    assert_eq!((counts(&parts), polygons(&parts).len()), ((1, 1, 0), 1));
+    assert_eq!((counts(&parts), polygons(&parts).len()), ((1, 0, 0), 2));
 }
 
 /// Under full perspective each stick's round cap is as wide as the stick at
@@ -2365,8 +2484,10 @@ fn stick_hydrogens_fade_in_with_their_outline() {
     assert_eq!(faded.len(), 3);
     assert!(matches!(faded[0], Primitive::Contour { polygons, .. } if polygons.len() == 2));
     assert!(matches!(parts[0], Primitive::Contour { ref polygons, .. } if polygons.len() == 6));
+}
 
-    // A later morph shows the front hydrogen half, its disc, and their rim.
+#[test]
+fn a_fading_front_stick_half_shares_a_joint_without_a_disc() {
     let doc = lone(&[("C", [0., 0., 0.])], &[[0.8, 0., -1.]], |m| {
         m.style = Style::Stick;
         m.rotation = [1., 0., 0., 0.];
@@ -2382,17 +2503,20 @@ fn stick_hydrogens_fade_in_with_their_outline() {
         .collect();
     let [
         (rim_alpha, Primitive::Contour { polygons, .. }),
-        (disc_alpha, Primitive::Sphere { .. }),
-        (half_alpha, Primitive::ShadedQuad { corners, cap, .. }),
+        (half_alpha, Primitive::ShadedPolygon { points, .. }),
     ] = faded.as_slice()
     else {
-        panic!("expected the fading contour, disc, and front half: {faded:?}");
+        panic!("expected the fading contour and joint half: {faded:?}");
     };
     assert!(*rim_alpha > 0. && *rim_alpha < 1.);
-    assert_eq!((disc_alpha, half_alpha), (rim_alpha, rim_alpha));
-    let filled: Vec<_> = corners.iter().chain(cap).copied().collect();
-    assert_eq!(polygons.len(), 2);
-    assert!(polygons.contains(&filled));
+    assert_eq!(half_alpha, rim_alpha);
+    assert_eq!(polygons.as_slice(), std::slice::from_ref(points));
+    let mut view = View::new(&doc, &doc.models[0]).unwrap();
+    view.morph(&doc, &doc.models[0], *half_alpha);
+    let hydrogen = view.rotated[1];
+    assert!((view.rotated[0][2] - hydrogen[2]) / 4. > 0.05);
+    let center = view.project(hydrogen).0;
+    assert!(points.iter().any(|p| p.distance(center) < 1e-3));
 }
 
 #[test]

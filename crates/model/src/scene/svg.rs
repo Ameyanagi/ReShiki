@@ -416,14 +416,7 @@ fn push_svg(s: &mut String, drawing: Vec<Primitive>, frame: &Frame, halos: &mut 
                     ),
                     &stops,
                 );
-                s.push_str(&format!(
-                    "{defs}<polygon points=\"{}\" fill=\"url(#{id})\"/>",
-                    points
-                        .iter()
-                        .map(|p| format!("{},{}", p.x, p.y))
-                        .collect::<Vec<_>>()
-                        .join(" ")
-                ));
+                s.push_str(&defs);
                 if let (Some(_), [a, b, .., c, d]) = (outline, points.as_slice()) {
                     let paint = outline_paint(outline);
                     s.push_str(&format!(
@@ -431,6 +424,14 @@ fn push_svg(s: &mut String, drawing: Vec<Primitive>, frame: &Frame, halos: &mut 
                         b.x, b.y, a.x, a.y, c.x, c.y, d.x, d.y
                     ));
                 }
+                s.push_str(&format!(
+                    "<polygon points=\"{}\" fill=\"url(#{id})\"/>",
+                    points
+                        .iter()
+                        .map(|p| format!("{},{}", p.x, p.y))
+                        .collect::<Vec<_>>()
+                        .join(" ")
+                ));
             }
             Primitive::Contour { polygons, outline } => {
                 let path: String = polygons
@@ -701,14 +702,14 @@ mod tests {
                 Point::new(12., 8.),
             )
         };
-        let fill = concat!(
+        let defs = concat!(
             r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 8" width="12" height="8">"#,
             r#"<defs><linearGradient id="reshiki-3d-1" gradientUnits="userSpaceOnUse" x1="9" y1="2" x2="9" y2="6">"#,
             r#"<stop offset="0" stop-color="rgb(10,20,30)"/><stop offset="1" stop-color="rgb(40,50,60)"/>"#,
             r#"</linearGradient></defs>"#,
-            r#"<polygon points="9,2 2,2 1,4 2,6 9,6" fill="url(#reshiki-3d-1)"/>"#,
         );
-        assert_eq!(svg(None), format!("{fill}</svg>"));
+        let fill = r#"<polygon points="9,2 2,2 1,4 2,6 9,6" fill="url(#reshiki-3d-1)"/>"#;
+        assert_eq!(svg(None), format!("{defs}{fill}</svg>"));
         let sides = r#"<path d="M2 2 L9 2 M2 6 L9 6" fill="none" stroke="rgb(70,80,90)" stroke-opacity="0.75" stroke-width="0.5"/>"#;
         assert_eq!(
             svg(Some(Outline {
@@ -716,7 +717,7 @@ mod tests {
                 alpha: 0.75,
                 width: 0.5,
             })),
-            format!("{fill}{sides}</svg>")
+            format!("{defs}{sides}{fill}</svg>")
         );
     }
 }

@@ -76,7 +76,8 @@ pub enum Primitive {
     /// sides, corners 0–1 and 3–2.
     ShadedQuad {
         corners: [Point; 4],
-        /// The rounded start of a front half, from corner 3 to corner 0.
+        /// The rounded start of a front BallStick or Ellipsoids half,
+        /// from corner 3 to corner 0.
         /// Filled with the quad and stroked with the long sides when outlined.
         cap: Vec<Point>,
         from: Point,
@@ -84,15 +85,14 @@ pub enum Primitive {
         stops: Vec<(f32, [u8; 3])>,
         outline: Option<Outline>,
     },
-    /// A mitered 3D-model stick half filled with a gradient from `from` to `to`.
+    /// A 3D-model Stick half filled with a gradient from `from` to `to`.
     ShadedPolygon {
         points: Vec<Point>,
         from: Point,
         to: Point,
         stops: Vec<(f32, [u8; 3])>,
-        /// Strokes only the two long sides, the first and last edge of
-        /// `points`. Shared borders stay unstroked and the contour behind
-        /// supplies the joint's outer edge.
+        /// Strokes the two long sides beneath the fill, so only their outer
+        /// half shows. These are the first and last edges of `points`.
         outline: Option<Outline>,
     },
     /// The outer edge of the 3D-model sticks drawn after it: every polygon

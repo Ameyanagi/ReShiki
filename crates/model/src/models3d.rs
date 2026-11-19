@@ -1197,6 +1197,16 @@ impl View<'_> {
             f,
         )
     }
+    /// Unit direction from a point toward the viewer in the rotated frame.
+    fn eye(&self, point: [f32; 3]) -> [f32; 3] {
+        if self.perspective > 0. {
+            let eye = sub([0., 0., self.camera], point);
+            let distance = length(eye);
+            eye.map(|v| v / distance)
+        } else {
+            [0., 0., 1.]
+        }
+    }
     /// Index, projected centre and radius of each drawn ball.
     fn balls(&self) -> impl Iterator<Item = (usize, Point, f32)> + '_ {
         self.symbols
@@ -1994,8 +2004,11 @@ fn zip3<T: Copy>(a: [T; 3], b: [T; 3], f: impl Fn(T, T) -> T) -> [T; 3] {
 fn sub(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
     zip3(a, b, |a, b| a - b)
 }
+fn dot(a: [f32; 3], b: [f32; 3]) -> f32 {
+    a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+}
 fn length(p: [f32; 3]) -> f32 {
-    (p[0] * p[0] + p[1] * p[1] + p[2] * p[2]).sqrt()
+    dot(p, p).sqrt()
 }
 
 /// Centroid of the heavy atoms, or of all atoms without one.
@@ -2735,8 +2748,8 @@ impl View<'_> {
         Some((start, middle, radius * fs, radius * fm))
     }
 
-    /// Stick joints for halves drawn at or behind their atom's depth. Each
-    /// outline runs from the left edge round the atom to the right edge.
+    /// Stick joints for halves that share their atom's joint. Each outline
+    /// runs from the left edge round the atom to the right edge.
     /// Neighbours meet on their bisector, and a free side gets a round cap.
     /// Halves seen nearly end-on are left out.
     fn joints(
@@ -3059,6 +3072,8 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
     // Each half-bond sorts at its biased middle depth. A half drawn over
     // its atom starts at the ball's exit or, in Stick, at the atom centre.
     // Ties draw the half first.
+    let copy = |i| i >= view.originals;
+    let fades = |i| view.symbols.get(i) == Some(&"H") && grown < 1.;
     let mut items = vec![];
     for &(a, b) in &bonds {
         let (pa, pb) = (*rotated.get(a)?, *rotated.get(b)?);
@@ -3070,13 +3085,18 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
         }
     }
     let joints = if style == Style::Stick {
-        let front = |s: usize, z| rotated.get(s).is_some_and(|ps| z > ps[2]);
+        let front = |s: usize, o, z| {
+            rotated.get(s).is_some_and(|ps| z > ps[2])
+                && !((copy(s) || copy(o)) && (model.copy_opacity < 1. || grown < 1.))
+                && !fades(s)
+                && !fades(o)
+        };
         let joints = view.joints(items.iter().filter_map(|(z, _, _, item)| match *item {
-            Item::Bond(s, o) if !front(s, *z) => Some((s, o)),
+            Item::Bond(s, o) if !front(s, o, *z) => Some((s, o)),
             _ => None,
         }));
         items.retain(|(z, _, _, item)| match *item {
-            Item::Bond(s, o) => front(s, *z) || joints.contains_key(&(s, o)),
+            Item::Bond(s, o) => front(s, o, *z) || joints.contains_key(&(s, o)),
             _ => true,
         });
         joints
@@ -3106,13 +3126,22 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
                 Some((z, 1, z, Item::Atom(i)))
             }),
     );
-    items.extend(view.symbols.iter().enumerate().filter_map(|(i, symbol)| {
-        if view.shown.get(i) != Some(&true) || !model.labels.shows(symbol) {
-            return None;
+    if !model.labels.is_none() {
+        let mut label_depths: Vec<_> = rotated.iter().map(|p| p[2]).collect();
+        for (key, _, _, item) in &items {
+            if let Item::Bond(i, _) = *item {
+                let depth = label_depths.get_mut(i)?;
+                *depth = depth.max(*key);
+            }
         }
-        let z = rotated.get(i)?[2];
-        Some((z, 2, z, Item::Label(i)))
-    }));
+        items.extend(view.symbols.iter().enumerate().filter_map(|(i, symbol)| {
+            if view.shown.get(i) != Some(&true) || !model.labels.shows(symbol) {
+                return None;
+            }
+            let z = rotated.get(i)?[2];
+            Some((*label_depths.get(i)?, 2, z, Item::Label(i)))
+        }));
+    }
     items.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1.cmp(&b.1)));
     // Where each half-bond is drawn, so the first of a pair can reach under
     // the second.
@@ -3155,10 +3184,10 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
     let mut drawn = vec![];
     for (n, (_, _, z, item)) in items.into_iter().enumerate() {
         let (Item::Bond(i, _) | Item::Atom(i) | Item::Label(i) | Item::Crossing(i, _)) = item;
-        let fading = view.symbols.get(i) == Some(&"H") && grown < 1.;
+        let fading = fades(i);
         let ghost = match item {
-            Item::Bond(a, b) => a >= view.originals || b >= view.originals,
-            _ => i >= view.originals,
+            Item::Bond(a, b) => copy(a) || copy(b),
+            _ => copy(i),
         };
         let alpha =
             if ghost { model.copy_opacity } else { 1. } * if fading || ghost { grown } else { 1. };
@@ -3245,7 +3274,7 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
                 };
                 let (q, f) = view.project(*rotated.get(i)?);
                 let r = style.atom_radius(symbol) * view.scale * f;
-                if style == Style::Stick {
+                if style == Style::Stick && !glossy {
                     let steps = 48;
                     rim.push(
                         (0..steps)
@@ -3296,26 +3325,28 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
                     }
                 } else {
                     let ps = *rotated.get(s)?;
+                    let joint = joints.get(&(s, o));
                     let mut cap_depth = 0.;
-                    if matches!(style, Style::BallStick | Style::Ellipsoids | Style::Stick)
-                        && z > ps[2]
-                    {
+                    if z > ps[2] && joint.is_none() {
                         let direction = sub(*rotated.get(o)?, ps);
                         let distance = length(direction);
                         let u = direction.map(|v| v / distance);
-                        let radius = view.ellipsoids.get(s)?.as_ref().map_or_else(
-                            || style.atom_radius(symbol),
-                            |ellipsoid| ellipsoid.radius_along(u),
-                        );
+                        let ellipsoid = view
+                            .ellipsoids
+                            .get(s)?
+                            .unwrap_or_else(|| Ellipsoid::sphere(style.atom_radius(symbol)));
                         let stick = style.bond_radius();
-                        let t = (radius * radius - stick * stick).max(0.).sqrt();
-                        let (exit, factor) = view.project(zip3(ps, u, |p, d| p + d * t));
-                        if (e.x - exit.x) * (e.x - a.x) + (e.y - exit.y) * (e.y - a.y) <= 0. {
+                        let t = ellipsoid.stick_exit(u, view.eye(ps), stick);
+                        let exit = zip3(ps, u, |p, d| p + d * t);
+                        let (screen_exit, factor) = view.project(exit);
+                        if (e.x - screen_exit.x) * (e.x - a.x) + (e.y - screen_exit.y) * (e.y - a.y)
+                            <= 0.
+                        {
                             continue;
                         }
-                        a = exit;
+                        a = screen_exit;
                         start = stick * view.scale * factor;
-                        cap_depth = start * u[2].abs();
+                        cap_depth = start * dot(u, view.eye(exit)).abs();
                     }
                     let (dx, dy) = (e.x - a.x, e.y - a.y);
                     let len = dx.hypot(dy);
@@ -3356,22 +3387,26 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
                             &[(0., BLACK, 0.2), (0.4, WHITE, 0.3), (1., BLACK, 0.22)],
                         )
                     };
-                    if let Some(joint) = joints.get(&(s, o)) {
+                    let from = e.offset(nx * half, ny * half);
+                    let to = e.offset(-nx * half, -ny * half);
+                    if let Some(joint) = joint {
                         // From the middle round the joint and back, the
                         // left edge first.
                         let (lx, ly) = (-dy / len, dx / len);
                         let mut points = vec![end.offset(lx * width, ly * width)];
                         points.extend(joint);
                         points.push(end.offset(-lx * width, -ly * width));
-                        rim.push(points.clone());
+                        if !glossy {
+                            rim.push(points.clone());
+                        }
                         drawn.push((
                             alpha,
                             Primitive::ShadedPolygon {
                                 points,
-                                from: e.offset(nx * half, ny * half),
-                                to: e.offset(-nx * half, -ny * half),
+                                from,
+                                to,
                                 stops,
-                                outline: outline(line),
+                                outline: outline(line * 2.),
                             },
                         ));
                         continue;
@@ -3399,19 +3434,34 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
                         a.offset(-nx * start, -ny * start),
                     ];
                     if style == Style::Stick {
-                        rim.push(corners.iter().chain(&cap).copied().collect());
-                    }
-                    Primitive::ShadedQuad {
-                        corners,
-                        cap,
-                        from: e.offset(nx * half, ny * half),
-                        to: e.offset(-nx * half, -ny * half),
-                        stops,
-                        outline: match style {
-                            Style::BallStick => outline(line * 0.8),
-                            Style::Stick => outline(line),
-                            _ => None,
-                        },
+                        if !glossy {
+                            rim.push(corners.iter().chain(&cap).copied().collect());
+                        }
+                        let [a, b, c, d] = corners;
+                        let mut points = Vec::with_capacity(cap.len() + 4);
+                        points.extend([b, a]);
+                        points.extend(cap.into_iter().rev());
+                        points.extend([d, c]);
+                        Primitive::ShadedPolygon {
+                            points,
+                            from,
+                            to,
+                            stops,
+                            outline: outline(line * 2.),
+                        }
+                    } else {
+                        Primitive::ShadedQuad {
+                            corners,
+                            cap,
+                            from,
+                            to,
+                            stops,
+                            outline: if style == Style::BallStick {
+                                outline(line * 0.8)
+                            } else {
+                                None
+                            },
+                        }
                     }
                 }
             }

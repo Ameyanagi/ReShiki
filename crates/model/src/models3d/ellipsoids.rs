@@ -1,14 +1,10 @@
 //! ORTEP displacement ellipsoids in Cartesian ångström and their exact silhouettes.
-use super::{Adp, BLACK, Cell, View, WHITE, length, mix, rgb, rotate, sub};
+use super::{Adp, BLACK, Cell, View, WHITE, dot, length, mix, rgb, rotate, sub};
 use crate::{
     document::Point,
     scene::{EllipsoidSection, Outline, Primitive},
 };
 use serde::{Deserialize, Serialize};
-
-fn dot(a: [f32; 3], b: [f32; 3]) -> f32 {
-    a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
-}
 
 /// The probability enclosed by a three-dimensional displacement ellipsoid.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -104,6 +100,43 @@ impl Ellipsoid {
             })
             .sum::<f32>();
         magnitude / inverse.sqrt()
+    }
+
+    /// Where the first of a stick's two silhouette lines exits the ellipsoid.
+    /// `direction` and `eye` are unit vectors in the ellipsoid's frame.
+    pub fn stick_exit(&self, direction: [f32; 3], eye: [f32; 3], radius: f32) -> f32 {
+        if !self.anisotropic {
+            let [axis, ..] = self.axes;
+            let ball = length(axis);
+            return (ball * ball - radius * radius).max(0.).sqrt();
+        }
+
+        let [x, y, z] = direction;
+        let [ex, ey, ez] = eye;
+        let mut across = [y * ez - z * ey, z * ex - x * ez, x * ey - y * ex];
+        if length(across) < f32::EPSILON {
+            across = if z.abs() < 0.9 {
+                [-y, x, 0.]
+            } else {
+                [0., -z, y]
+            };
+        }
+        let width = radius / length(across);
+        let (mut a, mut b, mut c) = (0., 0., -1.);
+        for axis in self.axes {
+            let squared = dot(axis, axis);
+            let along = dot(axis, direction) / squared;
+            let offset = dot(axis, across) * width / squared;
+            a += along * along;
+            b += along * offset;
+            c += offset * offset;
+        }
+        // Both lines solve a*t² ± 2*b*t + c = 0. Use the smaller exit root.
+        let discriminant = b * b - a * c;
+        if discriminant < 0. {
+            return 0.;
+        }
+        ((discriminant.sqrt() - b.abs()) / a).max(0.)
     }
 
     /// Project the dual quadric, then recover the centre and shape of its conic.
