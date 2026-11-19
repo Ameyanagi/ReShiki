@@ -4205,6 +4205,8 @@ dependencies = [
  "roxmltree",
  "serde",
  "serde_json",
+ "sha2",
+ "svgtypes",
  "tempfile",
  "thiserror 2.0.20",
  "tiff",

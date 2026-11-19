@@ -317,6 +317,20 @@ const NAME: CommandSpec = CommandSpec {
     body: name_help,
 };
 
+const PIECES: CommandSpec = CommandSpec {
+    name: "pieces",
+    summary: "Check equipment piece files: reshiki --cli pieces check FILE…",
+    usage: "reshiki --cli pieces check FILE...",
+    options: &[],
+    tools: &[],
+    operand: Some(Operand {
+        name: "FILE",
+        help: "One or more .reshiki-piece files to check.",
+        sets: None,
+    }),
+    body: pieces_help,
+};
+
 /// The commands whose flags another command rejects by name ("X does not
 /// take FLAG"); other flags are unknown options to the commands without them.
 pub(crate) const FILE_COMMANDS: &[CommandSpec] = &[CONVERT, RENDER, COMPOSE, ANALYZE, PREDICT_NMR];
@@ -429,6 +443,7 @@ pub(crate) const COMMANDS: &[CommandSpec] = &[
     ANALYZE,
     PREDICT_NMR,
     NAME,
+    PIECES,
     INFO,
     TOOLS,
     SCHEMA,
@@ -803,6 +818,18 @@ compose fills in. It is printed as one JSON line without the experimental
 label, so it can be saved and used as a schema file.
 ";
     format!("Usage: {}\n\n{body}", SCHEMA.usage)
+}
+
+fn pieces_help() -> String {
+    let body = "\
+Checks lab equipment piece files (.reshiki-piece): the format, the limits,
+every reference between shapes, joints, parts and parameters, and that each
+joint sits on the rim of its opening. Prints one JSON line,
+{\"pieces\": [{\"file\", \"ok\", \"id\", \"revision\", \"hash\"} or
+{\"file\", \"ok\": false, \"error\"}]}, and exits 1 when any file fails. The
+hash is the piece's content identity. Nothing is installed or changed.
+";
+    format!("Usage: {}\n\n{body}", PIECES.usage)
 }
 
 fn skill_help() -> String {

@@ -1,0 +1,9 @@
+Experimental: ReShiki's agent tools, schemas and results may change between releases.
+Usage: reshiki --cli pieces check FILE...
+
+Checks lab equipment piece files (.reshiki-piece): the format, the limits,
+every reference between shapes, joints, parts and parameters, and that each
+joint sits on the rim of its opening. Prints one JSON line,
+{"pieces": [{"file", "ok", "id", "revision", "hash"} or
+{"file", "ok": false, "error"}]}, and exits 1 when any file fails. The
+hash is the piece's content identity. Nothing is installed or changed.

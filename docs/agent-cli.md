@@ -30,6 +30,7 @@ has every help text as the program prints it.
 | [analyze](#analyze)         | Print molecular properties as one JSON line                       |
 | [predict-nmr](#predict-nmr) | Print predicted NMR shifts as one JSON line                       |
 | [name](#name)               | Print the systematic name of a structure                          |
+| [pieces](#pieces)           | Check lab equipment piece files                                   |
 | [info](#info)               | Print versions, limits and formats as one JSON line               |
 | [tools](#tools)             | Print the agent tool catalog as one JSON line                     |
 | [schema](#schema)           | Print the Proposal JSON Schema                                    |
@@ -559,6 +560,26 @@ This is `name --smiles 'CC(=NN)C' --json`, shown on several lines:
 | `detail`       | One sentence that explains the status                                                                      |
 | `aliases`      | Curated alias names for this exact graph; an empty array when no catalog entry matches                     |
 | `alternatives` | Other generated names independently reconstructed to this exact graph; otherwise an empty array            |
+
+## pieces
+
+```text
+reshiki --cli pieces check FILE...
+```
+
+`reshiki --cli help pieces` prints the [full help](agent-reference.md#reshiki---cli-pieces).
+
+Checks one or more lab equipment piece files (`.reshiki-piece`): the format,
+the limits, every reference between shapes, joints, parts and parameters, and
+that each joint sits on the rim of its opening. Prints one JSON line with an
+entry per file, `{"file", "ok", "id", "revision", "hash"}` or
+`{"file", "ok": false, "error"}`, and exits 1 when any file fails. `hash` is
+the piece's content identity. Nothing is installed or changed. The format is
+described in [presets/pieces/README.md](../presets/pieces/README.md).
+
+```sh
+reshiki --cli pieces check my-flask.reshiki-piece
+```
 
 ## info
 

@@ -57,6 +57,7 @@ compose      Lay out an assistant Proposal (JSON) and write it as a file
 analyze      Print molecular properties as one JSON line
 predict-nmr  Print predicted NMR shifts as one JSON line
 name         Print the systematic name of a structure
+pieces       Check equipment piece files: reshiki --cli pieces check FILE…
 info         Print versions, limits and formats as one JSON line
 tools        Print the agent tool catalog as one JSON line
 schema       Print a JSON Schema: reshiki --cli schema proposal

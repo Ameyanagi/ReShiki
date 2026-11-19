@@ -39,6 +39,7 @@ pub mod depiction;
 pub mod depth_appearance;
 pub mod document;
 pub mod editing;
+pub mod equipment;
 pub mod erasing;
 pub mod fischer;
 pub mod generic;

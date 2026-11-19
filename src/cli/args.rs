@@ -31,6 +31,8 @@ pub(crate) enum Command {
     Analyze(Input),
     PredictNmr(PredictNmr),
     Name(Name),
+    /// `pieces check FILE…`.
+    Pieces(Vec<PathBuf>),
 }
 
 /// A schema the CLI can print without a tool host.
@@ -165,6 +167,7 @@ pub(crate) fn parse(name: &OsStr, rest: &[OsString]) -> Result<Command, String> 
         "tools" => Err("tools takes no arguments".into()),
         "schema" => schema(&options(spec, rest)?),
         "skill" => skill(&options(spec, rest)?),
+        "pieces" => pieces(rest),
         "convert" => convert(&options(spec, rest)?),
         "render" => render(&options(spec, rest)?),
         "compose" => compose(&options(spec, rest)?),
@@ -196,6 +199,34 @@ pub(crate) fn parse(name: &OsStr, rest: &[OsString]) -> Result<Command, String> 
         }
         _ => Err(unknown_command(&lossy)),
     }
+}
+
+/// `pieces check FILE…`: a subcommand, then one or more files.
+fn pieces(rest: &[OsString]) -> Result<Command, String> {
+    let Some((sub, files)) = rest.split_first() else {
+        return Err("pieces needs a subcommand: pieces check FILE…".into());
+    };
+    if sub != "check" {
+        return Err(format!(
+            "unknown pieces subcommand `{}`; the subcommand is check",
+            sub.to_string_lossy()
+        ));
+    }
+    let mut paths = Vec::new();
+    let mut options_ended = false;
+    for token in files {
+        if !options_ended && token == "--" {
+            options_ended = true;
+        } else if !options_ended && token.to_string_lossy().starts_with('-') {
+            return Err(format!("unknown option `{}`", token.to_string_lossy()));
+        } else {
+            paths.push(PathBuf::from(token));
+        }
+    }
+    if paths.is_empty() {
+        return Err("pieces check needs at least one FILE".into());
+    }
+    Ok(Command::Pieces(paths))
 }
 
 /// The usage message for a command name that is not in the table.

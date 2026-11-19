@@ -2208,6 +2208,10 @@ const HELP_GOLDENS: &[(&str, &str)] = &[
         include_str!("../../tests/fixtures/cli-help/name.txt"),
     ),
     (
+        "pieces",
+        include_str!("../../tests/fixtures/cli-help/pieces.txt"),
+    ),
+    (
         "info",
         include_str!("../../tests/fixtures/cli-help/info.txt"),
     ),
@@ -2385,5 +2389,49 @@ async fn pictures_convert_from_the_editable_drawing_inside_them() {
                 }
             }
         }
+    }
+}
+
+#[tokio::test]
+async fn pieces_check_reports_each_file_and_fails_on_any_error() {
+    let good = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/crates/model/src/equipment/fixtures/rbf-300-29.reshiki-piece"
+    );
+    let folder = tempfile::tempdir().unwrap();
+    let bad = folder.path().join("bad.reshiki-piece");
+    std::fs::write(&bad, r#"{"format": "theme"}"#).unwrap();
+    let (code, out, err) = call(&["pieces", "check", good]).await;
+    assert_eq!((code, err.as_str()), (SUCCESS, ""));
+    let value: Value = serde_json::from_str(&out).unwrap();
+    assert_eq!(value["pieces"][0]["ok"], true);
+    assert_eq!(value["pieces"][0]["id"], "reshiki/rbf-300-29");
+    assert_eq!(value["pieces"][0]["hash"].as_str().unwrap().len(), 64);
+    let (code, out, err) = call(&["pieces", "check", good, bad.to_str().unwrap()]).await;
+    assert_eq!(code, FAILURE);
+    assert_eq!(err, "reshiki: error: 1 of 2 piece files did not pass\n");
+    let value: Value = serde_json::from_str(&out).unwrap();
+    assert_eq!(
+        value["pieces"][1]["error"],
+        "This is not a ReShiki piece file."
+    );
+    for (tokens, message) in [
+        (
+            &["pieces"][..],
+            "pieces needs a subcommand: pieces check FILE…",
+        ),
+        (
+            &["pieces", "list"],
+            "unknown pieces subcommand `list`; the subcommand is check",
+        ),
+        (&["pieces", "check"], "pieces check needs at least one FILE"),
+        (
+            &["pieces", "check", "--json", good],
+            "unknown option `--json`",
+        ),
+    ] {
+        let (code, out, err) = call(tokens).await;
+        assert_eq!((code, out.as_str()), (USAGE, ""), "{tokens:?}");
+        assert_eq!(err, format!("{USAGE_PREFIX}{message}\n"));
     }
 }
