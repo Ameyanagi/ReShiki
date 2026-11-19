@@ -1674,6 +1674,14 @@ fn bond_corner_drawings() -> Vec<(&'static str, Document)> {
     let over = doc.add_atom("C", Point::new(120., -20.));
     let under = doc.add_atom("N", Point::new(130., 50.));
     doc.add_bond(over, under, 1, "plain");
+    // A right angle between two colors. (A corner sharper than 29° is
+    // left out: its outline also narrows the inner edge, which a stroke
+    // keeps at full width.)
+    let right =
+        [(180., 40.), (220., 40.), (180., 80.)].map(|(x, y)| doc.add_atom("C", Point::new(x, y)));
+    doc.add_bond(right[1], right[0], 1, "plain");
+    doc.add_bond(right[0], right[2], 1, "plain");
+    doc.bonds.last_mut().unwrap().color = crate::palette::Color::Custom([0, 0, 200]);
     drawings.push(("ring-chain-crossing", doc));
     drawings
 }
@@ -1701,10 +1709,32 @@ fn vector_bond_lines_paint_the_same_ink_as_the_filled_outlines() {
         assert_eq!(size, stroked_size, "{name}: the bounds are the outlines'");
         let (mut ink, mut differ, mut total) = (0, 0, 0.);
         for (a, b) in before.pixels().iter().zip(after.pixels()) {
-            let (a, b) = (a.alpha(), b.alpha());
-            ink += usize::from(a.max(b) > 0);
-            differ += usize::from(a.abs_diff(b) > 127);
-            total += f64::from(a.abs_diff(b)) / 255.;
+            // Colors too, so a corner painted in the neighbour's color counts.
+            let channels = |c: &resvg::tiny_skia::PremultipliedColorU8| {
+                [c.red(), c.green(), c.blue(), c.alpha()]
+            };
+            let change = channels(a)
+                .into_iter()
+                .zip(channels(b))
+                .map(|(a, b)| a.abs_diff(b))
+                .max()
+                .unwrap_or_default();
+            ink += usize::from(a.alpha().max(b.alpha()) > 0);
+            if change > 127 {
+                let i = (a as *const _ as usize - before.pixels().as_ptr() as usize) / 4;
+                let (w, _) = size;
+                if differ % 40 == 0 {
+                    println!(
+                        "DBG {} {} {:?} {:?}",
+                        i as u32 % w,
+                        i as u32 / w,
+                        channels(a),
+                        channels(b)
+                    );
+                }
+            }
+            differ += usize::from(change > 127);
+            total += f64::from(change) / 255.;
         }
         println!(
             "{name}: {ink} ink pixels, {differ} differ by half, {total:.1} pixels of ink moved"

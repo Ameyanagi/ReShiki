@@ -2586,6 +2586,20 @@ struct Joined {
     lines: std::collections::BTreeMap<(crate::palette::Color, u32), Vec<BondLine>>,
 }
 fn push_joined_outlines(out: &mut Vec<Primitive>, joined: Joined) {
+    // Fills after lines: a butt end overlaps its neighbour's corner, which
+    // the neighbour's own fill restores where the colors differ.
+    for ((color, width), lines) in joined.lines {
+        out.extend(
+            bond_runs(lines)
+                .into_iter()
+                .map(|(points, closed)| Primitive::Polyline {
+                    points,
+                    closed,
+                    width: f32::from_bits(width),
+                    color,
+                }),
+        );
+    }
     out.extend(
         joined
             .fills
@@ -2606,18 +2620,6 @@ fn push_joined_outlines(out: &mut Vec<Primitive>, joined: Joined) {
                 )
             }),
     );
-    for ((color, width), lines) in joined.lines {
-        out.extend(
-            bond_runs(lines)
-                .into_iter()
-                .map(|(points, closed)| Primitive::Polyline {
-                    points,
-                    closed,
-                    width: f32::from_bits(width),
-                    color,
-                }),
-        );
-    }
 }
 /// A plain bond line in vector export, with whether each end continues
 /// into another line.
@@ -3364,7 +3366,8 @@ fn continues(scene: BondScene<'_, '_>, b: &Bond, id: u64) -> bool {
 }
 /// A plain bond's joined outline from `first` to `last` as a butt-ended
 /// line, plus the part of the outline's mitre that end leaves open where the
-/// line cannot continue into its neighbour's (a wedge, or another color).
+/// line cannot continue into its neighbour's (a wedge, another color, or a
+/// shortened corner), and the whole corner where another color meets.
 fn stroked_outline(
     scene: BondScene<'_, '_>,
     b: &Bond,
@@ -3378,34 +3381,39 @@ fn stroked_outline(
         color: b.color,
     }];
     let outline = scene.joins.polygon(b, first, last);
+    let overlap = scene.style.line_width() / 4.;
     for (id, at, toward) in [(b.a, first, last), (b.b, last, first)] {
-        if continues(scene, b, id) && scene.doc.atom(id).is_some_and(|a| a.position == at) {
+        let joined = scene.doc.atom(id).is_some_and(|a| a.position == at);
+        let mixed = joined && scene.joins.mixed(b, id);
+        if joined && continues(scene, b, id) && !mixed {
             continue;
         }
-        // The outline behind the butt end, reaching a little into the line
-        // so the two never meet edge to edge in a hairline seam.
         let length = at.distance(toward).max(0.001);
-        let depth = |p: Point| {
+        let depth = |p: &Point| {
             ((p.x - at.x) * (toward.x - at.x) + (p.y - at.y) * (toward.y - at.y)) / length
-                - scene.style.line_width() / 4.
         };
-        if outline
-            .iter()
-            .all(|p| depth(*p) > -scene.style.line_width() / 4. - 0.001)
-        {
+        let corners = outline.iter().map(depth).filter(|d| *d < length / 2.);
+        // Where another color meets, the whole corner, so this color's part
+        // stays its own; otherwise the outline behind the butt end. Either
+        // reaches a little into the line, so no hairline seam shows.
+        let reach = if mixed {
+            corners.fold(0., f32::max)
+        } else if corners.fold(0., f32::min) < -0.001 {
+            0.
+        } else {
             continue;
-        }
-        let mut open = vec![];
-        for (&p, &q) in outline.iter().zip(outline.iter().cycle().skip(1)) {
-            let (dp, dq) = (depth(p), depth(q));
+        } + overlap;
+        let mut corner = vec![];
+        for (p, q) in outline.iter().zip(outline.iter().cycle().skip(1)) {
+            let (dp, dq) = (depth(p) - reach, depth(q) - reach);
             if dp < 0. {
-                open.push(p);
+                corner.push(*p);
             }
             if (dp < 0.) != (dq < 0.) {
-                open.push(p.lerp(q, dp / (dp - dq)));
+                corner.push(p.lerp(*q, dp / (dp - dq)));
             }
         }
-        parts.push(Primitive::Polygon(open));
+        parts.push(Primitive::Polygon(corner));
     }
     parts
 }

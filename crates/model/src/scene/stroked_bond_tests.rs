@@ -289,9 +289,39 @@ fn svg_writes_bond_lines_as_butt_mitred_strokes_of_the_line_width() {
     assert!(svg.contains("Z\""), "The ring path closes");
 }
 
+/// Two plain bonds meeting at 20°, a corner the outline's mitre shortens.
+fn sharp_corner() -> Document {
+    let half = 10f32.to_radians();
+    drawing(
+        &[
+            (42. * half.cos(), 42. * half.sin()),
+            (0., 0.),
+            (42. * half.cos(), -42. * half.sin()),
+        ],
+        &[(0, 1, 1, "plain"), (1, 2, 1, "plain")],
+    )
+}
+
+#[test]
+fn a_shortened_sharp_corner_keeps_its_filled_tip() {
+    let doc = sharp_corner();
+    let vector = vector_primitives(&doc);
+    assert_eq!(
+        lines(&vector).len(),
+        2,
+        "No bevelled stroke join: {vector:?}"
+    );
+    let tip = fills(&vector);
+    assert_eq!(tip.len(), 2, "Each line keeps its half of the tip");
+    let reach = tip.iter().flatten().map(|p| p.x).fold(0., f32::min);
+    let width = doc.drawing_style.line_width();
+    assert!((reach + 2. * width).abs() < 0.01, "{reach} vs {width}");
+}
+
 #[test]
 fn stroked_bounds_match_the_filled_outlines() {
     for doc in [
+        sharp_corner(),
         ring(6, |_| 1),
         ring(5, |_| 1),
         drawing(

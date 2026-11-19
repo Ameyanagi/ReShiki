@@ -347,9 +347,14 @@ impl Joins<'_> {
         let t = cross(subtract(origin, point), v) / cross(u, v);
         Some((cap, point.offset(u.x * t, u.y * t)))
     }
+    /// Whether another bond meeting `b` at atom `id` has another color.
+    pub(crate) fn mixed(&self, b: &Bond, id: u64) -> bool {
+        self.neighbors(b, id).any(|adj| adj.color != b.color)
+    }
     /// The bond whose outline continues `b`'s through unlabelled atom `id`
     /// around their outer corner, a gap of at least a half turn that butt
-    /// ends leave open, so their lines join there with a mitre.
+    /// ends leave open, so their lines join there with a mitre. A corner
+    /// whose mitre `cap` shortens (very sharp, or on short bonds) has none.
     pub(crate) fn across_open_side(&self, b: &Bond, id: u64) -> Option<&Bond> {
         let (atom, visible) = self.atoms.get(&id)?;
         let point = atom.position;
@@ -369,9 +374,12 @@ impl Joins<'_> {
             }
         }
         let (gap, adj) = gaps.into_iter().max_by(|a, b| a.0.total_cmp(&b.0))?;
-        (!visible && gap.is_finite() && gap > std::f32::consts::PI - 0.001)
-            .then_some(adj)
-            .flatten()
+        let adj = adj.filter(|_| !visible && gap > std::f32::consts::PI - 0.001)?;
+        // The mitre tip's distance from the atom, and cap's limit on it.
+        let width = half_width(self.doc, b);
+        let tip = width / ((std::f32::consts::TAU - gap) / 2.).sin();
+        let adjacent = point.distance(self.atoms.get(&other(adj, id))?.0.position);
+        (tip <= (4. * width).min(0.45 * u.distance(Point::default()).min(adjacent))).then_some(adj)
     }
     pub fn polygon(&self, b: &Bond, start: Point, end: Point) -> Vec<Point> {
         let [al, ar] = self.cap(b, b.a, start, end);
