@@ -249,3 +249,66 @@ fn updating_to_a_newer_revision_is_one_undo_step_and_keeps_the_seat() {
     let _ = app.update(Message::Undo);
     assert_eq!(app.tab.doc, before);
 }
+
+/// Where a click places `id` so that the middle of its hold `name` is at `at`.
+fn click_for(app: &App, id: &str, name: &str, at: [f64; 2]) -> Point {
+    let scale = placed::world_per_mm(&app.tab.doc, placed::DEFAULT_PT_PER_MM);
+    let probe = placed::graphic(0, builtin::find(id).unwrap(), Point::default(), scale);
+    let p = solve::ports(&probe)
+        .into_iter()
+        .find(|p| p.at.joint == name)
+        .unwrap();
+    let c = [
+        p.point[0] + p.dir[0] * p.length / 2.,
+        p.point[1] + p.dir[1] * p.length / 2.,
+    ];
+    Point::new((at[0] - c[0]) as f32, (at[1] - c[1]) as f32)
+}
+
+#[test]
+fn a_clamp_placed_by_the_rod_mounts_on_it_in_one_undo_step() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let _ = app.update(Message::Equipment(Action::Arm(k("reshiki/stand"))));
+    let _ = app.update(Message::Canvas(Edit::Piece(Point::new(0., 0.))));
+    let rod = solve::ports(&app.tab.doc.graphics[0]).remove(0);
+    let at = [
+        rod.point[0] + 3.,
+        rod.point[1] + rod.dir[1] * rod.length / 2.,
+    ];
+    let _ = app.update(Message::Equipment(Action::Arm(k("reshiki/clamp-3finger"))));
+    let before = app.tab.doc.clone();
+    let click = click_for(&app, "reshiki/clamp-3finger", "boss", at);
+    let _ = app.update(Message::Canvas(Edit::Piece(click)));
+    assert_eq!(app.tab.doc.seats.len(), 1, "{}", app.status);
+    assert_eq!(app.status, "Mounted the clamp on the stand rod");
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+}
+
+#[test]
+fn add_clips_clips_the_selected_assembly_in_one_undo_step() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let neck = flask_neck(&mut app, Point::new(200., 300.));
+    let _ = app.update(Message::Equipment(Action::Arm(k("reshiki/stopper-15"))));
+    let scale = placed::world_per_mm(&app.tab.doc, placed::DEFAULT_PT_PER_MM);
+    let probe = placed::graphic(
+        0,
+        builtin::find("reshiki/stopper-15").unwrap(),
+        Point::default(),
+        scale,
+    );
+    let shoulder = solve::ports(&probe)[0].point;
+    let click = Point::new(neck.x - shoulder[0] as f32, neck.y - shoulder[1] as f32);
+    let _ = app.update(Message::Canvas(Edit::Piece(click)));
+    assert_eq!(app.tab.doc.seats.len(), 1, "{}", app.status);
+    let _ = app.update(Message::Tool(Tool::Select));
+    let before = app.tab.doc.clone();
+    let _ = app.update(Message::Equipment(Action::AddClips));
+    assert_eq!(app.status, "Added 1 joint clip");
+    let clip = app.tab.doc.seats[0].clip.expect("clipped");
+    assert!(app.tab.selected.contains(&clip));
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+}

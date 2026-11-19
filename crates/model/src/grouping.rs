@@ -84,8 +84,12 @@ impl Document {
             }
             // Seated pieces are picked as one assembly, like a group.
             for seat in &self.seats {
-                if selected.contains(&seat.a.piece) || selected.contains(&seat.b.piece) {
-                    selected.extend([seat.a.piece, seat.b.piece]);
+                if [Some(seat.a.piece), Some(seat.b.piece), seat.clip]
+                    .iter()
+                    .flatten()
+                    .any(|id| selected.contains(id))
+                {
+                    selected.extend([seat.a.piece, seat.b.piece].into_iter().chain(seat.clip));
                 }
             }
             if count == selected.len() {

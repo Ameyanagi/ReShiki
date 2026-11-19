@@ -591,6 +591,9 @@ pub(crate) fn remap_ids(doc: &mut Document, mapping: &HashMap<u64, u64>) -> Opti
     for seat in seats {
         map(&mut seat.a.piece)?;
         map(&mut seat.b.piece)?;
+        if let Some(clip) = &mut seat.clip {
+            map(clip)?;
+        }
     }
     for g in groups {
         map(&mut g.id)?;

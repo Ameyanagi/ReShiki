@@ -373,10 +373,82 @@ pub(crate) fn parts(g: &Graphic) -> Vec<Part> {
         .collect()
 }
 
+/// The pieces painted with `id` as one group: its assembly in drawing
+/// order, when it has two or more pieces.
+fn group(doc: &Document, id: u64) -> Vec<&Graphic> {
+    if doc.seats.is_empty() {
+        return Vec::new();
+    }
+    let members = super::solve::assembly(doc, id);
+    if members.len() < 2 {
+        return Vec::new();
+    }
+    (doc.graphics.iter())
+        .filter(|g| g.piece.is_some() && members.contains(&g.id))
+        .collect()
+}
+
+/// An assembly's paint plan: its pieces' plans merged in paint order, each
+/// path owned by the index of its piece in `members`.
+fn group_plan(members: &[&Graphic]) -> Vec<PlanPath> {
+    let mut out: Vec<PlanPath> = Vec::new();
+    for (i, g) in members.iter().enumerate() {
+        out.extend(plan(g).iter().cloned().map(|mut p| {
+            p.owner = i;
+            p
+        }));
+    }
+    super::plan::order(&mut out);
+    out
+}
+
+/// What a piece paints on the drawing's canvas. An assembly paints all its
+/// pieces at its first piece's place, layer by layer across them, so a
+/// clamp's back fingers pass behind the neck and its front finger in front;
+/// its other pieces paint nothing of their own.
+pub fn painted(g: &Graphic, doc: &Document) -> Vec<Primitive> {
+    let members = group(doc, g.id);
+    match members.first() {
+        None => primitives(g, doc.canvas_theme),
+        Some(first) if first.id == g.id => paint(&group_plan(&members), &members, doc.canvas_theme),
+        Some(_) => Vec::new(),
+    }
+}
+
+/// Whether `id` is the piece seen at `p`, within `r`, where the pieces of its
+/// assembly overlap: the glass between a clamp's fingers is the flask's.
+/// True outside an assembly, or where none of its paths is hit.
+pub fn on_top(doc: &Document, id: u64, p: Point, r: f32) -> bool {
+    let members = group(doc, id);
+    if members.is_empty() {
+        return true;
+    }
+    let q = [f64::from(p.x), f64::from(p.y)];
+    let pt = f64::from(doc.drawing_style.points_per_world());
+    let hits = |path: &PlanPath| {
+        let outline = super::geometry::flatten(&path.path);
+        let (width, filled) = match path.ink {
+            Ink::Fill => (0., true),
+            Ink::Stroke(w) => (width_pt(w, path.pass), false),
+            Ink::FillStroke(w) => (width_pt(w, path.pass), true),
+        };
+        (filled && super::geometry::inside(q, &outline))
+            || super::geometry::distance_to_outline(q, &outline)
+                <= f64::from(r) + f64::from(width) / pt / 2.
+    };
+    (group_plan(&members).iter().rev())
+        .find(|path| hits(path))
+        .is_none_or(|path| members.get(path.owner).is_some_and(|g| g.id == id))
+}
+
 /// What the piece paints on `theme`, in light-canvas colours like every other primitive.
 pub fn primitives(g: &Graphic, theme: CanvasTheme) -> Vec<Primitive> {
-    plan(g)
-        .iter()
+    paint(&plan(g), &[g], theme)
+}
+
+/// Paint `plan`, whose owners index `owners`.
+fn paint(plan: &[PlanPath], owners: &[&Graphic], theme: CanvasTheme) -> Vec<Primitive> {
+    plan.iter()
         .map(|p| {
             let fill = fill_rgb(p.material, p.color, theme);
             let stroke = if p.material == Material::Liquid {
@@ -405,7 +477,8 @@ pub fn primitives(g: &Graphic, theme: CanvasTheme) -> Vec<Primitive> {
                 _ => None,
             };
             // A see-through piece, such as the placement ghost.
-            let alpha = match (alpha, g.style.effects.opacity) {
+            let opacity = owners.get(p.owner).and_then(|g| g.style.effects.opacity);
+            let alpha = match (alpha, opacity) {
                 (Some(a), Some(b)) => Some(a * b),
                 (a, b) => a.or(b),
             };
@@ -420,8 +493,9 @@ pub fn primitives(g: &Graphic, theme: CanvasTheme) -> Vec<Primitive> {
         .collect()
 }
 
-/// The drawing as ChemDraw can keep it: each piece becomes a group of
-/// filled and stroked curves in paint order, in the colours the canvas shows.
+/// The drawing as ChemDraw can keep it: each piece, or each assembly as a
+/// whole, becomes a group of filled and stroked curves in paint order, in
+/// the colours the canvas shows.
 pub fn materialized(doc: &Document) -> std::borrow::Cow<'_, Document> {
     if !doc.graphics.iter().any(|g| g.piece.is_some()) {
         return std::borrow::Cow::Borrowed(doc);
@@ -439,7 +513,7 @@ pub fn materialized(doc: &Document) -> std::borrow::Cow<'_, Document> {
             continue;
         }
         let mut members = Vec::new();
-        for primitive in primitives(g, doc.canvas_theme) {
+        for primitive in painted(g, doc) {
             let (alpha, primitive) = match primitive {
                 Primitive::Opacity { alpha, primitive } => (Some(alpha), *primitive),
                 p => (None, p),
@@ -480,6 +554,10 @@ pub fn materialized(doc: &Document) -> std::borrow::Cow<'_, Document> {
         {
             group.members.retain(|id| *id != g.id);
             group.members.extend(&members);
+        }
+        // An assembly is one group, written where its first piece is.
+        if members.is_empty() {
+            continue;
         }
         out.groups.push(crate::grouping::Group {
             id: next,

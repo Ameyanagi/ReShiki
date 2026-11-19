@@ -1,11 +1,13 @@
-//! Seats join the joints of placed pieces. Snapping makes them, every edit
-//! and every read checks them with one tolerance, and the pieces they join
-//! form an assembly that moves as one. Stored poses are never re-solved: a
-//! seat that no longer fits is released and both pieces stay where they are.
+//! Seats join the joints and holds of placed pieces. Snapping makes them,
+//! every edit and every read checks them with one tolerance, and the pieces
+//! they join form an assembly that moves as one. Stored poses are never
+//! re-solved: a seat that no longer fits is released and both pieces stay
+//! where they are. Only a seat's clip follows it, and a grounded piece such
+//! as a stand stays put while what it holds slides along its rod.
 use super::builtin;
-use super::eval::{joints, resolve};
-use super::format::{Category, Definition, Gender, Joint, PlugFamily, taper};
-use super::geometry::{Affine, add, dot, len, mul, normalize, sub};
+use super::eval::{Value, holds, joints, resolve};
+use super::format::{Category, Definition, Gender, HoldKind, Joint, PlugFamily, taper};
+use super::geometry::{Affine, add, dot, len, mul, normalize, perp, sub};
 use super::placed;
 use crate::document::{Document, Point};
 use crate::graphics::Graphic;
@@ -13,7 +15,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
-/// One joint of one placed piece.
+/// One joint or hold of one placed piece.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct JointRef {
@@ -21,17 +23,30 @@ pub struct JointRef {
     pub joint: String,
 }
 
-/// Two joints seated in each other.
+/// Two joints seated in each other, or a hold on what it holds.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Seat {
     pub a: JointRef,
     pub b: JointRef,
+    /// The joint clip on a ground-glass seat: a placed clip piece.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub clip: Option<u64>,
 }
 
 impl Seat {
+    fn new(a: JointRef, b: JointRef) -> Self {
+        Self { a, b, clip: None }
+    }
     fn has(&self, piece: u64) -> bool {
         self.a.piece == piece || self.b.piece == piece
+    }
+    /// The seat joins `piece`, or `piece` is its clip.
+    fn touches(&self, piece: u64) -> bool {
+        self.has(piece) || self.clip == Some(piece)
+    }
+    fn pieces(&self) -> impl Iterator<Item = u64> + use<> {
+        [self.a.piece, self.b.piece].into_iter().chain(self.clip)
     }
     fn holds(&self, j: &JointRef) -> bool {
         self.a == *j || self.b == *j
@@ -49,14 +64,18 @@ const REACH_DIAMETERS: f64 = 1.;
 /// A drag snaps only when the axes are this close to opposite.
 const REACH_DEG: f64 = 40.;
 
-/// What a joint fits.
+/// What a joint or hold fits.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Kind {
     Taper(String),
     Plug(PlugFamily, f64),
+    /// A segment to grip or slide along, and the diameters it takes in mm.
+    Hold(HoldKind, [f64; 2]),
 }
 
-/// A joint of a placed piece, in world units.
+/// A joint or hold of a placed piece, in world units. A female port receives:
+/// a socket, a rail, a neck to grip. A hold runs from `point` along the unit
+/// `dir` for `length`.
 #[derive(Debug, Clone)]
 pub struct Port {
     pub at: JointRef,
@@ -66,15 +85,38 @@ pub struct Port {
     pub dir: [f64; 2],
     /// World units per millimetre.
     pub mm: f64,
+    /// A hold's length in world units; 0 for a joint.
+    pub length: f64,
 }
 
 impl Port {
-    /// "15/25", or a plug's family.
+    /// "15/25", a plug's family, or a hold's diameter.
     pub fn size(&self) -> String {
         match &self.kind {
             Kind::Taper(size) => size.clone(),
             Kind::Plug(family, _) => format!("{family:?}").to_lowercase(),
+            Kind::Hold(_, [lo, hi]) if lo == hi => format!("Ø{lo} mm"),
+            Kind::Hold(_, [lo, hi]) => format!("Ø{lo}–{hi} mm"),
         }
+    }
+    pub fn hold(&self) -> Option<HoldKind> {
+        match self.kind {
+            Kind::Hold(kind, _) => Some(kind),
+            _ => None,
+        }
+    }
+    /// A rail takes any number of sliders; every other port one partner.
+    pub fn shared(&self) -> bool {
+        self.hold() == Some(HoldKind::Rail)
+    }
+    /// The middle of a hold.
+    fn centre(&self) -> [f64; 2] {
+        add(self.point, mul(self.dir, self.length / 2.))
+    }
+    /// The point of a hold nearest `p`.
+    fn nearest(&self, p: [f64; 2]) -> [f64; 2] {
+        let t = dot(sub(p, self.point), self.dir).clamp(0., self.length);
+        add(self.point, mul(self.dir, t))
     }
     /// Where the seated pieces touch: the male shoulder sits 0.06 L outside
     /// the female mouth.
@@ -90,6 +132,7 @@ impl Port {
         let mm = match &self.kind {
             Kind::Taper(size) => taper(size).map_or(10., |t| t.d),
             Kind::Plug(_, size) => *size,
+            Kind::Hold(_, [_, hi]) => *hi,
         };
         mm * self.mm
     }
@@ -107,7 +150,7 @@ fn frame(g: &Graphic) -> Affine {
     ])
 }
 
-/// Every joint of a placed piece; none for any other graphic.
+/// Every joint and hold of a placed piece; none for any other graphic.
 pub fn ports(g: &Graphic) -> Vec<Port> {
     let Some((piece, d)) = g.piece.as_ref().and_then(|p| Some((p, p.linked.as_ref()?))) else {
         return Vec::new();
@@ -116,13 +159,14 @@ pub fn ports(g: &Graphic) -> Vec<Port> {
         return Vec::new();
     };
     let t = frame(g);
-    joints(d, &values)
+    let at = |joint: &str| JointRef {
+        piece: g.id,
+        joint: joint.to_owned(),
+    };
+    let mut out: Vec<Port> = joints(d, &values)
         .into_iter()
         .map(|j| Port {
-            at: JointRef {
-                piece: g.id,
-                joint: j.joint.id().to_owned(),
-            },
+            at: at(j.joint.id()),
             kind: match j.joint {
                 Joint::Taper { size, .. } => Kind::Taper(size.clone()),
                 Joint::Plug {
@@ -133,18 +177,56 @@ pub fn ports(g: &Graphic) -> Vec<Port> {
             point: t.apply(j.at),
             dir: t.apply_dir(j.dir),
             mm: t.scale_factor(),
+            length: 0.,
         })
-        .collect()
+        .collect();
+    out.extend(holds(d, &values).into_iter().map(|h| {
+        let (from, to) = (t.apply(h.from), t.apply(h.to));
+        Port {
+            at: at(&h.hold.id),
+            kind: Kind::Hold(h.hold.kind, h.hold.diameter_mm.range()),
+            gender: if h.hold.kind.held() {
+                Gender::F
+            } else {
+                Gender::M
+            },
+            point: from,
+            dir: normalize(sub(to, from)),
+            mm: t.scale_factor(),
+            length: len(sub(to, from)),
+        }
+    }));
+    out
 }
 
-/// Same kind, opposite gender; tapers of one size, plugs within 10 %.
+/// Same kind, opposite gender; tapers of one size, plugs within 10 %; a
+/// slider on a rail and a jaw on a grip whose diameter is in the jaw's range.
 pub fn mates(a: &Port, b: &Port) -> bool {
     a.gender != b.gender
         && match (&a.kind, &b.kind) {
             (Kind::Taper(x), Kind::Taper(y)) => x == y,
             (Kind::Plug(f, x), Kind::Plug(g, y)) => f == g && (x - y).abs() <= 0.1 * x.max(*y),
+            (Kind::Hold(x, dx), Kind::Hold(y, dy)) if x.mate() == *y => {
+                let (held, holder) = if x.held() { (dx, dy) } else { (dy, dx) };
+                let d = (held[0] + held[1]) / 2.;
+                (holder[0]..=holder[1]).contains(&d)
+            }
             _ => false,
         }
+}
+
+/// Both are holds, or both are joints: only these can ever be paired.
+fn alike(a: &Port, b: &Port) -> bool {
+    a.hold().is_some() == b.hold().is_some()
+}
+
+/// The female and male of a pair.
+fn sides<'p>(a: &'p Port, b: &'p Port) -> (&'p Port, &'p Port) {
+    if a.gender == Gender::F {
+        (a, b)
+    } else {
+        (b, a)
+    }
 }
 
 fn angle_between(a: [f64; 2], b: [f64; 2]) -> f64 {
@@ -154,30 +236,43 @@ fn angle_between(a: [f64; 2], b: [f64; 2]) -> f64 {
         .to_degrees()
 }
 
-/// How far a seated pair is off: millimetres between the male shoulder and
-/// where it belongs, and degrees between the male axis and the reversed
-/// female axis. Pieces seated together share one scale.
-pub fn residual(a: &Port, b: &Port) -> (f64, f64) {
-    let (f, m) = if a.gender == Gender::F {
-        (a, b)
+/// Degrees between the axes of a pair as seated: a cone points into its
+/// socket, while a hold lies along what it holds, either way round.
+fn misalign(a: &Port, b: &Port) -> f64 {
+    if a.hold().is_some() {
+        let turn = angle_between(a.dir, b.dir);
+        turn.min(180. - turn)
     } else {
-        (b, a)
-    };
-    let off = len(sub(m.point, f.contact())) / f.mm;
-    let turn = angle_between(m.dir, mul(f.dir, -1.));
-    let scale = (m.mm / f.mm - 1.).abs();
-    (if scale > 1e-3 { f64::INFINITY } else { off }, turn)
+        angle_between(a.dir, mul(b.dir, -1.))
+    }
 }
 
-/// How far apart two joints are for snapping: from the female contact point
-/// to the male cone, shoulder to tip. A cone whose tip reaches the mouth, or
-/// is already inside it, counts as close.
-fn gap(a: &Port, b: &Port) -> f64 {
-    let (f, m) = if a.gender == Gender::F {
-        (a, b)
+/// How far a seated pair is off: millimetres between the male shoulder and
+/// where it belongs, or between a jaw or slider and what it holds, and
+/// degrees between the axes as seated. Pieces seated together share one scale.
+pub fn residual(a: &Port, b: &Port) -> (f64, f64) {
+    let (f, m) = sides(a, b);
+    let off = if f.hold().is_some() {
+        len(sub(m.centre(), f.nearest(m.centre())))
     } else {
-        (b, a)
-    };
+        len(sub(m.point, f.contact()))
+    } / f.mm;
+    let scale = (m.mm / f.mm - 1.).abs();
+    (
+        if scale > 1e-3 { f64::INFINITY } else { off },
+        misalign(a, b),
+    )
+}
+
+/// How far apart two ports are for snapping: from the female contact point
+/// to the male cone, shoulder to tip, or from a jaw or slider to what it
+/// holds. A cone whose tip reaches the mouth, or is already inside it,
+/// counts as close.
+fn gap(a: &Port, b: &Port) -> f64 {
+    let (f, m) = sides(a, b);
+    if f.hold().is_some() {
+        return len(sub(m.centre(), f.nearest(m.centre())));
+    }
     let length = match (&m.kind, m.gender) {
         (Kind::Taper(size), Gender::M) => taper(size).map_or(0., |t| t.l) * m.mm,
         _ => 0.,
@@ -192,28 +287,43 @@ fn fits(a: &Port, b: &Port) -> bool {
     mates(a, b) && off <= TOLERANCE_MM && turn <= TOLERANCE_DEG
 }
 
+fn grounded(doc: &Document, id: u64) -> bool {
+    (doc.graphics.iter())
+        .find(|g| g.id == id)
+        .and_then(|g| g.piece.as_ref()?.linked.as_ref())
+        .is_some_and(|d| d.grounded)
+}
+
 fn port(doc: &Document, j: &JointRef) -> Option<Port> {
     let g = doc.graphics.iter().find(|g| g.id == j.piece)?;
     ports(g).into_iter().find(|p| p.at == *j)
 }
 
 /// Drop seats that name a missing piece or joint, that a joint shares, or
-/// that no longer fit; mark the seated joints so seated cones are drawn cut.
-/// An assembly keeps one layer and one place in the stacking order: a piece
-/// whose layer changed takes its assembly along.
+/// that no longer fit, with their clips; put every other clip on its seat;
+/// mark the seated joints so seated cones are drawn cut. An assembly keeps
+/// one layer and one place in the stacking order: a piece whose layer
+/// changed takes its assembly along.
 pub fn check(doc: &mut Document, before: Option<&Document>) {
     let mut taken = BTreeSet::new();
-    let seats = std::mem::take(&mut doc.seats);
-    for seat in seats {
-        let ok = match (port(doc, &seat.a), port(doc, &seat.b)) {
-            (Some(a), Some(b)) => fits(&a, &b),
-            _ => false,
-        };
-        if ok && !taken.contains(&seat.a) && !taken.contains(&seat.b) {
+    let mut dropped = Vec::new();
+    for seat in std::mem::take(&mut doc.seats) {
+        let ok = port(doc, &seat.a)
+            .zip(port(doc, &seat.b))
+            .is_some_and(|(a, b)| {
+                fits(&a, &b)
+                    && [&a, &b]
+                        .iter()
+                        .all(|p| p.shared() || !taken.contains(&p.at))
+            });
+        if ok {
             taken.extend([seat.a.clone(), seat.b.clone()]);
             doc.seats.push(seat);
+        } else {
+            dropped.extend(seat.clip);
         }
     }
+    clips(doc, &dropped);
     let layer_before =
         |id: u64| before.and_then(|b| b.graphics.iter().find(|g| g.id == id).map(|g| g.layer));
     for members in assemblies(doc) {
@@ -234,6 +344,78 @@ pub fn check(doc: &mut Document, before: Option<&Document>) {
         gather(doc, &members);
     }
     mark(doc);
+}
+
+/// Where a clip sits on a ground-glass seat, as a piece frame: the female
+/// mouth at the origin and +y into the socket, a millimetre long; and the size.
+fn clip_frame(doc: &Document, seat: &Seat) -> Option<(String, [Point; 3])> {
+    let (a, b) = (port(doc, &seat.a)?, port(doc, &seat.b)?);
+    let (f, _) = sides(&a, &b);
+    let Kind::Taper(size) = &f.kind else {
+        return None;
+    };
+    let y = mul(normalize(f.dir), -f.mm);
+    let p = |v: [f64; 2]| Point::new(v[0] as f32, v[1] as f32);
+    Some((size.clone(), [p(f.point), p([y[1], -y[0]]), p(y)]))
+}
+
+fn clip_size(g: &Graphic) -> Option<&str> {
+    Some(
+        g.piece
+            .as_ref()?
+            .linked
+            .as_ref()?
+            .clip
+            .as_ref()?
+            .size
+            .as_str(),
+    )
+}
+
+/// Remove the clips `dropped` with their seats, and put every other clip on
+/// its seat; a clip that is gone, taken or of another size comes off it.
+fn clips(doc: &mut Document, dropped: &[u64]) {
+    let frames: Vec<_> = (doc.seats.iter())
+        .map(|s| s.clip.and_then(|_| clip_frame(doc, s)))
+        .collect();
+    let mut used = BTreeSet::new();
+    for (seat, frame) in doc.seats.iter_mut().zip(frames) {
+        let Some(c) = seat.clip else {
+            continue;
+        };
+        let g = doc.graphics.iter_mut().find(|g| g.id == c);
+        match (frame, g) {
+            (Some((size, [origin, x, y])), Some(g))
+                if clip_size(g) == Some(&size) && used.insert(c) =>
+            {
+                (g.origin, g.axis_x, g.axis_y) = (origin, x, y);
+            }
+            _ => seat.clip = None,
+        }
+    }
+    let gone: Vec<u64> = (dropped.iter())
+        .filter(|c| !used.contains(*c))
+        .copied()
+        .collect();
+    if !gone.is_empty() {
+        doc.graphics.retain(|g| !gone.contains(&g.id));
+        doc.prune_groups();
+    }
+}
+
+/// Release the seats that `release` picks, and remove their clips.
+fn release(doc: &mut Document, release: impl Fn(&Seat) -> bool) -> bool {
+    let (gone, kept): (Vec<Seat>, Vec<Seat>) = std::mem::take(&mut doc.seats)
+        .into_iter()
+        .partition(|s| release(s));
+    doc.seats = kept;
+    if gone.is_empty() {
+        return false;
+    }
+    let dropped: Vec<u64> = gone.iter().filter_map(|s| s.clip).collect();
+    clips(doc, &dropped);
+    mark(doc);
+    true
 }
 
 /// Mark each piece's seated joints.
@@ -283,13 +465,18 @@ fn place(doc: &mut Document, ids: &[u64], index: usize) {
     doc.graphics.splice(at..at, taken);
 }
 
-/// The pieces joined to `id` through seats, `id` included.
+/// The pieces joined to `id` through seats, with the seats' clips, `id` included.
 pub fn assembly(doc: &Document, id: u64) -> BTreeSet<u64> {
-    let mut found = BTreeSet::from([id]);
-    let mut pending = vec![id];
+    reach(doc, id, |_| true)
+}
+
+/// The pieces joined to `from` through the seats `through` allows.
+fn reach(doc: &Document, from: u64, through: impl Fn(&Seat) -> bool) -> BTreeSet<u64> {
+    let mut found = BTreeSet::from([from]);
+    let mut pending = vec![from];
     while let Some(p) = pending.pop() {
-        for s in doc.seats.iter().filter(|s| s.has(p)) {
-            for q in [s.a.piece, s.b.piece] {
+        for s in doc.seats.iter().filter(|s| s.touches(p) && through(s)) {
+            for q in s.pieces() {
                 if found.insert(q) {
                     pending.push(q);
                 }
@@ -329,22 +516,27 @@ pub fn closure(doc: &Document, ids: &[u64]) -> Vec<u64> {
     out
 }
 
-/// The piece that stays when an assembly is pulled apart: the biggest vessel
-/// (a piece that holds liquid), else the biggest piece.
+/// The piece that stays when an assembly is pulled apart: a grounded piece
+/// such as the stand, else the biggest vessel (a piece that holds liquid),
+/// else the biggest piece.
 fn anchor(doc: &Document, members: &BTreeSet<u64>) -> Option<u64> {
     let rank = |g: &Graphic| {
         let (lo, hi) = g.shape_bounds();
-        let vessel = (g.piece.as_ref()?.linked.as_ref()).is_some_and(|d| !d.liquids.is_empty());
-        Some((vessel, (hi.x - lo.x) * (hi.y - lo.y)))
+        let d = g.piece.as_ref()?.linked.as_ref()?;
+        Some((
+            d.grounded,
+            !d.liquids.is_empty(),
+            (hi.x - lo.x) * (hi.y - lo.y),
+        ))
     };
     doc.graphics
         .iter()
         .filter(|g| members.contains(&g.id))
         .max_by(|a, b| {
             let (a, b) = (rank(a), rank(b));
-            a.map(|a| a.0)
-                .cmp(&b.map(|b| b.0))
-                .then(a.map_or(0., |a| a.1).total_cmp(&b.map_or(0., |b| b.1)))
+            a.map(|a| (a.0, a.1))
+                .cmp(&b.map(|b| (b.0, b.1)))
+                .then(a.map_or(0., |a| a.2).total_cmp(&b.map_or(0., |b| b.2)))
         })
         .map(|g| g.id)
 }
@@ -359,24 +551,10 @@ pub fn detached(doc: &Document, ids: &[u64]) -> Vec<u64> {
         if members.len() < 2 {
             continue;
         }
-        let without = |doc: &Document, from: u64| -> BTreeSet<u64> {
-            let mut found = BTreeSet::from([from]);
-            let mut pending = vec![from];
-            while let Some(p) = pending.pop() {
-                for s in doc.seats.iter().filter(|s| s.has(p) && !s.has(id)) {
-                    for q in [s.a.piece, s.b.piece] {
-                        if found.insert(q) {
-                            pending.push(q);
-                        }
-                    }
-                }
-            }
-            found
-        };
         let mut rest: Vec<BTreeSet<u64>> = Vec::new();
         for &m in members.iter().filter(|m| **m != id) {
             if !rest.iter().any(|c| c.contains(&m)) {
-                rest.push(without(doc, m));
+                rest.push(reach(doc, m, |s| !s.has(id)));
             }
         }
         let anchor = anchor(doc, &members).filter(|a| *a != id).or_else(|| {
@@ -403,6 +581,8 @@ pub enum Offer {
     Seat,
     /// They fit through this adapter, inserted between them.
     Adapter(Arc<Definition>),
+    /// A joint clip goes on the seat.
+    Clip,
     /// Nothing fits.
     Mismatch,
 }
@@ -422,23 +602,35 @@ pub struct Snap {
     pub behind: Option<bool>,
     /// The inserted adapter.
     pub added: Option<u64>,
+    /// Where the seat is, in world units.
+    pub at: [f64; 2],
 }
 
-/// The turn in degrees and the scale that seat `m` on `s`: axes opposite,
-/// one scale, and the two contact points on each other.
-fn seating(s: &Port, m: &Port) -> (f64, f64) {
-    let want = mul(s.dir, -1.);
-    let turn = (want[1].atan2(want[0]) - m.dir[1].atan2(m.dir[0])).to_degrees();
-    (turn, s.mm / m.mm)
+/// The turn in degrees and the scale that seat `m` on `s`, and the point of
+/// `m` that goes onto the point of `s`. Joints oppose their axes and meet at
+/// their contact points; a hold lines its axis up with what it holds, the
+/// shorter way round, and its middle goes onto it.
+fn seating(s: &Port, m: &Port) -> (f64, f64, [f64; 2], [f64; 2]) {
+    let angle = |v: [f64; 2]| v[1].atan2(v[0]).to_degrees();
+    let k = s.mm / m.mm;
+    if s.hold().is_none() {
+        let turn = angle(mul(s.dir, -1.)) - angle(m.dir);
+        return (turn, k, m.contact(), s.contact());
+    }
+    let turn = (angle(s.dir) - angle(m.dir) + 90.).rem_euclid(180.) - 90.;
+    if m.gender == Gender::F {
+        (turn, k, m.nearest(s.centre()), s.centre())
+    } else {
+        (turn, k, m.centre(), s.nearest(m.centre()))
+    }
 }
 
-/// Turn and scale `ids` about `m`'s contact point and move it onto `s`'s:
-/// pieces exactly, other objects (a grouped caption) as a turn would.
+/// Turn and scale `ids` about the point of `m` that seats and move it onto
+/// `s`: pieces exactly, other objects (a grouped caption) as a turn would.
 fn apply(doc: &mut Document, ids: &[u64], s: &Port, m: &Port) {
-    let (turn, k) = seating(s, m);
-    let from = m.contact();
-    let shift = sub(s.contact(), from);
-    let t = Affine::translate(s.contact())
+    let (turn, k, from, to) = seating(s, m);
+    let shift = sub(to, from);
+    let t = Affine::translate(to)
         .then(Affine::rotate(turn, [0., 0.]))
         .then(Affine::scale(k, [0., 0.]))
         .then(Affine::translate(mul(from, -1.)));
@@ -471,14 +663,37 @@ fn apply(doc: &mut Document, ids: &[u64], s: &Port, m: &Port) {
     }
 }
 
-/// Free joints of the pieces in (or not in) `moving`.
+/// A jaw or slider with a `fit` parameter closes on what it now holds: a
+/// clamp's fingers meet the neck.
+fn fit(doc: &mut Document, a: &Port, b: &Port) {
+    let (f, m) = sides(a, b);
+    let Kind::Hold(_, [lo, hi]) = f.kind else {
+        return;
+    };
+    let Some(piece) = (doc.graphics.iter_mut())
+        .find(|g| g.id == m.at.piece)
+        .and_then(|g| g.piece.as_mut())
+    else {
+        return;
+    };
+    let Some(k) = (piece.linked.as_ref())
+        .and_then(|d| d.holds.iter().find(|h| h.id == m.at.joint))
+        .and_then(|h| h.fit.clone())
+    else {
+        return;
+    };
+    piece.params.insert(k, Value::Number((lo + hi) / 2.));
+}
+
+/// Free joints and holds of the pieces in (or not in) `moving`. A rail
+/// stays free however many sliders it holds.
 fn free(doc: &Document, moving: &BTreeSet<u64>, inside: bool) -> Vec<Port> {
     let seated: BTreeSet<&JointRef> = doc.seats.iter().flat_map(|s| [&s.a, &s.b]).collect();
     doc.graphics
         .iter()
         .filter(|g| g.piece.is_some() && moving.contains(&g.id) == inside)
         .flat_map(ports)
-        .filter(|p| !seated.contains(&p.at))
+        .filter(|p| p.shared() || !seated.contains(&p.at))
         .collect()
 }
 
@@ -521,6 +736,7 @@ fn seat(doc: &mut Document, moving: &[u64], s: &Port, m: &Port, offer: &Offer) -
         scaled: (m.mm / s.mm - 1.).abs() > 1e-3,
         behind: None,
         added: None,
+        at: seating(s, m).3,
     };
     let static_set = assembly(doc, s.at.piece);
     let target_layer = (doc.graphics.iter())
@@ -542,19 +758,14 @@ fn seat(doc: &mut Document, moving: &[u64], s: &Port, m: &Port, offer: &Offer) -
         };
         doc.graphics.push(g);
         apply(doc, &[id], s, a);
-        doc.seats.push(Seat {
-            a: s.at.clone(),
-            b: a.at.clone(),
-        });
+        doc.seats.push(Seat::new(s.at.clone(), a.at.clone()));
         onto = port(doc, &b.at).unwrap_or_else(|| b.clone());
         snap.added = Some(id);
         ids.insert(0, id);
     }
     apply(doc, moving, &onto, m);
-    doc.seats.push(Seat {
-        a: onto.at.clone(),
-        b: m.at.clone(),
-    });
+    doc.seats.push(Seat::new(onto.at.clone(), m.at.clone()));
+    fit(doc, &onto, m);
     // Close every other joint of the joined assembly that now fits, such as
     // a second neck; other selected pieces that happen to line up stay free.
     let moved: BTreeSet<u64> = ids.iter().copied().collect();
@@ -564,16 +775,13 @@ fn seat(doc: &mut Document, moving: &[u64], s: &Port, m: &Port, offer: &Offer) -
         .filter(|p| joined.contains(&p.at.piece))
         .collect();
     let outer = free(doc, &moved, false);
+    let taken = |doc: &Document, p: &Port| !p.shared() && doc.seats.iter().any(|s| s.holds(&p.at));
     for a in &inner {
-        if let Some(b) = outer
-            .iter()
-            .find(|b| fits(a, b) && !doc.seats.iter().any(|s| s.holds(&b.at)))
-            && !doc.seats.iter().any(|s| s.holds(&a.at))
+        if let Some(b) = outer.iter().find(|b| fits(a, b) && !taken(doc, b))
+            && !taken(doc, a)
         {
-            doc.seats.push(Seat {
-                a: b.at.clone(),
-                b: a.at.clone(),
-            });
+            doc.seats.push(Seat::new(b.at.clone(), a.at.clone()));
+            fit(doc, a, b);
         }
     }
     // The merged assembly takes the target's layer, and the pieces that
@@ -599,35 +807,65 @@ fn seat(doc: &mut Document, moving: &[u64], s: &Port, m: &Port, offer: &Offer) -
     snap
 }
 
+/// The ground lock: when the moving pieces include a grounded one, such as
+/// a stand, and the target's assembly does not, the target's side moves to
+/// it instead, so a stand stays where it is put. The pieces that move and
+/// the roles of the two ports; `None` when the target cannot take the scale.
+fn ground_lock(doc: &Document, ids: &[u64], s: Port, m: Port) -> Option<(Vec<u64>, Port, Port)> {
+    let fixed = assembly(doc, s.at.piece);
+    if !ids.iter().any(|id| grounded(doc, *id)) || fixed.iter().any(|id| grounded(doc, *id)) {
+        return Some((ids.to_vec(), s, m));
+    }
+    scalable(doc, &fixed, m.mm / s.mm).then(|| {
+        let ids = doc.expand_groups(&fixed.into_iter().collect::<Vec<_>>());
+        (ids, m, s)
+    })
+}
+
 /// After the pieces `ids` moved: release their seats to pieces that stayed,
-/// then snap them to the best joint within `reach` world units of one of
-/// their free joints. A compatible joint seats; a mismatch inserts the
-/// adapter that fits, or only says why nothing fits. `any_angle` lets a new
-/// piece turn to fit; a dragged one must already point within 40°.
+/// unless they still fit (a clamp slid along a rod), then snap them to the
+/// best joint or hold within `reach` world units of one of their own. A
+/// compatible one seats; a joint mismatch inserts the adapter that fits, or
+/// only says why nothing fits. `any_angle` lets a new piece turn to fit; a
+/// dragged one must already point within 40°. A clip moved on its own goes
+/// onto the nearest seat of its size.
 pub fn snap(doc: &mut Document, ids: &[u64], reach: f32, any_angle: bool) -> Option<Snap> {
     let moving: BTreeSet<u64> = ids.iter().copied().collect();
-    if !doc
-        .graphics
-        .iter()
-        .any(|g| g.piece.is_some() && moving.contains(&g.id))
+    let pieces: Vec<&Graphic> = (doc.graphics.iter())
+        .filter(|g| g.piece.is_some() && moving.contains(&g.id))
+        .collect();
+    if let [g] = pieces[..]
+        && let Some(size) = clip_size(g)
     {
+        let (id, size, at) = (g.id, size.to_owned(), placed::middle(g));
+        return clip_on(doc, id, &size, at, reach);
+    }
+    if pieces.is_empty() {
         return None;
     }
-    let before = doc.seats.len();
-    doc.seats
-        .retain(|s| moving.contains(&s.a.piece) == moving.contains(&s.b.piece));
-    if doc.seats.len() != before {
-        mark(doc);
-    }
+    let cut: Vec<Seat> = (doc.seats.iter())
+        .filter(|s| moving.contains(&s.a.piece) != moving.contains(&s.b.piece))
+        .filter(|s| {
+            !port(doc, &s.a)
+                .zip(port(doc, &s.b))
+                .is_some_and(|(a, b)| fits(&a, &b))
+        })
+        .cloned()
+        .collect();
+    release(doc, |s| cut.contains(s));
     let inner = free(doc, &moving, true);
     let outer = free(doc, &moving, false);
     // A joint that fits wins, then one an adapter joins, then the closest.
     let mut best: Option<(u8, f64, &Port, &Port)> = None;
     for m in &inner {
-        for s in &outer {
+        for s in outer.iter().filter(|s| alike(m, s)) {
+            // Holds pair only with what they hold; a joint mismatch says why.
+            if m.hold().is_some() && !mates(m, s) {
+                continue;
+            }
             let reach = f64::from(reach).max(REACH_DIAMETERS * s.diameter());
             let off = gap(m, s);
-            let turn = angle_between(m.dir, mul(s.dir, -1.));
+            let turn = misalign(m, s);
             // A pair whose scaling a moving piece cannot take is no choice.
             if off > reach
                 || (!any_angle && turn > REACH_DEG)
@@ -646,14 +884,15 @@ pub fn snap(doc: &mut Document, ids: &[u64], reach: f32, any_angle: bool) -> Opt
             }
         }
     }
-    let (tier, _, s, m) = best?;
-    let (s, m) = (s.clone(), m.clone());
-    let offer = if tier == 2 {
+    let (_, _, s, m) = best?;
+    let (ids, s, m) = ground_lock(doc, ids, s.clone(), m.clone())?;
+    let offer = if mates(&s, &m) {
         Offer::Seat
     } else if let Some((d, ..)) = adapter(&s, &m) {
         Offer::Adapter(d)
     } else {
         return Some(Snap {
+            at: s.point,
             target: s,
             moving: m,
             offer: Offer::Mismatch,
@@ -662,12 +901,84 @@ pub fn snap(doc: &mut Document, ids: &[u64], reach: f32, any_angle: bool) -> Opt
             added: None,
         });
     };
-    Some(seat(doc, ids, &s, &m, &offer))
+    Some(seat(doc, &ids, &s, &m, &offer))
+}
+
+/// Put the clip `id` on the nearest seat of its size without a clip whose
+/// socket mouth is within reach of `at`; off any seat it was on before.
+fn clip_on(doc: &mut Document, id: u64, size: &str, at: Point, reach: f32) -> Option<Snap> {
+    for s in doc.seats.iter_mut().filter(|s| s.clip == Some(id)) {
+        s.clip = None;
+    }
+    let p = [f64::from(at.x), f64::from(at.y)];
+    let size = Kind::Taper(size.to_owned());
+    let (i, f, m) = (doc.seats.iter().enumerate())
+        .filter(|(_, s)| s.clip.is_none())
+        .filter_map(|(i, s)| {
+            let (a, b) = (port(doc, &s.a)?, port(doc, &s.b)?);
+            let (f, m) = sides(&a, &b);
+            (f.kind == size).then(|| (i, f.clone(), m.clone()))
+        })
+        .filter(|(_, f, _)| len(sub(f.point, p)) <= f64::from(reach).max(f.diameter()))
+        .min_by(|a, b| len(sub(a.1.point, p)).total_cmp(&len(sub(b.1.point, p))))?;
+    doc.seats.get_mut(i)?.clip = Some(id);
+    clips(doc, &[]);
+    Some(Snap {
+        at: f.point,
+        target: f,
+        moving: m,
+        offer: Offer::Clip,
+        scaled: false,
+        behind: None,
+        added: None,
+    })
+}
+
+/// The built-in clip a seat between the pieces `ids` lacks.
+fn missing_clip(doc: &Document, ids: &[u64], s: &Seat) -> Option<Arc<Definition>> {
+    if s.clip.is_some() || !ids.contains(&s.a.piece) || !ids.contains(&s.b.piece) {
+        return None;
+    }
+    let (size, _) = clip_frame(doc, s)?;
+    (builtin::catalogue().iter())
+        .find(|d| d.clip.as_ref().is_some_and(|c| c.size == size))
+        .cloned()
+}
+
+/// How many ground-glass seats between the pieces `ids` could take a clip.
+pub fn unclipped(doc: &Document, ids: &[u64]) -> usize {
+    (doc.seats.iter())
+        .filter(|s| missing_clip(doc, ids, s).is_some())
+        .count()
+}
+
+/// Put a clip of the right size on every ground-glass seat between the
+/// pieces `ids` that has none; how many went on.
+pub fn add_clips(doc: &mut Document, ids: &[u64]) -> usize {
+    let wanted: Vec<(usize, Arc<Definition>, i32)> = (doc.seats.iter().enumerate())
+        .filter_map(|(i, s)| {
+            let layer = (doc.graphics.iter())
+                .find(|g| g.id == s.a.piece)
+                .map_or(-1, |g| g.layer);
+            Some((i, missing_clip(doc, ids, s)?, layer))
+        })
+        .collect();
+    for (i, d, layer) in &wanted {
+        let id = doc.next_id();
+        let mut g = placed::graphic(id, d.clone(), Point::default(), 1.);
+        g.layer = *layer;
+        doc.graphics.push(g);
+        if let Some(s) = doc.seats.get_mut(*i) {
+            s.clip = Some(id);
+        }
+    }
+    clips(doc, &[]);
+    wanted.len()
 }
 
 /// Joints the selected pieces could be connected to, nearest first: each a
-/// free joint of the selection and a free joint elsewhere that fits it,
-/// directly or through an adapter.
+/// free joint or hold of the selection and a free one elsewhere that fits
+/// it, directly or through an adapter.
 pub fn options(doc: &Document, ids: &[u64]) -> Vec<(Port, Port, Offer)> {
     let moving: BTreeSet<u64> = closure(doc, ids).into_iter().collect();
     let inner = free(doc, &moving, true);
@@ -697,18 +1008,20 @@ pub fn options(doc: &Document, ids: &[u64]) -> Vec<(Port, Port, Offer)> {
 pub fn connect(doc: &mut Document, ids: &[u64], s: &JointRef, m: &JointRef) -> Option<Snap> {
     let moving = closure(doc, ids);
     let (s, m) = (port(doc, s)?, port(doc, m)?);
-    if doc.seats.iter().any(|x| x.holds(&s.at) || x.holds(&m.at)) {
+    let taken = |p: &Port| !p.shared() && doc.seats.iter().any(|x| x.holds(&p.at));
+    if taken(&s) || taken(&m) {
         return None;
     }
+    let pieces: BTreeSet<u64> = moving.iter().copied().collect();
+    if !scalable(doc, &pieces, s.mm / m.mm) {
+        return None;
+    }
+    let (moving, s, m) = ground_lock(doc, &moving, s, m)?;
     let offer = if mates(&s, &m) {
         Offer::Seat
     } else {
         Offer::Adapter(adapter(&s, &m)?.0)
     };
-    let pieces: BTreeSet<u64> = moving.iter().copied().collect();
-    if !scalable(doc, &pieces, s.mm / m.mm) {
-        return None;
-    }
     Some(seat(doc, &moving, &s, &m, &offer))
 }
 
@@ -721,13 +1034,75 @@ fn scalable(doc: &Document, moving: &BTreeSet<u64>, k: f64) -> bool {
         .all(|g| range.contains(&(frame(g).scale_factor() * k * pt)))
 }
 
-/// Release the seat at joint `j` and pull the side without the anchor out
-/// along the joint's axis, far enough to leave a gap outside snap reach.
+/// What a drag that starts on `clicked` moves when the selection is `ids`:
+/// their whole assembly, except that pieces held on a grounded one, such as
+/// a clamp on a stand, slide along without it and without what only it
+/// holds. Dragging the grounded piece itself moves everything.
+pub fn carried(doc: &Document, ids: &[u64], clicked: &[u64]) -> Vec<u64> {
+    let all = closure(doc, ids);
+    let ground: BTreeSet<u64> = (all.iter().copied())
+        .filter(|id| grounded(doc, *id))
+        .collect();
+    if ground.is_empty() || clicked.iter().any(|id| ground.contains(id)) {
+        return all;
+    }
+    let piece = |id: &u64| {
+        doc.graphics
+            .iter()
+            .any(|g| g.id == *id && g.piece.is_some())
+    };
+    let mut held = BTreeSet::new();
+    for c in clicked.iter().filter(|c| all.contains(c) && piece(c)) {
+        held.extend(reach(doc, *c, |s| {
+            !ground.contains(&s.a.piece) && !ground.contains(&s.b.piece)
+        }));
+    }
+    if held.is_empty() {
+        return all;
+    }
+    all.into_iter()
+        .filter(|id| held.contains(id) || !piece(id))
+        .collect()
+}
+
+/// A drag of the pieces `ids` by `delta`, along the rails that hold them on
+/// pieces that stay and stopped at the rails' ends; `None` when nothing that
+/// stays holds them. Pieces held any other way do not move.
+pub fn constrain(doc: &Document, ids: &[u64], delta: [f64; 2]) -> Option<[f64; 2]> {
+    let mut axis: Option<[f64; 2]> = None;
+    let (mut lo, mut hi) = (f64::NEG_INFINITY, f64::INFINITY);
+    for s in (doc.seats.iter()).filter(|s| ids.contains(&s.a.piece) != ids.contains(&s.b.piece)) {
+        let (Some(a), Some(b)) = (port(doc, &s.a), port(doc, &s.b)) else {
+            return Some([0., 0.]);
+        };
+        let (rail, slider) = if ids.contains(&s.a.piece) {
+            (b, a)
+        } else {
+            (a, b)
+        };
+        let v = *axis.get_or_insert(rail.dir);
+        if !rail.shared() || (rail.dir[0] * v[1] - rail.dir[1] * v[0]).abs() > 1e-6 {
+            return Some([0., 0.]);
+        }
+        // How far along `v` the slider may go before it leaves either end.
+        let way = dot(rail.dir, v);
+        let t = dot(sub(slider.centre(), rail.point), rail.dir);
+        let (x, y) = (-t * way, (rail.length - t) * way);
+        lo = lo.max(x.min(y));
+        hi = hi.min(x.max(y));
+    }
+    let v = axis?;
+    Some(mul(v, dot(delta, v).clamp(lo, hi.max(lo))))
+}
+
+/// Release the seat at joint `j` and pull the side without the anchor out,
+/// along a joint's axis or away from a hold, far enough to leave a gap
+/// outside snap reach.
 pub fn detach(doc: &mut Document, j: &JointRef) -> bool {
-    let Some(i) = doc.seats.iter().position(|s| s.holds(j)) else {
+    let Some(seat) = doc.seats.iter().find(|s| s.holds(j)).cloned() else {
         return false;
     };
-    let seat = doc.seats.remove(i);
+    release(doc, |s| *s == seat);
     let members: BTreeSet<u64> = assembly(doc, seat.a.piece)
         .union(&assembly(doc, seat.b.piece))
         .copied()
@@ -741,12 +1116,33 @@ pub fn detach(doc: &mut Document, j: &JointRef) -> bool {
     // Pieces still joined through another seat stay where they are.
     let apart = !assembly(doc, stay.piece).contains(&go.piece);
     if apart && let (Some(s), Some(g)) = (port(doc, stay), port(doc, go)) {
-        // A joint length and a diameter: a clear gap, and out of snap reach.
-        let away = match &s.kind {
+        let (f, _) = sides(&s, &g);
+        // A joint length and a diameter, or two diameters off a hold: a
+        // clear gap, and out of snap reach.
+        let away = match &f.kind {
             Kind::Taper(size) => taper(size).map_or(10., |t| t.l + t.d),
             Kind::Plug(_, size) => 2. * size,
+            Kind::Hold(_, [lo, hi]) => lo + hi,
         } * s.mm;
-        let shift = mul(normalize(s.dir), away);
+        // Off a hold, towards the side the pulled piece is on.
+        let out = if s.hold().is_some() {
+            let n = perp(s.dir);
+            let middle =
+                (doc.graphics.iter())
+                    .find(|x| x.id == g.at.piece)
+                    .map_or(g.centre(), |x| {
+                        let m = placed::middle(x);
+                        [f64::from(m.x), f64::from(m.y)]
+                    });
+            if dot(sub(middle, s.centre()), n) < 0. {
+                mul(n, -1.)
+            } else {
+                n
+            }
+        } else {
+            normalize(s.dir)
+        };
+        let shift = mul(out, away);
         let pulled: Vec<u64> = assembly(doc, g.at.piece).into_iter().collect();
         doc.translate(&pulled, shift[0] as f32, shift[1] as f32);
     }
@@ -754,26 +1150,40 @@ pub fn detach(doc: &mut Document, j: &JointRef) -> bool {
     true
 }
 
-/// A seated joint's partner.
+/// A seated joint's partner; the first of a rail's.
 pub fn partner(doc: &Document, j: &JointRef) -> Option<JointRef> {
-    doc.seats.iter().find_map(|s| {
-        if s.a == *j {
-            Some(s.b.clone())
-        } else if s.b == *j {
-            Some(s.a.clone())
-        } else {
-            None
-        }
-    })
+    partners(doc, j).into_iter().next()
 }
 
-/// Drop the seats of deleted pieces.
+/// Every joint or hold seated on `j`.
+pub fn partners(doc: &Document, j: &JointRef) -> Vec<JointRef> {
+    (doc.seats.iter())
+        .filter_map(|s| {
+            if s.a == *j {
+                Some(s.b.clone())
+            } else if s.b == *j {
+                Some(s.a.clone())
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
+/// The clip on the seat at joint `j`.
+pub fn clip_at(doc: &Document, j: &JointRef) -> Option<u64> {
+    doc.seats.iter().find(|s| s.holds(j))?.clip
+}
+
+/// Drop the seats of deleted pieces with their clips, and deleted clips.
 pub(crate) fn prune(doc: &mut Document) {
-    let before = doc.seats.len();
     let ids: BTreeSet<u64> = doc.graphics.iter().map(|g| g.id).collect();
-    doc.seats
-        .retain(|s| ids.contains(&s.a.piece) && ids.contains(&s.b.piece));
-    if doc.seats.len() != before {
-        mark(doc);
+    for s in &mut doc.seats {
+        if s.clip.is_some_and(|c| !ids.contains(&c)) {
+            s.clip = None;
+        }
     }
+    release(doc, |s| {
+        !ids.contains(&s.a.piece) || !ids.contains(&s.b.piece)
+    });
 }

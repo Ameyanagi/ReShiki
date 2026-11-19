@@ -83,6 +83,9 @@ pub struct PlanPath {
     pub ink: Ink,
     /// Only in this style; `None` in both.
     pub style: Option<StyleKind>,
+    /// The shape's depth within its layer, across an assembly.
+    #[serde(skip)]
+    pub depth: i8,
     /// World units.
     #[serde(serialize_with = "segs")]
     pub path: Vec<Seg>,
@@ -131,13 +134,6 @@ impl Default for Settings {
 
 const BORE: Rgb = [201, 213, 220];
 
-struct Item {
-    pass: Pass,
-    depth: i8,
-    owner: usize,
-    path: PlanPath,
-}
-
 /// The paint plan of one compositing group, in paint order.
 pub fn paint_plan(group: &[Instance], settings: Settings) -> Result<Vec<PlanPath>, String> {
     let mut items = Vec::new();
@@ -146,17 +142,25 @@ pub fn paint_plan(group: &[Instance], settings: Settings) -> Result<Vec<PlanPath
         let evaluated = evaluate(instance.definition, &values)?;
         piece(owner, instance, &evaluated, settings, &mut items)?;
     }
-    // Stable sort keeps each piece's own order inside a pass.
-    items.sort_by_key(|i| {
-        let per_piece = matches!(i.pass, Pass::Outline | Pass::Glass | Pass::Liquid);
+    order(&mut items);
+    Ok(items)
+}
+
+/// Put a group's paths in paint order: every piece's back layer, then each
+/// piece's glass as one silhouette with its liquid, then the inner, body and
+/// front layers of all pieces, each by depth, then by owner. A stable sort
+/// keeps each piece's own order inside a pass, so the plans of single
+/// pieces merge into the plan of their assembly.
+pub fn order(paths: &mut [PlanPath]) {
+    paths.sort_by_key(|p| {
+        let per_piece = matches!(p.pass, Pass::Outline | Pass::Glass | Pass::Liquid);
         (
-            if per_piece { Pass::Outline } else { i.pass },
-            if per_piece { 0 } else { i.depth },
-            i.owner,
-            if per_piece { i.pass } else { Pass::Back },
+            if per_piece { Pass::Outline } else { p.pass },
+            if per_piece { 0 } else { p.depth },
+            p.owner,
+            if per_piece { p.pass } else { Pass::Back },
         )
     });
-    Ok(items.into_iter().map(|i| i.path).collect())
 }
 
 fn layer_pass(layer: Layer) -> Pass {
@@ -173,11 +177,11 @@ fn piece(
     instance: &Instance,
     e: &Evaluated,
     settings: Settings,
-    items: &mut Vec<Item>,
+    items: &mut Vec<PlanPath>,
 ) -> Result<(), String> {
     let t = instance.transform;
     let mm = t.scale_factor();
-    let push = |items: &mut Vec<Item>,
+    let push = |items: &mut Vec<PlanPath>,
                 pass: Pass,
                 depth: i8,
                 material: Material,
@@ -185,19 +189,15 @@ fn piece(
                 ink: Ink,
                 style: Option<StyleKind>,
                 path: &[Seg]| {
-        items.push(Item {
-            pass,
-            depth,
+        items.push(PlanPath {
             owner,
-            path: PlanPath {
-                owner,
-                pass,
-                material,
-                color,
-                ink,
-                style,
-                path: t.map(path),
-            },
+            pass,
+            material,
+            color,
+            ink,
+            style,
+            depth,
+            path: t.map(path),
         })
     };
     // Glass on the body layer joins one silhouette: outlines, then fills.
@@ -293,19 +293,15 @@ fn piece(
             .map(|c| c.iter().map(|p| t.apply(*p)).collect())
             .collect();
         for path in liquid(&region, l.fill, l.liquid.meniscus, mm) {
-            items.push(Item {
-                pass: Pass::Liquid,
-                depth: 0,
+            items.push(PlanPath {
                 owner,
-                path: PlanPath {
-                    owner,
-                    pass: Pass::Liquid,
-                    material: Material::Liquid,
-                    color: Some(l.color),
-                    ink: path.0,
-                    style: None,
-                    path: path.1,
-                },
+                pass: Pass::Liquid,
+                material: Material::Liquid,
+                color: Some(l.color),
+                ink: path.0,
+                style: None,
+                depth: 0,
+                path: path.1,
             });
         }
     }

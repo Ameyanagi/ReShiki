@@ -328,6 +328,26 @@ pub struct Hold {
     pub diameter_mm: Diameter,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub part: Option<String>,
+    /// A millimetre range parameter set to the diameter this jaw or slider
+    /// closes on: a clamp's fingers meet the neck they hold.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fit: Option<String>,
+}
+
+impl HoldKind {
+    /// Rails and grips are held; sliders and jaws hold them.
+    pub fn held(self) -> bool {
+        matches!(self, Self::Rail | Self::Grip)
+    }
+    /// The kind this one pairs with.
+    pub fn mate(self) -> Self {
+        match self {
+            Self::Rail => Self::Slider,
+            Self::Slider => Self::Rail,
+            Self::Grip => Self::Jaw,
+            Self::Jaw => Self::Grip,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

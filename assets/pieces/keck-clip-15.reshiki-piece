@@ -1,0 +1,91 @@
+{
+ "format": "reshiki-piece",
+ "format_version": 0,
+ "id": "reshiki/keck-clip-15",
+ "revision": 1,
+ "family": "keck-clip",
+ "variant": {
+  "joint": "15/25"
+ },
+ "names": {
+  "en": "Joint clip, 15/25",
+  "ja": "スリ用クリップ 15/25"
+ },
+ "category": "holding",
+ "keywords": [
+  "Keck",
+  "clip",
+  "joint clip",
+  "クリップ"
+ ],
+ "credits": {
+  "author": "ReShiki",
+  "license": "CC0-1.0"
+ },
+ "units": "mm",
+ "clip": {
+  "size": "15/25"
+ },
+ "shapes": [
+  {
+   "id": "s0",
+   "layer": "back",
+   "material": "plastic",
+   "role": "solid",
+   "color": [
+    224,
+    162,
+    27
+   ],
+   "path": "M-11.6 3.4A11.6 2.32 0 0 1 11.6 3.4L11.6 6A11.6 2.32 0 0 0 -11.6 6Z"
+  },
+  {
+   "id": "s1",
+   "layer": "front",
+   "material": "plastic",
+   "role": "solid",
+   "color": [
+    224,
+    162,
+    27
+   ],
+   "path": "M11.6 3.4A11.6 2.32 0 0 1 -9.14 4.83L-9.14 7.43A11.6 2.32 0 0 0 11.6 6Z"
+  },
+  {
+   "id": "s2",
+   "layer": "back",
+   "material": "plastic",
+   "role": "solid",
+   "color": [
+    224,
+    162,
+    27
+   ],
+   "path": "M-9.1 -4.9A9.1 1.82 0 0 1 9.1 -4.9L9.1 -2.7A9.1 1.82 0 0 0 -9.1 -2.7Z"
+  },
+  {
+   "id": "s3",
+   "layer": "front",
+   "material": "plastic",
+   "role": "solid",
+   "color": [
+    224,
+    162,
+    27
+   ],
+   "path": "M9.1 -4.9A9.1 1.82 0 0 1 -7.17 -3.78L-7.17 -1.58A9.1 1.82 0 0 0 9.1 -2.7Z"
+  },
+  {
+   "id": "s4",
+   "layer": "front",
+   "material": "plastic",
+   "role": "solid",
+   "color": [
+    224,
+    162,
+    27
+   ],
+   "path": "M10.2 6L8.7 -3.9L11.3 -3.9L13 6Z"
+  }
+ ]
+}

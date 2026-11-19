@@ -1,0 +1,60 @@
+{
+ "format": "reshiki-piece",
+ "format_version": 0,
+ "id": "reshiki/stand",
+ "revision": 1,
+ "family": "stand",
+ "variant": {
+  "rod_mm": "620"
+ },
+ "names": {
+  "en": "Lab stand",
+  "ja": "スタンド"
+ },
+ "category": "holding",
+ "keywords": [
+  "stand",
+  "rod",
+  "support",
+  "スタンド"
+ ],
+ "credits": {
+  "author": "ReShiki",
+  "license": "CC0-1.0"
+ },
+ "units": "mm",
+ "grounded": true,
+ "shapes": [
+  {
+   "id": "s0",
+   "layer": "back",
+   "material": "metal",
+   "role": "solid",
+   "path": "M-37 0L187 0A3 3 0 0 1 190 3L190 11A3 3 0 0 1 187 14L-37 14A3 3 0 0 1 -40 11L-40 3A3 3 0 0 1 -37 0Z",
+   "depth": -1
+  },
+  {
+   "id": "s1",
+   "layer": "back",
+   "material": "metal",
+   "role": "solid",
+   "path": "M-3 -620L3 -620A3 3 0 0 1 6 -617L6 -1A3 3 0 0 1 3 2L-3 2A3 3 0 0 1 -6 -1L-6 -617A3 3 0 0 1 -3 -620Z",
+   "depth": -1
+  }
+ ],
+ "holds": [
+  {
+   "id": "rod",
+   "kind": "rail",
+   "from": [
+    0,
+    -40
+   ],
+   "to": [
+    0,
+    -600
+   ],
+   "diameter_mm": 12
+  }
+ ]
+}

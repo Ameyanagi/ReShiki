@@ -57,11 +57,12 @@ struct SeatHint {
 
 impl SeatHint {
     fn new(doc: &Document, snap: &reshiki::equipment::solve::Snap) -> Self {
-        let p = snap.target.point;
+        use reshiki::equipment::solve::Offer;
+        let p = snap.at;
         Self {
             at: World::new(p[0] as f32, p[1] as f32),
             radius: (snap.target.diameter() / 2.) as f32,
-            fits: matches!(snap.offer, reshiki::equipment::solve::Offer::Seat),
+            fits: matches!(snap.offer, Offer::Seat | Offer::Clip),
             text: crate::app::equipment::snap_text(doc, snap),
         }
     }

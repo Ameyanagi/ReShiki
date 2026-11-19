@@ -35,3 +35,49 @@ fn a_piece_exports_as_one_group_of_curves_in_paint_order() {
         );
     }
 }
+
+#[test]
+fn a_clamped_flask_exports_as_one_group_with_the_fingers_around_the_neck() {
+    use crate::equipment::solve;
+    let mut document = Document::default();
+    let scale = placed::world_per_mm(&document, placed::DEFAULT_PT_PER_MM);
+    for (id, piece, at) in [
+        (1, "reshiki/rbf-100-15", Point::new(100., 100.)),
+        (2, "reshiki/clamp-3finger", Point::new(0., 0.)),
+    ] {
+        let d = builtin::find(piece).unwrap();
+        document.graphics.push(placed::graphic(id, d, at, scale));
+    }
+    let port = |doc: &Document, piece: u64, name: &str| {
+        let g = doc.graphics.iter().find(|g| g.id == piece).unwrap();
+        let p = solve::ports(g)
+            .into_iter()
+            .find(|p| p.at.joint == name)
+            .unwrap();
+        [
+            p.point[0] + p.dir[0] * p.length / 2.,
+            p.point[1] + p.dir[1] * p.length / 2.,
+        ]
+    };
+    let (grip, jaw) = (port(&document, 1, "neck-grip"), port(&document, 2, "jaw"));
+    document.translate(&[2], (grip[0] - jaw[0]) as f32, (grip[1] - jaw[1]) as f32);
+    solve::snap(&mut document, &[2], 14., false).unwrap();
+    assert_eq!(document.seats.len(), 1);
+    let painted: usize = (document.graphics.iter())
+        .map(|g| placed::primitives(g, document.canvas_theme).len())
+        .sum();
+    let request = Request::molecule("export", document.clone());
+    let xml = write(&document, (&request).into()).unwrap();
+    let imported = cdxml::import_cdxml(&xml).unwrap().document;
+    assert!(imported.graphics.len() >= painted);
+    // One group holds both pieces: ChemDraw keeps a group together in the
+    // stacking order, so only one group can put the fingers on both sides.
+    assert_eq!(imported.groups.len(), 1);
+    assert_eq!(imported.groups[0].members.len(), imported.graphics.len());
+    // The first curve is the clamp's back layer, behind the flask's glass.
+    let first = &imported.graphics[0];
+    assert_ne!(
+        first.style.fill,
+        Some(crate::palette::Color::Custom([255; 3]))
+    );
+}
