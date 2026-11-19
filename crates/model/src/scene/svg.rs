@@ -261,6 +261,23 @@ fn push_svg(s: &mut String, drawing: Vec<Primitive>, frame: &Frame, halos: &mut 
             Primitive::Line(a, b, w) => {
                 s.push_str(&format!("<line x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\" stroke=\"{ink}\" stroke-width=\"{w}\" stroke-linecap=\"round\"/>",a.x,a.y,b.x,b.y));
             }
+            Primitive::Polyline {
+                points,
+                closed,
+                width,
+                color,
+            } => {
+                let [r, g, b] = theme.color(color.rgb());
+                let mut d = points
+                    .iter()
+                    .enumerate()
+                    .map(|(i, p)| format!("{}{},{}", if i == 0 { 'M' } else { 'L' }, p.x, p.y))
+                    .collect::<String>();
+                if closed {
+                    d.push('Z');
+                }
+                s.push_str(&format!("<path d=\"{d}\" fill=\"none\" stroke=\"rgb({r},{g},{b})\" stroke-width=\"{width}\" stroke-linecap=\"butt\" stroke-linejoin=\"miter\" stroke-miterlimit=\"4\"/>"));
+            }
             Primitive::Polygon(points) => {
                 s.push_str(&format!(
                     "<polygon points=\"{}\" fill=\"{ink}\"/>",
@@ -585,6 +602,7 @@ fn push_halo(s: &mut String, primitives: &[Primitive], radius: f32, color: &str)
                 &format!("fill=\"{color}\" {}", spread(0.)),
             ),
             Primitive::Picture(_)
+            | Primitive::Polyline { .. }
             | Primitive::Halo { .. }
             | Primitive::Sphere { .. }
             | Primitive::Ellipsoid { .. }

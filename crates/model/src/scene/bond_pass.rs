@@ -132,6 +132,7 @@ impl<'a> BondPass<'a> {
             faces: &self.faces,
             crossing_gaps: &rings.crossing_gaps,
             opacity,
+            lines: false,
         }
     }
 }

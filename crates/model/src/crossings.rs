@@ -803,6 +803,16 @@ fn half(primitive: &Primitive, g: Gap, bound: f32, below: bool) -> Option<Primit
             value >= bound
         }
     };
+    let segment = |a: Point, b: Point| {
+        let pa = projection(a, g);
+        let pb = projection(b, g);
+        match (inside(pa), inside(pb)) {
+            (true, true) => Some((a, b)),
+            (false, false) => None,
+            (true, false) => Some((a, intersection(a, b, pa, pb, bound))),
+            (false, true) => Some((intersection(a, b, pa, pb, bound), b)),
+        }
+    };
     match primitive {
         Primitive::Path {
             commands,
@@ -816,24 +826,22 @@ fn half(primitive: &Primitive, g: Gap, bound: f32, below: bool) -> Option<Primit
                 filled: false,
             })
         }
-        Primitive::Line(a, b, width) => {
-            let pa = projection(*a, g);
-            let pb = projection(*b, g);
-            match (inside(pa), inside(pb)) {
-                (true, true) => Some(primitive.clone()),
-                (false, false) => None,
-                (true, false) => Some(Primitive::Line(
-                    *a,
-                    intersection(*a, *b, pa, pb, bound),
-                    *width,
-                )),
-                (false, true) => Some(Primitive::Line(
-                    intersection(*a, *b, pa, pb, bound),
-                    *b,
-                    *width,
-                )),
-            }
-        }
+        Primitive::Line(a, b, width) => segment(*a, *b).map(|(a, b)| Primitive::Line(a, b, *width)),
+        // Bond lines are cut before they join, one segment each.
+        Primitive::Polyline {
+            points,
+            closed: false,
+            width,
+            color,
+        } => match points.as_slice() {
+            &[a, b] => segment(a, b).map(|(a, b)| Primitive::Polyline {
+                points: vec![a, b],
+                closed: false,
+                width: *width,
+                color: *color,
+            }),
+            _ => Some(primitive.clone()),
+        },
         Primitive::Polygon(points) => {
             let mut clipped = vec![];
             for (a, b) in points
@@ -869,7 +877,7 @@ fn on_rail(primitive: &Primitive, gap: &Gap) -> bool {
     }
     let points: Vec<Point> = match primitive {
         Primitive::Line(a, b, _) => vec![*a, *b],
-        Primitive::Polygon(points) => points.clone(),
+        Primitive::Polygon(points) | Primitive::Polyline { points, .. } => points.clone(),
         Primitive::Path { commands, .. } => commands
             .iter()
             .flat_map(crate::graphics::PathCommand::iter_points)
@@ -885,7 +893,7 @@ fn on_rail(primitive: &Primitive, gap: &Gap) -> bool {
 fn span(primitive: &Primitive, gap: &Gap) -> f32 {
     let points: Vec<Point> = match primitive {
         Primitive::Line(a, b, _) => vec![*a, *b],
-        Primitive::Polygon(points) => points.clone(),
+        Primitive::Polygon(points) | Primitive::Polyline { points, .. } => points.clone(),
         Primitive::Path { commands, .. } => commands
             .iter()
             .flat_map(crate::graphics::PathCommand::iter_points)
@@ -909,6 +917,7 @@ pub fn cut(mut primitives: Vec<Primitive>, gaps: &[Gap]) -> Vec<Primitive> {
                 let halves = if matches!(
                     p,
                     Primitive::Line(..)
+                        | Primitive::Polyline { .. }
                         | Primitive::Polygon(_)
                         | Primitive::Path { filled: false, .. }
                 ) && on_rail(p, gap)

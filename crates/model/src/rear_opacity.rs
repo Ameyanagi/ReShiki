@@ -138,6 +138,10 @@ impl Paint {
     pub fn atom(&self, id: u64) -> f32 {
         self.atoms.get(&id).copied().unwrap_or(1.)
     }
+    /// Whether every part of this bond is painted at full opacity.
+    pub(crate) fn opaque(&self, bond: &Bond) -> bool {
+        self.bond_alpha(bond) >= 1.
+    }
     fn bond_alpha(&self, bond: &Bond) -> f32 {
         self.node(bond.a).opacity.min(self.node(bond.b).opacity)
     }

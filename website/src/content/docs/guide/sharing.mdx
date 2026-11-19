@@ -44,6 +44,8 @@ File exports use the full drawing. **Copy image** uses the current selection whe
 | Chemical structure data          | **MOL**, **SMILES**, or **InChI**                                                   |
 | Chemical reaction data           | **RXN** or **Reaction SMILES** in Reaction roles                                    |
 
+In SVG and PDF, plain bonds are stroked lines, so changing the stroke width in Illustrator or Inkscape changes every bond. Wedges and bold bonds stay filled. See [bonds in vector files](/developer/figure-export/#bonds-in-vector-files).
+
 Export dialogs also add the selected format’s extension when you omit it.
 
 Molecular and reaction data formats do not retain the full figure layout. Keep the `.rsk` original.

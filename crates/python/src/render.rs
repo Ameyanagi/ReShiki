@@ -73,7 +73,13 @@ pub async fn document(
         return formats::write_with_engine(doc, format, &engine).await;
     }
     let (doc, _) = export::figure_document(&engine, doc).await?;
-    let svg = scene::svg_with_background(&doc);
+    // SVG and PDF stroke plain bonds, so editors restyle their widths.
+    let primitives = if format == "png" {
+        scene::primitives(&doc)
+    } else {
+        scene::vector_primitives(&doc)
+    };
+    let svg = scene::svg_of(&doc, primitives, Some(doc.canvas_theme.background()));
     // Keep physical style dimensions intact unless a box was requested.
     if format == "svg" && options.width.is_none() && options.height.is_none() {
         return if options.outline_svg {

@@ -143,7 +143,9 @@ fn draw_primitives_with_opacity(
             Primitive::Halo { radius, primitives } => {
                 draw_halo(frame, primitives, camera, bounds, *radius)
             }
-            Primitive::Sphere { .. }
+            // Vector export only; the canvas draws the bond outlines.
+            Primitive::Polyline { .. }
+            | Primitive::Sphere { .. }
             | Primitive::Ellipsoid { .. }
             | Primitive::ShadedQuad { .. }
             | Primitive::ShadedPolygon { .. }
@@ -342,6 +344,7 @@ fn draw_halo(
                 }
             }
             Primitive::Picture(_)
+            | Primitive::Polyline { .. }
             | Primitive::Halo { .. }
             | Primitive::Sphere { .. }
             | Primitive::Ellipsoid { .. }

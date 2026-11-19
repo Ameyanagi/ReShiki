@@ -584,7 +584,7 @@ fn composed_rear_atom_label_gets_a_halo_over_complete_lobes_only_when_it_is_pain
             alpha > 0.,
             "Only a painted label gets a halo (alpha {alpha})"
         );
-        let svg = reshiki::scene::svg(&doc);
+        let svg = reshiki::scene::svg_of(&doc, reshiki::scene::vector_primitives(&doc), None);
         assert_eq!(svg.contains(">C</text>"), alpha > 0.);
         assert_eq!(
             reshiki::export::clipboard_drawing(&doc, "svg").unwrap(),

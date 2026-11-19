@@ -383,7 +383,12 @@ fn outlined_svg_is_never_smaller_than_its_floor() {
         "../../../../assets/examples/shortcut-examples.rsk"
     ))
     .unwrap();
-    let tree = parse_svg(scene::svg_with_background(&doc)).unwrap();
+    let svg = scene::svg_of(
+        &doc,
+        scene::vector_primitives(&doc),
+        Some(doc.canvas_theme.background()),
+    );
+    let tree = parse_svg(svg).unwrap();
     let (floor, outlined) = (
         outlined_floor(tree.root()),
         office_svg(&tree).unwrap().len(),
@@ -780,16 +785,13 @@ fn outlined_svg_and_office_exports_preserve_text_geometry_and_physical_size() {
     for theme in crate::canvas_theme::CanvasTheme::ALL {
         let mut doc = doc.clone();
         doc.canvas_theme = theme;
+        let vector = |paper| scene::svg_of(&doc, scene::vector_primitives(&doc), paper);
         assert_eq!(
             drawing(&doc, "svg").unwrap(),
-            scene::svg_with_background(&doc).into_bytes()
+            vector(Some(theme.background())).into_bytes()
         );
         for clipboard in [false, true] {
-            let source = if clipboard {
-                scene::svg(&doc)
-            } else {
-                scene::svg_with_background(&doc)
-            };
+            let source = vector((!clipboard).then(|| theme.background()));
             let bytes = if clipboard {
                 clipboard_figure(&doc, "svg-office").unwrap().bytes
             } else {
@@ -1610,4 +1612,144 @@ fn file_sizes_follow_the_adaptive_budget() {
     let (width, height, dpi) = png_file_size(size, 1200).unwrap();
     assert_eq!(dpi, 600);
     assert_eq!((width, height), png_pixels(size, 600));
+}
+
+/// Drawings with every kind of bond corner: ring and chain mitres, fused
+/// and three-way atoms, labels, wedges, colors, crossings and carbonyls.
+fn bond_corner_drawings() -> Vec<(&'static str, Document)> {
+    use crate::document::Point;
+    let mut drawings: Vec<_> = [
+        (
+            "bond-join-regression",
+            &include_bytes!("../../../../tests/fixtures/bond-join-regression.rsk")[..],
+        ),
+        (
+            "artemisinin",
+            include_bytes!("../../../../tests/fixtures/qa-artemisinin-after.rsk"),
+        ),
+        (
+            "esterification",
+            include_bytes!("../../../../tests/fixtures/esterification-scheme.rsk"),
+        ),
+        (
+            "tilted-fused",
+            include_bytes!("../../../../tests/fixtures/tilted-fused-double-bonds.rsk"),
+        ),
+        (
+            "phenylalanine",
+            include_bytes!("../../../../tests/fixtures/phenylalanine-rotation.rsk"),
+        ),
+    ]
+    .into_iter()
+    .map(|(name, bytes)| (name, Document::from_json(bytes).unwrap()))
+    .collect();
+    let mut doc = Document::default();
+    let hexagon: Vec<_> = (0..6)
+        .map(|i| {
+            let angle = std::f32::consts::FRAC_PI_3 * i as f32 + 0.5;
+            doc.add_atom("C", Point::new(30. * angle.cos(), 30. * angle.sin()))
+        })
+        .collect();
+    for i in 0..6 {
+        doc.add_bond(hexagon[i], hexagon[(i + 1) % 6], 1 + (i % 2) as u8, "plain");
+    }
+    let chain: Vec<_> = [
+        (60., 10.),
+        (86., 25.),
+        (112., 10.),
+        (138., 25.),
+        (164., 10.),
+    ]
+    .into_iter()
+    .map(|(x, y)| doc.add_atom("C", Point::new(x, y)))
+    .collect();
+    doc.add_bond(hexagon[0], chain[0], 1, "plain");
+    doc.add_bond(chain[0], chain[1], 1, "wedge");
+    doc.add_bond(chain[1], chain[2], 1, "plain");
+    doc.add_bond(chain[2], chain[3], 1, "plain");
+    doc.add_bond(chain[3], chain[4], 2, "plain");
+    doc.atoms.last_mut().unwrap().element = "O".into();
+    doc.bonds[2].color = crate::palette::Color::Custom([200, 0, 0]);
+    // A bond crossing the chain.
+    let over = doc.add_atom("C", Point::new(120., -20.));
+    let under = doc.add_atom("N", Point::new(130., 50.));
+    doc.add_bond(over, under, 1, "plain");
+    // A right angle between two colors. (A corner sharper than 29° is
+    // left out: its outline also narrows the inner edge, which a stroke
+    // keeps at full width.)
+    let right =
+        [(180., 40.), (220., 40.), (180., 80.)].map(|(x, y)| doc.add_atom("C", Point::new(x, y)));
+    doc.add_bond(right[1], right[0], 1, "plain");
+    doc.add_bond(right[0], right[2], 1, "plain");
+    doc.bonds.last_mut().unwrap().color = crate::palette::Color::Custom([0, 0, 200]);
+    let wide = doc.add_atom("C", Point::new(150., 20.));
+    doc.add_bond(right[0], wide, 1, "hollow_wedge");
+    doc.bonds.last_mut().unwrap().color = crate::palette::Color::Custom([0, 150, 0]);
+    drawings.push(("ring-chain-crossing", doc));
+    drawings
+}
+
+/// Vector export strokes plain bonds; at 1200 dpi its pixels must match the
+/// filled outlines the canvas and PNG draw, ends and corners included.
+#[test]
+fn vector_bond_lines_paint_the_same_ink_as_the_filled_outlines() {
+    for (name, doc) in bond_corner_drawings() {
+        let filled = scene::primitives(&doc);
+        let stroked = scene::vector_primitives(&doc);
+        assert!(
+            stroked
+                .iter()
+                .any(|p| matches!(p, scene::Primitive::Polyline { .. })),
+            "{name}"
+        );
+        let pixels = |primitives| {
+            let tree = parse_svg(scene::svg_of(&doc, primitives, None)).unwrap();
+            let size = png_pixels((tree.size().width(), tree.size().height()), 1200);
+            (size, raster(&tree, None, 1200., size, (0., 0.)).unwrap())
+        };
+        let (size, before) = pixels(filled);
+        let (stroked_size, after) = pixels(stroked);
+        assert_eq!(size, stroked_size, "{name}: the bounds are the outlines'");
+        let (mut ink, mut differ, mut total) = (0, 0, 0.);
+        for (a, b) in before.pixels().iter().zip(after.pixels()) {
+            // Colors too, so a corner painted in the neighbour's color counts.
+            let channels = |c: &resvg::tiny_skia::PremultipliedColorU8| {
+                [c.red(), c.green(), c.blue(), c.alpha()]
+            };
+            let change = channels(a)
+                .into_iter()
+                .zip(channels(b))
+                .map(|(a, b)| a.abs_diff(b))
+                .max()
+                .unwrap_or_default();
+            ink += usize::from(a.alpha().max(b.alpha()) > 0);
+            if change > 127 {
+                let i = (a as *const _ as usize - before.pixels().as_ptr() as usize) / 4;
+                let (w, _) = size;
+                if differ % 40 == 0 {
+                    println!(
+                        "DBG {} {} {:?} {:?}",
+                        i as u32 % w,
+                        i as u32 / w,
+                        channels(a),
+                        channels(b)
+                    );
+                }
+            }
+            differ += usize::from(change > 127);
+            total += f64::from(change) / 255.;
+        }
+        println!(
+            "{name}: {ink} ink pixels, {differ} differ by half, {total:.1} pixels of ink moved"
+        );
+        assert!(
+            differ * 10_000 <= ink && total * 1000. <= ink as f64,
+            "{name}: {differ} of {ink} pixels differ, {total:.1} pixels of ink moved"
+        );
+        let svg = String::from_utf8(drawing(&doc, "svg").unwrap()).unwrap();
+        assert!(
+            svg.contains("stroke-linejoin=\"miter\""),
+            "{name}: SVG export strokes bonds"
+        );
+    }
 }
