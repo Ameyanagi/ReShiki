@@ -4,9 +4,14 @@ Open **View → Page setup…** or **Export → Page setup…**. Choose A4, A5,
 US Letter, US Legal, a table-of-contents graphic or a custom size. Width, height and the four margins use
 millimetres. Portrait/landscape and a 1–10 by 1–10 page grid are available.
 Choosing a size or an orientation applies it at once, as one Undo step, and
-leaves the panel open. For typed sizes, margins and the page grid, press Enter
-or **Apply page setup**; editing the fields alone does not change the drawing.
-Opening Page setup closes the View strip.
+leaves the panel open. It changes only the size: margins and grid values you
+typed stay typed until you apply them, and margins too wide for the new size
+go back to their defaults. A table-of-contents size makes one sheet centered
+on the drawing. **Custom** puts the cursor in **Width**. For typed sizes,
+margins and the page grid, press Enter or **Apply page setup**; editing the
+fields alone does not change the drawing. Print and **Export pages as PDF…**
+use the same pages, valid typed values included. Opening Page setup closes the
+View strip.
 
 The canvas shows sheets in the document’s light or dark canvas colors, with margin guides and page numbers. Page colors are also used when exporting or printing.
 Atom selection markers shrink at page-fit zoom to keep small structures readable.

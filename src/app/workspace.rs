@@ -2929,7 +2929,11 @@ impl App {
         ]);
         let actions = group(vec![
             command("Page setup…", Message::Pages(super::pages::Action::Show)).into(),
-            command("Done", Message::View(super::view_settings::Action::Toggle)).into(),
+            command(
+                "Close view options",
+                Message::View(super::view_settings::Action::Toggle),
+            )
+            .into(),
         ]);
         container(
             row![interface, canvas, data, actions]

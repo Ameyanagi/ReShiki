@@ -188,3 +188,72 @@ fn page_setup_closes_the_view_strip_and_landscape_applies_at_once() {
     let _ = app.update(Message::Undo);
     assert_eq!(app.tab.doc, portrait);
 }
+
+#[test]
+fn a_size_choice_keeps_typed_margins_and_grid_typed() {
+    let mut app = ready();
+    let _ = app.update(Message::Pages(Action::Open));
+    let _ = app.update(Message::Pages(Action::Preset(Preset::A4)));
+    let _ = app.update(Message::Pages(Action::Input(Field::Columns, "2".into())));
+    let _ = app.update(Message::Pages(Action::Input(Field::Rows, "x".into())));
+    let _ = app.update(Message::Pages(Action::Landscape(true)));
+    let layout = app.tab.doc.page_layout.clone().unwrap();
+    assert!(layout.width_pt > layout.height_pt);
+    assert_eq!(
+        (layout.columns, layout.rows),
+        (1, 1),
+        "the grid is not applied"
+    );
+    let editor = app.tab.pages.editor.as_ref().unwrap();
+    assert_eq!((editor.columns.as_str(), editor.rows.as_str()), ("2", "x"));
+    assert!(!app.error, "{}", app.status);
+}
+
+#[test]
+fn margins_too_wide_for_a_smaller_size_fall_back_to_the_defaults() {
+    let mut app = ready();
+    let _ = app.update(Message::Pages(Action::Open));
+    let _ = app.update(Message::Pages(Action::Preset(Preset::A4)));
+    let _ = app.update(Message::Pages(Action::Input(Field::Left, "80".into())));
+    let _ = app.update(Message::Pages(Action::Input(Field::Right, "80".into())));
+    let _ = app.update(Message::Pages(Action::Apply));
+    let _ = app.update(Message::Pages(Action::Show));
+    let _ = app.update(Message::Pages(Action::Open));
+    let _ = app.update(Message::Pages(Action::Preset(Preset::A5)));
+    assert!(!app.error, "{}", app.status);
+    let layout = app.tab.doc.page_layout.as_ref().unwrap();
+    assert_eq!(layout.preset(), Preset::A5);
+    assert_eq!(layout.margins, reshiki::pages::Margins::default());
+}
+
+#[test]
+fn a_toc_preset_is_one_sheet_framing_page_one() {
+    let mut app = ready();
+    app.tab.doc.add_atom("C", Point::new(0., 0.));
+    let _ = app.update(Message::Pages(Action::Open));
+    let _ = app.update(Message::Pages(Action::Input(Field::Columns, "2".into())));
+    let _ = app.update(Message::Pages(Action::Apply));
+    let _ = app.update(Message::Pages(Action::Navigate(1)));
+    let _ = app.update(Message::Pages(Action::Open));
+    let _ = app.update(Message::Pages(Action::Preset(Preset::AcsToc)));
+    let layout = app.tab.doc.page_layout.as_ref().unwrap();
+    assert_eq!(layout.count(), 1);
+    assert_eq!(app.tab.pages.active, 0);
+    let _ = app.update(Message::Undo);
+    assert_eq!(
+        app.tab.doc.page_layout.as_ref().unwrap().count(),
+        2,
+        "one Undo step"
+    );
+}
+
+#[test]
+fn page_setup_on_a_paged_drawing_also_closes_the_view_strip() {
+    let mut app = ready();
+    let _ = app.update(Message::Pages(Action::Open));
+    let _ = app.update(Message::Pages(Action::Apply));
+    assert!(app.tab.doc.page_layout.is_some());
+    app.view_open = true;
+    let _ = app.update(Message::Pages(Action::Show));
+    assert!(!app.view_open);
+}
