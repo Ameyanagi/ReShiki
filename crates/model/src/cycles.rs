@@ -230,6 +230,23 @@ struct Span {
     sweep: f32,
 }
 impl Span {
+    /// Keep a painted parallel lane's radius positive, including its phase
+    /// when a very small arc's inner parallel crosses through the centre.
+    fn shifted(self, offset: f32) -> Option<Self> {
+        let radius = self.radius + offset;
+        (radius != 0.).then_some(Self {
+            radius: radius.abs(),
+            first: self.first + if radius < 0. { 180. } else { 0. },
+            ..self
+        })
+    }
+    fn reversed(self) -> Self {
+        Self {
+            first: self.first + self.sweep,
+            sweep: -self.sweep,
+            ..self
+        }
+    }
     fn angle(self, t: f32) -> f32 {
         (self.first + self.sweep * t).to_radians()
     }
@@ -448,11 +465,15 @@ pub fn drawn(doc: &Document, g: &Graphic) -> Drawn {
                 (p.x - arc.center.x) * (p.x - center.x) + (p.y - arc.center.y) * (p.y - center.y);
             if dot >= 0. { 1. } else { -1. }
         };
+        let half = if step.reversible && !step.hidden && to > from {
+            DEFAULT.world(style.gap_pt.max(2.)) * 0.75
+        } else {
+            0.
+        };
         if !step.hidden && to > from {
             if step.reversible {
                 // Two half-headed arcs either side of the line, the forward
                 // one on the outside.
-                let half = DEFAULT.world(style.gap_pt.max(2.)) * 0.75;
                 // Half heads face away from the pair.
                 let forward = ArrowStyle {
                     head: if (arc.sweep > 0.) == (outward > 0.) {
@@ -484,7 +505,19 @@ pub fn drawn(doc: &Document, g: &Graphic) -> Drawn {
         }
         // Side arrows swoop in to the arc, or out of it, meeting it along
         // its way, far enough along from their end for an easy curve.
-        let length = arc.radius * arc.sweep.to_radians().abs();
+        let lanes: Vec<_> = if half == 0. {
+            vec![(0, arc)]
+        } else {
+            [
+                arc.shifted(outward * half),
+                arc.shifted(-outward * half).map(Span::reversed),
+            ]
+            .into_iter()
+            .enumerate()
+            .filter_map(|(i, lane)| lane.map(|lane| (i, lane)))
+            .collect()
+        };
+        let mut attachments = vec![];
         for incoming in step
             .reagents
             .iter()
@@ -495,15 +528,38 @@ pub fn drawn(doc: &Document, g: &Graphic) -> Drawn {
                 continue;
             };
             let c = center_of(b);
-            let ahead = (1.2 * bond).max(1.1 * (c.distance(arc.center) - arc.radius).abs());
+            // A reversible step paints two lanes, not their centreline. Meet
+            // the lane on this part's side, travelling that lane's way.
+            let Some(&(lane, path)) = lanes.iter().min_by(|(i, a), (j, b)| {
+                let distance = |a: &Span| (c.distance(a.center) - a.radius).abs();
+                distance(a).total_cmp(&distance(b)).then(i.cmp(j))
+            }) else {
+                continue;
+            };
+            let length = path.radius * path.sweep.to_radians().abs();
+            let ahead = (1.2 * bond).max(1.1 * (c.distance(path.center) - path.radius).abs());
             let shift = if length > 0. { ahead / length } else { 0. };
-            let t = (arc.along(c) + if incoming { shift } else { -shift }).clamp(0.15, 0.85);
+            let projected = path.along(c);
+            let t = (projected + if incoming { shift } else { -shift }).clamp(0.15, 0.85);
+            attachments.push(SideAttachment {
+                ink: b,
+                incoming,
+                projected,
+                t,
+                path,
+                lane,
+            });
+        }
+        if half != 0. {
+            separate_attachments(&mut attachments, bond);
+        }
+        for attachment in attachments {
             let side = side_arrow(
                 g.id,
-                arc.at(t, 0.),
-                arc.tangent(t),
-                grown(b, gap),
-                incoming,
+                attachment.path.at(attachment.t, 0.),
+                attachment.path.tangent(attachment.t),
+                grown(attachment.ink, gap),
+                attachment.incoming,
                 &style,
             );
             taken.push(side.bounds());
@@ -586,6 +642,75 @@ pub fn drawn(doc: &Document, g: &Graphic) -> Drawn {
         ));
     }
     out
+}
+
+#[derive(Clone, Copy)]
+struct SideAttachment {
+    ink: (Point, Point),
+    incoming: bool,
+    projected: f32,
+    t: f32,
+    path: Span,
+    lane: usize,
+}
+
+/// Keep joins in their parts' perimeter order. Incoming and outgoing shifts
+/// otherwise pull two neighbouring connectors onto the same point. Pooling
+/// adjacent conflicts moves the preferred joins as little as possible.
+fn separate_attachments(attachments: &mut [SideAttachment], bond: f32) {
+    #[derive(Clone, Copy)]
+    struct Block {
+        sum: f32,
+        count: usize,
+    }
+    for lane in 0..2 {
+        let mut ordered: Vec<_> = attachments
+            .iter()
+            .copied()
+            .enumerate()
+            .filter(|(_, a)| a.lane == lane)
+            .collect();
+        ordered.sort_by(|(_, a), (_, b)| a.projected.total_cmp(&b.projected));
+        let Some((_, first)) = ordered.first().filter(|_| ordered.len() > 1) else {
+            continue;
+        };
+        let length = first.path.radius * first.path.sweep.to_radians().abs();
+        if length <= 0. {
+            continue;
+        }
+        let gap = (bond / length).min(0.7 / (ordered.len() - 1) as f32);
+        let maximum = 0.85 - gap * (ordered.len() - 1) as f32;
+        let mut blocks = vec![];
+        for (i, (_, attachment)) in ordered.iter().enumerate() {
+            blocks.push(Block {
+                sum: attachment.t - i as f32 * gap,
+                count: 1,
+            });
+            while let Some([a, b]) = blocks.last_chunk::<2>() {
+                if a.sum / a.count as f32 <= b.sum / b.count as f32 {
+                    break;
+                }
+                let merged = Block {
+                    sum: a.sum + b.sum,
+                    count: a.count + b.count,
+                };
+                blocks.truncate(blocks.len() - 2);
+                blocks.push(merged);
+            }
+        }
+        let mut positions = vec![];
+        for block in blocks {
+            let base = (block.sum / block.count as f32).clamp(0.15, maximum.max(0.15));
+            for _ in 0..block.count {
+                positions.push(base + positions.len() as f32 * gap);
+            }
+        }
+        for ((index, _), t) in ordered.into_iter().zip(positions) {
+            if let Some(attachment) = attachments.get_mut(index) {
+                attachment.t = t;
+            }
+        }
+    }
 }
 
 /// A side arrow between a part's ink and the point where it touches the
@@ -1414,5 +1539,7 @@ pub fn reconcile(doc: &mut Document) {
     ungroup_freed(doc, &freed);
 }
 
+#[cfg(test)]
+mod side_attachment_tests;
 #[cfg(test)]
 mod tests;
