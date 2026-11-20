@@ -411,14 +411,16 @@ pub(super) fn paint(
         if path.filled {
             f.fill(&shape, ink);
         }
-        f.stroke(
-            &shape,
-            Stroke::default()
-                .with_color(ink)
-                .with_width(1.5)
-                .with_line_cap(LineCap::Round)
-                .with_line_join(LineJoin::Round),
-        );
+        if path.stroked {
+            f.stroke(
+                &shape,
+                Stroke::default()
+                    .with_color(ink)
+                    .with_width(1.5)
+                    .with_line_cap(LineCap::Round)
+                    .with_line_join(LineJoin::Round),
+            );
+        }
     }
 }
 

@@ -24,11 +24,23 @@ pub struct IconPath {
     /// A dot or wedge painted in the line color.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub filled: bool,
+    /// Whether the path also takes the icon's line width. Older saved icons
+    /// stroked every path, including filled details.
+    #[serde(default = "yes", skip_serializing_if = "is_true")]
+    pub stroked: bool,
+}
+
+fn yes() -> bool {
+    true
+}
+
+fn is_true(value: &bool) -> bool {
+    *value
 }
 
 impl Icon {
     /// Reads the library's form: SVG path data joined by `|`, a leading `*`
-    /// marking a filled path.
+    /// marking a filled path, followed by `!` when the path has no stroke.
     pub fn parse(name: &str, data: &str) -> Result<Self, String> {
         use crate::equipment::geometry::{Seg, parse_path};
         let point = |[x, y]: [f64; 2]| Point::new(x as f32, y as f32);
@@ -36,6 +48,7 @@ impl Icon {
             .split('|')
             .map(|d| {
                 let (filled, d) = d.strip_prefix('*').map_or((false, d), |d| (true, d));
+                let (stroked, d) = d.strip_prefix('!').map_or((true, d), |d| (false, d));
                 let commands = parse_path(d)
                     .map_err(|e| format!("Icon {name}: {e}"))?
                     .into_iter()
@@ -46,7 +59,11 @@ impl Icon {
                         Seg::Close => PathCommand::Close,
                     })
                     .collect();
-                Ok(IconPath { commands, filled })
+                Ok(IconPath {
+                    commands,
+                    filled,
+                    stroked,
+                })
             })
             .collect::<Result<_, String>>()?;
         Ok(Self {
@@ -88,6 +105,7 @@ pub fn parts(icon: &Icon, style: &GraphicStyle) -> Vec<Part> {
         commands: path.commands.iter().map(|c| c.map(unit)).collect(),
         style: GraphicStyle {
             fill: path.filled.then_some(style.stroke),
+            width_pt: if path.stroked { style.width_pt } else { 0. },
             ..style.clone()
         },
         filled: path.filled,

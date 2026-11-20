@@ -3815,20 +3815,20 @@ pepper	Food	chili,chilli,hot,spicy,vegetable,food,paprika	M13 11c0 2.21 -2.239 4
 pepper-off	Food	chili,chilli,mild,not-spicy,vegetable,disabled,slash	M12.59 12.59c-.77 1.418 -2.535 2.41 -4.59 2.41c-2.761 0 -5 -1.79 -5 -4a8 8 0 0 0 13.643 5.67m1.64 -2.357a7.97 7.97 0 0 0 .717 -3.313a3 3 0 0 0 -5.545 -1.59|M16 8c0 -2 2 -4 4 -4|M3 3l18 18
 percentage	Math	percent,percentage-sign,discount,rate,ratio,proportion,statistics,math,sale	M16 17a1 1 0 1 0 2 0a1 1 0 1 0 -2 0|M6 7a1 1 0 1 0 2 0a1 1 0 1 0 -2 0|M6 18l12 -12
 percentage-0	System	empty,none,percent,progress,pie-chart,ratio,share,fraction,loading,proportion,statistics	M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0
-percentage-10	System	percent,progress,pie-chart,ratio,share,fraction,loading,proportion,statistics	*M12 3c1.92 0 3.7 .601 5.16 1.626l-5.16 7.374v-9|M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0
+percentage-10	System	percent,progress,pie-chart,ratio,share,fraction,loading,proportion,statistics	*!M12 3c1.92 0 3.7 .601 5.16 1.626l-5.16 7.374v-9|M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0
 percentage-100	System	full,complete,percent,progress,pie-chart,ratio,share,fraction,loading,proportion,statistics	*M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0
-percentage-20	System	percent,progress,pie-chart,ratio,share,fraction,loading,proportion,statistics	*M12 3a9 9 0 0 1 8.497 6.025l-8.497 2.975v-9|M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0
-percentage-25	System	quarter,one-quarter,percent,progress,pie-chart,ratio,share,fraction,loading,proportion,statistics	*M21 12a9 9 0 0 0 -9 -9m0 0v9h9|M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0
-percentage-30	System	percent,progress,pie-chart,ratio,share,fraction,loading,proportion,statistics	*M12 3a9 9 0 0 1 8.495 11.973l-8.495 -2.973v-9|M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0
-percentage-33	System	one-third,third,percent,progress,pie-chart,ratio,share,fraction,loading,proportion,statistics	*M12 3a9 9 0 0 1 7.794 13.5l-7.79 -4.497v-9|M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0
-percentage-40	System	percent,progress,pie-chart,ratio,share,fraction,loading,proportion,statistics	*M12 3a9 9 0 0 1 5.162 16.372l-5.162 -7.372v-9|M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0
-percentage-50	System	half,percent,progress,pie-chart,ratio,share,fraction,loading,proportion,statistics	*M12 21a9 9 0 0 0 0 -18m0 0v18|M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0
-percentage-60	System	percent,progress,pie-chart,ratio,share,fraction,loading,proportion,statistics	*M12 3a9 9 0 1 1 -5.162 16.373l5.162 -7.373v-9|M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0
-percentage-66	System	two-thirds,percent,progress,pie-chart,ratio,share,fraction,loading,proportion,statistics	*M12 3a9 9 0 1 1 -7.795 13.498l7.795 -4.498v-9|M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0
-percentage-70	System	percent,progress,pie-chart,ratio,share,fraction,loading,proportion,statistics	*M12 3a9 9 0 1 1 -8.495 11.973l8.495 -2.973v-9|M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0
-percentage-75	System	three-quarters,percent,progress,pie-chart,ratio,share,fraction,loading,proportion,statistics	*M3 12a9 9 0 1 0 9 -9m0 0v9h-9|M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0
-percentage-80	System	percent,progress,pie-chart,ratio,share,fraction,loading,proportion,statistics	*M12 3a9 9 0 1 1 -8.497 6.025l8.497 2.975v-9|M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0
-percentage-90	System	percent,progress,pie-chart,ratio,share,fraction,loading,proportion,statistics	*M12 3a9 9 0 1 1 -5.16 1.626l5.16 7.374v-9|M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0
+percentage-20	System	percent,progress,pie-chart,ratio,share,fraction,loading,proportion,statistics	*!M12 3a9 9 0 0 1 8.497 6.025l-8.497 2.975v-9|M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0
+percentage-25	System	quarter,one-quarter,percent,progress,pie-chart,ratio,share,fraction,loading,proportion,statistics	*!M21 12a9 9 0 0 0 -9 -9m0 0v9h9|M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0
+percentage-30	System	percent,progress,pie-chart,ratio,share,fraction,loading,proportion,statistics	*!M12 3a9 9 0 0 1 8.495 11.973l-8.495 -2.973v-9|M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0
+percentage-33	System	one-third,third,percent,progress,pie-chart,ratio,share,fraction,loading,proportion,statistics	*!M12 3a9 9 0 0 1 7.794 13.5l-7.79 -4.497v-9|M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0
+percentage-40	System	percent,progress,pie-chart,ratio,share,fraction,loading,proportion,statistics	*!M12 3a9 9 0 0 1 5.162 16.372l-5.162 -7.372v-9|M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0
+percentage-50	System	half,percent,progress,pie-chart,ratio,share,fraction,loading,proportion,statistics	*!M12 21a9 9 0 0 0 0 -18m0 0v18|M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0
+percentage-60	System	percent,progress,pie-chart,ratio,share,fraction,loading,proportion,statistics	*!M12 3a9 9 0 1 1 -5.162 16.373l5.162 -7.373v-9|M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0
+percentage-66	System	two-thirds,percent,progress,pie-chart,ratio,share,fraction,loading,proportion,statistics	*!M12 3a9 9 0 1 1 -7.795 13.498l7.795 -4.498v-9|M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0
+percentage-70	System	percent,progress,pie-chart,ratio,share,fraction,loading,proportion,statistics	*!M12 3a9 9 0 1 1 -8.495 11.973l8.495 -2.973v-9|M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0
+percentage-75	System	three-quarters,percent,progress,pie-chart,ratio,share,fraction,loading,proportion,statistics	*!M3 12a9 9 0 1 0 9 -9m0 0v9h-9|M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0
+percentage-80	System	percent,progress,pie-chart,ratio,share,fraction,loading,proportion,statistics	*!M12 3a9 9 0 1 1 -8.497 6.025l8.497 2.975v-9|M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0
+percentage-90	System	percent,progress,pie-chart,ratio,share,fraction,loading,proportion,statistics	*!M12 3a9 9 0 1 1 -5.16 1.626l5.16 7.374v-9|M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0
 perfume	E-commerce	fragrance,cologne,scent,spray,bottle,beauty,cosmetics	M10 6v3|M14 6v3|M5 11a2 2 0 0 1 2 -2h10a2 2 0 0 1 2 2v8a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2l0 -8|M10 15a2 2 0 1 0 4 0a2 2 0 1 0 -4 0|M9 3h6v3h-6l0 -3
 perspective	Shapes	3d,perspective-transform,skew,distort,depth,transform,design	M6.141 4.163l12 1.714a1 1 0 0 1 .859 .99v10.266a1 1 0 0 1 -.859 .99l-12 1.714a1 1 0 0 1 -1.141 -.99v-13.694a1 1 0 0 1 1.141 -.99
 perspective-off	Shapes	3d,perspective-transform,skew,distort,disabled,slash,depth,transform,inactive	M8.511 4.502l9.63 1.375a1 1 0 0 1 .859 .99v8.133m-.859 3.123l-12 1.714a1 1 0 0 1 -1.141 -.99v-13.694a1 1 0 0 1 .01 -.137|M3 3l18 18

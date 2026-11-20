@@ -295,9 +295,78 @@ fn locked_apply_uses_the_size_edited_last_and_clears_the_other() {
     input(&mut app, Field::Width, "150");
     input(&mut app, Field::Height, "90");
     assert_eq!(
-        app.tab.numeric_transforms.to_apply(),
+        app.tab
+            .numeric_transforms
+            .to_apply(&app.tab.doc, &app.tab.selected),
         [Field::Width, Field::Height]
     );
+}
+
+#[test]
+fn icons_keep_the_effective_proportional_lock_when_both_sizes_are_edited() {
+    for last in [Field::Width, Field::Height] {
+        let mut app = fixture();
+        let icon = app.tab.doc.next_id();
+        let drawing = reshiki::line_icons::Icon::parse("test", "M2 2L22 22").unwrap();
+        app.tab.doc.graphics.push(Graphic::line_icon(
+            icon,
+            drawing,
+            Point::new(300., 80.),
+            40.,
+            Default::default(),
+        ));
+        app.tab.selected.push(icon);
+        app.sync_numeric_transforms();
+        let _ = app.update(Message::NumericTransform(Action::Proportional(false)));
+        let original = app.tab.doc.clone();
+        let selected = app.tab.selected.clone();
+        let first = if last == Field::Width {
+            Field::Height
+        } else {
+            Field::Width
+        };
+        let target = |field| {
+            extent(&original, &selected, field).unwrap() * if field == last { 1.5 } else { 2. }
+        };
+        input(&mut app, first, &format!("{:.2}", target(first)));
+        input(&mut app, last, &format!("{:.2}", target(last)));
+        assert!(proportions_locked(&app.tab.doc, &app.tab.selected, false));
+        assert_eq!(
+            app.tab
+                .numeric_transforms
+                .to_apply(&app.tab.doc, &app.tab.selected),
+            [last]
+        );
+        let _ = app.update(Message::NumericTransform(Action::ApplyAll));
+        assert!(!app.error, "{}", app.status);
+        let reached = extent(&app.tab.doc, &app.tab.selected, last).unwrap();
+        assert!((reached - target(last)).abs() < 0.01, "{last:?}: {reached}");
+        let before = original.graphics.iter().find(|g| g.id == icon).unwrap();
+        let after = app.tab.doc.graphics.iter().find(|g| g.id == icon).unwrap();
+        let scale_x =
+            after.axis_x.distance(Point::default()) / before.axis_x.distance(Point::default());
+        let scale_y =
+            after.axis_y.distance(Point::default()) / before.axis_y.distance(Point::default());
+        assert!((scale_x - scale_y).abs() < 1e-5);
+        let applied = app.tab.doc.clone();
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.tab.doc, original);
+        assert!(!app.tab.history.can_undo());
+        let _ = app.update(Message::Redo);
+        assert_eq!(app.tab.doc, applied);
+        app.tab.selected.retain(|id| *id != icon);
+        app.sync_numeric_transforms();
+        assert!(!app.tab.numeric_transforms.proportional);
+        assert!(!proportions_locked(&app.tab.doc, &app.tab.selected, false));
+        input(&mut app, Field::Width, "150");
+        input(&mut app, Field::Height, "90");
+        assert_eq!(
+            app.tab
+                .numeric_transforms
+                .to_apply(&app.tab.doc, &app.tab.selected),
+            [Field::Width, Field::Height]
+        );
+    }
 }
 
 #[test]
@@ -312,7 +381,9 @@ fn apply_includes_tilt_typed_before_more_was_closed() {
     input(&mut app, Field::TiltX, "20");
     let _ = app.update(Message::NumericTransform(Action::More(false)));
     assert_eq!(
-        app.tab.numeric_transforms.to_apply(),
+        app.tab
+            .numeric_transforms
+            .to_apply(&app.tab.doc, &app.tab.selected),
         [Field::Rotation, Field::TiltX]
     );
     let _ = app.update(Message::NumericTransform(Action::ApplyAll));

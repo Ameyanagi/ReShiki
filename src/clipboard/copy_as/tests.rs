@@ -914,6 +914,8 @@ async fn a_cycle_step_copies_as_its_own_reaction_smiles() {
             role: crate::cycles::Role::Reagent(0),
             part: mebr,
             ink,
+            arc: vec![],
+            tag: String::new(),
         },
     );
     let engine = LocalEngine::in_process();

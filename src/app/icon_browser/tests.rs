@@ -137,7 +137,7 @@ fn the_grid_survives_scrolling_searching_and_a_new_recent_row() {
     use iced::advanced::widget::Tree;
     let mut app = app();
     let _ = app.update(Message::Tool(Tool::Icons));
-    let mut tree = Tree::new(&app.icons_panel());
+    let mut tree = Tree::new(app.icons_panel());
     let scroll = |offset| Action::Scrolled {
         offset,
         height: 700.,
@@ -201,7 +201,7 @@ fn unfiltered_placement_and_search_to_recent_reconcile_each_row() {
     use iced::advanced::widget::Tree;
     let mut app = app();
     let _ = app.update(Message::Tool(Tool::Icons));
-    let mut tree = Tree::new(&app.icons_panel());
+    let mut tree = Tree::new(app.icons_panel());
     for action in [
         Action::Pick(Choice::Condition(SymbolKind::Light)),
         Action::Search("flask".into()),
@@ -239,7 +239,7 @@ async fn the_grid_lays_out_after_placement_search_and_scroll_jumps() {
     .unwrap();
     let mut app = app();
     let _ = app.update(Message::Tool(Tool::Icons));
-    let mut tree = Tree::new(&app.icons_panel());
+    let mut tree = Tree::new(app.icons_panel());
     let limits = layout::Limits::new(iced::Size::ZERO, iced::Size::new(340., 900.));
     let mut layout = |app: &App| {
         let mut panel = app.icons_panel();

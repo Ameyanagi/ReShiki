@@ -50,7 +50,9 @@ def build_tsv(tarball: bytes, *, integrity: str = INTEGRITY) -> tuple[bytes, int
             assert node == "path", name
             d = attributes["d"]
             assert d.startswith(("M", "m")) and "|" not in d and "\t" not in d, name
-            paths.append("*" + d if attributes.get("fill") == "currentColor" else d)
+            fill = "*" if attributes.get("fill") == "currentColor" else ""
+            no_stroke = "!" if attributes.get("stroke") == "none" else ""
+            paths.append(fill + no_stroke + d)
         lines.append("\t".join((name, icon.get("category", ""), tags_field, "|".join(paths))))
 
     return ("\n".join(lines) + "\n").encode("utf-8"), len(outline)
