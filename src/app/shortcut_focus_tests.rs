@@ -2588,6 +2588,76 @@ async fn context_row_rotation_field_applies_a_typed_angle() {
     assert!(!app.tab.history.can_undo());
 }
 
+/// One physical Backspace deletes one character and creates one draft Undo.
+#[tokio::test]
+#[ignore = "Opt-in renderer input check"]
+async fn caption_backspace_and_undo_keep_graphemes_whole() {
+    use iced::widget::text_editor::{Action, Edit};
+
+    let mut ui = Ui::new().await;
+    let primary = if cfg!(target_os = "macos") {
+        Modifiers::LOGO
+    } else {
+        Modifiers::CTRL
+    };
+    for (text, remaining, select_all) in [
+        ("Mix 🇯🇵", "Mix ", false),
+        ("Mix 👩\u{200D}🔬", "Mix ", false),
+        ("Mix x", "Mix ", false),
+        ("Mix 🇯🇵", "", true),
+    ] {
+        let (mut app, _) = App::new();
+        app.tab.busy = false;
+        let task = app.update(Message::InlineText(super::inline_text::Action::Begin(
+            None,
+            reshiki::document::Point::default(),
+        )));
+        ui.run_task(&mut app, task).await;
+        let _ = app.update(Message::CaptionAction(Action::Edit(Edit::Paste(
+            text.to_owned().into(),
+        ))));
+        if select_all {
+            ui.key(
+                &mut app,
+                Key::Character("a".into()),
+                Code::KeyA,
+                primary,
+                None,
+            )
+            .await;
+        }
+        ui.key(
+            &mut app,
+            Key::Named(Named::Backspace),
+            Code::Backspace,
+            Modifiers::empty(),
+            None,
+        )
+        .await;
+        assert_eq!(app.tab.caption, remaining, "Backspace in {text:?}");
+        ui.key(
+            &mut app,
+            Key::Character("z".into()),
+            Code::KeyZ,
+            primary,
+            None,
+        )
+        .await;
+        assert_eq!(app.tab.caption, text, "one Undo in {text:?}");
+        ui.key(
+            &mut app,
+            Key::Character("z".into()),
+            Code::KeyZ,
+            primary | Modifiers::SHIFT,
+            None,
+        )
+        .await;
+        assert_eq!(app.tab.caption, remaining, "one Redo in {text:?}");
+        assert!(ui.input(&app, "inline-caption").1);
+        assert!(app.tab.doc.annotations.is_empty(), "the edit stays a draft");
+    }
+}
+
 /// The symbol picker inserts into the open caption and hands typing back to
 /// it; Escape closes only the picker, and typed shortcuts still expand.
 #[tokio::test]

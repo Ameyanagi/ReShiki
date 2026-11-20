@@ -4045,6 +4045,7 @@ dependencies = [
  "time",
  "tokio",
  "ttf-parser",
+ "unicode-segmentation",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
@@ -4205,6 +4206,7 @@ dependencies = [
  "reshiki-process-heap",
  "resvg",
  "roxmltree",
+ "rustybuzz",
  "serde",
  "serde_json",
  "sha2",
@@ -4214,6 +4216,7 @@ dependencies = [
  "tiff",
  "tokio",
  "ttf-parser",
+ "unicode-segmentation",
 ]
 
 [[package]]
