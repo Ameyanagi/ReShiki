@@ -165,8 +165,14 @@ impl App {
         }
         let scroll = |lo: f32, hi: f32, size: f32| {
             let spare = size - (hi - lo);
+            // Too big to show whole: its start stays in the first half of
+            // the view, so what was on screen beside it stays when it can.
             if spare < 0. {
-                return lo - 40.;
+                return if lo < 0. {
+                    lo - 40.
+                } else {
+                    (lo - size / 2.).max(0.)
+                };
             }
             let margin = 40.0_f32.min(spare / 2.);
             let to_start = lo - margin;

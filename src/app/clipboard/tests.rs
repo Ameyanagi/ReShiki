@@ -1098,7 +1098,7 @@ fn a_wide_paste_keeps_the_zoom_and_scrolls_to_show_its_start() {
     let paper = app.guides.paper(iced::Rectangle::with_size(app.viewport));
     let x = app.tab.camera.screen(lo, paper).x;
     assert!((0.0..paper.width).contains(&x));
-    assert!((x - 40.).abs() < 1e-3);
+    assert!((x - paper.width / 2.).abs() < 1e-3, "its start is mid-view");
     let _ = app.update(Message::Undo);
     assert_eq!(app.tab.doc, before);
 }
