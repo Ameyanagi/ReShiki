@@ -3,7 +3,7 @@
     "variant": "Jacs",
     "id": "acs-guidance",
     "name": "JACS / ACS",
-    "description": "ACS published values; existing ReShiki default.",
+    "description": "ACS 1996 values as ACS publishes them, rounded. The ReShiki default.",
     "kind": "published guidance",
     "url": "https://pubsapp.acs.org/paragonplus/submission/general/graphics_prep.html",
     "retrieved": "2026-09-26",
@@ -17,6 +17,28 @@
       "hash_spacing_pt": 2.5,
       "bond_spacing_ratio": 0.18
     }
+  },
+  {
+    "variant": "Acs1996",
+    "id": "acs-document-1996",
+    "name": "ACS Document 1996",
+    "description": "ChemDraw's ACS Document 1996 stationery. JACS / ACS rounds the same values.",
+    "kind": "publisher template",
+    "url": "https://pubsapp.acs.org/paragonplus/submission/general/graphics_prep.html",
+    "retrieved": "2026-11-20",
+    "settings": {
+      "font_family": "Arial",
+      "font_size_pt": 10.0,
+      "bond_length_pt": 14.399994,
+      "line_width_pt": 0.59999084,
+      "bold_width_pt": 2.0125885,
+      "margin_width_pt": 1.5873871,
+      "hash_spacing_pt": 2.4944763,
+      "bond_spacing_ratio": 0.18
+    },
+    "source_file": "ACS Document 1996.cds",
+    "sha256": "516ae7f93bb08018d73df8f2eac0df3718f8a01316fad7c305c283d550044702",
+    "notes": "Bundled with ChemDraw 26.1 (Stationery folder). Values are the file's own, stored in 1/65536 pt: 14.4 pt bonds, 0.6 pt lines, and bold width, margin and hash spacing of about 0.071, 0.056 and 0.088 cm."
   },
   {
     "variant": "Nature",

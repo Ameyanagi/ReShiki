@@ -145,6 +145,8 @@ fn from_chemdraw_xml(xml: &str, name: &str) -> Result<DrawingStyle, String> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Preset {
     Jacs,
+    /// ChemDraw's bundled ACS Document 1996 stationery, at its stored precision.
+    Acs1996,
     Nature,
     Rsc,
     Angewandte,
@@ -153,8 +155,9 @@ pub enum Preset {
     Presentation,
 }
 impl Preset {
-    pub const ALL: [Self; 5] = [
+    pub const ALL: [Self; 6] = [
         Self::Jacs,
+        Self::Acs1996,
         Self::Nature,
         Self::Rsc,
         Self::Angewandte,
@@ -163,6 +166,7 @@ impl Preset {
     pub fn id(self) -> &'static str {
         match self {
             Self::Jacs => "acs-guidance",
+            Self::Acs1996 => "acs-document-1996",
             Self::Nature => "nature-publisher",
             Self::Rsc => "rsc-guidance",
             Self::Angewandte => "angewandte-publisher",
@@ -172,7 +176,10 @@ impl Preset {
     }
     pub fn description(self) -> &'static str {
         match self {
-            Self::Jacs => "ACS published values; existing ReShiki default.",
+            Self::Jacs => "ACS 1996 values as ACS publishes them, rounded. The ReShiki default.",
+            Self::Acs1996 => {
+                "ChemDraw's ACS Document 1996 stationery. JACS / ACS rounds the same values."
+            }
             Self::Nature => "Official Nature stylesheet: Helvetica, 6 pt labels.",
             Self::Rsc => {
                 "RSC written pt values; label margin retained from its download. The downloaded template differs."
@@ -186,7 +193,7 @@ impl Preset {
     }
     pub fn source_url(self) -> Option<&'static str> {
         Some(match self {
-            Self::Jacs => {
+            Self::Jacs | Self::Acs1996 => {
                 "https://pubsapp.acs.org/paragonplus/submission/general/graphics_prep.html"
             }
             Self::Nature => "https://www.nature.com/nature/for-authors/formatting-guide",
@@ -205,6 +212,9 @@ impl Preset {
     fn json(self) -> &'static str {
         match self {
             Self::Jacs => include_str!("../../../presets/drawing/acs-guidance.reshiki-style"),
+            Self::Acs1996 => {
+                include_str!("../../../presets/drawing/acs-document-1996.reshiki-style")
+            }
             Self::Nature => include_str!("../../../presets/drawing/nature-publisher.reshiki-style"),
             Self::Rsc => include_str!("../../../presets/drawing/rsc-guidance.reshiki-style"),
             Self::Angewandte => {
@@ -226,6 +236,7 @@ impl std::fmt::Display for Preset {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
             Self::Jacs => "JACS / ACS",
+            Self::Acs1996 => "ACS Document 1996",
             Self::Nature => "Nature",
             Self::Rsc => "RSC",
             Self::Angewandte => "Angewandte",

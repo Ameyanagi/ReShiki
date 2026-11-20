@@ -2,7 +2,7 @@
 
 Click the style selector in the status bar, left of **View**, to switch directly between journal presets. Choose **Manage styles…** at the bottom of that menu, or **Properties → Edit drawing style…**, to open the detailed editor. New documents always start with **JACS / ACS**. Changing one document does not change the defaults for another.
 
-Choose **JACS / ACS**, **Nature**, **RSC**, **Angewandte**, or **SYNLETT / SYNTHESIS**. Each journal choice follows publisher instructions or an official download and has a **Publisher instructions ↗** link in the panel. See [journal settings and publisher sources](journal-drawing-presets.md).
+Choose **JACS / ACS**, **ACS Document 1996**, **Nature**, **RSC**, **Angewandte**, or **SYNLETT / SYNTHESIS**. Each journal choice follows publisher instructions or an official download and has a **Publisher instructions ↗** link in the panel. See [journal settings and publisher sources](journal-drawing-presets.md).
 
 Direct journal selection applies the preset immediately, scales existing geometry with its bond length, and updates matching fonts and strokes in one Undo step. **Manage styles…** opens the editor with the current settings; customized settings display as **Custom** in the selector.
 
@@ -32,7 +32,7 @@ Atom labels without individual font overrides inherit the document style. **Upda
 
 The footer **Export** icon saves the panel settings as a `.reshiki-style` file without changing the drawing. The **Import** icon opens a saved style into the preview; the **Save** icon still applies it to the drawing. A style file contains settings only, not molecules or page contents. Native style files are validated before use and limited to 64 KB. **Import** also accepts ChemDraw `.cds`, `.cdx` and `.cdxml` files up to 16 MB, including older journal stationery. It extracts the document label font and bond dimensions; artwork, page layout, colors and separate caption settings are not imported.
 
-[Journal settings and publisher sources](journal-drawing-presets.md) explain the five publisher-based choices and compare their actual drawings in ReShiki and ChemDraw. Complete stationery documents combining page layouts, objects, and styles are not imported by this panel. To open supported artwork from binary `.cds` stationery, use **File → Open** or drop the file on the canvas. Multiple top-level drawing spaces are arranged vertically; original paper settings are not retained.
+[Journal settings and publisher sources](journal-drawing-presets.md) explain the publisher-based choices and compare their actual drawings in ReShiki and ChemDraw. Complete stationery documents combining page layouts, objects, and styles are not imported by this panel. To open supported artwork from binary `.cds` stationery, use **File → Open** or drop the file on the canvas. Multiple top-level drawing spaces are arranged vertically; original paper settings are not retained.
 
 ## Persistence and exchange
 

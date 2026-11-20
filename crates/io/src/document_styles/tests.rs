@@ -14,6 +14,37 @@ fn journal_presets_use_publisher_settings() {
     assert_eq!(Preset::Nature.style().font_family, "Helvetica");
     assert!((Preset::Angewandte.style().bold_width_pt - 2.6015625).abs() < 0.000001);
     assert_eq!(Preset::Rsc.style().line_width_pt, 0.5);
+    // ChemDraw's ACS Document 1996.cds stores these in 1/65536 pt.
+    let acs = Preset::Acs1996.style();
+    assert_eq!((acs.font_family.as_str(), acs.font_size_pt), ("Arial", 10.));
+    for (value, stored) in [
+        (acs.bond_length_pt, 943718),
+        (acs.line_width_pt, 39321),
+        (acs.bold_width_pt, 131897),
+        (acs.margin_width_pt, 104031),
+        (acs.hash_spacing_pt, 163478),
+    ] {
+        assert_eq!(value, (f64::from(stored) / 65536.) as f32);
+    }
+    assert_eq!(acs.bond_spacing_ratio, 0.18);
+}
+
+#[test]
+fn chemdraw_acs_1996_stationery_imports_as_its_preset() {
+    // The stationery's values as ChemDraw writes them, under its file name.
+    let xml = r#"<CDXML LabelFont="3" LabelSize="10" LabelFace="96" CaptionFont="3" CaptionSize="10"
+        HashSpacing="2.494476318359375" MarginWidth="1.5873870849609375" LineWidth="0.5999908447265625"
+        BoldWidth="2.0125885009765625" BondLength="14.399993896484375" BondSpacing="18" ChainAngle="120">
+        <fonttable><font id="3" charset="iso-8859-1" name="Arial"/></fonttable></CDXML>"#;
+    let name = std::path::Path::new("ACS Document 1996.cdxml");
+    let style = load_bytes(name, xml.as_bytes().to_vec()).unwrap();
+    assert_eq!(style, Preset::Acs1996.style());
+    // Saving it as stationery writes ChemDraw's own numbers back.
+    let cds = std::path::Path::new("acs.cds");
+    assert_eq!(
+        load_bytes(name, to_bytes(cds, &style).unwrap()).unwrap(),
+        style
+    );
 }
 
 #[test]

@@ -100,6 +100,7 @@ fn dropdown_partial_redraws_preserve_unchanged_pixels() {
         for options in [
             vec![
                 "JACS / ACS",
+                "ACS Document 1996",
                 "Nature",
                 "RSC",
                 "Angewandte",
