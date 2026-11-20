@@ -501,3 +501,12 @@ fn measure_schema_retention() {
         cold.peak_bytes.saturating_sub(baseline)
     );
 }
+
+#[test]
+fn symbol_wildcard_and_hyphen_stay_ascii() {
+    // An atom label's `*` is a wildcard and `-` a sign; Unicode lookalikes
+    // would turn a hidden wildcard atom into an unsupported label.
+    assert_eq!(symbol_char('*'), '*');
+    assert_eq!(symbol_char('-'), '-');
+    assert_eq!(symbol_char('a'), 'α');
+}
