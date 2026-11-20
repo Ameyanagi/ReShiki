@@ -8,12 +8,13 @@ use crate::{
     document::{Arrow, Document, Point},
     graphics::{Graphic, GraphicKind},
     style::DEFAULT,
-    typography::{TextAlign, TextFormat},
+    typography::TextFormat,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::f32::consts::{FRAC_PI_2, TAU};
 
+mod label_placement;
 mod split;
 pub mod steps;
 
@@ -457,11 +458,6 @@ fn drawn_layouts(doc: &Document, g: &Graphic, mut record: impl FnMut(usize, &Sid
         pattern: g.style.pattern,
         ..ArrowStyle::preset(Preset::Forward)
     };
-    let format = TextFormat {
-        style: doc.drawing_style.text_style(),
-        alignment: TextAlign::Center,
-        ..Default::default()
-    };
     let n = cycle.intermediates.len();
     let all = boxes(doc, cycle);
     let at = |angle: f32| polar(center, radius, angle);
@@ -488,8 +484,6 @@ fn drawn_layouts(doc: &Document, g: &Graphic, mut record: impl FnMut(usize, &Sid
         boxes.push(b.unwrap_or_else(|| (at(angle), at(angle))));
         angles.push(angle);
     }
-    // What labels keep clear of: every part's ink.
-    let mut taken: Vec<(Point, Point)> = all.iter().flatten().copied().collect();
     let mut sides = all.iter().skip(n);
     let mut names = vec![];
     let ends: Vec<((Point, Point), f32)> = boxes.into_iter().zip(angles).collect();
@@ -565,85 +559,14 @@ fn drawn_layouts(doc: &Document, g: &Graphic, mut record: impl FnMut(usize, &Sid
         }
         record(s, &layout);
         for side in layout.routes(&layout.boxes()) {
-            taken.push(side.bounds());
             out.arrows.push(side);
             out.arcs.push(None);
         }
         if !step.name.trim().is_empty() {
-            names.push((wrapped(&step.name, &format, bond * 2.5), arc, outward));
+            names.push((step.name.as_str(), arc, outward));
         }
     }
-    // Names go where they cover the least ink: inside the cycle at the arc's
-    // middle when that is free, else outside, else a little along the arc.
-    for (text, arc, outward) in names {
-        let layout = crate::typography::layout(&text, &format);
-        let (w, h) = (layout.width, layout.height);
-        let place = |t: f32, out: f32| {
-            let angle = arc.angle(t);
-            let reach = 0.5 * (w * angle.cos().abs() + h * angle.sin().abs());
-            let c = polar(arc.center, arc.radius + out * (gap + reach), angle);
-            (c.offset(-w * 0.5, -h * 0.5), c.offset(w * 0.5, h * 0.5))
-        };
-        // Ink the box covers, and the whole box again if it reaches the arc.
-        let covered = |b: (Point, Point), out: f32| -> f32 {
-            let inked: f32 = taken
-                .iter()
-                .map(|t| grown(*t, gap * 0.5))
-                .map(|t| {
-                    let x = (b.1.x.min(t.1.x) - b.0.x.max(t.0.x)).max(0.);
-                    let y = (b.1.y.min(t.1.y) - b.0.y.max(t.0.y)).max(0.);
-                    x * y
-                })
-                .sum();
-            let c = arc.center;
-            let nearest = Point::new(c.x.clamp(b.0.x, b.1.x), c.y.clamp(b.0.y, b.1.y));
-            let farthest = Point::new(
-                if c.x - b.0.x > b.1.x - c.x {
-                    b.0.x
-                } else {
-                    b.1.x
-                },
-                if c.y - b.0.y > b.1.y - c.y {
-                    b.0.y
-                } else {
-                    b.1.y
-                },
-            );
-            let clear = if out < 0. {
-                farthest.distance(c) < arc.radius - gap * 0.5
-            } else {
-                nearest.distance(c) > arc.radius + gap * 0.5
-            };
-            inked + if clear { 0. } else { w * h }
-        };
-        let mut best: Option<((Point, Point), f32)> = None;
-        'search: for depth in [1., 1.8] {
-            for t in [0.5, 0.38, 0.62, 0.26, 0.74] {
-                for out in [-outward, outward] {
-                    let b = place(t, out * depth);
-                    let cost = covered(b, out);
-                    if best.is_none_or(|(_, c)| cost < c) {
-                        best = Some((b, cost));
-                    }
-                    if cost <= 0. {
-                        break 'search;
-                    }
-                }
-            }
-        }
-        if let Some((chosen, _)) = best {
-            taken.push(chosen);
-            out.labels.push((chosen.0, text, format.clone()));
-        }
-    }
-    if !cycle.label.trim().is_empty() {
-        let layout = crate::typography::layout(&cycle.label, &format);
-        out.labels.push((
-            center.offset(-layout.width * 0.5, -layout.height * 0.5),
-            cycle.label.clone(),
-            format,
-        ));
-    }
+    label_placement::place(doc, g, cycle, names, &all, &mut out);
     out
 }
 
