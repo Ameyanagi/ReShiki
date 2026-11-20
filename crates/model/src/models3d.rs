@@ -87,6 +87,15 @@ impl Style {
             Self::Ellipsoids => 0.18,
         }
     }
+
+    /// Cylinder radius (Å) of a shaded half-bond.
+    fn bond_radius(self) -> f32 {
+        match self {
+            Self::BallStick | Self::Ellipsoids => BOND_RADIUS,
+            Self::Stick => STICK_RADIUS,
+            Self::Wireframe | Self::SpaceFilling => 0.,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -1188,6 +1197,16 @@ impl View<'_> {
             f,
         )
     }
+    /// Unit direction from a point toward the viewer in the rotated frame.
+    fn eye(&self, point: [f32; 3]) -> [f32; 3] {
+        if self.perspective > 0. {
+            let eye = sub([0., 0., self.camera], point);
+            let distance = length(eye);
+            eye.map(|v| v / distance)
+        } else {
+            [0., 0., 1.]
+        }
+    }
     /// Index, projected centre and radius of each drawn ball.
     fn balls(&self) -> impl Iterator<Item = (usize, Point, f32)> + '_ {
         self.symbols
@@ -1985,8 +2004,11 @@ fn zip3<T: Copy>(a: [T; 3], b: [T; 3], f: impl Fn(T, T) -> T) -> [T; 3] {
 fn sub(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
     zip3(a, b, |a, b| a - b)
 }
+fn dot(a: [f32; 3], b: [f32; 3]) -> f32 {
+    a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+}
 fn length(p: [f32; 3]) -> f32 {
-    (p[0] * p[0] + p[1] * p[1] + p[2] * p[2]).sqrt()
+    dot(p, p).sqrt()
 }
 
 /// Centroid of the heavy atoms, or of all atoms without one.
@@ -2668,9 +2690,8 @@ impl View<'_> {
     fn half_bond(&self, s: usize, o: usize) -> Option<(Point, Point, f32, f32)> {
         let (centre, po) = (*self.rotated.get(s)?, *self.rotated.get(o)?);
         let ps = centre;
-        // The colour seam sits midway between the ellipsoid surfaces, but the
-        // stick starts at the centre: its own atom is drawn over it, so the
-        // flat end never shows a gap against the curved outline.
+        // The colour seam sits midway between the ellipsoid surfaces. The
+        // untrimmed start stays at the atom centre.
         let (ps, po) = if self.style == Style::Ellipsoids {
             let d = sub(po, ps);
             let distance = length(d);
@@ -2720,22 +2741,21 @@ impl View<'_> {
                 middle = start.offset(d.x * t, d.y * t);
             }
         }
-        let radius = match self.style {
-            Style::BallStick | Style::Ellipsoids => BOND_RADIUS * self.scale,
-            Style::Stick => STICK_RADIUS * self.scale,
-            Style::Wireframe => return Some((start, middle, self.wire / 2., self.wire / 2.)),
-            Style::SpaceFilling => 0.,
-        };
+        if self.style == Style::Wireframe {
+            return Some((start, middle, self.wire / 2., self.wire / 2.));
+        }
+        let radius = self.style.bond_radius() * self.scale;
         Some((start, middle, radius * fs, radius * fm))
     }
 
-    /// Stick style's joints: each half-bond's outline at its atom, from its
-    /// left edge (toward the next half-bond counterclockwise on screen) round
-    /// to its right edge. Neighbouring halves share one border point on their
-    /// bisector, so a joint of three bonds has three borders and nothing
-    /// overlaps; a free side of 180° or more gets a round cap. Halves seen
-    /// nearly end-on are left out: the joint covers them.
-    fn joints(&self, halves: &[(usize, usize)]) -> HashMap<(usize, usize), Vec<Point>> {
+    /// Stick joints for halves that share their atom's joint. Each outline
+    /// runs from the left edge round the atom to the right edge.
+    /// Neighbours meet on their bisector, and a free side gets a round cap.
+    /// Halves seen nearly end-on are left out.
+    fn joints(
+        &self,
+        halves: impl IntoIterator<Item = (usize, usize)>,
+    ) -> HashMap<(usize, usize), Vec<Point>> {
         struct Half {
             key: (usize, usize),
             angle: f32,
@@ -2744,7 +2764,7 @@ impl View<'_> {
             length: f32,
         }
         let mut at: HashMap<usize, Vec<Half>> = HashMap::new();
-        for &(s, o) in halves {
+        for (s, o) in halves {
             let Some((start, end, radius, _)) = self.half_bond(s, o) else {
                 continue;
             };
@@ -2938,8 +2958,8 @@ thread_local! {
     static COPIES: std::cell::RefCell<Vec<std::rc::Rc<Copied>>> = Default::default();
 }
 
-/// A stick half shorter on screen than this fraction of its half width is
-/// seen end-on and left to its joint.
+/// A joint half shorter on screen than this fraction of its half width is
+/// seen end-on.
 const END_ON: f32 = 0.25;
 /// How far each half reaches past a shared border, in stick half widths.
 const OVERLAP: f32 = 0.12;
@@ -3025,6 +3045,13 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
                 width,
             })
     };
+    let side_outline = || {
+        outline(line * 2.).map(|o| Outline {
+            color: rgb(mix(float(o.color), float(backdrop), 1. - o.alpha)),
+            alpha: 1.,
+            width: o.width,
+        })
+    };
     if model.background == Background::Card {
         let (lo, hi) = view.bounds();
         let width = model.size / 340.;
@@ -3049,36 +3076,42 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
         /// A dashed half-bond leaving the cell from a point, with its end.
         Crossing(usize, [f32; 3]),
     }
-    // Each half-bond sorts at its own depth but never after its atom, so the
-    // ball covers the half that points toward the viewer yet a half-bond
-    // still passes in front of a farther atom. Ties draw the half first.
+    // Each half-bond sorts at its biased middle depth. A half drawn over
+    // its atom starts at the ball's exit or, in Stick, at the atom centre.
+    // Ties draw the half first.
+    let copy = |i| i >= view.originals;
+    let fades = |i| view.symbols.get(i) == Some(&"H") && grown < 1.;
     let mut items = vec![];
-    // Stick draws each half-bond as its share of the joints; an atom with
-    // none on screen is a disc.
-    let joints = if style == Style::Stick {
-        view.joints(
-            &bonds
-                .iter()
-                .flat_map(|&(a, b)| [(a, b), (b, a)])
-                .collect::<Vec<_>>(),
-        )
-    } else {
-        HashMap::new()
-    };
     for &(a, b) in &bonds {
         let (pa, pb) = (*rotated.get(a)?, *rotated.get(b)?);
         let middle = zip3(pa, pb, |a, b| (a + b) / 2.);
         for (s, o) in [(a, b), (b, a)] {
-            if style == Style::Stick && !joints.contains_key(&(s, o)) {
-                continue;
-            }
             let ps = *rotated.get(s)?;
             let z = (ps[2] + middle[2]) / 2. - 0.05;
-            items.push((z.min(ps[2]), 0, z, Item::Bond(s, o)));
+            items.push((z, 0, z, Item::Bond(s, o)));
         }
     }
-    // Wireframe and stick draw only the atoms without shown bonds, as dots
-    // and discs.
+    let joints = if style == Style::Stick {
+        let front = |s: usize, o, z| {
+            rotated.get(s).is_some_and(|ps| z > ps[2])
+                && !((copy(s) || copy(o)) && (model.copy_opacity < 1. || grown < 1.))
+                && !fades(s)
+                && !fades(o)
+        };
+        let joints = view.joints(items.iter().filter_map(|(z, _, _, item)| match *item {
+            Item::Bond(s, o) if !front(s, o, *z) => Some((s, o)),
+            _ => None,
+        }));
+        items.retain(|(z, _, _, item)| match *item {
+            Item::Bond(s, o) => front(s, o, *z) || joints.contains_key(&(s, o)),
+            _ => true,
+        });
+        joints
+    } else {
+        HashMap::new()
+    };
+    // Stick draws a disc where there is no joint. Wireframe draws dots
+    // where there are no shown bonds.
     let bonded: HashSet<usize> = if style == Style::Stick {
         joints.keys().map(|&(s, _)| s).collect()
     } else {
@@ -3100,13 +3133,22 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
                 Some((z, 1, z, Item::Atom(i)))
             }),
     );
-    items.extend(view.symbols.iter().enumerate().filter_map(|(i, symbol)| {
-        if view.shown.get(i) != Some(&true) || !model.labels.shows(symbol) {
-            return None;
+    if !model.labels.is_none() {
+        let mut label_depths: Vec<_> = rotated.iter().map(|p| p[2]).collect();
+        for (key, _, _, item) in &items {
+            if let Item::Bond(i, _) = *item {
+                let depth = label_depths.get_mut(i)?;
+                *depth = depth.max(*key);
+            }
         }
-        let z = rotated.get(i)?[2];
-        Some((z, 2, z, Item::Label(i)))
-    }));
+        items.extend(view.symbols.iter().enumerate().filter_map(|(i, symbol)| {
+            if view.shown.get(i) != Some(&true) || !model.labels.shows(symbol) {
+                return None;
+            }
+            let z = rotated.get(i)?[2];
+            Some((*label_depths.get(i)?, 2, z, Item::Label(i)))
+        }));
+    }
     items.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1.cmp(&b.1)));
     // Where each half-bond is drawn, so the first of a pair can reach under
     // the second.
@@ -3144,18 +3186,19 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
         .iter()
         .map(|s| (*s, element_color(doc, s)))
         .collect();
-    // Stick style's outline: one stroke of every shape, behind all of them.
+    // The contour behind the Stick fills traces their outer edge.
     let mut rims: [Vec<Vec<Point>>; 4] = Default::default();
     let mut drawn = vec![];
     for (n, (_, _, z, item)) in items.into_iter().enumerate() {
         let (Item::Bond(i, _) | Item::Atom(i) | Item::Label(i) | Item::Crossing(i, _)) = item;
-        let fading = view.symbols.get(i) == Some(&"H") && grown < 1.;
+        let fading = fades(i);
         let ghost = match item {
-            Item::Bond(a, b) => a >= view.originals || b >= view.originals,
-            _ => i >= view.originals,
+            Item::Bond(a, b) => copy(a) || copy(b),
+            _ => copy(i),
         };
         let alpha =
             if ghost { model.copy_opacity } else { 1. } * if fading || ghost { grown } else { 1. };
+        let rim = rims.get_mut(usize::from(ghost) * 2 + usize::from(fading))?;
         let symbol = *view.symbols.get(i)?;
         let base = mix(
             float(*colors.get(symbol).unwrap_or(&GREY)),
@@ -3238,18 +3281,16 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
                 };
                 let (q, f) = view.project(*rotated.get(i)?);
                 let r = style.atom_radius(symbol) * view.scale * f;
-                if style == Style::Stick {
+                if style == Style::Stick && !glossy {
                     let steps = 48;
-                    if let Some(rim) = rims.get_mut(usize::from(ghost) * 2 + usize::from(fading)) {
-                        rim.push(
-                            (0..steps)
-                                .map(|k| {
-                                    let t = std::f32::consts::TAU * k as f32 / steps as f32;
-                                    q.offset(r * t.cos(), r * t.sin())
-                                })
-                                .collect(),
-                        );
-                    }
+                    rim.push(
+                        (0..steps)
+                            .map(|k| {
+                                let t = std::f32::consts::TAU * k as f32 / steps as f32;
+                                q.offset(r * t.cos(), r * t.sin())
+                            })
+                            .collect(),
+                    );
                 }
                 Primitive::Sphere {
                     center: q,
@@ -3280,7 +3321,7 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
                 }
             }
             Item::Bond(s, o) => {
-                let (a, e, start, half) = view.half_bond(s, o)?;
+                let (mut a, e, mut start, half) = view.half_bond(s, o)?;
                 if style == Style::Wireframe {
                     Primitive::Wire {
                         from: a,
@@ -3290,9 +3331,33 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
                         dash: 0.,
                     }
                 } else {
+                    let ps = *rotated.get(s)?;
+                    let joint = joints.get(&(s, o));
+                    let mut cap_depth = 0.;
+                    if z > ps[2] && joint.is_none() {
+                        let direction = sub(*rotated.get(o)?, ps);
+                        let distance = length(direction);
+                        let u = direction.map(|v| v / distance);
+                        let ellipsoid = view
+                            .ellipsoids
+                            .get(s)?
+                            .unwrap_or_else(|| Ellipsoid::sphere(style.atom_radius(symbol)));
+                        let stick = style.bond_radius();
+                        let t = ellipsoid.stick_exit(u, view.eye(ps), stick);
+                        let exit = zip3(ps, u, |p, d| p + d * t);
+                        let (screen_exit, factor) = view.project(exit);
+                        if (e.x - screen_exit.x) * (e.x - a.x) + (e.y - screen_exit.y) * (e.y - a.y)
+                            <= 0.
+                        {
+                            continue;
+                        }
+                        a = screen_exit;
+                        start = stick * view.scale * factor;
+                        cap_depth = start * dot(u, view.eye(exit)).abs();
+                    }
                     let (dx, dy) = (e.x - a.x, e.y - a.y);
                     let len = dx.hypot(dy);
-                    // Stick's joints already left out the halves seen end-on.
+                    // Joints already omit their halves seen nearly end-on.
                     if len < line * 0.5 && style != Style::Stick {
                         continue;
                     }
@@ -3329,44 +3394,81 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
                             &[(0., BLACK, 0.2), (0.4, WHITE, 0.3), (1., BLACK, 0.22)],
                         )
                     };
-                    if let Some(joint) = joints.get(&(s, o)) {
+                    let from = e.offset(nx * half, ny * half);
+                    let to = e.offset(-nx * half, -ny * half);
+                    if let Some(joint) = joint {
                         // From the middle round the joint and back, the
                         // left edge first.
                         let (lx, ly) = (-dy / len, dx / len);
                         let mut points = vec![end.offset(lx * width, ly * width)];
                         points.extend(joint);
                         points.push(end.offset(-lx * width, -ly * width));
-                        if let Some(rim) =
-                            rims.get_mut(usize::from(ghost) * 2 + usize::from(fading))
-                        {
+                        if !glossy {
                             rim.push(points.clone());
                         }
                         drawn.push((
                             alpha,
                             Primitive::ShadedPolygon {
                                 points,
-                                from: e.offset(nx * half, ny * half),
-                                to: e.offset(-nx * half, -ny * half),
+                                from,
+                                to,
                                 stops,
+                                outline: side_outline(),
                             },
                         ));
                         continue;
                     }
-                    Primitive::ShadedQuad {
-                        corners: [
-                            a.offset(nx * start, ny * start),
-                            end.offset(nx * width, ny * width),
-                            end.offset(-nx * width, -ny * width),
-                            a.offset(-nx * start, -ny * start),
-                        ],
-                        from: e.offset(nx * half, ny * half),
-                        to: e.offset(-nx * half, -ny * half),
-                        stops,
-                        outline: if style == Style::BallStick {
-                            outline(line * 0.8)
-                        } else {
-                            None
-                        },
+                    let cap = if cap_depth > 0. {
+                        use std::f32::consts::{FRAC_PI_2, PI};
+                        let steps = (PI / ARC_STEP).ceil() as usize;
+                        (1..steps)
+                            .map(|k| {
+                                let (sin, cos) = (k as f32 * ARC_STEP - FRAC_PI_2).sin_cos();
+                                let (across, back) = (start * sin, cap_depth * cos);
+                                a.offset(
+                                    nx * across - dx / len * back,
+                                    ny * across - dy / len * back,
+                                )
+                            })
+                            .collect()
+                    } else {
+                        vec![]
+                    };
+                    let corners = [
+                        a.offset(nx * start, ny * start),
+                        end.offset(nx * width, ny * width),
+                        end.offset(-nx * width, -ny * width),
+                        a.offset(-nx * start, -ny * start),
+                    ];
+                    if style == Style::Stick {
+                        if !glossy {
+                            rim.push(corners.iter().chain(&cap).copied().collect());
+                        }
+                        let [a, b, c, d] = corners;
+                        let mut points = Vec::with_capacity(cap.len() + 4);
+                        points.extend([b, a]);
+                        points.extend(cap.into_iter().rev());
+                        points.extend([d, c]);
+                        Primitive::ShadedPolygon {
+                            points,
+                            from,
+                            to,
+                            stops,
+                            outline: side_outline(),
+                        }
+                    } else {
+                        Primitive::ShadedQuad {
+                            corners,
+                            cap,
+                            from,
+                            to,
+                            stops,
+                            outline: if style == Style::BallStick {
+                                outline(line * 0.8)
+                            } else {
+                                None
+                            },
+                        }
                     }
                 }
             }

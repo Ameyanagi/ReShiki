@@ -127,6 +127,40 @@ fn probability_scales_semiaxes_and_invalid_adps_have_no_ellipsoid() {
 }
 
 #[test]
+fn stick_exit_from_a_sphere_uses_the_circular_cross_section() {
+    let direction = [0.6, 0., 0.8];
+    let eye = [0., 0., 1.];
+    let (ball, stick) = (0.33f32, 0.085);
+    assert_eq!(
+        Ellipsoid::sphere(ball).stick_exit(direction, eye, stick),
+        (ball * ball - stick * stick).sqrt()
+    );
+    assert_eq!(
+        Ellipsoid::sphere(stick).stick_exit(direction, eye, stick),
+        0.
+    );
+}
+
+#[test]
+fn stick_exit_from_a_narrow_ellipsoid_uses_its_transverse_radius() {
+    let (sin, cos) = 30f32.to_radians().sin_cos();
+    let direction = [cos, 0., sin];
+    let ellipsoid = Ellipsoid {
+        axes: [
+            [0.6 * cos, 0., 0.6 * sin],
+            [0., 0.1, 0.],
+            [-0.1 * sin, 0., 0.1 * cos],
+        ],
+        anisotropic: true,
+    };
+    let eye = [0., 0., 1.];
+    let exit = ellipsoid.stick_exit(direction, eye, 0.085);
+    assert!((exit - 0.316).abs() < 1e-4, "exit at {exit} Å");
+    assert_eq!(ellipsoid.stick_exit(direction, eye, 0.12), 0.);
+    assert!((ellipsoid.stick_exit(direction, direction, 0.085) - exit).abs() < 1e-5);
+}
+
+#[test]
 fn orthographic_and_perspective_silhouettes_match_known_axes() {
     let doc = document();
     let ellipsoid = Ellipsoid {
