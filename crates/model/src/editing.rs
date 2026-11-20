@@ -962,12 +962,15 @@ fn map_positions(
             a.position = convert(a.position);
         }
     }
-    let only_text = only_text(doc, &ids);
+    // Text selected on its own turns when the transform turns.
+    let turns = only_text(doc, &ids)
+        && crate::document::text_angle(vector(Point::new(1., 0.)), vector(Point::new(0., 1.)))
+            != 0.;
     for a in &mut doc.annotations {
         if !ids.contains(&a.id) {
             continue;
         }
-        if a.angle == 0. && !only_text {
+        if a.angle == 0. && !turns {
             a.position = convert(a.position);
         } else {
             let (w, h) = a.size();

@@ -922,6 +922,16 @@ impl Writer<'_> {
         let s = &f.style;
         let (width, height, baseline) = match measured {
             Some(m) => (real(m.width), real(m.height), real(m.baseline)),
+            // Turned text turns about its laid-out centre, so it needs its
+            // laid-out box.
+            None if a.angle != 0. => {
+                let (w, h) = a.size();
+                (
+                    real(w) * self.scale,
+                    real(h) * self.scale,
+                    real(s.size_pt) * 0.9,
+                )
+            }
             None => (
                 f.width_pt.map(real).unwrap_or_else(|| {
                     a.text
@@ -950,14 +960,7 @@ impl Writer<'_> {
         };
         let (w, h) = (width / self.scale, height / self.scale);
         // ChemDraw turns text about its anchor; ReShiki about its centre.
-        // Without measured metrics the box above is an estimate; the text
-        // turns about its laid-out centre.
-        let centre = match measured {
-            Some(_) => origin.add(w / 2., h / 2.),
-            None if a.angle != 0. => P::from(a.centre()),
-            None => origin.add(w / 2., h / 2.),
-        };
-        let angle = real(a.angle);
+        let (centre, angle) = (origin.add(w / 2., h / 2.), real(a.angle));
         let anchor = origin
             .add(w * factor, baseline / self.scale)
             .turned(centre, angle);
