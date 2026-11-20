@@ -314,3 +314,35 @@ fn chemistry_in_the_hole_of_a_compound_path_keeps_the_canvas_ink() {
     let on_frame = doc.add_atom("O", p(-25., 0.));
     assert_eq!(label(&resolved_document(&doc), on_frame), [0; 3]);
 }
+
+#[test]
+fn text_in_a_front_shape_reads_on_that_shape() {
+    // A black card brought in front of the drawing on the light canvas: its
+    // text is painted over it and takes the dark canvas's ink. A caption
+    // beside it keeps the light canvas's ink.
+    let mut doc = Document::default();
+    let shape = card(
+        &mut doc,
+        Point::new(0., 0.),
+        Point::new(80., 40.),
+        Color::Custom([0; 3]),
+    );
+    doc.graphics[0].layer = 1;
+    for (id, x) in [(10, 20.), (11, 200.)] {
+        doc.annotations.push(Annotation {
+            id,
+            position: Point::new(x, 15.),
+            text: "hν".into(),
+            format: Default::default(),
+        });
+    }
+    doc.graphics[0].text = Some(10);
+    crate::shape_text::reconcile(&mut doc);
+    let resolved = resolved_document(&doc);
+    let color = |id| {
+        let text = resolved.annotations.iter().find(|t| t.id == id).unwrap();
+        shown(&resolved, text.format.style.color)
+    };
+    assert_eq!(color(10), [255; 3], "on its black shape {shape}");
+    assert_eq!(color(11), [0; 3]);
+}

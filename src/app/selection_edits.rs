@@ -219,7 +219,10 @@ impl App {
     }
     pub(super) fn delete_selection(&mut self) {
         let before = self.tab.doc.clone();
-        let ids = reshiki::arrow_labels::with_labels(&self.tab.doc, &self.tab.selected);
+        let ids = reshiki::shape_text::with_texts(
+            &self.tab.doc,
+            &reshiki::arrow_labels::with_labels(&self.tab.doc, &self.tab.selected),
+        );
         self.tab.doc.delete(&ids);
         self.changed(before);
     }

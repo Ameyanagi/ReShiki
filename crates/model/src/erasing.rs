@@ -136,7 +136,7 @@ pub fn stroke(doc: &mut Document, from: Point, to: Point, radius: f32) {
         .collect();
     drop(drawn);
     if !ids.is_empty() {
-        doc.delete(&ids);
+        doc.delete(&crate::shape_text::with_texts(doc, &ids));
     }
     if !bonds.is_empty() {
         let affected: Vec<_> = bonds.iter().flat_map(|(a, b)| [*a, *b]).collect();

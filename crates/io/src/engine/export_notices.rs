@@ -87,6 +87,11 @@ fn drawing_losses(
         notices.push(notice);
     }
     if matches!(format, "cdxml" | "cdx")
+        && let Some(notice) = crate::shape_text::export_notice(document)
+    {
+        notices.push(notice);
+    }
+    if matches!(format, "cdxml" | "cdx")
         && let Some(notice) = crate::arrows::export_notice(document)
     {
         notices.push(notice);

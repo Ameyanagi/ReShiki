@@ -153,6 +153,7 @@ pub enum Edit {
     EraseStart(World),
     EraseTo(World, World),
     EraseEnd,
+    /// Edit a caption, or the text a closed shape holds.
     BeginText(u64),
     /// A Text-tool Option/Alt-click: label the atom there
     /// with the last committed label, as ChemDraw repeats labels.

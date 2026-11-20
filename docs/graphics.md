@@ -19,6 +19,16 @@ geometry in `.rsk` files.
    A rounded rectangle also has **Corner (pt)**; leave it empty to round 18% of
    the shorter side.
 
+### Type text inside a shape
+
+Double-click a rectangle, rounded rectangle, ellipse or circle and type. The
+text is centred in the shape and wraps to its width. It moves with the shape,
+rewraps when you resize it, and dragging the text drags the shape. The usual
+text editor applies, so symbols, typed shortcuts and sub- and superscripts all
+work. Applying empty text adds nothing; Delete on the shape removes its text
+too. The text stays upright when the shape is rotated. ChemDraw files get the
+text as a caption centred over the shape.
+
 ### Shade or shadow a shape
 
 Select a rectangle, rounded rectangle, ellipse or closed path. In

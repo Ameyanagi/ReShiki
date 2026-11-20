@@ -364,6 +364,9 @@ pub struct Graphic {
     /// The intermediates and steps that make an ellipse a catalytic cycle.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cycle: Option<Box<crate::cycles::Cycle>>,
+    /// The annotation this closed shape holds, centred inside it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub text: Option<u64>,
 }
 fn back_layer() -> i32 {
     -1
@@ -472,6 +475,7 @@ impl Graphic {
                 panel: None,
                 leader: None,
                 cycle: None,
+                text: None,
             };
         }
         let mut dx = end.x - start.x;
@@ -520,6 +524,7 @@ impl Graphic {
             panel: None,
             leader: None,
             cycle: None,
+            text: None,
         }
     }
     /// A rounded rectangle's corner radius in drawing units, at most half its

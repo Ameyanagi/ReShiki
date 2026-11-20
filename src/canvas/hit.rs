@@ -265,6 +265,15 @@ fn hit_object_with_orbital(
                             // A piece wins only where it shows above its assembly.
                             && (g.piece.is_none()
                                 || reshiki::equipment::placed::on_top(doc, g.id, p, r))
+                            // Text a shape holds is drawn right after it.
+                            || g.text.is_some_and(|text| {
+                                doc.annotations.iter().any(|a| {
+                                    let (w, h) = a.size();
+                                    a.id == text
+                                        && (a.position.x..a.position.x + w).contains(&p.x)
+                                        && (a.position.y..a.position.y + h).contains(&p.y)
+                                })
+                            })
                     }
             })
             .max_by_key(|(i, g)| (g.layer, *i))
