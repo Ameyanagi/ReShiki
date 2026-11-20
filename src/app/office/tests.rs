@@ -59,7 +59,7 @@ fn open(app: &mut App, name: &str, host: Host, token: u8) -> (TabId, Lease) {
     doc.add_atom("O", Point::default());
     let _ = app.update(Message::OfficePrepared(
         binding,
-        Some((path, Ok(files::Prepared::Native(Box::new(doc))))),
+        Some((path, Ok(files::Prepared::Native(Box::new(doc), None)))),
     ));
     assert_eq!(lease.phase(), Phase::Open);
     (app.tab.id, lease)
@@ -99,7 +99,7 @@ fn two_office_tabs_keep_their_own_host_and_ordinary_duplicates_keep_binding() {
     let before = app.tab.doc.clone();
     let _ = app.update(Message::FilePrepared(Some((
         "a.rsk".into(),
-        Ok(files::Prepared::Native(Box::default())),
+        Ok(files::Prepared::Native(Box::default(), None)),
     ))));
     assert_eq!(app.tab.doc, before);
     assert_eq!(
@@ -131,7 +131,10 @@ fn different_session_cannot_take_an_office_path_or_dirty_ordinary_tab() {
     };
     let _ = app.update(Message::OfficePrepared(
         binding,
-        Some(("a.rsk".into(), Ok(files::Prepared::Native(Box::default())))),
+        Some((
+            "a.rsk".into(),
+            Ok(files::Prepared::Native(Box::default(), None)),
+        )),
     ));
     assert_eq!(rejected.phase(), Phase::Rejected);
     assert_eq!(original.phase(), Phase::Open);
@@ -141,7 +144,7 @@ fn different_session_cannot_take_an_office_path_or_dirty_ordinary_tab() {
     let (mut ordinary, _) = App::new();
     let _ = ordinary.update(Message::FilePrepared(Some((
         "dirty.rsk".into(),
-        Ok(files::Prepared::Native(Box::default())),
+        Ok(files::Prepared::Native(Box::default(), None)),
     ))));
     ordinary.tab.doc.add_atom("N", Point::default());
     let before = ordinary.tab.doc.clone();
@@ -154,7 +157,7 @@ fn different_session_cannot_take_an_office_path_or_dirty_ordinary_tab() {
         },
         Some((
             "dirty.rsk".into(),
-            Ok(files::Prepared::Native(Box::default())),
+            Ok(files::Prepared::Native(Box::default(), None)),
         )),
     ));
     assert_eq!(rejected.phase(), Phase::Rejected);
@@ -282,6 +285,7 @@ fn bound_office_generic_expansion_delivers_after_tab_switch_without_rebinding_or
     let before = app.tab.doc.clone();
     let note = app.tab.doc.next_id();
     app.tab.doc.annotations.push(reshiki::document::Annotation {
+        angle: 0.,
         id: note,
         position: Point::new(0., 100.),
         text: "source-only redo".into(),

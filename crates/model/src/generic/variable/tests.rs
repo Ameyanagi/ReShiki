@@ -203,6 +203,7 @@ fn variable_pose_is_local_rigid_and_preserves_unrelated_native_associations() {
     let fixed = source.add_atom("O", Point::new(-250., 80.));
     let annotation = source.next_id();
     source.annotations.push(crate::document::Annotation {
+        angle: 0.,
         id: annotation,
         position: Point::new(-300., 180.),
         text: "oxidane".into(),

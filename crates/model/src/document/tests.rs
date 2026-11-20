@@ -201,6 +201,7 @@ fn drawable_id_order_excludes_groups_but_next_id_includes_them() {
     doc.atoms[0].id = 10;
     doc.atoms[1].id = 2;
     doc.annotations.push(Annotation {
+        angle: 0.,
         id: 7,
         position: Point::default(),
         text: "caption".into(),
@@ -660,6 +661,7 @@ fn annotation_text_is_capped_per_text_box_and_per_drawing() {
     let add = |doc: &mut Document, bytes: usize| {
         let id = doc.next_id();
         doc.annotations.push(Annotation {
+            angle: 0.,
             id,
             position: Point::default(),
             text: "x".repeat(bytes),
@@ -860,4 +862,35 @@ fn passive_snapshot_adoption_still_allows_real_edits_to_follow_links() {
             .unwrap()
             .position
     );
+}
+
+#[test]
+fn a_saved_view_reopens_without_raising_the_version_or_changing_the_drawing() {
+    let mut source = Document::default();
+    source.add_atom("C", Point::default());
+    let plain = source.file_json().unwrap();
+    let view = View {
+        center: Point::new(120.5, -40.),
+        zoom: 0.76,
+    };
+    let saved = source.file_json_with_view(Some(view)).unwrap();
+    let json = serde_json::from_slice::<serde_json::Value>(&saved).unwrap();
+    let plain_json = serde_json::from_slice::<serde_json::Value>(&plain).unwrap();
+    assert_eq!(json["version"], plain_json["version"]);
+    assert_eq!(View::read(&saved), Some(view));
+    assert_eq!(View::read(&plain), None);
+    // The drawing reads as if the view were not there, as older ReShiki reads it.
+    let reopened = Document::from_native_file(&saved).unwrap();
+    assert_eq!(reopened, Document::from_native_file(&plain).unwrap());
+    assert_eq!(reopened.file_json().unwrap(), plain);
+    // An unusable view is dropped; the drawing still opens.
+    for bad in [
+        r#""view":{"center":{"x":0,"y":0},"zoom":0},"#,
+        r#""view":7,"#,
+    ] {
+        let text = String::from_utf8(plain.clone()).unwrap();
+        let broken = text.replacen('{', &format!("{{{bad}"), 1);
+        assert_eq!(View::read(broken.as_bytes()), None);
+        assert!(Document::from_native_file(broken.as_bytes()).is_ok());
+    }
 }

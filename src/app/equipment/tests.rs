@@ -1,6 +1,7 @@
 use super::*;
 use crate::canvas::Edit;
 use reshiki::equipment::builtin;
+use reshiki::equipment::solve::hose::Grip;
 use reshiki::graphics::GraphicKind;
 
 /// The key that arms a built-in piece.
@@ -66,6 +67,55 @@ fn arming_and_placing_a_piece_adds_one_graphic_in_one_undo_step() {
     assert_eq!(app.tab.doc, before);
     let _ = app.update(Message::Redo);
     assert_eq!(app.tab.doc, placed);
+}
+
+#[test]
+fn hanging_a_hose_and_bending_it_are_separate_undo_steps() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let _ = app.update(Message::Equipment(Action::Arm(k("reshiki/liebig-29"))));
+    let _ = app.update(Message::Canvas(Edit::Piece(Point::new(200., 300.))));
+    let before = app.tab.doc.clone();
+    let water_in = solve::ports(&before.graphics[0])
+        .into_iter()
+        .find(|p| p.at.joint == "water-in")
+        .unwrap();
+    let p = Point::new(water_in.point[0] as f32, water_in.point[1] as f32);
+
+    let _ = app.update(Message::Equipment(Action::Arm(k("reshiki/hose-7"))));
+    let _ = app.update(Message::Canvas(Edit::Hose(p, p)));
+    assert!(!app.error, "{}", app.status);
+    assert_eq!(app.tab.doc.graphics.len(), before.graphics.len() + 1);
+    assert_eq!(app.tab.doc.seats.len(), before.seats.len() + 1);
+    assert_eq!(app.status, "Hose on the condenser water in");
+    let hose = app
+        .tab
+        .doc
+        .graphics
+        .iter()
+        .find(|g| g.id != water_in.at.piece)
+        .unwrap();
+    let id = hose.id;
+    let line = hose.piece.as_ref().unwrap().centre_line.clone();
+    let hung = app.tab.doc.clone();
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+    let _ = app.update(Message::Redo);
+    assert_eq!(app.tab.doc, hung);
+
+    let _ = app.update(Message::Tool(Tool::Select));
+    app.set_selection(vec![id]);
+    let _ = app.update(Message::Canvas(Edit::HoseGrip {
+        id,
+        grip: Grip::Middle,
+        to: p.offset(50., 60.),
+    }));
+    assert!(!app.error, "{}", app.status);
+    let bent = app.tab.doc.graphics.iter().find(|g| g.id == id).unwrap();
+    assert_ne!(bent.piece.as_ref().unwrap().centre_line, line);
+    assert_eq!(app.tab.doc.seats, hung.seats);
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, hung);
 }
 
 #[test]

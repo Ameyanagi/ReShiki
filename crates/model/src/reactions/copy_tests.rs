@@ -111,6 +111,7 @@ fn explicit_roles_coefficients_agents_and_annotations_override_geometry() {
     let agent = doc.add_atom("O", Point::new(50., -60.));
     let caption = doc.next_id();
     doc.annotations.push(Annotation {
+        angle: 0.,
         id: caption,
         position: Point::new(50., -30.),
         text: "conditions".into(),
@@ -262,6 +263,7 @@ fn pruned_partial_explicit_roles_never_trigger_geometric_inference() {
 
     let caption = doc.next_id();
     doc.annotations.push(Annotation {
+        angle: 0.,
         id: caption,
         position: Point::new(50., -30.),
         text: "conditions".into(),

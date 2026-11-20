@@ -197,6 +197,14 @@ pub enum Edit {
         param: String,
         value: reshiki::equipment::eval::Value,
     },
+    /// Drag a hose's end or middle to this point.
+    HoseGrip {
+        id: u64,
+        grip: reshiki::equipment::solve::hose::Grip,
+        to: World,
+    },
+    /// Lay the armed hose from one point to another; a click passes one point twice.
+    Hose(World, World),
     /// Move an arrow node's direction control alone, making the node a Corner.
     ArrowControlFree(u64, usize, World),
     /// Split the arrow's shaft at this point with a new node.
@@ -516,6 +524,10 @@ enum Gesture {
     PieceHandle {
         id: u64,
         handle: reshiki::equipment::solve::adjust::Handle,
+        start: World,
+    },
+    /// Laying the armed hose from where the press was.
+    Hose {
         start: World,
     },
     Transform(Box<TransformDrag>),

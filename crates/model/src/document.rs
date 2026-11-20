@@ -31,6 +31,12 @@ impl Point {
     pub fn is_finite(self) -> bool {
         self.x.is_finite() && self.y.is_finite()
     }
+    /// This point turned `degrees` clockwise about `pivot`.
+    pub fn turned(self, pivot: Self, degrees: f32) -> Self {
+        let (s, c) = degrees.to_radians().sin_cos();
+        let (x, y) = (self.x - pivot.x, self.y - pivot.y);
+        pivot.offset(x * c - y * s, x * s + y * c)
+    }
 }
 
 fn is_zero_u64(value: &u64) -> bool {
@@ -170,15 +176,74 @@ fn plain() -> String {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Annotation {
     pub id: u64,
+    /// The top-left corner of the text box before it turns.
     pub position: Point,
     pub text: String,
     #[serde(default)]
     pub format: TextFormat,
+    /// Clockwise turn in degrees about the box's centre.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub angle: f32,
+}
+/// The clockwise turn in degrees, from 0 to 360, of text whose rightward
+/// and downward directions now point along `x` and `y`. Text is never
+/// mirrored: after a reflection it reads along whichever of the two keeps it
+/// nearer upright.
+pub fn text_angle(x: Point, y: Point) -> f32 {
+    let signed = |degrees: f32| (degrees + 180.).rem_euclid(360.) - 180.;
+    let along = signed(x.y.atan2(x.x).to_degrees());
+    let angle = if x.x * y.y - x.y * y.x >= 0. {
+        along
+    } else {
+        let across = signed(y.y.atan2(y.x).to_degrees() - 90.);
+        if across.abs() < along.abs() {
+            across
+        } else {
+            along
+        }
+    };
+    // A full turn, or rounding, leaves the text upright.
+    if angle.abs() < 1e-3 {
+        0.
+    } else {
+        angle.rem_euclid(360.)
+    }
 }
 impl Annotation {
     pub fn size(&self) -> (f32, f32) {
         let layout = crate::typography::layout(&self.text, &self.format);
         (layout.width, layout.height)
+    }
+    /// The box's centre, which it turns about.
+    pub fn centre(&self) -> Point {
+        let (w, h) = self.size();
+        self.position.offset(w / 2., h / 2.)
+    }
+    /// The turned box's corners, clockwise from the top left.
+    pub fn corners(&self) -> [Point; 4] {
+        let (w, h) = self.size();
+        let (p, centre) = (self.position, self.position.offset(w / 2., h / 2.));
+        [p, p.offset(w, 0.), p.offset(w, h), p.offset(0., h)]
+            .map(|corner| corner.turned(centre, self.angle))
+    }
+    /// The upright box around the turned one.
+    pub fn bounds(&self) -> (Point, Point) {
+        let corners = self.corners();
+        corners[1..]
+            .iter()
+            .fold((corners[0], corners[0]), |(lo, hi), p| {
+                (
+                    Point::new(lo.x.min(p.x), lo.y.min(p.y)),
+                    Point::new(hi.x.max(p.x), hi.y.max(p.y)),
+                )
+            })
+    }
+    /// Whether `p` lies inside the turned box.
+    pub fn contains(&self, p: Point) -> bool {
+        let (w, h) = self.size();
+        let at = self.position;
+        let p = p.turned(at.offset(w / 2., h / 2.), -self.angle);
+        (at.x..at.x + w).contains(&p.x) && (at.y..at.y + h).contains(&p.y)
     }
 }
 /// An interior node of a multi-segment arrow.
@@ -330,6 +395,29 @@ pub const VERSION: u32 = 40;
 pub const MAX_ANNOTATION_TEXT: usize = 64 * 1024;
 /// Bytes of annotation text in one drawing.
 pub const MAX_DRAWING_TEXT: usize = 1024 * 1024;
+
+/// The canvas centre and zoom a native file was saved at. It sits beside the
+/// drawing, not in it: panning never edits the drawing, it raises no document
+/// version, and older ReShiki ignores it.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct View {
+    pub center: Point,
+    pub zoom: f32,
+}
+impl View {
+    /// The view stored in native file contents; a missing or unusable one is
+    /// none, never an error, since the drawing opens without it.
+    pub fn read(bytes: &[u8]) -> Option<Self> {
+        #[derive(Deserialize)]
+        struct Probe {
+            view: Option<View>,
+        }
+        serde_json::from_slice::<Probe>(bytes)
+            .ok()?
+            .view
+            .filter(|view| view.center.is_finite() && view.zoom.is_finite() && view.zoom > 0.)
+    }
+}
 
 fn newer_version(version: u64) -> String {
     format!(
@@ -545,7 +633,22 @@ impl Document {
     }
     /// Native file contents, marked with the version their fields require.
     pub fn file_json(&self) -> Result<Vec<u8>, String> {
-        serde_json::to_vec_pretty(&self.current()).map_err(|e| e.to_string())
+        self.file_json_with_view(None)
+    }
+    /// [`Self::file_json`] with the view the drawing was saved in.
+    pub fn file_json_with_view(&self, view: Option<View>) -> Result<Vec<u8>, String> {
+        #[derive(Serialize)]
+        struct File<'a> {
+            #[serde(flatten)]
+            doc: &'a Document,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            view: Option<View>,
+        }
+        serde_json::to_vec_pretty(&File {
+            doc: &self.current(),
+            view,
+        })
+        .map_err(|e| e.to_string())
     }
     /// A copy marked with its required native version, for files, clipboard
     /// data and recovery drafts, so reading them back never migrates again.
@@ -585,6 +688,7 @@ impl Document {
                 .any(|f| f.effect != crate::ring_fills::RingEffect::Flat)
             || !self.highlight_style.is_flat()
             || crate::palette::any_color(self, |c| c == crate::palette::Color::Paper)
+            || self.annotations.iter().any(|a| a.angle != 0.)
         {
             DRAWING_ELEMENTS
         } else if self.property_captions.iter().any(|link| {
@@ -1152,6 +1256,9 @@ impl Document {
             }
         }
         for a in &self.annotations {
+            if !a.angle.is_finite() {
+                return Err("Non-finite text angle".into());
+            }
             a.format.validate(&a.text)?;
         }
         crate::molecule_names::validate(self)?;
@@ -1361,3 +1468,5 @@ impl History {
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod turned_text_tests;

@@ -555,6 +555,7 @@ fn group_name_hyphens_stay_on_the_baseline() -> Result<(), String> {
 fn svg_preserves_annotations_and_escapes_xml() {
     let mut d = Document::default();
     d.annotations.push(crate::document::Annotation {
+        angle: 0.,
         id: 1,
         position: Point::default(),
         text: "A < B & C".into(),

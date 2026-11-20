@@ -170,6 +170,7 @@ fn illustration_arrows_take_no_condition_text_and_release_theirs() {
     edit(&mut doc, |doc| {
         text = doc.next_id();
         doc.annotations.push(Annotation {
+            angle: 0.,
             id: text,
             position: Point::new(-10., -30.),
             text: "MeOH".into(),
@@ -287,6 +288,7 @@ fn preview_of_assigned_roles_shows_their_conditions() {
     edit(&mut doc, |doc| {
         let id = doc.next_id();
         doc.annotations.push(Annotation {
+            angle: 0.,
             id,
             position: Point::new(-10., -30.),
             text: "MeOH".into(),

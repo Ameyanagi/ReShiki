@@ -198,10 +198,6 @@ fn dispatcher_preserves_shift_and_does_not_fall_through_modifier_chords() {
         Some(Message::Shortcut(Action::FixedAngles))
     ));
     assert!(matches!(
-        key_message(&key("k"), &key("K"), primary() | Modifiers::SHIFT),
-        Some(Message::Cleanup(crate::app::cleanup::Action::Begin))
-    ));
-    assert!(matches!(
         key_message(&key("j"), &key("j"), primary()),
         Some(Message::Shortcut(Action::Join))
     ));
@@ -215,6 +211,30 @@ fn dispatcher_preserves_shift_and_does_not_fall_through_modifier_chords() {
         ),
         Some(Message::Transform(Transform::TiltY(_)))
     ));
+}
+
+#[test]
+fn primary_k_toggles_the_palette_and_keeps_shift_and_alt_actions() {
+    use crate::app::command_palette;
+
+    assert!(matches!(
+        key_message(&key("k"), &key("k"), primary()),
+        Some(Message::Commands(command_palette::Action::Open))
+    ));
+    assert!(matches!(
+        command_palette::modal_key(&key("k"), primary()),
+        Some(Message::Commands(command_palette::Action::Close))
+    ));
+    assert!(matches!(
+        key_message(&key("k"), &key("K"), primary() | Modifiers::SHIFT),
+        Some(Message::Cleanup(crate::app::cleanup::Action::Begin))
+    ));
+    assert!(matches!(
+        key_message(&key("k"), &key("˚"), primary() | Modifiers::ALT),
+        Some(Message::AromaticDisplay)
+    ));
+    assert!(command_palette::modal_key(&key("k"), primary() | Modifiers::SHIFT).is_none());
+    assert!(command_palette::modal_key(&key("k"), primary() | Modifiers::ALT).is_none());
 }
 
 #[test]

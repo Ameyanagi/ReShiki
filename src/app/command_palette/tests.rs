@@ -47,12 +47,181 @@ fn top(app: &App) -> &Command {
 }
 
 #[test]
+fn drawing_commands_have_unique_palette_names() {
+    let list = catalog::build(&app());
+    for name in [
+        "Figure layouts",
+        "Make catalytic cycle",
+        "Remove from cycle",
+        "Cycle: Clockwise",
+        "Cycle: Counterclockwise",
+        "Cycle step: Reversible",
+        "Cycle step: Hide arrow",
+        "Connect…",
+        "Equipment: Add clips to all joints",
+        "Equipment: Detach",
+        "Equipment: Update",
+        "Equipment: Update all in drawing",
+        "Add callout",
+        "Wrap in panel",
+        "Row with even gutters",
+        "Column with even gutters",
+        "Grid with even gutters",
+        "Bring to front",
+        "Send to back",
+        "Shadow",
+        "Graphic: Shaded",
+        "Make arc",
+        "Panel: Outline",
+        "Panel: Title bar",
+        "Panel: In border",
+        "Panel: Rounded corners",
+        "Panel: Square corners",
+        "Panel: Split columns",
+        "Panel: Split rows",
+        "Panel: Fit to contents",
+        "Panel: Clear contents",
+        "Layout: Row",
+        "Layout: Column",
+        "Layout: Grid",
+        "Layout: Start",
+        "Layout: Center",
+        "Layout: End",
+        "Gradient: None",
+        "Gradient: Linear",
+        "Gradient: Radial",
+        "Highlight style: Flat",
+        "Highlight style: Soft glow",
+        "Highlight style: Disc",
+        "Fill effect: Flat",
+        "Fill effect: Gradient",
+        "Fill effect: Opacity",
+        "Fill effect: Soft glow",
+        "Fill effect: Disc",
+        "Arrow body: Line",
+        "Arrow body: Block",
+        "Arrow body: Hollow block",
+        "Arrow body: Chevron",
+        "Arrow body: Gradient",
+        "Arrow pattern: Solid",
+        "Arrow pattern: Dashed",
+        "Arrow pattern: Dotted",
+        "Arrow pattern: Wavy",
+        "Bold arrow",
+        "Dashed arrow",
+        "Hollow arrow",
+        "Unequal equilibrium arrow",
+        "Angled arrow",
+        "Half arrow",
+        "Block arrow",
+        "Hollow block arrow",
+        "Chevron arrow",
+        "Gradient arrow",
+        "Arc arrow",
+        "Purpose: Chemistry",
+        "Purpose: Reference",
+        "Purpose: Illustration",
+        "Preview reaction",
+        "Color by origin",
+        "Color by origin: Clear colors",
+        "Color by origin: Mark new bonds",
+        "Color by origin: Mark broken and changed bonds",
+        "Color by origin: Fill new rings",
+        "Color by origin: Legend",
+    ] {
+        assert_eq!(
+            list.iter().filter(|command| command.name == name).count(),
+            1,
+            "{name} is in the palette exactly once"
+        );
+        let command = list
+            .iter()
+            .find(|command| command.name == name)
+            .unwrap_or_else(|| panic!("Missing palette command: {name}"));
+        let label = name.split_once(": ").map_or(name, |(_, label)| label);
+        assert!(label.chars().count() <= 30, "{name}");
+        assert!(
+            command.detail.chars().count() <= 80,
+            "{name}: {}",
+            command.detail
+        );
+    }
+}
+
+#[test]
+fn drawing_commands_send_the_same_actions_as_their_controls() {
+    use crate::app::{cycles, equipment, figure_panels, palettes};
+    use reshiki::highlights::HighlightStyle;
+
+    let list = catalog::build(&app());
+    let commands = [
+        (
+            "Make catalytic cycle",
+            Message::Cycle(cycles::Action::Make),
+            Need::MakeCycle,
+        ),
+        (
+            "Connect…",
+            Message::Equipment(equipment::Action::Connect),
+            Need::Equipment,
+        ),
+        ("Add callout", Message::AddCallout, Need::Callout),
+        (
+            "Wrap in panel",
+            Message::Figure(figure_panels::Action::Wrap),
+            Need::Selection,
+        ),
+        (
+            "Highlight style: Soft glow",
+            Message::HighlightStyle(HighlightStyle::Glow),
+            Need::Nothing,
+        ),
+    ]
+    .into_iter()
+    .map(|(name, message, need)| (name.to_owned(), message, need))
+    .chain(palettes::arrow_options().into_iter().map(|option| {
+        (
+            option.command_name(),
+            Message::Palette(option.action()),
+            Need::Nothing,
+        )
+    }));
+    for (name, message, need) in commands {
+        let command = list.iter().find(|command| command.name == name).unwrap();
+        assert_eq!(command.need, need, "{name}");
+        let Run::Send(messages) = &command.run else {
+            panic!("{name} must send its control’s message");
+        };
+        assert_eq!(
+            format!("{messages:?}"),
+            format!("{:?}", [message]),
+            "{name}"
+        );
+    }
+}
+
+#[test]
+fn figure_layouts_opens_the_templates_collection() {
+    use crate::app::{InspectorTab, template_library::Filter};
+    let mut app = app();
+    app.inspector_open = false;
+    app.templates.query = "benzene".into();
+    app.templates.filter = Filter::Favorites;
+
+    run(&mut app, "Figure layouts");
+
+    assert!(app.inspector_open);
+    assert_eq!(app.inspector_tab, InspectorTab::Templates);
+    assert_eq!(app.templates.collection, reshiki::templates::FIGURE_LAYOUTS);
+    assert_eq!(app.templates.filter, Filter::All);
+    assert!(app.templates.query.is_empty());
+}
+
+#[test]
 fn stereo_commands_are_searchable_and_style_notes_toggle_through_the_palette() {
     let mut app = app();
     for name in ["Check drawing", "Redraw stereo bonds"] {
         search(&mut app, name);
-        // Available commands intentionally precede unavailable ones, including
-        // the style preference whose description also mentions Check drawing.
         let command = &app.commands.items[row(&app, name)];
         assert_eq!(command.need, catalog::Need::Molecule);
         assert_eq!(
@@ -147,7 +316,6 @@ fn ionic_and_centred_charge_commands_follow_selection_eligibility() {
     app.tab.doc = Document::default();
     app.tab.selected = reshiki::editing::ring(&mut app.tab.doc, Point::default(), 7, true, 5.);
     search(&mut app, "Center charge in ring");
-    // Unavailable, it ranks below available matches such as Normalize depiction.
     let center = &app.commands.items[row(&app, "Center charge in ring")];
     assert!(app.command_unavailable(center).is_some());
     app.tab.doc.atoms[0].charge = 1;
@@ -373,6 +541,7 @@ fn indexed_command_targets_match_the_original_selection_and_pointing_query() {
     let (a, b) = ethane(&mut app);
     let caption = app.tab.doc.next_id();
     app.tab.doc.annotations.push(Annotation {
+        angle: 0.,
         id: caption,
         position: Point::new(100., 100.),
         text: "Caption".into(),
@@ -1134,6 +1303,7 @@ fn caption_and_graphic_selections_never_fall_back_to_pointer_or_hotspot() {
         let (a, b) = ethane(&mut app);
         let caption = app.tab.doc.next_id();
         app.tab.doc.annotations.push(Annotation {
+            angle: 0.,
             id: caption,
             position: Point::new(150., 100.),
             text: "Caption".into(),
@@ -1168,7 +1338,6 @@ fn caption_and_graphic_selections_never_fall_back_to_pointer_or_hotspot() {
                 app.tab.keyboard_drawing.set_target(hotspot, &app.tab.doc);
                 search(&mut app, query);
                 assert_eq!(app.keyboard_target(), keyboard);
-                // Unavailable commands rank below available ones, so pick it by name.
                 let index = row(&app, name);
                 let command = app.commands.items[index].clone();
                 let reason = app.command_unavailable(&command).expect(query);
@@ -1343,6 +1512,55 @@ fn context_favors_commands_for_the_target() {
 }
 
 #[test]
+fn outline_favors_the_selected_panel() {
+    use reshiki::graphics::{BracketSides, Graphic, GraphicKind, Panel};
+
+    let mut app = app();
+    let id = app.tab.doc.next_id();
+    let mut panel = Graphic::dragged(
+        id,
+        GraphicKind::Rectangle,
+        Point::default(),
+        Point::new(120., 80.),
+        Default::default(),
+        BracketSides::Both,
+        false,
+    );
+    panel.panel = Some(Panel::default());
+    app.tab.doc.graphics.push(panel);
+    app.tab.selected = vec![id];
+
+    search(&mut app, "outline");
+    assert_eq!(top(&app).name, "Panel: Outline");
+    assert!(app.command_unavailable(top(&app)).is_none());
+}
+
+#[test]
+fn hollow_block_favors_the_selected_arrow() {
+    use reshiki::{
+        arrows::{ArrowStyle, Body, Preset},
+        document::Arrow,
+    };
+
+    let mut app = app();
+    let id = app.tab.doc.next_id();
+    let mut style = ArrowStyle::default();
+    style.set_body(Body::Block);
+    app.tab.doc.arrows.push(Arrow::new(
+        id,
+        Point::default(),
+        Point::new(120., 0.),
+        Preset::Forward,
+        style,
+    ));
+    app.tab.selected = vec![id];
+
+    search(&mut app, "hollow block");
+    assert_eq!(top(&app).name, "Arrow body: Hollow block");
+    assert!(app.command_unavailable(top(&app)).is_none());
+}
+
+#[test]
 fn unknown_words_offer_a_name_and_valid_smiles() {
     let mut app = app();
     search(&mut app, "ibuprofen");
@@ -1401,7 +1619,12 @@ fn every_catalog_entry_runs() {
     for command in &catalog {
         *counts.entry(command.category.label()).or_insert(0) += 1;
         match &command.run {
-            Run::Send(messages) => assert!(!messages.is_empty(), "{}", command.name),
+            // A row that cannot act here, such as Detach with no single joint, sends nothing.
+            Run::Send(messages) => assert!(
+                !messages.is_empty() || matches!(command.need, Need::Blocked(_)),
+                "{}",
+                command.name
+            ),
             Run::AtomKey(key) if *key != "Enter" => {
                 let doc = reshiki::rings::Preset::Benzene.document(42., false);
                 let id = doc.atoms[0].id;
@@ -1674,19 +1897,37 @@ fn tab_cycles_the_category_filter_and_a_new_query_resets_it() {
 }
 
 #[test]
-fn unavailable_commands_rank_after_available_ones() {
+fn unavailable_commands_rank_after_available_ones_in_each_match_tier() {
     let mut app = app();
-    for query in ["copy", "charge", "bond", "select", "nmr"] {
-        search(&mut app, query);
-        let state = &app.commands;
-        let blocked: Vec<_> = state
-            .results
+    open(&mut app);
+    let command = |name, synonyms, need| Command {
+        need,
+        ..Command::new(name, Category::Edit, "", synonyms, Run::Send(vec![]))
+    };
+    let items = vec![
+        command("Blocked fuzzy", "CC", Need::Selection),
+        command("Blocked CCX", "", Need::Selection),
+        command("Available fuzzy", "CC", Need::Nothing),
+        command("Available CCX", "", Need::Nothing),
+    ];
+    app.commands.catalog = items.len();
+    app.commands.items = items;
+    let _ = app.update(Message::Commands(Action::Query("CC".into())));
+    let ranked = app.commands.ranked();
+    assert_eq!(
+        ranked
             .iter()
-            .map(|i| app.command_unavailable(&state.items[*i]).is_some())
-            .collect();
-        assert!(blocked.contains(&true), "{query}: some cannot run");
-        assert!(blocked.is_sorted(), "{query}: available first");
-    }
+            .map(|command| command.name.as_str())
+            .collect::<Vec<_>>(),
+        [
+            "Available CCX",
+            "Insert SMILES CC",
+            "Insert structure named “CC”",
+            "Blocked CCX",
+            "Available fuzzy",
+            "Blocked fuzzy",
+        ]
+    );
     // An exact alias still ranks first, to say why it cannot run.
     search(&mut app, "noh");
     assert_eq!(top(&app).name, "Clear highlights");
@@ -1722,12 +1963,134 @@ fn name_matches_outrank_synonym_and_description_matches() {
         .commands
         .ranked()
         .iter()
+        .filter(|c| !matches!(c.run, Run::Name(_) | Run::Smiles(_)))
         .map(|c| c.name.as_str())
         .collect();
     assert_eq!(ranked[..2], ["Big wedges", "Alpha"]);
     // A shortcut key typed exactly ranks with the name matches.
     search(&mut app, "v");
     assert_eq!(top(&app).name, "Select tool");
+}
+
+#[test]
+fn palette_search_accepts_british_spelling() {
+    let mut app = app();
+    search(&mut app, "color");
+    let names: Vec<_> = app
+        .commands
+        .ranked()
+        .iter()
+        .map(|command| command.name.clone())
+        .collect();
+    assert!(names.iter().any(|name| name == "Color by origin"));
+
+    search(&mut app, "colour");
+    assert!(app.commands.ranked().iter().map(|c| &c.name).eq(&names));
+    assert_eq!(
+        search::normalize_spelling("Colour+CENTRE, grey favourite organise"),
+        "color+center, gray favorite organize"
+    );
+}
+
+#[test]
+fn colour_name_matches_lead_even_without_a_reaction() {
+    let mut app = app();
+    assert!(app.tab.selected.is_empty());
+    assert!(app.tab.doc.reactions.is_empty());
+    search(&mut app, "colour");
+
+    let origin = &app.commands.items[row(&app, "Color by origin")];
+    assert!(app.command_unavailable(origin).is_some());
+    let ranked = app.commands.ranked();
+    let names: Vec<_> = ranked
+        .iter()
+        .filter(|command| !matches!(command.run, Run::Name(_)))
+        .map(|command| command.name.as_str())
+        .collect();
+    assert!(names.iter().any(|name| !name.contains("Color")));
+    assert!(
+        names.iter().map(|name| !name.contains("Color")).is_sorted(),
+        "{names:?}"
+    );
+}
+
+#[test]
+fn an_exact_saved_template_name_beats_its_normalized_spelling() {
+    use reshiki::{rings::Preset, templates::Template};
+
+    let mut app = app();
+    app.templates.library.templates =
+        [("Gray", Preset::Benzene), ("Grey", Preset::Cyclopentadiene)]
+            .into_iter()
+            .map(|(name, preset)| Template {
+                id: format!("test:{name}"),
+                group: "Rings".into(),
+                name: name.into(),
+                smiles: String::new(),
+                keywords: vec![],
+                low_rank_keywords: vec![],
+                note: String::new(),
+                locants: Default::default(),
+                document: preset.document(42., false),
+                anchor: Default::default(),
+            })
+            .collect();
+
+    search(&mut app, "Grey");
+    assert_eq!(top(&app).name, "Grey");
+    let _ = app.update(Message::Commands(Action::Submit));
+    assert_eq!(app.tab.doc.atoms.len(), 5, "{}", app.status);
+}
+
+#[test]
+fn origin_ranks_reaction_coloring_first() {
+    let mut app = app();
+    search(&mut app, "origin");
+
+    assert_eq!(top(&app).name, "Color by origin");
+    assert!(app.command_unavailable(top(&app)).is_some());
+}
+
+#[test]
+fn reaction_commands_use_the_reaction_chosen_in_roles_with_only_a_product_selected() {
+    use crate::app::reactions::Action as ReactionAction;
+    use reshiki::{
+        document::Arrow,
+        reactions::{self, Role},
+    };
+
+    let mut app = app();
+    let reactant = app.tab.doc.add_atom("C", Point::default());
+    let product = app.tab.doc.add_atom("C", Point::new(250., 0.));
+    let other_reactant = app.tab.doc.add_atom("O", Point::new(0., 150.));
+    let [arrow, other] = [0., 150.].map(|y| {
+        let id = app.tab.doc.next_id();
+        app.tab.doc.arrows.push(Arrow::new(
+            id,
+            Point::new(80., y),
+            Point::new(180., y),
+            Default::default(),
+            Default::default(),
+        ));
+        id
+    });
+    reactions::assign(&mut app.tab.doc, arrow, &[reactant], Role::Reactant).unwrap();
+    reactions::assign(&mut app.tab.doc, arrow, &[product], Role::Product).unwrap();
+    reactions::assign(&mut app.tab.doc, other, &[other_reactant], Role::Reactant).unwrap();
+
+    let _ = app.update(Message::Reaction(ReactionAction::Open));
+    let _ = app.update(Message::Reaction(ReactionAction::Choose(arrow)));
+    let _ = app.update(Message::Canvas(Edit::Select(vec![product])));
+    assert_eq!(app.tab.selected, [product]);
+    assert_eq!(app.reaction_arrow(), Some(arrow));
+    for name in ["Preview reaction", "Color by origin"] {
+        search(&mut app, name);
+        assert_eq!(
+            app.command_unavailable(&app.commands.items[row(&app, name)]),
+            None,
+            "{name}"
+        );
+    }
 }
 
 #[test]
@@ -1893,6 +2256,7 @@ fn out_of_range_font_sizes_stay_first_and_leave_the_document_and_input_untouched
     let mut app = app();
     let id = app.tab.doc.next_id();
     app.tab.doc.annotations.push(reshiki::document::Annotation {
+        angle: 0.,
         id,
         position: Point::default(),
         text: "Caption".into(),
@@ -2432,6 +2796,7 @@ fn chemical_name_format_command_requires_selected_text_boxes_and_undoes_once() {
     let mut app = app();
     let atom = app.tab.doc.add_atom("C", Point::default());
     app.tab.doc.annotations.push(reshiki::document::Annotation {
+        angle: 0.,
         id: 2,
         position: Point::new(0., 50.),
         text: "N,N'-diethylmethanamine".into(),

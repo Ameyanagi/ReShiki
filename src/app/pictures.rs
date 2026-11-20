@@ -155,6 +155,41 @@ impl App {
         }
     }
 
+    /// Scrolls clipped bounds into view at the current zoom.
+    pub(super) fn pan_to_show(&mut self, lo: Point, hi: Point) {
+        let paper = self.guides.paper(iced::Rectangle::with_size(self.viewport));
+        let camera = self.tab.camera;
+        let (lo, hi) = (camera.screen(lo, paper), camera.screen(hi, paper));
+        if lo.x >= 0. && lo.y >= 0. && hi.x <= paper.width && hi.y <= paper.height {
+            return;
+        }
+        let scroll = |lo: f32, hi: f32, size: f32| {
+            let spare = size - (hi - lo);
+            // Too big to show whole: its start stays in the first half of
+            // the view, so what was on screen beside it stays when it can.
+            if spare < 0. {
+                return if lo < 0. {
+                    lo - 40.
+                } else {
+                    (lo - size / 2.).max(0.)
+                };
+            }
+            let margin = 40.0_f32.min(spare / 2.);
+            let to_start = lo - margin;
+            let to_end = to_start - (spare - 2. * margin);
+            0.0_f32.clamp(to_end, to_start)
+        };
+        let center = camera.center.offset(
+            scroll(lo.x, hi.x, paper.width) / camera.zoom,
+            scroll(lo.y, hi.y, paper.height) / camera.zoom,
+        );
+        if center != camera.center {
+            self.tab.camera.center = center;
+            self.tab.fit_to_view = false;
+            self.tab.pages.fit = None;
+        }
+    }
+
     /// Centers the view on these bounds, zooming out if they do not fit.
     pub(super) fn reveal_bounds(&mut self, lo: Point, hi: Point) {
         let paper = self.guides.paper(iced::Rectangle::with_size(self.viewport));

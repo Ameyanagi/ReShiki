@@ -339,6 +339,7 @@ fn prepare(request: Request) -> Result<Preparation, Error> {
                 let (xml, found) = cycles::take_cdxml(&text);
                 (xml.into_owned(), found)
             };
+            let xml = cdxml::symbol_text_to_unicode(&xml);
             let (xml, approximated) = cdxml::approximate(&xml);
             let (xml, variables) =
                 cdxml::drawing_variables(&xml).map_err(|e| Error::Binary(e.to_string()))?;
@@ -387,7 +388,7 @@ fn prepare(request: Request) -> Result<Preparation, Error> {
                 warnings.push(variables.notice().into());
                 return Ok(Preparation::Drawing(Box::new(document), warnings));
             }
-            let prepared = match cdxml::prepare_cdxml(&xml) {
+            let prepared = match cdxml::prepare_chemical_drawing(&xml) {
                 Ok(prepared) => prepared,
                 Err(error) if matches!(error.cause, cdxml::PreparationCause::Sanitization(_)) => {
                     let prepared = cdxml::prepare_drawing(&xml)?;

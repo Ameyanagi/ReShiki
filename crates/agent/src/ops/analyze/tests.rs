@@ -84,6 +84,7 @@ fn methoxy() -> (Document, [u64; 4]) {
     doc.contract(&[anchor, member], "OMe", "MeO").unwrap();
     let caption = doc.next_id();
     doc.annotations.push(Annotation {
+        angle: 0.,
         id: caption,
         position: Point::new(0., 60.),
         text: "ether".into(),

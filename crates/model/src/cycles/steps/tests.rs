@@ -104,6 +104,7 @@ fn a_step_is_a_reaction_of_its_parts_on_a_copy() {
     let mut doc = t.doc.clone();
     let note = doc.next_id();
     doc.annotations.push(Annotation {
+        angle: 0.,
         id: note,
         position: Point::new(240., -60.),
         text: "THF".into(),
@@ -151,6 +152,7 @@ fn a_step_with_text_on_one_side_says_what_it_needs() {
     let text = |doc: &mut Document, x: f32, y: f32, value: &str| {
         let id = doc.next_id();
         doc.annotations.push(Annotation {
+            angle: 0.,
             id,
             position: Point::new(x, y),
             text: value.into(),
@@ -263,6 +265,7 @@ fn joining_a_cycle_takes_a_part_out_of_its_ordinary_reaction() {
     ));
     let note = doc.next_id();
     doc.annotations.push(Annotation {
+        angle: 0.,
         id: note,
         position: Point::new(1050., -40.),
         text: "NaOH".into(),
@@ -364,6 +367,7 @@ fn coloring_one_chain_keeps_the_colors_of_a_chain_cut_off_by_text() {
     let text = |doc: &mut Document, x: f32, y: f32| {
         let id = doc.next_id();
         doc.annotations.push(Annotation {
+            angle: 0.,
             id,
             position: Point::new(x, y),
             text: "[M]".into(),

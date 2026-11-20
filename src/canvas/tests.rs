@@ -2378,6 +2378,7 @@ fn double_click_edits_grouped_labels_but_drag_moves_the_group() {
     let atom = doc.add_atom("C", World::new(-100., -80.));
     let label = doc.next_id();
     doc.annotations.push(reshiki::document::Annotation {
+        angle: 0.,
         id: label,
         position: World::default(),
         text: "Reaction conditions".into(),
@@ -3393,6 +3394,7 @@ fn arrow_end_drag_preview_keeps_condition_labels_like_the_commit() {
     ));
     let before = doc.clone();
     let mut text = reshiki::document::Annotation {
+        angle: 0.,
         id: 2,
         position: World::default(),
         text: "Pd/C, H2, EtOAc, rt".into(),
@@ -3977,6 +3979,7 @@ fn text_in_a_front_shape_picks_its_own_shape_over_a_filled_one_below() {
     doc.graphics
         .push(shape(2, World::new(-40., -20.), World::new(40., 20.)));
     doc.annotations.push(reshiki::document::Annotation {
+        angle: 0.,
         id: 3,
         position: World::default(),
         text: "hν".into(),

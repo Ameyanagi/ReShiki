@@ -12,6 +12,7 @@ fn drawing() -> Document {
     let b = d.add_atom("O", Point::new(42., 0.));
     d.add_bond(a, b, 1, "plain");
     d.annotations.push(Annotation {
+        angle: 0.,
         id: 3,
         position: Point::new(0., 60.),
         text: "substrate".into(),
@@ -276,6 +277,7 @@ async fn a_condition_icon_grouped_with_its_arrow_moves_with_it_and_keeps_the_rea
     ));
     let text = d.next_id();
     d.annotations.push(Annotation {
+        angle: 0.,
         id: text,
         position: Point::new(130., -20.),
         text: "blue LEDs".into(),

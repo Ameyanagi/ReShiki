@@ -177,6 +177,7 @@ pub(super) fn union_source() -> Document {
         });
     let annotation = source.next_id();
     source.annotations.push(crate::document::Annotation {
+        angle: 0.,
         id: annotation,
         position: Point::new(-380., 180.),
         text: "oxidane".into(),

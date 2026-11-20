@@ -251,6 +251,7 @@ fn repeated_asymmetric_rotation_drags_keep_the_pivot_and_preview_geometry() {
         source.add_atom("N", World::new(0., 50.));
         let expected_pivot = if mixed {
             source.annotations.push(Annotation {
+                angle: 0.,
                 id: source.next_id(),
                 position: World::new(120., 60.),
                 text: "Upright".into(),

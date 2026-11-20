@@ -223,6 +223,7 @@ fn generated_presentation_preflight_rejects_large_cartesian_annotations_before_m
     // 200,000 bytes of text, within the limit of one text box.
     for _ in 0..4 {
         source.annotations.push(crate::document::Annotation {
+            angle: 0.,
             id: source.next_id(),
             position: Point::new(0., 140.),
             text: "a".repeat(50_000),

@@ -237,9 +237,15 @@ impl Document {
         for g in around {
             let owns = |id: u64| g.members.contains(&id) && own(id) == Some(g.id);
             // A cycle's circle never leaves the group of its own parts.
-            if (self.graphics.iter())
-                .any(|c| c.cycle.is_some() && set.contains(&c.id) && owns(c.id))
-            {
+            let holds_parts = |c: &crate::graphics::Graphic| {
+                c.cycle.as_deref().is_some_and(|cycle| {
+                    cycle.parts().any(|(_, ids)| {
+                        ids.iter()
+                            .any(|id| g.members.contains(id) && !set.contains(id))
+                    })
+                })
+            };
+            if (self.graphics.iter()).any(|c| set.contains(&c.id) && owns(c.id) && holds_parts(c)) {
                 break;
             }
             let runs = cycle.is_some_and(owns);

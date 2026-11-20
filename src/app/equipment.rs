@@ -19,6 +19,8 @@ use reshiki::equipment::{
 use reshiki::graphics::Graphic;
 use std::{path::PathBuf, sync::Arc};
 
+pub(super) const INSERT: &str = "Insert equipment…";
+
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct Filter(pub Option<Category>);
 impl std::fmt::Display for Filter {
@@ -183,6 +185,20 @@ pub(crate) fn joint_name(doc: &Document, j: &JointRef) -> String {
     }
 }
 
+fn xy(p: Point) -> [f64; 2] {
+    [f64::from(p.x), f64::from(p.y)]
+}
+
+/// "Hose on the condenser water in", or that its end hangs free.
+fn hose_text(doc: &Document, barbs: &[solve::Port]) -> String {
+    let names: Vec<String> = barbs.iter().map(|b| joint_name(doc, &b.at)).collect();
+    if names.is_empty() {
+        "Hose end free · drag it onto a hose barb".into()
+    } else {
+        format!("Hose on the {}", names.join(" and the "))
+    }
+}
+
 /// "Tilt: 25°", "Valve: Open", "Liquid level: 40 %": a parameter of the
 /// piece `g` at `value`; its current value when `value` is `None`.
 pub(crate) fn value_text(g: &Graphic, param: &str, value: Option<&Value>) -> String {
@@ -272,6 +288,22 @@ fn seat_state(doc: &Document, port: &Port, partner: &JointRef) -> String {
     format!("{verb} {}{at}{clip}", joint_name(doc, partner))
 }
 
+/// A shared rod names the individual seat's other side when detaching.
+fn detach_joint(port: &Port, partner: &JointRef) -> JointRef {
+    if port.shared() {
+        partner.clone()
+    } else {
+        port.at.clone()
+    }
+}
+
+fn seat_detach(doc: &Document, seat: &solve::Seat) -> JointRef {
+    (doc.graphics.iter())
+        .find(|g| g.id == seat.a.piece)
+        .and_then(|g| solve::ports(g).into_iter().find(|p| p.at == seat.a))
+        .map_or_else(|| seat.a.clone(), |port| detach_joint(&port, &seat.b))
+}
+
 /// What a snap does, for the pill beside the joint and the status bar.
 pub(crate) fn snap_text(doc: &Document, snap: &Snap) -> String {
     let target = joint_name(doc, &snap.target.at);
@@ -318,6 +350,16 @@ pub(crate) fn snap_text(doc: &Document, snap: &Snap) -> String {
 }
 
 /// The size fields, volume first: "100 mL · 15/25".
+/// "Round-bottom flask · 100 mL · 15/25", or the title alone for a piece without sizes.
+fn named(d: &Definition) -> String {
+    let size = size(d);
+    if size.is_empty() {
+        title(d).to_owned()
+    } else {
+        format!("{} · {size}", title(d))
+    }
+}
+
 fn size(d: &Definition) -> String {
     let volume = d.variant.get("volume_ml").map(|v| format!("{v} mL"));
     let rest = d
@@ -382,11 +424,12 @@ impl App {
                 else {
                     return Task::none();
                 };
-                self.status = format!(
-                    "{} · {} · Click to place · Esc cancels",
-                    title(&definition),
-                    size(&definition)
-                );
+                let how = if definition.tube.is_some() {
+                    "Drag from one hose barb to another, or click a barb"
+                } else {
+                    "Click to place"
+                };
+                self.status = format!("{} · {how} · Esc cancels", named(&definition));
                 self.error = false;
                 self.tab.connect = None;
                 self.equipment.armed = Some(definition);
@@ -561,6 +604,42 @@ impl App {
             .any(|g| g.piece.is_some() && self.tab.selected.contains(&g.id))
     }
 
+    /// The Properties card's Detach target, only when it is unambiguous.
+    pub(super) fn selected_piece_detach(&self) -> Option<JointRef> {
+        let doc = &self.tab.doc;
+        // Properties needs at least one linked piece before showing its rows.
+        if !doc.graphics.iter().any(|g| {
+            self.tab.selected.contains(&g.id)
+                && g.piece.as_ref().is_some_and(|p| p.linked.is_some())
+        }) {
+            return None;
+        }
+        let mut joints = vec![];
+        if let [id] = self.tab.selected.as_slice() {
+            let graphic = doc.graphics.iter().find(|g| g.id == *id)?;
+            for port in solve::ports(graphic) {
+                for partner in solve::partners(doc, &port.at) {
+                    let joint = detach_joint(&port, &partner);
+                    if !joints.contains(&joint) {
+                        joints.push(joint);
+                    }
+                }
+            }
+        } else {
+            for seat in &doc.seats {
+                if self.tab.selected.contains(&seat.a.piece)
+                    && self.tab.selected.contains(&seat.b.piece)
+                {
+                    let joint = seat_detach(doc, seat);
+                    if !joints.contains(&joint) {
+                        joints.push(joint);
+                    }
+                }
+            }
+        }
+        (joints.len() == 1).then(|| joints.remove(0))
+    }
+
     /// Keyboard Connect's status line: the joint shown and how to go on.
     fn connect_status(&mut self) {
         self.error = false;
@@ -614,6 +693,43 @@ impl App {
         self.changed(before);
         if let Some(snap) = snap.filter(|_| !self.error) {
             self.snapped(&snap);
+        }
+    }
+
+    /// Lay the armed hose from `from` to `to` (one point for a click), its
+    /// ends pushed onto barbs they reach, as one Undo step.
+    pub(super) fn place_hose(&mut self, from: Point, to: Point, before: Document) {
+        let Some(definition) = (self.equipment.armed.clone())
+            .filter(|d| self.tool == Tool::Equipment && d.tube.is_some())
+        else {
+            return;
+        };
+        let reach = f64::from(solve::REACH_PX / self.tab.camera.zoom);
+        let (id, barbs) =
+            solve::hose::place_hose(&mut self.tab.doc, definition, xy(from), xy(to), reach);
+        if !self.equipment.repeat {
+            self.tool = Tool::Select;
+        }
+        self.tab.selected = solve::closure(&self.tab.doc, &[id]);
+        self.changed(before);
+        if !self.error {
+            self.status = hose_text(&self.tab.doc, &barbs);
+        }
+    }
+
+    /// Drag a hose's end or middle, as one Undo step.
+    pub(super) fn drag_hose(
+        &mut self,
+        id: u64,
+        grip: solve::hose::Grip,
+        to: Point,
+        before: Document,
+    ) {
+        let reach = f64::from(solve::REACH_PX / self.tab.camera.zoom);
+        let barb = solve::hose::drag(&mut self.tab.doc, id, grip, xy(to), reach);
+        self.changed(before);
+        if !self.error && grip != solve::hose::Grip::Middle {
+            self.status = hose_text(&self.tab.doc, barb.as_slice());
         }
     }
 
@@ -729,7 +845,7 @@ impl App {
                 .find(|e| Arc::ptr_eq(&e.definition, d))
                 .map_or(Source::BuiltIn, |e| e.source);
             let mut card = column![
-                text(format!("{} · {}", title(d), size(d))).size(14),
+                text(named(d)).size(14),
                 checkbox(state.repeat)
                     .label("Keep placing")
                     .text_size(12)
@@ -817,24 +933,31 @@ impl App {
             let mut chips = row![].spacing(4);
             for e in sizes {
                 let d = &e.definition;
+                let size_label = size(d);
+                // A lone piece without sizes needs no chip: its tile arms it.
+                if size_label.is_empty() && sizes.len() == 1 {
+                    continue;
+                }
                 // Two chips of one size name their revision, and two of one
                 // revision the start of their content hash.
-                let twin = |o: &Entry| o.key != e.key && size(&o.definition) == size(d);
-                let mut chip = size(d);
+                let twin = |o: &Entry| o.key != e.key && size(&o.definition) == size_label;
+                let mut parts = vec![size_label.clone()];
                 if sizes.iter().any(|o| twin(o)) {
-                    chip.push_str(&format!(" · r{}", d.revision));
+                    parts.push(format!("r{}", d.revision));
                 }
                 if sizes
                     .iter()
                     .any(|o| twin(o) && o.definition.revision == d.revision)
                 {
                     let hash = e.key.rsplit('#').next().unwrap_or_default();
-                    chip.push_str(&format!(" · {}", hash.get(..6).unwrap_or(hash)));
+                    parts.push(hash.get(..6).unwrap_or(hash).to_owned());
                 }
+                parts.retain(|p| !p.is_empty());
+                let chip = parts.join(" · ");
                 chips = chips.push(
                     reshiki::accessibility::button(
                         format!("equipment-size-{}", e.key),
-                        format!("{} · {}", label(e), size(d)),
+                        format!("{} · {chip}", label(e)),
                         text(chip).size(11),
                     )
                     .checked(armed(e))
@@ -1023,7 +1146,7 @@ impl App {
                 }
                 for (i, partner) in partners.iter().enumerate() {
                     // Detach names the side a rod's seat is one of many on.
-                    let joint = if port.shared() { partner } else { &port.at };
+                    let joint = detach_joint(&port, partner);
                     let mut lines = column![];
                     if i == 0 {
                         lines = lines.push(text(name.clone()).size(12));
@@ -1037,7 +1160,7 @@ impl App {
                                         .style(muted_text)
                                 )
                                 .width(Length::Fill),
-                            command("Detach", Message::Equipment(Action::Detach(joint.clone()))),
+                            command("Detach", Message::Equipment(Action::Detach(joint))),
                         ]
                         .align_y(Alignment::Center),
                     );
@@ -1059,10 +1182,7 @@ impl App {
                 .collect();
             for seat in &seats {
                 // A rod holds many: detach the other side.
-                let joint = (doc.graphics.iter())
-                    .find(|g| g.id == seat.a.piece)
-                    .and_then(|g| solve::ports(g).into_iter().find(|p| p.at == seat.a))
-                    .map_or(&seat.a, |p| if p.shared() { &seat.b } else { &seat.a });
+                let joint = seat_detach(doc, seat);
                 let clip = if seat.clip.is_some() {
                     " · clipped"
                 } else {
@@ -1077,7 +1197,7 @@ impl App {
                         ))
                         .size(12)
                         .width(Length::Fill),
-                        command("Detach", Message::Equipment(Action::Detach(joint.clone()))),
+                        command("Detach", Message::Equipment(Action::Detach(joint))),
                     ]
                     .align_y(Alignment::Center),
                 );

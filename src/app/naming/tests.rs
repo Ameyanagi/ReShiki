@@ -520,9 +520,10 @@ fn native_open_preserves_pending_naming_in_an_empty_source_tab() {
     document.add_atom("O", Point::default());
     let _ = app.update(Message::FilePrepared(Some((
         "pending-name-open.rsk".into(),
-        Ok(super::super::files::Prepared::Native(Box::new(
-            document.clone(),
-        ))),
+        Ok(super::super::files::Prepared::Native(
+            Box::new(document.clone()),
+            None,
+        )),
     ))));
     assert_ne!(app.tab.id, source);
     assert!(app.tab.file_epoch > epoch);
@@ -696,6 +697,7 @@ async fn name_preview_is_placed_beside_a_caption_only_drawing() -> Result<(), St
     let (mut app, _) = App::new();
     app.tab.busy = false;
     app.tab.doc.annotations.push(reshiki::document::Annotation {
+        angle: 0.,
         id: 1,
         position: Point::new(250., 80.),
         text: "Existing caption".into(),

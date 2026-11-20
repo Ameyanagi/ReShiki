@@ -682,7 +682,7 @@ fn point_bounds(doc: &Document, ids: &[u64]) -> Option<(Point, Point)> {
             doc.annotations
                 .iter()
                 .filter(|a| ids.contains(&a.id))
-                .flat_map(|a| [a.position, a.position.offset(a.size().0, a.size().1)]),
+                .flat_map(|a| a.corners()),
         )
         .chain(
             doc.arrows
@@ -915,6 +915,14 @@ pub fn scale_axes_about(doc: &mut Document, ids: &[u64], pivot: Point, x: f32, y
     );
 }
 
+/// Whether `ids` holds nothing but text. Such text turns with a transform;
+/// mixed with other objects, upright text stays upright and turned text
+/// turns about its centre.
+pub(crate) fn only_text(doc: &Document, ids: &HashSet<u64>) -> bool {
+    ids.iter()
+        .all(|id| doc.annotations.iter().any(|a| a.id == *id))
+}
+
 fn map_positions(
     doc: &mut Document,
     ids: &[u64],
@@ -954,9 +962,23 @@ fn map_positions(
             a.position = convert(a.position);
         }
     }
+    // Text selected on its own turns when the transform turns.
+    let turns = only_text(doc, &ids)
+        && crate::document::text_angle(vector(Point::new(1., 0.)), vector(Point::new(0., 1.)))
+            != 0.;
     for a in &mut doc.annotations {
-        if ids.contains(&a.id) {
+        if !ids.contains(&a.id) {
+            continue;
+        }
+        if a.angle == 0. && !turns {
             a.position = convert(a.position);
+        } else {
+            let (w, h) = a.size();
+            let centre = convert(a.position.offset(w / 2., h / 2.));
+            let (s, c) = a.angle.to_radians().sin_cos();
+            a.angle =
+                crate::document::text_angle(vector(Point::new(c, s)), vector(Point::new(-s, c)));
+            a.position = centre.offset(-w / 2., -h / 2.);
         }
     }
     for a in &mut doc.arrows {

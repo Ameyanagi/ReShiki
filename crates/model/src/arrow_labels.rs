@@ -104,11 +104,11 @@ pub fn gap_geometry(doc: &Document, annotation: u64) -> Option<GapGeometry> {
             normal.y * half_thickness(arrow, &f),
         ),
         to: f.mid.offset(
-            normal.x * (across - extent(text.size(), normal) / 2.),
-            normal.y * (across - extent(text.size(), normal) / 2.),
+            normal.x * (across - extent(text, normal) / 2.),
+            normal.y * (across - extent(text, normal) / 2.),
         ),
         tangent: f.dir,
-        half_span: extent(text.size(), f.dir) / 2.,
+        half_span: extent(text, f.dir) / 2.,
     })
 }
 
@@ -160,7 +160,7 @@ pub(crate) fn translated_units(doc: &mut Document, selection: impl Fn(u64) -> Op
         let offset = sub(centre(text), f.mid);
         let along = dot(offset, f.dir).abs();
         // Sideways escape detaches; perpendicular movement adjusts any gap.
-        if along > f.len / 2. && along > extent(text.size(), f.dir) / 2. {
+        if along > f.len / 2. && along > extent(text, f.dir) / 2. {
             continue;
         }
         let across = dot(offset, f.up);
@@ -169,8 +169,7 @@ pub(crate) fn translated_units(doc: &mut Document, selection: impl Fn(u64) -> Op
         } else {
             Side::Below
         };
-        let value =
-            (across.abs() - half_thickness(arrow, &f) - extent(text.size(), f.up) / 2.).max(0.);
+        let value = (across.abs() - half_thickness(arrow, &f) - extent(text, f.up) / 2.).max(0.);
         if (value - label.gap.unwrap_or_else(|| spacing(doc).gap)).abs() > 1e-4 {
             label.gap = Some(value);
         }
@@ -248,9 +247,11 @@ fn frame_along(arrow: &Arrow, dir: Point) -> Frame {
         len,
     }
 }
-/// Extent of a text box measured along a unit vector.
-fn extent(size: (f32, f32), along: Point) -> f32 {
-    size.0 * along.x.abs() + size.1 * along.y.abs()
+/// Extent of a text's turned box measured along a unit vector.
+fn extent(text: &Annotation, along: Point) -> f32 {
+    let (w, h) = text.size();
+    let along = along.turned(Point::default(), -text.angle);
+    w * along.x.abs() + h * along.y.abs()
 }
 fn centre(a: &Annotation) -> Point {
     let (w, h) = a.size();
@@ -277,13 +278,13 @@ fn slot(doc: &Document, arrow: &Arrow, text: &Annotation) -> Option<(Side, f32)>
     let frame = frame(arrow)?;
     let offset = sub(centre(text), frame.mid);
     let along = dot(offset, frame.dir).abs();
-    if along > frame.len / 2. && along > extent(text.size(), frame.dir) / 2. {
+    if along > frame.len / 2. && along > extent(text, frame.dir) / 2. {
         return None;
     }
     let across = dot(offset, frame.up);
     let reach = half_thickness(arrow, &frame)
         + spacing(doc).gap
-        + extent(text.size(), frame.up) / 2.
+        + extent(text, frame.up) / 2.
         + doc.drawing_style.bond_length_world;
     if across.abs() > reach {
         return None;
@@ -303,7 +304,7 @@ pub fn of(doc: &Document, arrow: u64) -> impl Iterator<Item = &ArrowLabel> {
 fn widest(doc: &Document, arrow: u64, dir: Point) -> Option<f32> {
     of(doc, arrow)
         .filter_map(|l| doc.annotations.iter().find(|a| a.id == l.annotation))
-        .map(|a| extent(a.size(), dir))
+        .map(|a| extent(a, dir))
         .reduce(f32::max)
 }
 /// The shortest arrow that fits its labels, and the length an arrow that
@@ -521,7 +522,7 @@ fn place_labels(doc: &mut Document, id: u64, reopening: bool) {
                 Side::Below => Point::new(-f.up.x, -f.up.y),
             };
             let distance =
-                ink + l.gap.unwrap_or_else(|| spacing(doc).gap) + extent(size, normal) / 2.;
+                ink + l.gap.unwrap_or_else(|| spacing(doc).gap) + extent(text, normal) / 2.;
             let centre = f.mid.offset(normal.x * distance, normal.y * distance);
             Some((l.annotation, centre.offset(-size.0 / 2., -size.1 / 2.)))
         })

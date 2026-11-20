@@ -4,7 +4,7 @@ use super::{Arrow, ArrowStyle, Head, unit};
 use crate::{document::Point, graphics::PathCommand, style::DEFAULT};
 use serde::{Deserialize, Serialize};
 
-choices!(Body { Line => "Line", Block => "Block", Hollow => "Hollow", Chevron => "Chevron", Gradient => "Gradient" });
+choices!(Body { Line => "Line", Block => "Block", Hollow => "Hollow block", Chevron => "Chevron", Gradient => "Gradient" });
 impl Body {
     pub fn is_line(&self) -> bool {
         *self == Self::Line

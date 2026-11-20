@@ -135,7 +135,7 @@ fn opening_a_drawing_uses_its_own_fit_instead_of_the_previous_camera() {
         let old_epoch = app.tab.file_epoch;
         let _ = app.update(Message::FilePrepared(Some((
             "inspector-motion.rsk".into(),
-            Ok(files::Prepared::Native(Box::new(document))),
+            Ok(files::Prepared::Native(Box::new(document), None)),
         ))));
         assert_ne!(app.tab.file_epoch, old_epoch);
         assert_eq!(app.tab.camera.center, reference.tab.camera.center);

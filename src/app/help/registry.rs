@@ -5,7 +5,7 @@
 //! changes in one place. Contextual keys come from the same tables the
 //! drawing uses (`reshiki::hotkeys`), and their previews run those edits.
 use super::super::{
-    Message, optimization, printing, settings_page,
+    Message, command_palette, optimization, printing, settings_page,
     shortcuts::{self, TabKey, keys, tab_keys},
 };
 use iced::keyboard::Modifiers;
@@ -107,6 +107,13 @@ pub(crate) fn entries() -> Vec<Entry> {
             "Search every shortcut, with a drawing of what it does",
             Anywhere,
             &["help", "keyboard", "reference", "keys", "cheat sheet"],
+        ),
+        entry(
+            format!("{} / :", command_palette::shortcut_keys()),
+            "Command palette",
+            "Search drawing commands and run them",
+            Anywhere,
+            &["commands", "search", "run"],
         ),
         entry(
             "Esc",

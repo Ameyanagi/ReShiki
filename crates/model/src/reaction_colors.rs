@@ -729,6 +729,7 @@ pub fn set_legend(
         (None, true) => {
             let id = doc.next_id();
             doc.annotations.push(Annotation {
+                angle: 0.,
                 id,
                 position: Point::default(),
                 text: String::new(),

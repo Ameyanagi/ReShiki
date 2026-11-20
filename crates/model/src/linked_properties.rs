@@ -380,6 +380,7 @@ pub fn toggle(
             let gap = doc.drawing_style.font_size().max(12.) * 0.5;
             let center = anchor(doc, atoms).map_or(0., |p| p.x);
             doc.annotations.push(Annotation {
+                angle: 0.,
                 id,
                 position: Point::new(center, hi.y + gap),
                 text: String::new(),

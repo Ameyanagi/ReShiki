@@ -176,6 +176,7 @@ fn both_color_visitors_see_every_stored_color() {
         style: TextStyle::default(),
     });
     doc.annotations.push(crate::document::Annotation {
+        angle: 0.,
         id: 3,
         position: Point::default(),
         text: "x".into(),

@@ -11,6 +11,8 @@ use reshiki::{
     palette::{Color, Hue, Row},
 };
 
+pub(super) const LASTING_LAYOUTS: [Flow; 3] = [Flow::Row, Flow::Column, Flow::Grid(2)];
+
 #[derive(Debug, Clone)]
 pub enum Action {
     Wrap,
@@ -230,7 +232,7 @@ impl App {
         self.sync_graphics();
     }
 
-    fn selected_panels(&self) -> impl Iterator<Item = &Graphic> {
+    pub(super) fn selected_panels(&self) -> impl Iterator<Item = &Graphic> {
         self.tab
             .doc
             .graphics
@@ -571,8 +573,8 @@ impl App {
             )
             .push(
                 row![
-                    toggle("Rounded", rounded, Action::Rounded(true)),
-                    toggle("Square", !rounded, Action::Rounded(false)),
+                    toggle("Rounded corners", rounded, Action::Rounded(true)),
+                    toggle("Square corners", !rounded, Action::Rounded(false)),
                 ]
                 .spacing(4),
             )

@@ -304,12 +304,22 @@ impl CdxmlScene {
                     format: c.format,
                 }
                 .into_document()?;
-                Ok(document::Annotation {
+                let mut caption = document::Annotation {
                     id: c.id,
                     position: narrow(c.position),
                     text,
                     format,
-                })
+                    angle: c.angle,
+                };
+                if c.angle != 0. {
+                    let (w, h) = caption.size();
+                    let at = caption.position;
+                    let centre = c
+                        .centre
+                        .map_or_else(|| at.offset(w / 2., h / 2.).turned(at, c.angle), narrow);
+                    caption.position = centre.offset(-w / 2., -h / 2.);
+                }
+                Ok(caption)
             })
             .collect::<Result<_>>()?;
         document.arrows = self
