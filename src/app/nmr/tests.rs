@@ -99,7 +99,7 @@ fn open_and_restore_keep_source_report_in_its_epoch() {
         } else {
             let _ = app.update(Message::FilePrepared(Some((
                 "nmr-cache-open.rsk".into(),
-                Ok(files::Prepared::Native(Box::new(ethyl_acetate_doc()))),
+                Ok(files::Prepared::Native(Box::new(ethyl_acetate_doc()), None)),
             ))));
         }
         assert_ne!(app.tab.id, source);
@@ -3049,6 +3049,7 @@ fn nmr_row_and_marker_selection_refresh_caption_and_atom_controls() {
             ..Default::default()
         };
         app.tab.doc.annotations.push(Annotation {
+            angle: 0.,
             id: caption_id,
             position: Point::new(100., 340.),
             text: "Styled caption before NMR selection".into(),

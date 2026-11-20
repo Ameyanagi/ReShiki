@@ -271,6 +271,7 @@ async fn bond_gallery_survives_checks_cleanup_and_cdxml_with_appearance_intact()
         );
         let origin = gallery.atom(ids[0]).unwrap().position;
         gallery.annotations.push(Annotation {
+            angle: 0.,
             id: gallery.next_id(),
             position: origin.offset(0., 30.),
             text: preset.name().into(),

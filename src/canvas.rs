@@ -153,6 +153,7 @@ pub enum Edit {
     EraseStart(World),
     EraseTo(World, World),
     EraseEnd,
+    /// Edit a caption, or the text a closed shape holds.
     BeginText(u64),
     /// A Text-tool Option/Alt-click: label the atom there
     /// with the last committed label, as ChemDraw repeats labels.
@@ -411,6 +412,9 @@ pub struct State {
     last_click: Option<(iced::time::Instant, u64)>,
     last_transform_click: Option<HandleClick>,
     modifiers: iced::keyboard::Modifiers,
+    /// The drag moves a piece picked out of its object, as Option/Alt does:
+    /// a stand's rod or a joint no longer holds it in place.
+    pull_out: bool,
 }
 
 /// A context menu suspends pointer gestures, not the expensive drawing caches.

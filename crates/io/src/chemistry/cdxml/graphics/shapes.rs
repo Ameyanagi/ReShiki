@@ -140,11 +140,11 @@ impl Reader<'_, '_> {
                     "Gradient-shaded CDXML orbitals are not supported yet",
                 ));
             }
-            let grey = super::super::approximate::GREY;
+            let gradient = super::super::approximate::GRADIENT;
             let key = label
                 .replace("Shaded", "")
                 .replace("Solid", "")
-                .replace(grey, "");
+                .replace(gradient, "");
             let key = if label.starts_with("dz2") {
                 "dz2"
             } else {
@@ -170,8 +170,8 @@ impl Reader<'_, '_> {
             )?;
             value.phase = Some(if label.contains("Solid") {
                 Phase::Solid
-            } else if label.contains(grey) {
-                Phase::Shaded
+            } else if label.contains(gradient) {
+                Phase::Gradient
             } else {
                 Phase::Open
             });

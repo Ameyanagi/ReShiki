@@ -292,6 +292,11 @@ async fn retrosynthesis_arrows_roundtrip_through_cdxml_and_cdx() {
             let expected_style = expected.appearance();
             assert!((actual_style.width_pt - expected_style.width_pt).abs() < 1. / 65536.);
             actual_style.width_pt = expected_style.width_pt;
+            // An angled head has no notch: ChemDraw reads its center size as
+            // the head's half-width, which comes back exactly.
+            if expected_style.shape == HeadShape::Open {
+                actual_style.head_notch = expected_style.head_notch;
+            }
             assert_eq!(actual_style, expected_style);
             // Editable exchange translates the page; preserve relative geometry.
             assert!((actual.end.x - actual.start.x - 180.).abs() < 0.001);
@@ -479,4 +484,78 @@ fn centered_aromatic_charge_export_retains_atom_charge_without_extra_center_text
     assert_eq!(charges, ["1"]);
     assert!(!tree.descendants().any(|node| node.has_tag_name("t")));
     assert_eq!(doc, before);
+}
+
+/// Pd(PPh3)2 with each PPh3 contracted as ReShiki's Contract makes it: a
+/// label and a reverse spelling the catalog does not know.
+fn bis_phosphine_palladium() -> Document {
+    let mut doc = Document::default();
+    let pd = doc.add_atom("Pd", Point::default());
+    for side in [-1., 1.] {
+        let p = doc.add_atom("P", Point::new(side * 42., 0.));
+        doc.add_bond(p, pd, 1, "plain");
+        let mut members = vec![p];
+        for (dx, dy) in [(1., -1.), (1., 1.), (2., 0.)] {
+            let ring = crate::editing::ring(
+                &mut doc,
+                Point::new(side * (42. + dx * 30.), dy * 30.),
+                6,
+                true,
+                14.,
+            );
+            doc.add_bond(p, ring[0], 1, "plain");
+            members.extend(ring);
+        }
+        doc.contract(&members, "PPh3", "Ph3P").unwrap();
+    }
+    doc.validate().unwrap();
+    doc
+}
+
+/// The PPh3 left of Pd reads Ph3P and the right one PPh3, so neither label
+/// prints over the metal.
+fn phosphine_labels(doc: &Document) -> Vec<(&str, &str)> {
+    let mut groups: Vec<_> = doc.abbreviations.iter().collect();
+    groups.sort_by(|a, b| {
+        let x = |g: &crate::abbreviations::Abbreviation| doc.atom(g.anchor).unwrap().position.x;
+        x(a).total_cmp(&x(b))
+    });
+    groups
+        .iter()
+        .map(|g| (g.reverse_label.as_str(), g.text(doc)))
+        .collect()
+}
+
+#[test]
+fn contracted_labels_keep_their_side_through_cdxml_and_cdx() {
+    let doc = bis_phosphine_palladium();
+    let expected = [("Ph3P", "Ph3P"), ("Ph3P", "PPh3")];
+    assert_eq!(phosphine_labels(&doc), expected);
+    let xml = write(&doc, Options::default()).unwrap();
+    // ChemDraw saves the same labels flush right and flush left.
+    let resaved = xml
+        .replace(
+            r#"LabelAlignment="Right""#,
+            r#"LabelJustification="Right" Justification="Right" LabelAlignment="Right""#,
+        )
+        .replace(
+            r#"LabelAlignment="Left""#,
+            r#"LabelJustification="Left" LabelAlignment="Left""#,
+        );
+    assert_ne!(resaved, xml);
+    // The left one typed as it reads there.
+    let at = resaved.find(r#"LabelAlignment="Right""#).unwrap();
+    let at = at + resaved[at..].find("PPh3").unwrap();
+    let typed = format!("{}Ph3P{}", &resaved[..at], &resaved[at + 4..]);
+    let decoded = crate::exchange::from_cdx(&crate::exchange::to_cdx(&xml).unwrap()).unwrap();
+    for xml in [&xml, &decoded, &resaved, &typed] {
+        let imported = crate::chemistry::cdxml::import_cdxml(xml).unwrap().document;
+        assert_eq!(phosphine_labels(&imported), expected);
+        // Reopened twice, the labels still read the same.
+        let again = write(&imported, Options::default()).unwrap();
+        let again = crate::chemistry::cdxml::import_cdxml(&again)
+            .unwrap()
+            .document;
+        assert_eq!(phosphine_labels(&again), expected);
+    }
 }

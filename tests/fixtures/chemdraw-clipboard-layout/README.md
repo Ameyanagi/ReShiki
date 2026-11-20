@@ -21,8 +21,8 @@ Editable export may represent the two stamps as three paths. The regression
 checks their six actual straight edges across that representation change,
 in addition to the source frames on initial import.
 
-`unsupported-graphic` adds a valid gradient-shaded p orbital, a style ReShiki
-cannot draw yet. The drawing imports whole, the orbital in flat grey, and the
+`unsupported-graphic` adds a rectangle with a 20 pt line, wider than ReShiki
+draws. The drawing imports whole, the line at the nearest width, and the
 import says so. `misleading.smiles` describes the same molecular identities but
 loses the deliberate geometry and reaction stamps; it must not silently replace
 failed editable drawing clipboard data.

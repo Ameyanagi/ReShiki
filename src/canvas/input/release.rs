@@ -503,7 +503,14 @@ impl MoleculeCanvas<'_> {
         ControlFlow::Continue(if start.distance(p) < click_slop {
             if !state.modifiers.shift()
                 && let Some(label) = hit_object(self.doc, p, self.camera.world_len(HANDLE_PICK_PX))
-                    .filter(|id| self.doc.annotations.iter().any(|a| a.id == *id))
+                    .filter(|id| {
+                        self.doc.annotations.iter().any(|a| a.id == *id)
+                            || self
+                                .doc
+                                .graphics
+                                .iter()
+                                .any(|g| g.id == *id && reshiki::shape_text::supports(g))
+                    })
             {
                 let now = iced::time::Instant::now();
                 if state.last_click.is_some_and(|(time, id)| {
@@ -519,6 +526,11 @@ impl MoleculeCanvas<'_> {
                 .first()
                 .copied()
                 .filter(|id| self.doc.atom(*id).is_some())
+                // A click into the selected object picks a piece of it.
+                .filter(|_| {
+                    !(clicked.len() < self.selected.len()
+                        && clicked.iter().all(|id| self.selected.contains(id)))
+                })
             {
                 let now = iced::time::Instant::now();
                 if state.last_click.is_some_and(|(time, id)| {

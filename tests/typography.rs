@@ -125,6 +125,7 @@ fn styled_labels_survive_native_save_and_vector_and_raster_exports() {
         format.apply("α < H2O", None, &change);
     }
     doc.annotations.push(Annotation {
+        angle: 0.,
         id: 1,
         position: Point::default(),
         text: "α < H2O".into(),
@@ -186,6 +187,7 @@ async fn cdxml_uses_rendered_text_metrics_and_keeps_caption_position() {
         .document
         .unwrap();
     doc.annotations.push(Annotation {
+        angle: 0.,
         id: 10,
         position: Point::new(150.0, 90.0),
         text: "Centered\ncaption".into(),
@@ -249,6 +251,7 @@ fn japanese_fallback_uses_real_advances_and_keeps_document_styles() {
     assert!((layout.width - measured).abs() < 0.01);
     let mut doc = Document::default();
     doc.annotations.push(Annotation {
+        angle: 0.,
         id: 1,
         position: Point::default(),
         text: "水素化 H₂O".into(),

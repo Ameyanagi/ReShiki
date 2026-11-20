@@ -33,6 +33,7 @@ impl MoleculeCanvas<'_> {
         // Pieces held on a stand slide along its rod; Option pulls them off.
         if !copies
             && !modifiers.alt()
+            && !state.pull_out
             && let Some(d) = reshiki::equipment::solve::constrain(
                 self.doc,
                 ids,

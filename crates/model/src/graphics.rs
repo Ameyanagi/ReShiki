@@ -9,8 +9,8 @@ use crate::{document::Point, style};
 pub use arc::ArcGeometry;
 pub(crate) use effects::bounding_frame;
 pub use effects::{
-    EXPORT_NOTICE, Effects, GLOW_NOTICE, Gradient, GradientKind, SHADOW_RGB, export_notice, shade,
-    tiled, wave_radius, wavy,
+    EXPORT_NOTICE, Effects, GLOW_NOTICE, Gradient, GradientKind, SHADOW_RGB, export_notice,
+    lobe_shading, shade, tiled, wave_radius, wavy,
 };
 pub use heads::PathHeads;
 pub use panel::{Divider, Panel, TitlePlace};
@@ -152,17 +152,26 @@ impl Default for GraphicStyle {
 }
 /// The largest corner radius, beyond any page ChemDraw draws.
 pub const MAX_CORNER_PT: f32 = 1000.;
+/// ChemDraw's dash and gap length, its default hash spacing.
+pub const DASH_PT: f32 = 2.7;
 impl GraphicStyle {
     pub fn width(&self) -> f32 {
         style::DEFAULT.world(self.width_pt)
     }
+    /// As in ChemDraw, dashes and gaps keep one length whatever the line
+    /// width and end square, so a bold dashed line reads as many short
+    /// blocks. Dots stay round and spaced by the width.
     pub fn dashes(&self) -> Vec<f32> {
         let w = self.width();
         match self.pattern {
             LinePattern::Solid | LinePattern::Wavy => vec![],
-            LinePattern::Dashed => vec![w * 5.0, w * 3.0],
+            LinePattern::Dashed => vec![style::DEFAULT.world(DASH_PT); 2],
             LinePattern::Dotted => vec![w * 0.1, w * 2.5],
         }
+    }
+    /// Round line ends, except on dashes.
+    pub fn round_caps(&self) -> bool {
+        self.pattern != LinePattern::Dashed
     }
     pub fn validate(&self) -> Result<(), String> {
         if !self.width_pt.is_finite() || !(0.1..=12.0).contains(&self.width_pt) {
@@ -370,6 +379,9 @@ pub struct Graphic {
     /// The intermediates and steps that make an ellipse a catalytic cycle.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cycle: Option<Box<crate::cycles::Cycle>>,
+    /// The annotation this closed shape holds, centred inside it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub text: Option<u64>,
 }
 fn back_layer() -> i32 {
     -1
@@ -489,6 +501,7 @@ impl Graphic {
                 panel: None,
                 leader: None,
                 cycle: None,
+                text: None,
             };
         }
         let mut dx = end.x - start.x;
@@ -538,6 +551,7 @@ impl Graphic {
             panel: None,
             leader: None,
             cycle: None,
+            text: None,
         }
     }
     /// A rounded rectangle's corner radius in drawing units, at most half its

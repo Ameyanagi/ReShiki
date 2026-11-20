@@ -72,6 +72,7 @@ fn main() -> anyhow::Result<()> {
                 Point::new(dest.x - (lo.x + hi.x) / 2., dest.y - (lo.y + hi.y) / 2.),
             );
             sheet.annotations.push(Annotation {
+                angle: 0.,
                 id: sheet.next_id(),
                 position: dest.offset(-100., 150.),
                 text: name.into(),

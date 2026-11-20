@@ -785,8 +785,9 @@ impl App {
                     return None;
                 }
                 if repeat
-                    && modifiers.is_empty()
-                    && key == iced::keyboard::Key::Named(iced::keyboard::key::Named::F8)
+                    && (command_palette::is_shortcut(&key, modifiers)
+                        || (modifiers.is_empty()
+                            && key == iced::keyboard::Key::Named(iced::keyboard::key::Named::F8)))
                 {
                     return None;
                 }

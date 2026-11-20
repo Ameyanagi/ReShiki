@@ -500,6 +500,7 @@ fn pet_repeat() -> reshiki::document::Document {
 fn add_caption(doc: &mut reshiki::document::Document, text: &str) -> u64 {
     let id = doc.next_id();
     doc.annotations.push(reshiki::document::Annotation {
+        angle: 0.,
         id,
         position: World::new(150., 100.),
         text: text.into(),
@@ -1271,7 +1272,8 @@ fn arrange_commands_have_one_name_on_every_surface() {
         assert!(
             palette.iter().any(|c| {
                 matches!(&c.run, super::super::command_palette::catalog::Run::Send(messages)
-                    if format!("{:?}", messages[0]) == message && c.name == command.name())
+                    if messages.first().is_some_and(|m| format!("{m:?}") == message)
+                        && c.name == command.name())
             }),
             "{message} is {} in the palette",
             command.name()
@@ -1529,6 +1531,7 @@ fn chemical_name_format_menu_targets_annotations_and_uses_document_history() {
     app.tab.selected = vec![atom];
     assert!(!labels(&app, Page::Main).contains(&"Format as chemical name"));
     app.tab.doc.annotations.push(reshiki::document::Annotation {
+        angle: 0.,
         id: 2,
         position: World::new(0., 50.),
         text: "tert-butyl".into(),
@@ -1776,4 +1779,46 @@ fn a_shapes_arrange_menu_offers_its_stacking_order() {
     app.tab.selected = vec![id];
     let align = labels(&app, Page::Align);
     assert!(align.contains(&"Bring to front") && align.contains(&"Send to back"));
+}
+
+#[test]
+fn select_structures_in_cycle_picks_every_part_and_not_the_circle() -> Result<(), String> {
+    let (mut app, _) = App::new();
+    let mut parts = vec![];
+    for (x, y, label) in [
+        (0., -200., "Pd(0)L2"),
+        (170., 90., "ArPdX"),
+        (-230., 90., "ArPdAr"),
+    ] {
+        let id = app.tab.doc.next_id();
+        let style = app.tab.doc.drawing_style.text_style();
+        app.tab.doc.annotations.push(reshiki::document::Annotation {
+            angle: 0.,
+            id,
+            position: World::new(x, y),
+            text: label.into(),
+            format: reshiki::typography::TextFormat {
+                style,
+                ..Default::default()
+            },
+        });
+        parts.push(id);
+    }
+    app.tab.selected = parts.clone();
+    let _ = app.update(Message::Cycle(super::super::cycles::Action::Make));
+    let _ = app.update(Message::Cycle(super::super::cycles::Action::MakeApply));
+    let circle = app.selected_cycle().ok_or("no cycle")?.0;
+    // With the cycle selected, a click on its circle or arcs picks only them.
+    let whole = app.tab.selected.clone();
+    assert_eq!(app.tab.doc.click_selection(&whole, &[circle]), vec![circle]);
+    assert_eq!(
+        enabled(&app, Page::Main, "Select structures in cycle"),
+        Some(true)
+    );
+    run_item(&mut app, Page::Main, "Select structures in cycle")?;
+    let mut selected = app.tab.selected.clone();
+    selected.sort_unstable();
+    parts.sort_unstable();
+    assert_eq!(selected, parts);
+    Ok(())
 }

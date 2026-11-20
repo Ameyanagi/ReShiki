@@ -72,7 +72,9 @@ impl SymbolKind {
     }
 }
 choices!(OrbitalKind {S=>"s orbital",Sigma=>"σ orbital",Lobe=>"Single lobe",P=>"p orbital",Hybrid=>"sp³ hybrid",Dxy=>"dxy orbital",Dz2=>"dz² orbital"});
-choices!(Phase {Solid=>"Solid phase",Open=>"Outline",Shaded=>"Gray phase"});
+// `Gradient` is ChemDraw's shaded phase: white at the upper left of each lobe
+// to the line color at its edge.
+choices!(Phase {Solid=>"Solid phase",Open=>"Outline",Shaded=>"Gray phase",Gradient=>"Shaded phase"});
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum MarkKind {
@@ -182,19 +184,23 @@ pub fn orbital_parts(
             None
         } else {
             let color = style.fill.unwrap_or(style.stroke);
-            Some(if phase == Phase::Solid {
-                color
-            } else {
+            Some(if phase == Phase::Shaded {
                 // Scene documents hold canonical bytes, so this lightens toward the paper.
                 crate::palette::Color::Custom(color.rgb().map(|c| ((c as u16 + 255 * 2) / 3) as u8))
+            } else {
+                color
             })
         };
+        let mut style = GraphicStyle {
+            fill,
+            ..style.clone()
+        };
+        // Shading paints opaque bands, so a see-through orbital fills flat.
+        style.effects.shaded =
+            phase == Phase::Gradient && fill.is_some() && style.effects.opacity.is_none();
         out.push(Part {
             commands,
-            style: GraphicStyle {
-                fill,
-                ..style.clone()
-            },
+            style,
             filled: fill.is_some(),
         });
     };
@@ -224,6 +230,10 @@ pub fn orbital_parts(
     }
     out
 }
+/// A radical ion's sign and dot along its axis, and a free sign's arm.
+const ION_SIGN: f32 = 0.22;
+const ION_DOT: f32 = -0.45;
+const SIGN_ARM: f32 = 0.3;
 pub fn symbol_parts(kind: SymbolKind, amount: u8, style: &GraphicStyle) -> Vec<Part> {
     glyph_parts(kind, amount, style, false)
 }
@@ -250,7 +260,7 @@ fn glyph_parts(kind: SymbolKind, amount: u8, style: &GraphicStyle, mark: bool) -
     let (radius, arm) = if mark && circled {
         (0.4, 0.24)
     } else {
-        (0.52, 0.3)
+        (0.52, SIGN_ARM)
     };
     let mut out = vec![];
     let mut add = |commands: Vec<PathCommand>, fill: bool| {
@@ -285,13 +295,13 @@ fn glyph_parts(kind: SymbolKind, amount: u8, style: &GraphicStyle, mark: bool) -
             SymbolKind::Plus | SymbolKind::CirclePlus | SymbolKind::RadicalCation
         );
         let ion = matches!(kind, SymbolKind::RadicalCation | SymbolKind::RadicalAnion);
-        let x = if ion { 0.22 } else { 0. };
+        let x = if ion { ION_SIGN } else { 0. };
         add(sign(positive, x), false);
         if circled {
             add(circle(0., 0., radius, radius), false);
         }
         if ion {
-            add(circle(-0.45, 0., 0.095, 0.095), true);
+            add(circle(ION_DOT, 0., 0.095, 0.095), true);
         }
         if amount > 1 {
             add(
@@ -598,6 +608,27 @@ impl Graphic {
                     self.axis_x.y * q.x + self.axis_y.y * q.y,
                 )
             });
+        }
+        // A radical ion's sign stands upright however the ion turns, as
+        // ChemDraw draws it; only its place beside the dot turns.
+        if let GraphicKind::Symbol(kind @ (SymbolKind::RadicalCation | SymbolKind::RadicalAnion)) =
+            self.kind
+            && let Some(sign) = parts.first_mut()
+        {
+            use PathCommand::{Line, Move};
+            // A stretched ion keeps a square sign of its mean size.
+            let arm = SIGN_ARM
+                * (self.axis_x.x * self.axis_y.y - self.axis_x.y * self.axis_y.x)
+                    .abs()
+                    .sqrt();
+            let c = self
+                .origin
+                .offset(self.axis_x.x * ION_SIGN, self.axis_x.y * ION_SIGN);
+            sign.commands = vec![Move(c.offset(-arm, 0.)), Line(c.offset(arm, 0.))];
+            if kind == SymbolKind::RadicalCation {
+                sign.commands
+                    .extend([Move(c.offset(0., -arm)), Line(c.offset(0., arm))]);
+            }
         }
         parts
     }

@@ -372,7 +372,11 @@ pub(super) struct State {
 
 #[derive(Debug, Clone)]
 pub enum Prepared {
-    Native(Box<reshiki::document::Document>),
+    /// A native drawing and the view it was saved in.
+    Native(
+        Box<reshiki::document::Document>,
+        Option<reshiki::document::View>,
+    ),
     /// A picture's embedded drawing, or the picture itself with the reason
     /// its drawing could not be read.
     Picture(Box<reshiki::document::Document>, Option<String>),
@@ -448,7 +452,10 @@ fn prepare(path: &std::path::Path, contents: Vec<u8>) -> Result<Prepared, String
     } else if reshiki::compatibility::is_native_extension(&extension) {
         let doc = reshiki::document::Document::from_native_file(&contents)
             .map_err(|e| format!("Could not open document: {e}"))?;
-        Ok(Prepared::Native(Box::new(doc)))
+        Ok(Prepared::Native(
+            Box::new(doc),
+            reshiki::document::View::read(&contents),
+        ))
     } else {
         // An SD file's records are read next, in `records`. Its extension
         // comes first, as for Insert: POSCAR is told by its name.
@@ -878,13 +885,16 @@ impl super::App {
                 self.desktop_import_started();
                 return task;
             }
-            Ok(Prepared::Native(doc)) => {
+            Ok(Prepared::Native(doc, view)) => {
                 #[cfg(not(target_arch = "wasm32"))]
                 let kept = self.github_opened(&path);
                 #[cfg(target_arch = "wasm32")]
                 let kept = iced::Task::none();
                 if self.open_target(Some(&path)) {
                     self.show_opened(*doc, Some(path));
+                    if let Some(view) = view {
+                        self.restore_view(view);
+                    }
                 }
                 return kept;
             }
@@ -964,6 +974,53 @@ impl super::App {
             ));
         }
         self.error = false;
+    }
+
+    /// Show the opened drawing as it was saved, unless that view shows none
+    /// of it (or of its pages): then it stays fitted.
+    fn restore_view(&mut self, view: reshiki::document::View) {
+        let camera = crate::canvas::Camera {
+            center: view.center,
+            // The range the camera itself keeps; reveals go down to 0.001.
+            zoom: view.zoom.clamp(0.001, 5.),
+        };
+        let paper = self.guides.paper(iced::Rectangle::with_size(self.viewport));
+        let (half_x, half_y) = (
+            camera.world_len(paper.width / 2.),
+            camera.world_len(paper.height / 2.),
+        );
+        let layout = self.tab.doc.page_layout.as_ref();
+        let pages: Vec<_> = layout
+            .map(|layout| {
+                (0..layout.count())
+                    .filter_map(|i| layout.bounds(i))
+                    .collect()
+            })
+            .unwrap_or_default();
+        let shown = |(lo, hi): &(reshiki::document::Point, reshiki::document::Point)| {
+            (lo.x - half_x..=hi.x + half_x).contains(&camera.center.x)
+                && (lo.y - half_y..=hi.y + half_y).contains(&camera.center.y)
+        };
+        if !std::iter::once(self.tab.doc.bounds())
+            .chain(pages.iter().copied())
+            .any(|bounds| shown(&bounds))
+        {
+            return;
+        }
+        // Page controls act on the page nearest the middle of the view.
+        let away = |(lo, hi): &(reshiki::document::Point, reshiki::document::Point)| {
+            lo.lerp(*hi, 0.5).distance(camera.center)
+        };
+        if let Some((page, _)) = pages
+            .iter()
+            .enumerate()
+            .min_by(|(_, a), (_, b)| away(a).total_cmp(&away(b)))
+        {
+            self.tab.pages.active = page;
+        }
+        self.tab.camera = camera;
+        self.tab.pages.fit = None;
+        self.tab.fit_to_view = false;
     }
 
     /// Save, or Save as in `format`. The first Save of a ChemDraw or MOL file
@@ -1080,6 +1137,12 @@ impl super::App {
         }
         let snapshot = std::sync::Arc::new(self.tab.doc.clone());
         let save_snapshot = std::sync::Arc::clone(&snapshot);
+        #[cfg(not(target_arch = "wasm32"))]
+        let github_root = self.github.root.clone();
+        let view = Some(reshiki::document::View {
+            center: self.tab.camera.center,
+            zoom: self.tab.camera.zoom,
+        });
         let epoch = self.tab.file_epoch;
         #[cfg(target_arch = "wasm32")]
         let handle = if !save_as && path.is_some() {
@@ -1117,10 +1180,11 @@ impl super::App {
                             reshiki::compatibility::NATIVE_EXTENSION,
                         )
                     };
+                    let bytes = save_snapshot.file_json_with_view(view)?;
                     if let Some(handle) = &handle {
-                        crate::web::write_file(handle, &save_snapshot).await?;
+                        crate::web::write_file(handle, &bytes).await?;
                     } else {
-                        write(&path, &save_snapshot.file_json()?)?;
+                        write(&path, &bytes)?;
                     }
                     Ok(Some(Saved { path, handle }))
                 }
@@ -1142,6 +1206,13 @@ impl super::App {
                         .filter(|binding| binding.same_path(&path))
                         .map_or(path.clone(), |binding| binding.path.clone());
                     let save_path = path.clone();
+                    // A drawing kept in a GitHub repository is shared: each
+                    // person's view stays out of its commits and versions.
+                    let view = view.filter(|_| {
+                        github_root.as_deref().is_none_or(|root| {
+                            reshiki::github::workcopy::locate(root, &path).is_none()
+                        })
+                    });
                     // A ChemDraw or MOL file is written by the chemistry engine.
                     let exported = match kept_format(&path) {
                         Some(format) => Some(
@@ -1157,7 +1228,7 @@ impl super::App {
                     reshiki::task::spawn_blocking(move || {
                         let bytes = match exported {
                             Some(bytes) => bytes,
-                            None => save_snapshot.file_json()?,
+                            None => save_snapshot.file_json_with_view(view)?,
                         };
                         #[cfg(any(windows, target_os = "linux"))]
                         let _target_owner = if office.as_ref().is_some_and(|binding| {

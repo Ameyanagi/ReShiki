@@ -267,6 +267,9 @@ pub(super) fn certify_translation(
         }
         undo(&mut actual.id)?;
         actual.origin = old.origin;
+        if let Some(text) = actual.text.as_mut() {
+            undo(text)?;
+        }
         if let Some(leader) = actual.leader.as_mut() {
             for target in [&mut leader.start, &mut leader.end].into_iter().flatten() {
                 for id in target.ids_mut() {

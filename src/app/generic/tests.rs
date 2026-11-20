@@ -342,6 +342,7 @@ fn generated_layout_preserves_manual_presentation_and_packs_ink_bounds() {
     });
     let annotation = source.next_id();
     source.annotations.push(reshiki::document::Annotation {
+        angle: 0.,
         id: annotation,
         position: Point::new(-80., 140.),
         text: "manual caption".into(),
@@ -492,6 +493,7 @@ fn union_publication_source() -> Document {
         });
     let caption = source.next_id();
     source.annotations.push(reshiki::document::Annotation {
+        angle: 0.,
         id: caption,
         position: Point::new(-330., 180.),
         text: "oxidane".into(),
@@ -675,6 +677,7 @@ fn prepared_expansion_errors_keep_original_tab_history_and_status() {
     app.tab.doc = union_publication_source();
     let caption = app.tab.doc.next_id();
     app.tab.doc.annotations.push(reshiki::document::Annotation {
+        angle: 0.,
         id: caption,
         position: Point::new(0., 200.),
         text: "x".repeat(Limits::default().max_work),
@@ -715,6 +718,7 @@ fn prepared_expansion_errors_keep_original_tab_history_and_status() {
         .doc
         .annotations
         .push(reshiki::document::Annotation {
+            angle: 0.,
             id,
             position: Point::new(1e30, 80.),
             text: "remote manual text".into(),

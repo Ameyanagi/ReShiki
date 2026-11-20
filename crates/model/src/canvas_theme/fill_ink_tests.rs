@@ -36,6 +36,7 @@ fn figure(canvas: CanvasTheme, fill: Color) -> (Document, [u64; 4]) {
     let outside = doc.add_atom("O", Point::new(200., 0.));
     let text = doc.next_id();
     doc.annotations.push(Annotation {
+        angle: 0.,
         id: text,
         position: Point::new(30., 10.),
         text: "card".into(),
@@ -85,6 +86,19 @@ fn a_dark_card_takes_light_ink_on_the_light_canvas() {
     let resolved = resolved_document(&doc);
     assert_eq!(label(&resolved, a), [255; 3]);
     assert_eq!(shown(&resolved, resolved.bonds[0].color), [255; 3]);
+}
+
+#[test]
+fn a_shaded_dark_card_reads_light_and_keeps_dark_ink() {
+    // Shading is white at its highlight and looks the same on both
+    // canvases, so a curve over a shaded orbital lobe reopened from ChemDraw
+    // stays black.
+    for canvas in CanvasTheme::ALL {
+        let (mut doc, [a, ..]) = figure(canvas, Color::Ink);
+        doc.graphics[0].style.effects.shaded = true;
+        let resolved = resolved_document(&doc);
+        assert_eq!(label(&resolved, a), [0; 3], "{canvas:?}");
+    }
 }
 
 #[test]
@@ -300,4 +314,37 @@ fn chemistry_in_the_hole_of_a_compound_path_keeps_the_canvas_ink() {
     // On the frame itself the light fill still calls for black ink.
     let on_frame = doc.add_atom("O", p(-25., 0.));
     assert_eq!(label(&resolved_document(&doc), on_frame), [0; 3]);
+}
+
+#[test]
+fn text_in_a_front_shape_reads_on_that_shape() {
+    // A black card brought in front of the drawing on the light canvas: its
+    // text is painted over it and takes the dark canvas's ink. A caption
+    // beside it keeps the light canvas's ink.
+    let mut doc = Document::default();
+    let shape = card(
+        &mut doc,
+        Point::new(0., 0.),
+        Point::new(80., 40.),
+        Color::Custom([0; 3]),
+    );
+    doc.graphics[0].layer = 1;
+    for (id, x) in [(10, 20.), (11, 200.)] {
+        doc.annotations.push(Annotation {
+            angle: 0.,
+            id,
+            position: Point::new(x, 15.),
+            text: "hν".into(),
+            format: Default::default(),
+        });
+    }
+    doc.graphics[0].text = Some(10);
+    crate::shape_text::reconcile(&mut doc);
+    let resolved = resolved_document(&doc);
+    let color = |id| {
+        let text = resolved.annotations.iter().find(|t| t.id == id).unwrap();
+        shown(&resolved, text.format.style.color)
+    };
+    assert_eq!(color(10), [255; 3], "on its black shape {shape}");
+    assert_eq!(color(11), [0; 3]);
 }

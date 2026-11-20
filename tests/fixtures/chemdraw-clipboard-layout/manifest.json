@@ -57,9 +57,9 @@
         "cds": "unsupported-graphic.drawing.cds"
       },
       "sha256": {
-        "cdxml": "d367d646b8e6298433dc3386094a3d58291ef99b14431432994023f49837cb73",
-        "cdx": "172a84c950f96d2de4300a00c4aaca561c207574031b7cb87370ea0d2a299cf3",
-        "cds": "bf0b932a96ad9e618fad9df4bbdeff7c652a41d3966f84b367348832933ba5b6"
+        "cdxml": "c61159730873d1aefba70f01292882a5f01f81b8452e58d5099f16f585ff59f5",
+        "cdx": "27c3cfa94d9af69073c510c234dd7cb29eb6320fd89e1bceda373e0f5b424cc4",
+        "cds": "ce548b36f6ec10332868402b2e15c83879365986528880a93d9eaf4f6bc5de95"
       }
     }
   ]

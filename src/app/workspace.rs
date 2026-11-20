@@ -763,7 +763,7 @@ impl App {
             (Tool::Graphic(self.toolbar.bracket.kind), brackets.as_str()),
             (self.toolbar.symbol, symbols.as_str()),
             (self.toolbar.orbital, orbitals.as_str()),
-            (Tool::Equipment, "Equipment"),
+            (Tool::Equipment, super::equipment::INSERT),
             (Tool::Icons, "Icons"),
         ];
         let mut grid = column![].spacing(TOOL_GAP);

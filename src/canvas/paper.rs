@@ -100,6 +100,7 @@ impl MoleculeCanvas<'_> {
         let mut doc = draft.preview.into_owned();
         reshiki::arrow_anchors::reconcile(&mut doc);
         reshiki::arrow_labels::reconcile(&mut doc, self.doc);
+        reshiki::shape_text::reconcile(&mut doc);
         doc
     }
 
@@ -154,6 +155,8 @@ impl MoleculeCanvas<'_> {
             reshiki::arrow_anchors::reconcile(doc);
             // Show condition labels and the length clamp as the commit will.
             reshiki::arrow_labels::reconcile(doc, base);
+            // Text in a shape follows it, as the commit will place it.
+            reshiki::shape_text::reconcile(doc);
         }
         let Draft {
             mut preview,

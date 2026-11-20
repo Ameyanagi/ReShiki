@@ -19,9 +19,10 @@ The preview pane labels its drawings **Example: before** and **Example: after**.
 
 ## Run a command
 
-Press **:** to open the **command palette**, also over an atom or bond; in a
-text field, **:** types a colon. Type part of a command and press **Enter** or
-click a row: unlike Help, the palette runs the command and closes. Each row
+Press **⌘K** (**Ctrl+K** on Windows and Linux) or **:** to open the
+**command palette**, including over an atom or bond. In a text field, **:**
+types a colon. Type part of a command, then press **Enter** or click a row to
+run it and close the palette. Press **⌘K**, **Ctrl+K** or **Esc** to close it. Each row
 shows its category and shortcut, so the palette also teaches the keys, and the
 selected row's description appears below the list.
 
@@ -49,7 +50,7 @@ The palette searches the same way as Help. Each word you type may start any word
 - **Bond** and **Atom** edits: every bond style (single, double, triple, wedges, wavy, bold, dashed, dative, hydrogen bond…), double-bond line position, bond direction and depth, charge, radicals and the contextual atom keys (extend chain, carbonyl, tert-butyl, Cp ligand…).
 - **Edit**, **Analyze**, **File**, **View** and **Tool** commands from the menus, toolbar and panels: undo, flips, rotation, alignment, clean up, 3D optimization, **Predict NMR**, formula and properties, naming, reaction roles and mapping, save, export formats, copy formats, zoom, guides, themes, journal styles, every inspector panel and every drawing tool, including a tool for each ring preset (**Benzene tool**, **Cyclopentadiene tool**, **Chair A/B tool**, **Haworth 5/6 tool**) that chooses the Ring tool with that preset.
 
-Commands act on the **selection**; with nothing selected, on the atom or bond under the pointer (or the keyboard-drawing hotspot). **double bond** makes the selected bonds double; with no bond, it chooses the double-bond tool. **benzene** attaches a ring to the selected atom or fuses it to the selected bond the same way the **a** key does, and otherwise adds it at the center of the view and selects it. Every edit is one Undo step. Commands whose name or shortcut key matches rank above those matched only by keyword or description. A command that needs a target it does not have stays listed, greyed and below the commands that can run, with the reason under the list. With an empty search, recently run commands come first; commands for the current target rank higher. Before any command has run, a **Start here** group leads instead: **Import structure or name**, **Benzene**, **Open…**, **Clean up**, **Molecular formula and properties**, **Predict NMR**, **Export panel** and **Help & shortcuts**, with the rest under **More commands**. Recent commands that cannot run come after those that can.
+Commands act on the **selection**; with nothing selected, on the atom or bond under the pointer (or the keyboard-drawing hotspot). **double bond** makes the selected bonds double; with no bond, it chooses the double-bond tool. **benzene** attaches a ring to the selected atom or fuses it to the selected bond the same way the **a** key does, and otherwise adds it at the center of the view and selects it. Every edit is one Undo step. Commands whose name or shortcut key matches rank above those matched only by keyword or description. While something is selected, the matching commands that act on it come first. A command that needs a target it does not have stays listed, greyed and below the commands that can run in its group, with the reason under the list. With an empty search, recently run commands come first; commands for the current target rank higher. Before any command has run, a **Start here** group leads instead: **Import structure or name**, **Benzene**, **Open…**, **Clean up**, **Molecular formula and properties**, **Predict NMR**, **Export panel** and **Help & shortcuts**, with the rest under **More commands**. Recent commands that cannot run come after those that can.
 
 A template command places once and returns to Select, including when placement
 is refused. It keeps the Templates tool's **Keep placing** preference unchanged.
@@ -334,7 +335,7 @@ bond and tool actions. Ring palette hover hints show one tool-selection key.
 | Keys                      | Action                                                                      |
 | ------------------------- | --------------------------------------------------------------------------- |
 | ? / F1 / Cmd/Ctrl+Shift+/ | Searchable shortcut finder and editable examples                            |
-| :                         | Command palette: search for a command and run it                            |
+| ⌘K / Ctrl+K / :           | Open the command palette                                                    |
 | Cmd/Ctrl+,                | Settings. Esc or Cmd/Ctrl+, closes them.                                    |
 | Cmd/Ctrl+N / O / S        | New / open, each in a new tab / save                                        |
 | Cmd/Ctrl+Shift+S          | Save as…                                                                    |

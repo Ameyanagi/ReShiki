@@ -438,6 +438,9 @@ fn on_fills(doc: &crate::document::Document) -> std::borrow::Cow<'_, crate::docu
     order.sort_by_key(|(_, g)| g.layer);
     let mut cards: Vec<Card> = vec![];
     let mut graphics = vec![canvas; doc.graphics.len()];
+    // How many cards lie under each shape's text: those painted before it
+    // and its own.
+    let mut through = vec![0; doc.graphics.len()];
     let mut behind_chemistry = None;
     for (i, g) in order {
         if g.layer >= 0 && behind_chemistry.is_none() {
@@ -450,11 +453,21 @@ fn on_fills(doc: &crate::document::Document) -> std::borrow::Cow<'_, crate::docu
         }
         let palette = if mode.is_dark() { dark } else { light };
         if let Some(rgb) = g.backing(|c| palette.rgb(c), mode.background()) {
+            // Shading is white at its highlight and mostly light; ink reads
+            // on its middle band.
+            let rgb = if g.style.effects.shaded {
+                crate::graphics::shade(rgb, 0.5)
+            } else {
+                rgb
+            };
             cards.push(Card {
                 outline: flattened(&g.commands()),
                 bounds,
                 canvas: ink_canvas(rgb),
             });
+        }
+        if let Some(slot) = through.get_mut(i) {
+            *slot = cards.len();
         }
     }
     if cards.iter().all(|card| card.canvas == canvas) {
@@ -481,10 +494,25 @@ fn on_fills(doc: &crate::document::Document) -> std::borrow::Cow<'_, crate::docu
     let texts: Vec<_> = if doc.annotations.is_empty() {
         vec![]
     } else {
+        // Text in a shape in front of the drawing is painted right after its
+        // shape, so the cards up to that shape decide.
+        let held: std::collections::HashMap<u64, usize> = doc
+            .graphics
+            .iter()
+            .zip(&through)
+            .filter(|(g, _)| g.layer >= 0)
+            .filter_map(|(g, count)| Some((g.text?, *count)))
+            .collect();
         let each: Vec<_> = doc.annotations.iter().map(|t| vec![t.id]).collect();
         crate::scene::selections_bounds(doc, &each)
             .into_iter()
-            .map(|bounds| bounds.map_or(canvas, |bounds| on(middle(bounds))))
+            .zip(&doc.annotations)
+            .map(|(bounds, t)| {
+                bounds.map_or(canvas, |bounds| match held.get(&t.id) {
+                    Some(count) => under(cards.get(..*count).unwrap_or_default(), middle(bounds)),
+                    None => on(middle(bounds)),
+                })
+            })
             .collect()
     };
     let modes: std::collections::HashMap<u64, CanvasTheme> = doc

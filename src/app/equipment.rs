@@ -19,6 +19,8 @@ use reshiki::equipment::{
 use reshiki::graphics::Graphic;
 use std::{path::PathBuf, sync::Arc};
 
+pub(super) const INSERT: &str = "Insert equipment…";
+
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct Filter(pub Option<Category>);
 impl std::fmt::Display for Filter {
@@ -270,6 +272,22 @@ fn seat_state(doc: &Document, port: &Port, partner: &JointRef) -> String {
         .flatten()
         .unwrap_or_default();
     format!("{verb} {}{at}{clip}", joint_name(doc, partner))
+}
+
+/// A shared rod names the individual seat's other side when detaching.
+fn detach_joint(port: &Port, partner: &JointRef) -> JointRef {
+    if port.shared() {
+        partner.clone()
+    } else {
+        port.at.clone()
+    }
+}
+
+fn seat_detach(doc: &Document, seat: &solve::Seat) -> JointRef {
+    (doc.graphics.iter())
+        .find(|g| g.id == seat.a.piece)
+        .and_then(|g| solve::ports(g).into_iter().find(|p| p.at == seat.a))
+        .map_or_else(|| seat.a.clone(), |port| detach_joint(&port, &seat.b))
 }
 
 /// What a snap does, for the pill beside the joint and the status bar.
@@ -559,6 +577,42 @@ impl App {
     pub(super) fn pieces_selected(&self) -> bool {
         (self.tab.doc.graphics.iter())
             .any(|g| g.piece.is_some() && self.tab.selected.contains(&g.id))
+    }
+
+    /// The Properties card's Detach target, only when it is unambiguous.
+    pub(super) fn selected_piece_detach(&self) -> Option<JointRef> {
+        let doc = &self.tab.doc;
+        // Properties needs at least one linked piece before showing its rows.
+        if !doc.graphics.iter().any(|g| {
+            self.tab.selected.contains(&g.id)
+                && g.piece.as_ref().is_some_and(|p| p.linked.is_some())
+        }) {
+            return None;
+        }
+        let mut joints = vec![];
+        if let [id] = self.tab.selected.as_slice() {
+            let graphic = doc.graphics.iter().find(|g| g.id == *id)?;
+            for port in solve::ports(graphic) {
+                for partner in solve::partners(doc, &port.at) {
+                    let joint = detach_joint(&port, &partner);
+                    if !joints.contains(&joint) {
+                        joints.push(joint);
+                    }
+                }
+            }
+        } else {
+            for seat in &doc.seats {
+                if self.tab.selected.contains(&seat.a.piece)
+                    && self.tab.selected.contains(&seat.b.piece)
+                {
+                    let joint = seat_detach(doc, seat);
+                    if !joints.contains(&joint) {
+                        joints.push(joint);
+                    }
+                }
+            }
+        }
+        (joints.len() == 1).then(|| joints.remove(0))
     }
 
     /// Keyboard Connect's status line: the joint shown and how to go on.
@@ -1023,7 +1077,7 @@ impl App {
                 }
                 for (i, partner) in partners.iter().enumerate() {
                     // Detach names the side a rod's seat is one of many on.
-                    let joint = if port.shared() { partner } else { &port.at };
+                    let joint = detach_joint(&port, partner);
                     let mut lines = column![];
                     if i == 0 {
                         lines = lines.push(text(name.clone()).size(12));
@@ -1037,7 +1091,7 @@ impl App {
                                         .style(muted_text)
                                 )
                                 .width(Length::Fill),
-                            command("Detach", Message::Equipment(Action::Detach(joint.clone()))),
+                            command("Detach", Message::Equipment(Action::Detach(joint))),
                         ]
                         .align_y(Alignment::Center),
                     );
@@ -1047,7 +1101,7 @@ impl App {
         // An assembly: each seat in it, with Detach.
         if self.tab.selected.len() > 1 {
             body = body.push(
-                text("Option-click a piece for its own joints and library actions.")
+                text("Click a piece again for its own joints and library actions.")
                     .size(11)
                     .style(muted_text),
             );
@@ -1059,10 +1113,7 @@ impl App {
                 .collect();
             for seat in &seats {
                 // A rod holds many: detach the other side.
-                let joint = (doc.graphics.iter())
-                    .find(|g| g.id == seat.a.piece)
-                    .and_then(|g| solve::ports(g).into_iter().find(|p| p.at == seat.a))
-                    .map_or(&seat.a, |p| if p.shared() { &seat.b } else { &seat.a });
+                let joint = seat_detach(doc, seat);
                 let clip = if seat.clip.is_some() {
                     " · clipped"
                 } else {
@@ -1077,7 +1128,7 @@ impl App {
                         ))
                         .size(12)
                         .width(Length::Fill),
-                        command("Detach", Message::Equipment(Action::Detach(joint.clone()))),
+                        command("Detach", Message::Equipment(Action::Detach(joint))),
                     ]
                     .align_y(Alignment::Center),
                 );

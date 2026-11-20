@@ -10,6 +10,7 @@ fn app() -> App {
 fn label(app: &mut App, text: &str) -> u64 {
     let id = app.tab.doc.next_id();
     app.tab.doc.annotations.push(Annotation {
+        angle: 0.,
         id,
         position: Point::new(20., 30.),
         text: text.into(),
@@ -62,6 +63,7 @@ fn unicode_subscript_caption_commits_ascii_and_reopens_with_explicit_formatting(
 fn pasted_captions_normalize_subscripts_before_native_document_insertion() {
     let mut source = Document::default();
     source.annotations.push(Annotation {
+        angle: 0.,
         id: 1,
         position: Point::default(),
         text: "K₂CO₃, DMF".into(),
@@ -428,6 +430,7 @@ fn empty_editor_is_wide_enough_for_the_zoomed_placeholder() {
             natural.height * zoom + 20.,
             40.,
             None,
+            false,
         );
         let placeholder = Paragraph::with_text(iced::advanced::Text {
             content: PLACEHOLDER,
@@ -460,7 +463,7 @@ fn popup_stays_in_view_at_document_edges_with_long_labels() {
         for extra in [40., 120.] {
             for arrow in [None, Some(iced::Point::new(210., 180.))] {
                 let label = iced::Rectangle::new(anchor, iced::Size::new(80., 35.));
-                let bounds = editor_bounds(viewport, label, 4000., 1800., extra, arrow);
+                let bounds = editor_bounds(viewport, label, 4000., 1800., extra, arrow, false);
                 assert!(bounds.x >= 0. && bounds.y >= 0.);
                 assert!(bounds.x + bounds.width <= viewport.width);
                 assert!(bounds.y + bounds.height <= viewport.height);
@@ -492,7 +495,7 @@ fn condition_popups_stay_outside_the_label_and_arrow_when_space_permits() {
                 iced::Size::new(60. * 1.09, 35. * 1.09),
             );
             for extra in [40., 124.] {
-                let bounds = editor_bounds(viewport, label, 100., 60., extra, Some(arrow));
+                let bounds = editor_bounds(viewport, label, 100., 60., extra, Some(arrow), false);
                 let projection = |p: iced::Point| {
                     let offset = p - arrow;
                     offset.x * normal.x + offset.y * normal.y
@@ -506,7 +509,7 @@ fn condition_popups_stay_outside_the_label_and_arrow_when_space_permits() {
                     assert!(projection(corner) >= label_edge + 7.99, "{bounds:?}");
                 }
             }
-            let ordinary = editor_bounds(viewport, label, 100., 60., 40., None);
+            let ordinary = editor_bounds(viewport, label, 100., 60., 40., None, false);
             assert_eq!(
                 ordinary.position(),
                 label.position() - iced::Vector::new(8., 8.)
@@ -579,4 +582,51 @@ fn text_tool_conditions_attach_to_an_arrow_and_sideways_drag_detaches() {
     assert_eq!(app.tab.doc, attached);
     let _ = app.update(Message::Undo);
     assert_eq!(app.tab.doc, before);
+}
+
+#[test]
+fn double_clicking_a_shape_types_centred_text_into_it_in_one_step() {
+    use reshiki::graphics::{BracketSides, Graphic, GraphicKind, GraphicStyle};
+    let mut app = app();
+    let shape = app.tab.doc.next_id();
+    app.tab.doc.graphics.push(Graphic::dragged(
+        shape,
+        GraphicKind::Ellipse,
+        Point::new(0., 0.),
+        Point::new(90., 90.),
+        GraphicStyle::default(),
+        BracketSides::default(),
+        false,
+    ));
+    // Empty text adds nothing.
+    let _ = app.update(Message::Canvas(CanvasEdit::BeginText(shape)));
+    let _ = app.update(Message::InlineText(Action::Finish(true)));
+    assert!(app.tab.doc.annotations.is_empty());
+    assert!(!app.tab.history.can_undo());
+
+    let _ = app.update(Message::Canvas(CanvasEdit::BeginText(shape)));
+    assert_eq!(app.tab.caption_format.alignment, TextAlign::Center);
+    type_text(&mut app, "💡");
+    let _ = app.update(Message::InlineText(Action::Finish(true)));
+    let held = app.tab.doc.graphics[0]
+        .text
+        .expect("the shape holds the text");
+    let text = app
+        .tab
+        .doc
+        .annotations
+        .iter()
+        .find(|a| a.id == held)
+        .unwrap();
+    let (w, h) = text.size();
+    let centre = text.position.offset(w / 2., h / 2.);
+    assert!(centre.distance(Point::new(45., 45.)) < 1e-3, "{centre:?}");
+
+    // A second double-click edits the same text; one Undo removes it all.
+    let _ = app.update(Message::Canvas(CanvasEdit::BeginText(shape)));
+    assert_eq!(app.inline_label_id(), Some(held));
+    let _ = app.update(Message::InlineText(Action::Finish(false)));
+    let _ = app.update(Message::Undo);
+    assert!(app.tab.doc.annotations.is_empty());
+    assert_eq!(app.tab.doc.graphics[0].text, None);
 }

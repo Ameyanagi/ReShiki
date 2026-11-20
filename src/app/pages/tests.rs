@@ -101,6 +101,7 @@ fn selecting_page_artwork_keeps_page_controls_and_centers_only_the_selection() {
     let mut app = ready();
     let caption = app.tab.doc.next_id();
     app.tab.doc.annotations.push(Annotation {
+        angle: 0.,
         id: caption,
         position: Point::new(10., 35.),
         text: "Methanol".into(),

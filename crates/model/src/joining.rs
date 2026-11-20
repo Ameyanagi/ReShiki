@@ -85,6 +85,7 @@ fn moving_ids(doc: &Document, selected: &[u64]) -> Vec<u64> {
     }
     // An arrow takes its condition text with it, as Copy and Delete do.
     crate::arrow_labels::include_labels(doc, &mut moving);
+    crate::shape_text::include_texts(doc, &mut moving);
     doc.all_ids()
         .into_iter()
         .filter(|id| moving.contains(id))

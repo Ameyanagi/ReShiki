@@ -12,11 +12,11 @@ use super::{
 };
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
-    f64::consts::PI,
+    f64::consts::{FRAC_1_SQRT_2, PI},
 };
 
-/// Orbital name part for the grey phase. Only this pass writes it.
-pub(super) const GREY: &str = "Grey";
+/// Orbital name part for ChemDraw's shaded phase. Only this pass writes it.
+pub(super) const GRADIENT: &str = "Gradient";
 
 const ALLOWED: &[&str] = &[
     "CDXML",
@@ -51,10 +51,11 @@ const SALVAGED: &[&str] = &["t", "graphic", "arrow", "curve", "fragment", "group
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 enum Kind {
-    ShadedOrbital,
     DoubledCurve,
+    DoubledPair,
     Faded,
     ArcStraight,
+    EquilibriumRatio,
     CurvedArrowMark,
     ClosedCurveHead,
     Size,
@@ -82,14 +83,26 @@ impl Kind {
     fn words(self) -> (&'static str, &'static str, Option<[&'static str; 2]>) {
         let same = |how| Some([how, how]);
         match self {
-            Self::ShadedOrbital => ("shaded orbital", "shaded orbitals", same("in flat grey")),
             Self::DoubledCurve => (
                 "doubled curve",
                 "doubled curves",
                 Some(["as a single line", "as single lines"]),
             ),
+            Self::DoubledPair => (
+                "doubled curve",
+                "doubled curves",
+                Some(["as two grouped curves", "as pairs of grouped curves"]),
+            ),
             Self::Faded => ("see-through object", "see-through objects", same("opaque")),
             Self::ArcStraight => ("arc arrow", "arc arrows", same("straight")),
+            Self::EquilibriumRatio => (
+                "unbalanced equilibrium arrow",
+                "unbalanced equilibrium arrows",
+                Some([
+                    "with its shorter arrow lengthened to a fifth of the other",
+                    "with their shorter arrows lengthened to a fifth of the other",
+                ]),
+            ),
             Self::CurvedArrowMark => (
                 "curved arrow",
                 "curved arrows",
@@ -110,7 +123,11 @@ impl Kind {
                 "single brackets",
                 Some(["as a curve", "as curves"]),
             ),
-            Self::StereoFlag => ("stereo flag", "stereo flags", same("as text")),
+            Self::StereoFlag => (
+                "stereo flag",
+                "stereo flags",
+                same("as text in a rounded box"),
+            ),
             Self::RotatedText => ("rotated caption", "rotated captions", same("upright")),
             Self::TextFace => (
                 "outlined or shadowed text",
@@ -197,10 +214,26 @@ fn rewrite(xml: &str) -> Result<(String, Option<String>, usize)> {
         headless: HashSet::new(),
         resized: HashSet::new(),
         affected: HashSet::new(),
+        budget: 0,
+        bonded: HashSet::new(),
     };
+    let mut curve_points = 0;
     for index in pass.tree.descendants(0)? {
-        if let Some(id) = pass.node(index)?.attr("id") {
+        let node = pass.tree.node(index)?;
+        if let Some(id) = node.attr("id") {
             pass.original.insert(id.to_owned());
+        }
+        if node.tag == "b" {
+            let ends = ["B", "E"].map(|key| node.attr(key).map(str::to_owned));
+            pass.bonded.extend(ends.into_iter().flatten());
+        }
+        // The reader may read a curve twice, inside a group of curves.
+        if node.tag == "curve" {
+            let count = |key: &str| {
+                node.attr(key)
+                    .map_or(0, |text| text.split_whitespace().count())
+            };
+            curve_points += 2 * (count("CurvePoints") / 2 + count("CurvePoints3D") / 3);
         }
     }
     pass.next_id = pass
@@ -209,6 +242,7 @@ fn rewrite(xml: &str) -> Result<(String, Option<String>, usize)> {
         .filter_map(|id| id.parse::<u32>().ok())
         .max()
         .map_or(1, |id| id.saturating_add(1));
+    pass.budget = 900_000usize.saturating_sub(curve_points);
     pass.objects(0)?;
     pass.brackets()?;
     for index in pass.tree.descendants(0)? {
@@ -254,6 +288,11 @@ struct Pass {
     /// Objects drawn differently or left out, each once however many of
     /// their styles changed.
     affected: HashSet<usize>,
+    /// Curve points the doubled curves' lines may still add: the reader
+    /// counts every curve point against one budget, these lines twice.
+    budget: usize,
+    /// Atoms at either end of a bond.
+    bonded: HashSet<String>,
 }
 
 fn numbers(text: &str) -> Option<Vec<f64>> {
@@ -296,6 +335,90 @@ fn curve_points(start: [f64; 2], segments: &[[[f64; 2]; 3]]) -> String {
     }
     list.push(segments.last().map_or(start, |segment| segment[2]));
     points(&list)
+}
+/// A path of Bézier segments moved `offset` along its normals: each segment
+/// in quarters, whose ends move along the curve's normal there and whose
+/// controls move with them. Corners meet at their mitre, or with a straight
+/// piece where that would reach past four offsets.
+fn parallel(
+    start: [f64; 2],
+    segments: &[[[f64; 2]; 3]],
+    offset: f64,
+    closed: bool,
+) -> ([f64; 2], Vec<[[f64; 2]; 3]>) {
+    let mid = |a: [f64; 2], b: [f64; 2]| [(a[0] + b[0]) / 2., (a[1] + b[1]) / 2.];
+    let halves = |[a, b, c, d]: [[f64; 2]; 4]| {
+        let (ab, bc, cd) = (mid(a, b), mid(b, c), mid(c, d));
+        let (abc, bcd) = (mid(ab, bc), mid(bc, cd));
+        let m = mid(abc, bcd);
+        [[a, ab, abc, m], [m, bcd, cd, d]]
+    };
+    // The unit normal of the first of these directions that has a length.
+    let normal = |directions: [([f64; 2], [f64; 2]); 3]| {
+        directions.into_iter().find_map(|(a, b)| {
+            let (x, y) = (b[0] - a[0], b[1] - a[1]);
+            let length = x.hypot(y);
+            (length > 1e-9).then(|| [-y / length * offset, x / length * offset])
+        })
+    };
+    let shift = |p: [f64; 2], n: [f64; 2]| [p[0] + n[0], p[1] + n[1]];
+    // Where the two moved ends at `corner` meet: their mitre, if close.
+    let join = |corner: [f64; 2], a: [f64; 2], b: [f64; 2]| {
+        let scale = offset * offset / (offset * offset + a[0] * b[0] + a[1] * b[1]);
+        let mitre = [(a[0] + b[0]) * scale, (a[1] + b[1]) * scale];
+        (scale.is_finite() && mitre[0].hypot(mitre[1]) <= 4. * offset.abs())
+            .then(|| shift(corner, mitre))
+    };
+    // Each piece's anchor, its moved controls and end, and both end normals.
+    let mut pieces = Vec::new();
+    let mut from = start;
+    for &[b, c, d] in segments {
+        for [p0, p1, p2, p3] in halves([from, b, c, d]).map(halves).into_iter().flatten() {
+            if let (Some(n0), Some(n3)) = (
+                normal([(p0, p1), (p0, p2), (p0, p3)]),
+                normal([(p2, p3), (p1, p3), (p0, p3)]),
+            ) {
+                pieces.push((p0, n0, [shift(p1, n0), shift(p2, n3), shift(p3, n3)], n3));
+            }
+        }
+        from = d;
+    }
+    let Some(&(anchor, normal, ..)) = pieces.first() else {
+        return (start, Vec::new());
+    };
+    let mut first = shift(anchor, normal);
+    let mut path: Vec<[[f64; 2]; 3]> = Vec::new();
+    let mut previous: Option<[f64; 2]> = None;
+    for (p0, n0, piece, n3) in pieces {
+        if let (Some(before), Some(last)) = (previous, path.last_mut()) {
+            let begin = shift(p0, n0);
+            if (last[2][0] - begin[0]).hypot(last[2][1] - begin[1]) > 1e-6 {
+                match join(p0, before, n0) {
+                    Some(corner) => last[2] = corner,
+                    None => {
+                        let end = last[2];
+                        path.push([end, begin, begin]);
+                    }
+                }
+            }
+        }
+        path.push(piece);
+        previous = Some(n3);
+    }
+    if closed && let (Some(before), Some(last)) = (previous, path.last_mut()) {
+        if (last[2][0] - first[0]).hypot(last[2][1] - first[1]) > 1e-6 {
+            match join(start, before, normal) {
+                Some(corner) => (last[2], first) = (corner, corner),
+                None => {
+                    let end = last[2];
+                    path.push([end, first, first]);
+                }
+            }
+        } else {
+            last[2] = first;
+        }
+    }
+    (first, path)
 }
 /// Whether three anchors make the two straight legs of a bent arrow, as the
 /// arrow reader judges it after scaling. Stricter here: a curve this takes
@@ -649,6 +772,7 @@ impl Pass {
         }
         match self.node(index)?.tag.as_str() {
             "arrow" => self.arrow(index),
+            "n" => self.hydrogens_first(index),
             "curve" => self.curve(index),
             // The picture reader takes a bitmap; a vector-only or linked
             // picture has none.
@@ -674,6 +798,39 @@ impl Pass {
         }
     }
 
+    /// ChemDraw anchors a label written hydrogens first, such as H2O, on its
+    /// first letter; ReShiki puts the element on the atom and the hydrogens
+    /// before it. A lone atom moves so its label covers the same place.
+    fn hydrogens_first(&mut self, index: usize) -> Result<()> {
+        let node = self.node(index)?;
+        // Not an atom with a 3D position, which would have to move as well.
+        if node.attr("id").is_none_or(|id| self.bonded.contains(id))
+            || node.attr("xyz").is_some()
+            || !super::labels::hydrogens_first(&self.tree, node)?
+        {
+            return Ok(());
+        }
+        let Some([x, y]) = node.attr("p").and_then(point) else {
+            return Ok(());
+        };
+        let label = node
+            .children
+            .iter()
+            .filter_map(|&child| self.node(child).ok())
+            .find(|child| child.tag == "t");
+        let Some(&[left, _, right, _]) = label
+            .and_then(|label| label.attr("BoundingBox"))
+            .and_then(numbers)
+            .as_deref()
+        else {
+            return Ok(());
+        };
+        self.set(
+            index,
+            "p",
+            format!("{} {}", spell(right - (x - left)), spell(y)),
+        )
+    }
     /// ChemDraw's alpha makes the object see-through; ReShiki draws it opaque.
     fn fade(&mut self, index: usize) -> Result<()> {
         if let Some(alpha) = self.attr(index, "alpha")?.as_deref().and_then(number) {
@@ -767,6 +924,21 @@ impl Pass {
         {
             self.clamp(index, "ArrowShaftSpacing", 50., 1600.)?;
         }
+        // ReShiki draws the shorter arrow of an equilibrium at least a fifth
+        // as long as the other.
+        if let Some(ratio) = self
+            .attr(index, "ArrowEquilibriumRatio")?
+            .as_deref()
+            .and_then(number)
+            && !(20.0..=500.).contains(&ratio)
+        {
+            self.set(
+                index,
+                "ArrowEquilibriumRatio",
+                spell(ratio.clamp(20., 500.)),
+            )?;
+            self.count(index, Kind::EquilibriumRatio);
+        }
         // The arrow reader draws an arc around its centre; without a centre
         // and both axes, or with a sweep past a full turn, the arrow runs
         // straight from its tail to its head.
@@ -817,9 +989,7 @@ impl Pass {
                 self.set(index, key, head)?;
             }
         }
-        if bits & 512 != 0 {
-            self.count(index, Kind::DoubledCurve);
-        }
+        let doubled = bits & 512 != 0;
         bits &= 1 | 2 | 4 | 128 | 256;
         if bits != original {
             self.set(index, "CurveType", bits.to_string())?;
@@ -877,7 +1047,105 @@ impl Pass {
                 self.clamp(index, width, 0.1, 12.)?;
             }
         }
-        self.head_sizes(index)
+        self.head_sizes(index)?;
+        if doubled {
+            let pair = self.double(index, bits)?;
+            self.count(
+                index,
+                if pair {
+                    Kind::DoubledPair
+                } else {
+                    Kind::DoubledCurve
+                },
+            );
+        }
+        Ok(())
+    }
+    /// ChemDraw strokes a doubled curve as two lines either side of a gap as
+    /// wide as the bold width. Without a fill or heads they become a group of
+    /// two parallel curves.
+    fn double(&mut self, index: usize, bits: i64) -> Result<bool> {
+        let node = self.node(index)?;
+        let root = self.node(0)?;
+        let heads = ["ArrowheadHead", "ArrowheadTail"]
+            .iter()
+            .any(|key| !matches!(node.attr(key).unwrap_or("None"), "None" | "Unspecified"));
+        let Some(values) = node.attr("CurvePoints").and_then(numbers) else {
+            return Ok(false);
+        };
+        if heads
+            || bits & (128 | 256) != 0
+            || matches!(node.attr("FillType"), Some("Solid" | "Shaded"))
+            || node
+                .attr("FadePercent")
+                .and_then(number)
+                .is_some_and(|fade| fade < 1000.)
+        {
+            return Ok(false);
+        }
+        let width = |key: &str, default: f64| {
+            node.attr(key)
+                .or_else(|| root.attr(key))
+                .and_then(number)
+                .unwrap_or(default)
+        };
+        let bold = width("BoldWidth", 2.);
+        let line = if bits & 4 != 0 || node.attr("LineType").is_some_and(|t| t.contains("Bold")) {
+            bold
+        } else {
+            width("LineWidth", 0.6)
+        };
+        // Each anchor between its two controls, as the reader takes them;
+        // the point list was made whole above.
+        let list = values.as_chunks::<2>().0;
+        let (Some(&first), Some(&start), Some(rest), Some(&last)) =
+            (list.first(), list.get(1), list.get(2..), list.last())
+        else {
+            return Ok(false);
+        };
+        let mut segments = rest.as_chunks::<3>().0.to_vec();
+        let closed = bits & 1 != 0 || node.attr("Closed") == Some("yes");
+        if closed && segments.last().is_some_and(|[.., end]| *end != start) {
+            segments.push([last, first, start]);
+        }
+        // A drawn path holds 20,000 commands at most, and the file's curves
+        // stay inside the reader's point budget.
+        let rails =
+            [1., -1.].map(|side| parallel(start, &segments, side * (bold + line) / 2., closed));
+        let added: usize = rails.iter().map(|(_, path)| 2 * (3 * path.len() + 3)).sum();
+        if rails
+            .iter()
+            .any(|(_, path)| path.is_empty() || path.len() > 19_000)
+            || added > self.budget
+        {
+            return Ok(false);
+        }
+        self.budget -= added;
+        let twin = self.tree.clone_subtree(index)?;
+        self.tree
+            .node_mut(twin)?
+            .attributes
+            .retain(|(key, _)| key != "id");
+        for (curve, (first, path)) in [index, twin].into_iter().zip(rails) {
+            self.set(curve, "CurvePoints", curve_points(first, &path))?;
+        }
+        self.group(index, twin)?;
+        Ok(true)
+    }
+    /// Puts `extra` beside `index` in a new group where `index` stood.
+    fn group(&mut self, index: usize, extra: usize) -> Result<()> {
+        let parent = self.node(index)?.parent;
+        let group = self.tree.create("group")?;
+        if let Some(parent) = parent {
+            let siblings = &mut self.tree.node_mut(parent)?.children;
+            if let Some(slot) = siblings.iter_mut().find(|i| **i == index) {
+                *slot = group;
+            }
+            self.tree.node_mut(group)?.parent = Some(parent);
+        }
+        self.tree.node_mut(index)?.parent = None;
+        self.tree.append(group, index)?;
+        self.tree.append(group, extra)
     }
     /// Whether the curve still stands after its point list was made readable.
     fn curve_geometry(&mut self, index: usize) -> Result<bool> {
@@ -957,7 +1225,10 @@ impl Pass {
             // A shadow of 0.1 to 36 pt, in hundredths.
             Some("Rectangle" | "Oval") => self.clamp(index, "ShadowSize", 10., 3600.),
             Some("Orbital") => self.orbital(index),
-            Some("Symbol") => self.symbol(index),
+            Some("Symbol") => {
+                self.symbol_frame(index)?;
+                self.symbol(index)
+            }
             Some("Arc") => self.arc_graphic(index),
             Some("Bracket") => Ok(()),
             _ => {
@@ -993,7 +1264,8 @@ impl Pass {
         }
     }
     /// ChemDraw's orbital names in the spelling the reader knows: the shape,
-    /// its phase, then `2` for the mirrored one.
+    /// its phase, then `2` for the mirrored one. ChemDraw shades one phase of
+    /// a plain orbital of more than one part, and the whole of a Shaded one.
     fn orbital(&mut self, index: usize) -> Result<()> {
         let Some(name) = self.attr(index, "OrbitalType")? else {
             return Ok(());
@@ -1001,12 +1273,13 @@ impl Pass {
         let (base, phase) = if let Some(base) = name.strip_suffix("Filled") {
             (base, "Solid")
         } else if let Some(base) = name.strip_suffix("Shaded") {
-            (base, GREY)
+            (base, GRADIENT)
         } else {
             (name.as_str(), "")
         };
         let (shape, mirrored) = match base {
-            "s" | "oval" | "lobe" | "p" | "dxy" => (base, false),
+            "s" | "oval" | "lobe" => (base, false),
+            "p" | "dxy" => (base, false),
             // ChemDraw's plus fills the small lobe or the ring, where
             // ReShiki's mirrored phase is.
             "hybridPlus" => ("sp3", true),
@@ -1015,17 +1288,89 @@ impl Pass {
             "dz2Minus" => ("dz2", false),
             _ => return Ok(()),
         };
-        // Plain names the reader already knows keep their present reading.
-        if phase.is_empty() && shape != "sp3" {
+        // A plain s, oval or lobe is an outline, as the reader reads it.
+        let single = matches!(shape, "s" | "oval" | "lobe");
+        if phase.is_empty() && single {
             return Ok(());
         }
-        if phase == GREY {
-            self.count(index, Kind::ShadedOrbital);
+        let phase = if phase.is_empty() { GRADIENT } else { phase };
+        // ChemDraw's dxy has its lobes along its axis and across it, the
+        // reader's between them: turn the axis back an eighth of a turn.
+        if shape == "dxy"
+            && let Some(&[x1, y1, x2, y2]) = self
+                .attr(index, "BoundingBox")?
+                .as_deref()
+                .and_then(numbers)
+                .as_deref()
+        {
+            let (x, y) = ((x1 - x2) * FRAC_1_SQRT_2, (y1 - y2) * FRAC_1_SQRT_2);
+            let end = [x2 + x + y, y2 + y - x];
+            self.set(
+                index,
+                "BoundingBox",
+                format!(
+                    "{} {} {} {}",
+                    spell(end[0]),
+                    spell(end[1]),
+                    spell(x2),
+                    spell(y2)
+                ),
+            )?;
         }
         self.set(
             index,
             "OrbitalType",
             format!("{shape}{phase}{}", if mirrored { "2" } else { "" }),
+        )
+    }
+    /// ChemDraw draws a sign, dagger or dot upright on a free symbol's first
+    /// point, as large as the distance to its second, and a lone pair with a
+    /// dot on each point. The reader turns a symbol to the line from its
+    /// second point to its first, so that line is laid out here as ChemDraw
+    /// draws the symbol. A symbol on an atom is the mark reader's to place.
+    fn symbol_frame(&mut self, index: usize) -> Result<()> {
+        let node = self.node(index)?;
+        if self.marks_atom(node) {
+            return Ok(());
+        }
+        let Some(&[ax, ay, bx, by]) = node.attr("BoundingBox").and_then(numbers).as_deref() else {
+            return Ok(());
+        };
+        let (dx, dy) = (ax - bx, ay - by);
+        let size = dx.hypot(dy);
+        let middle = [(ax + bx) / 2., (ay + by) / 2.];
+        // The symbol's middle and the axis the reader turns it to.
+        let (origin, axis) = match node.attr("SymbolType") {
+            Some(
+                "Plus" | "Minus" | "CirclePlus" | "CircleMinus" | "Dagger" | "DoubleDagger"
+                | "HDot" | "HDash" | "Attachment",
+            ) => ([ax, ay], [size, 0.]),
+            // The reader doubles a dot's axis.
+            Some("Electron" | "Radical") => ([ax, ay], [size / 2., 0.]),
+            // Its dots stand 0.4 of the doubled axis either side of the middle.
+            Some("LonePair" | "ElectronPair") => (middle, [dx * 1.25, dy * 1.25]),
+            // A bar 1.4 times as long as the distance, between the points.
+            Some("LonePairBar") => (middle, [dx * 2., dy * 2.]),
+            // The dot on the first point and the upright sign on the second:
+            // the reader's dot is 0.45 of its axis behind the middle and the
+            // sign 0.22 ahead, so the axis runs from the first point toward
+            // the second, 1/0.67 times as long.
+            Some("RadicalCation" | "RadicalAnion") => {
+                let axis = [-dx / 0.67, -dy / 0.67];
+                ([ax + 0.45 * axis[0], ay + 0.45 * axis[1]], axis)
+            }
+            _ => return Ok(()),
+        };
+        self.set(
+            index,
+            "BoundingBox",
+            format!(
+                "{} {} {} {}",
+                spell(origin[0]),
+                spell(origin[1]),
+                spell(origin[0] - axis[0]),
+                spell(origin[1] - axis[1])
+            ),
         )
     }
     fn marks_atom(&self, node: &Element) -> bool {
@@ -1041,10 +1386,12 @@ impl Pass {
         if marks_atom && node.attr("SymbolType") == Some("LonePairBar") {
             return self.set(index, "SymbolType", "LonePair");
         }
-        let label = match node.attr("SymbolType") {
-            Some("Racemic") => "Rac",
-            Some("Absolute") => "Abs",
-            Some("Relative") => "Rel",
+        // ChemDraw's label in its caption size, and the widths of that label
+        // and its rounded box, in ems.
+        let (label, text_width, box_width) = match node.attr("SymbolType") {
+            Some("Racemic") => ("Rac", 1.78, 2.3),
+            Some("Absolute") => ("Abs", 1.72, 2.29),
+            Some("Relative") => ("Rel", 1.5, 1.96),
             Some(
                 "CirclePlus" | "CircleMinus" | "Plus" | "Minus" | "Radical" | "Electron"
                 | "LonePair" | "ElectronPair" | "RadicalCation" | "RadicalAnion" | "HDot" | "HDash"
@@ -1058,13 +1405,54 @@ impl Pass {
                 return Ok(());
             }
         };
-        let Some(&[x1, y1, x2, y2]) = node.attr("BoundingBox").and_then(numbers).as_deref() else {
+        let Some(&[x, y, _, _]) = node.attr("BoundingBox").and_then(numbers).as_deref() else {
             return Ok(());
         };
         let color = node.attr("color").map(str::to_owned);
+        // The label takes the caption size of its page or document, as read.
+        let mut size = 10.;
+        let mut at = Some(index);
+        while let Some(i) = at {
+            let node = self.node(i)?;
+            if matches!(node.tag.as_str(), "page" | "CDXML")
+                && let Some(value) = node.attr("CaptionSize").and_then(number)
+            {
+                size = value.clamp(4., 144.);
+                break;
+            }
+            at = node.parent;
+        }
+        let node = self.node(index)?;
+        let kept: Vec<(String, String)> = node
+            .attributes
+            .iter()
+            .filter(|(key, _)| matches!(key.as_str(), "Z" | "color" | "Visible"))
+            .cloned()
+            .collect();
         for child in node.children.clone() {
             self.tree.detach(child)?;
         }
+        // The box, centered on the symbol's first point as ChemDraw draws it,
+        // with ChemDraw's proportions.
+        let frame = self.tree.create("graphic")?;
+        let (half_width, half_height) = (box_width * size / 2., 0.66 * size);
+        let mut attributes = vec![
+            ("GraphicType".into(), "Rectangle".into()),
+            ("RectangleType".into(), "RoundEdge".into()),
+            ("CornerRadius".into(), spell(size * 57.)),
+            (
+                "BoundingBox".into(),
+                format!(
+                    "{} {} {} {}",
+                    spell(x + half_width),
+                    spell(y - half_height),
+                    spell(x - half_width),
+                    spell(y + half_height)
+                ),
+            ),
+        ];
+        attributes.extend(kept);
+        self.tree.node_mut(frame)?.attributes = attributes;
         let run = self.tree.create("s")?;
         let text = self.tree.node_mut(run)?;
         text.text = label.into();
@@ -1076,7 +1464,23 @@ impl Pass {
         node.tag = "t".into();
         node.attributes
             .retain(|(key, _)| matches!(key.as_str(), "id" | "Z" | "Visible"));
-        node.set("p", format!("{} {}", spell(x1.min(x2)), spell(y1.max(y2))));
+        // The label's baseline, and its box, which places it on import.
+        let left = spell(x - text_width * size / 2.);
+        node.set("p", format!("{left} {}", spell(y + 0.35 * size)));
+        // One left-aligned line, whatever the page sets for captions.
+        node.set("CaptionJustification", "Left".into());
+        node.set("CaptionLineHeight", "auto".into());
+        node.set("WordWrapWidth", "0".into());
+        node.set(
+            "BoundingBox",
+            format!(
+                "{left} {} {} {}",
+                spell(y - 0.56 * size),
+                spell(x + text_width * size / 2.),
+                spell(y + 0.56 * size)
+            ),
+        );
+        self.group(index, frame)?;
         self.changed = true;
         self.count(index, Kind::StereoFlag);
         Ok(())
@@ -1392,11 +1796,19 @@ impl Pass {
         if !matches!(tag.as_str(), "t" | "n" | "page" | "CDXML") {
             return Ok(());
         }
-        if self
-            .attr(index, "RotationAngle")?
-            .as_deref()
-            .and_then(number)
-            .is_some_and(|angle| angle != 0.)
+        // Captions turn; atom labels and inherited defaults stay upright.
+        let parent = self.node(index)?.parent;
+        let caption = tag == "t"
+            && match parent {
+                Some(parent) => !matches!(self.node(parent)?.tag.as_str(), "n" | "objecttag"),
+                None => true,
+            };
+        if !caption
+            && self
+                .attr(index, "RotationAngle")?
+                .as_deref()
+                .and_then(number)
+                .is_some_and(|angle| angle != 0.)
         {
             self.remove(index, &["RotationAngle"])?;
             if tag == "t" {

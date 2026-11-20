@@ -139,7 +139,7 @@ version report that an update is required.
 
 1. Select an arrow, or choose the arrow tool.
 2. In **Properties → Body**, or in the arrow tool's context row, choose
-   **Block**, **Hollow**, **Chevron** or **Gradient**. **Line** is the usual
+   **Block**, **Hollow block**, **Chevron** or **Gradient**. **Line** is the usual
    thin arrow.
 3. **Body width (pt)** sets the width of the shaft. **Head length (pt)** and
    **Head half-width (pt)** under **Arrowhead & markers** set the head.
@@ -198,8 +198,10 @@ a drawing, never a reaction arrow.
 
 **Properties** shows a preview and sets each end's head (full, half or none),
 head shape, color, line style and width, head length, half-width and notch.
-Equilibrium arrows also set **Reverse length (0.2–1)** and **Shaft separation
-(pt)**. Number and color fields apply when you press Enter.
+Equilibrium arrows also set **Reverse length (0.2–5)**, the reverse arrow's
+length against the forward one (below 1 the reverse arrow is shorter, above 1
+the forward one), and **Shaft separation (pt)**. Number and color fields apply
+when you press Enter.
 
 ## Limits
 
@@ -308,8 +310,8 @@ opening in the shaft instead of drawing through the hollow center.
 
 Supported exchange includes straight full/half-headed arrows, straight
 retrosynthesis arrows with editable heads and style, head shape/dimensions/notches,
-color, solid/dashed strokes, resonance, dipole/no-go marks, equal-length
-equilibrium with half heads, single cubic or quadratic Bézier arrows with
+color, solid/dashed strokes, resonance, dipole/no-go marks, equal or
+unequal equilibrium with half heads (ChemDraw's `ArrowEquilibriumRatio`), single cubic or quadratic Bézier arrows with
 solid heads, and arrows with interior nodes, which are written as one
 multi-segment ChemDraw curve with the same heads. Cubic arrows keep both independently editable
 controls; quadratic arrows use their exact equivalent cubic control points.
@@ -322,7 +324,7 @@ This drawing metadata does not change molecular connectivity or electron counts.
 The importer reads multi-segment arrowed splines as pen paths with arrowheads,
 preserving head size even when an end segment is short. It rejects
 circular/elliptical arrow arcs, unknown head/stroke types and unsupported decoration. The exporter
-rejects dotted arrows, curved retrosynthesis arrows, bent/unequal equilibrium,
+rejects dotted arrows, curved retrosynthesis arrows, bent equilibrium,
 equilibrium with full/absent heads, dipoles with a tail head, and curved arrows
 with hollow/angled heads or dipole/no-go decoration. Those combinations remain
 editable and exportable in `.rsk`/SVG/PDF/PNG. Interchange checks found that

@@ -46,7 +46,7 @@ impl std::fmt::Display for RingEffect {
         f.write_str(match self {
             Self::Flat => "Flat",
             Self::Gradient => "Gradient",
-            Self::SeeThrough => "See-through",
+            Self::SeeThrough => "Opacity",
             Self::Glow => "Soft glow",
             Self::Disc => "Disc",
         })

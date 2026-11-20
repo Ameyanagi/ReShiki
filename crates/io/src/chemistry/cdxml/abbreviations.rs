@@ -373,9 +373,12 @@ fn flatten_one(tree: &mut Tree, outer: usize, geometry: &ExternalGeometry) -> Re
     } = atoms;
     let members = move_atoms(tree, parent, nodes, &connections, &highlight, transform)?;
     move_bonds(tree, parent, bonds, &removed_bonds, &highlight)?;
+    // A label on one bond reads toward it from either side; one between two
+    // bonds is laid out centred, and one on no bond has no side.
+    let one_bond = external.len() == 1;
     rewire_external(tree, external, &outer_id, &target_ids)?;
-    let presentation = transfer_label(tree, outer, anchor, text, multiple)?;
-    let (label, reverse_label) = label_names(tree, text)?;
+    let (presentation, element) = transfer_label(tree, outer, anchor, text, multiple)?;
+    let (label, reverse_label) = label_names(tree, text, element.filter(|_| one_bond))?;
     tree.detach(outer)?;
     Ok(Expanded {
         abbreviation: Abbreviation {
@@ -822,7 +825,7 @@ fn transfer_label(
     anchor: usize,
     text: usize,
     multiple: bool,
-) -> Result<Option<AbbreviationPresentation>> {
+) -> Result<(Option<AbbreviationPresentation>, Option<&'static str>)> {
     let presentation = Some(AbbreviationPresentation {
         label: atom_presentation(tree, outer)?,
         anchor: atom_presentation(tree, anchor)?,
@@ -831,7 +834,14 @@ fn transfer_label(
         tree.detach(text)?;
     }
     let label_text = tree.clone_subtree(text)?;
-    let p = tree.node(anchor)?.attr("p").unwrap_or("").to_owned();
+    let node = tree.node(anchor)?;
+    let p = node.attr("p").unwrap_or("").to_owned();
+    let element = node
+        .attr("Element")
+        .unwrap_or("6")
+        .parse::<usize>()
+        .ok()
+        .and_then(|n| crate::editing::ELEMENTS.get(n.checked_sub(1)?).copied());
     tree.node_mut(label_text)?.set("p", p);
     if multiple {
         // A multi-bond label's saved line arrangement is derived from geometry.
@@ -840,24 +850,27 @@ fn transfer_label(
             .set("LabelJustification", "Auto".into());
     }
     tree.append(anchor, label_text)?;
-    Ok(presentation)
+    Ok((presentation, element))
 }
 
-fn label_names(tree: &Tree, text: usize) -> Result<(String, String)> {
+fn label_names(tree: &Tree, text: usize, anchor: Option<&str>) -> Result<(String, String)> {
     let mut label = String::new();
     for span in tree.children(text, "s")? {
         label.push_str(&tree.node(span)?.text);
     }
     let presets = crate::chemistry::abbreviations::presets()
         .map_err(|error| Error::Invalid(error.to_string()))?;
-    Ok(group_names(&presets, label))
+    Ok(group_names(&presets, label, anchor))
 }
 
 /// An exact label wins, user groups first as typing does; otherwise a reversed
-/// spelling maps back to its group. Other text keeps no reverse spelling.
+/// spelling maps back to its group. Other formula text on one bond, attached
+/// through `anchor`, reads both ways as ChemDraw lays it out; anything else
+/// keeps no reverse spelling.
 fn group_names(
     presets: &[std::sync::Arc<crate::chemistry::abbreviations::Preset>],
     label: String,
+    anchor: Option<&str>,
 ) -> (String, String) {
     let exact = |user: bool| presets.iter().find(|p| p.user == user && p.label == label);
     let reversed = |user: bool| {
@@ -871,8 +884,100 @@ fn group_names(
         .or_else(|| reversed(false))
     {
         Some(preset) => (preset.label.clone(), preset.reverse_label.clone()),
-        None => (label, String::new()),
+        None => anchor
+            .and_then(|anchor| formula_spellings(&label, anchor))
+            .unwrap_or((label, String::new())),
     }
+}
+
+/// A formula label and its spelling for the other side of its bond, with the
+/// attachment element at the bond and hydrogens kept beside their atom: PPh3
+/// and Ph3P, CH2CH2OH and HOH2CH2C, PtBu3 and tBu3P. Text that starts with
+/// the element is the label; text that ends with it is the reverse. None for
+/// anything else, such as Boc, 2-Py, CH(CH3)2, NCHN or a charged label, and
+/// for text longer than a catalog label (32 characters).
+fn formula_spellings(text: &str, anchor: &str) -> Option<(String, String)> {
+    if text.len() > 32 {
+        return None;
+    }
+    // Elements and nicknames with their counts, read left to right, and
+    // whether each is hydrogen.
+    fn tokens(mut chunk: &str) -> Option<Vec<(&str, bool)>> {
+        let mut tokens = Vec::new();
+        while let Some(c) = chunk.chars().next() {
+            let nickname = crate::abbreviations::NICKNAMES
+                .iter()
+                .filter(|n| chunk.starts_with(**n))
+                .map(|n| n.len())
+                .max()
+                .unwrap_or(0);
+            let element = [2, 1]
+                .into_iter()
+                .find(|&n| {
+                    c.is_ascii_uppercase()
+                        && chunk
+                            .get(..n)
+                            .is_some_and(|s| crate::editing::ELEMENTS.contains(&s))
+                })
+                .unwrap_or(0);
+            let head = nickname.max(element);
+            if head == 0 {
+                return None;
+            }
+            let end = head + chunk[head..].bytes().take_while(u8::is_ascii_digit).count();
+            tokens.push((&chunk[..end], &chunk[..head] == "H"));
+            chunk = &chunk[end..];
+        }
+        Some(tokens)
+    }
+    let (tokens, forward) = match (
+        text.strip_prefix(anchor).and_then(tokens),
+        text.strip_suffix(anchor).and_then(tokens),
+    ) {
+        (Some(tokens), None) => (tokens, true),
+        (None, Some(tokens)) => (tokens, false),
+        _ => return None,
+    };
+    // Each unit is an atom or nickname and its hydrogens, which follow it in
+    // the label and precede it in the reverse.
+    let mut units: Vec<(&str, &str)> = Vec::new();
+    if forward {
+        units.push((anchor, ""));
+        for (token, hydrogen) in tokens {
+            match units.last_mut() {
+                Some(unit) if hydrogen && unit.1.is_empty() => unit.1 = token,
+                _ => units.push((token, "")),
+            }
+        }
+    } else {
+        let mut hydrogens = "";
+        for (token, hydrogen) in tokens.into_iter().chain([(anchor, false)]) {
+            if hydrogen && hydrogens.is_empty() {
+                hydrogens = token;
+            } else {
+                units.push((token, std::mem::take(&mut hydrogens)));
+            }
+        }
+    }
+    if units.len() < 2 {
+        return None;
+    }
+    let other = units
+        .iter()
+        .rev()
+        .map(|(atom, hydrogens)| {
+            if forward {
+                format!("{hydrogens}{atom}")
+            } else {
+                format!("{atom}{hydrogens}")
+            }
+        })
+        .collect();
+    Some(if forward {
+        (text.into(), other)
+    } else {
+        (other, text.into())
+    })
 }
 
 /// Python's .8g spelling, including exponent padding and signed zero.

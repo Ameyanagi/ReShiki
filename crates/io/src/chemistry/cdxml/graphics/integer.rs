@@ -79,14 +79,11 @@ impl NativeLayer {
     pub(super) fn length(&self) -> usize {
         self.digits.len()
     }
-    /// Exact z-middle, with the chemical plane (zero) skipped.
-    pub(super) fn relative(&self, middle: &Self) -> Self {
-        let positive = self >= middle;
-        let (large, small) = if positive {
-            (self, middle)
-        } else {
-            (middle, self)
-        };
+    /// Exact layer against the topmost chemistry or text, with the chemical
+    /// plane (zero) skipped: only a layer above `top` is positive.
+    pub(super) fn relative(&self, top: &Self) -> Self {
+        let positive = self > top;
+        let (large, small) = if positive { (self, top) } else { (top, self) };
         let different_signs = large.negative != small.negative;
         let (a, b) = if large.negative {
             (&small.digits, &large.digits)
@@ -94,7 +91,7 @@ impl NativeLayer {
             (&large.digits, &small.digits)
         };
         let mut reversed = Vec::with_capacity(a.len().max(b.len()) + 1);
-        let mut carry = i16::from(positive);
+        let mut carry = i16::from(!positive);
         let mut left = a.iter().rev();
         let mut right = b.iter().rev();
         loop {

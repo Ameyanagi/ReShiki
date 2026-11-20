@@ -77,13 +77,7 @@ pub fn objects(doc: &Document, polygon: &[Point]) -> Vec<u64> {
         }
     }
     for a in &doc.annotations {
-        let (w, h) = a.size();
-        let p = a.position;
-        if encloses(
-            polygon,
-            &[p, p.offset(w, 0.), p.offset(w, h), p.offset(0., h)],
-            true,
-        ) {
+        if encloses(polygon, &a.corners(), true) {
             result.push(a.id);
         }
     }

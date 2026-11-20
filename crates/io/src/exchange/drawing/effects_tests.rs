@@ -32,12 +32,20 @@ async fn the_owners_shaded_shadowed_and_wavy_shapes_import_from_cdx_and_cdxml() 
         for g in doc.graphics.iter().filter(|g| g.style.effects.shaded) {
             assert_eq!(g.style.fill, Some(g.style.stroke), "{format}");
         }
-        let wavy: Vec<_> = doc
-            .arrows
+        // ChemDraw's lines are graphic lines, the wavy one among them.
+        assert!(doc.arrows.is_empty(), "{format}");
+        let lines: Vec<_> = doc
+            .graphics
             .iter()
-            .filter(|a| a.appearance().pattern == LinePattern::Wavy)
+            .filter(|g| g.kind == GraphicKind::Line)
+            .map(|g| g.style.pattern)
             .collect();
-        assert_eq!(wavy.len(), 1, "{format}");
+        assert_eq!(lines.len(), 5, "{format}");
+        assert_eq!(
+            lines.iter().filter(|p| **p == LinePattern::Wavy).count(),
+            1,
+            "{format}"
+        );
         assert_eq!(doc.file_version(), crate::document::DRAWING_ELEMENTS);
         // The shaded rounded rectangle: CornerRadius 600 on a 20.05 × 14.05 pt box.
         let rounded = doc
@@ -77,10 +85,14 @@ async fn chemdraw_shading_rules_for_curves_and_headed_wavy_lines() {
     // ChemDraw draws a wavy curve and a headed wavy arrow straight.
     assert_eq!(doc.graphics[1].style.pattern, LinePattern::Solid);
     assert_eq!(doc.arrows[0].appearance().pattern, LinePattern::Solid);
-    let bold_dashed = doc.arrows[1].appearance();
-    assert_eq!(bold_dashed.pattern, LinePattern::Dashed);
-    assert_eq!(doc.graphics[2].kind, GraphicKind::Line);
-    assert_eq!(doc.graphics[2].style.pattern, LinePattern::Wavy);
+    // A line without heads is a graphic line, dashed and bold together.
+    assert_eq!(doc.arrows.len(), 1);
+    let bold_dashed = &doc.graphics[2];
+    assert_eq!(bold_dashed.kind, GraphicKind::Line);
+    assert_eq!(bold_dashed.style.pattern, LinePattern::Dashed);
+    assert_eq!(bold_dashed.style.width_pt, 2.);
+    assert_eq!(doc.graphics[3].kind, GraphicKind::Line);
+    assert_eq!(doc.graphics[3].style.pattern, LinePattern::Wavy);
 }
 
 fn shape(id: u64, kind: GraphicKind, end: (f32, f32), style: GraphicStyle) -> Graphic {
@@ -229,7 +241,16 @@ async fn effects_export_as_native_chemdraw_shapes_and_come_back() {
             effects(GraphicKind::Path).is_some_and(|e| e.0.shaded),
             "{format}"
         );
-        assert_eq!(back.arrows[0].appearance().pattern, LinePattern::Wavy);
+        // A wavy arrow without heads comes back as a wavy line.
+        assert!(back.arrows.is_empty(), "{format}");
+        assert_eq!(
+            back.graphics
+                .iter()
+                .filter(|g| g.kind == GraphicKind::Line && g.style.pattern == LinePattern::Wavy)
+                .count(),
+            2,
+            "{format}"
+        );
         // The shadow is painted, so the page leaves room for it.
         assert_eq!(back.file_version(), crate::document::DRAWING_ELEMENTS);
     }
@@ -322,4 +343,50 @@ async fn a_corner_too_large_for_cdx_exports_as_curves() {
     let xml = crate::exchange::from_cdx(&bytes).unwrap();
     assert!(!xml.contains("CornerRadius"));
     assert!(xml.contains("<curve"));
+}
+
+#[tokio::test]
+async fn lines_without_heads_leave_as_chemdraw_lines_and_come_back_as_lines() {
+    let dashed = GraphicStyle {
+        pattern: LinePattern::Dashed,
+        width_pt: 2.,
+        ..Default::default()
+    };
+    let document = Document {
+        graphics: vec![
+            shape(1, GraphicKind::Line, (30., 10.), GraphicStyle::default()),
+            shape(2, GraphicKind::Line, (-20., 5.), dashed),
+        ],
+        ..Default::default()
+    };
+    for format in ["cdxml", "cdx"] {
+        let bytes = crate::formats::write(document.clone(), format)
+            .await
+            .unwrap();
+        let xml = if format == "cdx" {
+            crate::exchange::from_cdx(&bytes).unwrap()
+        } else {
+            String::from_utf8(bytes.clone()).unwrap()
+        };
+        let tree = roxmltree::Document::parse(&xml).unwrap();
+        let types: Vec<_> = tree
+            .descendants()
+            .filter(|n| n.attribute("GraphicType") == Some("Line"))
+            .map(|n| n.attribute("LineType").unwrap_or("Solid"))
+            .collect();
+        assert_eq!(types, ["Solid", "Dashed"], "{format}");
+        let back = crate::formats::read(bytes, format).await.unwrap();
+        assert_eq!(back.graphics.len(), 2, "{format}");
+        for (line, original) in back.graphics.iter().zip(&document.graphics) {
+            assert_eq!(line.kind, GraphicKind::Line, "{format}");
+            assert_eq!(line.style.pattern, original.style.pattern, "{format}");
+            assert!((line.style.width_pt - original.style.width_pt).abs() < 0.01);
+            // Same start and direction, wherever the page puts the drawing.
+            assert!(line.axis_x.distance(original.axis_x) < 0.01, "{format}");
+        }
+        let offset = |g: &[Graphic]| {
+            Point::new(g[1].origin.x - g[0].origin.x, g[1].origin.y - g[0].origin.y)
+        };
+        assert!(offset(&back.graphics).distance(offset(&document.graphics)) < 0.01);
+    }
 }

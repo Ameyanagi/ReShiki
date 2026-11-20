@@ -107,6 +107,7 @@ fn picker_without_a_draft_edits_the_selected_text_box_or_starts_one() {
     assert_eq!(app.tab.doc.annotations[0].position, Point::new(120., 80.));
     let id = app.tab.doc.next_id();
     app.tab.doc.annotations.push(Annotation {
+        angle: 0.,
         id,
         position: Point::new(50., 60.),
         text: "heat".into(),

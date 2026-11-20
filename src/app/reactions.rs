@@ -110,15 +110,25 @@ const HUES: [HueChoice; 8] = [
     HueChoice(reshiki::palette::Hue::Purple),
 ];
 impl App {
-    pub(super) fn reaction_arrow(&self) -> Option<u64> {
-        let selected: Vec<_> = self
-            .tab
+    pub(super) fn selected_reaction_arrow(&self) -> Option<&reshiki::document::Arrow> {
+        let mut selected = self.selected_arrows();
+        let arrow = selected.next()?;
+        selected.next().is_none().then_some(arrow)
+    }
+
+    pub(super) fn reaction_colors(&self) -> Option<&reshiki::reaction_colors::Colors> {
+        let arrow = self.reaction_arrow()?;
+        self.tab
             .doc
-            .arrows
+            .reactions
             .iter()
-            .filter(|a| self.tab.selected.contains(&a.id))
-            .collect();
-        if let [arrow] = selected.as_slice() {
+            .find(|r| r.arrow == arrow)?
+            .colors
+            .as_ref()
+    }
+
+    pub(super) fn reaction_arrow(&self) -> Option<u64> {
+        if let Some(arrow) = self.selected_reaction_arrow() {
             return Some(arrow.id);
         }
         if self.tab.reactions.epoch == self.tab.file_epoch
@@ -490,25 +500,17 @@ impl App {
                         atom.label_h = source.label_h;
                     }
                 }
+                let name = self.part_name(&part.atoms);
+                let label = if part.coefficient > 1 {
+                    format!("{} × {name}", part.coefficient)
+                } else {
+                    name
+                };
                 card = card.push(
                     button(
                         row![
                             canvas(DrawingThumbnail(preview)).width(92).height(28),
-                            text(format!(
-                                "{}{} {}",
-                                if part.coefficient > 1 {
-                                    format!("{} × ", part.coefficient)
-                                } else {
-                                    String::new()
-                                },
-                                part.atoms.len(),
-                                if part.atoms.len() == 1 {
-                                    "atom"
-                                } else {
-                                    "atoms"
-                                }
-                            ))
-                            .size(12),
+                            text(label).size(12),
                         ]
                         .align_y(iced::Alignment::Center),
                     )
@@ -556,7 +558,7 @@ impl App {
         }
         body = body.push(
             row![
-                command("Preview", Message::Reaction(Action::Preview)),
+                command("Preview reaction", Message::Reaction(Action::Preview)),
                 command("Select reaction", Message::Reaction(Action::SelectAll)),
                 command(
                     "Clear selected roles",
@@ -652,7 +654,7 @@ impl App {
         }
         body.push(
             row![
-                command("Update colors", Message::Reaction(Action::ColorByOrigin))
+                command("Color by origin", Message::Reaction(Action::ColorByOrigin))
                     .width(Length::Fill),
                 command("Clear colors", Message::Reaction(Action::ClearColors)).width(Length::Fill),
             ]

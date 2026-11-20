@@ -3,7 +3,7 @@ section: Changes
 issues: []
 ---
 
-- **Lab equipment (preview)**: click **Equipment** in the tools palette to
+- **Lab equipment (preview)**: click **Insert equipment…** in the tools palette to
   place round-bottom flasks, Liebig condensers, glass stoppers, rubber septa
   and joint adapters. Search names and keywords in English or Japanese, pick
   a size, and click the drawing. A piece moves, turns, scales and mirrors as

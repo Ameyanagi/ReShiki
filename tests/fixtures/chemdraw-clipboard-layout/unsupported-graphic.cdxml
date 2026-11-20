@@ -27,6 +27,6 @@
     </t>
     <graphic id="43" BoundingBox="49 20 46 17" GraphicType="Symbol" SymbolType="Plus" />
     <graphic id="44" BoundingBox="18 40 11 35" GraphicType="Rectangle" />
-    <graphic id="45" BoundingBox="77 64 53 52" GraphicType="Orbital" OrbitalType="pShaded" />
+    <graphic id="45" BoundingBox="77 64 53 52" GraphicType="Rectangle" LineWidth="20" />
   </page>
 </CDXML>

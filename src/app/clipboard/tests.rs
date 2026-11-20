@@ -1076,3 +1076,122 @@ fn a_wide_paste_lands_beside_the_drawing_and_a_small_one_near_the_view_centre() 
     let pasted = app.tab.doc.atom(app.tab.selected[0]).unwrap().position;
     assert_eq!(pasted, center.offset(24., 24.));
 }
+
+#[test]
+fn a_wide_paste_keeps_the_zoom_and_scrolls_to_show_its_start() {
+    let (mut app, _) = App::new();
+    app.viewport = iced::Size::new(800., 600.);
+    app.guides.rulers = true;
+    app.tab.camera.zoom = 1.;
+    app.tab.doc.add_atom("C", Point::default());
+    app.tab.doc.add_atom("C", Point::new(1040., 0.));
+    let before = app.tab.doc.clone();
+
+    app.clipboard_read(
+        app.tab.file_epoch,
+        app.tab.revision,
+        Ok(PasteOutcome::native(before.clone())),
+    );
+
+    assert_eq!(app.tab.camera.zoom, 1.);
+    let (lo, _) = reshiki::scene::selection_bounds(&app.tab.doc, &app.tab.selected).unwrap();
+    let paper = app.guides.paper(iced::Rectangle::with_size(app.viewport));
+    let x = app.tab.camera.screen(lo, paper).x;
+    assert!((0.0..paper.width).contains(&x));
+    assert!((x - paper.width / 2.).abs() < 1e-3, "its start is mid-view");
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+}
+
+#[test]
+fn a_paste_that_is_on_screen_leaves_the_view_alone() {
+    let (mut app, _) = App::new();
+    app.viewport = iced::Size::new(800., 600.);
+    app.tab.camera.center = Point::new(70., -40.);
+    app.tab.camera.zoom = 1.5;
+    app.tab.fit_to_view = true;
+    let camera = app.tab.camera;
+    let mut part = Document::default();
+    part.add_atom("O", Point::default());
+
+    app.clipboard_read(
+        app.tab.file_epoch,
+        app.tab.revision,
+        Ok(PasteOutcome::native(part)),
+    );
+
+    assert_eq!(app.tab.selected.len(), 1);
+    assert_eq!(app.tab.camera.center, camera.center);
+    assert_eq!(app.tab.camera.zoom, camera.zoom);
+    assert!(app.tab.fit_to_view);
+}
+
+#[test]
+fn a_clipped_picture_paste_that_fits_scrolls_both_corners_into_view() {
+    let (mut app, _) = App::new();
+    app.viewport = iced::Size::new(800., 600.);
+    app.guides.rulers = true;
+    app.tab.camera.zoom = 1.5;
+    app.tab.fit_to_view = true;
+    let camera = app.tab.camera;
+    let paper = app.guides.paper(iced::Rectangle::with_size(app.viewport));
+    let visible = iced::Rectangle::with_size(paper.size());
+    let mut bytes = std::io::Cursor::new(Vec::new());
+    image::DynamicImage::new_rgb8(2, 2)
+        .write_to(&mut bytes, image::ImageFormat::Png)
+        .unwrap();
+    let picture = reshiki::pictures::Picture::import(bytes.get_ref()).unwrap();
+    let mut part = picture.document();
+    reshiki::pictures::resize(&mut part.graphics[0], 490., 368.).unwrap();
+
+    app.clipboard_read(app.tab.file_epoch, app.tab.revision, Ok(part.into()));
+
+    let (lo, hi) = reshiki::scene::selection_bounds(&app.tab.doc, &app.tab.selected).unwrap();
+    let clipped = camera.screen(hi, paper);
+    assert!(clipped.x > paper.width && clipped.y > paper.height);
+    assert!(visible.contains(app.tab.camera.screen(lo, paper)));
+    assert!(visible.contains(app.tab.camera.screen(hi, paper)));
+    assert_eq!(app.tab.camera.zoom, camera.zoom);
+    assert!(!app.tab.fit_to_view);
+    assert_eq!(
+        app.status,
+        "Picture pasted · Drag the corner handles to resize"
+    );
+}
+
+#[test]
+fn a_paste_into_a_clipped_panel_scrolls_only_for_the_new_content() {
+    use reshiki::graphics::{Graphic, GraphicKind};
+
+    let (mut app, _) = App::new();
+    app.viewport = iced::Size::new(800., 600.);
+    app.tab.camera.zoom = 1.5;
+    let camera = app.tab.camera;
+    let panel_id = app.tab.doc.next_id();
+    let mut panel = Graphic::dragged(
+        panel_id,
+        GraphicKind::Rectangle,
+        Point::new(-470., -150.),
+        Point::new(530., 150.),
+        Default::default(),
+        Default::default(),
+        false,
+    );
+    panel.panel = Some(Default::default());
+    app.tab.doc.graphics.push(panel);
+    app.tab.selected = vec![panel_id];
+    let mut part = Document::default();
+    part.add_atom("O", Point::default());
+
+    app.clipboard_read(
+        app.tab.file_epoch,
+        app.tab.revision,
+        Ok(PasteOutcome::native(part)),
+    );
+
+    assert_eq!(app.tab.selected.len(), 2);
+    assert!(app.tab.selected.contains(&panel_id));
+    assert_eq!(app.tab.selected, app.tab.doc.groups[0].members);
+    assert_eq!(app.tab.camera.center, camera.center);
+    assert_eq!(app.tab.camera.zoom, camera.zoom);
+}

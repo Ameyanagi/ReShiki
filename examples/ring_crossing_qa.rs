@@ -66,6 +66,7 @@ fn main() -> anyhow::Result<()> {
         let dest = Point::new((index % 4) as f32 * 185., (index / 4) as f32 * 230.);
         editing::append(&mut sheet, &doc, dest.offset(-(lo.x + hi.x) / 2., -lo.y));
         sheet.annotations.push(Annotation {
+            angle: 0.,
             id: sheet.next_id(),
             position: dest.offset(-65., 170.),
             text: name.replacen(" · ", " ", 1).replace(" · ", "\n"),

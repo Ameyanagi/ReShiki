@@ -223,6 +223,7 @@ fn clicked_repeat_scope_includes_grouped_caption_brackets_and_attachments() {
     let bracket = source.generic.repeats[0].bracket.unwrap();
     let caption = source.next_id();
     source.annotations.push(crate::document::Annotation {
+        angle: 0.,
         id: caption,
         position: Point::new(150., 100.),
         text: "PET".into(),
@@ -293,6 +294,7 @@ fn generic_native_group_validation_is_prepaid_for_every_expansion_scope() {
         let first = 3 + i * 3;
         for id in [first, first + 1] {
             source.annotations.push(Annotation {
+                angle: 0.,
                 id,
                 position: Point::new(0., 100.),
                 text: "a".into(),

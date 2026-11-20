@@ -2116,6 +2116,60 @@ fn group_clicks_move_all_members_and_alt_selects_a_member() {
 }
 
 #[test]
+fn a_second_click_in_a_selected_group_picks_the_member_and_a_drag_moves_it_alone() {
+    let mut doc = Document::default();
+    doc.add_atom("C", World::new(-50., 0.));
+    doc.add_atom("O", World::new(50., 0.));
+    doc.group_selection(&[1, 2]).unwrap();
+    let bounds = Rectangle::new(Point::ORIGIN, iced::Size::new(400., 300.));
+    // One pointer state throughout: the clicks come faster than a double-click.
+    let mut state = State::default();
+    let mut click = |canvas: &MoleculeCanvas<'_>, to: Point| {
+        canvas.update(
+            &mut state,
+            &Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+            bounds,
+            mouse::Cursor::Available(Point::new(150., 150.)),
+        );
+        canvas
+            .update(
+                &mut state,
+                &Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
+                bounds,
+                mouse::Cursor::Available(to),
+            )
+            .unwrap()
+            .into_inner()
+            .0
+            .unwrap()
+    };
+    let canvas = MoleculeCanvas {
+        tool: Tool::Select,
+        ..chain_canvas(&doc, ChainMode::Straight)
+    };
+    let Edit::Select(ids) = click(&canvas, Point::new(150., 150.)) else {
+        panic!("expected group selection")
+    };
+    assert_eq!(ids, vec![1, 2]);
+    let canvas = MoleculeCanvas {
+        selected: &ids,
+        ..canvas
+    };
+    let Edit::Select(member) = click(&canvas, Point::new(150., 150.)) else {
+        panic!("expected member selection")
+    };
+    assert_eq!(member, vec![1]);
+    let canvas = MoleculeCanvas {
+        selected: &member,
+        ..canvas
+    };
+    let Edit::Move(moved, ..) = click(&canvas, Point::new(175., 150.)) else {
+        panic!("expected member move")
+    };
+    assert_eq!(moved, vec![1]);
+}
+
+#[test]
 fn filled_background_leaves_atoms_and_bonds_selectable() {
     let mut doc = Document::default();
     let a = doc.add_atom("C", World::new(-20., 0.));
@@ -2325,6 +2379,7 @@ fn double_click_edits_grouped_labels_but_drag_moves_the_group() {
     let atom = doc.add_atom("C", World::new(-100., -80.));
     let label = doc.next_id();
     doc.annotations.push(reshiki::document::Annotation {
+        angle: 0.,
         id: label,
         position: World::default(),
         text: "Reaction conditions".into(),
@@ -3340,6 +3395,7 @@ fn arrow_end_drag_preview_keeps_condition_labels_like_the_commit() {
     ));
     let before = doc.clone();
     let mut text = reshiki::document::Annotation {
+        angle: 0.,
         id: 2,
         position: World::default(),
         text: "Pd/C, H2, EtOAc, rt".into(),
@@ -3899,4 +3955,43 @@ fn a_selected_pieces_handles_switch_a_valve_on_click_and_set_a_level_by_drag() {
         let edits = select_drag(&doc, selected, valve, valve, modifiers);
         assert!(!edits.iter().any(|e| matches!(e, Edit::PieceParam { .. })));
     }
+}
+
+#[test]
+fn text_in_a_front_shape_picks_its_own_shape_over_a_filled_one_below() {
+    use reshiki::graphics::{BracketSides, Graphic, GraphicKind, GraphicStyle};
+    let mut doc = Document::default();
+    let shape = |id, lo: World, hi: World| {
+        let mut g = Graphic::dragged(
+            id,
+            GraphicKind::Rectangle,
+            lo,
+            hi,
+            GraphicStyle::default(),
+            BracketSides::Both,
+            false,
+        );
+        g.layer = 1;
+        g
+    };
+    let mut below = shape(1, World::new(-100., -100.), World::new(100., 100.));
+    below.style.fill = Some(reshiki::palette::Color::Custom([220, 239, 233]));
+    doc.graphics.push(below);
+    doc.graphics
+        .push(shape(2, World::new(-40., -20.), World::new(40., 20.)));
+    doc.annotations.push(reshiki::document::Annotation {
+        angle: 0.,
+        id: 3,
+        position: World::default(),
+        text: "hν".into(),
+        format: Default::default(),
+    });
+    doc.graphics[1].text = Some(3);
+    reshiki::shape_text::reconcile(&mut doc);
+    let text = doc.annotations[0].clone();
+    let (w, h) = text.size();
+    let on_text = text.position.offset(w / 2., h / 2.);
+    assert_eq!(hit_object(&doc, on_text, 1.), Some(2));
+    // Beside the outlined shape the filled one shows.
+    assert_eq!(hit_object(&doc, World::new(70., 70.), 1.), Some(1));
 }

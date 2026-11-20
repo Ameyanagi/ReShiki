@@ -87,6 +87,11 @@ fn drawing_losses(
         notices.push(notice);
     }
     if matches!(format, "cdxml" | "cdx")
+        && let Some(notice) = crate::shape_text::export_notice(document)
+    {
+        notices.push(notice);
+    }
+    if matches!(format, "cdxml" | "cdx")
         && let Some(notice) = crate::arrows::export_notice(document)
     {
         notices.push(notice);
@@ -181,6 +186,7 @@ mod tests {
             ArrowStyle::preset(Preset::Forward),
         ));
         doc.annotations.push(Annotation {
+            angle: 0.,
             id: 2,
             position: Point::new(40., -40.),
             text: "heat".into(),

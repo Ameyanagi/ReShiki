@@ -113,6 +113,7 @@ mod tests {
     fn caption(doc: &mut Document, text: &str) -> u64 {
         let id = doc.next_id();
         doc.annotations.push(Annotation {
+            angle: 0.,
             id,
             position: World::new(80., 0.),
             text: text.into(),

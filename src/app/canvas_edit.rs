@@ -346,6 +346,7 @@ impl App {
                     self.tab.selected = snapped;
                 } else {
                     self.tab.doc.translate(&ids, dx, dy);
+                    let moved = ids.clone();
                     let seats = self.tab.doc.seats.len();
                     let reach = reshiki::equipment::solve::REACH_PX / self.tab.camera.zoom;
                     if let Some(snap) =
@@ -355,6 +356,11 @@ impl App {
                         snapped = Some(snap);
                     } else if self.tab.doc.seats.len() < seats {
                         joined = Some("Pulled out of its assembly".into());
+                    }
+                    // A piece dragged out of its cycle, panel or group leaves it.
+                    let left = self.tab.doc.take_out(&moved, Point::new(dx, dy));
+                    if let Some(names) = reshiki::grouping::Container::names(&left) {
+                        joined = Some(format!("Took it out of {names}"));
                     }
                     // The drop target the drag showed gives the part its role.
                     if let Some(target) = reshiki::cycles::drop_target(&self.tab.doc, &ids) {

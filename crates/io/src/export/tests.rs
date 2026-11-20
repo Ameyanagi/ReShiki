@@ -88,6 +88,7 @@ async fn editable_png_preserves_custom_colors_from_older_dark_snapshots() {
         let mut format = TextFormat::default();
         format.style.color = color;
         doc.annotations.push(Annotation {
+            angle: 0.,
             id: 1,
             position: Point::default(),
             text: "O".into(),
@@ -358,6 +359,7 @@ fn an_oversized_png_is_refused_before_the_scene_is_written() {
     let mut text = Document::default();
     text.add_atom("C", Point::default());
     text.annotations.push(crate::document::Annotation {
+        angle: 0.,
         id: text.next_id(),
         position: Point::default(),
         text: "x".repeat(10_000),
@@ -473,6 +475,7 @@ fn clipboard_is_transparent_and_files_keep_canvas_background() {
     format.style.color = crate::palette::Color::Custom([180, 50, 55]);
     let mut doc = Document::default();
     doc.annotations.push(Annotation {
+        angle: 0.,
         id: 1,
         position: Point::default(),
         text: "O".into(),
@@ -534,6 +537,7 @@ fn dark_ink_drawing() -> Document {
     let mut format = TextFormat::default();
     format.style.color = crate::palette::Color::Custom([180, 50, 55]);
     doc.annotations.push(Annotation {
+        angle: 0.,
         id: doc.next_id(),
         position: Point::new(0., 40.),
         text: "N".into(),
@@ -676,6 +680,7 @@ fn picture_backgrounds_keep_palette_and_element_colors() {
         let mut format = TextFormat::default();
         format.style.color = blue;
         doc.annotations.push(Annotation {
+            angle: 0.,
             id: doc.next_id(),
             position: Point::new(0., 40.),
             text: "M".into(),
@@ -1278,6 +1283,7 @@ fn transparent_label_halo_reaches_vector_readers_as_a_named_knockout_mask() {
 fn vector_payload_document() -> Document {
     let mut doc = Document::default();
     doc.annotations.push(crate::document::Annotation {
+        angle: 0.,
         id: 1,
         position: Default::default(),
         text: "Editable 日本語".into(),

@@ -94,9 +94,9 @@ impl Writer<'_> {
                     "Curved retrosynthesis arrows require native or image export",
                 ));
             }
-            if a.kind == "equilibrium" && (curved || s.equilibrium_ratio != 1.) {
+            if a.kind == "equilibrium" && curved {
                 return Err(invalid(
-                    "Bent or unequal equilibrium arrows require native or image export",
+                    "Bent equilibrium arrows require native or image export",
                 ));
             }
             if s.dipole && s.tail != Head::None {
@@ -217,6 +217,25 @@ impl Writer<'_> {
             if matches!(a.kind.as_str(), "equilibrium" | "retro") {
                 self.tree
                     .set(n, "ArrowShaftSpacing", integer(style_real(s.gap_pt) * 100.))?;
+            }
+            // ChemDraw opens an angled retrosynthesis head as wide as its
+            // center size, which an angled head has no other use for.
+            if a.kind == "retro" && s.shape == HeadShape::Open {
+                let length = (style_real(s.head_length_pt) * 100.).round_ties_even();
+                let width = (style_real(s.head_width_pt) * 100.).round_ties_even();
+                self.tree.set(
+                    n,
+                    "ArrowheadCenterSize",
+                    integer(width.clamp((length / 10.).ceil(), length)),
+                )?;
+            }
+            // ChemDraw's forward length against the reverse, in hundredths.
+            if a.kind == "equilibrium" && s.equilibrium_ratio != 1. {
+                self.tree.set(
+                    n,
+                    "ArrowEquilibriumRatio",
+                    integer(100. / style_real(s.equilibrium_ratio)),
+                )?;
             }
             if curved {
                 let points = if !a.nodes.is_empty() {
@@ -808,14 +827,15 @@ impl Writer<'_> {
     /// A shaded or shadowed rectangle or oval as ChemDraw's own shape, so
     /// ChemDraw keeps its style editable. Its one color is the fill's; an
     /// outline in another color follows as a curve in the same group. Rotated
-    /// rectangles and wavy or dotted outlines stay curves; a wavy line without
-    /// heads becomes ChemDraw's line, the one shape ChemDraw draws wavy.
+    /// rectangles and wavy or dotted outlines stay curves; a line without
+    /// heads becomes ChemDraw's line, which reads back as a line and is the
+    /// one shape ChemDraw draws wavy.
     fn native_shape(&mut self, g: &crate::graphics::Graphic, z: usize) -> Result<Option<Key>> {
         let style = &self.chemdraw_style(&g.style, g.kind != GraphicKind::Line);
         let (o, x, y) = (P::from(g.origin), P::from(g.axis_x), P::from(g.axis_y));
         let ellipse = g.kind == GraphicKind::Ellipse;
         let line = g.kind == GraphicKind::Line
-            && style.pattern == LinePattern::Wavy
+            && style.pattern != LinePattern::Dotted
             && g.heads
                 .is_none_or(|h| h.head == Head::None && h.tail == Head::None);
         if !line
@@ -861,7 +881,15 @@ impl Writer<'_> {
             // Start first, so the waves come back on the same side.
             attributes.extend([
                 ("GraphicType", "Line".into()),
-                ("LineType", "Wavy".into()),
+                (
+                    "LineType",
+                    match style.pattern {
+                        LinePattern::Wavy => "Wavy",
+                        LinePattern::Dashed => "Dashed",
+                        _ => "Solid",
+                    }
+                    .into(),
+                ),
                 (
                     "BoundingBox",
                     format!("{} {}", self.position(o), self.position(o.add(x.x, x.y))),

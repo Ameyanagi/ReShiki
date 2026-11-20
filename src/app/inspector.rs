@@ -466,6 +466,8 @@ pub(super) fn card<'a>(body: impl Into<Element<'a, Message>>) -> Element<'a, Mes
 }
 impl App {
     pub(super) fn show_molecular_properties(&mut self) -> Task<Message> {
+        // A selected cycle folds the section away: unfold it.
+        self.tab.cycle_inputs.purpose_open = true;
         self.inspector_open = true;
         self.inspector_tab = InspectorTab::Properties;
         self.tab.inspector_ui.model_controls = false;
@@ -476,22 +478,8 @@ impl App {
         let key = self.property_request_key();
         let properties = if key.atoms.is_empty() {
             Err("Select atoms or bonds to calculate their properties".into())
-        } else if reshiki::models3d::crystal::touches(&self.tab.doc, &key.atoms) {
-            reshiki::models3d::crystal::composition(&self.tab.doc, &key.atoms)
-        } else if reshiki::attachments::present(&self.tab.doc) {
-            if self.tab.selected.is_empty() {
-                reshiki::attachments::composition(&self.tab.doc)
-            } else {
-                reshiki::attachments::composition(&reshiki::editing::selection(
-                    &self.tab.doc,
-                    &self.tab.selected,
-                ))
-            }
         } else {
-            reshiki::chemistry::document::prepare(&self.property_document(&key))
-                .map_err(|error| error.to_string())
-                .and_then(|molecule| molecule.state.graph.atom_facts())
-                .and_then(|atoms| reshiki::chemistry::properties(&atoms))
+            self.molecular_composition(&key.atoms, &self.tab.selected)
         };
         match properties {
             Ok(properties) => {
@@ -513,8 +501,26 @@ impl App {
         .discard()
     }
 
+    pub(super) fn molecular_composition(
+        &self,
+        atoms: &[u64],
+        selected: &[u64],
+    ) -> Result<reshiki::chemistry::Properties, String> {
+        let doc = &self.tab.doc;
+        if reshiki::models3d::crystal::touches(doc, atoms) {
+            reshiki::models3d::crystal::composition(doc, atoms)
+        } else if reshiki::attachments::present(doc) {
+            let part = (!selected.is_empty()).then(|| reshiki::editing::selection(doc, selected));
+            reshiki::attachments::composition(part.as_ref().unwrap_or(doc))
+        } else {
+            let molecule = reshiki::chemistry::document::prepare(&self.property_fragment(atoms))
+                .map_err(|error| error.to_string())?;
+            reshiki::chemistry::properties(&molecule.state.graph.atom_facts()?)
+        }
+    }
+
     /// `[X]•⁺` reads `[X]⁺•` when the drawing style writes the charge first.
-    fn shown_formula(&self, formula: &str) -> String {
+    pub(super) fn shown_formula(&self, formula: &str) -> String {
         match formula.split_once("]•") {
             Some((head, charge)) if self.tab.doc.drawing_style.charge_before_radical => {
                 format!("{head}]{charge}•")
@@ -556,7 +562,11 @@ impl App {
     /// The molecule Properties describes. Atom maps belong to a reaction, so
     /// its SMILES (shown and copied there) leaves them out.
     pub(super) fn property_document(&self, key: &PropertyKey) -> Document {
-        let mut doc = reshiki::editing::analysis_document(&self.tab.doc, &key.atoms);
+        self.property_fragment(&key.atoms)
+    }
+
+    fn property_fragment(&self, atoms: &[u64]) -> Document {
+        let mut doc = reshiki::editing::analysis_document(&self.tab.doc, atoms);
         for atom in &mut doc.atoms {
             atom.map_num = 0;
         }
@@ -1033,21 +1043,18 @@ impl App {
                     .style(crate::appearance::text_color(Color::from_rgb8(182, 66, 61)))
             });
         }
-        let styled_graphics = matches!(self.tool, Tool::Graphic(_))
-            || self
-                .tab
-                .doc
-                .graphics
-                .iter()
-                .any(|g| selected.contains(&g.id) && g.picture.is_none() && g.piece.is_none());
+        let styled_graphics = self.graphic_panel_visible();
+        let cycle = self.cycle_card();
+        let show_cycle = cycle.is_some();
         // A selected panel's title, fill and shadow come before the cards of
         // what it holds, such as a crystal's structure or a cycle's steps.
         let panel_card = self.figure_panel_card().filter(|_| styled_graphics);
         let panel_first = panel_card.is_some();
         if let Some(panel) = panel_card {
-            body = body
-                .push(card(container(panel).padding(12)))
-                .push(card(container(self.graphic_panel()).padding(12)));
+            body = body.push(card(container(panel).padding(12)));
+            if !show_cycle {
+                body = body.push(card(container(self.graphic_panel()).padding(12)));
+            }
         }
         let model = self.selected_existing_model();
         let crystal_first = model.is_some_and(|model| {
@@ -1082,7 +1089,7 @@ impl App {
             ));
         }
         // What the selection is for comes first: it decides what else applies.
-        if let Some(row) = self.purpose_row(&selected) {
+        if !show_cycle && let Some(row) = self.purpose_row(&selected) {
             body = body.push(row);
         }
         // A cycle's roles and steps come before what its parts are made of.
@@ -1093,14 +1100,32 @@ impl App {
         if let Some(review) = self.step_review_card() {
             body = body.push(card(container(review).padding(12)));
         }
-        if let Some(cycle) = self.cycle_card().or_else(|| self.cycle_part_card()) {
+        if let Some(cycle) = cycle {
+            use super::cycles::{Action, disclosure};
+            let open = self.tab.cycle_inputs.purpose_open;
+            let mut properties = column![disclosure(
+                "cycle-purpose-properties",
+                "Purpose and properties",
+                open,
+                Action::TogglePurpose,
+            )]
+            .spacing(10);
+            if open {
+                properties = properties
+                    .push(self.purpose_row(&selected))
+                    .push(self.molecular_section(opened));
+            }
+            body = body
+                .push(card(container(cycle).padding(12)))
+                .push(properties);
+        } else if let Some(cycle) = self.cycle_part_card() {
             body = body.push(card(container(cycle).padding(12)));
         }
         let molecular_first = self.tab.selected.is_empty()
             || self.property_key().is_some_and(|key| !key.atoms.is_empty());
         // Keep the active ring tool's placement card visible above the expanded values.
         let ring_tool = matches!(self.tool, Tool::RingPreset(_));
-        if molecular_first && !ring_tool {
+        if !show_cycle && molecular_first && !ring_tool {
             body = body.push(self.molecular_section(opened));
         }
         if let Tool::RingPreset(preset) = self.tool {
@@ -1144,14 +1169,15 @@ impl App {
                 .padding(12),
             ));
         }
-        if molecular_first && ring_tool {
+        if !show_cycle && molecular_first && ring_tool {
             body = body.push(self.molecular_section(opened));
         }
         if let Some(card) = self.piece_card() {
             body = body.push(card);
         }
         // Pieces draw their own lines and fills: graphic style does not apply.
-        if styled_graphics && !panel_first {
+        // The circle's style restyles its arrows: it stays in view.
+        if styled_graphics && (!panel_first || show_cycle) {
             body = body.push(card(container(self.graphic_panel()).padding(12)));
         }
         if let Some(layout) = self.layout_card() {
@@ -1169,8 +1195,7 @@ impl App {
         {
             body = body.push(card(container(self.picture_panel()).padding(12)));
         }
-        if self.tool == Tool::Arrow || self.tab.doc.arrows.iter().any(|a| selected.contains(&a.id))
-        {
+        if self.arrow_panel_visible() {
             body = body.push(card(container(self.arrow_panel()).padding(12)));
         }
         if let Some(panel) = self.arrow_label_gap_panel() {
@@ -1192,7 +1217,7 @@ impl App {
         if let Some(section) = self.generic_structure_section() {
             body = body.push(section);
         }
-        if !molecular_first {
+        if !show_cycle && !molecular_first {
             body = body.push(self.molecular_section(opened));
         }
         if !self.tab.stereo_notes.is_empty() {
@@ -2317,11 +2342,7 @@ impl App {
                     Message::Figure(super::figure_panels::Action::Wrap)
                 ),
                 crate::appearance::pick_list(
-                    [
-                        reshiki::layouts::Flow::Row,
-                        reshiki::layouts::Flow::Column,
-                        reshiki::layouts::Flow::Grid(2),
-                    ],
+                    super::figure_panels::LASTING_LAYOUTS,
                     None::<reshiki::layouts::Flow>,
                     |flow| Message::Figure(super::figure_panels::Action::Arrange(flow)),
                 )

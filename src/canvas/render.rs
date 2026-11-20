@@ -3,7 +3,7 @@
 use super::{Camera, Document, World, dashes, layered, models3d, rgb, text_cache};
 use iced::widget::canvas::{
     self, Path, Stroke,
-    path::lyon_path::math::{Transform, vector},
+    path::lyon_path::math::{Angle, Transform, point as lyon_point, vector},
 };
 use iced::{Color, Point, Rectangle};
 use reshiki::{
@@ -132,7 +132,11 @@ fn draw_primitives_with_opacity(
                 let stroke = Stroke::default()
                     .with_color(alpha(rgb(style.stroke.rgb())))
                     .with_width(width)
-                    .with_line_cap(canvas::LineCap::Round)
+                    .with_line_cap(if style.round_caps() {
+                        canvas::LineCap::Round
+                    } else {
+                        canvas::LineCap::Butt
+                    })
                     .with_line_join(canvas::LineJoin::Round);
                 if dashes.is_empty() {
                     frame.stroke(&path, stroke);
@@ -179,45 +183,90 @@ fn draw_primitives_with_opacity(
                 });
                 frame.fill(&path, alpha(Color::BLACK));
             }
-            Primitive::Text {
-                position,
-                text,
-                size,
-                color,
-                style,
+            Primitive::Text { .. } => draw_text(frame, primitive, camera, bounds, opacity, None),
+            Primitive::Rotated {
+                pivot,
+                angle,
+                primitives,
             } => {
-                let at = camera.screen(*position, bounds);
-                let (paths, scale) = outlined_text(frame, text, *size, camera.zoom, *color, style);
-                if on_screen(&paths, at, scale, 0., bounds) {
-                    let transform = text_transform(at, scale);
-                    for (path, color) in &paths.paths {
-                        frame.fill(&path.transform(&transform), alpha(*color));
-                    }
-                    if !paths.pictures.is_empty() {
-                        frame.split();
-                        for (rect, handle) in &paths.pictures {
-                            frame.draw_image(
-                                text_rect(*rect, at, scale),
-                                canvas::Image::new(handle.clone()).opacity(opacity),
-                            );
-                        }
-                        frame.split();
-                    }
-                }
-                if style.underline {
-                    let width = reshiki::style::styled_text_width(text, *size, style);
-                    frame.stroke(
-                        &Path::line(
-                            camera.screen(position.offset(0.0, *size * 0.95), bounds),
-                            camera.screen(position.offset(width, *size * 0.95), bounds),
-                        ),
-                        Stroke::default()
-                            .with_width((*size * 0.045 * camera.zoom).max(0.5))
-                            .with_color(alpha(rgb(*color))),
-                    );
+                let turn = Some((camera.screen(*pivot, bounds), *angle));
+                for run in primitives {
+                    draw_text(frame, run, camera, bounds, opacity, turn);
                 }
             }
         }
+    }
+}
+
+/// A text run, turned `turn.1` degrees clockwise about the screen point `turn.0`.
+fn draw_text(
+    frame: &mut layered::Frame<'_>,
+    run: &Primitive,
+    camera: Camera,
+    bounds: Rectangle,
+    opacity: f32,
+    turn: Option<(Point, f32)>,
+) {
+    let Primitive::Text {
+        position,
+        text,
+        size,
+        color,
+        style,
+    } = run
+    else {
+        return;
+    };
+    let alpha = |mut color: Color| {
+        color.a *= opacity;
+        color
+    };
+    let at = camera.screen(*position, bounds);
+    let (paths, scale) = outlined_text(frame, text, *size, camera.zoom, *color, style);
+    let (pivot, degrees) = turn.unwrap_or((at, 0.));
+    let turned = Transform::translation(-pivot.x, -pivot.y)
+        .then_rotate(Angle::degrees(degrees))
+        .then_translate(vector(pivot.x, pivot.y));
+    // Turned text is always drawn: its upright box says little about where it lands.
+    if turn.is_some() || on_screen(&paths, at, scale, 0., bounds) {
+        let transform = text_transform(at, scale).then(&turned);
+        for (path, color) in &paths.paths {
+            frame.fill(&path.transform(&transform), alpha(*color));
+        }
+        if !paths.pictures.is_empty() {
+            frame.split();
+            for (rect, handle) in &paths.pictures {
+                let rect = text_rect(*rect, at, scale);
+                let centre = turned.transform_point(lyon_point(
+                    rect.x + rect.width / 2.,
+                    rect.y + rect.height / 2.,
+                ));
+                frame.draw_image(
+                    Rectangle {
+                        x: centre.x - rect.width / 2.,
+                        y: centre.y - rect.height / 2.,
+                        ..rect
+                    },
+                    canvas::Image::new(handle.clone())
+                        .opacity(opacity)
+                        .rotation(degrees.to_radians()),
+                );
+            }
+            frame.split();
+        }
+    }
+    if style.underline {
+        let width = reshiki::style::styled_text_width(text, *size, style);
+        frame.stroke(
+            &Path::line(
+                camera.screen(position.offset(0.0, *size * 0.95), bounds),
+                camera.screen(position.offset(width, *size * 0.95), bounds),
+            )
+            .transform(&turned),
+            Stroke::default()
+                .with_width((*size * 0.045 * camera.zoom).max(0.5))
+                .with_color(alpha(rgb(*color))),
+        );
     }
 }
 
@@ -364,6 +413,7 @@ fn draw_halo(
                 }
             }
             Primitive::Picture(_)
+            | Primitive::Rotated { .. }
             | Primitive::Halo { .. }
             | Primitive::Sphere { .. }
             | Primitive::Ellipsoid { .. }
