@@ -35,7 +35,7 @@ If ReShiki offers recovery drafts after an interrupted session, choose **Restore
 Choose **Import → Import SVG as drawing…**, or find **Import SVG as drawing…** in **⌘K**.
 Choose an `.svg` or `.svgz` file. It arrives as a group of editable paths. Ungroup it to edit its points.
 Strokes become outlines, gradients use their middle color, and filled paths have a 0.1 pt edge in the same color.
-Transparency becomes opaque on white. Text, pictures, masks, clips, filters, patterns and animation are left out;
+Paint opacity is kept. A translucent group makes each path translucent, so overlaps can look darker. Text, pictures, masks, clips, filters, patterns and animation are left out;
 the import message lists what changed. Outline text in the drawing program first.
 **Open** still restores the embedded drawing in an SVG exported by ReShiki.
 

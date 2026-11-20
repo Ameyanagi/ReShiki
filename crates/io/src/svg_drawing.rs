@@ -224,7 +224,33 @@ fn check_uses(xml: &roxmltree::Document<'_>) -> Result<(), String> {
         memo: &mut HashMap<roxmltree::NodeId, (usize, usize)>,
         active: &mut HashSet<roxmltree::NodeId>,
         depth: usize,
+        referenced: bool,
     ) -> Result<(usize, usize), String> {
+        // Definitions are not drawn until a live use reaches them. Source
+        // elements were already bounded by the streaming pass.
+        if matches!(
+            node.tag_name().name(),
+            "defs"
+                | "style"
+                | "metadata"
+                | "title"
+                | "desc"
+                | "linearGradient"
+                | "radialGradient"
+                | "stop"
+        ) || node.has_tag_name("symbol") && !referenced
+            || node.attribute("display") == Some("none")
+            || node.attribute("style").is_some_and(|style| {
+                style.split(';').any(|p| {
+                    p.split_once(':').is_some_and(|(k, v)| {
+                        k.trim().eq_ignore_ascii_case("display")
+                            && v.trim().trim_end_matches("!important").trim() == "none"
+                    })
+                })
+            })
+        {
+            return Ok((0, 0));
+        }
         if depth > MAX_DEPTH || !active.insert(node.id()) {
             return Err("The SVG has a recursive or deeply nested use reference.".into());
         }
@@ -238,7 +264,7 @@ fn check_uses(xml: &roxmltree::Document<'_>) -> Result<(), String> {
         let mut total = 1usize;
         let mut height = 0usize;
         for child in node.children().filter(|n| n.is_element()) {
-            let (n, h) = size(child, ids, memo, active, depth + 1)?;
+            let (n, h) = size(child, ids, memo, active, depth + 1, false)?;
             total = total.saturating_add(n);
             height = height.max(h + 1);
         }
@@ -250,7 +276,7 @@ fn check_uses(xml: &roxmltree::Document<'_>) -> Result<(), String> {
                 .and_then(|s| s.strip_prefix('#'))
                 .and_then(|id| ids.get(id))
             {
-                let (n, h) = size(*target, ids, memo, active, depth + 1)?;
+                let (n, h) = size(*target, ids, memo, active, depth + 1, true)?;
                 total = total.saturating_add(n);
                 height = height.max(h + 1);
             }
@@ -271,11 +297,12 @@ fn check_uses(xml: &roxmltree::Document<'_>) -> Result<(), String> {
         &mut HashMap::new(),
         &mut HashSet::new(),
         0,
+        false,
     )
     .map(|_| ())
 }
 
-fn paint(paint: &usvg::Paint, alpha: f32, notices: &mut Notices) -> Option<[u8; 3]> {
+fn paint(paint: &usvg::Paint, alpha: f32, notices: &mut Notices) -> Option<([u8; 3], f32)> {
     let (rgb, opacity) = match paint {
         usvg::Paint::Color(c) => ([c.red, c.green, c.blue], 1.),
         usvg::Paint::LinearGradient(g) => midpoint(g.stops(), notices)?,
@@ -289,10 +316,18 @@ fn paint(paint: &usvg::Paint, alpha: f32, notices: &mut Notices) -> Option<[u8; 
     if alpha <= 0. {
         return None;
     }
-    if alpha < 1. {
-        notices.add("transparent paints made opaque on white");
-    }
-    Some(rgb.map(|c| (255. + (f32::from(c) - 255.) * alpha).round() as u8))
+    // Native graphics retain paint alpha, so overlapping paths composite
+    // against the drawing and one another rather than an assumed white page.
+    let alpha = if alpha < 0.01 {
+        notices.add("paint opacities below 1% rounded to 1%");
+        0.01
+    } else if alpha > 0.99 && alpha < 1. {
+        notices.add("paint opacities above 99% rounded to opaque");
+        1.
+    } else {
+        alpha
+    };
+    Some((rgb, alpha))
 }
 fn midpoint(stops: &[usvg::Stop], notices: &mut Notices) -> Option<([u8; 3], f32)> {
     notices.add("gradients replaced by their middle color");
@@ -332,7 +367,11 @@ fn collect(
     commands: &mut usize,
     notices: &mut Notices,
 ) -> Result<(), String> {
-    let alpha = parent_alpha * group.opacity().get();
+    let opacity = group.opacity().get();
+    if opacity > 0. && opacity < 1. {
+        notices.add("groups with opacity applied to each path (overlaps may look darker)");
+    }
+    let alpha = parent_alpha * opacity;
     for node in group.children() {
         match node {
             usvg::Node::Group(g) => collect(g, alpha, scale, drawing, commands, notices)?,
@@ -350,7 +389,7 @@ fn collect(
                             notices: &mut Notices|
                  -> Result<(), String> {
                     if let Some(fill) = path.fill()
-                        && let Some(rgb) =
+                        && let Some((rgb, opacity)) =
                             paint(fill.paint(), alpha * fill.opacity().get(), notices)
                     {
                         let data = path
@@ -364,7 +403,7 @@ fn collect(
                             Some(data)
                         };
                         if let Some(data) = data {
-                            add(&data, rgb, drawing, commands)?;
+                            add(&data, rgb, opacity, drawing, commands)?;
                         }
                     }
                     Ok(())
@@ -374,7 +413,7 @@ fn collect(
                               notices: &mut Notices|
                  -> Result<(), String> {
                     if let Some(stroke) = path.stroke()
-                        && let Some(rgb) =
+                        && let Some((rgb, opacity)) =
                             paint(stroke.paint(), alpha * stroke.opacity().get(), notices)
                     {
                         let style = stroke.to_tiny_skia();
@@ -417,7 +456,7 @@ fn collect(
                             .stroke(&style, 1.)
                             .and_then(|p| p.transform(transform))
                         {
-                            add(&outline, rgb, drawing, commands)?;
+                            add(&outline, rgb, opacity, drawing, commands)?;
                         }
                     }
                     Ok(())
@@ -499,6 +538,7 @@ fn even_odd(
 fn add(
     path: &tiny_skia::Path,
     rgb: [u8; 3],
+    opacity: f32,
     drawing: &mut Document,
     commands: &mut usize,
 ) -> Result<(), String> {
@@ -551,6 +591,10 @@ fn add(
             stroke: Color::Custom(rgb),
             fill: Some(Color::Custom(rgb)),
             width_pt: 0.1,
+            effects: crate::graphics::Effects {
+                opacity: (opacity < 1.).then_some(opacity),
+                ..Default::default()
+            },
             ..Default::default()
         },
         Default::default(),

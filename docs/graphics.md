@@ -485,7 +485,7 @@ To make a review image of a piece file, run
 3. Ungroup it to edit a path with **Edit points**. Save a `.rsk` file to keep the paths.
 
 Fills keep their colors. Strokes become editable outlines, and gradients use their middle color.
-Filled paths have a 0.1 pt edge in the same color. Transparency becomes an opaque color on white.
+Filled paths have a 0.1 pt edge in the same color. Paint opacity is kept. A translucent group makes each path translucent, so overlaps can look darker.
 Text, pictures, masks, clips, filters, patterns and animation are left out; the import message
 lists what changed. Outline text in the drawing program before importing it.
 **Open** still restores the embedded ReShiki drawing in an SVG exported by ReShiki.

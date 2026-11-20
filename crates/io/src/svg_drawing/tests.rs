@@ -203,3 +203,51 @@ fn source_points_dash_expansion_and_use_chain_depth_are_capped() {
             .contains("deeply nested")
     );
 }
+
+#[test]
+fn ordinary_overlapping_translucent_paths_keep_their_paint_alpha() {
+    let imported = read_svg(
+        "<path d='M0 0H20V20H0Z' fill='red' fill-opacity='.5'/><path d='M10 0H30V20H10Z' fill='blue' fill-opacity='.5'/>",
+    );
+    let svg = crate::export::drawing(&imported.drawing, "svg").unwrap();
+    let tree = usvg::Tree::from_data(&svg, &Default::default()).unwrap();
+    let size = tree.size().to_int_size();
+    let mut pixels = tiny_skia::Pixmap::new(size.width(), size.height()).unwrap();
+    pixels.fill(tiny_skia::Color::WHITE);
+    resvg::render(&tree, Default::default(), &mut pixels.as_mut());
+    assert!(
+        pixels.data().chunks_exact(4).any(|pixel| {
+            pixel[..3]
+                .iter()
+                .zip([128i16, 64, 192])
+                .all(|(got, expected)| (i16::from(*got) - expected).abs() <= 3)
+        }),
+        "the overlap must composite blue over translucent red, not over white"
+    );
+}
+
+#[test]
+fn ordinary_artwork_ignores_unused_recursive_definitions() {
+    let imported = read_svg(
+        "<defs><symbol id='unused'><use href='#unused'/></symbol></defs><path d='M0 0H10V10H0Z'/>",
+    );
+    assert_eq!(imported.drawing.graphics.len(), 1);
+}
+
+#[test]
+fn group_opacity_is_named_separately_from_paint_opacity() {
+    let imported =
+        read_svg("<g opacity='.5'><path d='M0 0H20V20H0Z'/><path d='M10 0H30V20H10Z'/></g>");
+    assert!(
+        imported
+            .notice
+            .contains("groups with opacity applied to each path")
+    );
+    assert!(
+        imported
+            .drawing
+            .graphics
+            .iter()
+            .all(|g| g.style.effects.opacity == Some(0.5))
+    );
+}
