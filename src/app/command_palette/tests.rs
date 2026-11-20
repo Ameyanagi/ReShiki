@@ -387,17 +387,11 @@ fn stereodescriptors_are_searchable_and_toggle_the_whole_drawing() {
     app.tab.doc.add_atom("C", Point::default());
     app.tab.labels.scope = Scope::Selection;
     app.tab.history = Default::default();
-    let first_catalog = |app: &App| {
-        let state = &app.commands;
-        state.results.iter().copied().find(|&i| i < state.catalog)
-    };
     for query in ["pseudoasymmetric", "CIP", "r/s", "seqCis", "Ra/Sa"] {
         search(&mut app, query);
-        let index = row(&app, "Show stereodescriptors");
-        assert_eq!(first_catalog(&app), Some(index), "{query}");
+        assert_eq!(top(&app).name, "Show stereodescriptors", "{query}");
     }
-    let show = row(&app, "Show stereodescriptors");
-    let _ = app.update(Message::Commands(Action::Run(show)));
+    let _ = app.update(Message::Commands(Action::Submit));
     assert!(app.tab.doc.atom_labels.stereo);
     assert_eq!(app.tab.labels.scope, Scope::Selection);
     assert_eq!(app.tab.doc.atoms[0].display.stereo.show, None);
@@ -405,13 +399,10 @@ fn stereodescriptors_are_searchable_and_toggle_the_whole_drawing() {
     assert!(!app.tab.doc.atom_labels.stereo);
     assert!(!app.tab.history.can_undo());
 
-    search(&mut app, "CIP");
-    let show = row(&app, "Show stereodescriptors");
-    let _ = app.update(Message::Commands(Action::Run(show)));
+    run(&mut app, "CIP");
     search(&mut app, "pseudoasymmetric");
-    let hide = row(&app, "Hide stereodescriptors");
-    assert_eq!(first_catalog(&app), Some(hide));
-    let _ = app.update(Message::Commands(Action::Run(hide)));
+    assert_eq!(top(&app).name, "Hide stereodescriptors");
+    let _ = app.update(Message::Commands(Action::Submit));
     assert!(!app.tab.doc.atom_labels.stereo);
 }
 

@@ -722,12 +722,10 @@ impl App {
             )
         });
         let best = scored.iter().map(|(score, ..)| *score).max().unwrap_or(0);
-        // Offer insertion after exact aliases and available name or key matches.
+        // Offer insertion after the leading rows that can run.
         let mut split = scored
             .iter()
-            .take_while(|(_, i, tier)| {
-                *tier == 2 || (*tier == 1 && !blocked.get(*i).copied().unwrap_or(false))
-            })
+            .take_while(|(_, i, tier)| *tier == 2 || !blocked.get(*i).copied().unwrap_or(false))
             .count();
         let start_here = if typed.is_empty() && state.recent.is_empty() {
             scored.iter().filter(|(.., tier)| *tier == 2).count()
