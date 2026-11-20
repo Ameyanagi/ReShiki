@@ -264,3 +264,19 @@ fn a_cycle_circle_dragged_alone_keeps_its_parts_group() {
     let group = doc.groups.iter().find(|g| g.members.contains(&id)).unwrap();
     assert!(group.members.contains(&a));
 }
+
+#[test]
+fn an_empty_cycle_circle_dragged_out_of_its_panel_leaves_it() {
+    let mut doc = Document::default();
+    let circle = crate::cycles::insert(&mut doc, Point::new(100., 50.), 30.);
+    let frame = panel(&mut doc, Point::new(200., 100.), &[circle]);
+    assert_eq!(
+        move_by(&mut doc, &[circle], 0., 600.),
+        vec![Container::Panel]
+    );
+    assert!(
+        !doc.groups
+            .iter()
+            .any(|g| g.members.contains(&frame) && g.members.contains(&circle))
+    );
+}
