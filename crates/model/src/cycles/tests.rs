@@ -772,3 +772,251 @@ fn a_part_in_its_own_group_can_leave_and_full_steps_can_join() {
     let _ = crate::transaction::reconcile(&mut doc, before).unwrap();
     assert_eq!(cycle(&doc, id).steps[0].reagents.len(), 80);
 }
+
+fn bowed_insertion() -> (Document, Target) {
+    let mut doc = Document::from_json(include_bytes!(
+        "../../../../tests/fixtures/cycles/bowed-insertion.rsk"
+    ))
+    .unwrap();
+    // The actual drag captured in the owner walkthrough.
+    let part: Vec<_> = (40..=85).collect();
+    doc.translate(&part, -234.75783, 388.1741);
+    let target = drop_target(&doc, &part).unwrap();
+    assert_eq!((target.cycle, target.role), (191, Role::Intermediate(1)));
+    (doc, target)
+}
+
+#[test]
+fn splitting_a_bowed_step_only_brings_its_stranded_side_parts_along() {
+    let (mut doc, target) = bowed_insertion();
+    let before = doc.clone();
+    let old_step = cycle(&before, 191).steps[0].clone();
+    super::assign(&mut doc, &target);
+    if let Some(dir) = std::env::var_os("RESHIKI_CYCLE_SPLIT_QA_DIR") {
+        let dir = std::path::PathBuf::from(dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("after.rsk"), doc.file_json().unwrap()).unwrap();
+        let svg = crate::scene::svg_part(
+            &crate::scene::primitives(&doc),
+            Point::new(-800., -650.),
+            Point::new(800., 800.),
+        );
+        std::fs::write(dir.join("after.svg"), &svg).unwrap();
+        let mut options = resvg::usvg::Options::default();
+        options.fontdb_mut().load_system_fonts();
+        let tree = resvg::usvg::Tree::from_str(&svg, &options).unwrap();
+        let mut picture = resvg::tiny_skia::Pixmap::new(1200, 1088).unwrap();
+        picture.fill(resvg::tiny_skia::Color::WHITE);
+        resvg::render(
+            &tree,
+            resvg::tiny_skia::Transform::from_scale(0.75, 0.75),
+            &mut picture.as_mut(),
+        );
+        picture.save_png(dir.join("after.png")).unwrap();
+        let mut spans = vec![];
+        super::drawn_spans(&before, graphic(&before, 191), |i, span| {
+            spans.push(format!("old step {i}: {span:?}"))
+        });
+        super::drawn_spans(&doc, graphic(&doc, 191), |i, span| {
+            spans.push(format!("step {i}: {span:?}"))
+        });
+        std::fs::write(dir.join("spans.txt"), spans.join("\n")).unwrap();
+    }
+    let kept = cycle(&doc, 191);
+    assert_eq!(
+        kept.steps[0], old_step,
+        "roles and user settings stay exact"
+    );
+    assert_eq!(kept.steps[1], super::Step::default());
+    assert_eq!(kept.intermediates[1], target.part);
+    for id in [156, 160] {
+        assert_ne!(
+            doc.atoms.iter().find(|a| a.id == id).unwrap().position,
+            before.atoms.iter().find(|a| a.id == id).unwrap().position,
+            "the inherited side part is stranded past the shortened step"
+        );
+    }
+    for atom in &before.atoms {
+        if !(156..=168).contains(&atom.id) {
+            assert_eq!(doc.atoms.iter().find(|a| a.id == atom.id), Some(atom));
+        }
+    }
+    assert_eq!(doc.bonds, before.bonds);
+    assert_eq!(doc.abbreviations, before.abbreviations);
+    let drawing = drawn(&doc, graphic(&doc, 191));
+    let sides: Vec<_> = drawing
+        .arrows
+        .iter()
+        .zip(&drawing.arcs)
+        .filter(|(_, step)| step.is_none())
+        .take(3)
+        .map(|(a, _)| a)
+        .collect();
+    let bond = doc.drawing_style.bond_length_world;
+    for side in &sides[1..] {
+        let touch = if side.appearance().head == Head::None {
+            side.end
+        } else {
+            side.start
+        };
+        for (arc, step) in drawing
+            .arrows
+            .iter()
+            .zip(&drawing.arcs)
+            .filter(|(_, step)| step.is_some())
+        {
+            for k in 0..=1024 {
+                let p = side.point(k as f32 / 1024.);
+                if *step == Some(0) && p.distance(touch) <= bond * 2. {
+                    continue;
+                }
+                assert!(!arc.hit(p, 1.), "side curve crosses step {step:?} at {p:?}");
+            }
+        }
+    }
+    doc.validate().unwrap();
+}
+
+#[test]
+fn split_placement_keeps_one_history_frame_and_round_trips() {
+    let initial = Document::from_json(include_bytes!(
+        "../../../../tests/fixtures/cycles/bowed-insertion.rsk"
+    ))
+    .unwrap();
+    let (mut doc, target) = bowed_insertion();
+    super::assign(&mut doc, &target);
+    let mut history = crate::document::History::default();
+    crate::transaction::apply(&mut doc, &mut history, initial.clone(), false).unwrap();
+    let after = doc.clone();
+    assert_eq!(history.undo_frames().len(), 1);
+    assert!(history.undo(&mut doc));
+    assert_eq!(doc, initial);
+    assert!(!history.can_undo());
+    assert!(history.redo(&mut doc));
+    assert_eq!(doc, after);
+    let reopened = Document::from_json(&after.file_json().unwrap()).unwrap();
+    assert_eq!(reopened.atoms, after.atoms);
+    assert_eq!(reopened.annotations, after.annotations);
+    assert_eq!(cycle(&reopened, 191), cycle(&after, 191));
+}
+
+#[test]
+fn a_wraparound_split_keeps_the_same_physical_step_and_placement() {
+    let (mut normal, target) = bowed_insertion();
+    let mut wrapped = normal.clone();
+    let c = wrapped
+        .graphics
+        .iter_mut()
+        .find(|g| g.id == 191)
+        .unwrap()
+        .cycle
+        .as_deref_mut()
+        .unwrap();
+    c.intermediates.rotate_left(1);
+    c.steps.rotate_left(1);
+    let mut wrap_target = target.clone();
+    wrap_target.role = Role::Intermediate(0);
+    super::assign(&mut normal, &target);
+    super::assign(&mut wrapped, &wrap_target);
+    assert_eq!(wrapped.atoms, normal.atoms);
+    assert_eq!(cycle(&wrapped, 191).steps[2], cycle(&normal, 191).steps[0]);
+    wrapped.validate().unwrap();
+}
+
+#[test]
+fn an_ordinary_side_assignment_keeps_every_position() {
+    let (mut doc, mut target) = bowed_insertion();
+    target.role = Role::Reagent(0);
+    let before = doc.clone();
+    super::assign(&mut doc, &target);
+    assert_eq!(doc.atoms, before.atoms);
+    assert_eq!(doc.annotations, before.annotations);
+    assert_eq!(
+        cycle(&doc, 191).steps[0].reagents.last(),
+        Some(&target.part)
+    );
+}
+
+#[test]
+fn split_placements_stay_finite_when_mirrored_reversed_hidden_or_reversible() {
+    for mode in 0..4 {
+        let (mut doc, target) = bowed_insertion();
+        if mode == 0 {
+            let ids = doc.all_ids();
+            crate::editing::transform(&mut doc, &ids, crate::editing::Transform::FlipHorizontal);
+        } else {
+            let c = doc
+                .graphics
+                .iter_mut()
+                .find(|g| g.id == 191)
+                .unwrap()
+                .cycle
+                .as_deref_mut()
+                .unwrap();
+            if mode == 1 {
+                super::reverse(c);
+            } else if mode == 2 {
+                c.steps[0].hidden = true;
+            } else {
+                c.steps[0].reversible = true;
+            }
+        }
+        let target = if mode == 2 {
+            target
+        } else {
+            drop_target(&doc, &target.part).unwrap()
+        };
+        let old_steps = cycle(&doc, 191).steps.clone();
+        super::assign(&mut doc, &target);
+        let Role::Intermediate(i) = target.role else {
+            panic!("an intermediate");
+        };
+        let mut expected = old_steps;
+        expected.insert(i, super::Step::default());
+        assert_eq!(cycle(&doc, 191).steps, expected);
+        assert!(doc.atoms.iter().all(|a| a.position.is_finite()));
+        doc.validate().unwrap();
+    }
+}
+
+#[test]
+fn a_stranded_molecule_keeps_its_linked_caption() {
+    let (mut doc, target) = bowed_insertion();
+    let atoms: Vec<_> = (160..=168).collect();
+    let identity = crate::molecule_names::identity(&doc, &atoms).unwrap();
+    let caption = crate::molecule_names::show(
+        &mut doc,
+        &atoms,
+        "phenylboronic acid".into(),
+        identity,
+        TextFormat::default(),
+        false,
+    )
+    .unwrap();
+    let from = doc.atoms.iter().find(|a| a.id == 160).unwrap().position;
+    let label_from = doc
+        .annotations
+        .iter()
+        .find(|a| a.id == caption)
+        .unwrap()
+        .position;
+    super::assign(&mut doc, &target);
+    let to = doc.atoms.iter().find(|a| a.id == 160).unwrap().position;
+    let label_to = doc
+        .annotations
+        .iter()
+        .find(|a| a.id == caption)
+        .unwrap()
+        .position;
+    assert!(
+        from.distance(to) > 1.,
+        "caption does not prevent the repair"
+    );
+    let delta = Point::new(to.x - from.x, to.y - from.y);
+    assert!(label_from.offset(delta.x, delta.y).distance(label_to) < 1e-3);
+    assert_eq!(
+        crate::molecule_names::include_annotations(&doc, &atoms).last(),
+        Some(&caption)
+    );
+    doc.validate().unwrap();
+}

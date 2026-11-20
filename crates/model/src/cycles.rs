@@ -14,6 +14,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::f32::consts::{FRAC_PI_2, TAU};
 
+mod split;
 pub mod steps;
 
 /// Clear space between an arc's end and a part's ink, in points.
@@ -300,6 +301,12 @@ fn boxes(doc: &Document, cycle: &Cycle) -> Vec<Option<(Point, Point)>> {
 
 /// The cycle's arrows and labels as they would be drawn now.
 pub fn drawn(doc: &Document, g: &Graphic) -> Drawn {
+    drawn_spans(doc, g, |_, _| {})
+}
+
+// Insertion uses the same trimmed, bowed step as the renderer, including
+// hidden steps' side arrows and the centerline of a reversible pair.
+fn drawn_spans(doc: &Document, g: &Graphic, mut record_span: impl FnMut(usize, Span)) -> Drawn {
     let Some(cycle) = &g.cycle else {
         return Drawn::default();
     };
@@ -441,6 +448,7 @@ pub fn drawn(doc: &Document, g: &Graphic) -> Drawn {
             })
             .flatten()
             .unwrap_or(flat);
+        record_span(s, arc);
         // 1 when moving away from the arc's own center leaves the cycle.
         let outward = {
             let p = arc.at(0.5, 0.);
@@ -484,7 +492,6 @@ pub fn drawn(doc: &Document, g: &Graphic) -> Drawn {
         }
         // Side arrows swoop in to the arc, or out of it, meeting it along
         // its way, far enough along from their end for an easy curve.
-        let length = arc.radius * arc.sweep.to_radians().abs();
         for incoming in step
             .reagents
             .iter()
@@ -494,18 +501,7 @@ pub fn drawn(doc: &Document, g: &Graphic) -> Drawn {
             let Some(&Some(b)) = sides.next() else {
                 continue;
             };
-            let c = center_of(b);
-            let ahead = (1.2 * bond).max(1.1 * (c.distance(arc.center) - arc.radius).abs());
-            let shift = if length > 0. { ahead / length } else { 0. };
-            let t = (arc.along(c) + if incoming { shift } else { -shift }).clamp(0.15, 0.85);
-            let side = side_arrow(
-                g.id,
-                arc.at(t, 0.),
-                arc.tangent(t),
-                grown(b, gap),
-                incoming,
-                &style,
-            );
+            let side = side_on(g.id, arc, b, incoming, &style, bond, gap);
             taken.push(side.bounds());
             out.arrows.push(side);
             out.arcs.push(None);
@@ -586,6 +582,30 @@ pub fn drawn(doc: &Document, g: &Graphic) -> Drawn {
         ));
     }
     out
+}
+
+fn side_on(
+    id: u64,
+    arc: Span,
+    ink: (Point, Point),
+    incoming: bool,
+    style: &ArrowStyle,
+    bond: f32,
+    gap: f32,
+) -> Arrow {
+    let c = center_of(ink);
+    let length = arc.radius * arc.sweep.to_radians().abs();
+    let ahead = (1.2 * bond).max(1.1 * (c.distance(arc.center) - arc.radius).abs());
+    let shift = if length > 0. { ahead / length } else { 0. };
+    let t = (arc.along(c) + if incoming { shift } else { -shift }).clamp(0.15, 0.85);
+    side_arrow(
+        id,
+        arc.at(t, 0.),
+        arc.tangent(t),
+        grown(ink, gap),
+        incoming,
+        style,
+    )
 }
 
 /// A side arrow between a part's ink and the point where it touches the
@@ -978,6 +998,7 @@ pub fn holds(doc: &Document, cycle: u64, part: &[u64]) -> bool {
 /// Give the target's part its role, and group it with the cycle. It leaves
 /// any ordinary reaction; returns whether it had a role there.
 pub fn assign(doc: &mut Document, target: &Target) -> bool {
+    let split = split::prepare(doc, target);
     let left = leave_reactions(doc, &target.part);
     let Some(cycle) = doc
         .graphics
@@ -1025,6 +1046,9 @@ pub fn assign(doc: &mut Document, target: &Target) -> bool {
         let mut members = vec![target.cycle];
         members.extend(&target.part);
         let _ = doc.group_selection(&members);
+    }
+    if let Some(split) = split {
+        split::apply(doc, split);
     }
     left
 }
