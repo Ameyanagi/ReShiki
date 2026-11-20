@@ -16,6 +16,7 @@ use std::f32::consts::{FRAC_PI_2, TAU};
 
 mod label_placement;
 mod perimeter_arcs;
+mod resize;
 mod shapes;
 mod split;
 pub mod steps;
@@ -1464,7 +1465,8 @@ pub fn reverse(cycle: &mut Cycle) {
     cycle.counterclockwise = !cycle.counterclockwise;
 }
 
-/// Change a cycle's radius; its parts slide straight in or out with it.
+/// Change a cycle's mean radius; its parts slide straight in or out with it.
+/// Explicit noncircle shapes retain their affine frame and aspect ratio.
 pub fn set_radius(doc: &mut Document, id: u64, radius: f32) {
     let Some(g) = doc
         .graphics
@@ -1473,6 +1475,10 @@ pub fn set_radius(doc: &mut Document, id: u64, radius: f32) {
     else {
         return;
     };
+    if g.cycle.as_ref().is_some_and(|c| c.shape != Shape::Circle) {
+        resize::noncircle(doc, id, radius);
+        return;
+    }
     let (center, old) = g.cycle_circle();
     if !(radius.is_finite() && radius > 0. && old > 0.) {
         return;
