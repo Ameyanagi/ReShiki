@@ -3979,6 +3979,7 @@ fn text_in_a_front_shape_picks_its_own_shape_over_a_filled_one_below() {
     doc.graphics
         .push(shape(2, World::new(-40., -20.), World::new(40., 20.)));
     doc.annotations.push(reshiki::document::Annotation {
+        angle: 0.,
         id: 3,
         position: World::default(),
         text: "hν".into(),
