@@ -264,6 +264,7 @@ fn an_unselected_model_or_its_edge_moves_and_alt_or_copy_drags_move() {
     let (mut doc, atoms) = drawing();
     let text = doc.next_id();
     doc.annotations.push(reshiki::document::Annotation {
+        angle: 0.,
         id: text,
         position: World::new(100., 100.),
         text: "Note".into(),
@@ -473,6 +474,7 @@ fn foreground_text_arrows_and_graphics_keep_their_hits_over_the_model_outline() 
         let id = doc.next_id();
         match kind {
             0 => doc.annotations.push(Annotation {
+                angle: 0.,
                 id,
                 position: p.offset(-10., -7.),
                 text: "Foreground".into(),

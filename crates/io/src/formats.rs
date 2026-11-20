@@ -81,6 +81,7 @@ pub fn chemdraw_loss(format: &str, contents: &str) -> ChemdrawLoss {
     let Ok((xml, found)) = read else {
         return ChemdrawLoss::default();
     };
+    let xml = crate::chemistry::cdxml::symbol_text_to_unicode(&xml);
     let mut loss = crate::chemistry::cdxml::schemes::loss(&xml).unwrap_or_default();
     // The cycles that come back write their own scheme and steps again.
     if let Some(Found::Fresh(payload)) = found {

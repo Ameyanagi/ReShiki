@@ -3049,6 +3049,7 @@ fn nmr_row_and_marker_selection_refresh_caption_and_atom_controls() {
             ..Default::default()
         };
         app.tab.doc.annotations.push(Annotation {
+            angle: 0.,
             id: caption_id,
             position: Point::new(100., 340.),
             text: "Styled caption before NMR selection".into(),

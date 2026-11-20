@@ -305,9 +305,10 @@ Atom maps and colors are one Undo step each and are saved with the drawing.
 
 Lab equipment is a preview in this build. The catalogue has round-bottom
 flasks (50 and 100 mL with 15/25 joints; 100, 300 and 500 mL with 29/42),
-Liebig condensers, glass stoppers, rubber septa, a reducing and an
-expansion adapter, a lab stand, a three-finger clamp, a support ring and
-joint clips for 15/25 and 29/42.
+Liebig condensers, glass stoppers, rubber septa, a rubber hose, a reducing
+and an expansion adapter, a cow receiver adapter, a thermometer and its adapter,
+a balloon on a needle, a lab stand, a three-finger clamp, a support ring
+and joint clips for 15/25 and 29/42.
 
 1. Click **Insert equipment…** (the flask in the last row of the tools palette), or
    choose **Insert equipment…** in the command palette. The side panel lists
@@ -398,7 +399,9 @@ detached; click it a second time to select it alone and delete it.
 The built-in **Schlenk flask, 100 mL** and **Schlenk tube, 15/25** have
 three-way stopcocks. The **J. Young storage flask, 100 mL** and **J. Young
 Schlenk tube** have J. Young valves. Round-bottom flasks, Schlenk ware and
-J. Young ware can hold liquid.
+J. Young ware can hold liquid. The **Cow receiver adapter, 15/25** turns
+between receivers. The **Thermometer** slides through the **Thermometer
+adapter, 15/25**, and the **Balloon** on its needle inflates and deflates.
 
 1. Click a piece to select its whole assembly and show handles for movable
    parts. Hover over a handle to see its setting and value, for example
@@ -413,7 +416,12 @@ J. Young ware can hold liquid.
    level: 40 %**. The percentage measures only the share of the vessel's
    drawn area below the surface. The surface stays level on the page when
    you turn the vessel.
-4. **Properties → Equipment → Movable parts** lists each selected piece's
+4. Click the handle on the cow adapter's bulb to turn to the next receiver.
+   Attached receivers move with their outlets.
+5. Drag the top of the thermometer to set how deep it sits in its adapter.
+   The setup stays put.
+6. Drag the top of the balloon to inflate or deflate it.
+7. **Properties → Equipment → Movable parts** lists each selected piece's
    settings: buttons for states such as a clamp's **Jaws**, and sliders for
    **Tilt**, **Neck diameter** and **Liquid level**. Each change, and each
    slider drag, is one Undo step.
@@ -424,6 +432,19 @@ boss head turns; mount the clamp on a stand to tilt what it holds. Opening the j
 neck takes hold again. If a move would pull the assembly apart, as when two
 clamps on the same rod hold a flask, the nearest clamp lets go. The status
 line names the released piece, for example **Tilt: 25° · releases the tube**.
+
+### Connect hoses
+
+1. Choose **Rubber hose, 7 mm** in the **Equipment** panel.
+2. Drag from one hose barb, such as a condenser's water inlet, to another.
+   Or click a barb to hang a hose from it. A ring marks the barb an end will
+   go on.
+3. With the **Select** tool, click the hose. Diamonds appear at both ends
+   and in the middle. Drag an end onto another barb to reconnect it, or into
+   space to leave it free. Drag the middle diamond to bend the hose.
+
+A hose seated on a piece moves with its assembly. Placing a hose or dragging
+a handle is one Undo step.
 
 ### Keep and share equipment pieces
 

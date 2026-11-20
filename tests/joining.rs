@@ -50,6 +50,7 @@ async fn connecting_and_sharing_existing_fragments_preserve_ids_and_unrelated_co
         let moving = editing::append(&mut doc, &part, Point::new(200., 100.));
         let note = doc.next_id();
         doc.annotations.push(Annotation {
+            angle: 0.,
             id: note,
             position: Point::new(-100., 100.),
             text: "Unrelated note".into(),
@@ -91,6 +92,7 @@ async fn fused_aromatic_fragments_keep_their_ids_and_captions() {
     let mut moving = editing::append(&mut doc, &part, Point::new(230., 120.));
     let caption = doc.next_id();
     doc.annotations.push(Annotation {
+        angle: 0.,
         id: caption,
         position: Point::new(230., 200.),
         text: "Fused product".into(),
@@ -146,6 +148,7 @@ fn single_atoms_and_edges_can_merge_without_duplicate_objects() {
     let source = doc.add_atom("C", Point::new(100., 0.));
     let label = doc.next_id();
     doc.annotations.push(Annotation {
+        angle: 0.,
         id: label,
         position: Point::new(100., 40.),
         text: "Carbon".into(),
@@ -383,6 +386,7 @@ fn joining_restores_moved_reaction_arrow_and_caption_references() {
     ] {
         let mut doc = reaction_join_drawing();
         doc.annotations.push(Annotation {
+            angle: 0.,
             id: 6,
             position: Point::new(180., 80.),
             text: "Conditions".into(),
@@ -484,6 +488,7 @@ fn joining_allows_overlap_between_different_reaction_arrows() {
         ] {
             let id = doc.next_id();
             doc.annotations.push(Annotation {
+                angle: 0.,
                 id,
                 position,
                 text: text.into(),

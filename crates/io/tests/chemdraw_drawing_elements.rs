@@ -942,7 +942,7 @@ async fn objects_without_an_equivalent_are_left_out_and_named() {
 }
 
 #[tokio::test]
-async fn captions_with_unknown_settings_import_upright_and_plain() {
+async fn captions_with_unknown_settings_import_plain() {
     for (document, notices) in sheet(
         "<t id='2' p='10 20' RotationAngle='5898240'><s>turned</s></t>\
          <t id='3' p='10 40'><s face='9'>outlined</s></t>\
@@ -958,13 +958,15 @@ async fn captions_with_unknown_settings_import_upright_and_plain() {
         assert_eq!(
             notices,
             nearest(
-                "1 rotated caption upright; 1 outlined or shadowed text in the plain face; \
+                "1 outlined or shadowed text in the plain face; \
                  2 text sizes at the nearest size ReShiki draws; \
                  1 atom label with mixed text styles in the style of its first character; \
                  2 captions with automatic line spacing or width"
             )
         );
         assert_eq!(document.annotations.len(), 5);
+        // Turned without a box: about its anchor, as in ChemDraw.
+        assert_eq!(document.annotations[0].angle, 90.);
         let outlined = &document.annotations[1].format.style;
         assert!(outlined.bold);
         assert_eq!(document.annotations[2].format.style.size_pt, 4.);

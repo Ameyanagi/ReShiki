@@ -1,11 +1,12 @@
 use super::*;
 use crate::canvas::Edit;
-use reshiki::document::{Annotation, Point};
+use reshiki::document::{Annotation, Document, Point};
 
 fn text(app: &mut App, x: f32, y: f32, value: &str) -> u64 {
     let id = app.tab.doc.next_id();
     let style = app.tab.doc.drawing_style.text_style();
     app.tab.doc.annotations.push(Annotation {
+        angle: 0.,
         id,
         position: Point::new(x, y),
         text: value.into(),
@@ -159,6 +160,125 @@ fn tidy_preview_blocks_edits_and_discard_preserves_the_drawing() {
     assert!(app.tab.cycle_inputs.proposal.is_none());
     assert_eq!(app.tab.doc, before);
     assert!(app.error);
+}
+
+#[test]
+fn actual_suzuki_tidy_preview_applies_as_one_undo_step() {
+    let (mut app, _) = App::new();
+    app.tab.doc = Document::from_json(include_bytes!(
+        "../../../tests/fixtures/cycles/tidy-before.rsk"
+    ))
+    .unwrap();
+    app.tab.selected = vec![191];
+    let before = app.tab.doc.clone();
+    let roles = cycle(&app).1;
+    let frames = app.tab.history.undo_frames().len();
+
+    let _ = app.update(Message::Cycle(Action::Tidy));
+    assert!(!app.error, "{}", app.status);
+    assert_eq!(app.tab.doc, before);
+    assert_eq!(app.tab.history.undo_frames().len(), frames);
+    let preview = app.display_document().clone();
+    assert_ne!(preview, before);
+
+    let _ = app.update(Message::ContextKey("Enter".into()));
+    assert!(!app.error, "{}", app.status);
+    assert_eq!(app.tab.doc, preview);
+    assert_eq!(cycle(&app).1, roles);
+    assert_eq!(app.tab.history.undo_frames().len(), frames + 1);
+    let saved = Document::from_json(&app.tab.doc.file_json().unwrap()).unwrap();
+    assert_eq!(saved.atoms, preview.atoms);
+    assert_eq!(saved.bonds, preview.bonds);
+    assert_eq!(saved.annotations, preview.annotations);
+    assert_eq!(saved.graphics, preview.graphics);
+
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+    assert_eq!(cycle(&app).1, roles);
+    let _ = app.update(Message::Redo);
+    assert_eq!(app.tab.doc, preview);
+    let _ = app.update(Message::Cycle(Action::Tidy));
+    assert!(!app.error, "{}", app.status);
+    assert!(app.tab.cycle_inputs.proposal.is_none());
+    assert_eq!(app.tab.history.undo_frames().len(), frames + 1);
+}
+
+#[test]
+fn a_delayed_caption_result_requires_fresh_tidy_review_before_apply() {
+    use crate::app::naming::{Action as NamingAction, Outcome, test_support::record};
+    use reshiki::linked_properties::Property;
+
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    app.tab.doc = Document::from_json(include_bytes!(
+        "../../../tests/fixtures/cycles/tidy-before.rsk"
+    ))
+    .unwrap();
+    let ethanol = Document::from_json(include_bytes!(
+        "../../../tests/fixtures/chemical-naming-rust/ethanol-rust-native.rsk"
+    ))
+    .unwrap();
+    let atoms = reshiki::editing::append(&mut app.tab.doc, &ethanol, Point::new(1200., 0.));
+    let _ = app.update(Message::ToggleProperty(atoms, Property::Name));
+    let smiles = app.tab.naming.caption_pending.clone().unwrap();
+    let caption = app.tab.doc.property_captions.last().unwrap().annotation;
+    app.tab.selected = vec![191];
+    let roles = cycle(&app).1;
+    let _ = app.update(Message::Cycle(Action::Tidy));
+    assert!(!app.error, "{}", app.status);
+    let old_preview = app.display_document().clone();
+    let frames = app.tab.history.undo_frames().len();
+    let revision = app.tab.revision;
+
+    // This real completion changes caption ink and label_generation, while
+    // retaining the revision and Undo history, as ordinary async names do.
+    let _ = app.update(Message::Naming(NamingAction::CaptionNamed(
+        smiles.clone(),
+        Box::new(Ok(Outcome::Structure(record(&smiles)))),
+    )));
+    assert_eq!(app.tab.revision, revision);
+    assert_eq!(app.tab.history.undo_frames().len(), frames);
+    let named = app.tab.doc.clone();
+    assert_eq!(
+        named
+            .annotations
+            .iter()
+            .find(|a| a.id == caption)
+            .unwrap()
+            .text,
+        "ethan-1-ol"
+    );
+
+    // First Enter refreshes the candidate. The completed name is retained,
+    // but the user must review that candidate before its layout is applied.
+    let _ = app.update(Message::ContextKey("Enter".into()));
+    assert!(!app.error, "{}", app.status);
+    assert_eq!(app.tab.doc, named);
+    assert_eq!(app.tab.history.undo_frames().len(), frames);
+    assert!(app.tab.cycle_inputs.proposal.is_some());
+    let fresh_preview = app.display_document().clone();
+    assert_ne!(fresh_preview, old_preview);
+    assert_eq!(
+        fresh_preview
+            .annotations
+            .iter()
+            .find(|a| a.id == caption)
+            .unwrap()
+            .text,
+        "ethan-1-ol"
+    );
+
+    let _ = app.update(Message::ContextKey("Enter".into()));
+    assert!(!app.error, "{}", app.status);
+    assert!(app.tab.cycle_inputs.proposal.is_none());
+    assert_eq!(app.tab.doc, fresh_preview);
+    assert_eq!(cycle(&app).1, roles);
+    assert_eq!(app.tab.history.undo_frames().len(), frames + 1);
+    let _ = app.update(Message::Undo);
+    assert_eq!(
+        app.tab.doc, named,
+        "Undo retains the completed background caption"
+    );
 }
 
 #[test]

@@ -286,6 +286,8 @@ impl App {
                 return self.place_template(anchor, direction, before);
             }
             Edit::Piece(at) => return self.place_piece(at, before),
+            Edit::Hose(from, to) => return self.place_hose(from, to, before),
+            Edit::HoseGrip { id, grip, to } => return self.drag_hose(id, grip, to, before),
             Edit::Transform {
                 ids,
                 pivot,

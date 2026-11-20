@@ -365,6 +365,7 @@ async fn empty_exotic_and_unsupported_requests_keep_native_rules() -> anyhow::Re
     all_operations(&reference, &config, &Document::default(), "empty").await?;
     let mut figure = Document::default();
     figure.annotations.push(Annotation {
+        angle: 0.,
         id: 10,
         position: Point::new(0.1, -0.2),
         text: "αβ\n試料".into(),
@@ -497,6 +498,7 @@ async fn styles_high_ids_groups_abbreviations_and_reaction_warnings_survive() ->
     document.drawing_style.set_bond_length(16.3);
     let id = document.next_id();
     document.annotations.push(Annotation {
+        angle: 0.,
         id,
         position: Point::new(-10.1, 77.7),
         text: "試料 α\nH₂O".into(),
@@ -709,6 +711,7 @@ async fn native_drawing_precision_and_measurements_survive_the_real_transport() 
     let text = "試料 α\nH2O";
     let annotation = document.next_id();
     document.annotations.push(Annotation {
+        angle: 0.,
         id: annotation,
         position: Point::new(-45.25, 85.75),
         text: text.into(),

@@ -36,6 +36,7 @@ fn figure(canvas: CanvasTheme, fill: Color) -> (Document, [u64; 4]) {
     let outside = doc.add_atom("O", Point::new(200., 0.));
     let text = doc.next_id();
     doc.annotations.push(Annotation {
+        angle: 0.,
         id: text,
         position: Point::new(30., 10.),
         text: "card".into(),
@@ -330,6 +331,7 @@ fn text_in_a_front_shape_reads_on_that_shape() {
     doc.graphics[0].layer = 1;
     for (id, x) in [(10, 20.), (11, 200.)] {
         doc.annotations.push(Annotation {
+            angle: 0.,
             id,
             position: Point::new(x, 15.),
             text: "hν".into(),

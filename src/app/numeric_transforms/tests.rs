@@ -23,6 +23,7 @@ pub(super) fn fixture() -> App {
     app.tab.doc = reshiki::rings::Preset::Regular.document(42., false);
     app.tab.doc.atoms[0].element = "N".into();
     app.tab.doc.annotations.push(Annotation {
+        angle: 0.,
         id: app.tab.doc.next_id(),
         position: Point::new(95., 60.),
         text: "Fixed text".into(),

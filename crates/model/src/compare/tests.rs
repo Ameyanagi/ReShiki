@@ -27,6 +27,7 @@ pub(super) fn molecule(smiles: &str) -> Document {
 fn text(doc: &mut Document, words: &str, x: f32, y: f32) -> u64 {
     let id = doc.next_id();
     doc.annotations.push(Annotation {
+        angle: 0.,
         id,
         position: Point::new(x, y),
         text: words.into(),

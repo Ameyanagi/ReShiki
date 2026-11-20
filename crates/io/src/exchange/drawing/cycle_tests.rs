@@ -12,6 +12,7 @@ fn cycle_document() -> Document {
     ] {
         let id = document.next_id();
         document.annotations.push(Annotation {
+            angle: 0.,
             id,
             position: Point::new(x, y),
             text: text.into(),
@@ -38,6 +39,7 @@ fn cycle_document() -> Document {
     ] {
         let id = document.next_id();
         document.annotations.push(Annotation {
+            angle: 0.,
             id,
             position: Point::new(x, y),
             text: text.into(),
@@ -142,6 +144,7 @@ fn structure_cycle() -> (Document, u64) {
     c.steps[1].reversible = true;
     let text = document.next_id();
     document.annotations.push(Annotation {
+        angle: 0.,
         id: text,
         position: Point::new(240., -220.),
         text: "ArX".into(),

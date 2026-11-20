@@ -285,6 +285,7 @@ fn bound_office_generic_expansion_delivers_after_tab_switch_without_rebinding_or
     let before = app.tab.doc.clone();
     let note = app.tab.doc.next_id();
     app.tab.doc.annotations.push(reshiki::document::Annotation {
+        angle: 0.,
         id: note,
         position: Point::new(0., 100.),
         text: "source-only redo".into(),

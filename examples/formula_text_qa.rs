@@ -18,6 +18,7 @@ fn main() -> Result<()> {
             let mut format = TextFormat::default();
             format.style.formula = automatic && typography::is_formula(text);
             doc.annotations.push(Annotation {
+                angle: 0.,
                 id: doc.next_id(),
                 position: Point::new(0., i as f32 * 60.),
                 text: text.into(),

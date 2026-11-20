@@ -14,6 +14,7 @@ fn graphic(doc: &Document, id: u64) -> &Graphic {
 fn text(doc: &mut Document, at: Point, label: &str) -> u64 {
     let id = doc.next_id();
     doc.annotations.push(Annotation {
+        angle: 0.,
         id,
         position: at,
         text: label.into(),

@@ -11,6 +11,7 @@ fn text(doc: &mut Document, at: World, text: &str) -> u64 {
             style: doc.drawing_style.text_style(),
             ..Default::default()
         },
+        angle: 0.,
     });
     id
 }

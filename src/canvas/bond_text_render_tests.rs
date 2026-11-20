@@ -20,6 +20,7 @@ fn caption_document() -> (Document, u64, World, World) {
         .unwrap()
         .position;
     let mut caption = Annotation {
+        angle: 0.,
         id: doc.next_id(),
         position: top.offset(-8., -56.),
         text: "Pd2+".into(),

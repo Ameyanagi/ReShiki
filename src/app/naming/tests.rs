@@ -697,6 +697,7 @@ async fn name_preview_is_placed_beside_a_caption_only_drawing() -> Result<(), St
     let (mut app, _) = App::new();
     app.tab.busy = false;
     app.tab.doc.annotations.push(reshiki::document::Annotation {
+        angle: 0.,
         id: 1,
         position: Point::new(250., 80.),
         text: "Existing caption".into(),

@@ -713,6 +713,7 @@ fn output_keeps_presentation_and_can_be_undone_as_one_edit() -> anyhow::Result<(
         ..Default::default()
     });
     original.annotations.push(Annotation {
+        angle: 0.,
         id: 55,
         position: Point::new(0., 42.),
         text: "試料 A".into(),

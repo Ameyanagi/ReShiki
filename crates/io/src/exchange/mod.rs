@@ -11,6 +11,7 @@ mod values;
 #[cfg(test)]
 mod tests;
 
+pub(crate) use charsets::{is_symbol_font, symbol_char};
 pub(crate) use decode::{SKIPPED, style_from_cdx};
 pub use decode::{from_cdx, from_cdx_tolerant};
 pub use encode::{to_cds, to_cdx};

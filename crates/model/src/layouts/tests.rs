@@ -338,6 +338,7 @@ fn a_caption_added_after_arranging_moves_with_its_molecule() {
     let group = arrange(&mut doc, &ids, Flow::Row, GUTTER).unwrap();
     let caption = doc.next_id();
     doc.annotations.push(crate::document::Annotation {
+        angle: 0.,
         id: caption,
         position: Point::new(20., 40.),
         text: "ethane".into(),
@@ -418,6 +419,7 @@ fn a_layout_reselected_with_its_caption_can_change_flow() {
     let group = arrange(&mut doc, &ids, Flow::Row, GUTTER).unwrap();
     let caption = doc.next_id();
     doc.annotations.push(crate::document::Annotation {
+        angle: 0.,
         id: caption,
         position: Point::new(20., 40.),
         text: "ethane".into(),

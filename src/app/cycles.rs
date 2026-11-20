@@ -71,7 +71,16 @@ enum ProposalKind {
         selected: Vec<u64>,
         reversed: bool,
     },
-    Tidy,
+    Tidy {
+        source: ProposalSource,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct ProposalSource {
+    epoch: u64,
+    revision: u64,
+    labels: u64,
 }
 
 /// Part names keyed by part, at a drawing revision and computed-label generation.
@@ -221,7 +230,7 @@ impl App {
                     self.error = false;
                     self.status = match proposal.kind {
                         ProposalKind::Make { .. } => "Catalytic cycle discarded",
-                        ProposalKind::Tidy => "Cycle tidy discarded",
+                        ProposalKind::Tidy { .. } => "Cycle tidy discarded",
                     }
                     .into();
                 }
@@ -449,6 +458,30 @@ impl App {
             self.status = "Select a catalytic cycle first".into();
             return super::focus_drawing();
         };
+        self.propose_cycle_tidy_for(cycle)
+    }
+
+    fn cycle_proposal_source(&self) -> ProposalSource {
+        ProposalSource {
+            epoch: self.tab.file_epoch,
+            revision: self.tab.revision,
+            labels: self.tab.label_generation,
+        }
+    }
+
+    /// Refresh the same target even if a completed import changed selection.
+    fn propose_cycle_tidy_for(&mut self, cycle: u64) -> Task<Message> {
+        if !self
+            .tab
+            .doc
+            .graphics
+            .iter()
+            .any(|g| g.id == cycle && g.cycle.is_some())
+        {
+            self.error = true;
+            self.status = "The catalytic cycle is no longer available".into();
+            return super::focus_drawing();
+        }
         let mut doc = self.tab.doc.clone();
         self.error = false;
         if reshiki::cycles::tidy(&mut doc, cycle) {
@@ -465,7 +498,9 @@ impl App {
             self.tab.cycle_inputs.proposal = Some(Box::new(Proposal {
                 doc,
                 cycle,
-                kind: ProposalKind::Tidy,
+                kind: ProposalKind::Tidy {
+                    source: self.cycle_proposal_source(),
+                },
             }));
             self.inspector_open = true;
             self.inspector_tab = super::InspectorTab::Properties;
@@ -481,6 +516,13 @@ impl App {
         let Some(proposal) = self.tab.cycle_inputs.proposal.take() else {
             return Task::none();
         };
+        if let ProposalKind::Tidy { source } = &proposal.kind
+            && *source != self.cycle_proposal_source()
+        {
+            // Background labels and names may change ink without a revision.
+            // Show their newly tidied result before accepting another Apply.
+            return self.propose_cycle_tidy_for(proposal.cycle);
+        }
         // Made again, so results that reached the drawing meanwhile stay.
         let before = self.tab.doc.clone();
         let ProposalKind::Make {
@@ -574,7 +616,7 @@ impl App {
                 ProposalKind::Make { .. } => {
                     "Review the catalytic cycle · Enter applies · Esc discards"
                 }
-                ProposalKind::Tidy => "Review cycle tidy · Enter applies · Esc discards",
+                ProposalKind::Tidy { .. } => "Review cycle tidy · Enter applies · Esc discards",
             }
             .into();
             Some(Task::none())
@@ -584,7 +626,7 @@ impl App {
     /// The proposed cycle's order, to apply or discard.
     pub(super) fn cycle_proposal_card(&self) -> Option<Element<'_, Message>> {
         let proposal = self.tab.cycle_inputs.proposal.as_deref()?;
-        if matches!(proposal.kind, ProposalKind::Tidy) {
+        if matches!(proposal.kind, ProposalKind::Tidy { .. }) {
             return Some(
                 column![
                     section("Tidy cycle"),

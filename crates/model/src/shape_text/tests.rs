@@ -36,6 +36,7 @@ fn type_into(doc: &mut Document, text: &str) -> u64 {
             ..Default::default()
         };
         doc.annotations.push(Annotation {
+            angle: 0.,
             id,
             position: start(&g, &format),
             text: text.into(),

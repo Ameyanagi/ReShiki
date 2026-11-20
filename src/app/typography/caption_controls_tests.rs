@@ -8,6 +8,7 @@ fn selected_caption() -> App {
     app.tab.doc = Document::default();
     app.tab.doc.annotations = vec![
         Annotation {
+            angle: 0.,
             id: 1,
             position: Point::new(20., 30.),
             text: "First label".into(),
@@ -18,6 +19,7 @@ fn selected_caption() -> App {
             },
         },
         Annotation {
+            angle: 0.,
             id: 2,
             position: Point::new(200., 30.),
             text: "Other label".into(),
@@ -405,6 +407,7 @@ mod rendered {
 fn chemical_name_formatting_replaces_selected_annotation_spans_in_one_undo() {
     let mut app = selected_caption();
     app.tab.doc.annotations.push(Annotation {
+        angle: 0.,
         id: 3,
         position: Point::default(),
         text: "Unselected".into(),

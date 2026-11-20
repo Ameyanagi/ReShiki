@@ -236,6 +236,7 @@ fn exchange_copy_keeps_nested_groups_valid() {
     doc.arrows.push(arrow(Body::Chevron));
     for (id, y) in [(2, -30.), (5, 30.)] {
         doc.annotations.push(crate::document::Annotation {
+            angle: 0.,
             id,
             position: Point::new(0., y),
             text: "heat".into(),

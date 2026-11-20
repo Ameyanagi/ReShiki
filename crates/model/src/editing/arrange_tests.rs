@@ -30,6 +30,7 @@ fn geometry() -> Document {
         atom.display.highlight = Some(Color::Custom([240, 225, 190]));
     }
     doc.annotations.push(Annotation {
+        angle: 0.,
         id: doc.next_id(),
         position: Point::new(-20., 90.),
         text: "NH2 · grouped caption".into(),
@@ -542,6 +543,7 @@ fn labelled_arrows_translated_together_match_one_translate_per_unit() {
         });
         let caption = doc.next_id();
         doc.annotations.push(Annotation {
+            angle: 0.,
             id: caption,
             position: Point::new(60., y - 30.),
             text: "heat".into(),

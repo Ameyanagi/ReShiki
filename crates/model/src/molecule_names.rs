@@ -342,6 +342,7 @@ pub fn show(
         .map(|name| name.annotation)
         .unwrap_or_else(|| doc.next_id());
     let mut caption = Annotation {
+        angle: 0.,
         id,
         position: Point::default(),
         text: text.clone(),

@@ -31,6 +31,8 @@ mod piece_tests;
 #[cfg(test)]
 mod purpose_tests;
 mod tree;
+#[cfg(test)]
+mod turned_text_tests;
 pub use clipboard::write as write_clipboard;
 use tree::{Key, Tree};
 
@@ -146,6 +148,12 @@ impl P {
     }
     fn lerp(self, b: Self, t: f64) -> Self {
         self.add((b.x - self.x) * t, (b.y - self.y) * t)
+    }
+    /// This point turned `degrees` clockwise about `pivot`.
+    fn turned(self, pivot: Self, degrees: f64) -> Self {
+        let (s, c) = degrees.to_radians().sin_cos();
+        let (x, y) = (self.x - pivot.x, self.y - pivot.y);
+        pivot.add(x * c - y * s, x * s + y * c)
     }
 }
 

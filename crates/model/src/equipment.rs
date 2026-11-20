@@ -15,6 +15,8 @@ mod adjust_tests;
 #[cfg(test)]
 mod hold_tests;
 #[cfg(test)]
+mod hose_tests;
+#[cfg(test)]
 mod placed_tests;
 #[cfg(test)]
 mod solve_tests;

@@ -14,6 +14,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::f32::consts::{FRAC_PI_2, TAU};
 
+mod split;
 pub mod steps;
 
 /// Clear space between an arc's end and a part's ink, in points.
@@ -273,6 +274,118 @@ impl Span {
     }
 }
 
+struct StepSpan {
+    arc: Span,
+    start: Point,
+    end: Point,
+    open: bool,
+}
+
+/// Resolve one step exactly as it is drawn. Its ends may also bridge over
+/// an intermediate when checking whether that intermediate still belongs.
+fn step_span(
+    g: &Graphic,
+    cycle: &Cycle,
+    bond: f32,
+    step: &Step,
+    (first, a0): ((Point, Point), f32),
+    (next, a1): ((Point, Point), f32),
+) -> StepSpan {
+    let (center, radius) = g.cycle_circle();
+    let dir = if g.cycle_counterclockwise() { -1. } else { 1. };
+    let gap = DEFAULT.world(cycle.gap_pt);
+    let at = |angle: f32| polar(center, radius, angle);
+    let mut span = (dir * (a1 - a0)).rem_euclid(TAU);
+    if span < 1e-4 {
+        span = TAU;
+    }
+    let walk = 0.25_f32.to_radians();
+    // Half the angle a box spans as seen from the center, about `mid`.
+    let seen = |(lo, hi): (Point, Point), mid: f32| -> f32 {
+        [lo, Point::new(hi.x, lo.y), hi, Point::new(lo.x, hi.y)]
+            .into_iter()
+            .map(|p| {
+                let a = (p.y - center.y).atan2(p.x - center.x);
+                ((a - mid + std::f32::consts::PI).rem_euclid(TAU) - std::f32::consts::PI).abs()
+            })
+            .fold(0., f32::max)
+    };
+    // An intermediate off the circle keeps an opening as wide as it looks
+    // from the center, so the arcs still point at it.
+    let clear = |b: (Point, Point)| grown(b, gap);
+    let mut from = 0.;
+    while from < span * 0.5 && contains(clear(first), at(a0 + dir * from)) {
+        from += walk;
+    }
+    if from == 0. {
+        from = seen(clear(first), a0).min(span * 0.5);
+    }
+    let mut to = span;
+    while to > span * 0.5 && contains(clear(next), at(a0 + dir * to)) {
+        to -= walk;
+    }
+    if to == span {
+        to = span - seen(clear(next), a1).min(span * 0.5);
+    }
+    if to - from > 0.02 {
+        // Extra space never runs into the ink, and the arc keeps most of
+        // a bond length where the step has room.
+        let room = to - from - (0.8 * bond / radius).min(to - from);
+        let floor = -cycle.gap_pt;
+        let mut lead = DEFAULT.world(step.lead_pt.max(floor)) / radius;
+        let mut trail = DEFAULT.world(step.trail_pt.max(floor)) / radius;
+        if lead + trail > room && lead + trail > 0. {
+            let k = room / (lead + trail);
+            lead *= k;
+            trail *= k;
+        }
+        from += lead;
+        to -= trail;
+    } else {
+        from = (from + to) * 0.5;
+        to = from;
+    }
+    // A lone intermediate's arc stays short of a whole circle.
+    let most = 358_f32.to_radians();
+    if to - from > most {
+        let extra = (to - from - most) * 0.5;
+        from += extra;
+        to -= extra;
+    }
+    let start = at(a0 + dir * from);
+    let end = at(a0 + dir * to);
+    let flat = Span {
+        center,
+        radius,
+        first: (a0 + dir * from).to_degrees(),
+        sweep: (dir * (to - from)).to_degrees(),
+    };
+    // A bowed arc runs on a circle of its own through the same ends.
+    let bow = DEFAULT
+        .world(step.bow_pt)
+        .clamp(-0.9 * radius, 0.9 * radius);
+    let arc = (bow != 0. && to > from)
+        .then(|| {
+            let middle = polar(center, radius + bow, a0 + dir * (from + to) * 0.5);
+            let sweep = crate::arrows::sweep_through(start, middle, end)?;
+            let (c, r, first) = crate::arrows::arc_circle(start, end, sweep)?;
+            Some(Span {
+                center: c,
+                radius: r,
+                first,
+                sweep,
+            })
+        })
+        .flatten()
+        .unwrap_or(flat);
+    StepSpan {
+        arc,
+        start,
+        end,
+        open: to > from,
+    }
+}
+
 fn polar(center: Point, radius: f32, angle: f32) -> Point {
     center.offset(radius * angle.cos(), radius * angle.sin())
 }
@@ -317,6 +430,16 @@ fn boxes(doc: &Document, cycle: &Cycle) -> Vec<Option<(Point, Point)>> {
 
 /// The cycle's arrows and labels as they would be drawn now.
 pub fn drawn(doc: &Document, g: &Graphic) -> Drawn {
+    drawn_spans(doc, g, |_, _| {})
+}
+
+// Insertion uses the same trimmed, bowed step as the renderer, including
+// hidden steps' side arrows and the centerline of a reversible pair.
+fn drawn_spans(doc: &Document, g: &Graphic, mut record_span: impl FnMut(usize, Span)) -> Drawn {
+    drawn_layouts(doc, g, |step, layout| record_span(step, layout.arc))
+}
+
+fn drawn_layouts(doc: &Document, g: &Graphic, mut record: impl FnMut(usize, &SideLayout)) -> Drawn {
     let Some(cycle) = &g.cycle else {
         return Drawn::default();
     };
@@ -368,96 +491,18 @@ pub fn drawn(doc: &Document, g: &Graphic) -> Drawn {
     // What labels keep clear of: every part's ink.
     let mut taken: Vec<(Point, Point)> = all.iter().flatten().copied().collect();
     let mut sides = all.iter().skip(n);
-    let walk = 0.25_f32.to_radians();
-    // Half the angle a box spans as seen from the center, about `mid`.
-    let seen = |(lo, hi): (Point, Point), mid: f32| -> f32 {
-        [lo, Point::new(hi.x, lo.y), hi, Point::new(lo.x, hi.y)]
-            .into_iter()
-            .map(|p| {
-                let a = (p.y - center.y).atan2(p.x - center.x);
-                ((a - mid + std::f32::consts::PI).rem_euclid(TAU) - std::f32::consts::PI).abs()
-            })
-            .fold(0., f32::max)
-    };
     let mut names = vec![];
     let ends: Vec<((Point, Point), f32)> = boxes.into_iter().zip(angles).collect();
     for (s, step) in cycle.steps.iter().enumerate().take(n) {
         let (Some(&(first, a0)), Some(&(next, a1))) = (ends.get(s), ends.get((s + 1) % n)) else {
             continue;
         };
-        let mut span = (dir * (a1 - a0)).rem_euclid(TAU);
-        if span < 1e-4 {
-            span = TAU;
-        }
-        // Leave the first intermediate's ink, then stop short of the next.
-        let clear = |b: (Point, Point)| grown(b, gap);
-        // An intermediate moved off the circle keeps an opening as wide as
-        // it looks from the center, so the arcs still point at it.
-        let mut from = 0.;
-        while from < span * 0.5 && contains(clear(first), at(a0 + dir * from)) {
-            from += walk;
-        }
-        if from == 0. {
-            from = seen(clear(first), a0).min(span * 0.5);
-        }
-        let mut to = span;
-        while to > span * 0.5 && contains(clear(next), at(a0 + dir * to)) {
-            to -= walk;
-        }
-        if to == span {
-            to = span - seen(clear(next), a1).min(span * 0.5);
-        }
-        if to - from > 0.02 {
-            // Extra space never runs into the ink, and the arc keeps most of
-            // a bond length where the step has room.
-            let room = to - from - (0.8 * bond / radius).min(to - from);
-            let floor = -cycle.gap_pt;
-            let mut lead = DEFAULT.world(step.lead_pt.max(floor)) / radius;
-            let mut trail = DEFAULT.world(step.trail_pt.max(floor)) / radius;
-            if lead + trail > room && lead + trail > 0. {
-                let k = room / (lead + trail);
-                lead *= k;
-                trail *= k;
-            }
-            from += lead;
-            to -= trail;
-        } else {
-            from = (from + to) * 0.5;
-            to = from;
-        }
-        // A lone intermediate's arc stays short of a whole circle.
-        let most = 358_f32.to_radians();
-        if to - from > most {
-            let extra = (to - from - most) * 0.5;
-            from += extra;
-            to -= extra;
-        }
-        let start = at(a0 + dir * from);
-        let end = at(a0 + dir * to);
-        let flat = Span {
-            center,
-            radius,
-            first: (a0 + dir * from).to_degrees(),
-            sweep: (dir * (to - from)).to_degrees(),
-        };
-        // A bowed arc runs on a circle of its own through the same ends.
-        let bow = DEFAULT
-            .world(step.bow_pt)
-            .clamp(-0.9 * radius, 0.9 * radius);
-        let arc = (bow != 0. && to > from)
-            .then(|| {
-                let middle = polar(center, radius + bow, a0 + dir * (from + to) * 0.5);
-                let sweep = crate::arrows::sweep_through(start, middle, end)?;
-                let (c, r, first) = crate::arrows::arc_circle(start, end, sweep)?;
-                Some(Span {
-                    center: c,
-                    radius: r,
-                    first,
-                    sweep,
-                })
-            })
-            .flatten()
-            .unwrap_or(flat);
+        let StepSpan {
+            arc,
+            start,
+            end,
+            open,
+        } = step_span(g, cycle, bond, step, (first, a0), (next, a1));
         // 1 when moving away from the arc's own center leaves the cycle.
         let outward = {
             let p = arc.at(0.5, 0.);
@@ -465,12 +510,12 @@ pub fn drawn(doc: &Document, g: &Graphic) -> Drawn {
                 (p.x - arc.center.x) * (p.x - center.x) + (p.y - arc.center.y) * (p.y - center.y);
             if dot >= 0. { 1. } else { -1. }
         };
-        let half = if step.reversible && !step.hidden && to > from {
+        let half = if step.reversible && !step.hidden && open {
             DEFAULT.world(style.gap_pt.max(2.)) * 0.75
         } else {
             0.
         };
-        if !step.hidden && to > from {
+        if !step.hidden && open {
             if step.reversible {
                 // Two half-headed arcs either side of the line, the forward
                 // one on the outside.
@@ -503,65 +548,23 @@ pub fn drawn(doc: &Document, g: &Graphic) -> Drawn {
                 out.arcs.push(Some(s));
             }
         }
-        // Side arrows swoop in to the arc, or out of it, meeting it along
-        // its way, far enough along from their end for an easy curve.
-        let lanes: Vec<_> = if half == 0. {
-            vec![(0, arc)]
-        } else {
-            [
-                arc.shifted(outward * half),
-                arc.shifted(-outward * half).map(Span::reversed),
-            ]
-            .into_iter()
-            .enumerate()
-            .filter_map(|(i, lane)| lane.map(|lane| (i, lane)))
-            .collect()
-        };
-        let mut attachments = vec![];
-        for incoming in step
+        let mut layout = SideLayout::new(g.id, arc, outward, half, &style, bond, gap);
+        for (ids, incoming) in step
             .reagents
             .iter()
-            .map(|_| true)
-            .chain(step.products.iter().map(|_| false))
+            .map(|ids| (ids, true))
+            .chain(step.products.iter().map(|ids| (ids, false)))
         {
-            let Some(&Some(b)) = sides.next() else {
-                continue;
-            };
-            let c = center_of(b);
-            // A reversible step paints two lanes, not their centreline. Meet
-            // the lane on this part's side, travelling that lane's way.
-            let Some(&(lane, path)) = lanes.iter().min_by(|(i, a), (j, b)| {
-                let distance = |a: &Span| (c.distance(a.center) - a.radius).abs();
-                distance(a).total_cmp(&distance(b)).then(i.cmp(j))
-            }) else {
-                continue;
-            };
-            let length = path.radius * path.sweep.to_radians().abs();
-            let ahead = (1.2 * bond).max(1.1 * (c.distance(path.center) - path.radius).abs());
-            let shift = if length > 0. { ahead / length } else { 0. };
-            let projected = path.along(c);
-            let t = (projected + if incoming { shift } else { -shift }).clamp(0.15, 0.85);
-            attachments.push(SideAttachment {
-                ink: b,
-                incoming,
-                projected,
-                t,
-                path,
-                lane,
-            });
+            if let Some(&Some(ink)) = sides.next() {
+                layout.parts.push(SidePart {
+                    ids: ids.clone(),
+                    incoming,
+                    ink,
+                });
+            }
         }
-        if half != 0. {
-            separate_attachments(&mut attachments, bond);
-        }
-        for attachment in attachments {
-            let side = side_arrow(
-                g.id,
-                attachment.path.at(attachment.t, 0.),
-                attachment.path.tangent(attachment.t),
-                grown(attachment.ink, gap),
-                attachment.incoming,
-                &style,
-            );
+        record(s, &layout);
+        for side in layout.routes(&layout.boxes()) {
             taken.push(side.bounds());
             out.arrows.push(side);
             out.arcs.push(None);
@@ -642,6 +645,108 @@ pub fn drawn(doc: &Document, g: &Graphic) -> Drawn {
         ));
     }
     out
+}
+
+type SideInk = (bool, (Point, Point));
+
+#[derive(Debug, Clone)]
+struct SidePart {
+    ids: Vec<u64>,
+    incoming: bool,
+    ink: (Point, Point),
+}
+
+#[derive(Debug, Clone)]
+struct SideLayout {
+    arc: Span,
+    id: u64,
+    lanes: Vec<(usize, Span)>,
+    style: ArrowStyle,
+    bond: f32,
+    gap: f32,
+    paired: bool,
+    parts: Vec<SidePart>,
+}
+
+impl SideLayout {
+    fn new(
+        id: u64,
+        arc: Span,
+        outward: f32,
+        half: f32,
+        style: &ArrowStyle,
+        bond: f32,
+        gap: f32,
+    ) -> Self {
+        let lanes = if half == 0. {
+            vec![(0, arc)]
+        } else {
+            [
+                arc.shifted(outward * half),
+                arc.shifted(-outward * half).map(Span::reversed),
+            ]
+            .into_iter()
+            .enumerate()
+            .filter_map(|(i, lane)| lane.map(|lane| (i, lane)))
+            .collect()
+        };
+        Self {
+            arc,
+            id,
+            lanes,
+            style: style.clone(),
+            bond,
+            gap,
+            paired: half != 0.,
+            parts: vec![],
+        }
+    }
+
+    fn boxes(&self) -> Vec<SideInk> {
+        self.parts.iter().map(|p| (p.incoming, p.ink)).collect()
+    }
+
+    fn routes(&self, parts: &[SideInk]) -> Vec<Arrow> {
+        let mut attachments = vec![];
+        for &(incoming, ink) in parts {
+            let c = center_of(ink);
+            let Some(&(lane, path)) = self.lanes.iter().min_by(|(i, a), (j, b)| {
+                let distance = |a: &Span| (c.distance(a.center) - a.radius).abs();
+                distance(a).total_cmp(&distance(b)).then(i.cmp(j))
+            }) else {
+                continue;
+            };
+            let length = path.radius * path.sweep.to_radians().abs();
+            let ahead = (1.2 * self.bond).max(1.1 * (c.distance(path.center) - path.radius).abs());
+            let shift = if length > 0. { ahead / length } else { 0. };
+            let projected = path.along(c);
+            let t = (projected + if incoming { shift } else { -shift }).clamp(0.15, 0.85);
+            attachments.push(SideAttachment {
+                ink,
+                incoming,
+                projected,
+                t,
+                path,
+                lane,
+            });
+        }
+        if self.paired {
+            separate_attachments(&mut attachments, self.bond);
+        }
+        attachments
+            .into_iter()
+            .map(|attachment| {
+                side_arrow(
+                    self.id,
+                    attachment.path.at(attachment.t, 0.),
+                    attachment.path.tangent(attachment.t),
+                    grown(attachment.ink, self.gap),
+                    attachment.incoming,
+                    &self.style,
+                )
+            })
+            .collect()
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -1088,21 +1193,87 @@ fn zone(doc: &Document, g: &Graphic, cycle: &Cycle, p: Point) -> Option<Role> {
     }
 }
 
-/// Whether `part` still lies within cycle `cycle`: inside its circle or as
-/// far out as a drop beside a step's arc would add it.
+/// Whether `part` still lies within cycle `cycle`: inside its circle or
+/// beside the resolved bowed step it belongs to.
 pub fn holds(doc: &Document, cycle: u64, part: &[u64]) -> bool {
     let Some(g) = doc.graphics.iter().find(|g| g.id == cycle) else {
         return false;
     };
     let (center, radius) = g.cycle_circle();
-    let reach = radius + 4. * doc.drawing_style.bond_length_world;
-    crate::scene::selection_bounds(doc, part)
-        .is_some_and(|ink| center_of(ink).distance(center) < reach)
+    let bond = doc.drawing_style.bond_length_world;
+    let Some(ink) = crate::scene::selection_bounds(doc, part) else {
+        return false;
+    };
+    let p = center_of(ink);
+    let reach = 4. * bond;
+    if p.distance(center) < radius + reach {
+        return true;
+    }
+    let Some(cycle) = g.cycle.as_deref() else {
+        return false;
+    };
+    if !(center.is_finite()
+        && p.is_finite()
+        && radius.is_finite()
+        && radius > 1e-3
+        && bond.is_finite()
+        && bond > 0.
+        && cycle.gap_pt.is_finite())
+    {
+        return false;
+    }
+    let n = cycle.intermediates.len();
+    let Some((role, _)) = cycle
+        .parts()
+        .find(|(_, ids)| ids.iter().any(|id| part.contains(id)))
+    else {
+        return false;
+    };
+    // Resolve only this member's step(s), with no whole-cycle drawing or
+    // max-Bow annulus that could keep a part on the far side of the circle.
+    let near = |s: usize, first: usize, next: usize| {
+        let Some(step) = cycle.steps.get(s) else {
+            return false;
+        };
+        if step.bow_pt == 0.
+            || !step.bow_pt.is_finite()
+            || !step.lead_pt.is_finite()
+            || !step.trail_pt.is_finite()
+        {
+            return false;
+        }
+        let end = |i: usize| {
+            let ids = cycle.intermediates.get(i)?;
+            let b = crate::scene::selection_bounds(doc, ids)?;
+            let c = center_of(b);
+            Some((b, (c.y - center.y).atan2(c.x - center.x)))
+        };
+        let (Some(first), Some(next)) = (end(first), end(next)) else {
+            return false;
+        };
+        let StepSpan { arc, open, .. } = step_span(g, cycle, bond, step, first, next);
+        open && p.distance(arc.at(arc.along(p).clamp(0., 1.), 0.)) < reach
+    };
+    match role {
+        Role::Intermediate(i) if i < n => {
+            let before = (i + n - 1) % n;
+            let next = (i + 1) % n;
+            near(before, before, i)
+                || near(i, i, next)
+                // Insertion splits the step but leaves its Bow before the
+                // new member. Bridge its opening to recover the geometry
+                // it joined, independent of that member's current position.
+                || (n > 1 && near(before, before, next))
+        }
+        Role::Reagent(s) | Role::Product(s) if s < n => near(s, s, (s + 1) % n),
+        _ => false,
+    }
 }
 
 /// Give the target's part its role, and group it with the cycle. It leaves
 /// any ordinary reaction; returns whether it had a role there.
 pub fn assign(doc: &mut Document, target: &Target) -> bool {
+    let split = split::prepare(doc, target);
     let left = leave_reactions(doc, &target.part);
     let Some(cycle) = doc
         .graphics
@@ -1150,6 +1321,9 @@ pub fn assign(doc: &mut Document, target: &Target) -> bool {
         let mut members = vec![target.cycle];
         members.extend(&target.part);
         let _ = doc.group_selection(&members);
+    }
+    if let Some(split) = split {
+        split::apply(doc, split);
     }
     left
 }
@@ -1405,6 +1579,7 @@ pub fn materialized(doc: &Document) -> (std::borrow::Cow<'_, Document>, Vec<Mate
         for (position, text, format) in drawn.labels {
             ids.push(next);
             out.annotations.push(crate::document::Annotation {
+                angle: 0.,
                 id: next,
                 position,
                 text,
@@ -1543,3 +1718,6 @@ pub fn reconcile(doc: &mut Document) {
 mod side_attachment_tests;
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod stack_tests;
