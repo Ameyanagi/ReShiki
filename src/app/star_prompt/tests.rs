@@ -567,9 +567,12 @@ fn the_second_ask_or_a_star_ends_the_asks() {
     }
 }
 
-#[test]
+#[tokio::test]
 #[cfg(not(target_arch = "wasm32"))]
-fn the_first_github_sign_in_asks_once_more_even_after_not_now() {
+async fn the_first_github_sign_in_asks_once_more_even_after_not_now() {
+    use crate::app::github::{Account, Action as GitHubAction, Dialog};
+    use iced::futures::StreamExt;
+
     let first = day("2026-01-01");
     let dismissed = Record {
         state: Answer::Asked {
@@ -579,11 +582,35 @@ fn the_first_github_sign_in_asks_once_more_even_after_not_now() {
         ..asking(first)
     };
     let (mut app, _dir) = app_with(dismissed);
-    app.star_github_signed_in();
+    sign_in(&mut app);
+    app.github.dialog = Some(Dialog::SignIn);
+    let signed_in = reshiki::github::Account {
+        login: "octo".into(),
+        repos: Vec::new(),
+    };
+    let finished = app.update(Message::GitHub(GitHubAction::SignedIn(0, Ok(signed_in))));
+    let mut actions = iced_runtime::task::into_stream(finished).unwrap();
+    let mut checks_now = false;
+    while let Some(action) = actions.next().await {
+        checks_now |= matches!(
+            action,
+            iced_runtime::Action::Output(Message::Star(Action::Tick))
+        );
+    }
+    assert!(checks_now, "sign-in schedules the check without waiting");
+    assert!(matches!(app.github.account, Account::NeedsInstall { .. }));
+    assert!(app.github.dialog.is_none());
     assert_eq!(saved_record(&app).unwrap().signed_in_ask, SignedInAsk::Due);
-    assert!(!tick(&mut app), "not in the first few minutes");
-    app.star.signed_in = Some(Instant::now().checked_sub(AFTER_SIGN_IN).unwrap());
-    assert!(tick(&mut app));
+    assert!(app.star_ready(), "the sign-in ask needs no idle time");
+    let focus_check = app.update(Message::Star(Action::IsStarred(Some(false))));
+    assert!(iced_runtime::task::into_stream(focus_check).is_some());
+    assert!(!app.star.open, "wait for the current keyboard focus");
+    let _ = app.update(Message::Star(Action::CheckedUnstarred { focused: true }));
+    assert!(!app.star.open, "a control gained focus during the request");
+    assert_eq!(saved_record(&app).unwrap().signed_in_ask, SignedInAsk::Due);
+
+    let _ = app.update(Message::Star(Action::CheckedUnstarred { focused: false }));
+    assert!(app.star.open);
     let record = saved_record(&app).unwrap();
     assert_eq!(record.signed_in_ask, SignedInAsk::Asked);
     assert!(
@@ -593,8 +620,8 @@ fn the_first_github_sign_in_asks_once_more_even_after_not_now() {
 
     // Signing in again never asks again.
     let _ = app.update(Message::Star(Action::Dismiss));
-    app.star_github_signed_in();
-    assert!(app.star.signed_in.is_none());
+    let _ = app.star_github_signed_in();
+    assert!(!app.star_sign_in_pending());
     assert!(!tick(&mut app));
 }
 
@@ -602,11 +629,12 @@ fn the_first_github_sign_in_asks_once_more_even_after_not_now() {
 #[cfg(not(target_arch = "wasm32"))]
 fn someone_who_starred_on_github_is_never_asked() {
     let (mut app, _dir) = app_with(asking(day("2026-01-01")));
-    app.star_github_signed_in();
+    sign_in(&mut app);
+    let _ = app.star_github_signed_in();
     let _ = app.update(Message::Star(Action::IsStarred(Some(true))));
     assert!(!app.star.open);
     assert_eq!(saved_record(&app).unwrap().state, Answer::Starred);
-    assert!(app.star.signed_in.is_none());
+    assert!(!app.star_sign_in_pending());
     assert!(!tick(&mut app));
 
     // GitHub could not tell: no ask in this run, since they may have starred.
@@ -620,37 +648,31 @@ fn someone_who_starred_on_github_is_never_asked() {
 
 #[test]
 #[cfg(not(target_arch = "wasm32"))]
-fn the_sign_in_ask_waits_again_after_the_card_after_use() {
-    let first = day("2026-01-01");
-    let (mut app, _dir) = app_with(asking(first));
-    app.star_github_signed_in();
-    app.star.signed_in = Some(Instant::now().checked_sub(AFTER_SIGN_IN).unwrap());
-    assert!(tick(&mut app));
+fn a_sign_in_ask_waits_for_the_dialog_and_covers_a_due_usage_ask() {
+    let (mut app, _dir) = app_with(asking(today() - Days::new(1)));
+    sign_in(&mut app);
+    let _ = app.star_github_signed_in();
+    app.github.dialog = Some(crate::app::github::Dialog::SignIn);
+    let _ = app.update(Message::Star(Action::CheckedUnstarred { focused: false }));
+    assert!(!app.star.open);
+    assert_eq!(saved_record(&app).unwrap().signed_in_ask, SignedInAsk::Due);
+
+    app.github.dialog = None;
+    let _ = app.update(Message::Star(Action::CheckedUnstarred { focused: false }));
+    assert!(app.star.open);
     let record = saved_record(&app).unwrap();
     assert!(
         matches!(record.state, Answer::Asked { .. }),
-        "the ask after use"
+        "the card covers the usage ask too"
     );
-    assert_eq!(record.signed_in_ask, SignedInAsk::Due, "still due");
-    // A card left open never uses up the sign-in ask beneath it.
-    let restarted = app.star.signed_in.expect("still asks in this run");
-    app.star.signed_in = Some(restarted.checked_sub(AFTER_SIGN_IN).unwrap());
-    let _ = tick(&mut app);
-    assert_eq!(saved_record(&app).unwrap().signed_in_ask, SignedInAsk::Due);
-    app.star.signed_in = Some(restarted);
+    assert_eq!(record.signed_in_ask, SignedInAsk::Asked);
     let _ = app.update(Message::Star(Action::Dismiss));
-    assert!(!tick(&mut app), "not right after that card");
-    app.star.signed_in = Some(restarted.checked_sub(AFTER_SIGN_IN).unwrap());
-    assert!(tick(&mut app));
-    assert_eq!(
-        saved_record(&app).unwrap().signed_in_ask,
-        SignedInAsk::Asked
-    );
+    assert!(!tick(&mut app), "no second card for the same ask");
 }
 
 #[test]
 #[cfg(not(target_arch = "wasm32"))]
-fn a_one_click_star_thanks_and_a_failed_one_opens_the_page() {
+fn a_one_click_star_thanks_and_records_the_confirmed_star() {
     let (mut app, _dir) = app_with(asking(day("2026-01-01")));
     assert_eq!(app.star_link(), ("★ Star on GitHub ↗".to_owned(), None));
     app.github.account = crate::app::github::Account::SignedIn {
@@ -665,6 +687,7 @@ fn a_one_click_star_thanks_and_a_failed_one_opens_the_page() {
         )
     );
     let _ = app.update(Message::Star(Action::Starred(Ok(()))));
+    assert_eq!(saved_record(&app).unwrap().state, Answer::Starred);
     assert_eq!(app.status, "Starred ReShiki on GitHub as @octo. Thank you!");
     assert_eq!(app.star_link(), ("★ Starred on GitHub".to_owned(), None));
     let _ = app.update(Message::Star(Action::Opened(Ok(()))));
@@ -690,24 +713,35 @@ fn sign_in(app: &mut App) {
 
 #[test]
 #[cfg(not(target_arch = "wasm32"))]
-fn a_failed_star_says_why_before_the_page_opens() {
+fn a_denied_star_can_be_retried_and_other_errors_can_fall_back() {
     use reshiki::github::Error;
-    assert_eq!(
-        fallback(&Error::NoAccess.to_string(), Ok(())),
-        "Couldn't star through GitHub (No access on GitHub). Opened GitHub instead."
-    );
     assert_eq!(
         fallback(&Error::Offline.to_string(), Err("No browser.".into())),
         "Couldn't star through GitHub (Couldn't reach GitHub). No browser."
     );
+    for toast in [true, false] {
+        let (mut app, _dir) = app_with(asking(day("2026-01-01")));
+        sign_in(&mut app);
+        app.star.open = toast;
+        let _ = app.update(Message::Star(Action::Star { toast }));
+        assert!(!app.star.open);
+        let denied = app.update(Message::Star(Action::Starred(Err(Error::NoAccess))));
+        assert!(iced_runtime::task::into_stream(denied).is_none());
+        assert!(!app.github.starred);
+        assert!(app.error);
+        assert!(app.status.contains("Starring and repository access"));
+        assert_eq!(saved_record(&app).unwrap().state, Answer::Asking);
+
+        let retry = app.update(Message::Star(Action::Star { toast: false }));
+        assert!(iced_runtime::task::into_stream(retry).is_some());
+        let _ = app.update(Message::Star(Action::Starred(Ok(()))));
+        assert!(app.github.starred);
+        assert_eq!(saved_record(&app).unwrap().state, Answer::Starred);
+    }
+
+    // A sign-in GitHub no longer takes is signed out, as anywhere else.
     let (mut app, _dir) = app_with(asking(day("2026-01-01")));
     sign_in(&mut app);
-    let _ = app.update(Message::Star(Action::Starred(Err(Error::NoAccess))));
-    assert!(!app.github.starred);
-    let status = fallback("No access on GitHub.", Ok(()));
-    let _ = app.update(Message::Star(Action::Opened(Err(status.clone()))));
-    assert_eq!(app.status, status);
-    // A sign-in GitHub no longer takes is signed out, as anywhere else.
     let _ = app.update(Message::Star(Action::Starred(Err(Error::SignInExpired))));
     assert!(app.github.login().is_none());
 }

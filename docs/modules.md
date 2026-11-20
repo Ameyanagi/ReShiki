@@ -155,7 +155,7 @@ explains how the crates and modules fit together.
 - `src/app/settings_page.rs`: Settings
 - `src/app/shortcut_examples.rs`: An editable, unbound copy of the bundled reference in a document tab.
 - `src/app/shortcuts.rs`
-- `src/app/star_prompt.rs`: The "Like ReShiki?" toast, which asks once for a GitHub star after real use, and again at most once after a later feature release.
+- `src/app/star_prompt.rs`: The "Like ReShiki?" toast, which asks for a GitHub star after use or the first GitHub sign-in.
 - `src/app/startup.rs`
 - `src/app/stereo.rs`: Advisory drawing checks and explicit, undoable stereobond fixes.
 - `src/app/tabs.rs`: Document tabs

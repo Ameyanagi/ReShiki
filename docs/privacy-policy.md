@@ -28,16 +28,22 @@ after you have exported or copied a drawing five times, on a later day than
 your first launch, when you have not touched the window for 30 seconds. It
 never asks while you type in a field, drag, or have a menu, panel or dialog
 open. It never asks in a drawing from Office or LibreOffice, in the browser
-editor, or from the command line. **Star on GitHub** opens the project page in
-your browser. Without a star, ReShiki asks again at most once: in a later
-feature release such as 0.16.0, at least 90 days later. This holds whether you
+editor, or from the command line. Without a star, the usage prompt can appear
+again at most once, in a later feature release such as 0.16.0, at least 90 days
+later. This holds whether you
 choose **Not now** or quit with the card still open. The count and your answer
-stay in `star-prompt.json` in ReShiki's data folder. Signed out, nothing is sent
-anywhere. Signed in to GitHub, ReShiki first asks GitHub whether you starred it
-and never asks if you did; it also asks once more a few minutes after your
-first sign-in, even after **Not now**; and **Star on GitHub** stars it directly.
+stay in `star-prompt.json` in ReShiki's data folder.
+
+GitHub asks for permission to manage stars in the same authorization as
+sign-in. After your first sign-in, ReShiki checks with GitHub whether your
+account already starred the repo. If the repo is unstarred, the card can
+appear as soon as the drawing window is ready, even if you previously chose
+**Not now**.
+Signed in, ReShiki sends a star to GitHub only when you click **Star on GitHub**.
+Signed out, the button opens the project page in your browser.
+
 **ReShiki → Check for updates**, also opened by **Help → About ReShiki**, always
-has a **Star ReShiki on GitHub ↗** link, which counts as a star too.
+has a **Star on GitHub** button.
 
 ## GitHub sign-in and Send
 
