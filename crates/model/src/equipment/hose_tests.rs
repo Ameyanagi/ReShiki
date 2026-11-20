@@ -77,11 +77,11 @@ fn a_hose_seats_at_both_ends_and_leaves_along_each_barb() {
 
     let g = graphic(&doc, hose);
     let line = &g.piece.as_ref().unwrap().centre_line;
-    assert_eq!(line.len(), 7);
+    assert_eq!(line.len(), 13);
     let (x, y) = (g.axis_x, g.axis_y);
     let frame = Affine([x.x, x.y, y.x, y.y, 0., 0.].map(f64::from));
     assert_near(frame.apply_dir(sub(line[1], line[0])), outlet.dir);
-    assert_near(frame.apply_dir(sub(line[5], line[6])), inlet.dir);
+    assert_near(frame.apply_dir(sub(line[11], line[12])), inlet.dir);
     assert!(solve::closure(&doc, &[condenser]).contains(&hose));
 }
 

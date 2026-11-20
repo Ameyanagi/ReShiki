@@ -57,20 +57,38 @@ fn unit(v: Xy, fallback: Xy) -> Xy {
     }
 }
 
-/// A smooth line from `a` through `m` to `b` that leaves each end along
-/// `out` (unit vectors into the hose), as two Béziers.
-fn shape(a: Xy, out_a: Xy, m: Xy, b: Xy, out_b: Xy) -> Vec<Xy> {
-    // At least a world unit, so each end keeps its direction.
-    let (la, lb) = (len(sub(m, a)).max(1.), len(sub(b, m)).max(1.));
-    let along = unit(sub(b, a), perp(out_a));
-    let tangent = unit(add(unit(sub(m, a), along), unit(sub(b, m), along)), along);
+/// How far a hose runs straight on from each end, in millimetres, before it
+/// bends: room to turn when a barb faces away from the other end.
+const LEAD_MM: f64 = 20.;
+/// How far a new hose sags below the straight line between its leads, as a
+/// share of that line's length.
+const SAG: f64 = 0.15;
+
+/// A smooth line from `a` through `m` to `b` as four Béziers: straight for
+/// a lead from each end along `out` (a unit vector into the hose; the lead
+/// in world units), then bending through `m`, the chain's middle point.
+fn shape(a: Xy, (out_a, lead_a): (Xy, f64), m: Xy, b: Xy, (out_b, lead_b): (Xy, f64)) -> Vec<Xy> {
+    let straight =
+        |p: Xy, out: Xy, lead: f64| [1., 2., 3.].map(|k| add(p, mul(out, lead * k / 3.)));
+    let [a1, a2, la] = straight(a, out_a, lead_a);
+    let [b1, b2, lb] = straight(b, out_b, lead_b);
+    // At least a world unit, so each lead keeps its direction.
+    let (da, db) = (len(sub(m, la)).max(1.), len(sub(lb, m)).max(1.));
+    let along = unit(sub(lb, la), perp(out_a));
+    let tangent = unit(add(unit(sub(m, la), along), unit(sub(lb, m), along)), along);
     vec![
         a,
-        add(a, mul(out_a, la / 2.)),
-        sub(m, mul(tangent, la / 3.)),
+        a1,
+        a2,
+        la,
+        add(la, mul(out_a, da / 2.)),
+        sub(m, mul(tangent, da / 3.)),
         m,
-        add(m, mul(tangent, lb / 3.)),
-        add(b, mul(out_b, lb / 2.)),
+        add(m, mul(tangent, db / 3.)),
+        add(lb, mul(out_b, db / 2.)),
+        lb,
+        b2,
+        b1,
         b,
     ]
 }
@@ -165,9 +183,17 @@ fn push_on(doc: &mut Document, id: u64, k: usize, barb: &Port) {
 /// Where each end of hose `id` goes and the way it leaves into the hose:
 /// along the barb it is on, else towards `m`.
 fn reshape(doc: &mut Document, id: u64, ends: [(Xy, Option<Port>); 2], m: Xy) {
-    let out = |(p, barb): &(Xy, Option<Port>)| {
-        barb.as_ref()
-            .map_or_else(|| unit(sub(m, *p), [1., 0.]), |b| b.dir)
+    let lead = (doc.graphics.iter())
+        .find(|g| g.id == id)
+        .map_or(0., |g| frame(g).scale_factor() * LEAD_MM);
+    // On a barb the hose runs straight on along it; a free end aims at the
+    // middle, with a lead short enough to stay short of it.
+    let out = |(p, barb): &(Xy, Option<Port>)| match barb {
+        Some(b) => (b.dir, lead),
+        None => (
+            unit(sub(m, *p), [1., 0.]),
+            lead.min(len(sub(m, *p)) / 3.).max(1e-3),
+        ),
     };
     let [a, b] = &ends;
     let line = shape(a.0, out(a), m, b.0, out(b));
@@ -220,7 +246,13 @@ pub fn place_hose(
         .then(|| barb(doc, id, 1, b, reach, false))
         .flatten();
     let b = second.as_ref().map_or(b, |s| s.point);
-    let m = mul(add(a, b), 0.5);
+    // The middle sags below the leads' midpoint, as a hose hangs.
+    let lead = |p: Xy, barb: &Option<Port>| {
+        barb.as_ref()
+            .map_or(p, |b| add(p, mul(b.dir, LEAD_MM * mm)))
+    };
+    let (la, lb) = (lead(a, &first), lead(b, &second));
+    let m = add(mul(add(la, lb), 0.5), [0., SAG * len(sub(lb, la))]);
     reshape(doc, id, [(a, first.clone()), (b, second.clone())], m);
     if let Some(barb) = &second {
         push_on(doc, id, 1, barb);
