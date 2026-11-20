@@ -26,6 +26,128 @@ fn normal_paths_are_editable_grouped_and_survive_native_roundtrip() {
         doc
     );
 }
+
+fn rendered(drawing: &Document) -> tiny_skia::Pixmap {
+    let svg = crate::export::drawing(drawing, "svg").unwrap();
+    let tree = usvg::Tree::from_data(&svg, &Default::default()).unwrap();
+    let size = tree.size().to_int_size();
+    let mut pixels = tiny_skia::Pixmap::new(size.width(), size.height()).unwrap();
+    pixels.fill(tiny_skia::Color::WHITE);
+    resvg::render(&tree, Default::default(), &mut pixels.as_mut());
+    pixels
+}
+
+#[test]
+fn implicit_fill_closure_preserves_lines_curves_and_native_roundtrip() {
+    for d in ["M0 0H20V20", "M0 0Q20 0 20 20", "M0 0C20 0 20 20 0 20"] {
+        let imported = read_svg(&format!("<path d='{d}' fill='red'/>"));
+        let explicit = read_svg(&format!("<path d='{d}Z' fill='red'/>"));
+        assert_eq!(imported.drawing.graphics.len(), 1);
+        assert!(imported.drawing.graphics[0].filled(), "{d}");
+        assert_eq!(imported.drawing, explicit.drawing, "{d}");
+        let saved = imported.drawing.file_json().unwrap();
+        let reopened = Document::from_native_file(&saved).unwrap();
+        assert_eq!(reopened.file_json().unwrap(), saved);
+        assert!(!imported.notice.contains("Changed or left out"));
+        let pixels = rendered(&imported.drawing);
+        assert!(
+            pixels
+                .data()
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .filter(|p| p[0] > 240 && p[1] < 15 && p[2] < 15)
+                .count()
+                > 50,
+            "{d}: the interior must paint, not only the 0.1 pt edge"
+        );
+    }
+}
+
+#[test]
+fn implicit_fill_closure_does_not_add_a_stroked_closing_edge() {
+    let d = "M0 0H20V20";
+    let fill = read_svg(&format!("<path d='{d}Z' fill='red'/>"));
+    let stroke = read_svg(&format!(
+        "<path d='{d}' fill='none' stroke='blue' stroke-width='2'/>"
+    ));
+    let closed_stroke = read_svg(&format!(
+        "<path d='{d}Z' fill='none' stroke='blue' stroke-width='2'/>"
+    ));
+    for paint_order in ["fill stroke", "stroke fill"] {
+        let both = read_svg(&format!(
+            "<path d='{d}' fill='red' stroke='blue' stroke-width='2' paint-order='{paint_order}'/>"
+        ));
+        assert_eq!(both.drawing.graphics.len(), 2);
+        let graphic = |color| {
+            both.drawing
+                .graphics
+                .iter()
+                .find(|g| g.style.fill == Some(color))
+                .unwrap()
+        };
+        assert_eq!(
+            graphic(Color::Custom([255, 0, 0])).path,
+            fill.drawing.graphics[0].path
+        );
+        let blue = graphic(Color::Custom([0, 0, 255]));
+        assert_eq!(blue.path, stroke.drawing.graphics[0].path);
+        assert_ne!(blue.path, closed_stroke.drawing.graphics[0].path);
+    }
+}
+
+#[test]
+fn implicit_fill_closure_preserves_mixed_contours_and_holes() {
+    for (rule, inner) in [
+        ("nonzero", "M10 10V30H30V10"),
+        ("evenodd", "M10 10H30V30H10"),
+    ] {
+        let closed = read_svg(&format!(
+            "<path d='M0 0H40V40H0Z {inner}Z' fill='red' fill-rule='{rule}'/>"
+        ));
+        for (first, last) in [("", ""), ("Z", ""), ("", "Z")] {
+            let imported = read_svg(&format!(
+                "<path d='M0 0H40V40H0{first} {inner}{last}' fill='red' fill-rule='{rule}'/>"
+            ));
+            assert_eq!(
+                imported.drawing, closed.drawing,
+                "{rule}, {first:?}/{last:?}"
+            );
+            assert_eq!(imported.notice, closed.notice);
+            assert_eq!(
+                imported.drawing.graphics[0]
+                    .path
+                    .iter()
+                    .filter(|c| matches!(c, PathCommand::Close))
+                    .count(),
+                2
+            );
+            let pixels = rendered(&imported.drawing);
+            let middle = ((pixels.height() / 2 * pixels.width() + pixels.width() / 2) * 4) as usize;
+            assert_eq!(
+                &pixels.data()[middle..middle + 4],
+                &[255; 4],
+                "the hole stays unpainted: {rule}"
+            );
+        }
+    }
+}
+
+#[test]
+fn implicit_fill_closure_counts_against_the_output_command_limit() {
+    let repeated = "L1 0L1 1".repeat(MAX_COMMANDS / 2 - 1);
+    let fits = format!("M0 0{repeated}");
+    let imported = read_svg(&format!("<path d='{fits}'/>"));
+    assert_eq!(imported.drawing.graphics[0].path.len(), MAX_COMMANDS);
+    let overflow = format!("{fits}L0 1");
+    let error = read(
+        svg(&format!("<path d='{overflow}'/>")).as_bytes(),
+        DrawingStyle::default(),
+    )
+    .err()
+    .expect("the generated closing command exceeds the output budget");
+    assert!(error.contains("20,000"), "{error}");
+}
 #[test]
 fn physical_units_viewbox_transforms_css_and_use_are_resolved() {
     let text = r##"<svg xmlns="http://www.w3.org/2000/svg" width="1in" height="1in" viewBox="0 0 96 96"><style>.piece {fill:#123456}</style><defs><path id="p" d="M0 0H24V12H0Z"/></defs><g transform="translate(12 24) scale(2)"><use href="#p" class="piece"/></g></svg>"##;

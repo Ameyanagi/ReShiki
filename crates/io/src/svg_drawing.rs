@@ -373,11 +373,13 @@ fn collect(
                         && let Some((rgb, opacity)) =
                             paint(fill.paint(), alpha * fill.opacity().get(), notices)
                     {
-                        let data = path
-                            .data()
-                            .clone()
-                            .transform(transform)
-                            .ok_or("The SVG has invalid coordinates.")?;
+                        let data = close_fill_subpaths(
+                            &path
+                                .data()
+                                .clone()
+                                .transform(transform)
+                                .ok_or("The SVG has invalid coordinates.")?,
+                        )?;
                         let data = if fill.rule() == usvg::FillRule::EvenOdd {
                             even_odd(&data, notices)?
                         } else {
@@ -454,6 +456,45 @@ fn collect(
         }
     }
     Ok(())
+}
+
+/// SVG fills implicitly close every contour; strokes keep the original path.
+fn close_fill_subpaths(path: &tiny_skia::Path) -> Result<tiny_skia::Path, String> {
+    let mut builder = tiny_skia::PathBuilder::new();
+    let mut open = false;
+    for segment in path.segments() {
+        match segment {
+            tiny_skia::PathSegment::MoveTo(p) => {
+                if open {
+                    builder.close();
+                }
+                builder.move_to(p.x, p.y);
+                open = true;
+            }
+            tiny_skia::PathSegment::LineTo(p) => {
+                builder.line_to(p.x, p.y);
+                open = true;
+            }
+            tiny_skia::PathSegment::QuadTo(a, p) => {
+                builder.quad_to(a.x, a.y, p.x, p.y);
+                open = true;
+            }
+            tiny_skia::PathSegment::CubicTo(a, b, p) => {
+                builder.cubic_to(a.x, a.y, b.x, b.y, p.x, p.y);
+                open = true;
+            }
+            tiny_skia::PathSegment::Close => {
+                builder.close();
+                open = false;
+            }
+        }
+    }
+    if open {
+        builder.close();
+    }
+    builder
+        .finish()
+        .ok_or_else(|| "The SVG has invalid coordinates.".into())
 }
 
 // Keep curves for ordinary fills; only even-odd fills need winding normalization.
