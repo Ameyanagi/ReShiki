@@ -360,7 +360,10 @@ pub fn text_ascent(style: &crate::typography::TextStyle) -> f32 {
 }
 
 pub fn styled_text_width(text: &str, size: f32, style: &crate::typography::TextStyle) -> f32 {
-    text.chars().map(|c| glyph_metrics(c, style).1 * size).sum()
+    use unicode_segmentation::UnicodeSegmentation;
+    text.graphemes(true)
+        .map(|cluster| cluster_metrics(cluster, style).1 * size)
+        .sum()
 }
 
 /// The platform's Latin interface font. Japanese fonts center "…" and other
@@ -553,17 +556,7 @@ pub fn glyph_metrics(c: char, style: &crate::typography::TextStyle) -> GlyphMetr
 fn glyph_metrics_in(c: char, style: &crate::typography::TextStyle, fonts: &Fonts) -> GlyphMetrics {
     glyph_face(c, style, fonts)
         .and_then(|id| {
-            let info = fonts.db.face(id)?;
-            // Preserve a named match (including aliases) in exported SVG.
-            let name = fallback_families(&style.family, &fonts.db, &fonts.added)
-                .find(|name| info.families.iter().any(|(n, _)| n == name))
-                .or_else(|| info.families.first().map(|(name, _)| name.as_str()))?;
-            let family = fonts
-                .names
-                .iter()
-                .copied()
-                .find(|n| *n == name)
-                .or((name == font::SYMBOLS_FAMILY).then_some(font::SYMBOLS_FAMILY))?;
+            let family = face_family(id, style, fonts)?;
             fonts
                 .db
                 .with_face_data(id, |bytes, index| {
@@ -577,6 +570,131 @@ fn glyph_metrics_in(c: char, style: &crate::typography::TextStyle, fonts: &Fonts
             let family = fonts.names.iter().find(|n| **n == style.family);
             (family.copied().unwrap_or("Arial"), 0.6)
         })
+}
+
+/// The family name a face is exported under, preferring the style's own
+/// name or alias for it.
+fn face_family(
+    id: resvg::usvg::fontdb::ID,
+    style: &crate::typography::TextStyle,
+    fonts: &Fonts,
+) -> Option<&'static str> {
+    let info = fonts.db.face(id)?;
+    // Preserve a named match (including aliases) in exported SVG.
+    let name = fallback_families(&style.family, &fonts.db, &fonts.added)
+        .find(|name| info.families.iter().any(|(n, _)| n == name))
+        .or_else(|| info.families.first().map(|(name, _)| name.as_str()))?;
+    fonts
+        .names
+        .iter()
+        .copied()
+        .find(|n| *n == name)
+        .or((name == font::SYMBOLS_FAMILY).then_some(font::SYMBOLS_FAMILY))
+}
+
+type ClusterKey = (String, bool, bool, String);
+static CLUSTERS: LazyLock<Mutex<HashMap<ClusterKey, GlyphMetrics>>> =
+    LazyLock::new(Default::default);
+
+/// A grapheme cluster's family and advance in ems, as one piece the shaper
+/// draws: an emoji with a variation selector, joiner, skin tone or flag pair,
+/// or a letter with combining marks. An emoji sequence is set in the emoji
+/// face. One character is measured as `glyph_metrics` does.
+pub fn cluster_metrics(cluster: &str, style: &crate::typography::TextStyle) -> GlyphMetrics {
+    let mut chars = cluster.chars();
+    let first = chars.next().unwrap_or(' ');
+    if chars.next().is_none() {
+        return glyph_metrics(first, style);
+    }
+    let key = (
+        style.family.clone(),
+        style.bold,
+        style.italic,
+        cluster.to_owned(),
+    );
+    if let Ok(cache) = CLUSTERS.lock()
+        && let Some(result) = cache.get(&key)
+    {
+        return *result;
+    }
+    // The family the system draws emoji in, as a lone emoji resolves it.
+    let emoji = emoji_sequence(cluster).then(|| glyph_metrics('\u{1F600}', style).0);
+    let fonts = fonts();
+    let result = cluster_metrics_in(cluster, first, emoji, style, &fonts);
+    drop(fonts);
+    if let Ok(mut cache) = CLUSTERS.lock() {
+        if cache.len() >= 16384 {
+            cache.clear();
+        }
+        cache.insert(key, result);
+    }
+    result
+}
+
+fn cluster_metrics_in(
+    cluster: &str,
+    first: char,
+    emoji: Option<&str>,
+    style: &crate::typography::TextStyle,
+    fonts: &Fonts,
+) -> GlyphMetrics {
+    use resvg::usvg::fontdb::{Family, Query, Style, Weight};
+    let weight = if style.bold { 700 } else { 400 };
+    let has = |id| {
+        fonts
+            .db
+            .with_face_data(id, |bytes, index| {
+                font::face(bytes, index, weight)?.glyph_index(first)
+            })
+            .flatten()
+            .is_some()
+    };
+    emoji
+        .and_then(|family| {
+            fonts.db.query(&Query {
+                families: &[Family::Name(family)],
+                weight: Weight(weight),
+                style: if style.italic {
+                    Style::Italic
+                } else {
+                    Style::Normal
+                },
+                ..Default::default()
+            })
+        })
+        .filter(|id| has(*id))
+        .or_else(|| glyph_face(first, style, fonts))
+        .and_then(|id| {
+            let family = face_family(id, style, fonts)?;
+            fonts
+                .db
+                .with_face_data(id, |bytes, index| {
+                    let face = rustybuzz::Face::from_face(font::face(bytes, index, weight)?);
+                    let mut buffer = rustybuzz::UnicodeBuffer::new();
+                    buffer.push_str(cluster);
+                    let shaped = rustybuzz::shape(&face, &[], buffer);
+                    let advance: i32 = shaped.glyph_positions().iter().map(|p| p.x_advance).sum();
+                    Some((family, advance as f32 / face.units_per_em() as f32))
+                })
+                .flatten()
+        })
+        .unwrap_or_else(|| glyph_metrics_in(first, style, fonts))
+}
+
+/// A cluster the system draws as one emoji: it asks for emoji presentation,
+/// joins emoji, or holds a skin tone, flag letters, a keycap or a tag.
+fn emoji_sequence(cluster: &str) -> bool {
+    cluster.chars().any(|c| {
+        matches!(
+            c,
+            '\u{FE0F}'
+                | '\u{200D}'
+                | '\u{20E3}'
+                | '\u{1F1E6}'..='\u{1F1FF}'
+                | '\u{1F3FB}'..='\u{1F3FF}'
+                | '\u{E0020}'..='\u{E007F}'
+        )
+    })
 }
 
 static GLYPH_REACH: LazyLock<Mutex<HashMap<String, Option<f32>>>> = LazyLock::new(Default::default);
@@ -664,8 +782,10 @@ pub fn text_ink_shapes(
     use crate::document::Point;
     let mut x = 0.;
     let mut shapes = Vec::new();
-    for c in text.chars() {
-        let (_, advance) = glyph_metrics(c, style);
+    for cluster in unicode_segmentation::UnicodeSegmentation::graphemes(text, true) {
+        // A cluster's ink is its first character's; its advance is the whole.
+        let c = cluster.chars().next().unwrap_or(' ');
+        let (_, advance) = cluster_metrics(cluster, style);
         let key = (style.family.clone(), style.bold, style.italic, c);
         let cached = GLYPH_INK
             .lock()

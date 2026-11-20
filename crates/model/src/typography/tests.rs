@@ -445,3 +445,47 @@ fn replacing_text_keeps_the_style_of_what_stays_the_same() {
     assert_eq!(formula.at(2), formula.at(0));
     assert_ne!(formula.at(3), formula.at(0));
 }
+
+/// A joined emoji, a flag and a letter with its accent each lay out as one
+/// piece, never split between lines or fragments.
+#[test]
+fn grapheme_clusters_lay_out_whole() {
+    use super::{TextFormat, layout_with_metrics};
+    let clusters = std::cell::RefCell::new(vec![]);
+    let text = "a👩\u{200D}🔬🇯🇵e\u{301}";
+    let laid_out = layout_with_metrics(text, &TextFormat::default(), |cluster, _| {
+        clusters.borrow_mut().push(cluster.to_owned());
+        ("Arial", 0.6)
+    });
+    assert_eq!(
+        clusters.into_inner(),
+        ["a", "👩\u{200D}🔬", "🇯🇵", "e\u{301}"]
+    );
+    assert_eq!(laid_out.fragments.len(), 1);
+    assert_eq!(laid_out.fragments[0].text, text);
+    let size = TextFormat::default().style.size();
+    assert!((laid_out.width - 4. * 0.6 * size).abs() < 1e-3);
+}
+
+/// An emoji sequence is measured as the one picture the system draws, in its
+/// emoji face: a text face's ⚡ is not taken for ⚡️, and a flag or a joined
+/// emoji is about one emoji wide, not the sum of its parts.
+#[cfg(target_os = "macos")]
+#[test]
+fn emoji_sequences_measure_as_one_emoji() {
+    use crate::style::cluster_metrics;
+    let style = super::TextStyle::default();
+    let (emoji, one) = cluster_metrics("💡", &style);
+    assert_eq!(emoji, "Apple Color Emoji");
+    for sequence in ["⚡\u{FE0F}", "👩\u{200D}🔬", "👍🏽", "🇯🇵", "❄\u{FE0F}"] {
+        let (family, advance) = cluster_metrics(sequence, &style);
+        assert_eq!(family, emoji, "{sequence}");
+        assert!(
+            (advance - one).abs() < 0.01,
+            "{sequence}: {advance} vs {one}"
+        );
+    }
+    let laid_out = super::layout("H👩\u{200D}🔬", &Default::default());
+    assert_eq!(laid_out.fragments.len(), 2);
+    assert_eq!(laid_out.fragments[1].text, "👩\u{200D}🔬");
+}

@@ -627,3 +627,25 @@ fn double_clicking_a_shape_types_centred_text_into_it_in_one_step() {
     assert!(app.tab.doc.annotations.is_empty());
     assert_eq!(app.tab.doc.graphics[0].text, None);
 }
+
+/// The editor's own Backspace removes one code point, leaving half a flag or a
+/// stray joiner; the caption's Backspace selects the whole character first.
+#[test]
+fn backspace_removes_a_whole_emoji() {
+    let mut app = app();
+    begin(&mut app, None);
+    type_text(&mut app, "x🇯🇵👩\u{200D}🔬");
+    let backspace = |app: &mut App| {
+        let _ = app.update(Message::CaptionAction(Input::Select(Motion::Left)));
+        let _ = app.update(Message::CaptionAction(Input::Edit(Edit::Backspace)));
+    };
+    backspace(&mut app);
+    assert_eq!(app.tab.caption, "x🇯🇵");
+    backspace(&mut app);
+    assert_eq!(app.tab.caption, "x");
+    let _ = app.update(Message::CaptionAction(Input::Edit(Edit::Paste(
+        "🇯🇵".to_owned().into(),
+    ))));
+    let _ = app.update(Message::CaptionAction(Input::Edit(Edit::Backspace)));
+    assert_eq!(app.tab.caption, "x🇯", "the plain edit splits the flag");
+}

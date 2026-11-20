@@ -481,6 +481,18 @@ impl App {
                     return text_editor::Binding::from_key_press(key);
                 }
                 use iced::keyboard::{Key, key::Named};
+                // The editor's Backspace removes one code point, which split a
+                // flag or a joined emoji; take the whole character instead.
+                if key.key == Key::Named(Named::Backspace)
+                    && !key.modifiers.alt()
+                    && !key.modifiers.command()
+                    && self.tab.caption_editor.selection().is_none()
+                {
+                    return Some(text_editor::Binding::Sequence(vec![
+                        text_editor::Binding::Select(text_editor::Motion::Left),
+                        text_editor::Binding::Backspace,
+                    ]));
+                }
                 let custom = match &key.key {
                     Key::Named(Named::Escape) => Some(Message::InlineText(Action::Finish(false))),
                     Key::Named(Named::Enter) if key.modifiers.command() => {
