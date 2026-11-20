@@ -722,10 +722,7 @@ fn a_denied_star_can_be_retried_and_other_errors_can_fall_back() {
         assert!(iced_runtime::task::into_stream(denied).is_none());
         assert!(!app.github.starred);
         assert!(app.error);
-        assert!(
-            app.status
-                .contains("Starring permission and repository access")
-        );
+        assert!(app.status.contains("Starring and repository access"));
         assert_eq!(saved_record(&app).unwrap().state, Answer::Asking);
 
         let retry = app.update(Message::Star(Action::Star { toast: false }));

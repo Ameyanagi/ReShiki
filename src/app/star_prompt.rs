@@ -415,7 +415,7 @@ impl App {
                     return self.accessibility_refresh();
                 }
                 Err(reshiki::github::Error::NoAccess) => {
-                    self.status = "GitHub denied the star. Check ReShiki’s Starring permission and repository access.".into();
+                    self.status = "Star denied. Check Starring and repository access.".into();
                     self.error = true;
                 }
                 // As when signed out: the repository page in the browser,
