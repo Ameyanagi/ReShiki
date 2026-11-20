@@ -248,7 +248,7 @@ fn fixed_part(doc: &Document, ids: &[u64]) -> &'static str {
 
 /// Fonts and strokes do not scale, so target/current is not generally the
 /// required coordinate scale. Solve against the same bounds as the canvas box.
-/// A size the coordinates cannot change keeps the drawing and explains why.
+/// A note explains when fixed parts keep the size from reaching the target.
 fn size_factor(
     doc: &Document,
     ids: &[u64],
@@ -308,12 +308,14 @@ fn size_factor(
             )),
         ));
     }
-    // The smallest size squeezes every coordinate onto the fixed parts, so it
-    // is a limit to state, not a size to apply.
+    // Below the smallest size the fixed parts allow, apply that size and say so.
     if target < lo_size {
-        return Err(format!(
-            "{}, so the {name} cannot go below {lo_size:.2} pt",
-            fixed_part(doc, ids)
+        return Ok((
+            low,
+            Some(format!(
+                "{}, so the closest {name} is {lo_size:.2} pt",
+                fixed_part(doc, ids)
+            )),
         ));
     }
     if target > hi_size {
@@ -351,7 +353,7 @@ fn size_factor(
 /// Why sizes refuse a selection holding a molecule shown only as a 3D model.
 pub(crate) const RESIZE_SHOWN_IN_3D: &str = "Switch to 2D to resize the drawing";
 
-/// Applies one field. Returns a note when the size kept its value.
+/// Applies one field. Returns a note when fixed parts limit the size.
 fn transform_candidate(
     document: &mut Document,
     selected: &[u64],
@@ -423,7 +425,7 @@ fn transform_candidate(
             if !(0.0001..=10_000.).contains(&factor) {
                 return Err("Use a scale from 0.01% to 1000000% per change".into());
             }
-            if note.is_none() {
+            if factor != 1. {
                 scale(document, &ids, pivot, field, factor, lock);
             }
             document.validate()?;
@@ -546,7 +548,7 @@ impl App {
 
     // Validate against the caption that would be committed, without ending its
     // draft or consuming history for invalid and unchanged transforms.
-    /// The transformed drawing, if it changed, and notes on sizes that stayed.
+    /// The transformed drawing, if it changed, and notes on sizes fixed parts set.
     fn numeric_transform_candidate(
         &self,
         fields: &[Field],
@@ -634,7 +636,7 @@ impl App {
                     let before = std::mem::replace(&mut self.tab.doc, document);
                     self.changed(before);
                 }
-                // A size that stayed says why, after the commit's own status.
+                // Show size notes after the commit sets its status.
                 if !notes.is_empty() && !self.error {
                     self.status = notes.join(" · ");
                 }
