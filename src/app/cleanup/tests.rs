@@ -90,6 +90,41 @@ async fn clean_up_reaction_is_one_undo_step_and_then_tidy() {
     assert_eq!(app.tab.doc, original);
 }
 
+#[tokio::test]
+async fn clean_up_distant_recorded_reaction_keeps_signs_and_undoes_once() {
+    let mut document = Document::from_json(include_bytes!(
+        "../../../crates/model/src/reaction_cleanup/untidy_ester.rsk"
+    ))
+    .unwrap();
+    let bond = document.drawing_style.bond_length_world;
+    document.translate(&[1, 2, 3, 4, 5, 6, 7, 15, 16, 17], -bond * 8., 0.);
+    document.translate(&[8, 9, 10, 11, 12, 13, 14, 19, 20, 21], bond * 8., 0.);
+    let original = document.clone();
+    let mut app = app(document);
+    dispatch(&mut app, Message::Cleanup(Action::Scheme)).await;
+    assert!(!app.error, "{}", app.status);
+    let cleaned = app.tab.doc.clone();
+    for id in [16, 20] {
+        let sign = |doc: &Document| {
+            doc.annotations
+                .iter()
+                .find(|a| a.id == id)
+                .unwrap()
+                .position
+        };
+        assert_ne!(sign(&cleaned), sign(&original), "Sign {id} stayed behind");
+    }
+    assert_eq!(app.tab.history.undo_frames().count(), 1);
+    dispatch(&mut app, Message::Cleanup(Action::Scheme)).await;
+    assert_eq!(app.tab.doc, cleaned);
+    assert_eq!(app.status, "The reaction is already tidy");
+    assert_eq!(app.tab.history.undo_frames().count(), 1);
+    dispatch(&mut app, Message::Undo).await;
+    assert_eq!(app.tab.doc, original);
+    dispatch(&mut app, Message::Redo).await;
+    assert_eq!(app.tab.doc, cleaned);
+}
+
 async fn placed_fischer_converts_to_three_arm_centers(name: &str, count: usize) -> Document {
     let mut app = app(Document::default());
     let index = app

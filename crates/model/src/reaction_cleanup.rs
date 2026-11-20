@@ -218,9 +218,8 @@ pub fn clean(
                     places.insert(i, Place::Axis);
                 }
             }
-            // Molecules found by position belong to the row only within reach
-            // of its arrows: a gap wider than REACH ends the scheme. Recorded
-            // participants always stay, and bridge the reach to nearby signs.
+            // A gap wider than REACH separates clusters. An arrow or a
+            // recorded axis participant anchors its cluster to this row.
             let mut line: Vec<((f32, f32), Option<usize>)> = row
                 .arrows
                 .iter()
@@ -234,23 +233,26 @@ pub fn clean(
                 .collect();
             line.sort_by(|a, b| a.0.0.total_cmp(&b.0.0));
             let mut cluster: Vec<usize> = vec![];
-            let (mut end, mut arrow) = (f32::NEG_INFINITY, false);
+            let (mut end, mut anchored) = (f32::NEG_INFINITY, false);
             for (range, item) in line
                 .into_iter()
                 .chain([((f32::INFINITY, f32::INFINITY), None)])
             {
                 if range.0 - end > bond * REACH {
-                    if !arrow {
-                        for i in cluster.drain(..).filter(|i| !recorded.contains(i)) {
+                    if !anchored {
+                        for i in cluster.drain(..) {
                             places.remove(&i);
                         }
                     }
-                    (cluster, arrow) = (vec![], false);
+                    (cluster, anchored) = (vec![], false);
                 }
                 end = end.max(range.1);
                 match item {
-                    Some(i) => cluster.push(i),
-                    None => arrow = true,
+                    Some(i) => {
+                        anchored |= recorded.contains(&i);
+                        cluster.push(i);
+                    }
+                    None => anchored = true,
                 }
             }
             // Captions such as compound numbers follow the molecule they label.

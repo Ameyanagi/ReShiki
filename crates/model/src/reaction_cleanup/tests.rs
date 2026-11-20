@@ -64,25 +64,43 @@ fn recorded_reaction_keeps_its_plus_signs_in_order_and_is_idempotent() {
     // product + starts overlapping the ester's ethyl chain.
     let doc = Document::from_json(include_bytes!("untidy_ester.rsk")).unwrap();
     let cleaned = clean(&doc, &[], false).unwrap();
+    assert_recorded_reaction_is_tidy(&doc, &cleaned);
+}
+
+#[test]
+fn recorded_reaction_keeps_plus_signs_in_clusters_far_from_its_arrow() {
+    let mut doc = Document::from_json(include_bytes!("untidy_ester.rsk")).unwrap();
+    let bond = doc.drawing_style.bond_length_world;
+    // Both sides have normal gaps within their cluster, but neither reaches
+    // the arrow. The product cluster is flushed at the end of the row.
+    doc.translate(&[1, 2, 3, 4, 5, 6, 7, 15, 16, 17], -bond * 8., 0.);
+    doc.translate(&[8, 9, 10, 11, 12, 13, 14, 19, 20, 21], bond * 8., 0.);
+    let unrelated = text(&mut doc, "+", Point::new(bond * 60., 60.));
+    let cleaned = clean(&doc, &[], false).unwrap();
+    assert_recorded_reaction_is_tidy(&doc, &cleaned);
+    assert_eq!(bounds(&cleaned, &[unrelated]), bounds(&doc, &[unrelated]));
+}
+
+fn assert_recorded_reaction_is_tidy(doc: &Document, cleaned: &Document) {
     let reaction = &doc.reactions[0];
-    let arrow = the_arrow(&cleaned, reaction.arrow);
+    let arrow = the_arrow(cleaned, reaction.arrow);
     let items = [
-        bounds(&cleaned, &reaction.reactants[0].atoms),
-        bounds(&cleaned, &[16]),
-        bounds(&cleaned, &reaction.reactants[1].atoms),
+        bounds(cleaned, &reaction.reactants[0].atoms),
+        bounds(cleaned, &[16]),
+        bounds(cleaned, &reaction.reactants[1].atoms),
         (arrow.start, arrow.end),
-        bounds(&cleaned, &reaction.products[0].atoms),
-        bounds(&cleaned, &[20]),
-        bounds(&cleaned, &reaction.products[1].atoms),
+        bounds(cleaned, &reaction.products[0].atoms),
+        bounds(cleaned, &[20]),
+        bounds(cleaned, &reaction.products[1].atoms),
     ];
     let gap = doc.drawing_style.bond_length_world * GAP;
     for pair in items.windows(2) {
         assert!(close(pair[1].0.x - pair[0].1.x, gap), "{pair:?}");
     }
-    for (lo, hi) in &items[..3] {
+    for (lo, hi) in &items {
         assert!(close(lo.lerp(*hi, 0.5).y, arrow.start.y));
     }
-    assert_eq!(clean(&cleaned, &[], false).unwrap(), cleaned);
+    assert_eq!(&clean(cleaned, &[], false).unwrap(), cleaned);
 }
 
 /// A + B → C drawn untidily: off the axis, uneven gaps, a short arrow.
