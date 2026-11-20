@@ -1009,6 +1009,7 @@ async fn rust_ring_display_preserves_selected_scope_and_complete_response() -> T
             bond.color = reshiki::palette::Color::Custom([25, 60, 190]);
         }
         original.annotations.push(reshiki::document::Annotation {
+            angle: 0.,
             id: 987654,
             position: reshiki::document::Point::new(10., 100.),
             text: "試料".into(),

@@ -1,0 +1,333 @@
+{
+ "format": "reshiki-piece",
+ "format_version": 0,
+ "id": "reshiki/cow-15",
+ "revision": 1,
+ "family": "cow",
+ "variant": {
+  "joint": "15/25"
+ },
+ "names": {
+  "en": "Cow receiver adapter, 15/25",
+  "ja": "分留アダプター (牛型) 15/25"
+ },
+ "category": "distillation",
+ "keywords": [
+  "cow",
+  "spider",
+  "receiver",
+  "分留",
+  "牛型"
+ ],
+ "credits": {
+  "author": "ReShiki",
+  "license": "CC0-1.0"
+ },
+ "units": "mm",
+ "shapes": [
+  {
+   "id": "s0",
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "path": "M12 0A12 12 0 0 1 -12 0A12 12 0 0 1 12 0Z"
+  },
+  {
+   "id": "s1",
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "path": "M6.5 -10L6.5 -20L-6.5 -20L-6.5 -10Z"
+  },
+  {
+   "id": "s2",
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "path": "M-6.5 -20L-6.5 -18L6.5 -18L6.5 -20Z"
+  },
+  {
+   "id": "s3",
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "path": "M2.5 -13L14.5 -13L14.5 -11.7L19 -13L19 -11.7L23.5 -13L23.5 -11.8L27.5 -13.2L27.5 -18.8L23.5 -20.2L23.5 -19L19 -20.3L19 -19L14.5 -20.3L14.5 -19L2.5 -19Z"
+  },
+  {
+   "id": "s4",
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "path": "M-5 9L-5 26L5 26L5 9Z"
+  },
+  {
+   "id": "s5",
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "path": "M-5 24L-5 26.2L5 26.2L5 24Z"
+  },
+  {
+   "id": "s6",
+   "layer": "back",
+   "material": "glass",
+   "role": "glass",
+   "path": "M9 -5L32.23 -5A17 17 0 0 1 49.23 12L49.23 26.2L39.23 26.2L39.23 12A7 7 0 0 0 32.23 5L9 5Z",
+   "when": {
+    "turn": [
+     "r1"
+    ]
+   }
+  },
+  {
+   "id": "s7",
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "path": "M-9 -5L-32.23 -5A17 17 0 0 0 -49.23 12L-49.23 26.2L-39.23 26.2L-39.23 12A7 7 0 0 1 -32.23 5L-9 5Z",
+   "when": {
+    "turn": [
+     "r1"
+    ]
+   }
+  },
+  {
+   "id": "s8",
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "path": "M-9 -5L-42 -5A17 17 0 0 0 -59 12L-59 26.2L-49 26.2L-49 12A7 7 0 0 1 -42 5L-9 5Z",
+   "when": {
+    "turn": [
+     "r2"
+    ]
+   }
+  },
+  {
+   "id": "s9",
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "path": "M9 -5L42 -5A17 17 0 0 1 59 12L59 26.2L49 26.2L49 12A7 7 0 0 0 42 5L9 5Z",
+   "when": {
+    "turn": [
+     "r2"
+    ]
+   }
+  },
+  {
+   "id": "s10",
+   "layer": "back",
+   "material": "glass",
+   "role": "glass",
+   "path": "M-9 -5L-32.23 -5A17 17 0 0 0 -49.23 12L-49.23 26.2L-39.23 26.2L-39.23 12A7 7 0 0 1 -32.23 5L-9 5Z",
+   "when": {
+    "turn": [
+     "r3"
+    ]
+   }
+  },
+  {
+   "id": "s11",
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "path": "M9 -5L32.23 -5A17 17 0 0 1 49.23 12L49.23 26.2L39.23 26.2L39.23 12A7 7 0 0 0 32.23 5L9 5Z",
+   "when": {
+    "turn": [
+     "r3"
+    ]
+   }
+  }
+ ],
+ "joints": [
+  {
+   "id": "inlet",
+   "kind": "taper",
+   "size": "15/25",
+   "gender": "F",
+   "at": [
+    0,
+    -49
+   ],
+   "dir": [
+    0,
+    -1
+   ],
+   "draw": "standard"
+  },
+  {
+   "id": "o1",
+   "kind": "taper",
+   "size": "15/25",
+   "gender": "M",
+   "at": [
+    -54,
+    29.6
+   ],
+   "dir": [
+    0,
+    1
+   ],
+   "draw": "standard",
+   "poses": {
+    "turn": {
+     "r1": {
+      "at": [
+       -44.234,
+       29.6
+      ],
+      "dir": [
+       0,
+       1
+      ]
+     },
+     "r3": {
+      "at": [
+       -44.234,
+       29.6
+      ],
+      "dir": [
+       0,
+       1
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "o2",
+   "kind": "taper",
+   "size": "15/25",
+   "gender": "M",
+   "at": [
+    0,
+    29.6
+   ],
+   "dir": [
+    0,
+    1
+   ],
+   "draw": "standard"
+  },
+  {
+   "id": "o3",
+   "kind": "taper",
+   "size": "15/25",
+   "gender": "M",
+   "at": [
+    54,
+    29.6
+   ],
+   "dir": [
+    0,
+    1
+   ],
+   "draw": "standard",
+   "poses": {
+    "turn": {
+     "r1": {
+      "at": [
+       44.234,
+       29.6
+      ],
+      "dir": [
+       0,
+       1
+      ]
+     },
+     "r3": {
+      "at": [
+       44.234,
+       29.6
+      ],
+      "dir": [
+       0,
+       1
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "vacuum",
+   "kind": "plug",
+   "family": "hose",
+   "gender": "M",
+   "size_mm": 7,
+   "at": [
+    27.5,
+    -16
+   ],
+   "dir": [
+    1,
+    0
+   ]
+  }
+ ],
+ "holds": [
+  {
+   "id": "inlet-neck",
+   "kind": "grip",
+   "from": [
+    0,
+    -20
+   ],
+   "to": [
+    0,
+    -18
+   ],
+   "diameter_mm": 13
+  }
+ ],
+ "params": [
+  {
+   "id": "turn",
+   "names": {
+    "en": "Receiver",
+    "ja": "受器"
+   },
+   "kind": "states",
+   "default": "r2",
+   "states": [
+    {
+     "id": "r1",
+     "names": {
+      "en": "Receiver 1",
+      "ja": "受器 1"
+     }
+    },
+    {
+     "id": "r2",
+     "names": {
+      "en": "Receiver 2",
+      "ja": "受器 2"
+     }
+    },
+    {
+     "id": "r3",
+     "names": {
+      "en": "Receiver 3",
+      "ja": "受器 3"
+     }
+    }
+   ]
+  }
+ ],
+ "parts": [
+  {
+   "id": "turn",
+   "param": "turn",
+   "motion": {
+    "per_state": {}
+   },
+   "handle": {
+    "at": [
+     0,
+     0
+    ],
+    "gesture": "toggle"
+   }
+  }
+ ]
+}

@@ -10,6 +10,7 @@ mod steroids;
 use crate::document::{Atom, Document, Point};
 use crate::editing;
 pub(crate) use aromatic::show_circles;
+pub use layouts::GROUP as FIGURE_LAYOUTS;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::sync::LazyLock;

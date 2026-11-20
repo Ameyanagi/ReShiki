@@ -133,6 +133,7 @@ fn mixed() -> Document {
     let b = doc.add_atom("N", Point::new(20., 40.));
     doc.add_bond(a, b, 1, "plain");
     doc.annotations.push(Annotation {
+        angle: 0.,
         id: doc.next_id(),
         position: Point::new(100., 20.),
         text: "Upright caption".into(),

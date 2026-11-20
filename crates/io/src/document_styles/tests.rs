@@ -457,6 +457,7 @@ fn style_roundtrip_preserves_coordinates_and_explicit_overrides()
         ..Default::default()
     });
     doc.annotations.push(Annotation {
+        angle: 0.,
         id: 3,
         position: Point::new(40., 90.),
         text: "Scheme 1".into(),

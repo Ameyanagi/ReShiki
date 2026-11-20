@@ -1796,11 +1796,19 @@ impl Pass {
         if !matches!(tag.as_str(), "t" | "n" | "page" | "CDXML") {
             return Ok(());
         }
-        if self
-            .attr(index, "RotationAngle")?
-            .as_deref()
-            .and_then(number)
-            .is_some_and(|angle| angle != 0.)
+        // Captions turn; atom labels and inherited defaults stay upright.
+        let parent = self.node(index)?.parent;
+        let caption = tag == "t"
+            && match parent {
+                Some(parent) => !matches!(self.node(parent)?.tag.as_str(), "n" | "objecttag"),
+                None => true,
+            };
+        if !caption
+            && self
+                .attr(index, "RotationAngle")?
+                .as_deref()
+                .and_then(number)
+                .is_some_and(|angle| angle != 0.)
         {
             self.remove(index, &["RotationAngle"])?;
             if tag == "t" {

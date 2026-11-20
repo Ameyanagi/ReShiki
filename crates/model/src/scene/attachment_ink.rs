@@ -226,6 +226,7 @@ fn intersects_fraction(part: &Primitive, origin: Point, axis: Point, at: f32) ->
             .any(|path| signed_area(path).abs() > 1e-10 && range(path, 0.)),
         Primitive::Picture(_)
         | Primitive::Text { .. }
+        | Primitive::Rotated { .. }
         | Primitive::Halo { .. }
         | Primitive::Sphere { .. }
         | Primitive::Ellipsoid { .. }

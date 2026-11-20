@@ -180,6 +180,7 @@ async fn corrections_are_rerendered_and_exact_final_images_are_required() -> any
             Default::default(),
         ));
         doc.annotations.push(crate::document::Annotation {
+            angle: 0.,
             id: 2,
             position: crate::document::Point::new(70., -80.),
             text: "Test".into(),

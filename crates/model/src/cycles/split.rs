@@ -153,6 +153,11 @@ fn translated(b: Ink, delta: Point) -> Ink {
     (b.0.offset(delta.x, delta.y), b.1.offset(delta.x, delta.y))
 }
 
+fn label_ink((origin, text, format): &(Point, String, TextFormat)) -> Ink {
+    let layout = crate::typography::layout(text, format);
+    (*origin, origin.offset(layout.width, layout.height))
+}
+
 fn support(ink: Ink, origin: Point, normal: Point) -> f32 {
     [
         ink.0,
@@ -232,11 +237,29 @@ pub(super) fn apply(doc: &mut Document, mut split: Split) {
         .into_iter()
         .map(|ids| crate::molecule_names::include_annotations(doc, &ids))
         .filter(|ids| ids.iter().all(|id| !moving.contains(id)))
+        // A cycle only paints its resolved paths and labels. Its guide box
+        // would incorrectly mark the whole interior as occupied.
+        .chain(
+            doc.graphics
+                .iter()
+                .filter(|g| g.cycle.is_none() && g.style.effects.opacity != Some(0.))
+                .map(|g| vec![g.id]),
+        )
         .collect();
     let mut ink: Vec<_> = crate::scene::selections_bounds(doc, &units)
         .into_iter()
         .flatten()
         .collect();
+    ink.extend(drawn.labels.iter().map(label_ink));
+    for g in doc
+        .graphics
+        .iter()
+        .filter(|g| g.id != split.cycle && g.cycle.is_some() && g.style.effects.opacity != Some(0.))
+    {
+        let other = super::drawn(doc, g);
+        paths.extend(other.arrows.iter().map(points));
+        ink.extend(other.labels.iter().map(label_ink));
+    }
     let mut moves = vec![];
     for side in split.sides {
         let from = center_of(side.body);
@@ -341,6 +364,8 @@ pub(super) fn apply(doc: &mut Document, mut split: Split) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::graphics::{BracketSides, GraphicStyle};
+
     #[test]
     fn sampled_vertices_and_collinear_overlaps_are_obstacles() {
         let p = Point::new;
@@ -359,5 +384,73 @@ mod tests {
             &[p(0., 2.), p(4., 2.)],
             1.
         ));
+    }
+
+    #[test]
+    fn split_side_placement_keeps_graphics_and_the_cycle_title_clear() {
+        let mut before = Document::from_json(include_bytes!(
+            "../../../../tests/fixtures/cycles/bowed-insertion.rsk"
+        ))
+        .unwrap();
+        let part: Vec<_> = (40..=85).collect();
+        before.translate(&part, -234.75783, 388.1741);
+        let target = drop_target(&before, &part).unwrap();
+        let side = vec![(156..=159).collect(), (160..=168).collect()];
+        let ink = |doc: &Document| crate::scene::selections_bounds(doc, &side);
+        let mut baseline = before.clone();
+        assign(&mut baseline, &target);
+        let original = ink(&before);
+        let placed = ink(&baseline);
+        assert_ne!(placed, original);
+
+        let mut with_shape = before.clone();
+        let (lo, hi) = grown(placed[0].unwrap(), DEFAULT.world(2.));
+        with_shape.graphics.push(Graphic::dragged(
+            with_shape.next_id(),
+            GraphicKind::Rectangle,
+            lo,
+            hi,
+            GraphicStyle {
+                fill: Some(crate::palette::Color::Ink),
+                ..Default::default()
+            },
+            BracketSides::Both,
+            false,
+        ));
+        assign(&mut with_shape, &target);
+        assert!(
+            ink(&with_shape)
+                .into_iter()
+                .flatten()
+                .all(|b| !overlap(b, (lo, hi)))
+        );
+
+        let mut with_title = before;
+        let title = vec!["Suzuki–Miyaura coupling".repeat(5); 5].join("\n");
+        let g = with_title
+            .graphics
+            .iter_mut()
+            .find(|g| g.id == target.cycle)
+            .unwrap();
+        g.cycle.as_mut().unwrap().label = title.clone();
+        assign(&mut with_title, &target);
+        let g = with_title
+            .graphics
+            .iter()
+            .find(|g| g.id == target.cycle)
+            .unwrap();
+        let title = drawn(&with_title, g)
+            .labels
+            .into_iter()
+            .find(|(_, text, _)| *text == title)
+            .unwrap();
+        let title = label_ink(&title);
+        assert!(placed.into_iter().flatten().any(|b| overlap(b, title)));
+        assert!(
+            ink(&with_title)
+                .into_iter()
+                .flatten()
+                .all(|b| !overlap(b, title))
+        );
     }
 }

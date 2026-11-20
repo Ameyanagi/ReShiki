@@ -9,6 +9,7 @@ use std::f32::consts::TAU;
 fn text(doc: &mut Document, at: Point, text: &str) -> u64 {
     let id = doc.next_id();
     doc.annotations.push(Annotation {
+        angle: 0.,
         id,
         position: at,
         text: text.into(),
@@ -258,6 +259,110 @@ fn a_drop_on_a_bowed_arc_splits_its_step() {
     let target = drop_target(&doc, &[free]).unwrap();
     assert_eq!(target.role, Role::Intermediate(1), "at {mid}");
     assert_eq!(target.tag, "Insert between 1 and 2");
+}
+
+/// Insert beyond the ordinary ownership disk, using the actual painted arc.
+fn far_bowed_insert(backwards: bool, reversible: bool) -> (Document, u64, u64, Point) {
+    let (mut doc, id, _) = suzuki();
+    set_radius(&mut doc, id, 1000.);
+    let c = doc
+        .graphics
+        .iter_mut()
+        .find(|g| g.id == id)
+        .and_then(|g| g.cycle.as_deref_mut())
+        .unwrap();
+    if backwards {
+        reverse(c);
+    }
+    c.steps[0].bow_pt = 720.;
+    c.steps[0].reversible = reversible;
+    let (center, radius) = graphic(&doc, id).cycle_circle();
+    let drawn = drawn(&doc, graphic(&doc, id));
+    let on_arc = drawn.arrows[drawn.arcs.iter().position(|s| *s == Some(0)).unwrap()].point(0.5);
+    assert!(on_arc.distance(center) > radius + 5. * doc.drawing_style.bond_length_world);
+    let free = text(&mut doc, Point::default(), "Ar–X");
+    let c = center_of(ink(&doc, free));
+    doc.translate(&[free], on_arc.x - c.x, on_arc.y - c.y);
+    let target = drop_target(&doc, &[free]).unwrap();
+    assert_eq!(target.role, Role::Intermediate(1));
+    super::assign(&mut doc, &target);
+    doc.validate().unwrap();
+    (doc, id, free, on_arc)
+}
+
+#[test]
+fn a_far_bowed_insert_stays_owned_after_the_next_move_and_save() {
+    for backwards in [false, true] {
+        for reversible in [false, true] {
+            let (mut doc, id, free, _) = far_bowed_insert(backwards, reversible);
+            let c = doc
+                .graphics
+                .iter_mut()
+                .find(|g| g.id == id)
+                .and_then(|g| g.cycle.as_deref_mut())
+                .unwrap();
+            c.steps[1].name = "Keep the inserted step's oxidative addition".into();
+            c.steps[1].lead_pt = 12.;
+            c.steps[1].trail_pt = 7.;
+            c.steps[1].reversible = true;
+            let steps = c.steps.clone();
+            // Splitting retains Bow on the incoming step; neither new arc
+            // necessarily passes through the old arc's middle any more.
+            assert!(super::holds(&doc, id, &[free]));
+            let delta = Point::new(0.5, -0.25);
+            doc.translate(&[free], delta.x, delta.y);
+            assert!(doc.take_out(&[free], delta).is_empty());
+            assert_eq!(
+                super::role_of(&doc, free),
+                Some((id, Role::Intermediate(1)))
+            );
+            assert_eq!(cycle(&doc, id).steps, steps);
+            assert!(
+                doc.groups
+                    .iter()
+                    .any(|g| { g.members.contains(&id) && g.members.contains(&free) })
+            );
+            let saved = Document::from_json(&doc.file_json().unwrap()).unwrap();
+            assert!(super::holds(&saved, id, &[free]));
+            assert_eq!(cycle(&saved, id).steps, steps);
+        }
+    }
+}
+
+#[test]
+fn a_far_bow_does_not_keep_an_insert_on_the_opposite_side() {
+    let (mut doc, id, free, on_arc) = far_bowed_insert(false, false);
+    let (center, _) = graphic(&doc, id).cycle_circle();
+    let opposite = center.offset(center.x - on_arc.x, center.y - on_arc.y);
+    assert!((opposite.distance(center) - on_arc.distance(center)).abs() < 0.01);
+    let p = center_of(ink(&doc, free));
+    let delta = Point::new(opposite.x - p.x, opposite.y - p.y);
+    doc.translate(&[free], delta.x, delta.y);
+    assert!(!super::holds(&doc, id, &[free]));
+    assert!(
+        doc.take_out(&[free], delta)
+            .contains(&crate::grouping::Container::Cycle)
+    );
+    assert_eq!(super::role_of(&doc, free), None);
+    assert!(drop_target(&doc, &[free]).is_none());
+}
+
+#[test]
+fn removing_bow_restores_the_normal_circle_ownership_boundary() {
+    let (mut doc, id, free, _) = far_bowed_insert(false, false);
+    let c = doc
+        .graphics
+        .iter_mut()
+        .find(|g| g.id == id)
+        .and_then(|g| g.cycle.as_deref_mut())
+        .unwrap();
+    c.steps[0].bow_pt = 0.;
+    assert!(!super::holds(&doc, id, &[free]));
+    let (center, radius) = graphic(&doc, id).cycle_circle();
+    let p = center_of(ink(&doc, free));
+    let at = center.offset(radius + 3.5 * doc.drawing_style.bond_length_world, 0.);
+    doc.translate(&[free], at.x - p.x, at.y - p.y);
+    assert!(super::holds(&doc, id, &[free]));
 }
 
 #[test]

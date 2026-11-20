@@ -803,7 +803,10 @@ fn the_dialogs_save_closes_its_tab_after_a_finder_file_took_the_front() {
     finder.add_atom("S", Point::default());
     let _ = app.update(Message::FilePrepared(Some((
         "finder.rsk".into(),
-        Ok(super::super::files::Prepared::Native(Box::new(finder))),
+        Ok(super::super::files::Prepared::Native(
+            Box::new(finder),
+            None,
+        )),
     ))));
     assert_ne!(app.tab.id, asked);
     let _ = app.update(Message::Tab(

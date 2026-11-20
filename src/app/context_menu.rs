@@ -360,7 +360,6 @@ impl App {
     /// cycle leaves it; two or more free parts make one.
     fn cycle_entries(&self) -> Vec<Entry> {
         use super::cycles::Action;
-        let doc = &self.tab.doc;
         if let Some((_, cycle)) = self.selected_cycle() {
             let steps = self.cycle_step().is_some();
             let parts = cycle.parts().next().is_some();
@@ -380,12 +379,7 @@ impl App {
             )
             .collect();
         }
-        if self
-            .tab
-            .selected
-            .iter()
-            .any(|id| reshiki::cycles::role_of(doc, *id).is_some())
-        {
+        if self.cycle_part_selected() {
             vec![Entry::command(
                 "Remove from cycle",
                 Message::Cycle(super::cycles::Action::Remove),
@@ -1072,19 +1066,14 @@ impl App {
 
     /// Lasting layouts: rows, columns and grids that keep their gutters.
     fn layout_entries(&self) -> Vec<Entry> {
-        use reshiki::layouts::Flow;
         // Like Align, a layout needs two objects.
         if self.alignment_count() < 2 {
             return vec![];
         }
         let mut entries = vec![Entry::Separator, Entry::Hint("Lasting layout")];
-        for (label, flow) in [
-            ("Row with even gutters", Flow::Row),
-            ("Column with even gutters", Flow::Column),
-            ("Grid with even gutters", Flow::Grid(2)),
-        ] {
+        for flow in super::figure_panels::LASTING_LAYOUTS {
             entries.push(Entry::command(
-                label,
+                flow.label(),
                 Message::Figure(super::figure_panels::Action::Arrange(flow)),
                 true,
             ));

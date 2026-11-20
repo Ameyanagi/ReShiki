@@ -59,6 +59,7 @@ fn caption(doc: &mut Document, text: &str, p: Point, size: f32, bold: bool, widt
         reshiki::palette::Color::Custom(if bold { [41, 62, 56] } else { [78, 90, 87] });
     format.width_pt = Some(width);
     doc.annotations.push(Annotation {
+        angle: 0.,
         id: doc.next_id(),
         position: p,
         text: text.into(),

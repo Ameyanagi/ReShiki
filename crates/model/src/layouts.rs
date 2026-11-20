@@ -23,14 +23,18 @@ impl Flow {
             Self::Grid(columns) => usize::from(columns.max(1)),
         }
     }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Row => "Row with even gutters",
+            Self::Column => "Column with even gutters",
+            Self::Grid(_) => "Grid with even gutters",
+        }
+    }
 }
 impl std::fmt::Display for Flow {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Row => f.write_str("Row"),
-            Self::Column => f.write_str("Column"),
-            Self::Grid(columns) => write!(f, "Grid of {columns} columns"),
-        }
+        f.write_str(self.label())
     }
 }
 

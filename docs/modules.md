@@ -530,6 +530,7 @@ explains how the crates and modules fit together.
 - `crates/io/src/chemistry/cdxml/scene/ring_fills.rs`: Native ChemDraw bond-owned areas and legacy ReShiki-owned polygons.
 - `crates/io/src/chemistry/cdxml/schemes.rs`: Validate external reaction references without inventing native reaction roles.
 - `crates/io/src/chemistry/cdxml/stereo.rs`
+- `crates/io/src/chemistry/cdxml/symbol.rs`
 - `crates/io/src/chemistry/cdxml/tree.rs`: Private detached XML tree.
 - `crates/io/src/chemistry/cdxml/variables.rs`: Drawing-only labels on unspecified atoms; query chemistry remains unsupported.
 - `crates/io/src/chemistry/cdxml/xml_guard.rs`: One linear scan of the XML bytes before any parser runs.
@@ -685,6 +686,7 @@ explains how the crates and modules fit together.
 - `crates/model/src/crossings/depth.rs`: Resolve crossings at their actual XYZ intersection, with explicit layers taking precedence over automatic depth.
 - `crates/model/src/crossings/ring_strokes.rs`: Crossing clearance for cubic aromatic circles and partial ring curves.
 - `crates/model/src/cycles.rs`: Catalytic cycles.
+- `crates/model/src/cycles/split.rs`: Keep inherited side parts beside the step that an insertion shortens.
 - `crates/model/src/cycles/steps.rs`: A catalytic cycle's steps as ordinary reactions.
 - `crates/model/src/depiction.rs`: Opt-in nitrogen charge separation using the same cleanup as analysis.
 - `crates/model/src/depth_appearance.rs`: Persistent paint for an editable projection, independent of chemical styles.
@@ -702,6 +704,7 @@ explains how the crates and modules fit together.
 - `crates/model/src/equipment/revise.rs`: Moving placed pieces to another revision of their definition, as a library offers it.
 - `crates/model/src/equipment/solve.rs`: Seats join the joints and holds of placed pieces.
 - `crates/model/src/equipment/solve/adjust.rs`: Movable parts.
+- `crates/model/src/equipment/solve/hose.rs`: Hoses.
 - `crates/model/src/equipment/validate.rs`: Checks the schema cannot express
 - `crates/model/src/erasing.rs`: Erase the geometry crossed by a pointer stroke, including between motion events.
 - `crates/model/src/fischer.rs`: Explicit Fischer projections

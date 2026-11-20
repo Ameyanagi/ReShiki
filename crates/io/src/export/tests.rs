@@ -88,6 +88,7 @@ async fn editable_png_preserves_custom_colors_from_older_dark_snapshots() {
         let mut format = TextFormat::default();
         format.style.color = color;
         doc.annotations.push(Annotation {
+            angle: 0.,
             id: 1,
             position: Point::default(),
             text: "O".into(),
@@ -358,6 +359,7 @@ fn an_oversized_png_is_refused_before_the_scene_is_written() {
     let mut text = Document::default();
     text.add_atom("C", Point::default());
     text.annotations.push(crate::document::Annotation {
+        angle: 0.,
         id: text.next_id(),
         position: Point::default(),
         text: "x".repeat(10_000),
@@ -473,6 +475,7 @@ fn clipboard_is_transparent_and_files_keep_canvas_background() {
     format.style.color = crate::palette::Color::Custom([180, 50, 55]);
     let mut doc = Document::default();
     doc.annotations.push(Annotation {
+        angle: 0.,
         id: 1,
         position: Point::default(),
         text: "O".into(),
@@ -534,6 +537,7 @@ fn dark_ink_drawing() -> Document {
     let mut format = TextFormat::default();
     format.style.color = crate::palette::Color::Custom([180, 50, 55]);
     doc.annotations.push(Annotation {
+        angle: 0.,
         id: doc.next_id(),
         position: Point::new(0., 40.),
         text: "N".into(),
@@ -676,6 +680,7 @@ fn picture_backgrounds_keep_palette_and_element_colors() {
         let mut format = TextFormat::default();
         format.style.color = blue;
         doc.annotations.push(Annotation {
+            angle: 0.,
             id: doc.next_id(),
             position: Point::new(0., 40.),
             text: "M".into(),
@@ -1278,6 +1283,7 @@ fn transparent_label_halo_reaches_vector_readers_as_a_named_knockout_mask() {
 fn vector_payload_document() -> Document {
     let mut doc = Document::default();
     doc.annotations.push(crate::document::Annotation {
+        angle: 0.,
         id: 1,
         position: Default::default(),
         text: "Editable 日本語".into(),
@@ -1658,4 +1664,28 @@ fn file_sizes_follow_the_adaptive_budget() {
     let (width, height, dpi) = png_file_size(size, 1200).unwrap();
     assert_eq!(dpi, 600);
     assert_eq!((width, height), png_pixels(size, 600));
+}
+
+/// PDF fonts carry outlines only, so an emoji embedded as Apple Color Emoji
+/// text was invisible. It must come out as a picture while the letters beside
+/// it stay text.
+#[cfg(target_os = "macos")]
+#[test]
+fn colour_emoji_reach_the_pdf_as_pictures() {
+    let mut doc = Document::default();
+    doc.annotations.push(crate::document::Annotation {
+        id: 1,
+        position: crate::document::Point::default(),
+        text: "H 💡".into(),
+        format: Default::default(),
+        angle: 0.,
+    });
+    // A file and a copy, which macOS pastes into Keynote, Word or PowerPoint.
+    for pdf in [drawing(&doc, "pdf"), clipboard_drawing(&doc, "pdf")] {
+        let pdf = pdf.unwrap();
+        let has = |needle: &[u8]| pdf.windows(needle.len()).any(|w| w == needle);
+        assert!(has(b"/Subtype /Image"));
+        assert!(!has(b"AppleColorEmoji"));
+        assert!(has(b"/FontFile2"));
+    }
 }

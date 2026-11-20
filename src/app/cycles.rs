@@ -298,6 +298,13 @@ impl App {
         Some((id, self.tab.cycle_inputs.step.min(last)))
     }
 
+    pub(super) fn cycle_part_selected(&self) -> bool {
+        self.tab
+            .selected
+            .iter()
+            .any(|id| reshiki::cycles::role_of(&self.tab.doc, *id).is_some())
+    }
+
     /// Choose the step of the selected cycle that lies toward `p`, as a
     /// right-click on its arc does.
     pub(super) fn choose_step_at(&mut self, p: reshiki::document::Point, hit: &[u64]) {

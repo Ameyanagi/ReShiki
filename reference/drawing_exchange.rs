@@ -739,6 +739,7 @@ fn editable_drawing_output_matches_original_writer() -> anyhow::Result<()> {
     }
     let mut text = Document::default();
     text.annotations.push(Annotation {
+        angle: 0.,
         id: 1,
         position: Point::new(-37.125, 98.3),
         text: "試料 α & <H₂O>\nLine two".into(),
@@ -836,6 +837,7 @@ fn editable_drawing_output_matches_original_writer() -> anyhow::Result<()> {
     ] {
         let mut doc = Document::default();
         doc.annotations.push(Annotation {
+            angle: 0.,
             id: 1,
             position: Point::new(2., 3.),
             text: "試料 H2O\nSecond line".into(),
@@ -1018,6 +1020,7 @@ fn invalid_export_geometry_and_text_return_errors() -> anyhow::Result<()> {
     }
     let mut text = Document::default();
     text.annotations.push(Annotation {
+        angle: 0.,
         id: 1,
         position: Point::default(),
         text: "invalid\0text".into(),

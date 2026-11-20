@@ -192,6 +192,7 @@ fn stable_order_full_component_and_target_only_patch_keep_unrelated_drawing_exac
     let mut source = ethanol();
     let unrelated = source.add_atom("*", Point::new(-100., 500.));
     source.annotations.push(Annotation {
+        angle: 0.,
         id: source.next_id(),
         position: Point::new(10., -90.),
         text: "source caption".into(),
@@ -685,6 +686,7 @@ fn links_outside_the_molecule_do_not_stop_a_model() {
     fn text(doc: &mut Document, text: &str, at: Point) -> u64 {
         let id = doc.next_id();
         doc.annotations.push(Annotation {
+            angle: 0.,
             id,
             position: at,
             text: text.into(),

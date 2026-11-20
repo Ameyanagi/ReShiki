@@ -170,6 +170,7 @@ fn imported_open_and_closed_multicubic_paths_keep_their_local_anchor() {
         );
         source.add_atom("N", Point::new(-25., 80.));
         source.annotations.push(Annotation {
+            angle: 0.,
             id: source.next_id(),
             position: Point::new(250., -60.),
             text: "Keep upright".into(),

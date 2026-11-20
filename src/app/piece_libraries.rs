@@ -524,6 +524,33 @@ impl App {
         body.push(buttons.wrap().vertical_spacing(6)).into()
     }
 
+    fn piece_update_ids(&self, definition: &str) -> (Vec<u64>, Vec<u64>) {
+        let ids: Vec<u64> = (self.tab.doc.graphics.iter())
+            .filter(|g| g.piece.as_ref().is_some_and(|p| p.definition == definition))
+            .map(|g| g.id)
+            .collect();
+        let selected = (ids.iter().copied())
+            .filter(|id| self.tab.selected.contains(id))
+            .collect();
+        (ids, selected)
+    }
+
+    /// The Properties card's Update and optional Update all actions.
+    /// Looking them up does not run the seat-loss preview or change a library.
+    pub(super) fn selected_piece_updates(&self) -> Option<(Action, Option<Action>)> {
+        let mut pieces = (self.tab.doc.graphics.iter())
+            .filter(|g| self.tab.selected.contains(&g.id))
+            .filter_map(|g| g.piece.as_ref()?.linked.as_ref());
+        let definition = pieces.next()?;
+        let current = key(definition);
+        if !pieces.all(|d| key(d) == current) {
+            return None;
+        }
+        let (next, _) = self.equipment.libraries.newer(definition)?;
+        let (ids, selected) = self.piece_update_ids(&current);
+        Some(update_actions(selected, ids, &next))
+    }
+
     /// For one kind of selected piece: keep it, export it, or update it to
     /// a newer revision a library holds.
     pub(super) fn piece_library_rows(&self, d: &Arc<Definition>) -> Element<'_, Message> {
@@ -532,13 +559,7 @@ impl App {
         let in_library = libraries.entries.iter().any(|e| e.key == k);
         let mut body = column![].spacing(6);
         if let Some((next, source)) = libraries.newer(d) {
-            let ids: Vec<u64> = (self.tab.doc.graphics.iter())
-                .filter(|g| g.piece.as_ref().is_some_and(|p| p.definition == k))
-                .map(|g| g.id)
-                .collect();
-            let selected: Vec<u64> = (ids.iter().copied())
-                .filter(|id| self.tab.selected.contains(id))
-                .collect();
+            let (ids, selected) = self.piece_update_ids(&k);
             let outcome = revise::preview(&self.tab.doc, &selected, &next);
             body = body.push(
                 text(format!(
@@ -557,22 +578,10 @@ impl App {
                         .style(muted_text),
                 );
             }
-            let mut buttons = row![command(
-                "Update",
-                Message::Equipment(Action::Update {
-                    ids: selected,
-                    key: key(&next),
-                })
-            )]
-            .spacing(6);
-            if ids.len() > 1 {
-                buttons = buttons.push(command(
-                    "Update all in drawing",
-                    Message::Equipment(Action::Update {
-                        ids,
-                        key: key(&next),
-                    }),
-                ));
+            let (update, all) = update_actions(selected, ids, &next);
+            let mut buttons = row![command("Update", Message::Equipment(update))].spacing(6);
+            if let Some(all) = all {
+                buttons = buttons.push(command("Update all in drawing", Message::Equipment(all)));
             }
             body = body.push(buttons);
         }
@@ -593,6 +602,25 @@ impl App {
         ));
         body.push(buttons).into()
     }
+}
+
+fn update_actions(
+    selected: Vec<u64>,
+    ids: Vec<u64>,
+    next: &Definition,
+) -> (Action, Option<Action>) {
+    let next = key(next);
+    let all = (ids.len() > 1).then(|| Action::Update {
+        ids,
+        key: next.clone(),
+    });
+    (
+        Action::Update {
+            ids: selected,
+            key: next,
+        },
+        all,
+    )
 }
 
 /// What an update releases and resets, for the status line.

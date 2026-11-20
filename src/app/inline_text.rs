@@ -130,19 +130,27 @@ impl App {
             (Some(original), true) => doc.delete(&[original.id]),
             (Some(original), false) => {
                 if let Some(label) = doc.annotations.iter_mut().find(|a| a.id == original.id) {
+                    let centre = label.centre();
                     label.text = text;
                     label.format = format;
+                    // Turned text grows about its centre, which it turns about.
+                    if label.angle != 0. {
+                        let (w, h) = label.size();
+                        label.position = centre.offset(-w / 2., -h / 2.);
+                    }
                 }
             }
             (None, false) => {
                 let id = doc.next_id();
                 doc.annotations.push(Annotation {
+                    angle: 0.,
                     id,
                     position: state.position,
                     text,
                     format,
                 });
                 if let Some(target) = &state.callout {
+                    reshiki::leaders::keep_on_page(&mut doc, id, target);
                     reshiki::leaders::attach(&mut doc, id, target.clone())?;
                 }
                 if let Some(shape) = doc.graphics.iter_mut().find(|g| Some(g.id) == state.shape) {
@@ -424,6 +432,9 @@ impl App {
             (natural.height * self.tab.camera.zoom + 20.).max(size * 1.5 + 16.),
             extra,
             condition_arrow,
+            // Centred text, and turned text, edit centred over it.
+            self.tab.caption_format.alignment == TextAlign::Center
+                || state.original.as_ref().is_some_and(|a| a.angle != 0.),
         );
         let x = bounds.x;
         let y = bounds.y;
@@ -556,6 +567,7 @@ impl App {
                 canvas_theme: self.tab.doc.canvas_theme,
                 color_theme: self.tab.doc.color_theme,
                 annotations: vec![Annotation {
+                    angle: 0.,
                     id: 1,
                     position: Point::default(),
                     text: self.tab.caption.clone(),
@@ -813,6 +825,7 @@ fn editor_bounds(
     height: f32,
     extra: f32,
     condition_arrow: Option<iced::Point>,
+    centred: bool,
 ) -> iced::Rectangle {
     let width = width.max(240.).min((viewport.width - 16.).max(24.));
     let height = (height.max(60.) + extra).min((viewport.height - 16.).max(24.));
@@ -827,6 +840,8 @@ fn editor_bounds(
             + 8.;
         let center = label.center() + normal * clearance;
         iced::Point::new(center.x - width / 2., center.y - height / 2.)
+    } else if centred {
+        iced::Point::new(label.center_x() - width / 2., label.y - 8.)
     } else {
         iced::Point::new(label.x - 8., label.y - 8.)
     };

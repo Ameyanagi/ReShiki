@@ -116,6 +116,17 @@ impl Widget<Message, Theme, Renderer> for FileShortcuts<'_> {
     ) {
         let shortcut = crate::platform::shortcut_event(event);
         let event = shortcut.as_ref().unwrap_or(event);
+        if let Event::Keyboard(keyboard::Event::KeyPressed {
+            key,
+            modifiers,
+            repeat: true,
+            ..
+        }) = event
+            && super::command_palette::is_shortcut(key, *modifiers)
+        {
+            shell.capture_event();
+            return;
+        }
         // The Updates focus scope owns Tab, Enter and Space. Keep other keys
         // away from file routing and the focused editor behind the dialog.
         if self.updates_open

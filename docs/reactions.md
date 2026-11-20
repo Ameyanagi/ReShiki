@@ -47,9 +47,9 @@ molecule gives Chemistry.
 ### Preview a reaction
 
 Right-click a Chemistry reaction or equilibrium arrow and choose **Preview
-reaction**, or choose
-**Preview** in **Reaction roles**. Dashed outlines show each reactant, product
-and reagent, and the arrow with the conditions written along it. An arrow with assigned roles
+reaction**. The same command is in **Reaction roles** and the command palette.
+Dashed outlines show each reactant, product and reagent, and the arrow with the
+conditions written along it. An arrow with assigned roles
 shows them. Otherwise ReShiki reads the arrow's row: Chemistry molecules before
 the arrow are reactants, molecules after it are products, and molecules above
 or below its middle are reagents. The next arrow in the row ends each side.
@@ -291,7 +291,7 @@ highlighted, and an optional legend names each color.
    the color of new bonds and rings, and turn on **Mark new bonds**, **Mark
    broken and changed bonds**, **Fill new rings** or **Legend**. Each change
    repaints the reaction.
-4. After you edit a molecule or its maps, choose **Update colors**. **Clear
+4. After you edit a molecule or its maps, choose **Color by origin** again. **Clear
    colors** removes the colors and the legend.
 
 Each command is one Undo step. Coloring hides the map numbers so the figure stays readable; turn on **Show maps** in **Reaction roles** to see them. Atom maps keep abbreviations such as PPh₃ contracted. Bonds take the reactant's palette color, and

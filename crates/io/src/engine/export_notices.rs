@@ -186,6 +186,7 @@ mod tests {
             ArrowStyle::preset(Preset::Forward),
         ));
         doc.annotations.push(Annotation {
+            angle: 0.,
             id: 2,
             position: Point::new(40., -40.),
             text: "heat".into(),

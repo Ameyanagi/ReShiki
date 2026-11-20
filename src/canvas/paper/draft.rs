@@ -339,6 +339,23 @@ impl MoleculeCanvas<'_> {
         if handle.toggle || start.distance(p) < self.camera.world_len(pick::DRAG_SLOP_PX) {
             return;
         }
+        if let Some(grip) = handle.grip.filter(|_| self.tool.selects()) {
+            let reach = f64::from(self.camera.world_len(reshiki::equipment::solve::REACH_PX));
+            let doc = draft.preview.to_mut();
+            let to = [f64::from(p.x), f64::from(p.y)];
+            if let Some(b) = reshiki::equipment::solve::hose::drag(doc, *id, grip, to, reach) {
+                draft.seat_hint = Some(super::SeatHint {
+                    at: World::new(b.point[0] as f32, b.point[1] as f32),
+                    radius: (b.diameter() / 2.) as f32,
+                    fits: true,
+                    text: format!(
+                        "Push onto the {}",
+                        crate::app::equipment::joint_name(doc, &b.at)
+                    ),
+                });
+            }
+            return;
+        }
         let Some(g) = self.doc.graphics.iter().find(|g| g.id == *id) else {
             return;
         };

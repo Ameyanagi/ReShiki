@@ -30,6 +30,7 @@ image = { version = "0.25", default-features = false, features = [
 png = "0.17"
 resvg = "0.45"
 roxmltree = "0.20"
+rustybuzz = "0.20"
 serde = { version = "1", features = ["derive", "rc"] }
 serde_json = { version = "1", features = ["float_roundtrip"] }
 sha2 = { version = "0.10.9", default-features = false, features = ["force-soft"] }
@@ -38,6 +39,7 @@ tempfile = "3"
 thiserror = "2"
 tiff = "0.11.3"
 ttf-parser = "0.25"
+unicode-segmentation = "1.13"
 i_overlay = "9.1.0"
 
 [build-dependencies]

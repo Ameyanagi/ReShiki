@@ -10,6 +10,7 @@ fn app() -> App {
 fn label(app: &mut App, text: &str) -> u64 {
     let id = app.tab.doc.next_id();
     app.tab.doc.annotations.push(Annotation {
+        angle: 0.,
         id,
         position: Point::new(20., 30.),
         text: text.into(),
@@ -62,6 +63,7 @@ fn unicode_subscript_caption_commits_ascii_and_reopens_with_explicit_formatting(
 fn pasted_captions_normalize_subscripts_before_native_document_insertion() {
     let mut source = Document::default();
     source.annotations.push(Annotation {
+        angle: 0.,
         id: 1,
         position: Point::default(),
         text: "K₂CO₃, DMF".into(),
@@ -428,6 +430,7 @@ fn empty_editor_is_wide_enough_for_the_zoomed_placeholder() {
             natural.height * zoom + 20.,
             40.,
             None,
+            false,
         );
         let placeholder = Paragraph::with_text(iced::advanced::Text {
             content: PLACEHOLDER,
@@ -460,7 +463,7 @@ fn popup_stays_in_view_at_document_edges_with_long_labels() {
         for extra in [40., 120.] {
             for arrow in [None, Some(iced::Point::new(210., 180.))] {
                 let label = iced::Rectangle::new(anchor, iced::Size::new(80., 35.));
-                let bounds = editor_bounds(viewport, label, 4000., 1800., extra, arrow);
+                let bounds = editor_bounds(viewport, label, 4000., 1800., extra, arrow, false);
                 assert!(bounds.x >= 0. && bounds.y >= 0.);
                 assert!(bounds.x + bounds.width <= viewport.width);
                 assert!(bounds.y + bounds.height <= viewport.height);
@@ -492,7 +495,7 @@ fn condition_popups_stay_outside_the_label_and_arrow_when_space_permits() {
                 iced::Size::new(60. * 1.09, 35. * 1.09),
             );
             for extra in [40., 124.] {
-                let bounds = editor_bounds(viewport, label, 100., 60., extra, Some(arrow));
+                let bounds = editor_bounds(viewport, label, 100., 60., extra, Some(arrow), false);
                 let projection = |p: iced::Point| {
                     let offset = p - arrow;
                     offset.x * normal.x + offset.y * normal.y
@@ -506,7 +509,7 @@ fn condition_popups_stay_outside_the_label_and_arrow_when_space_permits() {
                     assert!(projection(corner) >= label_edge + 7.99, "{bounds:?}");
                 }
             }
-            let ordinary = editor_bounds(viewport, label, 100., 60., 40., None);
+            let ordinary = editor_bounds(viewport, label, 100., 60., 40., None, false);
             assert_eq!(
                 ordinary.position(),
                 label.position() - iced::Vector::new(8., 8.)
@@ -626,4 +629,52 @@ fn double_clicking_a_shape_types_centred_text_into_it_in_one_step() {
     let _ = app.update(Message::Undo);
     assert!(app.tab.doc.annotations.is_empty());
     assert_eq!(app.tab.doc.graphics[0].text, None);
+}
+
+#[test]
+fn backspace_removes_a_whole_grapheme_and_one_undo_restores_it() {
+    for prefix in ["Mix ", "שלום ", "Mix\n"] {
+        for cluster in ["🇯🇵", "👩\u{200D}🔬", "⚡️", "👍🏽", "e\u{301}", "x"] {
+            let mut app = app();
+            begin(&mut app, None);
+            let text = format!("{prefix}{cluster}");
+            type_text(&mut app, &text);
+            let format = app.tab.caption_format.clone();
+            let _ = app.update(Message::CaptionAction(Input::Edit(Edit::Backspace)));
+            assert_eq!(app.tab.caption, prefix, "Backspace in {text:?}");
+            let _ = app.update(Message::Undo);
+            assert_eq!(app.tab.caption, text, "one Undo in {text:?}");
+            assert_eq!(app.tab.caption_format, format);
+            let _ = app.update(Message::Redo);
+            assert_eq!(app.tab.caption, prefix, "one Redo in {text:?}");
+        }
+    }
+}
+
+#[test]
+fn grapheme_backspace_keeps_the_exact_style_range_between_equal_emoji() {
+    let mut app = app();
+    let text = "🇯🇵🇯🇵🇯🇵";
+    let id = label(&mut app, text);
+    let end = "🇯🇵🇯🇵".len();
+    app.tab.doc.annotations[0]
+        .format
+        .apply(text, Some(end..text.len()), &StyleChange::Bold(true));
+    begin(&mut app, Some(id));
+    app.tab.caption_editor.move_to(text_editor::Cursor {
+        position: text_editor::Position {
+            line: 0,
+            column: end,
+        },
+        selection: None,
+    });
+    let format = app.tab.caption_format.clone();
+    let _ = app.update(Message::CaptionAction(Input::Edit(Edit::Backspace)));
+    assert_eq!(app.tab.caption, "🇯🇵🇯🇵");
+    assert!(!app.tab.caption_format.at(0).bold);
+    assert!(app.tab.caption_format.at("🇯🇵".len()).bold);
+    app.tab.caption_format.validate(&app.tab.caption).unwrap();
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.caption, text);
+    assert_eq!(app.tab.caption_format, format);
 }

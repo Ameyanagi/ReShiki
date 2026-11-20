@@ -18,6 +18,7 @@ fn undo_and_redo_refresh_the_arrow_label_gap_input() {
     ));
     let before = doc.clone();
     doc.annotations.push(Annotation {
+        angle: 0.,
         id: 2,
         position: Point::new(20., -40.),
         text: "EtOH, rt".into(),

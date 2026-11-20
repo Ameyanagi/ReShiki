@@ -85,6 +85,7 @@ async fn main() -> anyhow::Result<()> {
                 (135., analysis.formula.clone(), 9.),
             ] {
                 sheet.annotations.push(Annotation {
+                    angle: 0.,
                     id: sheet.next_id(),
                     position: center.offset(-140., offset),
                     text,

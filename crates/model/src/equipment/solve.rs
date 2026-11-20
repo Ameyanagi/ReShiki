@@ -16,6 +16,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
 pub mod adjust;
+pub mod hose;
 
 /// One joint or hold of one placed piece.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -182,6 +183,15 @@ pub fn ports(g: &Graphic) -> Vec<Port> {
             length: 0.,
         })
         .collect();
+    // A hose's ends are where its centre line ends.
+    if let (Some(tube), Some(line)) = (&d.tube, placed::centre_line(d, piece)) {
+        for (k, end) in tube.ends.iter().enumerate() {
+            if let Some(p) = out.iter_mut().find(|p| p.at.joint == *end) {
+                let (at, dir) = placed::end(&line, k);
+                (p.point, p.dir) = (t.apply(at), t.apply_dir(dir));
+            }
+        }
+    }
     out.extend(holds(d, &values).into_iter().filter_map(|h| {
         let (from, to) = (t.apply(h.from), t.apply(h.to));
         let length = len(sub(to, from));

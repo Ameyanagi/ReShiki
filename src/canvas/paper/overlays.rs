@@ -571,8 +571,9 @@ impl MoleculeCanvas<'_> {
                 } else {
                     HandleShape::Diamond
                 };
-                let chosen = dragged
-                    .is_some_and(|(id, d)| id == g.id && d.param == h.param && d.part == h.part);
+                let chosen = dragged.is_some_and(|(id, d)| {
+                    id == g.id && d.param == h.param && d.part == h.part && d.grip == h.grip
+                });
                 draw_handle(frame, at, shape, chosen);
             }
         }
@@ -587,9 +588,16 @@ impl MoleculeCanvas<'_> {
         if let Some((id, h)) = self.piece_handle_at(p)
             && let Some(g) = self.doc.graphics.iter().find(|g| g.id == id)
         {
-            let how = if h.toggle { "click to switch" } else { "drag" };
-            let text = crate::app::equipment::value_text(g, &h.param, None);
-            badge(frame, bounds, local, format!("{text} · {how}"), true);
+            let text = match h.grip {
+                Some(reshiki::equipment::solve::hose::Grip::Middle) => "Hose · drag to bend".into(),
+                Some(_) => "Hose end · drag onto a hose barb".into(),
+                None => {
+                    let how = if h.toggle { "click to switch" } else { "drag" };
+                    let text = crate::app::equipment::value_text(g, &h.param, None);
+                    format!("{text} · {how}")
+                }
+            };
+            badge(frame, bounds, local, text, true);
         }
     }
 
