@@ -210,6 +210,9 @@ pub(super) fn key_message(key: &Key, modified: &Key, mods: Modifiers) -> Option<
     if super::help::is_shortcut(key, mods) {
         return Some(Message::ToggleHelp);
     }
+    if super::command_palette::is_shortcut(key, mods) {
+        return Some(Message::Commands(super::command_palette::Action::Open));
+    }
     if mods.is_empty() && matches!(key, Key::Named(Named::F8)) {
         return Some(Message::KeyboardDrawing(
             super::keyboard_drawing::Action::Toggle,

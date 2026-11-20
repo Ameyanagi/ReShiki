@@ -21,7 +21,7 @@ fn prepared() -> Opened {
     document.add_atom("O", Point::default());
     Some((
         "oxygen.rsk".into(),
-        Ok(Prepared::Native(Box::new(document))),
+        Ok(Prepared::Native(Box::new(document), None)),
     ))
 }
 
@@ -259,7 +259,7 @@ fn native_open_raises_old_versions_and_clears_computed_labels() {
     // An explicit light canvas: dark drawings before version 17 migrate to 17.
     let mut json = serde_json::to_value(&document).unwrap();
     json["canvas_theme"] = serde_json::json!("light");
-    let Prepared::Native(opened) = prepare(
+    let Prepared::Native(opened, _) = prepare(
         std::path::Path::new("old.rsk"),
         serde_json::to_vec(&json).unwrap(),
     )
@@ -494,7 +494,7 @@ fn cli_input_formats_match_the_app() {
             b"C".to_vec()
         };
         let chosen = match prepare(&path, contents).unwrap() {
-            Prepared::Native(_) => "reshiki",
+            Prepared::Native(_, _) => "reshiki",
             Prepared::Import { format, .. } => format,
             Prepared::Picture(..) => panic!("Structure files are not pictures"),
             Prepared::Records(_) => panic!("Structure files are not SD files"),
@@ -746,4 +746,41 @@ fn keeping_cdxml_keeps_panels_and_purpose_for_reshiki() {
         keep_format_text("cdx", ChemdrawLoss::default(), &doc),
         format!("Keep as CDX loses panels and object purpose. {unchanged}")
     );
+}
+
+#[tokio::test]
+async fn a_drawing_reopens_at_the_view_it_was_saved_in() {
+    let mut drawing = Document::default();
+    drawing.add_atom("O", Point::default());
+    drawing.add_atom("N", Point::new(900., 0.));
+    // Pages open fitted to the first page unless the file names a view.
+    drawing.page_layout = Some(Default::default());
+    let view = reshiki::document::View {
+        center: Point::new(640., 12.5),
+        zoom: 0.76,
+    };
+    // A view that shows none of the drawing or its page is not kept.
+    let lost = reshiki::document::View {
+        center: Point::new(1e30, 0.),
+        zoom: 5.,
+    };
+    for (bytes, saved) in [
+        (drawing.file_json_with_view(Some(view)).unwrap(), true),
+        (drawing.file_json().unwrap(), false),
+        (drawing.file_json_with_view(Some(lost)).unwrap(), false),
+    ] {
+        let (mut app, _) = App::new();
+        let opened = prepare_contents("view.rsk".into(), Ok(bytes)).await;
+        let _ = app.update(Message::FilePrepared(opened));
+        assert!(!app.error, "{}", app.status);
+        assert!(!app.dirty(), "A view is not an edit");
+        let camera = (
+            app.tab.camera.center.x,
+            app.tab.camera.center.y,
+            app.tab.camera.zoom,
+        );
+        assert_eq!(camera == (640., 12.5, 0.76), saved, "{camera:?}");
+        // A restored view stays put when the window resizes; a fitted page refits.
+        assert_eq!(app.tab.pages.fit.is_none(), saved);
+    }
 }

@@ -520,9 +520,10 @@ fn native_open_preserves_pending_naming_in_an_empty_source_tab() {
     document.add_atom("O", Point::default());
     let _ = app.update(Message::FilePrepared(Some((
         "pending-name-open.rsk".into(),
-        Ok(super::super::files::Prepared::Native(Box::new(
-            document.clone(),
-        ))),
+        Ok(super::super::files::Prepared::Native(
+            Box::new(document.clone()),
+            None,
+        )),
     ))));
     assert_ne!(app.tab.id, source);
     assert!(app.tab.file_epoch > epoch);

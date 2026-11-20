@@ -194,3 +194,25 @@ fn add_callout_on_a_bond_types_its_text_and_undoes_in_one_step() {
     app.finish_inline(false);
     assert_eq!(app.tab.doc, original);
 }
+
+#[test]
+fn a_callout_typed_by_the_page_edge_ends_on_the_page() {
+    let (mut app, _) = App::new();
+    let a = app.tab.doc.add_atom("C", Point::new(0., 0.));
+    let b = app.tab.doc.add_atom("C", Point::new(20., 0.));
+    app.tab.doc.add_bond(a, b, 1, "plain");
+    // The page's right margin is just right of the bond.
+    let mut layout = reshiki::pages::Layout::default();
+    let (lo, hi) = layout.content_bounds(0).unwrap();
+    layout.origin = Point::new(30. - hi.x, -(lo.y + hi.y) / 2.);
+    let (lo, hi) = layout.content_bounds(0).unwrap();
+    app.tab.doc.page_layout = Some(layout);
+    app.tab.selected = vec![a, b];
+    let _ = app.update(Message::AddCallout);
+    app.tab.caption = "New C–C bond, made here".into();
+    assert!(app.finish_inline(true));
+    let text = app.tab.doc.annotations[0].id;
+    let (a, b) = reshiki::scene::selection_bounds(&app.tab.doc, &[text]).unwrap();
+    assert!(a.x >= lo.x && b.x <= hi.x && a.y >= lo.y && b.y <= hi.y);
+    assert!(b.x < 10., "Left of the bond: {a:?} {b:?}");
+}
