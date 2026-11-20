@@ -699,20 +699,35 @@ impl App {
         // An exact alias ranks first even when it cannot run, to say why.
         // Recent commands stay above the rest, with available ones first.
         scored.sort_by_key(|&(score, i, tier)| {
-            let late = tier < 2 && blocked[i];
+            let late = tier < 2 && blocked.get(i).copied().unwrap_or(false);
+            let command = catalog.get(i);
+            let is = |name: &str| command.is_some_and(|c| c.name.eq_ignore_ascii_case(name));
+            // The command named exactly, then the matches that act on the
+            // selection.
+            let named = is(&typed) || normalized.is_some_and(is);
             let selection = prefer_selection
-                && tier < 2
+                && tier == 1
                 && !late
-                && !matches!(catalog[i].need, Need::Nothing | Need::Blocked(_));
+                && command.is_some_and(|c| !matches!(c.need, Need::Nothing | Need::Blocked(_)));
             // An exact typed name wins a tie with an exact normalized name.
-            let exact = normalized.is_some() && catalog[i].name.eq_ignore_ascii_case(&typed);
-            (Reverse(tier), late, !selection, Reverse(score), !exact, i)
+            let exact = normalized.is_some() && is(&typed);
+            (
+                Reverse(tier),
+                late,
+                !named,
+                !selection,
+                Reverse(score),
+                !exact,
+                i,
+            )
         });
         let best = scored.iter().map(|(score, ..)| *score).max().unwrap_or(0);
         // Offer insertion after exact aliases and available name or key matches.
         let mut split = scored
             .iter()
-            .take_while(|(_, i, tier)| *tier == 2 || (*tier == 1 && !blocked[*i]))
+            .take_while(|(_, i, tier)| {
+                *tier == 2 || (*tier == 1 && !blocked.get(*i).copied().unwrap_or(false))
+            })
             .count();
         let start_here = if typed.is_empty() && state.recent.is_empty() {
             scored.iter().filter(|(.., tier)| *tier == 2).count()

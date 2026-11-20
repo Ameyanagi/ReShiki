@@ -360,7 +360,6 @@ impl App {
     /// cycle leaves it; two or more free parts make one.
     fn cycle_entries(&self) -> Vec<Entry> {
         use super::cycles::Action;
-        let doc = &self.tab.doc;
         if let Some((_, cycle)) = self.selected_cycle() {
             let steps = self.cycle_step().is_some();
             let parts = cycle.parts().next().is_some();
