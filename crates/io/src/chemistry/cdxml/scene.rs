@@ -712,6 +712,8 @@ fn read_captions_and_arrows(
                 let angle = (super::numeric::float(node.attribute("RotationAngle").unwrap_or("0"))?
                     / 65536.)
                     .rem_euclid(360.) as f32;
+                // A broken angle reads as upright text.
+                let angle = if angle.is_finite() { angle } else { 0. };
                 // A turned caption's box surrounds the turned text, so its
                 // centre is the text's centre.
                 let centre = match node.attribute("BoundingBox") {

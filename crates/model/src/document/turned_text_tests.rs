@@ -123,3 +123,12 @@ fn text_selected_alone_turns_in_place() {
     assert!((doc.annotations[0].angle - 90.).abs() < 1e-3);
     assert!(near(doc.annotations[0].centre(), centre));
 }
+
+#[test]
+fn a_non_finite_turn_is_refused() {
+    let mut doc = Document::default();
+    doc.annotations.push(caption(f32::NAN));
+    assert!(doc.validate().is_err());
+    doc.annotations[0].angle = 30.;
+    assert!(doc.validate().is_ok());
+}

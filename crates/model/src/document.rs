@@ -1218,6 +1218,9 @@ impl Document {
             }
         }
         for a in &self.annotations {
+            if !a.angle.is_finite() {
+                return Err("Non-finite text angle".into());
+            }
             a.format.validate(&a.text)?;
         }
         crate::molecule_names::validate(self)?;

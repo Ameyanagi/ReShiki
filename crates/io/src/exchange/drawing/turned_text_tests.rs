@@ -75,3 +75,12 @@ async fn chemdraw_turned_captions_open_turned_about_their_box_centre() {
         lrp.centre()
     );
 }
+
+#[tokio::test]
+async fn a_broken_turn_opens_upright() {
+    let xml = r#"<CDXML BondLength="14.40"><page id="1">
+<t id="2" p="20 30" BoundingBox="20 20 40 32" RotationAngle="NaN" InterpretChemically="no"><s font="3" size="10">A</s></t>
+</page></CDXML>"#;
+    let doc = crate::formats::read(xml.into(), "cdxml").await.unwrap();
+    assert_eq!(doc.annotations[0].angle, 0.);
+}
