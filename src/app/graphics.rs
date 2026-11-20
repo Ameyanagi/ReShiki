@@ -311,6 +311,8 @@ impl App {
                 "Panel".to_owned()
             } else if cycle {
                 "Cycle arrows".to_owned()
+            } else if let Some(icon) = selected.first().and_then(|g| g.icon.as_ref()) {
+                format!("Icon · {}", icon.name.replace('-', " "))
             } else {
                 kind.to_string()
             })
@@ -331,7 +333,10 @@ impl App {
                 .width(48),
                 crate::appearance::pick_list(
                     // Symbols and orbitals draw no waves.
-                    if matches!(kind, GraphicKind::Symbol(_) | GraphicKind::Orbital(_)) {
+                    if matches!(
+                        kind,
+                        GraphicKind::Symbol(_) | GraphicKind::Orbital(_) | GraphicKind::Icon
+                    ) {
                         LinePattern::PLAIN.as_slice()
                     } else {
                         LinePattern::ALL.as_slice()
@@ -362,7 +367,10 @@ impl App {
                 .padding(6),
         ]
         .spacing(9);
-        if matches!(kind, GraphicKind::Symbol(_) | GraphicKind::Orbital(_)) {
+        if matches!(
+            kind,
+            GraphicKind::Symbol(_) | GraphicKind::Orbital(_) | GraphicKind::Icon
+        ) {
             let mut preview = selected.first().map(|g| (*g).clone()).unwrap_or_else(|| {
                 reshiki::graphics::Graphic::dragged(
                     1,
@@ -708,7 +716,7 @@ impl App {
             // A condition icon's paper disc stays with the icon, not the next shape.
             let fill = self.tab.graphic_style.fill;
             self.tab.graphic_style = g.style.clone();
-            if g.is_condition_icon() {
+            if g.is_icon() {
                 self.tab.graphic_style.fill = fill;
             }
             self.tab.orbital_phase = g.phase;
@@ -792,14 +800,14 @@ impl App {
             if matches!(
                 change,
                 GraphicChange::Pattern(reshiki::graphics::LinePattern::Wavy)
-            ) && matches!(g.kind, GraphicKind::Symbol(_) | GraphicKind::Orbital(_))
-            {
+            ) && matches!(
+                g.kind,
+                GraphicKind::Symbol(_) | GraphicKind::Orbital(_) | GraphicKind::Icon
+            ) {
                 continue;
             }
-            // A condition icon keeps its disc when a selection's fill or shading changes.
-            if matches!(change, GraphicChange::Fill(_) | GraphicChange::Shaded(_))
-                && g.is_condition_icon()
-            {
+            // An icon keeps its disc when a selection's fill or shading changes.
+            if matches!(change, GraphicChange::Fill(_) | GraphicChange::Shaded(_)) && g.is_icon() {
                 continue;
             }
             // Only a closed shape has an inside for a gradient to fill.

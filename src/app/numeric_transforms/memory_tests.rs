@@ -42,7 +42,10 @@ fn draft(app: &mut App) {
 }
 
 fn capture(name: &str, mut app: App, expected: Result<bool, &str>) -> Value {
-    let fields = app.tab.numeric_transforms.to_apply();
+    let fields = app
+        .tab
+        .numeric_transforms
+        .to_apply(&app.tab.doc, &app.tab.selected);
     let before = state(&app);
     let result = app.numeric_transform_candidate(&fields);
     match (&result, expected) {

@@ -874,7 +874,11 @@ pub(super) fn commits_draft(message: &Message) -> bool {
                 | super::pages::Action::Center(_)
                 | super::pages::Action::Export
         ) | Message::Printing(super::printing::Action::Start(_))
-            | Message::Imports(super::import::Action::Files(_) | super::import::Action::Read(..))
+            | Message::Imports(
+                super::import::Action::Files(_)
+                    | super::import::Action::Read(..)
+                    | super::import::Action::SvgRead(..)
+            )
             | Message::Pictures(
                 super::pictures::Action::Replace
                     | super::pictures::Action::Resize(_)
@@ -960,6 +964,13 @@ pub(super) fn commits_draft(message: &Message) -> bool {
             | Message::InsertTemplate(_)
             | Message::Templates(_)
             | Message::Equipment(_)
+            | Message::Icons(
+                super::icon_browser::Action::Search(_)
+                    | super::icon_browser::Action::Filter(_)
+                    | super::icon_browser::Action::Pick(_)
+                    | super::icon_browser::Action::Arm(_)
+                    | super::icon_browser::Action::Close
+            )
             | Message::AromaticDisplay
             | Message::MakeIonic
             | Message::CenterRingCharge

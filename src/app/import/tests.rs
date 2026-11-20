@@ -1016,3 +1016,31 @@ fn a_new_file_epoch_releases_an_import_that_can_no_longer_finish() {
     assert!(!app.tab.busy && !app.error);
     assert!(app.update(Message::Analyze).units() > 0);
 }
+
+#[tokio::test]
+async fn explicit_svg_artwork_import_is_one_undo_and_stays_editable() {
+    let mut app = ready();
+    let before = app.tab.doc.clone();
+    let batch=load_svg(vec![Picked { path:"apparatus.svg".into(), contents:br##"<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96"><path d="M0 0H20V20H0Z" fill="#369"/><path d="M30 0H40V20H30Z"/></svg>"##.to_vec() }],app.tab.doc.drawing_style.clone()).await.unwrap();
+    let ticket = app.import_ticket();
+    let _ = app.update(Message::Imports(Action::Loaded(
+        ticket,
+        Box::new(Ok(batch)),
+    )));
+    assert!(!app.error, "{}", app.status);
+    assert_eq!(app.tab.doc.graphics.len(), 2);
+    assert_eq!(app.tab.doc.groups.len(), 1);
+    assert!(
+        app.tab
+            .doc
+            .graphics
+            .iter()
+            .all(|g| g.kind == reshiki::graphics::GraphicKind::Path)
+    );
+    assert!(app.status.contains("editable outlines"));
+    let imported = app.tab.doc.clone();
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+    let _ = app.update(Message::Redo);
+    assert_eq!(app.tab.doc, imported);
+}

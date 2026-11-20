@@ -610,7 +610,9 @@ fn completion(message: &Message) -> Option<Completion> {
             use super::import::Action;
             match action {
                 // A chosen file belongs to the drawing it was chosen for.
-                Action::Loaded(..) | Action::Read(..) => Some(Completion::Imports),
+                Action::Loaded(..) | Action::Read(..) | Action::SvgRead(..) => {
+                    Some(Completion::Imports)
+                }
                 Action::InputKind(..)
                 | Action::Clear
                 | Action::Edit(..)
@@ -618,6 +620,7 @@ fn completion(message: &Message) -> Option<Completion> {
                 | Action::Menu(..)
                 | Action::ExamplesMenu(..)
                 | Action::Choose
+                | Action::ChooseSvg
                 | Action::Files(..)
                 | Action::Hovered(..)
                 | Action::Dropped(..)
@@ -741,6 +744,7 @@ fn completion(message: &Message) -> Option<Completion> {
         | Message::Abbreviations(..)
         | Message::TemplateNavigate(..)
         | Message::Equipment(..)
+        | Message::Icons(..)
         | Message::InspectorScroll(..)
         | Message::ResetBondDrawing
         | Message::FixedLength(..)

@@ -36,6 +36,8 @@ pub enum GraphicKind {
     Braces,
     Curve,
     Path,
+    /// A line icon from the Icons tool; see [`crate::line_icons`].
+    Icon,
 }
 impl GraphicKind {
     pub const DRAWABLE: [Self; 10] = [
@@ -77,6 +79,7 @@ impl std::fmt::Display for GraphicKind {
             Self::Path => "Pen path",
             Self::Picture => "Picture",
             Self::Piece => "Equipment piece",
+            Self::Icon => "Icon",
         })
     }
 }
@@ -336,6 +339,9 @@ pub struct Graphic {
     /// The definition and parameter values of a piece of lab equipment.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub piece: Option<Box<crate::equipment::placed::PieceRef>>,
+    /// An icon's name and drawing.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub icon: Option<Box<crate::line_icons::Icon>>,
     pub id: u64,
     pub kind: GraphicKind,
     pub origin: Point,
@@ -421,9 +427,11 @@ impl Graphic {
         if kind != GraphicKind::RoundedRectangle {
             style.corner_pt = None;
         }
-        // Symbols and orbitals draw no waves.
-        if matches!(kind, GraphicKind::Symbol(_) | GraphicKind::Orbital(_))
-            && style.pattern == LinePattern::Wavy
+        // Symbols, icons and orbitals draw no waves.
+        if matches!(
+            kind,
+            GraphicKind::Symbol(_) | GraphicKind::Orbital(_) | GraphicKind::Icon
+        ) && style.pattern == LinePattern::Wavy
         {
             style.pattern = LinePattern::Solid;
         }
@@ -433,12 +441,20 @@ impl Graphic {
         if let GraphicKind::Symbol(symbol) = kind {
             style.fill = symbol.fill();
         }
-        if matches!(kind, GraphicKind::Symbol(_) | GraphicKind::Orbital(_)) {
+        if kind == GraphicKind::Icon {
+            style.fill = Some(crate::palette::Color::Paper);
+        }
+        if matches!(
+            kind,
+            GraphicKind::Symbol(_) | GraphicKind::Orbital(_) | GraphicKind::Icon
+        ) {
             let delta = Point::new(end.x - start.x, end.y - start.y);
             let length = delta.distance(Point::default());
             let default = if let GraphicKind::Symbol(symbol) = kind {
                 // Condition icons start large enough to read on an arrow.
                 style::DEFAULT.world(if symbol.is_condition() { 11. } else { 8. })
+            } else if kind == GraphicKind::Icon {
+                style::DEFAULT.world(11.)
             } else {
                 42.
             };
@@ -453,7 +469,7 @@ impl Graphic {
             } else {
                 angle
             };
-            let axis = if matches!(kind, GraphicKind::Symbol(_)) {
+            let axis = if matches!(kind, GraphicKind::Symbol(_) | GraphicKind::Icon) {
                 Point::new(length, 0.)
             } else {
                 Point::new(length * angle.cos(), length * angle.sin())
@@ -463,6 +479,7 @@ impl Graphic {
                 arc: None,
                 picture: None,
                 piece: None,
+                icon: None,
                 id,
                 kind,
                 origin: start,
@@ -473,7 +490,7 @@ impl Graphic {
                 superscript: None,
                 phase: Default::default(),
                 phase_flipped: false,
-                layer: if matches!(kind, GraphicKind::Symbol(_)) {
+                layer: if matches!(kind, GraphicKind::Symbol(_) | GraphicKind::Icon) {
                     1
                 } else {
                     -1
@@ -516,6 +533,7 @@ impl Graphic {
             arc: None,
             picture: None,
             piece: None,
+            icon: None,
             id,
             kind,
             origin,
@@ -560,7 +578,10 @@ impl Graphic {
     pub fn commands(&self) -> Vec<PathCommand> {
         if matches!(
             self.kind,
-            GraphicKind::Symbol(_) | GraphicKind::Orbital(_) | GraphicKind::Piece
+            GraphicKind::Symbol(_)
+                | GraphicKind::Orbital(_)
+                | GraphicKind::Piece
+                | GraphicKind::Icon
         ) {
             return self.parts().into_iter().flat_map(|p| p.commands).collect();
         }
@@ -821,8 +842,8 @@ impl Graphic {
         if self.panel.is_some() {
             return Err("A panel keeps its shape: resize it with its handles".into());
         }
-        if self.is_condition_icon() {
-            return Err("A condition icon keeps its shape: move, turn or scale it".into());
+        if self.is_icon() {
+            return Err("An icon keeps its shape: move, turn or scale it".into());
         }
         if let Some(result) = self.edit_connected_path_point(index, p) {
             return result;
@@ -887,6 +908,12 @@ impl Graphic {
         }
         if (self.kind == GraphicKind::Piece) != self.piece.is_some() {
             return Err("Equipment piece data does not match the graphic kind".into());
+        }
+        if (self.kind == GraphicKind::Icon) != self.icon.is_some() {
+            return Err("Icon data does not match the graphic kind".into());
+        }
+        if let Some(icon) = &self.icon {
+            icon.validate()?;
         }
         crate::equipment::placed::validate(self)?;
         if self.picture.is_some() {
@@ -1031,7 +1058,7 @@ mod tests {
         let before = graphic.clone();
         assert_eq!(
             graphic.edit_point(0, Point::new(1., 1.)).unwrap_err(),
-            "A condition icon keeps its shape: move, turn or scale it"
+            "An icon keeps its shape: move, turn or scale it"
         );
         assert_eq!(graphic, before);
     }

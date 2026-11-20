@@ -189,12 +189,12 @@ impl State {
 
     /// What Apply applies: every edited field, except that locked proportions
     /// keep only the size typed last, since W and H cannot both be met.
-    fn to_apply(&self) -> Vec<Field> {
+    fn to_apply(&self, document: &Document, selected: &[u64]) -> Vec<Field> {
         let mut fields = self.edited();
         let both = [Field::Width, Field::Height]
             .iter()
             .all(|field| fields.contains(field));
-        if self.proportional && both {
+        if proportions_locked(document, selected, self.proportional) && both {
             let other = if self.last_size == Field::Width {
                 Field::Height
             } else {
@@ -204,6 +204,14 @@ impl State {
         }
         fields
     }
+}
+
+fn proportions_locked(document: &Document, selected: &[u64], requested: bool) -> bool {
+    requested
+        || document
+            .graphics
+            .iter()
+            .any(|graphic| graphic.is_icon() && selected.contains(&graphic.id))
 }
 
 fn extent(doc: &Document, ids: &[u64], field: Field) -> Option<f32> {
@@ -217,7 +225,8 @@ fn extent(doc: &Document, ids: &[u64], field: Field) -> Option<f32> {
 }
 
 fn scale(doc: &mut Document, ids: &[u64], pivot: Point, field: Field, factor: f32, lock: bool) {
-    if lock || field == Field::Scale {
+    // An icon keeps its shape, as on the canvas.
+    if field == Field::Scale || proportions_locked(doc, ids, lock) {
         // Equipment stops at its scale limits as one, so seats hold.
         let factor = reshiki::equipment::placed::scale_limit(doc, ids, factor);
         editing::transform_about(doc, ids, pivot, factor, 0.);
@@ -334,6 +343,7 @@ fn transform_candidate(
     lock: bool,
 ) -> Result<(), String> {
     let ids = document.expand_abbreviation_selection(selected);
+    let lock = proportions_locked(document, &ids, lock);
     if reshiki::scene::selection_bounds(document, &ids).is_none() {
         return Err("Select objects to transform".into());
     }
@@ -565,7 +575,11 @@ impl App {
             Action::More(open) => self.tab.numeric_transforms.more = open,
             Action::Apply(field) => self.apply_numeric_transforms(&[field], true),
             Action::ApplyAll => {
-                self.apply_numeric_transforms(&self.tab.numeric_transforms.to_apply(), false)
+                let fields = self
+                    .tab
+                    .numeric_transforms
+                    .to_apply(&self.tab.doc, &self.tab.selected);
+                self.apply_numeric_transforms(&fields, false)
             }
         }
         Task::none()
@@ -640,6 +654,8 @@ impl App {
     pub(super) fn numeric_transform_panel(&self) -> Element<'_, Message> {
         let state = &self.tab.numeric_transforms;
         let selected = !self.tab.selected.is_empty();
+        let fixed = proportions_locked(&self.tab.doc, &self.tab.selected, false);
+        let locked = state.proportional || fixed;
         let tilt = selected && crate::canvas::tilt::available(&self.tab.doc, &self.tab.selected);
         let cell = |label: Element<'static, Message>, field: Field, label_width: f32| {
             let enabled = if matches!(field, Field::TiltX | Field::TiltY) {
@@ -673,17 +689,21 @@ impl App {
             reshiki::accessibility::button(
                 "transform-proportions",
                 "Lock width and height proportions",
-                canvas(Glyph(Icon::Lock(state.proportional), true))
+                canvas(Glyph(Icon::Lock(locked), true))
                     .width(LOCK)
                     .height(LOCK),
             )
             .padding(0)
-            .checked(state.proportional)
-            .style(control(state.proportional))
-            .on_press(Message::NumericTransform(Action::Proportional(
-                !state.proportional,
-            ))),
-            if state.proportional {
+            .checked(locked)
+            .style(control(locked))
+            .on_press_maybe(
+                (!fixed).then_some(Message::NumericTransform(Action::Proportional(
+                    !state.proportional,
+                ))),
+            ),
+            if fixed {
+                "Icons keep their proportions · W and H scale together\nIf both are edited, Apply uses the one edited last"
+            } else if locked {
                 "Proportions locked · W and H scale together\nIf both are edited, Apply uses the one edited last"
             } else {
                 "Proportions unlocked · W and H change one axis"
@@ -720,7 +740,7 @@ impl App {
         if state.more {
             body = body.push(pair(Field::TiltX, label(Field::TiltY).into(), Field::TiltY));
         }
-        let pending = state.to_apply();
+        let pending = state.to_apply(&self.tab.doc, &self.tab.selected);
         let edited = selected && !pending.is_empty();
         let hidden_tilt = !state.more
             && pending

@@ -96,6 +96,7 @@ explains how the crates and modules fit together.
 - `src/app/history.rs`: Undo and redo of drawing history.
 - `src/app/host.rs`: Requests from the page that hosts the browser editor; see web.rs.
 - `src/app/hover_qa.rs`: Opt-in real-widget evidence for the exact large-gallery pointer report.
+- `src/app/icon_browser.rs`: The Icons tool
 - `src/app/icons.rs`
 - `src/app/icons/arrows.rs`
 - `src/app/icons/bonds.rs`
@@ -614,6 +615,9 @@ explains how the crates and modules fit together.
 - `crates/io/src/piece_library.rs`: Libraries of equipment pieces
 - `crates/io/src/preview.rs`: The editor's PNG preview of a drawing, shared by the assistant's canvas tools, the MCP `render` and `convert` tools, the CLI and the browser library, so every surface draws the same pixels.
 - `crates/io/src/recovery.rs`
+- `crates/io/src/svg_drawing.rs`: Bounded SVG import as ordinary, editable vector graphics.
+- `crates/io/src/svg_drawing/css.rs`: Remove unsupported CSS effects without changing selectors or the cascade.
+- `crates/io/src/svg_drawing/references.rs`: Disable unused use references before usvg eagerly expands definitions.
 - `crates/io/src/task.rs`: Blocking chemistry and rendering work off the async executor.
 - `crates/io/src/template_library.rs`: User-authored templates and portable collections.
 
@@ -764,6 +768,7 @@ explains how the crates and modules fit together.
 - `crates/model/src/leaders.rs`: Callout leaders
 - `crates/model/src/lib.rs`
 - `crates/model/src/ligands.rs`: Defined haptic abbreviations
+- `crates/model/src/line_icons.rs`: Line icons placed with the Icons tool.
 - `crates/model/src/linked_properties.rs`: Property captions linked to a molecule
 - `crates/model/src/models3d.rs`: 3D models of structures (#386)
 - `crates/model/src/models3d/cell_occlusion.rs`: Cell ink visible past the model's space-filling balls.

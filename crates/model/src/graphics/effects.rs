@@ -170,7 +170,10 @@ impl Graphic {
     pub fn closed_shape(&self) -> bool {
         !matches!(
             self.kind,
-            GraphicKind::Picture | GraphicKind::Symbol(_) | GraphicKind::Orbital(_)
+            GraphicKind::Picture
+                | GraphicKind::Symbol(_)
+                | GraphicKind::Orbital(_)
+                | GraphicKind::Icon
         ) && (self.kind.closed()
             || self
                 .commands()
