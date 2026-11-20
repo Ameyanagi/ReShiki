@@ -12,7 +12,7 @@ The main palette has separate **Chair A**, **Chair B** and **Cyclopentadiene** t
 
 - Click empty space to place a ring centered at the pointer. Drag on empty space instead to place the ring's first atom at the press point with its first bond pointing at the pointer, the ring on the counter-clockwise side. The direction snaps to 15° steps; hold Option/Alt to rotate freely. The ring keeps its usual bond length either way; dragging never scales it.
 - Click a compatible atom to share it, or a single/double bond to fuse. Drag from the target to choose the attachment side; a drag from an atom aims the ring in 15° steps, or freely with Option/Alt. Existing atoms and coordinates remain unchanged; new edges match the local bond length.
-- Hold Alt/Option on an atom to attach the whole ring through a new single bond. The default direction uses the available angular gap; a drag chooses the direction freely. This mode also supports eligible nitrogen/oxygen attachment atoms. It does not replace an element with carbon.
+- Hold Alt/Option on an atom to attach the whole ring through a new single bond. The default direction uses the widest angular gap outside the atom's rings, so at a ring-fusion atom the new ring goes outside the fused system; a drag chooses the direction freely. This mode also supports eligible nitrogen/oxygen attachment atoms. It does not replace an element with carbon.
 - Hold Shift with Cyclopentadiene to move its two nonadjacent double bonds by one edge.
 - Each placement is one Undo step. Escape, focus loss or release outside the canvas cancels a drag. Invalid chemistry leaves the document unchanged and explains the failed attachment.
 
