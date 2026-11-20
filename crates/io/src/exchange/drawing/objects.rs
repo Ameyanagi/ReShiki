@@ -594,7 +594,10 @@ impl Writer<'_> {
                 if let Some(parts) = self.options.graphic_parts.and_then(|p| p.get(&g.id)) {
                     parts.clone()
                 } else {
-                    if matches!(g.kind, GraphicKind::Symbol(_) | GraphicKind::Orbital(_)) {
+                    if matches!(
+                        g.kind,
+                        GraphicKind::Symbol(_) | GraphicKind::Orbital(_) | GraphicKind::Icon
+                    ) {
                         return Err(invalid(
                             "Scientific drawing export requires styled vector parts",
                         ));

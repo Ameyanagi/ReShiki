@@ -964,6 +964,13 @@ pub(super) fn commits_draft(message: &Message) -> bool {
             | Message::InsertTemplate(_)
             | Message::Templates(_)
             | Message::Equipment(_)
+            | Message::Icons(
+                super::icon_browser::Action::Search(_)
+                    | super::icon_browser::Action::Filter(_)
+                    | super::icon_browser::Action::Pick(_)
+                    | super::icon_browser::Action::Arm(_)
+                    | super::icon_browser::Action::Close
+            )
             | Message::AromaticDisplay
             | Message::MakeIonic
             | Message::CenterRingCharge

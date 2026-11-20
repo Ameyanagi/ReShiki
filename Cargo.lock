@@ -4005,6 +4005,7 @@ dependencies = [
  "iced_winit",
  "image",
  "js-sys",
+ "miniz_oxide 0.8.9",
  "nazuchem-ir",
  "nazuchem-kernel",
  "nazuchem-n2s",

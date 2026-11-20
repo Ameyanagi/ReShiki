@@ -49,8 +49,8 @@ pub(super) struct SelectionBox {
     /// their frames and there are no edge handles. A drawing mixed with shown
     /// models does not resize at all.
     models: bool,
-    /// Equipment pieces scale only uniformly, so a selection holding one has
-    /// no edge handles.
+    /// Equipment pieces and icons scale only uniformly, so a selection
+    /// holding one has no edge handles.
     pieces: bool,
 }
 
@@ -90,7 +90,7 @@ impl SelectionBox {
             pieces: doc
                 .graphics
                 .iter()
-                .any(|g| g.piece.is_some() && ids.contains(&g.id)),
+                .any(|g| (g.piece.is_some() || g.is_icon()) && ids.contains(&g.id)),
         })
     }
 
