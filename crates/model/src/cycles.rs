@@ -328,8 +328,8 @@ pub fn drawn(doc: &Document, g: &Graphic) -> Drawn {
     }
 }
 
-// Keep legacy Circle construction analytic and unchanged. Noncircle features
-// beyond ordinary shafts still use this path until their perimeter consumers land.
+// Keep legacy Circle construction analytic and unchanged. Noncircle side
+// arrows and labels still use this path until their perimeter consumers land.
 fn drawn_circle(doc: &Document, g: &Graphic) -> Drawn {
     let Some(cycle) = &g.cycle else {
         return Drawn::default();
@@ -678,32 +678,11 @@ pub fn hit(doc: &Document, g: &Graphic, p: Point, r: f32) -> bool {
         .map(|s| s.bow_pt.abs())
         .fold(0., f32::max);
     let reach = 8. * doc.drawing_style.bond_length_world + DEFAULT.world(bow);
-    let far = if g.cycle.as_ref().is_none_or(|c| c.shape == Shape::Circle) {
-        p.distance(center) > radius + reach
-    } else {
-        // The mean-radius Circle bound can exclude a wide ellipse's ends.
-        let corners = [
-            g.origin,
-            g.origin.offset(g.axis_x.x, g.axis_x.y),
-            g.origin.offset(g.axis_y.x, g.axis_y.y),
-            g.origin
-                .offset(g.axis_x.x + g.axis_y.x, g.axis_x.y + g.axis_y.y),
-        ];
-        let lo = corners
-            .iter()
-            .fold(Point::new(f32::INFINITY, f32::INFINITY), |a, b| {
-                Point::new(a.x.min(b.x), a.y.min(b.y))
-            });
-        let hi = corners
-            .iter()
-            .fold(Point::new(f32::NEG_INFINITY, f32::NEG_INFINITY), |a, b| {
-                Point::new(a.x.max(b.x), a.y.max(b.y))
-            });
-        // Bowed/reversible and side paths still have legacy geometry in
-        // this slice, so keep that bound as well until they move over.
-        !contains(grown((lo, hi), reach + r), p) && p.distance(center) > radius + reach
-    };
-    if far {
+    // A noncircle's corner miter can exceed both its frame and mean-radius
+    // bounds. Let native arrow hit testing bound the final painted shafts.
+    if g.cycle.as_ref().is_none_or(|c| c.shape == Shape::Circle)
+        && p.distance(center) > radius + reach
+    {
         return false;
     }
     let drawn = drawn(doc, g);

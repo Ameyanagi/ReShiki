@@ -258,7 +258,7 @@ fn circle_is_exactly_the_legacy_analytic_path_including_other_features() {
 }
 
 #[test]
-fn unconverted_bow_reversible_side_and_name_consumers_are_preserved() {
+fn converted_bow_and_reversible_shafts_preserve_side_arrows_and_names() {
     let (mut doc, _) = fixture(Shape::Ellipse, 4, false, false);
     let side = doc.next_id();
     let mut reagent = doc.annotations[0].clone();
@@ -282,20 +282,137 @@ fn unconverted_bow_reversible_side_and_name_consumers_are_preserved() {
             .arrows
             .iter()
             .zip(&drawn.arcs)
-            .filter(|(_, step)| matches!(step, None | Some(0) | Some(1)))
+            .filter(|(_, step)| step.is_none())
             .map(|(a, s)| (a.clone(), *s))
             .collect::<Vec<_>>()
     };
     assert_eq!(retained(&actual), retained(&old));
     assert_eq!(actual.labels, old.labels);
+    assert_eq!(actual.arcs.iter().filter(|s| **s == Some(0)).count(), 2);
     assert!(
         actual
             .arrows
             .iter()
             .zip(actual.arcs)
-            .filter(|(_, s)| matches!(s, Some(2) | Some(3)))
+            .filter(|(_, s)| s.is_some())
             .all(|(a, _)| a.arc.is_none())
     );
+}
+
+#[test]
+fn bow_and_reversible_lanes_survive_direction_reflection_rotation_and_materialization() {
+    use crate::arrows::Head;
+    for shape in [Shape::Ellipse, Shape::RoundedRectangle, Shape::Rectangle] {
+        for mirrored in [false, true] {
+            for counterclockwise in [false, true] {
+                let (mut doc, _) = fixture(shape, 4, mirrored, counterclockwise);
+                let rotate = |p: Point| {
+                    let (s, c) = 0.43_f32.sin_cos();
+                    Point::new(c * p.x - s * p.y, s * p.x + c * p.y)
+                };
+                let g = &mut doc.graphics[0];
+                g.origin = rotate(g.origin);
+                g.axis_x = rotate(g.axis_x);
+                g.axis_y = rotate(g.axis_y);
+                for a in &mut doc.annotations {
+                    let (w, h) = a.size();
+                    a.position =
+                        rotate(a.position.offset(w * 0.5, h * 0.5)).offset(-w * 0.5, -h * 0.5);
+                }
+                let original = cycles::drawn(&doc, graphic(&doc));
+                for (i, s) in doc.graphics[0]
+                    .cycle
+                    .as_mut()
+                    .unwrap()
+                    .steps
+                    .iter_mut()
+                    .enumerate()
+                {
+                    s.bow_pt = if i % 2 == 0 { 36. } else { -36. };
+                }
+                let bowed = cycles::drawn(&doc, graphic(&doc));
+                assert_eq!(original.arcs, bowed.arcs);
+                for (plain, bent) in original.arrows.iter().zip(&bowed.arrows) {
+                    assert_eq!(plain.start, bent.start);
+                    assert_eq!(plain.end, bent.end);
+                    assert_ne!(plain.point(0.5), bent.point(0.5));
+                }
+                for s in &mut doc.graphics[0].cycle.as_mut().unwrap().steps {
+                    s.reversible = true;
+                }
+                doc.validate().unwrap();
+                let g = graphic(&doc);
+                let drawn = cycles::drawn(&doc, g);
+                assert_eq!(
+                    drawn.arrows.len(),
+                    8,
+                    "{shape:?}, {mirrored}, {counterclockwise}"
+                );
+                assert_eq!(drawn.arcs.len(), 8);
+                let dir = if g.cycle_counterclockwise() { -1. } else { 1. };
+                let half = DEFAULT.world(ArrowStyle::DEFAULT.gap_pt.max(2.)) * 0.75;
+                for (s, center) in bowed.arrows.iter().enumerate() {
+                    let lanes: Vec<_> = drawn
+                        .arrows
+                        .iter()
+                        .zip(&drawn.arcs)
+                        .filter(|(_, step)| **step == Some(s))
+                        .map(|(a, _)| a)
+                        .collect();
+                    assert_eq!(lanes.len(), 2);
+                    let controls = center.cubic.unwrap();
+                    let normal = |a: Point, b: Point| {
+                        let (x, y) = (b.x - a.x, b.y - a.y);
+                        let len = x.hypot(y);
+                        Point::new(dir * y / len, -dir * x / len)
+                    };
+                    let first = normal(center.start, controls[0]);
+                    let last = normal(controls[1], center.end);
+                    let near =
+                        |a: Point, b: Point| assert!(a.distance(b) < 0.0001, "{a:?} != {b:?}");
+                    near(
+                        lanes[0].start,
+                        center.start.offset(half * first.x, half * first.y),
+                    );
+                    near(
+                        lanes[0].end,
+                        center.end.offset(half * last.x, half * last.y),
+                    );
+                    near(
+                        lanes[1].start,
+                        center.end.offset(-half * last.x, -half * last.y),
+                    );
+                    near(
+                        lanes[1].end,
+                        center.start.offset(-half * first.x, -half * first.y),
+                    );
+                    for lane in lanes {
+                        lane.validate().unwrap();
+                        assert!(lane.arc.is_none());
+                        assert_eq!(
+                            lane.appearance().head,
+                            if dir > 0. { Head::Left } else { Head::Right }
+                        );
+                        assert_eq!(lane.appearance().tail, Head::None);
+                        let paths = lane.paths();
+                        assert!(paths.iter().any(|p| !p.filled && p.commands.len() > 1));
+                        assert!(paths.iter().any(|p| p.filled));
+                        assert!(cycles::hit(&doc, g, lane.point(0.5), 1.));
+                    }
+                }
+                let (materialized, written) = cycles::materialized(&doc);
+                assert_eq!(written[0].arcs.len(), 8);
+                assert_eq!(materialized.arrows.len(), 8);
+                let reopened = Document::from_json(&materialized.file_json().unwrap()).unwrap();
+                assert_eq!(reopened.arrows, materialized.arrows);
+                for (stored, rendered) in materialized.arrows.iter().zip(drawn.arrows) {
+                    assert_eq!(stored.nodes, rendered.nodes);
+                    assert_eq!(stored.cubic, rendered.cubic);
+                    assert_eq!(stored.appearance(), rendered.appearance());
+                }
+            }
+        }
+    }
 }
 
 #[test]
@@ -413,6 +530,45 @@ fn benchmark_perimeter_step_rendering() {
                     start.elapsed().as_secs_f64() * 1000. / 20.
                 );
             }
+        }
+    }
+}
+
+#[test]
+#[ignore = "local bowed reversible cycle rendering benchmark"]
+fn benchmark_bowed_reversible_step_rendering() {
+    use std::{hint::black_box, time::Instant};
+    for n in [4, 64] {
+        for shape in [
+            Shape::Circle,
+            Shape::Ellipse,
+            Shape::RoundedRectangle,
+            Shape::Rectangle,
+        ] {
+            let (mut doc, _) = fixture(shape, n, false, false);
+            for (i, step) in doc.graphics[0]
+                .cycle
+                .as_mut()
+                .unwrap()
+                .steps
+                .iter_mut()
+                .enumerate()
+            {
+                step.reversible = true;
+                step.bow_pt = if i % 2 == 0 { 36. } else { -36. };
+            }
+            let start = Instant::now();
+            let mut arrows = 0;
+            for _ in 0..20 {
+                arrows += black_box(cycles::drawn(black_box(&doc), black_box(graphic(&doc))))
+                    .arrows
+                    .len();
+            }
+            assert_eq!(arrows, n * 2 * 20);
+            println!(
+                "{shape:?}, {n} bowed reversible steps: {:.3} ms/render",
+                start.elapsed().as_secs_f64() * 1000. / 20.
+            );
         }
     }
 }

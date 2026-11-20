@@ -76,6 +76,23 @@ enum Geometry {
     Path(Vec<Piece>),
 }
 
+/// A native cubic with its end on the original trimmed step's arclength
+/// scale. Editor-only geometry, never a stored cycle field.
+#[derive(Debug, Clone)]
+pub(super) struct CubicSection {
+    pub points: [[f64; 2]; 4],
+    pub end_t: f64,
+    pub corner_after: bool,
+}
+
+struct Section {
+    curve: Segment,
+    from: f64,
+    to: f64,
+    start_corner: bool,
+    end_corner: bool,
+}
+
 impl Outline {
     pub(super) fn new(g: &Graphic, shape: Shape) -> Option<Self> {
         if shape == Shape::Circle {
@@ -288,6 +305,156 @@ impl Outline {
         Some(out)
     }
 
+    /// Retain source boundaries and the trimmed step's arclength midpoint.
+    /// Native arrow parameters give equal time to unequal segments, so Bow
+    /// consumers must use these original distances instead.
+    pub(super) fn cubic_sections(&self, start: f64, length: f64) -> Option<Vec<CubicSection>> {
+        let amount = length.abs().min(self.length);
+        if amount == 0. {
+            return None;
+        }
+        Some(
+            self.sections(start, length)?
+                .into_iter()
+                .map(|s| CubicSection {
+                    points: s.curve.controls().map(|p| [p.x, p.y]),
+                    end_t: s.to / amount,
+                    corner_after: s.end_corner,
+                })
+                .collect(),
+        )
+    }
+
+    fn sections(&self, start: f64, length: f64) -> Option<Vec<Section>> {
+        let Geometry::Path(pieces) = &self.geometry else {
+            return None;
+        };
+        let start = self.wrapped(start)?;
+        if !length.is_finite() {
+            return None;
+        }
+        let amount = length.abs().min(self.length);
+        let s = if length < 0. {
+            (start - amount).rem_euclid(self.length)
+        } else {
+            start
+        };
+        let first = pieces.iter().position(|p| s < p.start + p.length)?;
+        let mut local = s - pieces.get(first)?.start;
+        let mut done = 0.;
+        let mut sections = vec![];
+        let corner = |index: usize| {
+            let before = pieces.get((index + pieces.len() - 1) % pieces.len())?;
+            let after = pieces.get(index)?;
+            Some(
+                matches!(
+                    (before.curve, after.curve),
+                    (Segment::Line(..), Segment::Line(..))
+                ) || before.curve.tangent(1.).dot(after.curve.tangent(0.)) < 1. - 1e-5,
+            )
+        };
+        // Advance by source piece, independently of the optional midpoint.
+        // Subtracting a midpoint from an edge can leave a rounding residual
+        // or an unwrapped seam distance and must not lose the next edge.
+        for i in 0..=pieces.len() {
+            if done >= amount {
+                break;
+            }
+            let index = (first + i) % pieces.len();
+            let piece = pieces.get(index)?;
+            let boundary = done + (piece.length - local);
+            let to = amount.min(boundary);
+            let at_end = boundary <= amount;
+            let end = if at_end {
+                piece.length
+            } else {
+                local + to - done
+            };
+            let (t0, t1) = (piece.parameter(local), piece.parameter(end));
+            let start_corner = local == 0. && corner(index)?;
+            let end_corner = at_end && corner((index + 1) % pieces.len())?;
+            let mid = amount * 0.5;
+            let tm = (done < mid && mid < to).then(|| piece.parameter(local + mid - done));
+            if let Some(tm) = tm.filter(|tm| t0 < *tm && *tm < t1) {
+                sections.push(Section {
+                    curve: piece.curve.trim(t0, tm),
+                    from: done,
+                    to: mid,
+                    start_corner,
+                    end_corner: false,
+                });
+                sections.push(Section {
+                    curve: piece.curve.trim(tm, t1),
+                    from: mid,
+                    to,
+                    start_corner: false,
+                    end_corner,
+                });
+            } else {
+                // Arclength inversion can round an adjacent midpoint onto
+                // a source boundary. Share that knot, retaining its corner,
+                // instead of adding a zero-length cubic with no tangent.
+                if tm.is_some_and(|tm| tm <= t0)
+                    && let Some(last) = sections.last_mut()
+                {
+                    last.to = mid;
+                }
+                sections.push(Section {
+                    curve: piece.curve.trim(t0, t1),
+                    from: done,
+                    to: if tm.is_some_and(|tm| tm >= t1) {
+                        mid
+                    } else {
+                        to
+                    },
+                    start_corner,
+                    end_corner,
+                });
+            }
+            done = to;
+            local = 0.;
+        }
+        if amount - done > amount * 1e-12 {
+            return None;
+        }
+        // A nonzero parameter span can still round to one geometric point.
+        // Merge only that coincident knot, never a short nonzero source edge.
+        let mut retained: Vec<Section> = vec![];
+        for section in sections {
+            if section.curve.polygon_length() == 0. {
+                if let Some(last) = retained.last_mut() {
+                    last.to = section.to;
+                    last.end_corner |= section.end_corner;
+                }
+            } else {
+                retained.push(section);
+            }
+        }
+        let mut sections = retained;
+        sections.first_mut()?.from = 0.;
+        if let Some(last) = sections.last_mut() {
+            last.to = amount;
+        }
+        for i in 1..sections.len() {
+            let from = sections.get(i - 1)?.to;
+            sections.get_mut(i)?.from = from;
+        }
+        if length < 0. {
+            sections = sections
+                .into_iter()
+                .rev()
+                .map(|s| Section {
+                    curve: s.curve.reversed(),
+                    from: amount - s.to,
+                    to: amount - s.from,
+                    start_corner: s.end_corner,
+                    end_corner: s.start_corner,
+                })
+                .collect();
+        }
+        Some(sections)
+    }
+
     fn wrapped(&self, s: f64) -> Option<f64> {
         s.is_finite().then(|| s.rem_euclid(self.length))
     }
@@ -360,12 +527,14 @@ enum Segment {
     Cubic([V; 4]),
 }
 impl Segment {
-    fn cubic(self) -> CubicBez {
-        let points = match self {
+    fn controls(self) -> [V; 4] {
+        match self {
             Self::Cubic(points) => points,
             Self::Line(a, b) => [a, a.lerp(b, 1. / 3.), a.lerp(b, 2. / 3.), b],
-        };
-        let [p, a, b, q] = points.map(|p| kurbo::Point::new(p.x, p.y));
+        }
+    }
+    fn cubic(self) -> CubicBez {
+        let [p, a, b, q] = self.controls().map(|p| kurbo::Point::new(p.x, p.y));
         CubicBez::new(p, a, b, q)
     }
     fn ends(self) -> (V, V) {

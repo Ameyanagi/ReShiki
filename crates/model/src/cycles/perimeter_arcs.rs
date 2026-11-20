@@ -1,6 +1,5 @@
-//! Ordinary noncircle shafts. The perimeter is the sole source of their
-//! geometry; circular Bow/reversible and side-path consumers remain separate.
-use super::{Cycle, Drawn, Outline, boxes, center_of, contains, grown};
+//! Noncircle shafts. Side-path consumers remain separate from the perimeter.
+use super::{Drawn, Outline, boxes, center_of, contains, grown};
 use crate::{
     arrows::{ArrowStyle, Preset},
     document::{Arrow, ArrowNode, Document, Point},
@@ -12,15 +11,11 @@ use crate::{
 #[path = "perimeter_arc_tests.rs"]
 mod tests;
 
-fn ordinary(cycle: &Cycle, step: usize) -> bool {
-    cycle
-        .steps
-        .get(step)
-        .is_some_and(|s| !s.reversible && s.bow_pt == 0.)
-}
+#[path = "perimeter_deform.rs"]
+mod deform;
 
-/// Replace only ordinary step shafts, retaining every legacy side arrow,
-/// bowed/reversible step and label. Arc-to-step associations remain explicit.
+/// Replace step shafts while retaining legacy side arrows and labels.
+/// Each reversible lane has its own explicit arc-to-step association.
 pub(super) fn replace(doc: &Document, g: &Graphic, perimeter: &Outline, out: &mut Drawn) {
     let Some(cycle) = g.cycle.as_deref() else {
         return;
@@ -73,7 +68,7 @@ pub(super) fn replace(doc: &Document, g: &Graphic, perimeter: &Outline, out: &mu
         .enumerate()
         .take(n)
         .map(|(s, step)| {
-            if step.hidden || !ordinary(cycle, s) {
+            if step.hidden {
                 return None;
             }
             let (&first, &last) = (anchors.get(s)?, anchors.get((s + 1) % n)?);
@@ -113,13 +108,20 @@ pub(super) fn replace(doc: &Document, g: &Graphic, perimeter: &Outline, out: &mu
                 from += extra;
                 to -= extra;
             }
-            path_arrow(
-                g.id,
-                perimeter,
-                first + dir * from,
-                dir * (to - from),
-                &style,
-            )
+            let (start, length) = (first + dir * from, dir * (to - from));
+            if step.bow_pt == 0. && !step.reversible {
+                Some(vec![path_arrow(g.id, perimeter, start, length, &style)?])
+            } else {
+                deform::arrows(
+                    g.id,
+                    perimeter,
+                    start,
+                    length,
+                    f64::from(DEFAULT.world(step.bow_pt)),
+                    step.reversible,
+                    &style,
+                )
+            }
         })
         .collect();
     let mut replaced = vec![false; n];
@@ -128,11 +130,13 @@ pub(super) fn replace(doc: &Document, g: &Graphic, perimeter: &Outline, out: &mu
         .into_iter()
         .zip(std::mem::take(&mut out.arcs))
     {
-        if let Some(s) = step.filter(|s| ordinary(cycle, *s)) {
+        if let Some(s) = step {
             if let Some(done) = replaced.get_mut(s) {
-                if !*done && let Some(arrow) = arrows.get_mut(s).and_then(Option::take) {
-                    next_arrows.push(arrow);
-                    next_arcs.push(Some(s));
+                if !*done && let Some(arrows) = arrows.get_mut(s).and_then(Option::take) {
+                    for arrow in arrows {
+                        next_arrows.push(arrow);
+                        next_arcs.push(Some(s));
+                    }
                 }
                 *done = true;
             }
@@ -144,9 +148,11 @@ pub(super) fn replace(doc: &Document, g: &Graphic, perimeter: &Outline, out: &mu
     // A Circle's shorter surrogate may have had no room for a shaft that
     // fits the chosen perimeter. Do not make its old visibility a condition.
     for (s, arrow) in arrows.into_iter().enumerate() {
-        if let Some(arrow) = arrow {
-            next_arrows.push(arrow);
-            next_arcs.push(Some(s));
+        if let Some(arrows) = arrow {
+            for arrow in arrows {
+                next_arrows.push(arrow);
+                next_arcs.push(Some(s));
+            }
         }
     }
     out.arrows = next_arrows;
