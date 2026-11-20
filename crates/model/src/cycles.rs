@@ -14,7 +14,10 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::f32::consts::{FRAC_PI_2, TAU};
 
+mod shapes;
 pub mod steps;
+
+pub use shapes::{Outline, Projection, Shape, Tangents};
 
 /// Clear space between an arc's end and a part's ink, in points.
 pub const GAP_PT: f32 = 6.;
@@ -24,6 +27,9 @@ const MAX_PARTS: usize = 64;
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Cycle {
+    /// The cycle's outline. Missing values retain the legacy mean-radius circle.
+    #[serde(skip_serializing_if = "Shape::is_circle")]
+    pub shape: Shape,
     /// Steps run counterclockwise on the page.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub counterclockwise: bool,
@@ -41,6 +47,7 @@ pub struct Cycle {
 impl Default for Cycle {
     fn default() -> Self {
         Self {
+            shape: Shape::Circle,
             counterclockwise: false,
             intermediates: vec![],
             steps: vec![],
@@ -208,6 +215,14 @@ impl Graphic {
             .as_ref()
             .is_some_and(|c| c.counterclockwise != (self.frame_determinant() < 0.))
     }
+}
+
+/// The cycle's clockwise perimeter, independent of its step direction.
+/// This geometry service does not change how existing cycles are drawn.
+/// Noncircle frames that are singular, nonfinite, or too ill-conditioned to
+/// address every positive-length edge return `None`.
+pub fn outline(graphic: &Graphic) -> Option<Outline> {
+    Outline::new(graphic, graphic.cycle.as_deref()?.shape)
 }
 
 /// What a cycle draws, in drawing coordinates.
@@ -1277,5 +1292,7 @@ pub fn reconcile(doc: &mut Document) {
     ungroup_freed(doc, &freed);
 }
 
+#[cfg(test)]
+mod shape_tests;
 #[cfg(test)]
 mod tests;

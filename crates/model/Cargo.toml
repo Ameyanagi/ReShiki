@@ -16,6 +16,8 @@ nazuchem-ir = { workspace = true }
 reshiki-chemistry = { path = "../chemistry" }
 reshiki-metafile = { path = "../metafile" }
 iced_core = "0.14"
+# Already used by the renderer; cycle perimeters share its cubic arc-length solver.
+kurbo = "0.11.3"
 # Large embedded data is stored deflated (build.rs) and inflated on first use.
 miniz_oxide = "0.8"
 base64 = "0.22"

@@ -864,11 +864,15 @@ impl Graphic {
             panel.validate()?;
         }
         if let Some(cycle) = &self.cycle {
-            let (center, radius) = self.cycle_circle();
-            if self.kind != GraphicKind::Ellipse
-                || !(center.is_finite() && radius.is_finite() && radius > 1e-3)
-            {
-                return Err("A catalytic cycle must be a circle of some size".into());
+            if cycle.shape == crate::cycles::Shape::Circle {
+                let (center, radius) = self.cycle_circle();
+                if self.kind != GraphicKind::Ellipse
+                    || !(center.is_finite() && radius.is_finite() && radius > 1e-3)
+                {
+                    return Err("A catalytic cycle must be a circle of some size".into());
+                }
+            } else if self.kind != GraphicKind::Ellipse || !cycle.shape.valid_frame(self) {
+                return Err("A cycle shape needs a finite frame with two independent axes".into());
             }
             cycle.validate()?;
         }
