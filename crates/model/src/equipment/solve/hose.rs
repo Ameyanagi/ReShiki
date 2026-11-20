@@ -69,9 +69,10 @@ const SAG: f64 = 0.15;
 type End = (Xy, Xy, f64);
 
 /// The three Béziers from end `e` towards `m`, `m` excluded: straight on
-/// for the lead, then a turn of radius `r`. A lead that faces away from
-/// `m` turns a quarter circle towards it first, so a hose doubling back
-/// to a barb loops instead of pinching; otherwise it runs straight on.
+/// for the lead, then a turn of radius `r`. A lead that ends less than `r`
+/// short of `m` (or past it) turns a quarter circle towards it first, so a
+/// hose doubling back to a barb loops instead of pinching; otherwise it
+/// runs straight on.
 fn leg((p, out, lead): End, m: Xy, r: f64) -> (Vec<Xy>, Xy) {
     let l = add(p, mul(out, lead));
     let side = perp(out);
@@ -80,7 +81,7 @@ fn leg((p, out, lead): End, m: Xy, r: f64) -> (Vec<Xy>, Xy) {
     } else {
         side
     };
-    let (t, dir) = if dot(out, sub(m, l)) < 0. {
+    let (t, dir) = if dot(out, sub(m, l)) < r {
         (add(l, add(mul(out, r), mul(n, r))), n)
     } else {
         (add(l, mul(out, r / 2.)), out)
