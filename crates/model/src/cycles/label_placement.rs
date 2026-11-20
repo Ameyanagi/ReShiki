@@ -109,28 +109,60 @@ impl Ring {
             }
         }
 
-        // A very small or crowded ring may need more space along the step's
-        // bearing. Move beyond the occupied extent on that ray.
+        // If the nearby candidates are blocked, advance along this step's
+        // bearing only as far as needed to get past the occupied intervals.
         let mid = arc.at(0.5, 0.);
         let angle = (mid.y - self.center.y).atan2(mid.x - self.center.x);
-        let (x, y) = (angle.cos(), angle.sin());
-        let extent = |(lo, hi): Bounds| {
-            let edge_x = if x < 0. { lo.x } else { hi.x };
-            let edge_y = if y < 0. { lo.y } else { hi.y };
-            (edge_x - self.center.x) * x + (edge_y - self.center.y) * y
-        };
-        let edge = occupied
+        let (y, x) = angle.sin_cos();
+        let direction = Point::new(x, y);
+        let padding = size.offset(self.clearance, self.clearance);
+        let mut blocked: Vec<_> = occupied
             .iter()
-            .map(|b| extent(*b))
-            .chain(painted.iter().map(|p| extent(grown(p.bounds, p.stroke))))
-            .fold(self.radius, f32::max);
+            .copied()
+            .chain(painted.iter().map(|p| grown(p.bounds, p.stroke)))
+            .filter_map(|(lo, hi)| {
+                let bounds = (
+                    lo.offset(-padding.x, -padding.y),
+                    hi.offset(padding.x, padding.y),
+                );
+                ray_interval(self.center, direction, bounds)
+            })
+            .collect();
+        blocked.sort_by(|a, b| a.0.total_cmp(&b.0));
         let reach = size.x * x.abs() + size.y * y.abs();
-        box_at(polar(
-            self.center,
-            edge + reach + 2. * self.clearance,
-            angle,
-        ))
+        let mut radius = self.radius + reach + 2. * self.clearance;
+        for (enter, exit) in blocked {
+            if radius < enter {
+                break;
+            }
+            if radius <= exit {
+                radius = exit + 0.25 * self.clearance;
+            }
+        }
+        box_at(polar(self.center, radius, angle))
     }
+}
+
+// Distances along the ray for which the center of a padded label would lie
+// inside the obstacle expanded by half the label size.
+fn ray_interval(origin: Point, direction: Point, (lo, hi): Bounds) -> Option<(f32, f32)> {
+    let (mut start, mut end) = (0.0_f32, f32::INFINITY);
+    for (p, d, low, high) in [
+        (origin.x, direction.x, lo.x, hi.x),
+        (origin.y, direction.y, lo.y, hi.y),
+    ] {
+        if d == 0. {
+            if p < low || p > high {
+                return None;
+            }
+        } else {
+            let a = (low - p) / d;
+            let b = (high - p) / d;
+            start = start.max(a.min(b));
+            end = end.min(a.max(b));
+        }
+    }
+    (start <= end).then_some((start, end))
 }
 
 pub(super) fn place(
@@ -242,5 +274,35 @@ mod tests {
         assert!(ring.has_room(label, false));
         assert!(!overlaps(grown(label, ring.clearance), occupied[0]));
         assert!(center_of(label).x > 50.);
+    }
+
+    #[test]
+    fn a_crowded_ring_uses_the_first_clear_space_along_the_step() {
+        let center = Point::new(0., 0.);
+        let ring = Ring {
+            center,
+            radius: 50.,
+            clearance: 4.,
+            spacing: 42.,
+        };
+        let occupied = [
+            (Point::new(-200., -200.), Point::new(200., 200.)),
+            (Point::new(1000., -20.), Point::new(1050., 20.)),
+            (Point::new(10000., 10000.), Point::new(10010., 10010.)),
+        ];
+        let arc = Span {
+            center,
+            radius: ring.radius,
+            first: -45.,
+            sweep: 90.,
+        };
+        let label = ring.label_bounds(arc, 1., Point::new(24., 9.), &occupied, &[]);
+        assert!(ring.has_room(label, false));
+        assert!(
+            occupied
+                .iter()
+                .all(|b| !overlaps(grown(label, ring.clearance), *b))
+        );
+        assert!((228. ..235.).contains(&center_of(label).x));
     }
 }
