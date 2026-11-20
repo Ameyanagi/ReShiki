@@ -424,7 +424,12 @@ impl App {
                 else {
                     return Task::none();
                 };
-                self.status = format!("{} · Click to place · Esc cancels", named(&definition));
+                let how = if definition.tube.is_some() {
+                    "Drag from one hose barb to another, or click a barb"
+                } else {
+                    "Click to place"
+                };
+                self.status = format!("{} · {how} · Esc cancels", named(&definition));
                 self.error = false;
                 self.tab.connect = None;
                 self.equipment.armed = Some(definition);
