@@ -374,6 +374,7 @@ impl App {
     fn cleanup_button(&self) -> Element<'_, Message> {
         use super::cleanup::Action;
         use reshiki::cleanup::{Orientation, Scope};
+        use reshiki::style::units::{self, Unit};
         let open = self.cleanup_menu;
         let run = Message::Cleanup(Action::Begin);
         let main = icon_button(
@@ -399,10 +400,10 @@ impl App {
         );
         let popup = open.then(|| {
             let chosen = self.cleanup_options;
-            let item = |id: &'static str, label: &'static str, on: bool, action| {
+            let item = |id: &'static str, label: String, on: bool, action| {
                 reshiki::accessibility::button(
                     id,
-                    label,
+                    label.clone(),
                     row![
                         text(if on { "✓" } else { "" }).size(12).width(14),
                         text(label).size(12)
@@ -415,16 +416,25 @@ impl App {
                 .style(control(false))
                 .on_press(Message::Cleanup(action))
             };
-            let orientation = |id, label, mode| {
+            let orientation = |id, label: &str, mode| {
                 item(
                     id,
-                    label,
+                    label.into(),
                     chosen.orientation() == mode,
                     Action::Orientation(mode),
                 )
             };
-            let scope =
-                |id, label, scope| item(id, label, chosen.scope == scope, Action::Scope(scope));
+            let scope = |id, label: &str, scope| {
+                item(
+                    id,
+                    label.into(),
+                    chosen.scope == scope,
+                    Action::Scope(scope),
+                )
+            };
+            let on = self.appearance.cleanup_style_bond_length;
+            let points = self.tab.doc.drawing_style.bond_length_pt;
+            let length = units::format((points * 100.).round() / 100., Unit::Points);
             container(
                 column![
                     container(section("Orientation")).padding([4, 8]),
@@ -438,10 +448,24 @@ impl App {
                         "Whole molecules",
                         Scope::SelectedMolecules
                     ),
+                    container(section("Bond length")).padding([4, 8]),
+                    item(
+                        "cleanup-style-length",
+                        format!("Also set bond length to the style ({length} pt)"),
+                        on,
+                        Action::StyleBondLength(!on),
+                    ),
+                    container(section("Reaction")).padding([4, 8]),
+                    item(
+                        "cleanup-reaction",
+                        keyed("Clean up reaction", &Message::Cleanup(Action::Scheme)),
+                        false,
+                        Action::Scheme,
+                    ),
                 ]
                 .spacing(1),
             )
-            .width(190)
+            .width(300)
             .padding(5)
             .style(super::color_popover::surface)
             .into()

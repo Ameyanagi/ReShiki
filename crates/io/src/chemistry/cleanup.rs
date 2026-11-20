@@ -73,7 +73,7 @@ struct Part {
     identity: Identity,
     moving: HashSet<u64>,
     fixed: Coordinates,
-    /// The median drawn bond length in layout units: cleanup keeps the size.
+    /// The target bond length in layout units.
     bond_length: f64,
 }
 
@@ -328,10 +328,10 @@ pub fn prepare(source: &Document, options: Options, selection: &[u64]) -> Result
             .filter(|(_, (id, _))| !moving.contains(id))
             .map(|(i, (_, p))| (i, NativePoint { x: p.x, y: p.y }))
             .collect();
-        // Keep the drawing's size, as ChemDraw does; RDKit parity redraws at
-        // the style's length. A molecule without bonds uses the style's too.
+        // Keep the drawing's size by default, as ChemDraw does. The style's
+        // length also applies in RDKit parity mode and to molecules without bonds.
         let style = f64::from(source.drawing_style.bond_length_world) / 28.;
-        let bond_length = if molecular::refine() {
+        let bond_length = if !options.style_bond_length && molecular::refine() {
             median_bond(&molecule.state, &molecule.positions).unwrap_or(style)
         } else {
             style

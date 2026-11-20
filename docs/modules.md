@@ -740,6 +740,7 @@ explains how the crates and modules fit together.
 - `crates/model/src/projection.rs`: Editable orthographic projections and nonchemical ring-centre anchors.
 - `crates/model/src/projection/growth.rs`: Bond growth in a Cp/aromatic ring's retained plane.
 - `crates/model/src/projection/vector.rs`: f32 3D vector helpers over retained XYZ (position x/y plus depth).
+- `crates/model/src/reaction_cleanup.rs`: Clean up reaction
 - `crates/model/src/reaction_mapping.rs`: Chemical atom correspondence, independent of printed custom atom numbers.
 - `crates/model/src/reaction_mapping/search.rs`: Bounded maximum-cardinality graph matching.
 - `crates/model/src/reactions.rs`: Explicit reaction membership, independent of where a scheme is drawn.

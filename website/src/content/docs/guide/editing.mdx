@@ -181,6 +181,15 @@ Press **:** for the **command palette**: type part of a command, such as **benze
   alt="A cleaned benzene ring standing upright, with the Clean up options menu open: Keep, Free and IUPAC fused rings orientation, and Selected atoms or Whole molecules."
 />
 
-Clean up applies at once as one Undo step. It keeps the drawing's size and stands six-membered rings upright, turning them at most 30°. The **▾** beside the button sets the orientation (**Keep**, **Free** or **IUPAC fused rings**) and what a selection cleans: **Selected atoms** keeps the rest fixed, **Whole molecules** includes each complete molecule touched by the selection. Other molecules stay in place. Cleanup adjusts molecular geometry; it does not arrange an entire reaction scheme.
+Clean up applies at once as one Undo step. By default, it keeps the drawing's size. It stands six-membered rings upright, turning them at most 30°. The **▾** beside the button sets the orientation (**Keep**, **Free** or **IUPAC fused rings**) and what a selection cleans: **Selected atoms** keeps the rest fixed, **Whole molecules** includes each complete molecule touched by the selection. Other molecules stay in place.
+
+Under **Bond length**, choose **Also set bond length to the style (14.4 pt)** to redraw each molecule at the drawing style's bond length instead of keeping its size. ReShiki remembers this choice.
+
+### Clean up a reaction
+
+1. Select the reaction, or select nothing to clean up every reaction.
+2. Press **Cmd/Ctrl+Shift+X**, or choose **Clean up reaction** in the Clean up **▾** menu.
+
+Reactants, products and `+` signs line up on the arrow and are spaced evenly. Every arrow takes the same length, and conditions above or below an arrow are centred on it. Only straight arrows are lined up. [Details](/developer/selection-cleanup/#clean-up-reaction).
 
 Attachment-containing complexes, including Cp/Cp\* groups, retain their geometry with an explicit limitation. Independent ordinary molecules can still be cleaned; unsupported complex geometry is not replaced by a guessed arrangement.

@@ -215,7 +215,10 @@ fn dispatcher_preserves_shift_and_does_not_fall_through_modifier_chords() {
         key_message(&key("j"), &key("j"), primary()),
         Some(Message::Shortcut(Action::Join))
     ));
-    assert!(key_message(&key("x"), &key("X"), primary() | Modifiers::SHIFT).is_none());
+    assert!(matches!(
+        key_message(&key("x"), &key("X"), primary() | Modifiers::SHIFT),
+        Some(Message::Cleanup(crate::app::cleanup::Action::Scheme))
+    ));
     assert!(key_message(&key("z"), &key("z"), primary() | Modifiers::ALT).is_none());
     assert!(matches!(
         key_message(

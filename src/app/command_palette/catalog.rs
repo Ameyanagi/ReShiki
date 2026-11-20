@@ -812,6 +812,14 @@ fn edits() -> Vec<Command> {
         )
         .keys(keys(Modifiers::COMMAND | Modifiers::SHIFT, "K")),
         send(
+            "Clean up reaction",
+            Edit,
+            "Line up the selected reaction, or every reaction, on its arrows",
+            "tidy scheme align arrow plus conditions",
+            Message::Cleanup(cleanup::Action::Scheme),
+        )
+        .keys(keys(Modifiers::COMMAND | Modifiers::SHIFT, "X")),
+        send(
             "Convert to wedge drawing",
             Edit,
             "Replace Fischer projections with ordinary stereochemical drawings",
