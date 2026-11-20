@@ -104,6 +104,7 @@ fn routing_document() -> Document {
     doc.add_bond(a, b, 1, "bold");
     doc.bonds[0].highlight = Some(reshiki::palette::Color::Custom([190, 230, 240]));
     doc.annotations.push(Annotation {
+        angle: 0.,
         id: doc.next_id(),
         position: World::new(125., 240.),
         text: "Editable underlined caption".into(),
@@ -169,6 +170,7 @@ fn paper_document() -> (Document, Vec<u64>, [u64; 4]) {
         purpose: Default::default(),
     });
     doc.annotations.push(Annotation {
+        angle: 0.,
         id: doc.next_id(),
         position: World::new(430., 250.),
         text: "Caption".into(),

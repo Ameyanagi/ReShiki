@@ -67,6 +67,7 @@ fn formula_and_plain_captions_remain_text_in_both_exchange_formats() -> anyhow::
     doc.add_bond(a, b, 1, "plain");
     for (index, (text, formula)) in [("C18H24Si", true), ("C", false)].into_iter().enumerate() {
         doc.annotations.push(Annotation {
+            angle: 0.,
             id: 10 + index as u64,
             position: Point::new(0., 80. + 60. * index as f32),
             text: text.into(),

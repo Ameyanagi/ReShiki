@@ -26,6 +26,7 @@ fn caption(doc: &mut Document, text: &str, center: Point, format: &TextFormat) {
     crate::typography::normalize_subscript_digits(&mut text, &mut format);
     let size = crate::typography::layout(&text, &format);
     doc.annotations.push(Annotation {
+        angle: 0.,
         id: doc.next_id(),
         position: center.offset(-size.width / 2., 0.),
         text,

@@ -2378,6 +2378,7 @@ fn double_click_edits_grouped_labels_but_drag_moves_the_group() {
     let atom = doc.add_atom("C", World::new(-100., -80.));
     let label = doc.next_id();
     doc.annotations.push(reshiki::document::Annotation {
+        angle: 0.,
         id: label,
         position: World::default(),
         text: "Reaction conditions".into(),
@@ -3393,6 +3394,7 @@ fn arrow_end_drag_preview_keeps_condition_labels_like_the_commit() {
     ));
     let before = doc.clone();
     let mut text = reshiki::document::Annotation {
+        angle: 0.,
         id: 2,
         position: World::default(),
         text: "Pd/C, H2, EtOAc, rt".into(),
@@ -3952,4 +3954,43 @@ fn a_selected_pieces_handles_switch_a_valve_on_click_and_set_a_level_by_drag() {
         let edits = select_drag(&doc, selected, valve, valve, modifiers);
         assert!(!edits.iter().any(|e| matches!(e, Edit::PieceParam { .. })));
     }
+}
+
+#[test]
+fn text_in_a_front_shape_picks_its_own_shape_over_a_filled_one_below() {
+    use reshiki::graphics::{BracketSides, Graphic, GraphicKind, GraphicStyle};
+    let mut doc = Document::default();
+    let shape = |id, lo: World, hi: World| {
+        let mut g = Graphic::dragged(
+            id,
+            GraphicKind::Rectangle,
+            lo,
+            hi,
+            GraphicStyle::default(),
+            BracketSides::Both,
+            false,
+        );
+        g.layer = 1;
+        g
+    };
+    let mut below = shape(1, World::new(-100., -100.), World::new(100., 100.));
+    below.style.fill = Some(reshiki::palette::Color::Custom([220, 239, 233]));
+    doc.graphics.push(below);
+    doc.graphics
+        .push(shape(2, World::new(-40., -20.), World::new(40., 20.)));
+    doc.annotations.push(reshiki::document::Annotation {
+        angle: 0.,
+        id: 3,
+        position: World::default(),
+        text: "hν".into(),
+        format: Default::default(),
+    });
+    doc.graphics[1].text = Some(3);
+    reshiki::shape_text::reconcile(&mut doc);
+    let text = doc.annotations[0].clone();
+    let (w, h) = text.size();
+    let on_text = text.position.offset(w / 2., h / 2.);
+    assert_eq!(hit_object(&doc, on_text, 1.), Some(2));
+    // Beside the outlined shape the filled one shows.
+    assert_eq!(hit_object(&doc, World::new(70., 70.), 1.), Some(1));
 }

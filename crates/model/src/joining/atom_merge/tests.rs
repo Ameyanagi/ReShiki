@@ -280,6 +280,7 @@ fn groups_reaction_roles_coefficients_and_captions_survive_remapping() {
     doc.add_bond(selected[1], selected[2], 1, "plain");
     let caption = doc.next_id();
     doc.annotations.push(Annotation {
+        angle: 0.,
         id: caption,
         position: Point::new(50., 80.),
         text: "Reactant".into(),
@@ -548,6 +549,7 @@ fn mixed_objects_duplicate_ids_small_selections_and_abbreviations_are_rejected()
     let (mut doc, selected) = sites(3, "C", false);
     let caption = doc.next_id();
     doc.annotations.push(Annotation {
+        angle: 0.,
         id: caption,
         position: Point::default(),
         text: "Note".into(),

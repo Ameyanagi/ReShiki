@@ -11,6 +11,7 @@ use crate::{
 fn caption(doc: &mut Document, text: &str, at: Point) -> u64 {
     let id = doc.next_id();
     doc.annotations.push(Annotation {
+        angle: 0.,
         id,
         position: at,
         text: text.into(),

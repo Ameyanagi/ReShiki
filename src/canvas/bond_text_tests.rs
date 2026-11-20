@@ -6,6 +6,7 @@ use reshiki::document::Annotation;
 fn caption(doc: &mut Document, text: &str, position: World) -> u64 {
     let id = doc.next_id();
     doc.annotations.push(Annotation {
+        angle: 0.,
         id,
         position,
         text: text.into(),

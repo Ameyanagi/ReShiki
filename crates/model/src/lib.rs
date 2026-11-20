@@ -71,6 +71,7 @@ pub mod rings;
 pub mod scene;
 pub mod scientific;
 pub mod selection_region;
+pub mod shape_text;
 pub mod stereo_groups;
 pub mod stereochemistry;
 pub mod storage;

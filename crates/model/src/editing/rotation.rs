@@ -7,7 +7,8 @@ use std::collections::HashSet;
 
 /// The mean of selected visible atom sites and one stable site per drawing object.
 ///
-/// Captions contribute their upright text's insertion point, arrows their endpoint
+/// Captions contribute their upright text's insertion point (a turning
+/// caption its centre), arrows their endpoint
 /// midpoint, and graphics a point in their retained affine frame. A rotation about
 /// this mean leaves it fixed, so recomputing it for the next command does not move
 /// the pivot. Hidden abbreviation members move with their visible anchor but do
@@ -30,9 +31,24 @@ pub fn center(doc: &Document, ids: &[u64]) -> Option<Point> {
             add(f64::from(atom.position.x), f64::from(atom.position.y));
         }
     }
+    // Text in a shape is placed by the shape, so only the shape counts.
+    let held: HashSet<_> = doc
+        .graphics
+        .iter()
+        .filter(|g| selected.contains(&g.id))
+        .filter_map(|g| g.text)
+        .collect();
+    // The point a caption turns or moves about: upright text in a mixed
+    // selection keeps its insertion point, turning text its centre.
+    let only_text = super::only_text(doc, &selected);
     for caption in &doc.annotations {
-        if selected.contains(&caption.id) {
-            add(f64::from(caption.position.x), f64::from(caption.position.y));
+        if selected.contains(&caption.id) && !held.contains(&caption.id) {
+            let site = if caption.angle == 0. && !only_text {
+                caption.position
+            } else {
+                caption.centre()
+            };
+            add(f64::from(site.x), f64::from(site.y));
         }
     }
     for arrow in &doc.arrows {

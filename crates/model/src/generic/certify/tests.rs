@@ -135,6 +135,7 @@ fn prepared_union_publication_inherits_claims_without_identity_and_rejects_tampe
     );
     let mut oversized = source.clone();
     oversized.annotations.push(crate::document::Annotation {
+        angle: 0.,
         id: oversized.next_id(),
         position: Point::default(),
         text: "x".repeat(Limits::default().max_work),

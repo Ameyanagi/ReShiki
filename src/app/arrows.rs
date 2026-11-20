@@ -395,18 +395,40 @@ impl App {
         }
         .into();
     }
+    pub(super) fn selected_arrows(&self) -> impl Iterator<Item = &reshiki::document::Arrow> {
+        self.tab
+            .doc
+            .arrows
+            .iter()
+            .filter(|a| self.tab.selected.contains(&a.id))
+    }
+
+    pub(super) fn arrow_panel_visible(&self) -> bool {
+        self.tool == Tool::Arrow || self.selected_arrows().next().is_some()
+    }
+
+    pub(super) fn arrow_body_controls(&self) -> bool {
+        !matches!(
+            self.tab.arrow_style,
+            Preset::Equilibrium | Preset::Retro | Preset::Bent
+        )
+    }
+
+    /// Whether the arrow panel offers Make arc: on straight and curved
+    /// arrows alike, but not once one is an arc.
+    pub(super) fn can_make_arc(&self) -> bool {
+        !self.selected_arrows().any(|a| a.is_arc())
+            && self
+                .selected_arrows()
+                .any(|a| a.kind != "bent" && !a.is_attached())
+    }
+
     pub(super) fn arrow_panel(&self) -> Element<'_, Message> {
         use super::workspace::{accessible_command, command, hover_hint, muted_text};
         use iced::widget::{Space, checkbox, column, container, row, text, tooltip};
         use iced::{Alignment, Length};
         let s = &self.tab.arrows.style;
-        let selected_arrows = self
-            .tab
-            .doc
-            .arrows
-            .iter()
-            .filter(|a| self.tab.selected.contains(&a.id))
-            .count();
+        let selected_arrows = self.selected_arrows().count();
         let has_selection = selected_arrows > 0;
         let heading = match (selected_arrows, self.tab.selected.len()) {
             (0, _) => "Arrow tool".into(),
@@ -551,17 +573,8 @@ impl App {
             number("Line width (pt)", Field::Line),
         ]
         .spacing(8);
-        let selected: Vec<_> = self
-            .tab
-            .doc
-            .arrows
-            .iter()
-            .filter(|a| self.tab.selected.contains(&a.id))
-            .collect();
-        if !matches!(
-            self.tab.arrow_style,
-            Preset::Equilibrium | Preset::Retro | Preset::Bent
-        ) {
+        let selected: Vec<_> = self.selected_arrows().collect();
+        if self.arrow_body_controls() {
             panel = panel.push(
                 row![
                     text("Body").size(11).width(44),
@@ -611,7 +624,7 @@ impl App {
         ]
         .spacing(8);
         if self.tab.arrow_style == Preset::Equilibrium {
-            geometry = geometry.push(number("Reverse length (0.2–1)", Field::Ratio));
+            geometry = geometry.push(number("Reverse length (0.2–5)", Field::Ratio));
         }
         if matches!(self.tab.arrow_style, Preset::Equilibrium | Preset::Retro) {
             geometry = geometry.push(number("Shaft separation (pt)", Field::Gap));
@@ -663,10 +676,7 @@ impl App {
             let mut straighten =
                 row![action("arrow.straighten", "Straighten", Action::Straighten)].spacing(4);
             let arcs = selected.iter().any(|a| a.is_arc());
-            let can_arc = !arcs
-                && selected
-                    .iter()
-                    .any(|a| a.kind != "bent" && !a.is_attached());
+            let can_arc = self.can_make_arc();
             let make_arc = || {
                 hover_hint(
                     action("arrow.make-arc", "Make arc", Action::MakeArc),

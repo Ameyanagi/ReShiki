@@ -303,6 +303,7 @@ pub fn reconcile(doc: &mut Document, before: Document) -> Result<Reconciled, Rej
     crate::molecule_names::reconcile(doc, &before);
     crate::linked_properties::reconcile(doc, &before);
     crate::arrow_labels::reconcile(doc, &before);
+    crate::shape_text::reconcile(doc);
     crate::models3d::reconcile(doc, &before);
     crate::cycles::reconcile(doc);
     doc.piece_definitions = crate::equipment::placed::used(doc);
@@ -315,6 +316,8 @@ pub fn reconcile(doc: &mut Document, before: Document) -> Result<Reconciled, Rej
         }
         doc.reconcile_molecule_groups();
         crate::layouts::reconcile(doc, &before);
+        // Layouts can move shapes; their text follows.
+        crate::shape_text::reconcile(doc);
         // Last, after layouts have moved things: seats that no longer fit go.
         crate::equipment::solve::check(doc, Some(&before));
     }

@@ -146,6 +146,7 @@ fn source_bond_is_exact_and_mixed_objects_transform_and_remap_together() {
     let mut part = ethanol();
     let id = part.next_id();
     part.annotations.push(Annotation {
+        angle: 0.,
         id,
         position: Point::new(21., -30.),
         text: "ethanol".into(),

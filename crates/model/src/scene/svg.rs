@@ -198,6 +198,18 @@ fn push_svg(s: &mut String, drawing: Vec<Primitive>, frame: &Frame, halos: &mut 
                 push_svg(&mut inner, vec![*primitive], frame, halos);
                 s.push_str(&format!("<g opacity=\"{alpha}\">{inner}</g>"));
             }
+            Primitive::Rotated {
+                pivot,
+                angle,
+                primitives,
+            } => {
+                let mut inner = String::new();
+                push_svg(&mut inner, primitives, frame, halos);
+                s.push_str(&format!(
+                    "<g transform=\"rotate({angle} {} {})\">{inner}</g>",
+                    pivot.x, pivot.y
+                ));
+            }
             Primitive::Halo { radius, primitives } => {
                 if let Some([r, g, b]) = frame.paper {
                     push_halo(s, &primitives, radius, &format!("rgb({r},{g},{b})"));
@@ -256,7 +268,7 @@ fn push_svg(s: &mut String, drawing: Vec<Primitive>, frame: &Frame, halos: &mut 
                 } else {
                     format!(" stroke-dasharray=\"{dashes}\"")
                 };
-                s.push_str(&format!("<path d=\"{path}\" fill=\"{fill}\" stroke=\"rgb({},{},{})\" stroke-width=\"{}\" stroke-linecap=\"round\" stroke-linejoin=\"round\"{dash}/>",stroke[0],stroke[1],stroke[2],style.width()));
+                s.push_str(&format!("<path d=\"{path}\" fill=\"{fill}\" stroke=\"rgb({},{},{})\" stroke-width=\"{}\" stroke-linecap=\"{}\" stroke-linejoin=\"round\"{dash}/>",stroke[0],stroke[1],stroke[2],style.width(),if style.round_caps() { "round" } else { "butt" }));
             }
             Primitive::Line(a, b, w) => {
                 s.push_str(&format!("<line x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\" stroke=\"{ink}\" stroke-width=\"{w}\" stroke-linecap=\"round\"/>",a.x,a.y,b.x,b.y));
@@ -653,6 +665,7 @@ fn push_halo(s: &mut String, primitives: &[Primitive], radius: f32, color: &str)
                 &format!("fill=\"{color}\" {}", spread(0.)),
             ),
             Primitive::Picture(_)
+            | Primitive::Rotated { .. }
             | Primitive::Halo { .. }
             | Primitive::Sphere { .. }
             | Primitive::Ellipsoid { .. }

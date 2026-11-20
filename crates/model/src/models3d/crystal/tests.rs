@@ -233,6 +233,7 @@ fn compound_live_cell_edits_keep_unvalidated_context_scoped_to_the_cell() {
     doc.add_bond(ordinary[0], ordinary[1], 1, "plain");
     let annotation = doc.next_id();
     doc.annotations.push(crate::document::Annotation {
+        angle: 0.,
         id: annotation,
         position: Point::new(100., 100.),
         text: "temporary".into(),

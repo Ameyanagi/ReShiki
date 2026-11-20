@@ -94,6 +94,7 @@ fn everything() -> (Document, Ids) {
     );
     let caption = doc.next_id();
     doc.annotations.push(crate::document::Annotation {
+        angle: 0.,
         id: caption,
         position: Point::new(100., -20.),
         text: "heat".into(),

@@ -29,7 +29,8 @@ async fn constructed_chemdraw_retrosynthesis_and_hollow_arrows_keep_their_kinds(
     assert_eq!(retro.appearance().tail, Head::None);
     assert_eq!(retro.appearance().shape, HeadShape::Open);
     assert_eq!(retro.appearance().head_length_pt, 6.);
-    assert_eq!(retro.appearance().head_width_pt, 1.5);
+    // ChemDraw draws an angled retrosynthesis head as wide as its center size.
+    assert_eq!(retro.appearance().head_width_pt, 5.25);
     assert_eq!(retro.appearance().gap_pt, 2.);
     // A hollow head on a spaced shaft is ChemDraw's hollow block arrow,
     // sized in hundredths of its 0.6 pt line.

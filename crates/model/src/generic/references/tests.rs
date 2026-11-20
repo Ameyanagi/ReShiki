@@ -13,6 +13,7 @@ fn generated_union_rejects_changed_component_dependencies_atomically() {
     let mut named = union_source();
     let caption = named.next_id();
     named.annotations.push(crate::document::Annotation {
+        angle: 0.,
         id: caption,
         position: Point::new(0., 100.),
         text: "propane".into(),
@@ -64,6 +65,7 @@ fn generated_union_rejects_changed_component_dependencies_atomically() {
     alternative = atom_text::apply(&alternative, b, "[C,N]", Mode::Auto).unwrap();
     let caption = alternative.next_id();
     alternative.annotations.push(crate::document::Annotation {
+        angle: 0.,
         id: caption,
         position: Point::new(0., 70.),
         text: "inherited claim".into(),

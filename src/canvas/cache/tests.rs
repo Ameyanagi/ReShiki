@@ -7,6 +7,7 @@ fn drawing() -> Document {
     let b = doc.add_atom("O", Point::new(42., 0.));
     doc.add_bond(a, b, 1, "plain");
     doc.annotations.push(Annotation {
+        angle: 0.,
         id: 100,
         position: Point::new(0., 60.),
         text: "Caption H2O".into(),

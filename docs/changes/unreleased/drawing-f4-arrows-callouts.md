@@ -4,7 +4,7 @@ issues: []
 ---
 
 - **Arrow bodies**: **Properties → Body** and the arrow tool's context row give
-  an arrow a **Block**, **Hollow**, **Chevron** or **Gradient** body. The look
+  an arrow a **Block**, **Hollow block**, **Chevron** or **Gradient** body. The look
   never changes what the arrow means: a block reaction arrow keeps its roles
   and conditions. The arrow palette offers each body as a preset. See
   [Reaction and mechanism arrows](arrows.md).

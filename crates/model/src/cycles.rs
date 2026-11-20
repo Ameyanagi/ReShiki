@@ -1142,6 +1142,7 @@ pub fn materialized(doc: &Document) -> (std::borrow::Cow<'_, Document>, Vec<Mate
         for (position, text, format) in drawn.labels {
             ids.push(next);
             out.annotations.push(crate::document::Annotation {
+                angle: 0.,
                 id: next,
                 position,
                 text,

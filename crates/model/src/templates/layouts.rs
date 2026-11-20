@@ -201,6 +201,7 @@ pub(super) fn templates() -> Result<Vec<Template>, String> {
     let (_, hi) = crate::scene::selection_bounds(&evidence, &held).unwrap_or_default();
     let note_id = evidence.next_id();
     evidence.annotations.push(crate::document::Annotation {
+        angle: 0.,
         id: note_id,
         position: Point::new(hi.x + 3. * r, -0.6 * r),
         text: "¹H NMR, crystal structure\nor a picture".into(),

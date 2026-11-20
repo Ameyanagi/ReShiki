@@ -291,7 +291,17 @@ fn escape(out: &mut String, text: &str, attribute: bool) -> Result<()> {
     }
     Ok(())
 }
-fn convert(tree: &Tree<'_>, fonts: &mut HashMap<u16, u16>, tolerant: bool) -> Result<Element> {
+#[derive(Clone, Copy)]
+enum TextEncoding {
+    Charset(u16),
+    LegacySymbol,
+}
+
+fn convert(
+    tree: &Tree<'_>,
+    fonts: &mut HashMap<u16, TextEncoding>,
+    tolerant: bool,
+) -> Result<Element> {
     let (mut connection_count, mut node_type_count) = (0usize, 0usize);
     for (tag, _) in &tree.raw {
         match *tag {
@@ -319,16 +329,23 @@ fn convert(tree: &Tree<'_>, fonts: &mut HashMap<u16, u16>, tolerant: bool) -> Re
                 let id = r.u16()?;
                 let charset = r.u16()?;
                 let size = r.u16()?;
-                let encoding = charset_name(charset)?;
                 let name = decode_string(
                     r.take(usize::from(size))?,
                     if charset == 65001 { 65001 } else { 10000 },
                 )?;
-                fonts.insert(id, charset);
+                let (encoding, charset_name) = if charset != 65001 && is_symbol_font(&name) {
+                    (
+                        TextEncoding::LegacySymbol,
+                        charset_name(charset).unwrap_or("Unknown"),
+                    )
+                } else {
+                    (TextEncoding::Charset(charset), charset_name(charset)?)
+                };
+                fonts.insert(id, encoding);
                 let mut font = Element::new("font");
                 font.set("id", id);
                 font.set("name", name);
-                font.set("charset", encoding);
+                font.set("charset", charset_name);
                 table.children.push(font);
             }
             r.done()?;
@@ -434,7 +451,7 @@ fn property(
     tag: u16,
     p: &Property,
     data: &[u8],
-    fonts: &HashMap<u16, u16>,
+    fonts: &HashMap<u16, TextEncoding>,
 ) -> Result<()> {
     {
         if numeric(p.kind) {
@@ -564,7 +581,11 @@ struct Run {
     size: u16,
     color: u16,
 }
-fn decode_text(data: &[u8], fonts: &HashMap<u16, u16>, utf8: bool) -> Result<Vec<Element>> {
+fn decode_text(
+    data: &[u8],
+    fonts: &HashMap<u16, TextEncoding>,
+    utf8: bool,
+) -> Result<Vec<Element>> {
     let mut r = Reader::new(data);
     let mut runs = Vec::new();
     for _ in 0..r.u16()? {
@@ -596,15 +617,21 @@ fn decode_text(data: &[u8], fonts: &HashMap<u16, u16>, utf8: bool) -> Result<Vec
             .remaining
             .get(run.start..end)
             .ok_or("Invalid binary text style ranges")?;
-        let charset = if utf8 {
-            65001
-        } else {
-            run.font.and_then(|id| fonts.get(&id)).copied().unwrap_or(0)
+        let encoding = run.font.and_then(|id| fonts.get(&id).copied());
+        let charset = match (utf8, encoding) {
+            (true, _) => 65001,
+            (false, Some(TextEncoding::Charset(charset))) => charset,
+            // Plain CDXML stores legacy Symbol bytes as U+0000–U+00FF.
+            (false, Some(TextEncoding::LegacySymbol) | None) => 0,
         };
         let mut span = Element::new("s");
         span.text = decode_string(bytes, charset)?.replace('\r', "\n");
         if let Some(font) = run.font {
-            span.set("font", font);
+            // UTF8Text overrides the font-table encoding. Omit the legacy
+            // Symbol reference so CDXML readers see this run as Unicode.
+            if !(utf8 && matches!(encoding, Some(TextEncoding::LegacySymbol))) {
+                span.set("font", font);
+            }
             span.set("face", run.face);
             span.set("size", run.size as f64 / 20.);
             span.set("color", run.color);

@@ -117,7 +117,7 @@ fn lost_proxy_revokes_host_target_but_keeps_the_drawing_and_styles() {
         binding,
         Some((
             "office.rsk".into(),
-            Ok(files::Prepared::Native(Box::new(doc))),
+            Ok(files::Prepared::Native(Box::new(doc), None)),
         )),
     ));
     let before = app.tab.doc.clone();
@@ -156,7 +156,7 @@ fn background_proxy_loss_clears_naming_without_changing_the_front_tab() {
         binding,
         Some((
             "background-office.rsk".into(),
-            Ok(files::Prepared::Native(Box::new(doc))),
+            Ok(files::Prepared::Native(Box::new(doc), None)),
         )),
     ));
     let (id, epoch, before) = (app.tab.id, app.tab.file_epoch, app.tab.doc.clone());

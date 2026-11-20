@@ -588,7 +588,7 @@ impl App {
                         .text_size(12)
                         .padding([5, 8])
                         .width(Length::Fill),
-                        "Gradient from the paper color, see-through, soft glow or disc",
+                        "Choose a gradient, reduced opacity, soft glow or disc",
                         // Above, so it never covers the list's choices.
                         tooltip::Position::Top,
                     ),

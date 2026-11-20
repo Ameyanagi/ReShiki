@@ -143,6 +143,8 @@ pub fn bond_text_at(doc: &Document, p: World, radius: f32) -> Option<u64> {
     let id = hit_object(doc, p, radius)?;
     let annotation = doc.annotations.iter().find(|a| a.id == id)?;
     let (lo, hi) = reshiki::atom_text::text_ink_bounds(annotation)?;
+    // In the text's own upright frame.
+    let p = p.turned(annotation.centre(), -annotation.angle);
     (p.x >= lo.x && p.x <= hi.x && p.y >= lo.y && p.y <= hi.y).then_some(id)
 }
 
@@ -265,6 +267,15 @@ fn hit_object_with_orbital(
                             // A piece wins only where it shows above its assembly.
                             && (g.piece.is_none()
                                 || reshiki::equipment::placed::on_top(doc, g.id, p, r))
+                            // Text a shape holds is drawn right after it.
+                            || g.text.is_some_and(|text| {
+                                doc.annotations.iter().any(|a| {
+                                    let (w, h) = a.size();
+                                    a.id == text
+                                        && (a.position.x..a.position.x + w).contains(&p.x)
+                                        && (a.position.y..a.position.y + h).contains(&p.y)
+                                })
+                            })
                     }
             })
             .max_by_key(|(i, g)| (g.layer, *i))
@@ -281,12 +292,7 @@ fn hit_object_with_orbital(
             doc.annotations
                 .iter()
                 .rev()
-                .find(|a| {
-                    p.x >= a.position.x
-                        && p.x < a.position.x + a.size().0
-                        && p.y >= a.position.y
-                        && p.y < a.position.y + a.size().1
-                })
+                .find(|a| a.contains(p))
                 .map(|a| a.id)
         })
         .or_else(|| doc.arrows.iter().rev().find(|a| a.hit(p, r)).map(|a| a.id))

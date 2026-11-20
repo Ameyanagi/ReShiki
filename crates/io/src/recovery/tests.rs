@@ -214,6 +214,7 @@ fn drafts_use_the_required_file_version_after_custom_arrow_gap_returns_to_auto()
     ));
     let annotation = doc.next_id();
     doc.annotations.push(Annotation {
+        angle: 0.,
         id: annotation,
         position: Point::new(40., -30.),
         text: "heat".into(),

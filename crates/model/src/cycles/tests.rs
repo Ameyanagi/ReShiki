@@ -8,6 +8,7 @@ use crate::{
 fn text(doc: &mut Document, at: Point, text: &str) -> u64 {
     let id = doc.next_id();
     doc.annotations.push(Annotation {
+        angle: 0.,
         id,
         position: at,
         text: text.into(),

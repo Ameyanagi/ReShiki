@@ -218,6 +218,7 @@ async fn selection_layout_and_double_click_regression() {
         let id = app.tab.doc.next_id();
         let at = reshiki::document::Point::new(-120., 100.);
         app.tab.doc.annotations.push(reshiki::document::Annotation {
+            angle: 0.,
             id,
             position: at,
             text: "Reaction conditions".into(),

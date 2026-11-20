@@ -6,7 +6,6 @@ use super::{
 };
 use crate::canvas::{self, Edit, Tool};
 use iced::Task;
-use reshiki::document::Point;
 use std::ops::ControlFlow::{self, Break, Continue};
 
 pub(super) type Gate = ControlFlow<Task<Message>, Message>;
@@ -397,9 +396,7 @@ impl App {
             );
         }
         if let Message::Canvas(Edit::BeginText(id)) = message {
-            return Break(
-                self.inline_action(inline_text::Action::Begin(Some(id), Point::default())),
-            );
+            return Break(self.begin_text(id));
         }
         if let Message::Canvas(ref edit @ (Edit::Click(p) | Edit::RepeatLabel(p))) = message
             && self.tool == Tool::Text
