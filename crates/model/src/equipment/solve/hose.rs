@@ -72,8 +72,8 @@ const SAG: f64 = 0.15;
 type End = (Xy, Xy, f64);
 
 /// The three Béziers from end `e` towards `m`, `m` excluded: straight on
-/// for the lead, then a turn of radius `r`. A lead that ends less than `r`
-/// short of `m` (or past it) turns a quarter circle towards it first, so a
+/// for the lead, then a turn of radius `r`. A lead that ends no more than
+/// `r` short of `m` (or past it; within rounding) turns a quarter circle towards it first, so a
 /// hose doubling back to a barb loops instead of pinching; otherwise it
 /// runs straight on.
 fn leg((p, out, lead): End, m: Xy, r: f64) -> (Vec<Xy>, Xy) {
@@ -84,7 +84,7 @@ fn leg((p, out, lead): End, m: Xy, r: f64) -> (Vec<Xy>, Xy) {
     } else {
         side
     };
-    let (t, dir) = if dot(out, sub(m, l)) < r {
+    let (t, dir) = if dot(out, sub(m, l)) <= r * (1. + 1e-9) {
         (add(l, add(mul(out, r), mul(n, r))), n)
     } else {
         (add(l, mul(out, r / 2.)), out)
@@ -275,7 +275,7 @@ pub fn place_hose(
         let drop = CLICK_DOWN_MM * mm;
         (
             add(along(LEAD_MM * mm + turn), [0., drop]),
-            add(along(LEAD_MM * mm + 0.8 * turn), [0., drop / 2.]),
+            add(along(LEAD_MM * mm + turn), [0., drop / 2.]),
         )
     });
     let b = match hang {
